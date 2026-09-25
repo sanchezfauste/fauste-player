@@ -13,3 +13,11 @@ pub mod playlist;
 
 pub use error::ModelError;
 pub use playlist::{Playlist, PlaylistEntry, Playlists};
+pub mod config;
+pub mod player;
+
+pub use config::{
+    AnalysisSettings, Config, ConfigWarning, Limits, OutputsConfig, PlayerRoutes, PlayersConfig,
+    Route, Tuning, UiConfig,
+};
+pub use player::PlayMode;
