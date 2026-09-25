@@ -3,4 +3,5 @@
 
 #![deny(clippy::indexing_slicing)]
 
+pub mod metadata;
 pub mod signal;
