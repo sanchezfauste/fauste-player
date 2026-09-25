@@ -200,9 +200,9 @@ impl Engine {
                     .current
                     .iter()
                     .chain(rt.cue_src.iter())
-                    .filter(|p| {
-                        matches!(p.start, StartState::WhenReady { .. }) && !p.shared.is_failed()
-                    })
+                    // A failed source counts until its failure has been handled
+                    // (the worker flags it just before it reports).
+                    .filter(|p| matches!(p.start, StartState::WhenReady { .. }))
                     .count();
                 let preload = rt
                     .preload
@@ -1212,6 +1212,9 @@ impl Engine {
                 if let StartState::WhenReady { fade_in } = p.start
                     // Also set when the worker failed: whatever it buffered still plays.
                     && p.shared.is_ready()
+                    // A failed source with nothing buffered has nothing to play:
+                    // it waits for its failure to be handled instead.
+                    && !(p.shared.is_failed() && p.shared.is_drained())
                 {
                     p.start = StartState::Requested;
                     starts.push((p.bus.clone(), p.slot, fade_in));
