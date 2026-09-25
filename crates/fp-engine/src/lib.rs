@@ -5,6 +5,7 @@
 #![deny(clippy::indexing_slicing)]
 
 pub mod atomic;
+pub mod bus;
 pub mod decode;
 pub mod mixer;
 pub mod ramp;
