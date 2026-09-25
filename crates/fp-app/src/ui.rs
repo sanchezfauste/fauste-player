@@ -1,4 +1,6 @@
 //! egui user interface.
 
 pub mod format;
+pub mod icons;
+pub mod theme;
 pub mod view;
