@@ -1,0 +1,27 @@
+[package]
+name = "fp-engine"
+description = "Audio engine: sources, bus mixers, decoding and the conductor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+fp-model.workspace = true
+fp-backends.workspace = true
+thiserror.workspace = true
+symphonia.workspace = true
+rubato.workspace = true
+audioadapter-buffers.workspace = true
+rtrb.workspace = true
+crossbeam-channel.workspace = true
+arc-swap.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+assert_no_alloc.workspace = true
+hound.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
