@@ -2,8 +2,9 @@
 
 use std::path::PathBuf;
 
+use crate::config::Config;
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
-use crate::player::PlayMode;
+use crate::player::{ColumnWidths, PlayMode};
 
 /// A user intent, sent by the UI.
 #[derive(Debug, Clone, PartialEq)]
@@ -20,6 +21,31 @@ pub enum Command {
     },
     SetMode(PlayerId, PlayMode),
     ToggleStopAfterCurrent(PlayerId),
+    ToggleCue(PlayerId),
+    CueEntry(PlayerId, EntryId),
+    SetVolume(PlayerId, f32),
+    Seek(PlayerId, f64),
+    ShowPlaylist(PlayerId, PlaylistId),
+    SetColumnWidths(PlayerId, ColumnWidths),
+    RemoveEntry(EntryId),
+    MoveEntry {
+        entry: EntryId,
+        to: PlaylistId,
+        index: usize,
+    },
+    DuplicateEntry(EntryId),
+    CreatePlaylist {
+        name: String,
+    },
+    RenamePlaylist {
+        playlist: PlaylistId,
+        name: String,
+    },
+    DeletePlaylist(PlaylistId),
+    SetPlayerCount(usize),
+    /// Replaces the configuration (already validated by the caller); the
+    /// player count is kept, use `SetPlayerCount` to change it.
+    UpdateConfig(Box<Config>),
 }
 
 /// Something the audio engine observed.
@@ -33,6 +59,8 @@ pub enum EngineEvent {
     TransitionStarted { player: PlayerId },
     /// A source could not be decoded or read.
     SourceFailed { player: PlayerId, entry: EntryId },
+    /// The cue source reached its end.
+    CueEnded { player: PlayerId },
 }
 
 /// Everything the engine needs to open and position one source.
@@ -95,5 +123,26 @@ pub enum EngineAction {
     Schedule {
         player: PlayerId,
         plan: Option<TransitionPlan>,
+    },
+    AddPlayer {
+        player: PlayerId,
+    },
+    RemovePlayer {
+        player: PlayerId,
+    },
+    StartCue {
+        player: PlayerId,
+        request: SourceRequest,
+    },
+    StopCue {
+        player: PlayerId,
+    },
+    SetVolume {
+        player: PlayerId,
+        volume: f32,
+    },
+    Seek {
+        player: PlayerId,
+        secs: f64,
     },
 }
