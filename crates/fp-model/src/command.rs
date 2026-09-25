@@ -145,4 +145,9 @@ pub enum EngineAction {
         player: PlayerId,
         secs: f64,
     },
+    /// Open `request` at its position and hold it paused (crash recovery).
+    LoadPaused {
+        player: PlayerId,
+        request: SourceRequest,
+    },
 }

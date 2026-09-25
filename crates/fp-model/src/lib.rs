@@ -9,6 +9,7 @@ pub mod ids;
 pub mod player;
 pub mod playlist;
 pub mod reducer;
+pub mod session;
 pub mod state;
 pub mod track;
 
@@ -22,5 +23,6 @@ pub use ids::{EntryId, IdGen, PlayerId, PlaylistId, TrackId};
 pub use player::{ColumnWidths, CueState, PlayMode, PlayerState, Transport};
 pub use playlist::{Playlist, PlaylistEntry, Playlists};
 pub use reducer::{apply, on_event, plan_for};
+pub use session::{PlayerSession, RestoreParts};
 pub use state::AppState;
 pub use track::{FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track, TrackKind};
