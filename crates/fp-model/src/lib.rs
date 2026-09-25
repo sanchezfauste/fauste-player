@@ -21,6 +21,6 @@ pub use error::ModelError;
 pub use ids::{EntryId, IdGen, PlayerId, PlaylistId, TrackId};
 pub use player::{ColumnWidths, CueState, PlayMode, PlayerState, Transport};
 pub use playlist::{Playlist, PlaylistEntry, Playlists};
-pub use reducer::{apply, on_event};
+pub use reducer::{apply, on_event, plan_for};
 pub use state::AppState;
 pub use track::{FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track, TrackKind};

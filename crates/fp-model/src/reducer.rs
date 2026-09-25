@@ -2,13 +2,13 @@
 
 use std::path::PathBuf;
 
-use crate::command::{Command, EngineAction, EngineEvent, SourceRequest};
+use crate::command::{Command, EngineAction, EngineEvent, SourceRequest, TransitionPlan};
 use crate::error::ModelError;
 use crate::ids::{EntryId, PlayerId, PlaylistId};
-use crate::player::Transport;
+use crate::player::{PlayMode, PlayerState, Transport};
 use crate::playlist::PlaylistEntry;
 use crate::state::AppState;
-use crate::track::Track;
+use crate::track::{FileState, Track};
 
 /// Applies a user command. On `Err` the state is unchanged.
 pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>, ModelError> {
@@ -24,6 +24,22 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             index,
             paths,
         } => insert_paths(state, playlist, index, paths)?,
+        Command::SetMode(id, mode) => {
+            let i = state.player_index(id)?;
+            let player = &mut state.players[i];
+            player.mode = mode;
+            if mode == PlayMode::Single {
+                player.stop_after_current = false;
+            }
+        }
+        Command::ToggleStopAfterCurrent(id) => {
+            let i = state.player_index(id)?;
+            let player = &mut state.players[i];
+            if player.mode == PlayMode::Single {
+                return Err(ModelError::StopAfterInSingle);
+            }
+            player.stop_after_current = !player.stop_after_current;
+        }
     }
     reconcile(state, &mut out);
     Ok(out)
@@ -43,6 +59,26 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             if let Ok(i) = state.player_index(player) {
                 stop_player(state, i);
             }
+        }
+        EngineEvent::TransitionStarted { player } => {
+            if let Ok(i) = state.player_index(player) {
+                let overlapping = matches!(
+                    state.players[i].scheduled,
+                    Some(TransitionPlan::StartNextAt {
+                        fade_current_until_secs: Some(_),
+                        ..
+                    })
+                );
+                if advance(state, i).is_some() {
+                    state.players[i].fading = overlapping;
+                } else {
+                    stop_player(state, i);
+                    out.push(EngineAction::StopNow { player });
+                }
+            }
+        }
+        EngineEvent::SourceFailed { player, entry } => {
+            source_failed(state, player, entry, &mut out)
         }
     }
     reconcile(state, &mut out);
@@ -168,6 +204,65 @@ fn insert_paths(
     Ok(())
 }
 
+/// Spec §4.5: mark the file unreadable, then skip (Continuous) or stop.
+fn source_failed(
+    state: &mut AppState,
+    player: PlayerId,
+    entry: EntryId,
+    out: &mut Vec<EngineAction>,
+) {
+    if let Some(t) = state
+        .playlists
+        .entry(entry)
+        .map(|e| e.track)
+        .and_then(|track| state.library.get_mut(track))
+    {
+        t.file_state = FileState::Unreadable;
+    }
+    if let Ok(i) = state.player_index(player)
+        && state.players[i].current == Some(entry)
+    {
+        let keep_going =
+            state.players[i].mode == PlayMode::Continuous && !state.players[i].stop_after_current;
+        let restarted = if keep_going { advance(state, i) } else { None };
+        match restarted {
+            Some(request) => out.push(EngineAction::StartCurrent { player, request }),
+            None => {
+                stop_player(state, i);
+                out.push(EngineAction::StopNow { player });
+            }
+        }
+    }
+    let replacement = state.playlists.next_playable_after(entry, &state.library);
+    for p in &mut state.players {
+        if p.next == Some(entry) {
+            p.next = replacement;
+        }
+    }
+}
+
+/// Rules 9–11: what the engine must do when the current track ends.
+pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan> {
+    if player.transport == Transport::Stopped {
+        return None;
+    }
+    let track = state.track_for_entry(player.current?)?;
+    let cue_out = track.cue_out_secs();
+    if player.mode == PlayMode::Single || player.stop_after_current || player.next.is_none() {
+        return Some(TransitionPlan::StopAt { at_secs: cue_out });
+    }
+    match track.segue_start_secs() {
+        Some(segue) if state.config.players.auto_segue => Some(TransitionPlan::StartNextAt {
+            at_secs: segue,
+            fade_current_until_secs: Some(cue_out),
+        }),
+        _ => Some(TransitionPlan::StartNextAt {
+            at_secs: cue_out,
+            fade_current_until_secs: None,
+        }),
+    }
+}
+
 /// Rule 12: the next entry becomes current. Returns the request for the new
 /// current source, or `None` (state untouched) when there is nothing to play.
 pub(crate) fn advance(state: &mut AppState, i: usize) -> Option<SourceRequest> {
@@ -240,6 +335,21 @@ pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
         out.push(EngineAction::Preload {
             player: player.id,
             request,
+        });
+    }
+    let plans: Vec<(usize, Option<TransitionPlan>)> = state
+        .players
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (i, plan_for(state, p)))
+        .filter(|(i, plan)| state.players[*i].scheduled != *plan)
+        .collect();
+    for (i, plan) in plans {
+        let player = &mut state.players[i];
+        player.scheduled = plan;
+        out.push(EngineAction::Schedule {
+            player: player.id,
+            plan,
         });
     }
 }

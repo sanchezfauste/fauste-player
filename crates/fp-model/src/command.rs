@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
+use crate::player::PlayMode;
 
 /// A user intent, sent by the UI.
 #[derive(Debug, Clone, PartialEq)]
@@ -17,6 +18,8 @@ pub enum Command {
         index: usize,
         paths: Vec<PathBuf>,
     },
+    SetMode(PlayerId, PlayMode),
+    ToggleStopAfterCurrent(PlayerId),
 }
 
 /// Something the audio engine observed.
@@ -26,6 +29,10 @@ pub enum EngineEvent {
     FadeCompleted { player: PlayerId },
     /// The current source stopped: a scheduled `StopAt` was reached or a fade stop completed.
     ReachedEnd { player: PlayerId },
+    /// The engine started the next source as scheduled by a `StartNextAt` plan.
+    TransitionStarted { player: PlayerId },
+    /// A source could not be decoded or read.
+    SourceFailed { player: PlayerId, entry: EntryId },
 }
 
 /// Everything the engine needs to open and position one source.
@@ -83,5 +90,10 @@ pub enum EngineAction {
     },
     StopNow {
         player: PlayerId,
+    },
+    /// Replace the transition plan of the current source (`None` cancels it).
+    Schedule {
+        player: PlayerId,
+        plan: Option<TransitionPlan>,
     },
 }
