@@ -10,6 +10,7 @@ use crossbeam_channel::{Receiver, Sender};
 use egui::{
     Align, Color32, Key, Layout, Rect, RichText, Sense, TextureHandle, Ui, UiBuilder, vec2,
 };
+use fp_backends::AudioBackend;
 use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
 use fp_model::{AppState, Command, EntryId, ModelError, PlayerId, PlaylistId, TrackId, Transport};
@@ -17,6 +18,7 @@ use fp_model::{AppState, Command, EntryId, ModelError, PlayerId, PlaylistId, Tra
 use super::controller::Controller;
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::player;
+use super::settings::{self, SettingsDeps, SettingsState};
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
 use crate::i18n::I18n;
@@ -143,6 +145,9 @@ pub struct AppUi {
     picks_tx: Sender<Picked>,
     picks_rx: Receiver<Picked>,
     themed: bool,
+    settings: SettingsState,
+    settings_shown: bool,
+    backends: Vec<Arc<dyn AudioBackend>>,
 }
 
 impl AppUi {
@@ -160,7 +165,16 @@ impl AppUi {
             picks_tx,
             picks_rx,
             themed: false,
+            settings: SettingsState::default(),
+            settings_shown: false,
+            backends: Vec::new(),
         }
+    }
+
+    /// The audio systems listed in Settings.
+    pub fn with_backends(mut self, backends: Vec<Arc<dyn AudioBackend>>) -> Self {
+        self.backends = backends;
+        self
     }
 
     /// Where "Re-analyse all" goes.
@@ -255,7 +269,26 @@ impl AppUi {
         );
         status_bar(&mut status_ui, &scene, &self.view, &self.platform);
         ui.allocate_rect(full, Sense::hover());
-        self.file_drops(&ctx);
+        if self.view.settings_open {
+            if !self.settings_shown {
+                self.settings.reset();
+                self.settings_shown = true;
+            }
+            let deps = SettingsDeps {
+                backends: &self.backends,
+                services: self.services.as_ref(),
+                notice: self
+                    .view
+                    .notice
+                    .as_ref()
+                    .filter(|(_, until)| *until > time)
+                    .map(|(text, _)| text.clone()),
+            };
+            self.view.settings_open = settings::show(&ctx, &scene, &mut self.settings, &deps);
+        } else {
+            self.settings_shown = false;
+            self.file_drops(&ctx);
+        }
         let busy = state
             .players
             .iter()

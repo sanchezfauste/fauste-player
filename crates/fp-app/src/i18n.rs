@@ -28,7 +28,7 @@ macro_rules! number_arg {
         }
     )*};
 }
-number_arg!(i32, i64, u32, u64, usize, f32, f64);
+number_arg!(i32, i64, u16, u32, u64, usize, f32, f64);
 
 impl From<&str> for Arg {
     fn from(v: &str) -> Self {

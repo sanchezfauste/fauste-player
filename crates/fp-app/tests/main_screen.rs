@@ -6,110 +6,20 @@
 )]
 //! The main screen, driven headlessly (spec §8.3).
 
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+mod support;
 
-use arc_swap::ArcSwap;
 use egui::Key;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::i18n::I18n;
 use fp_app::services::MediaCache;
 use fp_app::ui::app::AppUi;
-use fp_app::ui::controller::Controller;
 use fp_app::ui::files::audio_paths;
-use fp_engine::conductor::Telemetry;
-use fp_model::{AppState, Command, Config, EntryId, ModelError, PlayerId, Route};
-
-struct Fake {
-    state: ArcSwap<AppState>,
-    telemetry: ArcSwap<Telemetry>,
-    sent: Mutex<Vec<Command>>,
-}
-
-impl Fake {
-    fn new(state: AppState) -> Arc<Self> {
-        Arc::new(Self {
-            state: ArcSwap::from_pointee(state),
-            telemetry: ArcSwap::from_pointee(Telemetry::default()),
-            sent: Mutex::new(Vec::new()),
-        })
-    }
-}
-
-impl Controller for Fake {
-    fn model(&self) -> Arc<AppState> {
-        self.state.load_full()
-    }
-    fn telemetry(&self) -> Arc<Telemetry> {
-        self.telemetry.load_full()
-    }
-    fn send(&self, command: Command) -> bool {
-        self.sent.lock().unwrap().push(command);
-        true
-    }
-    fn test_tone(&self, _route: Route, _frequency_hz: f32) -> bool {
-        true
-    }
-    fn take_rejection(&self) -> Option<ModelError> {
-        None
-    }
-}
-
-fn state(players: usize, tracks: usize) -> AppState {
-    let mut config = Config::default();
-    config.players.count = players;
-    let mut state = AppState::new(config, "Main");
-    let playlist = state.playlists.first_id().unwrap();
-    let paths = (1..=tracks)
-        .map(|n| PathBuf::from(format!("/music/Song {n}.mp3")))
-        .collect();
-    fp_model::apply(
-        &mut state,
-        Command::InsertPaths {
-            playlist,
-            index: 0,
-            paths,
-        },
-    )
-    .unwrap();
-    state
-}
-
-fn harness(state: AppState) -> (Harness<'static, AppUi>, Arc<Fake>) {
-    let fake = Fake::new(state);
-    let ui = AppUi::new(
-        fake.clone(),
-        I18n::new(Some("en-US")),
-        MediaCache::default(),
-    );
-    // Short frames, so that two clicks fall within the double-click delay.
-    let mut harness = Harness::builder()
-        .with_size(egui::vec2(1000.0, 700.0))
-        .with_step_dt(0.02)
-        .build_ui_state(|ui, app: &mut AppUi| app.ui(ui), ui);
-    harness.run_steps(2);
-    (harness, fake)
-}
+use fp_model::Command;
+use support::{Fake, harness, state};
 
 fn sent(fake: &Fake) -> Vec<Command> {
-    std::mem::take(&mut *fake.sent.lock().unwrap())
-}
-
-fn entries(fake: &Fake) -> Vec<EntryId> {
-    let s = fake.state.load();
-    s.playlists
-        .iter()
-        .next()
-        .unwrap()
-        .entries
-        .iter()
-        .map(|e| e.id)
-        .collect()
-}
-
-fn player(fake: &Fake, n: usize) -> PlayerId {
-    fake.state.load().players[n].id
+    fake.take_sent()
 }
 
 #[test]
@@ -117,7 +27,7 @@ fn clicking_play_sends_play() {
     let (mut h, fake) = harness(state(2, 3));
     h.get_all_by_label("Play").next().unwrap().click();
     h.run_steps(2);
-    assert!(sent(&fake).contains(&Command::Play(player(&fake, 0))));
+    assert!(sent(&fake).contains(&Command::Play(fake.player(0))));
 }
 
 #[test]
@@ -127,18 +37,18 @@ fn double_clicking_a_row_sets_next() {
     h.step();
     h.get_by_label("Song 3").click();
     h.run_steps(2);
-    let e = entries(&fake);
-    assert!(sent(&fake).contains(&Command::SetNext(player(&fake, 0), e[2])));
+    let e = fake.entries();
+    assert!(sent(&fake).contains(&Command::SetNext(fake.player(0), e[2])));
 }
 
 #[test]
 fn the_context_menu_removes_an_entry() {
     let (mut h, fake) = harness(state(1, 3));
+    let e = fake.entries();
     h.get_by_label("Song 2").click_secondary();
     h.run_steps(2);
     h.get_by_label("Remove from playlist").click();
     h.run_steps(2);
-    let e = entries(&fake);
     assert!(sent(&fake).contains(&Command::RemoveEntry(e[1])));
 }
 
@@ -147,7 +57,7 @@ fn number_keys_play_players() {
     let (mut h, fake) = harness(state(2, 3));
     h.key_press(Key::Num2);
     h.run_steps(2);
-    assert_eq!(sent(&fake), vec![Command::Play(player(&fake, 1))]);
+    assert_eq!(sent(&fake), vec![Command::Play(fake.player(1))]);
 }
 
 #[test]
