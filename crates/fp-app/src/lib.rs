@@ -4,4 +4,5 @@ pub mod bootstrap;
 pub mod crash;
 pub mod i18n;
 pub mod logging;
+pub mod services;
 pub mod ui;
