@@ -1,0 +1,125 @@
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
+//! Shared test helpers: WAV fixtures and synthetic sources.
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use fp_engine::worker::{SampleSource, SourceOpener};
+
+/// Writes a 16-bit WAV whose sample `i` (per channel) is `(i % 20_000) as i16`,
+/// so any position can be identified from its value.
+pub fn indexed_wav(dir: &Path, name: &str, rate: u32, channels: u16, frames: usize) -> PathBuf {
+    let path = dir.join(name);
+    let spec = hound::WavSpec {
+        channels,
+        sample_rate: rate,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    for i in 0..frames {
+        for _ in 0..channels {
+            w.write_sample((i % 20_000) as i16).unwrap();
+        }
+    }
+    w.finalize().unwrap();
+    path
+}
+
+/// The sample index encoded by `indexed_wav`, recovered from a decoded value.
+pub fn index_of(sample: f32) -> i64 {
+    (f64::from(sample) * 32_768.0).round() as i64
+}
+
+/// Emits `total` frames whose left sample is the frame number and right is its negation.
+pub struct Counting {
+    pub next: u64,
+    pub total: u64,
+    pub block: u64,
+}
+
+impl SampleSource for Counting {
+    fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
+        if self.next >= self.total {
+            return Ok(false);
+        }
+        let end = (self.next + self.block).min(self.total);
+        for i in self.next..end {
+            out.push(i as f32);
+            out.push(-(i as f32));
+        }
+        self.next = end;
+        Ok(true)
+    }
+}
+
+/// Opener producing `Counting` sources of `total` frames. The path is ignored.
+pub fn counting_opener(total: u64) -> SourceOpener {
+    Arc::new(move |_path, from_secs, rate| {
+        let start = (from_secs * f64::from(rate)).round() as u64;
+        Ok(Box::new(Counting {
+            next: start,
+            total,
+            block: 64,
+        }) as Box<dyn SampleSource>)
+    })
+}
+
+/// A source that panics on its first block.
+pub struct Exploding;
+
+impl SampleSource for Exploding {
+    fn next_block(&mut self, _out: &mut Vec<f32>) -> Result<bool, String> {
+        panic!("boom");
+    }
+}
+
+/// Opener for paths named `track<N>`: sample `i` (from the start of the file)
+/// of track N is `N * 100_000 + i` on both channels, and every track is
+/// `frames` long. Any other path fails to open.
+pub fn tagged_opener(frames: u64) -> SourceOpener {
+    Arc::new(move |path, from_secs, rate| {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let n: u64 = name
+            .strip_prefix("track")
+            .and_then(|d| d.parse().ok())
+            .ok_or_else(|| format!("cannot open {name}"))?;
+        let start = (from_secs * f64::from(rate)).round() as u64;
+        Ok(Box::new(Tagged {
+            base: n * 100_000,
+            next: start,
+            total: frames,
+        }) as Box<dyn SampleSource>)
+    })
+}
+
+pub struct Tagged {
+    base: u64,
+    next: u64,
+    total: u64,
+}
+
+impl SampleSource for Tagged {
+    fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
+        if self.next >= self.total {
+            return Ok(false);
+        }
+        let end = (self.next + 512).min(self.total);
+        for i in self.next..end {
+            let v = (self.base + i) as f32;
+            out.push(v);
+            out.push(v);
+        }
+        self.next = end;
+        Ok(true)
+    }
+}
