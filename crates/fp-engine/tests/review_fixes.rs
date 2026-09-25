@@ -336,3 +336,27 @@ fn running_out_of_mixer_slots_is_never_reported_as_a_file_failure() {
     );
     assert!(r.engine.slot_exhaustions() > 0);
 }
+
+// Plan 4 — test tones for Settings ("Test Main" / "Test Cue").
+#[test]
+fn a_test_tone_plays_on_the_requested_route_only() {
+    let mut r = rig(4, Some(route("card", 0)), Some(route("card", 2)), 48_000);
+    r.engine
+        .play_test_tone(&route("card", 2), 440.0, 0.05, -18.0, r.clock);
+    r.run(3);
+    assert!(
+        r.channel(0)
+            .iter()
+            .chain(r.channel(1).iter())
+            .all(|v| *v == 0.0),
+        "Main stays silent"
+    );
+    let peak = r.channel(2).iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    assert!((peak - 0.1259).abs() < 0.01, "−18 dBFS peak, got {peak}");
+    r.run(10);
+    assert_eq!(r.engine.active_tones(), 0, "the tone's slot is released");
+    assert!(
+        r.channel(2).iter().rev().take(BLOCK).all(|v| *v == 0.0),
+        "the tone ends by itself"
+    );
+}
