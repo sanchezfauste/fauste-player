@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 fp-model.workspace = true
 fp-backends.workspace = true
+fp-decode.workspace = true
 thiserror.workspace = true
 symphonia.workspace = true
 rubato.workspace = true

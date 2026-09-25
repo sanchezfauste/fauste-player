@@ -308,6 +308,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fp-decode"
+version = "0.1.0"
+dependencies = [
+ "hound",
+ "symphonia",
+ "tempfile",
+]
+
+[[package]]
 name = "fp-engine"
 version = "0.1.0"
 dependencies = [
@@ -316,6 +325,7 @@ dependencies = [
  "audioadapter-buffers",
  "crossbeam-channel",
  "fp-backends",
+ "fp-decode",
  "fp-model",
  "hound",
  "rtrb",
