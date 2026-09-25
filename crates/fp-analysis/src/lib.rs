@@ -4,6 +4,7 @@
 #![deny(clippy::indexing_slicing)]
 
 pub mod analyze;
+pub mod analyzer;
 pub mod cache;
 pub mod metadata;
 pub mod signal;
