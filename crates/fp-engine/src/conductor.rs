@@ -22,6 +22,8 @@ pub struct Telemetry {
     /// Increases every time the model snapshot changes (drives saving).
     pub model_version: u64,
     pub dropped_commands: u64,
+    /// Sources refused for lack of a mixer slot (should always be zero).
+    pub slot_exhaustions: u64,
 }
 
 pub struct Conductor {
@@ -155,6 +157,7 @@ impl Conductor {
             buses: self.engine.bus_status(),
             model_version: self.version,
             dropped_commands: self.engine.dropped_commands(),
+            slot_exhaustions: self.engine.slot_exhaustions(),
         }));
     }
 

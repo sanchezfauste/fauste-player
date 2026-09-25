@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, Sender};
 use fp_backends::{AudioBackend, NullBackend, StreamConfig};
 use fp_model::{
-    Config, EngineAction, EngineEvent, EntryId, PlayerId, PlayerRoutes, SourceRequest,
+    Config, EngineAction, EngineEvent, EntryId, PlayerId, PlayerRoutes, Route, SourceRequest,
     TransitionPlan, Tuning,
 };
 
@@ -93,13 +93,29 @@ struct Playing {
     start: StartState,
     /// Report `ReachedEnd` when this source finishes (fade stop).
     report_end: bool,
+    /// The worker failed after this source started: let the buffered audio
+    /// play out, then report `SourceFailed` (spec §4.5).
+    failed: bool,
+    /// A pre-listen source (never paused with the player).
+    cue: bool,
+}
+
+/// Why a source could not be created. None of these is a problem with the
+/// file, so none is ever reported to the model as `SourceFailed`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AttachError {
+    NoPlayer,
+    NoRoute,
+    NoSlot,
+    QueueFull,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Plan {
     None,
     Waiting(TransitionPlan),
-    Dispatched(TransitionPlan),
+    /// Sent to the mixer; the transition happens at this bus frame.
+    Dispatched(TransitionPlan, u64),
 }
 
 struct PlayerRuntime {
@@ -131,6 +147,7 @@ pub struct Engine {
     next_key: u64,
     events: Vec<EngineEvent>,
     dropped_commands: u64,
+    slot_exhaustions: u64,
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -164,7 +181,50 @@ impl Engine {
             next_key: 0,
             events: Vec::new(),
             dropped_commands: 0,
+            slot_exhaustions: 0,
         }
+    }
+
+    /// Sources that could not be attached for lack of a mixer slot.
+    pub fn slot_exhaustions(&self) -> u64 {
+        self.slot_exhaustions
+    }
+
+    /// Sources still waiting for their worker: pending starts, and preloads
+    /// not yet ready. Tests poll this instead of sleeping.
+    pub fn unsettled_sources(&self) -> usize {
+        self.players
+            .values()
+            .map(|rt| {
+                let waiting = rt
+                    .current
+                    .iter()
+                    .chain(rt.cue_src.iter())
+                    .filter(|p| {
+                        matches!(p.start, StartState::WhenReady { .. }) && !p.shared.is_failed()
+                    })
+                    .count();
+                let preload = rt
+                    .preload
+                    .iter()
+                    .filter(|p| !p.shared.is_ready() && !p.shared.is_failed())
+                    .count();
+                waiting + preload
+            })
+            .sum()
+    }
+
+    /// Sources attached to mixers across all players (a leak shows up here).
+    pub fn attached_sources(&self) -> usize {
+        self.players
+            .values()
+            .map(|rt| {
+                rt.preload.iter().count()
+                    + rt.current.iter().count()
+                    + rt.cue_src.iter().count()
+                    + rt.outgoing.len()
+            })
+            .sum()
     }
 
     /// Bus commands that could not be queued (should always be zero).
@@ -213,57 +273,104 @@ impl Engine {
         }
     }
 
-    fn backend(&self, id: Option<&str>) -> Arc<dyn AudioBackend> {
-        let wanted = id.or(self.settings.default_backend.as_deref());
-        wanted
-            .and_then(|w| self.backends.iter().find(|b| b.id().0 == w))
-            .or_else(|| self.backends.first())
-            .cloned()
+    fn find_backend(&self, id: &str) -> Option<Arc<dyn AudioBackend>> {
+        self.backends.iter().find(|b| b.id().0 == id).cloned()
+    }
+
+    /// The configured default backend, else the first registered one.
+    fn default_backend(&self) -> Arc<dyn AudioBackend> {
+        self.settings
+            .default_backend
+            .as_deref()
+            .and_then(|id| self.find_backend(id))
+            .or_else(|| self.backends.first().cloned())
             .unwrap_or_else(|| Arc::new(NullBackend))
+    }
+
+    /// The default backend's default device, or the Null device.
+    fn default_output(&self) -> BusKey {
+        let backend = self.default_backend();
+        match backend.default_device() {
+            Some(device) => BusKey {
+                backend: backend.id().0,
+                device: device.0,
+            },
+            None => BusKey {
+                backend: "null".to_owned(),
+                device: "null".to_owned(),
+            },
+        }
+    }
+
+    /// Where a configured route really goes. A route naming a backend this
+    /// machine does not have (e.g. a config copied from another OS) falls
+    /// back to the default output: its device id belongs to the missing
+    /// backend and would never open.
+    fn route_target(&self, route: &Route) -> (BusKey, u16) {
+        match self.find_backend(&route.backend) {
+            Some(backend) => (
+                BusKey {
+                    backend: backend.id().0,
+                    device: route.device.clone(),
+                },
+                route.first_channel,
+            ),
+            None => {
+                tracing::warn!(backend = %route.backend, "route to an unavailable backend; using the default output");
+                (self.default_output(), 0)
+            }
+        }
     }
 
     /// Resolves the (bus, first channel) of a player's Main and Cue outputs.
     fn resolve_routes(&self, player: PlayerId) -> ((BusKey, u16), Option<(BusKey, u16)>) {
         let routes = self.settings.routes.iter().find(|r| r.player == player);
-        let key_for = |backend: &Arc<dyn AudioBackend>, device: String| BusKey {
-            backend: backend.id().0,
-            device,
-        };
         let main = match routes.and_then(|r| r.main.as_ref()) {
-            Some(route) => (
-                key_for(&self.backend(Some(&route.backend)), route.device.clone()),
-                route.first_channel,
-            ),
-            None => {
-                let backend = self.backend(None);
-                let device = backend
-                    .default_device()
-                    .map_or_else(|| "null".to_owned(), |d| d.0);
-                let backend = if device == "null" {
-                    Arc::new(NullBackend) as Arc<dyn AudioBackend>
-                } else {
-                    backend
-                };
-                (key_for(&backend, device), 0)
-            }
+            Some(route) => self.route_target(route),
+            None => (self.default_output(), 0),
         };
-        let cue = routes.and_then(|r| r.cue.as_ref()).map(|route| {
-            (
-                key_for(&self.backend(Some(&route.backend)), route.device.clone()),
-                route.first_channel,
-            )
-        });
+        let cue = routes
+            .and_then(|r| r.cue.as_ref())
+            .map(|route| self.route_target(route));
         (main, cue)
+    }
+
+    /// Channels a bus must open with so that every route to it fits (e.g.
+    /// Main on 1/2 and Cue on 3/4 of one interface needs 4), capped by what
+    /// the device reports.
+    fn channels_for(&self, key: &BusKey) -> u16 {
+        let wanted = self
+            .settings
+            .routes
+            .iter()
+            .flat_map(|r| r.main.iter().chain(r.cue.iter()))
+            .map(|route| self.route_target(route))
+            .filter(|(k, _)| k == key)
+            .map(|(_, first)| first.saturating_add(2))
+            .fold(self.settings.channels.max(2), u16::max);
+        let device_channels = self
+            .find_backend(&key.backend)
+            .and_then(|b| b.enumerate_devices().ok())
+            .and_then(|devices| devices.into_iter().find(|d| d.id.0 == key.device))
+            .map(|d| d.channels)
+            .filter(|c| *c > 0);
+        match device_channels {
+            Some(available) => wanted.min(available).max(2.min(available)),
+            None => wanted,
+        }
     }
 
     fn ensure_bus(&mut self, key: &BusKey, now: Instant) {
         if !self.buses.contains_key(key) {
-            let backend = self.backend(Some(&key.backend));
+            let backend = self
+                .find_backend(&key.backend)
+                .unwrap_or_else(|| Arc::new(NullBackend));
+            let channels = self.channels_for(key);
             let t = &self.settings.tuning;
             let config = StreamConfig {
                 sample_rate: self.settings.sample_rate,
                 buffer_frames: self.settings.buffer_frames,
-                channels: self.settings.channels,
+                channels,
             };
             let mixer = MixerConfig {
                 volume_smoothing_frames: self.settings.frames(t.gain_smoothing_ms).max(1) as u32,
@@ -272,6 +379,7 @@ impl Engine {
             let timing = BusTiming {
                 watchdog_timeout: Duration::from_secs_f64(t.watchdog_timeout_ms / 1000.0),
                 reconnect_interval: Duration::from_secs_f64(t.reconnect_interval_ms / 1000.0),
+                startup_grace: Duration::from_secs_f64(t.watchdog_startup_grace_ms / 1000.0),
             };
             let bus = Bus::open(key.clone(), backend, config, 8, mixer, timing, now);
             self.buses.insert(key.clone(), bus);
@@ -332,11 +440,11 @@ impl Engine {
                     .get_mut(&player)
                     .and_then(|rt| rt.cue_src.take())
                 {
-                    self.stop_quick_and_release(cue);
+                    self.stop_quick_and_release(player, cue);
                 }
             }
             EngineAction::LoadPaused { player, request } => {
-                if let Some(p) = self.new_source(player, false, &request) {
+                if let Ok(p) = self.new_source(player, false, &request) {
                     let old = self.players.get_mut(&player).and_then(|rt| {
                         rt.paused = true;
                         rt.current.replace(p)
@@ -416,10 +524,10 @@ impl Engine {
         player: PlayerId,
         cue: bool,
         request: &SourceRequest,
-    ) -> Option<Playing> {
-        let rt = self.players.get(&player)?;
+    ) -> Result<Playing, AttachError> {
+        let rt = self.players.get(&player).ok_or(AttachError::NoPlayer)?;
         let (bus_key, channel) = if cue {
-            rt.cue.clone()?
+            rt.cue.clone().ok_or(AttachError::NoRoute)?
         } else {
             rt.main.clone()
         };
@@ -431,10 +539,11 @@ impl Engine {
         let ring = ((self.settings.tuning.prebuffer_secs * f64::from(self.settings.sample_rate))
             as usize)
             .max(1024);
-        let bus = self.buses.get_mut(&bus_key)?;
+        let bus = self.buses.get_mut(&bus_key).ok_or(AttachError::NoRoute)?;
         let Some(slot) = bus.alloc_slot() else {
+            self.slot_exhaustions += 1;
             tracing::error!(?player, bus = ?bus_key, "no free mixer slot");
-            return None;
+            return Err(AttachError::NoSlot);
         };
         let (producer, consumer) = source_pair(ring);
         let shared = consumer.shared.clone();
@@ -445,14 +554,14 @@ impl Engine {
             first_channel: channel,
         }) {
             tracing::error!(?player, "bus command queue full");
-            return None;
+            return Err(AttachError::QueueFull);
         }
         self.next_key += 1;
         let key = SourceKey(self.next_key);
         rt.worker
             .load(key, request.path.clone(), request.from_secs, producer);
         self.owners.insert(key, player);
-        Some(Playing {
+        Ok(Playing {
             key,
             bus: bus_key,
             slot,
@@ -462,6 +571,8 @@ impl Engine {
             shared,
             start: StartState::Idle,
             report_end: false,
+            failed: false,
+            cue,
         })
     }
 
@@ -492,12 +603,16 @@ impl Engine {
         self.owners.remove(&p.key);
     }
 
-    /// Fades a source out over `frames` from now and stops it; it is released
-    /// when the mixer reports it finished.
-    fn fade_out(&mut self, player: PlayerId, p: Playing, frames: u64, curve: Curve) {
-        if p.start != StartState::Started {
+    /// Fades a playing source out over `frames` from now and stops it; it is
+    /// released when the mixer reports it finished. A source that is not
+    /// audible (never started, or paused) is released at once. Returns
+    /// whether the source was queued to fade (and will finish later).
+    fn fade_out(&mut self, player: PlayerId, p: Playing, frames: u64, curve: Curve) -> bool {
+        let paused = !p.cue && self.players.get(&player).is_some_and(|rt| rt.paused);
+        if p.start != StartState::Started || paused {
+            self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
             self.release(p);
-            return;
+            return false;
         }
         let now = self.now_frame(&p.bus);
         let len = u32::try_from(frames).unwrap_or(u32::MAX);
@@ -519,55 +634,46 @@ impl Engine {
                 at_frame: now + frames,
             },
         );
-        if let Some(rt) = self.players.get_mut(&player) {
-            rt.outgoing.push(p);
+        match self.players.get_mut(&player) {
+            Some(rt) => {
+                rt.outgoing.push(p);
+                true
+            }
+            None => {
+                self.release(p);
+                false
+            }
         }
     }
 
-    fn stop_quick_and_release(&mut self, p: Playing) {
-        if p.start != StartState::Started {
-            // Never reached the mixer's clock: there is nothing to ramp down.
-            self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
-            self.release(p);
-            return;
-        }
-        // A de-click ramp then detach; nothing is reported for it.
+    /// Stops a source with a de-click ramp; nothing is reported for it.
+    fn stop_quick_and_release(&mut self, player: PlayerId, p: Playing) {
         let frames = self.settings.frames(self.settings.tuning.declick_ms);
-        let now = self.now_frame(&p.bus);
-        let len = u32::try_from(frames).unwrap_or(u32::MAX);
-        self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
-        self.send(
-            &p.bus,
-            BusCommand::Ramp {
-                slot: p.slot,
-                to: 0.0,
-                frames: len,
-                curve: Curve::Linear,
-                at_frame: now,
-            },
-        );
-        self.send(
-            &p.bus,
-            BusCommand::StopAt {
-                slot: p.slot,
-                at_frame: now + frames,
-            },
-        );
-        // Keep it until it finishes so the ramp is heard; then it is released.
-        let owner = self.owners.get(&p.key).copied();
-        match owner.and_then(|o| self.players.get_mut(&o)) {
-            Some(rt) => rt.outgoing.push(p),
-            None => self.release(p),
-        }
+        self.fade_out(player, p, frames, Curve::Linear);
     }
 
-    /// Takes back a transition that was sent to the mixer but has not happened.
-    fn undispatch(&mut self, player: PlayerId) {
-        let Some(rt) = self.players.get_mut(&player) else {
-            return;
+    /// Takes back a transition that was sent to the mixer but has not
+    /// happened yet. If the mixer already executed it (its frame has passed,
+    /// but this thread has not seen the `Started` event), it is committed
+    /// instead: the engine follows what is audible. Returns `true` if a
+    /// transition was committed.
+    fn undispatch(&mut self, player: PlayerId) -> bool {
+        let Some(rt) = self.players.get(&player) else {
+            return false;
         };
-        let Plan::Dispatched(plan) = rt.plan else {
-            return;
+        let Plan::Dispatched(plan, at_frame) = rt.plan else {
+            return false;
+        };
+        let executed = rt
+            .current
+            .as_ref()
+            .is_some_and(|c| self.now_frame(&c.bus) >= at_frame);
+        if executed && matches!(plan, TransitionPlan::StartNextAt { .. }) && rt.preload.is_some() {
+            self.promote(player);
+            return true;
+        }
+        let Some(rt) = self.players.get_mut(&player) else {
+            return false;
         };
         rt.plan = Plan::Waiting(plan);
         let mut cancels = Vec::new();
@@ -583,6 +689,40 @@ impl Engine {
         for (bus, slot) in cancels {
             self.send(&bus, BusCommand::Cancel { slot });
         }
+        false
+    }
+
+    /// The preload started as the dispatched transition said: it becomes the
+    /// current source and the old one is outgoing. Reports `TransitionStarted`.
+    fn promote(&mut self, player: PlayerId) {
+        let Some(rt) = self.players.get_mut(&player) else {
+            return;
+        };
+        let Some(mut next) = rt.preload.take() else {
+            return;
+        };
+        next.start = StartState::Started;
+        let entry = next.entry;
+        let overlapping = matches!(
+            rt.plan,
+            Plan::Dispatched(
+                TransitionPlan::StartNextAt {
+                    fade_current_until_secs: Some(_),
+                    ..
+                },
+                _
+            )
+        );
+        rt.plan = Plan::None;
+        // The audio moved on: whatever was requested meanwhile, the next is
+        // playing, and the model follows the engine.
+        rt.paused = false;
+        if let Some(old) = rt.current.replace(next) {
+            rt.outgoing.push(old);
+        }
+        rt.notify_fade |= overlapping;
+        self.events
+            .push(EngineEvent::TransitionStarted { player, entry });
     }
 
     fn preload(&mut self, player: PlayerId, request: Option<SourceRequest>) {
@@ -600,7 +740,9 @@ impl Engine {
             self.release(old);
         }
         if let Some(req) = request {
-            let p = self.new_source(player, false, &req);
+            // A preload that cannot attach is simply absent; the transition
+            // then ends the current track instead (see `dispatch`).
+            let p = self.new_source(player, false, &req).ok();
             if let Some(rt) = self.players.get_mut(&player) {
                 rt.preload = p;
             }
@@ -608,14 +750,18 @@ impl Engine {
     }
 
     /// Takes the preload if it matches `request`, otherwise opens a new source.
-    fn take_or_open(&mut self, player: PlayerId, request: &SourceRequest) -> Option<Playing> {
-        let rt = self.players.get_mut(&player)?;
+    fn take_or_open(
+        &mut self,
+        player: PlayerId,
+        request: &SourceRequest,
+    ) -> Result<Playing, AttachError> {
+        let rt = self.players.get_mut(&player).ok_or(AttachError::NoPlayer)?;
         let matches = rt
             .preload
             .as_ref()
             .is_some_and(|p| p.entry == request.entry && p.start_secs == request.from_secs);
-        if matches {
-            return rt.preload.take();
+        if matches && let Some(p) = rt.preload.take() {
+            return Ok(p);
         }
         self.new_source(player, false, request)
     }
@@ -626,13 +772,30 @@ impl Engine {
         request: &SourceRequest,
         crossfade_ms: Option<u32>,
     ) {
-        self.undispatch(player);
-        let Some(mut next) = self.take_or_open(player, request) else {
-            self.events.push(EngineEvent::SourceFailed {
-                player,
-                entry: request.entry,
-            });
+        let committed = self.undispatch(player);
+        let already = self
+            .players
+            .get(&player)
+            .and_then(|rt| rt.current.as_ref())
+            .is_some_and(|c| c.entry == request.entry && c.start == StartState::Started);
+        if committed && already {
+            // The mixer already started exactly this entry.
             return;
+        }
+        let mut next = match self.take_or_open(player, request) {
+            Ok(next) => next,
+            Err(e) => {
+                // An engine limitation, not a bad file: end the entry cleanly.
+                tracing::error!(?player, error = ?e, "cannot start a source");
+                self.events.push(EngineEvent::ReachedEnd {
+                    player,
+                    entry: request.entry,
+                });
+                if crossfade_ms.is_some() {
+                    self.events.push(EngineEvent::FadeCompleted { player });
+                }
+                return;
+            }
         };
         if next.start == StartState::Requested {
             self.send(&next.bus, BusCommand::Cancel { slot: next.slot });
@@ -644,20 +807,26 @@ impl Engine {
         rt.paused = false;
         rt.plan = Plan::None;
         let old = rt.current.replace(next);
-        if let Some(old) = old {
-            match crossfade_ms {
-                Some(ms) => {
-                    let frames = self.settings.frames(f64::from(ms));
-                    if let Some(rt) = self.players.get_mut(&player) {
-                        rt.notify_fade = true;
-                    }
-                    self.fade_out(player, old, frames, Curve::EqualPower);
-                }
-                None => self.stop_quick_and_release(old),
+        let queued = match (old, crossfade_ms) {
+            (Some(old), Some(ms)) => {
+                let frames = self.settings.frames(f64::from(ms));
+                self.fade_out(player, old, frames, Curve::EqualPower)
             }
-        } else if crossfade_ms.is_some() {
-            // Nothing to fade: complete immediately.
-            self.events.push(EngineEvent::FadeCompleted { player });
+            (Some(old), None) => {
+                self.stop_quick_and_release(player, old);
+                false
+            }
+            (None, _) => false,
+        };
+        if crossfade_ms.is_some() {
+            if queued {
+                if let Some(rt) = self.players.get_mut(&player) {
+                    rt.notify_fade = true;
+                }
+            } else {
+                // Nothing audible to fade: the fade is complete right away.
+                self.events.push(EngineEvent::FadeCompleted { player });
+            }
         }
     }
 
@@ -673,22 +842,21 @@ impl Engine {
         for p in outgoing {
             self.fade_out(player, p, frames, Curve::EqualPower);
         }
-        match current {
-            Some(mut p) if p.start == StartState::Started => {
-                p.report_end = true;
-                self.fade_out(player, p, frames, Curve::EqualPower);
-            }
-            Some(p) => {
-                let entry = p.entry;
-                self.release(p);
+        if let Some(mut p) = current {
+            let entry = p.entry;
+            p.report_end = true;
+            if !self.fade_out(player, p, frames, Curve::EqualPower) {
                 self.events.push(EngineEvent::ReachedEnd { player, entry });
             }
-            None => {}
         }
     }
 
     fn pause(&mut self, player: PlayerId) {
-        self.undispatch(player);
+        if self.undispatch(player) {
+            // The transition already happened in the audio: the next is on
+            // air and the model will follow it (`TransitionStarted`).
+            return;
+        }
         let ramp = u32::try_from(self.settings.frames(self.settings.tuning.pause_ramp_ms))
             .unwrap_or(u32::MAX);
         let Some(rt) = self.players.get_mut(&player) else {
@@ -748,7 +916,6 @@ impl Engine {
             return;
         };
         rt.plan = Plan::None;
-        rt.paused = false;
         rt.notify_fade = false;
         let all: Vec<Playing> = rt
             .current
@@ -756,8 +923,12 @@ impl Engine {
             .into_iter()
             .chain(rt.outgoing.drain(..))
             .collect();
+        // `fade_out` releases paused sources at once (they are silent).
         for p in all {
-            self.stop_quick_and_release(p);
+            self.stop_quick_and_release(player, p);
+        }
+        if let Some(rt) = self.players.get_mut(&player) {
+            rt.paused = false;
         }
     }
 
@@ -772,7 +943,7 @@ impl Engine {
             return;
         };
         request.from_secs = secs;
-        let Some(mut next) = self.new_source(player, false, &request) else {
+        let Ok(mut next) = self.new_source(player, false, &request) else {
             return;
         };
         let Some(rt) = self.players.get_mut(&player) else {
@@ -784,7 +955,7 @@ impl Engine {
             StartState::WhenReady { fade_in: true }
         };
         if let Some(old) = rt.current.replace(next) {
-            self.stop_quick_and_release(old);
+            self.stop_quick_and_release(player, old);
         }
     }
 
@@ -794,17 +965,17 @@ impl Engine {
             .get_mut(&player)
             .and_then(|rt| rt.cue_src.take())
         {
-            self.stop_quick_and_release(old);
+            self.stop_quick_and_release(player, old);
         }
         match self.new_source(player, true, request) {
-            Some(mut cue) => {
+            Ok(mut cue) => {
                 cue.start = StartState::WhenReady { fade_in: false };
                 if let Some(rt) = self.players.get_mut(&player) {
                     rt.cue_src = Some(cue);
                 }
             }
-            // No Cue output configured: nothing can be heard, end it at once.
-            None => self.events.push(EngineEvent::CueEnded { player }),
+            // No Cue output (or no slot): nothing can be heard, end it at once.
+            Err(_) => self.events.push(EngineEvent::CueEnded { player }),
         }
     }
 }
@@ -843,6 +1014,18 @@ impl Engine {
             let Some(rt) = self.players.get_mut(&player) else {
                 continue;
             };
+            // A current source that is playing (or about to) keeps playing what
+            // is buffered; the mixer finishes it when the ring drains and the
+            // failure is reported then (spec §4.5). A failure before anything
+            // was buffered finishes at once the same way.
+            if let Some(c) = rt.current.as_mut()
+                && c.key == failure.key
+                && c.start != StartState::Idle
+                && !c.shared.is_drained()
+            {
+                c.failed = true;
+                continue;
+            }
             let taken = if rt.current.as_ref().is_some_and(|p| p.key == failure.key) {
                 rt.plan = Plan::None;
                 rt.current.take()
@@ -890,31 +1073,7 @@ impl Engine {
                     return;
                 };
                 match role {
-                    Role::Preload => {
-                        // A dispatched transition happened: the next is now on air.
-                        let Some(mut next) = rt.preload.take() else {
-                            return;
-                        };
-                        next.start = StartState::Started;
-                        let entry = next.entry;
-                        let overlapping = matches!(
-                            rt.plan,
-                            Plan::Dispatched(TransitionPlan::StartNextAt {
-                                fade_current_until_secs: Some(_),
-                                ..
-                            })
-                        );
-                        rt.plan = Plan::None;
-                        // The audio moved on: whatever was requested meanwhile, the
-                        // next is playing, and the model follows the engine.
-                        rt.paused = false;
-                        if let Some(old) = rt.current.replace(next) {
-                            rt.outgoing.push(old);
-                        }
-                        rt.notify_fade |= overlapping;
-                        self.events
-                            .push(EngineEvent::TransitionStarted { player, entry });
-                    }
+                    Role::Preload => self.promote(player),
                     Role::Current => {
                         if let Some(c) = rt.current.as_mut() {
                             c.start = StartState::Started;
@@ -981,7 +1140,8 @@ impl Engine {
         }
     }
 
-    /// The current source stopped by itself (end of stream or a planned stop).
+    /// The current source stopped by itself (end of stream, a planned stop,
+    /// or the drained end of a source whose worker failed).
     fn current_finished(&mut self, player: PlayerId) {
         let Some(rt) = self.players.get_mut(&player) else {
             return;
@@ -990,36 +1150,50 @@ impl Engine {
             return;
         };
         let plan = match rt.plan {
-            Plan::Waiting(p) | Plan::Dispatched(p) => Some(p),
+            Plan::Waiting(p) | Plan::Dispatched(p, _) => Some(p),
             Plan::None => None,
         };
-        let entry = finished.entry;
+        let (entry, failed) = (finished.entry, finished.failed);
         self.release(finished);
-        match plan {
+        if failed {
+            // Everything buffered has been heard; now the model decides (skip
+            // in Continuous mode, stop otherwise).
+            if let Some(rt) = self.players.get_mut(&player) {
+                rt.plan = Plan::None;
+            }
+            self.events
+                .push(EngineEvent::SourceFailed { player, entry });
+            return;
+        }
+        let next = match plan {
+            Some(TransitionPlan::StartNextAt { .. }) => self
+                .players
+                .get(&player)
+                .and_then(|rt| rt.preload.as_ref())
+                .filter(|p| p.start != StartState::Started)
+                .map(|p| (p.bus.clone(), p.slot)),
+            _ => None,
+        };
+        match next {
             // End of stream before (or instead of) the scheduled transition:
-            // start the next right now.
-            Some(TransitionPlan::StartNextAt { .. }) => {
-                let Some(rt) = self.players.get_mut(&player) else {
-                    return;
-                };
-                rt.plan = Plan::Dispatched(TransitionPlan::StartNextAt {
-                    at_secs: 0.0,
-                    fade_current_until_secs: None,
-                });
-                match rt.preload.as_mut() {
-                    Some(next) if next.start != StartState::Started => {
-                        next.start = StartState::Requested;
-                        let (bus, slot) = (next.bus.clone(), next.slot);
-                        let at = self.now_frame(&bus);
-                        self.send(&bus, BusCommand::Start { slot, at_frame: at });
-                    }
-                    _ => {
-                        rt.plan = Plan::None;
-                        self.events.push(EngineEvent::ReachedEnd { player, entry });
+            // start the next right now; `promote` runs on its `Started` event.
+            Some((bus, slot)) => {
+                let at = self.now_frame(&bus);
+                self.send(&bus, BusCommand::Start { slot, at_frame: at });
+                if let Some(rt) = self.players.get_mut(&player) {
+                    rt.plan = Plan::Dispatched(
+                        TransitionPlan::StartNextAt {
+                            at_secs: 0.0,
+                            fade_current_until_secs: None,
+                        },
+                        at,
+                    );
+                    if let Some(p) = rt.preload.as_mut() {
+                        p.start = StartState::Requested;
                     }
                 }
             }
-            _ => {
+            None => {
                 if let Some(rt) = self.players.get_mut(&player) {
                     rt.plan = Plan::None;
                 }
@@ -1036,8 +1210,8 @@ impl Engine {
             let current = if rt.paused { None } else { rt.current.as_mut() };
             for p in current.into_iter().chain(rt.cue_src.iter_mut()) {
                 if let StartState::WhenReady { fade_in } = p.start
+                    // Also set when the worker failed: whatever it buffered still plays.
                     && p.shared.is_ready()
-                    && !p.shared.is_failed()
                 {
                     p.start = StartState::Requested;
                     starts.push((p.bus.clone(), p.slot, fade_in));
@@ -1125,7 +1299,7 @@ impl Engine {
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
-        rt.plan = Plan::Dispatched(plan);
+        rt.plan = Plan::Dispatched(plan, at_frame);
         let Some(current) = rt.current.as_ref() else {
             return;
         };

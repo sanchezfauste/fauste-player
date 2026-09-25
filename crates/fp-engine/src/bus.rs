@@ -34,6 +34,8 @@ pub enum BusHealth {
 pub struct BusTiming {
     pub watchdog_timeout: Duration,
     pub reconnect_interval: Duration,
+    /// Watchdog timeout before a newly opened stream's first block.
+    pub startup_grace: Duration,
 }
 
 struct VirtualClock {
@@ -104,6 +106,8 @@ pub struct Bus {
     used: Vec<bool>,
     /// Last error from the backend, for the UI.
     last_error: Option<String>,
+    /// Heartbeat value when the current stream was opened.
+    opened_beat: u64,
 }
 
 impl Bus {
@@ -136,6 +140,7 @@ impl Bus {
             last_retry: now,
             used: vec![false; slots],
             last_error: None,
+            opened_beat: 0,
         };
         if !bus.try_open(now) {
             bus.virtual_clock = VirtualClock::start(bus.mixer.clone(), bus.config);
@@ -159,6 +164,7 @@ impl Bus {
                 self.stream = Some(stream);
                 self.health = BusHealth::Ok;
                 self.last_heartbeat = self.handle.shared.heartbeat();
+                self.opened_beat = self.last_heartbeat;
                 self.last_beat_at = now;
                 self.last_error = None;
                 true
@@ -204,8 +210,14 @@ impl Bus {
         }
         match self.health {
             BusHealth::Ok => {
-                let silent =
-                    now.saturating_duration_since(self.last_beat_at) > self.timing.watchdog_timeout;
+                // Until a newly opened stream delivers its first block it gets a
+                // longer grace (Bluetooth and bridged devices can be slow to start).
+                let timeout = if beat == self.opened_beat {
+                    self.timing.startup_grace
+                } else {
+                    self.timing.watchdog_timeout
+                };
+                let silent = now.saturating_duration_since(self.last_beat_at) > timeout;
                 if self.handle.shared.lost.load(Ordering::Acquire) || silent {
                     tracing::warn!(bus = ?self.key, silent, "output device lost; switching to the virtual clock");
                     self.stream = None;
@@ -257,7 +269,10 @@ impl Bus {
     /// Drains events, and frees memory and slots the mixer handed back.
     pub fn poll(&mut self) -> Vec<BusEvent> {
         while let Ok(retired) = self.handle.retired.pop() {
-            if let Retired::Source { slot, .. } = retired
+            // A refused attach (`slot: None`) never occupied a slot: nothing to free.
+            if let Retired::Source {
+                slot: Some(slot), ..
+            } = retired
                 && let Some(u) = self.used.get_mut(slot)
             {
                 *u = false;

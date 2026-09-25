@@ -82,15 +82,19 @@ impl SampleSource for Exploding {
 
 /// Opener for paths named `track<N>`: sample `i` (from the start of the file)
 /// of track N is `N * 100_000 + i` on both channels, and every track is
-/// `frames` long. Any other path fails to open.
+/// `frames` long. `broken<N>` plays like `track<N>` but ends with a read
+/// error instead of a clean end. Any other path fails to open.
 pub fn tagged_opener(frames: u64) -> SourceOpener {
     Arc::new(move |path, from_secs, rate| {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let n: u64 = name
-            .strip_prefix("track")
+        let (digits, fails) = match name.strip_prefix("track") {
+            Some(d) => (Some(d), false),
+            None => (name.strip_prefix("broken"), true),
+        };
+        let n: u64 = digits
             .and_then(|d| d.parse().ok())
             .ok_or_else(|| format!("cannot open {name}"))?;
         let start = (from_secs * f64::from(rate)).round() as u64;
@@ -98,6 +102,7 @@ pub fn tagged_opener(frames: u64) -> SourceOpener {
             base: n * 100_000,
             next: start,
             total: frames,
+            fails,
         }) as Box<dyn SampleSource>)
     })
 }
@@ -106,12 +111,17 @@ pub struct Tagged {
     base: u64,
     next: u64,
     total: u64,
+    fails: bool,
 }
 
 impl SampleSource for Tagged {
     fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
         if self.next >= self.total {
-            return Ok(false);
+            return if self.fails {
+                Err("read error".to_owned())
+            } else {
+                Ok(false)
+            };
         }
         let end = (self.next + 512).min(self.total);
         for i in self.next..end {

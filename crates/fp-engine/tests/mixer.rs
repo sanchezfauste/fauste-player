@@ -330,7 +330,7 @@ fn detached_sources_and_old_storage_come_back_for_freeing_off_the_rt_thread() {
     render(&mut m, 1, 2);
     assert!(matches!(
         h.retired.pop(),
-        Ok(Retired::Source { slot: 0, .. })
+        Ok(Retired::Source { slot: Some(0), .. })
     ));
 }
 
@@ -342,10 +342,24 @@ fn attaching_to_an_occupied_slot_hands_the_source_back() {
     attach(&mut h, 0, a, 0);
     attach(&mut h, 0, b, 0);
     render(&mut m, 1, 2);
+    // Handed back as "never attached", so the conductor keeps slot 0 marked busy.
     assert!(matches!(
         h.retired.pop(),
-        Ok(Retired::Source { slot: 0, .. })
+        Ok(Retired::Source { slot: None, .. })
     ));
+}
+
+#[test]
+fn a_full_retired_queue_never_frees_memory_on_the_rt_thread() {
+    let (mut m, mut h) = mixer(1);
+    // Nobody drains `retired`: every detached source must be kept, not dropped.
+    for _ in 0..1_100 {
+        let (_p, c) = counting_source(4, false);
+        attach(&mut h, 0, c, 0);
+        send(&mut h, BusCommand::Detach { slot: 0 });
+        render(&mut m, 1, 2);
+    }
+    assert!(h.shared.leaked.load(Ordering::Relaxed) > 0);
 }
 
 #[test]

@@ -16,7 +16,9 @@ use std::time::{Duration, Instant};
 use fp_backends::{AudioBackend, NullBackend, OfflineBackend, OfflineDevice};
 use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
-use fp_model::{AppState, Command, Config, EntryId, ModelError, PlayMode, PlayerId, Transport};
+use fp_model::{
+    AppState, Command, Config, EntryId, FileState, ModelError, PlayMode, PlayerId, Transport,
+};
 use support::tagged_opener;
 
 const BLOCK: usize = 480;
@@ -124,17 +126,24 @@ fn the_spawned_conductor_runs_in_real_time_on_the_null_backend() {
     let p = conductor.state().players[0].id;
     let handle = conductor.spawn(handle, Duration::from_millis(5)).unwrap();
     handle.send(Command::Play(p));
-    std::thread::sleep(Duration::from_millis(300));
-    let t = handle.telemetry.load();
-    let position = t
-        .players
-        .iter()
-        .find(|(id, _)| *id == p)
-        .unwrap()
-        .1
-        .position_secs
-        .unwrap();
-    assert!(position > 0.1, "position {position}");
+    // Poll with a generous deadline instead of a fixed sleep (slow CI runners).
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let position = loop {
+        let t = handle.telemetry.load();
+        let position = t
+            .players
+            .iter()
+            .find(|(id, _)| *id == p)
+            .and_then(|(_, t)| t.position_secs);
+        if position.is_some_and(|pos| pos > 0.1) || Instant::now() > deadline {
+            break position;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert!(
+        position.is_some_and(|pos| pos > 0.1),
+        "position {position:?}"
+    );
     drop(handle);
 }
 
@@ -176,6 +185,7 @@ fn stress(simulated_secs: u64) {
     let mut rng = Rng(0x5eed);
     let mut last_move: HashMap<PlayerId, (f64, u64, Instant)> = HashMap::new();
     let mut history: HashMap<PlayerId, Vec<(u64, String)>> = HashMap::new();
+    let mut fading_since: HashMap<PlayerId, (u64, Instant)> = HashMap::new();
     let blocks = simulated_secs * 100;
     for block in 0..blocks {
         if block % 25 == 0 {
@@ -209,9 +219,26 @@ fn stress(simulated_secs: u64) {
         if block % 4 == 0 {
             std::thread::yield_now();
         }
-        // A playing (not paused) player must never stand still for long.
+        // A playing (not paused) player must never stand still for long, a
+        // fade must never outlive a whole track, and sources must not pile up.
         let model = handle.model.load();
         let telemetry = handle.telemetry.load();
+        for pl in &model.players {
+            let since = fading_since.entry(pl.id).or_insert((block, Instant::now()));
+            if !pl.fading {
+                *since = (block, Instant::now());
+            }
+            assert!(
+                block - since.0 < 1_000 || since.1.elapsed() < Duration::from_secs(2),
+                "player {:?} has been fading for 10 simulated seconds",
+                pl.id
+            );
+        }
+        assert!(
+            conductor.engine().attached_sources() <= players.len() * 8,
+            "sources are piling up: {}",
+            conductor.engine().attached_sources()
+        );
         for (id, t) in &telemetry.players {
             let playing = model
                 .player(*id)
@@ -248,7 +275,17 @@ fn stress(simulated_secs: u64) {
             }
         }
     }
-    assert_eq!(handle.telemetry.load().dropped_commands, 0);
+    let telemetry = handle.telemetry.load();
+    assert_eq!(telemetry.dropped_commands, 0);
+    assert_eq!(
+        telemetry.slot_exhaustions, 0,
+        "mixer slots must never run out"
+    );
+    let model = handle.model.load();
+    assert!(
+        model.library.iter().all(|t| t.file_state == FileState::Ok),
+        "every test file is valid: none may end up marked unreadable"
+    );
 }
 
 #[test]

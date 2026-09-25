@@ -27,6 +27,7 @@ const MIXER: MixerConfig = MixerConfig {
 const TIMING: BusTiming = BusTiming {
     watchdog_timeout: Duration::from_millis(500),
     reconnect_interval: Duration::from_secs(2),
+    startup_grace: Duration::from_secs(5),
 };
 
 fn setup(plugged: bool) -> (OfflineBackend, OfflineDevice, Bus, Instant) {
@@ -72,12 +73,31 @@ fn unplugging_switches_to_the_virtual_clock_and_the_timeline_keeps_moving() {
 }
 
 #[test]
-fn a_silent_device_is_declared_lost_by_the_watchdog() {
-    let (_b, _device, mut bus, t0) = setup(true);
-    bus.supervise(t0 + Duration::from_millis(400));
+fn a_device_that_stops_rendering_is_declared_lost_by_the_watchdog() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.render(480).unwrap();
+    bus.supervise(t0 + Duration::from_millis(100));
+    bus.supervise(t0 + Duration::from_millis(500));
     assert_eq!(bus.health(), BusHealth::Ok);
-    bus.supervise(t0 + Duration::from_millis(600));
+    bus.supervise(t0 + Duration::from_millis(700));
     assert_eq!(bus.health(), BusHealth::Lost);
+}
+
+#[test]
+fn a_slow_starting_device_gets_a_grace_period_before_its_first_block() {
+    let (_b, _device, mut bus, t0) = setup(true);
+    bus.supervise(t0 + Duration::from_millis(600));
+    assert_eq!(
+        bus.health(),
+        BusHealth::Ok,
+        "Bluetooth and bridged devices can take a while to start"
+    );
+    bus.supervise(t0 + Duration::from_secs(6));
+    assert_eq!(
+        bus.health(),
+        BusHealth::Lost,
+        "but a device that never starts is still detected"
+    );
 }
 
 #[test]

@@ -65,7 +65,9 @@ pub enum BusEvent {
 /// Memory handed back to the conductor to be freed off the RT thread.
 pub enum Retired {
     Source {
-        slot: usize,
+        /// The slot the source occupied, or `None` if it was refused
+        /// (occupied or out-of-range slot) and never attached.
+        slot: Option<usize>,
         source: SourceConsumer,
         volume: Arc<AtomicF32>,
     },
@@ -101,6 +103,11 @@ pub struct BusShared {
     pub xruns: AtomicU64,
     pub dropped_events: AtomicU64,
     pub lock_misses: AtomicU64,
+    /// Items that could not be handed back and were leaked instead of being
+    /// freed on the real-time thread (should always be zero).
+    pub leaked: AtomicU64,
+    /// Blocks in which a source's channel pair did not fit the stream.
+    pub misrouted: AtomicU64,
     pub peak_l: AtomicF32,
     pub peak_r: AtomicF32,
 }
@@ -229,7 +236,11 @@ impl Mixer {
 
     fn retire(&mut self, item: Retired) {
         if self.backlog.is_some() {
-            // Keep the oldest; this one waits in its slot (see `detach`).
+            // Both the queue and the backlog are full (the conductor stopped
+            // draining). Freeing here would break the real-time rules, so the
+            // item is leaked and counted instead.
+            std::mem::forget(item);
+            self.shared.leaked.fetch_add(1, Ordering::Relaxed);
             return;
         }
         if let Err(rtrb::PushError::Full(item)) = self.retired.push(item) {
@@ -271,7 +282,7 @@ impl Mixer {
                 } else {
                     // Occupied or out of range: hand the source straight back.
                     self.retire(Retired::Source {
-                        slot,
+                        slot: None,
                         source,
                         volume,
                     });
@@ -334,7 +345,7 @@ impl Mixer {
                     && let Some(s) = cell.take()
                 {
                     self.retire(Retired::Source {
-                        slot,
+                        slot: Some(slot),
                         source: s.source,
                         volume: s.volume,
                     });
@@ -379,6 +390,9 @@ impl Mixer {
             let Some(Some(slot)) = self.slots.0.get_mut(index) else {
                 continue;
             };
+            if slot.started && !slot.finished && slot.first_channel + 1 >= channels {
+                self.shared.misrouted.fetch_add(1, Ordering::Relaxed);
+            }
             let mut events: [Option<BusEvent>; 2] = [None, None];
             let (l, r) = render_slot(
                 slot,
@@ -439,6 +453,9 @@ fn render_slot(
         }
     }
     let target_volume = slot.volume.load().clamp(0.0, 1.0);
+    // A pair that does not fit the stream is consumed silently (never written
+    // into another channel or frame); the caller counts it.
+    let fits = slot.first_channel + 1 < channels;
     let mut chunk = [0.0f32; CHUNK_FRAMES * SOURCE_CHANNELS];
     let (mut peak_l, mut peak_r) = (0.0f32, 0.0f32);
     while f < frames && !slot.paused {
@@ -467,6 +484,9 @@ fn render_slot(
         let Some(buf) = chunk.get_mut(..n * SOURCE_CHANNELS) else {
             break;
         };
+        // Read "no more audio will come" *before* popping: a producer that
+        // pushes its last samples and then sets eof cannot lose them.
+        let ended = slot.source.shared.is_eof() || slot.source.shared.is_failed();
         let got = slot.source.pop_frames(buf);
         for (k, &[l, r]) in buf
             .as_chunks::<SOURCE_CHANNELS>()
@@ -484,14 +504,14 @@ fn render_slot(
             let (l, r) = (l * g, r * g);
             peak_l = peak_l.max(l.abs());
             peak_r = peak_r.max(r.abs());
-            let base = (f + k) * channels + slot.first_channel;
-            if let Some(o) = out.get_mut(base) {
-                *o += l;
-            }
-            if slot.first_channel + 1 < channels
-                && let Some(o) = out.get_mut(base + 1)
-            {
-                *o += r;
+            if fits {
+                let base = (f + k) * channels + slot.first_channel;
+                if let Some(o) = out.get_mut(base) {
+                    *o += l;
+                }
+                if let Some(o) = out.get_mut(base + 1) {
+                    *o += r;
+                }
             }
         }
         slot.source
@@ -503,7 +523,8 @@ fn render_slot(
             slot.paused = true;
         }
         if got < n {
-            if slot.source.shared.is_eof() {
+            // End of stream, or a failed source whose buffer has drained.
+            if ended {
                 finish(slot, index, abs + got as u64, events);
                 break;
             }

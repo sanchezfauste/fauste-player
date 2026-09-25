@@ -16,6 +16,8 @@ pub const SOURCE_CHANNELS: usize = 2;
 pub struct SourceShared {
     /// Bus frames the mixer has consumed from the ring.
     pub frames_played: AtomicU64,
+    /// Frames the worker has pushed into the ring.
+    pub frames_pushed: AtomicU64,
     /// Set by the worker once the whole stream has been pushed.
     pub eof: AtomicBool,
     /// Set by the worker when the stream could not be opened or decoded.
@@ -32,6 +34,11 @@ pub struct SourceShared {
 impl SourceShared {
     pub fn frames_played(&self) -> u64 {
         self.frames_played.load(Ordering::Acquire)
+    }
+
+    /// True when everything pushed so far has been played.
+    pub fn is_drained(&self) -> bool {
+        self.frames_pushed.load(Ordering::Acquire) <= self.frames_played()
     }
 
     pub fn is_ready(&self) -> bool {
@@ -92,6 +99,9 @@ impl SourceProducer {
         let (pushed, _) = self
             .ring
             .push_partial_slice(samples.get(..fit).unwrap_or_default());
+        self.shared
+            .frames_pushed
+            .fetch_add((pushed.len() / SOURCE_CHANNELS) as u64, Ordering::AcqRel);
         pushed.len()
     }
 

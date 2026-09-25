@@ -109,6 +109,11 @@ impl FileDecoder {
             let packet = match self.format.next_packet() {
                 Ok(Some(packet)) => packet,
                 Ok(None) => return Ok(false),
+                // A truncated file (interrupted download, damaged tail) ends
+                // where its data ends instead of failing.
+                Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    return Ok(false);
+                }
                 Err(e) => return Err(e.to_string()),
             };
             if packet.track_id != self.track_id {

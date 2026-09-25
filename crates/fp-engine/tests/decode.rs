@@ -58,3 +58,14 @@ fn a_file_that_is_not_audio_is_reported_with_its_path() {
     assert!(error.contains("notes.mp3"), "{error}");
     assert!(FileDecoder::open(&dir.path().join("missing.flac")).is_err());
 }
+
+#[test]
+fn a_truncated_file_plays_what_it_has_and_ends_cleanly() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = indexed_wav(dir.path(), "cut.wav", 48_000, 2, 48_000);
+    let bytes = std::fs::read(&path).unwrap();
+    std::fs::write(&path, &bytes[..bytes.len() / 2]).unwrap(); // an interrupted download
+    let mut d = FileDecoder::open(&path).unwrap();
+    let out = decode_all(&mut d);
+    assert!(out.len() > 20_000 * 2, "most of the audio is still there");
+}

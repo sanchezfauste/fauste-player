@@ -87,11 +87,18 @@ impl Rig {
         self.engine.execute(action, self.clock);
     }
 
-    /// Lets worker threads fill their rings, then ticks.
+    /// Waits (bounded) until worker threads have filled every pending
+    /// source, ticking meanwhile; no fixed sleeps, so slow CI machines pass.
     fn settle(&mut self) {
-        std::thread::sleep(Duration::from_millis(20));
-        let events = self.engine.tick(self.clock);
-        self.events.extend(events);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let events = self.engine.tick(self.clock);
+            self.events.extend(events);
+            if self.engine.unsettled_sources() == 0 || Instant::now() > deadline {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
     }
 
     /// Renders `blocks` blocks on both devices, ticking after each.
