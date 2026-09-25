@@ -113,3 +113,73 @@ fn invalid_values_are_clamped_on_load() {
         loaded.warnings
     );
 }
+
+fn write_config(s: &Store, json: &str) {
+    let path = s.paths().config_file();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, json).unwrap();
+}
+
+#[test]
+fn hand_edited_values_of_the_wrong_type_are_repaired_not_discarded() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    write_config(
+        &s,
+        r#"{"schema_version":1,"config":{
+            "players":{"count":-1,"fade_ms":1500.5,"end_warning_secs":"soon"},
+            "outputs":{"sample_rate":1e3,"buffer_frames":99999999999},
+            "ui":{"wave_color":"cyan"}}}"#,
+    );
+    let loaded = s.load("Main");
+    let c = &loaded.state.config;
+    assert_eq!(c.players.count, 1, "negative count clamps to the minimum");
+    assert_eq!(c.players.fade_ms, 1501, "fractional values are rounded");
+    assert_eq!(
+        c.players.end_warning_secs, 10.0,
+        "an invalid value falls back to its default"
+    );
+    assert_eq!(
+        c.outputs.sample_rate, 8000,
+        "1e3 is read as 1000 then clamped"
+    );
+    assert_eq!(
+        c.outputs.buffer_frames, 16_384,
+        "a huge value saturates then clamps"
+    );
+    assert_eq!(
+        c.ui.wave_color, "cyan",
+        "valid fields next to invalid ones are kept"
+    );
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.contains("end_warning_secs")),
+        "{:?}",
+        loaded.warnings
+    );
+    assert!(
+        s.paths().config_file().exists(),
+        "a repairable file is not quarantined"
+    );
+}
+
+#[test]
+fn a_newer_file_is_preserved_beyond_backup_rotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    let newer = r#"{"schema_version":99,"config":{}}"#;
+    write_config(&s, newer);
+    let loaded = s.load("Main");
+    for _ in 0..5 {
+        s.save_config(&loaded.state).unwrap();
+    }
+    let preserved: Vec<_> = fs::read_dir(s.paths().config_dir.clone())
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.to_string_lossy().contains(".newer-"))
+        .collect();
+    assert_eq!(preserved.len(), 1, "{preserved:?}");
+    assert_eq!(fs::read_to_string(&preserved[0]).unwrap(), newer);
+}

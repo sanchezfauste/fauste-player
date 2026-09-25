@@ -111,6 +111,36 @@ fn quarantine(path: &Path, warnings: &mut Vec<String>) {
     }
 }
 
+/// Keeps a copy of a file written by a newer version under a name that backup
+/// rotation never touches, so a later upgrade can still recover it. A copy
+/// with identical content is not duplicated.
+fn preserve(path: &Path, bytes: &[u8], warnings: &mut Vec<String>) {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return;
+    };
+    let prefix = format!("{}.newer-", name.to_string_lossy());
+    let already = fs::read_dir(dir).into_iter().flatten().flatten().any(|e| {
+        e.file_name().to_string_lossy().starts_with(&prefix)
+            && fs::read(e.path()).is_ok_and(|existing| existing == bytes)
+    });
+    if already {
+        return;
+    }
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let target = sibling(path, &format!("newer-{stamp}"));
+    match fs::write(&target, bytes) {
+        Ok(()) => warnings.push(format!(
+            "{}: kept a copy at {}",
+            path.display(),
+            target.display()
+        )),
+        Err(e) => warnings.push(format!("{}: could not keep a copy: {e}", path.display())),
+    }
+}
+
 /// Loads the primary file, falling back to `.bak1`…`.bakN`. Never fails:
 /// when nothing is usable it returns `value: None` (use defaults).
 pub fn load_with_fallback<T>(
@@ -134,7 +164,8 @@ pub fn load_with_fallback<T>(
                     };
                 }
                 Err(ParseError::TooNew(msg)) => {
-                    warnings.push(format!("{}: {msg}", candidate.display()))
+                    warnings.push(format!("{}: {msg}", candidate.display()));
+                    preserve(&candidate, &bytes, &mut warnings);
                 }
                 Err(ParseError::Corrupt(msg)) => {
                     warnings.push(format!(

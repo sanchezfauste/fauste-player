@@ -11,6 +11,7 @@ use crate::docs::{
     PlaylistsDoc, SESSION_MIGRATIONS, SESSION_SCHEMA, SessionDoc,
 };
 use crate::error::StoreError;
+use crate::lenient::config_from_value;
 use crate::migrate::{Migration, upgrade};
 use crate::paths::AppPaths;
 
@@ -56,15 +57,32 @@ impl Store {
     pub fn load(&self, default_playlist_name: &str) -> LoadedState {
         let mut warnings = Vec::new();
 
-        let config_doc: Loaded<ConfigDoc> = load_doc(
+        // Read leniently: a hand-edited value of the wrong type falls back to its
+        // default (with a warning) instead of discarding the whole file.
+        let config_doc = load_with_fallback(
             &self.paths.config_file(),
             self.limits.backup_count,
             self.limits.max_state_file_bytes,
-            CONFIG_SCHEMA,
-            CONFIG_MIGRATIONS,
+            |bytes| {
+                let value: serde_json::Value = serde_json::from_slice(bytes)
+                    .map_err(|e| ParseError::Corrupt(e.to_string()))?;
+                let value = upgrade(value, CONFIG_SCHEMA, CONFIG_MIGRATIONS)?;
+                let mut notes = Vec::new();
+                let config = config_from_value(
+                    value.get("config").unwrap_or(&serde_json::Value::Null),
+                    &mut notes,
+                );
+                Ok((config, notes))
+            },
         );
         warnings.extend(config_doc.warnings);
-        let mut config = config_doc.value.map(|d| d.config).unwrap_or_default();
+        let mut config = match config_doc.value {
+            Some((config, notes)) => {
+                warnings.extend(notes);
+                config
+            }
+            None => Default::default(),
+        };
         warnings.extend(config.validate().into_iter().map(|w| w.to_string()));
         let limits = config.limits.clone();
 
