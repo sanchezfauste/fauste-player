@@ -5,3 +5,6 @@
 pub mod ids;
 
 pub use ids::{EntryId, IdGen, PlayerId, PlaylistId, TrackId};
+pub mod track;
+
+pub use track::{FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track, TrackKind};
