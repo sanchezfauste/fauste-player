@@ -79,6 +79,22 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             let i = state.player_index(id)?;
             state.players[i].columns = widths;
         }
+        Command::ApplyAnalysis { track, analysis } => {
+            // Analysis may finish after the track was removed: nothing to do.
+            if let Some(t) = state.library.get_mut(track) {
+                t.apply_analysis(&analysis);
+                refresh_next(state);
+            }
+        }
+        Command::SetFileState {
+            track,
+            state: file_state,
+        } => {
+            if let Some(t) = state.library.get_mut(track) {
+                t.file_state = file_state;
+                refresh_next(state);
+            }
+        }
         Command::RemoveEntry(entry) => remove_entry(state, entry, &mut out)?,
         Command::MoveEntry { entry, to, index } => {
             state.playlists.move_entry(entry, to, index)?;

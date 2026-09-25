@@ -187,6 +187,47 @@ impl Track {
     }
 }
 
+/// What analysis learned about a file (spec §6). Metadata fields are
+/// `None` when the file did not provide them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrackAnalysis {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration_secs: f64,
+    pub cue_in: Option<f64>,
+    pub cue_out: Option<f64>,
+    pub segue_start: Option<f64>,
+    pub outro_start: Option<f64>,
+}
+
+impl Track {
+    /// Stores an analysis result. Known metadata is only replaced by values
+    /// the analysis actually found, and manual markers always win.
+    pub fn apply_analysis(&mut self, analysis: &TrackAnalysis) {
+        if let Some(title) = analysis.title.as_ref().filter(|t| !t.is_empty()) {
+            self.title.clone_from(title);
+        }
+        if let Some(artist) = analysis.artist.as_ref().filter(|a| !a.is_empty()) {
+            self.artist.clone_from(artist);
+        }
+        if let Some(album) = analysis.album.as_ref().filter(|a| !a.is_empty()) {
+            self.album.clone_from(album);
+        }
+        if analysis.duration_secs.is_finite() && analysis.duration_secs > 0.0 {
+            self.duration_secs = analysis.duration_secs;
+        }
+        self.markers.set_auto(MarkerKind::CueIn, analysis.cue_in);
+        self.markers.set_auto(MarkerKind::CueOut, analysis.cue_out);
+        self.markers
+            .set_auto(MarkerKind::SegueStart, analysis.segue_start);
+        self.markers
+            .set_auto(MarkerKind::OutroStart, analysis.outro_start);
+        self.analyzed = true;
+        self.file_state = FileState::Ok;
+    }
+}
+
 /// All known tracks, keyed by id. Serialised as a JSON array.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(from = "Vec<Track>", into = "Vec<Track>")]

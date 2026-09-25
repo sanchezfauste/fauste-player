@@ -1,0 +1,159 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+//! Applying analysis results (spec §6) to the model.
+
+mod common;
+
+use common::{entries, fixture, p0};
+use fp_model::{
+    Command, EngineAction, FileState, MarkerKind, MarkerSource, TrackAnalysis, TrackId,
+    TransitionPlan, apply,
+};
+
+fn analysis(duration: f64) -> TrackAnalysis {
+    TrackAnalysis {
+        title: Some("Real Title".into()),
+        artist: Some("Real Artist".into()),
+        album: None,
+        duration_secs: duration,
+        cue_in: Some(0.5),
+        cue_out: Some(duration - 1.0),
+        segue_start: Some(duration - 6.0),
+        outro_start: Some(duration - 20.0),
+    }
+}
+
+fn track_of(state: &fp_model::AppState, n: usize) -> TrackId {
+    state.playlists.entry(entries(state)[n]).unwrap().track
+}
+
+#[test]
+fn analysis_fills_metadata_and_markers() {
+    let mut state = fixture(2);
+    let t = track_of(&state, 0);
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(analysis(200.0)),
+        },
+    )
+    .unwrap();
+    let track = state.library.get(t).unwrap();
+    assert_eq!(
+        (track.title.as_str(), track.artist.as_str()),
+        ("Real Title", "Real Artist")
+    );
+    assert_eq!(track.duration_secs, 200.0);
+    assert_eq!(track.cue_in_secs(), 0.5);
+    assert_eq!(track.cue_out_secs(), 199.0);
+    assert_eq!(track.segue_start_secs(), Some(194.0));
+    assert_eq!(track.outro_start_secs(), Some(180.0));
+    assert!(track.analyzed);
+    assert_eq!(
+        track.markers.get(MarkerKind::SegueStart).unwrap().source,
+        MarkerSource::Auto
+    );
+}
+
+#[test]
+fn analysis_does_not_erase_known_metadata_with_nothing() {
+    let mut state = fixture(1);
+    let t = track_of(&state, 0);
+    let before = state.library.get(t).unwrap().title.clone();
+    let mut a = analysis(100.0);
+    a.title = None;
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(a),
+        },
+    )
+    .unwrap();
+    assert_eq!(state.library.get(t).unwrap().title, before);
+}
+
+#[test]
+fn re_analysis_never_overwrites_manual_markers() {
+    let mut state = fixture(1);
+    let t = track_of(&state, 0);
+    state
+        .library
+        .get_mut(t)
+        .unwrap()
+        .markers
+        .set_manual(MarkerKind::SegueStart, Some(150.0));
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(analysis(200.0)),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        state.library.get(t).unwrap().segue_start_secs(),
+        Some(150.0)
+    );
+}
+
+#[test]
+fn a_newly_known_segue_reschedules_the_playing_transition() {
+    let mut state = fixture(2);
+    let p = p0(&state);
+    apply(&mut state, Command::Play(p)).unwrap();
+    let t = track_of(&state, 0);
+    let actions = apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(analysis(200.0)),
+        },
+    )
+    .unwrap();
+    assert!(actions.iter().any(|a| matches!(
+        a,
+        EngineAction::Schedule { player, plan: Some(TransitionPlan::StartNextAt { at_secs, fade_current_until_secs: Some(_) }) }
+            if *player == p && *at_secs == 194.0
+    )), "{actions:?}");
+}
+
+#[test]
+fn a_missing_file_is_skipped_as_next() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    apply(&mut state, Command::Play(p)).unwrap();
+    let t = track_of(&state, 1);
+    apply(
+        &mut state,
+        Command::SetFileState {
+            track: t,
+            state: FileState::Missing,
+        },
+    )
+    .unwrap();
+    assert_eq!(state.player(p).unwrap().next, Some(e[2]));
+}
+
+#[test]
+fn results_for_removed_tracks_are_ignored() {
+    let mut state = fixture(1);
+    let actions = apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: TrackId(987_654),
+            analysis: Box::new(analysis(10.0)),
+        },
+    );
+    assert!(actions.is_ok());
+    assert!(
+        apply(
+            &mut state,
+            Command::SetFileState {
+                track: TrackId(987_654),
+                state: FileState::Missing
+            }
+        )
+        .is_ok()
+    );
+}

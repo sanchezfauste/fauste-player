@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::config::Config;
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{ColumnWidths, PlayMode};
+use crate::track::{FileState, TrackAnalysis};
 
 /// A user intent, sent by the UI.
 #[derive(Debug, Clone, PartialEq)]
@@ -27,6 +28,16 @@ pub enum Command {
     Seek(PlayerId, f64),
     ShowPlaylist(PlayerId, PlaylistId),
     SetColumnWidths(PlayerId, ColumnWidths),
+    /// Stores an analysis result for a track (ignored if the track is gone).
+    ApplyAnalysis {
+        track: TrackId,
+        analysis: Box<TrackAnalysis>,
+    },
+    /// Records that a track's file is missing or unreadable (or back to Ok).
+    SetFileState {
+        track: TrackId,
+        state: FileState,
+    },
     RemoveEntry(EntryId),
     MoveEntry {
         entry: EntryId,

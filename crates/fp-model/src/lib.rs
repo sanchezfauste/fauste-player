@@ -25,4 +25,6 @@ pub use playlist::{Playlist, PlaylistEntry, Playlists};
 pub use reducer::{apply, on_event, plan_for};
 pub use session::{PlayerSession, RestoreParts};
 pub use state::AppState;
-pub use track::{FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track, TrackKind};
+pub use track::{
+    FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track, TrackAnalysis, TrackKind,
+};
