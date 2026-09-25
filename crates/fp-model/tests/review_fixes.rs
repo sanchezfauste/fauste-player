@@ -320,3 +320,25 @@ fn restore_drops_a_current_entry_whose_track_is_gone() {
         (None, Transport::Stopped)
     );
 }
+
+// Plan 2 review — a transition the engine reports after the model stopped is stale.
+#[test]
+fn a_transition_reported_after_stop_does_not_restart_the_player() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    apply(&mut state, Command::Play(p)).unwrap();
+    apply(&mut state, Command::Stop(p)).unwrap();
+    let actions = on_event(
+        &mut state,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: e[1],
+        },
+    );
+    assert_eq!(state.player(p).unwrap().transport, Transport::Stopped);
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, EngineAction::StartCurrent { .. }))
+    );
+}

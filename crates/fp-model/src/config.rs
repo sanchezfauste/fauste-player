@@ -169,6 +169,8 @@ pub struct Tuning {
     pub schedule_lead_ms: f64,
     pub conductor_tick_ms: f64,
     pub watchdog_timeout_ms: f64,
+    /// Watchdog timeout before a newly opened stream delivers its first block.
+    pub watchdog_startup_grace_ms: f64,
     pub reconnect_interval_ms: f64,
     pub gain_smoothing_ms: f64,
     pub save_debounce_ms: f64,
@@ -186,6 +188,7 @@ impl Default for Tuning {
             schedule_lead_ms: 200.0,
             conductor_tick_ms: 5.0,
             watchdog_timeout_ms: 500.0,
+            watchdog_startup_grace_ms: 5000.0,
             reconnect_interval_ms: 2000.0,
             gain_smoothing_ms: 20.0,
             save_debounce_ms: 1000.0,
@@ -415,6 +418,13 @@ impl Config {
             100.0,
             10_000.0,
             "tuning.watchdog_timeout_ms",
+            &mut w,
+        );
+        clamp_to(
+            &mut t.watchdog_startup_grace_ms,
+            100.0,
+            60_000.0,
+            "tuning.watchdog_startup_grace_ms",
             &mut w,
         );
         clamp_to(

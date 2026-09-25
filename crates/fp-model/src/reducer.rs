@@ -127,8 +127,11 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             }
         }
         EngineEvent::TransitionStarted { player, entry } => {
+            // A transition reported after the player was stopped is stale: the
+            // engine has already been told to stop everything.
             if let Ok(i) = state.player_index(player)
                 && state.players[i].current != Some(entry)
+                && state.players[i].transport != Transport::Stopped
             {
                 let overlapping = matches!(
                     state.players[i].scheduled,
