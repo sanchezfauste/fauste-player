@@ -8,9 +8,11 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+mod cpal_backend;
 mod null;
 mod offline;
 
+pub use cpal_backend::CpalBackend;
 pub use null::NullBackend;
 pub use offline::{OfflineBackend, OfflineDevice};
 
