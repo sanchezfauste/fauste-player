@@ -6,6 +6,7 @@
 
 pub mod atomic;
 pub mod bus;
+pub mod conductor;
 pub mod decode;
 pub mod engine;
 pub mod mixer;
