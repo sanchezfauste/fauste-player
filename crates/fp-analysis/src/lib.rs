@@ -3,5 +3,9 @@
 
 #![deny(clippy::indexing_slicing)]
 
+pub mod analyze;
+pub mod cache;
 pub mod metadata;
 pub mod signal;
+
+pub use analyze::{Analysis, AnalysisError, analyze_file};
