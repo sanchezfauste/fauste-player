@@ -82,7 +82,7 @@ fn a_non_audio_file_is_reported_as_unreadable() {
 }
 
 fn cache(dir: &Path) -> AnalysisCache {
-    AnalysisCache::new(dir.join("cache"), Limits::default().max_state_file_bytes)
+    AnalysisCache::new(dir.join("cache"), &Limits::default())
 }
 
 #[test]
@@ -137,4 +137,41 @@ fn a_corrupt_cache_entry_is_recomputed() {
         0,
         "the bad entry is removed"
     );
+}
+
+#[test]
+fn a_huge_embedded_cover_keeps_the_text_tags() {
+    use lofty::config::WriteOptions;
+    use lofty::picture::{MimeType, Picture, PictureType};
+    use lofty::prelude::*;
+    use lofty::tag::Tag;
+    let dir = tempfile::tempdir().unwrap();
+    let path = fixture(dir.path(), "file-name.wav", 2);
+    let mut tagged = lofty::read_from_path(&path).unwrap();
+    let ty = tagged.primary_tag_type();
+    tagged.insert_tag(Tag::new(ty));
+    let tag = tagged.primary_tag_mut().unwrap();
+    tag.set_title("Song Title".into());
+    // 17 MiB: under the 20 MiB cover limit, over lofty's own default allocation limit.
+    tag.push_picture(
+        Picture::unchecked(vec![0u8; 17 * 1024 * 1024])
+            .pic_type(PictureType::CoverFront)
+            .mime_type(MimeType::Png)
+            .build(),
+    );
+    tagged.save_to_path(&path, WriteOptions::default()).unwrap();
+    let a = analyze_file(&path, &settings(), &Limits::default()).unwrap();
+    assert_eq!(a.analysis.title.as_deref(), Some("Song Title"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_file_without_read_permission_is_unreadable_not_missing() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = fixture(dir.path(), "locked.wav", 1);
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let r = analyze_file(&path, &settings(), &Limits::default());
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(matches!(r, Err(AnalysisError::Unreadable(_))), "{r:?}");
 }

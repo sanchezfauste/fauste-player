@@ -23,8 +23,25 @@ fn non_empty(s: Option<std::borrow::Cow<'_, str>>) -> Option<String> {
 }
 
 /// Reads tags with lofty. Unreadable or untagged files yield empty `Tags`.
-pub fn read_tags(path: &Path) -> Tags {
-    let Ok(file) = lofty::read_from_path(path) else {
+pub fn read_tags(path: &Path, limits: &Limits) -> Tags {
+    // lofty refuses tag blocks larger than its own allocation limit (16 MiB),
+    // which would drop every tag of a file with a large cover. Align it with
+    // the configured cover limit (lofty's options are per thread).
+    let default_limit = 16 * 1024 * 1024;
+    let limit = usize::try_from(limits.max_cover_bytes)
+        .unwrap_or(usize::MAX)
+        .saturating_add(1024 * 1024);
+    lofty::config::apply_global_options(
+        lofty::config::GlobalOptions::new().allocation_limit(limit.max(default_limit)),
+    );
+    // If parsing still fails, retry without pictures so the text tags survive.
+    let parsed = lofty::read_from_path(path).or_else(|_| {
+        lofty::probe::Probe::open(path)?
+            .options(lofty::config::ParseOptions::new().read_cover_art(false))
+            .guess_file_type()?
+            .read()
+    });
+    let Ok(file) = parsed else {
         return Tags::default();
     };
     let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) else {

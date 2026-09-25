@@ -65,7 +65,9 @@ pub struct PlayerState {
     pub volume: f32,
     pub columns: ColumnWidths,
     /// Entry the engine was last asked to preload.
-    pub(crate) preloaded: Option<EntryId>,
+    /// Entry and start position the engine was last asked to preload (the
+    /// position changes when analysis finds the real cue-in).
+    pub(crate) preloaded: Option<(EntryId, f64)>,
     /// Transition plan the engine was last given.
     pub(crate) scheduled: Option<TransitionPlan>,
     /// A fade stop is running: no transition may start.

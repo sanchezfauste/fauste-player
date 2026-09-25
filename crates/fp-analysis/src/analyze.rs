@@ -28,6 +28,8 @@ pub enum AnalysisError {
     Missing,
     #[error("the file cannot be decoded: {0}")]
     Unreadable(String),
+    #[error("the analysis was cancelled")]
+    Cancelled,
 }
 
 /// Analyses `path` completely (spec §6).
@@ -36,8 +38,19 @@ pub fn analyze_file(
     settings: &AnalysisSettings,
     limits: &Limits,
 ) -> Result<Analysis, AnalysisError> {
-    if !path.exists() {
-        return Err(AnalysisError::Missing);
+    analyze_file_cancellable(path, settings, limits, &|| false)
+}
+
+/// As `analyze_file`, checking `cancelled` between decoded blocks.
+pub fn analyze_file_cancellable(
+    path: &Path,
+    settings: &AnalysisSettings,
+    limits: &Limits,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<Analysis, AnalysisError> {
+    match std::fs::metadata(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(AnalysisError::Missing),
+        _ => {}
     }
     let mut decoder = FileDecoder::open(path).map_err(AnalysisError::Unreadable)?;
     let mut builder = EnvelopeBuilder::new(
@@ -46,22 +59,38 @@ pub fn analyze_file(
         settings.peak_bucket_ms,
     );
     let mut block = Vec::new();
+    let mut decoded_any = false;
     loop {
+        if cancelled() {
+            return Err(AnalysisError::Cancelled);
+        }
         block.clear();
         match decoder.next_block(&mut block) {
-            Ok(true) => builder.push(&block),
+            Ok(true) => {
+                decoded_any = true;
+                builder.push(&block);
+            }
             Ok(false) => break,
+            // A damaged stretch after good audio: keep what decoded (the
+            // engine plays up to the same point).
+            Err(e) if decoded_any => {
+                tracing::warn!(path = %path.display(), "decoding stopped early: {e}");
+                break;
+            }
             Err(e) => return Err(AnalysisError::Unreadable(e)),
         }
     }
     let envelope = builder.finish();
     let markers = detect_markers(&envelope, settings);
-    let tags = read_tags(path);
+    // Tag and image parsers run on untrusted data: a crash there must only
+    // cost the metadata, never the (playable) audio.
+    let tags = std::panic::catch_unwind(|| read_tags(path, limits)).unwrap_or_default();
     let (file_artist, file_title) = title_from_file_name(path);
-    let cover_png = tags
-        .cover
-        .as_deref()
-        .and_then(|bytes| thumbnail_png(bytes, limits, settings.cover_thumb_px));
+    let cover_png = tags.cover.as_deref().and_then(|bytes| {
+        std::panic::catch_unwind(|| thumbnail_png(bytes, limits, settings.cover_thumb_px))
+            .ok()
+            .flatten()
+    });
     Ok(Analysis {
         analysis: TrackAnalysis {
             title: tags.title.or(Some(file_title)),

@@ -377,7 +377,12 @@ pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan
     if player.mode == PlayMode::Single || player.stop_after_current || player.next.is_none() {
         return Some(TransitionPlan::StopAt { at_secs: end });
     }
-    match track.segue_start_secs() {
+    // A segue only makes sense strictly inside the effective cue range (an
+    // automatic one may be stale against a manual cue-out).
+    let segue = track
+        .segue_start_secs()
+        .filter(|s| *s >= track.cue_in_secs() && *s < end);
+    match segue {
         Some(segue) if state.config.players.auto_segue && end.is_finite() => {
             Some(TransitionPlan::StartNextAt {
                 at_secs: segue,
@@ -629,17 +634,19 @@ pub(crate) fn fill_empty_next(state: &mut AppState) {
 
 /// Derives the engine work implied by the state: preload whatever is next.
 pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
-    let preloads: Vec<(usize, Option<EntryId>)> = state
+    let preloads: Vec<(usize, Option<SourceRequest>)> = state
         .players
         .iter()
         .enumerate()
-        .filter(|(_, p)| p.preloaded != p.next)
-        .map(|(i, p)| (i, p.next))
+        .map(|(i, p)| (i, p.next.and_then(|e| state.request_from_cue_in(e))))
+        .filter(|(i, request)| {
+            let wanted = request.as_ref().map(|r| (r.entry, r.from_secs));
+            state.players[*i].preloaded != wanted
+        })
         .collect();
-    for (i, wanted) in preloads {
-        let request = wanted.and_then(|e| state.request_from_cue_in(e));
+    for (i, request) in preloads {
         let player = &mut state.players[i];
-        player.preloaded = wanted;
+        player.preloaded = request.as_ref().map(|r| (r.entry, r.from_secs));
         out.push(EngineAction::Preload {
             player: player.id,
             request,

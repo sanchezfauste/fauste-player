@@ -157,3 +157,52 @@ fn results_for_removed_tracks_are_ignored() {
         .is_ok()
     );
 }
+
+#[test]
+fn a_newly_known_cue_in_re_preloads_the_next() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    apply(&mut state, Command::Play(p)).unwrap();
+    let t = track_of(&state, 1);
+    let mut a = analysis(200.0);
+    a.cue_in = Some(2.5);
+    let actions = apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(a),
+        },
+    )
+    .unwrap();
+    assert!(actions.iter().any(|a| matches!(
+        a,
+        EngineAction::Preload { player, request: Some(r) } if *player == p && r.entry == e[1] && r.from_secs == 2.5
+    )), "{actions:?}");
+}
+
+#[test]
+fn an_automatic_segue_outside_a_manual_cue_out_is_not_used() {
+    let mut state = fixture(2);
+    let p = p0(&state);
+    let t = track_of(&state, 0);
+    state
+        .library
+        .get_mut(t)
+        .unwrap()
+        .markers
+        .set_manual(MarkerKind::CueOut, Some(150.0));
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(analysis(206.0)),
+        },
+    )
+    .unwrap();
+    let actions = apply(&mut state, Command::Play(p)).unwrap();
+    assert!(actions.iter().any(|a| matches!(
+        a,
+        EngineAction::Schedule { plan: Some(TransitionPlan::StartNextAt { at_secs, fade_current_until_secs: None }), .. }
+            if *at_secs == 150.0
+    )), "the manual cue-out wins and the stale segue is ignored: {actions:?}");
+}

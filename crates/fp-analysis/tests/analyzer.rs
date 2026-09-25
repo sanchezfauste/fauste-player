@@ -49,7 +49,7 @@ fn submitted_files_are_analysed_in_the_background() {
 
 #[test]
 fn cancelled_jobs_produce_no_result() {
-    let slow: AnalyzeFn = Arc::new(|path, settings, limits| {
+    let slow: AnalyzeFn = Arc::new(|path, settings, limits, _cancelled| {
         std::thread::sleep(Duration::from_millis(200));
         analyze_file(path, settings, limits)
     });
@@ -83,16 +83,13 @@ fn cancelled_jobs_produce_no_result() {
 fn cached_results_are_returned_without_analysing_again() {
     let calls = Arc::new(AtomicUsize::new(0));
     let counter = calls.clone();
-    let counting: AnalyzeFn = Arc::new(move |path, settings, limits| {
+    let counting: AnalyzeFn = Arc::new(move |path, settings, limits, _cancelled| {
         counter.fetch_add(1, Ordering::SeqCst);
         analyze_file(path, settings, limits)
     });
     let dir = tempfile::tempdir().unwrap();
     let path = wav(dir.path(), "a.wav");
-    let cache = AnalysisCache::new(
-        dir.path().join("cache"),
-        Limits::default().max_state_file_bytes,
-    );
+    let cache = AnalysisCache::new(dir.path().join("cache"), &Limits::default());
     let analyzer = Analyzer::with_analyze_fn(
         1,
         AnalysisSettings::default(),
@@ -121,7 +118,7 @@ fn cached_results_are_returned_without_analysing_again() {
 
 #[test]
 fn a_panicking_decoder_is_reported_as_unreadable() {
-    let exploding: AnalyzeFn = Arc::new(|_, _, _| panic!("boom"));
+    let exploding: AnalyzeFn = Arc::new(|_, _, _, _| panic!("boom"));
     let analyzer = Analyzer::with_analyze_fn(
         1,
         AnalysisSettings::default(),
@@ -139,7 +136,7 @@ fn a_panicking_decoder_is_reported_as_unreadable() {
 fn duplicate_submissions_are_analysed_once() {
     let calls = Arc::new(AtomicUsize::new(0));
     let counter = calls.clone();
-    let slow: AnalyzeFn = Arc::new(move |path, settings, limits| {
+    let slow: AnalyzeFn = Arc::new(move |path, settings, limits, _cancelled| {
         counter.fetch_add(1, Ordering::SeqCst);
         std::thread::sleep(Duration::from_millis(100));
         analyze_file(path, settings, limits)
@@ -167,4 +164,101 @@ fn duplicate_submissions_are_analysed_once() {
             .is_err()
     );
     assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn dropping_the_analyzer_does_not_wait_for_queued_jobs() {
+    let slow: AnalyzeFn = Arc::new(|path, settings, limits, _cancelled| {
+        std::thread::sleep(Duration::from_millis(100));
+        analyze_file(path, settings, limits)
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "a.wav");
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        None,
+        slow,
+    )
+    .unwrap();
+    for n in 0..30 {
+        analyzer.submit(TrackId(n), path.clone());
+    }
+    let started = std::time::Instant::now();
+    drop(analyzer);
+    assert!(
+        started.elapsed() < Duration::from_millis(800),
+        "drop took {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn cancel_stops_a_running_analysis() {
+    let stopped = Arc::new(AtomicUsize::new(0));
+    let flag = stopped.clone();
+    let endless: AnalyzeFn = Arc::new(move |_, _, _, cancelled| {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while std::time::Instant::now() < deadline {
+            if cancelled() {
+                flag.fetch_add(1, Ordering::SeqCst);
+                return Err(AnalysisError::Cancelled);
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        Err(AnalysisError::Unreadable("not cancelled".into()))
+    });
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        None,
+        endless,
+    )
+    .unwrap();
+    analyzer.submit(TrackId(1), PathBuf::from("/long.flac"));
+    std::thread::sleep(Duration::from_millis(50));
+    analyzer.cancel(TrackId(1));
+    assert!(
+        analyzer
+            .results()
+            .recv_timeout(Duration::from_millis(500))
+            .is_err(),
+        "no result for a cancelled job"
+    );
+    assert_eq!(
+        stopped.load(Ordering::SeqCst),
+        1,
+        "the running analysis noticed the cancellation"
+    );
+}
+
+#[test]
+fn a_file_changed_during_analysis_is_not_cached_under_its_new_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "a.wav");
+    let cache_dir = dir.path().join("cache");
+    let rewriting: AnalyzeFn = Arc::new(|path, settings, limits, _cancelled| {
+        let result = analyze_file(path, settings, limits);
+        // The operator re-records the file while it is being analysed.
+        std::fs::write(path, vec![0u8; 12_345]).unwrap();
+        result
+    });
+    let cache = AnalysisCache::new(cache_dir.clone(), &Limits::default());
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        Some(cache),
+        rewriting,
+    )
+    .unwrap();
+    analyzer.submit(TrackId(1), path.clone());
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    let check = AnalysisCache::new(cache_dir, &Limits::default());
+    assert!(
+        check.load(&path, &AnalysisSettings::default()).is_none(),
+        "stale result cached for the new file"
+    );
 }

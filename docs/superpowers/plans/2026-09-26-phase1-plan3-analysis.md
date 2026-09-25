@@ -182,3 +182,34 @@
 | playable before analysis; markers apply when analysis lands | 2 |
 | background pool, cancellable | 6 |
 | INTRO tag convention | Phase 2 (deferred per spec) |
+
+## Review outcome and interface changes
+
+The whole-branch review found 1 critical and 4 important issues; four minors were promoted by effect. All of them were fixed with tests that failed first:
+
+| # | Issue | Fix |
+|---|---|---|
+| 1 | A stale preload after analysis found the real cue-in (dead air) | `PlayerState.preloaded` now tracks `(entry, from_secs)` |
+| 2 | Dropping the analyzer ran the whole queue | a stop flag, plus a cancellation check between decoded blocks |
+| 3 | A large cover dropped every tag | lofty's per-thread allocation limit follows `max_cover_bytes` |
+| 4 | Very quiet files got a segue | no segue unless the level ever reaches `segue_threshold_db`; no zero-length outro |
+| 5 | A stale automatic segue sat outside a manual cue-out | `plan_for` ignores a segue outside `[cue_in, cue_out)` |
+
+The promoted minors:
+
+- the cache key is taken before analysing;
+- the whole job runs under `catch_unwind`;
+- tag and cover panics only lose metadata;
+- a mid-stream decode error keeps the audio decoded so far.
+
+The interfaces differ from Task 5–6 as written:
+
+- **Cache:**
+  - `AnalysisCache::new(dir, &Limits)`, and the cover limits are part of the key;
+  - an explicit `key` / `load_key` / `store_key` API.
+- **Analyzer:**
+  - `Analyzer::spawn` returns `io::Result`;
+  - `AnalyzeFn` takes a fourth argument, `&dyn Fn() -> bool` ("cancelled?");
+  - `AnalysisError::Cancelled`;
+  - `analyze_file_cancellable`;
+  - submissions carry generation numbers.

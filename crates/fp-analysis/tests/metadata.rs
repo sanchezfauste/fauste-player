@@ -68,7 +68,7 @@ fn tags_and_cover_are_read() {
     let dir = tempfile::tempdir().unwrap();
     let path = wav(dir.path(), "x.wav");
     tag(&path, Some(png(300, 200)));
-    let tags = read_tags(&path);
+    let tags = read_tags(&path, &Limits::default());
     assert_eq!(tags.title.as_deref(), Some("Song Title"));
     assert_eq!(tags.artist.as_deref(), Some("The Artist"));
     assert_eq!(tags.album.as_deref(), Some("An Album"));
@@ -81,7 +81,7 @@ fn tags_and_cover_are_read() {
 fn untagged_files_fall_back_to_the_file_name() {
     let dir = tempfile::tempdir().unwrap();
     let path = wav(dir.path(), "Marta Oliva - Carretera norte.wav");
-    let tags = read_tags(&path);
+    let tags = read_tags(&path, &Limits::default());
     assert_eq!((tags.title, tags.artist, tags.cover), (None, None, None));
     assert_eq!(
         title_from_file_name(&path),
@@ -118,5 +118,8 @@ fn corrupt_cover_bytes_are_ignored() {
         thumbnail_png(b"\x89PNG not really", &Limits::default(), 128),
         None
     );
-    assert_eq!(read_tags(Path::new("/definitely/missing.mp3")).title, None);
+    assert_eq!(
+        read_tags(Path::new("/definitely/missing.mp3"), &Limits::default()).title,
+        None
+    );
 }

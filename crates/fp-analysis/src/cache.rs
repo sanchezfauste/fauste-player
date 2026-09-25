@@ -1,13 +1,14 @@
 //! One postcard file per analysed track. The key covers everything that can
 //! change the result: the file (path, size, mtime), the analysis code
-//! version and the analysis settings.
+//! version, the analysis settings and the cover limits.
 
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
 
-use fp_model::AnalysisSettings;
+use fp_model::{AnalysisSettings, Limits};
 use serde::{Deserialize, Serialize};
 
 use crate::analyze::Analysis;
@@ -21,9 +22,15 @@ struct CachedAnalysis {
     analysis: Analysis,
 }
 
+/// Identifies one file state plus the settings it was analysed with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CacheKey(String);
+
 pub struct AnalysisCache {
     dir: PathBuf,
     max_bytes: u64,
+    cover_limits: (u64, u32),
+    tmp_counter: AtomicU64,
 }
 
 /// FNV-1a 64: a stable hash (unlike `DefaultHasher`) for cache file names.
@@ -34,11 +41,26 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 }
 
 impl AnalysisCache {
-    pub fn new(dir: PathBuf, max_bytes: u64) -> Self {
-        Self { dir, max_bytes }
+    /// Opens (or creates on first store) a cache in `dir`. Temporary files
+    /// left by an interrupted run are swept.
+    pub fn new(dir: PathBuf, limits: &Limits) -> Self {
+        if let Ok(entries) = fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                if entry.path().extension().is_some_and(|e| e == "tmp") {
+                    let _ = fs::remove_file(entry.path());
+                }
+            }
+        }
+        Self {
+            dir,
+            max_bytes: limits.max_state_file_bytes,
+            cover_limits: (limits.max_cover_bytes, limits.max_cover_pixels),
+            tmp_counter: AtomicU64::new(0),
+        }
     }
 
-    fn key(path: &Path, settings: &AnalysisSettings) -> Option<String> {
+    /// The key of `path` as it is right now, or `None` if it cannot be read.
+    pub fn key(&self, path: &Path, settings: &AnalysisSettings) -> Option<CacheKey> {
         let canonical = path.canonicalize().ok()?;
         let meta = fs::metadata(&canonical).ok()?;
         let mtime = meta
@@ -47,29 +69,30 @@ impl AnalysisCache {
             .duration_since(UNIX_EPOCH)
             .ok()?
             .as_nanos();
-        Some(format!(
-            "{}|{}|{mtime}|{ANALYSIS_VERSION}|{settings:?}",
+        let (cover_bytes, cover_pixels) = self.cover_limits;
+        Some(CacheKey(format!(
+            "{}|{}|{mtime}|{ANALYSIS_VERSION}|{settings:?}|{cover_bytes}|{cover_pixels}",
             canonical.display(),
             meta.len()
-        ))
+        )))
     }
 
-    fn file_for(&self, key: &str) -> PathBuf {
-        self.dir.join(format!("{:016x}.bin", fnv1a(key.as_bytes())))
+    fn file_for(&self, key: &CacheKey) -> PathBuf {
+        self.dir
+            .join(format!("{:016x}.bin", fnv1a(key.0.as_bytes())))
     }
 
-    /// The cached analysis if the file and settings are unchanged. A corrupt
-    /// entry is removed so it is recomputed.
-    pub fn load(&self, path: &Path, settings: &AnalysisSettings) -> Option<Analysis> {
-        let key = Self::key(path, settings)?;
-        let file = self.file_for(&key);
+    /// The cached analysis for `key`. A corrupt or oversized entry is
+    /// removed so it is recomputed.
+    pub fn load_key(&self, key: &CacheKey) -> Option<Analysis> {
+        let file = self.file_for(key);
         if fs::metadata(&file).ok()?.len() > self.max_bytes {
             let _ = fs::remove_file(&file);
             return None;
         }
         let bytes = fs::read(&file).ok()?;
         match postcard::from_bytes::<CachedAnalysis>(&bytes) {
-            Ok(cached) if cached.key == key => Some(cached.analysis),
+            Ok(cached) if cached.key == key.0 => Some(cached.analysis),
             Ok(_) => None, // a hash collision: another file's entry
             Err(_) => {
                 let _ = fs::remove_file(&file);
@@ -78,27 +101,46 @@ impl AnalysisCache {
         }
     }
 
+    /// Stores `analysis` under `key` (written to a unique temporary file,
+    /// then renamed into place).
+    pub fn store_key(&self, key: &CacheKey, analysis: &Analysis) -> io::Result<()> {
+        let bytes = postcard::to_allocvec(&CachedAnalysis {
+            key: key.0.clone(),
+            analysis: analysis.clone(),
+        })
+        .map_err(io::Error::other)?;
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > self.max_bytes {
+            return Err(io::Error::other(
+                "analysis larger than the state file limit",
+            ));
+        }
+        fs::create_dir_all(&self.dir)?;
+        let file = self.file_for(key);
+        let n = self.tmp_counter.fetch_add(1, Ordering::Relaxed);
+        let tmp = file.with_extension(format!("{}-{n}.tmp", std::process::id()));
+        {
+            let mut f = fs::File::create(&tmp)?;
+            f.write_all(&bytes)?;
+            f.sync_all()?;
+        }
+        fs::rename(&tmp, &file).inspect_err(|_| {
+            let _ = fs::remove_file(&tmp);
+        })
+    }
+
+    pub fn load(&self, path: &Path, settings: &AnalysisSettings) -> Option<Analysis> {
+        self.load_key(&self.key(path, settings)?)
+    }
+
     pub fn store(
         &self,
         path: &Path,
         settings: &AnalysisSettings,
         analysis: &Analysis,
     ) -> io::Result<()> {
-        let key = Self::key(path, settings)
+        let key = self
+            .key(path, settings)
             .ok_or_else(|| io::Error::other("file metadata unavailable"))?;
-        let bytes = postcard::to_allocvec(&CachedAnalysis {
-            key: key.clone(),
-            analysis: analysis.clone(),
-        })
-        .map_err(io::Error::other)?;
-        fs::create_dir_all(&self.dir)?;
-        let file = self.file_for(&key);
-        let tmp = file.with_extension("tmp");
-        {
-            let mut f = fs::File::create(&tmp)?;
-            f.write_all(&bytes)?;
-            f.sync_all()?;
-        }
-        fs::rename(&tmp, &file)
+        self.store_key(&key, analysis)
     }
 }

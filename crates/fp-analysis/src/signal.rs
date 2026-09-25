@@ -176,8 +176,11 @@ pub fn detect_markers(env: &Envelope, s: &AnalysisSettings) -> AutoMarkers {
         .rms_db
         .get(..=last)
         .and_then(|w| w.iter().rposition(|db| *db >= segue_level))
-        .map_or(cue_out - s.segue_max_secs, |i| env.window_end(i));
-    let segue_start = Some(clamp(segue, s.segue_max_secs));
+        .map(|i| env.window_end(i));
+    // A piece that never reaches the segue level (spoken word, a soft
+    // classical recording) gets no automatic segue: nothing may be started
+    // over it.
+    let segue_start = segue.map(|t| clamp(t, s.segue_max_secs));
 
     // Outro: where the level falls `outro_drop_db` below the track's median.
     let mut body: Vec<f32> = env
@@ -193,7 +196,8 @@ pub fn detect_markers(env: &Envelope, s: &AnalysisSettings) -> AutoMarkers {
         .get(..=last)
         .and_then(|w| w.iter().rposition(|db| *db >= outro_level))
         .map_or(cue_out, |i| env.window_end(i));
-    let outro_start = Some(clamp(outro, s.outro_max_secs));
+    // An outro that would start at the very end is no outro.
+    let outro_start = Some(clamp(outro, s.outro_max_secs)).filter(|t| *t < cue_out);
 
     AutoMarkers {
         cue_in,
@@ -279,6 +283,21 @@ mod tests {
         let m = detect_markers(&envelope(&silence(90.0)), &settings());
         assert_eq!((m.cue_in, m.cue_out), (0.0, 90.0));
         assert_eq!((m.segue_start, m.outro_start), (None, None));
+    }
+
+    #[test]
+    fn a_very_quiet_file_gets_no_segue_and_no_empty_outro() {
+        // ≈ −25 dBFS RMS throughout: audible, but never reaches the −18 dB segue level.
+        let m = detect_markers(&envelope(&tone(120.0, 0.08, |_| 1.0)), &settings());
+        assert!(m.cue_out > 119.9);
+        assert_eq!(
+            m.segue_start, None,
+            "a soft piece must not be talked over by the next track"
+        );
+        assert_eq!(
+            m.outro_start, None,
+            "an outro that starts at the very end is no outro"
+        );
     }
 
     #[test]
