@@ -7,6 +7,7 @@
 pub mod atomic;
 pub mod bus;
 pub mod decode;
+pub mod engine;
 pub mod mixer;
 pub mod ramp;
 pub mod resample;
