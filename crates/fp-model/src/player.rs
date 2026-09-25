@@ -75,6 +75,11 @@ pub struct PlayerState {
 }
 
 impl PlayerState {
+    /// True while a fade stop runs (as opposed to a crossfade into the next).
+    pub fn fade_stopping(&self) -> bool {
+        self.fade_stop_pending
+    }
+
     pub fn new(id: PlayerId, playlist: PlaylistId, mode: PlayMode) -> Self {
         Self {
             id,

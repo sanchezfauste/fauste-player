@@ -170,3 +170,24 @@ pub fn apply(ctx: &egui::Context) {
         style.spacing.button_padding = egui::vec2(8.0, 4.0);
     });
 }
+
+/// Player column background: surface 40 % over the page background.
+pub const COLUMN_BG: Color32 = Color32::from_rgb(0x1b, 0x1d, 0x2b);
+/// Selected row and menu hover.
+pub const ACCENT_900: Color32 = Color32::from_rgb(0x2c, 0x28, 0x4a);
+pub const ACCENT_300: Color32 = Color32::from_rgb(0xc9, 0xc1, 0xff);
+/// Paused / stop-after highlight.
+pub const AMBER_BG: Color32 = Color32::from_rgb(0x43, 0x2f, 0x07);
+pub const AMBER_TEXT: Color32 = Color32::from_rgb(0xfc, 0xd1, 0x76);
+pub const AMBER_DIM: Color32 = Color32::from_rgb(0x9f, 0x79, 0x32);
+pub const CUE_BG: Color32 = Color32::from_rgb(0x0d, 0x32, 0x42);
+pub const PLAY_BORDER: Color32 = Color32::from_rgb(0x3e, 0xab, 0x5e);
+pub const PLAY_HOVER_BG: Color32 = Color32::from_rgb(0x14, 0x36, 0x1d);
+pub const PLAY_HOVER: Color32 = Color32::from_rgb(0x93, 0xe4, 0xa4);
+pub const PLAY_ACTIVE_BG: Color32 = Color32::from_rgb(0x1d, 0x4e, 0x2b);
+pub const INTRO_BADGE_BG: Color32 = Color32::from_rgb(0x00, 0x23, 0x32);
+pub const INTRO_BADGE_BLINK: Color32 = Color32::from_rgb(0x00, 0x50, 0x73);
+pub const INTRO_BADGE_TEXT: Color32 = Color32::from_rgb(0xb6, 0xe6, 0xff);
+pub const OUTRO_BADGE_BG: Color32 = Color32::from_rgb(0x35, 0x1e, 0x08);
+pub const OUTRO_BADGE_TEXT: Color32 = Color32::from_rgb(0xff, 0xd5, 0xa4);
+pub const MIX_TEXT: Color32 = Color32::from_rgb(0x1b, 0x15, 0x0b);
