@@ -303,6 +303,7 @@ name = "fp-backends"
 version = "0.1.0"
 dependencies = [
  "cpal",
+ "rtrb",
  "thiserror 2.0.21",
 ]
 
