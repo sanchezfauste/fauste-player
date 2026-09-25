@@ -53,6 +53,9 @@ pub struct PlayerState {
     pub playlist: PlaylistId,
     pub current: Option<EntryId>,
     pub next: Option<EntryId>,
+    /// True when the user chose `next` (double-click); false when it was
+    /// derived from the playlist order and should follow playlist edits.
+    pub next_explicit: bool,
     pub transport: Transport,
     pub fading: bool,
     pub mode: PlayMode,
@@ -65,6 +68,8 @@ pub struct PlayerState {
     pub(crate) preloaded: Option<EntryId>,
     /// Transition plan the engine was last given.
     pub(crate) scheduled: Option<TransitionPlan>,
+    /// A fade stop is running: no transition may start.
+    pub(crate) fade_stop_pending: bool,
 }
 
 impl PlayerState {
@@ -74,6 +79,7 @@ impl PlayerState {
             playlist,
             current: None,
             next: None,
+            next_explicit: false,
             transport: Transport::Stopped,
             fading: false,
             mode,
@@ -83,6 +89,7 @@ impl PlayerState {
             columns: ColumnWidths::default(),
             preloaded: None,
             scheduled: None,
+            fade_stop_pending: false,
         }
     }
 }

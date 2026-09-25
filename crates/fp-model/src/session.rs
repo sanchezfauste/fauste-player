@@ -20,6 +20,8 @@ pub struct PlayerSession {
     #[serde(default)]
     pub next: Option<EntryId>,
     #[serde(default)]
+    pub next_explicit: bool,
+    #[serde(default)]
     pub mode: PlayMode,
     #[serde(default)]
     pub stop_after_current: bool,
@@ -53,6 +55,7 @@ impl AppState {
                 playlist: p.playlist,
                 current: p.current,
                 next: p.next,
+                next_explicit: p.next_explicit,
                 mode: p.mode,
                 stop_after_current: p.stop_after_current,
                 position_secs: if p.current.is_some() {
@@ -103,6 +106,11 @@ impl AppState {
             state.players.push(player);
         }
         for p in &state.players {
+            // The engine starts every player at full volume; send the restored one.
+            out.push(EngineAction::SetVolume {
+                player: p.id,
+                volume: p.volume,
+            });
             if let Some(current) = p.current {
                 let position = sessions
                     .iter()
@@ -143,10 +151,13 @@ fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     } else {
         first_playlist(state)
     };
-    let current = s.current.filter(|e| state.playlists.entry(*e).is_some());
-    let next = s
+    // A current entry must still resolve to a track, or it could never be resumed.
+    let current = s.current.filter(|e| state.track_for_entry(*e).is_some());
+    let kept_next = s
         .next
-        .filter(|e| state.playlists.entry(*e).is_some() && Some(*e) != current)
+        .filter(|e| state.playlists.entry(*e).is_some() && Some(*e) != current);
+    let next_explicit = s.next_explicit && kept_next.is_some();
+    let next = kept_next
         .or_else(|| current.and_then(|c| state.playlists.next_playable_after(c, &state.library)));
     let volume = if s.volume.is_finite() && (0.0..=1.0).contains(&s.volume) {
         s.volume
@@ -156,6 +167,7 @@ fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     let mut player = PlayerState::new(id, playlist, s.mode);
     player.current = current;
     player.next = next;
+    player.next_explicit = next_explicit;
     player.transport = if current.is_some() {
         Transport::Paused
     } else {

@@ -159,6 +159,16 @@ impl Track {
         self.markers.cue_out.map_or(self.duration_secs, |m| m.secs)
     }
 
+    /// Cue-out when it is actually known: a marker, or a duration from
+    /// analysis. `None` for a track whose duration is still unknown.
+    pub fn known_cue_out_secs(&self) -> Option<f64> {
+        match self.markers.cue_out {
+            Some(m) => Some(m.secs),
+            None if self.duration_secs > 0.0 => Some(self.duration_secs),
+            None => None,
+        }
+    }
+
     pub fn segue_start_secs(&self) -> Option<f64> {
         self.markers.segue_start.map(|m| m.secs)
     }

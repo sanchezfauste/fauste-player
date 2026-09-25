@@ -13,7 +13,7 @@ pub mod session;
 pub mod state;
 pub mod track;
 
-pub use command::{Command, EngineAction, EngineEvent, SourceRequest, TransitionPlan};
+pub use command::{Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan};
 pub use config::{
     AnalysisSettings, Config, ConfigWarning, Limits, OutputsConfig, PlayerRoutes, PlayersConfig,
     Route, Tuning, UiConfig,

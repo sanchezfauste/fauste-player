@@ -150,14 +150,20 @@ fn rule8_fade_stop_fades_then_stops_when_the_engine_reports_the_end() {
     apply(&mut state, Command::Play(p)).unwrap();
     let actions = apply(&mut state, Command::FadeStop(p)).unwrap();
     assert_eq!(
-        actions,
-        vec![EngineAction::FadeOutAndStop {
+        actions.first(),
+        Some(&EngineAction::FadeOutAndStop {
             player: p,
             fade_ms: 1000
-        }]
+        })
     );
     assert!(state.player(p).unwrap().fading);
-    on_event(&mut state, EngineEvent::ReachedEnd { player: p });
+    on_event(
+        &mut state,
+        EngineEvent::ReachedEnd {
+            player: p,
+            entry: e[0],
+        },
+    );
     let player = state.player(p).unwrap();
     assert_eq!(
         (player.current, player.next, player.fading),

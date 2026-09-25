@@ -67,12 +67,17 @@ impl AppState {
         })
     }
 
-    /// A request that starts the entry at `secs`, clamped to the file; a
-    /// non-finite `secs` falls back to cue-in.
+    /// A request that starts the entry at `secs`, clamped to the file when its
+    /// duration is known; a non-finite `secs` falls back to cue-in.
     pub fn request_at(&self, entry: EntryId, secs: f64) -> Option<SourceRequest> {
         let track = self.track_for_entry(entry)?;
         let from_secs = if secs.is_finite() {
-            secs.clamp(0.0, track.duration_secs.max(0.0))
+            let end = if track.duration_secs > 0.0 {
+                track.duration_secs
+            } else {
+                f64::INFINITY
+            };
+            secs.clamp(0.0, end)
         } else {
             track.cue_in_secs()
         };

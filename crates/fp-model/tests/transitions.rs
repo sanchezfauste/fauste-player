@@ -127,7 +127,13 @@ fn rule9_stop_after_current_reschedules_a_stop_and_keeps_next_green() {
     // Rule 2: choosing another next keeps the flag.
     apply(&mut state, Command::SetNext(p, e[2])).unwrap();
     assert!(state.player(p).unwrap().stop_after_current);
-    on_event(&mut state, EngineEvent::ReachedEnd { player: p });
+    on_event(
+        &mut state,
+        EngineEvent::ReachedEnd {
+            player: p,
+            entry: e[0],
+        },
+    );
     let player = state.player(p).unwrap();
     assert_eq!(
         (player.current, player.next, player.stop_after_current),
@@ -141,7 +147,13 @@ fn rule11_transition_started_advances_marks_played_and_tracks_the_fade() {
     with_segue(&mut state, 172.0);
     let (e, p) = (entries(&state), p0(&state));
     apply(&mut state, Command::Play(p)).unwrap();
-    let actions = on_event(&mut state, EngineEvent::TransitionStarted { player: p });
+    let actions = on_event(
+        &mut state,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: e[1],
+        },
+    );
     let player = state.player(p).unwrap();
     assert_eq!(
         (player.current, player.next, player.fading),
@@ -162,9 +174,15 @@ fn rule11_transition_started_advances_marks_played_and_tracks_the_fade() {
 #[test]
 fn rule11_transition_without_overlap_does_not_mark_fading() {
     let mut state = fixture(3);
-    let p = p0(&state);
+    let (e, p) = (entries(&state), p0(&state));
     apply(&mut state, Command::Play(p)).unwrap();
-    on_event(&mut state, EngineEvent::TransitionStarted { player: p });
+    on_event(
+        &mut state,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: e[1],
+        },
+    );
     assert!(!state.player(p).unwrap().fading);
 }
 

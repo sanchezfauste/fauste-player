@@ -3,7 +3,9 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use crate::command::{Command, EngineAction, EngineEvent, SourceRequest, TransitionPlan};
+use crate::command::{
+    Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
+};
 use crate::config::Config;
 use crate::error::ModelError;
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
@@ -78,10 +80,17 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             state.players[i].columns = widths;
         }
         Command::RemoveEntry(entry) => remove_entry(state, entry, &mut out)?,
-        Command::MoveEntry { entry, to, index } => state.playlists.move_entry(entry, to, index)?,
+        Command::MoveEntry { entry, to, index } => {
+            state.playlists.move_entry(entry, to, index)?;
+            refresh_next(state);
+        }
         Command::DuplicateEntry(entry) => {
+            if state.playlists.entry(entry).is_none() {
+                return Err(ModelError::UnknownEntry(entry));
+            }
             let new_id = state.ids.entry();
             state.playlists.duplicate(entry, new_id)?;
+            refresh_next(state);
         }
         Command::CreatePlaylist { name } => {
             let id = state.ids.playlist();
@@ -110,13 +119,17 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                 state.players[i].fading = false;
             }
         }
-        EngineEvent::ReachedEnd { player } => {
-            if let Ok(i) = state.player_index(player) {
+        EngineEvent::ReachedEnd { player, entry } => {
+            if let Ok(i) = state.player_index(player)
+                && state.players[i].current == Some(entry)
+            {
                 stop_player(state, i);
             }
         }
-        EngineEvent::TransitionStarted { player } => {
-            if let Ok(i) = state.player_index(player) {
+        EngineEvent::TransitionStarted { player, entry } => {
+            if let Ok(i) = state.player_index(player)
+                && state.players[i].current != Some(entry)
+            {
                 let overlapping = matches!(
                     state.players[i].scheduled,
                     Some(TransitionPlan::StartNextAt {
@@ -124,7 +137,7 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                         ..
                     })
                 );
-                if advance(state, i).is_some() {
+                if advance_to(state, i, entry).is_some() {
                     state.players[i].fading = overlapping;
                 } else {
                     stop_player(state, i);
@@ -218,8 +231,11 @@ fn fade_stop(
     let i = state.player_index(id)?;
     let fade_ms = state.config.players.fade_ms;
     let player = &mut state.players[i];
-    if player.transport == Transport::Playing && !player.fading {
+    // Allowed during a crossfade or segue overlap too: the engine fades every
+    // Main source of the player. Only a fade stop already in progress blocks it.
+    if player.transport == Transport::Playing && !player.fade_stop_pending {
         player.fading = true;
+        player.fade_stop_pending = true;
         out.push(EngineAction::FadeOutAndStop {
             player: id,
             fade_ms,
@@ -237,6 +253,7 @@ fn set_next(state: &mut AppState, id: PlayerId, entry: EntryId) -> Result<(), Mo
         return Err(ModelError::NextIsCurrent);
     }
     state.players[i].next = Some(entry);
+    state.players[i].next_explicit = true;
     Ok(())
 }
 
@@ -260,11 +277,12 @@ fn insert_paths(
         });
     }
     state.playlists.insert(playlist, index, entries)?;
-    fill_empty_next(state);
+    refresh_next(state);
     Ok(())
 }
 
-/// Spec §4.5: mark the file unreadable, then skip (Continuous) or stop.
+/// Spec §4.5: mark the file unreadable, then skip (Continuous, while on air)
+/// or stop. A paused or restored player never starts playing by itself (§7).
 fn source_failed(
     state: &mut AppState,
     player: PlayerId,
@@ -282,8 +300,10 @@ fn source_failed(
     if let Ok(i) = state.player_index(player)
         && state.players[i].current == Some(entry)
     {
-        let keep_going =
-            state.players[i].mode == PlayMode::Continuous && !state.players[i].stop_after_current;
+        let p = &state.players[i];
+        let keep_going = p.transport == Transport::Playing
+            && p.mode == PlayMode::Continuous
+            && !p.stop_after_current;
         let restarted = if keep_going { advance(state, i) } else { None };
         match restarted {
             Some(request) => out.push(EngineAction::StartCurrent { player, request }),
@@ -293,31 +313,60 @@ fn source_failed(
             }
         }
     }
-    let replacement = state.playlists.next_playable_after(entry, &state.library);
+    let successors = successors_of(state, entry);
     for p in &mut state.players {
         if p.next == Some(entry) {
-            p.next = replacement;
+            p.next = successors.for_current(p.current);
+            p.next_explicit = false;
+        }
+        if p.cue.is_some_and(|c| c.entry == entry) {
+            p.cue = None;
+            out.push(EngineAction::StopCue { player: p.id });
+        }
+    }
+    refresh_next(state);
+}
+
+/// The two playable entries that follow `entry` in its playlist, so a
+/// replacement can skip a player's own current entry (next != current).
+struct Successors(Option<EntryId>, Option<EntryId>);
+
+impl Successors {
+    fn for_current(&self, current: Option<EntryId>) -> Option<EntryId> {
+        if self.0.is_some() && self.0 == current {
+            self.1
+        } else {
+            self.0
         }
     }
 }
 
-/// Rules 9–11: what the engine must do when the current track ends.
+fn successors_of(state: &AppState, entry: EntryId) -> Successors {
+    let first = state.playlists.next_playable_after(entry, &state.library);
+    let second = first.and_then(|f| state.playlists.next_playable_after(f, &state.library));
+    Successors(first, second)
+}
+
+/// Rules 9–11: what the engine must do when the current track ends. Returns
+/// `None` while a fade stop is running: the engine stops and reports the end.
 pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan> {
-    if player.transport == Transport::Stopped {
+    if player.transport == Transport::Stopped || player.fade_stop_pending {
         return None;
     }
     let track = state.track_for_entry(player.current?)?;
-    let cue_out = track.cue_out_secs();
+    let end = track.known_cue_out_secs().unwrap_or(SOURCE_END);
     if player.mode == PlayMode::Single || player.stop_after_current || player.next.is_none() {
-        return Some(TransitionPlan::StopAt { at_secs: cue_out });
+        return Some(TransitionPlan::StopAt { at_secs: end });
     }
     match track.segue_start_secs() {
-        Some(segue) if state.config.players.auto_segue => Some(TransitionPlan::StartNextAt {
-            at_secs: segue,
-            fade_current_until_secs: Some(cue_out),
-        }),
+        Some(segue) if state.config.players.auto_segue && end.is_finite() => {
+            Some(TransitionPlan::StartNextAt {
+                at_secs: segue,
+                fade_current_until_secs: Some(end),
+            })
+        }
         _ => Some(TransitionPlan::StartNextAt {
-            at_secs: cue_out,
+            at_secs: end,
             fade_current_until_secs: None,
         }),
     }
@@ -355,17 +404,18 @@ fn cue_entry(
     Ok(())
 }
 
-/// Stops cues that point at any of `entries`, and clears next pointers into them
-/// (replacing them with `replacement(entry)`).
+/// Stops cues that point at any of `entries`, and replaces next pointers into
+/// them with `replacement(entry, player's current)`.
 fn detach_entries(
     state: &mut AppState,
     entries: &HashSet<EntryId>,
-    replacement: impl Fn(EntryId) -> Option<EntryId>,
+    replacement: impl Fn(EntryId, Option<EntryId>) -> Option<EntryId>,
     out: &mut Vec<EngineAction>,
 ) {
     for p in &mut state.players {
         if let Some(next) = p.next.filter(|n| entries.contains(n)) {
-            p.next = replacement(next);
+            p.next = replacement(next, p.current);
+            p.next_explicit = false;
         }
         if p.cue.is_some_and(|c| entries.contains(&c.entry)) {
             p.cue = None;
@@ -391,11 +441,16 @@ fn remove_entry(
     if state.is_on_air(entry) {
         return Err(ModelError::EntryOnAir(entry));
     }
-    let after = state.playlists.next_playable_after(entry, &state.library);
+    let successors = successors_of(state, entry);
     let removed = state.playlists.remove_entry(entry)?;
-    detach_entries(state, &HashSet::from([entry]), |_| after, out);
+    detach_entries(
+        state,
+        &HashSet::from([entry]),
+        |_, current| successors.for_current(current),
+        out,
+    );
     forget_unreferenced(state, [removed.track]);
-    fill_empty_next(state);
+    refresh_next(state);
     Ok(())
 }
 
@@ -419,9 +474,9 @@ fn delete_playlist(
         }
     }
     let ids: HashSet<EntryId> = removed.entries.iter().map(|e| e.id).collect();
-    detach_entries(state, &ids, |_| None, out);
+    detach_entries(state, &ids, |_, _| None, out);
     forget_unreferenced(state, removed.entries.iter().map(|e| e.track));
-    fill_empty_next(state);
+    refresh_next(state);
     Ok(())
 }
 
@@ -465,34 +520,70 @@ fn set_player_count(
 /// current source, or `None` (state untouched) when there is nothing to play.
 pub(crate) fn advance(state: &mut AppState, i: usize) -> Option<SourceRequest> {
     let next = state.players[i].next?;
-    let request = state.request_from_cue_in(next)?;
+    advance_to(state, i, next)
+}
+
+/// Makes `target` the current entry: the normal advance when it is the next,
+/// or whatever the engine really started. An explicit next that differs from
+/// `target` is kept; otherwise the next is derived from the playlist.
+pub(crate) fn advance_to(state: &mut AppState, i: usize, target: EntryId) -> Option<SourceRequest> {
+    let request = state.request_from_cue_in(target)?;
     if let Some(current) = state.players[i].current {
         state.playlists.mark_played(current);
     }
-    let following = state.playlists.next_playable_after(next, &state.library);
+    let following = state.playlists.next_playable_after(target, &state.library);
     let player = &mut state.players[i];
-    player.current = Some(next);
-    player.next = following;
+    let keep_next = player.next_explicit && player.next.is_some() && player.next != Some(target);
+    if !keep_next {
+        player.next = following;
+        player.next_explicit = false;
+    }
+    player.current = Some(target);
     player.transport = Transport::Playing;
+    player.fade_stop_pending = false;
     // The preloaded source is now the current one, and the old plan no longer applies.
     player.preloaded = None;
     player.scheduled = None;
     Some(request)
 }
 
-/// Rule 7: stop semantics shared by Stop, fade stop, stop-after-current and Single mode.
+/// Rule 7: stop semantics shared by Stop, fade stop, stop-after-current and
+/// Single mode. An explicit next is kept; a derived one becomes the entry
+/// after the stopped one.
 pub(crate) fn stop_player(state: &mut AppState, i: usize) {
     if let Some(current) = state.players[i].current {
         state.playlists.mark_played(current);
-        if state.players[i].next.is_none() {
+        if !state.players[i].next_explicit || state.players[i].next.is_none() {
             state.players[i].next = state.playlists.next_playable_after(current, &state.library);
+            state.players[i].next_explicit = false;
         }
     }
     let player = &mut state.players[i];
     player.current = None;
     player.transport = Transport::Stopped;
     player.fading = false;
+    player.fade_stop_pending = false;
     player.stop_after_current = false;
+}
+
+/// After playlist edits: a player with a current entry and a derived next
+/// re-derives it (so insertions right after the current track are picked up),
+/// and idle players pick up newly available entries.
+pub(crate) fn refresh_next(state: &mut AppState) {
+    let derived: Vec<(usize, Option<EntryId>)> = state
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| !p.next_explicit)
+        .filter_map(|(i, p)| {
+            p.current
+                .map(|c| (i, state.playlists.next_playable_after(c, &state.library)))
+        })
+        .collect();
+    for (i, next) in derived {
+        state.players[i].next = next;
+    }
+    fill_empty_next(state);
 }
 
 /// An idle player (stopped, nothing current, no next) picks the first playable

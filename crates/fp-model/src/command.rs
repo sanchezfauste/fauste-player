@@ -53,10 +53,12 @@ pub enum Command {
 pub enum EngineEvent {
     /// A crossfade or segue fade-out finished.
     FadeCompleted { player: PlayerId },
-    /// The current source stopped: a scheduled `StopAt` was reached or a fade stop completed.
-    ReachedEnd { player: PlayerId },
-    /// The engine started the next source as scheduled by a `StartNextAt` plan.
-    TransitionStarted { player: PlayerId },
+    /// The source of `entry` stopped: a scheduled `StopAt` was reached or a
+    /// fade stop completed. Ignored unless `entry` is still the player's current.
+    ReachedEnd { player: PlayerId, entry: EntryId },
+    /// The engine started `entry` as scheduled by a `StartNextAt` plan. The
+    /// model follows the engine even if the next changed in the meantime.
+    TransitionStarted { player: PlayerId, entry: EntryId },
     /// A source could not be decoded or read.
     SourceFailed { player: PlayerId, entry: EntryId },
     /// The cue source reached its end.
@@ -72,7 +74,13 @@ pub struct SourceRequest {
     pub from_secs: f64,
 }
 
-/// What must happen at the end of the current track, in seconds of that track.
+/// Transition point meaning "the natural end of the decoded source". Used
+/// while a track's duration is still unknown (not yet analysed), so that no
+/// transition is ever scheduled at 0 s.
+pub const SOURCE_END: f64 = f64::INFINITY;
+
+/// What must happen at the end of the current track, in seconds of that track
+/// (`SOURCE_END` when the end is not known yet).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TransitionPlan {
     StopAt {
