@@ -76,6 +76,9 @@ pub struct PlayerTelemetry {
     pub peak_l: f32,
     pub peak_r: f32,
     pub underruns: u64,
+    /// The current source reaches its Main device unchanged: the BP badge
+    /// (Phase 4 spec B5).
+    pub bit_perfect: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -363,6 +366,31 @@ impl Engine {
             .collect()
     }
 
+    /// Whether `p` reaches its device unchanged (Phase 4 spec B5): a
+    /// bit-perfect bus open with exclusive access, the file at the bus rate
+    /// with a sample size the device format holds, and the mixer reporting
+    /// the source unaltered.
+    fn is_bit_perfect(&self, p: &Playing) -> bool {
+        let Some(bus) = self.buses.get(&p.bus) else {
+            return false;
+        };
+        let Some(format) = p.request.format else {
+            return false;
+        };
+        let Some(bits) = format.bits else {
+            return false;
+        };
+        !p.cue
+            && p.start == StartState::Started
+            && self.settings.bit_perfect.contains(&p.bus)
+            && bus.exclusive_granted()
+            && format.sample_rate == bus.sample_rate()
+            && bus.sample_format().is_some_and(|f| f.holds_bits(bits))
+            && p.shared
+                .unaltered
+                .load(std::sync::atomic::Ordering::Acquire)
+    }
+
     pub fn telemetry(&self, player: PlayerId) -> PlayerTelemetry {
         let Some(rt) = self.players.get(&player) else {
             return PlayerTelemetry::default();
@@ -387,6 +415,7 @@ impl Engine {
                     .underruns
                     .load(std::sync::atomic::Ordering::Relaxed)
             }),
+            bit_perfect: rt.current.as_ref().is_some_and(|p| self.is_bit_perfect(p)),
         }
     }
 

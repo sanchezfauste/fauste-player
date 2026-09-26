@@ -18,8 +18,8 @@ use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
 use fp_model::{
-    AudioFormat, Config, EngineAction, EntryId, OutputDevice, PlayerId, PlayerRoutes, Route,
-    SourceRequest, TrackId,
+    AudioFormat, CartId, CartRequest, Config, EngineAction, EntryId, OutputDevice, PlayerId,
+    PlayerRoutes, Route, SourceRequest, TrackId,
 };
 use support::indexed_wav;
 
@@ -198,4 +198,99 @@ fn a_device_without_exclusive_access_still_plays() {
     assert!(!r.dac.config().unwrap().exclusive, "shared instead");
     let heard = r.run(4_800);
     assert!(heard.iter().any(|v| *v != 0.0));
+}
+
+/// Runs until the badge settles, a few blocks at most.
+fn bit_perfect_after(r: &mut Rig, frames: usize) -> bool {
+    r.run(frames);
+    r.engine.telemetry(P).bit_perfect
+}
+
+#[test]
+fn bit_perfect_playback_is_bit_exact() {
+    let mut r = rig(true, true);
+    let path = wav(r.dir.path(), "a.wav", 44_100);
+    r.start(request(1, path, pcm16(44_100)));
+    let heard = r.run(30_000);
+    // `indexed_wav` sample i is (i % 20 000) as i16: find index 1, then
+    // every following sample must be the file's value, bit for bit.
+    let first = heard
+        .iter()
+        .position(|v| *v == 1.0 / 32_768.0)
+        .expect("the file starts playing");
+    for (i, v) in heard[first - 1..].iter().enumerate() {
+        let expected = (i % 20_000) as f32 / 32_768.0;
+        assert!(
+            v.to_bits() == expected.to_bits(),
+            "sample {i}: {v} is not {expected}"
+        );
+    }
+    assert!(r.engine.telemetry(P).bit_perfect, "the badge is lit");
+}
+
+#[test]
+fn volume_below_full_is_not_bit_perfect() {
+    let mut r = rig(true, true);
+    let path = wav(r.dir.path(), "a.wav", 48_000);
+    r.start(request(1, path, pcm16(48_000)));
+    assert!(bit_perfect_after(&mut r, 2_400));
+    r.act(EngineAction::SetVolume {
+        player: P,
+        volume: 0.99,
+    });
+    assert!(!bit_perfect_after(&mut r, 2_400));
+    r.act(EngineAction::SetVolume {
+        player: P,
+        volume: 1.0,
+    });
+    assert!(bit_perfect_after(&mut r, 2_400), "back at exactly 100 %");
+}
+
+#[test]
+fn an_overlapping_source_is_not_bit_perfect() {
+    let mut r = rig(true, true);
+    let path = wav(r.dir.path(), "a.wav", 48_000);
+    let jingle = wav(r.dir.path(), "j.wav", 48_000);
+    r.start(request(1, path, pcm16(48_000)));
+    assert!(bit_perfect_after(&mut r, 2_400));
+    r.act(EngineAction::StartCart(CartRequest {
+        cart: CartId(1),
+        track: TrackId(9),
+        path: jingle,
+        from_secs: 0.0,
+        until_secs: f64::INFINITY,
+        looped: false,
+        format: pcm16(48_000),
+    }));
+    r.settle();
+    assert!(!bit_perfect_after(&mut r, 2_400), "a cart plays over it");
+}
+
+#[test]
+fn a_resampled_source_is_not_bit_perfect() {
+    let mut r = rig(true, true);
+    r.dac.refuse_rate(44_100);
+    let path = wav(r.dir.path(), "a.wav", 44_100);
+    r.start(request(1, path, pcm16(44_100)));
+    assert!(!bit_perfect_after(&mut r, 2_400));
+}
+
+#[test]
+fn a_shared_device_is_not_bit_perfect() {
+    let mut r = rig(true, false);
+    let path = wav(r.dir.path(), "a.wav", 48_000);
+    r.start(request(1, path, pcm16(48_000)));
+    assert!(!bit_perfect_after(&mut r, 2_400));
+}
+
+#[test]
+fn a_lossy_file_is_not_bit_perfect() {
+    let mut r = rig(true, true);
+    let path = wav(r.dir.path(), "a.wav", 48_000);
+    let lossy = Some(AudioFormat {
+        sample_rate: 48_000,
+        bits: None,
+    });
+    r.start(request(1, path, lossy));
+    assert!(!bit_perfect_after(&mut r, 2_400));
 }
