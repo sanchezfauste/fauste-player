@@ -4,8 +4,8 @@
 
 | Crate | Responsibility | Depends on |
 |---|---|---|
-| `fp-model` | Domain types and the **pure** player state machine (spec §3): commands in, new state and `EngineAction`s out. No I/O, no threads. | — |
-| `fp-store` | Crash-safe persistence: atomic writes, rotating backups, quarantine of corrupt files, versioned JSON documents and migrations, lenient config loading | `fp-model` |
+| `fp-model` | Domain types and the **pure** state machine: player rules (spec §3), cartwall rules (Phase 2 spec P2.3), markers, shortcuts. Commands in, new state and `EngineAction`s out. No I/O, no threads. | — |
+| `fp-store` | Crash-safe persistence: atomic writes, rotating backups, quarantine of corrupt files, versioned JSON documents and migrations, lenient config loading; M3U/M3U8/PLS and cart page files | `fp-model` |
 | `fp-decode` | File decoding with symphonia to interleaved stereo `f32` (downmix per ITU-R BS.775) | — |
 | `fp-backends` | The `AudioBackend` trait; `CpalBackend` (ALSA, WASAPI shared, Core Audio), `NullBackend`, `OfflineBackend` | — |
 | `fp-engine` | Real-time mixer, buses with watchdog and virtual clock, per-player decode workers, resampling, the `Engine` and the `Conductor` thread | `fp-model`, `fp-backends`, `fp-decode` |
