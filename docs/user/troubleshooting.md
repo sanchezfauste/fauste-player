@@ -29,7 +29,9 @@
   Exclusive access was refused, and the device plays shared.
   - Windows: another program may hold the device exclusively, or exclusive
     control is turned off in the device's Advanced properties.
-  - macOS: another program may hold the device in hog mode.
+  - macOS: another program may hold the device in hog mode, or the device
+    offers its rates only as a continuous range (most interfaces list fixed
+    rates).
 - **A `hw:` device cannot be opened (Linux).**
   - A sound server may be holding the card. Stop it, or set the server to
     leave that card alone, and restart the application.

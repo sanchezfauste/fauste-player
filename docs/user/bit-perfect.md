@@ -24,8 +24,9 @@ The switch is disabled when the device cannot give exclusive access.
     turned on (it is on by default).
   - While it plays, no other program can use the device.
 - **macOS:** choose the device on **Core Audio**. It is opened in hog mode.
-  - The device's sample rate and bit depth are set to the track's, the same
-    settings Audio MIDI Setup shows.
+  - The device's sample rate is set to the track's, and its format to the
+    widest integer format it offers at that rate (the settings Audio MIDI
+    Setup shows).
   - They are given back when the application stops using the device.
   - Two devices with exactly the same name cannot be made bit-perfect.
 

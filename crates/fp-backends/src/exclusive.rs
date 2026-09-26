@@ -53,12 +53,18 @@ pub struct Candidate {
 }
 
 /// The exclusive-mode formats in order of preference: 24-bit integer (holds
-/// every source the mixer can pass unchanged), 16-bit integer, then float.
-const CANDIDATES: [Candidate; 3] = [
+/// every source the mixer can pass unchanged), 32-bit integer (devices that
+/// take only full 32-bit words), 16-bit integer, then float.
+const CANDIDATES: [Candidate; 4] = [
     Candidate {
         format: SampleFormat::I24,
         container_bits: 32,
         valid_bits: 24,
+    },
+    Candidate {
+        format: SampleFormat::I32,
+        container_bits: 32,
+        valid_bits: 32,
     },
     Candidate {
         format: SampleFormat::I16,
@@ -83,18 +89,33 @@ pub struct PhysicalFormat {
     pub bits: u32,
     /// Signed integer PCM (as opposed to float).
     pub integer: bool,
+    /// Linear PCM, as opposed to an encoded format (AC-3, IEC 60958).
+    pub linear_pcm: bool,
+    pub channels: u32,
     pub min_rate: f64,
     pub max_rate: f64,
 }
 
-/// The widest signed-integer physical format available at `rate`. Float
-/// physical formats are skipped: the point is to run the hardware at the
-/// file's integer sample size.
-pub fn choose_physical_format(formats: &[PhysicalFormat], rate: u32) -> Option<PhysicalFormat> {
+/// The index of the widest signed-integer linear-PCM physical format that
+/// runs at `rate` with at least `channels` channels. Float and encoded
+/// formats are skipped: the point is to run the hardware at the file's
+/// integer sample size, never to change what it decodes.
+pub fn choose_physical_format(
+    formats: &[PhysicalFormat],
+    rate: u32,
+    channels: u32,
+) -> Option<usize> {
     let rate = f64::from(rate);
     formats
         .iter()
-        .filter(|f| f.integer && f.min_rate <= rate && rate <= f.max_rate)
-        .max_by_key(|f| f.bits)
-        .copied()
+        .enumerate()
+        .filter(|(_, f)| {
+            f.integer
+                && f.linear_pcm
+                && f.channels >= channels
+                && f.min_rate <= rate
+                && rate <= f.max_rate
+        })
+        .max_by_key(|(_, f)| (f.bits, std::cmp::Reverse(f.channels)))
+        .map(|(i, _)| i)
 }

@@ -60,7 +60,13 @@ fn negotiation_prefers_24_bit_integer_then_16_then_float() {
     let all = negotiate(|_| true).unwrap();
     assert_eq!(all.format, SampleFormat::I24);
     let no_24 = negotiate(|c| c.format != SampleFormat::I24).unwrap();
-    assert_eq!(no_24.format, SampleFormat::I16);
+    assert_eq!(
+        no_24.format,
+        SampleFormat::I32,
+        "32-bit integer still carries 24 bits"
+    );
+    let sixteen = negotiate(|c| c.format == SampleFormat::I16 || c.format == SampleFormat::F32);
+    assert_eq!(sixteen.unwrap().format, SampleFormat::I16);
     let float_only = negotiate(|c| c.format == SampleFormat::F32).unwrap();
     assert_eq!(float_only.format, SampleFormat::F32);
     assert_eq!(negotiate(|_| false), None);
@@ -78,6 +84,8 @@ fn physical(bits: u32, integer: bool, rates: (f64, f64)) -> PhysicalFormat {
     PhysicalFormat {
         bits,
         integer,
+        linear_pcm: true,
+        channels: 2,
         min_rate: rates.0,
         max_rate: rates.1,
     }
@@ -90,16 +98,33 @@ fn the_widest_integer_physical_format_at_the_rate_is_chosen() {
         physical(24, true, (44_100.0, 96_000.0)),
         physical(32, false, (44_100.0, 192_000.0)),
     ];
-    assert_eq!(choose_physical_format(&formats, 48_000).unwrap().bits, 24);
+    assert_eq!(choose_physical_format(&formats, 48_000, 2), Some(1));
     assert_eq!(
-        choose_physical_format(&formats, 192_000).unwrap().bits,
-        16,
+        choose_physical_format(&formats, 192_000, 2),
+        Some(0),
         "24-bit does not reach 192 kHz"
     );
-    assert_eq!(choose_physical_format(&formats, 8_000), None);
+    assert_eq!(choose_physical_format(&formats, 8_000, 2), None);
     assert_eq!(
-        choose_physical_format(&[physical(32, false, (8_000.0, 96_000.0))], 48_000),
+        choose_physical_format(&[physical(32, false, (8_000.0, 96_000.0))], 48_000, 2),
         None,
         "float only: nothing to choose"
+    );
+}
+
+#[test]
+fn encoded_or_narrower_physical_formats_are_never_chosen() {
+    let ac3 = PhysicalFormat {
+        linear_pcm: false,
+        ..physical(24, true, (48_000.0, 48_000.0))
+    };
+    let mono = PhysicalFormat {
+        channels: 1,
+        ..physical(24, true, (48_000.0, 48_000.0))
+    };
+    let stereo16 = physical(16, true, (48_000.0, 48_000.0));
+    assert_eq!(
+        choose_physical_format(&[ac3, mono, stereo16], 48_000, 2),
+        Some(2)
     );
 }

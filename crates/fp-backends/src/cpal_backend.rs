@@ -305,17 +305,16 @@ impl CpalBackend {
         }
         let host = self.host()?;
         let dev = self.find(&host, device)?;
-        #[allow(unused_mut)]
-        let mut exclusive: Option<(Box<dyn Send>, SampleFormat)> = None;
         #[cfg(target_os = "macos")]
-        if config.exclusive {
+        let mut hog = if config.exclusive {
             let name = dev
                 .description()
                 .map(|d| d.name().to_owned())
                 .map_err(backend_error)?;
-            let (guard, hardware) = crate::coreaudio_hog::take(&name, config.sample_rate)?;
-            exclusive = Some((Box::new(guard), hardware));
-        }
+            Some(crate::coreaudio_hog::take(&name)?)
+        } else {
+            None
+        };
         let matching: Vec<cpal::SupportedStreamConfigRange> = dev
             .supported_output_configs()
             .map(|configs| {
@@ -376,19 +375,24 @@ impl CpalBackend {
                     if let Some(r) = renderer.take() {
                         let _ = handoff.push(r);
                     }
-                    stream.play().map_err(backend_error)?;
-                    let stream_format = match format {
+                    #[allow(unused_mut)]
+                    let mut format = match format {
                         cpal::SampleFormat::I16 => SampleFormat::I16,
                         cpal::SampleFormat::I32 => SampleFormat::I32,
                         cpal::SampleFormat::I24 => SampleFormat::I24,
                         _ => SampleFormat::F32,
                     };
-                    // In hog mode what reaches the device is the hardware
-                    // format the HAL converts to.
-                    let (held, format) = match exclusive.take() {
-                        Some((guard, hardware)) => (Some(guard), hardware),
-                        None => (None, stream_format),
-                    };
+                    #[allow(unused_mut)]
+                    let mut held: Option<Box<dyn Send>> = None;
+                    // In hog mode the hardware format is set after cpal built
+                    // its stream (cpal sets a float physical format of its
+                    // own), and what reaches the device is that format.
+                    #[cfg(target_os = "macos")]
+                    if let Some(guard) = hog.take() {
+                        format = guard.prepare(config.sample_rate, u32::from(config.channels))?;
+                        held = Some(Box::new(guard));
+                    }
+                    stream.play().map_err(backend_error)?;
                     return Ok(Box::new(CpalStream {
                         config,
                         format,

@@ -19,7 +19,10 @@ use crate::{
 
 /// How long `open` waits for the render thread to report.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(5);
-/// A buffer event later than this means the device stopped.
+/// Buffer events are awaited in slices this long, so a stop request is seen
+/// quickly even when the driver stops signalling.
+const EVENT_SLICE_MS: u32 = 20;
+/// Without a buffer event for this long, the device is taken as lost.
 const EVENT_TIMEOUT_MS: u32 = 2_000;
 
 struct ExclusiveStream {
@@ -141,6 +144,7 @@ fn open_on_thread(endpoint: &str, config: StreamConfig) -> Result<Opened, Backen
 fn render_loop(
     opened: &Opened,
     channels: usize,
+    sample_rate: u32,
     renderer: &mut dyn Renderer,
     errors: &dyn StreamErrorSink,
     stop: &AtomicBool,
@@ -148,14 +152,35 @@ fn render_loop(
     let samples = opened.buffer_frames.max(1) * channels;
     let mut scratch = vec![0.0f32; samples];
     let mut bytes = vec![0u8; samples * bytes_per_sample(opened.format)];
-    if opened.client.start_stream().is_err() {
-        errors.report(StreamErrorKind::DeviceLost);
+    // Real-time priority (MMCSS) for as long as the loop runs.
+    let _priority = audio_thread_priority::promote_current_thread_to_real_time(
+        u32::try_from(opened.buffer_frames).unwrap_or(u32::MAX),
+        sample_rate,
+    )
+    .ok();
+    // Prime one silent buffer, so the first period is not whatever the
+    // driver's buffer held (Microsoft's rendering sequence).
+    let silent = opened
+        .render
+        .write_to_device(opened.buffer_frames, &bytes, None)
+        .is_ok();
+    if !silent || opened.client.start_stream().is_err() {
+        if !stop.load(Ordering::Acquire) {
+            errors.report(StreamErrorKind::DeviceLost);
+        }
         return;
     }
-    while !stop.load(Ordering::Acquire) {
-        if opened.event.wait_for_event(EVENT_TIMEOUT_MS).is_err() {
-            errors.report(StreamErrorKind::DeviceLost);
-            break;
+    'events: while !stop.load(Ordering::Acquire) {
+        let mut waited = 0;
+        while opened.event.wait_for_event(EVENT_SLICE_MS).is_err() {
+            if stop.load(Ordering::Acquire) {
+                break 'events;
+            }
+            waited += EVENT_SLICE_MS;
+            if waited >= EVENT_TIMEOUT_MS {
+                errors.report(StreamErrorKind::DeviceLost);
+                break 'events;
+            }
         }
         let Ok(frames) = opened.client.get_available_space_in_frames() else {
             errors.report(StreamErrorKind::DeviceLost);
@@ -198,11 +223,23 @@ pub(crate) fn open(
         .name("fp-wasapi-render".to_owned())
         .spawn(move || match open_on_thread(&endpoint, config) {
             Ok(opened) => {
-                let _ = tx.send(Ok(opened.format));
-                render_loop(&opened, channels, renderer.as_mut(), errors.as_ref(), &flag);
+                // `open` gave up waiting: it has already fallen back.
+                if tx.send(Ok(opened.format)).is_ok() && !flag.load(Ordering::Acquire) {
+                    render_loop(
+                        &opened,
+                        channels,
+                        config.sample_rate,
+                        renderer.as_mut(),
+                        errors.as_ref(),
+                        &flag,
+                    );
+                }
+                drop(opened);
+                wasapi::deinitialize();
             }
             Err(e) => {
                 let _ = tx.send(Err(e));
+                wasapi::deinitialize();
             }
         })
         .map_err(|e| BackendError::Backend(e.to_string()))?;
@@ -213,9 +250,11 @@ pub(crate) fn open(
             return Err(e);
         }
         Err(_) => {
+            // A driver stuck opening: the bus plays shared instead (the
+            // thread ends by itself once the driver answers).
             stop.store(true, Ordering::Release);
-            return Err(BackendError::Backend(
-                "the exclusive stream did not open in time".to_owned(),
+            return Err(BackendError::Unsupported(
+                "the device did not open in exclusive mode in time".to_owned(),
             ));
         }
     };

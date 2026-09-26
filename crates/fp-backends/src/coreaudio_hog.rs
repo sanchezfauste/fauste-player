@@ -8,7 +8,9 @@ use coreaudio::audio_unit::macos_helpers::{
     get_audio_device_ids, get_device_name, get_hogging_pid, get_supported_physical_stream_formats,
     set_device_physical_stream_format, set_device_sample_rate, toggle_hog_mode,
 };
-use objc2_core_audio_types::{kAudioFormatFlagIsFloat, kAudioFormatFlagIsSignedInteger};
+use objc2_core_audio_types::{
+    kAudioFormatFlagIsFloat, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM,
+};
 
 use crate::exclusive::{PhysicalFormat, choose_physical_format};
 use crate::{BackendError, SampleFormat};
@@ -55,9 +57,8 @@ fn find(name: &str) -> Result<u32, BackendError> {
     }
 }
 
-/// Takes hog mode on `name` and prepares it for `rate`. Returns the guard
-/// and the sample format the hardware now runs in.
-pub(crate) fn take(name: &str, rate: u32) -> Result<(HogGuard, SampleFormat), BackendError> {
+/// Takes hog mode on `name`. The guard gives it back when dropped.
+pub(crate) fn take(name: &str) -> Result<HogGuard, BackendError> {
     let device = find(name)?;
     let me = this_process();
     match get_hogging_pid(device).map_err(|e| unsupported("hog mode", e))? {
@@ -69,6 +70,8 @@ pub(crate) fn take(name: &str, rate: u32) -> Result<(HogGuard, SampleFormat), Ba
                 ));
             }
         }
+        // Only one bus opens a device, so this process holding it already
+        // means a previous stream of that bus; its guard is gone.
         owner if owner == me => {}
         _ => {
             return Err(BackendError::Unsupported(
@@ -76,41 +79,49 @@ pub(crate) fn take(name: &str, rate: u32) -> Result<(HogGuard, SampleFormat), Ba
             ));
         }
     }
-    // From here on the guard gives the device back on any failure.
-    let guard = HogGuard { device };
-    set_device_sample_rate(device, f64::from(rate)).map_err(|e| unsupported("sample rate", e))?;
-    let ranged = get_supported_physical_stream_formats(device)
-        .map_err(|e| unsupported("physical formats", e))?;
-    let offered: Vec<PhysicalFormat> = ranged
-        .iter()
-        .map(|r| {
-            let flags = r.mFormat.mFormatFlags;
-            PhysicalFormat {
-                bits: r.mFormat.mBitsPerChannel,
-                integer: flags & kAudioFormatFlagIsSignedInteger != 0
-                    && flags & kAudioFormatFlagIsFloat == 0,
-                min_rate: r.mSampleRateRange.mMinimum,
-                max_rate: r.mSampleRateRange.mMaximum,
-            }
+    Ok(HogGuard { device })
+}
+
+impl HogGuard {
+    /// Sets the nominal rate and the widest integer linear-PCM physical
+    /// format at that rate with at least `channels` channels. Called after
+    /// the stream is built, since building sets a physical format of its
+    /// own. Returns the format the hardware now runs in.
+    pub(crate) fn prepare(&self, rate: u32, channels: u32) -> Result<SampleFormat, BackendError> {
+        let device = self.device;
+        set_device_sample_rate(device, f64::from(rate))
+            .map_err(|e| unsupported("sample rate", e))?;
+        let ranged = get_supported_physical_stream_formats(device)
+            .map_err(|e| unsupported("physical formats", e))?;
+        let offered: Vec<PhysicalFormat> = ranged
+            .iter()
+            .map(|r| {
+                let flags = r.mFormat.mFormatFlags;
+                PhysicalFormat {
+                    bits: r.mFormat.mBitsPerChannel,
+                    integer: flags & kAudioFormatFlagIsSignedInteger != 0
+                        && flags & kAudioFormatFlagIsFloat == 0,
+                    linear_pcm: r.mFormat.mFormatID == kAudioFormatLinearPCM,
+                    channels: r.mFormat.mChannelsPerFrame,
+                    min_rate: r.mSampleRateRange.mMinimum,
+                    max_rate: r.mSampleRateRange.mMaximum,
+                }
+            })
+            .collect();
+        let chosen = choose_physical_format(&offered, rate, channels)
+            .and_then(|i| Some((ranged.get(i)?, offered.get(i)?)));
+        let Some((r, format)) = chosen else {
+            // Float hardware only: the HAL passes cpal's f32 through.
+            return Ok(SampleFormat::F32);
+        };
+        let mut asbd = r.mFormat;
+        asbd.mSampleRate = f64::from(rate);
+        set_device_physical_stream_format(device, asbd)
+            .map_err(|e| unsupported("physical format", e))?;
+        Ok(if format.bits >= 24 {
+            SampleFormat::I24
+        } else {
+            SampleFormat::I16
         })
-        .collect();
-    let format = match choose_physical_format(&offered, rate) {
-        Some(chosen) => {
-            let index = offered.iter().position(|f| *f == chosen).unwrap_or(0);
-            if let Some(r) = ranged.get(index) {
-                let mut asbd = r.mFormat;
-                asbd.mSampleRate = f64::from(rate);
-                set_device_physical_stream_format(device, asbd)
-                    .map_err(|e| unsupported("physical format", e))?;
-            }
-            if chosen.bits >= 24 {
-                SampleFormat::I24
-            } else {
-                SampleFormat::I16
-            }
-        }
-        // Float hardware only: the HAL passes cpal's f32 through.
-        None => SampleFormat::F32,
-    };
-    Ok((guard, format))
+    }
 }
