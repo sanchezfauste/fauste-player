@@ -173,7 +173,11 @@ fn drop_file(h: &mut egui_kittest::Harness<'static, AppUi>, path: &std::path::Pa
     h.input_mut()
         .dropped_files
         .push(std::sync::Arc::new(Dropped(path.to_path_buf())));
-    h.run_steps(3);
+    // Dropped paths are read on a helper thread: give it time to answer.
+    for _ in 0..40 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
 }
 
 #[test]
@@ -247,5 +251,62 @@ fn delete_after_switching_tabs_does_not_remove_a_hidden_entry() {
         !sent(&fake)
             .iter()
             .any(|c| matches!(c, Command::RemoveEntry(_)))
+    );
+}
+
+#[test]
+fn background_faults_show_an_alert() {
+    let fake = support::Fake::new(state(1, 1));
+    let faults = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(1));
+    let app = AppUi::new(
+        fake.clone(),
+        I18n::new(Some("en-US")),
+        MediaCache::default(),
+    )
+    .with_service_faults(faults);
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1000.0, 700.0))
+        .build_ui_state(|ui, app: &mut AppUi| app.ui(ui), app);
+    h.run_steps(3);
+    assert!(h.query_by_label_contains("Background services").is_some());
+}
+
+#[test]
+fn opus_and_video_files_are_not_accepted() {
+    use fp_app::ui::files::is_audio;
+    use std::path::Path;
+    for yes in [
+        "a.wav", "a.aiff", "a.flac", "a.mp3", "a.ogg", "a.m4a", "a.AAC",
+    ] {
+        assert!(is_audio(Path::new(yes)), "{yes}");
+    }
+    for no in ["a.opus", "a.mkv", "a.webm", "a.mp4", "a.mka", "a.txt"] {
+        assert!(!is_audio(Path::new(no)), "{no}");
+    }
+}
+
+#[test]
+fn a_dropped_folder_inserts_its_audio_files() {
+    let dir = tempfile::tempdir().unwrap();
+    for name in ["b.flac", "a.mp3", "notes.txt"] {
+        std::fs::write(dir.path().join(name), b"x").unwrap();
+    }
+    let (mut h, fake) = harness(state(1, 1));
+    h.remove_cursor();
+    h.step();
+    drop_file(&mut h, dir.path());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut inserted = None;
+    while inserted.is_none() && std::time::Instant::now() < deadline {
+        h.run_steps(1);
+        inserted = sent(&fake).into_iter().find_map(|c| match c {
+            Command::InsertPaths { paths, .. } => Some(paths),
+            _ => None,
+        });
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(
+        inserted,
+        Some(vec![dir.path().join("a.mp3"), dir.path().join("b.flac")])
     );
 }

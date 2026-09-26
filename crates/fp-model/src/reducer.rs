@@ -121,6 +121,8 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             state.config = config;
         }
     }
+    fill_empty_next(state);
+    avoid_next_on_air(state);
     reconcile(state, &mut out);
     Ok(out)
 }
@@ -173,6 +175,8 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             }
         }
     }
+    fill_empty_next(state);
+    avoid_next_on_air(state);
     reconcile(state, &mut out);
     out
 }
@@ -629,6 +633,34 @@ pub(crate) fn fill_empty_next(state: &mut AppState) {
         .collect();
     for (i, pick) in picks {
         state.players[i].next = pick;
+    }
+}
+
+/// Spec §3 rule 22: a derived next (not chosen by the user) never points at
+/// an entry that is on air on another player; it moves on to the next
+/// playable entry that is not on air.
+pub(crate) fn avoid_next_on_air(state: &mut AppState) {
+    let on_air: Vec<(PlayerId, EntryId)> = state
+        .players
+        .iter()
+        .filter_map(|p| p.current.map(|c| (p.id, c)))
+        .collect();
+    let busy = |me: PlayerId, e: EntryId| on_air.iter().any(|(p, c)| *p != me && *c == e);
+    let fixes: Vec<(usize, Option<EntryId>)> = state
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| !p.next_explicit && p.next.is_some_and(|n| busy(p.id, n)))
+        .map(|(i, p)| {
+            let mut candidate = p.next;
+            while let Some(c) = candidate.filter(|c| busy(p.id, *c)) {
+                candidate = state.playlists.next_playable_after(c, &state.library);
+            }
+            (i, candidate)
+        })
+        .collect();
+    for (i, next) in fixes {
+        state.players[i].next = next;
     }
 }
 

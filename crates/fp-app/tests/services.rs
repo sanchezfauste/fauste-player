@@ -256,3 +256,23 @@ fn peaks_are_kept_only_for_tracks_on_a_player() {
     r.handle.send(Command::SetNext(p, last.id));
     r.run_until("peaks for the new next", |r| r.media.contains(last.track));
 }
+
+#[test]
+fn a_panicking_step_does_not_stop_autosave() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = rig(&[], dir);
+    // The analysis part fails on every step from now on.
+    r.services.fail_steps(u32::MAX);
+    r.services.step(r.now);
+    assert_eq!(r.services.faults().load(Ordering::SeqCst), 1);
+    r.handle.send(Command::CreatePlaylist {
+        name: "After".into(),
+    });
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    r.now += Duration::from_millis(1_100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    let saved = std::fs::read_to_string(r.paths.playlists_file()).unwrap_or_default();
+    assert!(saved.contains("After"));
+}

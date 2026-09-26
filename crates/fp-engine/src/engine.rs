@@ -217,6 +217,11 @@ impl Engine {
             .sum()
     }
 
+    /// Mixer slots in use across all buses (a leak shows up here).
+    pub fn used_slots(&self) -> usize {
+        self.buses.values().map(|b| b.used_slots()).sum()
+    }
+
     /// Test tones still playing.
     pub fn active_tones(&self) -> usize {
         self.tones.len()
@@ -250,6 +255,11 @@ impl Engine {
         let Some(bus) = self.buses.get_mut(&key) else {
             return;
         };
+        // Attach and Start must both fit, or the slot would never be freed.
+        if bus.command_room() < 2 {
+            self.dropped_commands += 1;
+            return;
+        }
         let Some(slot) = bus.alloc_slot() else {
             self.slot_exhaustions += 1;
             return;
@@ -292,7 +302,8 @@ impl Engine {
             .sum()
     }
 
-    /// Bus commands that could not be queued (should always be zero).
+    /// Bus commands that could not be queued, plus test tones refused because
+    /// the queue had no room for them.
     pub fn dropped_commands(&self) -> u64 {
         self.dropped_commands
     }

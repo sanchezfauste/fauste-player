@@ -2,10 +2,10 @@
 
 use std::path::{Path, PathBuf};
 
-/// File extensions the decoder can open.
+/// File extensions of the formats supported in Phase 1 (spec §6): WAV,
+/// AIFF, FLAC, MP3, OGG Vorbis, AAC/M4A and ALAC (in M4A).
 pub const AUDIO_EXTENSIONS: &[&str] = &[
-    "aac", "adts", "aif", "aifc", "aiff", "caf", "flac", "m4a", "m4b", "mka", "mkv", "mp1", "mp2",
-    "mp3", "mp4", "mpa", "oga", "ogg", "opus", "wav", "wave", "webm",
+    "aac", "adts", "aif", "aifc", "aiff", "flac", "m4a", "m4b", "mp3", "oga", "ogg", "wav", "wave",
 ];
 
 pub fn is_audio(path: &Path) -> bool {

@@ -112,3 +112,17 @@ fn restoring_with_no_playlists_creates_a_default_one_and_moves_ids_forward() {
     assert_eq!(restored.players[0].volume, 0.5);
     assert!(restored.ids.next_raw() > 500);
 }
+
+#[test]
+fn rule22_restored_idle_players_do_not_point_at_an_entry_on_air() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    apply(&mut state, Command::Play(p)).unwrap();
+    // A session saved with only the first player (for example before a
+    // player was added): the others are created fresh on restore.
+    let sessions: Vec<_> = state.sessions(|_| 10.0).into_iter().take(1).collect();
+    let (restored, _) = AppState::restore(parts(&state), &sessions, "Main");
+    for other in restored.players.iter().skip(1) {
+        assert_ne!(other.next, Some(e[0]), "e0 is on air on P1");
+    }
+}

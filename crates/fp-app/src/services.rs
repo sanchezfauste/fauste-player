@@ -90,6 +90,10 @@ pub struct Services {
     /// Tracks to analyse again even if already analysed.
     forced: HashSet<TrackId>,
     settings: Option<AnalysisSettings>,
+    /// Steps that panicked (shown by the UI as an alert).
+    faults: Arc<AtomicU64>,
+    #[cfg(feature = "test-hooks")]
+    fail_steps: u32,
     saved_version: u64,
     dirty_since: Option<Instant>,
     last_session_save: Option<Instant>,
@@ -115,6 +119,9 @@ impl Services {
             failed: HashSet::new(),
             forced: HashSet::new(),
             settings: None,
+            faults: Arc::new(AtomicU64::new(0)),
+            #[cfg(feature = "test-hooks")]
+            fail_steps: 0,
             saved_version: 0,
             dirty_since: None,
             last_session_save: None,
@@ -126,24 +133,62 @@ impl Services {
         self.request_tx.clone()
     }
 
-    /// One round of work. Never blocks on the analyzer.
+    /// Counts the steps that panicked.
+    pub fn faults(&self) -> Arc<AtomicU64> {
+        self.faults.clone()
+    }
+
+    /// Makes the analysis part of the next `count` steps panic. Used to test
+    /// panic isolation.
+    #[cfg(feature = "test-hooks")]
+    pub fn fail_steps(&mut self, count: u32) {
+        self.fail_steps = count;
+    }
+
+    /// One round of work. Never blocks on the analyzer. A panic inside is
+    /// logged and counted, and the next step runs normally, so saving never
+    /// stops for the rest of the session.
     pub fn step(&mut self, now: Instant) {
         // The version is read before the snapshot: the snapshot saved can
         // only be newer than the version recorded as saved, never older.
         let version = self.conductor.telemetry.load().model_version;
         let state = self.conductor.model.load_full();
-        while let Ok(request) = self.requests.try_recv() {
-            match request {
-                ServiceRequest::ReanalyseAll => self.restart_analysis(&state),
+        // Analysis and saving are isolated from each other: a fault in one
+        // never stops the other.
+        let analysis = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.analysis_step(&state);
+        }));
+        let saving = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.autosave(&state, version, now);
+        }));
+        for outcome in [analysis, saving] {
+            if outcome.is_err() {
+                self.faults.fetch_add(1, Ordering::AcqRel);
+                tracing::error!("a services step panicked; continuing");
             }
         }
-        self.follow_settings(&state);
-        self.submit_new(&state);
-        let wanted = Self::wanted(&state);
+    }
+
+    fn analysis_step(&mut self, state: &AppState) {
+        #[cfg(feature = "test-hooks")]
+        if self.fail_steps > 0 {
+            self.fail_steps -= 1;
+            #[allow(clippy::panic)]
+            {
+                panic!("injected services failure");
+            }
+        }
+        while let Ok(request) = self.requests.try_recv() {
+            match request {
+                ServiceRequest::ReanalyseAll => self.restart_analysis(state),
+            }
+        }
+        self.follow_settings(state);
+        self.submit_new(state);
+        let wanted = Self::wanted(state);
         while let Ok(result) = self.analyzer.results().try_recv() {
             self.route(result, &wanted);
         }
-        self.autosave(&state, version, now);
     }
 
     /// Final save, with the positions the engine reports right now.
@@ -297,9 +342,11 @@ impl Services {
             .dirty_since
             .is_some_and(|since| now.saturating_duration_since(since) >= debounce)
         {
+            // Recorded only once the files are written: a failed save is
+            // retried on the next step.
+            self.save_all(state);
             self.saved_version = version;
             self.dirty_since = None;
-            self.save_all(state);
             self.last_session_save = Some(now);
             return;
         }

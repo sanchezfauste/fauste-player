@@ -1,0 +1,75 @@
+name: release-build
+
+# Builds the release archives for every supported target and uploads them to
+# the GitHub release of `tag`. Called by release-please after a release is
+# created; can also be run by hand to rebuild the assets of an existing tag.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag (for example v0.2.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Install Linux system packages
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev libdbus-1-dev
+      - name: Install the pinned toolchain and target
+        shell: bash
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+      - name: Build and package
+        id: package
+        shell: bash
+        run: |
+          version="${TAG#v}"
+          archive="$(scripts/package-release.sh "${{ matrix.target }}" "${version}" | tail -n1)"
+          echo "archive=${archive}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ inputs.tag }}
+      - name: Upload to the release
+        shell: bash
+        run: gh release upload "${{ inputs.tag }}" "${{ steps.package.outputs.archive }}" "${{ steps.package.outputs.archive }}.sha256" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

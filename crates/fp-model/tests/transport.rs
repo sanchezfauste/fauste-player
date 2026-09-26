@@ -194,3 +194,64 @@ fn a_fade_stop_is_told_apart_from_a_crossfade() {
     apply(&mut state, Command::FadeStop(p)).unwrap();
     assert!(state.player(p).unwrap().fade_stopping());
 }
+
+#[test]
+fn rule22_an_idle_player_does_not_pick_an_entry_on_air_elsewhere() {
+    let mut state = fixture(3);
+    let e = entries(&state);
+    let (p1, p2) = (state.players[0].id, state.players[1].id);
+    apply(&mut state, Command::Play(p1)).unwrap();
+    assert_eq!(state.player(p1).unwrap().current, Some(e[0]));
+    assert_eq!(state.player(p2).unwrap().next, Some(e[1]));
+}
+
+#[test]
+fn rule22_derived_next_skips_entries_on_air_elsewhere() {
+    let mut state = fixture(4);
+    let e = entries(&state);
+    let (p1, p2) = (state.players[0].id, state.players[1].id);
+    apply(&mut state, Command::SetNext(p1, e[1])).unwrap();
+    apply(&mut state, Command::Play(p1)).unwrap();
+    apply(&mut state, Command::SetNext(p2, e[0])).unwrap();
+    apply(&mut state, Command::Play(p2)).unwrap();
+    assert_eq!(state.player(p2).unwrap().current, Some(e[0]));
+    assert_eq!(
+        state.player(p2).unwrap().next,
+        Some(e[2]),
+        "e[1] is on air on P1"
+    );
+}
+
+#[test]
+fn rule22_an_explicit_next_is_kept_even_if_on_air_elsewhere() {
+    let mut state = fixture(3);
+    let e = entries(&state);
+    let (p1, p2) = (state.players[0].id, state.players[1].id);
+    apply(&mut state, Command::SetNext(p2, e[0])).unwrap();
+    apply(&mut state, Command::Play(p1)).unwrap();
+    assert_eq!(state.player(p2).unwrap().next, Some(e[0]));
+}
+
+#[test]
+fn rule22_an_idle_player_left_without_next_picks_again_when_entries_come_free() {
+    let mut state = fixture(2);
+    let e = entries(&state);
+    let (p1, p2, p3) = (
+        state.players[0].id,
+        state.players[1].id,
+        state.players[2].id,
+    );
+    apply(&mut state, Command::Play(p1)).unwrap();
+    apply(&mut state, Command::Play(p2)).unwrap();
+    assert_eq!(
+        state.player(p3).unwrap().next,
+        None,
+        "both entries are on air"
+    );
+    apply(&mut state, Command::Stop(p2)).unwrap();
+    assert_eq!(
+        state.player(p3).unwrap().next,
+        Some(e[1]),
+        "e1 is free again"
+    );
+}

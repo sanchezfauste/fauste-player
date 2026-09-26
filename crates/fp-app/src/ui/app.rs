@@ -117,9 +117,10 @@ impl Scene<'_> {
                 if let Some(dir) = dir {
                     dialog = dialog.set_directory(dir);
                 }
-                let paths = pollster::block_on(dialog.pick_files())
+                let picked: Vec<PathBuf> = pollster::block_on(dialog.pick_files())
                     .map(|files| files.iter().map(|f| f.path().to_path_buf()).collect())
                     .unwrap_or_default();
+                let paths = audio_paths(&picked);
                 let _ = tx.send(Picked {
                     playlist,
                     index,
@@ -145,10 +146,12 @@ pub struct AppUi {
     picks_tx: Sender<Picked>,
     picks_rx: Receiver<Picked>,
     themed: bool,
+    #[cfg(feature = "test-hooks")]
     fail_next_frame: bool,
     settings: SettingsState,
     settings_shown: bool,
     backends: Vec<Arc<dyn AudioBackend>>,
+    service_faults: Option<Arc<std::sync::atomic::AtomicU64>>,
 }
 
 impl AppUi {
@@ -166,11 +169,19 @@ impl AppUi {
             picks_tx,
             picks_rx,
             themed: false,
+            #[cfg(feature = "test-hooks")]
             fail_next_frame: false,
             settings: SettingsState::default(),
             settings_shown: false,
             backends: Vec::new(),
+            service_faults: None,
         }
+    }
+
+    /// The services thread's fault counter, shown as a status-bar alert.
+    pub fn with_service_faults(mut self, faults: Arc<std::sync::atomic::AtomicU64>) -> Self {
+        self.service_faults = Some(faults);
+        self
     }
 
     /// The audio systems listed in Settings.
@@ -205,6 +216,7 @@ impl AppUi {
     }
 
     /// Makes the next frame panic. Used to test panic isolation.
+    #[cfg(feature = "test-hooks")]
     pub fn fail_next_frame(&mut self) {
         self.fail_next_frame = true;
     }
@@ -215,6 +227,7 @@ impl AppUi {
     }
 
     pub fn ui(&mut self, ui: &mut Ui) {
+        #[cfg(feature = "test-hooks")]
         if std::mem::take(&mut self.fail_next_frame) {
             #[allow(clippy::panic)]
             {
@@ -244,13 +257,13 @@ impl AppUi {
         while let Some(error) = self.ctl.take_rejection() {
             self.view.notice = Some((error_text(&self.i18n, &error), time + NOTICE_SECS));
         }
+        // Paths arrive already filtered (and folders expanded) off this thread.
         while let Ok(picked) = self.picks_rx.try_recv() {
-            let paths = audio_paths(&picked.paths);
-            if !paths.is_empty() {
+            if !picked.paths.is_empty() {
                 self.ctl.send(Command::InsertPaths {
                     playlist: picked.playlist,
                     index: picked.index,
-                    paths,
+                    paths: picked.paths,
                 });
             }
         }
@@ -293,7 +306,11 @@ impl AppUi {
                 .max_rect(status)
                 .layout(Layout::left_to_right(Align::Center)),
         );
-        status_bar(&mut status_ui, &scene, &self.view, &self.platform);
+        let faults = self
+            .service_faults
+            .as_ref()
+            .map_or(0, |f| f.load(std::sync::atomic::Ordering::Acquire));
+        status_bar(&mut status_ui, &scene, &self.view, &self.platform, faults);
         ui.allocate_rect(full, Sense::hover());
         if self.view.settings_open {
             if !self.settings_shown {
@@ -422,13 +439,22 @@ impl AppUi {
         let Some(target) = self.view.file_drop.or_else(fallback) else {
             return;
         };
-        let paths = audio_paths(&dropped);
-        if !paths.is_empty() {
-            self.ctl.send(Command::InsertPaths {
-                playlist: target.playlist,
-                index: target.index,
-                paths,
+        // Reading folders can be slow (network shares, sleeping disks): it
+        // happens on a helper thread and the result comes back as a pick.
+        let tx = self.picks_tx.clone();
+        let ctx = ctx.clone();
+        let spawned = std::thread::Builder::new()
+            .name("fp-drop-scan".to_owned())
+            .spawn(move || {
+                let _ = tx.send(Picked {
+                    playlist: target.playlist,
+                    index: target.index,
+                    paths: audio_paths(&dropped),
+                });
+                ctx.request_repaint();
             });
+        if let Err(e) = spawned {
+            tracing::error!(error = %e, "could not read the dropped files");
         }
     }
 }
@@ -453,7 +479,10 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
             i18n.tr_args("error-player-count", &[("max", (*max).into())])
         }
         ModelError::PlayerBusy(_) => i18n.tr("error-player-busy"),
-        other => i18n.tr_args("error-other", &[("detail", other.to_string().into())]),
+        ModelError::UnknownPlayer(_)
+        | ModelError::UnknownPlaylist(_)
+        | ModelError::UnknownEntry(_) => i18n.tr("error-not-found"),
+        ModelError::NoPlaylists => i18n.tr("error-no-playlists"),
     }
 }
 
@@ -588,7 +617,7 @@ fn legend(ui: &mut Ui, color: Color32, label: &str) {
     });
 }
 
-fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, platform: &str) {
+fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, platform: &str, faults: u64) {
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
     ui.painter().rect_filled(
@@ -599,7 +628,7 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, platform: 
     let t = scene.i18n;
     ui.spacing_mut().item_spacing = vec2(18.0, 0.0);
     ui.add_space(12.0);
-    let alerts: Vec<String> = scene
+    let mut alerts: Vec<String> = scene
         .telemetry
         .buses
         .iter()
@@ -611,6 +640,9 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, platform: 
             )
         })
         .collect();
+    if faults > 0 {
+        alerts.push(t.tr_args("alert-services-fault", &[("count", faults.into())]));
+    }
     let notice = view_state
         .notice
         .as_ref()

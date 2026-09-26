@@ -1,66 +1,268 @@
 # Fauste Player
 
-Desktop radio playout for Linux, Windows and macOS, written in Rust:
-independent players with their own playlists, sample-accurate mixes,
-pre-listen (CUE) output, automatic cue markers, and an interface that never
-blocks the audio.
+[![CI](https://github.com/sanchezfauste/fauste-player/actions/workflows/ci.yml/badge.svg)](https://github.com/sanchezfauste/fauste-player/actions/workflows/ci.yml)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196.svg)](https://www.conventionalcommits.org/en/v1.0.0/)
+[![SemVer](https://img.shields.io/badge/versioning-SemVer%202.0.0-blue.svg)](https://semver.org/spec/v2.0.0.html)
 
-## Building
+**Fauste Player** is a desktop radio playout application for Linux, Windows
+and macOS, written in Rust. It runs any number of independent players side
+by side, each with its own playlists, transport and outputs, with
+sample-accurate overlapping mixes, a separate pre-listen (CUE) output, and an
+audio engine that the interface can never block.
 
-Rust 1.98 or newer (`rustup` recommended).
+![Main screen](docs/images/main-screen.png)
 
-System packages:
+## Contents
 
-| OS | Packages |
+- [Features](#features)
+- [Platform support](#platform-support)
+- [Install](#install)
+- [Build from source](#build-from-source)
+- [Develop](#develop)
+- [How it is built](#how-it-is-built)
+- [Working with AI agents](#working-with-ai-agents)
+- [Versioning and releases](#versioning-and-releases)
+- [Roadmap](#roadmap)
+- [Documentation](#documentation)
+- [Contributing](#contributing) · [Security](#security) · [Licence](#licence)
+
+## Features
+
+- **Independent players:** four by default, any number configurable. Each
+  has Play/Next, Stop, Fade stop, Pause and Stop-after-current, SINGLE and
+  CONT modes, a countdown with tenths, a stereo meter, a volume fader and
+  its own playlist tabs.
+- **Sample-accurate mixing:** in continuous mode the next track starts
+  exactly at the MIX point and overlaps the fading end of the current one.
+  The MIX level and the maximum overlap are configurable.
+- **Automatic markers:** background analysis finds cue-in, cue-out, the MIX
+  point and the outro. It also reads tags and cover art, and draws the
+  waveform. Markers set by hand are never overwritten.
+- **CUE pre-listen** on a separate device or channel pair.
+- **Routing per player:** Main and Cue outputs on any device and channel
+  pair. Multichannel interfaces carry several players at once.
+- **Resilient:**
+  - if an output device is lost, the timeline keeps running on a virtual
+    clock and the device reconnects on its own;
+  - decoder, analysis, services and interface panics are contained;
+  - saves are atomic with rotating backups;
+  - after a crash, players come back paused at their positions, and nothing
+    goes on air by itself.
+- **Fast, dense interface** (egui). Virtualised track tables handle
+  thousands of entries, with drag and drop within and across players and
+  onto tabs, drops from the file manager, a context menu and keyboard
+  shortcuts.
+- **English and Spanish** interface (Fluent), following the OS language.
+
+## Platform support
+
+| OS | Audio system (Phase 1) | Planned (Phase 3) |
+|---|---|---|
+| Linux (x86-64, ARM64) | ALSA (works with PipeWire and PulseAudio through their ALSA plugins) | PipeWire, PulseAudio, JACK |
+| Windows 10/11 (x86-64) | WASAPI shared mode | WASAPI exclusive, ASIO, DirectSound, JACK |
+| macOS (Intel, Apple silicon) | Core Audio | Core Audio hog mode, JACK |
+
+Formats: WAV, AIFF, FLAC, MP3, OGG Vorbis, AAC/M4A, ALAC.
+
+## Install
+
+Download the archive for your platform from
+[Releases](https://github.com/sanchezfauste/fauste-player/releases), check
+its `.sha256`, extract it and run `fauste-player`. See the
+[getting started guide](docs/user/getting-started.md) for the details for
+each platform, such as unsigned binaries on macOS and Windows. Native
+packages (deb, rpm, Flatpak, AppImage, MSI, dmg) arrive in Phase 5.
+
+## Build from source
+
+The toolchain is pinned in `rust-toolchain.toml` (Rust 1.98.1, edition 2024).
+Install [rustup](https://rustup.rs); it picks the right version by itself.
+
+### Linux
+
+| Distribution | Packages |
 |---|---|
-| Debian / Ubuntu | `build-essential pkg-config libasound2-dev libdbus-1-dev` |
-| Fedora | `gcc pkgconf-pkg-config alsa-lib-devel dbus-devel` |
-| Windows | Visual Studio Build Tools (MSVC) |
-| macOS | Xcode command-line tools |
+| Debian, Ubuntu | `sudo apt install build-essential pkg-config libasound2-dev libdbus-1-dev` |
+| Fedora | `sudo dnf install gcc pkgconf-pkg-config alsa-lib-devel dbus-devel` |
+| Arch | `sudo pacman -S base-devel pkgconf alsa-lib dbus` |
+
+The window system libraries (X11 or Wayland, `libxkbcommon`, OpenGL) are
+loaded at run time. Any desktop has them. Minimal systems may need
+`libxkbcommon-x11-0` and `libgl1` (or their equivalents).
+
+### Windows
+
+Install the **Visual Studio Build Tools** with the *Desktop development with
+C++* workload (MSVC and the Windows SDK), then rustup. Use the default
+`x86_64-pc-windows-msvc` toolchain.
+
+### macOS
 
 ```sh
-cargo build --release
-cargo test --workspace
+xcode-select --install
 ```
 
-## Running
+### Build and run
 
 ```sh
-cargo run --release -p fp-app
+git clone https://github.com/sanchezfauste/fauste-player.git
+cd fauste-player
+cargo run --release -p fp-app          # builds and starts target/release/fauste-player
 ```
 
-Settings, playlists and the session are stored in the OS directories. Set
-`FAUSTE_HOME=<dir>` to keep everything in one folder instead (portable
-installs, tests).
-
-To try it with a ready-made state (four players, three playlists) built from
-a folder of audio files:
+To try it with a ready-made state (four players and three playlists built
+from a folder of audio files):
 
 ```sh
 FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- ~/Music
 FAUSTE_HOME=/tmp/fp-demo cargo run --release -p fp-app
 ```
 
-Keys: `1`–`9` play each player, `Del` removes the selected track, `Esc`
-closes dialogs. Double-click a track to set it as next; right-click for more.
+`FAUSTE_HOME` keeps every file of the application in one folder (portable
+mode). Without it, the OS locations are used; see
+[Data and backups](docs/user/data-and-backups.md).
 
-Logs are written to the log directory (daily files, 14 kept); a crash report
-is written there if the application panics.
+## Develop
 
-## Workspace
+### Workspace
 
 | Crate | Role |
 |---|---|
-| `fp-model` | Pure domain state and rules (commands in, engine actions out) |
-| `fp-store` | Atomic JSON persistence, backups, migrations |
-| `fp-backends` | Audio backends (system via cpal, Null, Offline for tests) |
-| `fp-decode` | File decoding (symphonia) |
-| `fp-engine` | Real-time mixer, buses, decode workers, conductor thread |
-| `fp-analysis` | Tags, cover art, waveform peaks and automatic markers |
-| `fp-app` | The egui application |
+| [`fp-model`](crates/fp-model) | Pure domain state and player rules: commands in, engine actions out |
+| [`fp-store`](crates/fp-store) | Atomic JSON persistence, backups, migrations |
+| [`fp-decode`](crates/fp-decode) | File decoding (symphonia) to stereo `f32` |
+| [`fp-backends`](crates/fp-backends) | Audio backends: system through cpal, Null, Offline for tests |
+| [`fp-engine`](crates/fp-engine) | Real-time mixer, buses, decode workers, the conductor thread |
+| [`fp-analysis`](crates/fp-analysis) | Tags, covers, peaks, automatic markers, cache, background pool |
+| [`fp-app`](crates/fp-app) | The egui application and the `fauste-player` binary |
 
-## Licences
+### Everyday commands
 
-The Inter font (`crates/fp-app/assets/fonts`) is distributed under the SIL
-Open Font License 1.1; see `crates/fp-app/assets/fonts/OFL.txt`. Icons come
-from Phosphor (MIT) via `egui-phosphor`.
+```sh
+cargo fmt --all                                        # format
+cargo clippy --workspace --all-targets -- -D warnings  # lint (CI fails on any warning)
+cargo test --workspace                                 # all tests: no sound card or display needed
+cargo test -p fp-engine --test conductor               # one test file
+cargo test --release -p fp-engine --test conductor -- --ignored six_simulated_hours   # soak
+cargo deny check                                       # licences, advisories, sources
+RUST_LOG=debug cargo run -p fp-app                     # verbose logs
+git config core.hooksPath .githooks                    # enable the Conventional Commits hook
+```
+
+### Rules the code follows
+
+- **No `unsafe`** (`forbid` workspace-wide), and no `unwrap`, `expect` or
+  `panic` outside tests. The audio and analysis crates deny
+  `clippy::indexing_slicing`.
+- **The real-time thread never allocates, frees, locks, logs or panics.**
+  `assert_no_alloc` tests enforce it. See
+  [Threading and real time](docs/technical/threading-and-realtime.md).
+- **Behaviour lives in the pure `fp-model` reducer** and is tested rule by
+  rule, without audio.
+- **No hardcoded product limits:** everything tunable is in `Config`, with
+  defaults, ranges and lenient loading.
+- **TDD:** write the failing test first. UI interactions are tested
+  headlessly with `egui_kittest`.
+- **English** for all code, identifiers, comments, commits and docs. Every
+  UI string goes through Fluent, in both `en-US` and `es-ES`.
+
+## How it is built
+
+The design started as an interactive prototype (the "v3" main screen with
+the Nocturne design system). It became a binding
+[design spec](docs/superpowers/specs/2026-09-25-fauste-player-design.md):
+normative player rules, engine, backends, analysis, persistence, UI,
+security, testing and phases. Each phase is split into implementation plans
+in [`docs/superpowers/plans`](docs/superpowers/plans). Each plan was
+executed task by task with test-driven development, then reviewed by a fresh
+reviewer before being merged. Deviations and decisions are recorded as
+rulings in the plans.
+
+In short:
+
+- the UI sends commands to a **conductor** thread;
+- the conductor applies them through the **pure model reducer** and turns
+  the resulting actions into **sample-accurate commands** for one real-time
+  mixer per output device;
+- per-player worker threads decode and resample into lock-free rings;
+- analysis and saving run in the background;
+- the UI reads immutable snapshots and never waits for the audio path.
+
+Details are in the [technical documentation](docs/technical/README.md).
+
+## Working with AI agents
+
+The project is developed with Claude Code and the **superpowers** skills.
+[`CLAUDE.md`](CLAUDE.md) is the canonical guide for agents (rules, commands,
+invariants, workflow). [`AGENTS.md`](AGENTS.md) points other agents to it.
+
+Install the skills from the official plugin marketplace inside Claude Code
+(`/plugin` → *superpowers*). Use them as follows:
+
+| Situation | Skill | How |
+|---|---|---|
+| A new feature or phase | `superpowers:brainstorming` | Explore the idea, agree the design, update the spec |
+| A spec is agreed | `superpowers:writing-plans` | Write `docs/superpowers/plans/<date>-<phase>-<plan>.md` with tasks, interfaces and a review focus |
+| Implementing a plan | `superpowers:executing-plans` (inline) or `superpowers:subagent-driven-development` | Task by task, with a ledger in `.superpowers/sdd/` |
+| Writing any code | `superpowers:test-driven-development` | Red, green, refactor; never skip the failing run |
+| A bug or a failing test | `superpowers:systematic-debugging` | Find the cause before changing code |
+| Before claiming done | `superpowers:verification-before-completion` | Run the checks and read the output |
+| After a plan | `superpowers:requesting-code-review` | A fresh reviewer on the most capable model reviews the whole branch |
+| Handling review findings | `superpowers:receiving-code-review` | Verify each finding, then fix it test-first |
+| Finishing | `superpowers:finishing-a-development-branch` | Green suite, then merge or PR |
+| Isolated work | `superpowers:using-git-worktrees` | One worktree per branch |
+
+The UI design lives in a Claude Design project, which agents can read through
+the `claude_design` MCP server (see `CLAUDE.md`).
+
+## Versioning and releases
+
+- [Semantic Versioning](https://semver.org/spec/v2.0.0.html) and
+  [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
+  (`feat(engine): …`, `fix(ui): …`, `docs: …`).
+- [release-please](https://github.com/googleapis/release-please) keeps a
+  release PR that bumps the version and writes the
+  [changelog](CHANGELOG.md).
+- Merging the release PR tags `vX.Y.Z`, publishes the GitHub release, and
+  attaches binaries for Linux (x86-64, ARM64), Windows (x86-64) and macOS
+  (Intel, Apple silicon), with checksums and third-party licence notices.
+
+See [Release process](docs/technical/release-process.md).
+
+## Roadmap
+
+| Phase | Content | Status |
+|---|---|---|
+| 1. Usable core | Players, mixing, CUE, analysis, persistence, main screen, Settings subset, CI and releases | done |
+| 2. Cartwall and full Settings | Cart pages, remappable shortcuts, language selector, M3U/M3U8/PLS import and export, manual marker editing | next |
+| 3. Native backends | PipeWire, PulseAudio, JACK, WASAPI exclusive, ASIO, DirectSound, Core Audio hog mode | planned |
+| 4. Bit-perfect | Exclusive output at the file's rate and format | planned |
+| 5. Packaging | deb, rpm, Flatpak, AppImage, signed MSI, signed and notarised dmg | planned |
+
+## Documentation
+
+- [User guide](docs/user/README.md)
+- [Technical documentation](docs/technical/README.md)
+- [Design spec](docs/superpowers/specs/2026-09-25-fauste-player-design.md) and [implementation plans](docs/superpowers/plans)
+- [Changelog](CHANGELOG.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+See [SECURITY.md](SECURITY.md). The application makes no network
+connections and sends no telemetry.
+
+## Licence
+
+No licence has been chosen for Fauste Player yet: until one is added, all
+rights are reserved by the author. Bundled third-party components keep
+their own licences:
+
+- the Inter font: SIL Open Font License 1.1,
+  [`OFL.txt`](crates/fp-app/assets/fonts/OFL.txt);
+- the Phosphor icons: MIT;
+- every Rust dependency: listed in `licenses/THIRD-PARTY.html` inside each
+  release archive.

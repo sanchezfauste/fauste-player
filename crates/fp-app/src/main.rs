@@ -29,7 +29,10 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
     let _log = logging::init(&paths.log_dir);
-    crash::install_panic_hook(paths.log_dir.clone());
+    crash::install_panic_hook(
+        paths.log_dir.clone(),
+        fp_model::Limits::default().max_crash_reports,
+    );
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");
     match run(paths) {
         Ok(()) => {
@@ -76,10 +79,12 @@ fn run(paths: fp_store::AppPaths) -> Result<(), Box<dyn std::error::Error>> {
     let media = MediaCache::default();
     let services = Services::new(handle.clone(), store, analyzer, media.clone());
     let requests = services.requests();
+    let faults = services.faults();
     let services = services.spawn()?;
 
     let app = AppUi::new(handle.clone(), i18n, media)
         .with_services(requests)
+        .with_service_faults(faults)
         .with_backends(backends)
         .with_platform(platform);
     let options = eframe::NativeOptions {

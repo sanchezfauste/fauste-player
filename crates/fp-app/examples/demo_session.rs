@@ -13,11 +13,25 @@ use fp_model::{AppState, Command, Config, Limits, PlaylistId};
 use fp_store::Store;
 
 fn main() -> ExitCode {
+    // Never write the demo over a real installation.
+    if std::env::var_os(bootstrap::HOME_VAR).is_none() {
+        eprintln!(
+            "demo_session: set {} to a scratch directory first",
+            bootstrap::HOME_VAR
+        );
+        return ExitCode::FAILURE;
+    }
     let (Some(paths), Some(folder)) = (bootstrap::paths(), std::env::args().nth(1)) else {
         eprintln!("usage: FAUSTE_HOME=<dir> demo_session <music folder>");
         return ExitCode::FAILURE;
     };
     let files = audio_paths(&[PathBuf::from(folder)]);
+    if files.is_empty() {
+        eprintln!(
+            "demo_session: no audio files directly inside that folder (sub-folders are not read)"
+        );
+        return ExitCode::FAILURE;
+    }
     let mut config = Config::default();
     config.players.count = 4;
     let mut state = AppState::new(config, "Morning");
@@ -28,7 +42,8 @@ fn main() -> ExitCode {
     let lists: Vec<PlaylistId> = state.playlists.iter().map(|p| p.id).collect();
     for (n, list) in lists.iter().enumerate() {
         let mut chosen = files.clone();
-        chosen.rotate_left(n * 3);
+        let len = chosen.len();
+        chosen.rotate_left((n * 3) % len);
         let _ = fp_model::apply(
             &mut state,
             Command::InsertPaths {
@@ -47,7 +62,7 @@ fn main() -> ExitCode {
                 .get(*list)
                 .and_then(|p| p.entries.first())
                 .map(|e| e.id);
-            if let Some(entry) = first {
+            if let Some(entry) = first.filter(|_| n < 3) {
                 let _ = fp_model::apply(&mut state, Command::SetNext(*player, entry));
             }
         }

@@ -323,7 +323,11 @@ fn info_row(
             let holds = view_state.meter(id, levels, scene.time);
             widgets::vu(ui, levels, holds);
             let volume = scene.state.player(id).map_or(1.0, |p| p.volume);
-            let tip = t.tr_args("tip-volume", &[("db", view::volume_db_text(volume).into())]);
+            let db = match view::volume_db(volume) {
+                Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),
+                None => t.tr("volume-silent"),
+            };
+            let tip = t.tr_args("tip-volume", &[("db", db.into())]);
             if let Some(pos) = widgets::fader(ui, view::fader_from_gain(volume), &tip) {
                 scene
                     .ctl
@@ -344,7 +348,7 @@ fn info_row(
                 let artist = match (&pv.title, &pv.artist) {
                     (_, Some(artist)) => artist.clone(),
                     (Some(_), None) => t.tr("unknown-artist"),
-                    (None, None) => "—".to_owned(),
+                    (None, None) => t.tr("placeholder-none"),
                 };
                 ui.add(
                     egui::Label::new(
@@ -374,10 +378,10 @@ fn info_row(
                                 )
                                 .selectable(false),
                             );
-                            next_line(ui, pv);
+                            next_line(ui, scene, pv);
                         });
                     } else {
-                        next_line(ui, pv);
+                        next_line(ui, scene, pv);
                     }
                 });
             });
@@ -385,8 +389,11 @@ fn info_row(
     );
 }
 
-fn next_line(ui: &mut Ui, pv: &PlayerView) {
-    let text = pv.next_line.clone().unwrap_or_else(|| "—".to_owned());
+fn next_line(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
+    let text = pv
+        .next_line
+        .clone()
+        .unwrap_or_else(|| scene.i18n.tr("placeholder-none"));
     ui.add(
         egui::Label::new(
             RichText::new(text)

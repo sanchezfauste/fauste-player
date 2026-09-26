@@ -33,7 +33,12 @@ unic-langid.workspace = true
 sys-locale.workspace = true
 image.workspace = true
 
+[features]
+# Hooks that inject failures, for the integration tests only.
+test-hooks = []
+
 [dev-dependencies]
+fp-app = { path = ".", features = ["test-hooks"] }
 egui_kittest.workspace = true
 tempfile.workspace = true
 hound.workspace = true

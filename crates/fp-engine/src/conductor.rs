@@ -161,8 +161,8 @@ impl Conductor {
                 }
             }
         }
-        let requests: Vec<EngineRequest> = self.requests.try_iter().collect();
-        for request in requests {
+        // One request per tick keeps the tick short; the rest wait their turn.
+        if let Ok(request) = self.requests.try_recv() {
             match request {
                 EngineRequest::TestTone {
                     route,

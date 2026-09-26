@@ -1,0 +1,77 @@
+# Analysis (`fp-analysis`)
+
+## Pipeline
+
+`analyze_file_cancellable(path, settings, limits, cancelled)` decodes the
+file once and returns an `Analysis`. Cancellation is checked between decode
+blocks. The result holds:
+
+- `TrackAnalysis`: title, artist, album, duration, and the automatic markers
+  (`cue_in`, `cue_out`, `segue_start`, `outro_start`);
+- `peaks`: min/max `i16` pairs per `analysis.peak_bucket_ms` (10 ms) of the
+  mono sum;
+- `cover_png`: a PNG thumbnail of the embedded cover (`analysis.cover_thumb_px`,
+  128 px).
+
+A truncated file is analysed up to where its data ends. A decode error mid-way
+keeps what was decoded.
+
+## Tags and covers (`metadata.rs`)
+
+- lofty reads the tags. Its allocation limit is set per thread from
+  `limits.max_cover_bytes`. If tags with artwork fail to parse, the read is
+  retried without artwork, so a broken picture never hides the title.
+- If there is no title, `Artist - Title` is parsed from the file name.
+- Covers larger than `limits.max_cover_bytes` or
+  `limits.max_cover_pixels` are rejected, and decoding uses explicit
+  `image::Limits`. Every failure degrades to "no cover".
+
+## Markers (`signal.rs`)
+
+An RMS envelope over `analysis.rms_window_ms` windows gives:
+
+| Marker | Rule |
+|---|---|
+| `cue_in` | start of the first window ≥ `silence_threshold_db`, else 0 |
+| `cue_out` | end of the last window ≥ `silence_threshold_db`, else the duration |
+| `segue_start` | scanning back from `cue_out`: the end of the first window ≥ `segue_threshold_db`, clamped to `[cue_out − segue_max_secs, cue_out)` and `≥ cue_in`; none if no window reaches the threshold |
+| `outro_start` | scanning back from `cue_out`: the end of the first window ≥ median RMS − `outro_drop_db`, clamped to `≥ cue_out − outro_max_secs`, and `< cue_out` |
+
+Tracks shorter than `markers_min_duration_secs` get neither `segue_start`
+nor `outro_start`. `intro_end` is never automatic. The model's
+`Track::apply_analysis` stores automatic markers without touching manual ones.
+
+## Cache (`cache.rs`)
+
+There is one postcard file per track in `<cache>/analysis/`. The key is an
+FNV-1a hash of the canonical path, size, mtime, `ANALYSIS_VERSION`, the
+analysis settings and the cover limits. The key is taken *before* analysing,
+and the result is only stored if the file did not change meanwhile. Writes
+use unique temporary files. Corrupt entries are ignored and recomputed.
+
+## Pool (`analyzer.rs`)
+
+`Analyzer::spawn(threads, settings, limits, cache)` starts the workers.
+Every `submit(track, path)` gets a generation number. A job only runs, and
+its result is only delivered, while it is the latest submission of its
+track. That single rule covers:
+
+- duplicates;
+- `cancel(track)`, which also stops a running job through its cancel flag;
+- resubmission.
+
+Dropping the analyzer does not wait for queued jobs. A panicking job is
+reported as `Unreadable`.
+
+## How the app uses it (`fp-app/src/services.rs`)
+
+The services thread submits tracks when either:
+
+- they are not analysed yet (or were forced by *Re-analyse all* or by a
+  settings change, which also cancels running jobs); or
+- they are **shown** (current, next or cue on any player) and their peaks are
+  not in memory.
+
+Results go to the model as `ApplyAnalysis` or `SetFileState`. Peaks and covers
+are kept in the `MediaCache` only for shown tracks. The disk cache brings
+them back cheaply when a track is shown again.
