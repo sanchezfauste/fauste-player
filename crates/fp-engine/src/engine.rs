@@ -148,6 +148,8 @@ pub struct Engine {
     events: Vec<EngineEvent>,
     dropped_commands: u64,
     slot_exhaustions: u64,
+    /// Test tones playing, by (bus, slot); released when they finish.
+    tones: Vec<(BusKey, usize)>,
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -182,6 +184,7 @@ impl Engine {
             events: Vec::new(),
             dropped_commands: 0,
             slot_exhaustions: 0,
+            tones: Vec::new(),
         }
     }
 
@@ -212,6 +215,68 @@ impl Engine {
                 waiting + preload
             })
             .sum()
+    }
+
+    /// Test tones still playing.
+    pub fn active_tones(&self) -> usize {
+        self.tones.len()
+    }
+
+    /// Plays a sine test tone on `route` (Settings: "Test Main"/"Test Cue").
+    /// The whole tone is rendered into the ring up front, so no worker is
+    /// involved; short de-click ramps avoid clicks at both ends.
+    pub fn play_test_tone(
+        &mut self,
+        route: &Route,
+        frequency_hz: f32,
+        secs: f32,
+        level_db: f32,
+        now: Instant,
+    ) {
+        let (key, channel) = self.route_target(route);
+        self.ensure_bus(&key, now);
+        let rate = self.settings.sample_rate.max(1) as f32;
+        let frames = (secs.max(0.0) * rate) as usize;
+        let ramp = (self.settings.frames(self.settings.tuning.declick_ms) as usize).max(1);
+        let amplitude = 10f32.powf(level_db / 20.0);
+        let step = std::f32::consts::TAU * frequency_hz / rate;
+        let samples: Vec<f32> = (0..frames)
+            .flat_map(|i| {
+                let envelope = (i.min(frames - 1 - i).min(ramp) as f32 / ramp as f32).min(1.0);
+                let v = amplitude * envelope * (step * i as f32).sin();
+                [v, v]
+            })
+            .collect();
+        let Some(bus) = self.buses.get_mut(&key) else {
+            return;
+        };
+        let Some(slot) = bus.alloc_slot() else {
+            self.slot_exhaustions += 1;
+            return;
+        };
+        let (mut producer, consumer) = source_pair(frames.max(1));
+        producer.push(&samples);
+        producer
+            .shared
+            .eof
+            .store(true, std::sync::atomic::Ordering::Release);
+        producer
+            .shared
+            .ready
+            .store(true, std::sync::atomic::Ordering::Release);
+        let volume = Arc::new(AtomicF32::new(1.0));
+        let at = bus.now_frame();
+        if bus.send(BusCommand::Attach {
+            slot,
+            source: consumer,
+            volume,
+            first_channel: channel,
+        }) && bus.send(BusCommand::Start { slot, at_frame: at })
+        {
+            self.tones.push((key, slot));
+        } else {
+            self.dropped_commands += 1;
+        }
     }
 
     /// Sources attached to mixers across all players (a leak shows up here).
@@ -1064,6 +1129,13 @@ impl Engine {
     }
 
     fn handle_bus_event(&mut self, bus: &BusKey, event: BusEvent) {
+        if let BusEvent::Finished { slot, .. } = event
+            && let Some(i) = self.tones.iter().position(|(b, s)| b == bus && *s == slot)
+        {
+            let (bus, slot) = self.tones.remove(i);
+            self.send(&bus, BusCommand::Detach { slot });
+            return;
+        }
         match event {
             BusEvent::Started { slot, .. } => {
                 let Some((player, role)) = self.find(bus, slot) else {

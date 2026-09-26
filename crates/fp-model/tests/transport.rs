@@ -180,3 +180,17 @@ fn unknown_player_is_refused() {
         Err(ModelError::UnknownPlayer(ghost))
     );
 }
+
+#[test]
+fn a_fade_stop_is_told_apart_from_a_crossfade() {
+    let mut state = fixture(3);
+    let p = p0(&state);
+    apply(&mut state, Command::Play(p)).unwrap();
+    apply(&mut state, Command::Play(p)).unwrap();
+    assert!(state.player(p).unwrap().fading);
+    assert!(!state.player(p).unwrap().fade_stopping(), "a crossfade");
+    let mut state = fixture(3);
+    apply(&mut state, Command::Play(p)).unwrap();
+    apply(&mut state, Command::FadeStop(p)).unwrap();
+    assert!(state.player(p).unwrap().fade_stopping());
+}

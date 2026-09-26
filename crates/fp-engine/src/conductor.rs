@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use crossbeam_channel::{Receiver, Sender, TrySendError};
-use fp_model::{AppState, Command, EngineAction, ModelError, PlayerId, apply, on_event};
+use fp_model::{AppState, Command, EngineAction, ModelError, PlayerId, Route, apply, on_event};
 
 use crate::engine::{BusStatus, Engine, PlayerTelemetry};
 
@@ -26,10 +26,21 @@ pub struct Telemetry {
     pub slot_exhaustions: u64,
 }
 
+/// Test tone parameters (spec §8.4): 1.5 s at −18 dBFS.
+const TEST_TONE_SECS: f32 = 1.5;
+const TEST_TONE_DB: f32 = -18.0;
+
+/// Requests for the engine that are not model commands.
+#[derive(Debug, Clone, PartialEq)]
+pub enum EngineRequest {
+    TestTone { route: Route, frequency_hz: f32 },
+}
+
 pub struct Conductor {
     state: AppState,
     engine: Engine,
     commands: Receiver<Command>,
+    requests: Receiver<EngineRequest>,
     rejected: Sender<ModelError>,
     model: Arc<ArcSwap<AppState>>,
     telemetry: Arc<ArcSwap<Telemetry>>,
@@ -39,6 +50,7 @@ pub struct Conductor {
 /// The UI's side of the conductor.
 pub struct ConductorHandle {
     commands: Sender<Command>,
+    requests: Sender<EngineRequest>,
     pub model: Arc<ArcSwap<AppState>>,
     pub telemetry: Arc<ArcSwap<Telemetry>>,
     /// Commands the model refused, with the reason (for a UI notice).
@@ -58,6 +70,16 @@ impl ConductorHandle {
             }
             Err(TrySendError::Disconnected(_)) => false,
         }
+    }
+
+    /// Plays a test tone on `route`; never blocks. `false` if the queue is full.
+    pub fn test_tone(&self, route: Route, frequency_hz: f32) -> bool {
+        self.requests
+            .try_send(EngineRequest::TestTone {
+                route,
+                frequency_hz,
+            })
+            .is_ok()
     }
 }
 
@@ -88,6 +110,7 @@ impl Conductor {
             engine.execute(action, now);
         }
         let (tx, rx) = crossbeam_channel::bounded(1024);
+        let (req_tx, req_rx) = crossbeam_channel::bounded(16);
         let (rejected_tx, rejected_rx) = crossbeam_channel::bounded(64);
         let model = Arc::new(ArcSwap::from_pointee(state.clone()));
         let telemetry = Arc::new(ArcSwap::from_pointee(Telemetry::default()));
@@ -95,6 +118,7 @@ impl Conductor {
             state,
             engine,
             commands: rx,
+            requests: req_rx,
             rejected: rejected_tx,
             model: model.clone(),
             telemetry: telemetry.clone(),
@@ -102,6 +126,7 @@ impl Conductor {
         };
         let handle = ConductorHandle {
             commands: tx,
+            requests: req_tx,
             model,
             telemetry,
             rejected: rejected_rx,
@@ -133,6 +158,23 @@ impl Conductor {
                 }
                 Err(e) => {
                     let _ = self.rejected.try_send(e);
+                }
+            }
+        }
+        let requests: Vec<EngineRequest> = self.requests.try_iter().collect();
+        for request in requests {
+            match request {
+                EngineRequest::TestTone {
+                    route,
+                    frequency_hz,
+                } => {
+                    self.engine.play_test_tone(
+                        &route,
+                        frequency_hz,
+                        TEST_TONE_SECS,
+                        TEST_TONE_DB,
+                        now,
+                    );
                 }
             }
         }

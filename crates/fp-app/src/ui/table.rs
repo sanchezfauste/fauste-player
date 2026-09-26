@@ -1,0 +1,475 @@
+//! The track table of a player column (spec §8.3): virtualised rows,
+//! resizable columns, row colours, context menu and drag and drop.
+
+use egui::{Align, Color32, Layout, Rect, RichText, Sense, Ui, pos2, vec2};
+use egui_extras::{Column, TableBuilder};
+use egui_phosphor::regular as icon;
+use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, Transport};
+
+use super::app::{DragEntry, DropTarget, Scene, ViewState};
+use super::format;
+use super::theme;
+use super::view::{self, RowStatus};
+use super::widgets::{font, font_medium};
+
+const HEADER_HEIGHT: f32 = 24.0;
+const ROW_HEIGHT: f32 = 28.0;
+
+fn header_label(ui: &mut Ui, text: &str) {
+    ui.add_space(8.0);
+    ui.add(
+        egui::Label::new(
+            RichText::new(text.to_uppercase())
+                .font(font(10.0))
+                .color(theme::NEUTRAL_500),
+        )
+        .selectable(false)
+        .truncate(),
+    );
+}
+
+pub(crate) fn track_table(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    player: PlayerId,
+    playlist: PlaylistId,
+) {
+    let Some(list) = scene.state.playlists.get(playlist) else {
+        return;
+    };
+    let Ok(p) = scene.state.player(player) else {
+        return;
+    };
+    let t = scene.i18n;
+    let digits = format::number_width(list.entries.len());
+    let columns = p.columns;
+    let number_w = columns.number.unwrap_or(digits as f32 * 8.0 + 26.0);
+    let title_w = columns
+        .title
+        .unwrap_or(((ui.available_width() - number_w - columns.duration) * 0.55).max(80.0));
+    let area = ui.max_rect();
+    ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+    let mut built = 0;
+    let mut widths = [0.0_f32; 4];
+    let mut hovered_row: Option<(usize, bool)> = None;
+    let mut pointer_row: Option<(usize, bool)> = None;
+    let pointer = ui.ctx().pointer_hover_pos();
+    let mut released: Option<(DragEntry, usize)> = None;
+    let entries = &list.entries;
+    let drop = view_state.drop.filter(|d| d.playlist == playlist);
+    let selected = view_state.selection.get(&player).copied();
+    let mut clicked: Option<EntryId> = None;
+    let mut dragged: Option<EntryId> = None;
+    TableBuilder::new(ui)
+        .id_salt(("tracks", player.0))
+        .striped(false)
+        .resizable(true)
+        .vscroll(true)
+        .auto_shrink([false, false])
+        .sense(Sense::click_and_drag())
+        .cell_layout(Layout::left_to_right(Align::Center))
+        .column(Column::initial(number_w).at_least(24.0).clip(true))
+        .column(Column::initial(title_w).at_least(60.0).clip(true))
+        .column(Column::remainder().at_least(60.0).clip(true))
+        .column(Column::initial(columns.duration).at_least(40.0).clip(true))
+        .header(HEADER_HEIGHT, |mut header| {
+            header.col(|ui| header_label(ui, &t.tr("col-number")));
+            header.col(|ui| header_label(ui, &t.tr("col-title")));
+            header.col(|ui| header_label(ui, &t.tr("col-artist")));
+            header.col(|ui| {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.add_space(8.0);
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(t.tr("col-duration").to_uppercase())
+                                .font(font(10.0))
+                                .color(theme::NEUTRAL_500),
+                        )
+                        .selectable(false),
+                    );
+                });
+            });
+        })
+        .body(|body| {
+            if let Some(w) = body.widths().get(..4) {
+                widths.copy_from_slice(w);
+            }
+            body.rows(ROW_HEIGHT, entries.len(), |mut row| {
+                built += 1;
+                let i = row.index();
+                let Some(entry) = entries.get(i) else {
+                    return;
+                };
+                let Some(track) = scene.state.library.get(entry.track) else {
+                    return;
+                };
+                let status = view::row_status(scene.state, player, entry.id);
+                let hi = matches!(status, RowStatus::Current | RowStatus::Next);
+                let bg = match status {
+                    RowStatus::Current => theme::ON_AIR_ROW,
+                    RowStatus::Next => theme::NEXT_ROW,
+                    _ if selected == Some(entry.id) => theme::ACCENT_900,
+                    _ => Color32::TRANSPARENT,
+                };
+                let dimmed = status == RowStatus::Played;
+                let text = if hi {
+                    theme::NEUTRAL_100
+                } else if dimmed {
+                    theme::NEUTRAL_600
+                } else {
+                    theme::TEXT
+                };
+                let artist_color = if hi {
+                    theme::NEUTRAL_100
+                } else if dimmed {
+                    theme::NEUTRAL_600
+                } else {
+                    theme::NEUTRAL_400
+                };
+                let row_font = if hi { font_medium(12.0) } else { font(12.0) };
+                let line = |ui: &mut Ui| {
+                    let r = ui.max_rect();
+                    let full = Rect::from_min_max(r.min, pos2(r.max.x, r.min.y + ROW_HEIGHT));
+                    ui.painter().rect_filled(full, 0.0, bg);
+                    ui.painter().rect_filled(
+                        Rect::from_min_size(
+                            pos2(full.left(), full.bottom() - 1.0),
+                            vec2(full.width(), 1.0),
+                        ),
+                        0.0,
+                        theme::TEXT.gamma_multiply(0.06),
+                    );
+                    if let Some(d) = drop {
+                        let y = if d.index == i {
+                            Some(full.top())
+                        } else if d.index == entries.len() && i + 1 == entries.len() {
+                            Some(full.bottom() - 2.0)
+                        } else {
+                            None
+                        };
+                        if let Some(y) = y {
+                            ui.painter().rect_filled(
+                                Rect::from_min_size(pos2(full.left(), y), vec2(full.width(), 2.0)),
+                                0.0,
+                                theme::ACCENT,
+                            );
+                        }
+                    }
+                };
+                row.col(|ui| {
+                    line(ui);
+                    ui.add_space(10.0);
+                    let (glyph, color) = match status {
+                        RowStatus::Current => {
+                            let playing = p.transport == Transport::Playing;
+                            let g = if playing {
+                                egui_phosphor::fill::SPEAKER_HIGH
+                            } else {
+                                egui_phosphor::fill::PAUSE
+                            };
+                            (Some(g.to_owned()), theme::NEUTRAL_100)
+                        }
+                        RowStatus::Next => (
+                            Some(icon::ARROW_BEND_DOWN_RIGHT.to_owned()),
+                            theme::NEUTRAL_100,
+                        ),
+                        RowStatus::Unavailable => (Some(icon::WARNING.to_owned()), theme::AMBER),
+                        _ => (None, theme::NEUTRAL_600),
+                    };
+                    let label = match glyph {
+                        Some(g) if hi => g,
+                        Some(g) => format!("{g}{:0digits$}", i + 1),
+                        None => format!("{:0digits$}", i + 1),
+                    };
+                    let family = if matches!(status, RowStatus::Current) {
+                        egui::FontFamily::Name(theme::ICONS_FILL.into())
+                    } else {
+                        egui::FontFamily::Proportional
+                    };
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(label)
+                                .font(egui::FontId::new(12.0, family))
+                                .color(color),
+                        )
+                        .selectable(false),
+                    );
+                });
+                row.col(|ui| {
+                    line(ui);
+                    ui.add_space(8.0);
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(&track.title)
+                                .font(row_font.clone())
+                                .color(text),
+                        )
+                        .selectable(false)
+                        .truncate(),
+                    );
+                });
+                row.col(|ui| {
+                    line(ui);
+                    ui.add_space(8.0);
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(if track.artist.is_empty() {
+                                t.tr("unknown-artist")
+                            } else {
+                                track.artist.clone()
+                            })
+                            .font(font(12.0))
+                            .color(artist_color),
+                        )
+                        .selectable(false)
+                        .truncate(),
+                    );
+                });
+                row.col(|ui| {
+                    line(ui);
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.add_space(10.0);
+                        let d = if track.duration_secs > 0.0 {
+                            format::clock(track.play_length_secs())
+                        } else {
+                            String::new()
+                        };
+                        ui.add(
+                            egui::Label::new(RichText::new(d).font(font(12.0)).color(text))
+                                .selectable(false),
+                        );
+                    });
+                });
+                let response = row.response();
+                if response.clicked() {
+                    clicked = Some(entry.id);
+                }
+                if response.double_clicked() && status != RowStatus::Current {
+                    scene.ctl.send(Command::SetNext(player, entry.id));
+                }
+                if response.drag_started() {
+                    response.dnd_set_drag_payload(DragEntry { entry: entry.id });
+                    dragged = Some(entry.id);
+                }
+                if let Some(p) = pointer.filter(|p| response.rect.contains(*p)) {
+                    pointer_row = Some((i, p.y > response.rect.center().y));
+                }
+                if response.dnd_hover_payload::<DragEntry>().is_some()
+                    && let Some(pos) = response.hover_pos()
+                {
+                    hovered_row = Some((i, pos.y > response.rect.center().y));
+                }
+                if let Some(payload) = response.dnd_release_payload::<DragEntry>() {
+                    let below = response
+                        .interact_pointer_pos()
+                        .or(response.hover_pos())
+                        .is_some_and(|p| p.y > response.rect.center().y);
+                    released = Some((*payload, if below { i + 1 } else { i }));
+                }
+                response.context_menu(|ui| {
+                    clicked = Some(entry.id);
+                    context_menu(ui, scene, player, playlist, entry.id, i, &track.title);
+                });
+            });
+        });
+    view_state.rows_built += built;
+    if let Some(entry) = clicked.or(dragged) {
+        view_state.selection.insert(player, entry);
+        view_state.active_player = Some(player);
+    }
+    // Drop target for entries dragged inside the app.
+    let pointer_in = ui
+        .ctx()
+        .pointer_hover_pos()
+        .is_some_and(|p| area.contains(p));
+    if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx()) {
+        match hovered_row {
+            Some((i, below)) => {
+                view_state.drop = Some(DropTarget {
+                    playlist,
+                    index: if below { i + 1 } else { i },
+                });
+            }
+            None if pointer_in => {
+                view_state.drop = Some(DropTarget {
+                    playlist,
+                    index: entries.len(),
+                });
+            }
+            None => {
+                if view_state.drop.is_some_and(|d| d.playlist == playlist) {
+                    view_state.drop = None;
+                }
+            }
+        }
+    }
+    if let Some((payload, index)) = released {
+        scene.ctl.send(Command::MoveEntry {
+            entry: payload.entry,
+            to: playlist,
+            index,
+        });
+        view_state.drop = None;
+    } else if pointer_in
+        && ui.input(|i| i.pointer.any_released())
+        && let Some(payload) = egui::DragAndDrop::payload::<DragEntry>(ui.ctx())
+    {
+        // Released below the last row.
+        scene.ctl.send(Command::MoveEntry {
+            entry: payload.entry,
+            to: playlist,
+            index: entries.len(),
+        });
+        view_state.drop = None;
+    }
+    // OS file drops land at the hovered row, or at the end.
+    if pointer_in {
+        view_state.file_drop = Some(DropTarget {
+            playlist,
+            index: pointer_row
+                .map(|(i, below)| if below { i + 1 } else { i })
+                .unwrap_or(entries.len()),
+        });
+    }
+    store_widths(ui, scene, view_state, player, columns, widths);
+}
+
+/// Sends the column widths once the user lets go of a resize handle.
+fn store_widths(
+    ui: &Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    player: PlayerId,
+    stored: ColumnWidths,
+    widths: [f32; 4],
+) {
+    if widths.iter().all(|w| *w <= 0.0) {
+        return;
+    }
+    let previous = view_state.widths.insert(player, widths);
+    let moved = previous.is_some_and(|p| {
+        p.iter()
+            .zip(widths.iter())
+            .any(|(a, b)| (a - b).abs() > 0.5)
+    });
+    if moved {
+        view_state.resizing.insert(player);
+    }
+    let pointer_down = ui.input(|i| i.pointer.primary_down());
+    if !pointer_down && view_state.resizing.remove(&player) {
+        let [number, title, _, duration] = widths;
+        let new = ColumnWidths {
+            number: Some(number),
+            title: Some(title),
+            duration,
+        };
+        if new != stored {
+            scene.ctl.send(Command::SetColumnWidths(player, new));
+        }
+    }
+}
+
+fn context_menu(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    player: PlayerId,
+    playlist: PlaylistId,
+    entry: EntryId,
+    index: usize,
+    title: &str,
+) {
+    let t = scene.i18n;
+    ui.set_min_width(240.0);
+    ui.add(
+        egui::Label::new(
+            RichText::new(title)
+                .font(font(11.0))
+                .color(theme::NEUTRAL_400),
+        )
+        .selectable(false)
+        .truncate(),
+    );
+    ui.separator();
+    let on_air = scene.state.is_on_air(entry);
+    // The item's text is its accessible label; tests find it by the plain text.
+    let labelled = |ui: &mut Ui, glyph: &str, key: &str, enabled: bool| {
+        let text = t.tr(key);
+        let response = ui.add_enabled(enabled, egui::Button::new(format!("{glyph}  {text}")));
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text.clone())
+        });
+        response
+    };
+    let state = scene.state.player(player).ok();
+    let fading = state.is_some_and(|p| p.fading);
+    if labelled(
+        ui,
+        egui_phosphor::fill::PLAY,
+        "menu-play-now",
+        !on_air && !fading,
+    )
+    .clicked()
+    {
+        // Play resumes a paused track (rule 4): stop it first so that the
+        // chosen entry is the one that starts.
+        if state.is_some_and(|p| p.transport == Transport::Paused) {
+            scene.ctl.send(Command::Stop(player));
+        }
+        scene.ctl.send(Command::SetNext(player, entry));
+        scene.ctl.send(Command::Play(player));
+        ui.close();
+    }
+    if labelled(ui, icon::ARROW_BEND_DOWN_RIGHT, "menu-set-next", !on_air).clicked() {
+        scene.ctl.send(Command::SetNext(player, entry));
+        ui.close();
+    }
+    if labelled(ui, icon::HEADPHONES, "menu-cue", true).clicked() {
+        scene.ctl.send(Command::CueEntry(player, entry));
+        ui.close();
+    }
+    ui.separator();
+    if labelled(ui, icon::PLUS, "menu-add-below", true).clicked() {
+        scene.pick_files(playlist, index + 1);
+        ui.close();
+    }
+    if labelled(ui, icon::COPY, "menu-duplicate", true).clicked() {
+        scene.ctl.send(Command::DuplicateEntry(entry));
+        ui.close();
+    }
+    let others: Vec<_> = scene
+        .state
+        .playlists
+        .iter()
+        .filter(|pl| pl.id != playlist)
+        .map(|pl| (pl.id, pl.name.clone(), pl.entries.len()))
+        .collect();
+    if !others.is_empty() {
+        ui.menu_button(
+            format!("{}  {}", icon::ARROW_RIGHT, t.tr("menu-move-to")),
+            |ui| {
+                for (id, name, len) in others {
+                    if ui.button(name).clicked() {
+                        scene.ctl.send(Command::MoveEntry {
+                            entry,
+                            to: id,
+                            index: len,
+                        });
+                        ui.close();
+                    }
+                }
+            },
+        );
+    }
+    ui.separator();
+    let remove = labelled(ui, icon::TRASH, "menu-remove", !on_air);
+    let remove = if on_air {
+        remove.on_disabled_hover_text(t.tr("menu-remove-on-air"))
+    } else {
+        remove
+    };
+    if remove.clicked() {
+        scene.ctl.send(Command::RemoveEntry(entry));
+        ui.close();
+    }
+}

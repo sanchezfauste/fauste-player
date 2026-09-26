@@ -1,0 +1,42 @@
+[package]
+name = "fp-app"
+description = "Fauste Player: the desktop application (egui UI and wiring)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "fauste-player"
+path = "src/main.rs"
+
+[dependencies]
+fp-model.workspace = true
+fp-store.workspace = true
+fp-engine.workspace = true
+fp-backends.workspace = true
+fp-analysis.workspace = true
+arc-swap.workspace = true
+crossbeam-channel.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+eframe.workspace = true
+egui.workspace = true
+egui_extras.workspace = true
+egui-phosphor.workspace = true
+rfd.workspace = true
+pollster.workspace = true
+chrono.workspace = true
+fluent-bundle.workspace = true
+unic-langid.workspace = true
+sys-locale.workspace = true
+image.workspace = true
+
+[dev-dependencies]
+egui_kittest.workspace = true
+tempfile.workspace = true
+hound.workspace = true
+
+[lints]
+workspace = true

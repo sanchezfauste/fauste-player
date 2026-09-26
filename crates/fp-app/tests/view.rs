@@ -1,0 +1,174 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::float_cmp
+)]
+//! Pure view-model logic (spec §3 rules 1 and 17–20).
+
+use std::path::PathBuf;
+
+use fp_app::ui::format::{clock, countdown, number_width};
+use fp_app::ui::view::{
+    PlayerStatus, RowStatus, fader_from_gain, gain_from_fader, player_view, playlist_times,
+    row_status, volume_db_text,
+};
+use fp_model::{AppState, Command, Config, EntryId, FileState, MarkerKind, PlayerId, apply};
+
+fn state(tracks: usize) -> (AppState, Vec<EntryId>, PlayerId) {
+    let mut state = AppState::new(Config::default(), "Main");
+    let playlist = state.playlists.first_id().unwrap();
+    let paths = (0..tracks)
+        .map(|i| PathBuf::from(format!("/m/Artist {i} - Song {i}.flac")))
+        .collect();
+    apply(
+        &mut state,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths,
+        },
+    )
+    .unwrap();
+    for (i, t) in state.library.iter_mut().enumerate() {
+        t.duration_secs = 200.0;
+        t.title = format!("Song {i}");
+        t.artist = "Artist".into();
+    }
+    let entries = state
+        .playlists
+        .get(playlist)
+        .unwrap()
+        .entries
+        .iter()
+        .map(|e| e.id)
+        .collect();
+    let p = state.players[0].id;
+    (state, entries, p)
+}
+
+#[test]
+fn countdown_shows_minutes_seconds_and_tenths() {
+    assert_eq!(countdown(147.25), ("-02:27".to_owned(), ".2".to_owned()));
+    assert_eq!(countdown(0.0), ("-00:00".to_owned(), ".0".to_owned()));
+    assert_eq!(countdown(-3.0), ("-00:00".to_owned(), ".0".to_owned()));
+    assert_eq!(countdown(3_723.9), ("-1:02:03".to_owned(), ".9".to_owned()));
+}
+
+#[test]
+fn clocks_switch_to_hours_after_one_hour() {
+    assert_eq!(clock(222.0), "03:42");
+    assert_eq!(clock(7_401.0), "2:03:21");
+    assert_eq!(clock(f64::NAN), "00:00");
+}
+
+#[test]
+fn track_numbers_use_at_least_two_digits_and_grow_with_the_list() {
+    assert_eq!(number_width(9), 2);
+    assert_eq!(number_width(99), 2);
+    assert_eq!(number_width(124), 3);
+    assert_eq!(number_width(10_000), 5);
+}
+
+#[test]
+fn rows_show_on_air_next_played_and_unavailable() {
+    let (mut s, e, p) = state(4);
+    apply(&mut s, Command::Play(p)).unwrap();
+    apply(&mut s, Command::Play(p)).unwrap(); // e0 played, e1 on air, e2 next
+    let t3 = s.playlists.entry(e[3]).unwrap().track;
+    s.library.get_mut(t3).unwrap().file_state = FileState::Missing;
+    assert_eq!(row_status(&s, p, e[0]), RowStatus::Played);
+    assert_eq!(row_status(&s, p, e[1]), RowStatus::Current);
+    assert_eq!(row_status(&s, p, e[2]), RowStatus::Next);
+    assert_eq!(row_status(&s, p, e[3]), RowStatus::Unavailable);
+}
+
+#[test]
+fn rule17_the_countdown_turns_red_in_the_last_seconds() {
+    let (mut s, _e, p) = state(2);
+    apply(&mut s, Command::Play(p)).unwrap();
+    let v = player_view(&s, p, Some(185.0), 0.0).unwrap();
+    assert_eq!(v.status, PlayerStatus::OnAir);
+    assert_eq!(
+        (v.elapsed, v.total, v.remaining),
+        (185.0, Some(200.0), 15.0)
+    );
+    assert!(!v.end_warning);
+    let v = player_view(&s, p, Some(191.0), 0.0).unwrap();
+    assert!(v.end_warning, "10 s is the default warning");
+}
+
+#[test]
+fn rule18_the_intro_badge_counts_down_only_for_a_marked_intro_and_blinks_at_the_end() {
+    let (mut s, e, p) = state(2);
+    apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(
+        player_view(&s, p, Some(1.0), 0.0).unwrap().intro,
+        None,
+        "no manual intro, no badge"
+    );
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    s.library
+        .get_mut(t)
+        .unwrap()
+        .markers
+        .set_manual(MarkerKind::IntroEnd, Some(12.0));
+    let v = player_view(&s, p, Some(0.6), 0.0).unwrap();
+    assert_eq!(v.intro, Some(11.4));
+    assert!(
+        v.intro_blink.is_none(),
+        "no blinking with more than 3 s left"
+    );
+    let on = player_view(&s, p, Some(10.0), 0.1).unwrap();
+    let off = player_view(&s, p, Some(10.0), 0.6).unwrap();
+    assert_eq!((on.intro_blink, off.intro_blink), (Some(true), Some(false)));
+    assert_eq!(player_view(&s, p, Some(12.5), 0.0).unwrap().intro, None);
+}
+
+#[test]
+fn rule19_the_outro_badge_counts_down_to_cue_out() {
+    let (mut s, e, p) = state(2);
+    apply(&mut s, Command::Play(p)).unwrap();
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    s.library
+        .get_mut(t)
+        .unwrap()
+        .markers
+        .set_auto(MarkerKind::OutroStart, Some(170.0));
+    assert_eq!(player_view(&s, p, Some(160.0), 0.0).unwrap().outro, None);
+    assert_eq!(
+        player_view(&s, p, Some(175.0), 0.0).unwrap().outro,
+        Some(25.0)
+    );
+}
+
+#[test]
+fn rule20_playlist_times_count_played_and_on_air_entries() {
+    let (mut s, _e, p) = state(3);
+    apply(&mut s, Command::Play(p)).unwrap();
+    apply(&mut s, Command::Play(p)).unwrap(); // first played, second on air
+    let playlist = s.playlists.first_id().unwrap();
+    let t = playlist_times(&s, playlist, &[(p, 50.0)]);
+    assert_eq!((t.total, t.elapsed, t.remaining), (600.0, 250.0, 350.0));
+}
+
+#[test]
+fn the_fader_law_is_zero_db_at_the_top_and_silent_at_the_bottom() {
+    assert_eq!(gain_from_fader(1.0), 1.0);
+    assert_eq!(gain_from_fader(0.0), 0.0);
+    let half = gain_from_fader(0.5);
+    assert!((fader_from_gain(half) - 0.5).abs() < 1e-5);
+    assert_eq!(volume_db_text(1.0), "0.0 dB");
+    assert_eq!(volume_db_text(0.0), "-∞ dB");
+    assert_eq!(volume_db_text(0.5), "-6.0 dB");
+}
+
+#[test]
+fn an_idle_player_shows_nothing_playing_and_its_next() {
+    let (s, _e, p) = state(2);
+    let v = player_view(&s, p, None, 0.0).unwrap();
+    assert_eq!(v.status, PlayerStatus::Stopped);
+    assert!(v.title.is_none());
+    assert_eq!(v.next_line.as_deref(), Some("Song 0 – Artist"));
+}

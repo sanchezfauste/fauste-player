@@ -162,6 +162,20 @@ fn a_flooded_command_queue_refuses_instead_of_blocking() {
     );
 }
 
+#[test]
+fn test_tones_requested_through_the_handle_play_on_their_route() {
+    let (mut conductor, handle, device, now) = offline_conductor(model(1, 1));
+    let route = fp_model::Route {
+        backend: "offline".into(),
+        device: "main".into(),
+        first_channel: 0,
+    };
+    assert!(handle.test_tone(route, 1_000.0));
+    conductor.tick(now);
+    let out = device.render(BLOCK).unwrap();
+    assert!(out.iter().any(|v| *v != 0.0));
+}
+
 /// xorshift, deterministic across runs.
 struct Rng(u64);
 
