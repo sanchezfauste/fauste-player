@@ -219,3 +219,4 @@ wave-reset = Volver a los marcadores automáticos
 cart-empty-n = Botón { $n }, vacío
 shortcut-reserved = { $key } está reservada y no se puede cambiar.
 playlist-import-empty = «{ $name }» no tiene archivos que importar.
+already-running = Fauste Player ya está en marcha.

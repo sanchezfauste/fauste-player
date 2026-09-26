@@ -1,6 +1,6 @@
 [package]
 name = "fp-app"
-description = "Fauste Player: the desktop application (egui UI and wiring)"
+description = "Radio playout with several players and a cartwall"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -50,3 +50,70 @@ hound.workspace = true
 
 [lints]
 workspace = true
+
+# Linux packages (Phase 5). `scripts/package/linux.sh` stages
+# `dist/staging/` (versioned metainfo, notices) before these run.
+[package.metadata.deb]
+name = "fauste-player"
+maintainer = "Marc Sánchez Fauste <sanchezfauste@gmail.com>"
+copyright = "Marc Sánchez Fauste"
+extended-description = """\
+Radio playout: several independent players with sample-accurate mixing, \
+automatic cue and MIX markers, CUE pre-listen, a cartwall of instant carts \
+and bit-perfect output on exclusive devices."""
+section = "sound"
+priority = "optional"
+# `$auto` sees only linked libraries; the window system ones are loaded at
+# run time (winit, glow), so they are listed by hand.
+depends = "$auto, libxkbcommon0, libegl1 | libgl1, libwayland-client0 | libx11-6"
+recommends = "pipewire-pulse | pulseaudio, libwayland-egl1, libxkbcommon-x11-0, libx11-xcb1, libxcursor1, libxi6"
+assets = [
+    ["target/release/fauste-player", "usr/bin/", "755"],
+    ["../../packaging/linux/org.fauste.FaustePlayer.desktop", "usr/share/applications/", "644"],
+    ["../../dist/staging/org.fauste.FaustePlayer.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["../../packaging/icons/fauste-player.svg", "usr/share/icons/hicolor/scalable/apps/org.fauste.FaustePlayer.svg", "644"],
+    ["../../packaging/icons/fauste-player-16.png", "usr/share/icons/hicolor/16x16/apps/org.fauste.FaustePlayer.png", "644"],
+    ["../../packaging/icons/fauste-player-32.png", "usr/share/icons/hicolor/32x32/apps/org.fauste.FaustePlayer.png", "644"],
+    ["../../packaging/icons/fauste-player-48.png", "usr/share/icons/hicolor/48x48/apps/org.fauste.FaustePlayer.png", "644"],
+    ["../../packaging/icons/fauste-player-64.png", "usr/share/icons/hicolor/64x64/apps/org.fauste.FaustePlayer.png", "644"],
+    ["../../packaging/icons/fauste-player-128.png", "usr/share/icons/hicolor/128x128/apps/org.fauste.FaustePlayer.png", "644"],
+    ["../../packaging/icons/fauste-player-256.png", "usr/share/icons/hicolor/256x256/apps/org.fauste.FaustePlayer.png", "644"],
+    ["../../packaging/icons/fauste-player-512.png", "usr/share/icons/hicolor/512x512/apps/org.fauste.FaustePlayer.png", "644"],
+    ["../../README.md", "usr/share/doc/fauste-player/", "644"],
+    ["../../dist/staging/THIRD-PARTY.html", "usr/share/doc/fauste-player/", "644"],
+    ["assets/fonts/OFL.txt", "usr/share/doc/fauste-player/Inter-OFL.txt", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "fauste-player"
+summary = "Radio playout with several players and a cartwall"
+license = "LicenseRef-proprietary"
+url = "https://github.com/sanchezfauste/fauste-player"
+assets = [
+    { source = "target/release/fauste-player", dest = "/usr/bin/fauste-player", mode = "755" },
+    { source = "../../packaging/linux/org.fauste.FaustePlayer.desktop", dest = "/usr/share/applications/org.fauste.FaustePlayer.desktop", mode = "644" },
+    { source = "../../dist/staging/org.fauste.FaustePlayer.metainfo.xml", dest = "/usr/share/metainfo/org.fauste.FaustePlayer.metainfo.xml", mode = "644" },
+    { source = "../../packaging/icons/fauste-player.svg", dest = "/usr/share/icons/hicolor/scalable/apps/org.fauste.FaustePlayer.svg", mode = "644" },
+    { source = "../../packaging/icons/fauste-player-16.png", dest = "/usr/share/icons/hicolor/16x16/apps/org.fauste.FaustePlayer.png", mode = "644" },
+    { source = "../../packaging/icons/fauste-player-32.png", dest = "/usr/share/icons/hicolor/32x32/apps/org.fauste.FaustePlayer.png", mode = "644" },
+    { source = "../../packaging/icons/fauste-player-48.png", dest = "/usr/share/icons/hicolor/48x48/apps/org.fauste.FaustePlayer.png", mode = "644" },
+    { source = "../../packaging/icons/fauste-player-64.png", dest = "/usr/share/icons/hicolor/64x64/apps/org.fauste.FaustePlayer.png", mode = "644" },
+    { source = "../../packaging/icons/fauste-player-128.png", dest = "/usr/share/icons/hicolor/128x128/apps/org.fauste.FaustePlayer.png", mode = "644" },
+    { source = "../../packaging/icons/fauste-player-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/org.fauste.FaustePlayer.png", mode = "644" },
+    { source = "../../packaging/icons/fauste-player-512.png", dest = "/usr/share/icons/hicolor/512x512/apps/org.fauste.FaustePlayer.png", mode = "644" },
+    { source = "../../README.md", dest = "/usr/share/doc/fauste-player/README.md", mode = "644", doc = true },
+    { source = "../../dist/staging/THIRD-PARTY.html", dest = "/usr/share/doc/fauste-player/THIRD-PARTY.html", mode = "644", doc = true },
+    { source = "assets/fonts/OFL.txt", dest = "/usr/share/doc/fauste-player/Inter-OFL.txt", mode = "644", doc = true },
+]
+
+# Window system libraries loaded at run time, by soname so any distribution
+# resolves them.
+[package.metadata.generate-rpm.requires]
+"libxkbcommon.so.0()(64bit)" = "*"
+"libEGL.so.1()(64bit)" = "*"
+
+[package.metadata.generate-rpm.recommends]
+pipewire-pulseaudio = "*"
+"libwayland-client.so.0()(64bit)" = "*"
+"libxkbcommon-x11.so.0()(64bit)" = "*"
+"libX11-xcb.so.1()(64bit)" = "*"

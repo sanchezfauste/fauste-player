@@ -88,12 +88,22 @@ Formats: WAV, AIFF, FLAC, MP3, OGG Vorbis, AAC/M4A, ALAC.
 
 ## Install
 
-Download the archive for your platform from
-[Releases](https://github.com/sanchezfauste/fauste-player/releases), check
-its `.sha256`, extract it and run `fauste-player`. See the
-[getting started guide](docs/user/getting-started.md) for the details for
-each platform, such as unsigned binaries on macOS and Windows. Native
-packages (deb, rpm, Flatpak, AppImage, MSI, dmg) arrive in Phase 5.
+Download a package for your platform from
+[Releases](https://github.com/sanchezfauste/fauste-player/releases). Each
+file has a `.sha256` next to it.
+
+| Platform | Packages |
+|---|---|
+| Debian, Ubuntu | `fauste-player_<version>_amd64.deb` / `_arm64.deb`: `sudo apt install ./fauste-player_*.deb` |
+| Fedora, openSUSE | `fauste-player-<version>-1.x86_64.rpm` / `.aarch64.rpm`: `sudo dnf install ./fauste-player-*.rpm` |
+| Any Linux | `fauste-player-<version>-x86_64.AppImage` / `-aarch64.AppImage`, or the Flatpak bundle `fauste-player-<version>-x86_64.flatpak` |
+| Windows | `fauste-player-<version>-x86_64-pc-windows-msvc.msi` |
+| macOS | `fauste-player-<version>-macos-universal.dmg` (Apple silicon and Intel) |
+| All | Portable archives (`.tar.gz`, `.zip`) per target |
+
+See the [getting started guide](docs/user/getting-started.md) for installing,
+updating and removing each one, and for first starts of unsigned builds on
+macOS and Windows.
 
 ## Build from source
 
@@ -277,7 +287,7 @@ See [Release process](docs/technical/release-process.md).
 | 2. Cartwall and full Settings | Cart pages, remappable shortcuts, language selector, M3U/M3U8/PLS import and export, manual marker editing | done |
 | 3. Native backends | PipeWire, PulseAudio, JACK, ASIO | done |
 | 4. Bit-perfect | Output at the file's rate and format with no processing, BP badge; ALSA `hw:`, WASAPI exclusive mode, Core Audio hog mode | done (Windows and macOS need an on-device loopback check) |
-| 5. Packaging | deb, rpm, Flatpak, AppImage, signed MSI, signed and notarised dmg | planned |
+| 5. Packaging | deb, rpm, Flatpak, AppImage, MSI, universal dmg; signing and notarisation when certificates are configured | done |
 
 ## Documentation
 

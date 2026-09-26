@@ -45,21 +45,34 @@ jobs:
         shell: bash
 
   release-baseline:
-    name: release build on the release image
-    # The Linux archives are built on ubuntu-22.04 (the oldest glibc they
-    # support); this catches a dependency that needs newer system packages
-    # or links a library the binary would need just to start.
+    name: release build and Linux packages on the release image
+    # The Linux archives and packages are built on ubuntu-22.04 (the oldest
+    # glibc they support). This builds them all as a release would, which
+    # catches a dependency that needs newer system packages, a library the
+    # binary would need just to start, and broken package metadata.
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - run: >
           sudo apt-get update && sudo apt-get install -y --no-install-recommends
           pkg-config libasound2-dev libdbus-1-dev libjack-jackd2-dev
+          desktop-file-utils appstream
       - name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --locked -p fp-app --bin fauste-player --features jack
-      - run: scripts/check-runtime-deps.sh target/debug/fauste-player
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about,cargo-binstall
+      - run: cargo binstall -y --locked cargo-deb cargo-generate-rpm
+      - name: Validate the desktop entry and AppStream metadata
+        run: |
+          desktop-file-validate packaging/linux/org.fauste.FaustePlayer.desktop
+          scripts/package/metainfo.sh 0.0.0 metainfo.xml
+          appstreamcli validate --no-net metainfo.xml
+      - name: Build the archive and the packages
+        run: scripts/package/linux.sh x86_64-unknown-linux-gnu
+        env:
+          FEATURES: jack
 
   deny:
     runs-on: ubuntu-latest

@@ -59,6 +59,7 @@ cargo deny check                              # after dependency changes
 cargo run -p fp-app                           # run the app (FAUSTE_HOME=<dir> for a scratch state)
 FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music dir>
 scripts/package-release.sh <target>           # release archive for one target
+scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows: windows.sh, macOS: macos.sh)
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
 ```
 
@@ -119,7 +120,8 @@ push** unless asked.
 | `docs/superpowers/specs` | The binding design spec |
 | `docs/superpowers/plans` | Implementation plans (one per step of a phase) |
 | `docs/user`, `docs/technical` | User and technical documentation. Keep them in sync with behaviour. |
-| `.github/workflows` | CI, release-please, release builds, commit checks |
+| `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
+| `.github/workflows` | CI, release-please, release builds and packages, commit checks |
 
 ## Design source
 

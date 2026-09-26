@@ -14,6 +14,20 @@ The paths come from `AppPaths::system()` (`directories::ProjectDirs` for
 the user guide's [Data and backups](../user/data-and-backups.md) for the
 concrete folders.
 
+## One instance per data folder
+
+- `fp-app/src/instance.rs` holds an exclusive lock on
+  `<data>/instance.lock` (`File::try_lock`) for the life of the process. The
+  OS releases it if the process dies.
+- **A second start** (typically a playlist opened from the file manager)
+  writes its playlist paths to `<data>/inbox/<pid>-<time>.txt`: it writes a
+  `.part` file, then renames it. Then it exits.
+- **The running instance** has an `fp-inbox` thread that collects those
+  files every 500 ms, deletes them, and hands the paths to the interface,
+  which imports them like any playlist file.
+- **With no playlist**, the second start shows "already running".
+- **Separate `FAUSTE_HOME` folders** have separate locks.
+
 ## Writing
 
 `write_atomic(path, bytes, backups)`:

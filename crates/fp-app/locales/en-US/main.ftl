@@ -219,3 +219,4 @@ wave-reset = Reset markers to automatic
 cart-empty-n = Cart { $n }, empty
 shortcut-reserved = { $key } is reserved and cannot be changed.
 playlist-import-empty = “{ $name }” has no files to import.
+already-running = Fauste Player is already running.
