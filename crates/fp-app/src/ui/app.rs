@@ -313,7 +313,7 @@ impl AppUi {
             self.view.settings_open = settings::show(&ctx, &scene, &mut self.settings, &deps);
         } else {
             self.settings_shown = false;
-            self.file_drops(&ctx);
+            self.file_drops(&ctx, &state);
         }
         let busy = state
             .players
@@ -342,16 +342,24 @@ impl AppUi {
             Key::Num9,
         ];
         let (pressed, delete, escape) = ctx.input(|i| {
+            // Only the first press counts: holding a key must not repeat it
+            // (a repeated Play would skip tracks on air).
+            let first_press = |wanted: Key| {
+                i.events.iter().any(|e| {
+                    matches!(e, egui::Event::Key { key, pressed: true, repeat: false, modifiers, .. }
+                        if *key == wanted && modifiers.is_none())
+                })
+            };
             let pressed: Vec<usize> = NUMBERS
                 .iter()
                 .enumerate()
-                .filter(|(_, k)| i.key_pressed(**k) && i.modifiers.is_none())
+                .filter(|(_, k)| first_press(**k))
                 .map(|(n, _)| n)
                 .collect();
             (
                 pressed,
-                i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace),
-                i.key_pressed(Key::Escape),
+                first_press(Key::Delete) || first_press(Key::Backspace),
+                first_press(Key::Escape),
             )
         });
         if self.view.settings_open {
@@ -369,14 +377,22 @@ impl AppUi {
             && let Some(player) = self.view.active_player
             && let Some(entry) = self.view.selection.remove(&player)
         {
-            self.ctl.send(Command::RemoveEntry(entry));
+            // Only an entry of the playlist the player shows can be removed.
+            let shown = state
+                .player(player)
+                .ok()
+                .and_then(|p| state.playlists.get(p.playlist))
+                .is_some_and(|l| l.position(entry).is_some());
+            if shown {
+                self.ctl.send(Command::RemoveEntry(entry));
+            }
         }
         if escape {
             self.view.selection.clear();
         }
     }
 
-    fn file_drops(&mut self, ctx: &egui::Context) {
+    fn file_drops(&mut self, ctx: &egui::Context, state: &AppState) {
         let dropped: Vec<PathBuf> = ctx.input(|i| {
             i.raw
                 .dropped_files
@@ -388,7 +404,22 @@ impl AppUi {
         if dropped.is_empty() {
             return;
         }
-        let Some(target) = self.view.file_drop else {
+        // Pointer positions are not reported during an OS drag on every
+        // platform: without one, the files go to the end of the list shown
+        // by the last player used (or the first player).
+        let fallback = || {
+            let player = self
+                .view
+                .active_player
+                .and_then(|id| state.player(id).ok())
+                .or_else(|| state.players.first())?;
+            let list = state.playlists.get(player.playlist)?;
+            Some(DropTarget {
+                playlist: list.id,
+                index: list.entries.len(),
+            })
+        };
+        let Some(target) = self.view.file_drop.or_else(fallback) else {
             return;
         };
         let paths = audio_paths(&dropped);

@@ -52,6 +52,11 @@ struct Rig {
 }
 
 fn rig(files: &[PathBuf], dir: tempfile::TempDir) -> Rig {
+    rig_slow(files, dir, Duration::ZERO)
+}
+
+/// `delay`: each analysis waits this long first (still cancellable).
+fn rig_slow(files: &[PathBuf], dir: tempfile::TempDir, delay: Duration) -> Rig {
     let paths = AppPaths::under(dir.path());
     let store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
@@ -82,6 +87,13 @@ fn rig(files: &[PathBuf], dir: tempfile::TempDir) -> Rig {
     let counter = analyses.clone();
     let counting: AnalyzeFn = Arc::new(move |path, settings, limits, cancelled| {
         counter.fetch_add(1, Ordering::SeqCst);
+        let until = Instant::now() + delay;
+        while Instant::now() < until {
+            if cancelled() {
+                return Err(fp_analysis::AnalysisError::Cancelled);
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
         analyze_file_cancellable(path, settings, limits, cancelled)
     });
     let analyzer =
@@ -196,4 +208,51 @@ fn shutdown_saves_the_session_with_positions() {
         a,
         EngineAction::LoadPaused { player, request } if *player == p && request.from_secs > 0.3
     )));
+}
+
+#[test]
+fn changing_analysis_settings_during_analysis_analyses_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 2);
+    let mut r = rig_slow(&[a], dir, Duration::from_millis(300));
+    r.run_until("analysis started", |r| {
+        r.analyses.load(Ordering::SeqCst) == 1
+    });
+    let mut config = r.handle.model.load().config.clone();
+    config.analysis.silence_threshold_db = -50.0;
+    r.handle.send(Command::UpdateConfig(Box::new(config)));
+    r.run_until("analysis", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    assert_eq!(
+        r.analyses.load(Ordering::SeqCst),
+        2,
+        "the running analysis was redone"
+    );
+}
+
+#[test]
+fn peaks_are_kept_only_for_tracks_on_a_player() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = rig(&files, dir);
+    r.run_until("analysis", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    let until = r.now + Duration::from_millis(300);
+    r.run_until("a quiet period", |r| r.now >= until);
+    let model = r.handle.model.load_full();
+    let tracks: Vec<_> = model.library.iter().map(|t| t.id).collect();
+    let next = model.players[0].next.unwrap();
+    let next_track = model.playlists.entry(next).unwrap().track;
+    for t in &tracks {
+        assert_eq!(r.media.contains(*t), *t == next_track, "{t:?}");
+    }
+    // A track that becomes next gets its peaks back.
+    let p = model.players[0].id;
+    let last = model.playlists.iter().next().unwrap().entries[2];
+    r.handle.send(Command::SetNext(p, last.id));
+    r.run_until("peaks for the new next", |r| r.media.contains(last.track));
 }

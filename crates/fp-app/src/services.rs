@@ -81,8 +81,14 @@ pub struct Services {
     media: MediaCache,
     requests: Receiver<ServiceRequest>,
     request_tx: Sender<ServiceRequest>,
-    /// Tracks submitted and not yet answered, or answered.
-    submitted: HashSet<TrackId>,
+    /// Tracks submitted and not answered yet.
+    in_flight: HashSet<TrackId>,
+    /// Tracks whose result reached the model since the last reset.
+    done: HashSet<TrackId>,
+    /// Tracks whose file could not be analysed since the last reset.
+    failed: HashSet<TrackId>,
+    /// Tracks to analyse again even if already analysed.
+    forced: HashSet<TrackId>,
     settings: Option<AnalysisSettings>,
     saved_version: u64,
     dirty_since: Option<Instant>,
@@ -104,7 +110,10 @@ impl Services {
             media,
             requests,
             request_tx,
-            submitted: HashSet::new(),
+            in_flight: HashSet::new(),
+            done: HashSet::new(),
+            failed: HashSet::new(),
+            forced: HashSet::new(),
             settings: None,
             saved_version: 0,
             dirty_since: None,
@@ -119,18 +128,22 @@ impl Services {
 
     /// One round of work. Never blocks on the analyzer.
     pub fn step(&mut self, now: Instant) {
+        // The version is read before the snapshot: the snapshot saved can
+        // only be newer than the version recorded as saved, never older.
+        let version = self.conductor.telemetry.load().model_version;
         let state = self.conductor.model.load_full();
         while let Ok(request) = self.requests.try_recv() {
             match request {
-                ServiceRequest::ReanalyseAll => self.submitted.clear(),
+                ServiceRequest::ReanalyseAll => self.restart_analysis(&state),
             }
         }
         self.follow_settings(&state);
         self.submit_new(&state);
+        let wanted = Self::wanted(&state);
         while let Ok(result) = self.analyzer.results().try_recv() {
-            self.route(result);
+            self.route(result, &wanted);
         }
-        self.autosave(&state, now);
+        self.autosave(&state, version, now);
     }
 
     /// Final save, with the positions the engine reports right now.
@@ -168,46 +181,97 @@ impl Services {
         if self.settings.is_some() {
             // New thresholds change the automatic markers of every track.
             self.analyzer.update_settings(current.clone());
-            self.submitted.clear();
+            self.restart_analysis(state);
         }
         self.settings = Some(current.clone());
     }
 
+    /// Analyses every track again; running analyses are cancelled so that
+    /// none finishes with outdated settings.
+    fn restart_analysis(&mut self, state: &AppState) {
+        for id in self.in_flight.drain() {
+            self.analyzer.cancel(id);
+        }
+        self.done.clear();
+        self.failed.clear();
+        self.forced = state.library.iter().map(|t| t.id).collect();
+    }
+
+    /// Tracks the screen draws: current, next and cue entries of the players.
+    fn wanted(state: &AppState) -> HashSet<TrackId> {
+        state
+            .players
+            .iter()
+            .flat_map(|p| [p.current, p.next, p.cue.map(|c| c.entry)])
+            .flatten()
+            .filter_map(|e| state.playlists.entry(e))
+            .map(|e| e.track)
+            .collect()
+    }
+
     fn submit_new(&mut self, state: &AppState) {
         let known: HashSet<TrackId> = state.library.iter().map(|t| t.id).collect();
-        for gone in self.submitted.difference(&known) {
+        for gone in self.in_flight.difference(&known) {
             self.analyzer.cancel(*gone);
         }
-        self.submitted.retain(|id| known.contains(id));
-        self.media.retain(|id| known.contains(&id));
+        self.in_flight.retain(|id| known.contains(id));
+        self.done.retain(|id| known.contains(id));
+        self.failed.retain(|id| known.contains(id));
+        self.forced.retain(|id| known.contains(id));
+        // Peaks and covers are kept only for what the players show; the
+        // analysis cache brings them back when a track is shown again.
+        let wanted = Self::wanted(state);
+        self.media.retain(|id| wanted.contains(&id));
         for track in state.library.iter() {
-            if self.submitted.insert(track.id) {
-                self.analyzer.submit(track.id, track.path.clone());
+            let id = track.id;
+            if self.in_flight.contains(&id) {
+                continue;
+            }
+            let analyse =
+                self.forced.contains(&id) || (!track.analyzed && !self.done.contains(&id));
+            let show =
+                wanted.contains(&id) && !self.media.contains(id) && !self.failed.contains(&id);
+            if analyse || show {
+                self.forced.remove(&id);
+                self.in_flight.insert(id);
+                self.analyzer.submit(id, track.path.clone());
             }
         }
     }
 
-    fn route(&mut self, result: AnalysisResult) {
+    fn route(&mut self, result: AnalysisResult, wanted: &HashSet<TrackId>) {
+        if matches!(result.outcome, Err(AnalysisError::Cancelled)) {
+            return;
+        }
+        self.in_flight.remove(&result.track);
+        self.done.insert(result.track);
         let command = match result.outcome {
             Ok(analysis) => {
-                self.media.insert(
-                    result.track,
-                    TrackMedia {
-                        peaks: analysis.peaks,
-                        peak_bucket_secs: analysis.peak_bucket_secs,
-                        cover_png: analysis.cover_png.map(Arc::from),
-                    },
-                );
+                self.failed.remove(&result.track);
+                if wanted.contains(&result.track) {
+                    self.media.insert(
+                        result.track,
+                        TrackMedia {
+                            peaks: analysis.peaks,
+                            peak_bucket_secs: analysis.peak_bucket_secs,
+                            cover_png: analysis.cover_png.map(Arc::from),
+                        },
+                    );
+                }
                 Command::ApplyAnalysis {
                     track: result.track,
                     analysis: Box::new(analysis.analysis),
                 }
             }
-            Err(AnalysisError::Missing) => Command::SetFileState {
-                track: result.track,
-                state: FileState::Missing,
-            },
+            Err(AnalysisError::Missing) => {
+                self.failed.insert(result.track);
+                Command::SetFileState {
+                    track: result.track,
+                    state: FileState::Missing,
+                }
+            }
             Err(AnalysisError::Unreadable(reason)) => {
+                self.failed.insert(result.track);
                 tracing::warn!(path = %result.path.display(), %reason, "unreadable file");
                 Command::SetFileState {
                     track: result.track,
@@ -218,12 +282,12 @@ impl Services {
         };
         if !self.conductor.send(command) {
             // The queue is full: try again on a later round.
-            self.submitted.remove(&result.track);
+            self.done.remove(&result.track);
+            self.forced.insert(result.track);
         }
     }
 
-    fn autosave(&mut self, state: &AppState, now: Instant) {
-        let version = self.conductor.telemetry.load().model_version;
+    fn autosave(&mut self, state: &AppState, version: u64, now: Instant) {
         if version != self.saved_version && self.dirty_since.is_none() {
             self.dirty_since = Some(now);
         }

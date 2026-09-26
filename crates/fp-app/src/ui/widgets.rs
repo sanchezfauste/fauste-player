@@ -160,6 +160,9 @@ pub fn vu(ui: &mut Ui, levels: [f32; 2], holds: [f32; 2]) {
     }
 }
 
+/// Fader travel moved by one mouse-wheel event (3 dB near the top).
+const FADER_WHEEL_STEP: f32 = 0.05;
+
 /// Vertical volume fader (drag or wheel). Returns the new fader position
 /// (0 bottom … 1 top) when the user moved it.
 pub fn fader(ui: &mut Ui, position: f32, label: &str) -> Option<f32> {
@@ -173,11 +176,25 @@ pub fn fader(ui: &mut Ui, position: f32, label: &str) -> Option<f32> {
         changed = Some((1.0 - (p.y - rect.top()) / rect.height()).clamp(0.0, 1.0));
     }
     if response.hovered() {
-        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-        if scroll != 0.0 {
-            changed = Some((position + scroll.signum() * 0.05).clamp(0.0, 1.0));
+        // One fixed step per wheel event: the smoothed scroll delta spreads a
+        // notch over many frames and would add up to a huge jump.
+        let steps: f32 = ui.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::MouseWheel { delta, .. } if delta.y != 0.0 => {
+                        Some(delta.y.signum())
+                    }
+                    _ => None,
+                })
+                .sum()
+        });
+        if steps != 0.0 {
+            changed = Some((position + steps * FADER_WHEEL_STEP).clamp(0.0, 1.0));
         }
     }
+    // Holding the knob still must not resend the same volume every frame.
+    let changed = changed.filter(|v| (v - position).abs() > f32::EPSILON);
     let shown = changed.unwrap_or(position);
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();

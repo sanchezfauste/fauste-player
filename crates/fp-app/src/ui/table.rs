@@ -53,6 +53,8 @@ pub(crate) fn track_table(
     let mut built = 0;
     let mut widths = [0.0_f32; 4];
     let mut hovered_row: Option<(usize, bool)> = None;
+    let mut pointer_row: Option<(usize, bool)> = None;
+    let pointer = ui.ctx().pointer_hover_pos();
     let mut released: Option<(DragEntry, usize)> = None;
     let entries = &list.entries;
     let drop = view_state.drop.filter(|d| d.playlist == playlist);
@@ -250,6 +252,9 @@ pub(crate) fn track_table(
                     response.dnd_set_drag_payload(DragEntry { entry: entry.id });
                     dragged = Some(entry.id);
                 }
+                if let Some(p) = pointer.filter(|p| response.rect.contains(*p)) {
+                    pointer_row = Some((i, p.y > response.rect.center().y));
+                }
                 if response.dnd_hover_payload::<DragEntry>().is_some()
                     && let Some(pos) = response.hover_pos()
                 {
@@ -322,7 +327,7 @@ pub(crate) fn track_table(
     if pointer_in {
         view_state.file_drop = Some(DropTarget {
             playlist,
-            index: hovered_row
+            index: pointer_row
                 .map(|(i, below)| if below { i + 1 } else { i })
                 .unwrap_or(entries.len()),
         });
@@ -396,7 +401,21 @@ fn context_menu(
         });
         response
     };
-    if labelled(ui, egui_phosphor::fill::PLAY, "menu-play-now", !on_air).clicked() {
+    let state = scene.state.player(player).ok();
+    let fading = state.is_some_and(|p| p.fading);
+    if labelled(
+        ui,
+        egui_phosphor::fill::PLAY,
+        "menu-play-now",
+        !on_air && !fading,
+    )
+    .clicked()
+    {
+        // Play resumes a paused track (rule 4): stop it first so that the
+        // chosen entry is the one that starts.
+        if state.is_some_and(|p| p.transport == Transport::Paused) {
+            scene.ctl.send(Command::Stop(player));
+        }
         scene.ctl.send(Command::SetNext(player, entry));
         scene.ctl.send(Command::Play(player));
         ui.close();
