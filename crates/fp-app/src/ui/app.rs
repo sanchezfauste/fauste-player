@@ -74,6 +74,10 @@ pub(crate) struct ViewState {
     pub resizing: HashSet<PlayerId>,
     pub rows_built: usize,
     pub settings_open: bool,
+    /// Where each player's waveform menu was opened, in seconds.
+    pub wave_menu: HashMap<PlayerId, f64>,
+    /// A marker being dragged on a waveform.
+    pub marker_drag: Option<(PlayerId, fp_model::MarkerKind)>,
     /// A cart to open in Settings → Cartwall (`Edit…` on a cart).
     pub edit_cart: Option<(fp_model::CartPageId, usize)>,
     meters: HashMap<PlayerId, Meter>,

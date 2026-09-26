@@ -8,7 +8,7 @@ use egui::{
     UiBuilder, pos2, vec2,
 };
 use egui_phosphor::regular as icon;
-use fp_model::{Command, PlayMode, PlayerId, PlaylistId, TrackId};
+use fp_model::{Command, MarkerKind, PlayMode, PlayerId, PlaylistId, TrackId};
 
 use super::app::{DragEntry, Scene, ViewState};
 use super::format;
@@ -68,7 +68,7 @@ pub(crate) fn column(
             header(ui, scene, id, index, &pv);
             info_row(ui, scene, view_state, covers, id, &pv, &telemetry);
             transport(ui, scene, id, &pv);
-            wave(ui, scene, id, &pv);
+            wave(ui, scene, view_state, id, &pv);
         });
     tabs(ui, scene, view_state, id, player.playlist);
     let footer_top = ui.max_rect().bottom() - FOOTER_HEIGHT;
@@ -629,7 +629,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
     );
 }
 
-fn wave(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
+fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId, pv: &PlayerView) {
     let t = scene.i18n;
     let track = scene
         .state
@@ -653,6 +653,9 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
     let (response, seek) = widgets::waveform(ui, WAVE_HEIGHT, &input);
     if let Some(secs) = seek {
         scene.ctl.send(Command::Seek(id, secs));
+    }
+    if let (Some(track), Some(total)) = (track, pv.total.filter(|t| *t > 0.0)) {
+        edit_markers(ui, scene, view_state, id, track, total, pv, &response);
     }
     let rect = response.rect;
     let painter = ui.painter_at(rect);
@@ -896,4 +899,147 @@ fn footer(ui: &mut Ui, scene: &Scene<'_>, playlist: PlaylistId) {
             .selectable(false),
         );
     });
+}
+
+/// Marker editing on the waveform (Phase 2 spec P2.8): a context menu that
+/// places a marker where it was opened, and Alt-drag on marker handles.
+#[allow(clippy::too_many_arguments)]
+fn edit_markers(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    id: PlayerId,
+    track: TrackId,
+    total: f64,
+    pv: &PlayerView,
+    response: &egui::Response,
+) {
+    let t = scene.i18n;
+    let inner = response.rect.shrink(1.0);
+    let secs_at = |x: f32| f64::from(((x - inner.left()) / inner.width()).clamp(0.0, 1.0)) * total;
+    let x_of = |f: f32| inner.left() + f * inner.width();
+    let m = pv.markers;
+    let handles = [
+        (MarkerKind::CueIn, m.cue_in),
+        (MarkerKind::IntroEnd, m.intro_end),
+        (MarkerKind::OutroStart, m.outro_start),
+        (MarkerKind::SegueStart, m.segue_start),
+        (MarkerKind::CueOut, m.cue_out),
+    ];
+    if response.secondary_clicked()
+        && let Some(p) = response.interact_pointer_pos()
+    {
+        view_state.wave_menu.insert(id, secs_at(p.x));
+    }
+    let at = view_state.wave_menu.get(&id).copied();
+    response.context_menu(|ui| {
+        ui.set_min_width(220.0);
+        let item = |ui: &mut Ui, key: &str| {
+            let text = t.tr(key);
+            let r = ui.button(&text);
+            r.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text.clone())
+            });
+            r.clicked()
+        };
+        if let Some(secs) = at {
+            ui.add(
+                egui::Label::new(
+                    RichText::new(format::clock(secs))
+                        .font(font(11.0))
+                        .color(theme::NEUTRAL_400),
+                )
+                .selectable(false),
+            );
+            ui.separator();
+            for (kind, key) in [
+                (MarkerKind::CueIn, "wave-set-cue-in"),
+                (MarkerKind::IntroEnd, "wave-set-intro"),
+                (MarkerKind::OutroStart, "wave-set-outro"),
+                (MarkerKind::SegueStart, "wave-set-mix"),
+                (MarkerKind::CueOut, "wave-set-cue-out"),
+            ] {
+                if item(ui, key) {
+                    scene.ctl.send(Command::SetMarker {
+                        track,
+                        kind,
+                        secs: Some(secs),
+                    });
+                    ui.close();
+                }
+            }
+            ui.separator();
+        }
+        if item(ui, "wave-reset") {
+            scene.ctl.send(Command::ResetMarkers { track });
+            ui.close();
+        }
+    });
+    let alt = ui.input(|i| i.modifiers.alt);
+    // The drag starts once the pointer has moved; pick the marker under
+    // the point where the button went down.
+    if alt
+        && response.drag_started()
+        && let Some(p) = ui.input(|i| i.pointer.press_origin())
+    {
+        // The nearest marker within reach of the pointer.
+        let nearest = handles
+            .iter()
+            .filter_map(|(kind, f)| f.map(|f| (*kind, (x_of(f) - p.x).abs())))
+            .filter(|(_, d)| *d <= 8.0)
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        view_state.marker_drag = nearest.map(|(kind, _)| (id, kind));
+    }
+    let dragging = view_state
+        .marker_drag
+        .filter(|(p, _)| *p == id)
+        .map(|(_, k)| k);
+    let painter = ui.painter_at(response.rect);
+    if alt || dragging.is_some() {
+        for (kind, f) in handles {
+            if let Some(f) = f {
+                let x = x_of(f);
+                let active = dragging == Some(kind);
+                let color = if active {
+                    theme::TEXT
+                } else {
+                    theme::ACCENT_300
+                };
+                painter.add(egui::Shape::convex_polygon(
+                    vec![
+                        pos2(x - 5.0, inner.top()),
+                        pos2(x + 5.0, inner.top()),
+                        pos2(x, inner.top() + 7.0),
+                    ],
+                    color,
+                    Stroke::NONE,
+                ));
+            }
+        }
+    }
+    if let Some(kind) = dragging
+        && let Some(p) = ui.ctx().pointer_latest_pos()
+    {
+        let x = p.x.clamp(inner.left(), inner.right());
+        painter.rect_filled(
+            Rect::from_min_size(pos2(x, inner.top()), vec2(1.0, inner.height())),
+            0.0,
+            theme::TEXT,
+        );
+        painter.text(
+            pos2(x + 4.0, inner.bottom() - 4.0),
+            egui::Align2::LEFT_BOTTOM,
+            format::clock(secs_at(x)),
+            font(10.0),
+            theme::TEXT,
+        );
+        if response.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+            scene.ctl.send(Command::SetMarker {
+                track,
+                kind,
+                secs: Some(secs_at(x)),
+            });
+            view_state.marker_drag = None;
+        }
+    }
 }
