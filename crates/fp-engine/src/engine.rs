@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use fp_backends::{AudioBackend, NullBackend, StreamConfig};
+use fp_backends::{AudioBackend, Availability, NullBackend, StreamConfig};
 use fp_model::{
     CartwallRoutes, Config, EngineAction, EngineEvent, EntryId, PlayerId, PlayerRoutes, Route,
     SourceRequest, TransitionPlan, Tuning,
@@ -142,6 +142,11 @@ struct PlayerRuntime {
 
 pub struct Engine {
     backends: Vec<Arc<dyn AudioBackend>>,
+    /// Backends that were unavailable when the engine started (a JACK
+    /// server not running, a missing library): routes to them fall back as
+    /// if the backend did not exist. One that was available and is lost
+    /// later keeps its routes, and the watchdog retries it.
+    unusable: std::collections::HashSet<String>,
     settings: EngineSettings,
     opener: SourceOpener,
     buses: BTreeMap<BusKey, Bus>,
@@ -177,9 +182,15 @@ impl Engine {
         opener: SourceOpener,
     ) -> Self {
         backends.push(Arc::new(NullBackend));
+        let unusable = backends
+            .iter()
+            .filter(|b| b.availability() != Availability::Available)
+            .map(|b| b.id().0)
+            .collect();
         let (failures_tx, failures_rx) = crossbeam_channel::unbounded();
         Self {
             backends,
+            unusable,
             settings,
             opener,
             buses: BTreeMap::new(),
@@ -362,13 +373,24 @@ impl Engine {
         self.backends.iter().find(|b| b.id().0 == id).cloned()
     }
 
-    /// The configured default backend, else the first registered one.
+    /// A backend routes may use: registered and available at start-up.
+    fn route_backend(&self, id: &str) -> Option<Arc<dyn AudioBackend>> {
+        self.find_backend(id)
+            .filter(|b| !self.unusable.contains(&b.id().0))
+    }
+
+    /// The configured default backend, else the first usable one.
     fn default_backend(&self) -> Arc<dyn AudioBackend> {
         self.settings
             .default_backend
             .as_deref()
-            .and_then(|id| self.find_backend(id))
-            .or_else(|| self.backends.first().cloned())
+            .and_then(|id| self.route_backend(id))
+            .or_else(|| {
+                self.backends
+                    .iter()
+                    .find(|b| !self.unusable.contains(&b.id().0))
+                    .cloned()
+            })
             .unwrap_or_else(|| Arc::new(NullBackend))
     }
 
@@ -392,7 +414,7 @@ impl Engine {
     /// back to the default output: its device id belongs to the missing
     /// backend and would never open.
     fn route_target(&self, route: &Route) -> (BusKey, u16) {
-        match self.find_backend(&route.backend) {
+        match self.route_backend(&route.backend) {
             Some(backend) => (
                 BusKey {
                     backend: backend.id().0,
@@ -411,7 +433,7 @@ impl Engine {
     /// the default output (that is where Main plays): a route to a backend
     /// this machine does not have, or one identical to Main, means no cue.
     fn cue_target(&self, route: &Route, main: &(BusKey, u16)) -> Option<(BusKey, u16)> {
-        let Some(backend) = self.find_backend(&route.backend) else {
+        let Some(backend) = self.route_backend(&route.backend) else {
             tracing::warn!(backend = %route.backend, "cue route to an unavailable backend; no cue");
             return None;
         };

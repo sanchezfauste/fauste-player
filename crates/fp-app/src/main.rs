@@ -13,7 +13,9 @@ use fp_app::ui::app::AppUi;
 use fp_app::ui::shell::Shell;
 use fp_app::ui::theme;
 use fp_app::{bootstrap, crash, logging};
-use fp_backends::{AudioBackend, CpalBackend, NullBackend};
+use fp_backends::{
+    AudioBackend, Availability, NullBackend, choose_default_backend, display_name, system_backends,
+};
 use fp_engine::conductor::Conductor;
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
@@ -57,14 +59,40 @@ fn run(paths: fp_store::AppPaths) -> Result<(), Box<dyn std::error::Error>> {
     let config = loaded.state.config.clone();
     let i18n = I18n::new(config.ui.language.as_deref());
 
-    let cpal = CpalBackend::default_host();
-    let platform = format!("{} · {}", os_name(), cpal.id().0.to_uppercase());
-    let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(cpal), Arc::new(NullBackend)];
-    let engine = Engine::new(
-        backends.clone(),
-        EngineSettings::from_config(&config),
-        file_opener(),
-    );
+    // Every audio system this build supports, plus Null as the last resort.
+    let mut backends = system_backends();
+    backends.push(Arc::new(NullBackend) as Arc<dyn AudioBackend>);
+    let availability: Vec<(String, bool)> = backends
+        .iter()
+        .map(|b| (b.id().0, b.availability() == Availability::Available))
+        .collect();
+    let listed: Vec<(&str, bool)> = availability
+        .iter()
+        .filter(|(id, _)| id != "null")
+        .map(|(id, ok)| (id.as_str(), *ok))
+        .collect();
+    let mut settings = EngineSettings::from_config(&config);
+    let chosen = choose_default_backend(
+        settings.default_backend.as_deref(),
+        &listed,
+        std::env::consts::OS,
+    )
+    .map(str::to_owned);
+    if settings.default_backend.is_some() && settings.default_backend != chosen {
+        tracing::warn!(
+            backend = ?settings.default_backend,
+            fallback = ?chosen,
+            "configured audio system unavailable"
+        );
+    }
+    settings.default_backend = chosen;
+    let in_use = settings
+        .default_backend
+        .clone()
+        .unwrap_or_else(|| "null".to_owned());
+    tracing::info!(backend = %in_use, ?availability, "audio systems");
+    let platform = format!("{} · {}", os_name(), display_name(&in_use));
+    let engine = Engine::new(backends.clone(), settings, file_opener());
     let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
     let tick = Duration::from_secs_f64(config.tuning.conductor_tick_ms.max(1.0) / 1000.0);
     let handle = Arc::new(conductor.spawn(handle, tick)?);

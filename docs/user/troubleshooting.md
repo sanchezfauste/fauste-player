@@ -6,10 +6,16 @@
    If you hear the tone, check the player's volume fader.
 2. If you hear nothing, pick another device or channel pair. Changes to
    outputs take effect after a restart.
-3. On Linux, check that no other program holds the ALSA device exclusively.
-   A PipeWire or PulseAudio desktop provides the ALSA `default` and `pipewire`
-   / `pulse` devices; native PipeWire, PulseAudio and JACK support arrives in a
-   later version.
+3. On Linux, prefer **PipeWire** or **PulseAudio** in Settings → Audio
+   outputs → Audio system. They share the sound card with other programs.
+   **ALSA** talks to the card directly and may find it busy.
+4. **JACK** shows as unavailable ("no output device") when no JACK server is
+   running. Start the server (for example with QjackCtl) and restart the
+   application. Set the JACK server to the sample rate in Settings (48 kHz
+   by default): JACK runs at one rate for every program.
+5. **PipeWire** is not offered by the downloadable archives; they reach
+   PipeWire through its PulseAudio service, which works the same way. It is
+   available in builds made with the `pipewire` feature.
 
 ## "Output lost" alert
 

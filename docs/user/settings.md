@@ -9,7 +9,7 @@ Changes in this section apply **the next time the application starts**.
 
 | Setting | Meaning |
 |---|---|
-| Audio system | The system audio interface: ALSA on Linux, WASAPI (shared) on Windows, Core Audio on macOS. "System default" follows the OS choice. |
+| Audio system | Linux: PipeWire (in builds that include it), PulseAudio, JACK or ALSA. Windows: WASAPI, ASIO (in builds that include it) or JACK. macOS: Core Audio or JACK. Systems missing on this computer, or with no output device (a JACK server that is not running), are shown as unavailable. "System default" uses the first available one in that order. |
 | Sample rate | The rate every output runs at; files are converted to it with high-quality resampling |
 | Buffer size | Frames per audio block; the resulting latency is shown below it |
 | Outputs per player | For each player, a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. Multichannel interfaces can carry several players on different pairs. |

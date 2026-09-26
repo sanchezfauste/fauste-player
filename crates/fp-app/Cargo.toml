@@ -34,6 +34,11 @@ sys-locale.workspace = true
 image.workspace = true
 
 [features]
+default = []
+# Audio systems (see crates/fp-backends/Cargo.toml).
+pipewire = ["fp-backends/pipewire"]
+jack = ["fp-backends/jack"]
+asio = ["fp-backends/asio"]
 # Hooks that inject failures, for the integration tests only.
 test-hooks = []
 

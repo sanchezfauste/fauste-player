@@ -318,15 +318,19 @@ pub trait Renderer: Send + 'static {
 | all | `Null` (real-time pacing, discards) | 1 | own |
 | all | `Offline` (renders to memory on a simulated clock; tests) | 1 | own |
 | Linux | ALSA | 1 | `cpal` |
-| Linux | PipeWire | 3 | `pipewire` (pipewire-rs) |
-| Linux | PulseAudio | 3 | `libpulse-binding` |
-| Linux, macOS, Windows | JACK | 3 | `jack` with dynamic loading |
+| Linux | PipeWire | 3 | `cpal` `pipewire` host (pipewire-rs) |
+| Linux | PulseAudio | 3 | `cpal` `pulseaudio` host (pure-Rust client) |
+| Linux, macOS, Windows | JACK | 3 | `cpal` `jack` host (dynamically loaded on macOS and Windows) |
 | Windows | WASAPI shared | 1 | `cpal` |
-| Windows | WASAPI exclusive | 3 | `wasapi` crate |
-| Windows | ASIO | 3 | `cpal` `asio` feature (needs the Steinberg SDK at build time via `ASIO_DIR`) |
-| Windows | DirectSound | 3 | `windows` crate |
+| Windows | WASAPI exclusive | 4 | with bit-perfect output (exclusive access only matters there) |
+| Windows | ASIO | 3 | `cpal` `asio` host (needs the Steinberg SDK at build time via `CPAL_ASIO_DIR`) |
 | macOS | Core Audio | 1 | `cpal` |
-| macOS | Core Audio hog mode (exclusive) | 3 | `coreaudio-rs` / `objc2-core-audio` |
+| macOS | Core Audio hog mode (exclusive) | 4 | with bit-perfect output |
+
+DirectSound is not supported. Microsoft deprecated it, WASAPI supersedes it,
+and it would need unsafe FFI for no benefit (ruling taken when Phase 3 was
+planned). Every Phase 3 backend comes through cpal's safe API, so the
+workspace keeps `forbid(unsafe_code)`.
 
 ### 5.3 Availability and linking
 
@@ -518,8 +522,8 @@ Exact versions are pinned in the Phase 1 plan after checking crates.io at implem
 |---|---|---|
 | **1. Usable core** | Workspace, `fp-model` (§3), engine (§4) with Null/Offline and cpal ALSA / WASAPI shared / Core Audio, analysis (§6 without intro tags), store (§7 without M3U/carts), UI main screen (§8.3 without the cartwall), Settings subset (§8.4), logging, CI. | On each OS: the default 4 players (and a configured 8) play real files through selectable Main/Cue devices; every rule in §3 works; auto-segue overlaps at detected segue points; state survives restart; unplugging the output device does not stop the timeline and it recovers on replug; all tests green in CI. |
 | **2. Cartwall and full Settings** | Cart pages (configurable grid, default 2×8 = 16 carts as in the design; overlap by default, loop, exclusive; per-page tabs with the playing dot; collapsible), cart bus routing, Cartwall and Shortcuts settings (remappable shortcuts), language selector, M3U/M3U8/PLS import and M3U export, cart-page import/export, manual marker editing on the waveform (intro/outro/mix, modifier + drag), `INTRO` tag convention. | Parity with the v3 design feature set. |
-| **3. Native backends** | PipeWire, PulseAudio, JACK, WASAPI exclusive, ASIO, DirectSound, Core Audio hog mode. | Each backend passes the backend conformance test suite and a manual on-device check. |
-| **4. Bit-perfect** | Exclusive mode at the file's rate and format, no resampling or processing when volume = 100 % and no fade; real BP indicator; device reopen between tracks of different rates. | Bit-exact loopback verification on at least one device per OS. |
+| **3. Native backends** | PipeWire, PulseAudio, JACK, ASIO (all through cpal hosts). | Each backend passes the backend conformance test suite and a manual on-device check. |
+| **4. Bit-perfect** | WASAPI exclusive and Core Audio hog mode; exclusive mode at the file's rate and format, no resampling or processing when volume = 100 % and no fade; real BP indicator; device reopen between tracks of different rates. | Bit-exact loopback verification on at least one device per OS. |
 | **5. Packaging** | deb, rpm, Flatpak, AppImage; signed MSI; signed and notarised dmg. | Installable artefacts produced by CI. |
 
 ---
