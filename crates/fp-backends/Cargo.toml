@@ -28,3 +28,8 @@ workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 cpal = { workspace = true, features = ["realtime-dbus"] }
+
+# Exclusive modes (Phase 4 plan 2), through safe APIs only.
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.24.0"
+crossbeam-channel.workspace = true

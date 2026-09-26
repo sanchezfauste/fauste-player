@@ -89,17 +89,23 @@ impl OutputStream for CpalStream {
     }
 }
 
-/// Whether a device gives the application sole, unconverted access. On
+/// Whether a device can give the application sole, unconverted access. On
 /// ALSA a `hw:` device is the hardware itself; everything else there goes
-/// through plugins (`plughw:`, `default`) or a sound server. Exclusive modes
-/// of other systems come with their own backends (Phase 4 plan 2).
+/// through plugins (`plughw:`, `default`) or a sound server. WASAPI has
+/// exclusive mode and Core Audio hog mode (Phase 4 plan 2).
 fn exclusive_capable(host: &str, device: &str) -> bool {
     // cpal's persisted ids name the host first (`alsa:hw:CARD=PCH,DEV=0`).
     let inner = device
         .strip_prefix(host)
         .and_then(|rest| rest.strip_prefix(':'))
         .unwrap_or(device);
-    host == "alsa" && inner.starts_with("hw:")
+    match host {
+        "alsa" => inner.starts_with("hw:"),
+        // Exclusive mode and hog mode: every output device can be asked;
+        // whether it is granted is known when the stream opens.
+        "wasapi" | "coreaudio" => true,
+        _ => false,
+    }
 }
 
 fn backend_error(e: impl std::fmt::Display) -> BackendError {
@@ -278,6 +284,19 @@ impl CpalBackend {
             return Err(BackendError::Unsupported(
                 "exclusive access is not available on this device".to_owned(),
             ));
+        }
+        if config.exclusive {
+            match self.id().0.as_str() {
+                // A hw: device is exclusive by itself: the cpal path below.
+                "alsa" => {}
+                #[cfg(windows)]
+                "wasapi" => return crate::wasapi_exclusive::open(device, config, renderer, errors),
+                _ => {
+                    return Err(BackendError::Unsupported(
+                        "exclusive access is not available on this system".to_owned(),
+                    ));
+                }
+            }
         }
         let host = self.host()?;
         let dev = self.find(&host, device)?;
@@ -502,6 +521,20 @@ mod tests {
         render_converted(&mut Samples(samples, 0), &mut out, 1, &mut scratch);
         let got: Vec<i32> = out.iter().map(|v| v.inner()).collect();
         assert_eq!(got, values);
+    }
+
+    #[test]
+    fn wasapi_and_core_audio_devices_are_exclusive_capable() {
+        assert!(exclusive_capable(
+            "wasapi",
+            "wasapi:{0.0.0.00000000}.{guid}"
+        ));
+        assert!(exclusive_capable(
+            "coreaudio",
+            "coreaudio:BuiltInSpeakerDevice"
+        ));
+        assert!(!exclusive_capable("jack", "jack:system"));
+        assert!(!exclusive_capable("asio", "asio:Interface"));
     }
 
     #[test]

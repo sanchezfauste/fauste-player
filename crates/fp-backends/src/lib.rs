@@ -9,9 +9,12 @@ use std::sync::Arc;
 use thiserror::Error;
 
 mod cpal_backend;
+pub mod exclusive;
 mod hosts;
 mod null;
 mod offline;
+#[cfg(windows)]
+mod wasapi_exclusive;
 
 pub use cpal_backend::CpalBackend;
 pub use hosts::{
