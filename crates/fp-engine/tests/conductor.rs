@@ -313,3 +313,69 @@ fn eight_players_survive_ten_simulated_minutes_of_random_commands() {
 fn eight_players_survive_six_simulated_hours_of_random_commands() {
     stress(6 * 3600);
 }
+
+#[test]
+fn firing_an_exclusive_cart_stops_the_others_on_air() {
+    let mut state = model(1, 0);
+    let page = state.cartwall.pages[0].id;
+    for index in 0..2 {
+        fp_model::apply(
+            &mut state,
+            Command::AssignCartFile {
+                page,
+                index,
+                path: PathBuf::from(format!("track{}", index + 1)),
+            },
+        )
+        .unwrap();
+    }
+    let edit = fp_model::CartEdit {
+        name: "Exclusive".into(),
+        kind: fp_model::CartKind::Jingle,
+        looped: false,
+        exclusive: true,
+    };
+    fp_model::apply(
+        &mut state,
+        Command::SetCart {
+            page,
+            index: 1,
+            edit,
+        },
+    )
+    .unwrap();
+    let (a, b) = (
+        state.cartwall.pages[0].carts[0].id,
+        state.cartwall.pages[0].carts[1].id,
+    );
+    let (mut conductor, handle, device, mut now) = offline_conductor(state);
+    let mut run = |conductor: &mut Conductor, blocks: usize| {
+        for _ in 0..blocks {
+            conductor.tick(now);
+            device.render(BLOCK).unwrap();
+            now += Duration::from_millis(10);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    };
+    handle.send(Command::FireCart(a));
+    run(&mut conductor, 20);
+    let on_air: Vec<_> = handle
+        .telemetry
+        .load()
+        .carts
+        .iter()
+        .map(|(c, _)| *c)
+        .collect();
+    assert_eq!(on_air, vec![a]);
+    handle.send(Command::FireCart(b));
+    run(&mut conductor, 20);
+    let on_air: Vec<_> = handle
+        .telemetry
+        .load()
+        .carts
+        .iter()
+        .map(|(c, _)| *c)
+        .collect();
+    assert_eq!(on_air, vec![b]);
+    assert_eq!(conductor.state().cartwall.playing.len(), 1);
+}

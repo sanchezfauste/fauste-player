@@ -69,3 +69,45 @@ fn a_truncated_file_plays_what_it_has_and_ends_cleanly() {
     let out = decode_all(&mut d);
     assert!(out.len() > 20_000 * 2, "most of the audio is still there");
 }
+
+fn sine_wav(dir: &std::path::Path, rate: u32, secs: f64) -> std::path::PathBuf {
+    let path = dir.join("sine.wav");
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: rate,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    let frames = (secs * f64::from(rate)) as usize;
+    for i in 0..frames {
+        let t = i as f64 / f64::from(rate);
+        w.write_sample(((t * 1000.0 * std::f64::consts::TAU).sin() * 16_000.0) as i16)
+            .unwrap();
+    }
+    w.finalize().unwrap();
+    path
+}
+
+fn open_all(path: &std::path::Path, from: f64, frames: usize) -> Vec<f32> {
+    let mut source = file_opener()(path, from, 48_000).unwrap();
+    let mut out = Vec::new();
+    while out.len() < frames * 2 && source.next_block(&mut out).unwrap() {}
+    out.truncate(frames * 2);
+    out
+}
+
+#[test]
+fn a_resampled_start_after_cue_in_matches_continuous_playback() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = sine_wav(dir.path(), 44_100, 1.0);
+    let continuous = open_all(&path, 0.0, 24_000);
+    let started = open_all(&path, 0.25, 64);
+    let reference = &continuous[12_000 * 2..12_064 * 2];
+    let worst = started
+        .iter()
+        .zip(reference)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f32, f32::max);
+    assert!(worst < 1e-4, "start transient {worst}");
+}

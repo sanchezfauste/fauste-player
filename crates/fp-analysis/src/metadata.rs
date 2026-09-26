@@ -100,3 +100,111 @@ pub fn thumbnail_png(bytes: &[u8], limits: &Limits, px: u32) -> Option<Vec<u8>> 
         .ok()?;
     Some(out)
 }
+
+/// The description / key of the intro tag (Phase 2 spec P2.8).
+const INTRO_KEY: &str = "INTRO";
+
+/// Parses an intro time: seconds (`12.5`) or `m:ss(.f)` / `h:mm:ss(.f)`.
+pub fn parse_intro_time(text: &str) -> Option<f64> {
+    // Tools in some locales write a decimal comma.
+    let text = text.trim().replace(',', ".");
+    if text.is_empty() {
+        return None;
+    }
+    let mut total = 0.0;
+    let parts: Vec<&str> = text.split(':').collect();
+    if parts.len() > 3 {
+        return None;
+    }
+    let last = parts.len() - 1;
+    for (i, part) in parts.iter().enumerate() {
+        // Only the seconds field may have decimals.
+        let allowed = |c: char| c.is_ascii_digit() || (i == last && c == '.');
+        if part.is_empty() || !part.chars().all(allowed) {
+            return None;
+        }
+        let value: f64 = part.parse().ok()?;
+        // Minutes and seconds after the first field stay below 60.
+        if i > 0 && value >= 60.0 {
+            return None;
+        }
+        total = total * 60.0 + value;
+    }
+    total.is_finite().then_some(total)
+}
+
+/// The intro time from an `INTRO` tag: ID3v2 `TXXX:INTRO`, a Vorbis or FLAC
+/// comment, an APE item, or an MP4 freeform `----:com.apple.iTunes:INTRO`.
+/// Anything unreadable is `None`.
+pub fn read_intro(path: &Path) -> Option<f64> {
+    use lofty::ape::ApeTag;
+    use lofty::file::{AudioFile, FileType};
+    use lofty::id3::v2::Id3v2Tag;
+    use lofty::mp4::{AtomData, AtomIdent};
+    use lofty::tag::ItemValue;
+
+    let from_id3 = |t: Option<&Id3v2Tag>| {
+        t.and_then(|t| t.get_user_text(INTRO_KEY))
+            .map(str::to_owned)
+    };
+    let from_ape = |t: Option<&ApeTag>| {
+        t.and_then(|t| t.get(INTRO_KEY))
+            .and_then(|i| match i.value() {
+                ItemValue::Text(s) => Some(s.clone()),
+                _ => None,
+            })
+    };
+    let result = std::panic::catch_unwind(|| -> Option<String> {
+        let probe = lofty::probe::Probe::open(path)
+            .ok()?
+            .guess_file_type()
+            .ok()?;
+        let file_type = probe.file_type()?;
+        let mut reader = std::fs::File::open(path).ok()?;
+        // Covers are not needed here, and a huge one must not hide the tag.
+        let options = lofty::config::ParseOptions::new()
+            .read_properties(false)
+            .read_cover_art(false);
+        match file_type {
+            FileType::Flac => {
+                let f = lofty::flac::FlacFile::read_from(&mut reader, options).ok()?;
+                f.vorbis_comments()
+                    .and_then(|v| v.get(INTRO_KEY))
+                    .map(str::to_owned)
+                    .or_else(|| from_id3(f.id3v2()))
+            }
+            FileType::Vorbis => {
+                let f = lofty::ogg::VorbisFile::read_from(&mut reader, options).ok()?;
+                f.vorbis_comments().get(INTRO_KEY).map(str::to_owned)
+            }
+            FileType::Mpeg => {
+                let f = lofty::mpeg::MpegFile::read_from(&mut reader, options).ok()?;
+                from_id3(f.id3v2()).or_else(|| from_ape(f.ape()))
+            }
+            FileType::Wav => {
+                let f = lofty::iff::wav::WavFile::read_from(&mut reader, options).ok()?;
+                from_id3(f.id3v2())
+            }
+            FileType::Aiff => {
+                let f = lofty::iff::aiff::AiffFile::read_from(&mut reader, options).ok()?;
+                from_id3(f.id3v2())
+            }
+            FileType::Mp4 => {
+                let f = lofty::mp4::Mp4File::read_from(&mut reader, options).ok()?;
+                let ident = AtomIdent::Freeform {
+                    mean: "com.apple.iTunes".into(),
+                    name: INTRO_KEY.into(),
+                };
+                f.ilst()
+                    .and_then(|i| i.get(&ident))
+                    .and_then(|a| a.data().next())
+                    .and_then(|d| match d {
+                        AtomData::UTF8(s) => Some(s.clone()),
+                        _ => None,
+                    })
+            }
+            _ => None,
+        }
+    });
+    result.ok().flatten().as_deref().and_then(parse_intro_time)
+}

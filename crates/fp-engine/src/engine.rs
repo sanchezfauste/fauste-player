@@ -11,8 +11,8 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, Sender};
 use fp_backends::{AudioBackend, NullBackend, StreamConfig};
 use fp_model::{
-    Config, EngineAction, EngineEvent, EntryId, PlayerId, PlayerRoutes, Route, SourceRequest,
-    TransitionPlan, Tuning,
+    CartwallRoutes, Config, EngineAction, EngineEvent, EntryId, PlayerId, PlayerRoutes, Route,
+    SourceRequest, TransitionPlan, Tuning,
 };
 
 use crate::atomic::AtomicF32;
@@ -22,6 +22,9 @@ use crate::ramp::Curve;
 use crate::source::{SourceShared, source_pair};
 use crate::worker::{PlayerWorker, SourceKey, SourceOpener, WorkerFailure};
 
+mod carts;
+pub use carts::{CartTelemetry, CartwallTelemetry};
+
 /// Stream settings and tuning, derived from the model `Config`.
 #[derive(Debug, Clone)]
 pub struct EngineSettings {
@@ -30,6 +33,7 @@ pub struct EngineSettings {
     pub channels: u16,
     pub tuning: Tuning,
     pub routes: Vec<PlayerRoutes>,
+    pub cartwall_routes: CartwallRoutes,
     /// Backend used when a player has no explicit route (`None`: the first registered).
     pub default_backend: Option<String>,
 }
@@ -42,6 +46,7 @@ impl EngineSettings {
             channels: 2,
             tuning: config.tuning.clone(),
             routes: config.outputs.routes.clone(),
+            cartwall_routes: config.outputs.cartwall.clone(),
             default_backend: config.outputs.backend.clone(),
         }
     }
@@ -150,6 +155,8 @@ pub struct Engine {
     slot_exhaustions: u64,
     /// Test tones playing, by (bus, slot); released when they finish.
     tones: Vec<(BusKey, usize)>,
+    /// Created on the first cart action.
+    cartwall: Option<carts::CartwallRuntime>,
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -185,6 +192,7 @@ impl Engine {
             dropped_commands: 0,
             slot_exhaustions: 0,
             tones: Vec::new(),
+            cartwall: None,
         }
     }
 
@@ -214,7 +222,8 @@ impl Engine {
                     .count();
                 waiting + preload
             })
-            .sum()
+            .sum::<usize>()
+            + self.unsettled_carts()
     }
 
     /// Mixer slots in use across all buses (a leak shows up here).
@@ -398,6 +407,28 @@ impl Engine {
         }
     }
 
+    /// Where a Cue route really goes. Unlike Main, a Cue never falls back to
+    /// the default output (that is where Main plays): a route to a backend
+    /// this machine does not have, or one identical to Main, means no cue.
+    fn cue_target(&self, route: &Route, main: &(BusKey, u16)) -> Option<(BusKey, u16)> {
+        let Some(backend) = self.find_backend(&route.backend) else {
+            tracing::warn!(backend = %route.backend, "cue route to an unavailable backend; no cue");
+            return None;
+        };
+        let target = (
+            BusKey {
+                backend: backend.id().0,
+                device: route.device.clone(),
+            },
+            route.first_channel,
+        );
+        if &target == main {
+            tracing::warn!("cue route equals the main route; no cue");
+            return None;
+        }
+        Some(target)
+    }
+
     /// Resolves the (bus, first channel) of a player's Main and Cue outputs.
     fn resolve_routes(&self, player: PlayerId) -> ((BusKey, u16), Option<(BusKey, u16)>) {
         let routes = self.settings.routes.iter().find(|r| r.player == player);
@@ -407,7 +438,7 @@ impl Engine {
         };
         let cue = routes
             .and_then(|r| r.cue.as_ref())
-            .map(|route| self.route_target(route));
+            .and_then(|route| self.cue_target(route, &main));
         (main, cue)
     }
 
@@ -420,6 +451,8 @@ impl Engine {
             .routes
             .iter()
             .flat_map(|r| r.main.iter().chain(r.cue.iter()))
+            .chain(self.settings.cartwall_routes.main.iter())
+            .chain(self.settings.cartwall_routes.cue.iter())
             .map(|route| self.route_target(route))
             .filter(|(k, _)| k == key)
             .map(|(_, first)| first.saturating_add(2))
@@ -468,7 +501,9 @@ impl Engine {
             .values()
             .filter(|p| p.cue.as_ref().is_some_and(|c| &c.0 == key))
             .count();
-        let wanted = ((mains * 5 + cues * 2 + 2) as f64 * self.settings.tuning.mixer_headroom)
+        let carts = self.cart_sources_on(key);
+        let wanted = ((mains * 5 + cues * 2 + carts + 2) as f64
+            * self.settings.tuning.mixer_headroom)
             .ceil() as usize;
         if let Some(bus) = self.buses.get_mut(key) {
             bus.ensure_capacity(wanted.max(8));
@@ -478,14 +513,10 @@ impl Engine {
     /// Executes one action at time `now`.
     pub fn execute(&mut self, action: EngineAction, now: Instant) {
         match action {
-            // The cartwall is wired to the engine in Phase 2 plan 2; until
-            // then no UI fires carts.
-            EngineAction::StartCart(_)
-            | EngineAction::StopCart { .. }
-            | EngineAction::StartCartCue(_)
-            | EngineAction::StopCartCue => {
-                tracing::debug!(?action, "cartwall action ignored: not wired yet");
-            }
+            EngineAction::StartCart(request) => self.start_cart(&request, now),
+            EngineAction::StopCart { cart } => self.stop_cart(cart),
+            EngineAction::StartCartCue(request) => self.start_cart_cue(&request, now),
+            EngineAction::StopCartCue => self.stop_cart_cue(),
             EngineAction::AddPlayer { player } => self.add_player(player, now),
             EngineAction::RemovePlayer { player } => self.remove_player(player),
             EngineAction::Preload { player, request } => self.preload(player, request),
@@ -1091,6 +1122,9 @@ impl Engine {
     fn handle_failures(&mut self) {
         let failures: Vec<WorkerFailure> = self.failures_rx.try_iter().collect();
         for failure in failures {
+            if self.cart_failure(&failure) {
+                continue;
+            }
             let Some(player) = self.owners.get(&failure.key).copied() else {
                 continue;
             };
@@ -1153,6 +1187,9 @@ impl Engine {
         {
             let (bus, slot) = self.tones.remove(i);
             self.send(&bus, BusCommand::Detach { slot });
+            return;
+        }
+        if self.cart_bus_event(bus, &event) {
             return;
         }
         match event {
@@ -1294,6 +1331,7 @@ impl Engine {
     }
 
     fn start_ready_sources(&mut self) {
+        self.start_ready_carts();
         let declick = u32::try_from(self.settings.frames(self.settings.tuning.declick_ms))
             .unwrap_or(u32::MAX);
         let mut starts: Vec<(BusKey, usize, bool)> = Vec::new();

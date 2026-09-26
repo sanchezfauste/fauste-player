@@ -105,18 +105,28 @@ refused if it would drop carts that have a file (`ModelError::CartsWouldBeLost`)
   worker, decodes every cart source. Carts are sources in the mixer like any
   other, so there is no new real-time code.
 - **Routes:** `config.outputs.cartwall: { main: Option<Route>, cue: Option<Route> }`.
-  Main falls back to the default output, as for players. Mixer capacity is
-  derived from the largest page × `mixer_headroom`.
-- **Start:** the source is opened at cue-in and started as soon as it is ready.
-  For a cart that is not looped, the engine sends `StopAt` at
-  `start_frame + (until − cue_in) × rate` when `Started` arrives.
-- **Loop:** the worker seeks back to cue-in whenever the decoded position
-  reaches `until` (cue-out). Frames past cue-out are never pushed, so the
-  loop is gapless and sample-accurate.
-- **Stop:** a de-click ramp, then `Detach`. The slot is released when the
-  mixer returns it.
+  - Main falls back to the default output, as for players.
+  - A Cue never falls back: a Cue route to a backend this machine does not
+    have, or one equal to Main, means no cue. This rule applies to player Cue
+    routes too.
+  - Mixer capacity grows with the slots in use on the bus, and before every
+    fire.
+- **Start and end:** the source is opened at cue-in and started as soon as it
+  is ready. The worker bounds it at `until` (cue-out), so a cart that is not
+  looped ends exactly there (`Finished` becomes `CartEnded`); no `StopAt` is
+  needed.
+- **Loop:** at `until` (or at the end of the file when the length is unknown)
+  the worker reopens the file at cue-in and keeps filling the same ring. A
+  resampled stream is opened with an aligned pre-roll whose warm-up output is
+  dropped. The first sample therefore matches continuous playback, at every
+  cue-in and at every loop point.
+- **Stop:** a de-click ramp (also for a start that is requested but not yet
+  confirmed), then `Detach`. The slot is released when the mixer returns it.
 - **Telemetry:** `Telemetry.carts: Vec<(CartId, CartTelemetry { position_secs, peak })>`
-  for the countdown and the progress bar.
+  and `cart_cue`. A looped cart's position wraps on the pass length the
+  worker measured.
+- **Known limit:** a marker change on a cart's track applies from the next
+  fire.
 
 ## P2.5 Keyboard shortcuts
 

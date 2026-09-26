@@ -134,6 +134,18 @@ pub struct OutputsConfig {
     pub sample_rate: u32,
     pub buffer_frames: u32,
     pub routes: Vec<PlayerRoutes>,
+    /// Where the cartwall plays (Phase 2 spec P2.4).
+    #[serde(default)]
+    pub cartwall: CartwallRoutes,
+}
+
+/// The cartwall's outputs. Main falls back to the default output; without
+/// a Cue route carts cannot be pre-listened.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CartwallRoutes {
+    pub main: Option<Route>,
+    pub cue: Option<Route>,
 }
 
 impl Default for OutputsConfig {
@@ -143,6 +155,7 @@ impl Default for OutputsConfig {
             sample_rate: 48_000,
             buffer_frames: 512,
             routes: Vec::new(),
+            cartwall: CartwallRoutes::default(),
         }
     }
 }

@@ -384,3 +384,20 @@ fn test_tones_that_do_not_fit_the_command_queue_release_their_slots() {
     assert_eq!(r.engine.active_tones(), 0);
     assert_eq!(r.engine.used_slots(), 0, "no slot is left behind");
 }
+
+#[test]
+fn a_player_cue_route_to_a_missing_backend_never_plays_on_main() {
+    let foreign = Route {
+        backend: "elsewhere".into(),
+        device: "card".into(),
+        first_channel: 0,
+    };
+    let mut r = rig(2, Some(route("card", 0)), Some(foreign), 48_000);
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: track(3),
+    });
+    r.run(5);
+    assert!(r.events.contains(&EngineEvent::CueEnded { player: P }));
+    assert!(r.channel(0).iter().all(|v| *v == 0.0));
+}

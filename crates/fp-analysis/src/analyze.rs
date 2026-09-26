@@ -7,7 +7,7 @@ use fp_model::{AnalysisSettings, Limits, TrackAnalysis};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::metadata::{read_tags, thumbnail_png, title_from_file_name};
+use crate::metadata::{read_intro, read_tags, thumbnail_png, title_from_file_name};
 use crate::signal::{EnvelopeBuilder, detect_markers};
 
 /// Everything analysis produces for one file.
@@ -101,8 +101,10 @@ pub fn analyze_file_cancellable(
             cue_out: Some(markers.cue_out),
             segue_start: markers.segue_start,
             outro_start: markers.outro_start,
-            // The INTRO tag is read from Phase 2 plan 2.
-            intro_end: None,
+            intro_end: read_intro(path).map(|secs| {
+                secs.max(markers.cue_in)
+                    .min(markers.cue_out.max(markers.cue_in))
+            }),
         },
         peak_bucket_secs: envelope.bucket_secs,
         peaks: envelope.peaks,

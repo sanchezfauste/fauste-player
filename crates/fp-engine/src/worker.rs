@@ -13,7 +13,7 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 
 use crate::decode::FileDecoder;
-use crate::resample::StreamResampler;
+use crate::resample::{StreamResampler, aligned_preroll};
 use crate::source::SourceProducer;
 
 /// Produces interleaved stereo at the bus rate.
@@ -30,17 +30,38 @@ pub type SourceOpener =
 pub fn file_opener() -> SourceOpener {
     Arc::new(|path, from_secs, bus_rate| {
         let mut decoder = FileDecoder::open(path)?;
-        decoder.seek(from_secs)?;
-        let resampler = if decoder.sample_rate() == bus_rate {
-            None
-        } else {
-            Some(StreamResampler::new(decoder.sample_rate(), bus_rate)?)
-        };
+        let file_rate = decoder.sample_rate();
+        if file_rate == bus_rate {
+            decoder.seek(from_secs)?;
+            return Ok(Box::new(FileSource {
+                decoder,
+                resampler: None,
+                block: Vec::new(),
+                finished: false,
+                skip_frames: 0,
+            }));
+        }
+        let resampler = StreamResampler::new(file_rate, bus_rate)?;
+        // Start a little earlier and drop the warm-up, so the first frame is
+        // what continuous playback would give at `from_secs`.
+        let available = (from_secs.max(0.0) * f64::from(file_rate)).floor() as usize;
+        let (mut pre_in, mut pre_out) =
+            aligned_preroll(file_rate, bus_rate, resampler.warmup_input_frames());
+        if pre_in > available {
+            // Not enough audio before the start: use the largest aligned
+            // pre-roll that fits (possibly none, at the very start).
+            let (step_in, step_out) = aligned_preroll(file_rate, bus_rate, 1);
+            let steps = available / step_in.max(1);
+            pre_in = steps * step_in;
+            pre_out = steps * step_out;
+        }
+        decoder.seek(from_secs - pre_in as f64 / f64::from(file_rate))?;
         Ok(Box::new(FileSource {
             decoder,
-            resampler,
+            resampler: Some(resampler),
             block: Vec::new(),
             finished: false,
+            skip_frames: pre_out,
         }))
     })
 }
@@ -50,6 +71,8 @@ struct FileSource {
     resampler: Option<StreamResampler>,
     block: Vec<f32>,
     finished: bool,
+    /// Output frames of pre-roll still to drop.
+    skip_frames: usize,
 }
 
 impl SampleSource for FileSource {
@@ -61,11 +84,18 @@ impl SampleSource for FileSource {
             return self.decoder.next_block(out);
         };
         self.block.clear();
+        let start = out.len();
         if self.decoder.next_block(&mut self.block)? {
             resampler.push(&self.block, out)?;
         } else {
             resampler.finish(out)?;
             self.finished = true;
+        }
+        if self.skip_frames > 0 {
+            let produced = (out.len() - start) / 2;
+            let drop = self.skip_frames.min(produced);
+            out.drain(start..start + drop * 2);
+            self.skip_frames -= drop;
         }
         Ok(true)
     }
@@ -75,12 +105,22 @@ impl SampleSource for FileSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SourceKey(pub u64);
 
+/// How a source is bounded (Phase 2 spec P2.4).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct LoadOptions {
+    /// The source ends here (seconds in the file); `None` is the end of the file.
+    pub until_secs: Option<f64>,
+    /// At the end, start again at `from_secs` in the same ring, without a gap.
+    pub looped: bool,
+}
+
 pub enum WorkerCommand {
     Load {
         key: SourceKey,
         path: PathBuf,
         from_secs: f64,
         producer: SourceProducer,
+        options: LoadOptions,
     },
     Drop {
         key: SourceKey,
@@ -102,6 +142,11 @@ struct Job {
     source: Option<Box<dyn SampleSource>>,
     pending: Vec<f32>,
     done: bool,
+    /// Frames per pass when bounded by `until`.
+    limit_frames: Option<u64>,
+    looped: bool,
+    /// Frames taken from the source in the current pass.
+    pass_frames: u64,
 }
 
 /// Handle to a running worker thread; dropping it stops the thread.
@@ -131,11 +176,23 @@ impl PlayerWorker {
     }
 
     pub fn load(&self, key: SourceKey, path: PathBuf, from_secs: f64, producer: SourceProducer) {
+        self.load_with(key, path, from_secs, producer, LoadOptions::default());
+    }
+
+    pub fn load_with(
+        &self,
+        key: SourceKey,
+        path: PathBuf,
+        from_secs: f64,
+        producer: SourceProducer,
+        options: LoadOptions,
+    ) {
         let _ = self.commands.send(WorkerCommand::Load {
             key,
             path,
             from_secs,
             producer,
+            options,
         });
     }
 
@@ -186,8 +243,13 @@ fn run(
                     path,
                     from_secs,
                     producer,
+                    options,
                 } => {
                     jobs.retain(|j| j.key != key);
+                    let limit_frames = options
+                        .until_secs
+                        .filter(|u| u.is_finite())
+                        .map(|u| ((u - from_secs).max(0.0) * f64::from(bus_rate)).round() as u64);
                     jobs.push(Job {
                         key,
                         path,
@@ -196,6 +258,9 @@ fn run(
                         source: None,
                         pending: Vec::new(),
                         done: false,
+                        limit_frames,
+                        looped: options.looped,
+                        pass_frames: 0,
                     });
                 }
                 WorkerCommand::Drop { key } => jobs.retain(|j| j.key != key),
@@ -230,6 +295,13 @@ fn run(
     }
 }
 
+fn finish(job: &mut Job) -> Result<(), String> {
+    job.done = true;
+    job.producer.shared.eof.store(true, Ordering::Release);
+    job.producer.shared.ready.store(true, Ordering::Release);
+    Ok(())
+}
+
 /// Opens the job if needed and moves at most one decoded block into its ring.
 fn step(
     job: &mut Job,
@@ -237,19 +309,41 @@ fn step(
     bus_rate: u32,
     ready_frames: usize,
 ) -> Result<(), String> {
+    if job.limit_frames == Some(0) {
+        return finish(job);
+    }
     if job.source.is_none() {
         job.source = Some(opener(&job.path, job.from_secs, bus_rate)?);
     }
     if job.pending.is_empty() {
-        let more = match job.source.as_mut() {
-            Some(source) => source.next_block(&mut job.pending)?,
-            None => false,
-        };
-        if !more && job.pending.is_empty() {
-            job.done = true;
-            job.producer.shared.eof.store(true, Ordering::Release);
-            job.producer.shared.ready.store(true, Ordering::Release);
-            return Ok(());
+        let at_limit = job.limit_frames.is_some_and(|l| job.pass_frames >= l);
+        let more = !at_limit
+            && match job.source.as_mut() {
+                Some(source) => source.next_block(&mut job.pending)?,
+                None => false,
+            };
+        if let Some(limit) = job.limit_frames {
+            // Cut what goes past `until`.
+            let room = limit.saturating_sub(job.pass_frames);
+            let frames = (job.pending.len() / 2) as u64;
+            if frames > room {
+                job.pending
+                    .truncate(usize::try_from(room).unwrap_or(usize::MAX) * 2);
+            }
+        }
+        job.pass_frames += (job.pending.len() / 2) as u64;
+        if job.pending.is_empty() && (at_limit || !more) {
+            // End of a pass: loop (unless the pass was empty), or finish.
+            if job.looped && job.pass_frames > 0 {
+                job.producer
+                    .shared
+                    .loop_frames
+                    .store(job.pass_frames, Ordering::Release);
+                job.source = Some(opener(&job.path, job.from_secs, bus_rate)?);
+                job.pass_frames = 0;
+                return Ok(());
+            }
+            return finish(job);
         }
     }
     let pushed = job.producer.push(&job.pending);

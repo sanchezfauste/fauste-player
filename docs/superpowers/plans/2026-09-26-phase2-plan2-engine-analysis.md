@@ -82,6 +82,8 @@ Also, read the `INTRO` tag during analysis.
   - `cart_positions_are_reported`.
 - **Conductor:** an end-to-end test through the model, `firing_an_exclusive_cart_stops_the_others_on_air`.
 
+- **Known limit (Phase 2 plan 1 review, M3):** a marker change on a cart's track applies from the next fire. The running cart keeps the `until` it started with. This is documented; it is not changed live.
+
 ### Task 4: INTRO tag
 
 - `metadata.rs` reads an intro time from:
