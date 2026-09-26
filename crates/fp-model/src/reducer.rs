@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use crate::cart_rules;
 use crate::command::{
     Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
 };
@@ -120,6 +121,24 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             config.players.count = state.config.players.count;
             state.config = config;
         }
+        Command::FireCart(cart) => cart_rules::fire(state, cart, &mut out)?,
+        Command::StopCart(cart) => cart_rules::stop(state, cart, &mut out)?,
+        Command::StopAllCarts => cart_rules::stop_all(state, &mut out),
+        Command::CueCart(cart) => cart_rules::cue(state, cart, &mut out)?,
+        Command::CreateCartPage { name } => cart_rules::create_page(state, name),
+        Command::RenameCartPage { page, name } => cart_rules::rename_page(state, page, name)?,
+        Command::DeleteCartPage(page) => cart_rules::delete_page(state, page, &mut out)?,
+        Command::ResizeCartPage { page, rows, cols } => {
+            cart_rules::resize_page(state, page, rows, cols)?
+        }
+        Command::SetCart { page, index, edit } => cart_rules::set_cart(state, page, index, edit)?,
+        Command::AssignCartFile { page, index, path } => {
+            cart_rules::assign_file(state, page, index, Some(path), &mut out)?
+        }
+        Command::ClearCartFile { page, index } => {
+            cart_rules::assign_file(state, page, index, None, &mut out)?
+        }
+        Command::ImportCartPage(import) => cart_rules::import_page(state, *import)?,
     }
     fill_empty_next(state);
     avoid_next_on_air(state);
@@ -169,6 +188,9 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
         EngineEvent::SourceFailed { player, entry } => {
             source_failed(state, player, entry, &mut out)
         }
+        EngineEvent::CartEnded { cart } => cart_rules::ended(state, cart),
+        EngineEvent::CartFailed { cart } => cart_rules::failed(state, cart),
+        EngineEvent::CartCueEnded => cart_rules::cue_ended(state),
         EngineEvent::CueEnded { player } => {
             if let Ok(i) = state.player_index(player) {
                 state.players[i].cue = None;
@@ -452,13 +474,9 @@ fn detach_entries(
     }
 }
 
-/// Drops library tracks that no playlist entry references any more.
+/// Drops library tracks that no playlist entry or cart references any more.
 fn forget_unreferenced(state: &mut AppState, tracks: impl IntoIterator<Item = TrackId>) {
-    for track in tracks {
-        if !state.playlists.references_track(track) {
-            state.library.remove(track);
-        }
-    }
+    cart_rules::forget_tracks(state, tracks);
 }
 
 fn remove_entry(

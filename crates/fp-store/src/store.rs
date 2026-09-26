@@ -113,6 +113,7 @@ impl Store {
                 config,
                 library,
                 playlists,
+                cart_pages: Vec::new(),
                 ids,
             },
             &sessions,

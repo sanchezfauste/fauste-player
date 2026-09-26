@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::cartwall::{CartPage, Cartwall};
 use crate::command::EngineAction;
 use crate::config::Config;
 use crate::ids::{EntryId, IdGen, PlayerId, PlaylistId};
@@ -43,6 +44,8 @@ pub struct RestoreParts {
     pub config: Config,
     pub library: Library,
     pub playlists: Playlists,
+    /// Cart pages (their carts reference `library` tracks).
+    pub cart_pages: Vec<CartPage>,
     pub ids: IdGen,
 }
 
@@ -80,10 +83,30 @@ impl AppState {
             config,
             library,
             mut playlists,
+            cart_pages,
             mut ids,
         } = parts;
         ids.observe(library.max_raw_id());
         ids.observe(playlists.max_raw_id());
+        let mut cartwall = Cartwall {
+            pages: cart_pages,
+            ..Cartwall::default()
+        };
+        ids.observe(cartwall.max_raw_id());
+        // Carts pointing at tracks the library no longer has become empty.
+        for cart in cartwall.pages.iter_mut().flat_map(|p| p.carts.iter_mut()) {
+            if cart.track.is_some_and(|t| library.get(t).is_none()) {
+                cart.track = None;
+            }
+        }
+        if cartwall.pages.is_empty() {
+            cartwall.pages.push(CartPage::new(
+                &mut ids,
+                "",
+                config.cartwall.default_rows,
+                config.cartwall.default_cols,
+            ));
+        }
         for s in sessions {
             ids.observe(s.id.0);
         }
@@ -95,6 +118,7 @@ impl AppState {
             library,
             playlists,
             players: Vec::new(),
+            cartwall,
             ids,
         };
         let mut out = Vec::new();

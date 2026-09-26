@@ -20,6 +20,25 @@ pub struct Config {
     pub ui: UiConfig,
     pub limits: Limits,
     pub tuning: Tuning,
+    pub cartwall: CartwallConfig,
+}
+
+/// Cartwall defaults (Phase 2 spec P2.3).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CartwallConfig {
+    /// Grid of a new cart page.
+    pub default_rows: u16,
+    pub default_cols: u16,
+}
+
+impl Default for CartwallConfig {
+    fn default() -> Self {
+        Self {
+            default_rows: 2,
+            default_cols: 8,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,6 +163,9 @@ pub struct Limits {
     /// Crash reports written per run (a contained, repeating panic is logged
     /// but does not fill the disk).
     pub max_crash_reports: usize,
+    /// Largest cart page grid.
+    pub max_cart_rows: u16,
+    pub max_cart_cols: u16,
 }
 
 impl Default for Limits {
@@ -156,6 +178,8 @@ impl Default for Limits {
             max_playlist_file_bytes: 10 * MIB,
             backup_count: 3,
             max_crash_reports: 20,
+            max_cart_rows: 8,
+            max_cart_cols: 16,
         }
     }
 }
@@ -277,6 +301,25 @@ impl Config {
             1,
             10_000,
             "limits.max_crash_reports",
+            &mut w,
+        );
+
+        clamp_to(&mut l.max_cart_rows, 1, 64, "limits.max_cart_rows", &mut w);
+        clamp_to(&mut l.max_cart_cols, 1, 64, "limits.max_cart_cols", &mut w);
+        let (max_rows, max_cols) = (l.max_cart_rows, l.max_cart_cols);
+        let c = &mut self.cartwall;
+        clamp_to(
+            &mut c.default_rows,
+            1,
+            max_rows,
+            "cartwall.default_rows",
+            &mut w,
+        );
+        clamp_to(
+            &mut c.default_cols,
+            1,
+            max_cols,
+            "cartwall.default_cols",
             &mut w,
         );
 

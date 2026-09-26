@@ -478,6 +478,14 @@ impl Engine {
     /// Executes one action at time `now`.
     pub fn execute(&mut self, action: EngineAction, now: Instant) {
         match action {
+            // The cartwall is wired to the engine in Phase 2 plan 2; until
+            // then no UI fires carts.
+            EngineAction::StartCart(_)
+            | EngineAction::StopCart { .. }
+            | EngineAction::StartCartCue(_)
+            | EngineAction::StopCartCue => {
+                tracing::debug!(?action, "cartwall action ignored: not wired yet");
+            }
             EngineAction::AddPlayer { player } => self.add_player(player, now),
             EngineAction::RemovePlayer { player } => self.remove_player(player),
             EngineAction::Preload { player, request } => self.preload(player, request),

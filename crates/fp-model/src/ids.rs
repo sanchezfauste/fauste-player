@@ -30,6 +30,15 @@ id_type!(
     TrackId
 );
 
+id_type!(
+    /// Identifies a cart page (one tab of the cartwall).
+    CartPageId
+);
+id_type!(
+    /// Identifies a cart (one button of the cartwall), stable across edits.
+    CartId
+);
+
 /// Monotonic id generator shared by every id kind, so ids never collide
 /// even across kinds. It is persisted with the playlists.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,6 +72,14 @@ impl IdGen {
 
     pub fn track(&mut self) -> TrackId {
         TrackId(self.next_raw())
+    }
+
+    pub fn cart_page(&mut self) -> CartPageId {
+        CartPageId(self.next_raw())
+    }
+
+    pub fn cart(&mut self) -> CartId {
+        CartId(self.next_raw())
     }
 }
 

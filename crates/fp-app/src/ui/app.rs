@@ -481,7 +481,13 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
         ModelError::PlayerBusy(_) => i18n.tr("error-player-busy"),
         ModelError::UnknownPlayer(_)
         | ModelError::UnknownPlaylist(_)
-        | ModelError::UnknownEntry(_) => i18n.tr("error-not-found"),
+        | ModelError::UnknownEntry(_)
+        | ModelError::UnknownCart(_)
+        | ModelError::UnknownCartPage(_)
+        | ModelError::UnknownCartPosition(_) => i18n.tr("error-not-found"),
+        ModelError::LastCartPage => i18n.tr("error-last-cart-page"),
+        ModelError::CartsWouldBeLost => i18n.tr("error-carts-would-be-lost"),
+        ModelError::CartGridOutOfRange => i18n.tr("error-cart-grid"),
         ModelError::NoPlaylists => i18n.tr("error-no-playlists"),
     }
 }

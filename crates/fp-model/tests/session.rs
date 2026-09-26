@@ -14,6 +14,7 @@ fn parts(state: &AppState) -> RestoreParts {
         config: state.config.clone(),
         library: state.library.clone(),
         playlists: state.playlists.clone(),
+        cart_pages: state.cartwall.pages.clone(),
         ids: state.ids.clone(),
     }
 }
@@ -86,6 +87,7 @@ fn restoring_with_no_playlists_creates_a_default_one_and_moves_ids_forward() {
         config: Config::default(),
         library: Library::default(),
         playlists: Playlists::default(),
+        cart_pages: Vec::new(),
         ids: IdGen::default(),
     };
     let duplicate = PlayerSession {

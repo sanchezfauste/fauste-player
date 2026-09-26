@@ -134,3 +134,6 @@ error-no-playlists = There are no playlists.
 placeholder-none = —
 volume-silent = -∞ dB
 unit-hz = { $value } Hz
+error-last-cart-page = The last cart page cannot be deleted.
+error-carts-would-be-lost = The smaller grid would drop carts that have a file. Clear them first.
+error-cart-grid = That grid size is outside the allowed range.

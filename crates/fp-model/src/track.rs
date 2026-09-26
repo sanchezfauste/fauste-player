@@ -189,7 +189,7 @@ impl Track {
 
 /// What analysis learned about a file (spec §6). Metadata fields are
 /// `None` when the file did not provide them.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct TrackAnalysis {
     pub title: Option<String>,
     pub artist: Option<String>,

@@ -2,8 +2,9 @@
 
 use std::path::PathBuf;
 
+use crate::cartwall::{CartEdit, CartPageImport};
 use crate::config::Config;
-use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
+use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{ColumnWidths, PlayMode};
 use crate::track::{FileState, TrackAnalysis};
 
@@ -57,6 +58,43 @@ pub enum Command {
     /// Replaces the configuration (already validated by the caller); the
     /// player count is kept, use `SetPlayerCount` to change it.
     UpdateConfig(Box<Config>),
+    /// Fires a cart, or stops it if it is playing (rules C1–C3, C6).
+    FireCart(CartId),
+    StopCart(CartId),
+    /// Stops every playing cart and the cart cue (C10).
+    StopAllCarts,
+    /// Pre-listens a cart on the cartwall Cue route, or stops it (C9).
+    CueCart(CartId),
+    CreateCartPage {
+        name: String,
+    },
+    RenameCartPage {
+        page: CartPageId,
+        name: String,
+    },
+    DeleteCartPage(CartPageId),
+    /// Changes a page's grid; carts keep their row-major position.
+    ResizeCartPage {
+        page: CartPageId,
+        rows: u16,
+        cols: u16,
+    },
+    SetCart {
+        page: CartPageId,
+        index: usize,
+        edit: CartEdit,
+    },
+    /// Gives a cart a file (a new library track). Stops it if playing (C8).
+    AssignCartFile {
+        page: CartPageId,
+        index: usize,
+        path: PathBuf,
+    },
+    ClearCartFile {
+        page: CartPageId,
+        index: usize,
+    },
+    ImportCartPage(Box<CartPageImport>),
 }
 
 /// Something the audio engine observed.
@@ -74,6 +112,12 @@ pub enum EngineEvent {
     SourceFailed { player: PlayerId, entry: EntryId },
     /// The cue source reached its end.
     CueEnded { player: PlayerId },
+    /// A cart that is not looped reached its cue-out (C5).
+    CartEnded { cart: CartId },
+    /// A cart's file could not be decoded or read.
+    CartFailed { cart: CartId },
+    /// The cart pre-listen reached its end.
+    CartCueEnded,
 }
 
 /// Everything the engine needs to open and position one source.
@@ -169,4 +213,25 @@ pub enum EngineAction {
         player: PlayerId,
         request: SourceRequest,
     },
+    /// Play a cart on the cartwall Main route.
+    StartCart(CartRequest),
+    StopCart {
+        cart: CartId,
+    },
+    /// Pre-listen a cart on the cartwall Cue route.
+    StartCartCue(CartRequest),
+    StopCartCue,
+}
+
+/// Everything the engine needs to play one cart.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CartRequest {
+    pub cart: CartId,
+    pub track: TrackId,
+    pub path: PathBuf,
+    /// Cue-in.
+    pub from_secs: f64,
+    /// Cue-out, or `SOURCE_END` while the length is unknown.
+    pub until_secs: f64,
+    pub looped: bool,
 }

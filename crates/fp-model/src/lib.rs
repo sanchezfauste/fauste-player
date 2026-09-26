@@ -2,6 +2,8 @@
 //! and the pure state machine that implements the player behaviour rules.
 //! This crate performs no I/O and spawns no threads.
 
+mod cart_rules;
+pub mod cartwall;
 pub mod command;
 pub mod config;
 pub mod error;
@@ -13,13 +15,16 @@ pub mod session;
 pub mod state;
 pub mod track;
 
-pub use command::{Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan};
+pub use cartwall::{Cart, CartEdit, CartKind, CartPage, CartPageImport, Cartwall, PlayingCart};
+pub use command::{
+    CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
+};
 pub use config::{
-    AnalysisSettings, Config, ConfigWarning, Limits, OutputsConfig, PlayerRoutes, PlayersConfig,
-    Route, Tuning, UiConfig,
+    AnalysisSettings, CartwallConfig, Config, ConfigWarning, Limits, OutputsConfig, PlayerRoutes,
+    PlayersConfig, Route, Tuning, UiConfig,
 };
 pub use error::ModelError;
-pub use ids::{EntryId, IdGen, PlayerId, PlaylistId, TrackId};
+pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
 pub use player::{ColumnWidths, CueState, PlayMode, PlayerState, Transport};
 pub use playlist::{Playlist, PlaylistEntry, Playlists};
 pub use reducer::{apply, on_event, plan_for};

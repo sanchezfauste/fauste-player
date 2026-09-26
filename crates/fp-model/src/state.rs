@@ -1,3 +1,4 @@
+use crate::cartwall::{CartPage, Cartwall};
 use crate::command::SourceRequest;
 use crate::config::Config;
 use crate::error::ModelError;
@@ -14,6 +15,7 @@ pub struct AppState {
     pub playlists: Playlists,
     /// Players in display order.
     pub players: Vec<PlayerState>,
+    pub cartwall: Cartwall,
     pub ids: IdGen,
 }
 
@@ -28,11 +30,21 @@ impl AppState {
         let players = (0..config.players.count)
             .map(|_| PlayerState::new(ids.player(), first, mode))
             .collect();
+        let page = CartPage::new(
+            &mut ids,
+            "",
+            config.cartwall.default_rows,
+            config.cartwall.default_cols,
+        );
         Self {
             config,
             library: Library::default(),
             playlists,
             players,
+            cartwall: Cartwall {
+                pages: vec![page],
+                ..Cartwall::default()
+            },
             ids,
         }
     }

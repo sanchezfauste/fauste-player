@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::ids::{EntryId, PlayerId, PlaylistId};
+use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId};
 
 /// Why a command was refused. A refused command never changes the state.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -27,4 +27,16 @@ pub enum ModelError {
     PlayerCountOutOfRange { requested: usize, max: usize },
     #[error("player {0:?} is busy and cannot be removed")]
     PlayerBusy(PlayerId),
+    #[error("unknown cart {0:?}")]
+    UnknownCart(CartId),
+    #[error("unknown cart page {0:?}")]
+    UnknownCartPage(CartPageId),
+    #[error("unknown cart position {0} on the page")]
+    UnknownCartPosition(usize),
+    #[error("the last cart page cannot be deleted")]
+    LastCartPage,
+    #[error("the new grid would drop carts that have a file")]
+    CartsWouldBeLost,
+    #[error("the cart grid is outside the configured limits")]
+    CartGridOutOfRange,
 }
