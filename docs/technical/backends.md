@@ -18,6 +18,25 @@ The engine only knows this trait. A `Renderer` is called on the device's
 real-time thread with an interleaved `f32` buffer. Stream errors are reported
 through an RT-safe sink: it sets atomics, which the bus watchdog reads.
 
+**Exclusive access (Phase 4):**
+- `StreamConfig::exclusive` asks for sole, unconverted access. A backend that
+  cannot give it for the device returns `BackendError::Unsupported`.
+- `DeviceInfo::exclusive_capable` says which devices can give it, and
+  `rate_switching` says which can be reopened at another rate.
+- `OutputStream::sample_format()` gives the format the device really runs in
+  (`F32`, `I32`, `I16`).
+- `SampleFormat::holds_bits` says whether integer PCM of a given size passes
+  unchanged: F32 up to 24 bits, I32 up to 32, I16 up to 16.
+- The f32 → I16 and f32 → I32 conversions are exact for integer PCM (they
+  scale by powers of two), and tests pin that.
+
+**Exclusive-capable devices:**
+- On cpal, only ALSA `hw:` devices are exclusive-capable
+  (`exclusive_capable(host, id)`). They are the hardware itself.
+- Offline devices can be marked capable (`set_exclusive_capable`) or made to
+  refuse a rate (`refuse_rate`), for tests.
+- Null accepts `exclusive` and ignores it, since it is the last resort.
+
 ## Implemented
 
 | Backend | Id | Platforms | Build |
@@ -92,9 +111,9 @@ release.
 
 ## Not provided
 
-- **WASAPI exclusive and Core Audio hog mode** belong to Phase 4
-  (bit-perfect). Exclusive access only matters there, and both need
-  platform APIs beyond cpal.
+- **WASAPI exclusive and Core Audio hog mode** are Phase 4 plan 2. cpal does
+  not offer them. They will come through the `wasapi` crate and through
+  coreaudio-rs's safe helpers, so `forbid(unsafe_code)` holds.
 - **DirectSound** is not supported: it is deprecated and WASAPI supersedes
   it.
 

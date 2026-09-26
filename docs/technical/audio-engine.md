@@ -40,6 +40,12 @@ block it:
 A slot whose channel pair does not fit the device is consumed silently and
 counted (`misrouted`), so it can never leak onto other channels.
 
+After each block the mixer sets `SourceShared::unaltered` for every slot:
+every gain it got in the block was exactly 1.0, and no other slot wrote a
+non-zero sample into an overlapping channel pair. In `f32`, `x * 1.0` and
+`x + 0.0` are exact, so such a source reached the output bit for bit with no
+special path. The check compares slots pairwise and allocates nothing.
+
 ## Buses and device loss
 
 A `Bus` (`bus.rs`) is one open device, keyed by `(backend, device)`, with one
@@ -49,6 +55,37 @@ error, or no heartbeat for `tuning.watchdog_timeout_ms` (500 ms; startup grace
 thread then renders the same mixer into a discard buffer at real-time pace,
 so countdowns, segues and chaining continue. The device is reopened every
 `tuning.reconnect_interval_ms` (2 s) and takes the mixer back when it opens.
+
+### Rates and bit-perfect buses
+
+- **Each bus has its own rate.** It starts at `outputs.sample_rate`. Every
+  seconds↔frames conversion for a source uses the rate of that source's bus:
+  fades, declicks, pause ramps, planned transitions, positions, cart loop
+  points and test tones (`Engine::rate_of`, `frames_on`). Workers open each
+  source at the rate the engine passes in `LoadOptions::rate`.
+- **Bit-perfect buses** are named in `outputs.bit_perfect` and opened with
+  `StreamConfig::exclusive`. If exclusive access is refused (`Unsupported`),
+  the bus reopens shared and `exclusive_granted` stays false.
+- **The rate follows the file.** Before a source attaches to a bit-perfect
+  bus (`follow_file_rate`), the bus is reopened at the file's rate
+  (`Bus::reopen_at`) if its format is known (`SourceRequest::format`, from
+  analysis) and the bus has no used slots. The mixer, its frame counter and
+  its slots survive; only the stream is replaced. A refused rate restores the
+  previous one, and a double failure leaves the bus `Lost`, for the watchdog.
+  With anything attached the rate never changes, since every timeline on the
+  bus is in its frames.
+- **`PlayerTelemetry::bit_perfect`** is set when all of these hold:
+  - the current source is on its Main bus, which is bit-perfect, `Ok`, and
+    exclusive;
+  - the file rate equals the bus rate;
+  - the file's bits are known and `SampleFormat::holds_bits` accepts them
+    for the stream's format;
+  - the mixer reports the source unaltered.
+
+  This drives the BP badge.
+- **Tests:** `tests/bit_perfect.rs` plays WAV files through `file_opener` on
+  an Offline device. It covers the rate changes and refusals, and a
+  bit-exact comparison of every rendered sample with the file.
 
 ## Engine
 
