@@ -53,6 +53,30 @@ pub struct StreamConfig {
     pub sample_rate: u32,
     pub buffer_frames: u32,
     pub channels: u16,
+    /// Sole, unconverted access to the device (Phase 4 spec B4). A backend
+    /// that cannot give it for this device refuses with `Unsupported`.
+    pub exclusive: bool,
+}
+
+/// The sample format a stream really runs in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SampleFormat {
+    F32,
+    I32,
+    I16,
+}
+
+impl SampleFormat {
+    /// Whether integer PCM of `bits` passes through this format unchanged
+    /// (an f32 mantissa holds 24 bits).
+    pub fn holds_bits(self, bits: u32) -> bool {
+        let capacity = match self {
+            SampleFormat::F32 => 24,
+            SampleFormat::I32 => 32,
+            SampleFormat::I16 => 16,
+        };
+        bits <= capacity
+    }
 }
 
 /// Classified stream failures, reported from the backend's own threads.
@@ -86,6 +110,8 @@ pub trait Renderer: Send + 'static {
 pub trait OutputStream: Send {
     /// The configuration actually in use.
     fn config(&self) -> StreamConfig;
+    /// The sample format the device runs in.
+    fn sample_format(&self) -> SampleFormat;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

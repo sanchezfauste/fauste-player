@@ -9,7 +9,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use crate::hosts::host_availability;
 use crate::{
     AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream,
-    Renderer, StreamConfig, StreamErrorKind, StreamErrorSink,
+    Renderer, SampleFormat, StreamConfig, StreamErrorKind, StreamErrorSink,
 };
 
 pub struct CpalBackend {
@@ -75,6 +75,7 @@ impl StreamErrorSink for MarkLost {
 
 struct CpalStream {
     config: StreamConfig,
+    format: SampleFormat,
     _stream: cpal::Stream,
 }
 
@@ -82,6 +83,18 @@ impl OutputStream for CpalStream {
     fn config(&self) -> StreamConfig {
         self.config
     }
+
+    fn sample_format(&self) -> SampleFormat {
+        self.format
+    }
+}
+
+/// Whether a device gives the application sole, unconverted access. On
+/// ALSA a `hw:` device is the hardware itself; everything else there goes
+/// through plugins (`plughw:`, `default`) or a sound server. Exclusive modes
+/// of other systems come with their own backends (Phase 4 plan 2).
+fn exclusive_capable(host: &str, device: &str) -> bool {
+    host == "alsa" && device.starts_with("hw:")
 }
 
 fn backend_error(e: impl std::fmt::Display) -> BackendError {
@@ -207,14 +220,15 @@ impl AudioBackend for CpalBackend {
             sample_rates.sort_unstable();
             sample_rates.dedup();
             let channels = self.channels(&device, channels);
+            let exclusive = exclusive_capable(&self.id().0, &id.to_string());
             list.push(DeviceInfo {
                 id: DeviceId(id.to_string()),
                 name,
                 channels,
                 sample_rates,
                 buffer_frames,
-                exclusive_capable: false,
-                rate_switching: false,
+                exclusive_capable: exclusive,
+                rate_switching: exclusive,
             });
         }
         Ok(list)
@@ -255,6 +269,11 @@ impl CpalBackend {
             inner: errors,
             lost: Arc::clone(self.host.lost()),
         });
+        if config.exclusive && !exclusive_capable(&self.id().0, &device.0) {
+            return Err(BackendError::Unsupported(
+                "exclusive access is not available on this device".to_owned(),
+            ));
+        }
         let host = self.host()?;
         let dev = self.find(&host, device)?;
         let matching: Vec<cpal::SupportedStreamConfigRange> = dev
@@ -317,6 +336,11 @@ impl CpalBackend {
                     stream.play().map_err(backend_error)?;
                     return Ok(Box::new(CpalStream {
                         config,
+                        format: match format {
+                            cpal::SampleFormat::I16 => SampleFormat::I16,
+                            cpal::SampleFormat::I32 => SampleFormat::I32,
+                            _ => SampleFormat::F32,
+                        },
                         _stream: stream,
                     }));
                 }
@@ -403,8 +427,56 @@ fn render_converted<T>(
 
 #[cfg(test)]
 mod tests {
-    use super::{HostCache, choose_buffer_frames, choose_sample_format, render_converted};
+    use super::{
+        HostCache, choose_buffer_frames, choose_sample_format, exclusive_capable, render_converted,
+    };
     use crate::Renderer;
+
+    /// Plays back fixed samples.
+    struct Samples(Vec<f32>, usize);
+
+    impl Renderer for Samples {
+        fn render(&mut self, out: &mut [f32], _channels: usize) {
+            for s in out {
+                *s = self.0.get(self.1).copied().unwrap_or(0.0);
+                self.1 += 1;
+            }
+        }
+    }
+
+    #[test]
+    fn conversion_to_i16_is_exact_for_16_bit_pcm() {
+        let values: Vec<i16> = (i16::MIN..=i16::MAX).collect();
+        let samples = values.iter().map(|v| f32::from(*v) / 32_768.0).collect();
+        let mut out = vec![0i16; values.len()];
+        let mut scratch = vec![0.0f32; 4096];
+        render_converted(&mut Samples(samples, 0), &mut out, 2, &mut scratch);
+        assert_eq!(out, values);
+    }
+
+    #[test]
+    fn conversion_to_i32_is_exact_for_24_bit_pcm() {
+        let values: Vec<i32> = (-(1 << 23)..(1 << 23))
+            .step_by(97)
+            .chain([(1 << 23) - 1])
+            .collect();
+        let samples = values.iter().map(|v| *v as f32 / 8_388_608.0).collect();
+        let mut out = vec![0i32; values.len()];
+        let mut scratch = vec![0.0f32; 4096];
+        render_converted(&mut Samples(samples, 0), &mut out, 1, &mut scratch);
+        let expected: Vec<i32> = values.iter().map(|v| v << 8).collect();
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn alsa_hw_devices_are_exclusive_capable() {
+        assert!(exclusive_capable("alsa", "hw:CARD=PCH,DEV=0"));
+        assert!(exclusive_capable("alsa", "hw:0,0"));
+        assert!(!exclusive_capable("alsa", "plughw:CARD=PCH,DEV=0"));
+        assert!(!exclusive_capable("alsa", "default"));
+        assert!(!exclusive_capable("pulseaudio", "hw:0,0"));
+        assert!(!exclusive_capable("jack", "system"));
+    }
 
     #[test]
     fn a_host_that_failed_to_open_is_tried_again() {

@@ -502,6 +502,7 @@ impl Engine {
                 sample_rate: self.settings.sample_rate,
                 buffer_frames: self.settings.buffer_frames,
                 channels,
+                exclusive: false,
             };
             let mixer = MixerConfig {
                 volume_smoothing_frames: self.settings.frames(t.gain_smoothing_ms).max(1) as u32,

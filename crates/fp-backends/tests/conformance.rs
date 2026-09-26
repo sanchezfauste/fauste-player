@@ -39,6 +39,7 @@ const CONFIG: StreamConfig = StreamConfig {
     sample_rate: 48_000,
     buffer_frames: 512,
     channels: 2,
+    exclusive: false,
 };
 
 /// Waits until `ok`, pumping `drive` (for backends rendered on demand).

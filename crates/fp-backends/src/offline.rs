@@ -2,12 +2,12 @@
 //! thread, so engine behaviour can be checked sample by sample without a
 //! sound card or real time passing.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::{
     AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream,
-    Renderer, StreamConfig, StreamErrorKind, StreamErrorSink,
+    Renderer, SampleFormat, StreamConfig, StreamErrorKind, StreamErrorSink,
 };
 
 struct Open {
@@ -22,6 +22,8 @@ struct DeviceState {
     plugged: bool,
     generation: u64,
     open: Option<Open>,
+    exclusive_capable: bool,
+    refused_rates: HashSet<u32>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -69,6 +71,21 @@ impl OfflineDevice {
     pub fn replug(&self) {
         lock(&self.state).plugged = true;
     }
+
+    /// Lets streams on this device be opened with `exclusive`.
+    pub fn set_exclusive_capable(&self, capable: bool) {
+        lock(&self.state).exclusive_capable = capable;
+    }
+
+    /// Makes opens at `rate` fail with `Unsupported`.
+    pub fn refuse_rate(&self, rate: u32) {
+        lock(&self.state).refused_rates.insert(rate);
+    }
+
+    /// The configuration of the open stream, if any.
+    pub fn config(&self) -> Option<StreamConfig> {
+        lock(&self.state).open.as_ref().map(|o| o.config)
+    }
 }
 
 struct OfflineStream {
@@ -80,6 +97,10 @@ struct OfflineStream {
 impl OutputStream for OfflineStream {
     fn config(&self) -> StreamConfig {
         self.config
+    }
+
+    fn sample_format(&self) -> SampleFormat {
+        SampleFormat::F32
     }
 }
 
@@ -140,14 +161,17 @@ impl AudioBackend for OfflineBackend {
         let mut list: Vec<DeviceInfo> = devices
             .values()
             .filter(|d| lock(&d.state).plugged)
-            .map(|d| DeviceInfo {
-                id: d.id.clone(),
-                name: d.id.0.clone(),
-                channels: d.channels,
-                sample_rates: vec![(8_000, 768_000)],
-                buffer_frames: Some((16, 16_384)),
-                exclusive_capable: false,
-                rate_switching: false,
+            .map(|d| {
+                let exclusive_capable = lock(&d.state).exclusive_capable;
+                DeviceInfo {
+                    id: d.id.clone(),
+                    name: d.id.0.clone(),
+                    channels: d.channels,
+                    sample_rates: vec![(8_000, 768_000)],
+                    buffer_frames: Some((16, 16_384)),
+                    exclusive_capable,
+                    rate_switching: exclusive_capable,
+                }
             })
             .collect();
         list.sort_by(|a, b| a.id.0.cmp(&b.id.0));
@@ -181,6 +205,17 @@ impl AudioBackend for OfflineBackend {
         let mut state = lock(&dev.state);
         if !state.plugged {
             return Err(BackendError::DeviceNotFound(device.clone()));
+        }
+        if config.exclusive && !state.exclusive_capable {
+            return Err(BackendError::Unsupported(
+                "exclusive access is not available on this device".to_owned(),
+            ));
+        }
+        if state.refused_rates.contains(&config.sample_rate) {
+            return Err(BackendError::Unsupported(format!(
+                "{} Hz is not supported",
+                config.sample_rate
+            )));
         }
         state.generation += 1;
         let generation = state.generation;

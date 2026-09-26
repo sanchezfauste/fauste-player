@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use crate::{
     AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream,
-    Renderer, StreamConfig, StreamErrorSink,
+    Renderer, SampleFormat, StreamConfig, StreamErrorSink,
 };
 
 pub const NULL_DEVICE: &str = "null";
@@ -25,6 +25,10 @@ struct NullStream {
 impl OutputStream for NullStream {
     fn config(&self) -> StreamConfig {
         self.config
+    }
+
+    fn sample_format(&self) -> SampleFormat {
+        SampleFormat::F32
     }
 }
 

@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use fp_backends::{
-    AudioBackend, BackendError, DeviceId, NullBackend, OfflineBackend, Renderer, StreamConfig,
-    StreamErrorKind, StreamErrorSink,
+    AudioBackend, BackendError, DeviceId, NullBackend, OfflineBackend, Renderer, SampleFormat,
+    StreamConfig, StreamErrorKind, StreamErrorSink,
 };
 
 /// Writes an increasing counter into every sample and counts frames.
@@ -43,6 +43,7 @@ const STEREO: StreamConfig = StreamConfig {
     sample_rate: 48_000,
     buffer_frames: 256,
     channels: 2,
+    exclusive: false,
 };
 
 fn counter() -> (Box<Counter>, Arc<AtomicU64>) {
@@ -146,4 +147,78 @@ fn null_backend_rejects_unknown_devices() {
         ),
         Err(BackendError::DeviceNotFound(_))
     ));
+}
+
+#[test]
+fn sample_formats_hold_their_bits() {
+    assert!(SampleFormat::I16.holds_bits(16));
+    assert!(!SampleFormat::I16.holds_bits(24));
+    assert!(SampleFormat::F32.holds_bits(24));
+    assert!(!SampleFormat::F32.holds_bits(32));
+    assert!(SampleFormat::I32.holds_bits(32));
+}
+
+#[test]
+fn offline_exclusive_access_needs_a_capable_device() {
+    let backend = OfflineBackend::new();
+    let shared = backend.add_device("shared", 2);
+    let direct = backend.add_device("direct", 2);
+    direct.set_exclusive_capable(true);
+    let exclusive = StreamConfig {
+        exclusive: true,
+        ..STEREO
+    };
+    let refused = backend.open_output(
+        &shared.id(),
+        exclusive,
+        counter().0,
+        Arc::new(Errors::default()),
+    );
+    assert!(matches!(refused, Err(BackendError::Unsupported(_))));
+    let stream = backend
+        .open_output(
+            &direct.id(),
+            exclusive,
+            counter().0,
+            Arc::new(Errors::default()),
+        )
+        .unwrap();
+    assert_eq!(stream.sample_format(), SampleFormat::F32);
+    assert_eq!(direct.config(), Some(exclusive));
+    let listed = backend.enumerate_devices().unwrap();
+    assert!(
+        listed
+            .iter()
+            .any(|d| d.id == direct.id() && d.exclusive_capable && d.rate_switching)
+    );
+}
+
+#[test]
+fn offline_devices_can_refuse_a_rate() {
+    let backend = OfflineBackend::new();
+    let device = backend.add_device("card", 2);
+    device.refuse_rate(44_100);
+    let at_44k = StreamConfig {
+        sample_rate: 44_100,
+        ..STEREO
+    };
+    assert!(matches!(
+        backend.open_output(
+            &device.id(),
+            at_44k,
+            counter().0,
+            Arc::new(Errors::default())
+        ),
+        Err(BackendError::Unsupported(_))
+    ));
+    assert!(
+        backend
+            .open_output(
+                &device.id(),
+                STEREO,
+                counter().0,
+                Arc::new(Errors::default())
+            )
+            .is_ok()
+    );
 }
