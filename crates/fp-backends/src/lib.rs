@@ -63,16 +63,18 @@ pub struct StreamConfig {
 pub enum SampleFormat {
     F32,
     I32,
+    /// 24 bits in a 32-bit container.
+    I24,
     I16,
 }
 
 impl SampleFormat {
-    /// Whether integer PCM of `bits` passes through this format unchanged
-    /// (an f32 mantissa holds 24 bits).
+    /// Whether integer PCM of `bits` reaches the device unchanged through
+    /// the mixer, which works in f32 (a 24-bit mantissa): at most 24 bits,
+    /// and no more than the format itself carries.
     pub fn holds_bits(self, bits: u32) -> bool {
         let capacity = match self {
-            SampleFormat::F32 => 24,
-            SampleFormat::I32 => 32,
+            SampleFormat::F32 | SampleFormat::I32 | SampleFormat::I24 => 24,
             SampleFormat::I16 => 16,
         };
         bits <= capacity

@@ -185,7 +185,8 @@ fn the_analysis_records_the_rate_and_bits() {
         a.analysis.format,
         Some(fp_model::AudioFormat {
             sample_rate: RATE,
-            bits: Some(16)
+            bits: Some(16),
+            channels: 1,
         })
     );
 }

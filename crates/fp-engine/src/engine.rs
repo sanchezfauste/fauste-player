@@ -380,6 +380,10 @@ impl Engine {
         let Some(bits) = format.bits else {
             return false;
         };
+        // Sources are stereo: more channels are downmixed (altered).
+        if !(1..=2).contains(&format.channels) {
+            return false;
+        }
         !p.cue
             && p.start == StartState::Started
             && self.settings.bit_perfect.contains(&p.bus)
@@ -419,23 +423,97 @@ impl Engine {
         }
     }
 
-    /// Before a source with `format` attaches to `bus`: a bit-perfect bus
-    /// with nothing attached follows the file's rate (Phase 4 spec B3). A
-    /// busy bus, or an unknown format, keeps the rate: the source is then
-    /// resampled to it.
-    fn follow_file_rate(&mut self, bus: &BusKey, format: Option<fp_model::AudioFormat>) {
+    /// Whether anything on `bus` is audible or about to be: a source
+    /// started, requested or waiting only to be ready, or a test tone.
+    /// Sources that merely wait (preloads, a track loaded paused) do not
+    /// count: they are reopened when the rate changes.
+    fn bus_sounding(&self, bus: &BusKey) -> bool {
+        let sounding = |start: StartState| start != StartState::Idle;
+        let players = self.players.values().any(|rt| {
+            rt.current
+                .iter()
+                .chain(rt.preload.iter())
+                .chain(rt.cue_src.iter())
+                .chain(rt.outgoing.iter())
+                .any(|p| &p.bus == bus && sounding(p.start))
+        });
+        players || self.carts_sounding(bus) || self.tones.iter().any(|(b, _)| b == bus)
+    }
+
+    /// Before a source with `format` starts on `bus`: a bit-perfect bus
+    /// with nothing sounding follows the file's rate (Phase 4 spec B3), and
+    /// the sources waiting on it are reopened at the new rate. A sounding
+    /// bus, or an unknown format, keeps the rate: the source is resampled.
+    fn prepare_start(&mut self, bus: &BusKey, format: Option<fp_model::AudioFormat>) {
         if !self.settings.bit_perfect.contains(bus) {
             return;
         }
         let Some(rate) = format.map(|f| f.sample_rate).filter(|r| *r > 0) else {
             return;
         };
+        if self.rate_of(bus) == rate || self.bus_sounding(bus) {
+            return;
+        }
         let now = self.now;
-        if let Some(b) = self.buses.get_mut(bus)
-            && b.used_slots() == 0
-            && b.sample_rate() != rate
-        {
+        let changed = self.buses.get_mut(bus).is_some_and(|b| {
+            let before = b.sample_rate();
             b.reopen_at(rate, now);
+            b.sample_rate() != before
+        });
+        if changed {
+            self.reopen_waiting(bus);
+        }
+    }
+
+    /// Re-creates every waiting (never started) player source on `bus` at
+    /// the bus's new rate; their old ones were opened at the old rate.
+    fn reopen_waiting(&mut self, bus: &BusKey) {
+        let ids: Vec<PlayerId> = self.players.keys().copied().collect();
+        for player in ids {
+            let waiting = |p: &Option<Playing>| {
+                p.as_ref()
+                    .is_some_and(|p| &p.bus == bus && p.start == StartState::Idle)
+            };
+            let Some(rt) = self.players.get_mut(&player) else {
+                continue;
+            };
+            let old_preload = if waiting(&rt.preload) {
+                rt.preload.take()
+            } else {
+                None
+            };
+            let old_current = if waiting(&rt.current) {
+                rt.current.take()
+            } else {
+                None
+            };
+            if let Some(old) = old_preload {
+                let request = old.request.clone();
+                self.release(old);
+                let fresh = self.new_source(player, false, &request).ok();
+                if let Some(rt) = self.players.get_mut(&player) {
+                    rt.preload = fresh;
+                }
+            }
+            if let Some(old) = old_current {
+                let request = old.request.clone();
+                self.release(old);
+                match self.new_source(player, false, &request) {
+                    Ok(fresh) => {
+                        if let Some(rt) = self.players.get_mut(&player) {
+                            rt.current = Some(fresh);
+                        }
+                    }
+                    Err(e) => {
+                        // An engine limitation, not a bad file: end the entry.
+                        tracing::error!(?player, error = ?e, "cannot reopen a waiting source");
+                        self.events.push(EngineEvent::ReachedEnd {
+                            player,
+                            entry: request.entry,
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -759,7 +837,6 @@ impl Engine {
         } else {
             rt.volume.clone()
         };
-        self.follow_file_rate(&bus_key, request.format);
         // A bus running faster than configured needs more frames for the
         // same seconds of buffer.
         let rate = self.rate_of(&bus_key).max(self.settings.sample_rate);
@@ -1010,6 +1087,9 @@ impl Engine {
             // The mixer already started exactly this entry.
             return;
         }
+        if let Some(main) = self.players.get(&player).map(|rt| rt.main.0.clone()) {
+            self.prepare_start(&main, request.format);
+        }
         let mut next = match self.take_or_open(player, request) {
             Ok(next) => next,
             Err(e) => {
@@ -1110,6 +1190,17 @@ impl Engine {
     }
 
     fn resume(&mut self, player: PlayerId) {
+        // A track loaded paused (after a restart) starts now: its rate may
+        // be followed like any other start.
+        let waiting = self
+            .players
+            .get(&player)
+            .and_then(|rt| rt.current.as_ref())
+            .filter(|c| c.start == StartState::Idle)
+            .map(|c| (c.bus.clone(), c.request.format));
+        if let Some((bus, format)) = waiting {
+            self.prepare_start(&bus, format);
+        }
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
@@ -1194,6 +1285,14 @@ impl Engine {
             .and_then(|rt| rt.cue_src.take())
         {
             self.stop_quick_and_release(player, old);
+        }
+        if let Some(cue) = self
+            .players
+            .get(&player)
+            .and_then(|rt| rt.cue.as_ref())
+            .map(|c| c.0.clone())
+        {
+            self.prepare_start(&cue, request.format);
         }
         match self.new_source(player, true, request) {
             Ok(mut cue) => {

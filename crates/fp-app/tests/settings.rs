@@ -297,6 +297,15 @@ fn outputs() -> (
     egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
     Arc<support::Fake>,
 ) {
+    outputs_with(Vec::new())
+}
+
+fn outputs_with(
+    bit_perfect: Vec<fp_model::OutputDevice>,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
     let backend = OfflineBackend::new();
     backend.add_device("dac", 2).set_exclusive_capable(true);
     backend.add_device("speakers", 2);
@@ -307,6 +316,7 @@ fn outputs() -> (
         first_channel: 0,
     };
     s.config.outputs.backend = Some("offline".into());
+    s.config.outputs.bit_perfect = bit_perfect;
     s.config.outputs.routes = vec![PlayerRoutes {
         player: s.players[0].id,
         main: Some(route("dac")),
@@ -369,4 +379,20 @@ fn a_shared_device_cannot_be_bit_perfect() {
         .click();
     h.run_steps(2);
     assert_eq!(bit_perfect_devices(&fake), vec!["dac".to_owned()]);
+}
+
+#[test]
+fn a_listed_device_can_always_be_turned_off() {
+    // Listed earlier (or edited by hand) although it cannot be exclusive.
+    let (mut h, fake) = outputs_with(vec![fp_model::OutputDevice {
+        backend: "offline".into(),
+        device: "speakers".into(),
+    }]);
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: speakers")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: speakers")
+        .click();
+    h.run_steps(2);
+    assert!(bit_perfect_devices(&fake).is_empty());
 }

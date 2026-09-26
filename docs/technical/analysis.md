@@ -8,8 +8,8 @@ blocks. The result holds:
 
 - `TrackAnalysis`: title, artist, album, duration, the automatic markers
   (`cue_in`, `cue_out`, `segue_start`, `outro_start`), and the file's
-  `format`: its sample rate, and its bits per sample for lossless codecs
-  (`None` for lossy ones). The track keeps the format, and source and cart
+  `format`: its sample rate, its bits per sample for lossless codecs (`None`
+  for lossy ones), and its channel count. The track keeps the format, and source and cart
   requests carry it, so bit-perfect buses can follow the file rate without
   reading the file;
 - `peaks`: min/max `i16` pairs per `analysis.peak_bucket_ms` (10 ms) of the
@@ -58,7 +58,8 @@ Its value is seconds (`12.5`) or `m:ss(.f)`. The model's
 
 There is one postcard file per track in `<cache>/analysis/`. The key is an
 FNV-1a hash of the canonical path, size, mtime, `ANALYSIS_VERSION` (4 since
-the format was added, so older libraries are re-analysed in the background), the
+the format was added; the services thread analyses again, once, every track
+that is analysed but has no format), the
 analysis settings and the cover limits. The key is taken *before* analysing,
 and the result is only stored if the file did not change meanwhile. Writes
 use unique temporary files. Corrupt entries are ignored and recomputed.

@@ -24,18 +24,22 @@ through an RT-safe sink: it sets atomics, which the bus watchdog reads.
 - `DeviceInfo::exclusive_capable` says which devices can give it, and
   `rate_switching` says which can be reopened at another rate.
 - `OutputStream::sample_format()` gives the format the device really runs in
-  (`F32`, `I32`, `I16`).
+  (`F32`, `I32`, `I24` (24 bits in 32), `I16`). cpal has no packed 3-byte
+  24-bit format, so devices that accept only `S24_3LE` cannot be opened.
 - `SampleFormat::holds_bits` says whether integer PCM of a given size passes
-  unchanged: F32 up to 24 bits, I32 up to 32, I16 up to 16.
-- The f32 → I16 and f32 → I32 conversions are exact for integer PCM (they
+  unchanged through the f32 mixer and the format: 24 bits for F32, I32 and
+  I24, and 16 for I16.
+- The f32 → I16, I24 and I32 conversions are exact for integer PCM (they
   scale by powers of two), and tests pin that.
 
 **Exclusive-capable devices:**
 - On cpal, only ALSA `hw:` devices are exclusive-capable
-  (`exclusive_capable(host, id)`). They are the hardware itself.
+  (`exclusive_capable(host, id)`, which reads cpal's persisted ids,
+  `alsa:hw:CARD=…,DEV=…`). They are the hardware itself.
 - Offline devices can be marked capable (`set_exclusive_capable`) or made to
   refuse a rate (`refuse_rate`), for tests.
-- Null accepts `exclusive` and ignores it, since it is the last resort.
+- Null refuses `exclusive`, so a bus on it plays shared and never claims to
+  be bit-perfect.
 
 ## Implemented
 

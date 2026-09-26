@@ -94,7 +94,12 @@ impl OutputStream for CpalStream {
 /// through plugins (`plughw:`, `default`) or a sound server. Exclusive modes
 /// of other systems come with their own backends (Phase 4 plan 2).
 fn exclusive_capable(host: &str, device: &str) -> bool {
-    host == "alsa" && device.starts_with("hw:")
+    // cpal's persisted ids name the host first (`alsa:hw:CARD=PCH,DEV=0`).
+    let inner = device
+        .strip_prefix(host)
+        .and_then(|rest| rest.strip_prefix(':'))
+        .unwrap_or(device);
+    host == "alsa" && inner.starts_with("hw:")
 }
 
 fn backend_error(e: impl std::fmt::Display) -> BackendError {
@@ -326,6 +331,9 @@ impl CpalBackend {
                 cpal::SampleFormat::I32 => {
                     build::<i32>(&dev, cpal_config, receiver, errors, scratch_frames)
                 }
+                cpal::SampleFormat::I24 => {
+                    build::<cpal::I24>(&dev, cpal_config, receiver, errors, scratch_frames)
+                }
                 _ => build::<f32>(&dev, cpal_config, receiver, errors, scratch_frames),
             };
             match built {
@@ -339,6 +347,7 @@ impl CpalBackend {
                         format: match format {
                             cpal::SampleFormat::I16 => SampleFormat::I16,
                             cpal::SampleFormat::I32 => SampleFormat::I32,
+                            cpal::SampleFormat::I24 => SampleFormat::I24,
                             _ => SampleFormat::F32,
                         },
                         _stream: stream,
@@ -395,6 +404,7 @@ fn choose_sample_format(formats: &[cpal::SampleFormat]) -> Option<cpal::SampleFo
     [
         cpal::SampleFormat::F32,
         cpal::SampleFormat::I32,
+        cpal::SampleFormat::I24,
         cpal::SampleFormat::I16,
     ]
     .into_iter()
@@ -466,6 +476,32 @@ mod tests {
         render_converted(&mut Samples(samples, 0), &mut out, 1, &mut scratch);
         let expected: Vec<i32> = values.iter().map(|v| v << 8).collect();
         assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn exclusive_capability_reads_cpal_device_ids() {
+        // cpal's persisted ids carry the host: `alsa:hw:CARD=PCH,DEV=0`.
+        assert!(exclusive_capable("alsa", "alsa:hw:CARD=PCH,DEV=0"));
+        assert!(!exclusive_capable("alsa", "alsa:plughw:CARD=PCH,DEV=0"));
+        assert!(!exclusive_capable("alsa", "alsa:default"));
+        assert!(!exclusive_capable("pulseaudio", "pulseaudio:hw:0,0"));
+    }
+
+    #[test]
+    fn devices_with_only_24_bit_integer_are_used() {
+        use cpal::SampleFormat::{I16, I24};
+        assert_eq!(choose_sample_format(&[I16, I24]), Some(I24));
+    }
+
+    #[test]
+    fn conversion_to_i24_is_exact_for_24_bit_pcm() {
+        let values: Vec<i32> = (-(1 << 23)..(1 << 23)).step_by(89).collect();
+        let samples = values.iter().map(|v| *v as f32 / 8_388_608.0).collect();
+        let mut out = vec![cpal::I24::new(0).unwrap(); values.len()];
+        let mut scratch = vec![0.0f32; 4096];
+        render_converted(&mut Samples(samples, 0), &mut out, 1, &mut scratch);
+        let got: Vec<i32> = out.iter().map(|v| v.inner()).collect();
+        assert_eq!(got, values);
     }
 
     #[test]

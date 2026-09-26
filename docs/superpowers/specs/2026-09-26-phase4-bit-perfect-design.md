@@ -26,10 +26,13 @@
 
 ## B2. File format
 
-- **Analysis records the format:** `TrackAnalysis` gains `format: Option<AudioFormat>`, holding the sample rate and the bits per sample. Bits are `None` for lossy codecs, whose decoded output is not integer PCM.
+- **Analysis records the format:** `TrackAnalysis` gains `format: Option<AudioFormat>`, holding:
+  - the sample rate;
+  - the bits per sample, which are `None` for lossy codecs, whose decoded output is not integer PCM;
+  - the channel count. Files with more than two channels are downmixed, so they are never bit-perfect.
 - **The track keeps it:** `Track::format` is persisted with serde default `None`.
 - **The request carries it:** `SourceRequest.format` and `CartRequest.format` pass it to the engine, so the engine decides rates with no file I/O.
-- `ANALYSIS_VERSION` becomes 4, so existing libraries are re-analysed in the background and gain their formats.
+- `ANALYSIS_VERSION` becomes 4. A track that is analysed but has no format (a library from an earlier version) is analysed again, once, in the background.
 - **A track not yet analysed** (format unknown) plays at the bus rate, as in Phase 1.
 
 ## B3. Stream rate follows the file
@@ -37,10 +40,18 @@
 Rules for a bit-perfect bus:
 
 1. **Rate:** each bus has its own rate. A normal bus runs at `outputs.sample_rate`. A bit-perfect bus starts at `outputs.sample_rate` and changes only as below.
-2. **Rate change when idle:** when a source with a known format is about to attach to a bit-perfect bus that has **no attached sources** (idle), and the format's rate differs, the bus is reopened at that rate first.
+2. **The rate is decided when a source starts, not when it is attached.** A source *starts* when:
+   - a track is played (`StartCurrent`);
+   - a track loaded paused is resumed for the first time;
+   - a pre-listen starts;
+   - a cart is fired or pre-listened.
+
+   If the bus is not **sounding**, the file's format is known and its rate differs, the bus is reopened at that rate first. A bus is sounding while any source on it is started, has a start requested, or is waiting only to be buffered, or while a test tone plays.
    - The mixer, its frame counter and its slots survive the reopen; only the device stream is replaced.
+   - Every source that is only **waiting** on that bus (preloads, a track loaded paused, of any player) is re-created at the new rate. It has not played a frame, so no timeline moves.
    - Reopening takes as long as the device needs to start (typically tens of milliseconds). This gap is the documented cost of changing rate.
-3. **A busy bus keeps its rate:** a source attaching to a busy bit-perfect bus at another rate is resampled to the bus rate, as in Phase 1, and is not bit-perfect. For example, a segue from a 44.1 kHz track into a 48 kHz one plays the 48 kHz track resampled for its whole length. A bus's rate never changes while anything is attached, because every frame-based timeline on the bus (planned stops, segues, positions) is in that bus's frames.
+   - Preloads never decide the rate: at start-up every player preloads, and the first preload would otherwise fix the rate for the session.
+3. **A sounding bus keeps its rate:** a source that starts on a sounding bit-perfect bus at another rate is resampled to the bus rate, as in Phase 1, and is not bit-perfect. For example, a segue from a 44.1 kHz track into a 48 kHz one plays the 48 kHz track resampled for its whole length. A bus's rate never changes while anything on it sounds, because every frame-based timeline on the bus (planned stops, segues, positions) is in that bus's frames.
 4. **A failed reopen:** if the reopen at the new rate fails (the device does not support the rate), the bus goes back to its previous rate, the source is resampled, and a warning is logged. If the previous rate also fails, the bus is `Lost` and follows the Phase 1 watchdog rules.
 5. **Timelines use the bus rate:** everything that converts between seconds and frames for a source uses the rate of that source's bus: fades, declicks, planned stops, positions, loop points and test tones. The worker opens each source at the rate the engine gives it in `LoadOptions.rate`.
 
@@ -49,12 +60,14 @@ Rules for a bit-perfect bus:
 - `StreamConfig` gains `exclusive: bool`. A bit-perfect bus asks for it.
 - A backend that cannot honour it for a device returns `BackendError::Unsupported`. The bus then retries without `exclusive`, logs a warning, and the BP badge stays off.
 - On ALSA, a `hw:` device is exclusive by itself; any other ALSA device refuses `exclusive`.
-- `OutputStream` gains `sample_format() -> SampleFormat` (`F32`, `I32` or `I16`), the format the device really runs in.
-- **The chosen format:** the existing order, F32 then I32 then I16, is kept. A source is bit-perfect only if the device format holds its bits:
-  - F32 holds up to 24 bits;
-  - I32 holds up to 32 bits;
-  - I16 holds up to 16 bits.
-- **The conversion to integer formats must be exact** for integer PCM: f32 → I16 for 16-bit sources, and f32 → I32 for 16- and 24-bit sources. This is covered by tests.
+- `OutputStream` gains `sample_format() -> SampleFormat` (`F32`, `I32`, `I24` or `I16`), the format the device really runs in. `I24` is 24 bits in a 32-bit container.
+- **The chosen format:** F32, then I32, then I24, then I16. A source is bit-perfect only if its bits pass unchanged:
+  - The mixer works in f32 (a 24-bit mantissa), so no source above 24 bits is ever bit-perfect. That includes 32-bit integer files and 32-bit float files.
+  - F32, I32 and I24 devices hold up to 24 bits.
+  - I16 devices hold up to 16 bits.
+- **The conversion to integer formats must be exact** for integer PCM: f32 → I16 for 16-bit sources, and f32 → I32 or I24 for 16- and 24-bit sources. This is covered by tests.
+- **Packed 24-bit devices:** devices that take only packed 3-byte 24-bit samples (`S24_3LE`, common on USB DACs) are not supported by the audio library, and cannot be opened.
+- **Null** refuses `exclusive`.
 
 ## B5. The BP badge
 

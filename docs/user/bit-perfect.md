@@ -27,11 +27,16 @@ The switch is disabled when the device cannot give exclusive access.
   still plays, shared, and the BP badge stays off.
 - **The rate follows the file.** When nothing is playing on the device and a
   track at another sample rate starts, the device is reopened at that rate.
-  - This takes as long as the device needs to start (usually a few tens of
-    milliseconds). The start is that much later.
-  - While something is playing, the rate never changes. A track at another
-    rate that starts during a mix (for example a 48 kHz track mixed into after
-    a 44.1 kHz one) is converted for its whole length, and is not bit-perfect.
+  - This happens when you play a track, resume one loaded paused, pre-listen,
+    or fire a cart. Tracks that are only waiting (the next track of each
+    player) are prepared again at the new rate.
+  - The reopen takes as long as the device needs to start (usually a few tens
+    of milliseconds). The start is that much later.
+  - While something is playing on the device, the rate never changes. A track
+    at another rate that starts then (for example a 48 kHz track mixed into
+    after a 44.1 kHz one, or a track started while another player or a cart
+    plays on the same device) is converted for its whole length, and is not
+    bit-perfect.
   - If the device refuses a rate, it keeps the previous one and the track is
     converted.
 - **No processing, when nothing asks for it.** The samples pass unchanged
@@ -48,14 +53,20 @@ its Main device unchanged. All of these must hold:
 
 - the device is bit-perfect and open with exclusive access;
 - the device runs at the track's sample rate;
-- the track is lossless (WAV, FLAC, AIFF, ALAC), and the device format holds
-  its sample size (a 24-bit file on a 16-bit device is not bit-perfect);
+- the track is lossless (WAV, FLAC, AIFF, ALAC), mono or stereo, and at most
+  24-bit, and the device format holds its sample size (a 24-bit file on a
+  16-bit device is not bit-perfect);
 - the track has been analysed, since that is how its rate and sample size
-  are known;
+  are known. Libraries from earlier versions are analysed again in the
+  background;
 - volume is 100 %, no fade runs, and nothing else plays on the same outputs.
 
-Lossy files (MP3, AAC, Ogg Vorbis, Opus) are never shown as bit-perfect:
-their decoded samples are not the integer values a device takes.
+Some files are never shown as bit-perfect:
+- **Lossy files** (MP3, AAC, Ogg Vorbis, Opus): their decoded samples are not
+  the integer values a device takes.
+- **Files above 24 bits:** the mixer works in 32-bit floating point, which
+  carries 24 bits exactly.
+- **Files with more than two channels:** they are mixed down to stereo.
 
 ## Checking it yourself
 

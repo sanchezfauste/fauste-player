@@ -155,7 +155,11 @@ fn sample_formats_hold_their_bits() {
     assert!(!SampleFormat::I16.holds_bits(24));
     assert!(SampleFormat::F32.holds_bits(24));
     assert!(!SampleFormat::F32.holds_bits(32));
-    assert!(SampleFormat::I32.holds_bits(32));
+    assert!(SampleFormat::I32.holds_bits(24));
+    // The mixer works in f32: 32-bit files lose their low bits on any device.
+    assert!(!SampleFormat::I32.holds_bits(32));
+    assert!(SampleFormat::I24.holds_bits(24));
+    assert!(!SampleFormat::I24.holds_bits(32));
 }
 
 #[test]
@@ -221,4 +225,18 @@ fn offline_devices_can_refuse_a_rate() {
             )
             .is_ok()
     );
+}
+
+#[test]
+fn null_refuses_exclusive_access() {
+    let backend = NullBackend;
+    let device = backend.default_device().unwrap();
+    let exclusive = StreamConfig {
+        exclusive: true,
+        ..STEREO
+    };
+    assert!(matches!(
+        backend.open_output(&device, exclusive, counter().0, Arc::new(Errors::default())),
+        Err(BackendError::Unsupported(_))
+    ));
 }

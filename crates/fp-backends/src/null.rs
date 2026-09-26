@@ -79,6 +79,12 @@ impl AudioBackend for NullBackend {
         if config.sample_rate == 0 || config.buffer_frames == 0 || config.channels == 0 {
             return Err(BackendError::Unsupported(format!("{config:?}")));
         }
+        if config.exclusive {
+            // Nothing reaches a device here: never claim bit-perfect output.
+            return Err(BackendError::Unsupported(
+                "the null output has no exclusive access".to_owned(),
+            ));
+        }
         let stop = Arc::new(AtomicBool::new(false));
         let stop_flag = stop.clone();
         let channels = usize::from(config.channels);

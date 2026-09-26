@@ -108,6 +108,7 @@ pub fn analyze_file_cancellable(
             format: Some(AudioFormat {
                 sample_rate: decoder.sample_rate(),
                 bits: decoder.bits_per_sample(),
+                channels: u32::try_from(decoder.channels()).unwrap_or(0),
             }),
         },
         peak_bucket_secs: envelope.bucket_secs,

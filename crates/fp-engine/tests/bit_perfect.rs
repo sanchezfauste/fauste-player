@@ -56,6 +56,10 @@ fn rig(bit_perfect: bool, exclusive_capable: bool) -> Rig {
         }];
     }
     config.tuning.gain_smoothing_ms = 0.0;
+    // Start only with more buffered than a test renders at once, so a test
+    // that renders faster than real time never outruns the worker.
+    config.tuning.prebuffer_secs = 4.0;
+    config.tuning.ready_threshold_ms = 1_500.0;
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
     let mut engine = Engine::new(
         backends,
@@ -90,6 +94,7 @@ fn pcm16(rate: u32) -> Option<AudioFormat> {
     Some(AudioFormat {
         sample_rate: rate,
         bits: Some(16),
+        channels: 2,
     })
 }
 
@@ -143,7 +148,8 @@ fn an_idle_bit_perfect_bus_reopens_at_the_file_rate() {
     let position = r.engine.telemetry(P).position_secs.unwrap();
     assert!(
         (position - 1.0).abs() < 0.05,
-        "one second at 44.1 kHz is one second: {position}"
+        "one second at 44.1 kHz is one second: {position} (underruns {})",
+        r.engine.telemetry(P).underruns
     );
 }
 
@@ -290,7 +296,80 @@ fn a_lossy_file_is_not_bit_perfect() {
     let lossy = Some(AudioFormat {
         sample_rate: 48_000,
         bits: None,
+        channels: 2,
     });
     r.start(request(1, path, lossy));
     assert!(!bit_perfect_after(&mut r, 2_400));
+}
+
+#[test]
+fn a_multichannel_file_is_not_bit_perfect() {
+    let mut r = rig(true, true);
+    // Three channels are downmixed to stereo: the samples change.
+    let path = indexed_wav(r.dir.path(), "c.wav", 48_000, 3, 48_000);
+    let format = Some(AudioFormat {
+        sample_rate: 48_000,
+        bits: Some(16),
+        channels: 3,
+    });
+    r.start(request(1, path, format));
+    assert!(!bit_perfect_after(&mut r, 2_400));
+}
+
+#[test]
+fn a_preload_does_not_decide_the_rate() {
+    let mut r = rig(true, true);
+    let path = wav(r.dir.path(), "a.wav", 44_100);
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(request(1, path.clone(), pcm16(44_100))),
+    });
+    r.settle();
+    assert_eq!(r.rate(), 48_000, "waiting is not playing");
+    r.start(request(1, path, pcm16(44_100)));
+    assert_eq!(r.rate(), 44_100, "starting it is");
+    assert!(bit_perfect_after(&mut r, 4_410));
+}
+
+#[test]
+fn after_a_stop_the_next_track_follows_its_rate() {
+    let mut r = rig(true, true);
+    let first = wav(r.dir.path(), "a.wav", 44_100);
+    let second = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, first, pcm16(44_100)));
+    r.run(4_410);
+    // Preloaded while the bus plays at 44.1 kHz: resampled for now.
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(request(2, second.clone(), pcm16(48_000))),
+    });
+    r.settle();
+    assert_eq!(r.rate(), 44_100);
+    r.act(EngineAction::StopNow { player: P });
+    r.run(4_410);
+    r.start(request(2, second, pcm16(48_000)));
+    assert_eq!(r.rate(), 48_000);
+    let heard = r.run(9_600);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays");
+    assert!(
+        r.engine.telemetry(P).bit_perfect,
+        "the preload was reopened at the new rate, not played resampled"
+    );
+}
+
+#[test]
+fn a_track_resumed_after_a_restart_follows_its_rate() {
+    let mut r = rig(true, true);
+    let path = wav(r.dir.path(), "a.wav", 44_100);
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: request(1, path, pcm16(44_100)),
+    });
+    r.settle();
+    assert_eq!(r.rate(), 48_000);
+    r.act(EngineAction::Resume { player: P });
+    r.settle();
+    assert_eq!(r.rate(), 44_100);
+    let heard = r.run(4_410);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays");
 }

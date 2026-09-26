@@ -152,6 +152,9 @@ impl Markers {
 pub struct AudioFormat {
     pub sample_rate: u32,
     pub bits: Option<u32>,
+    /// Channels in the file; 0 when unknown. More than two are downmixed.
+    #[serde(default)]
+    pub channels: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -23,6 +23,7 @@ fn analysis(duration: f64) -> TrackAnalysis {
         format: Some(AudioFormat {
             sample_rate: 44_100,
             bits: Some(16),
+            channels: 2,
         }),
     }
 }
@@ -229,7 +230,8 @@ fn requests_carry_the_track_format() {
         state.library.get(t).unwrap().format,
         Some(AudioFormat {
             sample_rate: 44_100,
-            bits: Some(16)
+            bits: Some(16),
+            channels: 2,
         })
     );
     let actions = apply(&mut state, Command::Play(p)).unwrap();

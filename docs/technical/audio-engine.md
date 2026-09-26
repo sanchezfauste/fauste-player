@@ -66,14 +66,23 @@ so countdowns, segues and chaining continue. The device is reopened every
 - **Bit-perfect buses** are named in `outputs.bit_perfect` and opened with
   `StreamConfig::exclusive`. If exclusive access is refused (`Unsupported`),
   the bus reopens shared and `exclusive_granted` stays false.
-- **The rate follows the file.** Before a source attaches to a bit-perfect
-  bus (`follow_file_rate`), the bus is reopened at the file's rate
-  (`Bus::reopen_at`) if its format is known (`SourceRequest::format`, from
-  analysis) and the bus has no used slots. The mixer, its frame counter and
-  its slots survive; only the stream is replaced. A refused rate restores the
-  previous one, and a double failure leaves the bus `Lost`, for the watchdog.
-  With anything attached the rate never changes, since every timeline on the
-  bus is in its frames.
+- **The rate follows the file.** When a source starts on a bit-perfect bus
+  (`prepare_start`), the bus is reopened at the file's rate
+  (`Bus::reopen_at`) if all of these hold:
+  - the file's format is known (`SourceRequest::format`, from analysis);
+  - the rate differs;
+  - nothing on the bus sounds (`bus_sounding`: a source that is started,
+    requested or waiting to be ready, or a test tone).
+
+  Sources start in `start_current`, in `resume` of a track loaded paused, in
+  `start_cue`, and when carts are fired or pre-listened.
+- **What survives a reopen:** the mixer, its frame counter and its slots.
+  Only the stream is replaced, and `reopen_waiting` re-creates the idle
+  sources on the bus (preloads, tracks loaded paused) at the new rate.
+- **Refusals:** a refused rate restores the previous one. A double failure
+  leaves the bus `Lost`, for the watchdog.
+- While anything on the bus sounds, the rate never changes, since every
+  timeline on the bus is in its frames. Preloads never decide the rate.
 - **`PlayerTelemetry::bit_perfect`** is set when all of these hold:
   - the current source is on its Main bus, which is bit-perfect, `Ok`, and
     exclusive;

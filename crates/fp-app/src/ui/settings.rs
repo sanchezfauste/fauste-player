@@ -664,12 +664,15 @@ fn bit_perfect(
         let name = info.map_or(device.device.as_str(), |d| d.name.as_str());
         let capable = info.is_some_and(|d| d.exclusive_capable);
         let mut on = listed.contains(device);
+        // A listed device can always be turned off, even when it is not
+        // plugged in or cannot be exclusive any more.
+        let enabled = capable || on;
         let label = t.tr_args("settings-bit-perfect-device", &[("device", name.into())]);
         row(ui, name, None, |ui| {
             let response = ui
-                .add_enabled_ui(capable, |ui| toggle(ui, &mut on, &label))
+                .add_enabled_ui(enabled, |ui| toggle(ui, &mut on, &label))
                 .response;
-            if !capable {
+            if !enabled {
                 response.on_disabled_hover_text(t.tr("bp-not-capable"));
                 return;
             }

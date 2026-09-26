@@ -52,6 +52,14 @@ impl CartwallRuntime {
 }
 
 impl Engine {
+    /// Whether a cart source on `bus` is audible or about to be (carts
+    /// never wait idle: they start as soon as they are ready).
+    pub(super) fn carts_sounding(&self, bus: &BusKey) -> bool {
+        self.cartwall
+            .as_ref()
+            .is_some_and(|c| c.all().any(|s| &s.bus == bus))
+    }
+
     /// Creates the cartwall worker and opens its buses on first use.
     fn ensure_cartwall(&mut self, now: Instant) -> bool {
         if self.cartwall.is_none() {
@@ -125,7 +133,6 @@ impl Engine {
             c.main.clone()
         };
         let volume = c.volume.clone();
-        self.follow_file_rate(&bus_key, request.format);
         // A bus running faster than configured needs more frames for the
         // same seconds of buffer.
         let rate = self.rate_of(&bus_key).max(self.settings.sample_rate);
@@ -188,6 +195,9 @@ impl Engine {
         }
         // A cart fired again while still on air restarts it.
         self.stop_cart(request.cart);
+        if let Some(main) = self.cartwall.as_ref().map(|c| c.main.0.clone()) {
+            self.prepare_start(&main, request.format);
+        }
         match self.cart_source(request, false) {
             Ok(source) => {
                 if let Some(c) = self.cartwall.as_mut() {
@@ -218,6 +228,14 @@ impl Engine {
             return;
         }
         self.stop_cart_cue();
+        if let Some(cue) = self
+            .cartwall
+            .as_ref()
+            .and_then(|c| c.cue.as_ref())
+            .map(|c| c.0.clone())
+        {
+            self.prepare_start(&cue, request.format);
+        }
         match self.cart_source(request, true) {
             Ok(source) => {
                 if let Some(c) = self.cartwall.as_mut() {
