@@ -101,8 +101,10 @@ pub fn analyze_file_cancellable(
             cue_out: Some(markers.cue_out),
             segue_start: markers.segue_start,
             outro_start: markers.outro_start,
-            intro_end: read_intro(path)
-                .map(|secs| secs.clamp(markers.cue_in, markers.cue_out.max(markers.cue_in))),
+            intro_end: read_intro(path).map(|secs| {
+                secs.max(markers.cue_in)
+                    .min(markers.cue_out.max(markers.cue_in))
+            }),
         },
         peak_bucket_secs: envelope.bucket_secs,
         peaks: envelope.peaks,

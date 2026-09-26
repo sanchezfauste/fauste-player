@@ -85,3 +85,10 @@ fn files_without_tags_have_no_intro() {
     assert_eq!(read_intro(&path), None);
     assert_eq!(read_intro(Path::new("/definitely/missing.flac")), None);
 }
+
+#[test]
+fn only_the_last_field_may_have_decimals_and_a_decimal_comma_is_accepted() {
+    assert_eq!(parse_intro_time("1.5:30"), None);
+    assert_eq!(parse_intro_time("12,5"), Some(12.5));
+    assert_eq!(parse_intro_time("1:02,5"), Some(62.5));
+}

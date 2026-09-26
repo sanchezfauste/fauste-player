@@ -29,6 +29,9 @@ pub struct SourceShared {
     /// Peak levels since the UI last read them (after gain).
     pub peak_l: AtomicF32,
     pub peak_r: AtomicF32,
+    /// Length in frames of one pass of a looped source, once the worker has
+    /// seen it end (0 until then).
+    pub loop_frames: AtomicU64,
 }
 
 impl SourceShared {

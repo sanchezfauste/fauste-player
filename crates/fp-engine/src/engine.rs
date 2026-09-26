@@ -407,6 +407,28 @@ impl Engine {
         }
     }
 
+    /// Where a Cue route really goes. Unlike Main, a Cue never falls back to
+    /// the default output (that is where Main plays): a route to a backend
+    /// this machine does not have, or one identical to Main, means no cue.
+    fn cue_target(&self, route: &Route, main: &(BusKey, u16)) -> Option<(BusKey, u16)> {
+        let Some(backend) = self.find_backend(&route.backend) else {
+            tracing::warn!(backend = %route.backend, "cue route to an unavailable backend; no cue");
+            return None;
+        };
+        let target = (
+            BusKey {
+                backend: backend.id().0,
+                device: route.device.clone(),
+            },
+            route.first_channel,
+        );
+        if &target == main {
+            tracing::warn!("cue route equals the main route; no cue");
+            return None;
+        }
+        Some(target)
+    }
+
     /// Resolves the (bus, first channel) of a player's Main and Cue outputs.
     fn resolve_routes(&self, player: PlayerId) -> ((BusKey, u16), Option<(BusKey, u16)>) {
         let routes = self.settings.routes.iter().find(|r| r.player == player);
@@ -416,7 +438,7 @@ impl Engine {
         };
         let cue = routes
             .and_then(|r| r.cue.as_ref())
-            .map(|route| self.route_target(route));
+            .and_then(|route| self.cue_target(route, &main));
         (main, cue)
     }
 

@@ -253,3 +253,58 @@ fn cart_positions_are_reported_and_wrap_when_looped() {
     let pos = carts[0].1.position_secs;
     assert!((0.5..0.5 + 480.0 / RATE).contains(&pos), "{pos}");
 }
+
+#[test]
+fn a_cue_route_to_a_missing_backend_never_plays_on_main() {
+    let foreign = Route {
+        backend: "elsewhere".into(),
+        device: "card".into(),
+        first_channel: 0,
+    };
+    let mut r = rig(2, Some(route(0)), Some(foreign), 48_000);
+    r.act(EngineAction::StartCartCue(cart(1, 0.0, SOURCE_END, false)));
+    r.run(5);
+    assert!(r.events.contains(&EngineEvent::CartCueEnded));
+    assert_eq!(audible(&r.channel(0)), 0);
+}
+
+#[test]
+fn a_cue_route_equal_to_main_is_refused() {
+    let mut r = rig(2, Some(route(0)), Some(route(0)), 48_000);
+    r.act(EngineAction::StartCartCue(cart(1, 0.0, SOURCE_END, false)));
+    r.run(5);
+    assert!(r.events.contains(&EngineEvent::CartCueEnded));
+    assert_eq!(audible(&r.channel(0)), 0);
+}
+
+#[test]
+fn stopping_a_cart_just_after_its_start_is_requested_still_fades() {
+    let mut r = rig(2, Some(route(0)), None, 48_000);
+    r.act(EngineAction::StartCart(cart(1, 0.0, SOURCE_END, false)));
+    r.settle(); // Start requested; the mixer has not reported Started yet.
+    let out = r.device.render(BLOCK).unwrap();
+    r.frames.extend(out.chunks(r.channels).map(<[f32]>::to_vec));
+    r.act(EngineAction::StopCart { cart: CartId(1) });
+    r.run(10);
+    let left = r.channel(0);
+    let last = left.iter().rposition(|v| *v != 0.0).unwrap();
+    let peak = left.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    assert!(
+        left[last].abs() < peak * 0.1,
+        "cut at full level: {} of {peak}",
+        left[last]
+    );
+    assert_eq!(r.engine.used_slots(), 0);
+}
+
+#[test]
+fn a_looped_cart_without_a_known_end_reports_a_wrapped_position() {
+    // 4 800-frame file (0.1 s), looped to its natural end.
+    let mut r = rig(2, Some(route(0)), None, 4_800);
+    r.act(EngineAction::StartCart(cart(1, 0.0, SOURCE_END, true)));
+    r.settle();
+    r.run(40); // 0.4 s: several passes
+    let (carts, _) = r.engine.cart_telemetry();
+    let pos = carts[0].1.position_secs;
+    assert!((0.0..0.1).contains(&pos), "{pos}");
+}

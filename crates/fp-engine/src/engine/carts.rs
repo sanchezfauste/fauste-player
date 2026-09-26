@@ -24,7 +24,6 @@ pub(super) struct CartSource {
     bus: BusKey,
     slot: usize,
     from_secs: f64,
-    until_secs: f64,
     looped: bool,
     shared: Arc<SourceShared>,
     start: StartState,
@@ -61,7 +60,10 @@ impl Engine {
                 Some(route) => self.route_target(route),
                 None => (self.default_output(), 0),
             };
-            let cue = routes.cue.as_ref().map(|route| self.route_target(route));
+            let cue = routes
+                .cue
+                .as_ref()
+                .and_then(|route| self.cue_target(route, &main));
             let ready = self
                 .settings
                 .frames(self.settings.tuning.ready_threshold_ms) as usize;
@@ -105,9 +107,13 @@ impl Engine {
     pub(super) fn cart_sources_on(&self, key: &BusKey) -> usize {
         self.cartwall.as_ref().map_or(0, |c| {
             let routed = &c.main.0 == key || c.cue.as_ref().is_some_and(|k| &k.0 == key);
-            // Room for the next firings as well as what is on air.
-            let base = if routed { 16 } else { 0 };
-            base + c.all().filter(|s| &s.bus == key).count()
+            if !routed {
+                return 0;
+            }
+            // Slots still held by released sources count until the mixer
+            // returns them; one more makes room for the cart being fired.
+            let held = self.buses.get(key).map_or(0, Bus::used_slots);
+            held.max(c.all().filter(|s| &s.bus == key).count()) + 1
         })
     }
 
@@ -163,7 +169,6 @@ impl Engine {
             bus: bus_key,
             slot,
             from_secs: request.from_secs,
-            until_secs: request.until_secs,
             looped: request.looped,
             shared,
             start: StartState::WhenReady { fade_in: false },
@@ -173,8 +178,9 @@ impl Engine {
 
     pub(super) fn start_cart(&mut self, request: &CartRequest, now: Instant) {
         if !self.ensure_cartwall(now) {
+            // Not the file's fault: the cart simply does not play.
             self.events
-                .push(EngineEvent::CartFailed { cart: request.cart });
+                .push(EngineEvent::CartEnded { cart: request.cart });
             return;
         }
         // A cart fired again while still on air restarts it.
@@ -230,7 +236,9 @@ impl Engine {
     /// it); a source that never started is released at once.
     fn stop_cart_source(&mut self, source: CartSource) {
         self.send(&source.bus, BusCommand::Cancel { slot: source.slot });
-        if source.start != StartState::Started {
+        // A requested start may already be audible (its Started event is
+        // not polled yet): fade it like a started one.
+        if !matches!(source.start, StartState::Started | StartState::Requested) {
             self.release_cart(&source);
             return;
         }
@@ -394,12 +402,16 @@ impl Engine {
         };
         let rate = f64::from(self.settings.sample_rate.max(1));
         let position = |s: &CartSource| {
-            let elapsed = s.shared.frames_played() as f64 / rate;
-            let length = s.until_secs - s.from_secs;
-            if s.looped && length.is_finite() && length > 0.0 {
-                s.from_secs + elapsed % length
+            let played = s.shared.frames_played();
+            let pass = s
+                .shared
+                .loop_frames
+                .load(std::sync::atomic::Ordering::Acquire);
+            if s.looped && pass > 0 {
+                // The real pass length, as the worker measured it.
+                s.from_secs + (played % pass) as f64 / rate
             } else {
-                s.from_secs + elapsed
+                s.from_secs + played as f64 / rate
             }
         };
         let carts = c

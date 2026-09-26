@@ -106,7 +106,8 @@ const INTRO_KEY: &str = "INTRO";
 
 /// Parses an intro time: seconds (`12.5`) or `m:ss(.f)` / `h:mm:ss(.f)`.
 pub fn parse_intro_time(text: &str) -> Option<f64> {
-    let text = text.trim();
+    // Tools in some locales write a decimal comma.
+    let text = text.trim().replace(',', ".");
     if text.is_empty() {
         return None;
     }
@@ -115,8 +116,11 @@ pub fn parse_intro_time(text: &str) -> Option<f64> {
     if parts.len() > 3 {
         return None;
     }
+    let last = parts.len() - 1;
     for (i, part) in parts.iter().enumerate() {
-        if part.is_empty() || !part.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        // Only the seconds field may have decimals.
+        let allowed = |c: char| c.is_ascii_digit() || (i == last && c == '.');
+        if part.is_empty() || !part.chars().all(allowed) {
             return None;
         }
         let value: f64 = part.parse().ok()?;
@@ -157,7 +161,10 @@ pub fn read_intro(path: &Path) -> Option<f64> {
             .ok()?;
         let file_type = probe.file_type()?;
         let mut reader = std::fs::File::open(path).ok()?;
-        let options = lofty::config::ParseOptions::new().read_properties(false);
+        // Covers are not needed here, and a huge one must not hide the tag.
+        let options = lofty::config::ParseOptions::new()
+            .read_properties(false)
+            .read_cover_art(false);
         match file_type {
             FileType::Flac => {
                 let f = lofty::flac::FlacFile::read_from(&mut reader, options).ok()?;

@@ -36,6 +36,11 @@ impl StreamResampler {
         })
     }
 
+    /// Input frames of history the filter needs before its output is exact.
+    pub fn warmup_input_frames(&self) -> usize {
+        ((self.skip as f64 / self.ratio).ceil() as usize) * 2 + 16
+    }
+
     /// Feeds interleaved stereo input; appends every complete output chunk to `dst`.
     pub fn push(&mut self, input: &[f32], dst: &mut Vec<f32>) -> Result<(), String> {
         self.pending.extend_from_slice(input);
@@ -106,4 +111,23 @@ impl StreamResampler {
         self.pending.drain(..need * 2);
         Ok(())
     }
+}
+
+/// The smallest pre-roll of at least `min_input_frames` whose output length
+/// is a whole number of frames: `(input_frames, output_frames)`. Starting a
+/// resampled stream that much earlier and dropping that many output frames
+/// gives exactly the samples a continuous stream would have (no warm-up
+/// transient at a cue-in or a loop point).
+pub fn aligned_preroll(from_rate: u32, to_rate: u32, min_input_frames: usize) -> (usize, usize) {
+    fn gcd(a: u64, b: u64) -> u64 {
+        if b == 0 { a } else { gcd(b, a % b) }
+    }
+    let (from, to) = (u64::from(from_rate.max(1)), u64::from(to_rate.max(1)));
+    let g = gcd(from, to);
+    let (step_in, step_out) = (from / g, to / g);
+    let steps = (min_input_frames as u64).div_ceil(step_in).max(1);
+    (
+        usize::try_from(steps * step_in).unwrap_or(usize::MAX),
+        usize::try_from(steps * step_out).unwrap_or(usize::MAX),
+    )
 }

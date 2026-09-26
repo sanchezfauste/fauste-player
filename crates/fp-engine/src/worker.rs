@@ -13,7 +13,7 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 
 use crate::decode::FileDecoder;
-use crate::resample::StreamResampler;
+use crate::resample::{StreamResampler, aligned_preroll};
 use crate::source::SourceProducer;
 
 /// Produces interleaved stereo at the bus rate.
@@ -30,17 +30,38 @@ pub type SourceOpener =
 pub fn file_opener() -> SourceOpener {
     Arc::new(|path, from_secs, bus_rate| {
         let mut decoder = FileDecoder::open(path)?;
-        decoder.seek(from_secs)?;
-        let resampler = if decoder.sample_rate() == bus_rate {
-            None
-        } else {
-            Some(StreamResampler::new(decoder.sample_rate(), bus_rate)?)
-        };
+        let file_rate = decoder.sample_rate();
+        if file_rate == bus_rate {
+            decoder.seek(from_secs)?;
+            return Ok(Box::new(FileSource {
+                decoder,
+                resampler: None,
+                block: Vec::new(),
+                finished: false,
+                skip_frames: 0,
+            }));
+        }
+        let resampler = StreamResampler::new(file_rate, bus_rate)?;
+        // Start a little earlier and drop the warm-up, so the first frame is
+        // what continuous playback would give at `from_secs`.
+        let available = (from_secs.max(0.0) * f64::from(file_rate)).floor() as usize;
+        let (mut pre_in, mut pre_out) =
+            aligned_preroll(file_rate, bus_rate, resampler.warmup_input_frames());
+        if pre_in > available {
+            // Not enough audio before the start: use the largest aligned
+            // pre-roll that fits (possibly none, at the very start).
+            let (step_in, step_out) = aligned_preroll(file_rate, bus_rate, 1);
+            let steps = available / step_in.max(1);
+            pre_in = steps * step_in;
+            pre_out = steps * step_out;
+        }
+        decoder.seek(from_secs - pre_in as f64 / f64::from(file_rate))?;
         Ok(Box::new(FileSource {
             decoder,
-            resampler,
+            resampler: Some(resampler),
             block: Vec::new(),
             finished: false,
+            skip_frames: pre_out,
         }))
     })
 }
@@ -50,6 +71,8 @@ struct FileSource {
     resampler: Option<StreamResampler>,
     block: Vec<f32>,
     finished: bool,
+    /// Output frames of pre-roll still to drop.
+    skip_frames: usize,
 }
 
 impl SampleSource for FileSource {
@@ -61,11 +84,18 @@ impl SampleSource for FileSource {
             return self.decoder.next_block(out);
         };
         self.block.clear();
+        let start = out.len();
         if self.decoder.next_block(&mut self.block)? {
             resampler.push(&self.block, out)?;
         } else {
             resampler.finish(out)?;
             self.finished = true;
+        }
+        if self.skip_frames > 0 {
+            let produced = (out.len() - start) / 2;
+            let drop = self.skip_frames.min(produced);
+            out.drain(start..start + drop * 2);
+            self.skip_frames -= drop;
         }
         Ok(true)
     }
@@ -305,6 +335,10 @@ fn step(
         if job.pending.is_empty() && (at_limit || !more) {
             // End of a pass: loop (unless the pass was empty), or finish.
             if job.looped && job.pass_frames > 0 {
+                job.producer
+                    .shared
+                    .loop_frames
+                    .store(job.pass_frames, Ordering::Release);
                 job.source = Some(opener(&job.path, job.from_secs, bus_rate)?);
                 job.pass_frames = 0;
                 return Ok(());
