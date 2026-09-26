@@ -10,7 +10,9 @@ use crossbeam_channel::{Receiver, Sender};
 use egui::{Align, Color32, Layout, RichText, Sense, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_backends::{AudioBackend, Availability, DeviceInfo};
-use fp_model::{Command, Config, PlayMode, PlayerId, PlayerRoutes, PlaylistId, Route};
+use fp_model::{
+    Command, Config, OutputDevice, PlayMode, PlayerId, PlayerRoutes, PlaylistId, Route,
+};
 
 use super::app::Scene;
 
@@ -565,6 +567,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         });
     }
     let cart_routes = config.outputs.cartwall.clone();
+    let chosen = chosen_devices(config);
     row(ui, &t.tr("settings-cartwall-outputs"), None, |ui| {
         ui.vertical(|ui| {
             route_picker(
@@ -587,6 +590,100 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             );
         });
     });
+    bit_perfect(ui, scene, &backends, &chosen);
+}
+
+/// The devices routes name explicitly, each once, in route order.
+fn chosen_devices(config: &Config) -> Vec<OutputDevice> {
+    let mut chosen: Vec<OutputDevice> = Vec::new();
+    let routes = config
+        .outputs
+        .routes
+        .iter()
+        .flat_map(|r| r.main.iter().chain(r.cue.iter()))
+        .chain(config.outputs.cartwall.main.iter())
+        .chain(config.outputs.cartwall.cue.iter());
+    for route in routes {
+        let device = OutputDevice {
+            backend: route.backend.clone(),
+            device: route.device.clone(),
+        };
+        if !chosen.contains(&device) {
+            chosen.push(device);
+        }
+    }
+    chosen
+}
+
+/// Bit-perfect devices (Phase 4 spec B6): one switch per chosen device,
+/// disabled where the device cannot give exclusive access.
+fn bit_perfect(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    backends: &[BackendChoice],
+    chosen: &[OutputDevice],
+) {
+    let t = scene.i18n;
+    ui.add_space(12.0);
+    ui.add(
+        egui::Label::new(
+            RichText::new(t.tr("settings-bit-perfect").to_uppercase())
+                .font(font(10.0))
+                .color(theme::NEUTRAL_500),
+        )
+        .selectable(false),
+    );
+    ui.add(
+        egui::Label::new(
+            RichText::new(t.tr("settings-bit-perfect-hint"))
+                .font(font(12.0))
+                .color(theme::NEUTRAL_400),
+        )
+        .selectable(false)
+        .wrap(),
+    );
+    ui.add_space(4.0);
+    if chosen.is_empty() {
+        ui.add(
+            egui::Label::new(
+                RichText::new(t.tr("settings-bit-perfect-none"))
+                    .font(font(12.0))
+                    .color(theme::NEUTRAL_500),
+            )
+            .selectable(false)
+            .wrap(),
+        );
+        return;
+    }
+    let listed = &scene.state.config.outputs.bit_perfect;
+    for device in chosen {
+        let info = backends
+            .iter()
+            .find(|b| b.id == device.backend)
+            .and_then(|b| b.devices.iter().find(|d| d.id.0 == device.device));
+        let name = info.map_or(device.device.as_str(), |d| d.name.as_str());
+        let capable = info.is_some_and(|d| d.exclusive_capable);
+        let mut on = listed.contains(device);
+        let label = t.tr_args("settings-bit-perfect-device", &[("device", name.into())]);
+        row(ui, name, None, |ui| {
+            let response = ui
+                .add_enabled_ui(capable, |ui| toggle(ui, &mut on, &label))
+                .response;
+            if !capable {
+                response.on_disabled_hover_text(t.tr("bp-not-capable"));
+                return;
+            }
+            if on != listed.contains(device) {
+                let device = device.clone();
+                update(scene, move |c| {
+                    c.outputs.bit_perfect.retain(|d| d != &device);
+                    if on {
+                        c.outputs.bit_perfect.push(device);
+                    }
+                });
+            }
+        });
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

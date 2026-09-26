@@ -101,12 +101,21 @@ pub fn state(players: usize, tracks: usize) -> AppState {
 }
 
 pub fn harness(state: AppState) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    harness_with_backends(state, Vec::new())
+}
+
+/// As `harness`, with audio systems for Settings → Audio outputs.
+pub fn harness_with_backends(
+    state: AppState,
+    backends: Vec<Arc<dyn fp_backends::AudioBackend>>,
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let fake = Fake::new(state);
     let ui = AppUi::new(
         fake.clone(),
         I18n::new(Some("en-US")),
         MediaCache::default(),
-    );
+    )
+    .with_backends(backends);
     // Short frames, so that two clicks fall within the double-click delay.
     let mut harness = Harness::builder()
         .with_size(egui::vec2(1000.0, 700.0))

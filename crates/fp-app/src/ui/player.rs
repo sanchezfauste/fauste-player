@@ -42,9 +42,11 @@ pub(crate) fn column(
         .find(|(p, _)| *p == id)
         .map(|(_, t)| *t)
         .unwrap_or_default();
-    let Some(pv) = view::player_view(scene.state, id, telemetry.position_secs, scene.time) else {
+    let Some(mut pv) = view::player_view(scene.state, id, telemetry.position_secs, scene.time)
+    else {
         return;
     };
+    pv.bit_perfect = telemetry.bit_perfect;
     let rect = ui.available_rect_before_wrap();
     ui.painter().rect_filled(rect, 0.0, theme::COLUMN_BG);
     ui.painter().rect_stroke(
@@ -222,13 +224,18 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                     }
                 }
                 let bp = t.tr("badge-bp");
+                let (tip, content) = if pv.bit_perfect {
+                    (t.tr("tip-bp-on"), theme::ACCENT)
+                } else {
+                    (t.tr("tip-bp-off"), theme::NEUTRAL_600)
+                };
                 widgets::tile(
                     ui,
                     vec2(24.0, 20.0),
-                    &t.tr("tip-bp"),
+                    &tip,
                     false,
                     TileStyle {
-                        content: theme::NEUTRAL_600,
+                        content,
                         ..TileStyle::plain()
                     },
                     |p, r, c| {

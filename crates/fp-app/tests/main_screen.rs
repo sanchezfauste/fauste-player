@@ -350,3 +350,23 @@ fn a_rebound_key_plays_the_new_target() {
         "2 lost its binding when it moved to Q"
     );
 }
+
+#[test]
+fn the_bp_badge_follows_telemetry() {
+    let (mut h, fake) = harness(state(1, 1));
+    assert!(h.query_by_label("Bit-perfect: off").is_some());
+    let player = fake.player(0);
+    fake.telemetry
+        .store(std::sync::Arc::new(fp_engine::conductor::Telemetry {
+            players: vec![(
+                player,
+                fp_engine::engine::PlayerTelemetry {
+                    bit_perfect: true,
+                    ..Default::default()
+                },
+            )],
+            ..Default::default()
+        }));
+    h.run_steps(2);
+    assert!(h.query_by_label("Bit-perfect: on").is_some());
+}
