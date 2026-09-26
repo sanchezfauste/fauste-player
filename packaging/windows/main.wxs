@@ -1,0 +1,106 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<!--
+  Windows installer (Phase 5), WiX Toolset v3 source, built by cargo-wix:
+  scripts/package/windows.sh. Per-machine install, Start menu shortcut.
+  The UpgradeCode never changes: a newer MSI replaces an installed older one.
+-->
+<?if $(sys.BUILDARCH) = x64 or $(sys.BUILDARCH) = arm64 ?>
+    <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
+<?else ?>
+    <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
+<?endif ?>
+
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+    <Product
+        Id='*'
+        Name='Fauste Player'
+        UpgradeCode='133738DE-1F76-40C1-84C0-F25E81A73AE6'
+        Manufacturer='Marc Sanchez Fauste'
+        Language='1033'
+        Codepage='1252'
+        Version='$(var.Version)'>
+
+        <Package Id='*'
+            Keywords='Installer'
+            Description='Fauste Player radio playout'
+            Manufacturer='Marc Sanchez Fauste'
+            InstallerVersion='450'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perMachine'
+            SummaryCodepage='1252'
+            />
+
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+
+        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
+        <Property Id='DiskPrompt' Value='Fauste Player Installation'/>
+
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
+                <Directory Id='APPLICATIONFOLDER' Name='Fauste Player'>
+                    <Component Id='binary0' Guid='*'>
+                        <File
+                            Id='exe0'
+                            Name='fauste-player.exe'
+                            DiskId='1'
+                            Source='$(var.CargoTargetBinDir)\fauste-player.exe'
+                            KeyPath='yes'/>
+                    </Component>
+                    <Directory Id='Licenses' Name='licenses'>
+                        <Component Id='notices' Guid='*'>
+                            <File Id='thirdparty' Name='THIRD-PARTY.html' DiskId='1'
+                                Source='dist\staging\THIRD-PARTY.html' KeyPath='yes'/>
+                            <File Id='fontlicense' Name='Inter-OFL.txt' DiskId='1'
+                                Source='crates\fp-app\assets\fonts\OFL.txt'/>
+                        </Component>
+                    </Directory>
+                </Directory>
+            </Directory>
+            <Directory Id='ProgramMenuFolder'>
+                <Component Id='shortcut' Guid='A1B5FBED-5003-49EC-B575-D13B739C9AD5'>
+                    <Shortcut
+                        Id='startmenu'
+                        Name='Fauste Player'
+                        Description='Radio playout with several players and a cartwall'
+                        Target='[APPLICATIONFOLDER]fauste-player.exe'
+                        WorkingDirectory='APPLICATIONFOLDER'
+                        Icon='ProductICO'/>
+                    <RegistryValue
+                        Root='HKCU'
+                        Key='Software\Fauste Player'
+                        Name='startmenu'
+                        Type='integer'
+                        Value='1'
+                        KeyPath='yes'/>
+                </Component>
+            </Directory>
+        </Directory>
+
+        <Feature
+            Id='Application'
+            Title='Fauste Player'
+            Description='The application, its notices and a Start menu shortcut.'
+            Level='1'
+            ConfigurableDirectory='APPLICATIONFOLDER'
+            AllowAdvertise='no'
+            Display='expand'
+            Absent='disallow'>
+            <ComponentRef Id='binary0'/>
+            <ComponentRef Id='notices'/>
+            <ComponentRef Id='shortcut'/>
+        </Feature>
+
+        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
+        <Icon Id='ProductICO' SourceFile='packaging\icons\fauste-player.ico'/>
+        <Property Id='ARPPRODUCTICON' Value='ProductICO'/>
+        <Property Id='ARPHELPLINK' Value='https://github.com/sanchezfauste/fauste-player'/>
+
+        <UI>
+            <UIRef Id='WixUI_FeatureTree'/>
+        </UI>
+        <WixVariable Id='WixUILicenseRtf' Value='packaging\windows\License.rtf'/>
+    </Product>
+</Wix>
