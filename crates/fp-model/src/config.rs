@@ -8,10 +8,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::PlayerId;
 use crate::player::PlayMode;
+use crate::shortcuts::{Shortcut, default_shortcuts};
 
 const MIB: u64 = 1024 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub players: PlayersConfig,
@@ -20,6 +21,41 @@ pub struct Config {
     pub ui: UiConfig,
     pub limits: Limits,
     pub tuning: Tuning,
+    pub cartwall: CartwallConfig,
+    pub shortcuts: Vec<Shortcut>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            players: PlayersConfig::default(),
+            analysis: AnalysisSettings::default(),
+            outputs: OutputsConfig::default(),
+            ui: UiConfig::default(),
+            limits: Limits::default(),
+            tuning: Tuning::default(),
+            cartwall: CartwallConfig::default(),
+            shortcuts: default_shortcuts(),
+        }
+    }
+}
+
+/// Cartwall defaults (Phase 2 spec P2.3).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CartwallConfig {
+    /// Grid of a new cart page.
+    pub default_rows: u16,
+    pub default_cols: u16,
+}
+
+impl Default for CartwallConfig {
+    fn default() -> Self {
+        Self {
+            default_rows: 2,
+            default_cols: 8,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,6 +180,9 @@ pub struct Limits {
     /// Crash reports written per run (a contained, repeating panic is logged
     /// but does not fill the disk).
     pub max_crash_reports: usize,
+    /// Largest cart page grid.
+    pub max_cart_rows: u16,
+    pub max_cart_cols: u16,
 }
 
 impl Default for Limits {
@@ -156,6 +195,8 @@ impl Default for Limits {
             max_playlist_file_bytes: 10 * MIB,
             backup_count: 3,
             max_crash_reports: 20,
+            max_cart_rows: 8,
+            max_cart_cols: 16,
         }
     }
 }
@@ -277,6 +318,25 @@ impl Config {
             1,
             10_000,
             "limits.max_crash_reports",
+            &mut w,
+        );
+
+        clamp_to(&mut l.max_cart_rows, 1, 64, "limits.max_cart_rows", &mut w);
+        clamp_to(&mut l.max_cart_cols, 1, 64, "limits.max_cart_cols", &mut w);
+        let (max_rows, max_cols) = (l.max_cart_rows, l.max_cart_cols);
+        let c = &mut self.cartwall;
+        clamp_to(
+            &mut c.default_rows,
+            1,
+            max_rows,
+            "cartwall.default_rows",
+            &mut w,
+        );
+        clamp_to(
+            &mut c.default_cols,
+            1,
+            max_cols,
+            "cartwall.default_cols",
             &mut w,
         );
 
@@ -459,6 +519,33 @@ impl Config {
             "tuning.save_debounce_ms",
             &mut w,
         );
+
+        // One chord per action and one action per chord; the first wins.
+        let mut chords = std::collections::HashSet::new();
+        let mut actions = std::collections::HashSet::new();
+        self.shortcuts.retain(|s| {
+            if s.action.position() == Some(0) {
+                w.push(ConfigWarning {
+                    field: "shortcuts",
+                    message: format!(
+                        "{} for {:?} ignored: positions start at 1",
+                        s.chord, s.action
+                    ),
+                });
+                return false;
+            }
+            let fresh = !chords.contains(&s.chord) && !actions.contains(&s.action);
+            if fresh {
+                chords.insert(s.chord.clone());
+                actions.insert(s.action);
+            } else {
+                w.push(ConfigWarning {
+                    field: "shortcuts",
+                    message: format!("{} for {:?} ignored: already bound", s.chord, s.action),
+                });
+            }
+            fresh
+        });
 
         w
     }

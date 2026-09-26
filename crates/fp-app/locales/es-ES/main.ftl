@@ -134,3 +134,7 @@ error-no-playlists = No hay playlists.
 placeholder-none = —
 volume-silent = -∞ dB
 unit-hz = { $value } Hz
+error-last-cart-page = No se puede eliminar la última página de cartuchos.
+error-carts-would-be-lost = La rejilla más pequeña quitaría cartuchos con archivo. Vacíalos primero.
+error-cart-grid = Ese tamaño de rejilla está fuera del rango permitido.
+error-invalid-marker = El inicio debe quedar antes del final.

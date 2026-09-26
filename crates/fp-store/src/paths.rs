@@ -41,6 +41,10 @@ impl AppPaths {
         self.data_dir.join("playlists.json")
     }
 
+    pub fn carts_file(&self) -> PathBuf {
+        self.data_dir.join("carts.json")
+    }
+
     pub fn session_file(&self) -> PathBuf {
         self.data_dir.join("session.json")
     }

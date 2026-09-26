@@ -14,6 +14,8 @@ fn parts(state: &AppState) -> RestoreParts {
         config: state.config.clone(),
         library: state.library.clone(),
         playlists: state.playlists.clone(),
+        cart_pages: state.cartwall.pages.clone(),
+        cartwall_session: state.cartwall.session(),
         ids: state.ids.clone(),
     }
 }
@@ -86,6 +88,8 @@ fn restoring_with_no_playlists_creates_a_default_one_and_moves_ids_forward() {
         config: Config::default(),
         library: Library::default(),
         playlists: Playlists::default(),
+        cart_pages: Vec::new(),
+        cartwall_session: fp_model::CartwallSession::default(),
         ids: IdGen::default(),
     };
     let duplicate = PlayerSession {
@@ -125,4 +129,54 @@ fn rule22_restored_idle_players_do_not_point_at_an_entry_on_air() {
     for other in restored.players.iter().skip(1) {
         assert_ne!(other.next, Some(e[0]), "e0 is on air on P1");
     }
+}
+
+#[test]
+fn restored_cart_pages_are_normalised() {
+    use fp_model::{Cart, CartId, CartPage, CartPageId, CartwallSession};
+    let state = fixture(0);
+    let mut cart = Cart::empty(CartId(900));
+    cart.name = "kept".into();
+    let broken = CartPage {
+        id: CartPageId(800),
+        name: "Broken".into(),
+        rows: 0,
+        cols: 60_000,
+        carts: vec![cart],
+    };
+    let parts = RestoreParts {
+        config: state.config.clone(),
+        library: state.library.clone(),
+        playlists: state.playlists.clone(),
+        cart_pages: vec![broken.clone(), broken],
+        cartwall_session: CartwallSession::default(),
+        ids: state.ids.clone(),
+    };
+    let (restored, _) = AppState::restore(parts, &[], "Main");
+    let limits = &restored.config.limits;
+    let mut ids = std::collections::HashSet::new();
+    for page in &restored.cartwall.pages {
+        assert!((1..=limits.max_cart_rows).contains(&page.rows));
+        assert!((1..=limits.max_cart_cols).contains(&page.cols));
+        assert_eq!(
+            page.carts.len(),
+            usize::from(page.rows) * usize::from(page.cols)
+        );
+        assert!(ids.insert(page.id.0), "duplicate page id");
+        for c in &page.carts {
+            assert!(ids.insert(c.id.0), "duplicate cart id");
+        }
+        assert_eq!(page.carts[0].name, "kept");
+    }
+    assert_eq!(restored.cartwall.pages.len(), 2);
+}
+
+#[test]
+fn orphan_library_tracks_are_dropped_on_restore() {
+    let mut state = fixture(1);
+    let orphan = fp_model::Track::new(fp_model::TrackId(777), std::path::PathBuf::from("/x.wav"));
+    state.library.insert(orphan);
+    let (restored, _) = AppState::restore(parts(&state), &[], "Main");
+    assert!(restored.library.get(fp_model::TrackId(777)).is_none());
+    assert_eq!(restored.library.iter().count(), 1);
 }

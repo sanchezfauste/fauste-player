@@ -89,6 +89,9 @@ pub struct Services {
     failed: HashSet<TrackId>,
     /// Tracks to analyse again even if already analysed.
     forced: HashSet<TrackId>,
+    /// Tracks seen analysed in a snapshot. One that turns unanalysed again
+    /// (markers reset) is analysed again.
+    seen_analyzed: HashSet<TrackId>,
     settings: Option<AnalysisSettings>,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
@@ -118,6 +121,7 @@ impl Services {
             done: HashSet::new(),
             failed: HashSet::new(),
             forced: HashSet::new(),
+            seen_analyzed: HashSet::new(),
             settings: None,
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
@@ -263,6 +267,17 @@ impl Services {
         self.done.retain(|id| known.contains(id));
         self.failed.retain(|id| known.contains(id));
         self.forced.retain(|id| known.contains(id));
+        self.seen_analyzed.retain(|id| known.contains(id));
+        for track in state.library.iter() {
+            if track.analyzed {
+                self.seen_analyzed.insert(track.id);
+            } else if self.seen_analyzed.remove(&track.id) {
+                // Analysed before, not any more: the model asked for a new
+                // analysis (manual markers reset or cleared).
+                self.done.remove(&track.id);
+                self.failed.remove(&track.id);
+            }
+        }
         // Peaks and covers are kept only for what the players show; the
         // analysis cache brings them back when a track is shown again.
         let wanted = Self::wanted(state);
@@ -369,6 +384,9 @@ impl Services {
         }
         if let Err(e) = self.store.save_playlists(state) {
             tracing::error!(error = %e, "saving the playlists failed");
+        }
+        if let Err(e) = self.store.save_carts(state) {
+            tracing::error!(error = %e, "saving the cart pages failed");
         }
         self.save_session(state);
     }

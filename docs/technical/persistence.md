@@ -6,7 +6,8 @@
 |---|---|---|
 | `config/config.json` | `ConfigDoc` | `schema_version`, `config` |
 | `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers), `playlists`, `ids` |
-| `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns) |
+| `data/carts.json` | `CartsDoc` | `schema_version`, `pages[]` (id, name, rows, cols, `carts[]` with id, name, track, kind, looped, exclusive); cart files are tracks of the `playlists.json` library |
+| `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns), `cartwall` (open, page shown) |
 
 The paths come from `AppPaths::system()` (`directories::ProjectDirs` for
 `org`/`Fauste`/`Fauste Player`), or from `AppPaths::under($FAUSTE_HOME)`. See
@@ -36,6 +37,25 @@ starts.
 own, so one bad value falls back to its default instead of discarding the
 file. `Config::validate` then clamps every value into range and returns
 warnings, which are logged.
+
+## Playlist and cart page files (`playlist_io.rs`)
+
+- `parse_playlist` reads M3U, M3U8 and PLS. It is tolerant:
+  - `#EXTINF` hints are used; comments and unknown lines are ignored;
+  - BOM and CRLF are handled;
+  - text is UTF-8, with a Windows-1252 fallback for M3U;
+  - `file://` URLs are percent-decoded;
+  - relative paths (with `/` or `\\` separators) are resolved against the
+    playlist's folder; absolute paths from another OS (`C:\\…` on Linux) are
+    kept as written and show as unavailable;
+  - streams are skipped and counted.
+
+  Input is capped at `limits.max_playlist_file_bytes`. `write_m3u8` writes
+  `#EXTINF` and absolute paths.
+- Cart pages use a versioned JSON format (`"format": "fauste-cart-page"`,
+  `"version": 1`), with 1-based positions, relative files resolved against
+  the file's folder, and the grid clamped to the limits.
+- All parsers are fuzzed (see [Testing](testing.md)).
 
 ## Migrations
 
@@ -102,6 +122,25 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 | `music_dir` | none | the folder where file dialogs start |
 | `language` | none (OS locale) | BCP-47 tag (`en-US`, `es-ES`) |
 
+### `cartwall`
+
+| Field | Default | Range |
+|---|---|---|
+| `default_rows` | 2 | 1 … `limits.max_cart_rows` |
+| `default_cols` | 8 | 1 … `limits.max_cart_cols` |
+
+### `shortcuts` (Settings → Keyboard shortcuts)
+
+A list of `{ "action": …, "chord": { "key": …, "ctrl"?, "alt"?, "shift"?, "command"? } }`.
+Actions are `PlayPlayer(n)`, `PausePlayer(n)`, `StopPlayer(n)`,
+`FadeStopPlayer(n)`, `CuePlayer(n)`, `FireCart(n)` (cart *n* of the page
+shown), `StopAllCarts`, `ToggleCartwall`, `NextCartPage` and
+`PreviousCartPage`, with 1-based positions. Keys use the interface
+toolkit's names (`"1"`, `"A"`, `"F1"`, `"Space"`). Validation keeps one
+chord per action and one action per chord. The defaults are `1`…`9` (play
+players 1–9), `F1`…`F12` (fire carts 1–12) and `Ctrl+Space` (stop all
+carts).
+
 ### `limits` (config file only)
 
 | Field | Default |
@@ -113,6 +152,8 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 | `max_playlist_file_bytes` | 10 MiB |
 | `backup_count` | 3 |
 | `max_crash_reports` | 20 (crash reports written per run) |
+| `max_cart_rows` | 8 |
+| `max_cart_cols` | 16 |
 
 ### `tuning` (config file only)
 

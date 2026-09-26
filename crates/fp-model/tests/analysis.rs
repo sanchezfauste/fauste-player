@@ -19,6 +19,7 @@ fn analysis(duration: f64) -> TrackAnalysis {
         cue_out: Some(duration - 1.0),
         segue_start: Some(duration - 6.0),
         outro_start: Some(duration - 20.0),
+        intro_end: None,
     }
 }
 

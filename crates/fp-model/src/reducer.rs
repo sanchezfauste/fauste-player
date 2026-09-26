@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use crate::cart_rules;
 use crate::command::{
     Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
 };
@@ -11,8 +12,9 @@ use crate::error::ModelError;
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{CueState, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, PlaylistEntry};
+use crate::shortcuts::{Shortcut, default_shortcuts};
 use crate::state::AppState;
-use crate::track::{FileState, Track};
+use crate::track::{FileState, MarkerKind, Track};
 
 /// Applies a user command. On `Err` the state is unchanged.
 pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>, ModelError> {
@@ -112,6 +114,11 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             let id = state.ids.playlist();
             state.playlists.add(Playlist::new(id, name));
         }
+        Command::CreatePlaylistFromPaths { name, paths } => {
+            let id = state.ids.playlist();
+            state.playlists.add(Playlist::new(id, name));
+            insert_paths(state, id, 0, paths)?;
+        }
         Command::RenamePlaylist { playlist, name } => state.playlists.rename(playlist, name)?,
         Command::DeletePlaylist(playlist) => delete_playlist(state, playlist, &mut out)?,
         Command::SetPlayerCount(count) => set_player_count(state, count, &mut out)?,
@@ -119,6 +126,49 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             let mut config: Config = *config;
             config.players.count = state.config.players.count;
             state.config = config;
+        }
+        Command::FireCart(cart) => cart_rules::fire(state, cart, &mut out)?,
+        Command::StopCart(cart) => cart_rules::stop(state, cart, &mut out)?,
+        Command::StopAllCarts => cart_rules::stop_all(state, &mut out),
+        Command::CueCart(cart) => cart_rules::cue(state, cart, &mut out)?,
+        Command::CreateCartPage { name } => cart_rules::create_page(state, name),
+        Command::RenameCartPage { page, name } => cart_rules::rename_page(state, page, name)?,
+        Command::DeleteCartPage(page) => cart_rules::delete_page(state, page, &mut out)?,
+        Command::ResizeCartPage { page, rows, cols } => {
+            cart_rules::resize_page(state, page, rows, cols)?
+        }
+        Command::SetCart { page, index, edit } => cart_rules::set_cart(state, page, index, edit)?,
+        Command::AssignCartFile { page, index, path } => {
+            cart_rules::assign_file(state, page, index, Some(path), &mut out)?
+        }
+        Command::ClearCartFile { page, index } => {
+            cart_rules::assign_file(state, page, index, None, &mut out)?
+        }
+        Command::ImportCartPage(import) => cart_rules::import_page(state, *import)?,
+        Command::ShowCartPage(page) => {
+            if state.cartwall.page(page).is_none() {
+                return Err(ModelError::UnknownCartPage(page));
+            }
+            state.cartwall.shown = Some(page);
+        }
+        Command::SetCartwallOpen(open) => state.cartwall.open = open,
+        Command::SetMarker { track, kind, secs } => set_marker(state, track, kind, secs)?,
+        Command::SetShortcut { action, chord } => {
+            let shortcuts = &mut state.config.shortcuts;
+            shortcuts.retain(|s| s.action != action && Some(&s.chord) != chord.as_ref());
+            if let Some(chord) = chord {
+                shortcuts.push(Shortcut { action, chord });
+            }
+        }
+        Command::ResetShortcuts => state.config.shortcuts = default_shortcuts(),
+        Command::ResetMarkers { track } => {
+            let t = state
+                .library
+                .get_mut(track)
+                .ok_or(ModelError::UnknownTrack(track))?;
+            t.markers.clear_manual();
+            t.analyzed = false;
+            refresh_next(state);
         }
     }
     fill_empty_next(state);
@@ -169,6 +219,9 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
         EngineEvent::SourceFailed { player, entry } => {
             source_failed(state, player, entry, &mut out)
         }
+        EngineEvent::CartEnded { cart } => cart_rules::ended(state, cart),
+        EngineEvent::CartFailed { cart } => cart_rules::failed(state, cart),
+        EngineEvent::CartCueEnded => cart_rules::cue_ended(state),
         EngineEvent::CueEnded { player } => {
             if let Ok(i) = state.player_index(player) {
                 state.players[i].cue = None;
@@ -452,13 +505,66 @@ fn detach_entries(
     }
 }
 
-/// Drops library tracks that no playlist entry references any more.
-fn forget_unreferenced(state: &mut AppState, tracks: impl IntoIterator<Item = TrackId>) {
-    for track in tracks {
-        if !state.playlists.references_track(track) {
-            state.library.remove(track);
+/// Phase 2 spec P2.8: a manual marker, validated against the effective cue
+/// range. Scheduling follows through `reconcile`.
+fn set_marker(
+    state: &mut AppState,
+    track: TrackId,
+    kind: MarkerKind,
+    secs: Option<f64>,
+) -> Result<(), ModelError> {
+    let t = state
+        .library
+        .get(track)
+        .ok_or(ModelError::UnknownTrack(track))?;
+    let cue_in = t.cue_in_secs();
+    let cue_out = t.known_cue_out_secs();
+    let duration = (t.duration_secs > 0.0).then_some(t.duration_secs);
+    let value = match secs {
+        None => None,
+        Some(v) if !v.is_finite() => return Err(ModelError::InvalidMarker),
+        Some(v) => Some(match kind {
+            // Cue points only make sense once the length is known.
+            MarkerKind::CueIn | MarkerKind::CueOut if duration.is_none() => {
+                return Err(ModelError::InvalidMarker);
+            }
+            MarkerKind::CueIn => {
+                let v = v.max(0.0);
+                if cue_out.is_some_and(|out| v >= out) {
+                    return Err(ModelError::InvalidMarker);
+                }
+                v
+            }
+            MarkerKind::CueOut => {
+                let v = duration.map_or(v, |d| v.min(d));
+                if v <= cue_in {
+                    return Err(ModelError::InvalidMarker);
+                }
+                v
+            }
+            _ => v.max(cue_in).min(cue_out.unwrap_or(f64::INFINITY)),
+        }),
+    };
+    if let Some(t) = state.library.get_mut(track) {
+        t.markers.set_manual(kind, value);
+        if matches!(kind, MarkerKind::CueIn | MarkerKind::CueOut) {
+            // Keep the inner markers within the new range.
+            let (cue_in, cue_out) = (t.cue_in_secs(), t.known_cue_out_secs());
+            t.markers
+                .clamp_manual_inner(cue_in, cue_out.unwrap_or(f64::INFINITY));
+        }
+        if value.is_none() {
+            // Let analysis put the automatic value back.
+            t.analyzed = false;
         }
     }
+    refresh_next(state);
+    Ok(())
+}
+
+/// Drops library tracks that no playlist entry or cart references any more.
+fn forget_unreferenced(state: &mut AppState, tracks: impl IntoIterator<Item = TrackId>) {
+    cart_rules::forget_tracks(state, tracks);
 }
 
 fn remove_entry(

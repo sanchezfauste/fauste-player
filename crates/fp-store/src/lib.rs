@@ -7,6 +7,7 @@ pub mod error;
 pub mod lenient;
 pub mod migrate;
 pub mod paths;
+pub mod playlist_io;
 pub mod store;
 
 pub use atomic::{LoadSource, Loaded, ParseError, backup_path, load_with_fallback, write_atomic};
@@ -16,4 +17,4 @@ pub use docs::{
 pub use error::StoreError;
 pub use migrate::{Migration, upgrade};
 pub use paths::AppPaths;
-pub use store::{LoadedState, Store};
+pub use store::{LoadedState, Store, fuzz_documents};

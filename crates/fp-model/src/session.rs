@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::cartwall::{CartPage, Cartwall, CartwallSession};
 use crate::command::EngineAction;
 use crate::config::Config;
 use crate::ids::{EntryId, IdGen, PlayerId, PlaylistId};
@@ -43,6 +44,9 @@ pub struct RestoreParts {
     pub config: Config,
     pub library: Library,
     pub playlists: Playlists,
+    /// Cart pages (their carts reference `library` tracks).
+    pub cart_pages: Vec<CartPage>,
+    pub cartwall_session: CartwallSession,
     pub ids: IdGen,
 }
 
@@ -80,12 +84,32 @@ impl AppState {
             config,
             library,
             mut playlists,
+            cart_pages,
+            cartwall_session,
             mut ids,
         } = parts;
         ids.observe(library.max_raw_id());
         ids.observe(playlists.max_raw_id());
         for s in sessions {
             ids.observe(s.id.0);
+        }
+        let mut cartwall = Cartwall {
+            pages: cart_pages,
+            open: cartwall_session.open,
+            ..Cartwall::default()
+        };
+        cartwall.shown = cartwall_session
+            .page
+            .filter(|p| cartwall.page(*p).is_some());
+        ids.observe(cartwall.max_raw_id());
+        let _ = cartwall.normalize(&config.limits, &mut ids, &library);
+        if cartwall.pages.is_empty() {
+            cartwall.pages.push(CartPage::new(
+                &mut ids,
+                "",
+                config.cartwall.default_rows,
+                config.cartwall.default_cols,
+            ));
         }
         if playlists.is_empty() {
             playlists.add(Playlist::new(ids.playlist(), default_playlist_name));
@@ -95,8 +119,21 @@ impl AppState {
             library,
             playlists,
             players: Vec::new(),
+            cartwall,
             ids,
         };
+        // Tracks nothing references (left by an interrupted save) are dropped.
+        let orphans: Vec<_> = state
+            .library
+            .iter()
+            .map(|t| t.id)
+            .filter(|t| {
+                !state.playlists.references_track(*t) && !state.cartwall.references_track(*t)
+            })
+            .collect();
+        for track in orphans {
+            state.library.remove(track);
+        }
         let mut out = Vec::new();
         for k in 0..state.config.players.count {
             let player = match sessions.get(k) {

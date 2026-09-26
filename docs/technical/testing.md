@@ -30,6 +30,27 @@ laptop and needs no sound card and no display.
 - The `test-hooks` feature of `fp-app` is enabled for its own tests through
   a self dev-dependency.
 
+## Fuzzing
+
+`fuzz/` holds [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) targets
+for every parser of untrusted input. It is a separate crate, excluded from
+the workspace, and needs the nightly toolchain:
+
+| Target | Input |
+|---|---|
+| `m3u`, `pls` | playlist files (`fp_store::playlist_io::parse_playlist`) |
+| `cart_page` | cart page files, parsed and then imported into the model |
+| `store_documents` | the same bytes as `config.json`, `playlists.json`, `session.json` and `carts.json`, then the restore |
+
+```sh
+rustup toolchain install nightly --profile minimal
+cargo install cargo-fuzz --locked
+cd fuzz && cargo +nightly fuzz run m3u -- -max_total_time=60
+```
+
+The `fuzz` workflow runs each target for five minutes every night and
+uploads any crash as an artefact.
+
 ## Checks run in CI
 
 ```sh
