@@ -47,6 +47,10 @@ audio engine that the interface can never block.
   set from a menu or with Alt-drag. An `INTRO` tag can also set the intro.
 - **Remappable keyboard shortcuts** for players and carts.
 - **M3U / M3U8 / PLS import and M3U8 export.**
+- **Bit-perfect output:** a device can be played with exclusive access,
+  following each file's sample rate while idle; at 100 % volume with no fade
+  or overlap the samples reach it unchanged, and a BP badge says so (ALSA
+  `hw:` devices; WASAPI exclusive and Core Audio hog mode next).
 - **Routing per player:** Main and Cue outputs on any device and channel
   pair. Multichannel interfaces carry several players at once.
 - **Resilient:**
@@ -65,11 +69,11 @@ audio engine that the interface can never block.
 
 ## Platform support
 
-| OS | Audio systems | Planned (Phase 4, bit-perfect) |
+| OS | Audio systems | Bit-perfect |
 |---|---|---|
-| Linux (x86-64, ARM64) | PulseAudio (also on PipeWire desktops), JACK, ALSA; native PipeWire in builds with the `pipewire` feature | — |
-| Windows 10/11 (x86-64) | WASAPI (shared), JACK, ASIO (when built with the SDK) | WASAPI exclusive |
-| macOS (Intel, Apple silicon) | Core Audio, JACK | Core Audio hog mode |
+| Linux (x86-64, ARM64) | PulseAudio (also on PipeWire desktops), JACK, ALSA; native PipeWire in builds with the `pipewire` feature | ALSA `hw:` devices |
+| Windows 10/11 (x86-64) | WASAPI (shared), JACK, ASIO (when built with the SDK) | WASAPI exclusive (next) |
+| macOS (Intel, Apple silicon) | Core Audio, JACK | Core Audio hog mode (next) |
 
 With nothing configured, the first available system is used, in this order:
 
@@ -272,7 +276,7 @@ See [Release process](docs/technical/release-process.md).
 | 1. Usable core | Players, mixing, CUE, analysis, persistence, main screen, Settings subset, CI and releases | done |
 | 2. Cartwall and full Settings | Cart pages, remappable shortcuts, language selector, M3U/M3U8/PLS import and export, manual marker editing | done |
 | 3. Native backends | PipeWire, PulseAudio, JACK, ASIO | done |
-| 4. Bit-perfect | WASAPI exclusive, Core Audio hog mode, output at the file's rate and format | next |
+| 4. Bit-perfect | Output at the file's rate and format with no processing, BP badge, ALSA `hw:` (plan 1); WASAPI exclusive, Core Audio hog mode (plan 2) | plan 1 done, plan 2 next |
 | 5. Packaging | deb, rpm, Flatpak, AppImage, signed MSI, signed and notarised dmg | planned |
 
 ## Documentation

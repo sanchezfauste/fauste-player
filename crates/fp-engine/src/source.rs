@@ -32,6 +32,10 @@ pub struct SourceShared {
     /// Length in frames of one pass of a looped source, once the worker has
     /// seen it end (0 until then).
     pub loop_frames: AtomicU64,
+    /// Set by the mixer after each block: every gain applied was exactly
+    /// 1.0 and no other source wrote into its channel pair, so its samples
+    /// reached the output unchanged (Phase 4 spec B1).
+    pub unaltered: AtomicBool,
 }
 
 impl SourceShared {

@@ -172,6 +172,10 @@ pub struct Slot {
     pausing: bool,
     paused: bool,
     finished: bool,
+    /// This block: every frame rendered at gain exactly 1.0.
+    block_unity: bool,
+    /// This block: wrote a non-zero sample.
+    block_audible: bool,
 }
 
 /// The conductor's side of a mixer.
@@ -278,6 +282,8 @@ impl Mixer {
                         pausing: false,
                         paused: false,
                         finished: false,
+                        block_unity: false,
+                        block_audible: false,
                     });
                 } else {
                     // Occupied or out of range: hand the source straight back.
@@ -410,6 +416,7 @@ impl Mixer {
                 self.emit(event);
             }
         }
+        mark_unaltered(&self.slots);
         self.shared.peak_l.fetch_max(peak_l);
         self.shared.peak_r.fetch_max(peak_r);
         self.shared
@@ -417,6 +424,25 @@ impl Mixer {
             .store(now + frames as u64, Ordering::Release);
         self.shared.heartbeat.fetch_add(1, Ordering::Release);
         self.shared.render_seq.fetch_add(1, Ordering::AcqRel);
+    }
+}
+
+/// Marks each slot's source unaltered when it played at unity and no other
+/// slot wrote into an overlapping channel pair. Compares slots pairwise: no
+/// allocation, and the slot count is small.
+fn mark_unaltered(slots: &SlotStorage) {
+    for (i, slot) in slots.0.iter().enumerate() {
+        let Some(slot) = slot else { continue };
+        let alone = !slots.0.iter().enumerate().any(|(j, other)| {
+            j != i
+                && other.as_ref().is_some_and(|o| {
+                    o.block_audible && o.first_channel.abs_diff(slot.first_channel) < 2
+                })
+        });
+        slot.source
+            .shared
+            .unaltered
+            .store(slot.block_unity && alone, Ordering::Release);
     }
 }
 
@@ -432,6 +458,8 @@ fn render_slot(
     volume_step: f32,
     events: &mut [Option<BusEvent>; 2],
 ) -> (f32, f32) {
+    slot.block_unity = false;
+    slot.block_audible = false;
     if slot.finished {
         return (0.0, 0.0);
     }
@@ -458,6 +486,8 @@ fn render_slot(
     let fits = slot.first_channel + 1 < channels;
     let mut chunk = [0.0f32; CHUNK_FRAMES * SOURCE_CHANNELS];
     let (mut peak_l, mut peak_r) = (0.0f32, 0.0f32);
+    let mut unity = true;
+    let mut rendered = false;
     while f < frames && !slot.paused {
         let abs = block_start + f as u64;
         if slot.stop_at.is_some_and(|stop| abs >= stop) {
@@ -501,6 +531,8 @@ fn render_slot(
                 slot.volume_now = (slot.volume_now - volume_step).max(target_volume);
             }
             let g = slot.fade.next_gain() * slot.pause.next_gain() * slot.volume_now;
+            unity &= g == 1.0;
+            rendered = true;
             let (l, r) = (l * g, r * g);
             peak_l = peak_l.max(l.abs());
             peak_r = peak_r.max(r.abs());
@@ -537,6 +569,8 @@ fn render_slot(
     }
     slot.source.shared.peak_l.fetch_max(peak_l);
     slot.source.shared.peak_r.fetch_max(peak_r);
+    slot.block_unity = unity && rendered;
+    slot.block_audible = peak_l > 0.0 || peak_r > 0.0;
     (peak_l, peak_r)
 }
 

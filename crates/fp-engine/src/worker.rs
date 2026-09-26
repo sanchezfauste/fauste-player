@@ -112,6 +112,9 @@ pub struct LoadOptions {
     pub until_secs: Option<f64>,
     /// At the end, start again at `from_secs` in the same ring, without a gap.
     pub looped: bool,
+    /// The rate to produce, that of the bus the source plays on; `None` is
+    /// the rate the worker was spawned with.
+    pub rate: Option<u32>,
 }
 
 pub enum WorkerCommand {
@@ -147,6 +150,8 @@ struct Job {
     looped: bool,
     /// Frames taken from the source in the current pass.
     pass_frames: u64,
+    /// Output rate of this source.
+    rate: u32,
 }
 
 /// Handle to a running worker thread; dropping it stops the thread.
@@ -177,6 +182,22 @@ impl PlayerWorker {
 
     pub fn load(&self, key: SourceKey, path: PathBuf, from_secs: f64, producer: SourceProducer) {
         self.load_with(key, path, from_secs, producer, LoadOptions::default());
+    }
+
+    /// Loads a whole file at `rate`.
+    pub fn load_at(
+        &self,
+        key: SourceKey,
+        path: PathBuf,
+        from_secs: f64,
+        producer: SourceProducer,
+        rate: u32,
+    ) {
+        let options = LoadOptions {
+            rate: Some(rate),
+            ..LoadOptions::default()
+        };
+        self.load_with(key, path, from_secs, producer, options);
     }
 
     pub fn load_with(
@@ -246,10 +267,11 @@ fn run(
                     options,
                 } => {
                     jobs.retain(|j| j.key != key);
+                    let rate = options.rate.unwrap_or(bus_rate);
                     let limit_frames = options
                         .until_secs
                         .filter(|u| u.is_finite())
-                        .map(|u| ((u - from_secs).max(0.0) * f64::from(bus_rate)).round() as u64);
+                        .map(|u| ((u - from_secs).max(0.0) * f64::from(rate)).round() as u64);
                     jobs.push(Job {
                         key,
                         path,
@@ -261,6 +283,7 @@ fn run(
                         limit_frames,
                         looped: options.looped,
                         pass_frames: 0,
+                        rate,
                     });
                 }
                 WorkerCommand::Drop { key } => jobs.retain(|j| j.key != key),
@@ -274,9 +297,7 @@ fn run(
             .filter(|j| !j.done && j.producer.free_frames() > 0)
             .min_by_key(|j| j.producer.buffered_frames())
         {
-            let outcome = catch_unwind(AssertUnwindSafe(|| {
-                step(job, opener, bus_rate, ready_frames)
-            }));
+            let outcome = catch_unwind(AssertUnwindSafe(|| step(job, opener, ready_frames)));
             let error = match outcome {
                 Ok(Ok(())) => None,
                 Ok(Err(e)) => Some(e),
@@ -303,17 +324,12 @@ fn finish(job: &mut Job) -> Result<(), String> {
 }
 
 /// Opens the job if needed and moves at most one decoded block into its ring.
-fn step(
-    job: &mut Job,
-    opener: &SourceOpener,
-    bus_rate: u32,
-    ready_frames: usize,
-) -> Result<(), String> {
+fn step(job: &mut Job, opener: &SourceOpener, ready_frames: usize) -> Result<(), String> {
     if job.limit_frames == Some(0) {
         return finish(job);
     }
     if job.source.is_none() {
-        job.source = Some(opener(&job.path, job.from_secs, bus_rate)?);
+        job.source = Some(opener(&job.path, job.from_secs, job.rate)?);
     }
     if job.pending.is_empty() {
         let at_limit = job.limit_frames.is_some_and(|l| job.pass_frames >= l);
@@ -339,7 +355,7 @@ fn step(
                     .shared
                     .loop_frames
                     .store(job.pass_frames, Ordering::Release);
-                job.source = Some(opener(&job.path, job.from_secs, bus_rate)?);
+                job.source = Some(opener(&job.path, job.from_secs, job.rate)?);
                 job.pass_frames = 0;
                 return Ok(());
             }

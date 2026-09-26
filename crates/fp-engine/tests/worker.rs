@@ -156,6 +156,7 @@ fn a_source_with_until_ends_exactly_there() {
     let options = LoadOptions {
         until_secs: Some(frames_secs(130)),
         looped: false,
+        rate: None,
     };
     w.load_with(
         SourceKey(1),
@@ -179,6 +180,7 @@ fn a_looped_source_repeats_without_gaps() {
     let options = LoadOptions {
         until_secs: Some(frames_secs(70)),
         looped: true,
+        rate: None,
     };
     w.load_with(
         SourceKey(1),
@@ -200,6 +202,7 @@ fn a_looped_source_without_until_loops_at_the_end_of_the_file() {
     let options = LoadOptions {
         until_secs: None,
         looped: true,
+        rate: None,
     };
     w.load_with(SourceKey(1), PathBuf::from("x"), 0.0, p, options);
     let l = lefts(&mut c, 200);
@@ -215,6 +218,7 @@ fn a_zero_length_loop_ends() {
     let options = LoadOptions {
         until_secs: Some(frames_secs(10)),
         looped: true,
+        rate: None,
     };
     w.load_with(
         SourceKey(1),

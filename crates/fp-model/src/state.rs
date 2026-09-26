@@ -76,6 +76,7 @@ impl AppState {
             track: track.id,
             path: track.path.clone(),
             from_secs: track.cue_in_secs(),
+            format: track.format,
         })
     }
 
@@ -98,6 +99,7 @@ impl AppState {
             track: track.id,
             path: track.path.clone(),
             from_secs,
+            format: track.format,
         })
     }
 

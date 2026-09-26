@@ -55,6 +55,8 @@ pub struct PlayerView {
     pub stop_after_current: bool,
     pub fading: bool,
     pub cueing: bool,
+    /// The current source reaches its device unchanged (the BP badge).
+    pub bit_perfect: bool,
 }
 
 fn fraction(value: Option<f64>, total: f64) -> Option<f32> {
@@ -107,6 +109,7 @@ pub fn player_view(
         stop_after_current: p.stop_after_current,
         fading: p.fading,
         cueing: p.cue.is_some(),
+        bit_perfect: false,
     };
     let Some(track) = current else {
         return Some(view);

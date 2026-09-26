@@ -57,6 +57,16 @@ fn rig(files: &[PathBuf], dir: tempfile::TempDir) -> Rig {
 
 /// `delay`: each analysis waits this long first (still cancellable).
 fn rig_slow(files: &[PathBuf], dir: tempfile::TempDir, delay: Duration) -> Rig {
+    rig_with(files, dir, delay, |_| {})
+}
+
+/// As `rig_slow`, with `prepare` applied to the loaded state first.
+fn rig_with(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    delay: Duration,
+    prepare: impl FnOnce(&mut fp_model::AppState),
+) -> Rig {
     let paths = AppPaths::under(dir.path());
     let store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
@@ -72,6 +82,7 @@ fn rig_slow(files: &[PathBuf], dir: tempfile::TempDir, delay: Duration) -> Rig {
         },
     )
     .unwrap();
+    prepare(&mut loaded.state);
     let backend = OfflineBackend::new();
     let device = backend.add_device("main", 2);
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
@@ -308,5 +319,28 @@ fn resetting_markers_analyses_the_track_again() {
     });
     r.run_until("analysed again", |r| {
         r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+}
+
+#[test]
+fn tracks_analysed_before_formats_existed_are_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (0..4)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    // A library saved before Phase 4: analysed, without formats.
+    let mut r = rig_with(&files, dir, Duration::ZERO, |state| {
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.duration_secs = 1.0;
+        }
+    });
+    r.run_until("every format", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.format.is_some())
     });
 }

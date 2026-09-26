@@ -11,8 +11,11 @@ mod support;
 use egui::Key;
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
-use fp_model::Command;
-use support::{harness, state};
+use std::sync::Arc;
+
+use fp_backends::{AudioBackend, OfflineBackend};
+use fp_model::{Command, PlayerRoutes, Route};
+use support::{harness, harness_with_backends, state};
 
 #[test]
 fn changing_fade_time_updates_the_config() {
@@ -286,4 +289,110 @@ fn a_typed_cart_name_is_kept_when_another_cart_is_selected() {
     h.get_by_role_and_label(Role::Button, "Cart 2").click();
     h.run_steps(3);
     assert_eq!(fake.state.load().cartwall.pages[0].carts[0].name, "Typed");
+}
+
+/// Player 1 plays on `dac` (exclusive-capable) and pre-listens on
+/// `speakers` (shared); Settings is open on Audio outputs.
+fn outputs() -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
+    outputs_with(Vec::new())
+}
+
+fn outputs_with(
+    bit_perfect: Vec<fp_model::OutputDevice>,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
+    let backend = OfflineBackend::new();
+    backend.add_device("dac", 2).set_exclusive_capable(true);
+    backend.add_device("speakers", 2);
+    let mut s = state(1, 1);
+    let route = |device: &str| Route {
+        backend: "offline".into(),
+        device: device.into(),
+        first_channel: 0,
+    };
+    s.config.outputs.backend = Some("offline".into());
+    s.config.outputs.bit_perfect = bit_perfect;
+    s.config.outputs.routes = vec![PlayerRoutes {
+        player: s.players[0].id,
+        main: Some(route("dac")),
+        cue: Some(route("speakers")),
+    }];
+    let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
+    let (mut h, fake) = harness_with_backends(s, backends);
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Audio outputs")
+        .click();
+    // Devices are listed by a helper thread.
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+            .is_some()
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    (h, fake)
+}
+
+fn bit_perfect_devices(fake: &support::Fake) -> Vec<String> {
+    fake.state
+        .load()
+        .config
+        .outputs
+        .bit_perfect
+        .iter()
+        .map(|d| d.device.clone())
+        .collect()
+}
+
+#[test]
+fn a_device_can_be_marked_bit_perfect() {
+    let (mut h, fake) = outputs();
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+        .click();
+    h.run_steps(2);
+    assert_eq!(bit_perfect_devices(&fake), vec!["dac".to_owned()]);
+}
+
+#[test]
+fn a_shared_device_cannot_be_bit_perfect() {
+    let (mut h, fake) = outputs();
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: speakers")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: speakers")
+        .click();
+    h.run_steps(2);
+    assert!(bit_perfect_devices(&fake).is_empty());
+    // The same click on a capable device does take (the switch was reached).
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+        .click();
+    h.run_steps(2);
+    assert_eq!(bit_perfect_devices(&fake), vec!["dac".to_owned()]);
+}
+
+#[test]
+fn a_listed_device_can_always_be_turned_off() {
+    // Listed earlier (or edited by hand) although it cannot be exclusive.
+    let (mut h, fake) = outputs_with(vec![fp_model::OutputDevice {
+        backend: "offline".into(),
+        device: "speakers".into(),
+    }]);
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: speakers")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: speakers")
+        .click();
+    h.run_steps(2);
+    assert!(bit_perfect_devices(&fake).is_empty());
 }

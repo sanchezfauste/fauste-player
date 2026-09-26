@@ -390,3 +390,62 @@ fn the_renderer_outputs_silence_instead_of_waiting_for_a_held_lock() {
     assert!(out.iter().all(|s| *s == 0.0));
     assert_eq!(h.shared.lock_misses.load(Ordering::Relaxed), 1);
 }
+
+fn start(h: &mut MixerHandle, slot: usize) {
+    send(h, BusCommand::Start { slot, at_frame: 0 });
+}
+
+#[test]
+fn a_source_is_unaltered_only_at_unity_and_alone_on_its_pair() {
+    let (mut m, mut h) = mixer(4);
+    let (_pa, a) = counting_source(64, false);
+    let alone = a.shared.clone();
+    attach(&mut h, 0, a, 0);
+    start(&mut h, 0);
+    render(&mut m, 4, 4);
+    assert!(alone.unaltered.load(Ordering::Acquire), "unity, alone");
+
+    // Another source on channels 3/4 does not touch channels 1/2.
+    let (_pb, b) = counting_source(64, false);
+    let other_pair = b.shared.clone();
+    attach(&mut h, 1, b, 2);
+    start(&mut h, 1);
+    render(&mut m, 4, 4);
+    assert!(alone.unaltered.load(Ordering::Acquire));
+    assert!(other_pair.unaltered.load(Ordering::Acquire));
+
+    // A third one on channels 1/2 is mixed into the first.
+    let (_pc, c) = counting_source(64, false);
+    let mixed_in = c.shared.clone();
+    attach(&mut h, 2, c, 0);
+    start(&mut h, 2);
+    render(&mut m, 4, 4);
+    assert!(!alone.unaltered.load(Ordering::Acquire), "summed");
+    assert!(!mixed_in.unaltered.load(Ordering::Acquire));
+    assert!(other_pair.unaltered.load(Ordering::Acquire));
+}
+
+#[test]
+fn a_gain_below_unity_alters_a_source() {
+    let (mut m, mut h) = mixer(2);
+    let (_p, c) = counting_source(64, false);
+    let shared = c.shared.clone();
+    let volume = Arc::new(AtomicF32::new(0.5));
+    assert!(
+        h.commands
+            .push(BusCommand::Attach {
+                slot: 0,
+                source: c,
+                volume: volume.clone(),
+                first_channel: 0,
+            })
+            .is_ok()
+    );
+    start(&mut h, 0);
+    render(&mut m, 4, 2);
+    assert!(!shared.unaltered.load(Ordering::Acquire));
+    volume.store(1.0);
+    render(&mut m, 4, 2);
+    render(&mut m, 4, 2);
+    assert!(shared.unaltered.load(Ordering::Acquire), "back at unity");
+}

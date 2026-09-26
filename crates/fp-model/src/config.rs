@@ -119,6 +119,13 @@ pub struct Route {
     pub first_channel: u16,
 }
 
+/// One output device, as a bit-perfect setting names it (Phase 4 spec B1).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct OutputDevice {
+    pub backend: String,
+    pub device: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerRoutes {
     pub player: PlayerId,
@@ -137,6 +144,10 @@ pub struct OutputsConfig {
     /// Where the cartwall plays (Phase 2 spec P2.4).
     #[serde(default)]
     pub cartwall: CartwallRoutes,
+    /// Devices played bit-perfect: exclusive access, and the stream rate
+    /// follows the files (Phase 4 spec B1, B3).
+    #[serde(default)]
+    pub bit_perfect: Vec<OutputDevice>,
 }
 
 /// The cartwall's outputs. Main falls back to the default output; without
@@ -156,6 +167,7 @@ impl Default for OutputsConfig {
             buffer_frames: 512,
             routes: Vec::new(),
             cartwall: CartwallRoutes::default(),
+            bit_perfect: Vec::new(),
         }
     }
 }

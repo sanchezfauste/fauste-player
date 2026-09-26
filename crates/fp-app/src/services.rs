@@ -287,8 +287,13 @@ impl Services {
             if self.in_flight.contains(&id) {
                 continue;
             }
-            let analyse =
-                self.forced.contains(&id) || (!track.analyzed && !self.done.contains(&id));
+            // Tracks analysed before formats were recorded (Phase 4) are
+            // analysed again, once, so bit-perfect output knows their rate.
+            let outdated = track.analyzed && track.format.is_none();
+            let analyse = self.forced.contains(&id)
+                || ((!track.analyzed || outdated)
+                    && !self.done.contains(&id)
+                    && !self.failed.contains(&id));
             let show =
                 wanted.contains(&id) && !self.media.contains(id) && !self.failed.contains(&id);
             if analyse || show {

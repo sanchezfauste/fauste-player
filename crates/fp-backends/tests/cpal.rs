@@ -32,6 +32,7 @@ const STEREO: StreamConfig = StreamConfig {
     sample_rate: 48_000,
     buffer_frames: 256,
     channels: 2,
+    exclusive: false,
 };
 
 #[test]

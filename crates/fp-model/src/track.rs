@@ -146,6 +146,17 @@ impl Markers {
     }
 }
 
+/// A file's own sample rate and sample size (Phase 4 spec B2). `bits` is
+/// `None` for lossy codecs, whose decoded output is not integer PCM.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioFormat {
+    pub sample_rate: u32,
+    pub bits: Option<u32>,
+    /// Channels in the file; 0 when unknown. More than two are downmixed.
+    #[serde(default)]
+    pub channels: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Track {
     pub id: TrackId,
@@ -159,6 +170,9 @@ pub struct Track {
     pub markers: Markers,
     /// True once analysis (tags, peaks, automatic markers) has completed.
     pub analyzed: bool,
+    /// Known once analysed (Phase 4); libraries saved earlier have none.
+    #[serde(default)]
+    pub format: Option<AudioFormat>,
 }
 
 impl Track {
@@ -179,6 +193,7 @@ impl Track {
             file_state: FileState::default(),
             markers: Markers::default(),
             analyzed: false,
+            format: None,
         }
     }
 
@@ -233,6 +248,9 @@ pub struct TrackAnalysis {
     /// From an `INTRO` tag (Phase 2 spec P2.8); never detected from audio.
     #[serde(default)]
     pub intro_end: Option<f64>,
+    /// The file's rate and sample size (Phase 4 spec B2).
+    #[serde(default)]
+    pub format: Option<AudioFormat>,
 }
 
 impl Track {
@@ -259,6 +277,9 @@ impl Track {
             .set_auto(MarkerKind::OutroStart, analysis.outro_start);
         self.markers
             .set_auto(MarkerKind::IntroEnd, analysis.intro_end);
+        if analysis.format.is_some() {
+            self.format = analysis.format;
+        }
         self.analyzed = true;
         self.file_state = FileState::Ok;
     }
