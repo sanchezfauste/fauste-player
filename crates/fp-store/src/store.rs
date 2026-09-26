@@ -158,6 +158,17 @@ impl Store {
             .map(|d| (d.players, d.cartwall))
             .unwrap_or_default();
         let cart_pages = carts.value.map(|d| d.pages).unwrap_or_default();
+        // Report what the restore will repair in the cart pages (the restore
+        // itself applies the same normalisation).
+        {
+            let mut probe = fp_model::Cartwall {
+                pages: cart_pages.clone(),
+                ..fp_model::Cartwall::default()
+            };
+            let mut probe_ids = ids.clone();
+            probe_ids.observe(probe.max_raw_id());
+            warnings.extend(probe.normalize(&config.limits, &mut probe_ids, &library));
+        }
         let (state, actions) = AppState::restore(
             RestoreParts {
                 config,

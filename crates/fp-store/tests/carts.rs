@@ -152,4 +152,9 @@ fn carts_pointing_at_unknown_tracks_become_empty() {
     s.save_playlists(&fresh).unwrap();
     let loaded = s.load("Main");
     assert!(loaded.state.cartwall.pages[1].carts[3].track.is_none());
+    assert!(
+        loaded.warnings.iter().any(|w| w.contains("lost its file")),
+        "{:?}",
+        loaded.warnings
+    );
 }

@@ -125,3 +125,26 @@ fn shortcuts_round_trip_through_json() {
     let back: Vec<Shortcut> = serde_json::from_str(&json).unwrap();
     assert_eq!(back, d);
 }
+
+#[test]
+fn position_zero_is_not_a_valid_target() {
+    let mut config = Config {
+        shortcuts: vec![
+            Shortcut {
+                action: ShortcutAction::PlayPlayer(0),
+                chord: KeyChord::key("A"),
+            },
+            Shortcut {
+                action: ShortcutAction::FireCart(0),
+                chord: KeyChord::key("B"),
+            },
+            Shortcut {
+                action: ShortcutAction::FireCart(1),
+                chord: KeyChord::key("C"),
+            },
+        ],
+        ..Config::default()
+    };
+    config.validate();
+    assert_eq!(config.shortcuts.len(), 1);
+}

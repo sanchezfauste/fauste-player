@@ -183,3 +183,31 @@ fn a_newer_file_is_preserved_beyond_backup_rotation() {
     assert_eq!(preserved.len(), 1, "{preserved:?}");
     assert_eq!(fs::read_to_string(&preserved[0]).unwrap(), newer);
 }
+
+#[test]
+fn an_unknown_shortcut_does_not_discard_the_others() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    write_config(
+        &s,
+        r#"{ "schema_version": 1, "config": { "shortcuts": [
+            { "action": { "PlayPlayer": 1 }, "chord": { "key": "Q" } },
+            { "action": "SomethingFromTheFuture", "chord": { "key": "W" } },
+            { "action": "StopAllCarts", "chord": { "key": "E", "ctrl": true } }
+        ] } }"#,
+    );
+    let loaded = s.load("Main");
+    let keys: Vec<String> = loaded
+        .state
+        .config
+        .shortcuts
+        .iter()
+        .map(|s| s.chord.to_string())
+        .collect();
+    assert_eq!(keys, vec!["Q".to_owned(), "Ctrl+E".to_owned()]);
+    assert!(
+        loaded.warnings.iter().any(|w| w.contains("shortcuts")),
+        "{:?}",
+        loaded.warnings
+    );
+}

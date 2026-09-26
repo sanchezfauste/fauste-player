@@ -45,8 +45,9 @@ warnings, which are logged.
   - BOM and CRLF are handled;
   - text is UTF-8, with a Windows-1252 fallback for M3U;
   - `file://` URLs are percent-decoded;
-  - relative and Windows-style paths are resolved against the playlist's
-    folder;
+  - relative paths (with `/` or `\\` separators) are resolved against the
+    playlist's folder; absolute paths from another OS (`C:\\…` on Linux) are
+    kept as written and show as unavailable;
   - streams are skipped and counted.
 
   Input is capped at `limits.max_playlist_file_bytes`. `write_m3u8` writes

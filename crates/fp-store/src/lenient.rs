@@ -58,6 +58,21 @@ fn merge(root: &mut Value, parent: &str, user: &Value, warnings: &mut Vec<String
                 set(root, parent, key, Some(candidate));
                 accepts(root)
             });
+        if !accepted && let Value::Array(items) = value {
+            // Keep every element that fits on its own (for example one
+            // shortcut written by a newer version must not discard the rest).
+            let mut kept = Vec::new();
+            for item in items {
+                kept.push(item.clone());
+                set(root, parent, key, Some(Value::Array(kept.clone())));
+                if !accepts(root) {
+                    kept.pop();
+                    warnings.push(format!("config{field}: invalid element {item} ignored"));
+                }
+            }
+            set(root, parent, key, Some(Value::Array(kept)));
+            continue;
+        }
         if !accepted {
             set(root, parent, key, default);
             warnings.push(format!(

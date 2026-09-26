@@ -200,18 +200,13 @@ pub(crate) fn resize_page(
     while carts.len() < count {
         carts.push(Cart::empty(state.ids.cart()));
     }
-    let dropped: Vec<CartId> = p.carts.iter().skip(count).map(|c| c.id).collect();
     if let Some(p) = state.cartwall.page_mut(page) {
         p.rows = rows;
         p.cols = cols;
         p.carts = carts;
     }
-    // Dropped carts are empty, but may still pre-listen or be listed as
-    // playing after a file was cleared: forget them.
-    state
-        .cartwall
-        .playing
-        .retain(|p| !dropped.contains(&p.cart));
+    // Dropped carts have no file, so none of them can be playing or cueing
+    // (clearing a file stops the cart first).
     Ok(())
 }
 
@@ -289,6 +284,10 @@ pub(crate) fn import_page(state: &mut AppState, import: CartPageImport) -> Resul
             track
         });
         if let Some(cart) = page.carts.get_mut(position) {
+            // A position given twice: the earlier file is not kept.
+            if let Some(old) = cart.track.take() {
+                state.library.remove(old);
+            }
             cart.name = edit.name;
             cart.kind = edit.kind;
             cart.looped = edit.looped;

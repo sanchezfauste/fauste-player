@@ -193,3 +193,30 @@ fn unknown_tracks_are_refused() {
         Err(ModelError::UnknownTrack(TrackId(123_456)))
     );
 }
+
+#[test]
+fn cue_points_need_a_known_length() {
+    let mut state = fixture(1);
+    let t = track(&state, 0);
+    state.library.get_mut(t).unwrap().duration_secs = 0.0;
+    assert_eq!(
+        set(&mut state, t, MarkerKind::CueIn, Some(500.0)),
+        Err(ModelError::InvalidMarker)
+    );
+    assert_eq!(
+        set(&mut state, t, MarkerKind::CueOut, Some(5.0)),
+        Err(ModelError::InvalidMarker)
+    );
+}
+
+#[test]
+fn moving_cue_in_keeps_the_other_markers_inside_the_range() {
+    let mut state = fixture(1);
+    let t = track(&state, 0);
+    set(&mut state, t, MarkerKind::IntroEnd, Some(10.0)).unwrap();
+    set(&mut state, t, MarkerKind::CueIn, Some(20.0)).unwrap();
+    assert_eq!(marker(&state, t, MarkerKind::IntroEnd).unwrap().0, 20.0);
+    set(&mut state, t, MarkerKind::SegueStart, Some(170.0)).unwrap();
+    set(&mut state, t, MarkerKind::CueOut, Some(150.0)).unwrap();
+    assert_eq!(marker(&state, t, MarkerKind::SegueStart).unwrap().0, 150.0);
+}

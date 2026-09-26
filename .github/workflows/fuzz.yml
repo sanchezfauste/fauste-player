@@ -21,10 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install nightly and cargo-fuzz
-        run: |
-          rustup toolchain install nightly --profile minimal
-          cargo install cargo-fuzz --locked
+      - name: Install nightly
+        run: rustup toolchain install nightly --profile minimal
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: fuzz

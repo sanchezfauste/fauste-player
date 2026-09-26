@@ -283,3 +283,19 @@ fn cart_page_with_wrong_format_is_refused() {
         Err(CartPageFileError::TooNew(99))
     ));
 }
+
+#[test]
+fn unusual_file_urls_and_drive_paths() {
+    let text = b"C://music/a.mp3\nfile:/home/u/x.mp3\nfile://server/share/b.mp3\n";
+    let list = parse_playlist(text, Path::new("/l/a.m3u"), &limits()).unwrap();
+    assert_eq!(list.skipped_streams, 0);
+    let got: Vec<_> = list.entries.iter().map(|e| e.path.clone()).collect();
+    assert_eq!(
+        got,
+        vec![
+            PathBuf::from("C://music/a.mp3"),
+            PathBuf::from("/home/u/x.mp3"),
+            PathBuf::from("//server/share/b.mp3"),
+        ]
+    );
+}

@@ -524,6 +524,10 @@ fn set_marker(
         None => None,
         Some(v) if !v.is_finite() => return Err(ModelError::InvalidMarker),
         Some(v) => Some(match kind {
+            // Cue points only make sense once the length is known.
+            MarkerKind::CueIn | MarkerKind::CueOut if duration.is_none() => {
+                return Err(ModelError::InvalidMarker);
+            }
             MarkerKind::CueIn => {
                 let v = v.max(0.0);
                 if cue_out.is_some_and(|out| v >= out) {
@@ -543,6 +547,12 @@ fn set_marker(
     };
     if let Some(t) = state.library.get_mut(track) {
         t.markers.set_manual(kind, value);
+        if matches!(kind, MarkerKind::CueIn | MarkerKind::CueOut) {
+            // Keep the inner markers within the new range.
+            let (cue_in, cue_out) = (t.cue_in_secs(), t.known_cue_out_secs());
+            t.markers
+                .clamp_manual_inner(cue_in, cue_out.unwrap_or(f64::INFINITY));
+        }
         if value.is_none() {
             // Let analysis put the automatic value back.
             t.analyzed = false;

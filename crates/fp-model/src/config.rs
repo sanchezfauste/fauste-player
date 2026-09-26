@@ -524,6 +524,16 @@ impl Config {
         let mut chords = std::collections::HashSet::new();
         let mut actions = std::collections::HashSet::new();
         self.shortcuts.retain(|s| {
+            if s.action.position() == Some(0) {
+                w.push(ConfigWarning {
+                    field: "shortcuts",
+                    message: format!(
+                        "{} for {:?} ignored: positions start at 1",
+                        s.chord, s.action
+                    ),
+                });
+                return false;
+            }
             let fresh = !chords.contains(&s.chord) && !actions.contains(&s.action);
             if fresh {
                 chords.insert(s.chord.clone());

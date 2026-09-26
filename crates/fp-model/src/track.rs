@@ -122,6 +122,21 @@ impl Markers {
         }
     }
 
+    /// Clamps the manual intro, outro and MIX markers into `[from, to]`.
+    pub fn clamp_manual_inner(&mut self, from: f64, to: f64) {
+        for kind in [
+            MarkerKind::IntroEnd,
+            MarkerKind::OutroStart,
+            MarkerKind::SegueStart,
+        ] {
+            if let Some(m) = self.slot_mut(kind)
+                && m.source == MarkerSource::Manual
+            {
+                m.secs = m.secs.clamp(from, to.max(from));
+            }
+        }
+    }
+
     /// Places (or clears, with `None`) a user marker.
     pub fn set_manual(&mut self, kind: MarkerKind, secs: Option<f64>) {
         *self.slot_mut(kind) = secs.map(|secs| Marker {

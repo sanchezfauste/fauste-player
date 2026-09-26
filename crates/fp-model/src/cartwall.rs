@@ -186,6 +186,84 @@ impl Cartwall {
             .any(|c| c.track == Some(track))
     }
 
+    /// Repairs pages read from disk so every invariant holds: grids within
+    /// the limits with exactly `rows × cols` carts (growing the grid rather
+    /// than dropping a cart that has a file), unique page and cart ids, and
+    /// no cart pointing at a track the library does not have. Returns what
+    /// was repaired, for the load warnings. Idempotent.
+    pub fn normalize(
+        &mut self,
+        limits: &crate::config::Limits,
+        ids: &mut IdGen,
+        library: &crate::track::Library,
+    ) -> Vec<String> {
+        let mut notes = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let (max_rows, max_cols) = (limits.max_cart_rows.max(1), limits.max_cart_cols.max(1));
+        for page in &mut self.pages {
+            if !seen.insert(page.id.0) {
+                page.id = ids.cart_page();
+                notes.push(format!("cart page \"{}\" had a duplicate id", page.name));
+            }
+            let (mut rows, mut cols) = (page.rows.clamp(1, max_rows), page.cols.clamp(1, max_cols));
+            let needed = page
+                .carts
+                .iter()
+                .rposition(|c| c.track.is_some())
+                .map_or(0, |i| i + 1);
+            while usize::from(rows) * usize::from(cols) < needed
+                && (rows < max_rows || cols < max_cols)
+            {
+                if rows < max_rows {
+                    rows += 1;
+                } else {
+                    cols += 1;
+                }
+            }
+            let count = usize::from(rows) * usize::from(cols);
+            if (rows, cols) != (page.rows, page.cols) || page.carts.len() != count {
+                notes.push(format!(
+                    "cart page \"{}\": grid {}×{} with {} carts repaired to {rows}×{cols}",
+                    page.name,
+                    page.rows,
+                    page.cols,
+                    page.carts.len()
+                ));
+            }
+            let lost = page
+                .carts
+                .iter()
+                .skip(count)
+                .filter(|c| c.track.is_some())
+                .count();
+            if lost > 0 {
+                notes.push(format!(
+                    "cart page \"{}\": {lost} carts beyond the largest grid dropped",
+                    page.name
+                ));
+            }
+            page.carts.truncate(count);
+            while page.carts.len() < count {
+                page.carts.push(Cart::empty(ids.cart()));
+            }
+            page.rows = rows;
+            page.cols = cols;
+            for cart in &mut page.carts {
+                if !seen.insert(cart.id.0) {
+                    cart.id = ids.cart();
+                }
+                if cart.track.is_some_and(|t| library.get(t).is_none()) {
+                    cart.track = None;
+                    notes.push(format!(
+                        "cart \"{}\" on page \"{}\" lost its file (not in the library)",
+                        cart.name, page.name
+                    ));
+                }
+            }
+        }
+        notes
+    }
+
     /// The largest id used by pages and carts (to seed `IdGen` on load).
     pub fn max_raw_id(&self) -> u64 {
         self.pages

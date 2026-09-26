@@ -163,11 +163,24 @@ fn resolve(entry: &str, base: &Path) -> Option<Target> {
     if entry.is_empty() {
         return None;
     }
+    if is_windows_absolute(entry) {
+        return Some(Target::File(PathBuf::from(entry)));
+    }
     let lower = entry.to_ascii_lowercase();
-    if let Some(rest) = lower.strip_prefix("file://") {
+    if let Some(rest) = lower.strip_prefix("file:") {
         // Keep the original case: slice the same length off the original.
         let rest = entry.get(entry.len() - rest.len()..).unwrap_or(rest);
-        let rest = rest.strip_prefix("localhost").unwrap_or(rest);
+        let rest = match rest.strip_prefix("//") {
+            // `file:///path` and `file://localhost/path` are local.
+            Some(after) if after.starts_with('/') => after,
+            Some(after) => match after.strip_prefix("localhost") {
+                Some(local) => local,
+                // `file://server/share/…`: a network path.
+                None => rest,
+            },
+            // `file:/path`
+            None => rest,
+        };
         let decoded = percent_decode(rest);
         // `file:///C:/x` → `C:/x` on Windows.
         let decoded = match decoded.strip_prefix('/') {

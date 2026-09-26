@@ -429,3 +429,29 @@ fn new_pages_use_the_configured_grid_and_kinds_are_editable() {
     let c = &state.cartwall.pages[0].carts[0];
     assert_eq!((c.kind, c.name.as_str()), (CartKind::Spot, "Bakery"));
 }
+
+#[test]
+fn importing_duplicate_positions_keeps_no_orphan_track() {
+    let mut state = fixture(0);
+    let edit = CartEdit {
+        name: "x".into(),
+        kind: CartKind::Jingle,
+        looped: false,
+        exclusive: false,
+    };
+    let import = fp_model::CartPageImport {
+        name: "Imported".into(),
+        rows: 2,
+        cols: 8,
+        carts: vec![
+            (0, edit.clone(), Some(PathBuf::from("/a.wav"))),
+            (0, edit, Some(PathBuf::from("/b.wav"))),
+        ],
+    };
+    apply(&mut state, Command::ImportCartPage(Box::new(import))).unwrap();
+    assert_eq!(
+        state.library.iter().count(),
+        1,
+        "only the referenced track remains"
+    );
+}

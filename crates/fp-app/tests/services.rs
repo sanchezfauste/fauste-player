@@ -292,3 +292,21 @@ fn cart_pages_are_saved_after_the_debounce() {
     let saved = std::fs::read_to_string(r.paths.carts_file()).unwrap_or_default();
     assert!(saved.contains("Sports"), "{saved}");
 }
+
+#[test]
+fn resetting_markers_analyses_the_track_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 2);
+    let mut r = rig(&[a], dir);
+    r.run_until("analysis", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    let track = r.handle.model.load().library.iter().next().unwrap().id;
+    r.handle.send(Command::ResetMarkers { track });
+    r.run_until("a second analysis", |r| {
+        r.analyses.load(Ordering::SeqCst) >= 2
+    });
+    r.run_until("analysed again", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+}

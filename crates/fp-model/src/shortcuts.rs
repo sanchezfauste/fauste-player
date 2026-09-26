@@ -75,6 +75,24 @@ pub enum ShortcutAction {
     PreviousCartPage,
 }
 
+impl ShortcutAction {
+    /// The 1-based player or cart position the action targets, if any.
+    pub fn position(self) -> Option<u16> {
+        match self {
+            Self::PlayPlayer(n)
+            | Self::PausePlayer(n)
+            | Self::StopPlayer(n)
+            | Self::FadeStopPlayer(n)
+            | Self::CuePlayer(n)
+            | Self::FireCart(n) => Some(n),
+            Self::StopAllCarts
+            | Self::ToggleCartwall
+            | Self::NextCartPage
+            | Self::PreviousCartPage => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Shortcut {
     pub action: ShortcutAction,
