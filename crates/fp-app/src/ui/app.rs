@@ -15,6 +15,7 @@ use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
 use fp_model::{AppState, Command, EntryId, ModelError, PlayerId, PlaylistId, TrackId, Transport};
 
+use super::cartwall;
 use super::controller::Controller;
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::player;
@@ -69,6 +70,8 @@ pub(crate) struct ViewState {
     pub resizing: HashSet<PlayerId>,
     pub rows_built: usize,
     pub settings_open: bool,
+    /// A cart to open in Settings → Cartwall (`Edit…` on a cart).
+    pub edit_cart: Option<(fp_model::CartPageId, usize)>,
     meters: HashMap<PlayerId, Meter>,
     notice: Option<(String, f64)>,
 }
@@ -295,12 +298,31 @@ impl AppUi {
                 .layout(Layout::left_to_right(Align::Center)),
         );
         top_bar(&mut top_ui, &scene, &mut self.view);
+        // The cartwall strip takes the bottom of the middle area.
+        let inner = middle.shrink(8.0);
+        let cart_height = cartwall::height(&scene).min(inner.height() * 0.6);
+        let players_rect = Rect::from_min_max(
+            inner.min,
+            egui::pos2(inner.right(), inner.bottom() - cart_height - 8.0),
+        );
+        let cart_rect = Rect::from_min_max(
+            egui::pos2(inner.left(), inner.bottom() - cart_height),
+            inner.max,
+        );
         let mut players_ui = ui.new_child(
             UiBuilder::new()
-                .max_rect(middle.shrink(8.0))
+                .max_rect(players_rect)
                 .layout(Layout::left_to_right(Align::Min)),
         );
         players_row(&mut players_ui, &scene, &mut self.view, &mut self.covers);
+        let mut cart_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(cart_rect)
+                .id_salt("cartwall")
+                .layout(Layout::top_down(Align::Min)),
+        );
+        cart_ui.set_clip_rect(cart_rect);
+        cartwall::strip(&mut cart_ui, &scene, &mut self.view);
         let mut status_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(status)

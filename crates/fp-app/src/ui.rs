@@ -1,6 +1,8 @@
 //! egui user interface.
 
 pub mod app;
+pub mod cart_view;
+mod cartwall;
 pub mod controller;
 pub mod files;
 pub mod format;
