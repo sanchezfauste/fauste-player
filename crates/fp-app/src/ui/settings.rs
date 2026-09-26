@@ -13,6 +13,9 @@ use fp_backends::{AudioBackend, Availability, DeviceInfo};
 use fp_model::{Command, Config, PlayMode, PlayerId, PlayerRoutes, PlaylistId, Route};
 
 use super::app::Scene;
+
+mod carts;
+mod keys;
 use super::format;
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
@@ -31,6 +34,8 @@ pub(crate) enum Section {
     Players,
     Analysis,
     Playlists,
+    Cartwall,
+    Shortcuts,
 }
 
 /// One audio system and what it offers.
@@ -44,6 +49,8 @@ pub(crate) struct BackendChoice {
 #[derive(Default)]
 pub(crate) struct SettingsState {
     pub section: Section,
+    pub(super) carts: carts::CartsState,
+    pub(super) keys: keys::KeysState,
     backends: Option<Vec<BackendChoice>>,
     loading: Option<Receiver<Vec<BackendChoice>>>,
     names: HashMap<PlaylistId, String>,
@@ -53,6 +60,12 @@ pub(crate) struct SettingsState {
 }
 
 impl SettingsState {
+    /// Opens the Cartwall section on one cart (`Edit…` on a cart button).
+    pub fn edit_cart(&mut self, page: fp_model::CartPageId, index: usize) {
+        self.section = Section::Cartwall;
+        self.carts.select(page, index);
+    }
+
     /// Called when the modal opens: device lists are read again.
     pub fn reset(&mut self) {
         *self = Self::default();
@@ -208,6 +221,8 @@ pub(crate) fn show(
                                             Section::Players => players(ui, scene),
                                             Section::Analysis => analysis(ui, scene, deps),
                                             Section::Playlists => playlists(ui, scene, st),
+                                            Section::Cartwall => carts::section(ui, scene, st),
+                                            Section::Shortcuts => keys::section(ui, scene, st),
                                         }
                                     });
                             });
@@ -286,6 +301,12 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
             ),
             (Section::Analysis, icon::WAVEFORM, "settings-tab-analysis"),
             (Section::Playlists, icon::PLAYLIST, "settings-tab-playlists"),
+            (
+                Section::Cartwall,
+                icon::SQUARES_FOUR,
+                "settings-tab-cartwall",
+            ),
+            (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
         ] {
             let on = st.section == section;
             let label = t.tr(key);
@@ -516,7 +537,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 route_picker(
                     ui,
                     scene,
-                    player.id,
+                    Owner::Player(player.id),
                     Bus::Main,
                     routes.as_ref().and_then(|r| r.main.clone()),
                     backend_id.as_deref(),
@@ -525,7 +546,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 route_picker(
                     ui,
                     scene,
-                    player.id,
+                    Owner::Player(player.id),
                     Bus::Cue,
                     routes.as_ref().and_then(|r| r.cue.clone()),
                     backend_id.as_deref(),
@@ -534,6 +555,29 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             });
         });
     }
+    let cart_routes = config.outputs.cartwall.clone();
+    row(ui, &t.tr("settings-cartwall-outputs"), None, |ui| {
+        ui.vertical(|ui| {
+            route_picker(
+                ui,
+                scene,
+                Owner::Cartwall,
+                Bus::Main,
+                cart_routes.main.clone(),
+                backend_id.as_deref(),
+                &devices,
+            );
+            route_picker(
+                ui,
+                scene,
+                Owner::Cartwall,
+                Bus::Cue,
+                cart_routes.cue.clone(),
+                backend_id.as_deref(),
+                &devices,
+            );
+        });
+    });
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -542,7 +586,25 @@ enum Bus {
     Cue,
 }
 
-fn set_route(config: &mut Config, player: PlayerId, bus: Bus, route: Option<Route>) {
+/// Whose outputs a route picker edits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Owner {
+    Player(PlayerId),
+    Cartwall,
+}
+
+fn set_route(config: &mut Config, owner: Owner, bus: Bus, route: Option<Route>) {
+    let player = match owner {
+        Owner::Player(p) => p,
+        Owner::Cartwall => {
+            let c = &mut config.outputs.cartwall;
+            match bus {
+                Bus::Main => c.main = route,
+                Bus::Cue => c.cue = route,
+            }
+            return;
+        }
+    };
     let routes = &mut config.outputs.routes;
     let index = match routes.iter().position(|r| r.player == player) {
         Some(i) => i,
@@ -566,7 +628,7 @@ fn set_route(config: &mut Config, player: PlayerId, bus: Bus, route: Option<Rout
 fn route_picker(
     ui: &mut Ui,
     scene: &Scene<'_>,
-    player: PlayerId,
+    owner: Owner,
     bus: Bus,
     route: Option<Route>,
     backend: Option<&str>,
@@ -606,12 +668,12 @@ fn route_picker(
                     .map_or_else(|| d.clone(), |x| x.name.clone())
             })
             .unwrap_or_else(|| none_text.clone());
-        egui::ComboBox::from_id_salt(("device", player.0, bus == Bus::Main))
+        egui::ComboBox::from_id_salt(("device", owner, bus == Bus::Main))
             .selected_text(shown)
             .width(260.0)
             .show_ui(ui, |ui| {
                 if ui.selectable_label(device.is_none(), &none_text).clicked() {
-                    update(scene, |c| set_route(c, player, bus, None));
+                    update(scene, |c| set_route(c, owner, bus, None));
                 }
                 for d in devices {
                     let on = device.as_deref() == Some(d.id.0.as_str());
@@ -623,7 +685,7 @@ fn route_picker(
                             device: d.id.0.clone(),
                             first_channel: 0,
                         };
-                        update(scene, |c| set_route(c, player, bus, Some(r)));
+                        update(scene, |c| set_route(c, owner, bus, Some(r)));
                     }
                 }
             });
@@ -641,7 +703,7 @@ fn route_picker(
                     ],
                 )
             };
-            egui::ComboBox::from_id_salt(("channels", player.0, bus == Bus::Main))
+            egui::ComboBox::from_id_salt(("channels", owner, bus == Bus::Main))
                 .selected_text(pair(r.first_channel))
                 .show_ui(ui, |ui| {
                     for first in (0..channels.saturating_sub(1)).step_by(2) {
@@ -651,7 +713,7 @@ fn route_picker(
                         {
                             let mut changed = r.clone();
                             changed.first_channel = first;
-                            update(scene, |c| set_route(c, player, bus, Some(changed)));
+                            update(scene, |c| set_route(c, owner, bus, Some(changed)));
                         }
                     }
                 });
@@ -779,15 +841,48 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
             update(scene, |c| c.players.end_warning_secs = warning);
         }
     });
-    ui.add_space(12.0);
-    ui.add(
-        egui::Label::new(
-            RichText::new(t.tr_args("settings-language", &[("lang", t.lang().into())]))
-                .font(font(11.0))
-                .color(theme::NEUTRAL_500),
-        )
-        .selectable(false),
-    );
+    let current = config.ui.language.clone();
+    row(ui, &t.tr("settings-language-title"), None, |ui| {
+        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+        // Language names are shown in their own language.
+        for (tag, text) in [
+            (None, t.tr("settings-language-system")),
+            (Some("en-US"), "English".to_owned()),
+            (Some("es-ES"), "Español".to_owned()),
+        ] {
+            let on = current.as_deref() == tag;
+            let style = TileStyle {
+                fill: if on {
+                    theme::NEUTRAL_700
+                } else {
+                    Color32::TRANSPARENT
+                },
+                content: if on { theme::TEXT } else { theme::NEUTRAL_400 },
+                ..TileStyle::plain()
+            };
+            let width = ui
+                .painter()
+                .layout_no_wrap(text.clone(), font(12.0), theme::TEXT)
+                .size()
+                .x
+                + 28.0;
+            if widgets::tile(ui, vec2(width, 30.0), &text, true, style, |p, r, c| {
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    &text,
+                    font(12.0),
+                    c,
+                );
+            })
+            .clicked()
+                && !on
+            {
+                let tag = tag.map(str::to_owned);
+                update(scene, |c| c.ui.language = tag);
+            }
+        }
+    });
 }
 
 /// An on/off switch drawn like the design's toggles.

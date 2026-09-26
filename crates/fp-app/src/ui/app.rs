@@ -156,6 +156,8 @@ pub struct AppUi {
     fail_next_frame: bool,
     settings: SettingsState,
     settings_shown: bool,
+    /// The `config.ui.language` the interface strings follow.
+    language: Option<Option<String>>,
     backends: Vec<Arc<dyn AudioBackend>>,
     service_faults: Option<Arc<std::sync::atomic::AtomicU64>>,
 }
@@ -179,6 +181,7 @@ impl AppUi {
             fail_next_frame: false,
             settings: SettingsState::default(),
             settings_shown: false,
+            language: None,
             backends: Vec::new(),
             service_faults: None,
         }
@@ -249,6 +252,17 @@ impl AppUi {
             return;
         }
         let state = self.ctl.model();
+        // Follow a language change made in Settings (the first frame only
+        // records what the interface was built with).
+        let wanted = state.config.ui.language.clone();
+        match &self.language {
+            None => self.language = Some(wanted),
+            Some(applied) if *applied != wanted => {
+                self.i18n = I18n::new(wanted.as_deref());
+                self.language = Some(wanted);
+            }
+            Some(_) => {}
+        }
         let telemetry = self.ctl.telemetry();
         let time = ctx.input(|i| i.time);
         self.view.rows_built = 0;
@@ -341,6 +355,9 @@ impl AppUi {
             if !self.settings_shown {
                 self.settings.reset();
                 self.settings_shown = true;
+            }
+            if let Some((page, index)) = self.view.edit_cart.take() {
+                self.settings.edit_cart(page, index);
             }
             let deps = SettingsDeps {
                 backends: &self.backends,
