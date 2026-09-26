@@ -57,9 +57,9 @@ No lock is shared between the UI and anything on the audio path.
 |---|---|
 | A decoder panics | caught by the worker (`catch_unwind`); the source becomes `Failed`, drains what is buffered, and the model marks the entry `Unreadable` and skips it |
 | An analysis job panics | caught; reported as `Unreadable` |
-| A services step panics | caught; counted and shown as a status-bar alert; the next step runs normally |
+| A services step panics | analysis and autosave are caught separately, so a fault in one never stops the other; faults are counted and shown as a status-bar alert |
 | A UI frame panics | caught by `ui::shell::Shell`; the screen shows a banner with **Restart interface**; audio is unaffected |
-| Anything else | the panic hook writes `crash-<nanos>.txt` to the log directory before unwinding |
+| Any panic | the panic hook writes `crash-<nanos>.txt` to the log directory before unwinding, at most `limits.max_crash_reports` (20) per run; later panics are only logged |
 
 Every profile builds with `panic = "unwind"`, which the containment above
 relies on.

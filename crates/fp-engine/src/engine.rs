@@ -302,7 +302,8 @@ impl Engine {
             .sum()
     }
 
-    /// Bus commands that could not be queued (should always be zero).
+    /// Bus commands that could not be queued, plus test tones refused because
+    /// the queue had no room for them.
     pub fn dropped_commands(&self) -> u64 {
         self.dropped_commands
     }

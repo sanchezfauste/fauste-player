@@ -24,7 +24,7 @@ fn fauste_home_overrides_the_os_directories() {
 #[test]
 fn the_panic_hook_writes_a_crash_report() {
     let dir = tempfile::tempdir().unwrap();
-    install_panic_hook(dir.path().to_path_buf());
+    install_panic_hook(dir.path().to_path_buf(), 20);
     let _ = std::panic::catch_unwind(|| panic!("deliberate test panic"));
     let reports: Vec<_> = std::fs::read_dir(dir.path())
         .unwrap()

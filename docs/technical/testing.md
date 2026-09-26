@@ -5,7 +5,7 @@ laptop and needs no sound card and no display.
 
 | Layer | Where | How |
 |---|---|---|
-| Player rules (spec §3) | `fp-model/tests/*.rs` | One test per rule (`ruleN_…`), plus proptest properties for playlist operations (nothing lost or duplicated, the current entry never removed) |
+| Player rules (spec §3) | `fp-model/tests/*.rs` | Tests named after the rules they cover (`ruleN_…`); the display rules (1, 16–20) are tested in `fp-app` (view model and UI tests); plus proptest properties for playlist operations (nothing lost or duplicated, the current entry never removed) |
 | Store | `fp-store/tests`, unit tests in `fp-store/src` | Round trips, migrations, corrupt-file fallback, atomic-write crash simulation, lenient config |
 | Decoding | `fp-decode/tests`, `fp-engine/tests/decode.rs`, `worker.rs` | Formats, mono/multichannel downmix, seeks, truncated files, resampling in the worker |
 | Backends | `fp-backends/tests` | Null and Offline behaviour; cpal format conversion |
@@ -39,4 +39,6 @@ cargo test --workspace --locked
 cargo deny check          # licences, advisories, sources
 ```
 
-These run on Linux, Windows and macOS for every push and pull request.
+fmt, clippy and tests run on Linux, Windows and macOS for pushes to `master`
+and for every pull request; `cargo deny` and the release-bump check run on
+Linux.

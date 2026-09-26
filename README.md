@@ -152,7 +152,8 @@ git config core.hooksPath .githooks                    # enable the Conventional
 ### Rules the code follows
 
 - **No `unsafe`** (`forbid` workspace-wide), and no `unwrap`, `expect` or
-  `panic` outside tests. Library crates deny `clippy::indexing_slicing`.
+  `panic` outside tests. The audio and analysis crates deny
+  `clippy::indexing_slicing`.
 - **The real-time thread never allocates, frees, locks, logs or panics.**
   `assert_no_alloc` tests enforce it. See
   [Threading and real time](docs/technical/threading-and-realtime.md).

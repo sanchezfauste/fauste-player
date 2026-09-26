@@ -26,6 +26,12 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
     let files = audio_paths(&[PathBuf::from(folder)]);
+    if files.is_empty() {
+        eprintln!(
+            "demo_session: no audio files directly inside that folder (sub-folders are not read)"
+        );
+        return ExitCode::FAILURE;
+    }
     let mut config = Config::default();
     config.players.count = 4;
     let mut state = AppState::new(config, "Morning");
@@ -36,7 +42,8 @@ fn main() -> ExitCode {
     let lists: Vec<PlaylistId> = state.playlists.iter().map(|p| p.id).collect();
     for (n, list) in lists.iter().enumerate() {
         let mut chosen = files.clone();
-        chosen.rotate_left(n * 3);
+        let len = chosen.len();
+        chosen.rotate_left((n * 3) % len);
         let _ = fp_model::apply(
             &mut state,
             Command::InsertPaths {

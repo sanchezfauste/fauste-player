@@ -231,3 +231,27 @@ fn rule22_an_explicit_next_is_kept_even_if_on_air_elsewhere() {
     apply(&mut state, Command::Play(p1)).unwrap();
     assert_eq!(state.player(p2).unwrap().next, Some(e[0]));
 }
+
+#[test]
+fn rule22_an_idle_player_left_without_next_picks_again_when_entries_come_free() {
+    let mut state = fixture(2);
+    let e = entries(&state);
+    let (p1, p2, p3) = (
+        state.players[0].id,
+        state.players[1].id,
+        state.players[2].id,
+    );
+    apply(&mut state, Command::Play(p1)).unwrap();
+    apply(&mut state, Command::Play(p2)).unwrap();
+    assert_eq!(
+        state.player(p3).unwrap().next,
+        None,
+        "both entries are on air"
+    );
+    apply(&mut state, Command::Stop(p2)).unwrap();
+    assert_eq!(
+        state.player(p3).unwrap().next,
+        Some(e[1]),
+        "e1 is free again"
+    );
+}

@@ -1,37 +1,107 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "simple",
+  "bootstrap-sha": "088bc9caaae315eea60c5cc25f4591b6e2af7c63",
   "include-component-in-tag": false,
   "include-v-in-tag": true,
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": false,
   "pull-request-title-pattern": "chore: release ${version}",
   "changelog-sections": [
-    { "type": "feat", "section": "Features" },
-    { "type": "fix", "section": "Bug Fixes" },
-    { "type": "perf", "section": "Performance" },
-    { "type": "revert", "section": "Reverts" },
-    { "type": "refactor", "section": "Code Refactoring" },
-    { "type": "docs", "section": "Documentation" },
-    { "type": "build", "section": "Build System" },
-    { "type": "ci", "section": "Continuous Integration", "hidden": true },
-    { "type": "test", "section": "Tests", "hidden": true },
-    { "type": "style", "section": "Styles", "hidden": true },
-    { "type": "chore", "section": "Miscellaneous", "hidden": true }
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance"
+    },
+    {
+      "type": "revert",
+      "section": "Reverts"
+    },
+    {
+      "type": "refactor",
+      "section": "Code Refactoring"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation"
+    },
+    {
+      "type": "build",
+      "section": "Build System"
+    },
+    {
+      "type": "ci",
+      "section": "Continuous Integration",
+      "hidden": true
+    },
+    {
+      "type": "test",
+      "section": "Tests",
+      "hidden": true
+    },
+    {
+      "type": "style",
+      "section": "Styles",
+      "hidden": true
+    },
+    {
+      "type": "chore",
+      "section": "Miscellaneous",
+      "hidden": true
+    }
   ],
   "packages": {
     ".": {
       "package-name": "fauste-player",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
-        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name==='fp-analysis')].version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name==='fp-app')].version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name==='fp-backends')].version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name==='fp-decode')].version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name==='fp-engine')].version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name==='fp-model')].version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name==='fp-store')].version" }
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='fp-analysis')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='fp-app')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='fp-backends')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='fp-decode')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='fp-engine')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='fp-model')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='fp-store')].version"
+        }
       ]
     }
   }

@@ -35,7 +35,8 @@ Windows, macOS). Read [`README.md`](README.md) for the overview and
 6. **Safety lints.**
    - `unsafe_code` is forbidden.
    - `unwrap`, `expect` and `panic` are denied outside tests.
-   - Library crates deny `clippy::indexing_slicing` (use `get`).
+   - `fp-engine`, `fp-backends`, `fp-decode` and `fp-analysis` deny
+     `clippy::indexing_slicing` (use `get`); prefer `get` everywhere.
    - Test-only hooks go behind the `test-hooks` feature of `fp-app`.
 7. **Behaviour lives in `fp-model`.** Player rules are pure functions
    (`apply`, `on_event`, `plan_for`, `reconcile`), one test per rule in spec

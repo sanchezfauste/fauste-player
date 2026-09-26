@@ -65,6 +65,12 @@ so countdowns, segues and chaining continue. The device is reopened every
 | `AddPlayer`, `RemovePlayer` | create or retire a worker and its bookkeeping |
 | `LoadPaused` | restore a session: load the source at a position, paused |
 
+A known limit: a transition already dispatched to the mixer (within
+`schedule_lead_ms` of its frame) still starts the entry it was given, even if
+the next changed meanwhile. The model follows the engine
+(`TransitionStarted`). This is also why rule 22 can briefly be bypassed at
+that exact moment.
+
 It turns bus events back into model events: `TransitionStarted`,
 `ReachedEnd`, `FadeCompleted`, `SourceFailed` and `CueEnded`. Stale events
 (for an entry that is no longer current) are ignored by the model.

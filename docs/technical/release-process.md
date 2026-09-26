@@ -3,8 +3,10 @@
 ## Conventions
 
 - **Versions:** [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
-  Before 1.0.0, a breaking change bumps the minor version
-  (`bump-minor-pre-major`), and a feature or fix bumps the patch.
+  Before 1.0.0, a breaking change or a feature bumps the minor version
+  (`bump-minor-pre-major`), and a fix bumps the patch. The first release
+  after the 0.1.0 baseline is 0.2.0 (`bootstrap-sha` marks where its
+  changelog starts).
 - **Commits:** [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/).
   The subject is `type(scope)!: summary`:
 
@@ -30,7 +32,23 @@ git config core.hooksPath .githooks
 ```
 
 CI checks the PR title (`amannn/action-semantic-pull-request`) and every
-commit subject (`scripts/check-commits.sh`).
+commit subject (`scripts/check-commits.sh`). Reword git's default
+`Revert "…"` subject to `revert: …`. The local hook lets `fixup!` and
+`squash!` commits through so they can be autosquashed, but CI rejects them,
+so squash before pushing.
+
+## Repository setup (once)
+
+- **Settings → Actions → General:** enable *Allow GitHub Actions to create
+  and approve pull requests*, or release-please cannot open its PR.
+- Optionally add a secret **`RELEASE_PLEASE_TOKEN`** (a fine-grained PAT or a
+  GitHub App token with *contents* and *pull requests* write access). PRs
+  opened with the default `GITHUB_TOKEN` do not trigger other workflows, so
+  without it CI does not run on the release PR. In that case, close and
+  reopen the PR, or push an empty commit to it, to run CI.
+- CI also runs `scripts/check-release-bump.sh` on every push: it applies
+  release-please's own updater to a scratch copy and checks that `Cargo.lock`
+  stays consistent for `--locked` builds.
 
 ## How a release happens
 

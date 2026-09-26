@@ -23,6 +23,6 @@ Fauste Player is a local desktop application:
   - a malformed file degrades to "not available", never to a crash.
 - Paths from playlists are only opened for reading. Nothing is executed, and
   nothing is written outside the application's config, data, cache and log
-  folders, or a path the user picks in a save dialog.
-- The code has no `unsafe` (`#![forbid(unsafe_code)]`). Dependencies are
+  folders, or a path the user explicitly picks when exporting (from Phase 2).
+- The code has no `unsafe` (the workspace lints forbid `unsafe_code`). Dependencies are
   checked by `cargo deny` (advisories, licences, sources) in CI.

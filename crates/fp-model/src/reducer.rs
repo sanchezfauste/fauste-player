@@ -121,6 +121,7 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             state.config = config;
         }
     }
+    fill_empty_next(state);
     avoid_next_on_air(state);
     reconcile(state, &mut out);
     Ok(out)
@@ -174,6 +175,7 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             }
         }
     }
+    fill_empty_next(state);
     avoid_next_on_air(state);
     reconcile(state, &mut out);
     out

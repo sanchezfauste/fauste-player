@@ -40,9 +40,12 @@ Phase 3.
 
 ## Adding a backend
 
-1. Implement `AudioBackend` in a new module of `fp-backends`. FFI, if any, is
-   the only place `unsafe` may appear. It needs an `#[allow(unsafe_code)]`
-   scoped to the module, `// SAFETY:` comments and tests.
+1. Implement `AudioBackend` in a new module of `fp-backends`. Prefer crates
+   with safe APIs. The workspace forbids `unsafe_code`, and `forbid` cannot be
+   overridden by `allow`, so a backend that truly needs FFI requires an
+   explicit decision: change the lint level for `fp-backends` only (to
+   `deny`, with a module-scoped `allow`), plus `// SAFETY:` comments and
+   tests. Record that decision in the spec.
 2. Never allocate or block inside the render callback. Convert formats
    through buffers allocated when the stream opens.
 3. Register it in `fp-app/src/main.rs` (the list passed to `Engine::new`).

@@ -83,7 +83,7 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 | `markers_min_duration_secs` | 60 | 0 … 3600 |
 | `peak_bucket_ms` | 10 | 1 … 1000 |
 | `rms_window_ms` | 50 | 5 … 1000 |
-| `cover_thumb_px` | 128 | |
+| `cover_thumb_px` | 128 | 16 … 1024 |
 
 ### `outputs` (Settings → Audio outputs; applied at the next start)
 
@@ -112,6 +112,7 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 | `max_state_file_bytes` | 50 MiB |
 | `max_playlist_file_bytes` | 10 MiB |
 | `backup_count` | 3 |
+| `max_crash_reports` | 20 (crash reports written per run) |
 
 ### `tuning` (config file only)
 

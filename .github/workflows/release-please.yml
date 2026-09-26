@@ -5,6 +5,12 @@ name: release-please
 # Conventional Commits). Merging that PR tags vX.Y.Z and creates the GitHub
 # release; the binaries are then built and attached in the same run, because
 # releases created with GITHUB_TOKEN do not trigger other workflows.
+#
+# Repository setup: enable "Allow GitHub Actions to create and approve pull
+# requests" (Settings → Actions → General). Optionally add a secret
+# RELEASE_PLEASE_TOKEN (a fine-grained PAT or GitHub App token with contents
+# and pull-requests write access): PRs opened with it run CI, which PRs
+# opened with the default GITHUB_TOKEN do not.
 
 on:
   push:
@@ -24,6 +30,7 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 

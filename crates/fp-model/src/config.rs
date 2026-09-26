@@ -141,6 +141,9 @@ pub struct Limits {
     pub max_state_file_bytes: u64,
     pub max_playlist_file_bytes: u64,
     pub backup_count: usize,
+    /// Crash reports written per run (a contained, repeating panic is logged
+    /// but does not fill the disk).
+    pub max_crash_reports: usize,
 }
 
 impl Default for Limits {
@@ -152,6 +155,7 @@ impl Default for Limits {
             max_state_file_bytes: 50 * MIB,
             max_playlist_file_bytes: 10 * MIB,
             backup_count: 3,
+            max_crash_reports: 20,
         }
     }
 }
@@ -268,6 +272,13 @@ impl Config {
             &mut w,
         );
         clamp_to(&mut l.backup_count, 0, 20, "limits.backup_count", &mut w);
+        clamp_to(
+            &mut l.max_crash_reports,
+            1,
+            10_000,
+            "limits.max_crash_reports",
+            &mut w,
+        );
 
         let max_players = self.limits.max_players;
         let p = &mut self.players;

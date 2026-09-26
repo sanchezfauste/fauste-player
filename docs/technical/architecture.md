@@ -20,8 +20,9 @@ fp-app ──► fp-engine ──► fp-backends
    └──► fp-store ─────► fp-model
 ```
 
-All crates are `#![forbid(unsafe_code)]` through the workspace lints. Library
-crates also deny `clippy::indexing_slicing`. No crate may `unwrap`, `expect`
+All crates forbid `unsafe_code` through the workspace lints. `fp-engine`,
+`fp-backends`, `fp-decode` and `fp-analysis` also deny
+`clippy::indexing_slicing`. No crate may `unwrap`, `expect`
 or `panic` outside tests.
 
 ## Data flow
