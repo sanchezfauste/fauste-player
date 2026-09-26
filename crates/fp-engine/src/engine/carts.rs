@@ -52,6 +52,14 @@ impl CartwallRuntime {
 }
 
 impl Engine {
+    /// Whether a cart source on `bus` is audible or about to be (carts
+    /// never wait idle: they start as soon as they are ready).
+    pub(super) fn carts_sounding(&self, bus: &BusKey) -> bool {
+        self.cartwall
+            .as_ref()
+            .is_some_and(|c| c.all().any(|s| &s.bus == bus))
+    }
+
     /// Creates the cartwall worker and opens its buses on first use.
     fn ensure_cartwall(&mut self, now: Instant) -> bool {
         if self.cartwall.is_none() {
@@ -125,9 +133,10 @@ impl Engine {
             c.main.clone()
         };
         let volume = c.volume.clone();
-        let ring = ((self.settings.tuning.prebuffer_secs * f64::from(self.settings.sample_rate))
-            as usize)
-            .max(1024);
+        // A bus running faster than configured needs more frames for the
+        // same seconds of buffer.
+        let rate = self.rate_of(&bus_key).max(self.settings.sample_rate);
+        let ring = ((self.settings.tuning.prebuffer_secs * f64::from(rate)) as usize).max(1024);
         let bus = self.buses.get_mut(&bus_key).ok_or(AttachError::NoRoute)?;
         if bus.command_room() < 2 {
             self.dropped_commands += 1;
@@ -153,6 +162,7 @@ impl Engine {
         let options = LoadOptions {
             until_secs: Some(request.until_secs).filter(|u| u.is_finite()),
             looped: request.looped,
+            rate: Some(self.rate_of(&bus_key)),
         };
         if let Some(c) = self.cartwall.as_ref() {
             c.worker.load_with(
@@ -185,6 +195,9 @@ impl Engine {
         }
         // A cart fired again while still on air restarts it.
         self.stop_cart(request.cart);
+        if let Some(main) = self.cartwall.as_ref().map(|c| c.main.0.clone()) {
+            self.prepare_start(&main, request.format);
+        }
         match self.cart_source(request, false) {
             Ok(source) => {
                 if let Some(c) = self.cartwall.as_mut() {
@@ -215,6 +228,14 @@ impl Engine {
             return;
         }
         self.stop_cart_cue();
+        if let Some(cue) = self
+            .cartwall
+            .as_ref()
+            .and_then(|c| c.cue.as_ref())
+            .map(|c| c.0.clone())
+        {
+            self.prepare_start(&cue, request.format);
+        }
         match self.cart_source(request, true) {
             Ok(source) => {
                 if let Some(c) = self.cartwall.as_mut() {
@@ -242,7 +263,7 @@ impl Engine {
             self.release_cart(&source);
             return;
         }
-        let frames = self.settings.frames(self.settings.tuning.declick_ms);
+        let frames = self.frames_on(&source.bus, self.settings.tuning.declick_ms);
         let now = self.now_frame(&source.bus);
         self.send(
             &source.bus,
@@ -400,8 +421,8 @@ impl Engine {
         let Some(c) = self.cartwall.as_ref() else {
             return (Vec::new(), None);
         };
-        let rate = f64::from(self.settings.sample_rate.max(1));
         let position = |s: &CartSource| {
+            let rate = f64::from(self.rate_of(&s.bus));
             let played = s.shared.frames_played();
             let pass = s
                 .shared

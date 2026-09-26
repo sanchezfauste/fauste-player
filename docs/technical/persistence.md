@@ -113,6 +113,8 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 | `sample_rate` | 48000 | Hz |
 | `buffer_frames` | 512 | frames per block |
 | `routes[]` | empty | `{ player, main: Route?, cue: Route? }`, where `Route` is `{ backend, device, first_channel }` |
+| `cartwall` | none | `{ main: Route?, cue: Route? }` for the cartwall |
+| `bit_perfect[]` | empty | `{ backend, device }` of devices played bit-perfect (exclusive access, rate follows the files) |
 
 ### `ui`
 

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use crate::{
     AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream,
-    Renderer, StreamConfig, StreamErrorSink,
+    Renderer, SampleFormat, StreamConfig, StreamErrorSink,
 };
 
 pub const NULL_DEVICE: &str = "null";
@@ -25,6 +25,10 @@ struct NullStream {
 impl OutputStream for NullStream {
     fn config(&self) -> StreamConfig {
         self.config
+    }
+
+    fn sample_format(&self) -> SampleFormat {
+        SampleFormat::F32
     }
 }
 
@@ -74,6 +78,12 @@ impl AudioBackend for NullBackend {
         }
         if config.sample_rate == 0 || config.buffer_frames == 0 || config.channels == 0 {
             return Err(BackendError::Unsupported(format!("{config:?}")));
+        }
+        if config.exclusive {
+            // Nothing reaches a device here: never claim bit-perfect output.
+            return Err(BackendError::Unsupported(
+                "the null output has no exclusive access".to_owned(),
+            ));
         }
         let stop = Arc::new(AtomicBool::new(false));
         let stop_flag = stop.clone();

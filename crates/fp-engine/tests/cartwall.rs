@@ -38,6 +38,7 @@ fn cart(n: u64, from_secs: f64, until_secs: f64, looped: bool) -> CartRequest {
         from_secs,
         until_secs,
         looped,
+        format: None,
     }
 }
 

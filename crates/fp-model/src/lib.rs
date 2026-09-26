@@ -23,8 +23,8 @@ pub use command::{
     CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
 };
 pub use config::{
-    AnalysisSettings, CartwallConfig, CartwallRoutes, Config, ConfigWarning, Limits, OutputsConfig,
-    PlayerRoutes, PlayersConfig, Route, Tuning, UiConfig,
+    AnalysisSettings, CartwallConfig, CartwallRoutes, Config, ConfigWarning, Limits, OutputDevice,
+    OutputsConfig, PlayerRoutes, PlayersConfig, Route, Tuning, UiConfig,
 };
 pub use error::ModelError;
 pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
@@ -35,5 +35,6 @@ pub use session::{PlayerSession, RestoreParts};
 pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts};
 pub use state::AppState;
 pub use track::{
-    FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track, TrackAnalysis, TrackKind,
+    AudioFormat, FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track,
+    TrackAnalysis, TrackKind,
 };

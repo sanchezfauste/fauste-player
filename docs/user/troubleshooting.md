@@ -17,6 +17,21 @@
    PipeWire through its PulseAudio service, which works the same way. It is
    available in builds made with the `pipewire` feature.
 
+## Bit-perfect
+
+- **The BP badge stays off.** Check each condition in
+  [Bit-perfect output](bit-perfect.md#the-bp-badge): volume at 100 %, no
+  fade, nothing else on the same outputs, a lossless file that has been
+  analysed, and a device running at the file's rate.
+- **A short silence before a track.** The bit-perfect device reopened at the
+  track's sample rate. Keep the library at one rate to avoid it.
+- **A `hw:` device cannot be opened (Linux).**
+  - A sound server may be holding the card. Stop it, or set the server to
+    leave that card alone, and restart the application.
+  - Some USB DACs accept only packed 24-bit samples (`S24_3LE`), which the
+    audio library does not support. Use that card through `plughw:` (not
+    bit-perfect) instead.
+
 ## "Output lost" alert
 
 The status bar shows **Output lost: <device>** when a device stops responding.

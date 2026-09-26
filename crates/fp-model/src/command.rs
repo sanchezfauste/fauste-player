@@ -7,7 +7,7 @@ use crate::config::Config;
 use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{ColumnWidths, PlayMode};
 use crate::shortcuts::{KeyChord, ShortcutAction};
-use crate::track::{FileState, MarkerKind, TrackAnalysis};
+use crate::track::{AudioFormat, FileState, MarkerKind, TrackAnalysis};
 
 /// A user intent, sent by the UI.
 #[derive(Debug, Clone, PartialEq)]
@@ -153,6 +153,8 @@ pub struct SourceRequest {
     pub track: TrackId,
     pub path: PathBuf,
     pub from_secs: f64,
+    /// The file's format, once analysed (bit-perfect buses follow its rate).
+    pub format: Option<AudioFormat>,
 }
 
 /// Transition point meaning "the natural end of the decoded source". Used
@@ -260,4 +262,6 @@ pub struct CartRequest {
     /// Cue-out, or `SOURCE_END` while the length is unknown.
     pub until_secs: f64,
     pub looped: bool,
+    /// The file's format, once analysed.
+    pub format: Option<AudioFormat>,
 }

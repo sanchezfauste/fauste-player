@@ -19,6 +19,7 @@ const CONFIG: StreamConfig = StreamConfig {
     sample_rate: 48_000,
     buffer_frames: 480,
     channels: 2,
+    exclusive: false,
 };
 const MIXER: MixerConfig = MixerConfig {
     volume_smoothing_frames: 1,

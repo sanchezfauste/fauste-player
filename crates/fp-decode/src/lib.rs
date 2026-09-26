@@ -23,6 +23,7 @@ pub struct FileDecoder {
     decoder: Box<dyn AudioDecoder>,
     track_id: u32,
     sample_rate: u32,
+    bits_per_sample: Option<u32>,
     channels: usize,
     frames_hint: Option<u64>,
     scratch: Vec<f32>,
@@ -61,6 +62,8 @@ impl FileDecoder {
             .make_audio_decoder(params, &AudioDecoderOptions::default())
             .map_err(|e| format!("{}: {e}", path.display()))?;
         let channels = params.channels.as_ref().map_or(0, |c| c.count());
+        // Lossy codecs have no sample size: their output is not integer PCM.
+        let bits_per_sample = params.bits_per_sample.filter(|b| *b > 0);
         let frames_hint = track.num_frames;
         let track_id = track.id;
         Ok(Self {
@@ -68,6 +71,7 @@ impl FileDecoder {
             decoder,
             track_id,
             sample_rate,
+            bits_per_sample,
             channels,
             frames_hint,
             scratch: Vec::new(),
@@ -77,6 +81,11 @@ impl FileDecoder {
 
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
+    }
+
+    /// Bits per sample of integer PCM (lossless codecs); `None` for lossy.
+    pub fn bits_per_sample(&self) -> Option<u32> {
+        self.bits_per_sample
     }
 
     /// Channels in the file (0 if the container does not say).

@@ -16,6 +16,7 @@ by themselves.
 | [Cartwall](cartwall.md) | Instant carts: firing, pages, loops, exclusive carts, setup |
 | [Markers and mixing](markers-and-mixing.md) | Cue in/out, the MIX point, intro and outro, automatic analysis |
 | [Settings](settings.md) | Audio outputs, players, analysis, playlists |
+| [Bit-perfect output](bit-perfect.md) | Exclusive devices that follow each file's rate, the BP badge, checking a chain |
 | [Keyboard](keyboard.md) | Shortcuts |
 | [Data and backups](data-and-backups.md) | Where files live, autosave, crash recovery, portable mode |
 | [Troubleshooting](troubleshooting.md) | No sound, device lost, files marked unavailable, logs |

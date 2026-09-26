@@ -5,8 +5,8 @@ mod common;
 
 use common::{entries, fixture, p0};
 use fp_model::{
-    Command, EngineAction, FileState, MarkerKind, MarkerSource, TrackAnalysis, TrackId,
-    TransitionPlan, apply,
+    AudioFormat, Command, EngineAction, FileState, MarkerKind, MarkerSource, TrackAnalysis,
+    TrackId, TransitionPlan, apply,
 };
 
 fn analysis(duration: f64) -> TrackAnalysis {
@@ -20,6 +20,11 @@ fn analysis(duration: f64) -> TrackAnalysis {
         segue_start: Some(duration - 6.0),
         outro_start: Some(duration - 20.0),
         intro_end: None,
+        format: Some(AudioFormat {
+            sample_rate: 44_100,
+            bits: Some(16),
+            channels: 2,
+        }),
     }
 }
 
@@ -206,4 +211,47 @@ fn an_automatic_segue_outside_a_manual_cue_out_is_not_used() {
         EngineAction::Schedule { plan: Some(TransitionPlan::StartNextAt { at_secs, fade_current_until_secs: None }), .. }
             if *at_secs == 150.0
     )), "the manual cue-out wins and the stale segue is ignored: {actions:?}");
+}
+
+#[test]
+fn requests_carry_the_track_format() {
+    let mut state = fixture(2);
+    let p = p0(&state);
+    let t = track_of(&state, 0);
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(analysis(200.0)),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        state.library.get(t).unwrap().format,
+        Some(AudioFormat {
+            sample_rate: 44_100,
+            bits: Some(16),
+            channels: 2,
+        })
+    );
+    let actions = apply(&mut state, Command::Play(p)).unwrap();
+    let request = actions
+        .iter()
+        .find_map(|a| match a {
+            EngineAction::StartCurrent { request, .. } => Some(request.clone()),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(request.format.map(|f| f.sample_rate), Some(44_100));
+}
+
+#[test]
+fn a_library_without_formats_loads() {
+    let track: fp_model::Track = serde_json::from_str(
+        r#"{"id":1,"path":"/music/a.flac","title":"A","artist":"","album":"",
+            "duration_secs":10.0,"kind":"Music","file_state":"Ok",
+            "markers":{},"analyzed":true}"#,
+    )
+    .unwrap();
+    assert_eq!(track.format, None);
 }

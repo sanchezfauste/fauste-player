@@ -11,7 +11,7 @@ playlist tabs, transport, volume and outputs.
 | Status dot and label | **On air** (red), **Paused** (amber), **Stopped** (grey) |
 | **Mixing** / **Fading** badge | A crossfade into the next track, or a fade stop, is running |
 | **Stop after** badge | The player stops when the current track ends |
-| **BP** | Bit-perfect output indicator (inactive until a later version) |
+| **BP** | Lit while the current track reaches its Main device unchanged (see [Bit-perfect output](bit-perfect.md)) |
 | **SINGLE** / **CONT** | Play mode (see below) |
 | **CUE** | Pre-listen the next track on the CUE output |
 
