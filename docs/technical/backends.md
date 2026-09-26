@@ -27,33 +27,52 @@ through an RT-safe sink: it sets atomics, which the bus watchdog reads.
 | `OfflineBackend` | `offline` | tests | Devices rendered on demand on the caller's thread, for sample-exact tests |
 
 `system_backends()` returns one `CpalBackend::for_host` for every host
-compiled into the build (`cpal::ALL_HOSTS`), the platform default first.
+compiled into the build (`cpal::ALL_HOSTS`), in the OS preference order.
+Nothing connects to a system until it is first used.
 
-- **Hosts:** each backend creates its cpal host once and keeps it. Some
-  systems open a server connection per host. A host that cannot start (a
-  missing library, a JACK server that is not running) makes the backend
-  `Unavailable(reason)`.
+- **Hosts:** each backend creates its cpal host on first use and keeps it,
+  because some systems open a server connection per host. A host that
+  failed to open is not kept. One whose stream reported the device lost, or
+  whose open failed, is rebuilt on the next use, so the watchdog's reopen
+  reaches a restarted server instead of a dead connection.
+- **Availability:** `host_availability` gives `Available` only when the host
+  opens *and* has an output device. A missing library makes it
+  `Unavailable(reason)`, and so does a JACK host with no server (cpal opens
+  it anyway, with no ports): "no output device (is its server running?)".
+- **Channels:** a device reports the most channels any of its
+  configurations offers, except on PulseAudio, where every sink offers every
+  count it could remix to; there the sink's own layout (its default
+  configuration) is used.
 - **Streams:** they use the same code for every host: the sample format is
   chosen as F32, then I32, then I16 and converted through a preallocated
   buffer; the requested buffer size is tried first, then the device default.
   Real-time priority comes through cpal's `audio_thread_priority` (rtkit
   over D-Bus on Linux).
-- **Default backend:** `preferred_backend` picks the first available one in
-  the OS order (Linux: PipeWire, PulseAudio, JACK, ALSA; Windows: WASAPI,
-  ASIO, JACK; macOS: Core Audio, JACK). A configured backend that is not
-  available at start-up is replaced by that choice for the default output,
-  with a warning. Routes keep naming their own backend and retry while it is
-  away.
+- **Default backend:** `choose_default_backend` keeps the configured
+  backend when it is available, otherwise `preferred_backend` picks the
+  first available one in the OS order (Linux: PipeWire, PulseAudio, JACK,
+  ALSA; Windows: WASAPI, ASIO, JACK; macOS: Core Audio, JACK), with a
+  warning.
+- **Routes:** the engine notes which backends were unavailable when it
+  started. A Main route to one plays on the default output, and a Cue route
+  to one means no cue, as for a backend this build does not have. A backend
+  that was available and is lost later keeps its routes, and the watchdog
+  retries it.
 
 | Cargo feature (`fp-backends`, forwarded by `fp-app`) | System | Build needs |
 |---|---|---|
 | `pulseaudio` (default) | PulseAudio (a pure-Rust client, also works with PipeWire's PulseAudio server) | nothing |
-| `pipewire` | PipeWire | `libpipewire-0.3-dev`, `libspa-0.2-dev`, clang |
-| `jack` | JACK | Linux: `libjack-dev` (the library is loaded at run time); Windows, macOS: nothing |
+| `pipewire` | PipeWire, linked (the binary needs libpipewire 0.3.53 or later to start) | `libpipewire-0.3-dev`, `libspa-0.2-dev`, clang |
+| `jack` | JACK, loaded at run time (the binary starts without it) | Linux: `libjack-jackd2-dev`; Windows, macOS: nothing |
 | `asio` | ASIO (Windows) | the Steinberg ASIO SDK (`CPAL_ASIO_DIR`) |
 
-CI builds and tests with `pipewire,jack` on Linux and `jack` elsewhere; the
-release archives use the same features.
+CI builds and tests with `pipewire,jack` on Linux and `jack` elsewhere. The
+release archives use `jack` only: `pipewire` would make libpipewire a
+start-up dependency, and the release image (Ubuntu 22.04, chosen for its
+older glibc) has a libpipewire older than the bindings need. Distribution
+packages can enable it. CI's `release-baseline` job builds on that image,
+and `scripts/check-runtime-deps.sh` fails any Linux binary that links a
+library beyond ALSA, D-Bus and the C runtime.
 
 ## Conformance suite
 

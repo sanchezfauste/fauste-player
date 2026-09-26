@@ -576,3 +576,75 @@ fn a_route_to_an_unknown_backend_falls_back_to_the_default_backend() {
         "the player must not go silent"
     );
 }
+
+/// An audio system compiled in but not usable here (a JACK server that is
+/// not running, a library that is missing).
+struct Unavailable;
+
+impl AudioBackend for Unavailable {
+    fn id(&self) -> fp_backends::BackendId {
+        fp_backends::BackendId("jack".into())
+    }
+    fn availability(&self) -> fp_backends::Availability {
+        fp_backends::Availability::Unavailable("server not running".into())
+    }
+    fn enumerate_devices(&self) -> Result<Vec<fp_backends::DeviceInfo>, fp_backends::BackendError> {
+        Err(fp_backends::BackendError::Unavailable(
+            "server not running".into(),
+        ))
+    }
+    fn default_device(&self) -> Option<fp_backends::DeviceId> {
+        None
+    }
+    fn open_output(
+        &self,
+        _: &fp_backends::DeviceId,
+        _: fp_backends::StreamConfig,
+        _: Box<dyn fp_backends::Renderer>,
+        _: Arc<dyn fp_backends::StreamErrorSink>,
+    ) -> Result<Box<dyn fp_backends::OutputStream>, fp_backends::BackendError> {
+        Err(fp_backends::BackendError::Unavailable(
+            "server not running".into(),
+        ))
+    }
+}
+
+#[test]
+fn a_route_to_an_unavailable_backend_falls_back_to_the_default_output() {
+    let backend = OfflineBackend::new();
+    let main = backend.add_device("main", 2);
+    let mut config = Config::default();
+    config.outputs.buffer_frames = BLOCK as u32;
+    config.outputs.backend = Some("offline".into());
+    config.outputs.routes = vec![PlayerRoutes {
+        player: P,
+        main: Some(Route {
+            backend: "jack".into(),
+            device: "system".into(),
+            first_channel: 0,
+        }),
+        cue: None,
+    }];
+    let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(Unavailable), Arc::new(backend)];
+    let mut engine = Engine::new(
+        backends,
+        EngineSettings::from_config(&config),
+        tagged_opener(96_000),
+    );
+    let now = Instant::now();
+    engine.execute(EngineAction::AddPlayer { player: P }, now);
+    engine.execute(
+        EngineAction::StartCurrent {
+            player: P,
+            request: request(1, 0.0),
+        },
+        now,
+    );
+    std::thread::sleep(Duration::from_millis(20));
+    engine.tick(now);
+    let out = main.render(BLOCK).unwrap();
+    assert!(
+        out.iter().any(|v| *v != 0.0),
+        "a route to a system that is unavailable here must play on the default output"
+    );
+}

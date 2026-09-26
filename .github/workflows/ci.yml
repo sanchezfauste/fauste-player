@@ -44,6 +44,23 @@ jobs:
       - run: cargo test --workspace --locked --features "$FEATURES"
         shell: bash
 
+  release-baseline:
+    name: release build on the release image
+    # The Linux archives are built on ubuntu-22.04 (the oldest glibc they
+    # support); this catches a dependency that needs newer system packages
+    # or links a library the binary would need just to start.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          pkg-config libasound2-dev libdbus-1-dev libjack-jackd2-dev
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p fp-app --bin fauste-player --features jack
+      - run: scripts/check-runtime-deps.sh target/debug/fauste-player
+
   deny:
     runs-on: ubuntu-latest
     steps:

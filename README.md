@@ -67,7 +67,7 @@ audio engine that the interface can never block.
 
 | OS | Audio systems | Planned (Phase 4, bit-perfect) |
 |---|---|---|
-| Linux (x86-64, ARM64) | PipeWire, PulseAudio, JACK, ALSA | — |
+| Linux (x86-64, ARM64) | PulseAudio (also on PipeWire desktops), JACK, ALSA; native PipeWire in builds with the `pipewire` feature | — |
 | Windows 10/11 (x86-64) | WASAPI (shared), JACK, ASIO (when built with the SDK) | WASAPI exclusive |
 | macOS (Intel, Apple silicon) | Core Audio, JACK | Core Audio hog mode |
 
@@ -112,10 +112,15 @@ sudo apt install libpipewire-0.3-dev libspa-0.2-dev libjack-jackd2-dev clang   #
 cargo build --release -p fp-app --features pipewire,jack
 ```
 
-On Windows and macOS, `--features jack` needs no SDK: JACK is loaded at run
-time if it is installed. ASIO needs the Steinberg ASIO SDK: set
-`CPAL_ASIO_DIR` to it and build with `--features asio`. Release archives are
-built with `pipewire,jack` on Linux and `jack` elsewhere.
+JACK is loaded at run time on every OS, so a `jack` build still starts
+where JACK is not installed; on Windows and macOS it needs no SDK to build.
+`pipewire` links libpipewire, so that build needs PipeWire installed to
+start. ASIO needs the Steinberg ASIO SDK: set `CPAL_ASIO_DIR` to it and
+build with `--features asio`.
+
+The release archives are built with `jack` only. PipeWire desktops are
+served through PulseAudio (pipewire-pulse), and the archives start on any
+Linux with ALSA and D-Bus.
 
 The window system libraries (X11 or Wayland, `libxkbcommon`, OpenGL) are
 loaded at run time. Any desktop has them. Minimal systems may need

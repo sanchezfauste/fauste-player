@@ -14,7 +14,9 @@ mod null;
 mod offline;
 
 pub use cpal_backend::CpalBackend;
-pub use hosts::{display_name, preferred_backend, system_backends};
+pub use hosts::{
+    choose_default_backend, display_name, host_availability, preferred_backend, system_backends,
+};
 pub use null::NullBackend;
 pub use offline::{OfflineBackend, OfflineDevice};
 

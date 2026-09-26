@@ -1,11 +1,12 @@
-//! Backend built on cpal. In Phase 1 it provides the platform default host
-//! (ALSA on Linux, WASAPI shared mode on Windows, Core Audio on macOS).
+//! Backend built on cpal: one per audio system (cpal host) compiled in.
 
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
+use crate::hosts::host_availability;
 use crate::{
     AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream,
     Renderer, StreamConfig, StreamErrorKind, StreamErrorSink,
@@ -13,9 +14,63 @@ use crate::{
 
 pub struct CpalBackend {
     host_id: cpal::HostId,
-    /// Created on first use and kept: some systems (PulseAudio, JACK) open
-    /// a server connection per host, which should not happen on every call.
-    host: std::sync::OnceLock<Result<cpal::Host, String>>,
+    host: HostCache<cpal::Host>,
+}
+
+/// A host created on first use and kept: some systems (PulseAudio, JACK)
+/// open a server connection per host, which should not happen on every
+/// call. A host that failed to open is not kept, and one whose connection
+/// was lost (a server restart, a device gone) is rebuilt on the next use,
+/// so the watchdog's reopen reaches a live server.
+struct HostCache<H> {
+    host: Mutex<Option<Arc<H>>>,
+    /// Set from a stream's error callback (real-time safe) when the device
+    /// or server is lost.
+    lost: Arc<AtomicBool>,
+}
+
+impl<H> Default for HostCache<H> {
+    fn default() -> Self {
+        Self {
+            host: Mutex::new(None),
+            lost: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+impl<H> HostCache<H> {
+    fn get(&self, open: impl FnOnce() -> Result<H, String>) -> Result<Arc<H>, String> {
+        let mut host = self.host.lock().unwrap_or_else(PoisonError::into_inner);
+        if self.lost.swap(false, Ordering::AcqRel) {
+            *host = None;
+        }
+        if let Some(h) = host.as_ref() {
+            return Ok(Arc::clone(h));
+        }
+        let fresh = Arc::new(open()?);
+        *host = Some(Arc::clone(&fresh));
+        Ok(fresh)
+    }
+
+    fn lost(&self) -> &Arc<AtomicBool> {
+        &self.lost
+    }
+}
+
+/// Passes stream errors on, and marks the host for rebuilding when the
+/// device or server is lost.
+struct MarkLost {
+    inner: Arc<dyn StreamErrorSink>,
+    lost: Arc<AtomicBool>,
+}
+
+impl StreamErrorSink for MarkLost {
+    fn report(&self, kind: StreamErrorKind) {
+        if kind == StreamErrorKind::DeviceLost {
+            self.lost.store(true, Ordering::Release);
+        }
+        self.inner.report(kind);
+    }
 }
 
 struct CpalStream {
@@ -73,15 +128,29 @@ impl CpalBackend {
     pub fn for_host(host_id: cpal::HostId) -> Self {
         Self {
             host_id,
-            host: std::sync::OnceLock::new(),
+            host: HostCache::default(),
         }
     }
 
-    fn host(&self) -> Result<&cpal::Host, BackendError> {
+    fn open_host(&self) -> Result<Arc<cpal::Host>, String> {
         self.host
-            .get_or_init(|| cpal::host_from_id(self.host_id).map_err(|e| e.to_string()))
-            .as_ref()
-            .map_err(|e| BackendError::Unavailable(e.clone()))
+            .get(|| cpal::host_from_id(self.host_id).map_err(|e| e.to_string()))
+    }
+
+    fn host(&self) -> Result<Arc<cpal::Host>, BackendError> {
+        self.open_host().map_err(BackendError::Unavailable)
+    }
+
+    /// Output channels to offer for `device`. A sound server (PulseAudio)
+    /// lists every channel count it could remix to; the sink's own layout
+    /// is its default configuration.
+    fn channels(&self, device: &cpal::Device, supported: u16) -> u16 {
+        if self.host_id.name().eq_ignore_ascii_case("pulseaudio")
+            && let Ok(config) = device.default_output_config()
+        {
+            return config.channels();
+        }
+        supported
     }
 
     fn find(&self, host: &cpal::Host, device: &DeviceId) -> Result<cpal::Device, BackendError> {
@@ -98,10 +167,17 @@ impl AudioBackend for CpalBackend {
     }
 
     fn availability(&self) -> Availability {
-        match self.host() {
-            Ok(_) => Availability::Available,
-            Err(e) => Availability::Unavailable(e.to_string()),
+        let opened = self.open_host().map(|host| {
+            host.default_output_device().is_some()
+                || host
+                    .output_devices()
+                    .is_ok_and(|mut devices| devices.next().is_some())
+        });
+        if opened != Ok(true) {
+            // Try again next time: the server may be started later.
+            self.host.lost().store(true, Ordering::Release);
         }
+        host_availability(opened)
     }
 
     fn enumerate_devices(&self) -> Result<Vec<DeviceInfo>, BackendError> {
@@ -130,6 +206,7 @@ impl AudioBackend for CpalBackend {
             }
             sample_rates.sort_unstable();
             sample_rates.dedup();
+            let channels = self.channels(&device, channels);
             list.push(DeviceInfo {
                 id: DeviceId(id.to_string()),
                 name,
@@ -156,8 +233,30 @@ impl AudioBackend for CpalBackend {
         renderer: Box<dyn Renderer>,
         errors: Arc<dyn StreamErrorSink>,
     ) -> Result<Box<dyn OutputStream>, BackendError> {
+        let result = self.open_on_host(device, config, renderer, errors);
+        if result.is_err() {
+            // A stale connection is the usual cause; the next attempt
+            // starts from a fresh host.
+            self.host.lost().store(true, Ordering::Release);
+        }
+        result
+    }
+}
+
+impl CpalBackend {
+    fn open_on_host(
+        &self,
+        device: &DeviceId,
+        config: StreamConfig,
+        renderer: Box<dyn Renderer>,
+        errors: Arc<dyn StreamErrorSink>,
+    ) -> Result<Box<dyn OutputStream>, BackendError> {
+        let errors: Arc<dyn StreamErrorSink> = Arc::new(MarkLost {
+            inner: errors,
+            lost: Arc::clone(self.host.lost()),
+        });
         let host = self.host()?;
-        let dev = self.find(host, device)?;
+        let dev = self.find(&host, device)?;
         let matching: Vec<cpal::SupportedStreamConfigRange> = dev
             .supported_output_configs()
             .map(|configs| {
@@ -304,8 +403,26 @@ fn render_converted<T>(
 
 #[cfg(test)]
 mod tests {
-    use super::{choose_buffer_frames, choose_sample_format, render_converted};
+    use super::{HostCache, choose_buffer_frames, choose_sample_format, render_converted};
     use crate::Renderer;
+
+    #[test]
+    fn a_host_that_failed_to_open_is_tried_again() {
+        let cache = HostCache::<u32>::default();
+        assert!(cache.get(|| Err("server not running".to_owned())).is_err());
+        assert_eq!(cache.get(|| Ok(7)).ok().as_deref(), Some(&7));
+    }
+
+    #[test]
+    fn a_host_is_kept_until_it_is_lost_then_rebuilt() {
+        let cache = HostCache::<u32>::default();
+        assert_eq!(cache.get(|| Ok(1)).ok().as_deref(), Some(&1));
+        assert_eq!(cache.get(|| Ok(2)).ok().as_deref(), Some(&1), "kept");
+        cache
+            .lost()
+            .store(true, std::sync::atomic::Ordering::Release);
+        assert_eq!(cache.get(|| Ok(3)).ok().as_deref(), Some(&3), "rebuilt");
+    }
 
     struct Ramp(f32);
 

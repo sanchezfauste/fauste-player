@@ -14,7 +14,7 @@ use fp_app::ui::shell::Shell;
 use fp_app::ui::theme;
 use fp_app::{bootstrap, crash, logging};
 use fp_backends::{
-    AudioBackend, Availability, NullBackend, display_name, preferred_backend, system_backends,
+    AudioBackend, Availability, NullBackend, choose_default_backend, display_name, system_backends,
 };
 use fp_engine::conductor::Conductor;
 use fp_engine::engine::{Engine, EngineSettings};
@@ -71,21 +71,21 @@ fn run(paths: fp_store::AppPaths) -> Result<(), Box<dyn std::error::Error>> {
         .filter(|(id, _)| id != "null")
         .map(|(id, ok)| (id.as_str(), *ok))
         .collect();
-    let preferred = preferred_backend(&listed, std::env::consts::OS).map(str::to_owned);
     let mut settings = EngineSettings::from_config(&config);
-    // A configured system wins if it is available here; otherwise the
-    // preferred available one (a config from another machine, or a JACK
-    // server that is not running, must not leave the default output silent).
-    let configured_ok = settings
-        .default_backend
-        .as_deref()
-        .is_some_and(|id| availability.iter().any(|(b, ok)| b == id && *ok));
-    if !configured_ok {
-        if let Some(id) = &settings.default_backend {
-            tracing::warn!(backend = %id, fallback = ?preferred, "configured audio system unavailable");
-        }
-        settings.default_backend = preferred.clone();
+    let chosen = choose_default_backend(
+        settings.default_backend.as_deref(),
+        &listed,
+        std::env::consts::OS,
+    )
+    .map(str::to_owned);
+    if settings.default_backend.is_some() && settings.default_backend != chosen {
+        tracing::warn!(
+            backend = ?settings.default_backend,
+            fallback = ?chosen,
+            "configured audio system unavailable"
+        );
     }
+    settings.default_backend = chosen;
     let in_use = settings
         .default_backend
         .clone()
