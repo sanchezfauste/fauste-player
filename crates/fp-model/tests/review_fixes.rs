@@ -17,6 +17,7 @@ fn parts(state: &AppState) -> RestoreParts {
         library: state.library.clone(),
         playlists: state.playlists.clone(),
         cart_pages: state.cartwall.pages.clone(),
+        cartwall_session: state.cartwall.session(),
         ids: state.ids.clone(),
     }
 }

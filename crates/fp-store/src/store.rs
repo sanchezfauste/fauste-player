@@ -7,8 +7,9 @@ use fp_model::{AppState, EngineAction, Limits, PlayerId, RestoreParts};
 
 use crate::atomic::{Loaded, ParseError, load_with_fallback, write_atomic};
 use crate::docs::{
-    CONFIG_MIGRATIONS, CONFIG_SCHEMA, ConfigDoc, PLAYLISTS_MIGRATIONS, PLAYLISTS_SCHEMA,
-    PlaylistsDoc, SESSION_MIGRATIONS, SESSION_SCHEMA, SessionDoc,
+    CARTS_MIGRATIONS, CARTS_SCHEMA, CONFIG_MIGRATIONS, CONFIG_SCHEMA, CartsDoc, ConfigDoc,
+    PLAYLISTS_MIGRATIONS, PLAYLISTS_SCHEMA, PlaylistsDoc, SESSION_MIGRATIONS, SESSION_SCHEMA,
+    SessionDoc,
 };
 use crate::error::StoreError;
 use crate::lenient::config_from_value;
@@ -102,18 +103,31 @@ impl Store {
             SESSION_MIGRATIONS,
         );
         warnings.extend(session.warnings);
+        let carts: Loaded<CartsDoc> = load_doc(
+            &self.paths.carts_file(),
+            limits.backup_count,
+            limits.max_state_file_bytes,
+            CARTS_SCHEMA,
+            CARTS_MIGRATIONS,
+        );
+        warnings.extend(carts.warnings);
 
         let (library, playlists, ids) = lists
             .value
             .map(|d| (d.library, d.playlists, d.ids))
             .unwrap_or_default();
-        let sessions = session.value.map(|d| d.players).unwrap_or_default();
+        let (sessions, cartwall_session) = session
+            .value
+            .map(|d| (d.players, d.cartwall))
+            .unwrap_or_default();
+        let cart_pages = carts.value.map(|d| d.pages).unwrap_or_default();
         let (state, actions) = AppState::restore(
             RestoreParts {
                 config,
                 library,
                 playlists,
-                cart_pages: Vec::new(),
+                cart_pages,
+                cartwall_session,
                 ids,
             },
             &sessions,
@@ -152,6 +166,18 @@ impl Store {
         )
     }
 
+    pub fn save_carts(&self, state: &AppState) -> Result<(), StoreError> {
+        let doc = CartsDoc {
+            schema_version: CARTS_SCHEMA,
+            pages: state.cartwall.pages.clone(),
+        };
+        write_doc(
+            &self.paths.carts_file(),
+            &doc,
+            state.config.limits.backup_count,
+        )
+    }
+
     pub fn save_session(
         &self,
         state: &AppState,
@@ -160,6 +186,7 @@ impl Store {
         let doc = SessionDoc {
             schema_version: SESSION_SCHEMA,
             players: state.sessions(position_of),
+            cartwall: state.cartwall.session(),
         };
         write_doc(
             &self.paths.session_file(),

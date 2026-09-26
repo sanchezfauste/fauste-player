@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::cartwall::{CartPage, Cartwall};
+use crate::cartwall::{CartPage, Cartwall, CartwallSession};
 use crate::command::EngineAction;
 use crate::config::Config;
 use crate::ids::{EntryId, IdGen, PlayerId, PlaylistId};
@@ -46,6 +46,7 @@ pub struct RestoreParts {
     pub playlists: Playlists,
     /// Cart pages (their carts reference `library` tracks).
     pub cart_pages: Vec<CartPage>,
+    pub cartwall_session: CartwallSession,
     pub ids: IdGen,
 }
 
@@ -84,14 +85,19 @@ impl AppState {
             library,
             mut playlists,
             cart_pages,
+            cartwall_session,
             mut ids,
         } = parts;
         ids.observe(library.max_raw_id());
         ids.observe(playlists.max_raw_id());
         let mut cartwall = Cartwall {
             pages: cart_pages,
+            open: cartwall_session.open,
             ..Cartwall::default()
         };
+        cartwall.shown = cartwall_session
+            .page
+            .filter(|p| cartwall.page(*p).is_some());
         ids.observe(cartwall.max_raw_id());
         // Carts pointing at tracks the library no longer has become empty.
         for cart in cartwall.pages.iter_mut().flat_map(|p| p.carts.iter_mut()) {

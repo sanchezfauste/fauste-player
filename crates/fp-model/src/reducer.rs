@@ -140,6 +140,13 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             cart_rules::assign_file(state, page, index, None, &mut out)?
         }
         Command::ImportCartPage(import) => cart_rules::import_page(state, *import)?,
+        Command::ShowCartPage(page) => {
+            if state.cartwall.page(page).is_none() {
+                return Err(ModelError::UnknownCartPage(page));
+            }
+            state.cartwall.shown = Some(page);
+        }
+        Command::SetCartwallOpen(open) => state.cartwall.open = open,
         Command::SetMarker { track, kind, secs } => set_marker(state, track, kind, secs)?,
         Command::SetShortcut { action, chord } => {
             let shortcuts = &mut state.config.shortcuts;

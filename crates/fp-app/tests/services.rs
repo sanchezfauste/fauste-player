@@ -276,3 +276,19 @@ fn a_panicking_step_does_not_stop_autosave() {
     let saved = std::fs::read_to_string(r.paths.playlists_file()).unwrap_or_default();
     assert!(saved.contains("After"));
 }
+
+#[test]
+fn cart_pages_are_saved_after_the_debounce() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = rig(&[], dir);
+    r.handle.send(Command::CreateCartPage {
+        name: "Sports".into(),
+    });
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    r.now += Duration::from_millis(1_100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    let saved = std::fs::read_to_string(r.paths.carts_file()).unwrap_or_default();
+    assert!(saved.contains("Sports"), "{saved}");
+}

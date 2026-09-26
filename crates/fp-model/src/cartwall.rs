@@ -102,13 +102,47 @@ pub struct CartPageImport {
     pub carts: Vec<(usize, CartEdit, Option<PathBuf>)>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Cartwall {
     pub pages: Vec<CartPage>,
     /// In firing order.
     pub playing: Vec<PlayingCart>,
     /// The cart pre-listening on the cartwall Cue route (C9).
     pub cue: Option<CartId>,
+    /// The page on screen (`None`: the first one). Shortcuts that fire
+    /// "cart n" use it.
+    pub shown: Option<CartPageId>,
+    /// Whether the strip is expanded.
+    pub open: bool,
+}
+
+impl Default for Cartwall {
+    fn default() -> Self {
+        Self {
+            pages: Vec::new(),
+            playing: Vec::new(),
+            cue: None,
+            shown: None,
+            open: true,
+        }
+    }
+}
+
+/// The part of the cartwall kept in `session.json`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CartwallSession {
+    pub open: bool,
+    pub page: Option<CartPageId>,
+}
+
+impl Default for CartwallSession {
+    fn default() -> Self {
+        Self {
+            open: true,
+            page: None,
+        }
+    }
 }
 
 impl Cartwall {
@@ -125,6 +159,20 @@ impl Cartwall {
 
     pub fn page_mut(&mut self, id: CartPageId) -> Option<&mut CartPage> {
         self.pages.iter_mut().find(|p| p.id == id)
+    }
+
+    /// The page on screen: the chosen one if it still exists, else the first.
+    pub fn shown_page(&self) -> Option<&CartPage> {
+        self.shown
+            .and_then(|id| self.page(id))
+            .or_else(|| self.pages.first())
+    }
+
+    pub fn session(&self) -> CartwallSession {
+        CartwallSession {
+            open: self.open,
+            page: self.shown,
+        }
     }
 
     pub fn is_playing(&self, id: CartId) -> bool {

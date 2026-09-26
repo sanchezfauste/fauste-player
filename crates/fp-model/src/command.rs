@@ -96,6 +96,8 @@ pub enum Command {
         index: usize,
     },
     ImportCartPage(Box<CartPageImport>),
+    ShowCartPage(CartPageId),
+    SetCartwallOpen(bool),
     /// Places a manual marker (clamped into the cue range), or with `None`
     /// clears it and lets analysis fill it again.
     SetMarker {

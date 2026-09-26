@@ -167,6 +167,9 @@ pub(crate) fn delete_page(
         return Err(ModelError::LastCartPage);
     }
     let removed = state.cartwall.pages.remove(index);
+    if state.cartwall.shown == Some(page) {
+        state.cartwall.shown = None;
+    }
     for cart in &removed.carts {
         stop_playing(state, cart.id, out);
         if state.cartwall.cue == Some(cart.id) {

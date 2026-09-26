@@ -16,7 +16,9 @@ pub mod shortcuts;
 pub mod state;
 pub mod track;
 
-pub use cartwall::{Cart, CartEdit, CartKind, CartPage, CartPageImport, Cartwall, PlayingCart};
+pub use cartwall::{
+    Cart, CartEdit, CartKind, CartPage, CartPageImport, Cartwall, CartwallSession, PlayingCart,
+};
 pub use command::{
     CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
 };

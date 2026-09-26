@@ -370,6 +370,9 @@ impl Services {
         if let Err(e) = self.store.save_playlists(state) {
             tracing::error!(error = %e, "saving the playlists failed");
         }
+        if let Err(e) = self.store.save_carts(state) {
+            tracing::error!(error = %e, "saving the cart pages failed");
+        }
         self.save_session(state);
     }
 
