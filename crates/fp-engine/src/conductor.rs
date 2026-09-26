@@ -10,9 +10,11 @@ use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use crossbeam_channel::{Receiver, Sender, TrySendError};
-use fp_model::{AppState, Command, EngineAction, ModelError, PlayerId, Route, apply, on_event};
+use fp_model::{
+    AppState, CartId, Command, EngineAction, ModelError, PlayerId, Route, apply, on_event,
+};
 
-use crate::engine::{BusStatus, Engine, PlayerTelemetry};
+use crate::engine::{BusStatus, CartTelemetry, Engine, PlayerTelemetry};
 
 /// Live values for the UI, refreshed every tick.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -24,6 +26,10 @@ pub struct Telemetry {
     pub dropped_commands: u64,
     /// Sources refused for lack of a mixer slot (should always be zero).
     pub slot_exhaustions: u64,
+    /// Carts on air, in firing order.
+    pub carts: Vec<(CartId, CartTelemetry)>,
+    /// The cart pre-listening and its position.
+    pub cart_cue: Option<(CartId, f64)>,
 }
 
 /// Test tone parameters (spec §8.4): 1.5 s at −18 dBFS.
@@ -194,7 +200,10 @@ impl Conductor {
             .iter()
             .map(|p| (p.id, self.engine.telemetry(p.id)))
             .collect();
+        let (carts, cart_cue) = self.engine.cart_telemetry();
         self.telemetry.store(Arc::new(Telemetry {
+            carts,
+            cart_cue,
             players,
             buses: self.engine.bus_status(),
             model_version: self.version,
