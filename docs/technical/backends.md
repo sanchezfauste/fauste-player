@@ -18,25 +18,66 @@ The engine only knows this trait. A `Renderer` is called on the device's
 real-time thread with an interleaved `f32` buffer. Stream errors are reported
 through an RT-safe sink: it sets atomics, which the bus watchdog reads.
 
-## Implemented (Phase 1)
+## Implemented
 
-| Backend | Id | Platforms | Notes |
+| Backend | Id | Platforms | Build |
 |---|---|---|---|
-| `CpalBackend` | the cpal host id (`alsa`, `wasapi`, `coreaudio`) | Linux, Windows, macOS | Sample format chosen as F32, then I32, then I16, converting through a preallocated scratch buffer. Tries the requested buffer size, then the device default. Real-time priority through cpal's `audio_thread_priority` (rtkit over D-Bus on Linux). |
+| `CpalBackend` (one per cpal host) | `alsa`, `pulseaudio`, `pipewire`, `jack`, `wasapi`, `asio`, `coreaudio` | per OS | see below |
 | `NullBackend` | `null` | all | Discards audio at real-time pace; keeps timelines running with no sound card |
 | `OfflineBackend` | `offline` | tests | Devices rendered on demand on the caller's thread, for sample-exact tests |
 
-## Roadmap (spec §5.2)
+`system_backends()` returns one `CpalBackend::for_host` for every host
+compiled into the build (`cpal::ALL_HOSTS`), the platform default first.
 
-| Phase | Backends |
-|---|---|
-| 3 | PipeWire, PulseAudio, JACK (dynamically loaded), WASAPI exclusive, ASIO (with the SDK at build time), DirectSound, Core Audio hog mode |
-| 4 | Bit-perfect output on exclusive backends |
+- **Hosts:** each backend creates its cpal host once and keeps it. Some
+  systems open a server connection per host. A host that cannot start (a
+  missing library, a JACK server that is not running) makes the backend
+  `Unavailable(reason)`.
+- **Streams:** they use the same code for every host: the sample format is
+  chosen as F32, then I32, then I16 and converted through a preallocated
+  buffer; the requested buffer size is tried first, then the device default.
+  Real-time priority comes through cpal's `audio_thread_priority` (rtkit
+  over D-Bus on Linux).
+- **Default backend:** `preferred_backend` picks the first available one in
+  the OS order (Linux: PipeWire, PulseAudio, JACK, ALSA; Windows: WASAPI,
+  ASIO, JACK; macOS: Core Audio, JACK). A configured backend that is not
+  available at start-up is replaced by that choice for the default output,
+  with a warning. Routes keep naming their own backend and retry while it is
+  away.
 
-Each native backend will sit behind a Cargo feature. It reports
-`Unavailable(reason)` when its system library is missing, so the application
-still starts. A conformance test suite, shared by all backends, is part of
-Phase 3.
+| Cargo feature (`fp-backends`, forwarded by `fp-app`) | System | Build needs |
+|---|---|---|
+| `pulseaudio` (default) | PulseAudio (a pure-Rust client, also works with PipeWire's PulseAudio server) | nothing |
+| `pipewire` | PipeWire | `libpipewire-0.3-dev`, `libspa-0.2-dev`, clang |
+| `jack` | JACK | Linux: `libjack-dev` (the library is loaded at run time); Windows, macOS: nothing |
+| `asio` | ASIO (Windows) | the Steinberg ASIO SDK (`CPAL_ASIO_DIR`) |
+
+CI builds and tests with `pipewire,jack` on Linux and `jack` elsewhere; the
+release archives use the same features.
+
+## Conformance suite
+
+`fp-backends/tests/conformance.rs` runs the same checks against any
+backend:
+
+- it is available and lists named devices, including the default device;
+- the default device opens, and the stream reports a sane configuration;
+- the renderer is called;
+- callbacks stop within a second after the stream is dropped;
+- the device opens again.
+
+Null and Offline run in CI. On a machine with real systems, run
+`cargo test -p fp-backends --test conformance -- --ignored` (with the
+features you built): that is the on-device check each system needs before a
+release.
+
+## Not provided
+
+- **WASAPI exclusive and Core Audio hog mode** belong to Phase 4
+  (bit-perfect). Exclusive access only matters there, and both need
+  platform APIs beyond cpal.
+- **DirectSound** is not supported: it is deprecated and WASAPI supersedes
+  it.
 
 ## Adding a backend
 

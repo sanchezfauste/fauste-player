@@ -65,11 +65,20 @@ audio engine that the interface can never block.
 
 ## Platform support
 
-| OS | Audio system (Phase 1) | Planned (Phase 3) |
+| OS | Audio systems | Planned (Phase 4, bit-perfect) |
 |---|---|---|
-| Linux (x86-64, ARM64) | ALSA (works with PipeWire and PulseAudio through their ALSA plugins) | PipeWire, PulseAudio, JACK |
-| Windows 10/11 (x86-64) | WASAPI shared mode | WASAPI exclusive, ASIO, DirectSound, JACK |
-| macOS (Intel, Apple silicon) | Core Audio | Core Audio hog mode, JACK |
+| Linux (x86-64, ARM64) | PipeWire, PulseAudio, JACK, ALSA | — |
+| Windows 10/11 (x86-64) | WASAPI (shared), JACK, ASIO (when built with the SDK) | WASAPI exclusive |
+| macOS (Intel, Apple silicon) | Core Audio, JACK | Core Audio hog mode |
+
+With nothing configured, the first available system is used, in this order:
+
+- Linux: PipeWire, PulseAudio, JACK, ALSA;
+- Windows: WASAPI, ASIO, JACK;
+- macOS: Core Audio, JACK.
+
+Systems that are missing on a machine show as unavailable in Settings; the
+application still starts.
 
 Formats: WAV, AIFF, FLAC, MP3, OGG Vorbis, AAC/M4A, ALAC.
 
@@ -94,6 +103,19 @@ Install [rustup](https://rustup.rs); it picks the right version by itself.
 | Debian, Ubuntu | `sudo apt install build-essential pkg-config libasound2-dev libdbus-1-dev` |
 | Fedora | `sudo dnf install gcc pkgconf-pkg-config alsa-lib-devel dbus-devel` |
 | Arch | `sudo pacman -S base-devel pkgconf alsa-lib dbus` |
+
+PulseAudio support needs no extra package. To build with the optional
+audio systems:
+
+```sh
+sudo apt install libpipewire-0.3-dev libspa-0.2-dev libjack-jackd2-dev clang   # Debian, Ubuntu
+cargo build --release -p fp-app --features pipewire,jack
+```
+
+On Windows and macOS, `--features jack` needs no SDK: JACK is loaded at run
+time if it is installed. ASIO needs the Steinberg ASIO SDK: set
+`CPAL_ASIO_DIR` to it and build with `--features asio`. Release archives are
+built with `pipewire,jack` on Linux and `jack` elsewhere.
 
 The window system libraries (X11 or Wayland, `libxkbcommon`, OpenGL) are
 loaded at run time. Any desktop has them. Minimal systems may need
@@ -244,8 +266,8 @@ See [Release process](docs/technical/release-process.md).
 |---|---|---|
 | 1. Usable core | Players, mixing, CUE, analysis, persistence, main screen, Settings subset, CI and releases | done |
 | 2. Cartwall and full Settings | Cart pages, remappable shortcuts, language selector, M3U/M3U8/PLS import and export, manual marker editing | done |
-| 3. Native backends | PipeWire, PulseAudio, JACK, WASAPI exclusive, ASIO, DirectSound, Core Audio hog mode | next |
-| 4. Bit-perfect | Exclusive output at the file's rate and format | planned |
+| 3. Native backends | PipeWire, PulseAudio, JACK, ASIO | done |
+| 4. Bit-perfect | WASAPI exclusive, Core Audio hog mode, output at the file's rate and format | next |
 | 5. Packaging | deb, rpm, Flatpak, AppImage, signed MSI, signed and notarised dmg | planned |
 
 ## Documentation

@@ -47,7 +47,10 @@ jobs:
           ref: ${{ inputs.tag }}
       - name: Install Linux system packages
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev libdbus-1-dev
+        run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          pkg-config libasound2-dev libdbus-1-dev
+          libpipewire-0.3-dev libspa-0.2-dev libjack-jackd2-dev clang
       - name: Install the pinned toolchain and target
         shell: bash
         run: |
@@ -64,6 +67,11 @@ jobs:
         shell: bash
         run: |
           version="${TAG#v}"
+          if [ "$RUNNER_OS" = Linux ]; then
+            export FEATURES="pipewire,jack"
+          else
+            export FEATURES="jack"
+          fi
           archive="$(scripts/package-release.sh "${{ matrix.target }}" "${version}" | tail -n1)"
           echo "archive=${archive}" >> "$GITHUB_OUTPUT"
         env:

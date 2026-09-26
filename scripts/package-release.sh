@@ -15,7 +15,9 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 dist="${root}/dist"
 stage="${dist}/${name}"
 
-cargo build --release --locked --target "${target}" -p fp-app --bin fauste-player
+# Optional audio systems, e.g. FEATURES="pipewire,jack" (see fp-app features).
+cargo build --release --locked --target "${target}" -p fp-app --bin fauste-player \
+  ${FEATURES:+--features "${FEATURES}"}
 
 exe="fauste-player"
 case "${target}" in *windows*) exe="fauste-player.exe" ;; esac
