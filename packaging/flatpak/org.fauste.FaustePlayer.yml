@@ -1,0 +1,51 @@
+# Flatpak manifest (Phase 5). CI builds it with flatpak-builder after
+# generating cargo-sources.json from Cargo.lock (flatpak-cargo-generator), so
+# the build runs offline, as Flathub requires.
+app-id: org.fauste.FaustePlayer
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: fauste-player
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # Audio through PulseAudio (also PipeWire's PulseAudio service).
+  - --socket=pulseaudio
+  # ALSA hw: devices, for bit-perfect output.
+  - --device=all
+  # Music libraries are read in place; dialogs go through the portals.
+  - --filesystem=xdg-music:ro
+  - --filesystem=home:ro
+  # Real-time priority for the audio threads.
+  - --system-talk-name=org.freedesktop.RealtimeKit1
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/fauste-player/cargo
+    CARGO_NET_OFFLINE: 'true'
+modules:
+  - name: fauste-player
+    buildsystem: simple
+    build-commands:
+      # No optional audio systems: the sandbox reaches the sound server
+      # through PulseAudio, and ALSA directly.
+      - cargo --offline build --release --locked -p fp-app --bin fauste-player
+      - install -Dm755 target/release/fauste-player /app/bin/fauste-player
+      - install -Dm644 packaging/linux/org.fauste.FaustePlayer.desktop /app/share/applications/org.fauste.FaustePlayer.desktop
+      - scripts/package/metainfo.sh "$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)" metainfo.xml
+      - install -Dm644 metainfo.xml /app/share/metainfo/org.fauste.FaustePlayer.metainfo.xml
+      - install -Dm644 packaging/icons/fauste-player.svg /app/share/icons/hicolor/scalable/apps/org.fauste.FaustePlayer.svg
+      - for n in 16 32 48 64 128 256 512; do install -Dm644 packaging/icons/fauste-player-$n.png /app/share/icons/hicolor/${n}x${n}/apps/org.fauste.FaustePlayer.png; done
+      - install -Dm644 crates/fp-app/assets/fonts/OFL.txt /app/share/licenses/org.fauste.FaustePlayer/Inter-OFL.txt
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - target
+          - dist
+          - .worktrees
+      - cargo-sources.json
