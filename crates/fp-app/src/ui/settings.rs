@@ -444,7 +444,8 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let current = config.outputs.backend.clone();
     row(ui, &t.tr("settings-backend"), None, |ui| {
         let shown = current
-            .clone()
+            .as_deref()
+            .map(|id| fp_backends::display_name(id).to_owned())
             .unwrap_or_else(|| t.tr("settings-default-backend"));
         egui::ComboBox::from_id_salt("backend")
             .selected_text(shown)
@@ -460,9 +461,9 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                     let text = match &b.unavailable {
                         Some(_) => t.tr_args(
                             "settings-backend-unavailable",
-                            &[("name", b.id.clone().into())],
+                            &[("name", fp_backends::display_name(&b.id).to_owned().into())],
                         ),
-                        None => b.id.clone(),
+                        None => fp_backends::display_name(&b.id).to_owned(),
                     };
                     let response = ui.add_enabled(
                         b.unavailable.is_none(),

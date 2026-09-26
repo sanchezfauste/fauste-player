@@ -11,6 +11,18 @@ thiserror.workspace = true
 cpal.workspace = true
 rtrb.workspace = true
 
+[features]
+default = ["pulseaudio"]
+# Audio systems beyond the platform default (Phase 3). Each is a cpal host.
+# pulseaudio: a pure-Rust client, no system library needed (Linux).
+pulseaudio = ["cpal/pulseaudio"]
+# pipewire: needs libpipewire-0.3-dev, libspa-0.2-dev and clang to build (Linux).
+pipewire = ["cpal/pipewire"]
+# jack: loaded at run time; on Linux building needs libjack-dev.
+jack = ["cpal/jack"]
+# asio: needs the Steinberg ASIO SDK at build time (CPAL_ASIO_DIR), Windows.
+asio = ["cpal/asio"]
+
 [lints]
 workspace = true
 

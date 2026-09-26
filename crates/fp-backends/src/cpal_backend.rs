@@ -11,9 +11,11 @@ use crate::{
     Renderer, StreamConfig, StreamErrorKind, StreamErrorSink,
 };
 
-#[derive(Debug, Clone, Copy)]
 pub struct CpalBackend {
     host_id: cpal::HostId,
+    /// Created on first use and kept: some systems (PulseAudio, JACK) open
+    /// a server connection per host, which should not happen on every call.
+    host: std::sync::OnceLock<Result<cpal::Host, String>>,
 }
 
 struct CpalStream {
@@ -52,16 +54,34 @@ fn choose_buffer_frames(ranges: &[(u32, u32)], wanted: u32) -> Option<u32> {
         .then_some(wanted)
 }
 
+impl std::fmt::Debug for CpalBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CpalBackend")
+            .field("host", &self.host_id)
+            .finish()
+    }
+}
+
 impl CpalBackend {
     /// The platform's default cpal host.
     pub fn default_host() -> Self {
+        Self::for_host(cpal::default_host().id())
+    }
+
+    /// One audio system (ALSA, PulseAudio, PipeWire, JACK, WASAPI, ASIO,
+    /// Core Audio), as compiled into this build.
+    pub fn for_host(host_id: cpal::HostId) -> Self {
         Self {
-            host_id: cpal::default_host().id(),
+            host_id,
+            host: std::sync::OnceLock::new(),
         }
     }
 
-    fn host(&self) -> Result<cpal::Host, BackendError> {
-        cpal::host_from_id(self.host_id).map_err(|e| BackendError::Unavailable(e.to_string()))
+    fn host(&self) -> Result<&cpal::Host, BackendError> {
+        self.host
+            .get_or_init(|| cpal::host_from_id(self.host_id).map_err(|e| e.to_string()))
+            .as_ref()
+            .map_err(|e| BackendError::Unavailable(e.clone()))
     }
 
     fn find(&self, host: &cpal::Host, device: &DeviceId) -> Result<cpal::Device, BackendError> {
@@ -137,7 +157,7 @@ impl AudioBackend for CpalBackend {
         errors: Arc<dyn StreamErrorSink>,
     ) -> Result<Box<dyn OutputStream>, BackendError> {
         let host = self.host()?;
-        let dev = self.find(&host, device)?;
+        let dev = self.find(host, device)?;
         let matching: Vec<cpal::SupportedStreamConfigRange> = dev
             .supported_output_configs()
             .map(|configs| {
