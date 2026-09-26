@@ -153,6 +153,7 @@ impl Engine {
         let options = LoadOptions {
             until_secs: Some(request.until_secs).filter(|u| u.is_finite()),
             looped: request.looped,
+            rate: Some(self.rate_of(&bus_key)),
         };
         if let Some(c) = self.cartwall.as_ref() {
             c.worker.load_with(
@@ -242,7 +243,7 @@ impl Engine {
             self.release_cart(&source);
             return;
         }
-        let frames = self.settings.frames(self.settings.tuning.declick_ms);
+        let frames = self.frames_on(&source.bus, self.settings.tuning.declick_ms);
         let now = self.now_frame(&source.bus);
         self.send(
             &source.bus,
@@ -400,8 +401,8 @@ impl Engine {
         let Some(c) = self.cartwall.as_ref() else {
             return (Vec::new(), None);
         };
-        let rate = f64::from(self.settings.sample_rate.max(1));
         let position = |s: &CartSource| {
+            let rate = f64::from(self.rate_of(&s.bus));
             let played = s.shared.frames_played();
             let pass = s
                 .shared

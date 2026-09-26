@@ -52,7 +52,7 @@ impl EngineSettings {
     }
 
     fn frames(&self, ms: f64) -> u64 {
-        (ms.max(0.0) * f64::from(self.sample_rate) / 1000.0).round() as u64
+        frames_at(self.sample_rate, ms)
     }
 }
 
@@ -173,6 +173,11 @@ enum Role {
     Cue,
 }
 
+/// `ms` milliseconds in frames at `rate`.
+fn frames_at(rate: u32, ms: f64) -> u64 {
+    (ms.max(0.0) * f64::from(rate) / 1000.0).round() as u64
+}
+
 impl Engine {
     /// `backends` are tried by id for routes; a `Null` backend is always
     /// available as the last resort so a player can never stall.
@@ -260,9 +265,9 @@ impl Engine {
     ) {
         let (key, channel) = self.route_target(route);
         self.ensure_bus(&key, now);
-        let rate = self.settings.sample_rate.max(1) as f32;
+        let rate = self.rate_of(&key) as f32;
         let frames = (secs.max(0.0) * rate) as usize;
-        let ramp = (self.settings.frames(self.settings.tuning.declick_ms) as usize).max(1);
+        let ramp = (self.frames_on(&key, self.settings.tuning.declick_ms) as usize).max(1);
         let amplitude = 10f32.powf(level_db / 20.0);
         let step = std::f32::consts::TAU * frequency_hz / rate;
         let samples: Vec<f32> = (0..frames)
@@ -347,8 +352,9 @@ impl Engine {
         let Some(rt) = self.players.get(&player) else {
             return PlayerTelemetry::default();
         };
-        let rate = f64::from(self.settings.sample_rate);
-        let position = |p: &Playing| p.start_secs + p.shared.frames_played() as f64 / rate;
+        let position = |p: &Playing| {
+            p.start_secs + p.shared.frames_played() as f64 / f64::from(self.rate_of(&p.bus))
+        };
         let (peak_l, peak_r) = rt
             .current
             .iter()
@@ -371,6 +377,20 @@ impl Engine {
 
     fn find_backend(&self, id: &str) -> Option<Arc<dyn AudioBackend>> {
         self.backends.iter().find(|b| b.id().0 == id).cloned()
+    }
+
+    /// The rate `bus` runs at. Every source on a bus shares it, and it only
+    /// changes while nothing is attached (Phase 4 spec B3).
+    fn rate_of(&self, bus: &BusKey) -> u32 {
+        self.buses
+            .get(bus)
+            .map_or(self.settings.sample_rate, Bus::sample_rate)
+            .max(1)
+    }
+
+    /// `ms` milliseconds in frames of `bus`.
+    fn frames_on(&self, bus: &BusKey, ms: f64) -> u64 {
+        frames_at(self.rate_of(bus), ms)
     }
 
     /// A backend routes may use: registered and available at start-up.
@@ -696,8 +716,11 @@ impl Engine {
         }
         self.next_key += 1;
         let key = SourceKey(self.next_key);
-        rt.worker
-            .load(key, request.path.clone(), request.from_secs, producer);
+        let rate = self.rate_of(&bus_key);
+        if let Some(rt) = self.players.get(&player) {
+            rt.worker
+                .load_at(key, request.path.clone(), request.from_secs, producer, rate);
+        }
         self.owners.insert(key, player);
         Ok(Playing {
             key,
@@ -745,7 +768,8 @@ impl Engine {
     /// released when the mixer reports it finished. A source that is not
     /// audible (never started, or paused) is released at once. Returns
     /// whether the source was queued to fade (and will finish later).
-    fn fade_out(&mut self, player: PlayerId, p: Playing, frames: u64, curve: Curve) -> bool {
+    fn fade_out(&mut self, player: PlayerId, p: Playing, ms: f64, curve: Curve) -> bool {
+        let frames = self.frames_on(&p.bus, ms);
         let paused = !p.cue && self.players.get(&player).is_some_and(|rt| rt.paused);
         if p.start != StartState::Started || paused {
             self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
@@ -786,8 +810,7 @@ impl Engine {
 
     /// Stops a source with a de-click ramp; nothing is reported for it.
     fn stop_quick_and_release(&mut self, player: PlayerId, p: Playing) {
-        let frames = self.settings.frames(self.settings.tuning.declick_ms);
-        self.fade_out(player, p, frames, Curve::Linear);
+        self.fade_out(player, p, self.settings.tuning.declick_ms, Curve::Linear);
     }
 
     /// Takes back a transition that was sent to the mixer but has not
@@ -946,10 +969,7 @@ impl Engine {
         rt.plan = Plan::None;
         let old = rt.current.replace(next);
         let queued = match (old, crossfade_ms) {
-            (Some(old), Some(ms)) => {
-                let frames = self.settings.frames(f64::from(ms));
-                self.fade_out(player, old, frames, Curve::EqualPower)
-            }
+            (Some(old), Some(ms)) => self.fade_out(player, old, f64::from(ms), Curve::EqualPower),
             (Some(old), None) => {
                 self.stop_quick_and_release(player, old);
                 false
@@ -970,7 +990,7 @@ impl Engine {
 
     fn fade_out_and_stop(&mut self, player: PlayerId, fade_ms: u32) {
         self.undispatch(player);
-        let frames = self.settings.frames(f64::from(fade_ms));
+        let fade = f64::from(fade_ms);
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
@@ -978,15 +998,20 @@ impl Engine {
         let current = rt.current.take();
         let outgoing: Vec<Playing> = std::mem::take(&mut rt.outgoing);
         for p in outgoing {
-            self.fade_out(player, p, frames, Curve::EqualPower);
+            self.fade_out(player, p, fade, Curve::EqualPower);
         }
         if let Some(mut p) = current {
             let entry = p.entry;
             p.report_end = true;
-            if !self.fade_out(player, p, frames, Curve::EqualPower) {
+            if !self.fade_out(player, p, fade, Curve::EqualPower) {
                 self.events.push(EngineEvent::ReachedEnd { player, entry });
             }
         }
+    }
+
+    /// The pause/resume ramp in frames of `bus`.
+    fn ramp_frames(&self, bus: &BusKey) -> u32 {
+        u32::try_from(self.frames_on(bus, self.settings.tuning.pause_ramp_ms)).unwrap_or(u32::MAX)
     }
 
     fn pause(&mut self, player: PlayerId) {
@@ -995,8 +1020,6 @@ impl Engine {
             // air and the model will follow it (`TransitionStarted`).
             return;
         }
-        let ramp = u32::try_from(self.settings.frames(self.settings.tuning.pause_ramp_ms))
-            .unwrap_or(u32::MAX);
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
@@ -1008,6 +1031,7 @@ impl Engine {
             .map(|p| (p.bus.clone(), p.slot))
             .collect();
         for (bus, slot) in targets {
+            let ramp = self.ramp_frames(&bus);
             self.send(
                 &bus,
                 BusCommand::Pause {
@@ -1019,8 +1043,6 @@ impl Engine {
     }
 
     fn resume(&mut self, player: PlayerId) {
-        let ramp = u32::try_from(self.settings.frames(self.settings.tuning.pause_ramp_ms))
-            .unwrap_or(u32::MAX);
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
@@ -1038,6 +1060,7 @@ impl Engine {
             }
         }
         for (bus, slot) in targets {
+            let ramp = self.ramp_frames(&bus);
             self.send(
                 &bus,
                 BusCommand::Resume {
@@ -1355,8 +1378,6 @@ impl Engine {
 
     fn start_ready_sources(&mut self) {
         self.start_ready_carts();
-        let declick = u32::try_from(self.settings.frames(self.settings.tuning.declick_ms))
-            .unwrap_or(u32::MAX);
         let mut starts: Vec<(BusKey, usize, bool)> = Vec::new();
         for rt in self.players.values_mut() {
             let current = if rt.paused { None } else { rt.current.as_mut() };
@@ -1375,6 +1396,8 @@ impl Engine {
         }
         for (bus, slot, fade_in) in starts {
             let now = self.now_frame(&bus);
+            let declick = u32::try_from(self.frames_on(&bus, self.settings.tuning.declick_ms))
+                .unwrap_or(u32::MAX);
             if fade_in {
                 self.send(
                     &bus,
@@ -1411,10 +1434,7 @@ impl Engine {
 
     /// Sends due transitions to the mixer with their exact frame.
     fn dispatch_plans(&mut self) {
-        let rate = f64::from(self.settings.sample_rate);
-        let lead = self.settings.frames(self.settings.tuning.schedule_lead_ms);
-        let declick = self.settings.frames(self.settings.tuning.declick_ms);
-        let mut due: Vec<(PlayerId, TransitionPlan, u64)> = Vec::new();
+        let mut due: Vec<(PlayerId, TransitionPlan, u64, u64)> = Vec::new();
         for (id, rt) in &self.players {
             let Plan::Waiting(plan) = rt.plan else {
                 continue;
@@ -1438,19 +1458,27 @@ impl Engine {
             let (now, played) = bus
                 .shared()
                 .consistent(|| (bus.now_frame(), current.shared.frames_played()));
+            let rate = f64::from(self.rate_of(&current.bus));
+            let lead = self.frames_on(&current.bus, self.settings.tuning.schedule_lead_ms);
+            let declick = self.frames_on(&current.bus, self.settings.tuning.declick_ms);
             let position = current.start_secs + played as f64 / rate;
             let until = ((target - position) * rate).round().max(0.0) as u64;
             if until <= lead {
-                due.push((*id, plan, now + until));
+                due.push((*id, plan, now + until, declick));
             }
         }
-        for (player, plan, at_frame) in due {
+        for (player, plan, at_frame, declick) in due {
             self.dispatch(player, plan, at_frame, declick);
         }
     }
 
     fn dispatch(&mut self, player: PlayerId, plan: TransitionPlan, at_frame: u64, declick: u64) {
-        let rate = f64::from(self.settings.sample_rate);
+        let rate = self
+            .players
+            .get(&player)
+            .and_then(|rt| rt.current.as_ref())
+            .map_or(self.settings.sample_rate, |c| self.rate_of(&c.bus));
+        let rate = f64::from(rate);
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
