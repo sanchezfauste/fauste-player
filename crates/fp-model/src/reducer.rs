@@ -12,6 +12,7 @@ use crate::error::ModelError;
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{CueState, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, PlaylistEntry};
+use crate::shortcuts::{Shortcut, default_shortcuts};
 use crate::state::AppState;
 use crate::track::{FileState, MarkerKind, Track};
 
@@ -140,6 +141,14 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         }
         Command::ImportCartPage(import) => cart_rules::import_page(state, *import)?,
         Command::SetMarker { track, kind, secs } => set_marker(state, track, kind, secs)?,
+        Command::SetShortcut { action, chord } => {
+            let shortcuts = &mut state.config.shortcuts;
+            shortcuts.retain(|s| s.action != action && Some(&s.chord) != chord.as_ref());
+            if let Some(chord) = chord {
+                shortcuts.push(Shortcut { action, chord });
+            }
+        }
+        Command::ResetShortcuts => state.config.shortcuts = default_shortcuts(),
         Command::ResetMarkers { track } => {
             let t = state
                 .library

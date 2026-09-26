@@ -8,10 +8,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::PlayerId;
 use crate::player::PlayMode;
+use crate::shortcuts::{Shortcut, default_shortcuts};
 
 const MIB: u64 = 1024 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub players: PlayersConfig,
@@ -21,6 +22,22 @@ pub struct Config {
     pub limits: Limits,
     pub tuning: Tuning,
     pub cartwall: CartwallConfig,
+    pub shortcuts: Vec<Shortcut>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            players: PlayersConfig::default(),
+            analysis: AnalysisSettings::default(),
+            outputs: OutputsConfig::default(),
+            ui: UiConfig::default(),
+            limits: Limits::default(),
+            tuning: Tuning::default(),
+            cartwall: CartwallConfig::default(),
+            shortcuts: default_shortcuts(),
+        }
+    }
 }
 
 /// Cartwall defaults (Phase 2 spec P2.3).
@@ -502,6 +519,23 @@ impl Config {
             "tuning.save_debounce_ms",
             &mut w,
         );
+
+        // One chord per action and one action per chord; the first wins.
+        let mut chords = std::collections::HashSet::new();
+        let mut actions = std::collections::HashSet::new();
+        self.shortcuts.retain(|s| {
+            let fresh = !chords.contains(&s.chord) && !actions.contains(&s.action);
+            if fresh {
+                chords.insert(s.chord.clone());
+                actions.insert(s.action);
+            } else {
+                w.push(ConfigWarning {
+                    field: "shortcuts",
+                    message: format!("{} for {:?} ignored: already bound", s.chord, s.action),
+                });
+            }
+            fresh
+        });
 
         w
     }

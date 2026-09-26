@@ -6,6 +6,7 @@ use crate::cartwall::{CartEdit, CartPageImport};
 use crate::config::Config;
 use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{ColumnWidths, PlayMode};
+use crate::shortcuts::{KeyChord, ShortcutAction};
 use crate::track::{FileState, MarkerKind, TrackAnalysis};
 
 /// A user intent, sent by the UI.
@@ -106,6 +107,13 @@ pub enum Command {
     ResetMarkers {
         track: TrackId,
     },
+    /// Binds `chord` to `action` (taking it from any other action), or with
+    /// `None` unbinds the action.
+    SetShortcut {
+        action: ShortcutAction,
+        chord: Option<KeyChord>,
+    },
+    ResetShortcuts,
 }
 
 /// Something the audio engine observed.
