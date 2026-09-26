@@ -102,6 +102,49 @@ scripts/package-release.sh x86_64-unknown-linux-gnu  # → dist/fauste-player-<v
 
 ## Packaging (Phase 5)
 
-Native packages (deb, rpm, Flatpak, AppImage, a signed MSI, a signed and
-notarised dmg) are planned for Phase 5 and will be added to the same build
-matrix.
+`release-build.yml` attaches these packages to every release, each with a
+`.sha256`:
+
+| Job | Produces | Script |
+|---|---|---|
+| `build` (Linux matrix entries, ubuntu-22.04 and 22.04-arm) | archive, `.deb` (cargo-deb), `.rpm` (cargo-generate-rpm), AppImage (appimagetool) | `scripts/package-release.sh`, `scripts/package/linux.sh` |
+| `build` (Windows) | archive, `.msi` (cargo-wix, WiX Toolset v3) | `scripts/package/windows.sh` |
+| `build` (macOS entries) | archives per architecture | `scripts/package-release.sh` |
+| `macos-dmg` | universal `.app` (lipo) in a `.dmg` | `scripts/package/macos.sh` |
+| `flatpak-sources`, `flatpak`, `flatpak-release` | `cargo-sources.json` (flatpak-cargo-generator), then the bundle built offline with flatpak-builder | `packaging/flatpak/org.fauste.FaustePlayer.yml` |
+
+**Shared metadata** lives in `packaging/`, with one application id,
+`org.fauste.FaustePlayer`:
+- the icons (SVG, PNG sizes, `.ico`);
+- the desktop entry;
+- the AppStream metainfo. It carries no version: `scripts/package/metainfo.sh`
+  adds the one being packaged;
+- `Info.plist` and the WiX source.
+
+**Build rules:**
+- Every Linux package ships the archive's binary (built with `jack`; see
+  [backends](backends.md)), so the packages and the archive never differ.
+- The deb's dependencies are read from the binary. The build therefore runs on
+  the oldest supported image, ubuntu-22.04, and CI's `release-baseline` job
+  builds all three Linux packages on every push.
+
+**Local builds:**
+- Linux: `scripts/package/linux.sh x86_64-unknown-linux-gnu [version] [deb,rpm,appimage]`.
+- Windows: `scripts/package/windows.sh x86_64-pc-windows-msvc`, in Git Bash
+  with cargo-wix and WiX v3.
+- macOS: `scripts/package/macos.sh`.
+
+### Signing (optional secrets)
+
+| Secret | Used for |
+|---|---|
+| `WINDOWS_CERT_PFX` (base64 of a `.pfx`), `WINDOWS_CERT_PASSWORD` | signtool signs `fauste-player.exe` inside the MSI and the MSI itself, with an RFC 3161 timestamp |
+| `APPLE_CERT_P12` (base64 of a *Developer ID Application* `.p12`), `APPLE_CERT_PASSWORD` | codesign with the hardened runtime, for the app and the dmg |
+| `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (app-specific password) | notarytool notarisation, then stapling the ticket to the dmg |
+
+- **Without these secrets** the packages are built unsigned. The getting
+  started guide explains the SmartScreen and Gatekeeper prompts users then
+  see.
+- **Portable archives** are never signed.
+- **Passing the secrets:** release-please passes them to `release-build`
+  with `secrets: inherit`.

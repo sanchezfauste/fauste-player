@@ -1,8 +1,14 @@
 name: release-build
 
-# Builds the release archives for every supported target and uploads them to
-# the GitHub release of `tag`. Called by release-please after a release is
-# created; can also be run by hand to rebuild the assets of an existing tag.
+# Builds the release archives and installable packages for every supported
+# target and uploads them to the GitHub release of `tag`:
+#   - archives (.tar.gz, .zip) for every target;
+#   - Linux: .deb, .rpm and AppImage (x86_64, aarch64), and a Flatpak bundle;
+#   - Windows: .msi;
+#   - macOS: a universal .dmg.
+# Called by release-please after a release is created; can also be run by
+# hand to rebuild the assets of an existing tag. Signing runs only when its
+# secrets are configured (see docs/technical/release-process.md).
 
 on:
   workflow_call:
@@ -60,7 +66,20 @@ jobs:
           key: ${{ matrix.target }}
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-about
+          tool: cargo-about,cargo-binstall
+      - name: Install the packaging tools
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux) cargo binstall -y --locked cargo-deb cargo-generate-rpm ;;
+            Windows)
+              cargo binstall -y --locked cargo-wix
+              if ! command -v candle >/dev/null; then
+                choco install wixtoolset --no-progress -y
+                echo "C:/Program Files (x86)/WiX Toolset v3.14/bin" >> "$GITHUB_PATH"
+              fi
+              ;;
+          esac
       - name: Build and package
         id: package
         shell: bash
@@ -71,11 +90,120 @@ jobs:
           # (PulseAudio covers PipeWire desktops through pipewire-pulse).
           export FEATURES="jack"
           archive="$(scripts/package-release.sh "${{ matrix.target }}" "${version}" | tail -n1)"
-          echo "archive=${archive}" >> "$GITHUB_OUTPUT"
+          files=("${archive}")
+          case "$RUNNER_OS" in
+            Linux) mapfile -t -O 1 files < <(scripts/package/linux.sh "${{ matrix.target }}" "${version}" | grep '^/') ;;
+            Windows) files+=("$(scripts/package/windows.sh "${{ matrix.target }}" "${version}" | tail -n1)") ;;
+          esac
+          {
+            echo "files<<EOF"
+            for f in "${files[@]}"; do echo "$f"; echo "$f.sha256"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
         env:
           TAG: ${{ inputs.tag }}
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
       - name: Upload to the release
         shell: bash
-        run: gh release upload "${{ inputs.tag }}" "${{ steps.package.outputs.archive }}" "${{ steps.package.outputs.archive }}.sha256" --clobber
+        run: |
+          mapfile -t files <<< "${FILES}"
+          gh release upload "${{ inputs.tag }}" "${files[@]}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
+          FILES: ${{ steps.package.outputs.files }}
+
+  macos-dmg:
+    name: macOS disk image (universal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-universal
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+      - name: Build the app and the disk image
+        id: package
+        run: echo "dmg=$(scripts/package/macos.sh "${TAG#v}" | tail -n1)" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ inputs.tag }}
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      - name: Upload to the release
+        run: gh release upload "${{ inputs.tag }}" "${DMG}" "${DMG}.sha256" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DMG: ${{ steps.package.outputs.dmg }}
+
+  flatpak-sources:
+    name: Flatpak cargo sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate cargo-sources.json from Cargo.lock
+        run: |
+          pip install aiohttp tomlkit
+          curl -fsSL -o flatpak-cargo-generator.py \
+            https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
+          python3 flatpak-cargo-generator.py Cargo.lock -o packaging/flatpak/cargo-sources.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cargo-sources
+          path: packaging/flatpak/cargo-sources.json
+
+  flatpak:
+    name: Flatpak bundle (x86_64)
+    needs: flatpak-sources
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: cargo-sources
+          path: packaging/flatpak
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: fauste-player.flatpak
+          manifest-path: packaging/flatpak/org.fauste.FaustePlayer.yml
+          upload-artifact: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: fauste-player.flatpak
+
+  flatpak-release:
+    name: Attach the Flatpak bundle
+    needs: flatpak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: flatpak-bundle
+      - name: Upload to the release
+        run: |
+          name="fauste-player-${TAG#v}-x86_64.flatpak"
+          mv fauste-player.flatpak "${name}"
+          sha256sum "${name}" > "${name}.sha256"
+          gh release upload "${TAG}" "${name}" "${name}.sha256" --clobber --repo "${GITHUB_REPOSITORY}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
