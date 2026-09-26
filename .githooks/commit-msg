@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Rejects commit messages whose subject is not a Conventional Commit.
+# Enable once per clone with: git config core.hooksPath .githooks
+set -euo pipefail
+subject="$(head -n1 "$1")"
+pattern='^(feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert)(\([a-z0-9._/-]+\))?!?: [^ ].*'
+case "${subject}" in Merge\ *|fixup!\ *|squash!\ *) exit 0 ;; esac
+if [[ ! "${subject}" =~ ${pattern} ]]; then
+  echo "commit-msg: the subject must follow Conventional Commits, e.g. 'feat(engine): add ...'" >&2
+  echo "            got: ${subject}" >&2
+  exit 1
+fi
