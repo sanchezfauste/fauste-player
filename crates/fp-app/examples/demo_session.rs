@@ -55,7 +55,7 @@ fn main() -> ExitCode {
                 .get(*list)
                 .and_then(|p| p.entries.first())
                 .map(|e| e.id);
-            if let Some(entry) = first {
+            if let Some(entry) = first.filter(|_| n < 3) {
                 let _ = fp_model::apply(&mut state, Command::SetNext(*player, entry));
             }
         }
