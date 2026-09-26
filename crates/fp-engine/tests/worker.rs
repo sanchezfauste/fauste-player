@@ -12,7 +12,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use fp_engine::source::{SourceConsumer, source_pair};
-use fp_engine::worker::{PlayerWorker, SampleSource, SourceKey, SourceOpener, WorkerFailure};
+use fp_engine::worker::{
+    LoadOptions, PlayerWorker, SampleSource, SourceKey, SourceOpener, WorkerFailure,
+};
 use support::{Exploding, counting_opener};
 
 fn wait_until(what: &str, mut ok: impl FnMut() -> bool) {
@@ -131,4 +133,98 @@ fn dropping_a_source_releases_its_producer() {
     wait_until("ready", || c.shared.is_ready());
     w.drop_source(SourceKey(3));
     wait_until("producer dropped", || c.is_abandoned());
+}
+
+fn frames_secs(frames: u64) -> f64 {
+    frames as f64 / 48_000.0
+}
+
+fn lefts(c: &mut SourceConsumer, count: usize) -> Vec<f32> {
+    let mut got = Vec::new();
+    wait_until("enough frames", || {
+        drain(c, &mut got);
+        got.len() >= count * 2
+    });
+    got.chunks(2).take(count).map(|f| f[0]).collect()
+}
+
+#[test]
+fn a_source_with_until_ends_exactly_there() {
+    let (w, _f) = worker(counting_opener(1_000));
+    let (p, mut c) = source_pair(4_000);
+    let shared = p.shared.clone();
+    let options = LoadOptions {
+        until_secs: Some(frames_secs(130)),
+        looped: false,
+    };
+    w.load_with(
+        SourceKey(1),
+        PathBuf::from("x"),
+        frames_secs(30),
+        p,
+        options,
+    );
+    wait_until("eof", || shared.is_eof());
+    let mut got = Vec::new();
+    drain(&mut c, &mut got);
+    let l: Vec<f32> = got.chunks(2).map(|f| f[0]).collect();
+    assert_eq!(l, (30..130).map(|i| i as f32).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_looped_source_repeats_without_gaps() {
+    let (w, _f) = worker(counting_opener(1_000));
+    let (p, mut c) = source_pair(4_000);
+    let shared = p.shared.clone();
+    let options = LoadOptions {
+        until_secs: Some(frames_secs(70)),
+        looped: true,
+    };
+    w.load_with(
+        SourceKey(1),
+        PathBuf::from("x"),
+        frames_secs(10),
+        p,
+        options,
+    );
+    let l = lefts(&mut c, 600);
+    let expected: Vec<f32> = (10..70).cycle().take(600).map(|i| i as f32).collect();
+    assert_eq!(l, expected);
+    assert!(!shared.is_eof(), "a loop never ends by itself");
+}
+
+#[test]
+fn a_looped_source_without_until_loops_at_the_end_of_the_file() {
+    let (w, _f) = worker(counting_opener(50));
+    let (p, mut c) = source_pair(4_000);
+    let options = LoadOptions {
+        until_secs: None,
+        looped: true,
+    };
+    w.load_with(SourceKey(1), PathBuf::from("x"), 0.0, p, options);
+    let l = lefts(&mut c, 200);
+    let expected: Vec<f32> = (0..50).cycle().take(200).map(|i| i as f32).collect();
+    assert_eq!(l, expected);
+}
+
+#[test]
+fn a_zero_length_loop_ends() {
+    let (w, _f) = worker(counting_opener(1_000));
+    let (p, mut c) = source_pair(4_000);
+    let shared = p.shared.clone();
+    let options = LoadOptions {
+        until_secs: Some(frames_secs(10)),
+        looped: true,
+    };
+    w.load_with(
+        SourceKey(1),
+        PathBuf::from("x"),
+        frames_secs(10),
+        p,
+        options,
+    );
+    wait_until("eof", || shared.is_eof());
+    let mut got = Vec::new();
+    drain(&mut c, &mut got);
+    assert!(got.is_empty());
 }

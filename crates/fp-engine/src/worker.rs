@@ -75,12 +75,22 @@ impl SampleSource for FileSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SourceKey(pub u64);
 
+/// How a source is bounded (Phase 2 spec P2.4).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct LoadOptions {
+    /// The source ends here (seconds in the file); `None` is the end of the file.
+    pub until_secs: Option<f64>,
+    /// At the end, start again at `from_secs` in the same ring, without a gap.
+    pub looped: bool,
+}
+
 pub enum WorkerCommand {
     Load {
         key: SourceKey,
         path: PathBuf,
         from_secs: f64,
         producer: SourceProducer,
+        options: LoadOptions,
     },
     Drop {
         key: SourceKey,
@@ -102,6 +112,11 @@ struct Job {
     source: Option<Box<dyn SampleSource>>,
     pending: Vec<f32>,
     done: bool,
+    /// Frames per pass when bounded by `until`.
+    limit_frames: Option<u64>,
+    looped: bool,
+    /// Frames taken from the source in the current pass.
+    pass_frames: u64,
 }
 
 /// Handle to a running worker thread; dropping it stops the thread.
@@ -131,11 +146,23 @@ impl PlayerWorker {
     }
 
     pub fn load(&self, key: SourceKey, path: PathBuf, from_secs: f64, producer: SourceProducer) {
+        self.load_with(key, path, from_secs, producer, LoadOptions::default());
+    }
+
+    pub fn load_with(
+        &self,
+        key: SourceKey,
+        path: PathBuf,
+        from_secs: f64,
+        producer: SourceProducer,
+        options: LoadOptions,
+    ) {
         let _ = self.commands.send(WorkerCommand::Load {
             key,
             path,
             from_secs,
             producer,
+            options,
         });
     }
 
@@ -186,8 +213,13 @@ fn run(
                     path,
                     from_secs,
                     producer,
+                    options,
                 } => {
                     jobs.retain(|j| j.key != key);
+                    let limit_frames = options
+                        .until_secs
+                        .filter(|u| u.is_finite())
+                        .map(|u| ((u - from_secs).max(0.0) * f64::from(bus_rate)).round() as u64);
                     jobs.push(Job {
                         key,
                         path,
@@ -196,6 +228,9 @@ fn run(
                         source: None,
                         pending: Vec::new(),
                         done: false,
+                        limit_frames,
+                        looped: options.looped,
+                        pass_frames: 0,
                     });
                 }
                 WorkerCommand::Drop { key } => jobs.retain(|j| j.key != key),
@@ -230,6 +265,13 @@ fn run(
     }
 }
 
+fn finish(job: &mut Job) -> Result<(), String> {
+    job.done = true;
+    job.producer.shared.eof.store(true, Ordering::Release);
+    job.producer.shared.ready.store(true, Ordering::Release);
+    Ok(())
+}
+
 /// Opens the job if needed and moves at most one decoded block into its ring.
 fn step(
     job: &mut Job,
@@ -237,19 +279,37 @@ fn step(
     bus_rate: u32,
     ready_frames: usize,
 ) -> Result<(), String> {
+    if job.limit_frames == Some(0) {
+        return finish(job);
+    }
     if job.source.is_none() {
         job.source = Some(opener(&job.path, job.from_secs, bus_rate)?);
     }
     if job.pending.is_empty() {
-        let more = match job.source.as_mut() {
-            Some(source) => source.next_block(&mut job.pending)?,
-            None => false,
-        };
-        if !more && job.pending.is_empty() {
-            job.done = true;
-            job.producer.shared.eof.store(true, Ordering::Release);
-            job.producer.shared.ready.store(true, Ordering::Release);
-            return Ok(());
+        let at_limit = job.limit_frames.is_some_and(|l| job.pass_frames >= l);
+        let more = !at_limit
+            && match job.source.as_mut() {
+                Some(source) => source.next_block(&mut job.pending)?,
+                None => false,
+            };
+        if let Some(limit) = job.limit_frames {
+            // Cut what goes past `until`.
+            let room = limit.saturating_sub(job.pass_frames);
+            let frames = (job.pending.len() / 2) as u64;
+            if frames > room {
+                job.pending
+                    .truncate(usize::try_from(room).unwrap_or(usize::MAX) * 2);
+            }
+        }
+        job.pass_frames += (job.pending.len() / 2) as u64;
+        if job.pending.is_empty() && (at_limit || !more) {
+            // End of a pass: loop (unless the pass was empty), or finish.
+            if job.looped && job.pass_frames > 0 {
+                job.source = Some(opener(&job.path, job.from_secs, bus_rate)?);
+                job.pass_frames = 0;
+                return Ok(());
+            }
+            return finish(job);
         }
     }
     let pushed = job.producer.push(&job.pending);
