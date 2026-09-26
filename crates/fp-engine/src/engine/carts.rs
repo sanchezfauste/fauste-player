@@ -125,9 +125,11 @@ impl Engine {
             c.main.clone()
         };
         let volume = c.volume.clone();
-        let ring = ((self.settings.tuning.prebuffer_secs * f64::from(self.settings.sample_rate))
-            as usize)
-            .max(1024);
+        self.follow_file_rate(&bus_key, request.format);
+        // A bus running faster than configured needs more frames for the
+        // same seconds of buffer.
+        let rate = self.rate_of(&bus_key).max(self.settings.sample_rate);
+        let ring = ((self.settings.tuning.prebuffer_secs * f64::from(rate)) as usize).max(1024);
         let bus = self.buses.get_mut(&bus_key).ok_or(AttachError::NoRoute)?;
         if bus.command_room() < 2 {
             self.dropped_commands += 1;

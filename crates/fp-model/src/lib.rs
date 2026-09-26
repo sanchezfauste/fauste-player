@@ -23,8 +23,8 @@ pub use command::{
     CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
 };
 pub use config::{
-    AnalysisSettings, CartwallConfig, CartwallRoutes, Config, ConfigWarning, Limits, OutputsConfig,
-    PlayerRoutes, PlayersConfig, Route, Tuning, UiConfig,
+    AnalysisSettings, CartwallConfig, CartwallRoutes, Config, ConfigWarning, Limits, OutputDevice,
+    OutputsConfig, PlayerRoutes, PlayersConfig, Route, Tuning, UiConfig,
 };
 pub use error::ModelError;
 pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};

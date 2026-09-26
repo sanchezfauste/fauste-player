@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use fp_backends::{AudioBackend, DeviceId, OutputStream, StreamConfig, StreamErrorSink};
+use fp_backends::{
+    AudioBackend, BackendError, DeviceId, OutputStream, StreamConfig, StreamErrorSink,
+};
 
 use crate::mixer::{
     BusCommand, BusEvent, Mixer, MixerConfig, MixerHandle, MixerRenderer, Retired, SlotStorage,
@@ -108,6 +110,8 @@ pub struct Bus {
     last_error: Option<String>,
     /// Heartbeat value when the current stream was opened.
     opened_beat: u64,
+    /// Whether the open stream got the exclusive access it asked for.
+    exclusive_granted: bool,
 }
 
 impl Bus {
@@ -141,6 +145,7 @@ impl Bus {
             used: vec![false; slots],
             last_error: None,
             opened_beat: 0,
+            exclusive_granted: false,
         };
         if !bus.try_open(now) {
             bus.virtual_clock = VirtualClock::start(bus.mixer.clone(), bus.config);
@@ -156,10 +161,27 @@ impl Bus {
             shared: self.handle.shared.clone(),
         });
         let errors: Arc<dyn StreamErrorSink> = self.handle.shared.clone();
-        match self
-            .backend
-            .open_output(&self.device, self.config, renderer, errors)
-        {
+        let mut opened =
+            self.backend
+                .open_output(&self.device, self.config, renderer, errors.clone());
+        self.exclusive_granted = self.config.exclusive && opened.is_ok();
+        if self.config.exclusive && matches!(opened, Err(BackendError::Unsupported(_))) {
+            // Bit-perfect needs exclusive access; without it the device must
+            // still play (Phase 4 spec B4).
+            tracing::warn!(bus = ?self.key, "exclusive access refused; opening shared");
+            let renderer = Box::new(MixerRenderer {
+                mixer: self.mixer.clone(),
+                shared: self.handle.shared.clone(),
+            });
+            let shared = StreamConfig {
+                exclusive: false,
+                ..self.config
+            };
+            opened = self
+                .backend
+                .open_output(&self.device, shared, renderer, errors);
+        }
+        match opened {
             Ok(stream) => {
                 self.stream = Some(stream);
                 self.health = BusHealth::Ok;
@@ -190,6 +212,42 @@ impl Bus {
 
     pub fn sample_rate(&self) -> u32 {
         self.config.sample_rate
+    }
+
+    /// Whether the device is open with the exclusive access it asked for.
+    pub fn exclusive_granted(&self) -> bool {
+        self.health == BusHealth::Ok && self.exclusive_granted
+    }
+
+    /// The open stream's sample format, if a device stream is open.
+    pub fn sample_format(&self) -> Option<fp_backends::SampleFormat> {
+        self.stream.as_ref().map(|s| s.sample_format())
+    }
+
+    /// Reopens the device at `rate`, keeping the mixer, its clock and its
+    /// slots. Only for a bus with nothing attached: every timeline on a bus
+    /// is in its frames (Phase 4 spec B3). If the device refuses the rate,
+    /// the previous one is restored; if that fails too the bus is `Lost`
+    /// and the watchdog takes over. Returns whether `rate` took.
+    pub fn reopen_at(&mut self, rate: u32, now: Instant) -> bool {
+        let previous = self.config.sample_rate;
+        if rate == previous {
+            return true;
+        }
+        self.stream = None;
+        self.virtual_clock = None;
+        self.config.sample_rate = rate;
+        if self.try_open(now) {
+            tracing::info!(bus = ?self.key, rate, "stream rate follows the file");
+            return true;
+        }
+        tracing::warn!(bus = ?self.key, rate, error = ?self.last_error, "rate refused; keeping the previous one");
+        self.config.sample_rate = previous;
+        if !self.try_open(now) {
+            self.health = BusHealth::Lost;
+            self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
+        }
+        false
     }
 
     /// Current bus time in frames.

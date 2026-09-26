@@ -36,6 +36,8 @@ pub struct EngineSettings {
     pub cartwall_routes: CartwallRoutes,
     /// Backend used when a player has no explicit route (`None`: the first registered).
     pub default_backend: Option<String>,
+    /// Devices played bit-perfect (Phase 4 spec B1).
+    pub bit_perfect: std::collections::HashSet<BusKey>,
 }
 
 impl EngineSettings {
@@ -48,6 +50,15 @@ impl EngineSettings {
             routes: config.outputs.routes.clone(),
             cartwall_routes: config.outputs.cartwall.clone(),
             default_backend: config.outputs.backend.clone(),
+            bit_perfect: config
+                .outputs
+                .bit_perfect
+                .iter()
+                .map(|d| BusKey {
+                    backend: d.backend.clone(),
+                    device: d.device.clone(),
+                })
+                .collect(),
         }
     }
 
@@ -162,6 +173,9 @@ pub struct Engine {
     tones: Vec<(BusKey, usize)>,
     /// Created on the first cart action.
     cartwall: Option<carts::CartwallRuntime>,
+    /// The latest time `execute` or `tick` was given, for bus reopens made
+    /// deep inside an action.
+    now: Instant,
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -209,6 +223,7 @@ impl Engine {
             slot_exhaustions: 0,
             tones: Vec::new(),
             cartwall: None,
+            now: Instant::now(),
         }
     }
 
@@ -375,6 +390,26 @@ impl Engine {
         }
     }
 
+    /// Before a source with `format` attaches to `bus`: a bit-perfect bus
+    /// with nothing attached follows the file's rate (Phase 4 spec B3). A
+    /// busy bus, or an unknown format, keeps the rate: the source is then
+    /// resampled to it.
+    fn follow_file_rate(&mut self, bus: &BusKey, format: Option<fp_model::AudioFormat>) {
+        if !self.settings.bit_perfect.contains(bus) {
+            return;
+        }
+        let Some(rate) = format.map(|f| f.sample_rate).filter(|r| *r > 0) else {
+            return;
+        };
+        let now = self.now;
+        if let Some(b) = self.buses.get_mut(bus)
+            && b.used_slots() == 0
+            && b.sample_rate() != rate
+        {
+            b.reopen_at(rate, now);
+        }
+    }
+
     fn find_backend(&self, id: &str) -> Option<Arc<dyn AudioBackend>> {
         self.backends.iter().find(|b| b.id().0 == id).cloned()
     }
@@ -522,7 +557,7 @@ impl Engine {
                 sample_rate: self.settings.sample_rate,
                 buffer_frames: self.settings.buffer_frames,
                 channels,
-                exclusive: false,
+                exclusive: self.settings.bit_perfect.contains(key),
             };
             let mixer = MixerConfig {
                 volume_smoothing_frames: self.settings.frames(t.gain_smoothing_ms).max(1) as u32,
@@ -555,6 +590,7 @@ impl Engine {
 
     /// Executes one action at time `now`.
     pub fn execute(&mut self, action: EngineAction, now: Instant) {
+        self.now = now;
         match action {
             EngineAction::StartCart(request) => self.start_cart(&request, now),
             EngineAction::StopCart { cart } => self.stop_cart(cart),
@@ -694,9 +730,11 @@ impl Engine {
         } else {
             rt.volume.clone()
         };
-        let ring = ((self.settings.tuning.prebuffer_secs * f64::from(self.settings.sample_rate))
-            as usize)
-            .max(1024);
+        self.follow_file_rate(&bus_key, request.format);
+        // A bus running faster than configured needs more frames for the
+        // same seconds of buffer.
+        let rate = self.rate_of(&bus_key).max(self.settings.sample_rate);
+        let ring = ((self.settings.tuning.prebuffer_secs * f64::from(rate)) as usize).max(1024);
         let bus = self.buses.get_mut(&bus_key).ok_or(AttachError::NoRoute)?;
         let Some(slot) = bus.alloc_slot() else {
             self.slot_exhaustions += 1;
@@ -1146,6 +1184,7 @@ impl Engine {
     /// observations into model events, starts sources that became ready and
     /// dispatches transitions that are due. Returns the events for the model.
     pub fn tick(&mut self, now: Instant) -> Vec<EngineEvent> {
+        self.now = now;
         self.handle_failures();
         let keys: Vec<BusKey> = self.buses.keys().cloned().collect();
         for key in keys {

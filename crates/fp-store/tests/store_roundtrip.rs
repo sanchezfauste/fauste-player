@@ -211,3 +211,26 @@ fn an_unknown_shortcut_does_not_discard_the_others() {
         loaded.warnings
     );
 }
+
+#[test]
+fn bit_perfect_devices_round_trip_and_older_configs_have_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    write_config(
+        &s,
+        r#"{ "schema_version": 1, "config": { "outputs": { "sample_rate": 44100 } } }"#,
+    );
+    let mut loaded = s.load("Main");
+    assert!(loaded.state.config.outputs.bit_perfect.is_empty());
+    loaded.state.config.outputs.bit_perfect = vec![fp_model::OutputDevice {
+        backend: "alsa".into(),
+        device: "hw:CARD=DAC,DEV=0".into(),
+    }];
+    s.save_config(&loaded.state).unwrap();
+    let again = s.load("Main");
+    assert_eq!(
+        again.state.config.outputs.bit_perfect,
+        loaded.state.config.outputs.bit_perfect
+    );
+    assert!(again.warnings.is_empty(), "{:?}", again.warnings);
+}
