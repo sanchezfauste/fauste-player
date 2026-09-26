@@ -33,9 +33,40 @@ through an RT-safe sink: it sets atomics, which the bus watchdog reads.
   scale by powers of two), and tests pin that.
 
 **Exclusive-capable devices:**
-- On cpal, only ALSA `hw:` devices are exclusive-capable
-  (`exclusive_capable(host, id)`, which reads cpal's persisted ids,
-  `alsa:hw:CARD=…,DEV=…`). They are the hardware itself.
+- **Exclusive-capable devices** (`exclusive_capable(host, id)`, which reads
+  cpal's persisted ids such as `alsa:hw:CARD=…,DEV=…`):
+  - ALSA `hw:` devices. They are the hardware itself and open through cpal.
+  - Every WASAPI device (`wasapi_exclusive.rs`, Windows).
+    - The `wasapi` crate's safe API runs on a render thread of its own, since
+      COM objects stay on the thread that created them.
+    - That thread negotiates the format in this order: 24-in-32 integer,
+      32-bit integer, 16-bit integer, then float (`exclusive::negotiate`).
+    - It aligns the period, with the documented retry for unaligned buffers.
+    - It reports the outcome to `open`. An open that takes longer than 5 s
+      is refused as `Unsupported`, so the bus plays shared.
+    - Then it raises itself to real-time priority (MMCSS through
+      `audio_thread_priority`) and primes one silent buffer.
+    - On each buffer event it renders into preallocated buffers
+      (`exclusive::write_samples`).
+    - Events are awaited in 20 ms slices, so a stop never waits for a stuck
+      driver.
+    - Two seconds without an event, or any failure, is reported as
+      `DeviceLost`.
+  - Every Core Audio device (`coreaudio_hog.rs`, macOS).
+    - Hog mode is taken before the cpal stream is built.
+    - After the build (which sets a float physical format of its own) and
+      before play, `HogGuard::prepare` sets the nominal rate and the widest
+      signed-integer linear-PCM physical format at that rate, with at least
+      the stream's channels (`exclusive::choose_physical_format`). Encoded
+      formats (AC-3, IEC 60958) are never chosen.
+    - The stream reports that hardware format.
+    - The device is found by name: a name shared by several devices, or a
+      device another process holds, is refused.
+    - `HogGuard` releases hog mode after the stream stops.
+  - Any other exclusive request is refused with `Unsupported`, so the bus
+    plays shared and never claims bit-perfect output.
+
+  Only safe APIs are used, and `forbid(unsafe_code)` holds.
 - Offline devices can be marked capable (`set_exclusive_capable`) or made to
   refuse a rate (`refuse_rate`), for tests.
 - Null refuses `exclusive`, so a bus on it plays shared and never claims to
@@ -115,9 +146,6 @@ release.
 
 ## Not provided
 
-- **WASAPI exclusive and Core Audio hog mode** are Phase 4 plan 2. cpal does
-  not offer them. They will come through the `wasapi` crate and through
-  coreaudio-rs's safe helpers, so `forbid(unsafe_code)` holds.
 - **DirectSound** is not supported: it is deprecated and WASAPI supersedes
   it.
 

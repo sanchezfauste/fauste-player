@@ -17,8 +17,18 @@ The switch is disabled when the device cannot give exclusive access.
 - **Linux:** choose an ALSA device whose name starts with `hw:`. It is the
   sound card itself. PulseAudio, PipeWire, JACK and the ALSA `default` or
   `plughw:` devices mix or convert, so they are never bit-perfect.
-- **Windows and macOS:** exclusive modes (WASAPI exclusive, Core Audio hog
-  mode) are coming in a later version.
+- **Windows:** choose the device on the **WASAPI** system. It is opened in
+  exclusive mode.
+  - In the Windows sound settings, the device's **Advanced** properties must
+    have *Allow applications to take exclusive control of this device*
+    turned on (it is on by default).
+  - While it plays, no other program can use the device.
+- **macOS:** choose the device on **Core Audio**. It is opened in hog mode.
+  - The device's sample rate is set to the track's, and its format to the
+    widest integer format it offers at that rate (the settings Audio MIDI
+    Setup shows).
+  - They are given back when the application stops using the device.
+  - Two devices with exactly the same name cannot be made bit-perfect.
 
 ## What happens on a bit-perfect device
 

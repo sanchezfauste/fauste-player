@@ -77,6 +77,9 @@ struct CpalStream {
     config: StreamConfig,
     format: SampleFormat,
     _stream: cpal::Stream,
+    /// Exclusive access held for the stream's life (Core Audio hog mode),
+    /// released when dropped after the stream.
+    _exclusive: Option<Box<dyn Send>>,
 }
 
 impl OutputStream for CpalStream {
@@ -89,17 +92,23 @@ impl OutputStream for CpalStream {
     }
 }
 
-/// Whether a device gives the application sole, unconverted access. On
+/// Whether a device can give the application sole, unconverted access. On
 /// ALSA a `hw:` device is the hardware itself; everything else there goes
-/// through plugins (`plughw:`, `default`) or a sound server. Exclusive modes
-/// of other systems come with their own backends (Phase 4 plan 2).
+/// through plugins (`plughw:`, `default`) or a sound server. WASAPI has
+/// exclusive mode and Core Audio hog mode (Phase 4 plan 2).
 fn exclusive_capable(host: &str, device: &str) -> bool {
     // cpal's persisted ids name the host first (`alsa:hw:CARD=PCH,DEV=0`).
     let inner = device
         .strip_prefix(host)
         .and_then(|rest| rest.strip_prefix(':'))
         .unwrap_or(device);
-    host == "alsa" && inner.starts_with("hw:")
+    match host {
+        "alsa" => inner.starts_with("hw:"),
+        // Exclusive mode and hog mode: every output device can be asked;
+        // whether it is granted is known when the stream opens.
+        "wasapi" | "coreaudio" => true,
+        _ => false,
+    }
 }
 
 fn backend_error(e: impl std::fmt::Display) -> BackendError {
@@ -279,8 +288,33 @@ impl CpalBackend {
                 "exclusive access is not available on this device".to_owned(),
             ));
         }
+        if config.exclusive {
+            match self.id().0.as_str() {
+                // A hw: device is exclusive by itself: the cpal path below.
+                "alsa" => {}
+                #[cfg(windows)]
+                "wasapi" => return crate::wasapi_exclusive::open(device, config, renderer, errors),
+                #[cfg(target_os = "macos")]
+                "coreaudio" => {}
+                _ => {
+                    return Err(BackendError::Unsupported(
+                        "exclusive access is not available on this system".to_owned(),
+                    ));
+                }
+            }
+        }
         let host = self.host()?;
         let dev = self.find(&host, device)?;
+        #[cfg(target_os = "macos")]
+        let mut hog = if config.exclusive {
+            let name = dev
+                .description()
+                .map(|d| d.name().to_owned())
+                .map_err(backend_error)?;
+            Some(crate::coreaudio_hog::take(&name)?)
+        } else {
+            None
+        };
         let matching: Vec<cpal::SupportedStreamConfigRange> = dev
             .supported_output_configs()
             .map(|configs| {
@@ -341,16 +375,29 @@ impl CpalBackend {
                     if let Some(r) = renderer.take() {
                         let _ = handoff.push(r);
                     }
+                    #[allow(unused_mut)]
+                    let mut format = match format {
+                        cpal::SampleFormat::I16 => SampleFormat::I16,
+                        cpal::SampleFormat::I32 => SampleFormat::I32,
+                        cpal::SampleFormat::I24 => SampleFormat::I24,
+                        _ => SampleFormat::F32,
+                    };
+                    #[allow(unused_mut)]
+                    let mut held: Option<Box<dyn Send>> = None;
+                    // In hog mode the hardware format is set after cpal built
+                    // its stream (cpal sets a float physical format of its
+                    // own), and what reaches the device is that format.
+                    #[cfg(target_os = "macos")]
+                    if let Some(guard) = hog.take() {
+                        format = guard.prepare(config.sample_rate, u32::from(config.channels))?;
+                        held = Some(Box::new(guard));
+                    }
                     stream.play().map_err(backend_error)?;
                     return Ok(Box::new(CpalStream {
                         config,
-                        format: match format {
-                            cpal::SampleFormat::I16 => SampleFormat::I16,
-                            cpal::SampleFormat::I32 => SampleFormat::I32,
-                            cpal::SampleFormat::I24 => SampleFormat::I24,
-                            _ => SampleFormat::F32,
-                        },
+                        format,
                         _stream: stream,
+                        _exclusive: held,
                     }));
                 }
                 Err(e) => match e.kind() {
@@ -502,6 +549,20 @@ mod tests {
         render_converted(&mut Samples(samples, 0), &mut out, 1, &mut scratch);
         let got: Vec<i32> = out.iter().map(|v| v.inner()).collect();
         assert_eq!(got, values);
+    }
+
+    #[test]
+    fn wasapi_and_core_audio_devices_are_exclusive_capable() {
+        assert!(exclusive_capable(
+            "wasapi",
+            "wasapi:{0.0.0.00000000}.{guid}"
+        ));
+        assert!(exclusive_capable(
+            "coreaudio",
+            "coreaudio:BuiltInSpeakerDevice"
+        ));
+        assert!(!exclusive_capable("jack", "jack:system"));
+        assert!(!exclusive_capable("asio", "asio:Interface"));
     }
 
     #[test]

@@ -8,10 +8,15 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+#[cfg(target_os = "macos")]
+mod coreaudio_hog;
 mod cpal_backend;
+pub mod exclusive;
 mod hosts;
 mod null;
 mod offline;
+#[cfg(windows)]
+mod wasapi_exclusive;
 
 pub use cpal_backend::CpalBackend;
 pub use hosts::{

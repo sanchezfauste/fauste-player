@@ -28,3 +28,13 @@ workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 cpal = { workspace = true, features = ["realtime-dbus"] }
+
+# Exclusive modes (Phase 4 plan 2), through safe APIs only.
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.24.0"
+audio_thread_priority = { version = "0.35.1", default-features = false }
+crossbeam-channel.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+coreaudio-rs = { version = "0.14.2", default-features = false, features = ["audio_unit", "core_audio"] }
+objc2-core-audio-types = "0.3.2"
