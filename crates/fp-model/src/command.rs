@@ -50,6 +50,11 @@ pub enum Command {
     CreatePlaylist {
         name: String,
     },
+    /// A new playlist filled with `paths` (playlist file import).
+    CreatePlaylistFromPaths {
+        name: String,
+        paths: Vec<PathBuf>,
+    },
     RenamePlaylist {
         playlist: PlaylistId,
         name: String,

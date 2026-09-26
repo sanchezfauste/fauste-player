@@ -7,6 +7,7 @@ pub mod error;
 pub mod lenient;
 pub mod migrate;
 pub mod paths;
+pub mod playlist_io;
 pub mod store;
 
 pub use atomic::{LoadSource, Loaded, ParseError, backup_path, load_with_fallback, write_atomic};

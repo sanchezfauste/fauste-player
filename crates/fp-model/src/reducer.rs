@@ -114,6 +114,11 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             let id = state.ids.playlist();
             state.playlists.add(Playlist::new(id, name));
         }
+        Command::CreatePlaylistFromPaths { name, paths } => {
+            let id = state.ids.playlist();
+            state.playlists.add(Playlist::new(id, name));
+            insert_paths(state, id, 0, paths)?;
+        }
         Command::RenamePlaylist { playlist, name } => state.playlists.rename(playlist, name)?,
         Command::DeletePlaylist(playlist) => delete_playlist(state, playlist, &mut out)?,
         Command::SetPlayerCount(count) => set_player_count(state, count, &mut out)?,

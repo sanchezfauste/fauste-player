@@ -276,3 +276,37 @@ fn column_widths_are_stored_per_player() {
     assert_eq!(state.players[1].columns, ColumnWidths::default());
     assert_eq!(state.player(p).unwrap().transport, Transport::Stopped);
 }
+
+#[test]
+fn a_playlist_can_be_created_from_imported_paths() {
+    let mut state = common::fixture(0);
+    let paths = vec![
+        std::path::PathBuf::from("/m/a.mp3"),
+        std::path::PathBuf::from("/m/b.mp3"),
+    ];
+    fp_model::apply(
+        &mut state,
+        fp_model::Command::CreatePlaylistFromPaths {
+            name: "Imported".into(),
+            paths,
+        },
+    )
+    .unwrap();
+    let list = state
+        .playlists
+        .iter()
+        .find(|p| p.name == "Imported")
+        .unwrap();
+    let files: Vec<_> = list
+        .entries
+        .iter()
+        .map(|e| state.library.get(e.track).unwrap().path.clone())
+        .collect();
+    assert_eq!(
+        files,
+        vec![
+            std::path::PathBuf::from("/m/a.mp3"),
+            std::path::PathBuf::from("/m/b.mp3")
+        ]
+    );
+}
