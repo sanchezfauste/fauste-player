@@ -31,6 +31,29 @@ pub struct Store {
     limits: Limits,
 }
 
+fn parse_doc<T: DeserializeOwned>(
+    bytes: &[u8],
+    schema: u32,
+    migrations: &[Migration],
+) -> Result<T, ParseError> {
+    let value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
+    let value = upgrade(value, schema, migrations)?;
+    serde_json::from_value(value).map_err(|e| ParseError::Corrupt(e.to_string()))
+}
+
+fn parse_config(bytes: &[u8]) -> Result<(fp_model::Config, Vec<String>), ParseError> {
+    let value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
+    let value = upgrade(value, CONFIG_SCHEMA, CONFIG_MIGRATIONS)?;
+    let mut notes = Vec::new();
+    let config = config_from_value(
+        value.get("config").unwrap_or(&serde_json::Value::Null),
+        &mut notes,
+    );
+    Ok((config, notes))
+}
+
 fn load_doc<T: DeserializeOwned>(
     path: &Path,
     backups: usize,
@@ -39,11 +62,35 @@ fn load_doc<T: DeserializeOwned>(
     migrations: &[Migration],
 ) -> Loaded<T> {
     load_with_fallback(path, backups, max_bytes, |bytes| {
-        let value: serde_json::Value =
-            serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
-        let value = upgrade(value, schema, migrations)?;
-        serde_json::from_value(value).map_err(|e| ParseError::Corrupt(e.to_string()))
+        parse_doc(bytes, schema, migrations)
     })
+}
+
+/// Runs `bytes` through every document parser and the restore, as loading
+/// does. For the fuzz targets only.
+#[doc(hidden)]
+pub fn fuzz_documents(bytes: &[u8]) {
+    let mut config = parse_config(bytes).map(|(c, _)| c).unwrap_or_default();
+    let _ = config.validate();
+    let lists: Option<PlaylistsDoc> = parse_doc(bytes, PLAYLISTS_SCHEMA, PLAYLISTS_MIGRATIONS).ok();
+    let session: Option<SessionDoc> = parse_doc(bytes, SESSION_SCHEMA, SESSION_MIGRATIONS).ok();
+    let carts: Option<CartsDoc> = parse_doc(bytes, CARTS_SCHEMA, CARTS_MIGRATIONS).ok();
+    let (library, playlists, ids) = lists
+        .map(|d| (d.library, d.playlists, d.ids))
+        .unwrap_or_default();
+    let (sessions, cartwall_session) = session.map(|d| (d.players, d.cartwall)).unwrap_or_default();
+    let _ = AppState::restore(
+        RestoreParts {
+            config,
+            library,
+            playlists,
+            cart_pages: carts.map(|d| d.pages).unwrap_or_default(),
+            cartwall_session,
+            ids,
+        },
+        &sessions,
+        "Main",
+    );
 }
 
 impl Store {
@@ -64,17 +111,7 @@ impl Store {
             &self.paths.config_file(),
             self.limits.backup_count,
             self.limits.max_state_file_bytes,
-            |bytes| {
-                let value: serde_json::Value = serde_json::from_slice(bytes)
-                    .map_err(|e| ParseError::Corrupt(e.to_string()))?;
-                let value = upgrade(value, CONFIG_SCHEMA, CONFIG_MIGRATIONS)?;
-                let mut notes = Vec::new();
-                let config = config_from_value(
-                    value.get("config").unwrap_or(&serde_json::Value::Null),
-                    &mut notes,
-                );
-                Ok((config, notes))
-            },
+            parse_config,
         );
         warnings.extend(config_doc.warnings);
         let mut config = match config_doc.value {

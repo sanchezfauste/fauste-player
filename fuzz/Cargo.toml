@@ -1,0 +1,41 @@
+[package]
+name = "fauste-player-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+fp-model = { path = "../crates/fp-model" }
+fp-store = { path = "../crates/fp-store" }
+
+[[bin]]
+name = "m3u"
+path = "fuzz_targets/m3u.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pls"
+path = "fuzz_targets/pls.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cart_page"
+path = "fuzz_targets/cart_page.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "store_documents"
+path = "fuzz_targets/store_documents.rs"
+test = false
+doc = false
+bench = false

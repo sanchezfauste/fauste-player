@@ -17,4 +17,4 @@ pub use docs::{
 pub use error::StoreError;
 pub use migrate::{Migration, upgrade};
 pub use paths::AppPaths;
-pub use store::{LoadedState, Store};
+pub use store::{LoadedState, Store, fuzz_documents};
