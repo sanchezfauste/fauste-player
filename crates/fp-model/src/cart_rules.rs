@@ -22,6 +22,7 @@ fn request(state: &AppState, cart: &Cart, looped: bool) -> Option<CartRequest> {
         from_secs: track.cue_in_secs(),
         until_secs: track.known_cue_out_secs().unwrap_or(SOURCE_END),
         looped,
+        format: track.format,
     })
 }
 

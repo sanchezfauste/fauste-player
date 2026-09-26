@@ -175,3 +175,17 @@ fn a_file_without_read_permission_is_unreadable_not_missing() {
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
     assert!(matches!(r, Err(AnalysisError::Unreadable(_))), "{r:?}");
 }
+
+#[test]
+fn the_analysis_records_the_rate_and_bits() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = fixture(dir.path(), "format.wav", 1);
+    let a = analyze_file(&path, &settings(), &Limits::default()).unwrap();
+    assert_eq!(
+        a.analysis.format,
+        Some(fp_model::AudioFormat {
+            sample_rate: RATE,
+            bits: Some(16)
+        })
+    );
+}

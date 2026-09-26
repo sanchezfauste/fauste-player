@@ -35,5 +35,6 @@ pub use session::{PlayerSession, RestoreParts};
 pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts};
 pub use state::AppState;
 pub use track::{
-    FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track, TrackAnalysis, TrackKind,
+    AudioFormat, FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track,
+    TrackAnalysis, TrackKind,
 };

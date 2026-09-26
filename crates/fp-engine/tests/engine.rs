@@ -40,6 +40,7 @@ fn request(track: u64, from_secs: f64) -> SourceRequest {
         track: TrackId(track),
         path: PathBuf::from(format!("track{track}")),
         from_secs,
+        format: None,
     }
 }
 

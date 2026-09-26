@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use fp_decode::FileDecoder;
-use fp_model::{AnalysisSettings, Limits, TrackAnalysis};
+use fp_model::{AnalysisSettings, AudioFormat, Limits, TrackAnalysis};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -104,6 +104,10 @@ pub fn analyze_file_cancellable(
             intro_end: read_intro(path).map(|secs| {
                 secs.max(markers.cue_in)
                     .min(markers.cue_out.max(markers.cue_in))
+            }),
+            format: Some(AudioFormat {
+                sample_rate: decoder.sample_rate(),
+                bits: decoder.bits_per_sample(),
             }),
         },
         peak_bucket_secs: envelope.bucket_secs,
