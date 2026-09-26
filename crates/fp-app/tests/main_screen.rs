@@ -310,3 +310,43 @@ fn a_dropped_folder_inserts_its_audio_files() {
         Some(vec![dir.path().join("a.mp3"), dir.path().join("b.flac")])
     );
 }
+
+#[test]
+fn function_keys_fire_carts_of_the_page_shown() {
+    let (mut h, fake) = harness(state(1, 1));
+    h.key_press(Key::F2);
+    h.run_steps(2);
+    let second = fake.state.load().cartwall.pages[0].carts[1].id;
+    assert_eq!(sent(&fake), vec![Command::FireCart(second)]);
+}
+
+#[test]
+fn ctrl_space_stops_all_carts() {
+    let (mut h, fake) = harness(state(1, 1));
+    h.key_press_modifiers(egui::Modifiers::CTRL, Key::Space);
+    h.run_steps(2);
+    assert_eq!(sent(&fake), vec![Command::StopAllCarts]);
+}
+
+#[test]
+fn a_rebound_key_plays_the_new_target() {
+    let mut s = state(2, 1);
+    fp_model::apply(
+        &mut s,
+        Command::SetShortcut {
+            action: fp_model::ShortcutAction::PlayPlayer(2),
+            chord: Some(fp_model::KeyChord::key("Q")),
+        },
+    )
+    .unwrap();
+    let (mut h, fake) = harness(s);
+    h.key_press(Key::Q);
+    h.run_steps(2);
+    assert_eq!(sent(&fake), vec![Command::Play(fake.player(1))]);
+    h.key_press(Key::Num2);
+    h.run_steps(2);
+    assert!(
+        sent(&fake).is_empty(),
+        "2 lost its binding when it moved to Q"
+    );
+}

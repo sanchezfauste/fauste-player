@@ -237,7 +237,7 @@ pub struct WaveInput<'a> {
 /// Draws the waveform; returns the seek target (seconds) on click.
 pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, Option<f64>) {
     let size = vec2(ui.available_width(), height);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
     let owned = input.accessible_label.to_owned();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, owned.clone()));
     let painter = ui.painter_at(rect);
@@ -366,7 +366,8 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         let bg = Rect::from_min_size(pos2(lx, inner.top() + 13.0), vec2(tw, 14.0));
         painter.rect_filled(bg, 0.0, theme::NEUTRAL_800);
         painter.galley(pos2(lx + 4.0, bg.top() + 1.0), galley, theme::TEXT);
-        if response.clicked() {
+        // Alt (Option) is for marker editing: it never seeks.
+        if response.clicked() && !ui.input(|i| i.modifiers.alt) {
             seek = Some(f64::from(f) * total);
         }
     }

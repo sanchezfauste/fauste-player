@@ -13,11 +13,16 @@ use egui::{
 use fp_backends::AudioBackend;
 use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
-use fp_model::{AppState, Command, EntryId, ModelError, PlayerId, PlaylistId, TrackId, Transport};
+use fp_model::{
+    AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, ShortcutAction,
+    TrackId, Transport,
+};
 
+use super::cartwall;
 use super::controller::Controller;
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::player;
+use super::playlist_files::{self, FileOutcome};
 use super::settings::{self, SettingsDeps, SettingsState};
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
@@ -69,6 +74,12 @@ pub(crate) struct ViewState {
     pub resizing: HashSet<PlayerId>,
     pub rows_built: usize,
     pub settings_open: bool,
+    /// Where each player's waveform menu was opened, in seconds.
+    pub wave_menu: HashMap<PlayerId, f64>,
+    /// A marker being dragged on a waveform, and the track it belongs to.
+    pub marker_drag: Option<(PlayerId, fp_model::MarkerKind, TrackId)>,
+    /// A cart to open in Settings → Cartwall (`Edit…` on a cart).
+    pub edit_cart: Option<(fp_model::CartPageId, usize)>,
     meters: HashMap<PlayerId, Meter>,
     notice: Option<(String, f64)>,
 }
@@ -101,6 +112,7 @@ pub(crate) struct Scene<'a> {
     pub time: f64,
     pub ctx: egui::Context,
     picks: &'a Sender<Picked>,
+    pub files: &'a Sender<FileOutcome>,
 }
 
 impl Scene<'_> {
@@ -145,11 +157,19 @@ pub struct AppUi {
     covers_version: u64,
     picks_tx: Sender<Picked>,
     picks_rx: Receiver<Picked>,
+    files_tx: Sender<FileOutcome>,
+    files_rx: Receiver<FileOutcome>,
     themed: bool,
     #[cfg(feature = "test-hooks")]
     fail_next_frame: bool,
     settings: SettingsState,
     settings_shown: bool,
+    /// The egui context, once the first frame has run.
+    ctx: Option<egui::Context>,
+    /// Imports asked for before the first frame.
+    pending_imports: Vec<PathBuf>,
+    /// The `config.ui.language` the interface strings follow.
+    language: Option<Option<String>>,
     backends: Vec<Arc<dyn AudioBackend>>,
     service_faults: Option<Arc<std::sync::atomic::AtomicU64>>,
 }
@@ -157,6 +177,7 @@ pub struct AppUi {
 impl AppUi {
     pub fn new(ctl: Arc<dyn Controller>, i18n: I18n, media: MediaCache) -> Self {
         let (picks_tx, picks_rx) = crossbeam_channel::unbounded();
+        let (files_tx, files_rx) = crossbeam_channel::unbounded();
         Self {
             ctl,
             i18n,
@@ -168,11 +189,16 @@ impl AppUi {
             covers_version: 0,
             picks_tx,
             picks_rx,
+            files_tx,
+            files_rx,
             themed: false,
             #[cfg(feature = "test-hooks")]
             fail_next_frame: false,
             settings: SettingsState::default(),
             settings_shown: false,
+            ctx: None,
+            pending_imports: Vec::new(),
+            language: None,
             backends: Vec::new(),
             service_faults: None,
         }
@@ -221,6 +247,17 @@ impl AppUi {
         self.fail_next_frame = true;
     }
 
+    /// Imports a playlist file (M3U, M3U8, PLS) as a new playlist; the file
+    /// is read on a helper thread.
+    pub fn import_playlist(&mut self, path: PathBuf) {
+        let limits = self.ctl.model().config.limits.clone();
+        if let Some(ctx) = self.ctx.clone() {
+            playlist_files::import(&ctx, path, limits, self.files_tx.clone());
+        } else {
+            self.pending_imports.push(path);
+        }
+    }
+
     /// Table rows built during the last frame (virtualisation check).
     pub fn rows_built(&self) -> usize {
         self.view.rows_built
@@ -243,6 +280,17 @@ impl AppUi {
             return;
         }
         let state = self.ctl.model();
+        // Follow a language change made in Settings (the first frame only
+        // records what the interface was built with).
+        let wanted = state.config.ui.language.clone();
+        match &self.language {
+            None => self.language = Some(wanted),
+            Some(applied) if *applied != wanted => {
+                self.i18n = I18n::new(wanted.as_deref());
+                self.language = Some(wanted);
+            }
+            Some(_) => {}
+        }
         let telemetry = self.ctl.telemetry();
         let time = ctx.input(|i| i.time);
         self.view.rows_built = 0;
@@ -258,6 +306,16 @@ impl AppUi {
             self.view.notice = Some((error_text(&self.i18n, &error), time + NOTICE_SECS));
         }
         // Paths arrive already filtered (and folders expanded) off this thread.
+        if self.ctx.is_none() {
+            self.ctx = Some(ctx.clone());
+            for path in std::mem::take(&mut self.pending_imports) {
+                self.import_playlist(path);
+            }
+        }
+        while let Ok(outcome) = self.files_rx.try_recv() {
+            let text = self.file_outcome(outcome);
+            self.view.notice = Some((text, time + NOTICE_SECS));
+        }
         while let Ok(picked) = self.picks_rx.try_recv() {
             if !picked.paths.is_empty() {
                 self.ctl.send(Command::InsertPaths {
@@ -277,6 +335,7 @@ impl AppUi {
             time,
             ctx: ctx.clone(),
             picks: &self.picks_tx,
+            files: &self.files_tx,
         };
         let full = ui.available_rect_before_wrap();
         ui.painter().rect_filled(full, 0.0, theme::BG);
@@ -295,12 +354,31 @@ impl AppUi {
                 .layout(Layout::left_to_right(Align::Center)),
         );
         top_bar(&mut top_ui, &scene, &mut self.view);
+        // The cartwall strip takes the bottom of the middle area.
+        let inner = middle.shrink(8.0);
+        let cart_height = cartwall::height(&scene).min(inner.height() * 0.6);
+        let players_rect = Rect::from_min_max(
+            inner.min,
+            egui::pos2(inner.right(), inner.bottom() - cart_height - 8.0),
+        );
+        let cart_rect = Rect::from_min_max(
+            egui::pos2(inner.left(), inner.bottom() - cart_height),
+            inner.max,
+        );
         let mut players_ui = ui.new_child(
             UiBuilder::new()
-                .max_rect(middle.shrink(8.0))
+                .max_rect(players_rect)
                 .layout(Layout::left_to_right(Align::Min)),
         );
         players_row(&mut players_ui, &scene, &mut self.view, &mut self.covers);
+        let mut cart_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(cart_rect)
+                .id_salt("cartwall")
+                .layout(Layout::top_down(Align::Min)),
+        );
+        cart_ui.set_clip_rect(cart_rect);
+        cartwall::strip(&mut cart_ui, &scene, &mut self.view);
         let mut status_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(status)
@@ -316,6 +394,9 @@ impl AppUi {
             if !self.settings_shown {
                 self.settings.reset();
                 self.settings_shown = true;
+            }
+            if let Some((page, index)) = self.view.edit_cart.take() {
+                self.settings.edit_cart(page, index);
             }
             let deps = SettingsDeps {
                 backends: &self.backends,
@@ -347,47 +428,58 @@ impl AppUi {
         if ctx.text_edit_focused() {
             return;
         }
-        const NUMBERS: [Key; 9] = [
-            Key::Num1,
-            Key::Num2,
-            Key::Num3,
-            Key::Num4,
-            Key::Num5,
-            Key::Num6,
-            Key::Num7,
-            Key::Num8,
-            Key::Num9,
-        ];
-        let (pressed, delete, escape) = ctx.input(|i| {
+        // Configured shortcuts whose key the toolkit knows.
+        let bindings: Vec<(Key, &KeyChord, ShortcutAction)> = state
+            .config
+            .shortcuts
+            .iter()
+            .filter_map(|s| Key::from_name(&s.chord.key).map(|k| (k, &s.chord, s.action)))
+            // Delete, Backspace and Esc keep their fixed meaning.
+            .filter(|(k, _, _)| !super::settings::RESERVED_KEYS.contains(k))
+            .collect();
+        let (fired, delete, escape) = ctx.input(|i| {
             // Only the first press counts: holding a key must not repeat it
             // (a repeated Play would skip tracks on air).
-            let first_press = |wanted: Key| {
-                i.events.iter().any(|e| {
-                    matches!(e, egui::Event::Key { key, pressed: true, repeat: false, modifiers, .. }
-                        if *key == wanted && modifiers.is_none())
+            let first_press = |wanted: Key, chord: Option<&KeyChord>| {
+                i.events.iter().any(|e| match e {
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        repeat: false,
+                        modifiers,
+                        ..
+                    } if *key == wanted => match chord {
+                        Some(c) => {
+                            modifiers.ctrl == c.ctrl
+                                && modifiers.alt == c.alt
+                                && modifiers.shift == c.shift
+                                && modifiers.mac_cmd == c.command
+                        }
+                        None => modifiers.is_none(),
+                    },
+                    _ => false,
                 })
             };
-            let pressed: Vec<usize> = NUMBERS
+            let fired: Vec<ShortcutAction> = bindings
                 .iter()
-                .enumerate()
-                .filter(|(_, k)| first_press(**k))
-                .map(|(n, _)| n)
+                .filter(|(key, chord, _)| first_press(*key, Some(chord)))
+                .map(|(_, _, action)| *action)
                 .collect();
             (
-                pressed,
-                first_press(Key::Delete) || first_press(Key::Backspace),
-                first_press(Key::Escape),
+                fired,
+                first_press(Key::Delete, None) || first_press(Key::Backspace, None),
+                first_press(Key::Escape, None),
             )
         });
         if self.view.settings_open {
-            if escape {
+            if escape && !self.settings.capturing() {
                 self.view.settings_open = false;
             }
             return;
         }
-        for n in pressed {
-            if let Some(p) = state.players.get(n) {
-                self.ctl.send(Command::Play(p.id));
+        for action in fired {
+            if let Some(command) = shortcut_command(state, action) {
+                self.ctl.send(command);
             }
         }
         if delete
@@ -409,6 +501,54 @@ impl AppUi {
         }
     }
 
+    /// Applies a finished import or export and says what happened.
+    fn file_outcome(&mut self, outcome: FileOutcome) -> String {
+        let t = &self.i18n;
+        match outcome {
+            FileOutcome::Imported {
+                name,
+                result: Ok(list),
+            } => {
+                let count = list.entries.len();
+                let mut text = if count == 0 {
+                    t.tr_args("playlist-import-empty", &[("name", name.clone().into())])
+                } else {
+                    t.tr_args(
+                        "playlist-imported",
+                        &[("name", name.clone().into()), ("count", count.into())],
+                    )
+                };
+                if list.skipped_streams > 0 {
+                    text.push(' ');
+                    text.push_str(&t.tr_args(
+                        "playlist-streams-skipped",
+                        &[("streams", list.skipped_streams.into())],
+                    ));
+                }
+                if count > 0 {
+                    let paths = list.entries.into_iter().map(|e| e.path).collect();
+                    self.ctl
+                        .send(Command::CreatePlaylistFromPaths { name, paths });
+                }
+                text
+            }
+            FileOutcome::Imported {
+                name,
+                result: Err(e),
+            } => t.tr_args(
+                "playlist-import-failed",
+                &[("name", name.into()), ("error", e.into())],
+            ),
+            FileOutcome::Exported(Ok(path)) => t.tr_args(
+                "playlist-exported",
+                &[("path", path.display().to_string().into())],
+            ),
+            FileOutcome::Exported(Err(e)) => {
+                t.tr_args("playlist-export-failed", &[("error", e.into())])
+            }
+        }
+    }
+
     fn file_drops(&mut self, ctx: &egui::Context, state: &AppState) {
         let dropped: Vec<PathBuf> = ctx.input(|i| {
             i.raw
@@ -418,6 +558,13 @@ impl AppUi {
                 .filter(|p| !p.as_os_str().is_empty())
                 .collect()
         });
+        // Playlist files dropped on the window become new playlists.
+        let (lists, dropped): (Vec<PathBuf>, Vec<PathBuf>) = dropped
+            .into_iter()
+            .partition(|p| playlist_files::is_playlist_file(p));
+        for list in lists {
+            self.import_playlist(list);
+        }
         if dropped.is_empty() {
             return;
         }
@@ -457,6 +604,43 @@ impl AppUi {
             tracing::error!(error = %e, "could not read the dropped files");
         }
     }
+}
+
+/// The command a shortcut stands for, resolving 1-based positions against
+/// the players and the cart page shown.
+fn shortcut_command(state: &AppState, action: ShortcutAction) -> Option<Command> {
+    let player = |n: u16| {
+        state
+            .players
+            .get(usize::from(n).checked_sub(1)?)
+            .map(|p| p.id)
+    };
+    let wall = &state.cartwall;
+    let page_step = |step: isize| {
+        let shown = wall.shown_page().map(|p| p.id);
+        let index = wall.pages.iter().position(|p| Some(p.id) == shown)?;
+        let count = wall.pages.len() as isize;
+        let next = (index as isize + step).rem_euclid(count.max(1));
+        wall.pages.get(usize::try_from(next).ok()?).map(|p| p.id)
+    };
+    Some(match action {
+        ShortcutAction::PlayPlayer(n) => Command::Play(player(n)?),
+        ShortcutAction::PausePlayer(n) => Command::Pause(player(n)?),
+        ShortcutAction::StopPlayer(n) => Command::Stop(player(n)?),
+        ShortcutAction::FadeStopPlayer(n) => Command::FadeStop(player(n)?),
+        ShortcutAction::CuePlayer(n) => Command::ToggleCue(player(n)?),
+        ShortcutAction::FireCart(n) => {
+            let cart = wall
+                .shown_page()?
+                .carts
+                .get(usize::from(n).checked_sub(1)?)?;
+            Command::FireCart(cart.id)
+        }
+        ShortcutAction::StopAllCarts => Command::StopAllCarts,
+        ShortcutAction::ToggleCartwall => Command::SetCartwallOpen(!wall.open),
+        ShortcutAction::NextCartPage => Command::ShowCartPage(page_step(1)?),
+        ShortcutAction::PreviousCartPage => Command::ShowCartPage(page_step(-1)?),
+    })
 }
 
 fn default_platform() -> String {
