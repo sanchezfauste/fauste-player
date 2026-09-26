@@ -13,7 +13,10 @@ use egui::{
 use fp_backends::AudioBackend;
 use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
-use fp_model::{AppState, Command, EntryId, ModelError, PlayerId, PlaylistId, TrackId, Transport};
+use fp_model::{
+    AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, ShortcutAction,
+    TrackId, Transport,
+};
 
 use super::cartwall;
 use super::controller::Controller;
@@ -369,36 +372,45 @@ impl AppUi {
         if ctx.text_edit_focused() {
             return;
         }
-        const NUMBERS: [Key; 9] = [
-            Key::Num1,
-            Key::Num2,
-            Key::Num3,
-            Key::Num4,
-            Key::Num5,
-            Key::Num6,
-            Key::Num7,
-            Key::Num8,
-            Key::Num9,
-        ];
-        let (pressed, delete, escape) = ctx.input(|i| {
+        // Configured shortcuts whose key the toolkit knows.
+        let bindings: Vec<(Key, &KeyChord, ShortcutAction)> = state
+            .config
+            .shortcuts
+            .iter()
+            .filter_map(|s| Key::from_name(&s.chord.key).map(|k| (k, &s.chord, s.action)))
+            .collect();
+        let (fired, delete, escape) = ctx.input(|i| {
             // Only the first press counts: holding a key must not repeat it
             // (a repeated Play would skip tracks on air).
-            let first_press = |wanted: Key| {
-                i.events.iter().any(|e| {
-                    matches!(e, egui::Event::Key { key, pressed: true, repeat: false, modifiers, .. }
-                        if *key == wanted && modifiers.is_none())
+            let first_press = |wanted: Key, chord: Option<&KeyChord>| {
+                i.events.iter().any(|e| match e {
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        repeat: false,
+                        modifiers,
+                        ..
+                    } if *key == wanted => match chord {
+                        Some(c) => {
+                            modifiers.ctrl == c.ctrl
+                                && modifiers.alt == c.alt
+                                && modifiers.shift == c.shift
+                                && modifiers.mac_cmd == c.command
+                        }
+                        None => modifiers.is_none(),
+                    },
+                    _ => false,
                 })
             };
-            let pressed: Vec<usize> = NUMBERS
+            let fired: Vec<ShortcutAction> = bindings
                 .iter()
-                .enumerate()
-                .filter(|(_, k)| first_press(**k))
-                .map(|(n, _)| n)
+                .filter(|(key, chord, _)| first_press(*key, Some(chord)))
+                .map(|(_, _, action)| *action)
                 .collect();
             (
-                pressed,
-                first_press(Key::Delete) || first_press(Key::Backspace),
-                first_press(Key::Escape),
+                fired,
+                first_press(Key::Delete, None) || first_press(Key::Backspace, None),
+                first_press(Key::Escape, None),
             )
         });
         if self.view.settings_open {
@@ -407,9 +419,9 @@ impl AppUi {
             }
             return;
         }
-        for n in pressed {
-            if let Some(p) = state.players.get(n) {
-                self.ctl.send(Command::Play(p.id));
+        for action in fired {
+            if let Some(command) = shortcut_command(state, action) {
+                self.ctl.send(command);
             }
         }
         if delete
@@ -479,6 +491,43 @@ impl AppUi {
             tracing::error!(error = %e, "could not read the dropped files");
         }
     }
+}
+
+/// The command a shortcut stands for, resolving 1-based positions against
+/// the players and the cart page shown.
+fn shortcut_command(state: &AppState, action: ShortcutAction) -> Option<Command> {
+    let player = |n: u16| {
+        state
+            .players
+            .get(usize::from(n).checked_sub(1)?)
+            .map(|p| p.id)
+    };
+    let wall = &state.cartwall;
+    let page_step = |step: isize| {
+        let shown = wall.shown_page().map(|p| p.id);
+        let index = wall.pages.iter().position(|p| Some(p.id) == shown)?;
+        let count = wall.pages.len() as isize;
+        let next = (index as isize + step).rem_euclid(count.max(1));
+        wall.pages.get(usize::try_from(next).ok()?).map(|p| p.id)
+    };
+    Some(match action {
+        ShortcutAction::PlayPlayer(n) => Command::Play(player(n)?),
+        ShortcutAction::PausePlayer(n) => Command::Pause(player(n)?),
+        ShortcutAction::StopPlayer(n) => Command::Stop(player(n)?),
+        ShortcutAction::FadeStopPlayer(n) => Command::FadeStop(player(n)?),
+        ShortcutAction::CuePlayer(n) => Command::ToggleCue(player(n)?),
+        ShortcutAction::FireCart(n) => {
+            let cart = wall
+                .shown_page()?
+                .carts
+                .get(usize::from(n).checked_sub(1)?)?;
+            Command::FireCart(cart.id)
+        }
+        ShortcutAction::StopAllCarts => Command::StopAllCarts,
+        ShortcutAction::ToggleCartwall => Command::SetCartwallOpen(!wall.open),
+        ShortcutAction::NextCartPage => Command::ShowCartPage(page_step(1)?),
+        ShortcutAction::PreviousCartPage => Command::ShowCartPage(page_step(-1)?),
+    })
 }
 
 fn default_platform() -> String {
