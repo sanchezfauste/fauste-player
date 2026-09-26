@@ -134,12 +134,17 @@ scripts/package-release.sh x86_64-unknown-linux-gnu  # → dist/fauste-player-<v
   with cargo-wix and WiX v3.
 - macOS: `scripts/package/macos.sh`.
 
+**Dry run:** run `release-build` by hand with `dry_run` checked, and any ref
+as `tag`. It builds every package, including the MSI, the dmg and the
+Flatpak, without uploading anything. Do this before the first release after
+a packaging change.
+
 ### Signing (optional secrets)
 
 | Secret | Used for |
 |---|---|
 | `WINDOWS_CERT_PFX` (base64 of a `.pfx`), `WINDOWS_CERT_PASSWORD` | signtool signs `fauste-player.exe` inside the MSI and the MSI itself, with an RFC 3161 timestamp |
-| `APPLE_CERT_P12` (base64 of a *Developer ID Application* `.p12`), `APPLE_CERT_PASSWORD` | codesign with the hardened runtime, for the app and the dmg |
+| `APPLE_CERT_P12` (base64 of a *Developer ID Application* `.p12`), `APPLE_CERT_PASSWORD` | codesign with the hardened runtime, for the app and the dmg (without it the app gets an ad-hoc signature, so Gatekeeper offers *Open Anyway* instead of reporting it damaged) |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (app-specific password) | notarytool notarisation, then stapling the ticket to the dmg |
 
 - **Without these secrets** the packages are built unsigned. The getting

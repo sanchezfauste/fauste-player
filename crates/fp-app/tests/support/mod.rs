@@ -124,7 +124,7 @@ pub fn harness_with_backends(
     harness_from(state, |ui| ui.with_backends(backends))
 }
 
-fn harness_from(
+pub fn harness_from(
     state: AppState,
     build: impl FnOnce(AppUi) -> AppUi,
 ) -> (Harness<'static, AppUi>, Arc<Fake>) {

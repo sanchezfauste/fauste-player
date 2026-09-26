@@ -168,6 +168,8 @@ pub struct AppUi {
     ctx: Option<egui::Context>,
     /// Imports asked for before the first frame.
     pending_imports: Vec<PathBuf>,
+    /// Playlists handed over by a second start of the application.
+    inbox: Option<Receiver<PathBuf>>,
     /// The `config.ui.language` the interface strings follow.
     language: Option<Option<String>>,
     backends: Vec<Arc<dyn AudioBackend>>,
@@ -198,6 +200,7 @@ impl AppUi {
             settings_shown: false,
             ctx: None,
             pending_imports: Vec::new(),
+            inbox: None,
             language: None,
             backends: Vec::new(),
             service_faults: None,
@@ -245,6 +248,13 @@ impl AppUi {
     #[cfg(feature = "test-hooks")]
     pub fn fail_next_frame(&mut self) {
         self.fail_next_frame = true;
+    }
+
+    /// Playlists another start of the application hands over (see
+    /// `instance::watch`), imported as they arrive.
+    pub fn with_inbox(mut self, inbox: Receiver<PathBuf>) -> Self {
+        self.inbox = Some(inbox);
+        self
     }
 
     /// Imports a playlist file (M3U, M3U8, PLS) as a new playlist; the file
@@ -311,6 +321,15 @@ impl AppUi {
             for path in std::mem::take(&mut self.pending_imports) {
                 self.import_playlist(path);
             }
+        }
+        let handed: Vec<PathBuf> = self
+            .inbox
+            .as_ref()
+            .map(|rx| rx.try_iter().collect())
+            .unwrap_or_default();
+        for path in handed {
+            tracing::info!(path = %path.display(), "importing a playlist handed over by another start");
+            self.import_playlist(path);
         }
         while let Ok(outcome) = self.files_rx.try_recv() {
             let text = self.file_outcome(outcome);

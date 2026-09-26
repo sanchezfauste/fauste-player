@@ -65,6 +65,7 @@ if [ -n "${APPLE_CERT_P12:-}" ]; then
     -T /usr/bin/codesign
   rm -f "${work}/cert.p12"
   security set-key-partition-list -S apple-tool:,apple: -s -k "${password}" "${keychain}" >/dev/null
+  # shellcheck disable=SC2046 # one word per keychain path, as listed
   security list-keychains -d user -s "${keychain}" $(security list-keychains -d user | tr -d '"')
   identity="$(security find-identity -v -p codesigning "${keychain}" \
     | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n1)"
@@ -72,6 +73,10 @@ if [ -n "${APPLE_CERT_P12:-}" ]; then
     "${app}/Contents/MacOS/fauste-player"
   codesign --force --options runtime --timestamp --sign "${identity}" "${app}"
   codesign --verify --strict --verbose=2 "${app}"
+else
+  # Unsigned release: an ad-hoc signature seals the bundle, so macOS offers
+  # to open it (Privacy & Security → Open Anyway) instead of calling it damaged.
+  codesign --force --deep --sign - "${app}"
 fi
 
 # 4. Disk image with an Applications link.

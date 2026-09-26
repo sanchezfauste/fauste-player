@@ -3,7 +3,7 @@
 # the build runs offline, as Flathub requires.
 app-id: org.fauste.FaustePlayer
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
@@ -18,7 +18,6 @@ finish-args:
   # ALSA hw: devices, for bit-perfect output.
   - --device=all
   # Music libraries are read in place; dialogs go through the portals.
-  - --filesystem=xdg-music:ro
   - --filesystem=home:ro
   # Real-time priority for the audio threads.
   - --system-talk-name=org.freedesktop.RealtimeKit1
@@ -45,6 +44,9 @@ modules:
       - type: dir
         path: ../..
         skip:
+          - .git
+          - .flatpak-builder
+          - flatpak_app
           - target
           - dist
           - .worktrees

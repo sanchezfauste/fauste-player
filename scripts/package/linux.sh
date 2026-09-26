@@ -27,10 +27,10 @@ checksum() {
   (cd "$(dirname "$1")" && sha256sum "$(basename "$1")" > "$(basename "$1").sha256")
 }
 
-# 1. The release archive's contents (binary, notices).
-if [ ! -x "${stage}/fauste-player" ]; then
-  "${root}/scripts/package-release.sh" "${target}" "${version}" >/dev/null
-fi
+# 1. The release archive's contents (binary, notices). Always rebuilt (a
+# no-op when nothing changed), so a package never ships a stale binary or
+# one built with other features.
+"${root}/scripts/package-release.sh" "${target}" "${version}" >/dev/null
 mkdir -p "${work}"
 "${root}/scripts/package/metainfo.sh" "${version}" "${work}/${app_id}.metainfo.xml"
 if [ -f "${stage}/licenses/THIRD-PARTY.html" ]; then
@@ -42,8 +42,9 @@ fi
 
 # 2. Debian package.
 if want deb; then
+  # A SemVer pre-release (0.2.0-rc.1) sorts before its release with `~`.
   deb="$(cd "${root}" && cargo deb -p fp-app --no-build --no-strip --target "${target}" \
-    --deb-version "${version}" -o "${dist}/" | tail -n1)"
+    --deb-version "${version//-/\~}" -o "${dist}/" | tail -n1)"
   checksum "${deb}"
   echo "${deb}"
 fi

@@ -63,8 +63,10 @@ automatic cue and MIX markers, CUE pre-listen, a cartwall of instant carts \
 and bit-perfect output on exclusive devices."""
 section = "sound"
 priority = "optional"
-depends = "$auto"
-recommends = "pipewire-pulse | pulseaudio"
+# `$auto` sees only linked libraries; the window system ones are loaded at
+# run time (winit, glow), so they are listed by hand.
+depends = "$auto, libxkbcommon0, libegl1 | libgl1, libwayland-client0 | libx11-6"
+recommends = "pipewire-pulse | pulseaudio, libwayland-egl1, libxkbcommon-x11-0, libx11-xcb1, libxcursor1, libxi6"
 assets = [
     ["target/release/fauste-player", "usr/bin/", "755"],
     ["../../packaging/linux/org.fauste.FaustePlayer.desktop", "usr/share/applications/", "644"],
@@ -104,5 +106,14 @@ assets = [
     { source = "assets/fonts/OFL.txt", dest = "/usr/share/doc/fauste-player/Inter-OFL.txt", mode = "644", doc = true },
 ]
 
+# Window system libraries loaded at run time, by soname so any distribution
+# resolves them.
+[package.metadata.generate-rpm.requires]
+"libxkbcommon.so.0()(64bit)" = "*"
+"libEGL.so.1()(64bit)" = "*"
+
 [package.metadata.generate-rpm.recommends]
 pipewire-pulseaudio = "*"
+"libwayland-client.so.0()(64bit)" = "*"
+"libxkbcommon-x11.so.0()(64bit)" = "*"
+"libX11-xcb.so.1()(64bit)" = "*"

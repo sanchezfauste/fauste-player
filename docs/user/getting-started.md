@@ -25,9 +25,17 @@ on macOS.
   never required.
 - **AppImage:** if it does not start because FUSE is missing, run it with
   `--appimage-extract-and-run`.
-- **Flatpak:** the sandbox can read your home folder (to play your music
-  where it is). It plays through PulseAudio, or through ALSA directly for
-  bit-perfect devices.
+- **Flatpak:**
+  - The bundle needs the freedesktop runtime from Flathub. If the Flathub
+    remote is not set up, run
+    `flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo`
+    first.
+  - The sandbox can read your home folder (to play your music where it is).
+  - It plays through PulseAudio, or through ALSA directly for bit-perfect
+    devices.
+- **Desktop libraries:** the window uses libxkbcommon and EGL or OpenGL, with
+  Wayland or X11. Every desktop has them, and the `.deb` and `.rpm` declare
+  them. On a very minimal system, install them before using the AppImage.
 
 ### Windows
 
@@ -49,10 +57,25 @@ Player** to **Applications**. The same app runs on Apple silicon and Intel
 - **Updating:** replace the app the same way.
 - **Removing:** move it to the Bin.
 - **Unsigned app:** if the release is not signed and notarised, macOS refuses
-  the first start. Right-click the app, choose **Open**, then confirm; or run
-  `xattr -dr com.apple.quarantine "/Applications/Fauste Player.app"`.
+  the first start.
+  - macOS 15 and later: open **System Settings → Privacy & Security**,
+    scroll to the message about Fauste Player, choose **Open Anyway**, and
+    confirm.
+  - macOS 14 and earlier: right-click the app, choose **Open**, then confirm.
+  - Or run `xattr -dr com.apple.quarantine "/Applications/Fauste Player.app"`.
+- **JACK on macOS:** a signed and notarised app can only load a JACK library
+  that is itself signed. Otherwise JACK shows as unavailable; use Core
+  Audio.
 - **Playlists:** on macOS they are imported from Settings → Playlists.
   Opening a playlist file with the app from Finder is not supported.
+
+### One instance at a time
+
+Only one Fauste Player runs per data folder. Opening a playlist from the file
+manager while it runs imports that playlist into the running application.
+Starting it again with no playlist shows a message that it is already
+running. To run separate instances side by side (for example two studios on
+one computer), give each its own folder with `FAUSTE_HOME`.
 
 ### Command line
 

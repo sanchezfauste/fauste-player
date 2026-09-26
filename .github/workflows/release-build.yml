@@ -19,9 +19,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag (for example v0.2.0)
+        description: Existing release tag or any ref (for example v0.2.0)
         required: true
         type: string
+      dry_run:
+        description: Build every package without uploading (tests the pipeline before a release)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -92,7 +96,11 @@ jobs:
           archive="$(scripts/package-release.sh "${{ matrix.target }}" "${version}" | tail -n1)"
           files=("${archive}")
           case "$RUNNER_OS" in
-            Linux) mapfile -t -O 1 files < <(scripts/package/linux.sh "${{ matrix.target }}" "${version}" | grep '^/') ;;
+            Linux)
+              # Through a file: a failure of the script fails the step.
+              scripts/package/linux.sh "${{ matrix.target }}" "${version}" > packages.txt
+              mapfile -t -O 1 files < <(grep '^/' packages.txt)
+              ;;
             Windows) files+=("$(scripts/package/windows.sh "${{ matrix.target }}" "${version}" | tail -n1)") ;;
           esac
           {
@@ -105,6 +113,7 @@ jobs:
           WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
       - name: Upload to the release
+        if: ${{ !inputs.dry_run }}
         shell: bash
         run: |
           mapfile -t files <<< "${FILES}"
@@ -130,7 +139,10 @@ jobs:
           tool: cargo-about
       - name: Build the app and the disk image
         id: package
-        run: echo "dmg=$(scripts/package/macos.sh "${TAG#v}" | tail -n1)" >> "$GITHUB_OUTPUT"
+        run: |
+          # Assigned first: a failure of the script fails the step.
+          out="$(scripts/package/macos.sh "${TAG#v}")"
+          echo "dmg=$(printf '%s\n' "${out}" | tail -n1)" >> "$GITHUB_OUTPUT"
         env:
           TAG: ${{ inputs.tag }}
           APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
@@ -139,6 +151,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
       - name: Upload to the release
+        if: ${{ !inputs.dry_run }}
         run: gh release upload "${{ inputs.tag }}" "${DMG}" "${DMG}.sha256" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
@@ -170,7 +183,7 @@ jobs:
     needs: flatpak-sources
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
     steps:
       - uses: actions/checkout@v4
@@ -193,6 +206,7 @@ jobs:
   flatpak-release:
     name: Attach the Flatpak bundle
     needs: flatpak
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
