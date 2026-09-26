@@ -8,6 +8,7 @@ pub mod files;
 pub mod format;
 pub mod icons;
 mod player;
+pub mod playlist_files;
 mod settings;
 pub mod shell;
 mod table;

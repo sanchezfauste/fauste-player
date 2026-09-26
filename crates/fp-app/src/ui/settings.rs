@@ -1116,6 +1116,37 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             scene.ctl.send(Command::CreatePlaylist { name });
             st.new_name.clear();
         }
+        let import = t.tr("settings-import-playlist");
+        let width = ui
+            .painter()
+            .layout_no_wrap(import.clone(), font(12.0), theme::TEXT)
+            .size()
+            .x
+            + 36.0;
+        if widgets::tile(
+            ui,
+            vec2(width, 28.0),
+            &import,
+            true,
+            TileStyle::plain(),
+            |p, r, c| {
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    format!("{} {import}", icon::DOWNLOAD_SIMPLE),
+                    font(12.0),
+                    c,
+                );
+            },
+        )
+        .clicked()
+        {
+            super::playlist_files::import_with_dialog(
+                &scene.ctx,
+                scene.state.config.limits.clone(),
+                scene.files.clone(),
+            );
+        }
     });
     ui.add_space(12.0);
     ui.horizontal(|ui| {
@@ -1187,6 +1218,36 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 )
                 .selectable(false),
             );
+            let export = t.tr("settings-export-playlist");
+            if widgets::tile(
+                ui,
+                vec2(56.0, 30.0),
+                &t.tr("tip-export-playlist"),
+                true,
+                TileStyle {
+                    border: Color32::TRANSPARENT,
+                    content: theme::NEUTRAL_300,
+                    ..TileStyle::plain()
+                },
+                |p, r, c| {
+                    p.text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        format!("{} {export}", icon::EXPORT),
+                        font(12.0),
+                        c,
+                    );
+                },
+            )
+            .clicked()
+            {
+                super::playlist_files::export_with_dialog(
+                    &scene.ctx,
+                    format!("{name}.m3u8"),
+                    super::playlist_files::export_entries(scene.state, id),
+                    scene.files.clone(),
+                );
+            }
             let delete = t.tr("settings-delete");
             let only = scene.state.playlists.len() <= 1;
             let style = TileStyle {

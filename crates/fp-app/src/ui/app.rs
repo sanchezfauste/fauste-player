@@ -22,6 +22,7 @@ use super::cartwall;
 use super::controller::Controller;
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::player;
+use super::playlist_files::{self, FileOutcome};
 use super::settings::{self, SettingsDeps, SettingsState};
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
@@ -107,6 +108,7 @@ pub(crate) struct Scene<'a> {
     pub time: f64,
     pub ctx: egui::Context,
     picks: &'a Sender<Picked>,
+    pub files: &'a Sender<FileOutcome>,
 }
 
 impl Scene<'_> {
@@ -151,11 +153,17 @@ pub struct AppUi {
     covers_version: u64,
     picks_tx: Sender<Picked>,
     picks_rx: Receiver<Picked>,
+    files_tx: Sender<FileOutcome>,
+    files_rx: Receiver<FileOutcome>,
     themed: bool,
     #[cfg(feature = "test-hooks")]
     fail_next_frame: bool,
     settings: SettingsState,
     settings_shown: bool,
+    /// The egui context, once the first frame has run.
+    ctx: Option<egui::Context>,
+    /// Imports asked for before the first frame.
+    pending_imports: Vec<PathBuf>,
     /// The `config.ui.language` the interface strings follow.
     language: Option<Option<String>>,
     backends: Vec<Arc<dyn AudioBackend>>,
@@ -165,6 +173,7 @@ pub struct AppUi {
 impl AppUi {
     pub fn new(ctl: Arc<dyn Controller>, i18n: I18n, media: MediaCache) -> Self {
         let (picks_tx, picks_rx) = crossbeam_channel::unbounded();
+        let (files_tx, files_rx) = crossbeam_channel::unbounded();
         Self {
             ctl,
             i18n,
@@ -176,11 +185,15 @@ impl AppUi {
             covers_version: 0,
             picks_tx,
             picks_rx,
+            files_tx,
+            files_rx,
             themed: false,
             #[cfg(feature = "test-hooks")]
             fail_next_frame: false,
             settings: SettingsState::default(),
             settings_shown: false,
+            ctx: None,
+            pending_imports: Vec::new(),
             language: None,
             backends: Vec::new(),
             service_faults: None,
@@ -228,6 +241,17 @@ impl AppUi {
     #[cfg(feature = "test-hooks")]
     pub fn fail_next_frame(&mut self) {
         self.fail_next_frame = true;
+    }
+
+    /// Imports a playlist file (M3U, M3U8, PLS) as a new playlist; the file
+    /// is read on a helper thread.
+    pub fn import_playlist(&mut self, path: PathBuf) {
+        let limits = self.ctl.model().config.limits.clone();
+        if let Some(ctx) = self.ctx.clone() {
+            playlist_files::import(&ctx, path, limits, self.files_tx.clone());
+        } else {
+            self.pending_imports.push(path);
+        }
     }
 
     /// Table rows built during the last frame (virtualisation check).
@@ -278,6 +302,16 @@ impl AppUi {
             self.view.notice = Some((error_text(&self.i18n, &error), time + NOTICE_SECS));
         }
         // Paths arrive already filtered (and folders expanded) off this thread.
+        if self.ctx.is_none() {
+            self.ctx = Some(ctx.clone());
+            for path in std::mem::take(&mut self.pending_imports) {
+                self.import_playlist(path);
+            }
+        }
+        while let Ok(outcome) = self.files_rx.try_recv() {
+            let text = self.file_outcome(outcome);
+            self.view.notice = Some((text, time + NOTICE_SECS));
+        }
         while let Ok(picked) = self.picks_rx.try_recv() {
             if !picked.paths.is_empty() {
                 self.ctl.send(Command::InsertPaths {
@@ -297,6 +331,7 @@ impl AppUi {
             time,
             ctx: ctx.clone(),
             picks: &self.picks_tx,
+            files: &self.files_tx,
         };
         let full = ui.available_rect_before_wrap();
         ui.painter().rect_filled(full, 0.0, theme::BG);
@@ -460,6 +495,48 @@ impl AppUi {
         }
     }
 
+    /// Applies a finished import or export and says what happened.
+    fn file_outcome(&mut self, outcome: FileOutcome) -> String {
+        let t = &self.i18n;
+        match outcome {
+            FileOutcome::Imported {
+                name,
+                result: Ok(list),
+            } => {
+                let count = list.entries.len();
+                let mut text = t.tr_args(
+                    "playlist-imported",
+                    &[("name", name.clone().into()), ("count", count.into())],
+                );
+                if list.skipped_streams > 0 {
+                    text.push(' ');
+                    text.push_str(&t.tr_args(
+                        "playlist-streams-skipped",
+                        &[("streams", list.skipped_streams.into())],
+                    ));
+                }
+                let paths = list.entries.into_iter().map(|e| e.path).collect();
+                self.ctl
+                    .send(Command::CreatePlaylistFromPaths { name, paths });
+                text
+            }
+            FileOutcome::Imported {
+                name,
+                result: Err(e),
+            } => t.tr_args(
+                "playlist-import-failed",
+                &[("name", name.into()), ("error", e.into())],
+            ),
+            FileOutcome::Exported(Ok(path)) => t.tr_args(
+                "playlist-exported",
+                &[("path", path.display().to_string().into())],
+            ),
+            FileOutcome::Exported(Err(e)) => {
+                t.tr_args("playlist-export-failed", &[("error", e.into())])
+            }
+        }
+    }
+
     fn file_drops(&mut self, ctx: &egui::Context, state: &AppState) {
         let dropped: Vec<PathBuf> = ctx.input(|i| {
             i.raw
@@ -469,6 +546,13 @@ impl AppUi {
                 .filter(|p| !p.as_os_str().is_empty())
                 .collect()
         });
+        // Playlist files dropped on the window become new playlists.
+        let (lists, dropped): (Vec<PathBuf>, Vec<PathBuf>) = dropped
+            .into_iter()
+            .partition(|p| playlist_files::is_playlist_file(p));
+        for list in lists {
+            self.import_playlist(list);
+        }
         if dropped.is_empty() {
             return;
         }

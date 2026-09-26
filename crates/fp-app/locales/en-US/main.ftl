@@ -190,3 +190,17 @@ shortcut-reset = Reset to defaults
 shortcut-unbind = Unbind
 shortcut-press-key = Press a key…
 shortcut-help = Click an action, then press the key to use. Delete, Backspace and Esc cannot be changed.
+playlist-imported = Imported “{ $name }”: { $count ->
+    [one] 1 track.
+   *[other] { $count } tracks.
+}
+playlist-streams-skipped = { $streams ->
+    [one] 1 stream skipped (not supported).
+   *[other] { $streams } streams skipped (not supported).
+}
+playlist-import-failed = “{ $name }” could not be imported: { $error }
+playlist-exported = Playlist saved to { $path }.
+playlist-export-failed = The playlist could not be saved: { $error }
+settings-import-playlist = Import M3U / PLS…
+settings-export-playlist = M3U
+tip-export-playlist = Export as M3U8
