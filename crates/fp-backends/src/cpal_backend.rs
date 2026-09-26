@@ -77,6 +77,9 @@ struct CpalStream {
     config: StreamConfig,
     format: SampleFormat,
     _stream: cpal::Stream,
+    /// Exclusive access held for the stream's life (Core Audio hog mode),
+    /// released when dropped after the stream.
+    _exclusive: Option<Box<dyn Send>>,
 }
 
 impl OutputStream for CpalStream {
@@ -291,6 +294,8 @@ impl CpalBackend {
                 "alsa" => {}
                 #[cfg(windows)]
                 "wasapi" => return crate::wasapi_exclusive::open(device, config, renderer, errors),
+                #[cfg(target_os = "macos")]
+                "coreaudio" => {}
                 _ => {
                     return Err(BackendError::Unsupported(
                         "exclusive access is not available on this system".to_owned(),
@@ -300,6 +305,17 @@ impl CpalBackend {
         }
         let host = self.host()?;
         let dev = self.find(&host, device)?;
+        #[allow(unused_mut)]
+        let mut exclusive: Option<(Box<dyn Send>, SampleFormat)> = None;
+        #[cfg(target_os = "macos")]
+        if config.exclusive {
+            let name = dev
+                .description()
+                .map(|d| d.name().to_owned())
+                .map_err(backend_error)?;
+            let (guard, hardware) = crate::coreaudio_hog::take(&name, config.sample_rate)?;
+            exclusive = Some((Box::new(guard), hardware));
+        }
         let matching: Vec<cpal::SupportedStreamConfigRange> = dev
             .supported_output_configs()
             .map(|configs| {
@@ -361,15 +377,23 @@ impl CpalBackend {
                         let _ = handoff.push(r);
                     }
                     stream.play().map_err(backend_error)?;
+                    let stream_format = match format {
+                        cpal::SampleFormat::I16 => SampleFormat::I16,
+                        cpal::SampleFormat::I32 => SampleFormat::I32,
+                        cpal::SampleFormat::I24 => SampleFormat::I24,
+                        _ => SampleFormat::F32,
+                    };
+                    // In hog mode what reaches the device is the hardware
+                    // format the HAL converts to.
+                    let (held, format) = match exclusive.take() {
+                        Some((guard, hardware)) => (Some(guard), hardware),
+                        None => (None, stream_format),
+                    };
                     return Ok(Box::new(CpalStream {
                         config,
-                        format: match format {
-                            cpal::SampleFormat::I16 => SampleFormat::I16,
-                            cpal::SampleFormat::I32 => SampleFormat::I32,
-                            cpal::SampleFormat::I24 => SampleFormat::I24,
-                            _ => SampleFormat::F32,
-                        },
+                        format,
                         _stream: stream,
+                        _exclusive: held,
                     }));
                 }
                 Err(e) => match e.kind() {

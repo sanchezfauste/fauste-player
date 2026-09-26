@@ -1570,8 +1570,10 @@ dependencies = [
 name = "fp-backends"
 version = "0.1.0"
 dependencies = [
+ "coreaudio-rs",
  "cpal",
  "crossbeam-channel",
+ "objc2-core-audio-types",
  "rtrb",
  "thiserror 2.0.21",
  "wasapi",

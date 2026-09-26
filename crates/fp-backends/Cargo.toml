@@ -33,3 +33,7 @@ cpal = { workspace = true, features = ["realtime-dbus"] }
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.24.0"
 crossbeam-channel.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+coreaudio-rs = { version = "0.14.2", default-features = false, features = ["audio_unit", "core_audio"] }
+objc2-core-audio-types = "0.3.2"
