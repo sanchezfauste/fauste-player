@@ -83,6 +83,29 @@ default output, so a config copied from another OS still plays.
 and attach it to any route. The slot is only taken when both commands fit the
 queue, and it is released on `Finished`.
 
+## Cartwall
+
+Carts play as ordinary sources (`engine/carts.rs`). No real-time code is
+added.
+
+- A dedicated worker (`fp-cartwall`) decodes them.
+- **Routes:** they play on the cartwall routes (`config.outputs.cartwall`).
+  Main falls back to the default output. Without a Cue route, a cart
+  pre-listen ends at once (`CartCueEnded`).
+- **Exact ends and loops:** each load carries `until_secs` (the cue-out) and
+  `looped`. The worker cuts the frames past the end, so a cart finishes
+  exactly at its cue-out. A looped cart reopens at its cue-in and keeps
+  filling the same ring, so the loop point has no gap.
+- **Stopping:** a started cart gets a de-click ramp; one that never started is
+  released at once. Neither is reported as ended.
+- **Events:** mixer `Finished` becomes `CartEnded` (or `CartCueEnded`). A
+  worker failure becomes `CartFailed` once any buffered audio has played.
+- **Mixer capacity:** it counts the carts on air, plus room for more.
+- **Telemetry:** `Telemetry.carts` and `cart_cue` carry the positions
+  (wrapped within the loop for looped carts).
+- **Known limit:** a marker change on a cart's track applies from the next
+  fire. A cart already playing keeps the end it started with.
+
 ## Conductor
 
 `Conductor` (`conductor.rs`) owns `AppState` and the `Engine`. Each tick

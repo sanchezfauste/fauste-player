@@ -38,7 +38,16 @@ An RMS envelope over `analysis.rms_window_ms` windows gives:
 | `outro_start` | scanning back from `cue_out`: the end of the first window ≥ median RMS − `outro_drop_db`, clamped to `≥ cue_out − outro_max_secs`, and `< cue_out` |
 
 Tracks shorter than `markers_min_duration_secs` get neither `segue_start`
-nor `outro_start`. `intro_end` is never automatic. The model's
+nor `outro_start`. `intro_end` is never detected from audio. It comes from
+an `INTRO` tag (`read_intro`), clamped to the cue range and stored as an
+automatic marker so a manual one wins. The tag can be:
+
+- an ID3v2 `TXXX:INTRO` (MP3, WAV, AIFF, FLAC);
+- a Vorbis or FLAC comment `INTRO`;
+- an APE item `INTRO`;
+- an MP4 freeform `----:com.apple.iTunes:INTRO`.
+
+Its value is seconds (`12.5`) or `m:ss(.f)`. The model's
 `Track::apply_analysis` stores automatic markers without touching manual ones.
 
 ## Cache (`cache.rs`)
