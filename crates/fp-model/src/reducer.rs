@@ -13,7 +13,7 @@ use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{CueState, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, PlaylistEntry};
 use crate::state::AppState;
-use crate::track::{FileState, Track};
+use crate::track::{FileState, MarkerKind, Track};
 
 /// Applies a user command. On `Err` the state is unchanged.
 pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>, ModelError> {
@@ -139,6 +139,16 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             cart_rules::assign_file(state, page, index, None, &mut out)?
         }
         Command::ImportCartPage(import) => cart_rules::import_page(state, *import)?,
+        Command::SetMarker { track, kind, secs } => set_marker(state, track, kind, secs)?,
+        Command::ResetMarkers { track } => {
+            let t = state
+                .library
+                .get_mut(track)
+                .ok_or(ModelError::UnknownTrack(track))?;
+            t.markers.clear_manual();
+            t.analyzed = false;
+            refresh_next(state);
+        }
     }
     fill_empty_next(state);
     avoid_next_on_air(state);
@@ -472,6 +482,53 @@ fn detach_entries(
             out.push(EngineAction::StopCue { player: p.id });
         }
     }
+}
+
+/// Phase 2 spec P2.8: a manual marker, validated against the effective cue
+/// range. Scheduling follows through `reconcile`.
+fn set_marker(
+    state: &mut AppState,
+    track: TrackId,
+    kind: MarkerKind,
+    secs: Option<f64>,
+) -> Result<(), ModelError> {
+    let t = state
+        .library
+        .get(track)
+        .ok_or(ModelError::UnknownTrack(track))?;
+    let cue_in = t.cue_in_secs();
+    let cue_out = t.known_cue_out_secs();
+    let duration = (t.duration_secs > 0.0).then_some(t.duration_secs);
+    let value = match secs {
+        None => None,
+        Some(v) if !v.is_finite() => return Err(ModelError::InvalidMarker),
+        Some(v) => Some(match kind {
+            MarkerKind::CueIn => {
+                let v = v.max(0.0);
+                if cue_out.is_some_and(|out| v >= out) {
+                    return Err(ModelError::InvalidMarker);
+                }
+                v
+            }
+            MarkerKind::CueOut => {
+                let v = duration.map_or(v, |d| v.min(d));
+                if v <= cue_in {
+                    return Err(ModelError::InvalidMarker);
+                }
+                v
+            }
+            _ => v.max(cue_in).min(cue_out.unwrap_or(f64::INFINITY)),
+        }),
+    };
+    if let Some(t) = state.library.get_mut(track) {
+        t.markers.set_manual(kind, value);
+        if value.is_none() {
+            // Let analysis put the automatic value back.
+            t.analyzed = false;
+        }
+    }
+    refresh_next(state);
+    Ok(())
 }
 
 /// Drops library tracks that no playlist entry or cart references any more.

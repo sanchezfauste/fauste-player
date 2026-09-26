@@ -101,6 +101,8 @@ pub fn analyze_file_cancellable(
             cue_out: Some(markers.cue_out),
             segue_start: markers.segue_start,
             outro_start: markers.outro_start,
+            // The INTRO tag is read from Phase 2 plan 2.
+            intro_end: None,
         },
         peak_bucket_secs: envelope.bucket_secs,
         peaks: envelope.peaks,

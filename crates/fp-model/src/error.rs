@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId};
+use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
 
 /// Why a command was refused. A refused command never changes the state.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -27,6 +27,10 @@ pub enum ModelError {
     PlayerCountOutOfRange { requested: usize, max: usize },
     #[error("player {0:?} is busy and cannot be removed")]
     PlayerBusy(PlayerId),
+    #[error("unknown track {0:?}")]
+    UnknownTrack(TrackId),
+    #[error("the marker would put cue-in at or after cue-out")]
+    InvalidMarker,
     #[error("unknown cart {0:?}")]
     UnknownCart(CartId),
     #[error("unknown cart page {0:?}")]

@@ -484,7 +484,9 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
         | ModelError::UnknownEntry(_)
         | ModelError::UnknownCart(_)
         | ModelError::UnknownCartPage(_)
-        | ModelError::UnknownCartPosition(_) => i18n.tr("error-not-found"),
+        | ModelError::UnknownCartPosition(_)
+        | ModelError::UnknownTrack(_) => i18n.tr("error-not-found"),
+        ModelError::InvalidMarker => i18n.tr("error-invalid-marker"),
         ModelError::LastCartPage => i18n.tr("error-last-cart-page"),
         ModelError::CartsWouldBeLost => i18n.tr("error-carts-would-be-lost"),
         ModelError::CartGridOutOfRange => i18n.tr("error-cart-grid"),

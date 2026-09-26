@@ -106,6 +106,22 @@ impl Markers {
         });
     }
 
+    /// Removes every marker the user placed; automatic ones stay.
+    pub fn clear_manual(&mut self) {
+        for kind in [
+            MarkerKind::CueIn,
+            MarkerKind::IntroEnd,
+            MarkerKind::OutroStart,
+            MarkerKind::SegueStart,
+            MarkerKind::CueOut,
+        ] {
+            let slot = self.slot_mut(kind);
+            if slot.is_some_and(|m| m.source == MarkerSource::Manual) {
+                *slot = None;
+            }
+        }
+    }
+
     /// Places (or clears, with `None`) a user marker.
     pub fn set_manual(&mut self, kind: MarkerKind, secs: Option<f64>) {
         *self.slot_mut(kind) = secs.map(|secs| Marker {
@@ -199,6 +215,9 @@ pub struct TrackAnalysis {
     pub cue_out: Option<f64>,
     pub segue_start: Option<f64>,
     pub outro_start: Option<f64>,
+    /// From an `INTRO` tag (Phase 2 spec P2.8); never detected from audio.
+    #[serde(default)]
+    pub intro_end: Option<f64>,
 }
 
 impl Track {
@@ -223,6 +242,8 @@ impl Track {
             .set_auto(MarkerKind::SegueStart, analysis.segue_start);
         self.markers
             .set_auto(MarkerKind::OutroStart, analysis.outro_start);
+        self.markers
+            .set_auto(MarkerKind::IntroEnd, analysis.intro_end);
         self.analyzed = true;
         self.file_state = FileState::Ok;
     }

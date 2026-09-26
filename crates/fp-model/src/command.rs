@@ -6,7 +6,7 @@ use crate::cartwall::{CartEdit, CartPageImport};
 use crate::config::Config;
 use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{ColumnWidths, PlayMode};
-use crate::track::{FileState, TrackAnalysis};
+use crate::track::{FileState, MarkerKind, TrackAnalysis};
 
 /// A user intent, sent by the UI.
 #[derive(Debug, Clone, PartialEq)]
@@ -95,6 +95,17 @@ pub enum Command {
         index: usize,
     },
     ImportCartPage(Box<CartPageImport>),
+    /// Places a manual marker (clamped into the cue range), or with `None`
+    /// clears it and lets analysis fill it again.
+    SetMarker {
+        track: TrackId,
+        kind: MarkerKind,
+        secs: Option<f64>,
+    },
+    /// Drops every manual marker of a track and analyses it again.
+    ResetMarkers {
+        track: TrackId,
+    },
 }
 
 /// Something the audio engine observed.
