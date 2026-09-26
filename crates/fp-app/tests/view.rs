@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     PlayerStatus, RowStatus, fader_from_gain, gain_from_fader, player_view, playlist_times,
-    row_status, volume_db_text,
+    row_status, volume_db,
 };
 use fp_model::{AppState, Command, Config, EntryId, FileState, MarkerKind, PlayerId, apply};
 
@@ -48,6 +48,10 @@ fn state(tracks: usize) -> (AppState, Vec<EntryId>, PlayerId) {
     (state, entries, p)
 }
 
+fn entry(s: &fp_model::AppState, id: fp_model::EntryId) -> fp_model::PlaylistEntry {
+    *s.playlists.entry(id).unwrap()
+}
+
 #[test]
 fn countdown_shows_minutes_seconds_and_tenths() {
     assert_eq!(countdown(147.25), ("-02:27".to_owned(), ".2".to_owned()));
@@ -78,10 +82,10 @@ fn rows_show_on_air_next_played_and_unavailable() {
     apply(&mut s, Command::Play(p)).unwrap(); // e0 played, e1 on air, e2 next
     let t3 = s.playlists.entry(e[3]).unwrap().track;
     s.library.get_mut(t3).unwrap().file_state = FileState::Missing;
-    assert_eq!(row_status(&s, p, e[0]), RowStatus::Played);
-    assert_eq!(row_status(&s, p, e[1]), RowStatus::Current);
-    assert_eq!(row_status(&s, p, e[2]), RowStatus::Next);
-    assert_eq!(row_status(&s, p, e[3]), RowStatus::Unavailable);
+    assert_eq!(row_status(&s, p, &entry(&s, e[0])), RowStatus::Played);
+    assert_eq!(row_status(&s, p, &entry(&s, e[1])), RowStatus::Current);
+    assert_eq!(row_status(&s, p, &entry(&s, e[2])), RowStatus::Next);
+    assert_eq!(row_status(&s, p, &entry(&s, e[3])), RowStatus::Unavailable);
 }
 
 #[test]
@@ -159,9 +163,9 @@ fn the_fader_law_is_zero_db_at_the_top_and_silent_at_the_bottom() {
     assert_eq!(gain_from_fader(0.0), 0.0);
     let half = gain_from_fader(0.5);
     assert!((fader_from_gain(half) - 0.5).abs() < 1e-5);
-    assert_eq!(volume_db_text(1.0), "0.0 dB");
-    assert_eq!(volume_db_text(0.0), "-∞ dB");
-    assert_eq!(volume_db_text(0.5), "-6.0 dB");
+    assert_eq!(volume_db(1.0), Some(0.0));
+    assert_eq!(volume_db(0.0), None, "silence has no dB value");
+    assert!((volume_db(0.5).unwrap() + 6.02).abs() < 0.01);
 }
 
 #[test]

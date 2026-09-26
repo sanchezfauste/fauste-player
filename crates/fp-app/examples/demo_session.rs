@@ -13,6 +13,14 @@ use fp_model::{AppState, Command, Config, Limits, PlaylistId};
 use fp_store::Store;
 
 fn main() -> ExitCode {
+    // Never write the demo over a real installation.
+    if std::env::var_os(bootstrap::HOME_VAR).is_none() {
+        eprintln!(
+            "demo_session: set {} to a scratch directory first",
+            bootstrap::HOME_VAR
+        );
+        return ExitCode::FAILURE;
+    }
     let (Some(paths), Some(folder)) = (bootstrap::paths(), std::env::args().nth(1)) else {
         eprintln!("usage: FAUSTE_HOME=<dir> demo_session <music folder>");
         return ExitCode::FAILURE;

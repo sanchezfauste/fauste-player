@@ -185,6 +185,7 @@ A player has:
 19. **Outro indicator.** When `position ≥ outro_start`, an amber badge counts down to `cue_out`. The waveform shades the outro region warm.
 20. **Playlist footer:** `-remaining | elapsed / total` for the whole playlist, in the same format as the current track.
 21. **Player count** is configurable at runtime (default 4, minimum 1). There is no architectural maximum: players are identified by `PlayerId` and stored in growable collections. Config validation caps the count at `limits.max_players` (default 16) only as a resource guard. Reducing the count is refused while a player that would be removed is playing.
+22. **No duplicate on air by default.** A derived next (one the user did not choose), including an idle player's pick, never points at an entry that is on air on another player; it moves to the next playable entry that is not on air. A next the user chose explicitly is kept.
 
 ---
 

@@ -360,3 +360,27 @@ fn a_test_tone_plays_on_the_requested_route_only() {
         "the tone ends by itself"
     );
 }
+
+#[test]
+fn test_tones_that_do_not_fit_the_command_queue_release_their_slots() {
+    let mut r = rig(2, Some(route("card", 0)), None, 480_000);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: track(1),
+    });
+    r.settle();
+    r.run(2);
+    // A stalled device: commands pile up until the queue is full.
+    for _ in 0..1_000 {
+        r.engine.execute(EngineAction::Pause { player: P }, r.clock);
+        r.engine
+            .execute(EngineAction::Resume { player: P }, r.clock);
+    }
+    r.engine
+        .play_test_tone(&route("card", 0), 440.0, 0.01, -18.0, r.clock);
+    r.run(40);
+    r.act(EngineAction::StopNow { player: P });
+    r.run(40);
+    assert_eq!(r.engine.active_tones(), 0);
+    assert_eq!(r.engine.used_slots(), 0, "no slot is left behind");
+}

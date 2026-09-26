@@ -247,6 +247,15 @@ impl Bus {
         Some(slot)
     }
 
+    /// Free places in the command queue.
+    pub fn command_room(&self) -> usize {
+        self.handle.commands.slots()
+    }
+
+    pub fn used_slots(&self) -> usize {
+        self.used.iter().filter(|u| **u).count()
+    }
+
     /// Sends a command; `false` if the queue is full (the caller logs it).
     pub fn send(&mut self, command: BusCommand) -> bool {
         self.handle.commands.push(command).is_ok()

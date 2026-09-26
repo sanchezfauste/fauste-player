@@ -104,7 +104,7 @@ pub(crate) fn track_table(
                 let Some(track) = scene.state.library.get(entry.track) else {
                     return;
                 };
-                let status = view::row_status(scene.state, player, entry.id);
+                let status = view::row_status(scene.state, player, entry);
                 let hi = matches!(status, RowStatus::Current | RowStatus::Next);
                 let bg = match status {
                     RowStatus::Current => theme::ON_AIR_ROW,

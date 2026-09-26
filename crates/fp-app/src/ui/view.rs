@@ -1,7 +1,7 @@
 //! What each part of the screen shows, derived from the model snapshot and
 //! the engine telemetry. Pure functions: everything here is unit-tested.
 
-use fp_model::{AppState, EntryId, PlayMode, PlayerId, PlaylistId, Transport};
+use fp_model::{AppState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, Transport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerStatus {
@@ -150,20 +150,19 @@ pub fn player_view(
 }
 
 /// How a track-table row is drawn (spec §3 rule 1).
-pub fn row_status(state: &AppState, player: PlayerId, entry: EntryId) -> RowStatus {
-    if state.is_on_air(entry) {
+/// How a track-table row is drawn (spec §3 rule 1). Takes the row's entry
+/// directly: the table already has it, so nothing is searched per row.
+pub fn row_status(state: &AppState, player: PlayerId, entry: &PlaylistEntry) -> RowStatus {
+    if state.is_on_air(entry.id) {
         return RowStatus::Current;
     }
-    if state.player(player).is_ok_and(|p| p.next == Some(entry)) {
+    if state.player(player).is_ok_and(|p| p.next == Some(entry.id)) {
         return RowStatus::Next;
     }
-    let Some(e) = state.playlists.entry(entry) else {
-        return RowStatus::Normal;
-    };
-    if !state.library.is_playable(e.track) {
+    if !state.library.is_playable(entry.track) {
         return RowStatus::Unavailable;
     }
-    if e.played {
+    if entry.played {
         RowStatus::Played
     } else {
         RowStatus::Normal
@@ -234,10 +233,7 @@ pub fn fader_from_gain(gain: f32) -> f32 {
     (1.0 + 20.0 * gain.min(1.0).log10() / FADER_RANGE_DB).clamp(0.0, 1.0)
 }
 
-pub fn volume_db_text(gain: f32) -> String {
-    if gain <= 0.0 || gain.is_nan() {
-        "-∞ dB".to_owned()
-    } else {
-        format!("{:.1} dB", 20.0 * gain.log10())
-    }
+/// Gain in dB; `None` for silence (shown as −∞ by the UI).
+pub fn volume_db(gain: f32) -> Option<f32> {
+    (gain > 0.0 && !gain.is_nan()).then(|| 20.0 * gain.log10())
 }

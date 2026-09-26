@@ -90,6 +90,10 @@ pub struct Services {
     /// Tracks to analyse again even if already analysed.
     forced: HashSet<TrackId>,
     settings: Option<AnalysisSettings>,
+    /// Steps that panicked (shown by the UI as an alert).
+    faults: Arc<AtomicU64>,
+    #[cfg(feature = "test-hooks")]
+    fail_next_step: bool,
     saved_version: u64,
     dirty_since: Option<Instant>,
     last_session_save: Option<Instant>,
@@ -115,6 +119,9 @@ impl Services {
             failed: HashSet::new(),
             forced: HashSet::new(),
             settings: None,
+            faults: Arc::new(AtomicU64::new(0)),
+            #[cfg(feature = "test-hooks")]
+            fail_next_step: false,
             saved_version: 0,
             dirty_since: None,
             last_session_save: None,
@@ -126,8 +133,37 @@ impl Services {
         self.request_tx.clone()
     }
 
-    /// One round of work. Never blocks on the analyzer.
+    /// Counts the steps that panicked.
+    pub fn faults(&self) -> Arc<AtomicU64> {
+        self.faults.clone()
+    }
+
+    /// Makes the next step panic. Used to test panic isolation.
+    #[cfg(feature = "test-hooks")]
+    pub fn fail_next_step(&mut self) {
+        self.fail_next_step = true;
+    }
+
+    /// One round of work. Never blocks on the analyzer. A panic inside is
+    /// logged and counted, and the next step runs normally, so saving never
+    /// stops for the rest of the session.
     pub fn step(&mut self, now: Instant) {
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.step_inner(now)));
+        if outcome.is_err() {
+            self.faults.fetch_add(1, Ordering::AcqRel);
+            tracing::error!("a services step panicked; continuing");
+        }
+    }
+
+    fn step_inner(&mut self, now: Instant) {
+        #[cfg(feature = "test-hooks")]
+        if std::mem::take(&mut self.fail_next_step) {
+            #[allow(clippy::panic)]
+            {
+                panic!("injected services failure");
+            }
+        }
         // The version is read before the snapshot: the snapshot saved can
         // only be newer than the version recorded as saved, never older.
         let version = self.conductor.telemetry.load().model_version;

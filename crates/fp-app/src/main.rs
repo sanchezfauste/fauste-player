@@ -76,10 +76,12 @@ fn run(paths: fp_store::AppPaths) -> Result<(), Box<dyn std::error::Error>> {
     let media = MediaCache::default();
     let services = Services::new(handle.clone(), store, analyzer, media.clone());
     let requests = services.requests();
+    let faults = services.faults();
     let services = services.spawn()?;
 
     let app = AppUi::new(handle.clone(), i18n, media)
         .with_services(requests)
+        .with_service_faults(faults)
         .with_backends(backends)
         .with_platform(platform);
     let options = eframe::NativeOptions {

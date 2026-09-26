@@ -69,3 +69,32 @@ fn escape_closes_the_settings() {
     h.run_steps(3);
     assert!(h.query_by_role_and_label(Role::Button, "Players").is_none());
 }
+
+#[test]
+fn escape_cancels_a_playlist_rename() {
+    let (mut h, fake) = harness(state(1, 1));
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Playlists").click();
+    h.run_steps(2);
+    // The second text field is the name of the first playlist.
+    h.get_all_by_role(Role::TextInput).nth(1).unwrap().focus();
+    h.run_steps(1);
+    h.get_all_by_role(Role::TextInput)
+        .nth(1)
+        .unwrap()
+        .type_text(" renamed");
+    h.run_steps(1);
+    h.key_press(Key::Escape);
+    h.run_steps(3);
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::RenamePlaylist { .. }))
+    );
+    assert_eq!(
+        fake.state.load().playlists.iter().next().unwrap().name,
+        "Main"
+    );
+}

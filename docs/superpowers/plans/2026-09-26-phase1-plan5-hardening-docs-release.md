@@ -63,7 +63,7 @@
   - Test: `both_locales_define_the_same_keys` still passes.
 - **M9:** `demo_session` refuses to run without `FAUSTE_HOME`.
 - **M10:** `row_status` takes the `PlaylistEntry` directly.
-- **Duplicate next (new rule 21 in the spec):** a derived next (not explicit), and the pick of an idle player, skips entries that are on air (current) on another player.
+- **Duplicate next (new rule 22 in the spec):** a derived next (not explicit), and the pick of an idle player, skips entries that are on air (current) on another player.
   - Tests (fp-model): `an_idle_player_does_not_pick_an_entry_on_air_elsewhere` and `derived_next_skips_entries_on_air_elsewhere`.
 
 ### Task 2: Conventional Commits, SemVer and release-please

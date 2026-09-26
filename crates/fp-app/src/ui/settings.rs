@@ -454,10 +454,13 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let buffer = config.outputs.buffer_frames;
     row(ui, &t.tr("settings-rate"), None, |ui| {
         egui::ComboBox::from_id_salt("rate")
-            .selected_text(format!("{rate} Hz"))
+            .selected_text(t.tr_args("unit-hz", &[("value", rate.into())]))
             .show_ui(ui, |ui| {
                 for r in SAMPLE_RATES {
-                    if ui.selectable_label(r == rate, format!("{r} Hz")).clicked() {
+                    if ui
+                        .selectable_label(r == rate, t.tr_args("unit-hz", &[("value", r.into())]))
+                        .clicked()
+                    {
                         update(scene, |c| c.outputs.sample_rate = r);
                     }
                 }
@@ -1057,7 +1060,11 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
             let edit = st.names.entry(id).or_insert_with(|| name.clone());
             let response = ui.add(egui::TextEdit::singleline(edit).desired_width(300.0));
-            let commit = response.lost_focus() && edit.trim() != name && !edit.trim().is_empty();
+            let cancelled = ui.input(|i| i.key_pressed(egui::Key::Escape));
+            let commit = !cancelled
+                && response.lost_focus()
+                && edit.trim() != name
+                && !edit.trim().is_empty();
             if commit {
                 scene.ctl.send(Command::RenamePlaylist {
                     playlist: id,
