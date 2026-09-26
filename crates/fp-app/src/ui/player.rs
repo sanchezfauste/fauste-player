@@ -341,7 +341,11 @@ fn info_row(
                     .selectable(false)
                     .truncate(),
                 );
-                let artist = pv.artist.clone().unwrap_or_else(|| "—".to_owned());
+                let artist = match (&pv.title, &pv.artist) {
+                    (_, Some(artist)) => artist.clone(),
+                    (Some(_), None) => t.tr("unknown-artist"),
+                    (None, None) => "—".to_owned(),
+                };
                 ui.add(
                     egui::Label::new(
                         RichText::new(artist)

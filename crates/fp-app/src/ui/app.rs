@@ -145,6 +145,7 @@ pub struct AppUi {
     picks_tx: Sender<Picked>,
     picks_rx: Receiver<Picked>,
     themed: bool,
+    fail_next_frame: bool,
     settings: SettingsState,
     settings_shown: bool,
     backends: Vec<Arc<dyn AudioBackend>>,
@@ -165,6 +166,7 @@ impl AppUi {
             picks_tx,
             picks_rx,
             themed: false,
+            fail_next_frame: false,
             settings: SettingsState::default(),
             settings_shown: false,
             backends: Vec::new(),
@@ -189,12 +191,36 @@ impl AppUi {
         self
     }
 
+    pub fn i18n(&self) -> &I18n {
+        &self.i18n
+    }
+
+    /// Forgets all view state (selection, drags, open dialogs); the next
+    /// frame is rebuilt from the current snapshot.
+    pub fn reset_view(&mut self) {
+        self.view = ViewState::default();
+        self.settings = SettingsState::default();
+        self.settings_shown = false;
+        self.covers.clear();
+    }
+
+    /// Makes the next frame panic. Used to test panic isolation.
+    pub fn fail_next_frame(&mut self) {
+        self.fail_next_frame = true;
+    }
+
     /// Table rows built during the last frame (virtualisation check).
     pub fn rows_built(&self) -> usize {
         self.view.rows_built
     }
 
     pub fn ui(&mut self, ui: &mut Ui) {
+        if std::mem::take(&mut self.fail_next_frame) {
+            #[allow(clippy::panic)]
+            {
+                panic!("injected interface failure");
+            }
+        }
         let ctx = ui.ctx().clone();
         if !self.themed {
             // Fonts are bound from the next frame on; draw nothing until then.
@@ -483,7 +509,14 @@ fn players_row(
     let gap = 8.0;
     let available = ui.available_width();
     let width = ((available - gap * (count as f32 - 1.0)) / count as f32).max(MIN_COLUMN_WIDTH);
-    let height = ui.available_height();
+    let overflow = width * count as f32 + gap * (count as f32 - 1.0) > available + 0.5;
+    // The horizontal scroll bar gets its own strip instead of covering the footers.
+    let bar = if overflow {
+        ui.spacing().scroll.bar_width + ui.spacing().scroll.bar_inner_margin + 2.0
+    } else {
+        0.0
+    };
+    let height = ui.available_height() - bar;
     egui::ScrollArea::horizontal()
         .auto_shrink([false, false])
         .show(ui, |ui| {

@@ -7,6 +7,7 @@ pub mod format;
 pub mod icons;
 mod player;
 mod settings;
+pub mod shell;
 mod table;
 pub mod theme;
 pub mod view;

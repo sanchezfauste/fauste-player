@@ -114,3 +114,9 @@ fn dropped_paths_keep_only_audio_files() {
     ]);
     assert_eq!(got, vec![song, folder.join("a.MP3"), folder.join("b.flac")]);
 }
+
+#[test]
+fn tracks_without_an_artist_show_unknown_artist() {
+    let (h, _fake) = harness(state(1, 3));
+    assert_eq!(h.query_all_by_label("Unknown artist").count(), 3);
+}

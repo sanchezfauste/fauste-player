@@ -212,9 +212,13 @@ pub(crate) fn track_table(
                     ui.add_space(8.0);
                     ui.add(
                         egui::Label::new(
-                            RichText::new(&track.artist)
-                                .font(font(12.0))
-                                .color(artist_color),
+                            RichText::new(if track.artist.is_empty() {
+                                t.tr("unknown-artist")
+                            } else {
+                                track.artist.clone()
+                            })
+                            .font(font(12.0))
+                            .color(artist_color),
                         )
                         .selectable(false)
                         .truncate(),
