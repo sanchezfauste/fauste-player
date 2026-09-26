@@ -33,9 +33,31 @@ through an RT-safe sink: it sets atomics, which the bus watchdog reads.
   scale by powers of two), and tests pin that.
 
 **Exclusive-capable devices:**
-- On cpal, only ALSA `hw:` devices are exclusive-capable
-  (`exclusive_capable(host, id)`, which reads cpal's persisted ids,
-  `alsa:hw:CARD=…,DEV=…`). They are the hardware itself.
+- **Exclusive-capable devices** (`exclusive_capable(host, id)`, which reads
+  cpal's persisted ids such as `alsa:hw:CARD=…,DEV=…`):
+  - ALSA `hw:` devices. They are the hardware itself and open through cpal.
+  - Every WASAPI device (`wasapi_exclusive.rs`, Windows).
+    - The `wasapi` crate's safe API, used on a render thread of its own
+      (COM objects stay on the thread that created them). That thread
+      negotiates 24-in-32 integer, then 16-bit integer, then float
+      (`exclusive::negotiate`), aligns the period (with the documented
+      retry for unaligned buffers), and reports the outcome to `open`.
+    - It then renders on each buffer event into preallocated buffers
+      (`exclusive::write_samples`).
+    - Any failure is reported as `DeviceLost`.
+  - Every Core Audio device (`coreaudio_hog.rs`, macOS).
+    - Hog mode, the nominal rate and the widest integer physical format at
+      that rate, set through coreaudio-rs's safe helpers
+      (`exclusive::choose_physical_format`).
+    - The cpal stream then plays through the device, and a `HogGuard`
+      releases hog mode after the stream stops.
+    - The stream reports the hardware format.
+    - The device is found by name: a name shared by several devices, or a
+      device another process holds, is refused.
+  - Any other exclusive request is refused with `Unsupported`, so the bus
+    plays shared and never claims bit-perfect output.
+
+  Only safe APIs are used, and `forbid(unsafe_code)` holds.
 - Offline devices can be marked capable (`set_exclusive_capable`) or made to
   refuse a rate (`refuse_rate`), for tests.
 - Null refuses `exclusive`, so a bus on it plays shared and never claims to
@@ -115,9 +137,7 @@ release.
 
 ## Not provided
 
-- **WASAPI exclusive and Core Audio hog mode** are Phase 4 plan 2. cpal does
-  not offer them. They will come through the `wasapi` crate and through
-  coreaudio-rs's safe helpers, so `forbid(unsafe_code)` holds.
+
 - **DirectSound** is not supported: it is deprecated and WASAPI supersedes
   it.
 

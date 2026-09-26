@@ -25,6 +25,11 @@
   analysed, and a device running at the file's rate.
 - **A short silence before a track.** The bit-perfect device reopened at the
   track's sample rate. Keep the library at one rate to avoid it.
+- **The device plays, but the BP badge stays off (Windows or macOS).**
+  Exclusive access was refused, and the device plays shared.
+  - Windows: another program may hold the device exclusively, or exclusive
+    control is turned off in the device's Advanced properties.
+  - macOS: another program may hold the device in hog mode.
 - **A `hw:` device cannot be opened (Linux).**
   - A sound server may be holding the card. Stop it, or set the server to
     leave that card alone, and restart the application.
