@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Fauste Player
+GenericName=Radio Playout
+GenericName[es]=Emisión de radio
+Comment=Play music, jingles and spots on air with several players and a cartwall
+Comment[es]=Emite música, cuñas y jingles con varios reproductores y una cartuchera
+Exec=fauste-player %F
+Icon=org.fauste.FaustePlayer
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=radio;playout;broadcast;automation;cartwall;jingle;
+Keywords[es]=radio;emisión;automatización;cartuchera;cuña;
+MimeType=audio/x-mpegurl;audio/mpegurl;application/vnd.apple.mpegurl;audio/x-scpls;
+StartupNotify=true
+StartupWMClass=org.fauste.FaustePlayer

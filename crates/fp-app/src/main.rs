@@ -12,7 +12,7 @@ use fp_app::services::{MediaCache, Services};
 use fp_app::ui::app::AppUi;
 use fp_app::ui::shell::Shell;
 use fp_app::ui::theme;
-use fp_app::{bootstrap, crash, logging};
+use fp_app::{bootstrap, cli, crash, logging};
 use fp_backends::{
     AudioBackend, Availability, NullBackend, choose_default_backend, display_name, system_backends,
 };
@@ -25,7 +25,31 @@ use fp_store::Store;
 /// competing with the audio threads.
 const ANALYSIS_THREADS: usize = 2;
 
+/// Reverse-DNS application id, shared by the desktop entry, AppStream,
+/// Flatpak and the macOS bundle.
+const APP_ID: &str = "org.fauste.FaustePlayer";
+
 fn main() -> ExitCode {
+    let playlists = match cli::parse(std::env::args_os().skip(1)) {
+        Ok(cli::Invocation::Version) => {
+            println!("fauste-player {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        Ok(cli::Invocation::Help) => {
+            print!("{}", cli::usage());
+            return ExitCode::SUCCESS;
+        }
+        Ok(cli::Invocation::Run { playlists, ignored }) => {
+            for path in ignored {
+                eprintln!("fauste-player: not a playlist, ignored: {}", path.display());
+            }
+            playlists
+        }
+        Err(e) => {
+            eprintln!("fauste-player: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
     let Some(paths) = bootstrap::paths() else {
         eprintln!("fauste-player: no home directory found; set FAUSTE_HOME");
         return ExitCode::FAILURE;
@@ -36,7 +60,7 @@ fn main() -> ExitCode {
         fp_model::Limits::default().max_crash_reports,
     );
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");
-    match run(paths) {
+    match run(paths, playlists) {
         Ok(()) => {
             tracing::info!("stopped");
             ExitCode::SUCCESS
@@ -49,7 +73,10 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(paths: fp_store::AppPaths) -> Result<(), Box<dyn std::error::Error>> {
+fn run(
+    paths: fp_store::AppPaths,
+    playlists: Vec<std::path::PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let store = Store::new(paths.clone(), fp_model::Limits::default());
     let default_name = I18n::new(None).tr("default-playlist-name");
     let loaded = store.load(&default_name);
@@ -110,17 +137,26 @@ fn run(paths: fp_store::AppPaths) -> Result<(), Box<dyn std::error::Error>> {
     let faults = services.faults();
     let services = services.spawn()?;
 
-    let app = AppUi::new(handle.clone(), i18n, media)
+    let mut app = AppUi::new(handle.clone(), i18n, media)
         .with_services(requests)
         .with_service_faults(faults)
         .with_backends(backends)
         .with_platform(platform);
+    for playlist in playlists {
+        tracing::info!(path = %playlist.display(), "importing a playlist given at start");
+        app.import_playlist(playlist);
+    }
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title("Fauste Player")
+        // Matches the desktop entry, so the window gets its icon and name.
+        .with_app_id(APP_ID)
+        .with_inner_size([1600.0, 940.0])
+        .with_min_inner_size([420.0, 480.0]);
+    if let Some(icon) = cli::window_icon() {
+        viewport = viewport.with_icon(icon);
+    }
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("Fauste Player")
-            .with_app_id("fauste-player")
-            .with_inner_size([1600.0, 940.0])
-            .with_min_inner_size([420.0, 480.0]),
+        viewport,
         ..Default::default()
     };
     let result = eframe::run_native(

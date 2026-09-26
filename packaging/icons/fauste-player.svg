@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Fauste Player</title>
+  <rect width="512" height="512" fill="#161826"/>
+  <rect x="24" y="24" width="464" height="464" fill="none" stroke="#2c284a" stroke-width="8"/>
+  <g fill="none" stroke="#9184d9" stroke-width="30" stroke-linecap="butt">
+    <path d="M 196 316 A 85 85 0 0 1 196 196"/>
+    <path d="M 316 196 A 85 85 0 0 1 316 316"/>
+    <path d="M 146 366 A 156 156 0 0 1 146 146"/>
+    <path d="M 366 146 A 156 156 0 0 1 366 366"/>
+    <path d="M 96 416 A 226 226 0 0 1 96 96" stroke="#b5abfc"/>
+    <path d="M 416 96 A 226 226 0 0 1 416 416" stroke="#b5abfc"/>
+  </g>
+  <rect x="226" y="226" width="60" height="60" fill="#b5abfc"/>
+</svg>

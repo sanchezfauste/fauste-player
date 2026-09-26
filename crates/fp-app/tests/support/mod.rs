@@ -101,12 +101,22 @@ pub fn state(players: usize, tracks: usize) -> AppState {
 }
 
 pub fn harness(state: AppState) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    harness_with(state, |_| {})
+}
+
+/// As `harness`, with `configure` applied to the interface before its
+/// first frame (as `main` does).
+pub fn harness_with(
+    state: AppState,
+    configure: impl FnOnce(&mut AppUi),
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let fake = Fake::new(state);
-    let ui = AppUi::new(
+    let mut ui = AppUi::new(
         fake.clone(),
         I18n::new(Some("en-US")),
         MediaCache::default(),
     );
+    configure(&mut ui);
     // Short frames, so that two clicks fall within the double-click delay.
     let mut harness = Harness::builder()
         .with_size(egui::vec2(1000.0, 700.0))
