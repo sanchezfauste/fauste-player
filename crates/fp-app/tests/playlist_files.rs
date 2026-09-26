@@ -62,3 +62,32 @@ fn exported_playlists_are_valid_m3u8() {
     assert!(text.starts_with("#EXTM3U\n"));
     assert!(text.contains("/music/Song 2.mp3"));
 }
+
+#[test]
+fn an_import_with_nothing_playable_creates_no_playlist() {
+    let dir = tempfile::tempdir().unwrap();
+    let list = dir.path().join("streams.m3u");
+    std::fs::write(&list, "http://radio/one\nhttp://radio/two\n").unwrap();
+    let (mut h, fake) = harness(state(1, 0));
+    h.state_mut().import_playlist(list);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline
+        && h.query_all_by_label_contains("streams skipped")
+            .next()
+            .is_none()
+    {
+        h.run_steps(1);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::CreatePlaylistFromPaths { .. }))
+    );
+    assert!(
+        h.query_all_by_label_contains("streams skipped")
+            .next()
+            .is_some()
+    );
+}

@@ -210,3 +210,6 @@ wave-set-outro = Set outro start here
 wave-set-mix = Set MIX point here
 wave-set-cue-out = Set cue out here
 wave-reset = Reset markers to automatic
+cart-empty-n = Cart { $n }, empty
+shortcut-reserved = { $key } is reserved and cannot be changed.
+playlist-import-empty = “{ $name }” has no files to import.

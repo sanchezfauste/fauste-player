@@ -140,3 +140,37 @@ fn alt_dragging_the_mix_marker_moves_it() {
         "a marker drag does not seek"
     );
 }
+
+#[test]
+fn alt_with_the_secondary_button_moves_no_marker() {
+    let (s, _track) = playing();
+    let (mut h, fake) = harness(s);
+    let wave = h.get_by_label("Waveform: click to seek").rect();
+    let x_of = |secs: f32| wave.left() + 1.0 + (wave.width() - 2.0) * secs / 180.0;
+    let from = pos2(x_of(170.0), wave.center().y);
+    h.event(Event::ModifiersChanged(Modifiers::ALT));
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Secondary,
+        pressed: true,
+        modifiers: Modifiers::ALT,
+    });
+    h.run_steps(1);
+    for step in 1..=10 {
+        h.event(Event::PointerMoved(pos2(
+            from.x - 4.0 * step as f32,
+            from.y,
+        )));
+        h.run_steps(1);
+    }
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Secondary,
+        pressed: false,
+        modifiers: Modifiers::ALT,
+    });
+    h.run_steps(2);
+    assert!(set_markers(&fake.take_sent()).is_empty());
+}

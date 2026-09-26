@@ -199,3 +199,91 @@ fn choosing_spanish_switches_the_interface() {
     );
     assert!(h.query_all_by_label("Configuración").next().is_some());
 }
+
+#[test]
+fn delete_backspace_and_escape_cannot_be_bound() {
+    let (mut h, fake) = harness(state(1, 0));
+    open_section(&mut h, "Keyboard shortcuts");
+    for key in [Key::Delete, Key::Backspace] {
+        h.get_by_role_and_label(Role::Button, "Stop P1").click();
+        h.run_steps(2);
+        h.key_press(key);
+        h.run_steps(2);
+    }
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::SetShortcut { .. }))
+    );
+    assert!(
+        h.query_all_by_label_contains("is reserved")
+            .next()
+            .is_some()
+    );
+}
+
+#[test]
+fn escape_while_waiting_for_a_key_cancels_the_capture_only() {
+    let (mut h, fake) = harness(state(1, 0));
+    open_section(&mut h, "Keyboard shortcuts");
+    h.get_by_role_and_label(Role::Button, "Pause P1").click();
+    h.run_steps(2);
+    h.key_press(Key::Escape);
+    h.run_steps(3);
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Pause P1")
+            .is_some(),
+        "Settings stays open"
+    );
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::SetShortcut { .. }))
+    );
+}
+
+#[test]
+fn reserved_keys_in_the_config_are_ignored() {
+    let mut s = state(1, 2);
+    s.config.shortcuts.push(fp_model::Shortcut {
+        action: fp_model::ShortcutAction::StopPlayer(1),
+        chord: fp_model::KeyChord::key("Delete"),
+    });
+    let (mut h, fake) = harness(s);
+    h.key_press(Key::Delete);
+    h.run_steps(2);
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::Stop(_)))
+    );
+}
+
+#[test]
+fn a_typed_cart_name_is_kept_when_another_cart_is_selected() {
+    let (mut h, fake) = harness(with_cart());
+    open_section(&mut h, "Cartwall");
+    h.get_by_role_and_label(Role::Button, "Cart 1").click();
+    h.run_steps(2);
+    h.get_all_by_role(Role::TextInput)
+        .nth(1)
+        .unwrap()
+        .scroll_to_me();
+    h.run_steps(3);
+    h.get_all_by_role(Role::TextInput).nth(1).unwrap().focus();
+    h.run_steps(1);
+    h.get_all_by_role(Role::TextInput)
+        .nth(1)
+        .unwrap()
+        .type_text("Typed");
+    h.run_steps(1);
+    h.get_by_role_and_label(Role::Button, "Cart 2")
+        .scroll_to_me();
+    h.run_steps(3);
+    h.get_by_role_and_label(Role::Button, "Cart 2").click();
+    h.run_steps(3);
+    assert_eq!(fake.state.load().cartwall.pages[0].carts[0].name, "Typed");
+}

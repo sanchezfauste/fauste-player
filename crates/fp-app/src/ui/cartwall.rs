@@ -42,7 +42,11 @@ pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) 
         return;
     }
     ui.add_space(GAP);
-    grid(ui, scene, view_state);
+    // A grid larger than the strip scrolls instead of being cut off.
+    egui::ScrollArea::both()
+        .id_salt("cart-grid")
+        .auto_shrink([false, false])
+        .show(ui, |ui| grid(ui, scene, view_state));
 }
 
 fn header(ui: &mut Ui, scene: &Scene<'_>) {
@@ -212,9 +216,14 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                 };
                 let empty = view.status == CartStatus::Empty;
                 let label = if empty {
-                    t.tr("cart-empty")
+                    t.tr_args("cart-empty-n", &[("n", (index + 1).into())])
                 } else {
                     view.name.clone()
+                };
+                let shown = if empty {
+                    t.tr("cart-empty")
+                } else {
+                    label.clone()
                 };
                 let playing = view.status == CartStatus::Playing;
                 let style = TileStyle {
@@ -260,8 +269,8 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                             dot,
                         );
                         let title = match view.status {
-                            CartStatus::Unavailable => format!("{} {label}", icon::WARNING),
-                            _ => label.clone(),
+                            CartStatus::Unavailable => format!("{} {shown}", icon::WARNING),
+                            _ => shown.clone(),
                         };
                         let name_color = if empty { theme::NEUTRAL_600 } else { c };
                         let galley =

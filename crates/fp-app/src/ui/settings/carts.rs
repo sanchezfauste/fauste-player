@@ -13,7 +13,7 @@ use super::super::cartwall::page_name;
 use super::super::files::AUDIO_EXTENSIONS;
 use super::super::theme;
 use super::super::widgets::{self, TileStyle, font};
-use super::{SettingsState, heading, row, slider, toggle};
+use super::{SettingsState, heading, row, toggle};
 
 #[derive(Default)]
 pub(crate) struct CartsState {
@@ -28,6 +28,8 @@ pub(crate) struct CartsState {
     import: Option<Receiver<Option<Result<CartPageImport, String>>>>,
     export: Option<Receiver<Option<Result<PathBuf, String>>>>,
     message: Option<String>,
+    /// Grid size being dragged, applied on release.
+    grid_draft: Option<(CartPageId, u16, u16)>,
 }
 
 impl CartsState {
@@ -235,7 +237,11 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             c.export.is_none(),
         ) {
             let text = write_cart_page(page, &scene.state.library);
-            let file_name = format!("{}.cartpage.json", page_name(scene, 0, &page.name));
+            let index = wall.pages.iter().position(|p| p.id == page_id).unwrap_or(0);
+            let file_name = format!(
+                "{}.cartpage.json",
+                super::super::playlist_files::safe_file_name(&page_name(scene, index, &page.name))
+            );
             c.export = background(scene, move || {
                 let file = pollster::block_on(
                     rfd::AsyncFileDialog::new()
@@ -264,6 +270,15 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     ui.add_space(8.0);
     // Page name and grid.
     if c.page_name_for != Some(page_id) {
+        if let Some(old_id) = c.page_name_for
+            && let Some(old) = wall.page(old_id)
+            && old.name != c.page_name
+        {
+            scene.ctl.send(Command::RenameCartPage {
+                page: old_id,
+                name: c.page_name.trim().to_owned(),
+            });
+        }
         c.page_name = page.name.clone();
         c.page_name_for = Some(page_id);
     }
@@ -277,34 +292,40 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         });
     }
     let limits = &scene.state.config.limits;
-    let (mut rows, mut cols) = (page.rows, page.cols);
+    // The grid changes when the slider is released: resizing through
+    // smaller sizes on the way would drop the settings of trailing carts.
+    let (mut rows, mut cols) = match c.grid_draft {
+        Some((id, r, k)) if id == page_id => (r, k),
+        _ => (page.rows, page.cols),
+    };
     let rows_label = t.tr("settings-cart-rows");
     let cols_label = t.tr("settings-cart-cols");
+    let mut commit = false;
     row(ui, &t.tr("settings-cart-grid"), None, |ui| {
-        let a = slider(
-            ui,
-            &mut rows,
-            1..=limits.max_cart_rows,
-            1.0,
-            "",
-            &rows_label,
-        );
-        let b = slider(
-            ui,
-            &mut cols,
-            1..=limits.max_cart_cols,
-            1.0,
-            "",
-            &cols_label,
-        );
-        if a || b {
-            scene.ctl.send(Command::ResizeCartPage {
-                page: page_id,
-                rows,
-                cols,
-            });
+        for (value, max, label) in [
+            (&mut rows, limits.max_cart_rows, &rows_label),
+            (&mut cols, limits.max_cart_cols, &cols_label),
+        ] {
+            let response = ui.add(egui::Slider::new(value, 1..=max.max(1)).step_by(1.0));
+            let v = f64::from(*value);
+            let owned = label.clone();
+            response.widget_info(|| egui::WidgetInfo::slider(true, v, owned.clone()));
+            if response.drag_stopped() || (response.changed() && !response.dragged()) {
+                commit = true;
+            }
         }
     });
+    c.grid_draft = Some((page_id, rows, cols));
+    if commit && (rows, cols) != (page.rows, page.cols) {
+        scene.ctl.send(Command::ResizeCartPage {
+            page: page_id,
+            rows,
+            cols,
+        });
+        c.grid_draft = None;
+    } else if (rows, cols) == (page.rows, page.cols) {
+        c.grid_draft = None;
+    }
     ui.add_space(8.0);
     let cell_w = ((ui.available_width() - 6.0 * f32::from(page.cols.max(1) - 1))
         / f32::from(page.cols.max(1)))
@@ -363,6 +384,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         ui.add_space(6.0);
     }
     // The cart editor.
+    c.index = c.index.min(page.carts.len().saturating_sub(1));
     let Some(cart) = page.carts.get(c.index) else {
         return;
     };
@@ -393,6 +415,22 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         });
     };
     if c.name_for != Some((page_id, c.index)) {
+        // A name typed for the previous cart is kept, not dropped.
+        if let Some((old_page, old_index)) = c.name_for
+            && let Some(old) = wall.page(old_page).and_then(|p| p.carts.get(old_index))
+            && old.name != c.name
+        {
+            scene.ctl.send(Command::SetCart {
+                page: old_page,
+                index: old_index,
+                edit: CartEdit {
+                    name: c.name.trim().to_owned(),
+                    kind: old.kind,
+                    looped: old.looped,
+                    exclusive: old.exclusive,
+                },
+            });
+        }
         c.name = cart.name.clone();
         c.name_for = Some((page_id, c.index));
     }

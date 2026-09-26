@@ -134,7 +134,7 @@ fn clicking_a_cart_fires_it() {
 #[test]
 fn clicking_an_empty_cart_sends_nothing() {
     let (mut h, fake) = harness(with_cart());
-    h.get_all_by_label("Empty").next().unwrap().click();
+    h.get_by_label("Cart 2, empty").click();
     h.run_steps(2);
     assert!(
         !fake
@@ -191,3 +191,39 @@ fn the_cart_menu_pre_listens_on_cue() {
 
 #[allow(dead_code)]
 fn unused(_: &Fake) {}
+
+#[test]
+fn the_last_cart_is_reachable_in_a_small_window() {
+    let fake = support::Fake::new(with_cart());
+    let app = fp_app::ui::app::AppUi::new(
+        fake.clone(),
+        fp_app::i18n::I18n::new(Some("en-US")),
+        fp_app::services::MediaCache::default(),
+    );
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(420.0, 480.0))
+        .with_step_dt(0.02)
+        .build_ui_state(|ui, app: &mut fp_app::ui::app::AppUi| app.ui(ui), app);
+    h.run_steps(3);
+    let last = fake.state.load().cartwall.pages[0].carts[15].id;
+    let node = h.get_all_by_label("Cart 16, empty").next().unwrap();
+    node.scroll_to_me();
+    h.run_steps(3);
+    // Give the last cart a file so a click fires it.
+    let page = fake.state.load().cartwall.pages[0].id;
+    fp_app::ui::controller::Controller::send(
+        fake.as_ref(),
+        Command::AssignCartFile {
+            page,
+            index: 15,
+            path: PathBuf::from("/carts/last.wav"),
+        },
+    );
+    h.run_steps(3);
+    let _ = fake.take_sent();
+    h.get_by_label("last").scroll_to_me();
+    h.run_steps(3);
+    h.get_by_label("last").click();
+    h.run_steps(2);
+    assert!(fake.take_sent().contains(&Command::FireCart(last)));
+}

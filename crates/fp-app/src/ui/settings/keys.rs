@@ -16,6 +16,17 @@ pub(crate) struct KeysState {
     capture: Option<ShortcutAction>,
     /// A chord that another action uses: `(action, chord, current owner)`.
     pending: Option<(ShortcutAction, KeyChord, ShortcutAction)>,
+    /// Why the last key was not accepted.
+    refused: Option<String>,
+}
+
+/// Keys with a fixed meaning that shortcuts may not use.
+pub(crate) const RESERVED_KEYS: [Key; 3] = [Key::Delete, Key::Backspace, Key::Escape];
+
+impl KeysState {
+    pub(crate) fn capturing(&self) -> bool {
+        self.capture.is_some()
+    }
 }
 
 /// The name of an action, as listed in Settings.
@@ -124,7 +135,13 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         && let Some(chord) = pressed_chord(ui)
     {
         k.capture = None;
-        if chord.key != Key::Escape.name() {
+        k.refused = None;
+        let reserved = RESERVED_KEYS
+            .iter()
+            .any(|r| r.name() == chord.key && *r != Key::Escape);
+        if reserved {
+            k.refused = Some(t.tr_args("shortcut-reserved", &[("key", chord.key.clone().into())]));
+        } else if chord.key != Key::Escape.name() {
             let owner = shortcuts
                 .iter()
                 .find(|s| s.chord == chord && s.action != action)
@@ -168,6 +185,13 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 k.pending = None;
             }
         });
+        ui.add_space(8.0);
+    }
+    if let Some(refused) = &k.refused {
+        ui.add(
+            egui::Label::new(RichText::new(refused).font(font(12.0)).color(theme::AMBER))
+                .selectable(false),
+        );
         ui.add_space(8.0);
     }
     ui.horizontal(|ui| {

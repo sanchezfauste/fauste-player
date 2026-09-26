@@ -76,8 +76,8 @@ pub(crate) struct ViewState {
     pub settings_open: bool,
     /// Where each player's waveform menu was opened, in seconds.
     pub wave_menu: HashMap<PlayerId, f64>,
-    /// A marker being dragged on a waveform.
-    pub marker_drag: Option<(PlayerId, fp_model::MarkerKind)>,
+    /// A marker being dragged on a waveform, and the track it belongs to.
+    pub marker_drag: Option<(PlayerId, fp_model::MarkerKind, TrackId)>,
     /// A cart to open in Settings → Cartwall (`Edit…` on a cart).
     pub edit_cart: Option<(fp_model::CartPageId, usize)>,
     meters: HashMap<PlayerId, Meter>,
@@ -434,6 +434,8 @@ impl AppUi {
             .shortcuts
             .iter()
             .filter_map(|s| Key::from_name(&s.chord.key).map(|k| (k, &s.chord, s.action)))
+            // Delete, Backspace and Esc keep their fixed meaning.
+            .filter(|(k, _, _)| !super::settings::RESERVED_KEYS.contains(k))
             .collect();
         let (fired, delete, escape) = ctx.input(|i| {
             // Only the first press counts: holding a key must not repeat it
@@ -470,7 +472,7 @@ impl AppUi {
             )
         });
         if self.view.settings_open {
-            if escape {
+            if escape && !self.settings.capturing() {
                 self.view.settings_open = false;
             }
             return;
@@ -508,10 +510,14 @@ impl AppUi {
                 result: Ok(list),
             } => {
                 let count = list.entries.len();
-                let mut text = t.tr_args(
-                    "playlist-imported",
-                    &[("name", name.clone().into()), ("count", count.into())],
-                );
+                let mut text = if count == 0 {
+                    t.tr_args("playlist-import-empty", &[("name", name.clone().into())])
+                } else {
+                    t.tr_args(
+                        "playlist-imported",
+                        &[("name", name.clone().into()), ("count", count.into())],
+                    )
+                };
                 if list.skipped_streams > 0 {
                     text.push(' ');
                     text.push_str(&t.tr_args(
@@ -519,9 +525,11 @@ impl AppUi {
                         &[("streams", list.skipped_streams.into())],
                     ));
                 }
-                let paths = list.entries.into_iter().map(|e| e.path).collect();
-                self.ctl
-                    .send(Command::CreatePlaylistFromPaths { name, paths });
+                if count > 0 {
+                    let paths = list.entries.into_iter().map(|e| e.path).collect();
+                    self.ctl
+                        .send(Command::CreatePlaylistFromPaths { name, paths });
+                }
                 text
             }
             FileOutcome::Imported {

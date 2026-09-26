@@ -20,6 +20,7 @@ use super::format;
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
 use crate::services::ServiceRequest;
+pub(crate) use keys::RESERVED_KEYS;
 
 /// Test tone frequencies (spec §8.4).
 const MAIN_TONE_HZ: f32 = 1000.0;
@@ -60,6 +61,12 @@ pub(crate) struct SettingsState {
 }
 
 impl SettingsState {
+    /// True while Settings waits for a key to bind (Esc then cancels the
+    /// capture, not the dialog).
+    pub fn capturing(&self) -> bool {
+        self.keys.capturing()
+    }
+
     /// Opens the Cartwall section on one cart (`Edit…` on a cart button).
     pub fn edit_cart(&mut self, page: fp_model::CartPageId, index: usize) {
         self.section = Section::Cartwall;
@@ -147,6 +154,7 @@ pub(crate) fn show(
     st: &mut SettingsState,
     deps: &SettingsDeps<'_>,
 ) -> bool {
+    let capturing = st.capturing();
     st.poll();
     if let Some(rx) = &st.folder
         && let Ok(picked) = rx.try_recv()
@@ -275,7 +283,7 @@ pub(crate) fn show(
                 },
             );
         });
-    if modal.should_close() {
+    if modal.should_close() && !capturing {
         open = false;
     }
     open
@@ -1243,7 +1251,7 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             {
                 super::playlist_files::export_with_dialog(
                     &scene.ctx,
-                    format!("{name}.m3u8"),
+                    format!("{}.m3u8", super::playlist_files::safe_file_name(&name)),
                     super::playlist_files::export_entries(scene.state, id),
                     scene.files.clone(),
                 );

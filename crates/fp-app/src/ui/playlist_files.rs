@@ -19,6 +19,27 @@ pub fn is_playlist_file(path: &Path) -> bool {
     })
 }
 
+/// `name` as a file name: path separators, reserved and control characters
+/// become `_`, and an empty result becomes `playlist`.
+pub fn safe_file_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if c.is_control() || "/\\:*?\"<>|".contains(c) {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim().trim_matches('.').to_owned();
+    if cleaned.is_empty() {
+        "playlist".to_owned()
+    } else {
+        cleaned
+    }
+}
+
 /// What a background playlist-file job produced.
 pub enum FileOutcome {
     Imported {

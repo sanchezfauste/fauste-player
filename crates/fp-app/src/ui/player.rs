@@ -979,7 +979,7 @@ fn edit_markers(
     // The drag starts once the pointer has moved; pick the marker under
     // the point where the button went down.
     if alt
-        && response.drag_started()
+        && response.drag_started_by(egui::PointerButton::Primary)
         && let Some(p) = ui.input(|i| i.pointer.press_origin())
     {
         // The nearest marker within reach of the pointer.
@@ -988,12 +988,20 @@ fn edit_markers(
             .filter_map(|(kind, f)| f.map(|f| (*kind, (x_of(f) - p.x).abs())))
             .filter(|(_, d)| *d <= 8.0)
             .min_by(|a, b| a.1.total_cmp(&b.1));
-        view_state.marker_drag = nearest.map(|(kind, _)| (id, kind));
+        view_state.marker_drag = nearest.map(|(kind, _)| (id, kind, track));
+    }
+    // A drag belongs to the track it started on: if the player moved on,
+    // it is dropped.
+    if view_state
+        .marker_drag
+        .is_some_and(|(p, _, t)| p == id && t != track)
+    {
+        view_state.marker_drag = None;
     }
     let dragging = view_state
         .marker_drag
-        .filter(|(p, _)| *p == id)
-        .map(|(_, k)| k);
+        .filter(|(p, _, _)| *p == id)
+        .map(|(_, k, _)| k);
     let painter = ui.painter_at(response.rect);
     if alt || dragging.is_some() {
         for (kind, f) in handles {
