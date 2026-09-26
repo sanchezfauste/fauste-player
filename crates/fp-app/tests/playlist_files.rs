@@ -91,3 +91,44 @@ fn an_import_with_nothing_playable_creates_no_playlist() {
             .is_some()
     );
 }
+
+#[test]
+fn a_playlist_path_argument_is_imported_at_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let list = dir.path().join("Night.m3u");
+    std::fs::write(&list, "/music/a.mp3\n").unwrap();
+    // As `main` does: queued before the interface has run a frame.
+    let (mut h, fake) = support::harness_with(state(1, 0), |app| app.import_playlist(list));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut created = None;
+    while created.is_none() && Instant::now() < deadline {
+        h.run_steps(1);
+        created = fake.take_sent().into_iter().find_map(|c| match c {
+            Command::CreatePlaylistFromPaths { name, .. } => Some(name),
+            _ => None,
+        });
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(created.as_deref(), Some("Night"));
+}
+
+#[test]
+fn playlists_handed_over_by_a_second_start_are_imported() {
+    let dir = tempfile::tempdir().unwrap();
+    let list = dir.path().join("Late.m3u");
+    std::fs::write(&list, "/music/a.mp3\n").unwrap();
+    let (tx, rx) = crossbeam_channel::unbounded();
+    let (mut h, fake) = support::harness_from(state(1, 0), |app| app.with_inbox(rx));
+    tx.send(list).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut created = None;
+    while created.is_none() && Instant::now() < deadline {
+        h.run_steps(1);
+        created = fake.take_sent().into_iter().find_map(|c| match c {
+            Command::CreatePlaylistFromPaths { name, .. } => Some(name),
+            _ => None,
+        });
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(created.as_deref(), Some("Late"));
+}

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.fauste.FaustePlayer</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>Fauste Player</name>
+  <summary>Radio playout with several players and a cartwall</summary>
+  <summary xml:lang="es">Emisión de radio con varios reproductores y una cartuchera</summary>
+  <developer id="org.fauste">
+    <name>Marc Sánchez Fauste</name>
+  </developer>
+  <description>
+    <p>
+      Fauste Player puts music, jingles and spots on air. Several independent
+      players run side by side, each with its own playlists, and tracks mix
+      sample-accurately at their MIX points.
+    </p>
+    <ul>
+      <li>Automatic cue, MIX and outro markers from background analysis</li>
+      <li>Pre-listen on a separate CUE output</li>
+      <li>A cartwall of instant carts with pages, loops and exclusive carts</li>
+      <li>Bit-perfect output on exclusive devices</li>
+      <li>Keeps timing when an output device is lost, and recovers after a crash without putting anything on air</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">org.fauste.FaustePlayer.desktop</launchable>
+  <url type="homepage">https://github.com/sanchezfauste/fauste-player</url>
+  <url type="bugtracker">https://github.com/sanchezfauste/fauste-player/issues</url>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+  </categories>
+  <provides>
+    <binary>fauste-player</binary>
+    <mediatype>audio/x-mpegurl</mediatype>
+    <mediatype>audio/x-scpls</mediatype>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <!-- <releases> is added by scripts/package/metainfo.sh with the version being packaged. -->
+</component>

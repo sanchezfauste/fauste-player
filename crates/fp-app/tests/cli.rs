@@ -1,0 +1,77 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+//! Command-line arguments (Phase 5): what a package, a file manager or a
+//! smoke test passes to the binary.
+
+use std::ffi::OsString;
+use std::path::PathBuf;
+
+use fp_app::cli::{Invocation, parse};
+
+fn args(list: &[&str]) -> Vec<OsString> {
+    list.iter().map(OsString::from).collect()
+}
+
+#[test]
+fn version_and_help_are_recognised() {
+    assert_eq!(parse(args(&["--version"])).unwrap(), Invocation::Version);
+    assert_eq!(parse(args(&["-V"])).unwrap(), Invocation::Version);
+    assert_eq!(parse(args(&["--help"])).unwrap(), Invocation::Help);
+    assert_eq!(parse(args(&["-h"])).unwrap(), Invocation::Help);
+}
+
+#[test]
+fn no_arguments_just_run() {
+    assert_eq!(
+        parse(args(&[])).unwrap(),
+        Invocation::Run {
+            playlists: vec![],
+            ignored: vec![]
+        }
+    );
+}
+
+#[test]
+fn playlist_files_are_imported_and_other_files_ignored() {
+    let parsed = parse(args(&["Morning.M3U", "/x/b.pls", "song.mp3", "c.m3u8"])).unwrap();
+    assert_eq!(
+        parsed,
+        Invocation::Run {
+            playlists: vec![
+                PathBuf::from("Morning.M3U"),
+                PathBuf::from("/x/b.pls"),
+                PathBuf::from("c.m3u8")
+            ],
+            ignored: vec![PathBuf::from("song.mp3")],
+        }
+    );
+}
+
+#[test]
+fn unknown_options_are_refused_but_paths_after_a_double_dash_are_not() {
+    assert!(parse(args(&["--frobnicate"])).is_err());
+    assert_eq!(
+        parse(args(&["--", "-odd name.m3u"])).unwrap(),
+        Invocation::Run {
+            playlists: vec![PathBuf::from("-odd name.m3u")],
+            ignored: vec![]
+        }
+    );
+}
+
+#[test]
+fn the_macos_process_serial_number_is_ignored() {
+    assert_eq!(
+        parse(args(&["-psn_0_12345"])).unwrap(),
+        Invocation::Run {
+            playlists: vec![],
+            ignored: vec![]
+        }
+    );
+}
+
+#[test]
+fn the_window_icon_is_a_valid_square_image() {
+    let icon = fp_app::cli::window_icon().expect("the embedded icon decodes");
+    assert_eq!(icon.width, icon.height);
+    assert!(icon.width >= 128);
+}

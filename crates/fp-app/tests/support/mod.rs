@@ -101,7 +101,19 @@ pub fn state(players: usize, tracks: usize) -> AppState {
 }
 
 pub fn harness(state: AppState) -> (Harness<'static, AppUi>, Arc<Fake>) {
-    harness_with_backends(state, Vec::new())
+    harness_from(state, |ui| ui)
+}
+
+/// As `harness`, with `configure` applied to the interface before its
+/// first frame (as `main` does).
+pub fn harness_with(
+    state: AppState,
+    configure: impl FnOnce(&mut AppUi),
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    harness_from(state, |mut ui| {
+        configure(&mut ui);
+        ui
+    })
 }
 
 /// As `harness`, with audio systems for Settings → Audio outputs.
@@ -109,13 +121,19 @@ pub fn harness_with_backends(
     state: AppState,
     backends: Vec<Arc<dyn fp_backends::AudioBackend>>,
 ) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    harness_from(state, |ui| ui.with_backends(backends))
+}
+
+pub fn harness_from(
+    state: AppState,
+    build: impl FnOnce(AppUi) -> AppUi,
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let fake = Fake::new(state);
-    let ui = AppUi::new(
+    let ui = build(AppUi::new(
         fake.clone(),
         I18n::new(Some("en-US")),
         MediaCache::default(),
-    )
-    .with_backends(backends);
+    ));
     // Short frames, so that two clicks fall within the double-click delay.
     let mut harness = Harness::builder()
         .with_size(egui::vec2(1000.0, 700.0))

@@ -40,5 +40,7 @@ jobs:
     uses: ./.github/workflows/release-build.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
+    # Signing certificates (optional; see docs/technical/release-process.md).
+    secrets: inherit
     permissions:
       contents: write
