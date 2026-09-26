@@ -39,6 +39,14 @@ audio engine that the interface can never block.
   point and the outro. It also reads tags and cover art, and draws the
   waveform. Markers set by hand are never overwritten.
 - **CUE pre-listen** on a separate device or channel pair.
+- **Cartwall:** pages of instant carts (jingles, effects, spots), each with a
+  configurable grid. Carts overlap by default; they can loop gaplessly or stop
+  the others. They have their own Main and Cue outputs. Pages can be
+  imported and exported.
+- **Marker editing on the waveform:** cue in and out, intro, outro and MIX,
+  set from a menu or with Alt-drag. An `INTRO` tag can also set the intro.
+- **Remappable keyboard shortcuts** for players and carts.
+- **M3U / M3U8 / PLS import and M3U8 export.**
 - **Routing per player:** Main and Cue outputs on any device and channel
   pair. Multichannel interfaces carry several players at once.
 - **Resilient:**
@@ -52,7 +60,8 @@ audio engine that the interface can never block.
   thousands of entries, with drag and drop within and across players and
   onto tabs, drops from the file manager, a context menu and keyboard
   shortcuts.
-- **English and Spanish** interface (Fluent), following the OS language.
+- **English and Spanish** interface (Fluent). It follows the OS language or
+  the language chosen in Settings.
 
 ## Platform support
 
@@ -234,8 +243,8 @@ See [Release process](docs/technical/release-process.md).
 | Phase | Content | Status |
 |---|---|---|
 | 1. Usable core | Players, mixing, CUE, analysis, persistence, main screen, Settings subset, CI and releases | done |
-| 2. Cartwall and full Settings | Cart pages, remappable shortcuts, language selector, M3U/M3U8/PLS import and export, manual marker editing | next |
-| 3. Native backends | PipeWire, PulseAudio, JACK, WASAPI exclusive, ASIO, DirectSound, Core Audio hog mode | planned |
+| 2. Cartwall and full Settings | Cart pages, remappable shortcuts, language selector, M3U/M3U8/PLS import and export, manual marker editing | done |
+| 3. Native backends | PipeWire, PulseAudio, JACK, WASAPI exclusive, ASIO, DirectSound, Core Audio hog mode | next |
 | 4. Bit-perfect | Exclusive output at the file's rate and format | planned |
 | 5. Packaging | deb, rpm, Flatpak, AppImage, signed MSI, signed and notarised dmg | planned |
 

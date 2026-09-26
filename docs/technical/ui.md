@@ -13,7 +13,10 @@
 | `ui/app.rs` | `AppUi`: the main screen, keyboard, notices, OS drops, file-dialog results |
 | `ui/player.rs` | One player column: header, info row, transport, waveform, tabs, footer |
 | `ui/table.rs` | The track table (virtualised rows, drag and drop, context menu, column widths) |
-| `ui/settings.rs` | The Settings modal |
+| `ui/settings.rs` | The Settings modal (outputs, players and language, analysis, playlists) |
+| `ui/settings/carts.rs`, `ui/settings/keys.rs` | Settings → Cartwall (pages, grid, cart editor, import and export) and → Keyboard shortcuts (capture, conflicts) |
+| `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall strip, and its pure view model (status, countdown, progress) |
+| `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
 | `ui/shell.rs` | Panic isolation around each frame |
 | `ui/view.rs`, `ui/format.rs` | Pure view model: what to show, how to format it (unit-tested) |
 | `ui/widgets.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, VU, fader, waveform), drawn icons, the Nocturne theme |
@@ -27,8 +30,10 @@ Each frame, `AppUi::ui`:
 1. loads `ctl.model()` (an `Arc<AppState>`) and `ctl.telemetry()`;
 2. drains refusals (shown as a transient notice) and results of helper threads
    (file dialogs, dropped folders, device scans);
-3. handles the keyboard, unless a text field has focus: only first presses
-   count, and repeats are ignored;
+3. handles the keyboard, unless a text field has focus. Bindings come from
+   `config.shortcuts` (the key name and exact modifiers must match). Only
+   first presses count, and repeats are ignored. Player and cart positions
+   are resolved against the players and the cart page shown;
 4. draws the screen and sends `Command`s through `ctl.send`;
 5. requests a repaint: continuously while anything plays, fades or cues,
    otherwise every 100 ms for the clock.
@@ -40,6 +45,22 @@ from the snapshot.
 `Controller` is implemented by `ConductorHandle`. The tests use a fake that
 applies commands with `fp_model::apply` and records them and their refusals,
 so the UI is tested end to end without audio.
+
+## Language switching
+
+When `config.ui.language` changes (Settings → Players → Language), `AppUi`
+rebuilds its `I18n` on the next frame. The first frame only records the
+language the interface was built with.
+
+## Marker editing
+
+`player.rs::edit_markers` handles marker editing on the waveform:
+
+- the context menu remembers the time where it was opened
+  (`ViewState::wave_menu`) and sends `SetMarker` or `ResetMarkers`;
+- with Alt held, handles are drawn on the markers. A drag picks the marker
+  nearest to the press origin (`ViewState::marker_drag`) and sends a single
+  `SetMarker` on release. A waveform click never seeks while Alt is held.
 
 ## Nothing blocks the UI thread
 

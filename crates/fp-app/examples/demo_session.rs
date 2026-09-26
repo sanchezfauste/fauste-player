@@ -9,7 +9,7 @@ use std::process::ExitCode;
 
 use fp_app::bootstrap;
 use fp_app::ui::files::audio_paths;
-use fp_model::{AppState, Command, Config, Limits, PlaylistId};
+use fp_model::{AppState, CartEdit, CartKind, Command, Config, Limits, PlaylistId};
 use fp_store::Store;
 
 fn main() -> ExitCode {
@@ -70,10 +70,50 @@ fn main() -> ExitCode {
             let _ = fp_model::apply(&mut state, Command::Play(*player));
         }
     }
+    // Some carts on the first page, from the shortest files.
+    let mut short = files.clone();
+    short.sort_by_key(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(u64::MAX));
+    let page = state.cartwall.pages[0].id;
+    let _ = fp_model::apply(
+        &mut state,
+        Command::RenameCartPage {
+            page,
+            name: "General".into(),
+        },
+    );
+    let kinds = [CartKind::Jingle, CartKind::Effect, CartKind::Spot];
+    for (index, path) in short.iter().take(6).enumerate() {
+        let _ = fp_model::apply(
+            &mut state,
+            Command::AssignCartFile {
+                page,
+                index,
+                path: path.clone(),
+            },
+        );
+        let name = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let edit = CartEdit {
+            name,
+            kind: kinds[index % kinds.len()],
+            looped: index == 5,
+            exclusive: index == 0,
+        };
+        let _ = fp_model::apply(&mut state, Command::SetCart { page, index, edit });
+    }
+    let _ = fp_model::apply(
+        &mut state,
+        Command::CreateCartPage {
+            name: "Effects".into(),
+        },
+    );
     let store = Store::new(paths, Limits::default());
     let saved = store
         .save_config(&state)
         .and_then(|()| store.save_playlists(&state))
+        .and_then(|()| store.save_carts(&state))
         .and_then(|()| store.save_session(&state, |p| 40.0 + f64::from(p.0 as u32 % 7) * 19.0));
     match saved {
         Ok(()) => ExitCode::SUCCESS,

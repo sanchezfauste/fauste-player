@@ -66,3 +66,15 @@ Row colours:
 **+ Add** opens a file dialog, starting in the music folder set in
 Settings. The footer also shows the number of tracks, the time left in the
 playlist and its total length.
+
+## Playlist files
+
+- **Import:** Settings → Playlists → **Import M3U / PLS…**, or drop an
+  `.m3u`, `.m3u8` or `.pls` file on the window. It becomes a new playlist
+  named after the file.
+  - Relative paths are resolved against the playlist file's folder.
+  - `file://` addresses are understood.
+  - Files that cannot be found are still added, marked unavailable.
+  - Internet streams are skipped; a message says how many.
+- **Export:** the **M3U** button on each playlist in Settings saves it as an
+  M3U8 file with titles, lengths and full paths.

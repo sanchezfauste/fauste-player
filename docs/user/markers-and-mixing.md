@@ -8,9 +8,30 @@ Every track has up to five **markers**, in seconds:
 | Cue out | Where the track ends | Automatic: the end of the last sound above the silence threshold |
 | MIX (segue start) | Where the next track starts in continuous mode | Automatic (see below) |
 | Outro start | Where the ending of the track begins | Automatic (see below) |
-| Intro end | End of the spoken-over introduction | Manual only (marker editing arrives in a later version) |
+| Intro end | End of the spoken-over introduction | By hand, or from an `INTRO` tag in the file |
 
 Markers set by hand always win: a new analysis never replaces them.
+
+## Editing markers
+
+On a player's waveform:
+
+- **Right-click** where you want a marker and choose **Set cue in here**,
+  **Set intro end here**, **Set outro start here**, **Set MIX point here** or
+  **Set cue out here**. **Reset markers to automatic** removes the markers you
+  placed, and the track is analysed again.
+- **Hold Alt** (Option on macOS): handles appear on the markers. Drag one to
+  move it; the time is shown while you drag. A drag never moves the playhead.
+
+Cue-in must stay before cue-out. The other markers are kept between them.
+Changes to the track on air apply to its next transition at once.
+
+## The INTRO tag
+
+A file can carry its intro time in an `INTRO` tag, as seconds (`12.5`) or
+`m:ss`. It can be an ID3v2 user text frame (MP3, WAV, AIFF), a Vorbis or FLAC
+comment, an APE item or an MP4 freeform atom. It is read during analysis. A
+manual intro end still wins.
 
 ## How the automatic markers are found
 

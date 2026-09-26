@@ -12,12 +12,13 @@ by themselves.
 |---|---|
 | [Getting started](getting-started.md) | Installing, first start, adding music, playing |
 | [Players](players.md) | The player column: transport, modes, countdown, waveform, CUE |
-| [Playlists](playlists.md) | Tabs, the track table, drag and drop, the context menu |
+| [Playlists](playlists.md) | Tabs, the track table, drag and drop, the context menu, M3U/PLS files |
+| [Cartwall](cartwall.md) | Instant carts: firing, pages, loops, exclusive carts, setup |
 | [Markers and mixing](markers-and-mixing.md) | Cue in/out, the MIX point, intro and outro, automatic analysis |
 | [Settings](settings.md) | Audio outputs, players, analysis, playlists |
 | [Keyboard](keyboard.md) | Shortcuts |
 | [Data and backups](data-and-backups.md) | Where files live, autosave, crash recovery, portable mode |
 | [Troubleshooting](troubleshooting.md) | No sound, device lost, files marked unavailable, logs |
 
-The interface is available in English and Spanish and follows the language of
-the operating system.
+The interface is available in English and Spanish. It follows the language of
+the operating system unless you choose one in Settings.

@@ -14,6 +14,11 @@ Changes in this section apply **the next time the application starts**.
 | Buffer size | Frames per audio block; the resulting latency is shown below it |
 | Outputs per player | For each player, a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. Multichannel interfaces can carry several players on different pairs. |
 | Test Main / Test Cue | Plays a short tone (1 kHz on Main, 440 Hz on Cue, 1.5 s, −18 dBFS) on the chosen output, so you can check the wiring before going on air |
+| Cartwall | The cartwall's Main and Cue outputs. Main defaults to the system output. Without a Cue there is no cart pre-listen. |
+
+A Cue output never falls back to the output Main uses. A Cue that names a
+device on an audio system this computer does not have, or the same output as
+Main, means "no cue".
 
 If a device disappears while playing, the players keep their timelines, and
 the device is reopened when it comes back (see
@@ -23,6 +28,7 @@ the device is reopened when it comes back (see
 
 | Setting | Default | Meaning |
 |---|---|---|
+| Language | System | Interface language |
 | Number of players | 4 | Columns on the main screen (a player on air cannot be removed) |
 | Default mode | CONT | The mode players start in |
 | Fade time | 1000 ms | Used by Play while on air and by Fade stop |
@@ -40,5 +46,16 @@ manual markers are kept.
 - **Music folder:** where the file dialogs start.
 - **New playlist**, **rename** (edit the name and press Enter; Esc cancels)
   and **delete** (trash icon).
+- **Import M3U / PLS…** creates a new playlist from a playlist file. **M3U**
+  on each row exports it as M3U8. See [Playlists](playlists.md).
 
-The interface language follows the operating system (English or Spanish).
+**Language:** System, English or Español. The interface switches at once.
+
+## Cartwall
+
+Pages, grid size, the cart editor, and cart page import and export. See
+[Cartwall](cartwall.md).
+
+## Keyboard shortcuts
+
+See [Keyboard](keyboard.md).
