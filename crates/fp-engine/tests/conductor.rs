@@ -379,3 +379,55 @@ fn firing_an_exclusive_cart_stops_the_others_on_air() {
     assert_eq!(on_air, vec![b]);
     assert_eq!(conductor.state().cartwall.playing.len(), 1);
 }
+
+#[test]
+fn the_meter_follows_a_playing_source_and_falls_after_stop() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let p = conductor.state().players[0].id;
+    let reading = |handle: &ConductorHandle| {
+        handle
+            .telemetry
+            .load()
+            .players
+            .iter()
+            .find(|(id, _)| *id == p)
+            .map(|(_, t)| t.meter)
+            .unwrap()
+    };
+    assert!(handle.send(Command::Play(p)));
+    conductor.tick(now);
+    std::thread::sleep(Duration::from_millis(30));
+    for _ in 0..20 {
+        conductor.tick(now);
+        device.render(BLOCK);
+        now += Duration::from_millis(10);
+    }
+    let playing = reading(&handle);
+    assert!(playing.level_db[0] > -60.0, "{playing:?}");
+    assert!(handle.send(Command::Stop(p)));
+    for _ in 0..30 {
+        conductor.tick(now);
+        device.render(BLOCK);
+        now += Duration::from_millis(10);
+    }
+    let stopped = reading(&handle);
+    assert!(
+        stopped.level_db[0] < playing.level_db[0] - 3.0,
+        "falls at the ballistics' rate: {stopped:?}"
+    );
+    assert!(stopped.level_db[0] > -120.0, "not cut to silence at once");
+}
+
+#[test]
+fn true_peak_can_be_switched_while_playing() {
+    let (mut conductor, handle, _device, now) = offline_conductor(model(1, 1));
+    let p = conductor.state().players[0].id;
+    assert!(handle.send(Command::Play(p)));
+    conductor.tick(now);
+    assert!(!conductor.engine().true_peak());
+    let mut config = conductor.state().config.clone();
+    config.meter.true_peak = true;
+    assert!(handle.send(Command::UpdateConfig(Box::new(config))));
+    conductor.tick(now);
+    assert!(conductor.engine().true_peak());
+}

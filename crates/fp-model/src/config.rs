@@ -23,6 +23,8 @@ pub struct Config {
     pub tuning: Tuning,
     pub cartwall: CartwallConfig,
     pub shortcuts: Vec<Shortcut>,
+    /// Level meters (meters spec M3).
+    pub meter: MeterConfig,
 }
 
 impl Default for Config {
@@ -36,6 +38,79 @@ impl Default for Config {
             tuning: Tuning::default(),
             cartwall: CartwallConfig::default(),
             shortcuts: default_shortcuts(),
+            meter: MeterConfig::default(),
+        }
+    }
+}
+
+/// How the meter bar moves (meters spec M2): the standard meter types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum MeterBallistics {
+    /// Digital peak meter, IEC 60268-18: instant rise, 20 dB fall in 1.7 s.
+    #[default]
+    DigitalPeak,
+    /// Quasi-peak programme meter, IEC 60268-10 type IIb (EBU): 10 ms
+    /// integration, 24 dB fall in 2.8 s.
+    EbuPpm,
+    /// Quasi-peak programme meter, IEC 60268-10 type I (DIN): 5 ms
+    /// integration, 20 dB fall in 1.7 s.
+    DinPpm,
+    /// Volume unit meter, IEC 60268-17: RMS, 300 ms rise and fall.
+    Vu,
+    /// `attack_ms` and `release_db_per_sec`.
+    Custom,
+}
+
+/// The loudness line under the meter (EBU R128).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum LoudnessReadout {
+    Off,
+    /// Over the last 400 ms.
+    Momentary,
+    /// Over the last 3 s.
+    #[default]
+    ShortTerm,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MeterConfig {
+    pub ballistics: MeterBallistics,
+    /// Rise integration time for `Custom`, in ms (0 = instant).
+    pub attack_ms: f32,
+    /// Fall rate for `Custom`, in dB per second.
+    pub release_db_per_sec: f32,
+    /// Measure the peak of the 4× oversampled signal (ITU-R BS.1770).
+    pub true_peak: bool,
+    /// Bottom of the scale, in dBFS.
+    pub floor_db: f32,
+    /// How long the highest level stays lit; 0 turns the hold off.
+    pub peak_hold_secs: f32,
+    /// Alignment level mark (EBU R68: −18 dBFS).
+    pub reference_dbfs: f32,
+    /// Yellow from this level (EBU permitted maximum: −9 dBFS).
+    pub warning_dbfs: f32,
+    /// Red from this level.
+    pub danger_dbfs: f32,
+    pub loudness: LoudnessReadout,
+    /// The readout is green within ±1 LU of this (EBU R128: −23 LUFS).
+    pub loudness_target_lufs: f32,
+}
+
+impl Default for MeterConfig {
+    fn default() -> Self {
+        Self {
+            ballistics: MeterBallistics::DigitalPeak,
+            attack_ms: 5.0,
+            release_db_per_sec: 11.8,
+            true_peak: false,
+            floor_db: -60.0,
+            peak_hold_secs: 2.0,
+            reference_dbfs: -18.0,
+            warning_dbfs: -9.0,
+            danger_dbfs: -3.0,
+            loudness: LoudnessReadout::ShortTerm,
+            loudness_target_lufs: -23.0,
         }
     }
 }
@@ -571,6 +646,60 @@ impl Config {
             }
             fresh
         });
+
+        let m = &mut self.meter;
+        clamp_to(&mut m.attack_ms, 0.0, 1000.0, "meter.attack_ms", &mut w);
+        clamp_to(
+            &mut m.release_db_per_sec,
+            1.0,
+            100.0,
+            "meter.release_db_per_sec",
+            &mut w,
+        );
+        clamp_to(&mut m.floor_db, -96.0, -20.0, "meter.floor_db", &mut w);
+        clamp_to(
+            &mut m.peak_hold_secs,
+            0.0,
+            10.0,
+            "meter.peak_hold_secs",
+            &mut w,
+        );
+        clamp_to(
+            &mut m.reference_dbfs,
+            -30.0,
+            0.0,
+            "meter.reference_dbfs",
+            &mut w,
+        );
+        clamp_to(
+            &mut m.warning_dbfs,
+            -30.0,
+            0.0,
+            "meter.warning_dbfs",
+            &mut w,
+        );
+        clamp_to(&mut m.danger_dbfs, -30.0, 0.0, "meter.danger_dbfs", &mut w);
+        clamp_to(
+            &mut m.loudness_target_lufs,
+            -36.0,
+            -10.0,
+            "meter.loudness_target_lufs",
+            &mut w,
+        );
+        if m.reference_dbfs <= m.floor_db {
+            m.reference_dbfs = m.floor_db + 1.0;
+            w.push(ConfigWarning {
+                field: "meter.reference_dbfs",
+                message: "raised above the scale floor".to_owned(),
+            });
+        }
+        if m.warning_dbfs > m.danger_dbfs {
+            m.danger_dbfs = m.warning_dbfs;
+            w.push(ConfigWarning {
+                field: "meter.danger_dbfs",
+                message: "raised to the warning level".to_owned(),
+            });
+        }
 
         w
     }

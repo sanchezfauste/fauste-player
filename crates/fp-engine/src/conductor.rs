@@ -3,6 +3,7 @@
 //! reducer, executes the resulting actions on the engine, and publishes
 //! immutable snapshots. The UI never locks anything the audio path waits on.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -15,6 +16,7 @@ use fp_model::{
 };
 
 use crate::engine::{BusStatus, CartTelemetry, Engine, PlayerTelemetry};
+use crate::meter::MeterState;
 
 /// Live values for the UI, refreshed every tick.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -51,6 +53,9 @@ pub struct Conductor {
     model: Arc<ArcSwap<AppState>>,
     telemetry: Arc<ArcSwap<Telemetry>>,
     version: u64,
+    /// One meter per player (meters spec M2), and when they last moved.
+    meters: HashMap<PlayerId, MeterState>,
+    metered_at: Option<Instant>,
 }
 
 /// The UI's side of the conductor.
@@ -129,6 +134,8 @@ impl Conductor {
             model: model.clone(),
             telemetry: telemetry.clone(),
             version: 0,
+            meters: HashMap::new(),
+            metered_at: None,
         };
         let handle = ConductorHandle {
             commands: tx,
@@ -194,11 +201,32 @@ impl Conductor {
             self.version += 1;
             self.model.store(Arc::new(self.state.clone()));
         }
-        let players = self
-            .state
-            .players
-            .iter()
-            .map(|p| (p.id, self.engine.telemetry(p.id)))
+        if self.engine.true_peak() != self.state.config.meter.true_peak {
+            self.engine.set_true_peak(self.state.config.meter.true_peak);
+        }
+        let integration = crate::meter::mixer_integration(&self.state.config.meter);
+        if self.engine.meter_integration() != integration {
+            self.engine
+                .set_meter_integration(integration.0, integration.1);
+        }
+        let dt = self
+            .metered_at
+            .map_or(0.0, |at| now.saturating_duration_since(at).as_secs_f64());
+        self.metered_at = Some(now);
+        let ids: Vec<PlayerId> = self.state.players.iter().map(|p| p.id).collect();
+        self.meters.retain(|id, _| ids.contains(id));
+        let players = ids
+            .into_iter()
+            .map(|id| {
+                let mut t = self.engine.telemetry(id);
+                let input = self.engine.take_meter_input(id);
+                t.meter =
+                    self.meters
+                        .entry(id)
+                        .or_default()
+                        .update(input, dt, &self.state.config.meter);
+                (id, t)
+            })
             .collect();
         let (carts, cart_cue) = self.engine.cart_telemetry();
         self.telemetry.store(Arc::new(Telemetry {

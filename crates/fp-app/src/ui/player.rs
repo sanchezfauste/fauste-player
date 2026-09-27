@@ -68,7 +68,7 @@ pub(crate) fn column(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, id, index, &pv);
-            info_row(ui, scene, view_state, covers, id, &pv, &telemetry);
+            info_row(ui, scene, covers, id, &pv, &telemetry);
             transport(ui, scene, id, &pv);
             wave(ui, scene, view_state, id, &pv);
         });
@@ -303,7 +303,6 @@ fn cover(
 fn info_row(
     ui: &mut Ui,
     scene: &Scene<'_>,
-    view_state: &mut ViewState,
     covers: &mut HashMap<TrackId, TextureHandle>,
     id: PlayerId,
     pv: &PlayerView,
@@ -323,12 +322,11 @@ fn info_row(
         |ui| {
             ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
             cover(ui, scene, covers, current_track);
-            let levels = [
-                widgets::vu_fraction(telemetry.peak_l),
-                widgets::vu_fraction(telemetry.peak_r),
-            ];
-            let holds = view_state.meter(id, levels, scene.time);
-            widgets::vu(ui, levels, holds);
+            let meter = &scene.state.config.meter;
+            let loudness = widgets::loudness_line(&telemetry.meter, meter)
+                .map(|(value, _)| t.tr_args("meter-loudness", &[("value", value.into())]))
+                .unwrap_or_default();
+            widgets::vu(ui, &telemetry.meter, meter, &loudness);
             let volume = scene.state.player(id).map_or(1.0, |p| p.volume);
             let db = match view::volume_db(volume) {
                 Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),

@@ -35,8 +35,6 @@ const STATUS_BAR_HEIGHT: f32 = 24.0;
 const NOTICE_SECS: f64 = 5.0;
 /// Idle repaint period (the clock).
 const IDLE_REPAINT: Duration = Duration::from_millis(100);
-/// Peak-hold fall rate, in meter fractions per second.
-const HOLD_DECAY_PER_SEC: f32 = 0.35;
 
 /// The payload of an entry being dragged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,12 +55,6 @@ pub(crate) struct Picked {
     paths: Vec<PathBuf>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-struct Meter {
-    holds: [f32; 2],
-    at: f64,
-}
-
 /// Everything the UI remembers between frames.
 #[derive(Default)]
 pub(crate) struct ViewState {
@@ -80,25 +72,7 @@ pub(crate) struct ViewState {
     pub marker_drag: Option<(PlayerId, fp_model::MarkerKind, TrackId)>,
     /// A cart to open in Settings → Cartwall (`Edit…` on a cart).
     pub edit_cart: Option<(fp_model::CartPageId, usize)>,
-    meters: HashMap<PlayerId, Meter>,
     notice: Option<(String, f64)>,
-}
-
-impl ViewState {
-    /// Peak hold for a player's meter, decaying over time.
-    pub fn meter(&mut self, player: PlayerId, levels: [f32; 2], now: f64) -> [f32; 2] {
-        let m = self.meters.entry(player).or_default();
-        let dt = (now - m.at).clamp(0.0, 1.0) as f32;
-        m.at = now;
-        for (hold, level) in m.holds.iter_mut().zip(levels) {
-            *hold = if level >= *hold {
-                level
-            } else {
-                (*hold - dt * HOLD_DECAY_PER_SEC).max(0.0)
-            };
-        }
-        m.holds
-    }
 }
 
 /// What a frame draws from, shared by the parts of the screen.

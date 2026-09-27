@@ -130,6 +130,22 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 | `cartwall` | none | `{ main: Route?, cue: Route? }` for the cartwall |
 | `bit_perfect[]` | empty | `{ backend, device }` of devices played bit-perfect (exclusive access, rate follows the files) |
 
+### `meter` (Settings → Meters; applied at once)
+
+| Field | Default | Range | Meaning |
+|---|---|---|---|
+| `ballistics` | `DigitalPeak` | `DigitalPeak`, `EbuPpm`, `DinPpm`, `Vu`, `Custom` | meter type (IEC 60268-18, 60268-10 IIb and I, 60268-17) |
+| `attack_ms` | 5 | 0 … 1000 | rise integration for `Custom` |
+| `release_db_per_sec` | 11.8 | 1 … 100 | fall for `Custom` |
+| `true_peak` | false | | 4× oversampled peak |
+| `floor_db` | −60 | −96 … −20 | bottom of the scale |
+| `peak_hold_secs` | 2 | 0 … 10 | 0 turns the hold off |
+| `reference_dbfs` | −18 | −30 … 0 | alignment mark |
+| `warning_dbfs` | −9 | −30 … 0 | yellow from here |
+| `danger_dbfs` | −3 | −30 … 0 | red from here (raised to the warning level if below it) |
+| `loudness` | `ShortTerm` | `Off`, `Momentary`, `ShortTerm` | the LUFS line |
+| `loudness_target_lufs` | −23 | −36 … −10 | green within ±1 LU |
+
 ### `ui`
 
 | Field | Default | Meaning |

@@ -6,6 +6,9 @@ use egui::{
     Vec2, WidgetInfo, WidgetType, pos2, vec2,
 };
 
+use fp_engine::meter::MeterReading;
+use fp_model::{LoudnessReadout, MeterConfig};
+
 use super::format;
 use super::theme::{self, WaveColors};
 use super::view::MarkerFractions;
@@ -111,52 +114,144 @@ pub fn glyph(painter: &Painter, rect: Rect, icon: &str, size: f32, color: Color3
     );
 }
 
-/// Meter range: the bottom segment lights at this level.
-const VU_FLOOR_DB: f32 = -48.0;
-const VU_SEGMENTS: usize = 20;
-
-/// Linear peak to meter fraction (0..1).
-pub fn vu_fraction(peak: f32) -> f32 {
-    if peak <= 0.0 || !peak.is_finite() {
-        return 0.0;
-    }
-    let db = 20.0 * peak.log10();
-    ((db - VU_FLOOR_DB) / -VU_FLOOR_DB).clamp(0.0, 1.0)
+/// Colour zone of a meter segment (meters spec M4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Zone {
+    Normal,
+    Warning,
+    Danger,
 }
 
-/// Stereo meter: 20 segments per channel, green/yellow/red, with peak hold.
-pub fn vu(ui: &mut Ui, levels: [f32; 2], holds: [f32; 2]) {
-    let (rect, _) = ui.allocate_exact_size(vec2(30.0, 64.0), Sense::hover());
+/// One segment of a meter bar, bottom first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Segment {
+    pub lit: bool,
+    /// The peak-hold segment.
+    pub hold: bool,
+    /// The segment holding the alignment level.
+    pub reference: bool,
+    pub zone: Zone,
+}
+
+/// The `count` segments of a bar from the scale floor to 0 dBFS, each
+/// covering an equal span in dB; a segment lights when the level reaches
+/// its middle.
+pub fn meter_segments(level_db: f32, hold_db: f32, c: &MeterConfig, count: usize) -> Vec<Segment> {
+    let count = count.max(1);
+    let floor = c.floor_db.min(-1.0);
+    let step = -floor / count as f32;
+    // Levels above 0 dBFS (overs, true peak) sit on the top segment.
+    let index_of = |db: f32| (db > floor).then(|| (((db - floor) / step) as usize).min(count - 1));
+    let hold = index_of(hold_db).filter(|_| c.peak_hold_secs > 0.0 && hold_db >= level_db);
+    let reference = index_of(c.reference_dbfs);
+    (0..count)
+        .map(|i| {
+            let middle = floor + (i as f32 + 0.5) * step;
+            Segment {
+                lit: level_db >= middle,
+                hold: hold == Some(i),
+                reference: reference == Some(i),
+                zone: if middle >= c.danger_dbfs {
+                    Zone::Danger
+                } else if middle >= c.warning_dbfs {
+                    Zone::Warning
+                } else {
+                    Zone::Normal
+                },
+            }
+        })
+        .collect()
+}
+
+/// The loudness line under the meter: the value in LUFS (one decimal, or a
+/// dash when nothing is measured) and whether it is within ±1 LU of the
+/// target. `None` when the readout is off.
+pub fn loudness_line(r: &MeterReading, c: &MeterConfig) -> Option<(String, bool)> {
+    let value = match c.loudness {
+        LoudnessReadout::Off => return None,
+        LoudnessReadout::Momentary => r.momentary_lufs,
+        LoudnessReadout::ShortTerm => r.short_term_lufs,
+    };
+    Some(match value {
+        Some(lufs) => (
+            // One decimal while it fits the meter's width.
+            if lufs > -99.95 {
+                format!("{lufs:.1}")
+            } else {
+                format!("{lufs:.0}")
+            },
+            (lufs - c.loudness_target_lufs).abs() <= 1.0,
+        ),
+        None => ("—".to_owned(), false),
+    })
+}
+
+fn zone_colour(zone: Zone) -> Color32 {
+    match zone {
+        Zone::Normal => theme::VU_GREEN,
+        Zone::Warning => theme::VU_YELLOW,
+        Zone::Danger => theme::VU_RED,
+    }
+}
+
+/// Stereo level meter (meters spec M4): segments from the floor to 0 dBFS
+/// in the configured zones, the peak hold, a tick at the alignment level,
+/// and the loudness line when it is on.
+pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, loudness_label: &str) {
+    let (rect, response) = ui.allocate_exact_size(vec2(30.0, 64.0), Sense::hover());
     if !ui.is_rect_visible(rect) {
         return;
     }
+    let line = loudness_line(reading, c);
+    let bars_height = if line.is_some() { 52.0 } else { rect.height() };
+    let segments_count = ((bars_height / 2.6).floor() as usize).max(4);
     let painter = ui.painter();
-    let seg_h = rect.height() / VU_SEGMENTS as f32;
-    for (ch, (level, hold)) in levels.iter().zip(holds).enumerate() {
+    let seg_h = bars_height / segments_count as f32;
+    for ch in 0..2 {
         let x = rect.left() + ch as f32 * 16.0;
-        let lit = (level * VU_SEGMENTS as f32).round() as usize;
-        let peak = (hold * VU_SEGMENTS as f32).round() as usize;
-        for i in 0..VU_SEGMENTS {
-            let on = i < lit || (peak > 0 && i == peak - 1);
-            let colour = if i >= VU_SEGMENTS - 3 {
-                theme::VU_RED
-            } else if i >= VU_SEGMENTS - 7 {
-                theme::VU_YELLOW
-            } else {
-                theme::VU_GREEN
-            };
-            let fill = if on {
-                colour
+        let level = reading.level_db.get(ch).copied().unwrap_or(-120.0);
+        let hold = reading.hold_db.get(ch).copied().unwrap_or(-120.0);
+        for (i, s) in meter_segments(level, hold, c, segments_count)
+            .iter()
+            .enumerate()
+        {
+            let fill = if s.lit || s.hold {
+                zone_colour(s.zone)
             } else {
                 theme::NEUTRAL_800.gamma_multiply(0.55)
             };
-            let top = rect.bottom() - (i + 1) as f32 * seg_h + 1.0;
+            let top = rect.top() + bars_height - (i + 1) as f32 * seg_h + 0.5;
             painter.rect_filled(
-                Rect::from_min_size(pos2(x, top), vec2(14.0, seg_h - 1.5)),
+                Rect::from_min_size(pos2(x, top), vec2(14.0, (seg_h - 1.0).max(1.0))),
                 0.0,
                 fill,
             );
+            if s.reference && ch == 0 {
+                // The alignment tick, in the gap between the channels.
+                painter.rect_filled(
+                    Rect::from_min_size(pos2(rect.left() + 14.0, top), vec2(2.0, seg_h)),
+                    0.0,
+                    theme::NEUTRAL_300,
+                );
+            }
         }
+    }
+    if let Some((text, on_target)) = line {
+        painter.text(
+            pos2(rect.center().x, rect.bottom()),
+            Align2::CENTER_BOTTOM,
+            &text,
+            FontId::monospace(9.0),
+            if on_target {
+                theme::VU_GREEN
+            } else {
+                theme::NEUTRAL_400
+            },
+        );
+        let label = loudness_label.to_owned();
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, label.clone())
+        });
     }
 }
 
