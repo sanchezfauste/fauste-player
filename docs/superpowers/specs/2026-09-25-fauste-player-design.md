@@ -141,7 +141,7 @@ A player has:
 ### 3.2 Rules
 
 1. **Entry colours.** In each player's table, that player's current entry is shown red and its next green; an entry on air on another player is marked with that player's number ("P2"), not highlighted. Entries that player has played are dimmed. "Played" is kept per entry and per player, and persists.
-2. **Double-click** on an entry sets `next` to that entry. This is not allowed on the current entry. It is allowed while `stop_after_current` is on, and it does **not** clear that flag.
+2. **Double-click** on an entry sets `next` to that entry. This is not allowed on that player's own current entry. It is allowed while `stop_after_current` is on, and it does **not** clear that flag.
 3. **Play while Stopped.** If `next` exists, it becomes `current` and starts; `next` becomes the entry after it. If there is no `next`, nothing happens.
 4. **Play while Paused** resumes.
 5. **Play while Playing.** If `next` exists and no fade is running:
@@ -185,7 +185,7 @@ A player has:
 19. **Outro indicator.** When `position ≥ outro_start`, an amber badge counts down to `cue_out`. The waveform shades the outro region warm.
 20. **Playlist footer:** `-remaining | elapsed / total` for the whole playlist, in the same format as the current track, from this player's point of view (its played entries and its current position).
 21. **Player count** is configurable at runtime (default 4, minimum 1). There is no architectural maximum: players are identified by `PlayerId` and stored in growable collections. Config validation caps the count at `limits.max_players` (default 16) only as a resource guard. Reducing the count is refused while a player that would be removed is playing.
-22. **Players are independent.** A player's `current`, `next` and played marks change only through that player's own commands and events. Several players may show the same playlist, each at its own position, and the same entry may be on air on several players at once. Only removal looks across players: an entry on air on any player cannot be removed (rule 13). (This replaces the Phase 1 rule "no duplicate on air by default", which moved every other player's next whenever one player started an entry.)
+22. **Players are independent.** A player's `current`, `next` and played marks change only through that player's own transport commands and engine events. Several players may show the same playlist, each at its own position, and the same entry may be on air on several players at once. Two things still look across players: an entry on air on any player cannot be removed (rule 13), and edits to a playlist (insert, move, remove) or a file becoming unreadable re-derive the next of every player that shows it (rules 12 and 13). (This replaces the Phase 1 rule "no duplicate on air by default", which moved every other player's next whenever one player started an entry.)
 
 ---
 

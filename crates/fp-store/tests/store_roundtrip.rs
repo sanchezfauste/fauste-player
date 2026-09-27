@@ -234,3 +234,63 @@ fn bit_perfect_devices_round_trip_and_older_configs_have_none() {
     );
     assert!(again.warnings.is_empty(), "{:?}", again.warnings);
 }
+
+/// A saved state with one entry played by player 0.
+fn saved_with_a_played_entry(s: &Store) -> AppState {
+    let mut state = AppState::new(Config::default(), "Main");
+    let playlist = state.playlists.first_id().unwrap();
+    let paths = vec![PathBuf::from("/m/a.flac"), PathBuf::from("/m/b.flac")];
+    apply(
+        &mut state,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths,
+        },
+    )
+    .unwrap();
+    let entry = state.playlists.get(playlist).unwrap().entries[0].id;
+    state.playlists.mark_played(entry, state.players[0].id);
+    s.save_config(&state).unwrap();
+    s.save_playlists(&state).unwrap();
+    s.save_session(&state, |_| 0.0).unwrap();
+    state
+}
+
+#[test]
+fn playlists_are_saved_with_the_schema_that_has_per_player_played_marks() {
+    // Builds from before per-player marks require `played` on every entry;
+    // a newer schema makes them keep the file aside instead of discarding it.
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    saved_with_a_played_entry(&s);
+    let doc: serde_json::Value =
+        serde_json::from_slice(&fs::read(s.paths().playlists_file()).unwrap()).unwrap();
+    assert_eq!(doc["schema_version"], 2);
+}
+
+#[test]
+fn a_schema_1_playlists_file_counts_its_played_entries_for_every_player() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    let state = saved_with_a_played_entry(&s);
+    let path = s.paths().playlists_file();
+    let mut doc: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    doc["schema_version"] = 1.into();
+    for list in doc["playlists"].as_array_mut().unwrap() {
+        for entry in list["entries"].as_array_mut().unwrap() {
+            let obj = entry.as_object_mut().unwrap();
+            let played = obj.remove("played_by").is_some();
+            obj.insert("played".into(), played.into());
+        }
+    }
+    fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+
+    let loaded = s.load("Main");
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    let playlist = loaded.state.playlists.first_id().unwrap();
+    let entries = &loaded.state.playlists.get(playlist).unwrap().entries;
+    let players: Vec<_> = state.players.iter().map(|p| p.id).collect();
+    assert!(players.iter().all(|p| entries[0].is_played_by(*p)));
+    assert!(players.iter().all(|p| !entries[1].is_played_by(*p)));
+}

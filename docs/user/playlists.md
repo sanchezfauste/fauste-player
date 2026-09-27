@@ -27,8 +27,10 @@ remembered per player.
 
 Players are independent: several players can show the same playlist, each
 with its own next track, its own played marks and its own times in the
-footer. What one player does never moves another player's next. The same
-track can even be on air on two players at once.
+footer. Playing, stopping or skipping on one player never moves another
+player's next. The same track can even be on air on two players at once.
+Editing the playlist (adding, moving or removing entries) or a file becoming
+unreadable can still change the next of any player that shows it.
 
 Row colours:
 

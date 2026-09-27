@@ -8,14 +8,23 @@ use fp_model::{CartPage, CartwallSession, Config, IdGen, Library, PlayerSession,
 use crate::migrate::Migration;
 
 pub const CONFIG_SCHEMA: u32 = 1;
-pub const PLAYLISTS_SCHEMA: u32 = 1;
+pub const PLAYLISTS_SCHEMA: u32 = 2;
 pub const SESSION_SCHEMA: u32 = 1;
 pub const CARTS_SCHEMA: u32 = 1;
 
 pub const CONFIG_MIGRATIONS: &[Migration] = &[];
-pub const PLAYLISTS_MIGRATIONS: &[Migration] = &[];
+pub const PLAYLISTS_MIGRATIONS: &[Migration] = &[playlists_v1_to_v2];
 pub const SESSION_MIGRATIONS: &[Migration] = &[];
 pub const CARTS_MIGRATIONS: &[Migration] = &[];
+
+/// Schema 2 marks an entry played per player (`played_by`) instead of with
+/// one `played` flag. Player ids live in the session, so the flag is kept as
+/// it is and `AppState::restore` counts it as played by every player. The
+/// bump itself matters: builds that require `played` reject a schema 2 file
+/// as too new and keep it, instead of treating it as corrupt.
+fn playlists_v1_to_v2(doc: serde_json::Value) -> Result<serde_json::Value, String> {
+    Ok(doc)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigDoc {
