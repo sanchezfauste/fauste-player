@@ -18,6 +18,7 @@ use super::app::Scene;
 
 mod carts;
 mod keys;
+mod meters;
 use super::format;
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
@@ -35,6 +36,7 @@ pub(crate) enum Section {
     #[default]
     Outputs,
     Players,
+    Meters,
     Analysis,
     Playlists,
     Cartwall,
@@ -229,6 +231,7 @@ pub(crate) fn show(
                                                 outputs(ui, scene, st);
                                             }
                                             Section::Players => players(ui, scene),
+                                            Section::Meters => meters::section(ui, scene),
                                             Section::Analysis => analysis(ui, scene, deps),
                                             Section::Playlists => playlists(ui, scene, st),
                                             Section::Cartwall => carts::section(ui, scene, st),
@@ -309,6 +312,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
                 icon::SLIDERS_HORIZONTAL,
                 "settings-tab-players",
             ),
+            (Section::Meters, icon::GAUGE, "settings-tab-meters"),
             (Section::Analysis, icon::WAVEFORM, "settings-tab-analysis"),
             (Section::Playlists, icon::PLAYLIST, "settings-tab-playlists"),
             (
