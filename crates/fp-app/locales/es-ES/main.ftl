@@ -251,3 +251,4 @@ loudness-short-term = Corto plazo (3 s)
 settings-loudness-target = Objetivo de sonoridad
 settings-hint-loudness-target = La lectura se ve en verde a ±1 LU del objetivo (EBU R128: −23 LUFS).
 meter-loudness = Sonoridad { $value } LUFS
+tip-on-air-elsewhere = En el aire en el reproductor { $n }

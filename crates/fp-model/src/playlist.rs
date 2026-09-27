@@ -3,14 +3,37 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::ModelError;
-use crate::ids::{EntryId, PlaylistId, TrackId};
+use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
 use crate::track::Library;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaylistEntry {
     pub id: EntryId,
     pub track: TrackId,
-    pub played: bool,
+    /// The players that have played this entry (spec §3 rules 12 and 22:
+    /// players are independent, so each keeps its own marks).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub played_by: Vec<PlayerId>,
+    /// `played` from files written before players were independent; turned
+    /// into marks for every player on restore (`AppState::normalize_played_marks`).
+    #[serde(default, rename = "played", skip_serializing)]
+    pub legacy_played: bool,
+}
+
+impl PlaylistEntry {
+    /// A new, unplayed entry.
+    pub fn new(id: EntryId, track: TrackId) -> Self {
+        Self {
+            id,
+            track,
+            played_by: Vec::new(),
+            legacy_played: false,
+        }
+    }
+
+    pub fn is_played_by(&self, player: PlayerId) -> bool {
+        self.played_by.contains(&player)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -102,13 +125,29 @@ impl Playlists {
             .find_map(|p| p.entries.iter().find(|e| e.id == entry))
     }
 
-    pub fn mark_played(&mut self, entry: EntryId) {
+    /// Marks `entry` as played by `player`.
+    pub fn mark_played(&mut self, entry: EntryId, player: PlayerId) {
         if let Some(e) = self
             .lists
             .iter_mut()
             .find_map(|p| p.entries.iter_mut().find(|e| e.id == entry))
+            && !e.played_by.contains(&player)
         {
-            e.played = true;
+            e.played_by.push(player);
+        }
+    }
+
+    /// Entries read with the old shared `played` flag become played by
+    /// every one of `players`.
+    pub fn convert_legacy_played(&mut self, players: &[PlayerId]) {
+        for e in self.lists.iter_mut().flat_map(|p| p.entries.iter_mut()) {
+            if std::mem::take(&mut e.legacy_played) {
+                for p in players {
+                    if !e.played_by.contains(p) {
+                        e.played_by.push(*p);
+                    }
+                }
+            }
         }
     }
 
@@ -176,12 +215,11 @@ impl Playlists {
     /// Inserts an unplayed copy of `entry` right after it.
     pub fn duplicate(&mut self, entry: EntryId, new_id: EntryId) -> Result<EntryId, ModelError> {
         let (pl, pos) = self.find(entry).ok_or(ModelError::UnknownEntry(entry))?;
-        let original = *self.entry(entry).ok_or(ModelError::UnknownEntry(entry))?;
-        let copy = PlaylistEntry {
-            id: new_id,
-            track: original.track,
-            played: false,
-        };
+        let track = self
+            .entry(entry)
+            .ok_or(ModelError::UnknownEntry(entry))?
+            .track;
+        let copy = PlaylistEntry::new(new_id, track);
         self.insert(pl, pos + 1, vec![copy])?;
         Ok(new_id)
     }
@@ -218,11 +256,7 @@ mod tests {
         let mut lists = Playlists::default();
         let mut a = Playlist::new(PlaylistId(100), "A");
         for (e, t) in [(1, 1), (2, 2), (3, 3)] {
-            a.entries.push(PlaylistEntry {
-                id: EntryId(e),
-                track: TrackId(t),
-                played: false,
-            });
+            a.entries.push(PlaylistEntry::new(EntryId(e), TrackId(t)));
         }
         lists.add(a);
         lists.add(Playlist::new(PlaylistId(200), "B"));
@@ -273,11 +307,11 @@ mod tests {
     #[test]
     fn duplicate_inserts_an_unplayed_copy_right_after() {
         let (mut lists, _) = setup();
-        lists.mark_played(EntryId(1));
+        lists.mark_played(EntryId(1), PlayerId(1));
         let copy = lists.duplicate(EntryId(1), EntryId(9)).unwrap();
         assert_eq!(copy, EntryId(9));
         assert_eq!(ids(&lists, 100), vec![1, 9, 2, 3]);
-        assert!(!lists.entry(EntryId(9)).unwrap().played);
+        assert!(lists.entry(EntryId(9)).unwrap().played_by.is_empty());
         assert_eq!(lists.entry(EntryId(9)).unwrap().track, TrackId(1));
     }
 

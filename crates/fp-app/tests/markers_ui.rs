@@ -16,7 +16,7 @@ use support::{harness, state};
 /// P1 plays a 180 s track with a MIX point at 170 s.
 fn playing() -> (AppState, TrackId) {
     let mut s = state(1, 2);
-    let e = s.playlists.iter().next().unwrap().entries[0];
+    let e = s.playlists.iter().next().unwrap().entries[0].clone();
     let analysis = TrackAnalysis {
         duration_secs: 180.0,
         cue_in: Some(0.0),

@@ -49,7 +49,7 @@ fn state(tracks: usize) -> (AppState, Vec<EntryId>, PlayerId) {
 }
 
 fn entry(s: &fp_model::AppState, id: fp_model::EntryId) -> fp_model::PlaylistEntry {
-    *s.playlists.entry(id).unwrap()
+    s.playlists.entry(id).unwrap().clone()
 }
 
 #[test]
@@ -153,7 +153,7 @@ fn rule20_playlist_times_count_played_and_on_air_entries() {
     apply(&mut s, Command::Play(p)).unwrap();
     apply(&mut s, Command::Play(p)).unwrap(); // first played, second on air
     let playlist = s.playlists.first_id().unwrap();
-    let t = playlist_times(&s, playlist, &[(p, 50.0)]);
+    let t = playlist_times(&s, p, playlist, &[(p, 50.0)]);
     assert_eq!((t.total, t.elapsed, t.remaining), (600.0, 250.0, 350.0));
 }
 
@@ -175,4 +175,46 @@ fn an_idle_player_shows_nothing_playing_and_its_next() {
     assert_eq!(v.status, PlayerStatus::Stopped);
     assert!(v.title.is_none());
     assert_eq!(v.next_line.as_deref(), Some("Song 0 – Artist"));
+}
+
+#[test]
+fn an_entry_on_air_on_another_player_is_marked_with_that_player() {
+    let (mut s, e, p1) = state(3);
+    let p2 = s.players[1].id;
+    apply(&mut s, Command::Play(p1)).unwrap();
+    apply(&mut s, Command::SetNext(p2, e[1])).unwrap();
+    assert_eq!(row_status(&s, p1, &entry(&s, e[0])), RowStatus::Current);
+    assert_eq!(
+        row_status(&s, p2, &entry(&s, e[0])),
+        RowStatus::OnAirElsewhere(1),
+        "on air on player 1, not P2's own"
+    );
+}
+
+#[test]
+fn played_rows_belong_to_each_player() {
+    let (mut s, e, p1) = state(3);
+    let p2 = s.players[1].id;
+    apply(&mut s, Command::Play(p1)).unwrap();
+    apply(&mut s, Command::Play(p1)).unwrap();
+    assert_eq!(row_status(&s, p1, &entry(&s, e[0])), RowStatus::Played);
+    assert_eq!(
+        row_status(&s, p2, &entry(&s, e[0])),
+        RowStatus::Next,
+        "P2's own next"
+    );
+    assert_eq!(row_status(&s, p2, &entry(&s, e[2])), RowStatus::Normal);
+}
+
+#[test]
+fn playlist_times_follow_each_player() {
+    let (mut s, _e, p1) = state(3);
+    let p2 = s.players[1].id;
+    let playlist = s.playlists.first_id().unwrap();
+    apply(&mut s, Command::Play(p1)).unwrap();
+    apply(&mut s, Command::Play(p1)).unwrap();
+    let mine = playlist_times(&s, p1, playlist, &[(p1, 50.0)]);
+    let theirs = playlist_times(&s, p2, playlist, &[(p1, 50.0)]);
+    assert_eq!(mine.elapsed, 250.0, "one played, 50 s into the next");
+    assert_eq!(theirs.elapsed, 0.0, "P2 has played nothing: {theirs:?}");
 }

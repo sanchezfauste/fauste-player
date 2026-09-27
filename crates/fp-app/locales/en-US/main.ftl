@@ -251,3 +251,4 @@ loudness-short-term = Short-term (3 s)
 settings-loudness-target = Loudness target
 settings-hint-loudness-target = The readout is green within ±1 LU (EBU R128: −23 LUFS).
 meter-loudness = Loudness { $value } LUFS
+tip-on-air-elsewhere = On air on player { $n }

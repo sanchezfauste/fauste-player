@@ -12,8 +12,13 @@ pub enum PlayerStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowStatus {
+    /// This player's current entry.
     Current,
+    /// This player's next.
     Next,
+    /// On air on another player (1-based player number); players are
+    /// independent, so it is only marked (spec §3 rule 22).
+    OnAirElsewhere(usize),
     Unavailable,
     Played,
     Normal,
@@ -156,16 +161,24 @@ pub fn player_view(
 /// How a track-table row is drawn (spec §3 rule 1). Takes the row's entry
 /// directly: the table already has it, so nothing is searched per row.
 pub fn row_status(state: &AppState, player: PlayerId, entry: &PlaylistEntry) -> RowStatus {
-    if state.is_on_air(entry.id) {
+    let me = state.player(player).ok();
+    if me.is_some_and(|p| p.current == Some(entry.id)) {
         return RowStatus::Current;
     }
-    if state.player(player).is_ok_and(|p| p.next == Some(entry.id)) {
+    if me.is_some_and(|p| p.next == Some(entry.id)) {
         return RowStatus::Next;
+    }
+    if let Some(n) = state
+        .players
+        .iter()
+        .position(|p| p.id != player && p.current == Some(entry.id))
+    {
+        return RowStatus::OnAirElsewhere(n + 1);
     }
     if !state.library.is_playable(entry.track) {
         return RowStatus::Unavailable;
     }
-    if entry.played {
+    if entry.is_played_by(player) {
         RowStatus::Played
     } else {
         RowStatus::Normal
@@ -183,6 +196,7 @@ pub struct PlaylistTimes {
 /// on-air entries up to their position.
 pub fn playlist_times(
     state: &AppState,
+    player: PlayerId,
     playlist: PlaylistId,
     positions: &[(PlayerId, f64)],
 ) -> PlaylistTimes {
@@ -199,14 +213,18 @@ pub fn playlist_times(
         };
         let len = track.play_length_secs();
         total += len;
-        let on_air = state.players.iter().find(|p| p.current == Some(e.id));
+        // This player's own progress only: players are independent.
+        let on_air = state
+            .players
+            .iter()
+            .find(|p| p.id == player && p.current == Some(e.id));
         if let Some(p) = on_air {
             let pos = positions
                 .iter()
                 .find(|(id, _)| *id == p.id)
                 .map_or(track.cue_in_secs(), |(_, s)| *s);
             elapsed += (pos - track.cue_in_secs()).clamp(0.0, len);
-        } else if e.played {
+        } else if e.is_played_by(player) {
             elapsed += len;
         }
     }

@@ -163,8 +163,10 @@ so countdowns, segues and chaining continue. The device is reopened every
 A known limit: a transition already dispatched to the mixer (within
 `schedule_lead_ms` of its frame) still starts the entry it was given, even if
 the next changed meanwhile. The model follows the engine
-(`TransitionStarted`). This is also why rule 22 can briefly be bypassed at
-that exact moment.
+(`TransitionStarted`). A transition counts as executed only once the bus has
+rendered past its frame (`now_frame > at_frame`): at exactly that frame it
+is still pending, so a fade stop or pause arriving then takes it back
+instead of fading a source that never started.
 
 It turns bus events back into model events: `TransitionStarted`,
 `ReachedEnd`, `FadeCompleted`, `SourceFailed` and `CueEnded`. Stale events

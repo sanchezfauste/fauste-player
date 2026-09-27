@@ -94,7 +94,7 @@ fn continuous_playback_chains_tracks_in_the_model_and_on_air() {
         Some(e[1]),
         "the second track is on air after the first ended"
     );
-    assert!(model.playlists.entry(e[0]).unwrap().played);
+    assert!(model.playlists.entry(e[0]).unwrap().is_played_by(p));
     assert!(heard.iter().any(|v| (*v as u64) / 100_000 == 2));
     assert!(handle.telemetry.load().model_version > 0);
 }

@@ -90,7 +90,7 @@ pub(crate) fn column(
             .max_rect(footer_rect)
             .layout(Layout::left_to_right(Align::Center)),
     );
-    footer(&mut footer_ui, scene, player.playlist);
+    footer(&mut footer_ui, scene, id, player.playlist);
 }
 
 fn small_caps(text: &str, color: Color32) -> RichText {
@@ -814,7 +814,7 @@ fn tabs(
     ui.painter().rect_filled(bottom, 0.0, theme::NEUTRAL_800);
 }
 
-fn footer(ui: &mut Ui, scene: &Scene<'_>, playlist: PlaylistId) {
+fn footer(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: PlaylistId) {
     let t = scene.i18n;
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
@@ -877,7 +877,7 @@ fn footer(ui: &mut Ui, scene: &Scene<'_>, playlist: PlaylistId) {
         .iter()
         .filter_map(|(p, t)| t.position_secs.map(|s| (*p, s)))
         .collect();
-    let times = view::playlist_times(scene.state, playlist, &positions);
+    let times = view::playlist_times(scene.state, id, playlist, &positions);
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.add_space(10.0);
         ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
