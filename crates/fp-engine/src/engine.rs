@@ -1045,10 +1045,12 @@ impl Engine {
         let Plan::Dispatched(plan, at_frame) = rt.plan else {
             return false;
         };
+        // `now_frame` is the next frame the device will play: a transition
+        // at exactly that frame has not happened yet.
         let executed = rt
             .current
             .as_ref()
-            .is_some_and(|c| self.now_frame(&c.bus) >= at_frame);
+            .is_some_and(|c| self.now_frame(&c.bus) > at_frame);
         if executed && matches!(plan, TransitionPlan::StartNextAt { .. }) && rt.preload.is_some() {
             self.promote(player);
             return true;

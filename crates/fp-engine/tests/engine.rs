@@ -649,3 +649,53 @@ fn a_route_to_an_unavailable_backend_falls_back_to_the_default_output() {
         "a route to a system that is unavailable here must play on the default output"
     );
 }
+
+#[test]
+fn a_fade_stop_on_the_exact_frame_of_a_transition_still_ends() {
+    let mut r = rig(96_000, false);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(request(2, 0.0)),
+    });
+    r.settle();
+    r.run(1);
+    let start = r.heard.iter().position(|v| *v != 0.0).unwrap();
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: 0.5,
+            fade_current_until_secs: None,
+        }),
+    });
+    // Render up to the transition's frame exactly: it is the next frame the
+    // device will play, not one already played.
+    let at = start + 24_000;
+    assert_eq!(at % BLOCK, 0, "the transition falls on a block boundary");
+    r.run((at - r.heard.len()) / BLOCK);
+    assert_eq!(r.heard.len(), at);
+    r.act(EngineAction::FadeOutAndStop {
+        player: P,
+        fade_ms: 100,
+    });
+    r.run(100);
+    assert!(
+        r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ReachedEnd { player, .. } if *player == P)),
+        "the fade stop ends: {:?}",
+        r.events
+    );
+    assert!(
+        r.heard[r.heard.len() - BLOCK..].iter().all(|v| *v == 0.0),
+        "silent after the fade"
+    );
+    assert_eq!(
+        r.engine.attached_sources(),
+        1,
+        "only the preloaded next is left, waiting"
+    );
+}
