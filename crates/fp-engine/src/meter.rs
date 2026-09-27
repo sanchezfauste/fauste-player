@@ -10,9 +10,16 @@ pub const SILENCE_DB: f32 = -120.0;
 const BIN_SECS: f64 = 0.1;
 const MOMENTARY_BINS: usize = 4;
 const SHORT_TERM_BINS: usize = 30;
-/// A sine's RMS is 3.01 dB under its peak; RMS meters are calibrated so a
-/// sine reads its peak level (AES17).
-const SINE_RMS_OFFSET_DB: f32 = 3.010_3;
+/// The VU responds to the rectified average; a sine's is 2/π of its peak,
+/// and the scale is calibrated so that a sine reads its peak level (AES17).
+const VU_SINE_CALIBRATION: f64 = std::f64::consts::FRAC_PI_2;
+/// VU needle (IEC 60268-17): a second-order movement that overshoots by
+/// 1.25 % (between the standard's 1 % and 1.5 %) and first reaches 99 % of
+/// a step in 300 ms: ζ from the overshoot, ω₀ = 4.0536 / 0.3 s.
+const VU_DAMPING: f64 = 0.812_717;
+const VU_NATURAL_RAD_PER_SEC: f64 = 13.511_93;
+/// Integration step of the needle.
+const VU_STEP_SECS: f64 = 0.000_25;
 
 /// What a player's sources measured since the last tick (mixer, meters spec M1).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -20,6 +27,8 @@ pub struct MeterInput {
     /// Sample or true peak, linear.
     pub peak: [f32; 2],
     pub sum_sq: [f64; 2],
+    /// Sums of magnitudes (rectified), for the VU.
+    pub sum_abs: [f64; 2],
     /// K-weighted sums of squares.
     pub k_sum: [f64; 2],
     pub frames: u64,
@@ -33,6 +42,9 @@ impl MeterInput {
                 *p = p.max(*o);
             }
             if let (Some(s), Some(o)) = (self.sum_sq.get_mut(ch), other.sum_sq.get(ch)) {
+                *s += o;
+            }
+            if let (Some(s), Some(o)) = (self.sum_abs.get_mut(ch), other.sum_abs.get(ch)) {
                 *s += o;
             }
             if let (Some(k), Some(o)) = (self.k_sum.get_mut(ch), other.k_sum.get(ch)) {
@@ -68,7 +80,8 @@ impl Default for MeterReading {
 /// fall rate.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Ballistics {
-    rms: bool,
+    /// A VU (the needle of `move_vu`) rather than a peak meter.
+    vu: bool,
     attack_tau: f64,
     release_db_per_sec: f32,
 }
@@ -108,7 +121,7 @@ fn ballistics(c: &MeterConfig) -> Ballistics {
     // Peak meters rise at once here: programme meters are integrated per
     // sample in the mixer (`mixer_integration`).
     let peak = |fall_db: f32, fall_secs: f32| Ballistics {
-        rms: false,
+        vu: false,
         attack_tau: 0.0,
         release_db_per_sec: fall_db / fall_secs,
     };
@@ -116,14 +129,14 @@ fn ballistics(c: &MeterConfig) -> Ballistics {
         MeterBallistics::DigitalPeak => peak(20.0, 1.7),
         MeterBallistics::EbuPpm => peak(24.0, 2.8),
         MeterBallistics::DinPpm => peak(20.0, 1.5),
-        // 99 % in 300 ms: τ = 0.3 / ln(100), symmetric.
+        // The needle's movement is `move_vu`; the fall is for the hold.
         MeterBallistics::Vu => Ballistics {
-            rms: true,
-            attack_tau: 0.3 / 100f64.ln(),
+            vu: true,
+            attack_tau: 0.0,
             release_db_per_sec: 20.0 / 1.7,
         },
         MeterBallistics::Custom => Ballistics {
-            rms: false,
+            vu: false,
             attack_tau: 0.0,
             release_db_per_sec: c.release_db_per_sec,
         },
@@ -235,6 +248,8 @@ pub struct MeterState {
     flowing_secs: f64,
     /// Time waited for a block, applied to the level when it comes.
     pending_secs: f64,
+    /// VU needles: position (linear) and velocity, per channel.
+    vu: [(f64, f64); 2],
 }
 
 /// Device callbacks can be longer than a tick: a tick without audio this
@@ -243,26 +258,28 @@ const GAP_SECS: f64 = 0.05;
 /// Assumed until audio has flowed long enough to measure the rate.
 const DEFAULT_RATE: f64 = 48_000.0;
 
-/// Moves one channel's level for `span` seconds of measured audio.
+/// Moves a VU needle (`position`, `velocity`) for `span` seconds towards
+/// `target`, the second-order movement of IEC 60268-17.
+fn move_vu(position: &mut f64, velocity: &mut f64, target: f64, span: f64) {
+    let steps = (span / VU_STEP_SECS).ceil().max(1.0);
+    let h = span / steps;
+    let w = VU_NATURAL_RAD_PER_SEC;
+    for _ in 0..steps as usize {
+        let accel = w * w * (target - *position) - 2.0 * VU_DAMPING * w * *velocity;
+        *velocity += accel * h;
+        *position += *velocity * h;
+    }
+}
+
+/// Moves one peak-meter channel's level for `span` seconds of audio.
 fn move_level(linear: &mut f32, b: &Ballistics, input: &MeterInput, ch: usize, span: f64) {
-    let target = if b.rms {
-        let sum = input.sum_sq.get(ch).copied().unwrap_or(0.0);
-        let rms = if input.frames > 0 {
-            (sum / input.frames as f64).sqrt() as f32
-        } else {
-            0.0
-        };
-        from_db(to_db(rms) + SINE_RMS_OFFSET_DB)
-    } else {
-        input.peak.get(ch).copied().unwrap_or(0.0)
-    };
+    let target = input.peak.get(ch).copied().unwrap_or(0.0);
     let approach = if b.attack_tau > 0.0 {
         (1.0 - (-span / b.attack_tau).exp()) as f32
     } else {
         1.0
     };
-    if target >= *linear || b.rms {
-        // A VU moves with the same time constant both ways.
+    if target >= *linear {
         *linear += (target - *linear) * approach;
     } else {
         let fallen = to_db(*linear) - b.release_db_per_sec * span as f32;
@@ -304,7 +321,22 @@ impl MeterState {
                 continue;
             };
             if let Some(span) = span {
-                move_level(linear, &b, &input, ch, span);
+                if b.vu {
+                    let (Some(sum), Some((position, velocity))) =
+                        (input.sum_abs.get(ch), self.vu.get_mut(ch))
+                    else {
+                        continue;
+                    };
+                    let average = if input.frames > 0 {
+                        sum / input.frames as f64
+                    } else {
+                        0.0
+                    };
+                    move_vu(position, velocity, average * VU_SINE_CALIBRATION, span);
+                    *linear = position.max(0.0) as f32;
+                } else {
+                    move_level(linear, &b, &input, ch, span);
+                }
             }
             let db = to_db(*linear);
             if let Some(l) = level_db.get_mut(ch) {

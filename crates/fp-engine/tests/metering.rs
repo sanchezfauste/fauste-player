@@ -176,15 +176,13 @@ fn config(ballistics: MeterBallistics) -> MeterConfig {
     }
 }
 
-fn db(linear: f32) -> f32 {
-    20.0 * linear.log10()
-}
-
-/// A tick of steady peak `level` (linear), both channels.
+/// A tick of a steady sine of peak `level` (linear), both channels.
 fn peak(level: f32) -> MeterInput {
     MeterInput {
         peak: [level; 2],
         sum_sq: [f64::from(level * level) * 240.0 / 2.0; 2],
+        // A sine's rectified average is 2/π of its peak.
+        sum_abs: [f64::from(level) * 240.0 * std::f64::consts::FRAC_2_PI; 2],
         k_sum: [0.0; 2],
         frames: 240,
     }
@@ -221,24 +219,52 @@ fn ebu_ppm_falls_24_db_in_2_8_s() {
     assert!((r.level_db[0] + 24.0).abs() < 0.3, "{}", r.level_db[0]);
 }
 
-#[test]
-fn vu_reaches_99_percent_in_300_ms() {
+/// The VU's step response to a sine of peak 1, per tick, as linear level.
+fn vu_step(secs: f64) -> Vec<f32> {
     let c = config(MeterBallistics::Vu);
     let mut m = MeterState::default();
-    let early = run(&mut m, &c, peak(1.0), 0.1);
-    let at_300 = run(&mut m, &c, peak(1.0), 0.2);
-    // A steady sine of peak 1 reads 0 dB (RMS, sine-calibrated).
+    (0..(secs / TICK).round() as usize)
+        .map(|_| 10f32.powf(m.update(peak(1.0), TICK, &c).level_db[0] / 20.0))
+        .collect()
+}
+
+#[test]
+fn vu_reaches_99_percent_in_300_ms() {
+    // IEC 60268-17: 99 % of the steady reading in 300 ms ± 10 %.
+    let steps = vu_step(2.0);
+    let first = steps.iter().position(|v| *v >= 0.99).unwrap();
+    let t = (first + 1) as f64 * TICK;
+    assert!((0.27..=0.33).contains(&t), "99 % at {t} s");
+}
+
+#[test]
+fn vu_overshoots_between_1_and_1_5_percent() {
+    // IEC 60268-17: the needle overshoots by 1 % to 1.5 %.
+    let steps = vu_step(2.0);
+    let max = steps.iter().copied().fold(0.0f32, f32::max);
+    assert!((1.010..=1.015).contains(&max), "overshoot {max}");
+    let settled = *steps.last().unwrap();
     assert!(
-        early.level_db[0] < -1.0,
-        "not instant: {}",
-        early.level_db[0]
+        (settled - 1.0).abs() < 0.001,
+        "a sine reads its peak level: {settled}"
     );
-    assert!(
-        at_300.level_db[0] > db(0.99) - 0.05,
-        "{}",
-        at_300.level_db[0]
-    );
-    assert!(at_300.level_db[0] < 0.1);
+}
+
+#[test]
+fn vu_reads_the_rectified_average_like_a_real_vu() {
+    // A square wave of the same peak has a rectified average π/2 times a
+    // sine's: it reads 3.92 dB higher, where an RMS meter shows 3.01.
+    let c = config(MeterBallistics::Vu);
+    let mut m = MeterState::default();
+    let square = MeterInput {
+        peak: [1.0; 2],
+        sum_sq: [240.0; 2],
+        sum_abs: [240.0; 2],
+        frames: 240,
+        ..MeterInput::default()
+    };
+    let r = run(&mut m, &c, square, 2.0);
+    assert!((r.level_db[0] - 3.92).abs() < 0.05, "{}", r.level_db[0]);
 }
 
 #[test]
@@ -349,6 +375,7 @@ fn vu_is_steady_when_callbacks_skip_ticks() {
     let full = MeterInput {
         frames: 512,
         sum_sq: [0.5 * 512.0; 2],
+        sum_abs: [512.0 * std::f64::consts::FRAC_2_PI; 2],
         peak: [1.0; 2],
         ..MeterInput::default()
     };

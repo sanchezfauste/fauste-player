@@ -573,6 +573,7 @@ fn render_slot(
     let (mut audible_l, mut audible_r) = (0.0f32, 0.0f32);
     // Meter measurement, added to the source's accumulators once per block.
     let (mut sum_l, mut sum_r, mut k_l, mut k_r) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    let (mut abs_l, mut abs_r) = (0.0f64, 0.0f64);
     let mut measured = 0u64;
     while f < frames && !slot.paused {
         let abs = block_start + f as u64;
@@ -639,6 +640,8 @@ fn render_slot(
             let (wl, wr) = (kw_l.process(f64::from(l)), kw_r.process(f64::from(r)));
             sum_l += f64::from(l) * f64::from(l);
             sum_r += f64::from(r) * f64::from(r);
+            abs_l += f64::from(l.abs());
+            abs_r += f64::from(r.abs());
             k_l += wl * wl;
             k_r += wr * wr;
             measured += 1;
@@ -679,6 +682,8 @@ fn render_slot(
         let shared = &slot.source.shared;
         shared.sum_sq_l.fetch_add(sum_l);
         shared.sum_sq_r.fetch_add(sum_r);
+        shared.sum_abs_l.fetch_add(abs_l);
+        shared.sum_abs_r.fetch_add(abs_r);
         shared.k_sum_l.fetch_add(k_l);
         shared.k_sum_r.fetch_add(k_r);
         shared.measured_frames.fetch_add(measured, Ordering::AcqRel);

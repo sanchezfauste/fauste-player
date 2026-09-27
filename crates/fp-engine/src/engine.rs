@@ -206,6 +206,8 @@ fn take_measurement(s: &SourceShared) {
     s.peak_r.take();
     s.sum_sq_l.take();
     s.sum_sq_r.take();
+    s.sum_abs_l.take();
+    s.sum_abs_r.take();
     s.k_sum_l.take();
     s.k_sum_r.take();
     s.measured_frames
@@ -436,6 +438,7 @@ impl Engine {
             input.merge(crate::meter::MeterInput {
                 peak: [s.peak_l.take(), s.peak_r.take()],
                 sum_sq: [s.sum_sq_l.take(), s.sum_sq_r.take()],
+                sum_abs: [s.sum_abs_l.take(), s.sum_abs_r.take()],
                 k_sum: [s.k_sum_l.take(), s.k_sum_r.take()],
                 frames: s
                     .measured_frames
