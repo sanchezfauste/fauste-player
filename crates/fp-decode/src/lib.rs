@@ -8,10 +8,12 @@
 use std::io::Read;
 use std::path::Path;
 
+mod ape;
 mod dsd;
 mod symph;
 mod wavpack;
 
+use ape::ApeFileDecoder;
 use dsd::DsdDecoder;
 use symph::SymphoniaDecoder;
 use wavpack::WavPackDecoder;
@@ -63,6 +65,7 @@ enum Backend {
     Symphonia(Box<SymphoniaDecoder>),
     Dsd(Box<DsdDecoder>),
     WavPack(Box<WavPackDecoder>),
+    Ape(Box<ApeFileDecoder>),
 }
 
 /// Decodes one file, whatever its format.
@@ -81,11 +84,8 @@ impl FileDecoder {
             Kind::Dsf => Backend::Dsd(Box::new(DsdDecoder::open_dsf(path)?)),
             Kind::Dff => Backend::Dsd(Box::new(DsdDecoder::open_dff(path)?)),
             Kind::WavPack => Backend::WavPack(Box::new(WavPackDecoder::open(path)?)),
-            // Monkey's Audio arrives with its decoder; until then symphonia
-            // tries it, as before.
-            Kind::Symphonia | Kind::Ape => {
-                Backend::Symphonia(Box::new(SymphoniaDecoder::open(path)?))
-            }
+            Kind::Ape => Backend::Ape(Box::new(ApeFileDecoder::open(path)?)),
+            Kind::Symphonia => Backend::Symphonia(Box::new(SymphoniaDecoder::open(path)?)),
         };
         Ok(Self { backend })
     }
@@ -94,6 +94,7 @@ impl FileDecoder {
         match &self.backend {
             Backend::Symphonia(d) => d.sample_rate(),
             Backend::WavPack(d) => d.sample_rate(),
+            Backend::Ape(d) => d.sample_rate(),
             Backend::Dsd(d) => d.sample_rate(),
         }
     }
@@ -104,6 +105,7 @@ impl FileDecoder {
         match &self.backend {
             Backend::Symphonia(d) => d.bits_per_sample(),
             Backend::WavPack(d) => d.bits_per_sample(),
+            Backend::Ape(d) => d.bits_per_sample(),
             Backend::Dsd(_) => None,
         }
     }
@@ -113,6 +115,7 @@ impl FileDecoder {
         match &self.backend {
             Backend::Symphonia(d) => d.channels(),
             Backend::WavPack(d) => d.channels(),
+            Backend::Ape(d) => d.channels(),
             Backend::Dsd(d) => d.channels(),
         }
     }
@@ -122,6 +125,7 @@ impl FileDecoder {
         match &self.backend {
             Backend::Symphonia(d) => d.frames_hint(),
             Backend::WavPack(d) => d.frames_hint(),
+            Backend::Ape(d) => d.frames_hint(),
             Backend::Dsd(d) => d.frames_hint(),
         }
     }
@@ -131,6 +135,7 @@ impl FileDecoder {
         match &mut self.backend {
             Backend::Symphonia(d) => d.seek(secs),
             Backend::WavPack(d) => d.seek(secs),
+            Backend::Ape(d) => d.seek(secs),
             Backend::Dsd(d) => d.seek(secs),
         }
     }
@@ -141,6 +146,7 @@ impl FileDecoder {
         match &mut self.backend {
             Backend::Symphonia(d) => d.next_block(out),
             Backend::WavPack(d) => d.next_block(out),
+            Backend::Ape(d) => d.next_block(out),
             Backend::Dsd(d) => d.next_block(out),
         }
     }

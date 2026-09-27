@@ -24,6 +24,7 @@ proptest = "1.11.0"
 tempfile = "3.27.0"
 cpal = { version = "0.18.2", features = ["realtime"] }
 symphonia = { version = "0.6.1", features = ["all"] }
+ape-decoder = "0.3.2"
 wavicle = { version = "0.1.0", default-features = false, features = ["decode"] }
 rubato = "5.0.0"
 audioadapter-buffers = "5.2.0"
