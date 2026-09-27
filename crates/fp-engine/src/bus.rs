@@ -156,6 +156,11 @@ impl Bus {
     fn try_open(&mut self, now: Instant) -> bool {
         self.last_retry = now;
         self.handle.shared.lost.store(false, Ordering::Release);
+        // Sources attached from now on measure at this rate (K-weighting).
+        self.handle
+            .shared
+            .sample_rate
+            .store(self.config.sample_rate, Ordering::Release);
         let renderer = Box::new(MixerRenderer {
             mixer: self.mixer.clone(),
             shared: self.handle.shared.clone(),

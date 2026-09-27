@@ -1,6 +1,32 @@
 //! Lock-free scalar cells shared between threads.
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+
+/// An `f64` accumulator: one thread adds, another takes (meter energies).
+#[derive(Debug, Default)]
+pub struct AtomicF64(AtomicU64);
+
+impl AtomicF64 {
+    /// Adds `value` (lock-free; real-time safe).
+    pub fn fetch_add(&self, value: f64) {
+        let mut current = self.0.load(Ordering::Relaxed);
+        loop {
+            let next = (f64::from_bits(current) + value).to_bits();
+            match self
+                .0
+                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Relaxed)
+            {
+                Ok(_) => return,
+                Err(actual) => current = actual,
+            }
+        }
+    }
+
+    /// Returns the sum and resets it to zero.
+    pub fn take(&self) -> f64 {
+        f64::from_bits(self.0.swap(0f64.to_bits(), Ordering::AcqRel))
+    }
+}
 
 /// An `f32` readable and writable from any thread without locks.
 #[derive(Debug, Default)]

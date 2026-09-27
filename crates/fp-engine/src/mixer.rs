@@ -4,13 +4,15 @@
 //! only arrives and leaves through lock-free queues.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 use fp_backends::{Renderer, StreamErrorKind, StreamErrorSink};
 
 use crate::atomic::AtomicF32;
+use crate::kweight::KWeighting;
 use crate::ramp::{Curve, Ramp};
 use crate::source::{SOURCE_CHANNELS, SourceConsumer};
+use crate::truepeak::TruePeak;
 
 /// Frames processed per inner step; bounds the stack scratch buffer.
 const CHUNK_FRAMES: usize = 256;
@@ -110,6 +112,10 @@ pub struct BusShared {
     pub misrouted: AtomicU64,
     pub peak_l: AtomicF32,
     pub peak_r: AtomicF32,
+    /// The stream's rate, set by the bus on every open (K-weighting).
+    pub sample_rate: AtomicU32,
+    /// Measure true peak instead of sample peak (meters spec M1).
+    pub true_peak: AtomicBool,
 }
 
 impl BusShared {
@@ -176,6 +182,9 @@ pub struct Slot {
     block_unity: bool,
     /// This block: wrote a non-zero sample.
     block_audible: bool,
+    /// Meter measurement state (meters spec M1).
+    k_weighting: [KWeighting; 2],
+    true_peak: [TruePeak; 2],
 }
 
 /// The conductor's side of a mixer.
@@ -265,6 +274,7 @@ impl Mixer {
                 first_channel,
             } => {
                 let volume_now = volume.load();
+                let rate = self.shared.sample_rate.load(Ordering::Acquire).max(1);
                 if let Some(cell) = self.slots.0.get_mut(slot)
                     && cell.is_none()
                 {
@@ -284,6 +294,8 @@ impl Mixer {
                         finished: false,
                         block_unity: false,
                         block_audible: false,
+                        k_weighting: [KWeighting::new(rate); 2],
+                        true_peak: [TruePeak::default(); 2],
                     });
                 } else {
                     // Occupied or out of range: hand the source straight back.
@@ -392,6 +404,7 @@ impl Mixer {
         let mut peak_l = 0.0f32;
         let mut peak_r = 0.0f32;
         let volume_step = self.volume_step;
+        let true_peak = self.shared.true_peak.load(Ordering::Relaxed);
         for index in 0..self.slots.len() {
             let Some(Some(slot)) = self.slots.0.get_mut(index) else {
                 continue;
@@ -409,6 +422,7 @@ impl Mixer {
                 now,
                 volume_step,
                 &mut events,
+                true_peak,
             );
             peak_l = peak_l.max(l);
             peak_r = peak_r.max(r);
@@ -457,6 +471,7 @@ fn render_slot(
     block_start: u64,
     volume_step: f32,
     events: &mut [Option<BusEvent>; 2],
+    true_peak: bool,
 ) -> (f32, f32) {
     slot.block_unity = false;
     slot.block_audible = false;
@@ -488,6 +503,9 @@ fn render_slot(
     let (mut peak_l, mut peak_r) = (0.0f32, 0.0f32);
     let mut unity = true;
     let mut rendered = false;
+    // Meter measurement, added to the source's accumulators once per block.
+    let (mut sum_l, mut sum_r, mut k_l, mut k_r) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    let mut measured = 0u64;
     while f < frames && !slot.paused {
         let abs = block_start + f as u64;
         if slot.stop_at.is_some_and(|stop| abs >= stop) {
@@ -534,8 +552,21 @@ fn render_slot(
             unity &= g == 1.0;
             rendered = true;
             let (l, r) = (l * g, r * g);
-            peak_l = peak_l.max(l.abs());
-            peak_r = peak_r.max(r.abs());
+            let [tp_l, tp_r] = &mut slot.true_peak;
+            let (level_l, level_r) = if true_peak {
+                (tp_l.push(l), tp_r.push(r))
+            } else {
+                (l.abs(), r.abs())
+            };
+            peak_l = peak_l.max(level_l);
+            peak_r = peak_r.max(level_r);
+            let [kw_l, kw_r] = &mut slot.k_weighting;
+            let (wl, wr) = (kw_l.process(f64::from(l)), kw_r.process(f64::from(r)));
+            sum_l += f64::from(l) * f64::from(l);
+            sum_r += f64::from(r) * f64::from(r);
+            k_l += wl * wl;
+            k_r += wr * wr;
+            measured += 1;
             if fits {
                 let base = (f + k) * channels + slot.first_channel;
                 if let Some(o) = out.get_mut(base) {
@@ -569,6 +600,14 @@ fn render_slot(
     }
     slot.source.shared.peak_l.fetch_max(peak_l);
     slot.source.shared.peak_r.fetch_max(peak_r);
+    if measured > 0 {
+        let shared = &slot.source.shared;
+        shared.sum_sq_l.fetch_add(sum_l);
+        shared.sum_sq_r.fetch_add(sum_r);
+        shared.k_sum_l.fetch_add(k_l);
+        shared.k_sum_r.fetch_add(k_r);
+        shared.measured_frames.fetch_add(measured, Ordering::AcqRel);
+    }
     slot.block_unity = unity && rendered;
     slot.block_audible = peak_l > 0.0 || peak_r > 0.0;
     (peak_l, peak_r)

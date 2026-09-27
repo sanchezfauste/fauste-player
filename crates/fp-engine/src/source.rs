@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use crate::atomic::AtomicF32;
+use crate::atomic::{AtomicF32, AtomicF64};
 
 /// Sources are always stereo; mono is duplicated and multichannel downmixed.
 pub const SOURCE_CHANNELS: usize = 2;
@@ -36,6 +36,14 @@ pub struct SourceShared {
     /// 1.0 and no other source wrote into its channel pair, so its samples
     /// reached the output unchanged (Phase 4 spec B1).
     pub unaltered: AtomicBool,
+    /// Meter measurement since the conductor last took it (meters spec M1),
+    /// after gain: sums of squares, K-weighted sums of squares, and the
+    /// frames they cover.
+    pub sum_sq_l: AtomicF64,
+    pub sum_sq_r: AtomicF64,
+    pub k_sum_l: AtomicF64,
+    pub k_sum_r: AtomicF64,
+    pub measured_frames: AtomicU64,
 }
 
 impl SourceShared {
