@@ -193,8 +193,10 @@ pub struct Slot {
     /// Whether true peak was measured last block (its history restarts
     /// when it is switched on).
     true_peak_on: bool,
-    /// Programme-meter integrator per channel: two stages.
+    /// Programme-meter integrator per channel: two stages, and the charge
+    /// factors they were run with (a preset change starts them from rest).
     ppm: [[f32; 2]; 2],
+    ppm_charge: [f32; 2],
 }
 
 /// The conductor's side of a mixer.
@@ -308,6 +310,7 @@ impl Mixer {
                         true_peak: [TruePeak::default(); 2],
                         true_peak_on: false,
                         ppm: [[0.0; 2]; 2],
+                        ppm_charge: [0.0; 2],
                     });
                 } else {
                     // Occupied or out of range: hand the source straight back.
@@ -499,6 +502,13 @@ impl MeterMode {
         } else {
             *b * self.decay
         };
+        // During silence the fall would end in subnormal numbers, slow on
+        // many CPUs: flush them (far below any displayed level).
+        for stage in [&mut *a, &mut *b] {
+            if *stage < 1e-20 {
+                *stage = 0.0;
+            }
+        }
         *b
     }
 }
@@ -535,6 +545,10 @@ fn render_slot(
     events: &mut [Option<BusEvent>; 2],
     meter: MeterMode,
 ) -> (f32, f32) {
+    if slot.ppm_charge != meter.charge {
+        slot.ppm_charge = meter.charge;
+        slot.ppm = [[0.0; 2]; 2];
+    }
     if meter.true_peak && !slot.true_peak_on {
         slot.true_peak = [TruePeak::default(); 2];
     }
@@ -720,5 +734,29 @@ impl Renderer for MixerRenderer {
                 self.shared.lock_misses.fetch_add(1, Ordering::Relaxed);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MeterMode;
+
+    #[test]
+    fn a_programme_meter_falls_to_exact_zero_in_silence() {
+        let mode = MeterMode {
+            true_peak: false,
+            programme: true,
+            charge: [0.01, 0.02],
+            // 100 dB/s at 48 kHz.
+            decay: 10f32.powf(-100.0 / (20.0 * 48_000.0)),
+        };
+        let mut stages = [0.0f32; 2];
+        for _ in 0..4_800 {
+            mode.integrate(&mut stages, 1.0);
+        }
+        for _ in 0..48_000 * 20 {
+            mode.integrate(&mut stages, 0.0);
+        }
+        assert_eq!(stages, [0.0, 0.0], "no subnormal tail");
     }
 }

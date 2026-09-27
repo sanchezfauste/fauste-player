@@ -497,6 +497,9 @@ fn true_peak_can_be_switched_on_for_a_bus() {
 /// Reading, relative to the steady tone, of a 5 kHz burst of `burst_ms` on
 /// the programme meter `ballistics` configures (the mixer's integration).
 fn burst_reading_db(ballistics: fp_model::MeterBallistics, burst_ms: f64) -> f32 {
+    // Tech 3205 table 2 footnote: a burst needs five cycles, so the 0.5 ms
+    // one is at 10 kHz.
+    let freq = if burst_ms < 1.0 { 10_000.0 } else { 5_000.0 };
     let config = fp_model::MeterConfig {
         ballistics,
         ..fp_model::MeterConfig::default()
@@ -514,7 +517,7 @@ fn burst_reading_db(ballistics: fp_model::MeterBallistics, burst_ms: f64) -> f32
         let samples: Vec<f32> = (0..frames)
             .flat_map(|n| {
                 let x = if n < burst {
-                    (std::f64::consts::TAU * 5_000.0 * n as f64 / 48_000.0).sin() as f32
+                    (std::f64::consts::TAU * freq * n as f64 / 48_000.0).sin() as f32
                 } else {
                     0.0
                 };

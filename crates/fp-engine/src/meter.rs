@@ -265,6 +265,8 @@ pub struct MeterState {
     pending_secs: f64,
     /// VU needles: position (linear) and velocity, per channel.
     vu: [(f64, f64); 2],
+    /// The ballistics the state belongs to; a change starts from rest.
+    ballistics: Option<MeterBallistics>,
 }
 
 /// Device callbacks can be longer than a tick: a tick without audio this
@@ -276,6 +278,9 @@ const DEFAULT_RATE: f64 = 48_000.0;
 /// Moves a VU needle (`position`, `velocity`) for `span` seconds towards
 /// `target`, the second-order movement of IEC 60268-17.
 fn move_vu(position: &mut f64, velocity: &mut f64, target: f64, span: f64) {
+    // The needle settles well within a second: a longer span (a conductor
+    // stall, a resumed machine) needs no more work than that.
+    let span = span.min(1.0);
     let steps = (span / VU_STEP_SECS).ceil().max(1.0);
     let h = span / steps;
     let w = VU_NATURAL_RAD_PER_SEC;
@@ -308,6 +313,12 @@ impl MeterState {
         if !self.started {
             self.hold_db = [SILENCE_DB; 2];
             self.started = true;
+        }
+        if self.ballistics != Some(c.ballistics) {
+            self.ballistics = Some(c.ballistics);
+            self.linear = [0.0; 2];
+            self.vu = [(0.0, 0.0); 2];
+            self.pending_secs = 0.0;
         }
         let b = ballistics(c);
         let dt = dt_secs.max(0.0);

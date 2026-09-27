@@ -77,7 +77,13 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
     and the next block moves it for the whole span. Longer, the meter
     counts silence (the bar falls, and loudness counts silent frames).
   - `meter::mixer_integration` gives the buses their integrator for the
-    configured preset. The reading goes into `PlayerTelemetry::meter`.
+    configured preset. Settings apply at the next tick: the integrator
+    constants and the true-peak flag reach every bus, and a preset change
+    starts the needles and integrators from rest. The reading goes into
+    `PlayerTelemetry::meter`.
+  - The programme-meter stages and the K-weighting flush values below
+    1e-20, so silence never runs on subnormal numbers. The VU's work per
+    tick is bounded (at most one second of needle movement).
 - **The interface only draws** the reading (`widgets::meter_segments`,
   `widgets::loudness_line`).
 - **Tests** (`tests/metering.rs`, `tests/mixer.rs`):

@@ -33,7 +33,7 @@
   - **Programme-meter integration** (EBU, DIN, custom): a two-stage rectifier integrator per sample. Each stage charges upwards only and falls at the meter's fall rate. The EBU time constants (2.25 and 0.95 ms) are fitted to Tech 3205 table 2; DIN and custom scale them to their integration time by the IEC definition.
   - **Rectified sum** per channel (Σ|x|), for the VU; sums of squares are kept too.
   - **K-weighted mean square** per channel, for loudness (ITU-R BS.1770): the pre-filter (high shelf) and the RLB high-pass, with coefficients derived for the bus rate from the standard's analogue prototypes.
-- **Storage:** sums of squares and the frame count accumulate in `SourceShared` atomics. The conductor takes them every tick, so nothing is lost between ticks.
+- **Storage:** sums of squares, rectified sums, K-weighted sums and the frame count accumulate in `SourceShared` atomics. The conductor takes them every tick, so nothing is lost between ticks.
 - **Real-time rules:** filter states live in the slot, coefficients are computed at attach, and nothing is allocated. The true-peak switch is an atomic flag in `BusShared`, set from the configuration.
 
 ## M2. Ballistics and loudness (conductor thread)
@@ -44,7 +44,7 @@
   | Preset | Standard | Input | Rise | Fall |
   |---|---|---|---|---|
   | `DigitalPeak` (default) | IEC 60268-18 | peak | instant | 20 dB in 1.7 s |
-  | `EbuPpm` | IEC 60268-10 type IIb | peak | integration 10 ms | 24 dB in 2.8 s |
+  | `EbuPpm` | IEC 60268-10 type IIb | peak | integration 10 ± 2 ms (the fit: 8.37 ms by the IEC definition) | 24 dB in 2.8 s |
   | `DinPpm` | IEC 60268-10 type I | peak | integration 5 ms | 20 dB in 1.5 s |
   | `Vu` | IEC 60268-17 | rectified average | second order: 99 % in 300 ms, 1.25 % overshoot | the same movement |
   | `Custom` | — | peak | `attack_ms` | `release_db_per_sec` |

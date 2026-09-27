@@ -40,11 +40,11 @@ fn imported_playlists_become_new_playlists() {
     }
     let (name, paths) = created.expect("a playlist is created");
     assert_eq!(name, "Morning show");
-    // A root-relative entry keeps the playlist's drive on Windows.
-    assert_eq!(
-        paths,
-        vec![dir.path().join("/music/a.mp3"), dir.path().join("b.flac")]
-    );
+    // A root-relative entry keeps the playlist's drive on Windows: exactly
+    // what joining a root-relative path does.
+    #[allow(clippy::join_absolute_paths)]
+    let root_relative = dir.path().join("/music/a.mp3");
+    assert_eq!(paths, vec![root_relative, dir.path().join("b.flac")]);
     h.run_steps(2);
     assert!(
         h.query_all_by_label_contains("1 stream").next().is_some(),

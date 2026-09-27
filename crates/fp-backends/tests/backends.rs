@@ -130,8 +130,14 @@ fn null_backend_consumes_audio_at_real_time_pace() {
     // machine it may fall behind, and deliberately does not catch up, so
     // only progress is required from below.
     let real_time = elapsed * 48_000.0;
-    assert!(rendered <= real_time + 256.0, "rendered {rendered} in {elapsed} s");
-    assert!(rendered >= real_time * 0.25, "rendered {rendered} in {elapsed} s");
+    assert!(
+        rendered <= real_time + 256.0,
+        "rendered {rendered} in {elapsed} s"
+    );
+    assert!(
+        rendered >= real_time * 0.25,
+        "rendered {rendered} in {elapsed} s"
+    );
     let after = frames.load(Ordering::Relaxed);
     std::thread::sleep(Duration::from_millis(50));
     assert_eq!(

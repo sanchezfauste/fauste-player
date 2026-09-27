@@ -594,3 +594,28 @@ fn ebu_tech_3341_case_11_short_term_maxima_step_by_1_lu() {
 fn ebu_tech_3341_case_14_momentary_maxima_step_by_1_lu() {
     live_case(0.02, 0.4, |r| r.momentary_lufs);
 }
+
+#[test]
+fn a_long_conductor_stall_costs_the_vu_no_more_than_a_second() {
+    let c = config(MeterBallistics::Vu);
+    let mut m = MeterState::default();
+    run(&mut m, &c, peak(1.0), 0.5);
+    let started = std::time::Instant::now();
+    m.update(peak(1.0), 3_600.0, &c);
+    assert!(
+        started.elapsed().as_millis() < 100,
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn switching_back_to_vu_starts_from_rest() {
+    let vu = config(MeterBallistics::Vu);
+    let digital = config(MeterBallistics::DigitalPeak);
+    let mut m = MeterState::default();
+    run(&mut m, &vu, peak(1.0), 1.0);
+    run(&mut m, &digital, MeterInput::default(), 5.0);
+    let r = m.update(MeterInput::default(), TICK, &vu);
+    assert!(r.level_db[0] < -60.0, "no stale needle: {}", r.level_db[0]);
+}
