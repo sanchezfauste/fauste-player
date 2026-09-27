@@ -46,6 +46,41 @@ non-zero sample into an overlapping channel pair. In `f32`, `x * 1.0` and
 `x + 0.0` are exact, so such a source reached the output bit for bit with no
 special path. The check compares slots pairwise and allocates nothing.
 
+## Level meters
+
+Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../superpowers/specs/2026-09-27-meters-design.md)).
+
+- **The mixer measures** each slot after its gain, on the real-time thread,
+  without allocating.
+  - The peak: the sample peak, or with `BusShared::true_peak` the peak of a
+    4× windowed-sinc interpolation (`truepeak.rs`).
+  - Sums of squares.
+  - K-weighted sums of squares (`kweight.rs`). These are the ITU-R BS.1770
+    pre-filter and RLB high-pass, derived for the bus rate
+    (`BusShared::sample_rate`, set on every open); at 48 kHz they reproduce
+    the standard's coefficients.
+  - All of it accumulates in `SourceShared` atomics (`AtomicF64` sums and
+    `measured_frames`).
+- **The conductor meters.**
+  - Every tick, `Engine::take_meter_input` takes a player's measurement
+    (current plus fading sources), so nothing is lost between interface
+    frames.
+  - `meter::MeterState` applies the configured ballistics: IEC 60268-18
+    digital peak, IEC 60268-10 EBU and DIN programme meters (a first-order
+    rise with τ = integration / 3), IEC 60268-17 VU (RMS, sine-calibrated),
+    or custom rates.
+  - It keeps the peak hold, and computes momentary (400 ms) and short-term
+    (3 s) loudness from 100 ms blocks: L = −0.691 + 10·log10(z_L + z_R).
+  - The reading goes into `PlayerTelemetry::meter`.
+  - Settings apply at the next tick. The bus true-peak flags follow
+    `config.meter.true_peak`.
+- **The interface only draws** the reading (`widgets::meter_segments`,
+  `widgets::loudness_line`).
+- **Tests:** `tests/metering.rs` checks the BS.1770 coefficients, the 1 kHz
+  gain at every rate, the true peak of an intersample-peak sine, every
+  preset's rise and fall, the hold, and EBU Tech 3341 case 1 (a −23 dBFS
+  1 kHz stereo sine reads −23 LUFS).
+
 ## Buses and device loss
 
 A `Bus` (`bus.rs`) is one open device, keyed by `(backend, device)`, with one

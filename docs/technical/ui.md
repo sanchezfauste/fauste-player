@@ -38,7 +38,7 @@ Each frame, `AppUi::ui`:
 5. requests a repaint: continuously while anything plays, fades or cues,
    otherwise every 100 ms for the clock.
 
-The UI keeps only **view state**: selection, drag target, meter peak holds,
+The UI keeps only **view state**: selection, drag target,
 column widths being dragged, the Settings section. Everything else comes
 from the snapshot.
 

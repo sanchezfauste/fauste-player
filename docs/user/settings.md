@@ -36,6 +36,31 @@ the device is reopened when it comes back (see
 | Automatic mix at the MIX point | On | Overlap tracks in continuous mode |
 | End-of-track warning | 10 s | When the countdown starts blinking red |
 
+## Meters
+
+Changes apply at once.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| Meter type | Digital peak | How the bar rises and falls, after a broadcast standard (see below) |
+| Rise time, Fall rate | 5 ms, 11.8 dB/s | Only for **Custom** |
+| True peak | Off | Measure between samples (4× oversampled, ITU-R BS.1770). It shows peaks that exceed 0 dBFS after conversion, which a sample-peak meter misses. |
+| Scale floor | −60 dBFS | The bottom of the scale |
+| Peak hold | 2 s | How long the highest level stays lit; 0 turns it off |
+| Alignment level | −18 dBFS | Marked on the scale (EBU R68) |
+| Warning from | −9 dBFS | Yellow from here (EBU permitted maximum) |
+| Danger from | −3 dBFS | Red from here |
+| Loudness readout | Short-term | The loudness under the meter: off, momentary (last 400 ms) or short-term (last 3 s), EBU R128 |
+| Loudness target | −23 LUFS | The readout is green within ±1 LU (EBU R128) |
+
+| Meter type | Standard | Behaviour |
+|---|---|---|
+| Digital peak | IEC 60268-18 | Shows every peak at once; falls 20 dB in 1.7 s |
+| EBU PPM | IEC 60268-10 type IIb | Ignores peaks shorter than about 10 ms; falls 24 dB in 2.8 s |
+| DIN PPM | IEC 60268-10 type I | Ignores peaks shorter than about 5 ms; falls 20 dB in 1.7 s |
+| VU | IEC 60268-17 | Average (RMS) level, rising and falling in 300 ms; a sine reads its peak level |
+| Custom | — | Your rise time and fall rate |
+
 ## Analysis
 
 The thresholds described in [Markers and mixing](markers-and-mixing.md).

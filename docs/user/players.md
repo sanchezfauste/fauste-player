@@ -18,7 +18,16 @@ playlist tabs, transport, volume and outputs.
 ## Info row
 
 - **Cover** of the track on air, or a vinyl placeholder.
-- **Stereo meter:** 20 segments, green, yellow and red, with peak hold.
+- **Stereo meter:** the level the player puts out, after its volume.
+  - The scale runs from the floor (−60 dBFS by default) to 0 dBFS: green,
+    yellow from the warning level (−9 dBFS), and red from the danger level
+    (−3 dBFS).
+  - A tick between the channels marks the alignment level (−18 dBFS).
+  - The highest level stays lit for a moment (the peak hold).
+  - The number underneath is the loudness in LUFS (EBU R128), green within
+    ±1 LU of the target (−23 LUFS).
+  - The meter type and every level can be changed in
+    [Settings → Meters](settings.md#meters).
 - **Volume fader:** drag it or use the mouse wheel, one step per notch. The
   tooltip shows the level in dB; the top is 0 dB and the bottom is silence.
 - **Title, artist** and the **next** line, with a green square. While CUE is
