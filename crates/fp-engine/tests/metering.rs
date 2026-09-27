@@ -473,3 +473,124 @@ fn the_true_peak_filter_is_the_one_bs_1770_publishes() {
         }
     }
 }
+
+/// A programme of 1 kHz stereo tones (`Some(dBFS)`) and silences (`None`),
+/// each lasting its seconds, measured like the mixer does in 5 ms ticks.
+fn programme(parts: &[(Option<f64>, f64)]) -> Vec<MeterInput> {
+    let rate = 48_000.0;
+    let mut samples = Vec::new();
+    let mut n = 0u64;
+    for (level, secs) in parts {
+        let amp = level.map_or(0.0, |db| 10f64.powf(db / 20.0));
+        for _ in 0..(secs * rate).round() as usize {
+            samples.push(amp * (std::f64::consts::TAU * 1_000.0 * n as f64 / rate).sin());
+            n += 1;
+        }
+    }
+    let mut k = [KWeighting::new(48_000), KWeighting::new(48_000)];
+    samples
+        .chunks(240)
+        .map(|chunk| {
+            let mut input = MeterInput {
+                frames: chunk.len() as u64,
+                ..MeterInput::default()
+            };
+            for x in chunk {
+                for (ch, kw) in k.iter_mut().enumerate() {
+                    let w = kw.process(*x);
+                    input.k_sum[ch] += w * w;
+                }
+            }
+            input
+        })
+        .collect()
+}
+
+fn readings(inputs: &[MeterInput]) -> Vec<MeterReading> {
+    let c = MeterConfig::default();
+    let mut m = MeterState::default();
+    inputs.iter().map(|i| m.update(*i, TICK, &c)).collect()
+}
+
+#[test]
+fn ebu_tech_3341_case_2_reads_minus_33_lufs() {
+    let r = readings(&programme(&[(Some(-33.0), 5.0)]));
+    let last = r.last().unwrap();
+    assert!((last.momentary_lufs.unwrap() + 33.0).abs() <= 0.1);
+    assert!((last.short_term_lufs.unwrap() + 33.0).abs() <= 0.1);
+}
+
+#[test]
+fn ebu_tech_3341_case_9_short_term_is_constant_after_3_s() {
+    let parts: Vec<_> = (0..5)
+        .flat_map(|_| [(Some(-20.0), 1.34), (Some(-30.0), 1.66)])
+        .collect();
+    let r = readings(&programme(&parts));
+    for (i, reading) in r.iter().enumerate().skip((3.0 / TICK) as usize) {
+        let s = reading.short_term_lufs.unwrap();
+        assert!(
+            (s + 23.0).abs() <= 0.1,
+            "at {:.3} s: S = {s}",
+            i as f64 * TICK
+        );
+    }
+}
+
+#[test]
+fn ebu_tech_3341_case_12_momentary_is_constant_after_1_s() {
+    let parts: Vec<_> = (0..25)
+        .flat_map(|_| [(Some(-20.0), 0.18), (Some(-30.0), 0.22)])
+        .collect();
+    let r = readings(&programme(&parts));
+    for (i, reading) in r.iter().enumerate().skip((1.0 / TICK) as usize) {
+        let m = reading.momentary_lufs.unwrap();
+        assert!(
+            (m + 23.0).abs() <= 0.1,
+            "at {:.3} s: M = {m}",
+            i as f64 * TICK
+        );
+    }
+}
+
+/// Tech 3341's live-meter cases: 20 segments of `lead · i` silence, a tone
+/// of `tone` seconds at −38 + i dBFS, then `tone − lead · i` of silence.
+/// The maximum of `pick` in each segment must step from −38 to −19 LUFS.
+fn live_case(lead: f64, tone: f64, pick: fn(&MeterReading) -> Option<f32>) {
+    let parts: Vec<_> = (0..20)
+        .flat_map(|i| {
+            let i = f64::from(i);
+            [
+                (None, lead * i),
+                (Some(-38.0 + i), tone),
+                (None, tone - lead * i),
+            ]
+        })
+        .collect();
+    let r = readings(&programme(&parts));
+    let mut start = 0.0;
+    for i in 0..20 {
+        let span = 2.0 * tone;
+        let from = (start / TICK) as usize;
+        let to = (((start + span) / TICK) as usize).min(r.len());
+        let max = r[from..to]
+            .iter()
+            .filter_map(pick)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let expected = -38.0 + i as f32;
+        assert!(
+            (max - expected).abs() <= 0.1,
+            "segment {i}: max {max}, expected {expected}"
+        );
+        start += span;
+    }
+}
+
+#[test]
+fn ebu_tech_3341_case_11_short_term_maxima_step_by_1_lu() {
+    live_case(0.15, 3.0, |r| r.short_term_lufs);
+}
+
+#[test]
+fn ebu_tech_3341_case_14_momentary_maxima_step_by_1_lu() {
+    live_case(0.02, 0.4, |r| r.momentary_lufs);
+}

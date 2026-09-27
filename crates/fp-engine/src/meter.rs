@@ -6,10 +6,12 @@ use fp_model::{MeterBallistics, MeterConfig};
 
 /// The lowest level a meter reports, in dBFS (below any display floor).
 pub const SILENCE_DB: f32 = -120.0;
-/// Loudness blocks (ITU-R BS.1770 uses 100 ms steps).
-const BIN_SECS: f64 = 0.1;
-const MOMENTARY_BINS: usize = 4;
-const SHORT_TERM_BINS: usize = 30;
+/// Loudness blocks: 5 ms, the conductor's tick, so the 400 ms and 3 s
+/// windows slide finely enough to meet EBU Tech 3341's live-meter cases
+/// (tones offset by 20 ms steps).
+const BIN_SECS: f64 = 0.005;
+const MOMENTARY_BINS: usize = 80;
+const SHORT_TERM_BINS: usize = 600;
 /// The VU responds to the rectified average; a sine's is 2/π of its peak,
 /// and the scale is calibrated so that a sine reads its peak level (AES17).
 const VU_SINE_CALIBRATION: f64 = std::f64::consts::FRAC_PI_2;
@@ -166,14 +168,27 @@ struct Bin {
     frames: u64,
 }
 
-/// The last 3 s of 100 ms blocks, in a fixed ring.
-#[derive(Debug, Clone, Copy, Default)]
+/// The last 3 s of blocks, in a ring allocated once (on the conductor
+/// thread, never the audio one).
+#[derive(Debug, Clone)]
 struct LoudnessWindow {
-    bins: [Bin; SHORT_TERM_BINS],
+    bins: Vec<Bin>,
     next: usize,
     filled: usize,
     current: Bin,
     current_secs: f64,
+}
+
+impl Default for LoudnessWindow {
+    fn default() -> Self {
+        Self {
+            bins: vec![Bin::default(); SHORT_TERM_BINS],
+            next: 0,
+            filled: 0,
+            current: Bin::default(),
+            current_secs: 0.0,
+        }
+    }
 }
 
 impl LoudnessWindow {
@@ -234,7 +249,7 @@ impl LoudnessWindow {
 }
 
 /// One player's meter.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct MeterState {
     linear: [f32; 2],
     hold_db: [f32; 2],
