@@ -73,8 +73,8 @@ pub struct PlayerTelemetry {
     /// Position of the current source in track seconds.
     pub position_secs: Option<f64>,
     pub cue_position_secs: Option<f64>,
-    pub peak_l: f32,
-    pub peak_r: f32,
+    /// The player's meter, filled in by the conductor (meters spec M2).
+    pub meter: crate::meter::MeterReading,
     pub underruns: u64,
     /// The current source reaches its Main device unchanged: the BP badge
     /// (Phase 4 spec B5).
@@ -179,6 +179,8 @@ pub struct Engine {
     /// The latest time `execute` or `tick` was given, for bus reopens made
     /// deep inside an action.
     now: Instant,
+    /// Whether meters measure true peak (new buses start with it).
+    true_peak: bool,
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -227,6 +229,7 @@ impl Engine {
             tones: Vec::new(),
             cartwall: None,
             now: Instant::now(),
+            true_peak: false,
         }
     }
 
@@ -395,6 +398,41 @@ impl Engine {
                 .load(std::sync::atomic::Ordering::Acquire)
     }
 
+    /// What `player`'s sources on air (current and fading out) measured
+    /// since the last call; the measurement is taken, not copied.
+    pub fn take_meter_input(&self, player: PlayerId) -> crate::meter::MeterInput {
+        let mut input = crate::meter::MeterInput::default();
+        let Some(rt) = self.players.get(&player) else {
+            return input;
+        };
+        for p in rt.current.iter().chain(rt.outgoing.iter()) {
+            let s = &p.shared;
+            input.merge(crate::meter::MeterInput {
+                peak: [s.peak_l.take(), s.peak_r.take()],
+                sum_sq: [s.sum_sq_l.take(), s.sum_sq_r.take()],
+                k_sum: [s.k_sum_l.take(), s.k_sum_r.take()],
+                frames: s
+                    .measured_frames
+                    .swap(0, std::sync::atomic::Ordering::AcqRel),
+            });
+        }
+        input
+    }
+
+    /// Meters measure true peak on every bus (meters spec M1).
+    pub fn set_true_peak(&mut self, on: bool) {
+        self.true_peak = on;
+        for bus in self.buses.values() {
+            bus.shared()
+                .true_peak
+                .store(on, std::sync::atomic::Ordering::Release);
+        }
+    }
+
+    pub fn true_peak(&self) -> bool {
+        self.true_peak
+    }
+
     pub fn telemetry(&self, player: PlayerId) -> PlayerTelemetry {
         let Some(rt) = self.players.get(&player) else {
             return PlayerTelemetry::default();
@@ -402,18 +440,10 @@ impl Engine {
         let position = |p: &Playing| {
             p.start_secs + p.shared.frames_played() as f64 / f64::from(self.rate_of(&p.bus))
         };
-        let (peak_l, peak_r) = rt
-            .current
-            .iter()
-            .chain(rt.outgoing.iter())
-            .fold((0.0f32, 0.0f32), |(l, r), p| {
-                (l.max(p.shared.peak_l.take()), r.max(p.shared.peak_r.take()))
-            });
         PlayerTelemetry {
             position_secs: rt.current.as_ref().map(position),
             cue_position_secs: rt.cue_src.as_ref().map(position),
-            peak_l,
-            peak_r,
+            meter: crate::meter::MeterReading::default(),
             underruns: rt.current.as_ref().map_or(0, |p| {
                 p.shared
                     .underruns
@@ -676,6 +706,9 @@ impl Engine {
                 startup_grace: Duration::from_secs_f64(t.watchdog_startup_grace_ms / 1000.0),
             };
             let bus = Bus::open(key.clone(), backend, config, 8, mixer, timing, now);
+            bus.shared()
+                .true_peak
+                .store(self.true_peak, std::sync::atomic::Ordering::Release);
             self.buses.insert(key.clone(), bus);
         }
         // Capacity derived from routing (spec §4.3): per player on Main, a
