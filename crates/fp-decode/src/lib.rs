@@ -10,6 +10,7 @@ use std::path::Path;
 
 mod ape;
 mod dsd;
+mod opus;
 mod symph;
 mod wavpack;
 

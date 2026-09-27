@@ -1625,6 +1625,8 @@ version = "0.1.0"
 dependencies = [
  "ape-decoder",
  "hound",
+ "opus-decoder",
+ "opus-pure",
  "symphonia",
  "tempfile",
  "wavicle",
@@ -3029,6 +3031,21 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
+name = "opus-decoder"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15ae32c275dabb0cd2c863460bf349e9abc3568ba2abf0f9eb7b7d2edeeed07e"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "opus-pure"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de6a3cef053e1fdea38a5e50edb0789590a31184c5a59f6cd5e462fe844793e7"
 
 [[package]]
 name = "orbclient"
