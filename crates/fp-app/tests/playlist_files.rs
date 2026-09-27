@@ -40,9 +40,10 @@ fn imported_playlists_become_new_playlists() {
     }
     let (name, paths) = created.expect("a playlist is created");
     assert_eq!(name, "Morning show");
+    // A root-relative entry keeps the playlist's drive on Windows.
     assert_eq!(
         paths,
-        vec![PathBuf::from("/music/a.mp3"), dir.path().join("b.flac")]
+        vec![dir.path().join("/music/a.mp3"), dir.path().join("b.flac")]
     );
     h.run_steps(2);
     assert!(
