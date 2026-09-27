@@ -73,19 +73,35 @@ struct Ballistics {
     release_db_per_sec: f32,
 }
 
-/// The programme-meter integration time (ms, 0 for none) and fall rate
-/// (dB/s) the mixer applies per sample for `c` (meters spec M1): a
-/// programme meter integrates each sample, so peaks shorter than the
-/// integration time read lower.
-pub fn mixer_integration(c: &MeterConfig) -> (f32, f32) {
+/// EBU PPM integrator (two stages, ms), fitted so that 5 kHz bursts meet
+/// EBU Tech 3205-E table 2 (100, 10, 5, 1.5 and 0.5 ms) within tolerance.
+/// The fit's widest error is 86 % of a tolerance (the 10 ms point).
+const EBU_PPM_TAUS: (f32, f32) = (2.25, 0.95);
+/// The same integrator reads a burst 2 dB low (the IEC definition of the
+/// integration time) at this duration, within Tech 3205's 10 ± 2 ms.
+const EBU_PPM_INTEGRATION_MS: f32 = 8.365;
+
+/// The integrator scaled to an integration time of `ms` (IEC definition: a
+/// 5 kHz burst that long reads 2 dB below the steady tone).
+fn taus_for_integration(ms: f32) -> (f32, f32) {
+    let scale = ms / EBU_PPM_INTEGRATION_MS;
+    (EBU_PPM_TAUS.0 * scale, EBU_PPM_TAUS.1 * scale)
+}
+
+/// The programme-meter integrator the mixer runs per sample for `c` (its
+/// two time constants in ms, 0 for none) and the fall rate in dB/s
+/// (meters spec M1): a programme meter integrates every sample, so peaks
+/// shorter than its integration time read lower.
+pub fn mixer_integration(c: &MeterConfig) -> (f32, f32, f32) {
     let b = ballistics(c);
-    let integration = match c.ballistics {
-        MeterBallistics::EbuPpm => 10.0,
-        MeterBallistics::DinPpm => 5.0,
-        MeterBallistics::Custom => c.attack_ms,
-        MeterBallistics::DigitalPeak | MeterBallistics::Vu => 0.0,
+    let (tau1, tau2) = match c.ballistics {
+        MeterBallistics::EbuPpm => EBU_PPM_TAUS,
+        // IEC 60268-10 type I: 5 ms integration time.
+        MeterBallistics::DinPpm => taus_for_integration(5.0),
+        MeterBallistics::Custom if c.attack_ms > 0.0 => taus_for_integration(c.attack_ms),
+        _ => (0.0, 0.0),
     };
-    (integration, b.release_db_per_sec)
+    (tau1, tau2, b.release_db_per_sec)
 }
 
 fn ballistics(c: &MeterConfig) -> Ballistics {

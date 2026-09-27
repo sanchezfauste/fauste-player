@@ -116,9 +116,10 @@ pub struct BusShared {
     pub sample_rate: AtomicU32,
     /// Measure true peak instead of sample peak (meters spec M1).
     pub true_peak: AtomicBool,
-    /// Programme-meter integration time in ms (0: none) and its fall rate
-    /// in dB/s, applied per sample (IEC 60268-10).
-    pub integration_ms: AtomicF32,
+    /// Programme-meter integrator time constants in ms (0: none) and its
+    /// fall rate in dB/s, applied per sample (see `meter::mixer_integration`).
+    pub ppm_tau1_ms: AtomicF32,
+    pub ppm_tau2_ms: AtomicF32,
     pub fall_db_per_sec: AtomicF32,
 }
 
@@ -192,8 +193,8 @@ pub struct Slot {
     /// Whether true peak was measured last block (its history restarts
     /// when it is switched on).
     true_peak_on: bool,
-    /// Programme-meter integrator per channel.
-    ppm: [f32; 2],
+    /// Programme-meter integrator per channel: two stages.
+    ppm: [[f32; 2]; 2],
 }
 
 /// The conductor's side of a mixer.
@@ -306,7 +307,7 @@ impl Mixer {
                         k_weighting: [KWeighting::new(rate); 2],
                         true_peak: [TruePeak::default(); 2],
                         true_peak_on: false,
-                        ppm: [0.0; 2],
+                        ppm: [[0.0; 2]; 2],
                     });
                 } else {
                     // Occupied or out of range: hand the source straight back.
@@ -456,37 +457,49 @@ impl Mixer {
 #[derive(Debug, Clone, Copy)]
 struct MeterMode {
     true_peak: bool,
-    /// Programme-meter rise per sample (0: none) and fall factor per sample.
-    attack: f32,
+    /// A programme meter: the two-stage integrator runs.
+    programme: bool,
+    /// Per-sample charge factors of the two stages, and the fall factor.
+    charge: [f32; 2],
     decay: f32,
 }
 
 impl MeterMode {
     fn read(shared: &BusShared) -> Self {
         let rate = shared.sample_rate.load(Ordering::Relaxed).max(1) as f32;
-        let integration = shared.integration_ms.load();
-        // A first-order rise with τ = integration / 3 reads a tone burst of
-        // the integration time within about 0.5 dB of steady state.
-        let attack = if integration > 0.0 {
-            1.0 - (-3_000.0 / (integration * rate)).exp()
-        } else {
-            0.0
+        let factor = |tau_ms: f32| {
+            if tau_ms > 0.0 {
+                1.0 - (-1_000.0 / (tau_ms * rate)).exp()
+            } else {
+                1.0
+            }
         };
+        let (tau1, tau2) = (shared.ppm_tau1_ms.load(), shared.ppm_tau2_ms.load());
         let fall = shared.fall_db_per_sec.load().max(0.0);
         Self {
             true_peak: shared.true_peak.load(Ordering::Relaxed),
-            attack,
+            programme: tau1 > 0.0 || tau2 > 0.0,
+            charge: [factor(tau1), factor(tau2)],
             decay: 10f32.powf(-fall / (20.0 * rate)),
         }
     }
 
-    fn integrate(&self, env: &mut f32, level: f32) -> f32 {
-        if level > *env {
-            *env += (level - *env) * self.attack;
+    /// A rectifier charging a first stage, which charges a second one; each
+    /// only charges upwards and falls at the meter's fall rate.
+    fn integrate(&self, stages: &mut [f32; 2], level: f32) -> f32 {
+        let [a, b] = stages;
+        let [k1, k2] = self.charge;
+        *a = if level > *a {
+            *a + (level - *a) * k1
         } else {
-            *env *= self.decay;
-        }
-        *env
+            *a * self.decay
+        };
+        *b = if *a > *b {
+            *b + (*a - *b) * k2
+        } else {
+            *b * self.decay
+        };
+        *b
     }
 }
 
@@ -615,7 +628,7 @@ fn render_slot(
             } else {
                 (l.abs(), r.abs())
             };
-            if meter.attack > 0.0 {
+            if meter.programme {
                 let [env_l, env_r] = &mut slot.ppm;
                 level_l = meter.integrate(env_l, level_l);
                 level_r = meter.integrate(env_r, level_r);

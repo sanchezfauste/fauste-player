@@ -206,8 +206,7 @@ impl Conductor {
         }
         let integration = crate::meter::mixer_integration(&self.state.config.meter);
         if self.engine.meter_integration() != integration {
-            self.engine
-                .set_meter_integration(integration.0, integration.1);
+            self.engine.set_meter_integration(integration);
         }
         let dt = self
             .metered_at
