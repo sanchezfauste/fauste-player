@@ -135,7 +135,7 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 | Field | Default | Range | Meaning |
 |---|---|---|---|
 | `ballistics` | `DigitalPeak` | `DigitalPeak`, `EbuPpm`, `DinPpm`, `Vu`, `Custom` | meter type (IEC 60268-18, 60268-10 IIb and I, 60268-17) |
-| `attack_ms` | 5 | 0 … 1000 | rise integration for `Custom` |
+| `attack_ms` | 5 | 0 … 1000 | integration time for `Custom` (a tone burst that long reads 2 dB low; 0 = instant) |
 | `release_db_per_sec` | 11.8 | 1 … 100 | fall for `Custom` |
 | `true_peak` | false | | 4× oversampled peak |
 | `floor_db` | −60 | −96 … −20 | bottom of the scale |

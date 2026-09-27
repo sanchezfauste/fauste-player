@@ -43,8 +43,8 @@ Changes apply at once.
 | Setting | Default | Meaning |
 |---|---|---|
 | Meter type | Digital peak | How the bar rises and falls, after a broadcast standard (see below) |
-| Rise time, Fall rate | 5 ms, 11.8 dB/s | Only for **Custom** |
-| True peak | Off | Measure between samples (4× oversampled, ITU-R BS.1770). It shows peaks that exceed 0 dBFS after conversion, which a sample-peak meter misses. |
+| Rise time, Fall rate | 5 ms, 11.8 dB/s | Only for **Custom**. The rise time is an integration time: a tone burst that long reads 2 dB low; 0 shows every peak. |
+| True peak | Off | Measure between samples, with the 4× oversampling filter ITU-R BS.1770 publishes. It shows peaks that exceed 0 dBFS after conversion, which a sample-peak meter misses. |
 | Scale floor | −60 dBFS | The bottom of the scale |
 | Peak hold | 2 s | How long the highest level stays lit; 0 turns it off |
 | Alignment level | −18 dBFS | Marked on the scale (EBU R68) |
@@ -56,9 +56,9 @@ Changes apply at once.
 | Meter type | Standard | Behaviour |
 |---|---|---|
 | Digital peak | IEC 60268-18 | Shows every peak at once; falls 20 dB in 1.7 s |
-| EBU PPM | IEC 60268-10 type IIb | Ignores peaks shorter than about 10 ms; falls 24 dB in 2.8 s |
-| DIN PPM | IEC 60268-10 type I | Ignores peaks shorter than about 5 ms; falls 20 dB in 1.5 s |
-| VU | IEC 60268-17 | Average (RMS) level, rising and falling in 300 ms; a sine reads its peak level |
+| EBU PPM | IEC 60268-10 type IIb | Peaks shorter than 10 ms read lower (a 10 ms tone burst reads 2 dB low, a 0.5 ms one about 17 dB low), as EBU Tech 3205 specifies; falls 24 dB in 2.8 s |
+| DIN PPM | IEC 60268-10 type I | The same with a 5 ms integration time; falls 20 dB in 1.5 s |
+| VU | IEC 60268-17 | The average level, with the needle movement of a VU meter: 99 % in 300 ms, with a slight overshoot; a sine reads its peak level |
 | Custom | — | Your rise time and fall rate |
 
 ## Analysis
