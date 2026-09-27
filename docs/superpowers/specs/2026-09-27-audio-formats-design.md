@@ -15,7 +15,7 @@
 | Ogg Vorbis | `ogg`, `oga` | symphonia | unchanged |
 | Matroska/WebM | `mka`, `mkv`, `webm` | symphonia | plus Opus inside |
 | **Opus** | `opus` (and in Ogg or WebM) | `opus-decoder`, a pure-Rust decoder that forbids `unsafe`, registered as a symphonia codec | always decoded at 48 kHz |
-| **WavPack** | `wv` | `wavicle` (pure Rust, `forbid(unsafe_code)`) | lossless and hybrid (lossy part); 8-bit files are refused |
+| **WavPack** | `wv` | `wavicle` (pure Rust, `forbid(unsafe_code)`) | lossless mono and stereo: 16-, 24- and 32-bit integer and 32-bit float. Hybrid (lossy), multichannel and 8-bit files are refused (the decoder does not support them) |
 | **Monkey's Audio** | `ape` | `ape-decoder` (pure Rust, `deny(unsafe_code)`) | frame-accurate seek |
 | **DSD** | `dsf`, `dff` | our own reader and DSD-to-PCM converter | DSD64 to DSD512; DST-compressed DFF is refused |
 

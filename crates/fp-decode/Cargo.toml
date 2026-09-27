@@ -8,10 +8,12 @@ publish.workspace = true
 
 [dependencies]
 symphonia.workspace = true
+wavicle.workspace = true
 
 [dev-dependencies]
 hound.workspace = true
 tempfile.workspace = true
+wavicle = { workspace = true, features = ["encode"] }
 
 [lints]
 workspace = true
