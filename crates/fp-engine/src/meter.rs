@@ -73,18 +73,33 @@ struct Ballistics {
     release_db_per_sec: f32,
 }
 
+/// The programme-meter integration time (ms, 0 for none) and fall rate
+/// (dB/s) the mixer applies per sample for `c` (meters spec M1): a
+/// programme meter integrates each sample, so peaks shorter than the
+/// integration time read lower.
+pub fn mixer_integration(c: &MeterConfig) -> (f32, f32) {
+    let b = ballistics(c);
+    let integration = match c.ballistics {
+        MeterBallistics::EbuPpm => 10.0,
+        MeterBallistics::DinPpm => 5.0,
+        MeterBallistics::Custom => c.attack_ms,
+        MeterBallistics::DigitalPeak | MeterBallistics::Vu => 0.0,
+    };
+    (integration, b.release_db_per_sec)
+}
+
 fn ballistics(c: &MeterConfig) -> Ballistics {
-    // A first-order rise with τ = integration / 3 reads a burst of the
-    // integration time within about 0.5 dB of steady state.
-    let peak = |integration_ms: f64, fall_db: f32, fall_secs: f32| Ballistics {
+    // Peak meters rise at once here: programme meters are integrated per
+    // sample in the mixer (`mixer_integration`).
+    let peak = |fall_db: f32, fall_secs: f32| Ballistics {
         rms: false,
-        attack_tau: integration_ms / 3_000.0,
+        attack_tau: 0.0,
         release_db_per_sec: fall_db / fall_secs,
     };
     match c.ballistics {
-        MeterBallistics::DigitalPeak => peak(0.0, 20.0, 1.7),
-        MeterBallistics::EbuPpm => peak(10.0, 24.0, 2.8),
-        MeterBallistics::DinPpm => peak(5.0, 20.0, 1.7),
+        MeterBallistics::DigitalPeak => peak(20.0, 1.7),
+        MeterBallistics::EbuPpm => peak(24.0, 2.8),
+        MeterBallistics::DinPpm => peak(20.0, 1.5),
         // 99 % in 300 ms: τ = 0.3 / ln(100), symmetric.
         MeterBallistics::Vu => Ballistics {
             rms: true,
@@ -93,7 +108,7 @@ fn ballistics(c: &MeterConfig) -> Ballistics {
         },
         MeterBallistics::Custom => Ballistics {
             rms: false,
-            attack_tau: f64::from(c.attack_ms) / 3_000.0,
+            attack_tau: 0.0,
             release_db_per_sec: c.release_db_per_sec,
         },
     }
@@ -133,20 +148,37 @@ struct LoudnessWindow {
 }
 
 impl LoudnessWindow {
-    fn add(&mut self, input: &MeterInput, dt: f64) {
-        for (k, add) in self.current.k_sum.iter_mut().zip(input.k_sum) {
+    /// Adds what was measured over `dt`; `frames` also counts silence the
+    /// meter infers when nothing played (so the value falls, not freezes).
+    /// Time spanning several blocks is spread over them, frames included.
+    fn add(&mut self, k_sum: [f64; 2], frames: u64, dt: f64) {
+        for (k, add) in self.current.k_sum.iter_mut().zip(k_sum) {
             *k += add;
         }
-        self.current.frames += input.frames;
-        self.current_secs += dt;
-        if self.current_secs + 1e-9 >= BIN_SECS {
-            if let Some(slot) = self.bins.get_mut(self.next) {
-                *slot = self.current;
+        // Past a whole window, older time would only be overwritten.
+        let dt = dt.min(BIN_SECS * SHORT_TERM_BINS as f64);
+        let frames_per_sec = if dt > 0.0 { frames as f64 / dt } else { 0.0 };
+        if dt <= 0.0 {
+            self.current.frames += frames;
+            return;
+        }
+        let mut left = dt;
+        while left > 1e-12 {
+            let part = left.min(BIN_SECS - self.current_secs).max(0.0);
+            self.current.frames += (frames_per_sec * part).round() as u64;
+            self.current_secs += part;
+            left -= part;
+            if self.current_secs + 1e-9 >= BIN_SECS {
+                if let Some(slot) = self.bins.get_mut(self.next) {
+                    *slot = self.current;
+                }
+                self.next = (self.next + 1) % SHORT_TERM_BINS;
+                self.filled = (self.filled + 1).min(SHORT_TERM_BINS);
+                self.current = Bin::default();
+                self.current_secs = 0.0;
+            } else if part <= 0.0 {
+                break;
             }
-            self.next = (self.next + 1) % SHORT_TERM_BINS;
-            self.filled = (self.filled + 1).min(SHORT_TERM_BINS);
-            self.current = Bin::default();
-            self.current_secs -= BIN_SECS;
         }
     }
 
@@ -180,6 +212,46 @@ pub struct MeterState {
     hold_left: [f32; 2],
     loudness: LoudnessWindow,
     started: bool,
+    /// Seconds since a tick last brought audio.
+    idle_secs: f64,
+    /// Frames and seconds measured while audio flowed, for the rate.
+    flowing_frames: f64,
+    flowing_secs: f64,
+    /// Time waited for a block, applied to the level when it comes.
+    pending_secs: f64,
+}
+
+/// Device callbacks can be longer than a tick: a tick without audio this
+/// soon after the last one only means the next block has not come yet.
+const GAP_SECS: f64 = 0.05;
+/// Assumed until audio has flowed long enough to measure the rate.
+const DEFAULT_RATE: f64 = 48_000.0;
+
+/// Moves one channel's level for `span` seconds of measured audio.
+fn move_level(linear: &mut f32, b: &Ballistics, input: &MeterInput, ch: usize, span: f64) {
+    let target = if b.rms {
+        let sum = input.sum_sq.get(ch).copied().unwrap_or(0.0);
+        let rms = if input.frames > 0 {
+            (sum / input.frames as f64).sqrt() as f32
+        } else {
+            0.0
+        };
+        from_db(to_db(rms) + SINE_RMS_OFFSET_DB)
+    } else {
+        input.peak.get(ch).copied().unwrap_or(0.0)
+    };
+    let approach = if b.attack_tau > 0.0 {
+        (1.0 - (-span / b.attack_tau).exp()) as f32
+    } else {
+        1.0
+    };
+    if target >= *linear || b.rms {
+        // A VU moves with the same time constant both ways.
+        *linear += (target - *linear) * approach;
+    } else {
+        let fallen = to_db(*linear) - b.release_db_per_sec * span as f32;
+        *linear = from_db(fallen.max(to_db(target)));
+    }
 }
 
 impl MeterState {
@@ -191,35 +263,32 @@ impl MeterState {
         }
         let b = ballistics(c);
         let dt = dt_secs.max(0.0);
+        if input.frames > 0 {
+            self.idle_secs = 0.0;
+            self.flowing_frames += input.frames as f64;
+            self.flowing_secs += dt;
+        } else {
+            self.idle_secs += dt;
+        }
+        // A device block can span several ticks: a tick without audio this
+        // soon after the last block only means the next one has not come.
+        // The level then stands, and moves for the whole span when it does.
+        let waiting = input.frames == 0 && self.idle_secs < GAP_SECS;
+        let span = if waiting {
+            self.pending_secs += dt;
+            None
+        } else {
+            let span = self.pending_secs + dt;
+            self.pending_secs = 0.0;
+            Some(span)
+        };
         let mut level_db = [SILENCE_DB; 2];
         for ch in 0..2 {
-            let target = if b.rms {
-                let sum = input.sum_sq.get(ch).copied().unwrap_or(0.0);
-                let rms = if input.frames > 0 {
-                    (sum / input.frames as f64).sqrt() as f32
-                } else {
-                    0.0
-                };
-                from_db(to_db(rms) + SINE_RMS_OFFSET_DB)
-            } else {
-                input.peak.get(ch).copied().unwrap_or(0.0)
-            };
             let Some(linear) = self.linear.get_mut(ch) else {
                 continue;
             };
-            let approach = if b.attack_tau > 0.0 {
-                (1.0 - (-dt / b.attack_tau).exp()) as f32
-            } else {
-                1.0
-            };
-            if target >= *linear {
-                *linear += (target - *linear) * approach;
-            } else if b.rms {
-                // VU: the same time constant both ways.
-                *linear += (target - *linear) * approach;
-            } else {
-                let fallen = to_db(*linear) - b.release_db_per_sec * dt as f32;
-                *linear = from_db(fallen.max(to_db(target)));
+            if let Some(span) = span {
+                move_level(linear, &b, &input, ch, span);
             }
             let db = to_db(*linear);
             if let Some(l) = level_db.get_mut(ch) {
@@ -239,7 +308,19 @@ impl MeterState {
                 }
             }
         }
-        self.loudness.add(&input, dt);
+        let frames = if input.frames == 0 && !waiting {
+            // Nothing playing: silence, counted as time so the loudness
+            // falls instead of freezing at the last value.
+            let rate = if self.flowing_secs > 0.5 {
+                self.flowing_frames / self.flowing_secs
+            } else {
+                DEFAULT_RATE
+            };
+            (dt * rate).round() as u64
+        } else {
+            input.frames
+        };
+        self.loudness.add(input.k_sum, frames, dt);
         MeterReading {
             level_db,
             hold_db: self.hold_db,

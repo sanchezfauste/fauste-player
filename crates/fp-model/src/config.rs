@@ -686,6 +686,13 @@ impl Config {
             "meter.loudness_target_lufs",
             &mut w,
         );
+        if m.reference_dbfs <= m.floor_db {
+            m.reference_dbfs = m.floor_db + 1.0;
+            w.push(ConfigWarning {
+                field: "meter.reference_dbfs",
+                message: "raised above the scale floor".to_owned(),
+            });
+        }
         if m.warning_dbfs > m.danger_dbfs {
             m.danger_dbfs = m.warning_dbfs;
             w.push(ConfigWarning {

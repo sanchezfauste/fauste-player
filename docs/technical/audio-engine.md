@@ -53,7 +53,12 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
 - **The mixer measures** each slot after its gain, on the real-time thread,
   without allocating.
   - The peak: the sample peak, or with `BusShared::true_peak` the peak of a
-    4× windowed-sinc interpolation (`truepeak.rs`).
+    4× windowed-sinc interpolation (`truepeak.rs`, never below the sample
+    itself). For programme meters it is integrated per sample
+    (`BusShared::integration_ms`, rise τ = integration / 3, fall at the
+    preset's rate), so short peaks read lower.
+  - Filter states are flushed below 1e-20, so silence never runs on
+    subnormal numbers.
   - Sums of squares.
   - K-weighted sums of squares (`kweight.rs`). These are the ITU-R BS.1770
     pre-filter and RLB high-pass, derived for the bus rate
@@ -65,10 +70,13 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   - Every tick, `Engine::take_meter_input` takes a player's measurement
     (current plus fading sources), so nothing is lost between interface
     frames.
-  - `meter::MeterState` applies the configured ballistics: IEC 60268-18
-    digital peak, IEC 60268-10 EBU and DIN programme meters (a first-order
-    rise with τ = integration / 3), IEC 60268-17 VU (RMS, sine-calibrated),
-    or custom rates.
+  - `meter::MeterState` applies the configured ballistics: the fall of
+    IEC 60268-18 digital peak (20 dB / 1.7 s) and IEC 60268-10 EBU
+    (24 dB / 2.8 s) and DIN (20 dB / 1.5 s) meters, IEC 60268-17 VU (RMS,
+    sine-calibrated, 300 ms both ways), or custom rates.
+  - A tick without a device block within 50 ms leaves the level standing,
+    and the next block moves it for the whole span. Longer, the meter
+    counts silence (the bar falls, and loudness counts silent frames).
   - It keeps the peak hold, and computes momentary (400 ms) and short-term
     (3 s) loudness from 100 ms blocks: L = −0.691 + 10·log10(z_L + z_R).
   - The reading goes into `PlayerTelemetry::meter`.

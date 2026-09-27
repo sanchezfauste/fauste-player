@@ -56,7 +56,12 @@ struct State {
 
 impl State {
     fn process(&mut self, f: &Biquad, x: f64) -> f64 {
-        let y = f.b0 * x + f.b1 * self.x1 + f.b2 * self.x2 - f.a1 * self.y1 - f.a2 * self.y2;
+        let mut y = f.b0 * x + f.b1 * self.x1 + f.b2 * self.x2 - f.a1 * self.y1 - f.a2 * self.y2;
+        // During silence the recursion decays into subnormal numbers, slow
+        // on many CPUs: flush them (far below any audible level).
+        if y.abs() < 1e-20 {
+            y = 0.0;
+        }
         self.x2 = self.x1;
         self.x1 = x;
         self.y2 = self.y1;

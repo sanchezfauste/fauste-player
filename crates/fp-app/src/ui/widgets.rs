@@ -140,9 +140,8 @@ pub fn meter_segments(level_db: f32, hold_db: f32, c: &MeterConfig, count: usize
     let count = count.max(1);
     let floor = c.floor_db.min(-1.0);
     let step = -floor / count as f32;
-    let index_of = |db: f32| {
-        (db > floor && db <= 0.5).then(|| (((db - floor) / step) as usize).min(count - 1))
-    };
+    // Levels above 0 dBFS (overs, true peak) sit on the top segment.
+    let index_of = |db: f32| (db > floor).then(|| (((db - floor) / step) as usize).min(count - 1));
     let hold = index_of(hold_db).filter(|_| c.peak_hold_secs > 0.0 && hold_db >= level_db);
     let reference = index_of(c.reference_dbfs);
     (0..count)
@@ -175,7 +174,12 @@ pub fn loudness_line(r: &MeterReading, c: &MeterConfig) -> Option<(String, bool)
     };
     Some(match value {
         Some(lufs) => (
-            format!("{lufs:.1}"),
+            // One decimal while it fits the meter's width.
+            if lufs > -99.95 {
+                format!("{lufs:.1}")
+            } else {
+                format!("{lufs:.0}")
+            },
             (lufs - c.loudness_target_lufs).abs() <= 1.0,
         ),
         None => ("—".to_owned(), false),

@@ -39,3 +39,13 @@ fn a_config_without_meter_loads_defaults() {
     let c: Config = serde_json::from_str(r#"{ "players": { "count": 2 } }"#).unwrap();
     assert_eq!(c.meter, Config::default().meter);
 }
+
+#[test]
+fn the_alignment_mark_stays_above_the_floor() {
+    let mut c = Config::default();
+    c.meter.floor_db = -20.0;
+    c.meter.reference_dbfs = -30.0;
+    let warnings = c.validate();
+    assert!(c.meter.reference_dbfs > c.meter.floor_db);
+    assert!(warnings.iter().any(|w| w.field == "meter.reference_dbfs"));
+}

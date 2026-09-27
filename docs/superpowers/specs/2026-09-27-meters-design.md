@@ -32,11 +32,12 @@
   |---|---|---|---|---|
   | `DigitalPeak` (default) | IEC 60268-18 | peak | instant | 20 dB in 1.7 s |
   | `EbuPpm` | IEC 60268-10 type IIb | peak | integration 10 ms | 24 dB in 2.8 s |
-  | `DinPpm` | IEC 60268-10 type I | peak | integration 5 ms | 20 dB in 1.7 s |
+  | `DinPpm` | IEC 60268-10 type I | peak | integration 5 ms | 20 dB in 1.5 s |
   | `Vu` | IEC 60268-17 | RMS | 300 ms to 99 % | 300 ms (symmetric) |
   | `Custom` | — | peak | `attack_ms` | `release_db_per_sec` |
 
-  PPM integration is modelled as a first-order attack on the linear level, with a time constant `integration / 3`, so that a tone burst of the integration time reads within about 0.5 dB of steady state. This is a display approximation at the 5 ms tick; the standards' exact burst responses are not claimed.
+  Programme-meter integration (EBU, DIN and custom rise) runs per sample in the mixer (`BusShared::integration_ms`), as a first-order rise on |x| with a time constant `integration / 3`. A tone burst of the integration time reads within about 0.5 dB of steady state, and shorter peaks read lower (a 0.5 ms click reads about 17 dB low on the EBU meter). The standards' exact burst figures are not claimed.
+- **Ticks without a block:** a device block can span several 5 ms ticks. A tick with no audio less than 50 ms after the last block leaves the level standing, and the next block moves it for the whole span. Longer without audio counts as silence: the bar falls, and loudness counts the elapsed time as silent frames, so it falls instead of freezing.
 - **Peak hold:** the highest level is kept for `peak_hold_secs`, then falls at the ballistics' fall rate. 0 disables it.
 - **Loudness (EBU R128 / ITU-R BS.1770):**
   - energies are binned in 100 ms blocks;

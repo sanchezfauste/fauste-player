@@ -181,6 +181,8 @@ pub struct Engine {
     now: Instant,
     /// Whether meters measure true peak (new buses start with it).
     true_peak: bool,
+    /// Programme-meter integration (ms) and fall (dB/s) for new buses.
+    integration: (f32, f32),
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -190,6 +192,18 @@ enum Role {
     Current,
     Outgoing(usize),
     Cue,
+}
+
+/// Empties a source's meter accumulators.
+fn take_measurement(s: &SourceShared) {
+    s.peak_l.take();
+    s.peak_r.take();
+    s.sum_sq_l.take();
+    s.sum_sq_r.take();
+    s.k_sum_l.take();
+    s.k_sum_r.take();
+    s.measured_frames
+        .swap(0, std::sync::atomic::Ordering::AcqRel);
 }
 
 /// `ms` milliseconds in frames at `rate`.
@@ -230,6 +244,7 @@ impl Engine {
             cartwall: None,
             now: Instant::now(),
             true_peak: false,
+            integration: (0.0, 0.0),
         }
     }
 
@@ -405,6 +420,11 @@ impl Engine {
         let Some(rt) = self.players.get(&player) else {
             return input;
         };
+        // The pre-listen is not on air: its measurement is taken and dropped
+        // so it does not pile up.
+        for p in rt.cue_src.iter() {
+            take_measurement(&p.shared);
+        }
         for p in rt.current.iter().chain(rt.outgoing.iter()) {
             let s = &p.shared;
             input.merge(crate::meter::MeterInput {
@@ -431,6 +451,20 @@ impl Engine {
 
     pub fn true_peak(&self) -> bool {
         self.true_peak
+    }
+
+    /// The programme-meter integration every bus applies per sample, and
+    /// its fall rate (meters spec M1).
+    pub fn set_meter_integration(&mut self, integration_ms: f32, fall_db_per_sec: f32) {
+        self.integration = (integration_ms, fall_db_per_sec);
+        for bus in self.buses.values() {
+            bus.shared().integration_ms.store(integration_ms);
+            bus.shared().fall_db_per_sec.store(fall_db_per_sec);
+        }
+    }
+
+    pub fn meter_integration(&self) -> (f32, f32) {
+        self.integration
     }
 
     pub fn telemetry(&self, player: PlayerId) -> PlayerTelemetry {
@@ -709,6 +743,8 @@ impl Engine {
             bus.shared()
                 .true_peak
                 .store(self.true_peak, std::sync::atomic::Ordering::Release);
+            bus.shared().integration_ms.store(self.integration.0);
+            bus.shared().fall_db_per_sec.store(self.integration.1);
             self.buses.insert(key.clone(), bus);
         }
         // Capacity derived from routing (spec §4.3): per player on Main, a

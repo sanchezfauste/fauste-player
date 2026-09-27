@@ -116,6 +116,10 @@ pub struct BusShared {
     pub sample_rate: AtomicU32,
     /// Measure true peak instead of sample peak (meters spec M1).
     pub true_peak: AtomicBool,
+    /// Programme-meter integration time in ms (0: none) and its fall rate
+    /// in dB/s, applied per sample (IEC 60268-10).
+    pub integration_ms: AtomicF32,
+    pub fall_db_per_sec: AtomicF32,
 }
 
 impl BusShared {
@@ -185,6 +189,11 @@ pub struct Slot {
     /// Meter measurement state (meters spec M1).
     k_weighting: [KWeighting; 2],
     true_peak: [TruePeak; 2],
+    /// Whether true peak was measured last block (its history restarts
+    /// when it is switched on).
+    true_peak_on: bool,
+    /// Programme-meter integrator per channel.
+    ppm: [f32; 2],
 }
 
 /// The conductor's side of a mixer.
@@ -296,6 +305,8 @@ impl Mixer {
                         block_audible: false,
                         k_weighting: [KWeighting::new(rate); 2],
                         true_peak: [TruePeak::default(); 2],
+                        true_peak_on: false,
+                        ppm: [0.0; 2],
                     });
                 } else {
                     // Occupied or out of range: hand the source straight back.
@@ -404,7 +415,7 @@ impl Mixer {
         let mut peak_l = 0.0f32;
         let mut peak_r = 0.0f32;
         let volume_step = self.volume_step;
-        let true_peak = self.shared.true_peak.load(Ordering::Relaxed);
+        let meter = MeterMode::read(&self.shared);
         for index in 0..self.slots.len() {
             let Some(Some(slot)) = self.slots.0.get_mut(index) else {
                 continue;
@@ -422,7 +433,7 @@ impl Mixer {
                 now,
                 volume_step,
                 &mut events,
-                true_peak,
+                meter,
             );
             peak_l = peak_l.max(l);
             peak_r = peak_r.max(r);
@@ -438,6 +449,44 @@ impl Mixer {
             .store(now + frames as u64, Ordering::Release);
         self.shared.heartbeat.fetch_add(1, Ordering::Release);
         self.shared.render_seq.fetch_add(1, Ordering::AcqRel);
+    }
+}
+
+/// How the meters measure this block, read once from `BusShared`.
+#[derive(Debug, Clone, Copy)]
+struct MeterMode {
+    true_peak: bool,
+    /// Programme-meter rise per sample (0: none) and fall factor per sample.
+    attack: f32,
+    decay: f32,
+}
+
+impl MeterMode {
+    fn read(shared: &BusShared) -> Self {
+        let rate = shared.sample_rate.load(Ordering::Relaxed).max(1) as f32;
+        let integration = shared.integration_ms.load();
+        // A first-order rise with τ = integration / 3 reads a tone burst of
+        // the integration time within about 0.5 dB of steady state.
+        let attack = if integration > 0.0 {
+            1.0 - (-3_000.0 / (integration * rate)).exp()
+        } else {
+            0.0
+        };
+        let fall = shared.fall_db_per_sec.load().max(0.0);
+        Self {
+            true_peak: shared.true_peak.load(Ordering::Relaxed),
+            attack,
+            decay: 10f32.powf(-fall / (20.0 * rate)),
+        }
+    }
+
+    fn integrate(&self, env: &mut f32, level: f32) -> f32 {
+        if level > *env {
+            *env += (level - *env) * self.attack;
+        } else {
+            *env *= self.decay;
+        }
+        *env
     }
 }
 
@@ -471,8 +520,12 @@ fn render_slot(
     block_start: u64,
     volume_step: f32,
     events: &mut [Option<BusEvent>; 2],
-    true_peak: bool,
+    meter: MeterMode,
 ) -> (f32, f32) {
+    if meter.true_peak && !slot.true_peak_on {
+        slot.true_peak = [TruePeak::default(); 2];
+    }
+    slot.true_peak_on = meter.true_peak;
     slot.block_unity = false;
     slot.block_audible = false;
     if slot.finished {
@@ -503,6 +556,8 @@ fn render_slot(
     let (mut peak_l, mut peak_r) = (0.0f32, 0.0f32);
     let mut unity = true;
     let mut rendered = false;
+    // Sample peaks, for the unaltered-source check (not the meter's mode).
+    let (mut audible_l, mut audible_r) = (0.0f32, 0.0f32);
     // Meter measurement, added to the source's accumulators once per block.
     let (mut sum_l, mut sum_r, mut k_l, mut k_r) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
     let mut measured = 0u64;
@@ -552,12 +607,19 @@ fn render_slot(
             unity &= g == 1.0;
             rendered = true;
             let (l, r) = (l * g, r * g);
+            audible_l = audible_l.max(l.abs());
+            audible_r = audible_r.max(r.abs());
             let [tp_l, tp_r] = &mut slot.true_peak;
-            let (level_l, level_r) = if true_peak {
+            let (mut level_l, mut level_r) = if meter.true_peak {
                 (tp_l.push(l), tp_r.push(r))
             } else {
                 (l.abs(), r.abs())
             };
+            if meter.attack > 0.0 {
+                let [env_l, env_r] = &mut slot.ppm;
+                level_l = meter.integrate(env_l, level_l);
+                level_r = meter.integrate(env_r, level_r);
+            }
             peak_l = peak_l.max(level_l);
             peak_r = peak_r.max(level_r);
             let [kw_l, kw_r] = &mut slot.k_weighting;
@@ -609,7 +671,7 @@ fn render_slot(
         shared.measured_frames.fetch_add(measured, Ordering::AcqRel);
     }
     slot.block_unity = unity && rendered;
-    slot.block_audible = peak_l > 0.0 || peak_r > 0.0;
+    slot.block_audible = audible_l > 0.0 || audible_r > 0.0;
     (peak_l, peak_r)
 }
 

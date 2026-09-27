@@ -146,20 +146,6 @@ fn ebu_ppm_falls_24_db_in_2_8_s() {
 }
 
 #[test]
-fn a_short_burst_reads_lower_on_a_ppm() {
-    let c = config(MeterBallistics::EbuPpm);
-    let mut m = MeterState::default();
-    let burst = m.update(peak(1.0), TICK, &c);
-    assert!(
-        burst.level_db[0] < -0.5,
-        "5 ms of a 10 ms integration: {}",
-        burst.level_db[0]
-    );
-    let steady = run(&mut m, &c, peak(1.0), 0.2);
-    assert!(steady.level_db[0].abs() < 0.1);
-}
-
-#[test]
 fn vu_reaches_99_percent_in_300_ms() {
     let c = config(MeterBallistics::Vu);
     let mut m = MeterState::default();
@@ -267,4 +253,111 @@ fn silence_clears_the_loudness() {
     let r = run(&mut m, &c, MeterInput::default(), 3.2);
     assert_eq!(r.momentary_lufs, None);
     assert_eq!(r.short_term_lufs, None);
+}
+
+#[test]
+fn din_ppm_falls_20_db_in_1_5_s() {
+    let c = config(MeterBallistics::DinPpm);
+    let mut m = MeterState::default();
+    run(&mut m, &c, peak(1.0), 0.5);
+    let r = run(&mut m, &c, peak(0.0), 1.5);
+    assert!((r.level_db[0] + 20.0).abs() < 0.3, "{}", r.level_db[0]);
+}
+
+#[test]
+fn vu_is_steady_when_callbacks_skip_ticks() {
+    // A 512-frame device buffer at 48 kHz fills every 10.7 ms: about every
+    // other 5 ms tick carries nothing.
+    let c = config(MeterBallistics::Vu);
+    let mut m = MeterState::default();
+    let full = MeterInput {
+        frames: 512,
+        sum_sq: [0.5 * 512.0; 2],
+        peak: [1.0; 2],
+        ..MeterInput::default()
+    };
+    let mut r = MeterReading::default();
+    for i in 0..400 {
+        let input = if i % 2 == 0 {
+            full
+        } else {
+            MeterInput::default()
+        };
+        r = m.update(input, TICK, &c);
+    }
+    assert!(
+        r.level_db[0].abs() < 0.3,
+        "a sine of peak 1 reads 0 dB: {}",
+        r.level_db[0]
+    );
+}
+
+#[test]
+fn the_bar_still_falls_when_the_audio_stops() {
+    let c = config(MeterBallistics::Vu);
+    let mut m = MeterState::default();
+    run(&mut m, &c, peak(1.0), 1.0);
+    let r = run(&mut m, &c, MeterInput::default(), 1.0);
+    assert!(r.level_db[0] < -20.0, "{}", r.level_db[0]);
+}
+
+#[test]
+fn loudness_falls_after_a_stop_instead_of_freezing() {
+    let c = MeterConfig::default();
+    let mut m = MeterState::default();
+    let mut before = MeterReading::default();
+    for input in sine_ticks(-23.0, 1_000.0, 4.0) {
+        before = m.update(input, TICK, &c);
+    }
+    let after = run(&mut m, &c, MeterInput::default(), 1.0);
+    let (b, a) = (
+        before.short_term_lufs.unwrap(),
+        after.short_term_lufs.unwrap(),
+    );
+    assert!(a < b - 1.0, "short-term falls: {b} → {a}");
+    assert_eq!(
+        after.momentary_lufs, None,
+        "400 ms of silence clears momentary"
+    );
+}
+
+#[test]
+fn a_long_stall_does_not_shrink_the_loudness_window() {
+    let c = MeterConfig::default();
+    let mut m = MeterState::default();
+    for input in sine_ticks(-23.0, 1_000.0, 1.0) {
+        m.update(input, TICK, &c);
+    }
+    // The conductor was held up for 5 s.
+    m.update(MeterInput::default(), 5.0, &c);
+    let mut r = MeterReading::default();
+    for input in sine_ticks(-23.0, 1_000.0, 0.2) {
+        r = m.update(input, TICK, &c);
+    }
+    let s = r.short_term_lufs;
+    assert!(s.is_none_or(|s| s < -30.0), "3 s of mostly silence: {s:?}");
+}
+
+#[test]
+fn silence_brings_the_k_weighting_to_exact_zero() {
+    let mut k = KWeighting::new(48_000);
+    for n in 0..48_000 {
+        k.process((std::f64::consts::TAU * 1_000.0 * f64::from(n) / 48_000.0).sin());
+    }
+    let mut last = 1.0;
+    for _ in 0..48_000 {
+        last = k.process(0.0);
+    }
+    assert_eq!(last, 0.0, "no subnormal limit cycle");
+}
+
+#[test]
+fn a_sample_aligned_peak_reads_at_least_its_sample_value() {
+    let mut tp = TruePeak::default();
+    let mut peak = 0.0f32;
+    for n in 0..200 {
+        let x = if n == 100 { 0.9 } else { 0.0 };
+        peak = peak.max(tp.push(x));
+    }
+    assert!(peak >= 0.9, "{peak}");
 }

@@ -204,6 +204,11 @@ impl Conductor {
         if self.engine.true_peak() != self.state.config.meter.true_peak {
             self.engine.set_true_peak(self.state.config.meter.true_peak);
         }
+        let integration = crate::meter::mixer_integration(&self.state.config.meter);
+        if self.engine.meter_integration() != integration {
+            self.engine
+                .set_meter_integration(integration.0, integration.1);
+        }
         let dt = self
             .metered_at
             .map_or(0.0, |at| now.saturating_duration_since(at).as_secs_f64());

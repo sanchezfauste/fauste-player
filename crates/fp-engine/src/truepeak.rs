@@ -48,14 +48,14 @@ impl Default for TruePeak {
 }
 
 impl TruePeak {
-    /// Feeds one sample; returns the largest magnitude among the four
-    /// interpolated points it adds.
+    /// Feeds one sample; returns the largest magnitude among the sample
+    /// itself and the four interpolated points it adds.
     pub fn push(&mut self, x: f32) -> f32 {
         if let Some(slot) = self.history.get_mut(self.next) {
             *slot = x;
         }
         self.next = (self.next + 1) % TAPS_PER_PHASE;
-        let mut peak = 0.0f32;
+        let mut peak = x.abs();
         for phase in &self.phases {
             let mut acc = 0.0f32;
             // Newest sample first: history[next - 1 - k].

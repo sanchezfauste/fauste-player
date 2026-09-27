@@ -493,3 +493,38 @@ fn true_peak_can_be_switched_on_for_a_bus() {
     let true_peak = shared.peak_l.take();
     assert!(true_peak > 0.97, "{true_peak}");
 }
+
+/// Full-scale click of `click` frames on a PPM integration of `integration_ms`.
+fn click_reading(integration_ms: f32, click: usize) -> f32 {
+    let (mut m, mut h) = mixer(2);
+    h.shared.sample_rate.store(48_000, Ordering::Release);
+    h.shared.integration_ms.store(integration_ms);
+    let (mut p, c) = source_pair(4_096);
+    let samples: Vec<f32> = (0..2_000)
+        .flat_map(|n| if n < click { [1.0, 1.0] } else { [0.0, 0.0] })
+        .collect();
+    assert_eq!(p.push(&samples), samples.len());
+    let shared = c.shared.clone();
+    attach(&mut h, 0, c, 0);
+    start(&mut h, 0);
+    render(&mut m, 1_600, 2);
+    20.0 * shared.peak_l.take().log10()
+}
+
+#[test]
+fn a_ppm_integrates_every_sample_so_short_clicks_read_lower() {
+    // 0.5 ms click: a digital peak meter shows it all, the PPMs do not.
+    assert!(click_reading(0.0, 24).abs() < 0.01);
+    assert!(
+        click_reading(10.0, 24) < -10.0,
+        "EBU: {}",
+        click_reading(10.0, 24)
+    );
+    assert!(
+        click_reading(5.0, 24) < -6.0,
+        "DIN: {}",
+        click_reading(5.0, 24)
+    );
+    // A steady tone reaches full scale on a PPM.
+    assert!(click_reading(10.0, 1_500).abs() < 0.2);
+}

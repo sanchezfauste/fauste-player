@@ -57,7 +57,7 @@ Changes apply at once.
 |---|---|---|
 | Digital peak | IEC 60268-18 | Shows every peak at once; falls 20 dB in 1.7 s |
 | EBU PPM | IEC 60268-10 type IIb | Ignores peaks shorter than about 10 ms; falls 24 dB in 2.8 s |
-| DIN PPM | IEC 60268-10 type I | Ignores peaks shorter than about 5 ms; falls 20 dB in 1.7 s |
+| DIN PPM | IEC 60268-10 type I | Ignores peaks shorter than about 5 ms; falls 20 dB in 1.5 s |
 | VU | IEC 60268-17 | Average (RMS) level, rising and falling in 300 ms; a sine reads its peak level |
 | Custom | — | Your rise time and fall rate |
 

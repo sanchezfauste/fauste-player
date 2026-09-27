@@ -116,3 +116,21 @@ fn choosing_a_vu_meter_updates_the_config() {
             .any(|c| matches!(c, Command::UpdateConfig(_)))
     );
 }
+
+#[test]
+fn an_over_keeps_its_hold_on_the_top_segment() {
+    let c = MeterConfig::default();
+    let segments = meter_segments(-40.0, 1.0, &c, 20);
+    assert!(segments[19].hold, "+1 dBTP holds the top segment");
+}
+
+#[test]
+fn a_long_loudness_value_fits_the_meter() {
+    let c = MeterConfig::default();
+    let r = MeterReading {
+        short_term_lufs: Some(-100.3),
+        ..MeterReading::default()
+    };
+    let (text, _) = loudness_line(&r, &c).unwrap();
+    assert!(text.chars().count() <= 5, "{text}");
+}
