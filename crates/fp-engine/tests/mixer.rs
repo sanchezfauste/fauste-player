@@ -494,37 +494,77 @@ fn true_peak_can_be_switched_on_for_a_bus() {
     assert!(true_peak > 0.97, "{true_peak}");
 }
 
-/// Full-scale click of `click` frames on a PPM integration of `integration_ms`.
-fn click_reading(integration_ms: f32, click: usize) -> f32 {
-    let (mut m, mut h) = mixer(2);
-    h.shared.sample_rate.store(48_000, Ordering::Release);
-    h.shared.integration_ms.store(integration_ms);
-    let (mut p, c) = source_pair(4_096);
-    let samples: Vec<f32> = (0..2_000)
-        .flat_map(|n| if n < click { [1.0, 1.0] } else { [0.0, 0.0] })
-        .collect();
-    assert_eq!(p.push(&samples), samples.len());
-    let shared = c.shared.clone();
-    attach(&mut h, 0, c, 0);
-    start(&mut h, 0);
-    render(&mut m, 1_600, 2);
-    20.0 * shared.peak_l.take().log10()
+/// Reading, relative to the steady tone, of a 5 kHz burst of `burst_ms` on
+/// the programme meter `ballistics` configures (the mixer's integration).
+fn burst_reading_db(ballistics: fp_model::MeterBallistics, burst_ms: f64) -> f32 {
+    // Tech 3205 table 2 footnote: a burst needs five cycles, so the 0.5 ms
+    // one is at 10 kHz.
+    let freq = if burst_ms < 1.0 { 10_000.0 } else { 5_000.0 };
+    let config = fp_model::MeterConfig {
+        ballistics,
+        ..fp_model::MeterConfig::default()
+    };
+    let (tau1, tau2, fall) = fp_engine::meter::mixer_integration(&config);
+    let read = |ms: f64| {
+        let (mut m, mut h) = mixer(2);
+        h.shared.sample_rate.store(48_000, Ordering::Release);
+        h.shared.ppm_tau1_ms.store(tau1);
+        h.shared.ppm_tau2_ms.store(tau2);
+        h.shared.fall_db_per_sec.store(fall);
+        let frames = 48_000usize;
+        let burst = (ms * 48.0).round() as usize;
+        let (mut p, c) = source_pair(frames);
+        let samples: Vec<f32> = (0..frames)
+            .flat_map(|n| {
+                let x = if n < burst {
+                    (std::f64::consts::TAU * freq * n as f64 / 48_000.0).sin() as f32
+                } else {
+                    0.0
+                };
+                [x, x]
+            })
+            .collect();
+        assert_eq!(p.push(&samples), samples.len());
+        let shared = c.shared.clone();
+        attach(&mut h, 0, c, 0);
+        start(&mut h, 0);
+        let mut peak = 0.0f32;
+        for _ in 0..(burst + 4_800) / 480 + 1 {
+            render(&mut m, 480, 2);
+            peak = peak.max(shared.peak_l.take());
+        }
+        peak
+    };
+    20.0 * (read(burst_ms) / read(400.0)).log10()
 }
 
 #[test]
-fn a_ppm_integrates_every_sample_so_short_clicks_read_lower() {
-    // 0.5 ms click: a digital peak meter shows it all, the PPMs do not.
-    assert!(click_reading(0.0, 24).abs() < 0.01);
-    assert!(
-        click_reading(10.0, 24) < -10.0,
-        "EBU: {}",
-        click_reading(10.0, 24)
-    );
-    assert!(
-        click_reading(5.0, 24) < -6.0,
-        "DIN: {}",
-        click_reading(5.0, 24)
-    );
-    // A steady tone reaches full scale on a PPM.
-    assert!(click_reading(10.0, 1_500).abs() < 0.2);
+fn the_ebu_ppm_meets_tech_3205_table_2() {
+    // EBU Tech 3205-E, table 2 (normal mode): burst → reading re steady tone.
+    for (ms, expected, tolerance) in [
+        (100.0, 0.0, 0.5),
+        (10.0, -2.0, 0.5),
+        (5.0, -4.0, 0.75),
+        (1.5, -9.0, 1.0),
+        (0.5, -17.0, 2.0),
+    ] {
+        let r = burst_reading_db(fp_model::MeterBallistics::EbuPpm, ms);
+        assert!(
+            (r - expected).abs() <= tolerance,
+            "{ms} ms: {r} dB, expected {expected} ± {tolerance}"
+        );
+    }
+}
+
+#[test]
+fn the_din_ppm_has_a_5_ms_integration_time() {
+    // IEC definition: a burst of the integration time reads 2 dB low.
+    let r = burst_reading_db(fp_model::MeterBallistics::DinPpm, 5.0);
+    assert!((r + 2.0).abs() <= 0.5, "{r}");
+}
+
+#[test]
+fn a_digital_peak_meter_shows_even_the_shortest_burst() {
+    let r = burst_reading_db(fp_model::MeterBallistics::DigitalPeak, 0.5);
+    assert!(r.abs() < 0.1, "{r}");
 }

@@ -181,8 +181,8 @@ pub struct Engine {
     now: Instant,
     /// Whether meters measure true peak (new buses start with it).
     true_peak: bool,
-    /// Programme-meter integration (ms) and fall (dB/s) for new buses.
-    integration: (f32, f32),
+    /// Programme-meter integrator (ms, ms, dB/s) for new buses.
+    integration: (f32, f32, f32),
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -194,12 +194,20 @@ enum Role {
     Cue,
 }
 
+fn store_integration(shared: &crate::mixer::BusShared, (tau1, tau2, fall): (f32, f32, f32)) {
+    shared.ppm_tau1_ms.store(tau1);
+    shared.ppm_tau2_ms.store(tau2);
+    shared.fall_db_per_sec.store(fall);
+}
+
 /// Empties a source's meter accumulators.
 fn take_measurement(s: &SourceShared) {
     s.peak_l.take();
     s.peak_r.take();
     s.sum_sq_l.take();
     s.sum_sq_r.take();
+    s.sum_abs_l.take();
+    s.sum_abs_r.take();
     s.k_sum_l.take();
     s.k_sum_r.take();
     s.measured_frames
@@ -244,7 +252,7 @@ impl Engine {
             cartwall: None,
             now: Instant::now(),
             true_peak: false,
-            integration: (0.0, 0.0),
+            integration: (0.0, 0.0, 0.0),
         }
     }
 
@@ -430,6 +438,7 @@ impl Engine {
             input.merge(crate::meter::MeterInput {
                 peak: [s.peak_l.take(), s.peak_r.take()],
                 sum_sq: [s.sum_sq_l.take(), s.sum_sq_r.take()],
+                sum_abs: [s.sum_abs_l.take(), s.sum_abs_r.take()],
                 k_sum: [s.k_sum_l.take(), s.k_sum_r.take()],
                 frames: s
                     .measured_frames
@@ -453,17 +462,16 @@ impl Engine {
         self.true_peak
     }
 
-    /// The programme-meter integration every bus applies per sample, and
-    /// its fall rate (meters spec M1).
-    pub fn set_meter_integration(&mut self, integration_ms: f32, fall_db_per_sec: f32) {
-        self.integration = (integration_ms, fall_db_per_sec);
+    /// The programme-meter integrator every bus runs per sample (two time
+    /// constants in ms, and the fall in dB/s; meters spec M1).
+    pub fn set_meter_integration(&mut self, integration: (f32, f32, f32)) {
+        self.integration = integration;
         for bus in self.buses.values() {
-            bus.shared().integration_ms.store(integration_ms);
-            bus.shared().fall_db_per_sec.store(fall_db_per_sec);
+            store_integration(bus.shared(), integration);
         }
     }
 
-    pub fn meter_integration(&self) -> (f32, f32) {
+    pub fn meter_integration(&self) -> (f32, f32, f32) {
         self.integration
     }
 
@@ -743,8 +751,7 @@ impl Engine {
             bus.shared()
                 .true_peak
                 .store(self.true_peak, std::sync::atomic::Ordering::Release);
-            bus.shared().integration_ms.store(self.integration.0);
-            bus.shared().fall_db_per_sec.store(self.integration.1);
+            store_integration(bus.shared(), self.integration);
             self.buses.insert(key.clone(), bus);
         }
         // Capacity derived from routing (spec §4.3): per player on Main, a

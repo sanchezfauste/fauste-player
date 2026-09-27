@@ -116,9 +116,10 @@ pub struct BusShared {
     pub sample_rate: AtomicU32,
     /// Measure true peak instead of sample peak (meters spec M1).
     pub true_peak: AtomicBool,
-    /// Programme-meter integration time in ms (0: none) and its fall rate
-    /// in dB/s, applied per sample (IEC 60268-10).
-    pub integration_ms: AtomicF32,
+    /// Programme-meter integrator time constants in ms (0: none) and its
+    /// fall rate in dB/s, applied per sample (see `meter::mixer_integration`).
+    pub ppm_tau1_ms: AtomicF32,
+    pub ppm_tau2_ms: AtomicF32,
     pub fall_db_per_sec: AtomicF32,
 }
 
@@ -192,8 +193,10 @@ pub struct Slot {
     /// Whether true peak was measured last block (its history restarts
     /// when it is switched on).
     true_peak_on: bool,
-    /// Programme-meter integrator per channel.
-    ppm: [f32; 2],
+    /// Programme-meter integrator per channel: two stages, and the charge
+    /// factors they were run with (a preset change starts them from rest).
+    ppm: [[f32; 2]; 2],
+    ppm_charge: [f32; 2],
 }
 
 /// The conductor's side of a mixer.
@@ -306,7 +309,8 @@ impl Mixer {
                         k_weighting: [KWeighting::new(rate); 2],
                         true_peak: [TruePeak::default(); 2],
                         true_peak_on: false,
-                        ppm: [0.0; 2],
+                        ppm: [[0.0; 2]; 2],
+                        ppm_charge: [0.0; 2],
                     });
                 } else {
                     // Occupied or out of range: hand the source straight back.
@@ -456,37 +460,56 @@ impl Mixer {
 #[derive(Debug, Clone, Copy)]
 struct MeterMode {
     true_peak: bool,
-    /// Programme-meter rise per sample (0: none) and fall factor per sample.
-    attack: f32,
+    /// A programme meter: the two-stage integrator runs.
+    programme: bool,
+    /// Per-sample charge factors of the two stages, and the fall factor.
+    charge: [f32; 2],
     decay: f32,
 }
 
 impl MeterMode {
     fn read(shared: &BusShared) -> Self {
         let rate = shared.sample_rate.load(Ordering::Relaxed).max(1) as f32;
-        let integration = shared.integration_ms.load();
-        // A first-order rise with τ = integration / 3 reads a tone burst of
-        // the integration time within about 0.5 dB of steady state.
-        let attack = if integration > 0.0 {
-            1.0 - (-3_000.0 / (integration * rate)).exp()
-        } else {
-            0.0
+        let factor = |tau_ms: f32| {
+            if tau_ms > 0.0 {
+                1.0 - (-1_000.0 / (tau_ms * rate)).exp()
+            } else {
+                1.0
+            }
         };
+        let (tau1, tau2) = (shared.ppm_tau1_ms.load(), shared.ppm_tau2_ms.load());
         let fall = shared.fall_db_per_sec.load().max(0.0);
         Self {
             true_peak: shared.true_peak.load(Ordering::Relaxed),
-            attack,
+            programme: tau1 > 0.0 || tau2 > 0.0,
+            charge: [factor(tau1), factor(tau2)],
             decay: 10f32.powf(-fall / (20.0 * rate)),
         }
     }
 
-    fn integrate(&self, env: &mut f32, level: f32) -> f32 {
-        if level > *env {
-            *env += (level - *env) * self.attack;
+    /// A rectifier charging a first stage, which charges a second one; each
+    /// only charges upwards and falls at the meter's fall rate.
+    fn integrate(&self, stages: &mut [f32; 2], level: f32) -> f32 {
+        let [a, b] = stages;
+        let [k1, k2] = self.charge;
+        *a = if level > *a {
+            *a + (level - *a) * k1
         } else {
-            *env *= self.decay;
+            *a * self.decay
+        };
+        *b = if *a > *b {
+            *b + (*a - *b) * k2
+        } else {
+            *b * self.decay
+        };
+        // During silence the fall would end in subnormal numbers, slow on
+        // many CPUs: flush them (far below any displayed level).
+        for stage in [&mut *a, &mut *b] {
+            if *stage < 1e-20 {
+                *stage = 0.0;
+            }
         }
-        *env
+        *b
     }
 }
 
@@ -522,6 +545,10 @@ fn render_slot(
     events: &mut [Option<BusEvent>; 2],
     meter: MeterMode,
 ) -> (f32, f32) {
+    if slot.ppm_charge != meter.charge {
+        slot.ppm_charge = meter.charge;
+        slot.ppm = [[0.0; 2]; 2];
+    }
     if meter.true_peak && !slot.true_peak_on {
         slot.true_peak = [TruePeak::default(); 2];
     }
@@ -560,6 +587,7 @@ fn render_slot(
     let (mut audible_l, mut audible_r) = (0.0f32, 0.0f32);
     // Meter measurement, added to the source's accumulators once per block.
     let (mut sum_l, mut sum_r, mut k_l, mut k_r) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    let (mut abs_l, mut abs_r) = (0.0f64, 0.0f64);
     let mut measured = 0u64;
     while f < frames && !slot.paused {
         let abs = block_start + f as u64;
@@ -615,7 +643,7 @@ fn render_slot(
             } else {
                 (l.abs(), r.abs())
             };
-            if meter.attack > 0.0 {
+            if meter.programme {
                 let [env_l, env_r] = &mut slot.ppm;
                 level_l = meter.integrate(env_l, level_l);
                 level_r = meter.integrate(env_r, level_r);
@@ -626,6 +654,8 @@ fn render_slot(
             let (wl, wr) = (kw_l.process(f64::from(l)), kw_r.process(f64::from(r)));
             sum_l += f64::from(l) * f64::from(l);
             sum_r += f64::from(r) * f64::from(r);
+            abs_l += f64::from(l.abs());
+            abs_r += f64::from(r.abs());
             k_l += wl * wl;
             k_r += wr * wr;
             measured += 1;
@@ -666,6 +696,8 @@ fn render_slot(
         let shared = &slot.source.shared;
         shared.sum_sq_l.fetch_add(sum_l);
         shared.sum_sq_r.fetch_add(sum_r);
+        shared.sum_abs_l.fetch_add(abs_l);
+        shared.sum_abs_r.fetch_add(abs_r);
         shared.k_sum_l.fetch_add(k_l);
         shared.k_sum_r.fetch_add(k_r);
         shared.measured_frames.fetch_add(measured, Ordering::AcqRel);
@@ -702,5 +734,29 @@ impl Renderer for MixerRenderer {
                 self.shared.lock_misses.fetch_add(1, Ordering::Relaxed);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MeterMode;
+
+    #[test]
+    fn a_programme_meter_falls_to_exact_zero_in_silence() {
+        let mode = MeterMode {
+            true_peak: false,
+            programme: true,
+            charge: [0.01, 0.02],
+            // 100 dB/s at 48 kHz.
+            decay: 10f32.powf(-100.0 / (20.0 * 48_000.0)),
+        };
+        let mut stages = [0.0f32; 2];
+        for _ in 0..4_800 {
+            mode.integrate(&mut stages, 1.0);
+        }
+        for _ in 0..48_000 * 20 {
+            mode.integrate(&mut stages, 0.0);
+        }
+        assert_eq!(stages, [0.0, 0.0], "no subnormal tail");
     }
 }

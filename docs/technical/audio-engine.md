@@ -48,46 +48,52 @@ special path. The check compares slots pairwise and allocates nothing.
 
 ## Level meters
 
-Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../superpowers/specs/2026-09-27-meters-design.md)).
+Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../superpowers/specs/2026-09-27-meters-design.md), whose section M0 lists the documents each part is verified against).
 
 - **The mixer measures** each slot after its gain, on the real-time thread,
   without allocating.
-  - The peak: the sample peak, or with `BusShared::true_peak` the peak of a
-    4× windowed-sinc interpolation (`truepeak.rs`, never below the sample
-    itself). For programme meters it is integrated per sample
-    (`BusShared::integration_ms`, rise τ = integration / 3, fall at the
-    preset's rate), so short peaks read lower.
-  - Filter states are flushed below 1e-20, so silence never runs on
-    subnormal numbers.
-  - Sums of squares.
-  - K-weighted sums of squares (`kweight.rs`). These are the ITU-R BS.1770
-    pre-filter and RLB high-pass, derived for the bus rate
-    (`BusShared::sample_rate`, set on every open); at 48 kHz they reproduce
-    the standard's coefficients.
-  - All of it accumulates in `SourceShared` atomics (`AtomicF64` sums and
-    `measured_frames`).
+  - The peak: the sample peak, or with `BusShared::true_peak` the largest
+    of the four phases of the ITU-R BS.1770-5 Annex 2 interpolator
+    (`truepeak.rs`, the published coefficients).
+  - For programme meters, the peak goes through a two-stage rectifier
+    integrator (`BusShared::ppm_tau1_ms`/`ppm_tau2_ms`, fall
+    `fall_db_per_sec`), fitted so that 5 kHz bursts meet EBU Tech 3205
+    table 2.
+  - Sums of squares, rectified sums (for the VU), and K-weighted sums of
+    squares (`kweight.rs`, the ITU-R BS.1770 filters derived for the bus
+    rate, `BusShared::sample_rate`). Filter states are flushed below
+    1e-20, so silence never runs on subnormal numbers.
+  - All of it accumulates in `SourceShared` atomics.
 - **The conductor meters.**
   - Every tick, `Engine::take_meter_input` takes a player's measurement
-    (current plus fading sources), so nothing is lost between interface
-    frames.
-  - `meter::MeterState` applies the configured ballistics: the fall of
-    IEC 60268-18 digital peak (20 dB / 1.7 s) and IEC 60268-10 EBU
-    (24 dB / 2.8 s) and DIN (20 dB / 1.5 s) meters, IEC 60268-17 VU (RMS,
-    sine-calibrated, 300 ms both ways), or custom rates.
+    (current plus fading sources; the pre-listen's is dropped).
+  - `meter::MeterState` applies the fall of each preset: 20 dB / 1.7 s,
+    24 dB / 2.8 s, or 20 dB / 1.5 s.
+  - The VU is a second-order needle (99 % in 300 ms, 1.25 % overshoot) on
+    the rectified average, calibrated so a sine reads its peak level.
+  - It keeps the peak hold, and computes momentary (400 ms) and short-term
+    (3 s) loudness from 5 ms blocks: L = −0.691 + 10·log10(z_L + z_R).
   - A tick without a device block within 50 ms leaves the level standing,
     and the next block moves it for the whole span. Longer, the meter
     counts silence (the bar falls, and loudness counts silent frames).
-  - It keeps the peak hold, and computes momentary (400 ms) and short-term
-    (3 s) loudness from 100 ms blocks: L = −0.691 + 10·log10(z_L + z_R).
-  - The reading goes into `PlayerTelemetry::meter`.
-  - Settings apply at the next tick. The bus true-peak flags follow
-    `config.meter.true_peak`.
+  - `meter::mixer_integration` gives the buses their integrator for the
+    configured preset. Settings apply at the next tick: the integrator
+    constants and the true-peak flag reach every bus, and a preset change
+    starts the needles and integrators from rest. The reading goes into
+    `PlayerTelemetry::meter`.
+  - The programme-meter stages and the K-weighting flush values below
+    1e-20, so silence never runs on subnormal numbers. The VU's work per
+    tick is bounded (at most one second of needle movement).
 - **The interface only draws** the reading (`widgets::meter_segments`,
   `widgets::loudness_line`).
-- **Tests:** `tests/metering.rs` checks the BS.1770 coefficients, the 1 kHz
-  gain at every rate, the true peak of an intersample-peak sine, every
-  preset's rise and fall, the hold, and EBU Tech 3341 case 1 (a −23 dBFS
-  1 kHz stereo sine reads −23 LUFS).
+- **Tests** (`tests/metering.rs`, `tests/mixer.rs`):
+  - the BS.1770 coefficients and the 1 kHz gain at every rate;
+  - EBU Tech 3341 cases 1, 2, 9, 11, 12 and 14 (loudness) and 15–23
+    (true peak);
+  - Tech 3205 table 2 (EBU PPM);
+  - the DIN integration time;
+  - the VU's 99 % time, overshoot and average response;
+  - every fall rate, and the hold.
 
 ## Buses and device loss
 

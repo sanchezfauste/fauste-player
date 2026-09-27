@@ -118,14 +118,26 @@ fn null_backend_consumes_audio_at_real_time_pace() {
     let backend = NullBackend;
     let device = backend.default_device().unwrap();
     let (renderer, frames) = counter();
+    let opened = std::time::Instant::now();
     let stream = backend
         .open_output(&device, STEREO, renderer, Arc::new(Errors::default()))
         .unwrap();
     std::thread::sleep(Duration::from_millis(250));
     drop(stream);
-    let rendered = frames.load(Ordering::Relaxed);
-    // 250 ms at 48 kHz is 12 000 frames; allow for scheduling jitter.
-    assert!((8_000..=16_000).contains(&rendered), "rendered {rendered}");
+    let elapsed = opened.elapsed().as_secs_f64();
+    let rendered = frames.load(Ordering::Relaxed) as f64;
+    // Never faster than real time (one block of lead at most). On a loaded
+    // machine it may fall behind, and deliberately does not catch up, so
+    // only progress is required from below.
+    let real_time = elapsed * 48_000.0;
+    assert!(
+        rendered <= real_time + 256.0,
+        "rendered {rendered} in {elapsed} s"
+    );
+    assert!(
+        rendered >= real_time * 0.25,
+        "rendered {rendered} in {elapsed} s"
+    );
     let after = frames.load(Ordering::Relaxed);
     std::thread::sleep(Duration::from_millis(50));
     assert_eq!(

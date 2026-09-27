@@ -54,37 +54,113 @@ fn k_weighting_gain_at_1_khz_is_the_same_at_every_rate() {
     assert!((at_48 - 0.691).abs() < 0.05, "{at_48}");
 }
 
-#[test]
-fn true_peak_finds_the_intersample_peak() {
-    // fs/4 with a 45° phase: every sample is ±0.707, the waveform peaks at 1.
+/// Highest true-peak reading of `samples`, in dBTP.
+fn dbtp(samples: &[f32]) -> f32 {
     let mut tp = TruePeak::default();
-    let mut sample_peak = 0.0f32;
-    let mut true_peak = 0.0f32;
-    for n in 0..4_000 {
-        let x = (std::f32::consts::FRAC_PI_2 * n as f32 + std::f32::consts::FRAC_PI_4).sin();
-        sample_peak = sample_peak.max(x.abs());
-        if n > 100 {
-            true_peak = true_peak.max(tp.push(x));
-        } else {
-            tp.push(x);
-        }
-    }
-    assert!((sample_peak - 0.707).abs() < 0.01);
-    assert!(true_peak > 0.97 && true_peak < 1.03, "{true_peak}");
+    let peak = samples.iter().fold(0.0f32, |m, x| m.max(tp.push(*x)));
+    20.0 * peak.log10()
+}
+
+/// A sine at `fs / div` of amplitude `amp` (FFS) and `phase_deg`, 1 s at
+/// 48 kHz, with 10 ms fades (EBU Tech 3341 cases 15–19).
+fn tp_sine(div: f64, amp: f64, phase_deg: f64) -> Vec<f32> {
+    let n = 48_000;
+    let fade = 480.0;
+    (0..n)
+        .map(|i| {
+            let i = i as f64;
+            let env = (i / fade).min((n as f64 - 1.0 - i) / fade).min(1.0);
+            let x = amp * (std::f64::consts::TAU * i / div + phase_deg.to_radians()).sin();
+            (x * env) as f32
+        })
+        .collect()
+}
+
+fn within(v: f32, expected: f32) -> bool {
+    // Tech 3341 tolerance: +0.2 / −0.4 dB.
+    v <= expected + 0.2 && v >= expected - 0.4
 }
 
 #[test]
-fn true_peak_of_a_low_tone_equals_its_sample_peak() {
-    let mut tp = TruePeak::default();
-    let mut peak = 0.0f32;
-    for n in 0..48_000 {
-        let x = 0.5 * (std::f32::consts::TAU * 100.0 * n as f32 / 48_000.0).sin();
-        let p = tp.push(x);
-        if n > 100 {
-            peak = peak.max(p);
-        }
+fn true_peak_meets_ebu_tech_3341_cases_15_to_19() {
+    for (case, div, amp, phase, expected) in [
+        (15, 4.0, 0.5, 0.0, -6.0),
+        (16, 4.0, 0.5, 45.0, -6.0),
+        (17, 6.0, 0.5, 60.0, -6.0),
+        (18, 8.0, 0.5, 67.5, -6.0),
+        (19, 4.0, 1.41, 45.0, 3.0),
+    ] {
+        let v = dbtp(&tp_sine(div, amp, phase));
+        assert!(
+            within(v, expected),
+            "case {case}: {v} dBTP, expected {expected}"
+        );
     }
-    assert!((peak - 0.5).abs() < 0.005, "{peak}");
+}
+
+/// Tech 3341 cases 20–23: fs/6 at 0.5 FFS with one period of fs/4 at 1.0
+/// inserted (continuous in phase), synthesized at 4·fs, low-pass filtered
+/// and decimated with an offset of 0–3 samples.
+fn tp_burst(offset: usize) -> Vec<f32> {
+    let up = 4usize;
+    let n = 48_000 * up;
+    let rate = 192_000.0;
+    let mut phase = 0.0f64;
+    let burst_start = n / 2;
+    let burst_len = 16; // one period of fs/4 at 4·fs
+    let fade = 0.01 * rate;
+    let hi: Vec<f64> = (0..n)
+        .map(|i| {
+            let in_burst = (burst_start..burst_start + burst_len).contains(&i);
+            let (freq, amp) = if in_burst {
+                (12_000.0, 1.0)
+            } else {
+                (8_000.0, 0.5)
+            };
+            let x = amp * phase.sin();
+            phase += std::f64::consts::TAU * freq / rate;
+            let i = i as f64;
+            x * (i / fade).min((n as f64 - 1.0 - i) / fade).min(1.0)
+        })
+        .collect();
+    // Anti-aliasing low-pass at fs/2: 511-tap Blackman-windowed sinc.
+    let taps = 511usize;
+    let centre = (taps - 1) as f64 / 2.0;
+    let h: Vec<f64> = (0..taps)
+        .map(|k| {
+            let t = (k as f64 - centre) / up as f64;
+            let sinc = if t == 0.0 {
+                1.0
+            } else {
+                (std::f64::consts::PI * t).sin() / (std::f64::consts::PI * t)
+            };
+            let x = std::f64::consts::TAU * k as f64 / (taps - 1) as f64;
+            sinc * (0.42 - 0.5 * x.cos() + 0.08 * (2.0 * x).cos()) / up as f64
+        })
+        .collect();
+    (0..(n - taps - up) / up)
+        .map(|m| {
+            let centre_in = m * up + offset + taps / 2;
+            let acc: f64 = h
+                .iter()
+                .enumerate()
+                .map(|(k, c)| c * hi[centre_in + k - taps / 2])
+                .sum();
+            acc as f32
+        })
+        .collect()
+}
+
+#[test]
+fn true_peak_meets_ebu_tech_3341_cases_20_to_23() {
+    for offset in 0..4 {
+        let v = dbtp(&tp_burst(offset));
+        assert!(
+            within(v, 0.0),
+            "case {}: {v} dBTP, expected 0.0",
+            20 + offset
+        );
+    }
 }
 
 use fp_engine::meter::{MeterInput, MeterReading, MeterState};
@@ -100,15 +176,13 @@ fn config(ballistics: MeterBallistics) -> MeterConfig {
     }
 }
 
-fn db(linear: f32) -> f32 {
-    20.0 * linear.log10()
-}
-
-/// A tick of steady peak `level` (linear), both channels.
+/// A tick of a steady sine of peak `level` (linear), both channels.
 fn peak(level: f32) -> MeterInput {
     MeterInput {
         peak: [level; 2],
         sum_sq: [f64::from(level * level) * 240.0 / 2.0; 2],
+        // A sine's rectified average is 2/π of its peak.
+        sum_abs: [f64::from(level) * 240.0 * std::f64::consts::FRAC_2_PI; 2],
         k_sum: [0.0; 2],
         frames: 240,
     }
@@ -145,24 +219,52 @@ fn ebu_ppm_falls_24_db_in_2_8_s() {
     assert!((r.level_db[0] + 24.0).abs() < 0.3, "{}", r.level_db[0]);
 }
 
-#[test]
-fn vu_reaches_99_percent_in_300_ms() {
+/// The VU's step response to a sine of peak 1, per tick, as linear level.
+fn vu_step(secs: f64) -> Vec<f32> {
     let c = config(MeterBallistics::Vu);
     let mut m = MeterState::default();
-    let early = run(&mut m, &c, peak(1.0), 0.1);
-    let at_300 = run(&mut m, &c, peak(1.0), 0.2);
-    // A steady sine of peak 1 reads 0 dB (RMS, sine-calibrated).
+    (0..(secs / TICK).round() as usize)
+        .map(|_| 10f32.powf(m.update(peak(1.0), TICK, &c).level_db[0] / 20.0))
+        .collect()
+}
+
+#[test]
+fn vu_reaches_99_percent_in_300_ms() {
+    // IEC 60268-17: 99 % of the steady reading in 300 ms ± 10 %.
+    let steps = vu_step(2.0);
+    let first = steps.iter().position(|v| *v >= 0.99).unwrap();
+    let t = (first + 1) as f64 * TICK;
+    assert!((0.27..=0.33).contains(&t), "99 % at {t} s");
+}
+
+#[test]
+fn vu_overshoots_between_1_and_1_5_percent() {
+    // IEC 60268-17: the needle overshoots by 1 % to 1.5 %.
+    let steps = vu_step(2.0);
+    let max = steps.iter().copied().fold(0.0f32, f32::max);
+    assert!((1.010..=1.015).contains(&max), "overshoot {max}");
+    let settled = *steps.last().unwrap();
     assert!(
-        early.level_db[0] < -1.0,
-        "not instant: {}",
-        early.level_db[0]
+        (settled - 1.0).abs() < 0.001,
+        "a sine reads its peak level: {settled}"
     );
-    assert!(
-        at_300.level_db[0] > db(0.99) - 0.05,
-        "{}",
-        at_300.level_db[0]
-    );
-    assert!(at_300.level_db[0] < 0.1);
+}
+
+#[test]
+fn vu_reads_the_rectified_average_like_a_real_vu() {
+    // A square wave of the same peak has a rectified average π/2 times a
+    // sine's: it reads 3.92 dB higher, where an RMS meter shows 3.01.
+    let c = config(MeterBallistics::Vu);
+    let mut m = MeterState::default();
+    let square = MeterInput {
+        peak: [1.0; 2],
+        sum_sq: [240.0; 2],
+        sum_abs: [240.0; 2],
+        frames: 240,
+        ..MeterInput::default()
+    };
+    let r = run(&mut m, &c, square, 2.0);
+    assert!((r.level_db[0] - 3.92).abs() < 0.05, "{}", r.level_db[0]);
 }
 
 #[test]
@@ -273,6 +375,7 @@ fn vu_is_steady_when_callbacks_skip_ticks() {
     let full = MeterInput {
         frames: 512,
         sum_sq: [0.5 * 512.0; 2],
+        sum_abs: [512.0 * std::f64::consts::FRAC_2_PI; 2],
         peak: [1.0; 2],
         ..MeterInput::default()
     };
@@ -352,12 +455,167 @@ fn silence_brings_the_k_weighting_to_exact_zero() {
 }
 
 #[test]
-fn a_sample_aligned_peak_reads_at_least_its_sample_value() {
-    let mut tp = TruePeak::default();
-    let mut peak = 0.0f32;
-    for n in 0..200 {
-        let x = if n == 100 { 0.9 } else { 0.0 };
-        peak = peak.max(tp.push(x));
+#[allow(clippy::excessive_precision)] // the published values, exact in f32
+fn the_true_peak_filter_is_the_one_bs_1770_publishes() {
+    // ITU-R BS.1770-5, Annex 2: order 48, 4 phases of 12 coefficients.
+    let phases = fp_engine::truepeak::PHASES;
+    assert_eq!(phases[0][0], 0.001_708_984_375);
+    assert_eq!(phases[0][5], 0.137_329_101_562_5);
+    assert_eq!(phases[0][6], 0.972_167_968_75);
+    assert_eq!(phases[1][5], 0.465_087_890_625);
+    assert_eq!(phases[2][5], 0.779_785_156_25);
+    assert_eq!(phases[3][5], 0.972_167_968_75);
+    assert_eq!(phases[3][11], 0.001_708_984_375);
+    // Each phase mirrors another.
+    for p in 0..4 {
+        for k in 0..12 {
+            assert_eq!(phases[p][k], phases[3 - p][11 - k]);
+        }
     }
-    assert!(peak >= 0.9, "{peak}");
+}
+
+/// A programme of 1 kHz stereo tones (`Some(dBFS)`) and silences (`None`),
+/// each lasting its seconds, measured like the mixer does in 5 ms ticks.
+fn programme(parts: &[(Option<f64>, f64)]) -> Vec<MeterInput> {
+    let rate = 48_000.0;
+    let mut samples = Vec::new();
+    let mut n = 0u64;
+    for (level, secs) in parts {
+        let amp = level.map_or(0.0, |db| 10f64.powf(db / 20.0));
+        for _ in 0..(secs * rate).round() as usize {
+            samples.push(amp * (std::f64::consts::TAU * 1_000.0 * n as f64 / rate).sin());
+            n += 1;
+        }
+    }
+    let mut k = [KWeighting::new(48_000), KWeighting::new(48_000)];
+    samples
+        .chunks(240)
+        .map(|chunk| {
+            let mut input = MeterInput {
+                frames: chunk.len() as u64,
+                ..MeterInput::default()
+            };
+            for x in chunk {
+                for (ch, kw) in k.iter_mut().enumerate() {
+                    let w = kw.process(*x);
+                    input.k_sum[ch] += w * w;
+                }
+            }
+            input
+        })
+        .collect()
+}
+
+fn readings(inputs: &[MeterInput]) -> Vec<MeterReading> {
+    let c = MeterConfig::default();
+    let mut m = MeterState::default();
+    inputs.iter().map(|i| m.update(*i, TICK, &c)).collect()
+}
+
+#[test]
+fn ebu_tech_3341_case_2_reads_minus_33_lufs() {
+    let r = readings(&programme(&[(Some(-33.0), 5.0)]));
+    let last = r.last().unwrap();
+    assert!((last.momentary_lufs.unwrap() + 33.0).abs() <= 0.1);
+    assert!((last.short_term_lufs.unwrap() + 33.0).abs() <= 0.1);
+}
+
+#[test]
+fn ebu_tech_3341_case_9_short_term_is_constant_after_3_s() {
+    let parts: Vec<_> = (0..5)
+        .flat_map(|_| [(Some(-20.0), 1.34), (Some(-30.0), 1.66)])
+        .collect();
+    let r = readings(&programme(&parts));
+    for (i, reading) in r.iter().enumerate().skip((3.0 / TICK) as usize) {
+        let s = reading.short_term_lufs.unwrap();
+        assert!(
+            (s + 23.0).abs() <= 0.1,
+            "at {:.3} s: S = {s}",
+            i as f64 * TICK
+        );
+    }
+}
+
+#[test]
+fn ebu_tech_3341_case_12_momentary_is_constant_after_1_s() {
+    let parts: Vec<_> = (0..25)
+        .flat_map(|_| [(Some(-20.0), 0.18), (Some(-30.0), 0.22)])
+        .collect();
+    let r = readings(&programme(&parts));
+    for (i, reading) in r.iter().enumerate().skip((1.0 / TICK) as usize) {
+        let m = reading.momentary_lufs.unwrap();
+        assert!(
+            (m + 23.0).abs() <= 0.1,
+            "at {:.3} s: M = {m}",
+            i as f64 * TICK
+        );
+    }
+}
+
+/// Tech 3341's live-meter cases: 20 segments of `lead · i` silence, a tone
+/// of `tone` seconds at −38 + i dBFS, then `tone − lead · i` of silence.
+/// The maximum of `pick` in each segment must step from −38 to −19 LUFS.
+fn live_case(lead: f64, tone: f64, pick: fn(&MeterReading) -> Option<f32>) {
+    let parts: Vec<_> = (0..20)
+        .flat_map(|i| {
+            let i = f64::from(i);
+            [
+                (None, lead * i),
+                (Some(-38.0 + i), tone),
+                (None, tone - lead * i),
+            ]
+        })
+        .collect();
+    let r = readings(&programme(&parts));
+    let mut start = 0.0;
+    for i in 0..20 {
+        let span = 2.0 * tone;
+        let from = (start / TICK) as usize;
+        let to = (((start + span) / TICK) as usize).min(r.len());
+        let max = r[from..to]
+            .iter()
+            .filter_map(pick)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let expected = -38.0 + i as f32;
+        assert!(
+            (max - expected).abs() <= 0.1,
+            "segment {i}: max {max}, expected {expected}"
+        );
+        start += span;
+    }
+}
+
+#[test]
+fn ebu_tech_3341_case_11_short_term_maxima_step_by_1_lu() {
+    live_case(0.15, 3.0, |r| r.short_term_lufs);
+}
+
+#[test]
+fn ebu_tech_3341_case_14_momentary_maxima_step_by_1_lu() {
+    live_case(0.02, 0.4, |r| r.momentary_lufs);
+}
+
+#[test]
+fn a_long_conductor_stall_costs_the_vu_no_more_than_a_second() {
+    let c = config(MeterBallistics::Vu);
+    let mut m = MeterState::default();
+    run(&mut m, &c, peak(1.0), 0.5);
+    let started = std::time::Instant::now();
+    m.update(peak(1.0), 3_600.0, &c);
+    assert!(
+        started.elapsed().as_millis() < 100,
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn switching_back_to_vu_starts_from_rest() {
+    let vu = config(MeterBallistics::Vu);
+    let digital = config(MeterBallistics::DigitalPeak);
+    let mut m = MeterState::default();
+    run(&mut m, &vu, peak(1.0), 1.0);
+    run(&mut m, &digital, MeterInput::default(), 5.0);
+    let r = m.update(MeterInput::default(), TICK, &vu);
+    assert!(r.level_db[0] < -60.0, "no stale needle: {}", r.level_db[0]);
 }

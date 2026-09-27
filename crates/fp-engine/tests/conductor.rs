@@ -431,3 +431,20 @@ fn true_peak_can_be_switched_while_playing() {
     conductor.tick(now);
     assert!(conductor.engine().true_peak());
 }
+
+#[test]
+fn a_programme_meter_preset_reaches_the_buses_while_playing() {
+    let (mut conductor, handle, _device, now) = offline_conductor(model(1, 1));
+    let p = conductor.state().players[0].id;
+    assert!(handle.send(Command::Play(p)));
+    conductor.tick(now);
+    let mut config = conductor.state().config.clone();
+    config.meter.ballistics = fp_model::MeterBallistics::EbuPpm;
+    assert!(handle.send(Command::UpdateConfig(Box::new(config.clone()))));
+    conductor.tick(now);
+    assert_eq!(
+        conductor.engine().meter_integration(),
+        fp_engine::meter::mixer_integration(&config.meter)
+    );
+    assert!(conductor.engine().meter_integration().0 > 0.0);
+}

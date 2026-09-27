@@ -41,6 +41,9 @@ pub struct SourceShared {
     /// frames they cover.
     pub sum_sq_l: AtomicF64,
     pub sum_sq_r: AtomicF64,
+    /// Sums of magnitudes (rectified), for the VU.
+    pub sum_abs_l: AtomicF64,
+    pub sum_abs_r: AtomicF64,
     pub k_sum_l: AtomicF64,
     pub k_sum_r: AtomicF64,
     pub measured_frames: AtomicU64,
