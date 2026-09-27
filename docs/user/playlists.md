@@ -25,13 +25,21 @@ last playlist, and a playlist with a track on air, cannot be deleted.
 Columns can be resized by dragging the header separators. The widths are
 remembered per player.
 
+Players are independent: several players can show the same playlist, each
+with its own next track, its own played marks and its own times in the
+footer. Playing, stopping or skipping on one player never moves another
+player's next. The same track can even be on air on two players at once.
+Editing the playlist (adding, moving or removing entries) or a file becoming
+unreadable can still change the next of any player that shows it.
+
 Row colours:
 
 | Row | Meaning |
 |---|---|
-| **Red**, with a speaker (or pause) icon | On air on this or another player |
+| **Red**, with a speaker (or pause) icon | On air on this player |
+| Red **P2** (or another number) in the number column | On air on that player |
 | **Green**, with an arrow | This player's next track |
-| Dimmed | Already played |
+| Dimmed | Already played on this player |
 | Warning icon | File missing or unreadable (it is skipped) |
 | Violet | Selected |
 

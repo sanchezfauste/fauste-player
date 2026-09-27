@@ -118,17 +118,19 @@ fn restoring_with_no_playlists_creates_a_default_one_and_moves_ids_forward() {
 }
 
 #[test]
-fn rule22_restored_idle_players_do_not_point_at_an_entry_on_air() {
-    let mut state = fixture(3);
-    let (e, p) = (entries(&state), p0(&state));
-    apply(&mut state, Command::Play(p)).unwrap();
-    // A session saved with only the first player (for example before a
-    // player was added): the others are created fresh on restore.
-    let sessions: Vec<_> = state.sessions(|_| 10.0).into_iter().take(1).collect();
-    let (restored, _) = AppState::restore(parts(&state), &sessions, "Main");
-    for other in restored.players.iter().skip(1) {
-        assert_ne!(other.next, Some(e[0]), "e0 is on air on P1");
-    }
+fn played_marks_from_before_independent_players_count_for_every_player() {
+    let playlist: fp_model::Playlist = serde_json::from_str(
+        r#"{"id":1,"name":"Main","entries":[{"id":7,"track":3,"played":true}]}"#,
+    )
+    .unwrap();
+    let mut state = fixture(0);
+    let players: Vec<_> = state.players.iter().map(|p| p.id).collect();
+    let mut lists = fp_model::Playlists::default();
+    lists.add(playlist);
+    state.playlists = lists;
+    state.normalize_played_marks();
+    let entry = state.playlists.entry(fp_model::EntryId(7)).unwrap();
+    assert!(players.iter().all(|p| entry.is_played_by(*p)));
 }
 
 #[test]

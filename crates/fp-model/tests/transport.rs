@@ -79,7 +79,7 @@ fn rule5_play_while_playing_crossfades_into_next() {
         (player.current, player.next, player.fading),
         (Some(e[1]), Some(e[2]), true)
     );
-    assert!(state.playlists.entry(e[0]).unwrap().played);
+    assert!(state.playlists.entry(e[0]).unwrap().is_played_by(p));
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn rule7_stop_marks_played_and_keeps_the_green_next() {
         (player.current, player.next, player.transport),
         (None, Some(e[1]), Transport::Stopped)
     );
-    assert!(state.playlists.entry(e[0]).unwrap().played);
+    assert!(state.playlists.entry(e[0]).unwrap().is_played_by(p));
 }
 
 #[test]
@@ -196,62 +196,57 @@ fn a_fade_stop_is_told_apart_from_a_crossfade() {
 }
 
 #[test]
-fn rule22_an_idle_player_does_not_pick_an_entry_on_air_elsewhere() {
+fn rule22_an_idle_player_keeps_its_own_next_when_another_plays() {
     let mut state = fixture(3);
     let e = entries(&state);
     let (p1, p2) = (state.players[0].id, state.players[1].id);
     apply(&mut state, Command::Play(p1)).unwrap();
     assert_eq!(state.player(p1).unwrap().current, Some(e[0]));
-    assert_eq!(state.player(p2).unwrap().next, Some(e[1]));
+    assert_eq!(
+        state.player(p2).unwrap().next,
+        Some(e[0]),
+        "players are independent"
+    );
 }
 
 #[test]
-fn rule22_derived_next_skips_entries_on_air_elsewhere() {
+fn rule22_another_player_starting_my_next_leaves_it_alone() {
     let mut state = fixture(4);
     let e = entries(&state);
     let (p1, p2) = (state.players[0].id, state.players[1].id);
-    apply(&mut state, Command::SetNext(p1, e[1])).unwrap();
     apply(&mut state, Command::Play(p1)).unwrap();
-    apply(&mut state, Command::SetNext(p2, e[0])).unwrap();
+    assert_eq!(state.player(p1).unwrap().next, Some(e[1]));
+    apply(&mut state, Command::SetNext(p2, e[1])).unwrap();
     apply(&mut state, Command::Play(p2)).unwrap();
-    assert_eq!(state.player(p2).unwrap().current, Some(e[0]));
+    assert_eq!(state.player(p2).unwrap().current, Some(e[1]));
     assert_eq!(
-        state.player(p2).unwrap().next,
-        Some(e[2]),
-        "e[1] is on air on P1"
+        state.player(p1).unwrap().next,
+        Some(e[1]),
+        "P1's next is its own"
     );
+    assert_eq!(state.player(p2).unwrap().next, Some(e[2]));
 }
 
 #[test]
-fn rule22_an_explicit_next_is_kept_even_if_on_air_elsewhere() {
+fn rule22_the_same_entry_can_play_on_two_players() {
+    let mut state = fixture(2);
+    let e = entries(&state);
+    let (p1, p2) = (state.players[0].id, state.players[1].id);
+    apply(&mut state, Command::Play(p1)).unwrap();
+    apply(&mut state, Command::Play(p2)).unwrap();
+    assert_eq!(state.player(p1).unwrap().current, Some(e[0]));
+    assert_eq!(state.player(p2).unwrap().current, Some(e[0]));
+}
+
+#[test]
+fn rule22_played_marks_belong_to_the_player_that_played() {
     let mut state = fixture(3);
     let e = entries(&state);
     let (p1, p2) = (state.players[0].id, state.players[1].id);
-    apply(&mut state, Command::SetNext(p2, e[0])).unwrap();
     apply(&mut state, Command::Play(p1)).unwrap();
-    assert_eq!(state.player(p2).unwrap().next, Some(e[0]));
-}
-
-#[test]
-fn rule22_an_idle_player_left_without_next_picks_again_when_entries_come_free() {
-    let mut state = fixture(2);
-    let e = entries(&state);
-    let (p1, p2, p3) = (
-        state.players[0].id,
-        state.players[1].id,
-        state.players[2].id,
-    );
+    // P1 moves on: e0 is played for P1 only.
     apply(&mut state, Command::Play(p1)).unwrap();
-    apply(&mut state, Command::Play(p2)).unwrap();
-    assert_eq!(
-        state.player(p3).unwrap().next,
-        None,
-        "both entries are on air"
-    );
-    apply(&mut state, Command::Stop(p2)).unwrap();
-    assert_eq!(
-        state.player(p3).unwrap().next,
-        Some(e[1]),
-        "e1 is free again"
-    );
+    let entry = state.playlists.entry(e[0]).unwrap();
+    assert!(entry.is_played_by(p1));
+    assert!(!entry.is_played_by(p2));
 }

@@ -140,8 +140,8 @@ A player has:
 
 ### 3.2 Rules
 
-1. **Entry colours.** The current entry is shown red and the next entry green. Played entries are dimmed. "Played" is a per-entry flag that persists.
-2. **Double-click** on an entry sets `next` to that entry. This is not allowed on the current entry. It is allowed while `stop_after_current` is on, and it does **not** clear that flag.
+1. **Entry colours.** In each player's table, that player's current entry is shown red and its next green; an entry on air on another player is marked with that player's number ("P2"), not highlighted. Entries that player has played are dimmed. "Played" is kept per entry and per player, and persists.
+2. **Double-click** on an entry sets `next` to that entry. This is not allowed on that player's own current entry. It is allowed while `stop_after_current` is on, and it does **not** clear that flag.
 3. **Play while Stopped.** If `next` exists, it becomes `current` and starts; `next` becomes the entry after it. If there is no `next`, nothing happens.
 4. **Play while Paused** resumes.
 5. **Play while Playing.** If `next` exists and no fade is running:
@@ -166,7 +166,7 @@ A player has:
     - If auto-segue is enabled, `cur` has a segue start, `next` exists and `stop_after_current` is off: at `cur.segue_start` the next source starts (sample-accurate) and `cur` fades from its segue start to its `cue_out` (overlap).
     - Otherwise, at `cur.cue_out` the next starts immediately (no gap) if `next` exists, else Stop.
 12. **Advance** happens whenever the next becomes current:
-    - the old current is marked played;
+    - the old current is marked played by this player;
     - `current = next`;
     - `next` = the entry after the new current in its playlist, skipping entries whose file state is `Missing` or `Unreadable`.
 13. **Entry removal.** An entry that is current on any player cannot be removed. If the removed entry was a player's `next`, that player's `next` becomes the entry after it.
@@ -183,9 +183,9 @@ A player has:
     - While `position < intro_end`, a blue "INTRO nn.n" badge counts down, and it blinks during the last 3 s.
     - The waveform shades the intro region blue.
 19. **Outro indicator.** When `position ≥ outro_start`, an amber badge counts down to `cue_out`. The waveform shades the outro region warm.
-20. **Playlist footer:** `-remaining | elapsed / total` for the whole playlist, in the same format as the current track.
+20. **Playlist footer:** `-remaining | elapsed / total` for the whole playlist, in the same format as the current track, from this player's point of view (its played entries and its current position).
 21. **Player count** is configurable at runtime (default 4, minimum 1). There is no architectural maximum: players are identified by `PlayerId` and stored in growable collections. Config validation caps the count at `limits.max_players` (default 16) only as a resource guard. Reducing the count is refused while a player that would be removed is playing.
-22. **No duplicate on air by default.** A derived next (one the user did not choose), including an idle player's pick, never points at an entry that is on air on another player; it moves to the next playable entry that is not on air. A next the user chose explicitly is kept.
+22. **Players are independent.** A player's `current`, `next` and played marks change only through that player's own transport commands and engine events. Several players may show the same playlist, each at its own position, and the same entry may be on air on several players at once. Two things still look across players: an entry on air on any player cannot be removed (rule 13), and edits to a playlist (insert, move, remove) or a file becoming unreadable re-derive the next of every player that shows it (rules 12 and 13). (This replaces the Phase 1 rule "no duplicate on air by default", which moved every other player's next whenever one player started an entry.)
 
 ---
 
@@ -428,7 +428,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - `egui_extras::TableBuilder` with resizable `#`, Title, Artist and Duration columns (resize handles padded away from labels), with widths stored per player;
     - virtualised rows;
     - `#` zero-padded to the digit count of the playlist length (3 digits for ≥ 100 entries);
-    - current row red with a speaker icon, next row green with an arrow icon, played rows dimmed, missing/unreadable rows with a warning icon.
+    - this player's current row red with a speaker icon, its next row green with an arrow icon, entries on air on another player marked "P<n>", rows this player has played dimmed, missing/unreadable rows with a warning icon.
   - **Footer:** "+ Add" (native file dialog via `rfd`, defaulting to the music folder), entry count, playlist times (§3, rule 20).
 - **Interactions:**
   - single click selects, double click sets next;

@@ -263,7 +263,7 @@ fn peaks_are_kept_only_for_tracks_on_a_player() {
     }
     // A track that becomes next gets its peaks back.
     let p = model.players[0].id;
-    let last = model.playlists.iter().next().unwrap().entries[2];
+    let last = model.playlists.iter().next().unwrap().entries[2].clone();
     r.handle.send(Command::SetNext(p, last.id));
     r.run_until("peaks for the new next", |r| r.media.contains(last.track));
 }

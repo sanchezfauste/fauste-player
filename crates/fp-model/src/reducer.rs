@@ -172,7 +172,6 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         }
     }
     fill_empty_next(state);
-    avoid_next_on_air(state);
     reconcile(state, &mut out);
     Ok(out)
 }
@@ -229,7 +228,6 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
         }
     }
     fill_empty_next(state);
-    avoid_next_on_air(state);
     reconcile(state, &mut out);
     out
 }
@@ -346,11 +344,7 @@ fn insert_paths(
     for path in paths {
         let track = state.ids.track();
         state.library.insert(Track::new(track, path));
-        entries.push(PlaylistEntry {
-            id: state.ids.entry(),
-            track,
-            played: false,
-        });
+        entries.push(PlaylistEntry::new(state.ids.entry(), track));
     }
     state.playlists.insert(playlist, index, entries)?;
     refresh_next(state);
@@ -663,7 +657,8 @@ pub(crate) fn advance(state: &mut AppState, i: usize) -> Option<SourceRequest> {
 pub(crate) fn advance_to(state: &mut AppState, i: usize, target: EntryId) -> Option<SourceRequest> {
     let request = state.request_from_cue_in(target)?;
     if let Some(current) = state.players[i].current {
-        state.playlists.mark_played(current);
+        let player = state.players[i].id;
+        state.playlists.mark_played(current, player);
     }
     let following = state.playlists.next_playable_after(target, &state.library);
     let player = &mut state.players[i];
@@ -686,7 +681,8 @@ pub(crate) fn advance_to(state: &mut AppState, i: usize, target: EntryId) -> Opt
 /// after the stopped one.
 pub(crate) fn stop_player(state: &mut AppState, i: usize) {
     if let Some(current) = state.players[i].current {
-        state.playlists.mark_played(current);
+        let player = state.players[i].id;
+        state.playlists.mark_played(current, player);
         if !state.players[i].next_explicit || state.players[i].next.is_none() {
             state.players[i].next = state.playlists.next_playable_after(current, &state.library);
             state.players[i].next_explicit = false;
@@ -739,34 +735,6 @@ pub(crate) fn fill_empty_next(state: &mut AppState) {
         .collect();
     for (i, pick) in picks {
         state.players[i].next = pick;
-    }
-}
-
-/// Spec §3 rule 22: a derived next (not chosen by the user) never points at
-/// an entry that is on air on another player; it moves on to the next
-/// playable entry that is not on air.
-pub(crate) fn avoid_next_on_air(state: &mut AppState) {
-    let on_air: Vec<(PlayerId, EntryId)> = state
-        .players
-        .iter()
-        .filter_map(|p| p.current.map(|c| (p.id, c)))
-        .collect();
-    let busy = |me: PlayerId, e: EntryId| on_air.iter().any(|(p, c)| *p != me && *c == e);
-    let fixes: Vec<(usize, Option<EntryId>)> = state
-        .players
-        .iter()
-        .enumerate()
-        .filter(|(_, p)| !p.next_explicit && p.next.is_some_and(|n| busy(p.id, n)))
-        .map(|(i, p)| {
-            let mut candidate = p.next;
-            while let Some(c) = candidate.filter(|c| busy(p.id, *c)) {
-                candidate = state.playlists.next_playable_after(c, &state.library);
-            }
-            (i, candidate)
-        })
-        .collect();
-    for (i, next) in fixes {
-        state.players[i].next = next;
     }
 }
 

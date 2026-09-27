@@ -289,7 +289,7 @@ fn a_transition_follows_what_the_engine_actually_started() {
     );
     let player = state.player(p).unwrap();
     assert_eq!((player.current, player.next), (Some(e[1]), Some(e[2])));
-    assert!(state.playlists.entry(e[0]).unwrap().played);
+    assert!(state.playlists.entry(e[0]).unwrap().is_played_by(p));
 }
 
 // Restore gaps (re-graded from minor).

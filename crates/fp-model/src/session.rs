@@ -8,7 +8,7 @@ use crate::config::Config;
 use crate::ids::{EntryId, IdGen, PlayerId, PlaylistId};
 use crate::player::{ColumnWidths, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, Playlists};
-use crate::reducer::{avoid_next_on_air, fill_empty_next, reconcile};
+use crate::reducer::{fill_empty_next, reconcile};
 use crate::state::AppState;
 use crate::track::Library;
 
@@ -161,8 +161,8 @@ impl AppState {
                 }
             }
         }
+        state.normalize_played_marks();
         fill_empty_next(&mut state);
-        avoid_next_on_air(&mut state);
         reconcile(&mut state, &mut out);
         (state, out)
     }

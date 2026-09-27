@@ -159,7 +159,7 @@ fn rule11_transition_started_advances_marks_played_and_tracks_the_fade() {
         (player.current, player.next, player.fading),
         (Some(e[1]), Some(e[2]), true)
     );
-    assert!(state.playlists.entry(e[0]).unwrap().played);
+    assert!(state.playlists.entry(e[0]).unwrap().is_played_by(p));
     assert!(
         scheduled(&actions, p).is_some(),
         "a plan for the new current must be sent"

@@ -71,7 +71,7 @@ proptest! {
             match op {
                 Op::Insert { list, index, track } => {
                     next_entry += 1;
-                    let entry = PlaylistEntry { id: EntryId(next_entry), track: TrackId(track), played: false };
+                    let entry = PlaylistEntry::new(EntryId(next_entry), TrackId(track));
                     lists.insert(PlaylistId(list as u64), index, vec![entry]).unwrap();
                     let at = index.min(reference[list].len());
                     reference[list].insert(at, (next_entry, track));

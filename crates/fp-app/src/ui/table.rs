@@ -177,6 +177,22 @@ pub(crate) fn track_table(
                         RowStatus::Unavailable => (Some(icon::WARNING.to_owned()), theme::AMBER),
                         _ => (None, theme::NEUTRAL_600),
                     };
+                    if let RowStatus::OnAirElsewhere(n) = status {
+                        // Marked, not highlighted: it is another player's.
+                        let tip = scene
+                            .i18n
+                            .tr_args("tip-on-air-elsewhere", &[("n", n.into())]);
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(format!("P{n}"))
+                                    .font(egui::FontId::proportional(11.0))
+                                    .color(theme::ON_AIR_TEXT),
+                            )
+                            .selectable(false),
+                        )
+                        .on_hover_text(tip);
+                        return;
+                    }
                     let label = match glyph {
                         Some(g) if hi => g,
                         Some(g) => format!("{g}{:0digits$}", i + 1),
@@ -391,6 +407,12 @@ fn context_menu(
         .truncate(),
     );
     ui.separator();
+    // Players are independent: only this player's own current entry cannot
+    // be chosen; removing needs the entry off air everywhere (rule 13).
+    let own_current = scene
+        .state
+        .player(player)
+        .is_ok_and(|p| p.current == Some(entry));
     let on_air = scene.state.is_on_air(entry);
     // The item's text is its accessible label; tests find it by the plain text.
     let labelled = |ui: &mut Ui, glyph: &str, key: &str, enabled: bool| {
@@ -407,7 +429,7 @@ fn context_menu(
         ui,
         egui_phosphor::fill::PLAY,
         "menu-play-now",
-        !on_air && !fading,
+        !own_current && !fading,
     )
     .clicked()
     {
@@ -420,7 +442,14 @@ fn context_menu(
         scene.ctl.send(Command::Play(player));
         ui.close();
     }
-    if labelled(ui, icon::ARROW_BEND_DOWN_RIGHT, "menu-set-next", !on_air).clicked() {
+    if labelled(
+        ui,
+        icon::ARROW_BEND_DOWN_RIGHT,
+        "menu-set-next",
+        !own_current,
+    )
+    .clicked()
+    {
         scene.ctl.send(Command::SetNext(player, entry));
         ui.close();
     }

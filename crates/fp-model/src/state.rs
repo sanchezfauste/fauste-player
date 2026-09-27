@@ -103,6 +103,13 @@ impl AppState {
         })
     }
 
+    /// Turns the shared `played` flags of files written before players were
+    /// independent into marks for every player (spec §3 rule 22).
+    pub fn normalize_played_marks(&mut self) {
+        let players: Vec<PlayerId> = self.players.iter().map(|p| p.id).collect();
+        self.playlists.convert_legacy_played(&players);
+    }
+
     /// True if `entry` is the current entry of any player.
     pub fn is_on_air(&self, entry: EntryId) -> bool {
         self.players.iter().any(|p| p.current == Some(entry))
