@@ -225,7 +225,8 @@ normative player rules, engine, backends, analysis, persistence, UI,
 security, testing and phases. Each phase is split into implementation plans
 in [`docs/superpowers/plans`](docs/superpowers/plans). Each plan was
 executed task by task with test-driven development, then reviewed by a fresh
-reviewer before being merged. Deviations and decisions are recorded as
+reviewer, and reaches `master` through a pull request once CI is green on
+every OS. Deviations and decisions are recorded as
 rulings in the plans.
 
 In short:

@@ -90,9 +90,39 @@ Progress ledgers live in `.superpowers/sdd/<plan>/progress.md` (git-ignored).
 Record every deviation from a plan as
 `Ruling: <decision> — <why> — <cost if wrong>`.
 
-Branches: `feat/…`, `fix/…`, `docs/…` from `master`. The maintainer has
-authorised merging finished, reviewed plans into `master` locally. **Never
-push** unless asked.
+### Pull requests
+
+Every change reaches `master` through a pull request on GitHub; nothing is
+merged locally.
+
+1. Branch from an up-to-date `master`: `feat/…`, `fix/…`, `docs/…`,
+   `ci/…`, `chore/…`.
+2. Commit with fmt, clippy and the whole suite green (see Commands).
+3. Push the branch and open a PR with `gh pr create`, following
+   `.github/pull_request_template.md`. The title is a Conventional Commit
+   summary.
+4. Wait for CI on all three OSes (`gh pr checks --watch`). A red check is
+   fixed on the branch, never bypassed.
+5. When the plan's review is done and CI is green, merge with
+   `gh pr merge --merge --delete-branch`, then update the local `master`.
+
+The maintainer has authorised pushing branches and merging green,
+reviewed PRs.
+
+### Documentation is part of every change
+
+A change is not done until everything that describes it says the same:
+
+- `README.md` (features, platform table, install, roadmap);
+- the user guide in `docs/user/` and the technical docs in
+  `docs/technical/`;
+- the spec in `docs/superpowers/specs/` when behaviour changes, and the plan;
+- this file (and `AGENTS.md` if the pointer changes) when the workflow,
+  commands or layout change;
+- UI strings in both locales.
+
+The PR template has a checklist for it. `CHANGELOG.md` is never edited by
+hand: release-please writes it from the commits.
 
 ## Commits and releases
 

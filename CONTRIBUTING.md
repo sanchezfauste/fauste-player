@@ -18,10 +18,14 @@ has the full rules, which apply to people and agents alike.
    cargo test --workspace
    cargo deny check        # when dependencies change
    ```
-5. **Commit** with [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
+5. **Update the docs** in the same PR: README, the user guide
+   (`docs/user/`), the technical docs (`docs/technical/`), the spec when
+   behaviour changes, and `CLAUDE.md` when the workflow changes.
+6. **Commit** with [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
    Enable the hook with `git config core.hooksPath .githooks`.
-6. **Open a PR.** Its title is a Conventional Commit too, and the template
-   lists what reviewers check.
+7. **Open a PR.** Its title is a Conventional Commit too, and the template
+   lists what reviewers check. It is merged once CI is green on Linux,
+   Windows and macOS.
 
 ## Code rules
 
