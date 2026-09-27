@@ -8,8 +8,10 @@
 use std::io::Read;
 use std::path::Path;
 
+mod dsd;
 mod symph;
 
+use dsd::DsdDecoder;
 use symph::SymphoniaDecoder;
 
 /// -3 dB, the ITU-R BS.775 weight for centre and surround channels.
@@ -57,6 +59,7 @@ pub fn probe(head: &[u8], _extension: Option<&str>) -> Kind {
 
 enum Backend {
     Symphonia(Box<SymphoniaDecoder>),
+    Dsd(Box<DsdDecoder>),
 }
 
 /// Decodes one file, whatever its format.
@@ -72,9 +75,11 @@ impl FileDecoder {
             .map_err(|e| format!("{}: {e}", path.display()))?;
         let extension = path.extension().and_then(|e| e.to_str());
         let backend = match probe(head.get(..read).unwrap_or_default(), extension) {
-            // The other backends arrive with their decoders; until then
-            // symphonia tries every file, as before.
-            Kind::Symphonia | Kind::Dsf | Kind::Dff | Kind::WavPack | Kind::Ape => {
+            Kind::Dsf => Backend::Dsd(Box::new(DsdDecoder::open_dsf(path)?)),
+            Kind::Dff => Backend::Dsd(Box::new(DsdDecoder::open_dff(path)?)),
+            // WavPack and Monkey's Audio arrive with their decoders; until
+            // then symphonia tries them, as before.
+            Kind::Symphonia | Kind::WavPack | Kind::Ape => {
                 Backend::Symphonia(Box::new(SymphoniaDecoder::open(path)?))
             }
         };
@@ -84,6 +89,7 @@ impl FileDecoder {
     pub fn sample_rate(&self) -> u32 {
         match &self.backend {
             Backend::Symphonia(d) => d.sample_rate(),
+            Backend::Dsd(d) => d.sample_rate(),
         }
     }
 
@@ -92,6 +98,7 @@ impl FileDecoder {
     pub fn bits_per_sample(&self) -> Option<u32> {
         match &self.backend {
             Backend::Symphonia(d) => d.bits_per_sample(),
+            Backend::Dsd(_) => None,
         }
     }
 
@@ -99,6 +106,7 @@ impl FileDecoder {
     pub fn channels(&self) -> usize {
         match &self.backend {
             Backend::Symphonia(d) => d.channels(),
+            Backend::Dsd(d) => d.channels(),
         }
     }
 
@@ -106,6 +114,7 @@ impl FileDecoder {
     pub fn frames_hint(&self) -> Option<u64> {
         match &self.backend {
             Backend::Symphonia(d) => d.frames_hint(),
+            Backend::Dsd(d) => d.frames_hint(),
         }
     }
 
@@ -113,6 +122,7 @@ impl FileDecoder {
     pub fn seek(&mut self, secs: f64) -> Result<(), String> {
         match &mut self.backend {
             Backend::Symphonia(d) => d.seek(secs),
+            Backend::Dsd(d) => d.seek(secs),
         }
     }
 
@@ -121,6 +131,7 @@ impl FileDecoder {
     pub fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
         match &mut self.backend {
             Backend::Symphonia(d) => d.next_block(out),
+            Backend::Dsd(d) => d.next_block(out),
         }
     }
 }
