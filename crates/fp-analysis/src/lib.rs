@@ -10,3 +10,4 @@ pub mod metadata;
 pub mod signal;
 
 pub use analyze::{Analysis, AnalysisError, analyze_file, analyze_file_cancellable};
+pub use signal::WavePeak;

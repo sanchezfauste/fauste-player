@@ -13,6 +13,7 @@ use super::format;
 use super::theme::{self, WaveColors};
 use super::view::MarkerFractions;
 use crate::services::TrackMedia;
+use fp_analysis::WavePeak;
 
 pub fn font(size: f32) -> FontId {
     FontId::proportional(size)
@@ -514,6 +515,62 @@ pub fn fader(ui: &mut Ui, position: f32, label: &str) -> Option<f32> {
     changed
 }
 
+/// How strongly the waveform's peak outline shows over the background,
+/// relative to its solid RMS body.
+const WAVE_PEAK_ALPHA: f32 = 0.45;
+
+/// One pixel column of the waveform, as fractions of full scale.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct WaveColumn {
+    /// The largest magnitude among the column's buckets.
+    pub peak: f32,
+    /// The RMS level of the column: the root of its buckets' mean square.
+    pub rms: f32,
+}
+
+/// Reduces analysis buckets of `bucket_secs` to `columns` equal columns
+/// spanning `span_secs`. Every column takes at least one bucket, so there
+/// are no gaps when there are more columns than buckets; columns past the
+/// audio are empty.
+pub fn wave_columns(
+    peaks: &[WavePeak],
+    bucket_secs: f64,
+    span_secs: f64,
+    columns: usize,
+) -> Vec<WaveColumn> {
+    let full = f32::from(i16::MAX);
+    let mut out = vec![WaveColumn::default(); columns];
+    if bucket_secs <= 0.0 || span_secs <= 0.0 {
+        return out;
+    }
+    let bucket_at = |c: usize| ((c as f64 / columns as f64) * span_secs / bucket_secs) as usize;
+    for (c, column) in out.iter_mut().enumerate() {
+        let a0 = bucket_at(c);
+        let a1 = bucket_at(c + 1).max(a0 + 1);
+        let Some(buckets) = peaks.get(a0.min(peaks.len())..a1.min(peaks.len())) else {
+            continue;
+        };
+        if buckets.is_empty() {
+            continue;
+        }
+        let peak = buckets
+            .iter()
+            .map(|p| p.min.unsigned_abs().max(p.max.unsigned_abs()))
+            .max()
+            .unwrap_or(0);
+        let mean_square = buckets
+            .iter()
+            .map(|p| (f32::from(p.rms) / full).powi(2))
+            .sum::<f32>()
+            / buckets.len() as f32;
+        *column = WaveColumn {
+            peak: (f32::from(peak) / full).min(1.0),
+            rms: mean_square.sqrt().min(1.0),
+        };
+    }
+    out
+}
+
 /// What the waveform shows.
 pub struct WaveInput<'a> {
     pub media: Option<&'a TrackMedia>,
@@ -569,36 +626,35 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
     }
     let play_x = m.position.map_or(inner.left(), x_of);
     if let Some(media) = input.media.filter(|m| !m.peaks.is_empty()) {
-        let peaks = &media.peaks;
-        let covered = media.peak_bucket_secs * peaks.len() as f64;
+        let covered = media.peak_bucket_secs * media.peaks.len() as f64;
         let span = covered.max(total);
         let amp = (inner.height() / 2.0 - 3.0).max(1.0);
-        let mut x = 0.0_f32;
-        while x < w {
-            let t0 = f64::from(x / w) * span;
-            let t1 = f64::from((x + 2.0) / w) * span;
-            let a0 = (t0 / media.peak_bucket_secs) as usize;
-            let a1 = ((t1 / media.peak_bucket_secs) as usize).max(a0 + 1);
-            let level = peaks
-                .get(a0.min(peaks.len())..a1.min(peaks.len()))
-                .unwrap_or_default()
-                .iter()
-                .map(|(lo, hi)| lo.unsigned_abs().max(hi.unsigned_abs()))
-                .max()
-                .unwrap_or(0);
-            let a = f32::from(level) / f32::from(i16::MAX as u16) * amp;
-            let px = inner.left() + x;
+        // One column per pixel: the peaks as a faint outline, the RMS level
+        // as the solid body inside it.
+        let columns = wave_columns(&media.peaks, media.peak_bucket_secs, span, w as usize);
+        for (i, column) in columns.iter().enumerate() {
+            let px = inner.left() + i as f32;
             let color = if px < play_x {
                 input.colors.played
             } else {
                 input.colors.unplayed
             };
-            painter.rect_filled(
-                Rect::from_min_size(pos2(px, mid - a), vec2(1.0, (a * 1.96).max(1.0))),
-                0.0,
-                color,
-            );
-            x += 2.0;
+            let peak = column.peak * amp;
+            if peak > 0.0 {
+                painter.rect_filled(
+                    Rect::from_min_max(pos2(px, mid - peak), pos2(px + 1.0, mid + peak)),
+                    0.0,
+                    color.gamma_multiply(WAVE_PEAK_ALPHA),
+                );
+            }
+            let rms = column.rms * amp;
+            if rms > 0.0 {
+                painter.rect_filled(
+                    Rect::from_min_max(pos2(px, mid - rms), pos2(px + 1.0, mid + rms)),
+                    0.0,
+                    color,
+                );
+            }
         }
     }
     let label_font = font_semibold(9.0);

@@ -8,15 +8,15 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::metadata::{read_intro, read_tags, thumbnail_png, title_from_file_name};
-use crate::signal::{EnvelopeBuilder, detect_markers};
+use crate::signal::{EnvelopeBuilder, WavePeak, detect_markers};
 
 /// Everything analysis produces for one file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Analysis {
     /// Metadata and markers for the model.
     pub analysis: TrackAnalysis,
-    /// Waveform: min/max per bucket, for the UI.
-    pub peaks: Vec<(i16, i16)>,
+    /// Waveform: min, max and RMS per bucket, for the UI.
+    pub peaks: Vec<WavePeak>,
     pub peak_bucket_secs: f64,
     /// Cover thumbnail as PNG, for the UI.
     pub cover_png: Option<Vec<u8>>,

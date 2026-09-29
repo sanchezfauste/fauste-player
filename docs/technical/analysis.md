@@ -12,8 +12,9 @@ blocks. The result holds:
   for lossy ones), and its channel count. The track keeps the format, and source and cart
   requests carry it, so bit-perfect buses can follow the file rate without
   reading the file;
-- `peaks`: min/max `i16` pairs per `analysis.peak_bucket_ms` (10 ms) of the
-  mono sum;
+- `peaks`: one `WavePeak { min, max, rms }` (`i16`, full scale =
+  `i16::MAX`) per `analysis.peak_bucket_ms` (10 ms) of the mono sum. The
+  waveform draws the peaks dimmed and the RMS level as a solid body;
 - `cover_png`: a PNG thumbnail of the embedded cover (`analysis.cover_thumb_px`,
   128 px).
 
