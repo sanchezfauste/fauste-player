@@ -54,8 +54,14 @@ pub(super) fn layout(file: &mut File) -> Result<Layout, String> {
                         }
                         _ => {}
                     }
-                    let len = usize::try_from(len).map_err(|_| bad())?;
-                    p = data.saturating_add(len).saturating_add(len % 2);
+                    // A sub-chunk must end inside PROP, which keeps `p` small
+                    // enough that the offsets above cannot overflow.
+                    let end = usize::try_from(len)
+                        .ok()
+                        .and_then(|len| data.checked_add(len)?.checked_add(len % 2))
+                        .filter(|end| *end <= prop.len() + 1)
+                        .ok_or_else(bad)?;
+                    p = end;
                 }
             }
             b"DST " => return Err("DST-compressed DSDIFF is not supported".into()),

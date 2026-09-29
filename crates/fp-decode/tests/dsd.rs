@@ -400,6 +400,13 @@ fn a_truncated_dsd_header_is_an_error() {
     let path = write(dir.path(), "cut.dff", &whole[..40]);
     assert!(FileDecoder::open(&path).is_err());
 
+    // A PROP sub-chunk that claims an enormous length.
+    let mut huge = dff(&stereo_pair(), b"DSD ");
+    let fs = huge.windows(4).position(|w| w == b"FS  ").unwrap();
+    huge[fs + 4..fs + 12].copy_from_slice(&(u64::MAX - 3).to_be_bytes());
+    let path = write(dir.path(), "huge.dff", &huge);
+    assert!(FileDecoder::open(&path).is_err());
+
     // A header that claims far more audio than the file holds is clamped to
     // the file, and bad channel counts are refused.
     let mut lying = dsf(&stereo_pair(), 8);
