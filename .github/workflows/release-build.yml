@@ -7,7 +7,9 @@ name: release-build
 #   - Windows: .msi;
 #   - macOS: a universal .dmg.
 # Called by release-please after a release is created; can also be run by
-# hand to rebuild the assets of an existing tag. Signing runs only when its
+# hand to rebuild the assets of an existing tag. Pull requests that touch the
+# packaging run it as a dry run (build everything, upload nothing), so a
+# broken package shows up before the release does. Signing runs only when its
 # secrets are configured (see docs/technical/release-process.md).
 
 on:
@@ -16,6 +18,12 @@ on:
       tag:
         required: true
         type: string
+  pull_request:
+    paths:
+      - packaging/**
+      - scripts/package-release.sh
+      - scripts/package/**
+      - .github/workflows/release-build.yml
   workflow_dispatch:
     inputs:
       tag:
@@ -113,10 +121,12 @@ jobs:
           WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
       - name: Upload to the release
-        if: ${{ !inputs.dry_run }}
+        if: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
         shell: bash
         run: |
-          mapfile -t files <<< "${FILES}"
+          # No mapfile: macOS runners ship bash 3.2.
+          files=()
+          while IFS= read -r f; do [ -n "$f" ] && files+=("$f"); done <<< "${FILES}"
           gh release upload "${{ inputs.tag }}" "${files[@]}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
@@ -151,7 +161,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
       - name: Upload to the release
-        if: ${{ !inputs.dry_run }}
+        if: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
         run: gh release upload "${{ inputs.tag }}" "${DMG}" "${DMG}.sha256" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
@@ -206,7 +216,7 @@ jobs:
   flatpak-release:
     name: Attach the Flatpak bundle
     needs: flatpak
-    if: ${{ !inputs.dry_run }}
+    if: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
