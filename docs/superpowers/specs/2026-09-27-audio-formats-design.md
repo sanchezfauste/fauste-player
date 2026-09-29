@@ -11,9 +11,9 @@
 | WAV, AIFF, CAF | `wav`, `aif`, `aiff`, `caf` | symphonia | unchanged |
 | FLAC | `flac` | symphonia | unchanged |
 | MP1/MP2/MP3 | `mp1`, `mp2`, `mp3` | symphonia | unchanged |
-| AAC, ALAC | `m4a`, `mp4`, `aac` | symphonia | unchanged |
+| AAC, ALAC | `m4a`, `m4b`, `aac` | symphonia | unchanged |
 | Ogg Vorbis | `ogg`, `oga` | symphonia | unchanged |
-| Matroska/WebM | `mka`, `mkv`, `webm` | symphonia | plus Opus inside |
+| Matroska/WebM audio | `mka`, `weba` | symphonia | plus Opus inside. Video containers (`mkv`, `webm`, `mp4`) are not offered in file choosers or folder scans |
 | **Opus** | `opus` (and in Ogg or WebM) | `opus-decoder`, a pure-Rust decoder that forbids `unsafe`, registered as a symphonia codec | always decoded at 48 kHz |
 | **WavPack** | `wv` | `wavicle` (pure Rust, `forbid(unsafe_code)`) | lossless mono and stereo: 16-, 24- and 32-bit integer and 32-bit float. Hybrid (lossy), multichannel and 8-bit files are refused (the decoder does not support them) |
 | **Monkey's Audio** | `ape` | `ape-decoder` (pure Rust, `deny(unsafe_code)`) | frame-accurate seek |
@@ -51,7 +51,7 @@ Every added crate is MIT or Apache-2.0 licensed. A GPL WavPack codec was rejecte
 ## F4. Everywhere else
 
 - **File filters:** adding files, drag and drop, folder scans and playlist imports accept the new extensions.
-- **Desktop entry:** the MIME types include the new formats.
+- **Desktop entry:** unchanged. The app opens playlists from the command line, not audio files, so it does not claim audio MIME types.
 - **Documentation:** the README format list, the user guide (getting started, playlists) and the technical docs (decoding, analysis).
 
 ## F5. Verification

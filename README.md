@@ -84,7 +84,7 @@ With nothing configured, the first available system is used, in this order:
 Systems that are missing on a machine show as unavailable in Settings; the
 application still starts.
 
-Formats: WAV, AIFF, FLAC, MP3, OGG Vorbis, AAC/M4A, ALAC.
+Formats: WAV, AIFF, CAF, FLAC, MP3 (and MP1/MP2), AAC/M4A, ALAC, Ogg Vorbis, Opus, WavPack, Monkey's Audio (APE), DSD (DSF and DFF) and Matroska audio (MKA). DSD is converted to PCM.
 
 ## Install
 

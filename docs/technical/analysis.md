@@ -51,6 +51,11 @@ automatic marker so a manual one wins. The tag can be:
 - an APE item `INTRO`;
 - an MP4 freeform `----:com.apple.iTunes:INTRO`.
 
+lofty reads the tags of every format except DSF. For DSF, `read_tags` reads
+the ID3v2 chunk the DSF header points to (at most the cover limit), wraps it
+in an in-memory WAV and hands that to lofty. DFF has no standard tags, so the
+file name is used.
+
 Its value is seconds (`12.5`) or `m:ss(.f)`. The model's
 `Track::apply_analysis` stores automatic markers without touching manual ones.
 

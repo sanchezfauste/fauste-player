@@ -272,15 +272,17 @@ fn background_faults_show_an_alert() {
 }
 
 #[test]
-fn opus_and_video_files_are_not_accepted() {
+fn new_formats_are_accepted_as_audio_files() {
     use fp_app::ui::files::is_audio;
     use std::path::Path;
     for yes in [
-        "a.wav", "a.aiff", "a.flac", "a.mp3", "a.ogg", "a.m4a", "a.AAC",
+        "a.wav", "a.aiff", "a.flac", "a.mp3", "a.ogg", "a.m4a", "a.AAC", "a.opus", "a.wv", "a.ape",
+        "a.dsf", "a.DFF", "a.caf", "a.mka", "a.mp2", "a.weba",
     ] {
         assert!(is_audio(Path::new(yes)), "{yes}");
     }
-    for no in ["a.opus", "a.mkv", "a.webm", "a.mp4", "a.mka", "a.txt"] {
+    // Video containers stay out: a folder scan must not pick up films.
+    for no in ["a.mkv", "a.webm", "a.mp4", "a.txt", "a.wvc"] {
         assert!(!is_audio(Path::new(no)), "{no}");
     }
 }

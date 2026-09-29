@@ -142,7 +142,7 @@ hand: release-please writes it from the commits.
 |---|---|
 | `crates/fp-model` | State, commands, reducer (rules), config, sessions |
 | `crates/fp-store` | Persistence, backups, migrations, lenient config |
-| `crates/fp-decode` | symphonia decoding and downmix |
+| `crates/fp-decode` | File decoding (symphonia, DSD, WavPack, Monkey's Audio, Opus) and downmix |
 | `crates/fp-backends` | `AudioBackend` trait, cpal, Null, Offline |
 | `crates/fp-engine` | Mixer, sources, buses, workers, engine, conductor |
 | `crates/fp-analysis` | Metadata, signal analysis, cache, pool |

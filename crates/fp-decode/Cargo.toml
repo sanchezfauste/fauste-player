@@ -1,6 +1,6 @@
 [package]
 name = "fp-decode"
-description = "Audio file decoding to interleaved stereo f32 (symphonia)"
+description = "Audio file decoding to interleaved stereo f32"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

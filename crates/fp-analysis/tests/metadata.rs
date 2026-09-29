@@ -123,3 +123,51 @@ fn corrupt_cover_bytes_are_ignored() {
         None
     );
 }
+
+/// A one-block stereo DSF file of DSD silence with `id3` as its metadata
+/// chunk.
+fn dsf_with_tag(dir: &Path, id3: &[u8]) -> PathBuf {
+    let data = vec![0x69u8; 2 * 4096];
+    let data_end = 92 + data.len() as u64;
+    let total = data_end + id3.len() as u64;
+    let mut f = Vec::new();
+    f.extend(b"DSD ");
+    f.extend(28u64.to_le_bytes());
+    f.extend(total.to_le_bytes());
+    f.extend(data_end.to_le_bytes());
+    f.extend(b"fmt ");
+    f.extend(52u64.to_le_bytes());
+    for v in [1u32, 0, 2, 2, 2_822_400, 1] {
+        f.extend(v.to_le_bytes());
+    }
+    f.extend((4096u64 * 8).to_le_bytes());
+    f.extend(4096u32.to_le_bytes());
+    f.extend(0u32.to_le_bytes());
+    f.extend(b"data");
+    f.extend((12 + data.len() as u64).to_le_bytes());
+    f.extend(data);
+    f.extend(id3);
+    let path = dir.join("tagged.dsf");
+    std::fs::write(&path, f).unwrap();
+    path
+}
+
+#[test]
+fn dsf_tags_are_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut tag = lofty::id3::v2::Id3v2Tag::new();
+    tag.set_title("Slow Tide".into());
+    tag.set_artist("The Harbour".into());
+    tag.set_album("Night Ferry".into());
+    let mut id3 = Vec::new();
+    tag.dump_to(&mut id3, WriteOptions::default()).unwrap();
+    let path = dsf_with_tag(dir.path(), &id3);
+    let tags = read_tags(&path, &Limits::default());
+    assert_eq!(tags.title.as_deref(), Some("Slow Tide"));
+    assert_eq!(tags.artist.as_deref(), Some("The Harbour"));
+    assert_eq!(tags.album.as_deref(), Some("Night Ferry"));
+
+    // A metadata pointer past the end, or garbage there, is no tag.
+    let path = dsf_with_tag(dir.path(), b"not a tag at all");
+    assert_eq!(read_tags(&path, &Limits::default()).title, None);
+}
