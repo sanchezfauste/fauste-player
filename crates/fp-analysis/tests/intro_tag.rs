@@ -92,3 +92,102 @@ fn only_the_last_field_may_have_decimals_and_a_decimal_comma_is_accepted() {
     assert_eq!(parse_intro_time("12,5"), Some(12.5));
     assert_eq!(parse_intro_time("1:02,5"), Some(62.5));
 }
+
+fn wavpack(dir: &Path) -> PathBuf {
+    let samples: Vec<i32> = (0..44_100)
+        .map(|i| ((i as f32 * 0.1).sin() * 8_000.0) as i32)
+        .collect();
+    let params = wavicle::EncodeParams {
+        channels: 1,
+        sample_rate: 44_100,
+        bits_per_sample: 16,
+    };
+    let path = dir.join("a.wv");
+    std::fs::write(&path, wavicle::encode_int(params, &samples).unwrap()).unwrap();
+    path
+}
+
+fn opus(dir: &Path) -> PathBuf {
+    use opus_pure::{Application, MAX_PACKET_BYTES, OggOpusWriter, OpusEncoder, OpusHead};
+    let mut encoder = OpusEncoder::new(48_000, 1, Application::Audio).unwrap();
+    let mut writer =
+        OggOpusWriter::new(Vec::new(), OpusHead::for_encoder(&encoder, 48_000)).unwrap();
+    let pcm: Vec<f32> = (0..48_000).map(|i| (i as f32 * 0.1).sin() * 0.3).collect();
+    let mut packet = vec![0u8; MAX_PACKET_BYTES];
+    for block in pcm.chunks(960) {
+        let n = encoder.encode(block, 960, &mut packet).unwrap();
+        writer.write_packet(&packet[..n]).unwrap();
+    }
+    let path = dir.join("a.opus");
+    std::fs::write(&path, writer.finish().unwrap()).unwrap();
+    path
+}
+
+fn ape_item(path: &Path, value: &str) {
+    let mut tag = lofty::ape::ApeTag::new();
+    tag.insert(
+        lofty::ape::ApeItem::new("INTRO".into(), lofty::tag::ItemValue::Text(value.into()))
+            .unwrap(),
+    );
+    tag.save_to_path(path, WriteOptions::default()).unwrap();
+}
+
+#[test]
+fn an_intro_tag_is_read_from_wavpack_and_monkeys_audio() {
+    let dir = tempfile::tempdir().unwrap();
+    let wv = wavpack(dir.path());
+    ape_item(&wv, "0.5");
+    assert_eq!(read_intro(&wv), Some(0.5));
+
+    let ape = dir.path().join("a.ape");
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../fp-decode/tests/fixtures/ape/sine_24s_c2000.ape"),
+        &ape,
+    )
+    .unwrap();
+    ape_item(&ape, "0:00.75");
+    assert_eq!(read_intro(&ape), Some(0.75));
+}
+
+#[test]
+fn an_intro_tag_is_read_from_opus() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = opus(dir.path());
+    let mut comments = lofty::ogg::tag::VorbisComments::new();
+    comments.insert("INTRO".into(), "0.4".into());
+    comments
+        .save_to_path(&path, WriteOptions::default())
+        .unwrap();
+    assert_eq!(read_intro(&path), Some(0.4));
+}
+
+#[test]
+fn an_intro_tag_is_read_from_dsf() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut tag = Id3v2Tag::new();
+    tag.insert_user_text("INTRO".into(), "0.1".into());
+    let mut id3 = Vec::new();
+    tag.dump_to(&mut id3, WriteOptions::default()).unwrap();
+    let data = vec![0x69u8; 2 * 4096];
+    let data_end = 92 + data.len() as u64;
+    let mut f = b"DSD ".to_vec();
+    f.extend(28u64.to_le_bytes());
+    f.extend((data_end + id3.len() as u64).to_le_bytes());
+    f.extend(data_end.to_le_bytes());
+    f.extend(b"fmt ");
+    f.extend(52u64.to_le_bytes());
+    for v in [1u32, 0, 2, 2, 2_822_400, 1] {
+        f.extend(v.to_le_bytes());
+    }
+    f.extend((4096u64 * 8).to_le_bytes());
+    f.extend(4096u32.to_le_bytes());
+    f.extend(0u32.to_le_bytes());
+    f.extend(b"data");
+    f.extend((12 + data.len() as u64).to_le_bytes());
+    f.extend(data);
+    f.extend(id3);
+    let path = dir.path().join("a.dsf");
+    std::fs::write(&path, f).unwrap();
+    assert_eq!(read_intro(&path), Some(0.1));
+}

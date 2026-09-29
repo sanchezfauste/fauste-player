@@ -1567,11 +1567,13 @@ dependencies = [
  "hound",
  "image",
  "lofty",
+ "opus-pure",
  "postcard",
  "serde",
  "tempfile",
  "thiserror 2.0.21",
  "tracing",
+ "wavicle",
 ]
 
 [[package]]

@@ -19,6 +19,8 @@ postcard.workspace = true
 
 [dev-dependencies]
 hound.workspace = true
+opus-pure.workspace = true
+wavicle = { workspace = true, features = ["encode"] }
 tempfile.workspace = true
 
 [lints]

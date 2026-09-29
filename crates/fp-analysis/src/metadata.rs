@@ -193,9 +193,12 @@ pub fn parse_intro_time(text: &str) -> Option<f64> {
     total.is_finite().then_some(total)
 }
 
-/// The intro time from an `INTRO` tag: ID3v2 `TXXX:INTRO`, a Vorbis or FLAC
-/// comment, an APE item, or an MP4 freeform `----:com.apple.iTunes:INTRO`.
-/// Anything unreadable is `None`.
+/// Most bytes read from a DSF file's tag when looking for `INTRO`.
+const DSF_INTRO_TAG_BYTES: u64 = 16 * 1024 * 1024;
+
+/// The intro time from an `INTRO` tag: ID3v2 `TXXX:INTRO`, a Vorbis, Opus or
+/// FLAC comment, an APE item (WavPack, Monkey's Audio, MP3), or an MP4
+/// freeform `----:com.apple.iTunes:INTRO`. Anything unreadable is `None`.
 pub fn read_intro(path: &Path) -> Option<f64> {
     use lofty::ape::ApeTag;
     use lofty::file::{AudioFile, FileType};
@@ -215,17 +218,35 @@ pub fn read_intro(path: &Path) -> Option<f64> {
             })
     };
     let result = std::panic::catch_unwind(|| -> Option<String> {
+        // Covers are not needed here, and a huge one must not hide the tag.
+        let options = lofty::config::ParseOptions::new()
+            .read_properties(false)
+            .read_cover_art(false);
+        // DSF: the ID3v2 chunk, which lofty reads once it is in a WAV.
+        if let Some(wav) = dsf_tag_as_wav(path, DSF_INTRO_TAG_BYTES) {
+            let f = lofty::iff::wav::WavFile::read_from(&mut std::io::Cursor::new(wav), options)
+                .ok()?;
+            return from_id3(f.id3v2());
+        }
         let probe = lofty::probe::Probe::open(path)
             .ok()?
             .guess_file_type()
             .ok()?;
         let file_type = probe.file_type()?;
         let mut reader = std::fs::File::open(path).ok()?;
-        // Covers are not needed here, and a huge one must not hide the tag.
-        let options = lofty::config::ParseOptions::new()
-            .read_properties(false)
-            .read_cover_art(false);
         match file_type {
+            FileType::Opus => {
+                let f = lofty::ogg::OpusFile::read_from(&mut reader, options).ok()?;
+                f.vorbis_comments().get(INTRO_KEY).map(str::to_owned)
+            }
+            FileType::WavPack => {
+                let f = lofty::wavpack::WavPackFile::read_from(&mut reader, options).ok()?;
+                from_ape(f.ape())
+            }
+            FileType::Ape => {
+                let f = lofty::ape::ApeFile::read_from(&mut reader, options).ok()?;
+                from_ape(f.ape()).or_else(|| from_id3(f.id3v2()))
+            }
             FileType::Flac => {
                 let f = lofty::flac::FlacFile::read_from(&mut reader, options).ok()?;
                 f.vorbis_comments()
