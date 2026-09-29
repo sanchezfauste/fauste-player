@@ -1,6 +1,6 @@
 # Waveform with peak and RMS Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** a waveform that shows a loud track's dynamics: peaks dimmed, RMS solid, drawn continuously.
 
@@ -30,14 +30,24 @@
 
 **Files:** `crates/fp-analysis/src/signal.rs`, `analyze.rs`, `cache.rs`, `crates/fp-app/src/services.rs`.
 
-- [ ] Test `peaks_hold_min_max_and_rms_per_bucket` (a 0.5 constant bucket has rms 0.5·MAX; a bucket with one −1 sample of 80 has rms MAX/√80); watch it fail.
-- [ ] Add `pub struct WavePeak { min, max, rms: i16 }`, accumulate the bucket's sum of squares, change `peaks` to `Vec<WavePeak>` in `Envelope`, `Analysis`, `TrackMedia`; bump `ANALYSIS_VERSION` to 5.
-- [ ] Run `cargo test -p fp-analysis`; commit `feat(analysis): keep the RMS level of each waveform bucket`.
+- [x] Test `peaks_hold_the_rms_level_of_each_bucket` (a 0.5 constant bucket has rms 0.5·MAX; a bucket with one −1 sample of 80 has rms MAX/√80); watch it fail.
+- [x] Add `pub struct WavePeak { min, max, rms: i16 }`, accumulate the bucket's sum of squares, change `peaks` to `Vec<WavePeak>` in `Envelope`, `Analysis`, `TrackMedia`; bump `ANALYSIS_VERSION` to 5.
+- [x] Run `cargo test -p fp-analysis`; commit `feat(analysis): keep the RMS level of each waveform bucket`.
 
 ### Task 2: continuous waveform with a peak outline and RMS body
 
 **Files:** `crates/fp-app/src/ui/widgets.rs`, `crates/fp-app/tests/waveform_view.rs`, docs.
 
-- [ ] Tests for `pub fn wave_columns(peaks, bucket_secs, span_secs, columns) -> Vec<(f32, f32)>`: one column per pixel; a column's peak is its largest bucket and its RMS the root of the mean square; columns past the audio are zero; more columns than buckets leave no gaps. Watch them fail.
-- [ ] Implement it; draw each 1 px column: peak dimmed (0.45), RMS solid, played/unplayed colours.
-- [ ] Docs (spec, analysis.md, players.md); fmt, clippy, suite; commit `feat(ui): draw the waveform continuously with its RMS body`.
+- [x] Tests for `pub fn wave_columns(peaks, bucket_secs, span_secs, columns) -> Vec<WaveColumn>` (`WaveColumn { peak, rms }`, fractions of full scale): one column per pixel; a column's peak is its largest bucket and its RMS the root of the mean square; columns past the audio are zero; more columns than buckets leave no gaps. Watch them fail.
+- [x] Implement it; draw each 1 px column: peak dimmed (0.45), RMS solid, played/unplayed colours.
+- [x] Docs (spec, analysis.md, players.md); fmt, clippy, suite; commit `feat(ui): draw the waveform continuously with its RMS body`.
+
+## Rulings and deferred minors
+
+- Ruling: `wave_columns` returns a `WaveColumn { peak, rms }` struct, not a tuple — named fields read better in the widget and the tests — cost if wrong: one rename.
+- Deferred minors (final review):
+  - float truncation in `bucket_at` can drop the last 10 ms bucket when the span equals the audio length;
+  - `a0 + 1` can overflow for a corrupt duration of about 1e17 s, and the column count is not capped for an unbounded width;
+  - about 2 rects per pixel per player every frame, and the bucket reduction runs every frame (cache it per track and width, or build one mesh);
+  - cache entries grow from about 6 to about 8 bytes per bucket, and old-version entries are never pruned;
+  - no tests for a silent bucket, a NaN bucket length, or an old-version cache key missing.
