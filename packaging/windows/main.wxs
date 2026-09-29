@@ -51,11 +51,15 @@
                             KeyPath='yes'/>
                     </Component>
                     <Directory Id='Licenses' Name='licenses'>
+                        <!-- One file per component: WiX only generates the
+                             GUID of a component whose key path is its file. -->
                         <Component Id='notices' Guid='*'>
                             <File Id='thirdparty' Name='THIRD-PARTY.html' DiskId='1'
                                 Source='dist\staging\THIRD-PARTY.html' KeyPath='yes'/>
+                        </Component>
+                        <Component Id='fontlicense' Guid='*'>
                             <File Id='fontlicense' Name='Inter-OFL.txt' DiskId='1'
-                                Source='crates\fp-app\assets\fonts\OFL.txt'/>
+                                Source='crates\fp-app\assets\fonts\OFL.txt' KeyPath='yes'/>
                         </Component>
                     </Directory>
                 </Directory>
@@ -91,6 +95,7 @@
             Absent='disallow'>
             <ComponentRef Id='binary0'/>
             <ComponentRef Id='notices'/>
+            <ComponentRef Id='fontlicense'/>
             <ComponentRef Id='shortcut'/>
         </Feature>
 
