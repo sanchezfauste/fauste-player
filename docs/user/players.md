@@ -24,7 +24,8 @@ playlist tabs, transport, volume and outputs.
     top 20 dB taking half the height). The scale's marks sit between the
     channels; the brighter one is the alignment level (−18 dBFS).
   - The bar is green, yellow from the warning level (−9 dBFS), and red
-    from the danger level (−3 dBFS).
+    from the danger level (−3 dBFS). The other meter types turn red where
+    their scale does (from 0 VU, from the permitted maximum on a PPM).
   - K-System meters show two sections: the solid bar is the average (RMS)
     level and the dimmer part above it reaches the peak. Their colours are
     the K-System's: green below 0, amber from 0 to +4, red above.

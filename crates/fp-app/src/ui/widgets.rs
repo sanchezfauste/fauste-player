@@ -381,10 +381,10 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
     }
     // The scale's marks in the gap between the channels, the alignment
     // level (K-System 0) brighter.
-    let alignment = c.ballistics.k_reference_dbfs().unwrap_or(c.reference_dbfs);
-    for mark in scale_marks(c) {
+    let marks = scale_marks(c).into_iter().map(|m| (m, false));
+    for (mark, alignment) in marks.chain(std::iter::once((alignment_dbfs(c), true))) {
         let y = y_of(mark);
-        let (width, colour) = if mark == alignment {
+        let (width, colour) = if alignment {
             (2.0, theme::NEUTRAL_300)
         } else {
             (1.0, theme::NEUTRAL_400.gamma_multiply(0.6))
@@ -418,14 +418,37 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
     clicked
 }
 
-/// The level (dBFS) where `zone` starts on the chosen meter.
+/// The alignment level the meter marks, in dBFS: the K-System's 0, or
+/// `reference_dbfs` (EBU TEST, DIN −9, 0 VU).
+pub fn alignment_dbfs(c: &MeterConfig) -> f32 {
+    c.ballistics.k_reference_dbfs().unwrap_or(c.reference_dbfs)
+}
+
+/// Permitted maximum level above alignment on the programme meters' scales
+/// (EBU +9, DIN 0).
+const PERMITTED_MAXIMUM_DB: f32 = 9.0;
+
+/// The level (dBFS) where `zone` starts on the chosen meter (meters spec
+/// M4): the configured zones on the digital scale; the scale's own on the
+/// others, which have no yellow band.
 fn zone_start(zone: Zone, c: &MeterConfig) -> f32 {
-    match (zone, c.ballistics.k_reference_dbfs()) {
-        (Zone::Normal, _) => f32::NEG_INFINITY,
-        (Zone::Warning, Some(k)) => k,
-        (Zone::Danger, Some(k)) => k + 4.0,
-        (Zone::Warning, None) => c.warning_dbfs,
-        (Zone::Danger, None) => c.danger_dbfs,
+    let r = c.reference_dbfs;
+    let (warning, danger) = match c.ballistics {
+        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => {
+            let k = alignment_dbfs(c);
+            (k, k + 4.0)
+        }
+        // The VU scale's red arc runs from 0 VU.
+        MeterBallistics::Vu => (r, r),
+        MeterBallistics::EbuPpm | MeterBallistics::DinPpm => {
+            (r + PERMITTED_MAXIMUM_DB, r + PERMITTED_MAXIMUM_DB)
+        }
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => (c.warning_dbfs, c.danger_dbfs),
+    };
+    match zone {
+        Zone::Normal => f32::NEG_INFINITY,
+        Zone::Warning => warning,
+        Zone::Danger => danger,
     }
 }
 

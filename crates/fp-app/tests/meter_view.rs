@@ -10,7 +10,9 @@ mod support;
 
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
-use fp_app::ui::widgets::{Zone, loudness_line, max_readout, meter_position, scale_marks, zone_of};
+use fp_app::ui::widgets::{
+    Zone, alignment_dbfs, loudness_line, max_readout, meter_position, scale_marks, zone_of,
+};
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::PlayerTelemetry;
 use fp_engine::meter::MeterReading;
@@ -286,4 +288,42 @@ fn a_long_loudness_value_fits_the_meter() {
     };
     let (text, _) = loudness_line(&r, &c).unwrap();
     assert!(text.chars().count() <= 5, "{text}");
+}
+
+const ALL_METERS: [MeterBallistics; 8] = [
+    MeterBallistics::DigitalPeak,
+    MeterBallistics::EbuPpm,
+    MeterBallistics::DinPpm,
+    MeterBallistics::Vu,
+    MeterBallistics::K20,
+    MeterBallistics::K14,
+    MeterBallistics::K12,
+    MeterBallistics::Custom,
+];
+
+#[test]
+fn every_meter_shows_its_alignment_level() {
+    for ballistics in ALL_METERS {
+        let c = meter(ballistics);
+        let at = alignment_dbfs(&c);
+        let p = meter_position(at, &c);
+        assert!(p > 0.0 && p < 1.0, "{ballistics:?}: {at} dBFS at {p}");
+    }
+    assert_eq!(alignment_dbfs(&meter(MeterBallistics::DigitalPeak)), -18.0);
+    assert_eq!(alignment_dbfs(&meter(MeterBallistics::K14)), -14.0);
+}
+
+#[test]
+fn programme_meters_turn_red_where_their_scale_does() {
+    // VU: the red arc from 0 VU; PPMs: from the permitted maximum, 9 dB
+    // above alignment (DIN 0, EBU +9). All inside their scales.
+    let vu = meter(MeterBallistics::Vu);
+    assert_eq!(zone_of(-18.5, &vu), Zone::Normal);
+    assert_eq!(zone_of(-18.0, &vu), Zone::Danger);
+    for ppm in [MeterBallistics::DinPpm, MeterBallistics::EbuPpm] {
+        let c = meter(ppm);
+        assert_eq!(zone_of(-9.5, &c), Zone::Normal, "{ppm:?}");
+        assert_eq!(zone_of(-9.0, &c), Zone::Danger, "{ppm:?}");
+        assert!(meter_position(-9.0, &c) < 1.0, "{ppm:?}: on the scale");
+    }
 }

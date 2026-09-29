@@ -75,8 +75,8 @@
 | `floor_db` | −60 | −96 … −20 | bottom of the digital scale (digital peak and custom); the other scales have the range their standard gives |
 | `peak_hold_secs` | 2.0 | 0 … 10 | M2 |
 | `reference_dbfs` | −18 | −30 … 0 | alignment level (EBU R68): the mark, EBU TEST, DIN −9 and 0 VU |
-| `warning_dbfs` | −9 | −30 … 0 | yellow from here (EBU permitted maximum); not for the K-System |
-| `danger_dbfs` | −3 | −30 … 0 | red from here; not for the K-System |
+| `warning_dbfs` | −9 | −30 … 0 | yellow from here (EBU permitted maximum), on the digital scale |
+| `danger_dbfs` | −3 | −30 … 0 | red from here, on the digital scale |
 | `loudness` | `ShortTerm` | `Off`, `Momentary`, `ShortTerm` | readout under the meter |
 | `loudness_target_lufs` | −23 | −36 … −10 | readout green within ±1 LU |
 
@@ -96,7 +96,8 @@
   | VU | −20, −10, −7, −5, −3, −2, −1, 0, +1, +2, +3 VU (IEC 60268-17) | 0 VU | proportional to the voltage, +3 VU at the top (0 VU at 70.8 %) |
   | K-20, K-14, K-12 | +N (0 dBFS, the top), +4, 0, −4 … −24 every 4 dB, −30, −40, −50, −60 | 0 (−N dBFS) | linear in dB from the top to −24 over 80 % of the height; −24 to −60 over the rest. The K-System asks for 1 dB marks down to −24: at this meter's size, every 4 dB |
 
-- **Zones:** green, yellow from `warning_dbfs`, red from `danger_dbfs`. The K-System has its own: green below 0, amber from 0 to +4, red above +4.
+- **Zones:** on the digital scale (digital peak, custom), green, yellow from `warning_dbfs`, red from `danger_dbfs`. The other scales use their own red region, which the configured levels could miss (a VU scale ends at −15 dBFS): VU red from 0 VU (its red arc); EBU and DIN red from the permitted maximum, 9 dB above alignment (EBU +9, DIN 0). The K-System: green below 0, amber from 0 to +4, red above.
+- **Alignment level:** a brighter tick at `reference_dbfs` (the K-System's 0 for K meters), whether or not it is one of the scale's marks.
 - **K-System bars show both sections:** the average (RMS) level is the solid body; the part up to the peak level is the same colour, dimmed. The other meters show one level, as their standard defines.
 - **Peak hold:** a two-pixel line at the hold level, in the colour of its zone.
 - **Maximum readout** above the bars: the maximum (M2) in dBFS with one decimal, red in the danger zone, a dash before any audio. A click on it restarts it.
