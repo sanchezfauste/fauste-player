@@ -56,6 +56,27 @@ impl MeterInput {
         // Both sources play over the same time: the frames are the same span.
         self.frames = self.frames.max(other.frames);
     }
+
+    /// The measurement with every non-finite value (a NaN or infinite
+    /// sample in a file) read as silence, so it cannot stick in a meter.
+    fn finite(mut self) -> Self {
+        for v in &mut self.peak {
+            if !v.is_finite() {
+                *v = 0.0;
+            }
+        }
+        for v in self
+            .sum_sq
+            .iter_mut()
+            .chain(&mut self.sum_abs)
+            .chain(&mut self.k_sum)
+        {
+            if !v.is_finite() {
+                *v = 0.0;
+            }
+        }
+        self
+    }
 }
 
 /// What the meter shows.
@@ -63,6 +84,11 @@ impl MeterInput {
 pub struct MeterReading {
     pub level_db: [f32; 2],
     pub hold_db: [f32; 2],
+    /// Average (RMS) level of the K-System, AES17: a sine reads its peak
+    /// level.
+    pub rms_db: [f32; 2],
+    /// The highest level the bar reached since the last restart.
+    pub max_db: f32,
     pub momentary_lufs: Option<f32>,
     pub short_term_lufs: Option<f32>,
 }
@@ -72,6 +98,8 @@ impl Default for MeterReading {
         Self {
             level_db: [SILENCE_DB; 2],
             hold_db: [SILENCE_DB; 2],
+            rms_db: [SILENCE_DB; 2],
+            max_db: SILENCE_DB,
             momentary_lufs: None,
             short_term_lufs: None,
         }
@@ -137,6 +165,8 @@ fn ballistics(c: &MeterConfig) -> Ballistics {
             attack_tau: 0.0,
             release_db_per_sec: 20.0 / 1.7,
         },
+        // K-System: one-sample rise, 26 dB in about 3 s.
+        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => peak(26.0, 3.0),
         MeterBallistics::Custom => Ballistics {
             vu: false,
             attack_tau: 0.0,
@@ -267,6 +297,9 @@ pub struct MeterState {
     vu: [(f64, f64); 2],
     /// The ballistics the state belongs to; a change starts from rest.
     ballistics: Option<MeterBallistics>,
+    /// The two stages of the average's mean square, per channel.
+    mean_square: [(f64, f64); 2],
+    max_db: f32,
 }
 
 /// Device callbacks can be longer than a tick: a tick without audio this
@@ -291,6 +324,27 @@ fn move_vu(position: &mut f64, velocity: &mut f64, target: f64, span: f64) {
     }
 }
 
+/// Time constant of each of the K-System average's two stages: a step
+/// reads 99 % of its RMS value (98.01 % of its mean square) in 600 ms, the
+/// K-System's integration time, and falls the same way.
+const K_AVERAGE_TAU_SECS: f64 = 0.6 / 5.839_793;
+
+/// Moves the two stages of an average (mean squares) towards `target` for
+/// `span` seconds, solved exactly for a constant input.
+fn move_average((a, b): &mut (f64, f64), target: f64, span: f64) {
+    let r = span / K_AVERAGE_TAU_SECS;
+    let e = (-r).exp();
+    let (da, db) = (*a - target, *b - target);
+    *a = target + da * e;
+    *b = target + db * e + da * r * e;
+    // Silence would end in subnormal numbers: flush them.
+    for stage in [&mut *a, &mut *b] {
+        if *stage < 1e-20 {
+            *stage = 0.0;
+        }
+    }
+}
+
 /// Moves one peak-meter channel's level for `span` seconds of audio.
 fn move_level(linear: &mut f32, b: &Ballistics, input: &MeterInput, ch: usize, span: f64) {
     let target = input.peak.get(ch).copied().unwrap_or(0.0);
@@ -308,10 +362,17 @@ fn move_level(linear: &mut f32, b: &Ballistics, input: &MeterInput, ch: usize, s
 }
 
 impl MeterState {
+    /// Restarts the maximum (a new entry, or the operator's click).
+    pub fn reset_max(&mut self) {
+        self.max_db = SILENCE_DB;
+    }
+
     /// Advances the meter by `dt_secs` with what was measured meanwhile.
     pub fn update(&mut self, input: MeterInput, dt_secs: f64, c: &MeterConfig) -> MeterReading {
+        let input = input.finite();
         if !self.started {
             self.hold_db = [SILENCE_DB; 2];
+            self.max_db = SILENCE_DB;
             self.started = true;
         }
         if self.ballistics != Some(c.ballistics) {
@@ -368,6 +429,22 @@ impl MeterState {
             if let Some(l) = level_db.get_mut(ch) {
                 *l = db;
             }
+            // Only what this tick measured counts: after a restart the bar
+            // may still be falling from the previous entry.
+            if input.frames > 0 {
+                let measured = to_db(input.peak.get(ch).copied().unwrap_or(0.0));
+                self.max_db = self.max_db.max(db.min(measured));
+            }
+            if let (Some(span), Some(ms), Some(sum)) =
+                (span, self.mean_square.get_mut(ch), input.sum_sq.get(ch))
+            {
+                let block = if input.frames > 0 {
+                    sum / input.frames as f64
+                } else {
+                    0.0
+                };
+                move_average(ms, block, span);
+            }
             if let (Some(hold), Some(left)) = (self.hold_db.get_mut(ch), self.hold_left.get_mut(ch))
             {
                 if c.peak_hold_secs <= 0.0 {
@@ -395,9 +472,15 @@ impl MeterState {
             input.frames
         };
         self.loudness.add(input.k_sum, frames, dt);
+        // AES17: √2 × RMS, so a full-scale sine reads 0 dBFS.
+        let rms_db = self
+            .mean_square
+            .map(|(_, ms)| to_db((2.0 * ms).sqrt() as f32));
         MeterReading {
             level_db,
             hold_db: self.hold_db,
+            rms_db,
+            max_db: self.max_db,
             momentary_lufs: self.loudness.lufs(MOMENTARY_BINS),
             short_term_lufs: self.loudness.lufs(SHORT_TERM_BINS),
         }

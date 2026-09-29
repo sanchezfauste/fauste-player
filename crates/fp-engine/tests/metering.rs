@@ -619,3 +619,111 @@ fn switching_back_to_vu_starts_from_rest() {
     let r = m.update(MeterInput::default(), TICK, &vu);
     assert!(r.level_db[0] < -60.0, "no stale needle: {}", r.level_db[0]);
 }
+
+#[test]
+fn a_sine_reads_its_level_on_the_k_system_average() {
+    // K-System: peak and average ride on the same scale for a sine (AES17).
+    let c = config(MeterBallistics::K20);
+    let mut m = MeterState::default();
+    let mut r = MeterReading::default();
+    for input in sine_ticks(-20.0, 1000.0, 2.0) {
+        r = m.update(input, TICK, &c);
+    }
+    assert!((r.rms_db[0] + 20.0).abs() < 0.1, "{}", r.rms_db[0]);
+    assert!((r.rms_db[1] + 20.0).abs() < 0.1, "{}", r.rms_db[1]);
+    assert!((r.level_db[0] + 20.0).abs() < 0.1, "{}", r.level_db[0]);
+}
+
+#[test]
+fn the_k_system_average_integrates_over_600_ms() {
+    let c = config(MeterBallistics::K20);
+    let mut m = MeterState::default();
+    let r = run(&mut m, &c, peak(1.0), 0.3);
+    assert!(
+        r.rms_db[0] < -0.5,
+        "still rising at 300 ms: {}",
+        r.rms_db[0]
+    );
+    let r = run(&mut m, &c, peak(1.0), 0.3);
+    assert!(
+        (-0.1..=0.0).contains(&r.rms_db[0]),
+        "99 % of the RMS value at 600 ms: {}",
+        r.rms_db[0]
+    );
+    run(&mut m, &c, peak(1.0), 2.0);
+    let r = run(&mut m, &c, MeterInput::default(), 0.6);
+    // The same two stages falling: 1.99 % of the mean square is left.
+    assert!((r.rms_db[0] + 17.0).abs() < 0.2, "{}", r.rms_db[0]);
+}
+
+#[test]
+fn the_k_system_peak_falls_26_db_in_3_s() {
+    let c = config(MeterBallistics::K14);
+    let mut m = MeterState::default();
+    let r = m.update(peak(1.0), TICK, &c);
+    assert!(
+        r.level_db[0].abs() < 0.01,
+        "one-sample rise: {}",
+        r.level_db[0]
+    );
+    let r = run(&mut m, &c, MeterInput::default(), 3.0);
+    assert!((r.level_db[0] + 26.0).abs() < 0.3, "{}", r.level_db[0]);
+}
+
+#[test]
+fn the_k_system_average_falls_in_silence() {
+    let c = config(MeterBallistics::K12);
+    let mut m = MeterState::default();
+    run(&mut m, &c, peak(1.0), 2.0);
+    let r = run(&mut m, &c, MeterInput::default(), 2.0);
+    assert!(r.rms_db[0] < -40.0, "{}", r.rms_db[0]);
+}
+
+#[test]
+fn the_maximum_stays_after_the_bar_falls_until_it_is_reset() {
+    let c = config(MeterBallistics::DigitalPeak);
+    let mut m = MeterState::default();
+    assert!(m.update(MeterInput::default(), TICK, &c).max_db <= -100.0);
+    m.update(peak(0.5), TICK, &c);
+    let r = run(&mut m, &c, peak(0.1), 3.0);
+    assert!((r.max_db + 6.02).abs() < 0.05, "{}", r.max_db);
+    m.reset_max();
+    let r = m.update(peak(0.1), TICK, &c);
+    assert!((r.max_db + 20.0).abs() < 0.05, "{}", r.max_db);
+}
+
+#[test]
+fn a_restarted_maximum_ignores_the_bar_still_falling_from_before() {
+    // A loud track cut straight into a quiet one: the new maximum is the
+    // quiet track's level, not the old bar on its way down.
+    let c = config(MeterBallistics::DigitalPeak);
+    let mut m = MeterState::default();
+    run(&mut m, &c, peak(0.9), 0.5);
+    m.reset_max();
+    let r = run(&mut m, &c, peak(0.1), 0.05);
+    assert!((r.max_db + 20.0).abs() < 0.05, "{}", r.max_db);
+}
+
+#[test]
+fn a_non_finite_block_does_not_break_the_meter() {
+    let c = MeterConfig::default();
+    let mut m = MeterState::default();
+    let bad = MeterInput {
+        peak: [f32::INFINITY, f32::NAN],
+        sum_sq: [f64::NAN, f64::INFINITY],
+        sum_abs: [f64::NAN; 2],
+        k_sum: [f64::NAN; 2],
+        frames: 240,
+    };
+    let r = m.update(bad, TICK, &c);
+    assert!(r.max_db.is_finite(), "{r:?}");
+    let c = config(MeterBallistics::K20);
+    let r = run(&mut m, &c, peak(0.1), 2.0);
+    assert!(r.max_db.is_finite() && r.max_db < 1.0, "{r:?}");
+    assert!(
+        (r.rms_db[0] + 20.0).abs() < 0.2,
+        "the average recovers: {r:?}"
+    );
+    assert!((r.rms_db[1] + 20.0).abs() < 0.2, "{r:?}");
+    assert!((r.level_db[0] + 20.0).abs() < 0.2, "{r:?}");
+}

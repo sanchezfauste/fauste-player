@@ -49,3 +49,19 @@ fn the_alignment_mark_stays_above_the_floor() {
     assert!(c.meter.reference_dbfs > c.meter.floor_db);
     assert!(warnings.iter().any(|w| w.field == "meter.reference_dbfs"));
 }
+
+#[test]
+fn k_system_meters_are_presets_with_their_reference() {
+    for (name, preset, k) in [
+        ("K20", MeterBallistics::K20, 20.0),
+        ("K14", MeterBallistics::K14, 14.0),
+        ("K12", MeterBallistics::K12, 12.0),
+    ] {
+        let c: Config =
+            serde_json::from_str(&format!(r#"{{ "meter": {{ "ballistics": "{name}" }} }}"#))
+                .unwrap();
+        assert_eq!(c.meter.ballistics, preset);
+        assert_eq!(preset.k_reference_dbfs(), Some(-k));
+    }
+    assert_eq!(MeterBallistics::DigitalPeak.k_reference_dbfs(), None);
+}

@@ -448,3 +448,82 @@ fn a_programme_meter_preset_reaches_the_buses_while_playing() {
     );
     assert!(conductor.engine().meter_integration().0 > 0.0);
 }
+
+/// Plays the first entry of player 0 for 200 ms, stops it and lets the bar
+/// fall for 500 ms. Returns the meter while playing and after the fall.
+fn play_then_stop(
+    conductor: &mut Conductor,
+    handle: &ConductorHandle,
+    device: &OfflineDevice,
+    now: &mut Instant,
+) -> (
+    fp_engine::meter::MeterReading,
+    fp_engine::meter::MeterReading,
+) {
+    let p = conductor.state().players[0].id;
+    let reading = |handle: &ConductorHandle| {
+        handle
+            .telemetry
+            .load()
+            .players
+            .iter()
+            .find(|(id, _)| *id == p)
+            .map(|(_, t)| t.meter)
+            .unwrap()
+    };
+    assert!(handle.send(Command::Play(p)));
+    conductor.tick(*now);
+    std::thread::sleep(Duration::from_millis(30));
+    for _ in 0..20 {
+        conductor.tick(*now);
+        device.render(BLOCK);
+        *now += Duration::from_millis(10);
+    }
+    let playing = reading(handle);
+    assert!(handle.send(Command::Stop(p)));
+    for _ in 0..50 {
+        conductor.tick(*now);
+        *now += Duration::from_millis(10);
+    }
+    (playing, reading(handle))
+}
+
+fn meter_of(handle: &ConductorHandle, p: PlayerId) -> fp_engine::meter::MeterReading {
+    handle
+        .telemetry
+        .load()
+        .players
+        .iter()
+        .find(|(id, _)| *id == p)
+        .map(|(_, t)| t.meter)
+        .unwrap()
+}
+
+#[test]
+fn the_meter_maximum_outlasts_a_stop_and_restarts_with_the_next_entry() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let p = conductor.state().players[0].id;
+    let (playing, stopped) = play_then_stop(&mut conductor, &handle, &device, &mut now);
+    assert!(playing.max_db > -60.0, "{playing:?}");
+    // The last block still counts after the stop; nothing clears it.
+    assert!(stopped.max_db >= playing.max_db, "kept after the stop");
+    assert!(stopped.level_db[0] < stopped.max_db - 3.0, "{stopped:?}");
+    assert!(handle.send(Command::Play(p)));
+    conductor.tick(now);
+    let restarted = meter_of(&handle, p);
+    assert!(
+        restarted.max_db < stopped.max_db - 3.0,
+        "a new entry restarts it: {restarted:?}"
+    );
+}
+
+#[test]
+fn the_meter_maximum_restarts_on_request() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let p = conductor.state().players[0].id;
+    let (_, stopped) = play_then_stop(&mut conductor, &handle, &device, &mut now);
+    assert!(handle.reset_meter_max(p));
+    conductor.tick(now);
+    let restarted = meter_of(&handle, p);
+    assert!(restarted.max_db < stopped.max_db - 3.0, "{restarted:?}");
+}

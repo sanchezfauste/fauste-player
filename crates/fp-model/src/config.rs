@@ -57,8 +57,25 @@ pub enum MeterBallistics {
     DinPpm,
     /// Volume unit meter, IEC 60268-17: RMS, 300 ms rise and fall.
     Vu,
+    /// K-System meters: a peak and an RMS average section on a scale
+    /// whose 0 is 20, 14 or 12 dB below full scale.
+    K20,
+    K14,
+    K12,
     /// `attack_ms` and `release_db_per_sec`.
     Custom,
+}
+
+impl MeterBallistics {
+    /// The level of a K-System meter's 0 in dBFS; `None` for other meters.
+    pub fn k_reference_dbfs(self) -> Option<f32> {
+        match self {
+            MeterBallistics::K20 => Some(-20.0),
+            MeterBallistics::K14 => Some(-14.0),
+            MeterBallistics::K12 => Some(-12.0),
+            _ => None,
+        }
+    }
 }
 
 /// The loudness line under the meter (EBU R128).
