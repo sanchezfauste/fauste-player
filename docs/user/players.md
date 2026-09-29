@@ -19,11 +19,20 @@ playlist tabs, transport, volume and outputs.
 
 - **Cover** of the track on air, or a vinyl placeholder.
 - **Stereo meter:** the level the player puts out, after its volume.
-  - The scale runs from the floor (−60 dBFS by default) to 0 dBFS: green,
-    yellow from the warning level (−9 dBFS), and red from the danger level
-    (−3 dBFS).
-  - A tick between the channels marks the alignment level (−18 dBFS).
-  - The highest level stays lit for a moment (the peak hold).
+  - One continuous bar per channel, on the scale of the meter type's
+    standard (the digital peak meter by default: −60 to 0 dBFS, with the
+    top 20 dB taking half the height). The scale's marks sit between the
+    channels; the brighter one is the alignment level (−18 dBFS).
+  - The bar is green, yellow from the warning level (−9 dBFS), and red
+    from the danger level (−3 dBFS). The other meter types turn red where
+    their scale does (from 0 VU, from the permitted maximum on a PPM).
+  - K-System meters show two sections: the solid bar is the average (RMS)
+    level and the dimmer part above it reaches the peak. Their colours are
+    the K-System's: green below 0, amber from 0 to +4, red above.
+  - The highest level stays lit for a moment as a line (the peak hold).
+  - The number above is the highest level since the entry started, in
+    dBFS, red in the danger zone. It stays after a stop and starts again
+    with the next entry, or when you click it.
   - The number underneath is the loudness in LUFS (EBU R128), green within
     ±1 LU of the target (−23 LUFS).
   - The meter type and every level can be changed in

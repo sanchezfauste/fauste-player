@@ -32,6 +32,10 @@ audio engine that the interface can never block.
   has Play/Next, Stop, Fade stop, Pause and Stop-after-current, SINGLE and
   CONT modes, a countdown with tenths, a stereo meter, a volume fader and
   its own playlist tabs.
+- **Standard level meters:** digital peak (IEC 60268-18), EBU and DIN PPM
+  (IEC 60268-10), VU (IEC 60268-17) and K-System (K-20, K-14, K-12), each
+  with its own ballistics and scale. Optional true peak and EBU R128
+  loudness, and a maximum readout.
 - **Sample-accurate mixing:** in continuous mode the next track starts
   exactly at the MIX point and overlaps the fading end of the current one.
   The MIX level and the maximum overlap are configurable.

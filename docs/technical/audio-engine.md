@@ -68,10 +68,17 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   - Every tick, `Engine::take_meter_input` takes a player's measurement
     (current plus fading sources; the pre-listen's is dropped).
   - `meter::MeterState` applies the fall of each preset: 20 dB / 1.7 s,
-    24 dB / 2.8 s, or 20 dB / 1.5 s.
+    24 dB / 2.8 s, 20 dB / 1.5 s, or 26 dB / 3 s (K-System peak).
+    Non-finite measurements read as silence.
   - The VU is a second-order needle (99 % in 300 ms, 1.25 % overshoot) on
     the rectified average, calibrated so a sine reads its peak level.
-  - It keeps the peak hold, and computes momentary (400 ms) and short-term
+  - It keeps the peak hold; the K-System average, two equal first-order
+    stages on the mean square (τ = 102.7 ms, so a step reads 99 % of its
+    RMS value in 600 ms) solved exactly per tick and read by the AES17
+    convention (a sine reads its peak level); and the maximum, counted
+    only from what each tick measured, which restarts when the player's
+    current entry changes and on `EngineRequest::ResetMeterMax` (a click
+    on the readout). It also computes momentary (400 ms) and short-term
     (3 s) loudness from 5 ms blocks: L = −0.691 + 10·log10(z_L + z_R).
   - A tick without a device block within 50 ms leaves the level standing,
     and the next block moves it for the whole span. Longer, the meter
@@ -84,8 +91,10 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   - The programme-meter stages and the K-weighting flush values below
     1e-20, so silence never runs on subnormal numbers. The VU's work per
     tick is bounded (at most one second of needle movement).
-- **The interface only draws** the reading (`widgets::meter_segments`,
-  `widgets::loudness_line`).
+- **The interface only draws** the reading: continuous bars on the scale
+  of the chosen standard (`widgets::meter_position`, marks from
+  `widgets::scale_marks`), coloured by `widgets::zone_of`, with
+  `widgets::max_readout` and `widgets::loudness_line`.
 - **Tests** (`tests/metering.rs`, `tests/mixer.rs`):
   - the BS.1770 coefficients and the 1 kHz gain at every rate;
   - EBU Tech 3341 cases 1, 2, 9, 11, 12 and 14 (loudness) and 15–23

@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use arc_swap::ArcSwap;
 use crossbeam_channel::{Receiver, Sender, TrySendError};
 use fp_model::{
-    AppState, CartId, Command, EngineAction, ModelError, PlayerId, Route, apply, on_event,
+    AppState, CartId, Command, EngineAction, EntryId, ModelError, PlayerId, Route, apply, on_event,
 };
 
 use crate::engine::{BusStatus, CartTelemetry, Engine, PlayerTelemetry};
@@ -41,7 +41,12 @@ const TEST_TONE_DB: f32 = -18.0;
 /// Requests for the engine that are not model commands.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EngineRequest {
-    TestTone { route: Route, frequency_hz: f32 },
+    TestTone {
+        route: Route,
+        frequency_hz: f32,
+    },
+    /// Restarts the maximum of a player's meter (meters spec M2).
+    ResetMeterMax(PlayerId),
 }
 
 pub struct Conductor {
@@ -56,6 +61,8 @@ pub struct Conductor {
     /// One meter per player (meters spec M2), and when they last moved.
     meters: HashMap<PlayerId, MeterState>,
     metered_at: Option<Instant>,
+    /// The entry each player's meter maximum belongs to.
+    metered_entries: HashMap<PlayerId, EntryId>,
 }
 
 /// The UI's side of the conductor.
@@ -90,6 +97,16 @@ impl ConductorHandle {
                 route,
                 frequency_hz,
             })
+            .is_ok()
+    }
+}
+
+impl ConductorHandle {
+    /// Restarts the maximum of `player`'s meter; never blocks. `false` if
+    /// the queue is full.
+    pub fn reset_meter_max(&self, player: PlayerId) -> bool {
+        self.requests
+            .try_send(EngineRequest::ResetMeterMax(player))
             .is_ok()
     }
 }
@@ -136,6 +153,7 @@ impl Conductor {
             version: 0,
             meters: HashMap::new(),
             metered_at: None,
+            metered_entries: HashMap::new(),
         };
         let handle = ConductorHandle {
             commands: tx,
@@ -189,6 +207,11 @@ impl Conductor {
                         now,
                     );
                 }
+                EngineRequest::ResetMeterMax(player) => {
+                    if let Some(meter) = self.meters.get_mut(&player) {
+                        meter.reset_max();
+                    }
+                }
             }
         }
         for event in self.engine.tick(now) {
@@ -214,6 +237,18 @@ impl Conductor {
         self.metered_at = Some(now);
         let ids: Vec<PlayerId> = self.state.players.iter().map(|p| p.id).collect();
         self.meters.retain(|id, _| ids.contains(id));
+        self.metered_entries.retain(|id, _| ids.contains(id));
+        // A new entry restarts the maximum; a stop (no entry) keeps it.
+        for player in &self.state.players {
+            let Some(entry) = player.current else {
+                continue;
+            };
+            if self.metered_entries.insert(player.id, entry) != Some(entry)
+                && let Some(meter) = self.meters.get_mut(&player.id)
+            {
+                meter.reset_max();
+            }
+        }
         let players = ids
             .into_iter()
             .map(|id| {

@@ -134,11 +134,11 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 
 | Field | Default | Range | Meaning |
 |---|---|---|---|
-| `ballistics` | `DigitalPeak` | `DigitalPeak`, `EbuPpm`, `DinPpm`, `Vu`, `Custom` | meter type (IEC 60268-18, 60268-10 IIb and I, 60268-17) |
+| `ballistics` | `DigitalPeak` | `DigitalPeak`, `EbuPpm`, `DinPpm`, `Vu`, `K20`, `K14`, `K12`, `Custom` | meter type and scale (IEC 60268-18, 60268-10 IIb and I, 60268-17, K-System) |
 | `attack_ms` | 5 | 0 … 1000 | integration time for `Custom`, by the IEC definition: a 5 kHz tone burst that long reads 2 dB low (the EBU preset's is 8.37 ms by this definition); 0 = instant |
 | `release_db_per_sec` | 11.8 | 1 … 100 | fall for `Custom` |
 | `true_peak` | false | | 4× oversampled peak |
-| `floor_db` | −60 | −96 … −20 | bottom of the scale |
+| `floor_db` | −60 | −96 … −20 | bottom of the digital scale (digital peak, custom) |
 | `peak_hold_secs` | 2 | 0 … 10 | 0 turns the hold off |
 | `reference_dbfs` | −18 | −30 … 0 | alignment mark |
 | `warning_dbfs` | −9 | −30 … 0 | yellow from here |

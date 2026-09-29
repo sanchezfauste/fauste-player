@@ -42,14 +42,14 @@ Changes apply at once.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| Meter type | Digital peak | How the bar rises and falls, after a broadcast standard (see below) |
+| Meter type | Digital peak | How the bar rises and falls, and its scale, after a standard (see below) |
 | Rise time, Fall rate | 5 ms, 11.8 dB/s | Only for **Custom**. The rise time is an integration time: a tone burst that long reads 2 dB low; 0 shows every peak. |
 | True peak | Off | Measure between samples, with the 4× oversampling filter ITU-R BS.1770 publishes. It shows peaks that exceed 0 dBFS after conversion, which a sample-peak meter misses. As the standard allows, an isolated one-sample click can read up to about 0.3 dB below its sample value. |
-| Scale floor | −60 dBFS | The bottom of the scale |
+| Scale floor | −60 dBFS | The bottom of the digital scale (digital peak and custom). The other meters show the range their standard gives. |
 | Peak hold | 2 s | How long the highest level stays lit; 0 turns it off |
-| Alignment level | −18 dBFS | Marked on the scale (EBU R68) |
-| Warning from | −9 dBFS | Yellow from here (EBU permitted maximum) |
-| Danger from | −3 dBFS | Red from here |
+| Alignment level | −18 dBFS | Marked on the scale (EBU R68). It is also where the EBU TEST mark, the DIN −9 mark and 0 VU sit. |
+| Warning from | −9 dBFS | Yellow from here (EBU permitted maximum), for the digital peak and custom meters |
+| Danger from | −3 dBFS | Red from here, for the digital peak and custom meters. The others turn red where their scale does: VU from 0 VU, EBU and DIN PPM from the permitted maximum (EBU +9, DIN 0), the K-System from +4. |
 | Loudness readout | Short-term | The loudness under the meter: off, momentary (last 400 ms) or short-term (last 3 s), EBU R128 |
 | Loudness target | −23 LUFS | The readout is green within ±1 LU (EBU R128) |
 
@@ -59,7 +59,19 @@ Changes apply at once.
 | EBU PPM | IEC 60268-10 type IIb | Peaks shorter than about 10 ms read lower (a 10 ms tone burst reads about 1.6 dB low, a 0.5 ms one about 18 dB low), within EBU Tech 3205's tolerances; falls 24 dB in 2.8 s |
 | DIN PPM | IEC 60268-10 type I | The same with a 5 ms integration time; falls 20 dB in 1.5 s |
 | VU | IEC 60268-17 | The average level, with the needle movement of a VU meter: 99 % in 300 ms, with a slight overshoot; a sine reads its peak level |
+| K-20, K-14, K-12 | K-System | Two sections: the average (RMS, 600 ms) as the solid bar and the peak (falls 26 dB in 3 s) dimmed above it. 0 is 20, 14 or 12 dB below full scale; green below 0, amber from 0 to +4, red above. K-12 suits broadcast, K-14 and K-20 more dynamic programme. |
 | Custom | — | Your rise time and fall rate |
+
+Each meter uses the scale of its standard, with its marks between the
+channels:
+
+| Meter | Scale |
+|---|---|
+| Digital peak, custom | −60 … 0 dBFS, marks every 10 dB down to −40 and every 5 dB above; the top 20 dB take half the height |
+| EBU PPM | −12 … +12 around the alignment level (TEST), every 4 dB; quieter levels rest at the bottom |
+| DIN PPM | −50 … +5, where 0 is 9 dB above the alignment level (−9 dBFS by default) |
+| VU | −20 … +3 VU, 0 VU at the alignment level; the bar moves in proportion to the voltage, like the needle |
+| K-System | from +20, +14 or +12 (0 dBFS) down to −60; even in dB down to −24 |
 
 ## Analysis
 

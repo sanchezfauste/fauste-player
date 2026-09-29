@@ -20,6 +20,7 @@ pub struct Fake {
     pub sent: Mutex<Vec<Command>>,
     pub rejected: Mutex<Vec<ModelError>>,
     pub tones: Mutex<Vec<(Route, f32)>>,
+    pub meter_resets: Mutex<Vec<PlayerId>>,
 }
 
 impl Fake {
@@ -30,6 +31,7 @@ impl Fake {
             sent: Mutex::new(Vec::new()),
             rejected: Mutex::new(Vec::new()),
             tones: Mutex::new(Vec::new()),
+            meter_resets: Mutex::new(Vec::new()),
         })
     }
 
@@ -72,6 +74,10 @@ impl Controller for Fake {
     }
     fn test_tone(&self, route: Route, frequency_hz: f32) -> bool {
         self.tones.lock().unwrap().push((route, frequency_hz));
+        true
+    }
+    fn reset_meter_max(&self, player: PlayerId) -> bool {
+        self.meter_resets.lock().unwrap().push(player);
         true
     }
     fn take_rejection(&self) -> Option<ModelError> {

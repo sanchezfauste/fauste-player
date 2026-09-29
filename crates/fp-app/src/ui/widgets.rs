@@ -7,7 +7,7 @@ use egui::{
 };
 
 use fp_engine::meter::MeterReading;
-use fp_model::{LoudnessReadout, MeterConfig};
+use fp_model::{LoudnessReadout, MeterBallistics, MeterConfig};
 
 use super::format;
 use super::theme::{self, WaveColors};
@@ -114,7 +114,7 @@ pub fn glyph(painter: &Painter, rect: Rect, icon: &str, size: f32, color: Color3
     );
 }
 
-/// Colour zone of a meter segment (meters spec M4).
+/// Colour zone of a meter level (meters spec M4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Zone {
     Normal,
@@ -122,45 +122,128 @@ pub enum Zone {
     Danger,
 }
 
-/// One segment of a meter bar, bottom first.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Segment {
-    pub lit: bool,
-    /// The peak-hold segment.
-    pub hold: bool,
-    /// The segment holding the alignment level.
-    pub reference: bool,
-    pub zone: Zone,
+/// The digital scale's deflection (meters spec M4), in % of 0 dBFS: the
+/// slope in %/dB of each 10 dB below −20, from −30 down to −70.
+const DIGITAL_SLOPES: [f32; 5] = [2.0, 1.5, 0.75, 0.5, 0.25];
+
+fn digital_deflection(db: f32) -> f32 {
+    if db >= -20.0 {
+        return 50.0 + (db + 20.0) * 2.5;
+    }
+    let mut top = 50.0;
+    let mut at = -20.0;
+    for slope in DIGITAL_SLOPES {
+        if db >= at - 10.0 {
+            return top - (at - db) * slope;
+        }
+        top -= 10.0 * slope;
+        at -= 10.0;
+    }
+    0.0
 }
 
-/// The `count` segments of a bar from the scale floor to 0 dBFS, each
-/// covering an equal span in dB; a segment lights when the level reaches
-/// its middle.
-pub fn meter_segments(level_db: f32, hold_db: f32, c: &MeterConfig, count: usize) -> Vec<Segment> {
-    let count = count.max(1);
-    let floor = c.floor_db.min(-1.0);
-    let step = -floor / count as f32;
-    // Levels above 0 dBFS (overs, true peak) sit on the top segment.
-    let index_of = |db: f32| (db > floor).then(|| (((db - floor) / step) as usize).min(count - 1));
-    let hold = index_of(hold_db).filter(|_| c.peak_hold_secs > 0.0 && hold_db >= level_db);
-    let reference = index_of(c.reference_dbfs);
-    (0..count)
-        .map(|i| {
-            let middle = floor + (i as f32 + 0.5) * step;
-            Segment {
-                lit: level_db >= middle,
-                hold: hold == Some(i),
-                reference: reference == Some(i),
-                zone: if middle >= c.danger_dbfs {
-                    Zone::Danger
-                } else if middle >= c.warning_dbfs {
-                    Zone::Warning
-                } else {
-                    Zone::Normal
-                },
+/// The K-System scale: linear in dB from the top to −24 over this share of
+/// the height, then to −60 below it.
+const K_LINEAR_SHARE: f32 = 0.8;
+
+/// Where `db` (dBFS) sits on the chosen meter's scale, from 0 (bottom) to 1
+/// (top), after its standard (meters spec M4). Levels above the top sit at
+/// the top.
+pub fn meter_position(db: f32, c: &MeterConfig) -> f32 {
+    if db.is_nan() {
+        return 0.0;
+    }
+    let p = match c.ballistics {
+        MeterBallistics::EbuPpm => (db - c.reference_dbfs + 12.0) / 24.0,
+        MeterBallistics::DinPpm => {
+            // Relative to +5 dB on the DIN scale (0 = alignment + 9 dB).
+            let din = db - c.reference_dbfs - 9.0;
+            let quarter = |d: f32| 10f32.powf((d - 5.0) / 80.0);
+            (quarter(din) - quarter(-50.0)) / (1.0 - quarter(-50.0))
+        }
+        MeterBallistics::Vu => 10f32.powf((db - c.reference_dbfs - 3.0) / 20.0),
+        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => {
+            let k = c.ballistics.k_reference_dbfs().unwrap_or(-20.0);
+            let rel = db - k;
+            let top = -k;
+            if rel >= -24.0 {
+                (1.0 - K_LINEAR_SHARE) + K_LINEAR_SHARE * (rel + 24.0) / (top + 24.0)
+            } else {
+                (1.0 - K_LINEAR_SHARE) * (rel + 60.0) / 36.0
             }
-        })
-        .collect()
+        }
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => {
+            let bottom = digital_deflection(c.floor_db.min(-1.0));
+            if db <= c.floor_db {
+                0.0
+            } else {
+                (digital_deflection(db.min(0.0)) - bottom) / (100.0 - bottom)
+            }
+        }
+    };
+    p.clamp(0.0, 1.0)
+}
+
+/// The chosen scale's marks, in dBFS, bottom first (meters spec M4).
+pub fn scale_marks(c: &MeterConfig) -> Vec<f32> {
+    let r = c.reference_dbfs;
+    match c.ballistics {
+        MeterBallistics::EbuPpm => (-3..=3).map(|i| r + 4.0 * i as f32).collect(),
+        MeterBallistics::DinPpm => [-50.0, -40.0, -30.0, -20.0, -10.0, -5.0, 0.0, 5.0]
+            .iter()
+            .map(|d| r + 9.0 + d)
+            .collect(),
+        MeterBallistics::Vu => [
+            -20.0, -10.0, -7.0, -5.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0,
+        ]
+        .iter()
+        .map(|vu| r + vu)
+        .collect(),
+        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => {
+            let k = c.ballistics.k_reference_dbfs().unwrap_or(-20.0);
+            let mut marks: Vec<f32> = [-60.0, -50.0, -40.0, -30.0]
+                .into_iter()
+                .chain((-6..=1).map(|i| 4.0 * i as f32))
+                .map(|rel| k + rel)
+                .collect();
+            marks.push(0.0);
+            marks
+        }
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => [
+            -60.0, -50.0, -40.0, -35.0, -30.0, -25.0, -20.0, -15.0, -10.0, -5.0, 0.0,
+        ]
+        .into_iter()
+        .filter(|m| *m >= c.floor_db)
+        .collect(),
+    }
+}
+
+/// The zone `db` falls in: the configured ones, or the K-System's own
+/// (amber from 0, red from +4).
+pub fn zone_of(db: f32, c: &MeterConfig) -> Zone {
+    if db >= zone_start(Zone::Danger, c) {
+        Zone::Danger
+    } else if db >= zone_start(Zone::Warning, c) {
+        Zone::Warning
+    } else {
+        Zone::Normal
+    }
+}
+
+/// The maximum readout: one decimal with its sign, or a dash when nothing
+/// was measured.
+pub fn max_readout(db: f32) -> String {
+    if db <= -100.0 {
+        return "—".to_owned();
+    }
+    let tenths = (db * 10.0).round();
+    if tenths > 0.0 {
+        format!("+{:.1}", tenths / 10.0)
+    } else if tenths == 0.0 {
+        "0.0".to_owned()
+    } else {
+        format!("{:.1}", tenths / 10.0)
+    }
 }
 
 /// The loudness line under the meter: the value in LUFS (one decimal, or a
@@ -194,47 +277,126 @@ fn zone_colour(zone: Zone) -> Color32 {
     }
 }
 
-/// Stereo level meter (meters spec M4): segments from the floor to 0 dBFS
-/// in the configured zones, the peak hold, a tick at the alignment level,
-/// and the loudness line when it is on.
-pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, loudness_label: &str) {
+/// Accessible names of the meter's parts.
+pub struct MeterLabels {
+    /// The loudness line, when it is on.
+    pub loudness: String,
+    /// The maximum readout.
+    pub max: String,
+    /// Tooltip of the maximum readout.
+    pub max_tip: String,
+}
+
+/// Height of the maximum readout above the bars.
+const MAX_LINE_HEIGHT: f32 = 11.0;
+
+/// Stereo level meter (meters spec M4): a continuous bar per channel on
+/// the scale of the chosen meter's standard, its marks between the
+/// channels, the peak hold, the maximum readout above and the loudness line
+/// below when it is on. K-System meters show the average (RMS) as the
+/// solid body and the peak dimmed above it. Returns true when the operator
+/// clicked the maximum to restart it.
+pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLabels) -> bool {
     let (rect, response) = ui.allocate_exact_size(vec2(30.0, 64.0), Sense::hover());
+    let max_rect = Rect::from_min_size(rect.min, vec2(rect.width(), MAX_LINE_HEIGHT));
+    let max_response = ui
+        .interact(max_rect, response.id.with("max"), Sense::click())
+        .on_hover_text(&labels.max_tip);
+    let max_label = labels.max.clone();
+    max_response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, max_label.clone())
+    });
+    let clicked = max_response.clicked();
     if !ui.is_rect_visible(rect) {
-        return;
+        return clicked;
     }
     let line = loudness_line(reading, c);
-    let bars_height = if line.is_some() { 52.0 } else { rect.height() };
-    let segments_count = ((bars_height / 2.6).floor() as usize).max(4);
+    let bars_top = rect.top() + MAX_LINE_HEIGHT;
+    let bars_bottom = if line.is_some() {
+        rect.bottom() - 12.0
+    } else {
+        rect.bottom()
+    };
+    let height = (bars_bottom - bars_top).max(1.0);
     let painter = ui.painter();
-    let seg_h = bars_height / segments_count as f32;
-    for ch in 0..2 {
-        let x = rect.left() + ch as f32 * 16.0;
-        let level = reading.level_db.get(ch).copied().unwrap_or(-120.0);
-        let hold = reading.hold_db.get(ch).copied().unwrap_or(-120.0);
-        for (i, s) in meter_segments(level, hold, c, segments_count)
-            .iter()
-            .enumerate()
-        {
-            let fill = if s.lit || s.hold {
-                zone_colour(s.zone)
-            } else {
-                theme::NEUTRAL_800.gamma_multiply(0.55)
-            };
-            let top = rect.top() + bars_height - (i + 1) as f32 * seg_h + 0.5;
-            painter.rect_filled(
-                Rect::from_min_size(pos2(x, top), vec2(14.0, (seg_h - 1.0).max(1.0))),
-                0.0,
-                fill,
-            );
-            if s.reference && ch == 0 {
-                // The alignment tick, in the gap between the channels.
+    painter.text(
+        pos2(rect.center().x, rect.top()),
+        Align2::CENTER_TOP,
+        max_readout(reading.max_db),
+        FontId::monospace(9.0),
+        if zone_of(reading.max_db, c) == Zone::Danger {
+            theme::VU_RED
+        } else {
+            theme::NEUTRAL_400
+        },
+    );
+    let y_of = |db: f32| bars_bottom - meter_position(db, c) * height;
+    // Where each zone starts on screen, bottom up.
+    let zones = [
+        (bars_bottom, Zone::Normal),
+        (y_of(zone_start(Zone::Warning, c)), Zone::Warning),
+        (y_of(zone_start(Zone::Danger, c)), Zone::Danger),
+    ];
+    // Paints a bar from `bottom` up to `top` (screen y) in the colours of
+    // the zones it crosses.
+    let column = |x: f32, top: f32, bottom: f32, alpha: f32| {
+        for (i, &(zone_bottom, zone)) in zones.iter().enumerate() {
+            let zone_top = zones.get(i + 1).map_or(bars_top, |z| z.0);
+            let low = zone_bottom.min(bottom);
+            let high = zone_top.max(top);
+            if low > high {
                 painter.rect_filled(
-                    Rect::from_min_size(pos2(rect.left() + 14.0, top), vec2(2.0, seg_h)),
+                    Rect::from_x_y_ranges(x..=x + 14.0, high..=low),
                     0.0,
-                    theme::NEUTRAL_300,
+                    zone_colour(zone).gamma_multiply(alpha),
                 );
             }
         }
+    };
+    let k_system = c.ballistics.k_reference_dbfs().is_some();
+    for ch in 0..2 {
+        let x = rect.left() + ch as f32 * 16.0;
+        painter.rect_filled(
+            Rect::from_x_y_ranges(x..=x + 14.0, bars_top..=bars_bottom),
+            0.0,
+            theme::NEUTRAL_800.gamma_multiply(0.55),
+        );
+        let level = y_of(reading.level_db.get(ch).copied().unwrap_or(-120.0));
+        if k_system {
+            let rms = y_of(reading.rms_db.get(ch).copied().unwrap_or(-120.0)).max(level);
+            column(x, level, rms, 0.45);
+            column(x, rms, bars_bottom, 1.0);
+        } else {
+            column(x, level, bars_bottom, 1.0);
+        }
+        let hold = reading.hold_db.get(ch).copied().unwrap_or(-120.0);
+        let hold_y = y_of(hold);
+        if c.peak_hold_secs > 0.0 && hold_y < bars_bottom && hold_y <= level {
+            painter.rect_filled(
+                Rect::from_x_y_ranges(x..=x + 14.0, hold_y..=(hold_y + 2.0).min(bars_bottom)),
+                0.0,
+                zone_colour(zone_of(hold, c)),
+            );
+        }
+    }
+    // The scale's marks in the gap between the channels, the alignment
+    // level (K-System 0) brighter.
+    let marks = scale_marks(c).into_iter().map(|m| (m, false));
+    for (mark, alignment) in marks.chain(std::iter::once((alignment_dbfs(c), true))) {
+        let y = y_of(mark);
+        let (width, colour) = if alignment {
+            (2.0, theme::NEUTRAL_300)
+        } else {
+            (1.0, theme::NEUTRAL_400.gamma_multiply(0.6))
+        };
+        painter.rect_filled(
+            Rect::from_x_y_ranges(
+                rect.left() + 14.0..=rect.left() + 16.0,
+                y - width / 2.0..=y + width / 2.0,
+            ),
+            0.0,
+            colour,
+        );
     }
     if let Some((text, on_target)) = line {
         painter.text(
@@ -248,10 +410,45 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, loudness_label: 
                 theme::NEUTRAL_400
             },
         );
-        let label = loudness_label.to_owned();
+        let label = labels.loudness.clone();
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, true, label.clone())
         });
+    }
+    clicked
+}
+
+/// The alignment level the meter marks, in dBFS: the K-System's 0, or
+/// `reference_dbfs` (EBU TEST, DIN −9, 0 VU).
+pub fn alignment_dbfs(c: &MeterConfig) -> f32 {
+    c.ballistics.k_reference_dbfs().unwrap_or(c.reference_dbfs)
+}
+
+/// Permitted maximum level above alignment on the programme meters' scales
+/// (EBU +9, DIN 0).
+const PERMITTED_MAXIMUM_DB: f32 = 9.0;
+
+/// The level (dBFS) where `zone` starts on the chosen meter (meters spec
+/// M4): the configured zones on the digital scale; the scale's own on the
+/// others, which have no yellow band.
+fn zone_start(zone: Zone, c: &MeterConfig) -> f32 {
+    let r = c.reference_dbfs;
+    let (warning, danger) = match c.ballistics {
+        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => {
+            let k = alignment_dbfs(c);
+            (k, k + 4.0)
+        }
+        // The VU scale's red arc runs from 0 VU.
+        MeterBallistics::Vu => (r, r),
+        MeterBallistics::EbuPpm | MeterBallistics::DinPpm => {
+            (r + PERMITTED_MAXIMUM_DB, r + PERMITTED_MAXIMUM_DB)
+        }
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => (c.warning_dbfs, c.danger_dbfs),
+    };
+    match zone {
+        Zone::Normal => f32::NEG_INFINITY,
+        Zone::Warning => warning,
+        Zone::Danger => danger,
     }
 }
 
