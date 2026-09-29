@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.3.0](https://github.com/sanchezfauste/fauste-player/compare/v0.2.0...v0.3.0) (2026-09-29)
+
+
+### Features
+
+* **analysis:** keep the RMS level of each waveform bucket ([a806936](https://github.com/sanchezfauste/fauste-player/commit/a8069363b990ad7bf680c4dcbd41e7468bd1366d))
+* **app:** accept the new audio formats, read DSF tags, document decoding ([59715d2](https://github.com/sanchezfauste/fauste-player/commit/59715d2027dca63e56c834662df9c67d72989d88))
+* **decode:** play DSD, WavPack, Monkey's Audio and Opus ([9149106](https://github.com/sanchezfauste/fauste-player/commit/91491067d7b695265182b0abac70a51bd538986e))
+* **engine:** K-System meters and a maximum level per player ([bc68eea](https://github.com/sanchezfauste/fauste-player/commit/bc68eea1a7126592d18900671f3f975bf7ec373f))
+* **ui:** draw the waveform continuously with its RMS body ([df8bd1c](https://github.com/sanchezfauste/fauste-player/commit/df8bd1c4ef22941cb826330f8e12fdc6f75fdf17))
+* **ui:** meters on their standard's scale, with a maximum readout ([0373c72](https://github.com/sanchezfauste/fauste-player/commit/0373c72e4c4ed514ef1117557f24f2760cf33778))
+* **ui:** standard meter scales, the K-System and a maximum readout ([de93d65](https://github.com/sanchezfauste/fauste-player/commit/de93d65fafd35b681060d0647b0d8b3070c08af3))
+* **ui:** waveform with a peak outline and an RMS body, drawn continuously ([b345cef](https://github.com/sanchezfauste/fauste-player/commit/b345cefbfeb272ea612b1d9b1123430c1bb25da4))
+
+
+### Bug Fixes
+
+* **analysis:** read the INTRO tag from Opus, WavPack, Monkey's Audio and DSF ([3555ca0](https://github.com/sanchezfauste/fauste-player/commit/3555ca0dfcf8ac9cd070cf9ece26dff60be49965))
+* **ci:** build the release packages on every platform, and run the nightly fuzz ([0a2b870](https://github.com/sanchezfauste/fauste-player/commit/0a2b870c800666d66a889889a2daa13580551cf8))
+* **decode:** look past a leading ID3v2 tag, and never guess a format ([91075a5](https://github.com/sanchezfauste/fauste-player/commit/91075a592d8906779f632a00f675228194099736))
+* **decode:** place surround DSD channels by their layout ([0622f2d](https://github.com/sanchezfauste/fauste-player/commit/0622f2db7ab4c9174d9f48b95aa7d73bea73d702))
+* **decode:** refuse DSDIFF property chunks that overrun their parent ([493cdcb](https://github.com/sanchezfauste/fauste-player/commit/493cdcb37768d6e3415698c42801a572b0b44a28))
+* **decode:** trim encoder delay once, in the decoder ([1bc8c8b](https://github.com/sanchezfauste/fauste-player/commit/1bc8c8b07111961b11d4b165cf3cb58a0b93ae24))
+* **packaging:** give each installer notice its own component ([759dcd2](https://github.com/sanchezfauste/fauste-player/commit/759dcd2522ac93f419a7143a9c947b4f6bea2198))
+* **ui:** mark the alignment level on every meter, and turn red where each scale does ([7e77951](https://github.com/sanchezfauste/fauste-player/commit/7e77951d7939ef6a99dc1b619950ac9a680d33f7))
+
+
+### Documentation
+
+* describe the standard meter scales and the K-System ([57c3bfe](https://github.com/sanchezfauste/fauste-player/commit/57c3bfee36b6c23334dbbf4e80f1dd0ae3d6ba08))
+* record the waveform plan's ruling and deferred minors ([ab5e9b0](https://github.com/sanchezfauste/fauste-player/commit/ab5e9b06153fafdad2b08badb1468b1b259be502))
+
 ## [0.2.0](https://github.com/sanchezfauste/fauste-player/compare/v0.1.0...v0.2.0) (2026-09-27)
 
 
