@@ -36,10 +36,10 @@ fn read_at(file: &mut File, offset: u64, buf: &mut [u8]) -> std::io::Result<()> 
 
 /// The headers of the audio blocks, up to the end of the file or the first
 /// thing that is not a block (a trailing tag, or damage).
-fn index(file: &mut File) -> Result<Vec<BlockRef>, String> {
+fn index(file: &mut File, start: u64) -> Result<Vec<BlockRef>, String> {
     let file_len = file.metadata().map_err(|e| e.to_string())?.len();
     let mut blocks = Vec::new();
-    let mut offset = 0u64;
+    let mut offset = start;
     let mut header = [0u8; HEADER_LEN];
     while offset + HEADER_LEN as u64 <= file_len {
         if read_at(file, offset, &mut header).is_err() {
@@ -58,12 +58,12 @@ fn index(file: &mut File) -> Result<Vec<BlockRef>, String> {
         };
         let h = match parsed {
             Ok(h) => h,
-            Err(e) if offset == 0 => return Err(format!("WavPack: {e}")),
+            Err(e) if offset == start => return Err(format!("WavPack: {e}")),
             Err(_) => break,
         };
         let len = h.block_len();
         if offset + len as u64 > file_len {
-            if offset == 0 {
+            if offset == start {
                 return Err("WavPack: the first block is truncated".into());
             }
             break;
@@ -88,9 +88,11 @@ fn index(file: &mut File) -> Result<Vec<BlockRef>, String> {
 }
 
 impl WavPackDecoder {
-    pub(crate) fn open(path: &Path) -> Result<Self, String> {
+    /// Opens the stream that starts `start` bytes into the file (after a
+    /// leading tag).
+    pub(crate) fn open(path: &Path, start: u64) -> Result<Self, String> {
         let mut file = File::open(path).map_err(|e| e.to_string())?;
-        let blocks = index(&mut file)?;
+        let blocks = index(&mut file, start)?;
         let mut decoder = Self {
             file,
             blocks,

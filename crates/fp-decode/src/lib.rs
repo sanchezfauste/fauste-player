@@ -5,7 +5,7 @@
 
 #![deny(clippy::indexing_slicing)]
 
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 mod ape;
@@ -62,6 +62,39 @@ pub fn probe(head: &[u8], _extension: Option<&str>) -> Kind {
     }
 }
 
+/// Extensions of the formats that have a backend of their own.
+fn own_format_extension(extension: &str) -> bool {
+    ["dsf", "dff", "wv", "ape"]
+        .iter()
+        .any(|e| e.eq_ignore_ascii_case(extension))
+}
+
+/// The length of an ID3v2 tag at the start of `head`, header and footer
+/// included.
+fn id3v2_len(head: &[u8]) -> Option<u64> {
+    if head.get(0..3)? != b"ID3" {
+        return None;
+    }
+    let flags = *head.get(5)?;
+    let size = head.get(6..10)?.iter().try_fold(0u64, |acc, b| {
+        (b & 0x80 == 0).then_some(acc << 7 | u64::from(*b))
+    })?;
+    let footer = if flags & 0x10 != 0 { 10 } else { 0 };
+    Some(10 + size + footer)
+}
+
+/// Reads until `buf` is full or the file ends.
+fn read_up_to(file: &mut std::fs::File, buf: &mut [u8]) -> std::io::Result<usize> {
+    let mut filled = 0;
+    while let Some(rest) = buf.get_mut(filled..).filter(|r| !r.is_empty()) {
+        match file.read(rest)? {
+            0 => break,
+            n => filled += n,
+        }
+    }
+    Ok(filled)
+}
+
 enum Backend {
     Symphonia(Box<SymphoniaDecoder>),
     Dsd(Box<DsdDecoder>),
@@ -76,16 +109,35 @@ pub struct FileDecoder {
 
 impl FileDecoder {
     pub fn open(path: &Path) -> Result<Self, String> {
+        let io = |e: std::io::Error| format!("{}: {e}", path.display());
+        let mut file = std::fs::File::open(path).map_err(io)?;
         let mut head = [0u8; 16];
-        let read = std::fs::File::open(path)
-            .and_then(|mut f| f.read(&mut head))
-            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let read = read_up_to(&mut file, &mut head).map_err(io)?;
+        // A leading ID3v2 tag hides the signature of WavPack and Monkey's
+        // Audio files; look past it.
+        let start = id3v2_len(head.get(..read).unwrap_or_default()).unwrap_or(0);
+        let read = if start > 0 {
+            file.seek(SeekFrom::Start(start)).map_err(io)?;
+            read_up_to(&mut file, &mut head).map_err(io)?
+        } else {
+            read
+        };
         let extension = path.extension().and_then(|e| e.to_str());
         let backend = match probe(head.get(..read).unwrap_or_default(), extension) {
             Kind::Dsf => Backend::Dsd(Box::new(DsdDecoder::open_dsf(path)?)),
             Kind::Dff => Backend::Dsd(Box::new(DsdDecoder::open_dff(path)?)),
-            Kind::WavPack => Backend::WavPack(Box::new(WavPackDecoder::open(path)?)),
+            Kind::WavPack => Backend::WavPack(Box::new(WavPackDecoder::open(path, start)?)),
             Kind::Ape => Backend::Ape(Box::new(ApeFileDecoder::open(path)?)),
+            // symphonia can take almost anything for MPEG and play noise, so
+            // a file whose extension promises one of our own formats is
+            // refused rather than handed to it.
+            Kind::Symphonia if extension.is_some_and(own_format_extension) => {
+                return Err(format!(
+                    "{}: not a valid {} file",
+                    path.display(),
+                    extension.unwrap_or_default()
+                ));
+            }
             Kind::Symphonia => Backend::Symphonia(Box::new(SymphoniaDecoder::open(path)?)),
         };
         Ok(Self { backend })

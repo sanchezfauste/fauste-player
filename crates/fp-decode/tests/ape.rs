@@ -101,3 +101,33 @@ fn a_damaged_ape_file_is_an_error() {
     };
     assert!(result.is_err(), "the damaged frame is reported");
 }
+
+/// An empty ID3v2.4 tag with `padding` bytes of padding.
+fn id3_prefix(padding: u8) -> Vec<u8> {
+    let mut tag = b"ID3\x04\x00\x00\x00\x00\x00".to_vec();
+    tag.push(padding);
+    tag.extend(std::iter::repeat_n(0u8, usize::from(padding)));
+    tag
+}
+
+#[test]
+fn an_ape_file_with_a_leading_id3_tag_still_decodes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut bytes = id3_prefix(10);
+    bytes.extend(std::fs::read(fixture("sine_24s_c2000.ape")).unwrap());
+    let path = dir.path().join("tagged.ape");
+    std::fs::write(&path, &bytes).unwrap();
+    let samples = decode_all(&path);
+    assert_eq!(pcm_hash(&samples, 24), 0x7536_c33e_edbc_89e5);
+}
+
+#[test]
+fn a_file_named_ape_that_is_not_ape_is_refused() {
+    // Never hand it to the general decoders, which may take it for MPEG
+    // and play noise.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("fake.ape");
+    let bytes = std::fs::read(fixture("sine_24s_c2000.ape")).unwrap();
+    std::fs::write(&path, &bytes[4..]).unwrap();
+    assert!(FileDecoder::open(&path).is_err());
+}

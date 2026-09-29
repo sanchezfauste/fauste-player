@@ -117,3 +117,15 @@ fn a_corrupt_wavpack_block_is_an_error() {
     std::fs::write(&path, &lying).unwrap();
     assert!(FileDecoder::open(&path).is_err());
 }
+
+#[test]
+fn a_wavpack_file_with_a_leading_id3_tag_still_decodes() {
+    let dir = tempfile::tempdir().unwrap();
+    let samples = source(16, 50_000);
+    let path = encode(dir.path(), "t.wv", 16, &samples);
+    let mut bytes = b"ID3\x04\x00\x00\x00\x00\x00\x0a".to_vec();
+    bytes.extend([0u8; 10]);
+    bytes.extend(std::fs::read(&path).unwrap());
+    std::fs::write(&path, &bytes).unwrap();
+    assert!(decode_all(&path) == scaled(&samples, 16));
+}
