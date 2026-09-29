@@ -63,7 +63,8 @@ its Main device unchanged. All of these must hold:
 
 - the device is bit-perfect and open with exclusive access;
 - the device runs at the track's sample rate;
-- the track is lossless (WAV, FLAC, AIFF, ALAC), mono or stereo, and at most
+- the track is lossless integer PCM (WAV, AIFF, FLAC, ALAC, WavPack or
+  Monkey's Audio; DSD is converted, so it never is), mono or stereo, and at most
   24-bit, and the device format holds its sample size (a 24-bit file on a
   16-bit device is not bit-perfect);
 - the track has been analysed, since that is how its rate and sample size

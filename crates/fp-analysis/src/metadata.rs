@@ -35,12 +35,21 @@ pub fn read_tags(path: &Path, limits: &Limits) -> Tags {
         lofty::config::GlobalOptions::new().allocation_limit(limit.max(default_limit)),
     );
     // If parsing still fails, retry without pictures so the text tags survive.
-    let parsed = lofty::read_from_path(path).or_else(|_| {
-        lofty::probe::Probe::open(path)?
-            .options(lofty::config::ParseOptions::new().read_cover_art(false))
-            .guess_file_type()?
-            .read()
-    });
+    let parsed = lofty::read_from_path(path)
+        .or_else(|_| {
+            lofty::probe::Probe::open(path)?
+                .options(lofty::config::ParseOptions::new().read_cover_art(false))
+                .guess_file_type()?
+                .read()
+        })
+        .or_else(|e| match dsf_tag_as_wav(path, limit as u64) {
+            Some(wav) => lofty::probe::Probe::new(std::io::Cursor::new(wav))
+                // The wrapper has no audio to describe.
+                .options(lofty::config::ParseOptions::new().read_properties(false))
+                .guess_file_type()?
+                .read(),
+            None => Err(e),
+        });
     let Ok(file) = parsed else {
         return Tags::default();
     };
@@ -59,6 +68,57 @@ pub fn read_tags(path: &Path, limits: &Limits) -> Tags {
         album: non_empty(tag.album()),
         cover,
     }
+}
+
+/// The ID3v2 chunk of a DSF file, which the DSF header points to, wrapped
+/// in a WAV container so that lofty reads it like any other ID3v2 tag
+/// (lofty does not read DSF itself). At most `max_bytes` are read.
+fn dsf_tag_as_wav(path: &Path, max_bytes: u64) -> Option<Vec<u8>> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut header = [0u8; 28];
+    file.read_exact(&mut header).ok()?;
+    if header.get(0..4)? != b"DSD " {
+        return None;
+    }
+    let at = u64::from_le_bytes(header.get(20..28)?.try_into().ok()?);
+    let len = file.metadata().ok()?.len();
+    if at == 0 || at >= len {
+        return None;
+    }
+    file.seek(SeekFrom::Start(at)).ok()?;
+    let mut id3 = Vec::new();
+    file.take((len - at).min(max_bytes))
+        .read_to_end(&mut id3)
+        .ok()?;
+    if !id3.starts_with(b"ID3") {
+        return None;
+    }
+    // A 16-bit mono PCM format chunk, no audio, and the tag.
+    let mut fmt = Vec::new();
+    fmt.extend(1u16.to_le_bytes());
+    fmt.extend(1u16.to_le_bytes());
+    fmt.extend(44_100u32.to_le_bytes());
+    fmt.extend(88_200u32.to_le_bytes());
+    fmt.extend(2u16.to_le_bytes());
+    fmt.extend(16u16.to_le_bytes());
+    let pad = id3.len() % 2;
+    let tag_len = u32::try_from(id3.len()).ok()?;
+    let riff_len = 4 + (8 + 16) + 8 + 8 + tag_len + u32::try_from(pad).ok()?;
+    let mut wav = Vec::with_capacity(riff_len as usize + 8);
+    wav.extend(b"RIFF");
+    wav.extend(riff_len.to_le_bytes());
+    wav.extend(b"WAVEfmt ");
+    wav.extend(16u32.to_le_bytes());
+    wav.extend(fmt);
+    wav.extend(b"data");
+    wav.extend(0u32.to_le_bytes());
+    wav.extend(b"ID3 ");
+    wav.extend(tag_len.to_le_bytes());
+    wav.extend(id3);
+    wav.extend(std::iter::repeat_n(0u8, pad));
+    Some(wav)
 }
 
 /// `Artist - Title` from the file name; without a separator the whole stem
@@ -133,9 +193,12 @@ pub fn parse_intro_time(text: &str) -> Option<f64> {
     total.is_finite().then_some(total)
 }
 
-/// The intro time from an `INTRO` tag: ID3v2 `TXXX:INTRO`, a Vorbis or FLAC
-/// comment, an APE item, or an MP4 freeform `----:com.apple.iTunes:INTRO`.
-/// Anything unreadable is `None`.
+/// Most bytes read from a DSF file's tag when looking for `INTRO`.
+const DSF_INTRO_TAG_BYTES: u64 = 16 * 1024 * 1024;
+
+/// The intro time from an `INTRO` tag: ID3v2 `TXXX:INTRO`, a Vorbis, Opus or
+/// FLAC comment, an APE item (WavPack, Monkey's Audio, MP3), or an MP4
+/// freeform `----:com.apple.iTunes:INTRO`. Anything unreadable is `None`.
 pub fn read_intro(path: &Path) -> Option<f64> {
     use lofty::ape::ApeTag;
     use lofty::file::{AudioFile, FileType};
@@ -155,17 +218,35 @@ pub fn read_intro(path: &Path) -> Option<f64> {
             })
     };
     let result = std::panic::catch_unwind(|| -> Option<String> {
+        // Covers are not needed here, and a huge one must not hide the tag.
+        let options = lofty::config::ParseOptions::new()
+            .read_properties(false)
+            .read_cover_art(false);
+        // DSF: the ID3v2 chunk, which lofty reads once it is in a WAV.
+        if let Some(wav) = dsf_tag_as_wav(path, DSF_INTRO_TAG_BYTES) {
+            let f = lofty::iff::wav::WavFile::read_from(&mut std::io::Cursor::new(wav), options)
+                .ok()?;
+            return from_id3(f.id3v2());
+        }
         let probe = lofty::probe::Probe::open(path)
             .ok()?
             .guess_file_type()
             .ok()?;
         let file_type = probe.file_type()?;
         let mut reader = std::fs::File::open(path).ok()?;
-        // Covers are not needed here, and a huge one must not hide the tag.
-        let options = lofty::config::ParseOptions::new()
-            .read_properties(false)
-            .read_cover_art(false);
         match file_type {
+            FileType::Opus => {
+                let f = lofty::ogg::OpusFile::read_from(&mut reader, options).ok()?;
+                f.vorbis_comments().get(INTRO_KEY).map(str::to_owned)
+            }
+            FileType::WavPack => {
+                let f = lofty::wavpack::WavPackFile::read_from(&mut reader, options).ok()?;
+                from_ape(f.ape())
+            }
+            FileType::Ape => {
+                let f = lofty::ape::ApeFile::read_from(&mut reader, options).ok()?;
+                from_ape(f.ape()).or_else(|| from_id3(f.id3v2()))
+            }
             FileType::Flac => {
                 let f = lofty::flac::FlacFile::read_from(&mut reader, options).ok()?;
                 f.vorbis_comments()

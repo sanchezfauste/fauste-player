@@ -46,10 +46,15 @@ nor `outro_start`. `intro_end` is never detected from audio. It comes from
 an `INTRO` tag (`read_intro`), clamped to the cue range and stored as an
 automatic marker so a manual one wins. The tag can be:
 
-- an ID3v2 `TXXX:INTRO` (MP3, WAV, AIFF, FLAC);
-- a Vorbis or FLAC comment `INTRO`;
-- an APE item `INTRO`;
+- an ID3v2 `TXXX:INTRO` (MP3, WAV, AIFF, FLAC, Monkey's Audio, DSF);
+- a Vorbis, Opus or FLAC comment `INTRO`;
+- an APE item `INTRO` (WavPack, Monkey's Audio, MP3);
 - an MP4 freeform `----:com.apple.iTunes:INTRO`.
+
+lofty reads the tags of every format except DSF. For DSF, `read_tags` reads
+the ID3v2 chunk the DSF header points to (at most the cover limit), wraps it
+in an in-memory WAV and hands that to lofty. DFF has no standard tags, so the
+file name is used.
 
 Its value is seconds (`12.5`) or `m:ss(.f)`. The model's
 `Track::apply_analysis` stores automatic markers without touching manual ones.

@@ -1,182 +1,226 @@
-//! File decoding with symphonia (pure-Rust codecs). Output is interleaved
-//! stereo `f32` at the file's own rate: mono is duplicated, more channels are
-//! downmixed with ITU-R BS.775 coefficients.
+//! File decoding. Output is interleaved stereo `f32` at the file's own rate:
+//! mono is duplicated, more channels are downmixed with ITU-R BS.775
+//! coefficients. symphonia decodes most formats; DSD, WavPack and Monkey's
+//! Audio have backends of their own (audio formats spec F2).
 
 #![deny(clippy::indexing_slicing)]
 
-use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
-use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
-use symphonia::core::errors::Error;
-use symphonia::core::formats::probe::Hint;
-use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::units::Time;
+mod ape;
+mod dsd;
+mod opus;
+mod symph;
+mod wavpack;
+
+use ape::ApeFileDecoder;
+use dsd::DsdDecoder;
+use symph::SymphoniaDecoder;
+use wavpack::WavPackDecoder;
 
 /// -3 dB, the ITU-R BS.775 weight for centre and surround channels.
 const MINUS_3DB: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
+/// Which backend decodes a file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Symphonia,
+    Dsf,
+    Dff,
+    WavPack,
+    Ape,
+}
+
+/// The backend for a file, from its first bytes (the content decides; the
+/// extension is only a hint for formats without a signature).
+pub fn probe(head: &[u8], _extension: Option<&str>) -> Kind {
+    match head {
+        [b'D', b'S', b'D', b' ', ..] => Kind::Dsf,
+        [
+            b'F',
+            b'R',
+            b'M',
+            b'8',
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            b'D',
+            b'S',
+            b'D',
+            b' ',
+            ..,
+        ] => Kind::Dff,
+        [b'w', b'v', b'p', b'k', ..] => Kind::WavPack,
+        [b'M', b'A', b'C', b' ', ..] => Kind::Ape,
+        _ => Kind::Symphonia,
+    }
+}
+
+/// Extensions of the formats that have a backend of their own.
+fn own_format_extension(extension: &str) -> bool {
+    ["dsf", "dff", "wv", "ape"]
+        .iter()
+        .any(|e| e.eq_ignore_ascii_case(extension))
+}
+
+/// The length of an ID3v2 tag at the start of `head`, header and footer
+/// included.
+fn id3v2_len(head: &[u8]) -> Option<u64> {
+    if head.get(0..3)? != b"ID3" {
+        return None;
+    }
+    let flags = *head.get(5)?;
+    let size = head.get(6..10)?.iter().try_fold(0u64, |acc, b| {
+        (b & 0x80 == 0).then_some(acc << 7 | u64::from(*b))
+    })?;
+    let footer = if flags & 0x10 != 0 { 10 } else { 0 };
+    Some(10 + size + footer)
+}
+
+/// Reads until `buf` is full or the file ends.
+fn read_up_to(file: &mut std::fs::File, buf: &mut [u8]) -> std::io::Result<usize> {
+    let mut filled = 0;
+    while let Some(rest) = buf.get_mut(filled..).filter(|r| !r.is_empty()) {
+        match file.read(rest)? {
+            0 => break,
+            n => filled += n,
+        }
+    }
+    Ok(filled)
+}
+
+enum Backend {
+    Symphonia(Box<SymphoniaDecoder>),
+    Dsd(Box<DsdDecoder>),
+    WavPack(Box<WavPackDecoder>),
+    Ape(Box<ApeFileDecoder>),
+}
+
+/// Decodes one file, whatever its format.
 pub struct FileDecoder {
-    format: Box<dyn FormatReader>,
-    decoder: Box<dyn AudioDecoder>,
-    track_id: u32,
-    sample_rate: u32,
-    bits_per_sample: Option<u32>,
-    channels: usize,
-    frames_hint: Option<u64>,
-    scratch: Vec<f32>,
-    /// Frames still to drop after a seek (the decoder lands before the target).
-    skip_frames: u64,
+    backend: Backend,
 }
 
 impl FileDecoder {
     pub fn open(path: &Path) -> Result<Self, String> {
-        let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let mss = MediaSourceStream::new(Box::new(file), Default::default());
-        let mut hint = Hint::new();
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            hint.with_extension(ext);
-        }
-        let format = symphonia::default::get_probe()
-            .probe(
-                &hint,
-                mss,
-                FormatOptions::default(),
-                MetadataOptions::default(),
-            )
-            .map_err(|e| format!("{}: {e}", path.display()))?;
-        let track = format
-            .default_track(TrackType::Audio)
-            .ok_or_else(|| format!("{}: no audio track", path.display()))?;
-        let params = track
-            .codec_params
-            .as_ref()
-            .and_then(|p| p.audio())
-            .ok_or_else(|| format!("{}: no audio parameters", path.display()))?;
-        let sample_rate = params
-            .sample_rate
-            .ok_or_else(|| format!("{}: unknown sample rate", path.display()))?;
-        let decoder = symphonia::default::get_codecs()
-            .make_audio_decoder(params, &AudioDecoderOptions::default())
-            .map_err(|e| format!("{}: {e}", path.display()))?;
-        let channels = params.channels.as_ref().map_or(0, |c| c.count());
-        // Lossy codecs have no sample size: their output is not integer PCM.
-        let bits_per_sample = params.bits_per_sample.filter(|b| *b > 0);
-        let frames_hint = track.num_frames;
-        let track_id = track.id;
-        Ok(Self {
-            format,
-            decoder,
-            track_id,
-            sample_rate,
-            bits_per_sample,
-            channels,
-            frames_hint,
-            scratch: Vec::new(),
-            skip_frames: 0,
-        })
+        let io = |e: std::io::Error| format!("{}: {e}", path.display());
+        let mut file = std::fs::File::open(path).map_err(io)?;
+        let mut head = [0u8; 16];
+        let read = read_up_to(&mut file, &mut head).map_err(io)?;
+        // A leading ID3v2 tag hides the signature of WavPack and Monkey's
+        // Audio files; look past it.
+        let start = id3v2_len(head.get(..read).unwrap_or_default()).unwrap_or(0);
+        let read = if start > 0 {
+            file.seek(SeekFrom::Start(start)).map_err(io)?;
+            read_up_to(&mut file, &mut head).map_err(io)?
+        } else {
+            read
+        };
+        let extension = path.extension().and_then(|e| e.to_str());
+        let backend = match probe(head.get(..read).unwrap_or_default(), extension) {
+            Kind::Dsf => Backend::Dsd(Box::new(DsdDecoder::open_dsf(path)?)),
+            Kind::Dff => Backend::Dsd(Box::new(DsdDecoder::open_dff(path)?)),
+            Kind::WavPack => Backend::WavPack(Box::new(WavPackDecoder::open(path, start)?)),
+            Kind::Ape => Backend::Ape(Box::new(ApeFileDecoder::open(path)?)),
+            // symphonia can take almost anything for MPEG and play noise, so
+            // a file whose extension promises one of our own formats is
+            // refused rather than handed to it.
+            Kind::Symphonia if extension.is_some_and(own_format_extension) => {
+                return Err(format!(
+                    "{}: not a valid {} file",
+                    path.display(),
+                    extension.unwrap_or_default()
+                ));
+            }
+            Kind::Symphonia => Backend::Symphonia(Box::new(SymphoniaDecoder::open(path)?)),
+        };
+        Ok(Self { backend })
     }
 
     pub fn sample_rate(&self) -> u32 {
-        self.sample_rate
+        match &self.backend {
+            Backend::Symphonia(d) => d.sample_rate(),
+            Backend::WavPack(d) => d.sample_rate(),
+            Backend::Ape(d) => d.sample_rate(),
+            Backend::Dsd(d) => d.sample_rate(),
+        }
     }
 
-    /// Bits per sample of integer PCM (lossless codecs); `None` for lossy.
+    /// Bits per sample of integer PCM (lossless codecs); `None` for lossy
+    /// codecs and for DSD, which is converted.
     pub fn bits_per_sample(&self) -> Option<u32> {
-        self.bits_per_sample
+        match &self.backend {
+            Backend::Symphonia(d) => d.bits_per_sample(),
+            Backend::WavPack(d) => d.bits_per_sample(),
+            Backend::Ape(d) => d.bits_per_sample(),
+            Backend::Dsd(_) => None,
+        }
     }
 
     /// Channels in the file (0 if the container does not say).
     pub fn channels(&self) -> usize {
-        self.channels
+        match &self.backend {
+            Backend::Symphonia(d) => d.channels(),
+            Backend::WavPack(d) => d.channels(),
+            Backend::Ape(d) => d.channels(),
+            Backend::Dsd(d) => d.channels(),
+        }
     }
 
     /// Total frames, when the container knows it without decoding.
     pub fn frames_hint(&self) -> Option<u64> {
-        self.frames_hint
+        match &self.backend {
+            Backend::Symphonia(d) => d.frames_hint(),
+            Backend::WavPack(d) => d.frames_hint(),
+            Backend::Ape(d) => d.frames_hint(),
+            Backend::Dsd(d) => d.frames_hint(),
+        }
     }
 
     /// Positions the stream so that the next frame produced is at `secs`.
     pub fn seek(&mut self, secs: f64) -> Result<(), String> {
-        if secs <= 0.0 {
-            return Ok(());
+        match &mut self.backend {
+            Backend::Symphonia(d) => d.seek(secs),
+            Backend::WavPack(d) => d.seek(secs),
+            Backend::Ape(d) => d.seek(secs),
+            Backend::Dsd(d) => d.seek(secs),
         }
-        let time = Time::try_from_secs_f64(secs).ok_or("seek position out of range")?;
-        let seeked = self
-            .format
-            .seek(
-                SeekMode::Accurate,
-                SeekTo::Time {
-                    time,
-                    track_id: Some(self.track_id),
-                },
-            )
-            .map_err(|e| e.to_string())?;
-        self.decoder.reset();
-        let time_base = self
-            .format
-            .tracks()
-            .iter()
-            .find(|t| t.id == self.track_id)
-            .and_then(|t| t.time_base);
-        let landed = time_base.map_or(secs, |tb| {
-            tb.calc_time_saturating(seeked.actual_ts).as_secs_f64()
-        });
-        let behind = (secs - landed).max(0.0);
-        self.skip_frames = (behind * f64::from(self.sample_rate)).round() as u64;
-        Ok(())
     }
 
-    /// Appends the next decoded packet as interleaved stereo. Returns `false`
-    /// at the end of the stream. Corrupt packets are skipped.
+    /// Appends the next decoded block as interleaved stereo. Returns `false`
+    /// at the end of the stream.
     pub fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
-        loop {
-            let packet = match self.format.next_packet() {
-                Ok(Some(packet)) => packet,
-                Ok(None) => return Ok(false),
-                // A truncated file (interrupted download, damaged tail) ends
-                // where its data ends instead of failing.
-                Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    return Ok(false);
-                }
-                Err(e) => return Err(e.to_string()),
-            };
-            if packet.track_id != self.track_id {
-                continue;
-            }
-            let buf = match self.decoder.decode(&packet) {
-                Ok(buf) => buf,
-                Err(Error::DecodeError(_)) => continue,
-                Err(e) => return Err(e.to_string()),
-            };
-            let channels = buf.spec().channels().count().max(1);
-            let frames = buf.frames();
-            self.scratch.resize(frames * channels, 0.0);
-            buf.copy_to_slice_interleaved(self.scratch.as_mut_slice());
-            let skip = usize::try_from(self.skip_frames)
-                .unwrap_or(usize::MAX)
-                .min(frames);
-            self.skip_frames -= skip as u64;
-            for frame in self.scratch.chunks_exact(channels).skip(skip) {
-                let (l, r) = downmix(frame);
-                out.push(l);
-                out.push(r);
-            }
-            return Ok(true);
+        match &mut self.backend {
+            Backend::Symphonia(d) => d.next_block(out),
+            Backend::WavPack(d) => d.next_block(out),
+            Backend::Ape(d) => d.next_block(out),
+            Backend::Dsd(d) => d.next_block(out),
         }
     }
 }
 
 /// Stereo from any channel count. Order follows the WAV/SMPTE convention
 /// (L, R, C, LFE, Ls, Rs, …); the LFE channel is dropped.
-fn downmix(frame: &[f32]) -> (f32, f32) {
+pub(crate) fn downmix(frame: &[f32]) -> (f32, f32) {
     match *frame {
         [m] => (m, m),
         [l, r] => (l, r),
         [l, r, c] => (l + MINUS_3DB * c, r + MINUS_3DB * c),
         [l, r, c, _lfe] => (l + MINUS_3DB * c, r + MINUS_3DB * c),
+        // 5.0: L R C Ls Rs.
+        [l, r, c, ls, rs] => {
+            let norm = 1.0 / (1.0 + 2.0 * MINUS_3DB);
+            (
+                (l + MINUS_3DB * (c + ls)) * norm,
+                (r + MINUS_3DB * (c + rs)) * norm,
+            )
+        }
         [l, r, c, _lfe, ls, rs, ..] => {
             let norm = 1.0 / (1.0 + 2.0 * MINUS_3DB);
             (
@@ -184,7 +228,6 @@ fn downmix(frame: &[f32]) -> (f32, f32) {
                 (r + MINUS_3DB * (c + rs)) * norm,
             )
         }
-        [l, r, ..] => (l, r),
         [] => (0.0, 0.0),
     }
 }
@@ -198,5 +241,17 @@ mod tests {
         assert_eq!(downmix(&[0.5]), (0.5, 0.5));
         let (l, r) = downmix(&[0.0, 0.0, 1.0]);
         assert!((l - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6 && (r - l).abs() < 1e-6);
+    }
+
+    #[test]
+    fn downmix_keeps_the_centre_of_five_channels() {
+        // L R C Ls Rs (5.0): the centre reaches both sides.
+        let (l, r) = downmix(&[0.0, 0.0, 1.0, 0.0, 0.0]);
+        assert!(l > 0.2 && (l - r).abs() < 1e-6, "{l} {r}");
+        let (l, r) = downmix(&[0.0, 0.0, 0.0, 1.0, 0.0]);
+        assert!(
+            l > 0.2 && r.abs() < 1e-6,
+            "left surround stays left: {l} {r}"
+        );
     }
 }

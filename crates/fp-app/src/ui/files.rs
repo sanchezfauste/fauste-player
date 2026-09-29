@@ -2,10 +2,12 @@
 
 use std::path::{Path, PathBuf};
 
-/// File extensions of the formats supported in Phase 1 (spec §6): WAV,
-/// AIFF, FLAC, MP3, OGG Vorbis, AAC/M4A and ALAC (in M4A).
+/// File extensions of the audio formats that can be played (audio formats
+/// spec F1). Video containers (`mkv`, `mp4`, `webm`) are left out so that
+/// folder scans do not pick up films.
 pub const AUDIO_EXTENSIONS: &[&str] = &[
-    "aac", "adts", "aif", "aifc", "aiff", "flac", "m4a", "m4b", "mp3", "oga", "ogg", "wav", "wave",
+    "aac", "adts", "aif", "aifc", "aiff", "ape", "caf", "dff", "dsf", "flac", "m4a", "m4b", "mka",
+    "mp1", "mp2", "mp3", "oga", "ogg", "opus", "wav", "wave", "weba", "wv",
 ];
 
 pub fn is_audio(path: &Path) -> bool {
