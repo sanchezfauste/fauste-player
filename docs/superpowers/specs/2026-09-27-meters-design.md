@@ -24,6 +24,8 @@
 | DIN PPM | IEC 60268-10 type I (not available: paid). The integration-time definition quoted in Tech 3205 is used | a 5 ms burst reads 2 dB low; 20 dB fall in 1.5 s |
 | VU | IEC 60268-17 (not available). Its publicly documented figures are used: average response, 99 % in 300 ms ± 10 %, 1–1.5 % overshoot | all three |
 | Digital peak | IEC 60268-18 (not available): instant rise, 20 dB fall in 1.7 s | rise and fall |
+| K-System | B. Katz, "An integrated approach to metering, monitoring and levelling" (AES), as specified in "Level Practices (Part 2)" (digido.com) | the average: a sine reads its level, 99 % of a step in 600 ms and the same fall; the peak falls 26 dB in 3 s |
+| Scales | IEC 60268-10 (types I and IIb), 60268-17 and 60268-18 scale marks as published (for example in ITU-T J.15 and the standards' public summaries); the K-System's scale as above | the position of every mark, per scale |
 
 ## M1. Measurement (engine, real-time thread)
 
@@ -47,11 +49,14 @@
   | `EbuPpm` | IEC 60268-10 type IIb | peak | integration 10 ± 2 ms (the fit: 8.37 ms by the IEC definition) | 24 dB in 2.8 s |
   | `DinPpm` | IEC 60268-10 type I | peak | integration 5 ms | 20 dB in 1.5 s |
   | `Vu` | IEC 60268-17 | rectified average | second order: 99 % in 300 ms, 1.25 % overshoot | the same movement |
+  | `K20`, `K14`, `K12` | K-System | peak and RMS average | peak: one sample; average: 99 % in 600 ms | peak: 26 dB in 3 s; average: as it rises |
   | `Custom` | — | peak | `attack_ms` | `release_db_per_sec` |
 
   Programme-meter integration runs per sample in the mixer (M1). The conductor applies the fall. The VU needle is a second-order system (ζ = 0.8127, ω₀ = 13.51 rad/s) driven by the rectified average, calibrated so that a sine reads its peak level.
 - **Ticks without a block:** a device block can span several 5 ms ticks. A tick with no audio less than 50 ms after the last block leaves the level standing, and the next block moves it for the whole span. Longer without audio counts as silence: the bar falls, and loudness counts the elapsed time as silent frames, so it falls instead of freezing.
 - **Peak hold:** the highest level is kept for `peak_hold_secs`, then falls at the ballistics' fall rate. 0 disables it.
+- **Average (RMS) level, for the K-System:** per channel, the mean square of the tick's samples goes through two equal first-order stages (τ = 600 ms / 5.84 = 102.7 ms, solved exactly per tick), so a step reads 99 % of its RMS value (−0.09 dB) after 600 ms and falls the same way, the K-System's 600 ms integration and fall. Ticks without audio count as silence, as for the bar. It is read by the AES17 convention (a full-scale sine reads 0 dBFS), so "peak and average sections are calibrated with sine wave to ride on the same numeric scale", as the K-System requires.
+- **Maximum:** the highest level the bar reached (either channel), shown as a number. Only what each tick measured counts, so after a restart the bar still falling from the previous entry is ignored. It restarts when a different entry becomes current (a segue's overlap counts for the new entry: it is what the player puts on air) and when the operator clicks the readout (an `EngineRequest`, since the meter is not model state). Non-finite samples read as silence and never stick in the meter.
 - **Loudness (EBU R128 / ITU-R BS.1770):**
   - energies are binned in 5 ms blocks (the tick), so the windows slide finely enough for Tech 3341's live-meter cases;
   - momentary loudness covers the last 400 ms, short-term the last 3 s;
@@ -67,11 +72,11 @@
 | `attack_ms` | 5.0 | 0 … 1000 | `Custom` rise |
 | `release_db_per_sec` | 11.8 | 1 … 100 | `Custom` fall |
 | `true_peak` | false | — | M1 |
-| `floor_db` | −60 | −96 … −20 | bottom of the scale |
+| `floor_db` | −60 | −96 … −20 | bottom of the digital scale (digital peak and custom); the other scales have the range their standard gives |
 | `peak_hold_secs` | 2.0 | 0 … 10 | M2 |
-| `reference_dbfs` | −18 | −30 … 0 | alignment mark (EBU R68) |
-| `warning_dbfs` | −9 | −30 … 0 | yellow from here (EBU permitted maximum) |
-| `danger_dbfs` | −3 | −30 … 0 | red from here |
+| `reference_dbfs` | −18 | −30 … 0 | alignment level (EBU R68): the mark, EBU TEST, DIN −9 and 0 VU |
+| `warning_dbfs` | −9 | −30 … 0 | yellow from here (EBU permitted maximum); not for the K-System |
+| `danger_dbfs` | −3 | −30 … 0 | red from here; not for the K-System |
 | `loudness` | `ShortTerm` | `Off`, `Momentary`, `ShortTerm` | readout under the meter |
 | `loudness_target_lufs` | −23 | −36 … −10 | readout green within ±1 LU |
 
@@ -80,8 +85,21 @@
 ## M4. Display
 
 - The meter keeps its size in the player column.
-- Segments are drawn from the floor to 0 dBFS in dB-linear steps, green, yellow from `warning_dbfs`, red from `danger_dbfs`.
-- A tick marks `reference_dbfs`. The hold segment is drawn in the colour of its zone.
+- **One continuous bar per channel**, drawn to the pixel, not in segments (segments of 3 dB made the bar move in visible steps).
+- **Scale: the one of the chosen meter's standard**, with its marks as small ticks between the channels (`reference_dbfs`, or K-System 0, brighter). Levels above the top of a scale sit at the top.
+
+  | Meter | Scale (marks) | Where the alignment level is | Law |
+  |---|---|---|---|
+  | Digital peak, custom | −60, −50, −40, −35, −30, −25, −20, −15, −10, −5, 0 dBFS (IEC 60268-18), from `floor_db` | the mark | the deflection commonly used for this scale, in % of 0 dBFS: 2.5 %/dB from −20 to 0, 2 from −30, 1.5 from −40, 0.75 from −50, 0.5 from −60, 0.25 from −70 (so −20 is halfway); the bottom is `floor_db` |
+  | EBU PPM | −12, −8, −4, TEST, +4, +8, +12 dB (IEC 60268-10 IIb) | TEST | linear in dB from −12 to +12; below −12 the bar rests at the bottom, like the needle |
+  | DIN PPM | −50, −40, −30, −20, −10, −5, 0, +5 dB (IEC 60268-10 type I); 0 dB is the permitted maximum, 9 dB above alignment | −9 | semi-logarithmic: height ∝ the fourth root of the voltage, from −50 (bottom) to +5 (top) |
+  | VU | −20, −10, −7, −5, −3, −2, −1, 0, +1, +2, +3 VU (IEC 60268-17) | 0 VU | proportional to the voltage, +3 VU at the top (0 VU at 70.8 %) |
+  | K-20, K-14, K-12 | +N (0 dBFS, the top), +4, 0, −4 … −24 every 4 dB, −30, −40, −50, −60 | 0 (−N dBFS) | linear in dB from the top to −24 over 80 % of the height; −24 to −60 over the rest. The K-System asks for 1 dB marks down to −24: at this meter's size, every 4 dB |
+
+- **Zones:** green, yellow from `warning_dbfs`, red from `danger_dbfs`. The K-System has its own: green below 0, amber from 0 to +4, red above +4.
+- **K-System bars show both sections:** the average (RMS) level is the solid body; the part up to the peak level is the same colour, dimmed. The other meters show one level, as their standard defines.
+- **Peak hold:** a two-pixel line at the hold level, in the colour of its zone.
+- **Maximum readout** above the bars: the maximum (M2) in dBFS with one decimal, red in the danger zone, a dash before any audio. A click on it restarts it.
 - With `loudness` on, one line under the meter shows the value in LUFS, coloured against the target.
 
 ## M5. Out of scope
