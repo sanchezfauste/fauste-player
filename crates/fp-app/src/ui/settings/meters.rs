@@ -10,11 +10,14 @@ use crate::ui::app::Scene;
 use crate::ui::theme;
 use crate::ui::widgets::{self, TileStyle, font};
 
-const PRESETS: [(MeterBallistics, &str); 5] = [
+const PRESETS: [(MeterBallistics, &str); 8] = [
     (MeterBallistics::DigitalPeak, "meter-digital-peak"),
     (MeterBallistics::EbuPpm, "meter-ebu-ppm"),
     (MeterBallistics::DinPpm, "meter-din-ppm"),
     (MeterBallistics::Vu, "meter-vu"),
+    (MeterBallistics::K20, "meter-k20"),
+    (MeterBallistics::K14, "meter-k14"),
+    (MeterBallistics::K12, "meter-k12"),
     (MeterBallistics::Custom, "meter-custom"),
 ];
 

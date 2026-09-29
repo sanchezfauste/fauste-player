@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use fp_engine::conductor::{ConductorHandle, Telemetry};
-use fp_model::{AppState, Command, ModelError, Route};
+use fp_model::{AppState, Command, ModelError, PlayerId, Route};
 
 pub trait Controller: Send + Sync {
     /// The latest model snapshot.
@@ -15,6 +15,8 @@ pub trait Controller: Send + Sync {
     fn send(&self, command: Command) -> bool;
     /// Plays a test tone on `route`; never blocks.
     fn test_tone(&self, route: Route, frequency_hz: f32) -> bool;
+    /// Restarts the maximum of `player`'s meter; never blocks.
+    fn reset_meter_max(&self, player: PlayerId) -> bool;
     /// The next command the model refused, if any.
     fn take_rejection(&self) -> Option<ModelError>;
 }
@@ -34,6 +36,10 @@ impl Controller for ConductorHandle {
 
     fn test_tone(&self, route: Route, frequency_hz: f32) -> bool {
         ConductorHandle::test_tone(self, route, frequency_hz)
+    }
+
+    fn reset_meter_max(&self, player: PlayerId) -> bool {
+        ConductorHandle::reset_meter_max(self, player)
     }
 
     fn take_rejection(&self) -> Option<ModelError> {

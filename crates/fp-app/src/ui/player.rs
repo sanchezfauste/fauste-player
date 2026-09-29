@@ -326,7 +326,17 @@ fn info_row(
             let loudness = widgets::loudness_line(&telemetry.meter, meter)
                 .map(|(value, _)| t.tr_args("meter-loudness", &[("value", value.into())]))
                 .unwrap_or_default();
-            widgets::vu(ui, &telemetry.meter, meter, &loudness);
+            let labels = widgets::MeterLabels {
+                loudness,
+                max: t.tr_args(
+                    "meter-max",
+                    &[("value", widgets::max_readout(telemetry.meter.max_db).into())],
+                ),
+                max_tip: t.tr("tip-meter-max"),
+            };
+            if widgets::vu(ui, &telemetry.meter, meter, &labels) {
+                scene.ctl.reset_meter_max(id);
+            }
             let volume = scene.state.player(id).map_or(1.0, |p| p.volume);
             let db = match view::volume_db(volume) {
                 Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),
