@@ -134,10 +134,11 @@ scripts/package-release.sh x86_64-unknown-linux-gnu  # → dist/fauste-player-<v
   with cargo-wix and WiX v3.
 - macOS: `scripts/package/macos.sh`.
 
-**Dry run:** run `release-build` by hand with `dry_run` checked, and any ref
-as `tag`. It builds every package, including the MSI, the dmg and the
-Flatpak, without uploading anything. Do this before the first release after
-a packaging change.
+**Dry run:** a pull request that touches `packaging/`, `scripts/package*`
+or `release-build.yml` runs `release-build` as a dry run: it builds every
+package, including the MSI, the dmg and the Flatpak, and uploads nothing.
+The same run can be started by hand with `dry_run` checked and any ref as
+`tag`.
 
 ### Signing (optional secrets)
 
