@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds the Windows installer (.msi) for one target, with a .sha256, in
-# dist/. Runs in Git Bash on Windows; needs cargo-wix and the WiX Toolset v3.
+# dist/, and prints its path as the last line of stdout (the WiX output goes
+# to stderr, so callers that keep only that line still see its errors). Runs in Git Bash on Windows; needs cargo-wix and the WiX Toolset v3.
 #
 #   scripts/package/windows.sh <target> [version]
 #
@@ -45,7 +46,7 @@ sign() {
 sign "${exe}"
 msi="${dist}/fauste-player-${version}-${target}.msi"
 (cd "${root}" && cargo wix -p fp-app --no-build --nocapture --target "${target}" \
-  --include packaging/windows/main.wxs --install-version "${version}" --output "${msi}")
+  --include packaging/windows/main.wxs --install-version "${version}" --output "${msi}") >&2
 sign "${msi}"
 (cd "${dist}" && sha256sum "$(basename "${msi}")" > "$(basename "${msi}").sha256")
 echo "${msi}"
