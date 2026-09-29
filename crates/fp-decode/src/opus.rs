@@ -1,8 +1,8 @@
 //! Opus for symphonia (audio formats spec F1): a decoder built on
 //! `opus-decoder`, registered for Opus tracks in Ogg and Matroska. It
 //! always decodes at 48 kHz and applies the output gain of the Opus header.
-//! The containers set each packet's pre-skip and end trim; the caller
-//! applies them.
+//! Like symphonia's own decoders, it removes the pre-skip and end padding the
+//! container marks on each packet when gapless decoding is on (the default).
 
 use std::sync::OnceLock;
 
@@ -50,6 +50,7 @@ pub(crate) fn codecs() -> &'static CodecRegistry {
 
 pub(crate) struct OpusDecoder {
     params: AudioCodecParameters,
+    gapless: bool,
     decoder: opus_decoder::OpusDecoder,
     channels: usize,
     /// Output gain from the Opus header, as a factor.
@@ -84,7 +85,7 @@ fn parse_head(head: &[u8]) -> Result<(usize, f32)> {
 }
 
 impl OpusDecoder {
-    fn try_new(params: &AudioCodecParameters) -> Result<Self> {
+    fn try_new(params: &AudioCodecParameters, opts: &AudioDecoderOptions) -> Result<Self> {
         let head = params
             .extra_data
             .as_deref()
@@ -99,6 +100,7 @@ impl OpusDecoder {
         };
         Ok(Self {
             params: params.clone(),
+            gapless: opts.gapless,
             decoder,
             channels,
             gain,
@@ -122,6 +124,11 @@ impl OpusDecoder {
                     *out = s * self.gain;
                 }
             }
+        }
+        if self.gapless {
+            let start = usize::try_from(packet.trim_start.get()).unwrap_or(usize::MAX);
+            let end = usize::try_from(packet.trim_end.get()).unwrap_or(usize::MAX);
+            self.buf.trim(start, end);
         }
         Ok(())
     }
@@ -160,9 +167,9 @@ impl AudioDecoder for OpusDecoder {
 impl RegisterableAudioDecoder for OpusDecoder {
     fn try_registry_new(
         params: &AudioCodecParameters,
-        _opts: &AudioDecoderOptions,
+        opts: &AudioDecoderOptions,
     ) -> Result<Box<dyn AudioDecoder>> {
-        Ok(Box::new(Self::try_new(params)?))
+        Ok(Box::new(Self::try_new(params, opts)?))
     }
 
     fn supported_codecs() -> &'static [SupportedAudioCodec] {

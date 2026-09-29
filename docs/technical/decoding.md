@@ -32,10 +32,11 @@ decoder (`opus::OpusDecoder`) built on `opus-decoder`. It decodes at 48 kHz,
 applies the header's output gain, and supports mono and stereo (mapping
 family 0).
 
-`SymphoniaDecoder::next_block` applies each packet's `trim_start` and
-`trim_end`: the encoder delay (Opus pre-skip, MP3 and AAC priming) and the
-padding of the last packet. A seek lands on the packet before the target and
-`skip_frames` drops the rest.
+Decoders are opened with gapless decoding on (symphonia's default): each
+decoder removes the encoder delay and end padding the container marks on its
+packets (`trim_start`, `trim_end`), so the Opus decoder does it too (Opus
+pre-skip). The backend must not trim again (`tests/gapless.rs`). A seek lands
+on the packet before the target and `skip_frames` drops the rest.
 
 ## DSD
 

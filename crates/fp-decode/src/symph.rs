@@ -151,22 +151,11 @@ impl SymphoniaDecoder {
             let frames = buf.frames();
             self.scratch.resize(frames * channels, 0.0);
             buf.copy_to_slice_interleaved(self.scratch.as_mut_slice());
-            // The container's trims: encoder delay (Opus pre-skip) and
-            // padding at the end of the last packet.
-            let trim_start = usize::try_from(packet.trim_start.get()).unwrap_or(usize::MAX);
-            let trim_end = usize::try_from(packet.trim_end.get()).unwrap_or(usize::MAX);
-            let kept = frames.saturating_sub(trim_start).saturating_sub(trim_end);
             let skip = usize::try_from(self.skip_frames)
                 .unwrap_or(usize::MAX)
-                .min(kept);
+                .min(frames);
             self.skip_frames -= skip as u64;
-            let frames_out = self
-                .scratch
-                .chunks_exact(channels)
-                .skip(trim_start.min(frames))
-                .take(kept)
-                .skip(skip);
-            for frame in frames_out {
+            for frame in self.scratch.chunks_exact(channels).skip(skip) {
                 let (l, r) = downmix(frame);
                 out.push(l);
                 out.push(r);
