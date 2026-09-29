@@ -70,6 +70,9 @@ red.
 ## Waveform
 
 - The part already played is drawn in the waveform colour; the rest is dimmer.
+- The outline shows the peaks, faint; the solid body inside it is the average
+  (RMS) level. On a loud track the peaks fill the height, and the body still
+  shows where the track is quieter or louder.
 - A blue shaded area at the start marks the **intro**, and a badge counts it
   down. The intro only shows when it has been set.
 - An orange shaded area at the end marks the **outro**, with its own countdown.

@@ -10,8 +10,8 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use fp_analysis::AnalysisError;
 use fp_analysis::analyzer::{AnalysisResult, Analyzer};
+use fp_analysis::{AnalysisError, WavePeak};
 use fp_engine::conductor::ConductorHandle;
 use fp_model::{AnalysisSettings, AppState, Command, FileState, PlayerId, TrackId, Transport};
 use fp_store::Store;
@@ -22,8 +22,8 @@ const PERIOD: Duration = Duration::from_millis(50);
 /// What the UI draws for a track besides its model data.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackMedia {
-    /// Min/max per bucket, full scale = `i16::MAX`.
-    pub peaks: Vec<(i16, i16)>,
+    /// Min, max and RMS per bucket, full scale = `i16::MAX`.
+    pub peaks: Vec<WavePeak>,
     pub peak_bucket_secs: f64,
     pub cover_png: Option<Arc<[u8]>>,
 }

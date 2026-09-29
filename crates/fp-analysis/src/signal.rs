@@ -2,6 +2,7 @@
 //! automatic cue markers derived from them.
 
 use fp_model::AnalysisSettings;
+use serde::{Deserialize, Serialize};
 
 /// Level reported for digital silence.
 pub const FLOOR_DB: f32 = -120.0;
@@ -16,8 +17,17 @@ pub struct Envelope {
     pub rms_db: Vec<f32>,
     /// Length of one peak bucket in seconds.
     pub bucket_secs: f64,
-    /// Min/max of the mono signal per bucket, scaled to `i16`.
-    pub peaks: Vec<(i16, i16)>,
+    /// Min, max and RMS level of the mono signal per bucket.
+    pub peaks: Vec<WavePeak>,
+}
+
+/// One waveform bucket of the mono signal, scaled to `i16` (full scale =
+/// `i16::MAX`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct WavePeak {
+    pub min: i16,
+    pub max: i16,
+    pub rms: i16,
 }
 
 /// Builds an `Envelope` incrementally from interleaved stereo blocks.
@@ -32,8 +42,9 @@ pub struct EnvelopeBuilder {
     rms_db: Vec<f32>,
     min: f32,
     max: f32,
+    bucket_sum_sq: f64,
     in_bucket: usize,
-    peaks: Vec<(i16, i16)>,
+    peaks: Vec<WavePeak>,
 }
 
 fn to_db(rms: f64) -> f32 {
@@ -62,6 +73,7 @@ impl EnvelopeBuilder {
             rms_db: Vec::new(),
             min: 0.0,
             max: 0.0,
+            bucket_sum_sq: 0.0,
             in_bucket: 0,
             peaks: Vec::new(),
         }
@@ -79,6 +91,7 @@ impl EnvelopeBuilder {
             }
             self.min = self.min.min(m);
             self.max = self.max.max(m);
+            self.bucket_sum_sq += f64::from(m) * f64::from(m);
             self.in_bucket += 1;
             if self.in_bucket == self.bucket {
                 self.close_bucket();
@@ -95,7 +108,13 @@ impl EnvelopeBuilder {
     }
 
     fn close_bucket(&mut self) {
-        self.peaks.push((to_i16(self.min), to_i16(self.max)));
+        let rms = (self.bucket_sum_sq / self.in_bucket.max(1) as f64).sqrt();
+        self.peaks.push(WavePeak {
+            min: to_i16(self.min),
+            max: to_i16(self.max),
+            rms: to_i16(rms as f32),
+        });
+        self.bucket_sum_sq = 0.0;
         self.min = 0.0;
         self.max = 0.0;
         self.in_bucket = 0;
@@ -330,8 +349,26 @@ mod tests {
         s[2 * 100 + 1] = -1.0;
         let e = envelope(&s);
         assert_eq!(e.peaks.len(), 2);
-        assert_eq!(e.peaks[0], (0, i16::MAX / 2));
-        assert_eq!(e.peaks[1], (-i16::MAX, 0));
+        assert_eq!((e.peaks[0].min, e.peaks[0].max), (0, i16::MAX / 2));
+        assert_eq!((e.peaks[1].min, e.peaks[1].max), (-i16::MAX, 0));
+    }
+
+    #[test]
+    fn peaks_hold_the_rms_level_of_each_bucket() {
+        // 10 ms buckets at 8 kHz = 80 frames: a constant 0.5, then a single
+        // full-scale sample among 79 silent ones.
+        let mut s = vec![0.5f32; 80 * 2];
+        s.extend(vec![0.0f32; 80 * 2]);
+        s[2 * 100] = -1.0;
+        s[2 * 100 + 1] = -1.0;
+        let e = envelope(&s);
+        assert_eq!(e.peaks[0].rms, i16::MAX / 2);
+        let expected = f32::from(i16::MAX) / 80f32.sqrt();
+        assert!(
+            (f32::from(e.peaks[1].rms) - expected).abs() <= 1.0,
+            "{}",
+            e.peaks[1].rms
+        );
     }
 
     #[test]

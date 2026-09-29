@@ -352,7 +352,7 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
   - rejects images larger than `limits.max_cover_bytes` (default 20 MB) or `limits.max_cover_pixels` (default 8000×8000);
   - decodes with explicit `image::Limits`;
   - stores a thumbnail (default 128×128, `analysis.cover_thumb_px`) in the cache.
-- **Peaks:** full decode, mono sum, min/max per bucket (`analysis.peak_bucket_ms`, default 10 ms), stored as `i16` pairs.
+- **Peaks:** full decode, mono sum; per bucket (`analysis.peak_bucket_ms`, default 10 ms) the minimum, the maximum and the RMS level, stored as `i16` (full scale = `i16::MAX`).
 - **Loudness envelope:** RMS over `analysis.rms_window_ms` windows (default 50 ms; in-memory only during analysis).
 - **Automatic markers** (seconds, `f64`). Every threshold below is a field of `AnalysisSettings` (in `config.json`, editable in Settings), not a constant:
   - `cue_in`: first window with RMS ≥ `silence_threshold_db` (default −40 dBFS), or 0.
@@ -421,6 +421,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - big countdown with tenths, `elapsed / total`.
   - **Waveform:**
     - played/unplayed colours, intro/outro shading, dashed amber MIX marker, playhead;
+    - drawn continuously, one column per pixel, as audio editors draw it: the peak envelope in the colour dimmed, and the RMS level of the same span as a solid body inside it. On a loud master the peaks fill the height but the body still shows the track's dynamics. Both are linear in amplitude and symmetric about the centre line; a column's peak is the largest of its buckets, its RMS the root of their mean square;
     - hover time tooltip, click to seek;
     - intro and outro badges per §3 (rules 18 and 19).
   - **Playlist tabs:** reordering and dropping entries on a tab appends them.

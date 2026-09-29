@@ -583,7 +583,7 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
                 .get(a0.min(peaks.len())..a1.min(peaks.len()))
                 .unwrap_or_default()
                 .iter()
-                .map(|(lo, hi)| lo.unsigned_abs().max(hi.unsigned_abs()))
+                .map(|p| p.min.unsigned_abs().max(p.max.unsigned_abs()))
                 .max()
                 .unwrap_or(0);
             let a = f32::from(level) / f32::from(i16::MAX as u16) * amp;
