@@ -23,6 +23,7 @@ pub(super) fn layout(file: &mut File) -> Result<Layout, String> {
     if format_id != 0 {
         return Err(format!("DSF format {format_id} is not raw DSD"));
     }
+    let channel_type = le_u32(&h, 48).ok_or_else(bad)?;
     let channels = le_u32(&h, 52).ok_or_else(bad)?;
     let rate = le_u32(&h, 56).ok_or_else(bad)?;
     let bits = le_u32(&h, 60).ok_or_else(bad)?;
@@ -53,5 +54,25 @@ pub(super) fn layout(file: &mut File) -> Result<Layout, String> {
         data_start,
         block: Some(block),
         lsb_first: bits == 1,
+        positions: positions(channel_type, usize::try_from(channels).map_err(|_| bad())?),
     })
+}
+
+/// Channel positions from the DSF channel type; the usual order for the
+/// count if the type does not match it.
+fn positions(channel_type: u32, channels: usize) -> Vec<Option<usize>> {
+    use super::{C, L, LFE, LS, R, RS};
+    let order: &[usize] = match channel_type {
+        3 => &[L, R, C],
+        4 => &[L, R, LS, RS],
+        5 => &[L, R, C, LFE],
+        6 => &[L, R, C, LS, RS],
+        7 => &[L, R, C, LFE, LS, RS],
+        _ => &[],
+    };
+    if order.len() == channels {
+        order.iter().copied().map(Some).collect()
+    } else {
+        super::default_positions(channels)
+    }
 }

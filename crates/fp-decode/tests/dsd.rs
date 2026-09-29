@@ -130,6 +130,18 @@ const BLOCK: usize = 4096;
 
 /// A DSF file: per-channel blocks of 4096 bytes, LSB first.
 fn dsf(channels: &[Vec<u8>], sample_bits: u64) -> Vec<u8> {
+    let channel_type = match channels.len() {
+        1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 5, // L R C LFE
+        5 => 6, // L R C Ls Rs
+        _ => 7, // L R C LFE Ls Rs
+    };
+    dsf_typed(channels, sample_bits, channel_type)
+}
+
+fn dsf_typed(channels: &[Vec<u8>], sample_bits: u64, channel_type: u32) -> Vec<u8> {
     let len = channels[0].len();
     let blocks = len.div_ceil(BLOCK);
     let mut data = Vec::new();
@@ -152,7 +164,7 @@ fn dsf(channels: &[Vec<u8>], sample_bits: u64) -> Vec<u8> {
     f.extend(52u64.to_le_bytes());
     f.extend(1u32.to_le_bytes()); // version
     f.extend(0u32.to_le_bytes()); // DSD raw
-    f.extend((channels.len() as u32).to_le_bytes()); // channel type (1 mono, 2 stereo)
+    f.extend(channel_type.to_le_bytes());
     f.extend((channels.len() as u32).to_le_bytes());
     f.extend(DSD64.to_le_bytes());
     f.extend(1u32.to_le_bytes()); // LSB first
@@ -178,13 +190,18 @@ fn chunk(id: &[u8; 4], body: &[u8]) -> Vec<u8> {
 /// A DSDIFF file: interleaved bytes, MSB first. `compression` is `DSD ` or
 /// `DST `.
 fn dff(channels: &[Vec<u8>], compression: &[u8; 4]) -> Vec<u8> {
+    let ids: Vec<&[u8; 4]> = [b"SLFT", b"SRGT", b"C   ", b"LFE ", b"LS  ", b"RS  "]
+        .into_iter()
+        .take(channels.len())
+        .collect();
+    dff_with_ids(channels, &ids, compression)
+}
+
+fn dff_with_ids(channels: &[Vec<u8>], ids: &[&[u8; 4]], compression: &[u8; 4]) -> Vec<u8> {
     let mut prop = b"SND ".to_vec();
     prop.extend(chunk(b"FS  ", &DSD64.to_be_bytes()));
     let mut chnl = (channels.len() as u16).to_be_bytes().to_vec();
-    for id in [b"SLFT", b"SRGT", b"C   ", b"LFE ", b"LS  ", b"RS  "]
-        .iter()
-        .take(channels.len())
-    {
+    for id in ids {
         chnl.extend(*id);
     }
     prop.extend(chunk(b"CHNL", &chnl));
@@ -418,4 +435,59 @@ fn a_truncated_dsd_header_is_an_error() {
     zero_channels[52..56].copy_from_slice(&0u32.to_le_bytes());
     let path = write(dir.path(), "zero.dsf", &zero_channels);
     assert!(FileDecoder::open(&path).is_err());
+}
+
+/// Peak of the 1 kHz component of each output side, from 0.1 s.
+fn sides(stereo: &[f32]) -> (f64, f64) {
+    let l = left(stereo);
+    let r: Vec<f64> = stereo
+        .iter()
+        .skip(1)
+        .step_by(2)
+        .map(|&s| f64::from(s))
+        .collect();
+    let n = 8820;
+    (
+        fit(&l[1000..1000 + n], 1000.0).0,
+        fit(&r[1000..1000 + n], 1000.0).0,
+    )
+}
+
+#[test]
+fn surround_dsd_channels_are_placed_by_their_layout() {
+    let dir = tempfile::tempdir().unwrap();
+    let samples = DSD64 as usize / 5;
+    let tone = pack(&modulate(sine(1000.0, 0.5), DSD64, samples));
+    let idle = vec![0x69u8; tone.len()];
+    let bits = tone.len() as u64 * 8;
+    // Quad (FL FR BL BR) with sound on back left only: it must stay left.
+    let quad = vec![idle.clone(), idle.clone(), tone.clone(), idle.clone()];
+    let expected = 0.5 * std::f64::consts::FRAC_1_SQRT_2 / (1.0 + std::f64::consts::SQRT_2);
+    for path in [
+        write(dir.path(), "quad.dsf", &dsf_typed(&quad, bits, 4)),
+        write(
+            dir.path(),
+            "quad.dff",
+            &dff_with_ids(&quad, &[b"SLFT", b"SRGT", b"LS  ", b"RS  "], b"DSD "),
+        ),
+    ] {
+        let (l, r) = sides(&decode_all(&path));
+        assert!(
+            (db(l) - db(expected)).abs() < 0.3,
+            "{}: left {l}",
+            path.display()
+        );
+        assert!(r < 1e-3, "{}: right {r}", path.display());
+    }
+    // 5.0 (FL FR C BL BR) with sound on the centre: both sides get it.
+    let five = vec![idle.clone(), idle.clone(), tone, idle.clone(), idle];
+    let (l, r) = sides(&decode_all(&write(
+        dir.path(),
+        "five.dsf",
+        &dsf(&five, bits),
+    )));
+    assert!(
+        (db(l) - db(expected)).abs() < 0.3 && (l - r).abs() < 1e-3,
+        "{l} {r}"
+    );
 }

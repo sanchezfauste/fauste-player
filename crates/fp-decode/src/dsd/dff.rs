@@ -28,7 +28,7 @@ pub(super) fn layout(file: &mut File) -> Result<Layout, String> {
         return Err(bad());
     }
     let form_end = form_size.saturating_add(12).min(file_len);
-    let (mut rate, mut channels) = (None, None);
+    let (mut rate, mut channels, mut positions) = (None, None, None);
     let mut at = 16u64;
     while at.saturating_add(12) <= form_end {
         let (id, size) = chunk_header(file, at)?;
@@ -48,7 +48,18 @@ pub(super) fn layout(file: &mut File) -> Result<Layout, String> {
                     let data = p + 12;
                     match sub {
                         b"FS  " => rate = be_u32(&prop, data),
-                        b"CHNL" => channels = be_u16(&prop, data),
+                        b"CHNL" => {
+                            channels = be_u16(&prop, data);
+                            let ids = prop.get(data + 2..).unwrap_or_default();
+                            positions = channels.map(|n| {
+                                ids.as_chunks::<4>()
+                                    .0
+                                    .iter()
+                                    .take(usize::from(n))
+                                    .map(position)
+                                    .collect::<Vec<_>>()
+                            });
+                        }
                         b"CMPR" if prop.get(data..data + 4) != Some(b"DSD ") => {
                             return Err("DST-compressed DSDIFF is not supported".into());
                         }
@@ -78,6 +89,9 @@ pub(super) fn layout(file: &mut File) -> Result<Layout, String> {
                     data_start: body,
                     block: None,
                     lsb_first: false,
+                    positions: positions
+                        .filter(|p: &Vec<Option<usize>>| p.len() == channels)
+                        .unwrap_or_else(|| super::default_positions(channels)),
                 });
             }
             _ => {}
@@ -85,4 +99,18 @@ pub(super) fn layout(file: &mut File) -> Result<Layout, String> {
         at = body.saturating_add(size).saturating_add(size % 2);
     }
     Err("DSDIFF has no DSD audio".into())
+}
+
+/// The frame position of a DSDIFF channel ID.
+fn position(id: &[u8; 4]) -> Option<usize> {
+    use super::{C, L, LFE, LS, R, RS};
+    match id {
+        b"SLFT" | b"MLFT" => Some(L),
+        b"SRGT" | b"MRGT" => Some(R),
+        b"C   " => Some(C),
+        b"LFE " => Some(LFE),
+        b"LS  " => Some(LS),
+        b"RS  " => Some(RS),
+        _ => None,
+    }
 }

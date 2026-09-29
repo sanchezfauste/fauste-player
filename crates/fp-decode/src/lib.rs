@@ -213,6 +213,14 @@ pub(crate) fn downmix(frame: &[f32]) -> (f32, f32) {
         [l, r] => (l, r),
         [l, r, c] => (l + MINUS_3DB * c, r + MINUS_3DB * c),
         [l, r, c, _lfe] => (l + MINUS_3DB * c, r + MINUS_3DB * c),
+        // 5.0: L R C Ls Rs.
+        [l, r, c, ls, rs] => {
+            let norm = 1.0 / (1.0 + 2.0 * MINUS_3DB);
+            (
+                (l + MINUS_3DB * (c + ls)) * norm,
+                (r + MINUS_3DB * (c + rs)) * norm,
+            )
+        }
         [l, r, c, _lfe, ls, rs, ..] => {
             let norm = 1.0 / (1.0 + 2.0 * MINUS_3DB);
             (
@@ -220,7 +228,6 @@ pub(crate) fn downmix(frame: &[f32]) -> (f32, f32) {
                 (r + MINUS_3DB * (c + rs)) * norm,
             )
         }
-        [l, r, ..] => (l, r),
         [] => (0.0, 0.0),
     }
 }
@@ -234,5 +241,17 @@ mod tests {
         assert_eq!(downmix(&[0.5]), (0.5, 0.5));
         let (l, r) = downmix(&[0.0, 0.0, 1.0]);
         assert!((l - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6 && (r - l).abs() < 1e-6);
+    }
+
+    #[test]
+    fn downmix_keeps_the_centre_of_five_channels() {
+        // L R C Ls Rs (5.0): the centre reaches both sides.
+        let (l, r) = downmix(&[0.0, 0.0, 1.0, 0.0, 0.0]);
+        assert!(l > 0.2 && (l - r).abs() < 1e-6, "{l} {r}");
+        let (l, r) = downmix(&[0.0, 0.0, 0.0, 1.0, 0.0]);
+        assert!(
+            l > 0.2 && r.abs() < 1e-6,
+            "left surround stays left: {l} {r}"
+        );
     }
 }

@@ -37,6 +37,30 @@ pub(crate) struct Layout {
     /// DSF: bytes per channel in each block. DSDIFF: `None` (interleaved).
     block: Option<u64>,
     lsb_first: bool,
+    /// Where each channel goes in the frame `downmix` reads for more than
+    /// two channels: L, R, C, LFE, Ls, Rs (`SLOTS`). `None` drops it.
+    positions: Vec<Option<usize>>,
+}
+
+/// Frame size for more than two channels: L, R, C, LFE, Ls, Rs.
+const SLOTS: usize = 6;
+pub(crate) const L: usize = 0;
+pub(crate) const R: usize = 1;
+pub(crate) const C: usize = 2;
+pub(crate) const LFE: usize = 3;
+pub(crate) const LS: usize = 4;
+pub(crate) const RS: usize = 5;
+
+/// The positions of `channels` channels stored in the usual order for their
+/// count, when the file says nothing more precise.
+pub(crate) fn default_positions(channels: usize) -> Vec<Option<usize>> {
+    let order: &[usize] = match channels {
+        3 => &[L, R, C],
+        4 => &[L, R, C, LFE],
+        5 => &[L, R, C, LS, RS],
+        _ => &[L, R, C, LFE, LS, RS],
+    };
+    (0..channels).map(|c| order.get(c).copied()).collect()
 }
 
 impl Layout {
@@ -122,7 +146,14 @@ impl DsdDecoder {
             read_pos: 0,
             next: 0,
             raw: Vec::new(),
-            frame: vec![0.0; layout.channels],
+            frame: vec![
+                0.0;
+                if layout.channels > 2 {
+                    SLOTS
+                } else {
+                    layout.channels
+                }
+            ],
             layout,
         })
     }
@@ -231,11 +262,18 @@ impl DsdDecoder {
                 if more && end as u64 > available {
                     break;
                 }
+                let surround = self.layout.channels > 2;
+                self.frame.fill(0.0);
                 for c in 0..self.layout.channels {
                     let sample =
                         convert::filter((start..end).map(|i| self.byte(c, i).unwrap_or(IDLE)));
-                    if let Some(slot) = self.frame.get_mut(c) {
-                        *slot = sample;
+                    let at = if surround {
+                        self.layout.positions.get(c).copied().flatten()
+                    } else {
+                        Some(c)
+                    };
+                    if let Some(slot) = at.and_then(|at| self.frame.get_mut(at)) {
+                        *slot += sample;
                     }
                 }
                 let (l, r) = crate::downmix(&self.frame);
