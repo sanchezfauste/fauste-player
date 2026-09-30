@@ -55,7 +55,9 @@ Row colours:
 | Set as next | Same as double-click |
 | Pre-listen on CUE | Play it on the CUE output |
 | Add tracks below… | Pick files to insert after this track |
-| Duplicate | Insert an unplayed copy below |
+| Duplicate | Insert an unplayed copy below (with its repeat and stop-after marks) |
+| Repeat this track | Tick to play it again and again, without a gap, until you press Play (next), Previous, Stop or Fade stop, or turn on Stop after. Pause keeps it repeating. A repeat icon shows at the right of the title |
+| Stop after this track | Tick to stop the player when this track ends, every time it plays (in any mode). Unlike the player's **Stop after** button, the mark stays with the track and is saved with the playlist. The stop-after icon shows at the right of the title. It wins over Repeat |
 | Move to ▸ | Move it to the end of another playlist |
 | Remove from playlist | Remove it; not possible while it is on air |
 

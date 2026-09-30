@@ -583,3 +583,90 @@ fn the_meter_maximum_restarts_on_request() {
     let restarted = meter_of(&handle, p);
     assert!(restarted.max_db < stopped.max_db - 3.0, "{restarted:?}");
 }
+
+#[test]
+fn a_repeating_entry_restarts_gaplessly_until_repeat_is_turned_off() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let e = entries(conductor.state());
+    let p = conductor.state().players[0].id;
+    assert!(handle.send(Command::ToggleEntryRepeat(e[0])));
+    assert!(handle.send(Command::Play(p)));
+    settle(&mut conductor, now);
+    let mut heard: Vec<f32> = Vec::new();
+    let run = |conductor: &mut Conductor, heard: &mut Vec<f32>, now: &mut Instant, ticks| {
+        for _ in 0..ticks {
+            conductor.tick(*now);
+            heard.extend(device.render(BLOCK).unwrap().chunks(2).map(|f| f[0]));
+            *now += Duration::from_millis(10);
+            std::thread::yield_now();
+        }
+    };
+    run(&mut conductor, &mut heard, &mut now, 350);
+    // Every pass starts exactly one track length after the one before (no
+    // gap, sample-accurate). In between, every sample continues the one
+    // before it, except for the engine's short de-click ramp at the end of
+    // each pass (as at any hard cut at cue-out).
+    let first = heard.iter().position(|v| *v == 100_000.0).unwrap();
+    let len = TRACK_FRAMES as usize;
+    let ramp = 480;
+    let passes = (heard.len() - first) / len;
+    assert!(passes >= 3, "{passes} passes");
+    for k in 0..passes {
+        let start = first + k * len;
+        assert_eq!(heard[start], 100_000.0, "pass {k} starts on its boundary");
+        for i in start + 1..start + len - ramp {
+            assert_eq!(heard[i] as u64, heard[i - 1] as u64 + 1, "a jump at {i}");
+        }
+    }
+    let model = handle.model.load();
+    let player = model.player(p).unwrap();
+    assert_eq!(player.current, Some(e[0]));
+    assert!(!model.playlists.entry(e[0]).unwrap().is_played_by(p));
+    // Repeat off: the next boundary moves on.
+    assert!(handle.send(Command::ToggleEntryRepeat(e[0])));
+    heard.clear();
+    run(&mut conductor, &mut heard, &mut now, 150);
+    assert!(heard.iter().any(|v| (*v as u64) / 100_000 == 2));
+    assert_eq!(handle.model.load().player(p).unwrap().current, Some(e[1]));
+}
+
+#[test]
+fn next_pressed_just_after_a_repeat_boundary_keeps_the_model_on_the_next_track() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let e = entries(conductor.state());
+    let p = conductor.state().players[0].id;
+    assert!(handle.send(Command::ToggleEntryRepeat(e[0])));
+    assert!(handle.send(Command::Play(p)));
+    settle(&mut conductor, now);
+    // Play almost to the end of the first pass.
+    let mut heard = 0usize;
+    while heard + BLOCK < TRACK_FRAMES as usize - BLOCK {
+        conductor.tick(now);
+        device.render(BLOCK).unwrap();
+        heard += BLOCK;
+        now += Duration::from_millis(10);
+        std::thread::yield_now();
+    }
+    conductor.tick(now);
+    // The mixer crosses the boundary before the conductor looks again...
+    for _ in 0..3 {
+        device.render(BLOCK).unwrap();
+    }
+    // ...and Next arrives in the same tick as the restart.
+    assert!(handle.send(Command::Play(p)));
+    now += Duration::from_millis(30);
+    for _ in 0..20 {
+        conductor.tick(now);
+        device.render(BLOCK).unwrap();
+        now += Duration::from_millis(10);
+        std::thread::yield_now();
+    }
+    let model = handle.model.load();
+    let player = model.player(p).unwrap();
+    assert_eq!(
+        player.current,
+        Some(e[1]),
+        "the model stays on the track Next chose"
+    );
+    assert_eq!(player.history, vec![e[0]]);
+}

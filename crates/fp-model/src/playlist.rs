@@ -20,6 +20,16 @@ pub struct PlaylistEntry {
     /// into marks for every player on restore (`AppState::normalize_played_marks`).
     #[serde(default, rename = "played", skip_serializing)]
     pub legacy_played: bool,
+    /// Repeat until the operator moves on (feedback spec R26).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub repeat: bool,
+    /// Stop the player after this entry, every time it plays (R27).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub stop_after: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl PlaylistEntry {
@@ -30,6 +40,8 @@ impl PlaylistEntry {
             track,
             played_by: Vec::new(),
             legacy_played: false,
+            repeat: false,
+            stop_after: false,
         }
     }
 
@@ -148,6 +160,12 @@ impl Playlists {
             .find_map(|p| p.entries.iter().find(|e| e.id == entry))
     }
 
+    pub fn entry_mut(&mut self, entry: EntryId) -> Option<&mut PlaylistEntry> {
+        self.lists
+            .iter_mut()
+            .find_map(|p| p.entries.iter_mut().find(|e| e.id == entry))
+    }
+
     /// Marks `entry` as played by `player`.
     pub fn mark_played(&mut self, entry: EntryId, player: PlayerId) {
         if let Some(e) = self
@@ -238,11 +256,12 @@ impl Playlists {
     /// Inserts an unplayed copy of `entry` right after it.
     pub fn duplicate(&mut self, entry: EntryId, new_id: EntryId) -> Result<EntryId, ModelError> {
         let (pl, pos) = self.find(entry).ok_or(ModelError::UnknownEntry(entry))?;
-        let track = self
-            .entry(entry)
-            .ok_or(ModelError::UnknownEntry(entry))?
-            .track;
-        let copy = PlaylistEntry::new(new_id, track);
+        let original = self.entry(entry).ok_or(ModelError::UnknownEntry(entry))?;
+        let copy = PlaylistEntry {
+            repeat: original.repeat,
+            stop_after: original.stop_after,
+            ..PlaylistEntry::new(new_id, original.track)
+        };
         self.insert(pl, pos + 1, vec![copy])?;
         Ok(new_id)
     }

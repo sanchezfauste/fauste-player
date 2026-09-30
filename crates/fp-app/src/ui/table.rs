@@ -8,9 +8,10 @@ use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, Transport};
 
 use super::app::{DragEntry, DropTarget, Scene, ViewState};
 use super::format;
+use super::icons;
 use super::theme;
 use super::view::{self, RowStatus};
-use super::widgets::{font, font_medium};
+use super::widgets::{self, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
 const ROW_HEIGHT: f32 = 28.0;
@@ -215,15 +216,33 @@ pub(crate) fn track_table(
                 row.col(|ui| {
                     line(ui);
                     ui.add_space(8.0);
-                    ui.add(
-                        egui::Label::new(
-                            RichText::new(&track.title)
-                                .font(row_font.clone())
-                                .color(text),
-                        )
-                        .selectable(false)
-                        .truncate(),
-                    );
+                    // The entry's flags sit at the right of the title, in the
+                    // row's text colour (feedback spec §2.3).
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        ui.add_space(4.0);
+                        if entry.stop_after {
+                            flag(ui, &t.tr("flag-stop-after"), |p, r| {
+                                p.extend(icons::stop_after(r, text));
+                            });
+                        }
+                        if entry.repeat {
+                            flag(ui, &t.tr("flag-repeat"), |p, r| {
+                                widgets::glyph(p, r, icon::REPEAT, 13.0, text, false);
+                            });
+                        }
+                        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(&track.title)
+                                        .font(row_font.clone())
+                                        .color(text),
+                                )
+                                .selectable(false)
+                                .truncate(),
+                            );
+                        });
+                    });
                 });
                 row.col(|ui| {
                     line(ui);
@@ -466,6 +485,22 @@ fn context_menu(
         scene.ctl.send(Command::DuplicateEntry(entry));
         ui.close();
     }
+    ui.separator();
+    // Checkable: each shows whether the entry has the flag (R26, R27).
+    let flags = scene.state.playlists.entry(entry);
+    let mut repeat = flags.is_some_and(|e| e.repeat);
+    if ui.checkbox(&mut repeat, t.tr("menu-repeat")).clicked() {
+        scene.ctl.send(Command::ToggleEntryRepeat(entry));
+        ui.close();
+    }
+    let mut stop_after = flags.is_some_and(|e| e.stop_after);
+    if ui
+        .checkbox(&mut stop_after, t.tr("menu-stop-after"))
+        .clicked()
+    {
+        scene.ctl.send(Command::ToggleEntryStopAfter(entry));
+        ui.close();
+    }
     let others: Vec<_> = scene
         .state
         .playlists
@@ -501,4 +536,16 @@ fn context_menu(
         scene.ctl.send(Command::RemoveEntry(entry));
         ui.close();
     }
+}
+
+/// A small flag icon with `label` as its accessible name and tooltip.
+fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
+    let (rect, response) = ui.allocate_exact_size(vec2(16.0, 12.0), Sense::hover());
+    let owned = label.to_owned();
+    response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, owned.clone()));
+    if ui.is_rect_visible(rect) {
+        paint(ui.painter(), rect);
+    }
+    response.on_hover_text(label);
 }

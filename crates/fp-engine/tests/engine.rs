@@ -367,6 +367,42 @@ fn seek_replaces_the_source_at_the_new_position() {
 }
 
 #[test]
+fn an_unreadable_preload_is_reported_as_a_preload_failure() {
+    let mut r = rig(96_000, false);
+    let mut bad = request(2, 0.0);
+    bad.path = PathBuf::from("corrupt.mp3");
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(bad),
+    });
+    // The worker reports the failure on its own thread: wait for a report.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !r.events.iter().any(|e| {
+        matches!(
+            e,
+            EngineEvent::PreloadFailed { .. } | EngineEvent::SourceFailed { .. }
+        )
+    }) && std::time::Instant::now() < deadline
+    {
+        r.settle();
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(
+        r.events.contains(&EngineEvent::PreloadFailed {
+            player: P,
+            entry: EntryId(2)
+        }),
+        "{:?}",
+        r.events
+    );
+    assert!(
+        !r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::SourceFailed { .. }))
+    );
+}
+
+#[test]
 fn an_unreadable_file_is_reported_with_its_entry() {
     let mut r = rig(96_000, false);
     let mut bad = request(1, 0.0);

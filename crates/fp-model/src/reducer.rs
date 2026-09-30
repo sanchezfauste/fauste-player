@@ -117,6 +117,20 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             state.playlists.move_entry(entry, to, index)?;
             refresh_next(state);
         }
+        Command::ToggleEntryRepeat(entry) => {
+            let e = state
+                .playlists
+                .entry_mut(entry)
+                .ok_or(ModelError::UnknownEntry(entry))?;
+            e.repeat = !e.repeat;
+        }
+        Command::ToggleEntryStopAfter(entry) => {
+            let e = state
+                .playlists
+                .entry_mut(entry)
+                .ok_or(ModelError::UnknownEntry(entry))?;
+            e.stop_after = !e.stop_after;
+        }
         Command::DuplicateEntry(entry) => {
             if state.playlists.entry(entry).is_none() {
                 return Err(ModelError::UnknownEntry(entry));
@@ -205,6 +219,21 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             }
         }
         EngineEvent::TransitionStarted { player, entry } => {
+            // The engine started the entry that is already current: a
+            // repeating entry's next pass (R26), perhaps committed just before
+            // a command changed the model. It stays current; the engine used
+            // up its preload and plan, so `reconcile` sends new ones, and the
+            // audio is playing whatever the model asked meanwhile (a pause
+            // that arrived after the restart does not stop it).
+            if let Ok(i) = state.player_index(player)
+                && state.players[i].current == Some(entry)
+                && state.players[i].transport != Transport::Stopped
+            {
+                let p = &mut state.players[i];
+                p.preloaded = None;
+                p.scheduled = None;
+                p.transport = Transport::Playing;
+            }
             // A transition reported after the player was stopped is stale: the
             // engine has already been told to stop everything.
             if let Ok(i) = state.player_index(player)
@@ -225,6 +254,9 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                     out.push(EngineAction::StopNow { player });
                 }
             }
+        }
+        EngineEvent::PreloadFailed { player, entry } => {
+            preload_failed(state, player, entry, &mut out)
         }
         EngineEvent::SourceFailed { player, entry } => {
             source_failed(state, player, entry, &mut out)
@@ -449,6 +481,37 @@ fn source_failed(
     refresh_next(state);
 }
 
+/// The source prepared to play next could not be opened: its file is
+/// unreadable, and whoever was going to play it gets another next. What is
+/// on air plays on, even when it is the same entry (a repeat, R26): its
+/// pass ends normally and the player moves on.
+fn preload_failed(
+    state: &mut AppState,
+    player: PlayerId,
+    entry: EntryId,
+    out: &mut Vec<EngineAction>,
+) {
+    let on_air = state
+        .player_index(player)
+        .is_ok_and(|i| state.players[i].current == Some(entry));
+    if !on_air {
+        source_failed(state, player, entry, out);
+        return;
+    }
+    if let Some(t) = state
+        .playlists
+        .entry(entry)
+        .map(|e| e.track)
+        .and_then(|track| state.library.get_mut(track))
+    {
+        t.file_state = FileState::Unreadable;
+    }
+    if let Ok(i) = state.player_index(player) {
+        // The failed preload is gone.
+        state.players[i].preloaded = None;
+    }
+}
+
 /// The two playable entries that follow `entry` in its playlist, so a
 /// replacement can skip a player's own current entry (next != current).
 struct Successors(Option<EntryId>, Option<EntryId>);
@@ -475,8 +538,22 @@ pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan
     if player.transport == Transport::Stopped || player.fade_stop_pending {
         return None;
     }
-    let track = state.track_for_entry(player.current?)?;
+    let current = player.current?;
+    let track = state.track_for_entry(current)?;
     let end = track.known_cue_out_secs().unwrap_or(SOURCE_END);
+    // R27: an entry marked "stop after" stops the player, in any mode.
+    if state.playlists.entry(current).is_some_and(|e| e.stop_after) {
+        return Some(TransitionPlan::StopAt { at_secs: end });
+    }
+    // R26: a repeating entry starts again at its own cue-in, gaplessly, as a
+    // hard transition into itself (its preload is the entry, see
+    // `preload_target`).
+    if repeating(state, player) {
+        return Some(TransitionPlan::StartNextAt {
+            at_secs: end,
+            fade_current_until_secs: None,
+        });
+    }
     if player.mode == PlayMode::Single || player.stop_after_current || player.next.is_none() {
         return Some(TransitionPlan::StopAt { at_secs: end });
     }
@@ -834,13 +911,44 @@ pub(crate) fn fill_empty_next(state: &mut AppState) {
     }
 }
 
+/// R26: the player's current entry repeats (and R27, stop-after-current or
+/// a fade stop do not end it first).
+fn repeating(state: &AppState, player: &PlayerState) -> bool {
+    player.transport != Transport::Stopped
+        && !player.fade_stop_pending
+        && !player.stop_after_current
+        && player
+            .current
+            .and_then(|c| state.playlists.entry(c))
+            .is_some_and(|e| e.repeat && !e.stop_after)
+        // A file that can no longer be opened plays its pass out, once.
+        && player
+            .current
+            .and_then(|c| state.track_for_entry(c))
+            .is_some_and(|t| t.file_state.is_playable())
+}
+
+/// The entry to preload: the current one while it repeats, else the next.
+fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
+    if repeating(state, player) {
+        player.current
+    } else {
+        player.next
+    }
+}
+
 /// Derives the engine work implied by the state: preload whatever is next.
 pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
     let preloads: Vec<(usize, Option<SourceRequest>)> = state
         .players
         .iter()
         .enumerate()
-        .map(|(i, p)| (i, p.next.and_then(|e| state.request_from_cue_in(e))))
+        .map(|(i, p)| {
+            (
+                i,
+                preload_target(state, p).and_then(|e| state.request_from_cue_in(e)),
+            )
+        })
         .filter(|(i, request)| {
             let wanted = request.as_ref().map(|r| (r.entry, r.from_secs));
             state.players[*i].preloaded != wanted

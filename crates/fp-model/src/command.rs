@@ -52,6 +52,10 @@ pub enum Command {
         index: usize,
     },
     DuplicateEntry(EntryId),
+    /// R26: the entry repeats until the operator moves on.
+    ToggleEntryRepeat(EntryId),
+    /// R27: the player stops after the entry, every time it plays.
+    ToggleEntryStopAfter(EntryId),
     CreatePlaylist {
         name: String,
     },
@@ -141,6 +145,9 @@ pub enum EngineEvent {
     TransitionStarted { player: PlayerId, entry: EntryId },
     /// A source could not be decoded or read.
     SourceFailed { player: PlayerId, entry: EntryId },
+    /// The source prepared for what plays next could not be opened; the
+    /// source on air, if any, is not affected.
+    PreloadFailed { player: PlayerId, entry: EntryId },
     /// The cue source of `entry` reached its end (or could not start).
     /// Ignored unless `entry` is still the player's cue.
     CueEnded { player: PlayerId, entry: EntryId },

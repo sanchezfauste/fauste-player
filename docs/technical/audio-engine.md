@@ -176,7 +176,7 @@ cannot hang the conductor.
 
 | Action | Effect |
 |---|---|
-| `Preload` | ask the worker for a source of the next entry at its cue-in; attach it idle |
+| `Preload` | ask the worker for a source of the next entry at its cue-in; attach it idle. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut) |
 | `StartCurrent` | start the preloaded source, or open one, once ready |
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs }`) to the mixer as exact frames once it is within `schedule_lead_ms` |
@@ -200,9 +200,15 @@ back and the waiting next goes back to idle, and a transition counts as
 executed only once the next was sent its `Start`.
 
 It turns bus events back into model events: `TransitionStarted`,
-`ReachedEnd`, `FadeCompleted`, `SourceFailed` and `CueEnded { entry }`. Stale
-events (for an entry that is no longer current, or no longer the cue) are
-ignored by the model.
+`ReachedEnd`, `FadeCompleted`, `SourceFailed`, `PreloadFailed` and
+`CueEnded { entry }`. Stale events (for an entry that is no longer current,
+or no longer the cue) are ignored by the model. A preload that cannot be
+opened is `PreloadFailed`, never `SourceFailed`: the source on air plays on
+even when it is the same entry (a repeat). When a command such as Next
+arrives in the tick where the mixer has just started a scheduled transition
+into something else (a repeating entry's next pass), `start_current`
+replaces that start at once and drops its `TransitionStarted`, so the model
+stays on the entry it chose.
 
 **Routing:** `route_target` maps a configured route to a bus and a channel
 pair. A route to a backend this machine does not have falls back to the

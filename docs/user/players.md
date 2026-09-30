@@ -54,7 +54,7 @@ playlist tabs, transport, volume and outputs.
 | **Stop** | Stop at once (with a short de-click ramp) |
 | **Fade stop** | Fade out and stop |
 | **Pause** | Pause or resume; blinks amber while paused |
-| **Stop after** (a play triangle then a square) | Stop when the current track ends (continuous mode only) |
+| **Stop after** (a play triangle then a square) | Stop when the current track ends (continuous mode only), once. To stop after a track every time it plays, or to repeat a track, use its menu in the playlist (see [Playlists](playlists.md)) |
 | **Previous** (a bar and two triangles) | While on air: fade back into the track this player played before, as Next does. Press again to keep going back. The track you left becomes the next one. |
 | **Restart** (a bar and one triangle) | Back to the start of the current track (its cue-in). A paused player stays paused. |
 

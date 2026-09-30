@@ -625,3 +625,51 @@ fn restart_and_previous_send_their_commands_when_available() {
     h.run_steps(2);
     assert_eq!(sent(&fake), vec![Command::Previous(p), Command::Restart(p)]);
 }
+
+#[test]
+fn the_row_menu_toggles_repeat_and_stop_after() {
+    let (mut h, fake) = harness(state(1, 3));
+    let e = fake.entries();
+    h.get_by_label("Song 2").click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Repeat this track").click();
+    h.run_steps(2);
+    h.get_by_label("Song 2").click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Stop after this track").click();
+    h.run_steps(2);
+    assert_eq!(
+        sent(&fake),
+        vec![
+            Command::ToggleEntryRepeat(e[1]),
+            Command::ToggleEntryStopAfter(e[1])
+        ]
+    );
+}
+
+#[test]
+fn flagged_entries_show_their_icons() {
+    let mut s = state(1, 3);
+    let e: Vec<_> = s
+        .playlists
+        .iter()
+        .next()
+        .unwrap()
+        .entries
+        .iter()
+        .map(|x| x.id)
+        .collect();
+    fp_model::apply(&mut s, Command::ToggleEntryRepeat(e[0])).unwrap();
+    fp_model::apply(&mut s, Command::ToggleEntryStopAfter(e[2])).unwrap();
+    let (h, _) = harness(s);
+    assert_eq!(h.query_all_by_label("Repeats").count(), 1);
+    assert_eq!(h.query_all_by_label("Stops after").count(), 1);
+    let repeat = h.get_by_label("Repeats").rect();
+    assert!(
+        h.query_all_by_label("Song 1").any(|n| {
+            let song = n.rect();
+            repeat.left() > song.left() && (repeat.center().y - song.center().y).abs() < 4.0
+        }),
+        "the icon sits in the row of its entry"
+    );
+}

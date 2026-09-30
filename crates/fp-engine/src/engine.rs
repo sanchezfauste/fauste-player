@@ -1178,6 +1178,7 @@ impl Engine {
         request: &SourceRequest,
         crossfade_ms: Option<u32>,
     ) {
+        let reported = self.events.len();
         let committed = self.undispatch(player);
         let already = self
             .players
@@ -1187,6 +1188,23 @@ impl Engine {
         if committed && already {
             // The mixer already started exactly this entry.
             return;
+        }
+        if committed {
+            // The mixer started something else (a repeating entry's next
+            // pass) just before this command, which the model gave after
+            // choosing `request`: that start is replaced right now, so the
+            // model must not follow it.
+            let mut i = reported;
+            while i < self.events.len() {
+                if matches!(
+                    self.events.get(i),
+                    Some(EngineEvent::TransitionStarted { player: p, .. }) if *p == player
+                ) {
+                    self.events.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
         }
         if let Some(main) = self.players.get(&player).map(|rt| rt.main.0.clone()) {
             self.prepare_start(&main, request.format);
@@ -1461,10 +1479,12 @@ impl Engine {
                 c.failed = true;
                 continue;
             }
+            let mut preload = false;
             let taken = if rt.current.as_ref().is_some_and(|p| p.key == failure.key) {
                 rt.plan = Plan::None;
                 rt.current.take()
             } else if rt.preload.as_ref().is_some_and(|p| p.key == failure.key) {
+                preload = true;
                 rt.preload.take()
             } else if rt.cue_src.as_ref().is_some_and(|p| p.key == failure.key) {
                 rt.cue_src.take()
@@ -1474,8 +1494,13 @@ impl Engine {
             if let Some(p) = taken {
                 let entry = p.entry;
                 self.release(p);
-                self.events
-                    .push(EngineEvent::SourceFailed { player, entry });
+                // A preload that fails says nothing about what is on air,
+                // even when it is the same entry (a repeat).
+                self.events.push(if preload {
+                    EngineEvent::PreloadFailed { player, entry }
+                } else {
+                    EngineEvent::SourceFailed { player, entry }
+                });
             }
         }
     }
