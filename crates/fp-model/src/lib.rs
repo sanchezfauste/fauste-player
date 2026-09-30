@@ -38,7 +38,7 @@ pub use player::{ColumnWidths, CueState, PlayMode, PlayerState, Transport};
 pub use playlist::{Playlist, PlaylistEntry, Playlists};
 pub use reducer::{apply, on_event, plan_for};
 pub use session::{PlayerSession, RestoreParts};
-pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts};
+pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, player_command};
 pub use state::AppState;
 pub use track::{
     AudioFormat, FileState, Library, Marker, MarkerKind, MarkerSource, Markers, Track,

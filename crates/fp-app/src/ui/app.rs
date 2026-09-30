@@ -696,12 +696,6 @@ fn chord_matches(modifiers: &egui::Modifiers, chord: &KeyChord) -> bool {
 /// The command a shortcut stands for, resolving 1-based positions against
 /// the players and the cart page shown.
 fn shortcut_command(state: &AppState, action: ShortcutAction) -> Option<Command> {
-    let player = |n: u16| {
-        state
-            .players
-            .get(usize::from(n).checked_sub(1)?)
-            .map(|p| p.id)
-    };
     let wall = &state.cartwall;
     let page_step = |step: isize| {
         let shown = wall.shown_page().map(|p| p.id);
@@ -710,14 +704,17 @@ fn shortcut_command(state: &AppState, action: ShortcutAction) -> Option<Command>
         let next = (index as isize + step).rem_euclid(count.max(1));
         wall.pages.get(usize::try_from(next).ok()?).map(|p| p.id)
     };
+    if let Some(command) = fp_model::player_command(state, action) {
+        return Some(command);
+    }
     Some(match action {
-        ShortcutAction::PlayPlayer(n) => Command::Play(player(n)?),
-        ShortcutAction::PausePlayer(n) => Command::Pause(player(n)?),
-        ShortcutAction::StopPlayer(n) => Command::Stop(player(n)?),
-        ShortcutAction::FadeStopPlayer(n) => Command::FadeStop(player(n)?),
-        ShortcutAction::CuePlayer(n) => Command::ToggleCue(player(n)?),
-        ShortcutAction::RestartPlayer(n) => Command::Restart(player(n)?),
-        ShortcutAction::PreviousPlayer(n) => Command::Previous(player(n)?),
+        ShortcutAction::PlayPlayer(_)
+        | ShortcutAction::PausePlayer(_)
+        | ShortcutAction::StopPlayer(_)
+        | ShortcutAction::FadeStopPlayer(_)
+        | ShortcutAction::CuePlayer(_)
+        | ShortcutAction::RestartPlayer(_)
+        | ShortcutAction::PreviousPlayer(_) => return None,
         ShortcutAction::FireCart(n) => {
             let cart = wall
                 .shown_page()?
