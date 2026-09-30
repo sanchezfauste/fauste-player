@@ -158,6 +158,8 @@ pub struct PlayersConfig {
     pub fade_ms: u32,
     pub auto_segue: bool,
     pub end_warning_secs: f64,
+    /// How many entries Previous can go back (R25); 0 disables Previous.
+    pub history_len: usize,
 }
 
 impl Default for PlayersConfig {
@@ -168,6 +170,7 @@ impl Default for PlayersConfig {
             fade_ms: 1000,
             auto_segue: true,
             end_warning_secs: 10.0,
+            history_len: 50,
         }
     }
 }
@@ -468,6 +471,7 @@ impl Config {
             "players.end_warning_secs",
             &mut w,
         );
+        clamp_to(&mut p.history_len, 0, 1000, "players.history_len", &mut w);
 
         let a = &mut self.analysis;
         clamp_to(
@@ -725,6 +729,15 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_history_length_is_validated() {
+        let mut c = Config::default();
+        assert_eq!(c.players.history_len, 50);
+        c.players.history_len = 5000;
+        assert!(!c.validate().is_empty());
+        assert_eq!(c.players.history_len, 1000);
+    }
 
     #[test]
     fn the_default_waveform_colour_is_slate_and_a_stored_one_is_kept() {

@@ -32,6 +32,23 @@ pub struct PlayerSession {
     pub volume: f32,
     #[serde(default)]
     pub columns: ColumnWidths,
+    /// Entries the player left, oldest first (R25).
+    #[serde(default, deserialize_with = "lenient_history")]
+    pub history: Vec<EntryId>,
+}
+
+/// A history that does not parse loads as empty: it only feeds Previous.
+fn lenient_history<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<EntryId>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Lenient {
+        Entries(Vec<EntryId>),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Lenient::deserialize(d)? {
+        Lenient::Entries(entries) => entries,
+        Lenient::Other(_) => Vec::new(),
+    })
 }
 
 fn full_volume() -> f32 {
@@ -69,6 +86,7 @@ impl AppState {
                 },
                 volume: p.volume,
                 columns: p.columns,
+                history: p.history.clone(),
             })
             .collect()
     }
@@ -216,5 +234,14 @@ fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     player.stop_after_current = s.mode == PlayMode::Continuous && s.stop_after_current;
     player.volume = volume;
     player.columns = s.columns;
+    // Only entries that still exist, and no more than the configured depth.
+    let kept: Vec<EntryId> = s
+        .history
+        .iter()
+        .copied()
+        .filter(|e| state.playlists.entry(*e).is_some())
+        .collect();
+    let skip = kept.len().saturating_sub(state.config.players.history_len);
+    player.history = kept.into_iter().skip(skip).collect();
     player
 }
