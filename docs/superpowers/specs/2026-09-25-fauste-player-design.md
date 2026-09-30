@@ -186,6 +186,10 @@ A player has:
 20. **Playlist footer:** `-remaining | elapsed / total` for the whole playlist, in the same format as the current track, from this player's point of view (its played entries and its current position).
 21. **Player count** is configurable at runtime (default 4, minimum 1). There is no architectural maximum: players are identified by `PlayerId` and stored in growable collections. Config validation caps the count at `limits.max_players` (default 16) only as a resource guard. Reducing the count is refused while a player that would be removed is playing. A configuration update is validated like a loaded one; a lower `limits.max_players` removes the idle players above it, and is refused while one of them is busy.
 22. **Players are independent.** A player's `current`, `next` and played marks change only through that player's own transport commands and engine events. Several players may show the same playlist, each at its own position, and the same entry may be on air on several players at once. Two things still look across players: an entry on air on any player cannot be removed (rule 13), and edits to a playlist (insert, move, remove) or a file becoming unreadable re-derive the next of every player that shows it (rules 12 and 13). (This replaces the Phase 1 rule "no duplicate on air by default", which moved every other player's next whenever one player started an entry.)
+23. **Restart** (feedback spec R23): with a current entry and not Stopped, seek to its `cue_in` through the anti-click seek path; a paused player stays paused. Otherwise nothing happens.
+24. **Previous** (R24): only while Playing and not fading. Entries are popped from the player's `history` until one still exists and is playable (the others are discarded); if none is left, nothing happens. The popped entry starts at full level while the current one fades out over `fade_ms`, exactly as Play-while-Playing (rule 5). The entry left is marked played but not recorded in the history, and becomes the explicit `next`.
+25. **History** (R25): every advance (a transition, Play-while-Playing) and every stop records the entry left in the player's `history`, dropping the oldest beyond `players.history_len` (default 50, 0–1000; 0 disables Previous). It is saved in `session.json`; one that does not parse loads empty, and entries that no longer exist are dropped on restore. Removing an entry does not edit histories; stale entries are skipped by Previous.
+26. **Availability** (R28): `fp_model::availability` says which transport actions make sense now — Play/Next: paused with a current entry, or a next exists and no fade runs; Pause: playing and not fading, or paused; Stop: a current entry; Fade stop: playing and no fade stop running; Restart: a current entry and not Stopped; Previous: playing, not fading, and a playable history entry; Stop after current: continuous mode; Cue: a next exists or a cue runs. The UI dims the others, and shortcuts ignore them; `apply` keeps its own guards.
 
 ---
 
@@ -419,7 +423,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
   - **Meter column** at the right, spanning the info row and the transport: labelled dB scale, stereo meter with reference lines and peak hold (meters spec M4), vertical volume fader (drag + wheel, dB tooltip).
   - **Transport:**
     - Play/NEXT button spanning 2 rows;
-    - Stop, Fade stop, Pause and Stop-after-current in a 2×2 grid, with 6 px gaps, all equal size;
+    - a 3×2 grid, 6 px gaps, all equal size: Previous, Stop, Pause on top; Restart, Fade stop, Stop-after-current below. Buttons whose action is unavailable (rule 26) are dimmed and inert, the Play button and the header's CUE included;
     - big countdown with tenths;
     - `elapsed / total` on a row under the transport, right-aligned.
   - **Waveform:**
@@ -451,7 +455,7 @@ A modal window, closed with `Esc` or "Close", with these sections:
   - sample rate and buffer size, with the computed latency;
   - per player, Main and Cue device and channel pair;
   - "Test Main" / "Test Cue" buttons that play a test tone (defaults: 1 kHz / 440 Hz, 1.5 s, −18 dBFS) through the real engine route.
-- **Players:** player count, default mode, `fade_ms`, auto-segue on/off, `end_warning_secs`.
+- **Players:** player count, default mode, `fade_ms`, auto-segue on/off, `end_warning_secs` (`history_len` is set in `config.json`).
 - **Analysis:** every `AnalysisSettings` field (silence threshold, segue threshold and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action. Manual markers are kept.
 - **Playlists:** music folder, and create/rename/delete playlists. The last playlist cannot be deleted, nor a playlist containing a current entry.
 

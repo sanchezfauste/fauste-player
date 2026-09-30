@@ -55,6 +55,13 @@ playlist tabs, transport, volume and outputs.
 | **Fade stop** | Fade out and stop |
 | **Pause** | Pause or resume; blinks amber while paused |
 | **Stop after** (a play triangle then a square) | Stop when the current track ends (continuous mode only) |
+| **Previous** (a bar and two triangles) | While on air: fade back into the track this player played before, as Next does. Press again to keep going back. The track you left becomes the next one. |
+| **Restart** (a bar and one triangle) | Back to the start of the current track (its cue-in). A paused player stays paused. |
+
+Buttons that cannot act right now are dimmed: Stop and Restart with nothing
+loaded, Pause and Fade stop while stopped, Previous with no earlier track or
+during a fade. A player remembers the last 50 tracks it played
+(`players.history_len` in `config.json`, 0 to 1000).
 
 ## Modes
 

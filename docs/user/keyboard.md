@@ -14,6 +14,8 @@
   a shortcut on `Tab` or an arrow does not move the focus.
 - Shortcuts are ignored while you type in a text field, such as a playlist
   name.
+- A shortcut whose button is dimmed does nothing (for example Stop on a
+  stopped player).
 
 ## Changing shortcuts
 
@@ -23,7 +25,8 @@ key, its name is shown. Choose **Assign** to move the key, or **Cancel**.
 **Unbind** removes a shortcut and **Reset to defaults** restores the table
 above. Available actions, for every player and cart:
 
-- play, pause, stop, fade stop and CUE on a player;
+- play, previous, restart, pause, stop, fade stop and CUE on a player
+  (previous and restart have no default key);
 - fire a cart of the page shown;
 - stop all carts;
 - show or hide the cartwall;
