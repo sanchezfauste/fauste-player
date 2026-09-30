@@ -112,6 +112,7 @@ scripts/package-release.sh x86_64-unknown-linux-gnu  # → dist/fauste-player-<v
 | `build` (macOS entries) | archives per architecture | `scripts/package-release.sh` |
 | `macos-dmg` | universal `.app` (lipo) in a `.dmg` | `scripts/package/macos.sh` |
 | `flatpak-sources`, `flatpak`, `flatpak-release` | `cargo-sources.json` (flatpak-cargo-generator), then the bundle built offline with flatpak-builder | `packaging/flatpak/org.fauste.FaustePlayer.yml` |
+| `unsigned-note` | a section in the release notes listing the installers built without their signing secrets, with a link to the user guide's instructions (added once) | `release-build.yml` |
 
 **Shared metadata** lives in `packaging/`, with one application id,
 `org.fauste.FaustePlayer`:
@@ -127,6 +128,11 @@ scripts/package-release.sh x86_64-unknown-linux-gnu  # → dist/fauste-player-<v
 - The deb's dependencies are read from the binary. The build therefore runs on
   the oldest supported image, ubuntu-22.04, and CI's `release-baseline` job
   builds all three Linux packages on every push.
+- Tools fetched while packaging are pinned and checked before they run:
+  appimagetool is release 1.9.1 (SHA-256 per architecture in
+  `scripts/package/linux.sh`), and flatpak-cargo-generator a fixed commit of
+  flatpak-builder-tools (SHA-256 in `release-build.yml`). Bump both together
+  with their checksums.
 
 **Local builds:**
 - Linux: `scripts/package/linux.sh x86_64-unknown-linux-gnu [version] [deb,rpm,appimage]`.
