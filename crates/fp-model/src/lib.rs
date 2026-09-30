@@ -2,6 +2,7 @@
 //! and the pure state machine that implements the player behaviour rules.
 //! This crate performs no I/O and spawns no threads.
 
+pub mod availability;
 mod cart_rules;
 pub mod cartwall;
 pub mod command;
@@ -16,6 +17,7 @@ pub mod shortcuts;
 pub mod state;
 pub mod track;
 
+pub use availability::{Availability, availability, command_available};
 pub use cartwall::{
     Cart, CartEdit, CartKind, CartPage, CartPageImport, Cartwall, CartwallSession, PlayingCart,
 };
