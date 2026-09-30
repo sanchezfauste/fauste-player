@@ -189,52 +189,74 @@ impl DsdDecoder {
     }
 
     /// Reads the next chunk of every channel. `false` at the end of the audio.
+    /// DSF blocks are read several at a time (about `CHUNK_BYTES` per
+    /// channel), so a file with tiny blocks costs no more reads than one
+    /// with the usual 4096-byte blocks.
     fn read_chunk(&mut self) -> Result<bool, String> {
         let layout = &self.layout;
         if self.read_pos >= layout.bytes {
             return Ok(false);
         }
         let channels = layout.channels as u64;
-        let (offset, len) = match layout.block {
+        let remaining = layout.bytes - self.read_pos;
+        // (file offset, bytes per channel in each group, groups).
+        let (offset, per_group, groups) = match layout.block {
             Some(block) => {
+                let block = block.max(1);
+                let groups = (CHUNK_BYTES as u64 / block)
+                    .max(1)
+                    .min(remaining.div_ceil(block));
                 let group = self.read_pos / block;
-                (layout.data_start + group * block * channels, block)
+                (layout.data_start + group * block * channels, block, groups)
             }
             None => {
-                let len = (layout.bytes - self.read_pos).min(CHUNK_BYTES as u64);
-                (layout.data_start + self.read_pos * channels, len)
+                let len = remaining.min(CHUNK_BYTES as u64);
+                (layout.data_start + self.read_pos * channels, len, 1)
             }
         };
-        let valid = len.min(layout.bytes - self.read_pos) as usize;
-        let len = len as usize;
-        self.raw.resize(len * layout.channels, 0);
+        let per_group = usize::try_from(per_group).map_err(|e| e.to_string())?;
+        let groups = usize::try_from(groups).map_err(|e| e.to_string())?;
+        self.raw.resize(per_group * layout.channels * groups, 0);
         read_at(&mut self.file, offset, &mut self.raw)?;
-        for (c, out) in self.bytes.iter_mut().enumerate() {
-            let chunk = match layout.block {
-                // DSF: one block per channel, one after the other.
-                Some(_) => self
-                    .raw
-                    .get(c * len..c * len + valid)
-                    .unwrap_or_default()
-                    .to_vec(),
-                // DSDIFF: bytes interleaved by channel.
-                None => self
-                    .raw
-                    .iter()
-                    .skip(c)
-                    .step_by(layout.channels)
-                    .take(valid)
-                    .copied()
-                    .collect(),
-            };
-            if layout.lsb_first {
-                out.extend(chunk.iter().map(|b| b.reverse_bits()));
-            } else {
-                out.extend(chunk);
+        let reverse = layout.lsb_first;
+        let mut read = 0u64;
+        for g in 0..groups {
+            let valid = (per_group as u64).min(remaining - read) as usize;
+            let group = self
+                .raw
+                .get(g * per_group * layout.channels..(g + 1) * per_group * layout.channels)
+                .unwrap_or_default();
+            for (c, out) in self.bytes.iter_mut().enumerate() {
+                let bytes: &mut dyn Iterator<Item = &u8> = match layout.block {
+                    // DSF: one block per channel, one after the other.
+                    Some(_) => &mut group
+                        .get(c * per_group..c * per_group + valid)
+                        .unwrap_or_default()
+                        .iter(),
+                    // DSDIFF: bytes interleaved by channel.
+                    None => &mut group.iter().skip(c).step_by(layout.channels).take(valid),
+                };
+                if reverse {
+                    out.extend(bytes.map(|b| b.reverse_bits()));
+                } else {
+                    out.extend(bytes);
+                }
             }
+            read += valid as u64;
         }
-        self.read_pos += valid as u64;
+        self.read_pos += read;
         Ok(true)
+    }
+
+    /// The whole window of channel `c` starting at byte `start`, when it lies
+    /// inside the stream and has been read (the usual case).
+    fn window(&self, c: usize, start: i64) -> Option<&[u8]> {
+        let start = u64::try_from(start).ok()?;
+        if start + WINDOW_BYTES > self.layout.bytes {
+            return None;
+        }
+        let at = usize::try_from(start.checked_sub(self.base)?).ok()?;
+        self.bytes.get(c)?.get(at..at + WINDOW_BYTES as usize)
     }
 
     /// The byte at absolute index `i` of channel `c`, if it has been read.
@@ -265,8 +287,13 @@ impl DsdDecoder {
                 let surround = self.layout.channels > 2;
                 self.frame.fill(0.0);
                 for c in 0..self.layout.channels {
-                    let sample =
-                        convert::filter((start..end).map(|i| self.byte(c, i).unwrap_or(IDLE)));
+                    let sample = match self.window(c, start) {
+                        Some(window) => convert::filter(window.iter().copied()),
+                        // At the edges of the stream: idle bytes outside it.
+                        None => {
+                            convert::filter((start..end).map(|i| self.byte(c, i).unwrap_or(IDLE)))
+                        }
+                    };
                     let at = if surround {
                         self.layout.positions.get(c).copied().flatten()
                     } else {

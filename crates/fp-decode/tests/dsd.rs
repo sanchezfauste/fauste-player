@@ -142,13 +142,22 @@ fn dsf(channels: &[Vec<u8>], sample_bits: u64) -> Vec<u8> {
 }
 
 fn dsf_typed(channels: &[Vec<u8>], sample_bits: u64, channel_type: u32) -> Vec<u8> {
+    dsf_blocks(channels, sample_bits, channel_type, BLOCK)
+}
+
+fn dsf_blocks(
+    channels: &[Vec<u8>],
+    sample_bits: u64,
+    channel_type: u32,
+    block_len: usize,
+) -> Vec<u8> {
     let len = channels[0].len();
-    let blocks = len.div_ceil(BLOCK);
+    let blocks = len.div_ceil(block_len);
     let mut data = Vec::new();
     for g in 0..blocks {
         for ch in channels {
-            let mut block = vec![0u8; BLOCK];
-            for (i, byte) in ch.iter().skip(g * BLOCK).take(BLOCK).enumerate() {
+            let mut block = vec![0u8; block_len];
+            for (i, byte) in ch.iter().skip(g * block_len).take(block_len).enumerate() {
                 block[i] = byte.reverse_bits();
             }
             data.extend(block);
@@ -169,7 +178,7 @@ fn dsf_typed(channels: &[Vec<u8>], sample_bits: u64, channel_type: u32) -> Vec<u
     f.extend(DSD64.to_le_bytes());
     f.extend(1u32.to_le_bytes()); // LSB first
     f.extend(sample_bits.to_le_bytes());
-    f.extend((BLOCK as u32).to_le_bytes());
+    f.extend((block_len as u32).to_le_bytes());
     f.extend(0u32.to_le_bytes());
     f.extend(b"data");
     f.extend((12 + data.len() as u64).to_le_bytes());
@@ -490,4 +499,54 @@ fn surround_dsd_channels_are_placed_by_their_layout() {
         (db(l) - db(expected)).abs() < 0.3 && (l - r).abs() < 1e-3,
         "{l} {r}"
     );
+}
+
+/// Throughput check, run by hand in release: `cargo test --release -p
+/// fp-decode --test dsd -- --ignored --nocapture`.
+#[test]
+#[ignore = "a measurement, not a check"]
+fn dsd_surround_decoding_speed() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = 0x1234_5678u32;
+    let channels: Vec<Vec<u8>> = (0..6)
+        .map(|_| {
+            (0..4_000_000)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 17;
+                    state ^= state << 5;
+                    state as u8
+                })
+                .collect()
+        })
+        .collect();
+    for block in [BLOCK, 16] {
+        let bytes = dsf_blocks(&channels, 4_000_000 * 8, 7, block);
+        let path = write(dir.path(), "surround.dsf", &bytes);
+        let started = std::time::Instant::now();
+        let frames = decode_all(&path).len() / 2;
+        let secs = started.elapsed().as_secs_f64();
+        let per_sec = frames as f64 / secs;
+        // DSD512 plays 705 600 output frames per second.
+        eprintln!(
+            "{block}-byte blocks: {frames} frames of 6 channels in {secs:.2} s: {:.0} % of a core at DSD512",
+            100.0 * 705_600.0 / per_sec
+        );
+    }
+}
+
+#[test]
+fn tiny_dsf_blocks_decode_like_the_usual_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let pair = stereo_pair();
+    let samples = pair[0].len() as u64 * 8;
+    let usual = decode_all(&write(dir.path(), "usual.dsf", &dsf(&pair, samples)));
+    let tiny = write(dir.path(), "tiny.dsf", &dsf_blocks(&pair, samples, 2, 16));
+    assert!(decode_all(&tiny) == usual);
+    let mut d = FileDecoder::open(&tiny).unwrap();
+    d.seek(0.1).unwrap();
+    let mut out = Vec::new();
+    while d.next_block(&mut out).unwrap() {}
+    let from = (0.1 * 88_200.0f64).round() as usize * 2;
+    assert!(out == usual[from..], "a seek among tiny blocks");
 }

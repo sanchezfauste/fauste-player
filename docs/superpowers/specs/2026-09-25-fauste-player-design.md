@@ -368,7 +368,7 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
   - entries of older analysis versions are removed by the analysis pool, off the start-up path.
 - **Playability before analysis.** A track can be played before its analysis finishes. Until then it has no waveform or segue start, and `cue_in = 0`, `cue_out = duration`. If analysis finishes while the track is current or next, its markers apply to scheduling that has not happened yet.
 
-Supported formats (via `symphonia`): WAV, AIFF, FLAC, MP3, OGG Vorbis, AAC/M4A, ALAC. **Opus is not supported in Phase 1.**
+Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opus, Matroska/WebM audio, WavPack, Monkey's Audio and DSD (DSF, DSDIFF). The extensions and decoders are in the [audio formats spec](2026-09-27-audio-formats-design.md) F1 (Phase 1 had symphonia's formats only).
 
 ---
 

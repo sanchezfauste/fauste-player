@@ -139,8 +139,10 @@ impl WavPackDecoder {
     }
 
     pub(crate) fn seek(&mut self, secs: f64) -> Result<(), String> {
-        // Saturating float-to-int conversion.
-        let target = (secs.max(0.0) * f64::from(self.rate)).round() as u64;
+        // Frames count from the first block, which need not start at 0 (a
+        // file cut out of a longer stream). Saturating float-to-int.
+        let origin = self.blocks.first().map_or(0, |b| b.first);
+        let target = origin.saturating_add((secs.max(0.0) * f64::from(self.rate)).round() as u64);
         let at = self
             .blocks
             .partition_point(|b| b.first + b.frames <= target);
