@@ -252,6 +252,8 @@ pub struct Mixer {
     shared: Arc<BusShared>,
     config: MixerConfig,
     volume_step: f32,
+    /// The volume smoothing as configured, and the rate it was sized for.
+    smoothing_base: Option<(u32, u32)>,
 }
 
 impl Mixer {
@@ -272,6 +274,7 @@ impl Mixer {
             shared: shared.clone(),
             config,
             volume_step,
+            smoothing_base: None,
         };
         (
             mixer,
@@ -435,8 +438,12 @@ impl Mixer {
     /// reopen): durations held in frames keep their length in time. Called
     /// while no stream renders.
     pub fn follow_rate(&mut self, from_rate: u32, to_rate: u32) {
-        let frames = u64::from(self.config.volume_smoothing_frames) * u64::from(to_rate)
-            / u64::from(from_rate.max(1));
+        // Always from the first known size and rate, so chains of changes
+        // between unrelated rates do not drift by rounding.
+        let (base_frames, base_rate) = *self
+            .smoothing_base
+            .get_or_insert((self.config.volume_smoothing_frames, from_rate.max(1)));
+        let frames = u64::from(base_frames) * u64::from(to_rate) / u64::from(base_rate);
         self.config.volume_smoothing_frames = u32::try_from(frames.max(1)).unwrap_or(u32::MAX);
         self.volume_step = 1.0 / self.config.volume_smoothing_frames as f32;
     }
@@ -846,5 +853,16 @@ mod tests {
             "{}",
             mixer.volume_step
         );
+        // Back and forth between unrelated rates: no drift.
+        let config = super::MixerConfig {
+            volume_smoothing_frames: 500,
+            max_commands_per_block: 8,
+        };
+        let (mut mixer, _handle) = super::Mixer::new(1, config);
+        for _ in 0..3 {
+            mixer.follow_rate(48_000, 44_100);
+            mixer.follow_rate(44_100, 48_000);
+        }
+        assert_eq!(mixer.config.volume_smoothing_frames, 500);
     }
 }

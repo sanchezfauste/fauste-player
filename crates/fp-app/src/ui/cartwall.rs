@@ -323,7 +323,13 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                 // An empty cart looks disabled and does not fire, but its
                 // menu still edits it (to choose its file).
                 let menu_on = if empty {
-                    ui.interact(response.rect, response.id.with("menu"), Sense::click())
+                    let area = ui.interact(response.rect, response.id.with("menu"), Sense::click());
+                    // Its own name: it only opens the menu to choose a file.
+                    let name = t.tr_args("cart-empty-edit", &[("n", (index + 1).into())]);
+                    area.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name.clone())
+                    });
+                    area
                 } else {
                     response.clone()
                 };

@@ -316,7 +316,7 @@ fn a_file_over_the_limit_is_refused_without_reading_it_all() {
     );
     assert!(matches!(
         read_bounded(&dir.path().join("missing.m3u"), 1024),
-        Err(PlaylistFileError::Unreadable(_))
+        Err(PlaylistFileError::Unreadable { .. })
     ));
 }
 

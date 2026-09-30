@@ -45,4 +45,8 @@ fn seeking_past_the_end_is_the_end_for_every_decoder() {
     let mut out = Vec::new();
     while d.next_block(&mut out).unwrap() {}
     assert!(out.is_empty());
+    // And back to the start: everything again.
+    d.seek(0.0).unwrap();
+    while d.next_block(&mut out).unwrap() {}
+    assert_eq!(out.len(), 2 * 4_800);
 }

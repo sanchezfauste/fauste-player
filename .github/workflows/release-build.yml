@@ -245,7 +245,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
           WINDOWS_SIGNED: ${{ secrets.WINDOWS_CERT_PFX != '' }}
-          MACOS_SIGNED: ${{ secrets.APPLE_CERT_P12 != '' }}
+          # Gatekeeper opens the app only when it is signed and notarised.
+          MACOS_SIGNED: ${{ secrets.APPLE_CERT_P12 != '' && secrets.APPLE_ID != '' }}
           GUIDE: https://github.com/${{ github.repository }}/blob/${{ inputs.tag }}/docs/user/getting-started.md
         run: |
           marker="<!-- unsigned-installers -->"

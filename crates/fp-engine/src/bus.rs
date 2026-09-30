@@ -321,16 +321,15 @@ impl Bus {
             }
             BusHealth::Lost => {
                 if now.saturating_duration_since(self.last_retry) >= self.timing.reconnect_interval
+                    && self.try_open(now, true)
                 {
-                    // Stop the stand-in first, so it and a stream that starts
-                    // rendering at once never both advance the timeline.
+                    // The stand-in keeps the timeline moving while the device
+                    // opens (which can take a while); it stops once the device
+                    // renders. Both may render one block meanwhile: the
+                    // timeline runs at most one period fast, once.
+                    tracing::info!(bus = ?self.key, "output device back");
                     self.virtual_clock = None;
-                    if self.try_open(now, true) {
-                        tracing::info!(bus = ?self.key, "output device back");
-                        self.refused_rates.clear();
-                    } else {
-                        self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
-                    }
+                    self.refused_rates.clear();
                 }
             }
         }

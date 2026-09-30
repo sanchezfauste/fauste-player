@@ -22,7 +22,7 @@
 | Engine | Volume smoothing and the ready threshold were sized at the configured rate. | `volume_smoothing_keeps_its_duration_when_the_rate_changes`, `the_ready_threshold_is_the_same_time_at_any_source_rate` |
 | Engine | The meter's five sums were taken one by one. They are now taken in whole blocks. | `a_block_rendered_during_a_take_is_taken_whole`, `a_later_measurement_of_the_same_source_adds_its_frames` |
 | Engine | `BusShared::consistent` could spin forever. | `a_render_that_never_finishes_does_not_hang_the_reader` |
-| Engine | The virtual clock and a reopened stream rendered at once. The clock now stops first. | `a_failed_reconnection_keeps_the_virtual_clock_running` |
+| Engine | A failed reconnection must keep the virtual clock running (pinned). | `a_failed_reconnection_keeps_the_virtual_clock_running` |
 | Engine | A dropped command logged its whole payload. | `a_dropped_command_is_logged_briefly` |
 | Engine | Conductor tests slept 30 ms. They now settle on the workers. | (the tests themselves) |
 | Backends | `OutputStream::config` reported the requested buffer size. The WASAPI `Initialize` reason was lost. | `the_reported_buffer_size_is_the_one_in_use` |
@@ -78,3 +78,23 @@ Each ruling gives what was decided, why, and the cost if it is wrong.
 - **The DIN test checks its own definition.** IEC 60268-10 is not available. Cost if wrong: a DIN meter off the standard.
 - **The DIN −10 mark gives way to the alignment tick at the column size,** under the legibility rule. Cost if wrong: one mark fewer.
 - **The fader sends one command per changed value,** with duplicates removed. This is intended. Cost if wrong: more commands during a drag.
+
+## Final review (fresh reviewer) and its fix pass
+
+- **Critical, fixed:** a next that was waiting for its file survived a stop, a seek or a pause, and went on air by itself once the file was read (rule 10). A transition taken back in that state promoted a next that had never been started, which left the air silent. `undispatch` now returns a waiting next to idle, and counts a transition as executed only once the next was sent its `Start`. A waiting next starts only while its transition stands. Tests: `a_next_waiting_for_its_file_never_starts_after_a_stop` and `a_pause_while_the_next_waits_takes_the_transition_back`.
+- **Important, fixed:** a next that became ready before its frame started early, summed with the current track. It now starts at the dispatched frame at the earliest (`a_next_ready_before_its_frame_still_starts_on_it`).
+- **Important, reverted:** stopping the virtual clock before each reconnection attempt stalled the timeline for as long as each attempt took. The clock runs again while the device opens.
+  - Ruling: the stand-in and the reopened stream may both render one block, once per reconnection — a lost timeline for the whole open is worse — cost if wrong: the timeline runs one period fast after a reconnection.
+- **Minors, fixed:**
+  - playlist id repairs are reported as load warnings (`repeated_playlist_ids_are_repaired_with_a_warning`);
+  - the sharing-violation retry runs on Windows only and covers errors 32 and 33 (`only_a_held_file_is_retried`);
+  - volume smoothing no longer drifts over chains of rates;
+  - the pre-roll needs a time base;
+  - a seek to 0 after reading (or past the end) repositions the reader;
+  - the empty-cart menu area has its own accessible name;
+  - the shortcut filter matches the whole chord;
+  - other I/O errors keep the system's message;
+  - the macOS unsigned note also needs notarisation.
+- Ruling: the bounded waits (50 ms) are per source when a device thread hangs mid-block — the watchdog declares the bus lost within `watchdog_timeout_ms` anyway — cost if wrong: a few slow conductor ticks before that.
+- Ruling: the Latin-1 fallback of a `file:` URL is all-or-nothing — a URL that mixes UTF-8 and Latin-1 escapes is broken either way — cost if wrong: one garbled name.
+

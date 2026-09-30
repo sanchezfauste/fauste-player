@@ -442,12 +442,7 @@ impl AppUi {
                         modifiers,
                         ..
                     } if *key == wanted && (repeats || !*repeat) => match chord {
-                        Some(c) => {
-                            modifiers.ctrl == c.ctrl
-                                && modifiers.alt == c.alt
-                                && modifiers.shift == c.shift
-                                && modifiers.mac_cmd == c.command
-                        }
+                        Some(c) => chord_matches(modifiers, c),
                         None => modifiers.is_none(),
                     },
                     _ => false,
@@ -460,10 +455,10 @@ impl AppUi {
                 .map(|(_, _, action)| *action)
                 .collect();
             // Keys held on a shortcut, first press or repeat.
-            let held: Vec<Key> = bindings
+            let held: Vec<(Key, KeyChord)> = bindings
                 .iter()
                 .filter(|(key, chord, _)| pressed(*key, Some(chord), true))
-                .map(|(key, _, _)| *key)
+                .map(|(key, chord, _)| (*key, (*chord).clone()))
                 .collect();
             (
                 fired,
@@ -481,9 +476,20 @@ impl AppUi {
         // A key held on a shortcut is taken out of the frame's input, so a
         // focused button or list does not act on it too (Space, Enter), nor
         // on its repeats.
+        // Only presses of the shortcut's own chord (Shift+Space still reaches
+        // the focused widget when Space is the shortcut), and the releases.
         ctx.input_mut(|i| {
-            i.events
-                .retain(|e| !matches!(e, egui::Event::Key { key, .. } if held.contains(key)));
+            i.events.retain(|e| match e {
+                egui::Event::Key {
+                    key,
+                    pressed,
+                    modifiers,
+                    ..
+                } => !held
+                    .iter()
+                    .any(|(k, c)| k == key && (!*pressed || chord_matches(modifiers, c))),
+                _ => true,
+            });
         });
         // Tab and the arrows move the focus before this runs; a shortcut on
         // them keeps it where it was.
@@ -494,7 +500,7 @@ impl AppUi {
             Key::ArrowLeft,
             Key::ArrowRight,
         ];
-        if held.iter().any(|k| moves_focus.contains(k)) {
+        if held.iter().any(|(k, _)| moves_focus.contains(k)) {
             ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
         }
         for action in fired {
@@ -624,6 +630,14 @@ impl AppUi {
             tracing::error!(error = %e, "could not read the dropped files");
         }
     }
+}
+
+/// Whether `modifiers` are exactly those of `chord`.
+fn chord_matches(modifiers: &egui::Modifiers, chord: &KeyChord) -> bool {
+    modifiers.ctrl == chord.ctrl
+        && modifiers.alt == chord.alt
+        && modifiers.shift == chord.shift
+        && modifiers.mac_cmd == chord.command
 }
 
 /// The command a shortcut stands for, resolving 1-based positions against

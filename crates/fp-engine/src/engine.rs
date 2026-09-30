@@ -1057,10 +1057,17 @@ impl Engine {
         };
         // `now_frame` is the next frame the device will play: a transition
         // at exactly that frame has not happened yet.
-        let executed = rt
-            .current
+        // The transition happened only if the next was sent its `Start`: a
+        // next still waiting for its file has not started, whatever the frame.
+        let sent = rt
+            .preload
             .as_ref()
-            .is_some_and(|c| self.now_frame(&c.bus) > at_frame);
+            .is_some_and(|p| matches!(p.start, StartState::Requested | StartState::Started));
+        let executed = sent
+            && rt
+                .current
+                .as_ref()
+                .is_some_and(|c| self.now_frame(&c.bus) > at_frame);
         if executed && matches!(plan, TransitionPlan::StartNextAt { .. }) && rt.preload.is_some() {
             self.promote(player);
             return true;
@@ -1073,11 +1080,17 @@ impl Engine {
         if let Some(c) = rt.current.as_ref() {
             cancels.push((c.bus.clone(), c.slot));
         }
-        if let Some(p) = rt.preload.as_mut()
-            && p.start == StartState::Requested
-        {
-            p.start = StartState::Idle;
-            cancels.push((p.bus.clone(), p.slot));
+        if let Some(p) = rt.preload.as_mut() {
+            match p.start {
+                StartState::Requested => {
+                    p.start = StartState::Idle;
+                    cancels.push((p.bus.clone(), p.slot));
+                }
+                // Waiting for its file: it was sent nothing, and must not
+                // start by itself once the file is read.
+                StartState::WhenReady { .. } => p.start = StartState::Idle,
+                StartState::Idle | StartState::Started => {}
+            }
         }
         for (bus, slot) in cancels {
             self.send(&bus, BusCommand::Cancel { slot });
@@ -1643,34 +1656,56 @@ impl Engine {
     }
 
     fn start_ready_sources(&mut self) {
-        self.start_ready_carts();
-        let mut starts: Vec<(BusKey, usize, bool)> = Vec::new();
-        for rt in self.players.values_mut() {
-            let (current, preload) = if rt.paused {
-                (None, None)
-            } else {
-                (rt.current.as_mut(), rt.preload.as_mut())
-            };
-            // A preload only waits to start after a dispatched transition.
-            for p in current
-                .into_iter()
-                .chain(preload)
-                .chain(rt.cue_src.iter_mut())
+        /// Queues the start of `p` if it waits to be ready and now is.
+        fn take_ready(
+            p: &mut Playing,
+            earliest: u64,
+            starts: &mut Vec<(BusKey, usize, bool, u64)>,
+        ) {
+            if let StartState::WhenReady { fade_in } = p.start
+                // Also set when the worker failed: whatever it buffered still plays.
+                && p.shared.is_ready()
+                // A failed source with nothing buffered has nothing to play:
+                // it waits for its failure to be handled instead.
+                && !(p.shared.is_failed() && p.shared.is_drained())
             {
-                if let StartState::WhenReady { fade_in } = p.start
-                    // Also set when the worker failed: whatever it buffered still plays.
-                    && p.shared.is_ready()
-                    // A failed source with nothing buffered has nothing to play:
-                    // it waits for its failure to be handled instead.
-                    && !(p.shared.is_failed() && p.shared.is_drained())
-                {
-                    p.start = StartState::Requested;
-                    starts.push((p.bus.clone(), p.slot, fade_in));
+                p.start = StartState::Requested;
+                starts.push((p.bus.clone(), p.slot, fade_in, earliest));
+            }
+        }
+        self.start_ready_carts();
+        // (bus, slot, fade in, earliest frame).
+        let mut starts: Vec<(BusKey, usize, bool, u64)> = Vec::new();
+        for rt in self.players.values_mut() {
+            if rt.paused {
+                for p in rt.cue_src.iter_mut() {
+                    take_ready(p, 0, &mut starts);
+                }
+                continue;
+            }
+            // A preload only waits to start after a dispatched transition,
+            // and never before the frame it was dispatched for.
+            let dispatched = match rt.plan {
+                Plan::Dispatched(TransitionPlan::StartNextAt { .. }, at_frame) => Some(at_frame),
+                _ => None,
+            };
+            for p in rt.current.iter_mut().chain(rt.cue_src.iter_mut()) {
+                take_ready(p, 0, &mut starts);
+            }
+            if let Some(p) = rt.preload.as_mut() {
+                match dispatched {
+                    Some(frame) => take_ready(p, frame, &mut starts),
+                    // Its transition is gone (taken back, or the current
+                    // source failed): it goes back to waiting idle.
+                    None if matches!(p.start, StartState::WhenReady { .. }) => {
+                        p.start = StartState::Idle;
+                    }
+                    None => {}
                 }
             }
         }
-        for (bus, slot, fade_in) in starts {
-            let now = self.now_frame(&bus);
+        for (bus, slot, fade_in, earliest) in starts {
+            let now = self.now_frame(&bus).max(earliest);
             let declick = u32::try_from(self.frames_on(&bus, self.settings.tuning.declick_ms))
                 .unwrap_or(u32::MAX);
             if fade_in {

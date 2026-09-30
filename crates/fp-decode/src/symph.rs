@@ -36,6 +36,8 @@ pub(crate) struct SymphoniaDecoder {
     /// A seek went past the end: nothing more to play (as for the other
     /// decoders), instead of an error.
     at_end: bool,
+    /// Whether anything was read yet: a seek to 0 before that is a no-op.
+    read_any: bool,
 }
 
 /// Opus needs this much decoded audio before a seek target (RFC 7845 §4.6).
@@ -97,6 +99,7 @@ impl SymphoniaDecoder {
             target_secs: None,
             preroll_secs,
             at_end: false,
+            read_any: false,
         })
     }
 
@@ -121,10 +124,18 @@ impl SymphoniaDecoder {
 
     /// Positions the stream so that the next frame produced is at `secs`.
     pub(crate) fn seek(&mut self, secs: f64) -> Result<(), String> {
-        if secs <= 0.0 {
+        if secs <= 0.0 && !self.read_any && !self.at_end {
             return Ok(());
         }
-        let from = (secs - self.preroll_secs).max(0.0);
+        let secs = secs.max(0.0);
+        // The pre-roll is dropped by placing packets in time, which needs
+        // the time base; without it, decoding starts at the target.
+        let preroll = if self.time_base.is_some() {
+            self.preroll_secs
+        } else {
+            0.0
+        };
+        let from = (secs - preroll).max(0.0);
         let time = Time::try_from_secs_f64(from).ok_or("seek position out of range")?;
         match self.format.seek(
             SeekMode::Accurate,
@@ -155,6 +166,7 @@ impl SymphoniaDecoder {
         if self.at_end {
             return Ok(false);
         }
+        self.read_any = true;
         loop {
             let packet = match self.format.next_packet() {
                 Ok(Some(packet)) => packet,

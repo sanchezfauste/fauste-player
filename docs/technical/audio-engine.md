@@ -118,8 +118,9 @@ error, or no heartbeat for `tuning.watchdog_timeout_ms` (500 ms; startup grace
 thread then renders the same mixer into a discard buffer at real-time pace,
 so countdowns, segues and chaining continue. The device is reopened every
 `tuning.reconnect_interval_ms` (2 s) and takes the mixer back when it opens.
-The virtual clock stops before each attempt (and starts again if it fails),
-so it and a stream that renders at once never both advance the timeline. A
+The virtual clock keeps the timeline moving while the device opens, and
+stops once it has: both may render one block meanwhile, so the timeline can
+run one period fast, once per reconnection. A
 reader that waits for a block to finish (`BusShared::consistent`,
 `whole_blocks`) gives up after 50 ms, so a render thread gone mid-block
 cannot hang the conductor.
@@ -192,8 +193,11 @@ rendered past its frame (`now_frame > at_frame`): at exactly that frame it
 is still pending, so a fade stop or pause arriving then takes it back
 instead of fading a source that never started. A next that is not buffered
 yet when its transition is dispatched (or when the current source ends)
-starts as soon as it is ready, rather than on the frame as silence counted
-as underruns.
+starts as soon as it is ready, never before the dispatched frame, rather than
+on the frame as silence counted as underruns. It starts only while that
+transition stands: a stop, pause, seek or new start takes the transition
+back and the waiting next goes back to idle, and a transition counts as
+executed only once the next was sent its `Start`.
 
 It turns bus events back into model events: `TransitionStarted`,
 `ReachedEnd`, `FadeCompleted`, `SourceFailed` and `CueEnded { entry }`. Stale

@@ -224,6 +224,7 @@ wave-set-mix = Poner el punto MIX aquí
 wave-set-cue-out = Poner el final aquí
 wave-reset = Volver a los marcadores automáticos
 cart-empty-n = Botón { $n }, vacío
+cart-empty-edit = Elegir un archivo para el botón { $n }
 shortcut-reserved = { $key } está reservada y no se puede cambiar.
 playlist-import-empty = «{ $name }» no tiene archivos que importar.
 already-running = Fauste Player ya está en marcha.

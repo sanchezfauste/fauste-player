@@ -66,14 +66,23 @@ const LOCKED_ATTEMPTS: u32 = 5;
 /// The first wait between attempts; it doubles each time (310 ms in all).
 const LOCKED_FIRST_WAIT_MS: u64 = 10;
 
-/// Runs `op`, retrying it a few times while it fails with "permission
-/// denied", the error a sharing violation gives.
+/// Whether `e` is a file briefly held by another process: on Windows a
+/// sharing or lock violation (errors 32 and 33) or an access denied while a
+/// scanner has the file open. Elsewhere such refusals are permanent.
+fn is_locked(e: &io::Error) -> bool {
+    cfg!(windows)
+        && (e.kind() == io::ErrorKind::PermissionDenied
+            || matches!(e.raw_os_error(), Some(32 | 33)))
+}
+
+/// Runs `op`, retrying it a few times while the file is held by another
+/// process (`is_locked`).
 fn retry_locked<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     let mut wait = LOCKED_FIRST_WAIT_MS;
     let mut attempt = 1;
     loop {
         match op() {
-            Err(e) if e.kind() == io::ErrorKind::PermissionDenied && attempt < LOCKED_ATTEMPTS => {
+            Err(e) if is_locked(&e) && attempt < LOCKED_ATTEMPTS => {
                 std::thread::sleep(std::time::Duration::from_millis(wait));
                 wait *= 2;
                 attempt += 1;
@@ -331,18 +340,40 @@ mod tests {
         assert_eq!(kept.len(), 2, "{kept:?}");
     }
 
+    #[cfg(windows)]
     #[test]
     fn a_briefly_locked_file_is_retried() {
+        for locked in [
+            io::Error::from_raw_os_error(32), // ERROR_SHARING_VIOLATION
+            io::Error::from(io::ErrorKind::PermissionDenied),
+        ] {
+            let kind = locked.raw_os_error();
+            let mut calls = 0;
+            let result = retry_locked(|| {
+                calls += 1;
+                if calls < 3 {
+                    Err(match kind {
+                        Some(code) => io::Error::from_raw_os_error(code),
+                        None => io::Error::from(io::ErrorKind::PermissionDenied),
+                    })
+                } else {
+                    Ok(calls)
+                }
+            });
+            assert_eq!(result.unwrap(), 3);
+        }
+    }
+
+    #[test]
+    fn only_a_held_file_is_retried() {
         let mut calls = 0;
-        let result = retry_locked(|| {
+        let denied: io::Result<()> = retry_locked(|| {
             calls += 1;
-            if calls < 3 {
-                Err(io::Error::from(io::ErrorKind::PermissionDenied))
-            } else {
-                Ok(calls)
-            }
+            Err(io::Error::from(io::ErrorKind::PermissionDenied))
         });
-        assert_eq!(result.unwrap(), 3);
+        assert!(denied.is_err());
+        let expected = if cfg!(windows) { LOCKED_ATTEMPTS } else { 1 };
+        assert_eq!(calls, expected, "a refusal is permanent outside Windows");
         let mut calls = 0;
         let result: io::Result<()> = retry_locked(|| {
             calls += 1;

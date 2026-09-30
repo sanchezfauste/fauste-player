@@ -224,6 +224,7 @@ wave-set-mix = Set MIX point here
 wave-set-cue-out = Set cue out here
 wave-reset = Reset markers to automatic
 cart-empty-n = Cart { $n }, empty
+cart-empty-edit = Choose a file for cart { $n }
 shortcut-reserved = { $key } is reserved and cannot be changed.
 playlist-import-empty = “{ $name }” has no files to import.
 already-running = Fauste Player is already running.

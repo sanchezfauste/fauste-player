@@ -105,7 +105,7 @@ impl From<PlaylistFileError> for FileError {
     fn from(e: PlaylistFileError) -> Self {
         match e {
             PlaylistFileError::TooLarge { limit } => Self::TooLarge { limit },
-            PlaylistFileError::Unreadable(kind) => Self::from_kind(kind, kind.to_string()),
+            PlaylistFileError::Unreadable { kind, message } => Self::from_kind(kind, message),
         }
     }
 }

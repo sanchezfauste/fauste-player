@@ -35,15 +35,21 @@ pub struct ImportedPlaylist {
 pub enum PlaylistFileError {
     #[error("the playlist file is larger than {limit} bytes")]
     TooLarge { limit: u64 },
-    #[error("the file could not be read: {0}")]
-    Unreadable(std::io::ErrorKind),
+    #[error("the file could not be read: {message}")]
+    Unreadable {
+        kind: std::io::ErrorKind,
+        message: String,
+    },
 }
 
 /// Reads `path` if it holds at most `limit` bytes. A longer file is refused
 /// after reading `limit + 1` bytes, not loaded whole (a file picked by
 /// mistake can be huge).
 pub fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, PlaylistFileError> {
-    let unreadable = |e: std::io::Error| PlaylistFileError::Unreadable(e.kind());
+    let unreadable = |e: std::io::Error| PlaylistFileError::Unreadable {
+        kind: e.kind(),
+        message: e.to_string(),
+    };
     let file = std::fs::File::open(path).map_err(unreadable)?;
     let mut bytes = Vec::new();
     file.take(limit.saturating_add(1))

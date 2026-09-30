@@ -754,3 +754,95 @@ fn a_transition_to_a_next_not_ready_yet_starts_it_when_ready_without_underruns()
         "no silence played as audio"
     );
 }
+
+/// Player P playing track 1, a next (track 2) that opens only once `gate`
+/// is set, and a transition to it at `at_secs` already scheduled.
+fn slow_next(at_secs: f64, fade_until: Option<f64>) -> (Rig, Arc<std::sync::atomic::AtomicBool>) {
+    let gate = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut r = rig_with(gated_opener(96_000, Arc::clone(&gate)), false);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(SourceRequest {
+            path: PathBuf::from("slow2"),
+            ..request(2, 0.0)
+        }),
+    });
+    r.run(1);
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs,
+            fade_current_until_secs: fade_until,
+        }),
+    });
+    (r, gate)
+}
+
+fn open(gate: &std::sync::atomic::AtomicBool) {
+    gate.store(true, std::sync::atomic::Ordering::Release);
+}
+
+#[test]
+fn a_next_waiting_for_its_file_never_starts_after_a_stop() {
+    // Rule 10: nothing goes on air by itself.
+    for blocks in [15, 40] {
+        let (mut r, gate) = slow_next(0.3, None);
+        r.run(blocks); // inside the transition window, or past it
+        r.act(EngineAction::StopNow { player: P });
+        open(&gate);
+        r.settle();
+        r.run(60);
+        assert!(
+            !r.heard.iter().any(|v| tag(*v).0 == 2),
+            "after {blocks} blocks"
+        );
+        assert!(
+            !r.events
+                .iter()
+                .any(|e| matches!(e, EngineEvent::TransitionStarted { .. })),
+            "{:?}",
+            r.events
+        );
+    }
+}
+
+#[test]
+fn a_next_ready_before_its_frame_still_starts_on_it() {
+    let (mut r, gate) = slow_next(0.15, None);
+    r.run(1);
+    open(&gate);
+    r.settle();
+    r.run(40);
+    let first = r.heard.iter().position(|v| tag(*v).0 == 2).unwrap();
+    let start = r.heard.iter().position(|v| tag(*v).0 == 1).unwrap();
+    assert_eq!(first - start, (0.15 * RATE) as usize, "not early, not late");
+}
+
+#[test]
+fn a_pause_while_the_next_waits_takes_the_transition_back() {
+    let (mut r, gate) = slow_next(0.1, Some(1.5));
+    r.run(30); // past the frame, the current fading, the next not open yet
+    r.act(EngineAction::Pause { player: P });
+    open(&gate);
+    r.settle();
+    r.run(10);
+    assert!(
+        !r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::TransitionStarted { .. })),
+        "nothing starts while paused: {:?}",
+        r.events
+    );
+    r.act(EngineAction::Resume { player: P });
+    r.settle();
+    r.run(200);
+    assert!(
+        r.heard.iter().any(|v| tag(*v).0 == 2),
+        "the next plays after the resume"
+    );
+}
