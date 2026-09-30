@@ -70,6 +70,19 @@ pub(crate) struct ViewState {
     pub about_open: bool,
     /// Where each player's waveform menu was opened, in seconds.
     pub wave_menu: HashMap<PlayerId, f64>,
+    /// When the operator last used each player's table or tabs (scroll,
+    /// entry drag, row menu, tab click), in `Scene::time`.
+    pub table_touched: HashMap<PlayerId, f64>,
+    /// The current entry each player's table last saw.
+    pub followed: HashMap<PlayerId, Option<EntryId>>,
+    /// A current entry the table will follow once the operator's grace has
+    /// passed (feedback spec F18).
+    pub follow_pending: HashMap<PlayerId, EntryId>,
+    /// A row the table scrolls to the top once its playlist is shown.
+    pub follow_scroll: HashMap<PlayerId, EntryId>,
+    /// The table width and column fractions each player's table was last
+    /// laid out with (a change resets egui's column widths).
+    pub table_layout: HashMap<PlayerId, (f32, Option<[f32; 4]>)>,
     /// Zoomed waveforms; a player without one shows the whole track.
     pub wave_zoom: HashMap<PlayerId, super::wave_view::WaveZoom>,
     /// A marker being dragged on a waveform, and the track it belongs to.
@@ -266,6 +279,11 @@ impl AppUi {
     /// Table rows built during the last frame (virtualisation check).
     pub fn rows_built(&self) -> usize {
         self.view.rows_built
+    }
+
+    /// The pixel widths of a player's table columns in the last frame.
+    pub fn column_widths(&self, player: PlayerId) -> Option<[f32; 4]> {
+        self.view.widths.get(&player).copied()
     }
 
     pub fn ui(&mut self, ui: &mut Ui) {

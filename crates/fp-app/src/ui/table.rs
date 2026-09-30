@@ -15,6 +15,8 @@ use super::widgets::{self, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
 const ROW_HEIGHT: f32 = 28.0;
+/// The Duration column is never narrower than this ("00:00:00" fits).
+const DURATION_MIN: f32 = 52.0;
 
 fn header_label(ui: &mut Ui, text: &str) {
     ui.add_space(8.0);
@@ -45,11 +47,27 @@ pub(crate) fn track_table(
     let t = scene.i18n;
     let digits = format::number_width(list.entries.len());
     let columns = p.columns;
-    let number_w = columns.number.unwrap_or(digits as f32 * 8.0 + 26.0);
-    let title_w = columns
-        .title
-        .unwrap_or(((ui.available_width() - number_w - columns.duration) * 0.55).max(80.0));
+    // Proportional columns (feedback spec F6): pixel widths from the stored
+    // fractions every frame; egui's table keeps the widths it was given, so
+    // it is reset when the table's width or the fractions change (never
+    // while a handle is being dragged).
+    let width = ui.available_width();
+    let number_min = digits as f32 * 8.0 + 26.0;
+    let px = view::column_px(columns.fractions, width, number_min, DURATION_MIN);
+    let layout = (width, columns.fractions);
+    let changed = view_state
+        .table_layout
+        .get(&player)
+        .is_none_or(|(w, f)| (w - width).abs() > 0.5 || *f != columns.fractions);
+    let reset = changed && !view_state.resizing.contains(&player);
+    if reset {
+        view_state.table_layout.insert(player, layout);
+    }
     let area = ui.max_rect();
+    // Read before the table's scroll area takes the wheel for itself.
+    let wheel_over_table =
+        ui.rect_contains_pointer(area) && ui.input(|i| i.smooth_scroll_delta != egui::Vec2::ZERO);
+    let pressed_in_table = ui.rect_contains_pointer(area) && ui.input(|i| i.pointer.primary_down());
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     let mut built = 0;
     let mut widths = [0.0_f32; 4];
@@ -62,18 +80,36 @@ pub(crate) fn track_table(
     let selected = view_state.selection.get(&player).copied();
     let mut clicked: Option<EntryId> = None;
     let mut dragged: Option<EntryId> = None;
-    TableBuilder::new(ui)
-        .id_salt(("tracks", player.0))
+    let mut builder = TableBuilder::new(ui).id_salt(("tracks", player.0));
+    if reset {
+        builder.reset();
+    }
+    // A current entry being followed: scroll its row to the top once.
+    if let Some(entry) = view_state.follow_scroll.get(&player).copied() {
+        match entries.iter().position(|e| e.id == entry) {
+            Some(i) => {
+                builder = builder.scroll_to_row(i, Some(Align::TOP));
+                view_state.follow_scroll.remove(&player);
+            }
+            // Not in this playlist: wait for its tab, unless it is gone.
+            None if scene.state.playlists.find(entry).is_none() => {
+                view_state.follow_scroll.remove(&player);
+            }
+            None => {}
+        }
+    }
+    let mut menu_open = false;
+    builder
         .striped(false)
         .resizable(true)
         .vscroll(true)
         .auto_shrink([false, false])
         .sense(Sense::click_and_drag())
         .cell_layout(Layout::left_to_right(Align::Center))
-        .column(Column::initial(number_w).at_least(24.0).clip(true))
-        .column(Column::initial(title_w).at_least(60.0).clip(true))
+        .column(Column::initial(px[0]).at_least(24.0).clip(true))
+        .column(Column::initial(px[1]).at_least(60.0).clip(true))
         .column(Column::remainder().at_least(60.0).clip(true))
-        .column(Column::initial(columns.duration).at_least(40.0).clip(true))
+        .column(Column::initial(px[3]).at_least(40.0).clip(true))
         .header(HEADER_HEIGHT, |mut header| {
             header.col(|ui| header_label(ui, &t.tr("col-number")));
             header.col(|ui| header_label(ui, &t.tr("col-title")));
@@ -303,6 +339,7 @@ pub(crate) fn track_table(
                     released = Some((*payload, if below { i + 1 } else { i }));
                 }
                 response.context_menu(|ui| {
+                    menu_open = true;
                     clicked = Some(entry.id);
                     context_menu(ui, scene, player, playlist, entry.id, i, &track.title);
                 });
@@ -367,7 +404,14 @@ pub(crate) fn track_table(
                 .unwrap_or(entries.len()),
         });
     }
-    store_widths(ui, scene, view_state, player, columns, widths);
+    store_widths(ui, scene, view_state, player, columns, widths, reset);
+    // The operator is using the table: scrolling it (wheel or scroll bar),
+    // pressing in it, dragging an entry (for as long as the drag lasts), or
+    // with a row menu open. Following waits (feedback spec F18).
+    let entry_drag = egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx());
+    if wheel_over_table || pressed_in_table || menu_open || dragged.is_some() || entry_drag {
+        view_state.table_touched.insert(player, scene.time);
+    }
 }
 
 /// Sends the column widths once the user lets go of a resize handle.
@@ -378,27 +422,29 @@ fn store_widths(
     player: PlayerId,
     stored: ColumnWidths,
     widths: [f32; 4],
+    relaid: bool,
 ) {
     if widths.iter().all(|w| *w <= 0.0) {
         return;
     }
     let previous = view_state.widths.insert(player, widths);
-    let moved = previous.is_some_and(|p| {
-        p.iter()
-            .zip(widths.iter())
-            .any(|(a, b)| (a - b).abs() > 0.5)
-    });
+    // Widths that changed because the table was laid out again (a new
+    // window width) are not the operator's: only a handle drag is.
+    let moved = !relaid
+        && previous.is_some_and(|p| {
+            p.iter()
+                .zip(widths.iter())
+                .any(|(a, b)| (a - b).abs() > 0.5)
+        });
     if moved {
         view_state.resizing.insert(player);
     }
     let pointer_down = ui.input(|i| i.pointer.primary_down());
     if !pointer_down && view_state.resizing.remove(&player) {
-        let [number, title, _, duration] = widths;
         let new = ColumnWidths {
-            number: Some(number),
-            title: Some(title),
-            duration,
-        };
+            fractions: Some(widths),
+        }
+        .normalized();
         if new != stored {
             scene.ctl.send(Command::SetColumnWidths(player, new));
         }

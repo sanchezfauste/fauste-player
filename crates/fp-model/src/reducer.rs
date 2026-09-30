@@ -94,7 +94,7 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         }
         Command::SetColumnWidths(id, widths) => {
             let i = state.player_index(id)?;
-            state.players[i].columns = widths;
+            state.players[i].columns = widths.normalized();
         }
         Command::ApplyAnalysis { track, analysis } => {
             // Analysis may finish after the track was removed: nothing to do.

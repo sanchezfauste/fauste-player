@@ -27,22 +27,25 @@ pub struct CueState {
     pub entry: EntryId,
 }
 
-/// User-resized track-table column widths, in logical pixels.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// The track table's column widths as fractions of its width (`#`, Title,
+/// Artist, Duration), summing to 1; `None` is the default layout
+/// (feedback spec §2.3). Pixel widths saved by earlier versions are ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ColumnWidths {
-    pub number: Option<f32>,
-    pub title: Option<f32>,
-    pub duration: f32,
+    pub fractions: Option<[f32; 4]>,
 }
 
-impl Default for ColumnWidths {
-    fn default() -> Self {
-        Self {
-            number: None,
-            title: None,
-            duration: 52.0,
-        }
+impl ColumnWidths {
+    /// Fractions scaled to sum to 1; broken ones (not finite, negative, all
+    /// zero) give the default layout.
+    pub fn normalized(self) -> Self {
+        let fractions = self.fractions.and_then(|f| {
+            let valid = f.iter().all(|x| x.is_finite() && *x >= 0.0);
+            let sum: f32 = f.iter().sum();
+            (valid && sum > 0.0).then(|| f.map(|x| x / sum))
+        });
+        Self { fractions }
     }
 }
 

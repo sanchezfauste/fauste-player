@@ -437,7 +437,8 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - intro and outro badges per §3 (rules 18 and 19).
   - **Playlist tabs:** reordering and dropping entries on a tab appends them.
   - **Track table:**
-    - `egui_extras::TableBuilder` with resizable `#`, Title, Artist and Duration columns (resize handles padded away from labels), with widths stored per player;
+    - `egui_extras::TableBuilder` with resizable `#`, Title, Artist and Duration columns (resize handles padded away from labels); widths are stored per player as fractions of the table and laid out every frame, so the columns fill the table and keep their proportions on resize (`#` and Duration have content minimums, Title:Artist default 60:40);
+    - follows the current entry: when it changes and the table and tabs were not used within `ui.follow_current_grace_secs` (0 = never), the tab of its playlist is shown and its row scrolled to the top; a drag or open row menu makes it wait (feedback spec F18);
     - virtualised rows;
     - `#` zero-padded to the digit count of the playlist length (3 digits for ≥ 100 entries);
     - this player's current row red with a speaker icon, its next row green with an arrow icon, entries on air on another player marked "P<n>", rows this player has played dimmed, missing/unreadable rows with a warning icon; entries marked to repeat or to stop after show a repeat icon or the stop-after icon at the right of the title, in the row's text colour, and the row menu has checkable "Repeat this track" and "Stop after this track".

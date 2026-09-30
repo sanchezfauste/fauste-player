@@ -101,7 +101,7 @@ red.
   to the finest detail the analysis has. **Shift+wheel** (or a sideways wheel)
   moves along the track. While zoomed, the view follows the playing position,
   except for 10 seconds after you zoom or move it
-  (`ui.follow_current_grace_secs`). **Full view**, in the top-right corner,
+  (`ui.follow_current_grace_secs`; 0 turns following off). **Full view**, in the top-right corner,
   zooming all the way out or a new track show the whole track again.
 
 ## CUE (pre-listen)

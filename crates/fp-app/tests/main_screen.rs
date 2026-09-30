@@ -673,3 +673,62 @@ fn flagged_entries_show_their_icons() {
         "the icon sits in the row of its entry"
     );
 }
+
+fn shares(w: [f32; 4]) -> [f32; 4] {
+    let sum: f32 = w.iter().sum();
+    w.map(|x| x / sum)
+}
+
+#[test]
+fn columns_fill_the_table_and_keep_their_shares_when_the_window_grows() {
+    let (mut h, fake) = harness(state(1, 3));
+    let p = fake.player(0);
+    let before = h.state().column_widths(p).unwrap();
+    assert!(
+        before[1] > before[2],
+        "Title gets the most room: {before:?}"
+    );
+    h.set_size(egui::vec2(1400.0, 700.0));
+    h.run_steps(3);
+    let after = h.state().column_widths(p).unwrap();
+    let (a, b) = (shares(before), shares(after));
+    for i in 1..3 {
+        assert!((a[i] - b[i]).abs() < 0.03, "{before:?} → {after:?}");
+    }
+    assert!(after.iter().sum::<f32>() > before.iter().sum::<f32>() + 300.0);
+}
+
+#[test]
+fn stored_fractions_are_applied() {
+    let mut s = state(1, 3);
+    let p = s.players[0].id;
+    fp_model::apply(
+        &mut s,
+        Command::SetColumnWidths(
+            p,
+            fp_model::ColumnWidths {
+                fractions: Some([0.1, 0.3, 0.5, 0.1]),
+            },
+        ),
+    )
+    .unwrap();
+    let (h, _) = harness(s);
+    let w = shares(h.state().column_widths(p).unwrap());
+    assert!(w[2] > w[1], "Artist wider than Title as stored: {w:?}");
+}
+
+#[test]
+fn resizing_the_window_does_not_store_column_widths() {
+    let (mut h, fake) = harness(state(1, 3));
+    fake.take_sent();
+    h.set_size(egui::vec2(1400.0, 700.0));
+    h.run_steps(3);
+    h.set_size(egui::vec2(1200.0, 700.0));
+    h.run_steps(3);
+    assert!(
+        !sent(&fake)
+            .iter()
+            .any(|c| matches!(c, Command::SetColumnWidths(..))),
+        "only a handle release stores widths"
+    );
+}
