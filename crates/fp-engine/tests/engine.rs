@@ -375,7 +375,18 @@ fn an_unreadable_preload_is_reported_as_a_preload_failure() {
         player: P,
         request: Some(bad),
     });
-    r.settle();
+    // The worker reports the failure on its own thread: wait for a report.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !r.events.iter().any(|e| {
+        matches!(
+            e,
+            EngineEvent::PreloadFailed { .. } | EngineEvent::SourceFailed { .. }
+        )
+    }) && std::time::Instant::now() < deadline
+    {
+        r.settle();
+        std::thread::sleep(Duration::from_millis(1));
+    }
     assert!(
         r.events.contains(&EngineEvent::PreloadFailed {
             player: P,
