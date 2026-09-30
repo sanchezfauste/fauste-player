@@ -61,6 +61,8 @@ FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music di
 scripts/package-release.sh <target>           # release archive for one target
 scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows: windows.sh, macOS: macos.sh)
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
+cargo test --release -p fp-analysis --test real_music -- --ignored   # real-music corpus (local only)
+cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
 ```
 
 Only commit when fmt, clippy and the whole test suite pass, for example:
@@ -165,6 +167,10 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
 
 - Engine tests use the `Offline` backend and drive time explicitly
   (`now: Instant`). Never sleep to wait for audio.
+- Real music: `test-music/` (git-ignored except its README; or
+  `FAUSTE_TEST_MUSIC=<dir>`) feeds the `#[ignore]` tests in
+  `fp-analysis/tests/real_music.rs` and the `marker_report` example. They
+  never run in CI and pass with a note when the folder is empty.
 - UI tests use `egui_kittest`, with `Harness::builder().with_step_dt(0.02)`
   (double clicks) and the recording `Fake` controller in
   `crates/fp-app/tests/support`.

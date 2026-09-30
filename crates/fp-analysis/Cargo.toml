@@ -22,6 +22,7 @@ hound.workspace = true
 opus-pure.workspace = true
 wavicle = { workspace = true, features = ["encode"] }
 tempfile.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

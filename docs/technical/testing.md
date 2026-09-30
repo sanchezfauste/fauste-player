@@ -15,6 +15,7 @@ laptop and needs no sound card and no display.
 | Conductor | `fp-engine/tests/conductor.rs` | End to end through the model; a stress test runs 8 players with random commands over 10 simulated minutes and several seeds, checking invariants |
 | Soak | `fp-engine/tests/conductor.rs` (`#[ignore]`) | 6 simulated hours: `cargo test --release -p fp-engine --test conductor -- --ignored six_simulated_hours` |
 | Analysis | `fp-analysis/tests`, unit tests in `signal.rs` and `cache.rs` | Markers on generated signals, tags and covers (including hostile inputs), the cache, the pool (cancellation, duplicates, panics) |
+| Real music | `fp-analysis/tests/real_music.rs` (`#[ignore]`), `fp-analysis/examples/marker_report.rs` | On the local corpus in `test-music/` (git-ignored; `FAUSTE_TEST_MUSIC` overrides it): trimming never cuts a bucket whose stereo peak reaches `trim_threshold_db`, and no overlap exceeds `segue_max_secs`. `marker_report` prints every file's markers and the overlap percentiles, with `--set key=value` to try other settings. Never in CI; an empty folder passes with a note |
 | App | `fp-app/tests` | bootstrap, i18n key parity, the view model, services (real analyzer and Offline engine), and the UI with `egui_kittest` (clicks, keys, context menu, drag targets, Settings, panic isolation) |
 
 ## Conventions
