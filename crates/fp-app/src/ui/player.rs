@@ -751,6 +751,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         mix_active: pv.mode == PlayMode::Continuous,
         mix_label: &mix_label,
         accessible_label: &label,
+        view: None,
     };
     let (response, seek) = widgets::waveform(ui, WAVE_HEIGHT, &input);
     if let Some(secs) = seek {

@@ -12,6 +12,7 @@ use fp_model::{LoudnessReadout, MeterBallistics, MeterConfig};
 use super::format;
 use super::theme::{self, WaveColors};
 use super::view::MarkerFractions;
+use super::wave_view::WaveView;
 use crate::services::TrackMedia;
 use fp_analysis::WavePeak;
 use std::sync::Arc;
@@ -901,6 +902,7 @@ pub fn wave_columns_in(
 pub struct WaveMemo {
     /// Held, so no other track can take its address while it is the key.
     media: Arc<TrackMedia>,
+    start_secs: f64,
     span_secs: f64,
     columns: Arc<[WaveColumn]>,
 }
@@ -913,17 +915,36 @@ pub fn memo_columns(
     span_secs: f64,
     columns: usize,
 ) -> Arc<[WaveColumn]> {
+    memo_columns_in(memo, media, 0.0, span_secs, columns)
+}
+
+/// As [`memo_columns`], for the stretch starting at `start_secs`.
+pub fn memo_columns_in(
+    memo: &mut Option<WaveMemo>,
+    media: &Arc<TrackMedia>,
+    start_secs: f64,
+    span_secs: f64,
+    columns: usize,
+) -> Arc<[WaveColumn]> {
     if let Some(m) = memo.as_ref().filter(|m| {
         Arc::ptr_eq(&m.media, media)
+            && m.start_secs.to_bits() == start_secs.to_bits()
             && m.span_secs.to_bits() == span_secs.to_bits()
             && m.columns.len() == columns
     }) {
         return Arc::clone(&m.columns);
     }
-    let reduced: Arc<[WaveColumn]> =
-        wave_columns(&media.peaks, media.peak_bucket_secs, span_secs, columns).into();
+    let reduced: Arc<[WaveColumn]> = wave_columns_in(
+        &media.peaks,
+        media.peak_bucket_secs,
+        start_secs,
+        span_secs,
+        columns,
+    )
+    .into();
     *memo = Some(WaveMemo {
         media: Arc::clone(media),
+        start_secs,
         span_secs,
         columns: Arc::clone(&reduced),
     });
@@ -942,6 +963,15 @@ pub struct WaveInput<'a> {
     pub mix_active: bool,
     pub mix_label: &'a str,
     pub accessible_label: &'a str,
+    /// The stretch shown; `None` is the whole track.
+    pub view: Option<WaveView>,
+}
+
+/// A drag on the waveform that seeks where it is released (feedback spec
+/// F2); Esc cancels it.
+#[derive(Clone, Copy, Default)]
+struct SeekDrag {
+    cancelled: bool,
 }
 
 /// Draws the waveform; returns the seek target (seconds) on click.
@@ -966,7 +996,6 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
     }
     let mid = inner.center().y;
     let w = inner.width();
-    let x_of = |f: f32| inner.left() + f * w;
     painter.rect_filled(
         Rect::from_min_size(pos2(inner.left(), mid), vec2(w, 1.0)),
         0.0,
@@ -975,6 +1004,9 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
     let Some(total) = input.total.filter(|t| *t > 0.0) else {
         return (response, None);
     };
+    let view = input.view.unwrap_or_else(|| WaveView::full(total));
+    // Markers are fractions of the track; the view maps their times.
+    let x_of = |f: f32| view.x_of(f64::from(f) * total, inner);
     let m = input.markers;
     if let Some(f) = m.intro_end {
         painter.rect_filled(
@@ -992,15 +1024,19 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
     }
     let play_x = m.position.map_or(inner.left(), x_of);
     if let Some(media) = input.media.filter(|m| !m.peaks.is_empty()) {
-        let covered = media.peak_bucket_secs * media.peaks.len() as f64;
-        let span = covered.max(total);
         let amp = (inner.height() / 2.0 - 3.0).max(1.0);
         // One column per pixel: the peaks as a faint outline, the RMS level
         // as the solid body inside it, all in one mesh.
         let mut memo = ui
             .data(|d| d.get_temp::<Option<WaveMemo>>(memo_id))
             .flatten();
-        let columns = memo_columns(&mut memo, media, span, w as usize);
+        let columns = memo_columns_in(
+            &mut memo,
+            media,
+            view.start_secs,
+            view.span_secs,
+            w as usize,
+        );
         ui.data_mut(|d| d.insert_temp(memo_id, memo));
         let mut mesh = egui::Mesh::default();
         for (i, column) in columns.iter().enumerate() {
@@ -1026,6 +1062,25 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
             }
         }
         painter.add(mesh);
+    }
+    // The trimmed head and tail are drawn dimmed, with a thin line at the
+    // cue points: the whole file is shown, and where playback starts and
+    // ends is plain (feedback spec F20).
+    let secs = |f: Option<f32>| f.map(|f| f64::from(f) * total);
+    for (region, edge) in view
+        .trimmed(inner, secs(m.cue_in), secs(m.cue_out), total)
+        .into_iter()
+        .zip([true, false])
+    {
+        if let Some(r) = region {
+            painter.rect_filled(r, 0.0, Color32::BLACK.gamma_multiply(TRIMMED_DIM));
+            let x = if edge { r.right() } else { r.left() };
+            painter.rect_filled(
+                Rect::from_min_size(pos2(x, inner.top()), vec2(1.0, inner.height())),
+                0.0,
+                theme::NEUTRAL_500,
+            );
+        }
     }
     let label_font = font_semibold(9.0);
     if let Some(f) = m.intro_end {
@@ -1069,28 +1124,66 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         0.0,
         theme::TEXT,
     );
+    // Alt (Option) is for marker editing: it never seeks.
+    let alt = ui.input(|i| i.modifiers.alt);
+    let drag_id = input.id.with("seek-drag");
+    if response.drag_started_by(egui::PointerButton::Primary) && !alt {
+        ui.data_mut(|d| d.insert_temp(drag_id, SeekDrag::default()));
+    }
+    let mut drag = ui.data(|d| d.get_temp::<SeekDrag>(drag_id));
+    if let Some(d) = drag.as_mut()
+        && ui.input(|i| i.key_pressed(egui::Key::Escape))
+    {
+        d.cancelled = true;
+        ui.data_mut(|data| data.insert_temp(drag_id, *d));
+    }
+    let pointer = ui.ctx().pointer_latest_pos();
     let mut seek = None;
-    if let Some(p) = response.hover_pos() {
-        let f = ((p.x - inner.left()) / w).clamp(0.0, 1.0);
+    let preview = |x: f32| {
         painter.rect_filled(
-            Rect::from_min_size(pos2(p.x, inner.top()), vec2(1.0, inner.height())),
+            Rect::from_min_size(pos2(x, inner.top()), vec2(1.0, inner.height())),
             0.0,
             theme::TEXT.gamma_multiply(0.6),
         );
-        let text = format::clock(f64::from(f) * total);
+        let text = format::clock(view.secs_at(x, inner));
         let galley = painter.layout_no_wrap(text, font(10.0), theme::TEXT);
         let tw = galley.size().x + 8.0;
-        let lx = (p.x + 4.0).min(inner.right() - tw);
+        let lx = (x + 4.0).min(inner.right() - tw);
         let bg = Rect::from_min_size(pos2(lx, inner.top() + 13.0), vec2(tw, 14.0));
         painter.rect_filled(bg, 0.0, theme::NEUTRAL_800);
         painter.galley(pos2(lx + 4.0, bg.top() + 1.0), galley, theme::TEXT);
-        // Alt (Option) is for marker editing: it never seeks.
-        if response.clicked() && !ui.input(|i| i.modifiers.alt) {
-            seek = Some(f64::from(f) * total);
+    };
+    match drag {
+        Some(d) => {
+            let inside = pointer.filter(|p| rect.contains(*p));
+            if !d.cancelled
+                && let Some(p) = inside
+            {
+                preview(p.x.clamp(inner.left(), inner.right()));
+            }
+            if response.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+                if !d.cancelled
+                    && let Some(p) = inside
+                {
+                    seek = Some(view.secs_at(p.x, inner));
+                }
+                ui.data_mut(|data| data.remove::<SeekDrag>(drag_id));
+            }
+        }
+        None => {
+            if let Some(p) = response.hover_pos() {
+                preview(p.x);
+                if response.clicked() && !alt {
+                    seek = Some(view.secs_at(p.x, inner));
+                }
+            }
         }
     }
     (response, seek)
 }
+
+/// How dark the trimmed head and tail of the waveform are drawn.
+const TRIMMED_DIM: f32 = 0.45;
 
 /// A small outlined badge with a caption and a big number (intro / outro).
 pub fn time_badge(
