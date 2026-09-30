@@ -52,6 +52,10 @@ pub enum Command {
         index: usize,
     },
     DuplicateEntry(EntryId),
+    /// R26: the entry repeats until the operator moves on.
+    ToggleEntryRepeat(EntryId),
+    /// R27: the player stops after the entry, every time it plays.
+    ToggleEntryStopAfter(EntryId),
     CreatePlaylist {
         name: String,
     },

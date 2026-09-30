@@ -117,6 +117,20 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             state.playlists.move_entry(entry, to, index)?;
             refresh_next(state);
         }
+        Command::ToggleEntryRepeat(entry) => {
+            let e = state
+                .playlists
+                .entry_mut(entry)
+                .ok_or(ModelError::UnknownEntry(entry))?;
+            e.repeat = !e.repeat;
+        }
+        Command::ToggleEntryStopAfter(entry) => {
+            let e = state
+                .playlists
+                .entry_mut(entry)
+                .ok_or(ModelError::UnknownEntry(entry))?;
+            e.stop_after = !e.stop_after;
+        }
         Command::DuplicateEntry(entry) => {
             if state.playlists.entry(entry).is_none() {
                 return Err(ModelError::UnknownEntry(entry));
