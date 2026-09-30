@@ -191,3 +191,126 @@ fn a_player_that_unloads_lets_go_of_its_waveform() {
         "only the test and the closure"
     );
 }
+
+mod view {
+    use egui::{Rect, pos2, vec2};
+    use fp_app::ui::wave_view::{WaveView, min_span};
+
+    use super::{bucket, wave_columns};
+    use fp_app::ui::widgets::wave_columns_in;
+
+    fn rect() -> Rect {
+        Rect::from_min_size(pos2(100.0, 10.0), vec2(400.0, 60.0))
+    }
+
+    fn near(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-6
+    }
+
+    #[test]
+    fn the_full_view_maps_the_file_to_the_width() {
+        let v = WaveView::full(200.0);
+        assert!(v.is_full(200.0));
+        assert_eq!(v.x_of(0.0, rect()), 100.0);
+        assert_eq!(v.x_of(200.0, rect()), 500.0);
+        assert!(near(v.secs_at(300.0, rect()), 100.0));
+        assert!(near(v.secs_at(-50.0, rect()), 0.0), "clamped to the view");
+    }
+
+    #[test]
+    fn zooming_keeps_the_time_under_the_pointer() {
+        let v = WaveView::full(200.0);
+        let x = 200.0; // 50 s
+        let z = v.zoom_at(x, rect(), 0.5, 200.0, 0.1);
+        assert!(near(z.span_secs, 100.0));
+        assert!(near(z.secs_at(x, rect()), 50.0), "{z:?}");
+        assert!(!z.is_full(200.0));
+    }
+
+    #[test]
+    fn the_view_stays_inside_the_file() {
+        let v = WaveView::full(200.0);
+        let z = v.zoom_at(110.0, rect(), 0.25, 200.0, 0.1);
+        assert!(z.start_secs >= 0.0);
+        let z = v.zoom_at(500.0, rect(), 0.25, 200.0, 0.1);
+        assert!(near(z.start_secs + z.span_secs, 200.0), "{z:?}");
+        let panned = z.pan(10_000.0, rect(), 200.0);
+        assert!(near(panned.start_secs, 0.0), "{panned:?}");
+        let panned = z.pan(-10_000.0, rect(), 200.0);
+        assert!(near(panned.start_secs + panned.span_secs, 200.0));
+    }
+
+    #[test]
+    fn the_deepest_zoom_is_one_bucket_per_pixel() {
+        let min = min_span(0.01, 400.0);
+        assert!(near(min, 4.0));
+        let mut v = WaveView::full(200.0);
+        for _ in 0..50 {
+            v = v.zoom_at(300.0, rect(), 0.5, 200.0, min);
+        }
+        assert!(near(v.span_secs, min));
+    }
+
+    #[test]
+    fn zooming_out_past_the_file_gives_the_full_view() {
+        let z = WaveView::full(200.0).zoom_at(300.0, rect(), 0.5, 200.0, 0.1);
+        let out = z.zoom_at(300.0, rect(), 4.0, 200.0, 0.1);
+        assert_eq!(out, WaveView::full(200.0));
+    }
+
+    #[test]
+    fn following_brings_the_playhead_back_into_view() {
+        let z = WaveView {
+            start_secs: 20.0,
+            span_secs: 40.0,
+        };
+        assert_eq!(z.follow(30.0, 200.0), z, "visible: unchanged");
+        let f = z.follow(150.0, 200.0);
+        assert!(f.start_secs <= 150.0 && 150.0 <= f.start_secs + f.span_secs);
+        assert!(near(f.span_secs, 40.0));
+        let end = z.follow(199.0, 200.0);
+        assert!(near(end.start_secs + end.span_secs, 200.0));
+    }
+
+    #[test]
+    fn a_zero_or_broken_length_is_harmless() {
+        for total in [0.0, f64::NAN, -3.0] {
+            let v = WaveView::full(total);
+            let x = v.x_of(1.0, rect());
+            assert!(x.is_finite());
+            assert!(v.secs_at(250.0, rect()).is_finite());
+            let z = v.zoom_at(250.0, rect(), 0.5, total, 0.1);
+            assert!(z.start_secs.is_finite() && z.span_secs.is_finite());
+        }
+    }
+
+    #[test]
+    fn trimmed_regions_cover_the_head_and_tail() {
+        let v = WaveView::full(200.0);
+        let [head, tail] = v.trimmed(rect(), Some(20.0), Some(180.0), 200.0);
+        let head = head.unwrap();
+        let tail = tail.unwrap();
+        assert_eq!((head.left(), head.right()), (100.0, 140.0));
+        assert_eq!((tail.left(), tail.right()), (460.0, 500.0));
+        let [none_head, none_tail] = v.trimmed(rect(), Some(0.0), Some(200.0), 200.0);
+        assert!(none_head.is_none() && none_tail.is_none());
+        // Zoomed past the head: only the tail part inside the view.
+        let z = WaveView {
+            start_secs: 100.0,
+            span_secs: 100.0,
+        };
+        let [head, tail] = z.trimmed(rect(), Some(20.0), Some(180.0), 200.0);
+        assert!(head.is_none());
+        assert_eq!(tail.unwrap().left(), 420.0);
+    }
+
+    #[test]
+    fn a_sub_range_is_the_matching_slice_of_the_full_reduction() {
+        let peaks: Vec<_> = (0..1000)
+            .map(|i| bucket((i % 100) as f32 / 100.0, 0.1))
+            .collect();
+        let full = wave_columns(&peaks, 0.01, 10.0, 100);
+        let part = wave_columns_in(&peaks, 0.01, 2.0, 3.0, 30);
+        assert_eq!(&full[20..50], &part[..]);
+    }
+}

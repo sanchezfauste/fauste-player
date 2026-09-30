@@ -843,6 +843,18 @@ pub fn wave_columns(
     span_secs: f64,
     columns: usize,
 ) -> Vec<WaveColumn> {
+    wave_columns_in(peaks, bucket_secs, 0.0, span_secs, columns)
+}
+
+/// As [`wave_columns`], for the `span_secs` starting at `start_secs`: only
+/// the buckets of that stretch are reduced.
+pub fn wave_columns_in(
+    peaks: &[WavePeak],
+    bucket_secs: f64,
+    start_secs: f64,
+    span_secs: f64,
+    columns: usize,
+) -> Vec<WaveColumn> {
     let full = f32::from(i16::MAX);
     let mut out = vec![WaveColumn::default(); columns];
     let valid = |secs: f64| secs.is_finite() && secs > 0.0;
@@ -853,7 +865,8 @@ pub fn wave_columns(
     // division leaves a hair below a whole bucket (28.999… for 29) on it,
     // so the last bucket is not lost; a huge span saturates.
     let bucket_at = |c: usize| {
-        ((c as f64 / columns as f64) * span_secs / bucket_secs + BUCKET_EPSILON) as usize
+        ((start_secs.max(0.0) + (c as f64 / columns as f64) * span_secs) / bucket_secs
+            + BUCKET_EPSILON) as usize
     };
     for (c, column) in out.iter_mut().enumerate() {
         let a0 = bucket_at(c);
