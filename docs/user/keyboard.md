@@ -9,6 +9,9 @@
 | `Esc` | Close menus and Settings; clear the selection |
 
 - Holding a key does not repeat it: a held `1` presses Play once.
+- A shortcut key does only its shortcut: if a button has the keyboard focus,
+  `Space` or `Enter` bound to a shortcut does not also press that button, and
+  a shortcut on `Tab` or an arrow does not move the focus.
 - Shortcuts are ignored while you type in a text field, such as a playlist
   name.
 

@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "config": {
+    "players": {
+      "count": 4,
+      "default_mode": "Continuous",
+      "fade_ms": 1000,
+      "auto_segue": true,
+      "end_warning_secs": 10.0
+    },
+    "analysis": {
+      "silence_threshold_db": -40.0,
+      "segue_threshold_db": -18.0,
+      "segue_max_secs": 8.0,
+      "outro_drop_db": 6.0,
+      "outro_max_secs": 30.0,
+      "markers_min_duration_secs": 60.0,
+      "peak_bucket_ms": 10,
+      "rms_window_ms": 50,
+      "cover_thumb_px": 128
+    },
+    "outputs": {
+      "backend": null,
+      "sample_rate": 48000,
+      "buffer_frames": 512,
+      "routes": [],
+      "cartwall": {
+        "main": null,
+        "cue": null
+      },
+      "bit_perfect": []
+    },
+    "ui": {
+      "wave_color": "sand",
+      "music_dir": null,
+      "language": null
+    },
+    "limits": {
+      "max_players": 16,
+      "max_cover_bytes": 20971520,
+      "max_cover_pixels": 8000,
+      "max_state_file_bytes": 52428800,
+      "max_playlist_file_bytes": 10485760,
+      "backup_count": 3,
+      "max_crash_reports": 20,
+      "max_cart_rows": 8,
+      "max_cart_cols": 16
+    },
+    "tuning": {
+      "declick_ms": 5.0,
+      "pause_ramp_ms": 10.0,
+      "prebuffer_secs": 5.0,
+      "ready_threshold_ms": 500.0,
+      "mixer_headroom": 2.0,
+      "max_commands_per_block": 256,
+      "schedule_lead_ms": 200.0,
+      "conductor_tick_ms": 5.0,
+      "watchdog_timeout_ms": 500.0,
+      "watchdog_startup_grace_ms": 5000.0,
+      "reconnect_interval_ms": 2000.0,
+      "gain_smoothing_ms": 20.0,
+      "save_debounce_ms": 1000.0
+    },
+    "cartwall": {
+      "default_rows": 2,
+      "default_cols": 8
+    },
+    "shortcuts": [
+      {
+        "action": {
+          "PlayPlayer": 1
+        },
+        "chord": {
+          "key": "1"
+        }
+      },
+      {
+        "action": {
+          "PlayPlayer": 2
+        },
+        "chord": {
+          "key": "2"
+        }
+      },
+      {
+        "action": {
+          "PlayPlayer": 3
+        },
+        "chord": {
+          "key": "3"
+        }
+      },
+      {
+        "action": {
+          "PlayPlayer": 4
+        },
+        "chord": {
+          "key": "4"
+        }
+      },
+      {
+        "action": {
+          "PlayPlayer": 5
+        },
+        "chord": {
+          "key": "5"
+        }
+      },
+      {
+        "action": {
+          "PlayPlayer": 6
+        },
+        "chord": {
+          "key": "6"
+        }
+      },
+      {
+        "action": {
+          "PlayPlayer": 7
+        },
+        "chord": {
+          "key": "7"
+        }
+      },
+      {
+        "action": {
+          "PlayPlayer": 8
+        },
+        "chord": {
+          "key": "8"
+        }
+      },
+      {
+        "action": {
+          "PlayPlayer": 9
+        },
+        "chord": {
+          "key": "9"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 1
+        },
+        "chord": {
+          "key": "F1"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 2
+        },
+        "chord": {
+          "key": "F2"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 3
+        },
+        "chord": {
+          "key": "F3"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 4
+        },
+        "chord": {
+          "key": "F4"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 5
+        },
+        "chord": {
+          "key": "F5"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 6
+        },
+        "chord": {
+          "key": "F6"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 7
+        },
+        "chord": {
+          "key": "F7"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 8
+        },
+        "chord": {
+          "key": "F8"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 9
+        },
+        "chord": {
+          "key": "F9"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 10
+        },
+        "chord": {
+          "key": "F10"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 11
+        },
+        "chord": {
+          "key": "F11"
+        }
+      },
+      {
+        "action": {
+          "FireCart": 12
+        },
+        "chord": {
+          "key": "F12"
+        }
+      },
+      {
+        "action": "StopAllCarts",
+        "chord": {
+          "key": "Space",
+          "ctrl": true
+        }
+      }
+    ],
+    "meter": {
+      "ballistics": "DigitalPeak",
+      "attack_ms": 5.0,
+      "release_db_per_sec": 11.8,
+      "true_peak": false,
+      "floor_db": -60.0,
+      "peak_hold_secs": 2.0,
+      "reference_dbfs": -18.0,
+      "warning_dbfs": -9.0,
+      "danger_dbfs": -3.0,
+      "loudness": "ShortTerm",
+      "loudness_target_lufs": -23.0
+    }
+  }
+}

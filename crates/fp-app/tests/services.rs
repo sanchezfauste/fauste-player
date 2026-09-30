@@ -344,3 +344,17 @@ fn tracks_analysed_before_formats_existed_are_analysed_again() {
             .all(|t| t.format.is_some())
     });
 }
+
+#[test]
+fn a_result_lost_to_a_panic_is_asked_for_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "Band - One.wav", 1);
+    let mut r = rig(&[a], dir);
+    // Applying the first result panics: that result is lost.
+    r.services.fail_routes(1);
+    r.run_until("analysis", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    assert_eq!(r.services.faults().load(Ordering::SeqCst), 1);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "analysed again once");
+}

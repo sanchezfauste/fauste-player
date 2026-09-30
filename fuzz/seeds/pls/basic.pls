@@ -1,0 +1,10 @@
+[playlist]
+File1=/music/a.mp3
+Title1=A
+Length1=215
+File01=/music/b.mp3
+Title01=B
+File2=http://radio.example/live
+Length2=-1
+NumberOfEntries=3
+Version=2

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use fp_model::{AppState, CartEdit, CartKind, Command, Config, Limits, apply};
 use fp_store::playlist_io::{
     CartPageFileError, ExportEntry, PlaylistFileError, parse_cart_page, parse_playlist,
-    write_cart_page, write_m3u8,
+    read_bounded, write_cart_page, write_m3u8,
 };
 
 fn limits() -> Limits {
@@ -298,4 +298,77 @@ fn unusual_file_urls_and_drive_paths() {
             PathBuf::from("//server/share/b.mp3"),
         ]
     );
+}
+
+#[test]
+fn a_file_over_the_limit_is_refused_without_reading_it_all() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("huge.m3u");
+    std::fs::write(&path, vec![b'#'; 4096]).unwrap();
+    assert!(matches!(
+        read_bounded(&path, 1024),
+        Err(PlaylistFileError::TooLarge { limit: 1024 })
+    ));
+    assert_eq!(
+        read_bounded(&path, 4096).unwrap().len(),
+        4096,
+        "at the limit"
+    );
+    assert!(matches!(
+        read_bounded(&dir.path().join("missing.m3u"), 1024),
+        Err(PlaylistFileError::Unreadable(_))
+    ));
+}
+
+#[test]
+fn a_file_url_percent_encoded_in_latin_1_is_read() {
+    // Older players encode "ú" as %FA (Latin-1), not %C3%BA (UTF-8).
+    let list = parse_playlist(
+        b"file:///m%FAsica/caf%E9.mp3\nfile:///m%C3%BAsica/uno.mp3\n",
+        Path::new("/lists/a.m3u"),
+        &limits(),
+    )
+    .unwrap();
+    let paths: Vec<_> = list.entries.iter().map(|e| e.path.clone()).collect();
+    assert_eq!(
+        paths,
+        vec![
+            PathBuf::from("/música/café.mp3"),
+            PathBuf::from("/música/uno.mp3")
+        ]
+    );
+}
+
+#[test]
+fn extinf_attributes_may_hold_commas() {
+    let text = "#EXTM3U\n#EXTINF:215 group-title=\"Rock, 80s\" tvg-name=\"a,b\",Band - Song\n/music/a.mp3\n";
+    let list = parse_playlist(text.as_bytes(), Path::new("/a.m3u8"), &limits()).unwrap();
+    let entry = &list.entries[0];
+    assert_eq!(entry.title.as_deref(), Some("Band - Song"));
+    assert_eq!(entry.duration_secs, Some(215.0));
+}
+
+#[test]
+fn pls_entries_numbered_1_and_01_are_both_kept() {
+    let text = "[playlist]\nFile1=/music/a.mp3\nTitle1=A\nFile01=/music/b.mp3\nTitle01=B\nNumberOfEntries=2\n";
+    let list = parse_playlist(text.as_bytes(), Path::new("/a.pls"), &limits()).unwrap();
+    let titles: Vec<_> = list
+        .entries
+        .iter()
+        .map(|e| e.title.clone().unwrap())
+        .collect();
+    assert_eq!(titles, vec!["A", "B"]);
+}
+
+#[test]
+fn an_exported_path_starting_with_a_hash_is_not_read_back_as_a_comment() {
+    let entries = vec![ExportEntry {
+        path: PathBuf::from("#1 hit.mp3"),
+        title: None,
+        duration_secs: None,
+    }];
+    let text = write_m3u8(&entries);
+    let list = parse_playlist(text.as_bytes(), Path::new("/lists/a.m3u8"), &limits()).unwrap();
+    let paths: Vec<_> = list.entries.iter().map(|e| e.path.clone()).collect();
+    assert_eq!(paths, vec![PathBuf::from("/lists/#1 hit.mp3")]);
 }

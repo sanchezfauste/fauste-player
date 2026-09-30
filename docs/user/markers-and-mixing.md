@@ -29,7 +29,8 @@ Changes to the track on air apply to its next transition at once.
 ## The INTRO tag
 
 A file can carry its intro time in an `INTRO` tag, as seconds (`12.5`) or
-`m:ss`. It can be an ID3v2 user text frame (MP3, WAV, AIFF, DSF), a Vorbis,
+`m:ss`. The name may be written in any case (`INTRO`, `Intro`). It can be an
+ID3v2 user text frame (MP3, WAV, AIFF, DSF), a Vorbis,
 Opus or FLAC comment, an APE item (WavPack, Monkey's Audio) or an MP4
 freeform atom. It is read during analysis. A
 manual intro end still wins.

@@ -133,3 +133,27 @@ fn playlists_handed_over_by_a_second_start_are_imported() {
     }
     assert_eq!(created.as_deref(), Some("Late"));
 }
+
+#[test]
+fn an_import_failure_is_explained_in_the_interface_language() {
+    use fp_app::i18n::I18n;
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("Gone.m3u");
+    // The reason is a message of the interface, not the system's English
+    // text ("No such file or directory (os error 2)").
+    let (mut h, _fake) = support::harness_with(state(1, 0), |app| app.import_playlist(missing));
+    let en = I18n::new(Some("en-US"));
+    let expected = en.tr_args(
+        "playlist-import-failed",
+        &[
+            ("name", "Gone".into()),
+            ("error", en.tr("file-error-not-found").into()),
+        ],
+    );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while h.query_by_label(&expected).is_none() && Instant::now() < deadline {
+        h.run_steps(1);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(h.query_by_label(&expected).is_some(), "{expected}");
+}

@@ -1,6 +1,6 @@
 //! The cartwall strip under the players (Phase 2 spec P2.9, v3 layout).
 
-use egui::{Align, Color32, Layout, Rect, RichText, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Align, Color32, Layout, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::{CartKind, CartPageId, Command};
 
@@ -320,8 +320,15 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                 if response.clicked() {
                     scene.ctl.send(Command::FireCart(cart.id));
                 }
-                if !empty {
-                    response.context_menu(|ui| {
+                // An empty cart looks disabled and does not fire, but its
+                // menu still edits it (to choose its file).
+                let menu_on = if empty {
+                    ui.interact(response.rect, response.id.with("menu"), Sense::click())
+                } else {
+                    response.clone()
+                };
+                {
+                    menu_on.context_menu(|ui| {
                         ui.set_min_width(200.0);
                         let item = |ui: &mut Ui, glyph: &str, key: &str| {
                             let text = t.tr(key);
@@ -335,11 +342,12 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                             });
                             r
                         };
-                        if item(ui, icon::HEADPHONES, "menu-cue").clicked() {
+                        if !empty && item(ui, icon::HEADPHONES, "menu-cue").clicked() {
                             scene.ctl.send(Command::CueCart(cart.id));
                             ui.close();
                         }
-                        if item(ui, egui_phosphor::fill::STOP, "menu-cart-stop").clicked() {
+                        if !empty && item(ui, egui_phosphor::fill::STOP, "menu-cart-stop").clicked()
+                        {
                             scene.ctl.send(Command::StopCart(cart.id));
                             ui.close();
                         }

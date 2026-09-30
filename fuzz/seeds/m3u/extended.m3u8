@@ -1,0 +1,5 @@
+#EXTM3U
+#EXTINF:215 group-title="Rock, 80s",Band - Song
+/music/a.mp3
+#EXTINF:-1,Stream
+http://radio.example/live

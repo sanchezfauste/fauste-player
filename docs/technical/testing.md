@@ -45,11 +45,15 @@ the workspace, and needs the nightly toolchain:
 ```sh
 rustup toolchain install nightly --profile minimal
 cargo install cargo-fuzz --locked
-cd fuzz && cargo +nightly fuzz run m3u -- -max_total_time=60
+cd fuzz && mkdir -p corpus/m3u && cargo +nightly fuzz run m3u corpus/m3u seeds/m3u -- -max_total_time=60
 ```
 
-The `fuzz` workflow runs each target for five minutes every night and
-uploads any crash as an artefact.
+`fuzz/seeds/<target>/` holds a small versioned seed corpus: valid files of
+each format (extended M3U with quoted attributes, `file:` URLs in UTF-8 and
+Latin-1, Windows and relative paths, PLS, a cart page, and the four state
+documents of a demo session). The working corpus (`fuzz/corpus/`) is not
+versioned. The `fuzz` workflow starts from the seeds, runs each target for
+five minutes every night and uploads any crash as an artefact.
 
 ## Checks run in CI
 

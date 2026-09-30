@@ -7,6 +7,7 @@
 //! an entry, shown as unavailable, so nothing is dropped silently.
 
 use std::collections::BTreeMap;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,24 @@ pub struct ImportedPlaylist {
 pub enum PlaylistFileError {
     #[error("the playlist file is larger than {limit} bytes")]
     TooLarge { limit: u64 },
+    #[error("the file could not be read: {0}")]
+    Unreadable(std::io::ErrorKind),
+}
+
+/// Reads `path` if it holds at most `limit` bytes. A longer file is refused
+/// after reading `limit + 1` bytes, not loaded whole (a file picked by
+/// mistake can be huge).
+pub fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, PlaylistFileError> {
+    let unreadable = |e: std::io::Error| PlaylistFileError::Unreadable(e.kind());
+    let file = std::fs::File::open(path).map_err(unreadable)?;
+    let mut bytes = Vec::new();
+    file.take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(unreadable)?;
+    if bytes.len() as u64 > limit {
+        return Err(PlaylistFileError::TooLarge { limit });
+    }
+    Ok(bytes)
 }
 
 /// One entry to write to an M3U8 file.
@@ -125,7 +144,11 @@ fn percent_decode(text: &str) -> String {
         out.push(b);
         i += 1;
     }
-    String::from_utf8_lossy(&out).into_owned()
+    // Older players percent-encode Latin-1 (`%FA` for "ú"), not UTF-8.
+    match String::from_utf8(out) {
+        Ok(text) => text,
+        Err(e) => decode_cp1252(e.as_bytes()),
+    }
 }
 
 /// `C:\…`, `C:/…` or `\\server\…`.
@@ -209,9 +232,25 @@ fn resolve(entry: &str, base: &Path) -> Option<Target> {
     Some(Target::File(normalize(&base.join(relative))))
 }
 
-/// `#EXTINF:<secs>[ attributes],<title>`
+/// `#EXTINF:<secs>[ attributes],<title>`. Attribute values are quoted and
+/// may hold commas: the title starts after the first comma outside quotes.
 fn parse_extinf(rest: &str) -> (Option<f64>, Option<String>) {
-    let (head, title) = rest.split_once(',').unwrap_or((rest, ""));
+    let mut quoted = false;
+    let comma = rest.char_indices().find_map(|(i, c)| match c {
+        '"' => {
+            quoted = !quoted;
+            None
+        }
+        ',' if !quoted => Some(i),
+        _ => None,
+    });
+    let (head, title) = match comma {
+        Some(i) => (
+            rest.get(..i).unwrap_or(rest),
+            rest.get(i + 1..).unwrap_or(""),
+        ),
+        None => (rest, ""),
+    };
     let secs = head
         .split_whitespace()
         .next()
@@ -267,7 +306,10 @@ struct PlsEntry {
 }
 
 fn parse_pls(text: &str, base: &Path) -> ImportedPlaylist {
-    let mut entries: BTreeMap<u64, PlsEntry> = BTreeMap::new();
+    // Keyed by the number and its digits as written: `File1` and `File01`
+    // are two entries (each with its own `Title…`), in number order, the
+    // shorter spelling first.
+    let mut entries: BTreeMap<(u64, usize, String), PlsEntry> = BTreeMap::new();
     for line in text.lines() {
         let Some((key, value)) = line.trim().split_once('=') else {
             continue;
@@ -281,7 +323,9 @@ fn parse_pls(text: &str, base: &Path) -> ImportedPlaylist {
         let Ok(n) = number.parse::<u64>() else {
             continue;
         };
-        let entry = entries.entry(n).or_default();
+        let entry = entries
+            .entry((n, number.len(), number.to_owned()))
+            .or_default();
         match field {
             "file" => entry.file = Some(value.to_owned()),
             "title" => entry.title = Some(value.to_owned()).filter(|t| !t.is_empty()),
@@ -333,7 +377,13 @@ pub fn write_m3u8(entries: &[ExportEntry]) -> String {
             .map_or(-1, |s| s.round() as i64);
         let title = e.title.as_deref().unwrap_or("").replace(['\n', '\r'], " ");
         out.push_str(&format!("#EXTINF:{secs},{title}\n"));
-        out.push_str(&e.path.to_string_lossy().replace(['\n', '\r'], " "));
+        let path = e.path.to_string_lossy().replace(['\n', '\r'], " ");
+        // A line starting with `#` is a comment: a relative path that does
+        // is written as `./#…`.
+        if path.starts_with('#') {
+            out.push_str("./");
+        }
+        out.push_str(&path);
         out.push('\n');
     }
     out

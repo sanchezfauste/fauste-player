@@ -372,3 +372,65 @@ fn the_bp_badge_follows_telemetry() {
     h.run_steps(2);
     assert!(h.query_by_label("Bit-perfect: on").is_some());
 }
+
+#[test]
+fn a_shortcut_key_does_not_also_press_the_focused_button() {
+    let mut s = state(1, 1);
+    fp_model::apply(
+        &mut s,
+        Command::SetShortcut {
+            action: fp_model::ShortcutAction::PausePlayer(1),
+            chord: Some(fp_model::KeyChord::key("Space")),
+        },
+    )
+    .unwrap();
+    let p = s.players[0].id;
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Stop").focus();
+    h.run_steps(1);
+    fake.take_sent();
+    h.key_press(Key::Space);
+    h.run_steps(2);
+    assert_eq!(sent(&fake), vec![Command::Pause(p)], "the shortcut only");
+    // Holding the key: the first press fires, its repeats reach nothing.
+    let space = |pressed: bool| egui::Event::Key {
+        key: Key::Space,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    h.event(space(true));
+    h.run_steps(1);
+    assert_eq!(sent(&fake), vec![Command::Pause(p)]);
+    for _ in 0..3 {
+        h.event(space(true)); // egui marks it a repeat: the key is down
+        h.run_steps(1);
+    }
+    h.event(space(false));
+    h.run_steps(2);
+    assert_eq!(sent(&fake), vec![], "the repeats press nothing");
+}
+
+#[test]
+fn a_shortcut_on_tab_does_not_move_the_focus() {
+    let mut s = state(1, 1);
+    fp_model::apply(
+        &mut s,
+        Command::SetShortcut {
+            action: fp_model::ShortcutAction::PausePlayer(1),
+            chord: Some(fp_model::KeyChord::key("Tab")),
+        },
+    )
+    .unwrap();
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Stop").focus();
+    h.run_steps(1);
+    let before = h.ctx.memory(|m| m.focused());
+    assert!(before.is_some());
+    fake.take_sent();
+    h.key_press(Key::Tab);
+    h.run_steps(2);
+    assert_eq!(h.ctx.memory(|m| m.focused()), before, "the focus stays");
+    assert_eq!(sent(&fake).len(), 1, "the shortcut fired");
+}

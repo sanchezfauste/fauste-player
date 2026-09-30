@@ -22,6 +22,8 @@ their own outputs, independently of the players.
 | Stop | Stop it |
 | Edit… | Open it in Settings |
 
+An empty cart's menu has **Edit…** only, to choose its file.
+
 - **Pages:** the tabs next to **CARTWALL** switch pages. A red dot shows
   that a cart on that page is playing.
 - Click **CARTWALL** to collapse the strip or expand it again.

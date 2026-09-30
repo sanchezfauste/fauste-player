@@ -430,18 +430,18 @@ impl AppUi {
             // Delete, Backspace and Esc keep their fixed meaning.
             .filter(|(k, _, _)| !super::settings::RESERVED_KEYS.contains(k))
             .collect();
-        let (fired, delete, escape) = ctx.input(|i| {
+        let (fired, held, delete, escape) = ctx.input(|i| {
             // Only the first press counts: holding a key must not repeat it
             // (a repeated Play would skip tracks on air).
-            let first_press = |wanted: Key, chord: Option<&KeyChord>| {
+            let pressed = |wanted: Key, chord: Option<&KeyChord>, repeats: bool| {
                 i.events.iter().any(|e| match e {
                     egui::Event::Key {
                         key,
                         pressed: true,
-                        repeat: false,
+                        repeat,
                         modifiers,
                         ..
-                    } if *key == wanted => match chord {
+                    } if *key == wanted && (repeats || !*repeat) => match chord {
                         Some(c) => {
                             modifiers.ctrl == c.ctrl
                                 && modifiers.alt == c.alt
@@ -453,13 +453,21 @@ impl AppUi {
                     _ => false,
                 })
             };
+            let first_press = |wanted: Key, chord: Option<&KeyChord>| pressed(wanted, chord, false);
             let fired: Vec<ShortcutAction> = bindings
                 .iter()
                 .filter(|(key, chord, _)| first_press(*key, Some(chord)))
                 .map(|(_, _, action)| *action)
                 .collect();
+            // Keys held on a shortcut, first press or repeat.
+            let held: Vec<Key> = bindings
+                .iter()
+                .filter(|(key, chord, _)| pressed(*key, Some(chord), true))
+                .map(|(key, _, _)| *key)
+                .collect();
             (
                 fired,
+                held,
                 first_press(Key::Delete, None) || first_press(Key::Backspace, None),
                 first_press(Key::Escape, None),
             )
@@ -469,6 +477,25 @@ impl AppUi {
                 self.view.settings_open = false;
             }
             return;
+        }
+        // A key held on a shortcut is taken out of the frame's input, so a
+        // focused button or list does not act on it too (Space, Enter), nor
+        // on its repeats.
+        ctx.input_mut(|i| {
+            i.events
+                .retain(|e| !matches!(e, egui::Event::Key { key, .. } if held.contains(key)));
+        });
+        // Tab and the arrows move the focus before this runs; a shortcut on
+        // them keeps it where it was.
+        let moves_focus = [
+            Key::Tab,
+            Key::ArrowUp,
+            Key::ArrowDown,
+            Key::ArrowLeft,
+            Key::ArrowRight,
+        ];
+        if held.iter().any(|k| moves_focus.contains(k)) {
+            ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
         }
         for action in fired {
             if let Some(command) = shortcut_command(state, action) {
@@ -530,14 +557,14 @@ impl AppUi {
                 result: Err(e),
             } => t.tr_args(
                 "playlist-import-failed",
-                &[("name", name.into()), ("error", e.into())],
+                &[("name", name.into()), ("error", e.text(t).into())],
             ),
             FileOutcome::Exported(Ok(path)) => t.tr_args(
                 "playlist-exported",
                 &[("path", path.display().to_string().into())],
             ),
             FileOutcome::Exported(Err(e)) => {
-                t.tr_args("playlist-export-failed", &[("error", e.into())])
+                t.tr_args("playlist-export-failed", &[("error", e.text(t).into())])
             }
         }
     }
