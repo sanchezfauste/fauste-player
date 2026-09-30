@@ -5,5 +5,6 @@
 
 #![deny(clippy::indexing_slicing)]
 
+pub mod feedback;
 pub mod message;
 pub mod router;
