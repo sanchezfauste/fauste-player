@@ -199,7 +199,7 @@ presentation, not a second source of rules.
       installed `licenses/THIRD-PARTY.html` (produced by cargo-about in release
       builds). The file is looked up next to the executable and in each
       package's documented licence directory. If it is missing (a development
-      build), the button is disabled and a tooltip says why.
+      build), the button is disabled and a note next to it says why.
   - All strings are in both locales. Opening the file never blocks the UI.
 
 ### 3.2 Plan 2: meter column (F7, F9, F11)
@@ -222,9 +222,10 @@ The layout follows mockup C, as approved:
   side, then the fader. The maximum readout sits above the bars, and the
   loudness line below them when it is on.
 - **Time.** `elapsed / total` moves under the transport, right-aligned.
-- **Transport grid.** The grid becomes 3×2. Its first column holds Previous
-  (top) and Restart (bottom), which plan 3 wires up. Stop, Pause, Fade stop and
-  Stop after current keep their relative places.
+- **Transport grid (plan 3).** The grid becomes 3×2 in plan 3, together with
+  the buttons it adds: its first column holds Previous (top) and Restart
+  (bottom). Stop, Pause, Fade stop and Stop after current keep their relative
+  places. Plan 2 leaves the 2×2 grid as it is.
 - **Scale.** The dB labels (monospace, `NEUTRAL_400`) are chosen from
   `scale_marks` so that they never overlap at the available height. Every
   labelled mark gets a 1 px reference line across both bars, in `NEUTRAL_400` at
