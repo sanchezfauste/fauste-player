@@ -84,9 +84,9 @@
 
 ## M4. Display
 
-- The meter keeps its size in the player column.
+- The meter and the volume fader form a column at the right of the player, spanning the info and transport rows (feedback spec §3.2): the scale's labels, then the L and R bars side by side, then the fader.
 - **One continuous bar per channel**, drawn to the pixel, not in segments (segments of 3 dB made the bar move in visible steps).
-- **Scale: the one of the chosen meter's standard**, with its marks as small ticks between the channels (`reference_dbfs`, or K-System 0, brighter). Levels above the top of a scale sit at the top.
+- **Scale: the one of the chosen meter's standard**, labelled on the left in the meter's own units (monospace, `NEUTRAL_400`), with a 1 px reference line at 35 % across both bars for every label. Nothing is drawn in the gap between the channels. Levels above the top of a scale sit at the top.
 
   | Meter | Scale (marks) | Where the alignment level is | Law |
   |---|---|---|---|
@@ -96,9 +96,9 @@
   | VU | −20, −10, −7, −5, −3, −2, −1, 0, +1, +2, +3 VU (IEC 60268-17) | 0 VU | proportional to the voltage, +3 VU at the top (0 VU at 70.8 %) |
   | K-20, K-14, K-12 | +N (0 dBFS, the top), +4, 0, −4 … −24 every 4 dB, −30, −40, −50, −60 | 0 (−N dBFS) | linear in dB from the top to −24 over 80 % of the height; −24 to −60 over the rest. The K-System asks for 1 dB marks down to −24: at this meter's size, every 4 dB |
 
-- **Zones:** on the digital scale (digital peak, custom), green, yellow from `warning_dbfs`, red from `danger_dbfs`. The other scales use their own red region, which the configured levels could miss (a VU scale ends at −15 dBFS): VU red from 0 VU (its red arc); EBU and DIN red from the permitted maximum, 9 dB above alignment (EBU +9, DIN 0). The K-System: green below 0, amber from 0 to +4, red above.
-- **Alignment level:** a brighter tick at `reference_dbfs` (the K-System's 0 for K meters), whether or not it is one of the scale's marks.
-- **Legibility:** marks stay inside the bars, and a mark closer than 3 px to one above it (or to the alignment tick) is left out, so a dense bottom of a scale does not blur at a small size.
+- **Zones:** muted traffic-light colours (normal #7fb08a, warning #d9b45a, danger #d8646a). On the digital scale (digital peak, custom), green, yellow from `warning_dbfs`, red from `danger_dbfs`. The other scales use their own red region, which the configured levels could miss (a VU scale ends at −15 dBFS): VU red from 0 VU (its red arc); EBU and DIN red from the permitted maximum, 9 dB above alignment (EBU +9, DIN 0). The K-System: green below 0, amber from 0 to +4, red above.
+- **Alignment level:** a heavier, brighter 2 px line at `reference_dbfs` (the K-System's 0 for K meters), whether or not it is one of the scale's marks. It is labelled only where the scale names it (EBU TEST, K 0, 0 VU); the digital meter's −18 dBFS keeps the round labels around it.
+- **Legibility:** lines stay inside the bars. Both ends of the scale are labelled first; then labels are kept top down while they are at least 10 px from every kept label, so they never overlap at the available height. A mark without a label gets no line.
 - **K-System bars show both sections:** the average (RMS) level is the solid body; the part up to the peak level is the same colour, dimmed. The other meters show one level, as their standard defines.
 - **Peak hold:** a two-pixel line at the hold level, in the colour of its zone.
 - **Maximum readout** above the bars: the maximum (M2) in dBFS with one decimal, red in the danger zone, a dash before any audio. A click on it restarts it.

@@ -19,7 +19,7 @@
 | `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
 | `ui/shell.rs` | Panic isolation around each frame |
 | `ui/view.rs`, `ui/format.rs` | Pure view model: what to show, how to format it (unit-tested) |
-| `ui/widgets.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, segmented control, tabular times, VU, fader, waveform), drawn icons, the Nocturne theme |
+| `ui/widgets.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, segmented control, tabular times, meter, fader, waveform), drawn icons, the Nocturne theme. The meter's geometry is the pure `meter_layout` (labels, lines, bars, readouts), unit-tested |
 | `ui/about.rs` | The About window: version, copyright, bundled notices, and the third-party notices file (located at start-up, opened on a helper thread) |
 | `ui/controller.rs` | The `Controller` trait between the UI and the rest |
 | `ui/files.rs` | Accepted audio extensions and folder expansion |
