@@ -230,7 +230,7 @@ fn changing_analysis_settings_during_analysis_analyses_again() {
         r.analyses.load(Ordering::SeqCst) == 1
     });
     let mut config = r.handle.model.load().config.clone();
-    config.analysis.silence_threshold_db = -50.0;
+    config.analysis.trim_threshold_db = -50.0;
     r.handle.send(Command::UpdateConfig(Box::new(config)));
     r.run_until("analysis", |r| {
         r.handle.model.load().library.iter().all(|t| t.analyzed)

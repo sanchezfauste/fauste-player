@@ -1057,18 +1057,25 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
         f64,
         &'static str,
     );
-    let fields: [Field; 6] = [
+    let fields: [Field; 7] = [
         (
-            "settings-silence",
-            a.silence_threshold_db,
-            -96.0..=-10.0,
+            "settings-trim-threshold",
+            a.trim_threshold_db,
+            -120.0..=-20.0,
             1.0,
             " dB",
         ),
         (
-            "settings-segue-threshold",
-            a.segue_threshold_db,
-            -60.0..=0.0,
+            "settings-trim-margin",
+            f64::from(a.trim_margin_ms),
+            0.0..=1000.0,
+            5.0,
+            " ms",
+        ),
+        (
+            "settings-segue-drop",
+            a.segue_drop_db,
+            3.0..=40.0,
             1.0,
             " dB",
         ),
@@ -1109,11 +1116,12 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
                 update(scene, |c| {
                     let a = &mut c.analysis;
                     match i {
-                        0 => a.silence_threshold_db = v,
-                        1 => a.segue_threshold_db = v,
-                        2 => a.segue_max_secs = v,
-                        3 => a.outro_drop_db = v,
-                        4 => a.outro_max_secs = v,
+                        0 => a.trim_threshold_db = v,
+                        1 => a.trim_margin_ms = v.round().clamp(0.0, 1000.0) as u32,
+                        2 => a.segue_drop_db = v,
+                        3 => a.segue_max_secs = v,
+                        4 => a.outro_drop_db = v,
+                        5 => a.outro_max_secs = v,
                         _ => a.markers_min_duration_secs = v,
                     }
                 });

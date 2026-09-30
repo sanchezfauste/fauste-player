@@ -19,6 +19,10 @@ pub struct Envelope {
     pub bucket_secs: f64,
     /// Min, max and RMS level of the mono signal per bucket.
     pub peaks: Vec<WavePeak>,
+    /// Largest absolute sample of either channel per bucket, in dBFS: what
+    /// trimming looks at, since a mono mix hides one-sided or antiphase
+    /// audio.
+    pub peak_db: Vec<f32>,
 }
 
 /// One waveform bucket of the mono signal, scaled to `i16` (full scale =
@@ -45,6 +49,8 @@ pub struct EnvelopeBuilder {
     bucket_sum_sq: f64,
     in_bucket: usize,
     peaks: Vec<WavePeak>,
+    abs_max: f32,
+    peak_db: Vec<f32>,
 }
 
 fn to_db(rms: f64) -> f32 {
@@ -76,6 +82,8 @@ impl EnvelopeBuilder {
             bucket_sum_sq: 0.0,
             in_bucket: 0,
             peaks: Vec::new(),
+            abs_max: 0.0,
+            peak_db: Vec::new(),
         }
     }
 
@@ -91,6 +99,7 @@ impl EnvelopeBuilder {
             }
             self.min = self.min.min(m);
             self.max = self.max.max(m);
+            self.abs_max = self.abs_max.max(l.abs()).max(r.abs());
             self.bucket_sum_sq += f64::from(m) * f64::from(m);
             self.in_bucket += 1;
             if self.in_bucket == self.bucket {
@@ -114,6 +123,8 @@ impl EnvelopeBuilder {
             max: to_i16(self.max),
             rms: to_i16(rms as f32),
         });
+        self.peak_db.push(to_db(f64::from(self.abs_max)));
+        self.abs_max = 0.0;
         self.bucket_sum_sq = 0.0;
         self.min = 0.0;
         self.max = 0.0;
@@ -133,6 +144,7 @@ impl EnvelopeBuilder {
             rms_db: self.rms_db,
             bucket_secs: self.bucket as f64 / self.rate,
             peaks: self.peaks,
+            peak_db: self.peak_db,
         }
     }
 }
@@ -144,12 +156,16 @@ impl Envelope {
         b.finish()
     }
 
-    fn window_start(&self, i: usize) -> f64 {
-        (i as f64 * self.window_secs).min(self.duration_secs)
-    }
-
     fn window_end(&self, i: usize) -> f64 {
         ((i + 1) as f64 * self.window_secs).min(self.duration_secs)
+    }
+
+    fn bucket_start(&self, i: usize) -> f64 {
+        (i as f64 * self.bucket_secs).min(self.duration_secs)
+    }
+
+    fn bucket_end(&self, i: usize) -> f64 {
+        ((i + 1) as f64 * self.bucket_secs).min(self.duration_secs)
     }
 }
 
@@ -165,9 +181,10 @@ pub struct AutoMarkers {
 
 /// Detects the cue points of spec §6 from an envelope.
 pub fn detect_markers(env: &Envelope, s: &AnalysisSettings) -> AutoMarkers {
-    let silence = s.silence_threshold_db as f32;
-    let first = env.rms_db.iter().position(|db| *db >= silence);
-    let last = env.rms_db.iter().rposition(|db| *db >= silence);
+    // Trim on the stereo bucket peaks, so no audible sample is ever cut.
+    let threshold = s.trim_threshold_db as f32;
+    let first = env.peak_db.iter().position(|db| *db >= threshold);
+    let last = env.peak_db.iter().rposition(|db| *db >= threshold);
     let (Some(first), Some(last)) = (first, last) else {
         // Nothing audible: keep the whole file, and no transition markers.
         return AutoMarkers {
@@ -177,8 +194,9 @@ pub fn detect_markers(env: &Envelope, s: &AnalysisSettings) -> AutoMarkers {
             outro_start: None,
         };
     };
-    let cue_in = env.window_start(first);
-    let cue_out = env.window_end(last);
+    let margin = f64::from(s.trim_margin_ms) / 1000.0;
+    let cue_in = (env.bucket_start(first) - margin).max(0.0);
+    let cue_out = (env.bucket_end(last) + margin).min(env.duration_secs);
     if env.duration_secs < s.markers_min_duration_secs {
         return AutoMarkers {
             cue_in,
@@ -189,32 +207,34 @@ pub fn detect_markers(env: &Envelope, s: &AnalysisSettings) -> AutoMarkers {
     }
     let clamp = |t: f64, max_back: f64| t.max(cue_out - max_back).max(cue_in).min(cue_out);
 
-    // Segue: after the last window still at or above the segue threshold.
-    let segue_level = s.segue_threshold_db as f32;
-    let segue = env
-        .rms_db
-        .get(..=last)
-        .and_then(|w| w.iter().rposition(|db| *db >= segue_level))
-        .map(|i| env.window_end(i));
-    // A piece that never reaches the segue level (spoken word, a soft
-    // classical recording) gets no automatic segue: nothing may be started
-    // over it.
-    let segue_start = segue.map(|t| clamp(t, s.segue_max_secs));
-
-    // Outro: where the level falls `outro_drop_db` below the track's median.
+    // The body: the RMS windows that overlap [cue_in, cue_out].
+    let windows = env.rms_db.len();
+    let window = env.window_secs.max(f64::EPSILON);
+    let first_w = ((cue_in / window) as usize).min(windows.saturating_sub(1));
+    let last_w = (((cue_out / window).ceil() as usize).saturating_sub(1))
+        .clamp(first_w, windows.saturating_sub(1));
     let mut body: Vec<f32> = env
         .rms_db
-        .get(first..=last)
+        .get(first_w..=last_w)
         .map(<[f32]>::to_vec)
         .unwrap_or_default();
     body.sort_by(f32::total_cmp);
     let median = body.get(body.len() / 2).copied().unwrap_or(FLOOR_DB);
-    let outro_level = median - s.outro_drop_db as f32;
-    let outro = env
-        .rms_db
-        .get(..=last)
-        .and_then(|w| w.iter().rposition(|db| *db >= outro_level))
-        .map_or(cue_out, |i| env.window_end(i));
+    // The last window still at or above `level`, as a time.
+    let last_at_or_above = |level: f32| {
+        env.rms_db
+            .get(..=last_w)
+            .and_then(|w| w.iter().rposition(|db| *db >= level))
+            .map(|i| env.window_end(i))
+    };
+
+    // Segue: where the level has fallen `segue_drop_db` below the body's
+    // median, so loud and quiet masters get the same overlap.
+    let segue_start =
+        last_at_or_above(median - s.segue_drop_db as f32).map(|t| clamp(t, s.segue_max_secs));
+
+    // Outro: where the level falls `outro_drop_db` below the track's median.
+    let outro = last_at_or_above(median - s.outro_drop_db as f32).unwrap_or(cue_out);
     // An outro that would start at the very end is no outro.
     let outro_start = Some(clamp(outro, s.outro_max_secs)).filter(|t| *t < cue_out);
 
@@ -259,6 +279,146 @@ mod tests {
         AnalysisSettings::default()
     }
 
+    /// A 1 kHz-ish tone at a fixed level in dBFS (peak).
+    fn tone_db(secs: f64, db: f32) -> Vec<f32> {
+        tone(secs, 10f32.powf(db / 20.0), |_| 1.0)
+    }
+
+    /// Every bucket whose stereo peak reaches the trim threshold lies in
+    /// `[cue_in, cue_out]`.
+    fn assert_nothing_audible_is_trimmed(env: &Envelope, m: &AutoMarkers, s: &AnalysisSettings) {
+        for (i, db) in env.peak_db.iter().enumerate() {
+            if *db >= s.trim_threshold_db as f32 {
+                let start = i as f64 * env.bucket_secs;
+                let end = ((i + 1) as f64 * env.bucket_secs).min(env.duration_secs);
+                assert!(
+                    start >= m.cue_in - 1e-9 && end <= m.cue_out + 1e-9,
+                    "bucket {i} ({db} dB) at {start}–{end} outside {}–{}",
+                    m.cue_in,
+                    m.cue_out
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn trimming_keeps_every_bucket_at_or_above_the_threshold() {
+        let click: Vec<f32> = tone_db(0.002, -30.0);
+        let fade = tone(3.0, 0.1, |t| 10f32.powf(-30.0 * t as f32 / 3.0 / 20.0));
+        let s: Vec<f32> = [
+            silence(0.5),
+            click,
+            silence(1.0),
+            tone_db(5.0, -6.0),
+            fade,
+            silence(1.0),
+        ]
+        .concat();
+        let env = envelope(&s);
+        let m = detect_markers(&env, &settings());
+        assert_nothing_audible_is_trimmed(&env, &m, &settings());
+        assert!(m.cue_in <= 0.5, "the click at 0.5 s stays: {}", m.cue_in);
+    }
+
+    #[test]
+    fn a_soft_fade_in_is_not_cut() {
+        // −70 → −20 dBFS over 4 s: it crosses −60 dBFS at 0.8 s.
+        let s = tone(4.0, 1.0, |t| {
+            10f32.powf((-70.0 + 50.0 * t as f32 / 4.0) / 20.0)
+        });
+        let env = envelope(&s);
+        let m = detect_markers(&env, &settings());
+        assert_nothing_audible_is_trimmed(&env, &m, &settings());
+        assert!(m.cue_in <= 0.8, "cue_in {}", m.cue_in);
+    }
+
+    #[test]
+    fn one_channel_or_antiphase_audio_is_not_trimmed_away() {
+        let left_only: Vec<f32> = tone_db(2.0, -20.0)
+            .chunks(2)
+            .flat_map(|f| [f.first().copied().unwrap_or(0.0), 0.0])
+            .collect();
+        let antiphase: Vec<f32> = tone_db(2.0, -20.0)
+            .chunks(2)
+            .flat_map(|f| {
+                let v = f.first().copied().unwrap_or(0.0);
+                [v, -v]
+            })
+            .collect();
+        let s: Vec<f32> = [
+            silence(1.0),
+            antiphase,
+            silence(1.0),
+            left_only,
+            silence(1.0),
+        ]
+        .concat();
+        let env = envelope(&s);
+        let m = detect_markers(&env, &settings());
+        assert!(m.cue_in <= 1.0 && m.cue_out >= 6.0, "{m:?}");
+        assert_nothing_audible_is_trimmed(&env, &m, &settings());
+    }
+
+    #[test]
+    fn the_margin_moves_cue_in_back_and_cue_out_forward() {
+        let s: Vec<f32> = [silence(1.0), tone_db(3.0, -6.0), silence(1.0)].concat();
+        let env = envelope(&s);
+        let tight = AnalysisSettings {
+            trim_margin_ms: 0,
+            ..settings()
+        };
+        let wide = AnalysisSettings {
+            trim_margin_ms: 200,
+            ..settings()
+        };
+        let a = detect_markers(&env, &tight);
+        let b = detect_markers(&env, &wide);
+        assert!((a.cue_in - b.cue_in - 0.2).abs() < 1e-6, "{a:?} {b:?}");
+        assert!((b.cue_out - a.cue_out - 0.2).abs() < 1e-6, "{a:?} {b:?}");
+        // Clamped to the file.
+        let huge = AnalysisSettings {
+            trim_margin_ms: 1000,
+            ..settings()
+        };
+        let c = detect_markers(&envelope(&tone_db(3.0, -6.0)), &huge);
+        assert_eq!((c.cue_in, c.cue_out), (0.0, 3.0));
+    }
+
+    /// `secs` of tone whose level falls linearly in dB by `drop` from `db`.
+    fn fade_db(secs: f64, db: f32, drop: f32) -> Vec<f32> {
+        tone(secs, 1.0, |t| {
+            10f32.powf((db - drop * t as f32 / secs as f32) / 20.0)
+        })
+    }
+
+    fn overlap(m: &AutoMarkers) -> f64 {
+        m.cue_out - m.segue_start.unwrap_or(m.cue_out)
+    }
+
+    #[test]
+    fn the_same_fade_gives_the_same_overlap_on_loud_and_quiet_masters() {
+        let loud: Vec<f32> = [tone_db(70.0, -5.0), fade_db(6.0, -5.0, 40.0)].concat();
+        let quiet: Vec<f32> = [tone_db(70.0, -17.0), fade_db(6.0, -17.0, 40.0)].concat();
+        let a = detect_markers(&envelope(&loud), &settings());
+        let b = detect_markers(&envelope(&quiet), &settings());
+        assert!((overlap(&a) - overlap(&b)).abs() < 0.1, "{a:?} {b:?}");
+        assert!(overlap(&a) > 0.5, "{a:?}");
+    }
+
+    #[test]
+    fn the_overlap_never_exceeds_segue_max() {
+        let s: Vec<f32> = [tone_db(70.0, -6.0), fade_db(20.0, -6.0, 60.0)].concat();
+        let m = detect_markers(&envelope(&s), &settings());
+        assert!(overlap(&m) <= settings().segue_max_secs + 1e-9, "{m:?}");
+        assert_eq!(settings().segue_max_secs, 4.0);
+    }
+
+    #[test]
+    fn a_track_that_ends_at_full_level_has_a_tiny_overlap() {
+        let m = detect_markers(&envelope(&tone_db(90.0, -6.0)), &settings());
+        assert!(overlap(&m) <= 0.1, "{m:?}");
+    }
+
     #[test]
     fn silence_at_both_ends_is_trimmed() {
         let s: Vec<f32> = [silence(1.0), tone(60.0, 0.5, |_| 1.0), silence(2.0)].concat();
@@ -268,16 +428,17 @@ mod tests {
     }
 
     #[test]
-    fn segue_starts_where_the_tail_drops_below_the_threshold() {
+    fn segue_starts_where_the_tail_drops_below_the_body_by_segue_drop() {
         let s: Vec<f32> = [
             tone(60.0, 0.5, |_| 1.0),
             tone(6.0, 0.5, |t| (1.0 - t / 6.0) as f32),
         ]
         .concat();
         let m = detect_markers(&envelope(&s), &settings());
-        // 0.5·(1 − t/6)/√2 crosses −18 dBFS at t ≈ 3.86 s into the fade.
+        // The body is at 0.5/√2 RMS; 15 dB below it, (1 − t/6) = 10^(−15/20)
+        // at t ≈ 4.93 s into the fade.
         let segue = m.segue_start.unwrap();
-        assert!((segue - 63.86).abs() < 0.12, "segue {segue}");
+        assert!((segue - 64.93).abs() < 0.12, "segue {segue}");
         assert!(segue <= m.cue_out);
     }
 
@@ -305,13 +466,14 @@ mod tests {
     }
 
     #[test]
-    fn a_very_quiet_file_gets_no_segue_and_no_empty_outro() {
-        // ≈ −25 dBFS RMS throughout: audible, but never reaches the −18 dB segue level.
+    fn a_steady_quiet_file_gets_no_overlap_and_no_empty_outro() {
+        // ≈ −25 dBFS RMS throughout: the level never falls, so the next
+        // track starts at the very end.
         let m = detect_markers(&envelope(&tone(120.0, 0.08, |_| 1.0)), &settings());
         assert!(m.cue_out > 119.9);
-        assert_eq!(
-            m.segue_start, None,
-            "a soft piece must not be talked over by the next track"
+        assert!(
+            overlap(&m) <= 0.05,
+            "a soft piece must not be talked over by the next track: {m:?}"
         );
         assert_eq!(
             m.outro_start, None,

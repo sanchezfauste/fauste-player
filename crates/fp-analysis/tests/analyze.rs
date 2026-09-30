@@ -115,7 +115,7 @@ fn changing_the_settings_invalidates_the_cache() {
     let c = cache(dir.path());
     c.store(&path, &settings(), &a).unwrap();
     let changed = AnalysisSettings {
-        segue_threshold_db: -24.0,
+        segue_drop_db: 12.0,
         ..settings()
     };
     assert!(c.load(&path, &changed).is_none());
