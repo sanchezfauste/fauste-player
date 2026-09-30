@@ -384,6 +384,9 @@ fn a_shortcut_key_does_not_also_press_the_focused_button() {
         },
     )
     .unwrap();
+    // Pause is only available while the player plays (R28).
+    let playing = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(playing)).unwrap();
     let p = s.players[0].id;
     let (mut h, fake) = harness(s);
     h.get_by_label("Stop").focus();
@@ -423,6 +426,9 @@ fn a_shortcut_on_tab_does_not_move_the_focus() {
         },
     )
     .unwrap();
+    // Pause is only available while the player plays (R28).
+    let playing = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(playing)).unwrap();
     let (mut h, fake) = harness(s);
     h.get_by_label("Stop").focus();
     h.run_steps(1);
@@ -525,4 +531,48 @@ fn an_hour_long_countdown_fits_between_the_grid_and_the_meter() {
 fn quiet_meter(mut state: fp_model::AppState) -> fp_model::AppState {
     state.config.meter.loudness = fp_model::LoudnessReadout::Off;
     state
+}
+
+/// `state` with `action` bound to `key`.
+fn bound(
+    mut s: fp_model::AppState,
+    action: fp_model::ShortcutAction,
+    key: &str,
+) -> fp_model::AppState {
+    fp_model::apply(
+        &mut s,
+        Command::SetShortcut {
+            action,
+            chord: Some(fp_model::KeyChord::key(key)),
+        },
+    )
+    .unwrap();
+    s
+}
+
+#[test]
+fn a_restart_shortcut_restarts_a_playing_player() {
+    let mut s = bound(state(1, 3), fp_model::ShortcutAction::RestartPlayer(1), "R");
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    let (mut h, fake) = harness(s);
+    h.key_press(Key::R);
+    h.run_steps(2);
+    assert_eq!(sent(&fake), vec![Command::Restart(p)]);
+}
+
+#[test]
+fn shortcuts_for_unavailable_actions_do_nothing() {
+    let s = bound(state(1, 3), fp_model::ShortcutAction::RestartPlayer(1), "R");
+    let s = bound(s, fp_model::ShortcutAction::PreviousPlayer(1), "P");
+    let s = bound(s, fp_model::ShortcutAction::StopPlayer(1), "S");
+    let (mut h, fake) = harness(s);
+    for key in [Key::R, Key::P, Key::S] {
+        h.key_press(key);
+        h.run_steps(2);
+    }
+    assert!(
+        sent(&fake).is_empty(),
+        "a stopped player cannot restart, go back or stop"
+    );
 }

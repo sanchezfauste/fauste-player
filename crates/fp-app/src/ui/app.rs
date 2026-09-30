@@ -534,7 +534,10 @@ impl AppUi {
             ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
         }
         for action in fired {
-            if let Some(command) = shortcut_command(state, action) {
+            // An action that makes no sense now (R28) is ignored.
+            if let Some(command) = shortcut_command(state, action)
+                && fp_model::command_available(state, &command)
+            {
                 self.ctl.send(command);
             }
         }
@@ -693,6 +696,8 @@ fn shortcut_command(state: &AppState, action: ShortcutAction) -> Option<Command>
         ShortcutAction::StopPlayer(n) => Command::Stop(player(n)?),
         ShortcutAction::FadeStopPlayer(n) => Command::FadeStop(player(n)?),
         ShortcutAction::CuePlayer(n) => Command::ToggleCue(player(n)?),
+        ShortcutAction::RestartPlayer(n) => Command::Restart(player(n)?),
+        ShortcutAction::PreviousPlayer(n) => Command::Previous(player(n)?),
         ShortcutAction::FireCart(n) => {
             let cart = wall
                 .shown_page()?

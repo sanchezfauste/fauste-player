@@ -148,3 +148,20 @@ fn position_zero_is_not_a_valid_target() {
     config.validate();
     assert_eq!(config.shortcuts.len(), 1);
 }
+
+#[test]
+fn restart_and_previous_have_no_default_key() {
+    let d = default_shortcuts();
+    for action in [
+        ShortcutAction::RestartPlayer(1),
+        ShortcutAction::PreviousPlayer(1),
+    ] {
+        assert_eq!(chord_of(&d, action), None, "{action:?}");
+        assert_eq!(action.position(), Some(1));
+        let json = serde_json::to_string(&action).unwrap();
+        assert_eq!(
+            serde_json::from_str::<ShortcutAction>(&json).unwrap(),
+            action
+        );
+    }
+}
