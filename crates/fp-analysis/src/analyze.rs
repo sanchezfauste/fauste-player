@@ -110,6 +110,7 @@ pub fn analyze_file_cancellable(
                 bits: decoder.bits_per_sample(),
                 channels: u32::try_from(decoder.channels()).unwrap_or(0),
             }),
+            version: crate::cache::ANALYSIS_VERSION,
         },
         peak_bucket_secs: envelope.bucket_secs,
         peaks: envelope.peaks,

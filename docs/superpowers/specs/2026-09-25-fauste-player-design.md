@@ -104,7 +104,7 @@ In priority order:
 
 | Group (in `config.json`) | Audience | Examples | Where edited |
 |---|---|---|---|
-| `players`, `analysis`, `outputs`, `ui` | operator | player count, `fade_ms`, auto-segue, segue/silence thresholds, routes, wave colour | Settings UI |
+| `players`, `analysis`, `outputs`, `ui` | operator | player count, `fade_ms`, auto-segue, trim threshold and margin, segue drop, routes, wave colour | Settings UI |
 | `limits` | resource guards | `max_players` (16), `max_cover_bytes`, `max_state_file_bytes`, `backup_count` | config file only |
 | `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `reconnect_interval_ms`, `gain_smoothing_ms`, `save_debounce_ms` | config file only (an "advanced" section) |
 
@@ -359,9 +359,9 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
 - **Peaks:** full decode, mono sum; per bucket (`analysis.peak_bucket_ms`, default 10 ms) the minimum, the maximum and the RMS level, stored as `i16` (full scale = `i16::MAX`).
 - **Loudness envelope:** RMS over `analysis.rms_window_ms` windows (default 50 ms; in-memory only during analysis).
 - **Automatic markers** (seconds, `f64`). Every threshold below is a field of `AnalysisSettings` (in `config.json`, editable in Settings), not a constant:
-  - `cue_in`: first window with RMS ≥ `silence_threshold_db` (default −40 dBFS), or 0.
-  - `cue_out`: end of the last window with RMS ≥ `silence_threshold_db`, or the duration.
-  - `segue_start`: scanning backwards from `cue_out`, the end of the first window whose RMS ≥ `segue_threshold_db` (default −18 dBFS). It is clamped to `[cue_out − segue_max_secs, cue_out]` (default `segue_max_secs` = 8) and to `≥ cue_in`. Tracks shorter than `markers_min_duration_secs` (default 60 s, as in the design) get no segue start.
+  - `cue_in`: the start of the first `peak_bucket_ms` bucket whose **stereo peak** (the largest absolute sample of either channel) is ≥ `trim_threshold_db` (default −60 dBFS), moved back by `trim_margin_ms` (default 20 ms, clamped at 0); 0 when nothing reaches it. Trimming never removes audio: no bucket at or above the threshold lies outside `[cue_in, cue_out]` (feedback spec §4.2).
+  - `cue_out`: the end of the last such bucket plus `trim_margin_ms` (clamped at the duration), or the duration.
+  - `segue_start`: the end of the last RMS window of the body (the windows between `cue_in` and `cue_out`) at or above the body's median RMS − `segue_drop_db` (default 15 dB), clamped to `[cue_out − segue_max_secs, cue_out]` (default `segue_max_secs` = 4) and to `≥ cue_in`. Relative to the track, so loud and quiet masters with the same fade get the same overlap. Tracks shorter than `markers_min_duration_secs` (default 60 s, as in the design) get no segue start.
   - `outro_start`: scanning backwards from `cue_out`, the end of the first window whose RMS ≥ (median track RMS − `outro_drop_db`, default 6 dB), clamped to `≥ cue_out − outro_max_secs` (default 30 s). Tracks shorter than `markers_min_duration_secs` get no outro.
   - `intro_end`: **never automatic.** It is manual only (Phase 2 marker editing, plus the Phase 2 tag convention `INTRO=<seconds>` as TXXX/Vorbis comment). If unset, no intro is shown.
 - **Marker provenance:** every marker is `Auto` or `Manual`. Manual markers are never overwritten by re-analysis.
@@ -456,7 +456,7 @@ A modal window, closed with `Esc` or "Close", with these sections:
   - per player, Main and Cue device and channel pair;
   - "Test Main" / "Test Cue" buttons that play a test tone (defaults: 1 kHz / 440 Hz, 1.5 s, −18 dBFS) through the real engine route.
 - **Players:** player count, default mode, `fade_ms`, auto-segue on/off, `end_warning_secs` (`history_len` is set in `config.json`).
-- **Analysis:** every `AnalysisSettings` field (silence threshold, segue threshold and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action. Manual markers are kept.
+- **Analysis:** every `AnalysisSettings` field (trim threshold and margin, segue drop and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action. Manual markers are kept.
 - **Playlists:** music folder, and create/rename/delete playlists. The last playlist cannot be deleted, nor a playlist containing a current entry.
 
 The Cartwall and Shortcuts sections, plus M3U import/export and the language selector, come in Phase 2. In Phase 1 the language follows the OS locale.

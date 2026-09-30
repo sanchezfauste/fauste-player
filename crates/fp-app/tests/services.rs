@@ -230,7 +230,7 @@ fn changing_analysis_settings_during_analysis_analyses_again() {
         r.analyses.load(Ordering::SeqCst) == 1
     });
     let mut config = r.handle.model.load().config.clone();
-    config.analysis.silence_threshold_db = -50.0;
+    config.analysis.trim_threshold_db = -50.0;
     r.handle.send(Command::UpdateConfig(Box::new(config)));
     r.run_until("analysis", |r| {
         r.handle.model.load().library.iter().all(|t| t.analyzed)
@@ -342,6 +342,35 @@ fn tracks_analysed_before_formats_existed_are_analysed_again() {
             .library
             .iter()
             .all(|t| t.format.is_some())
+    });
+}
+
+#[test]
+fn tracks_analysed_by_an_older_analysis_version_are_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (0..4)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    // A library analysed before the current markers rules: formats known,
+    // version 0 (saved before versions were recorded).
+    let mut r = rig_with(&files, dir, Duration::ZERO, |state| {
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.duration_secs = 1.0;
+            track.format = Some(fp_model::AudioFormat {
+                sample_rate: 44_100,
+                bits: Some(16),
+                channels: 2,
+            });
+        }
+    });
+    r.run_until("every track at the current version", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.analysis_version == fp_analysis::cache::ANALYSIS_VERSION)
     });
 }
 

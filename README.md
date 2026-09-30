@@ -41,7 +41,8 @@ audio engine that the interface can never block.
   loudness, and a maximum readout.
 - **Sample-accurate mixing:** in continuous mode the next track starts
   exactly at the MIX point and overlaps the fading end of the current one.
-  The MIX level and the maximum overlap are configurable.
+  How far below the track's own level the MIX point sits, and the maximum
+  overlap, are configurable.
 - **Automatic markers:** background analysis finds cue-in, cue-out, the MIX
   point and the outro. It also reads tags and cover art, and draws the
   waveform. Markers set by hand are never overwritten.

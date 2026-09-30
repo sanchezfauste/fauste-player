@@ -4,8 +4,8 @@ Every track has up to five **markers**, in seconds:
 
 | Marker | Meaning | How it is set |
 |---|---|---|
-| Cue in | Where playback starts | Automatic: the first sound above the silence threshold |
-| Cue out | Where the track ends | Automatic: the end of the last sound above the silence threshold |
+| Cue in | Where playback starts | Automatic: just before the first sound above the trim threshold |
+| Cue out | Where the track ends | Automatic: just after the last sound above the trim threshold |
 | MIX (segue start) | Where the next track starts in continuous mode | Automatic (see below) |
 | Outro start | Where the ending of the track begins | Automatic (see below) |
 | Intro end | End of the spoken-over introduction | By hand, or from an `INTRO` tag in the file |
@@ -37,15 +37,18 @@ manual intro end still wins.
 
 ## How the automatic markers are found
 
-The analysis measures the loudness of the track in short windows (50 ms by
-default).
+The analysis measures the track's peaks in 10 ms steps and its loudness in
+short windows (50 ms by default).
 
-- **Cue in / cue out:** silence at the start and end is skipped. Silence
-  means below the *silence threshold* (−40 dBFS by default).
-- **MIX:** the analysis scans backwards from cue-out and finds the last point
-  where the track is still louder than the *mix level* (−18 dBFS by default).
-  That point is never more than the *maximum mix length* (8 s by default)
-  before cue-out.
+- **Cue in / cue out:** only near-silence at the start and end is skipped:
+  anything whose peak reaches the *trim threshold* (−60 dBFS by default), on
+  either channel, is kept, with a *trim margin* (20 ms by default) around it.
+  Soft fade-ins, quiet tails and short sounds are never cut.
+- **MIX:** the analysis finds the last point where the track is still less
+  than the *segue drop* (15 dB by default) below its own typical loudness, so
+  loud and quiet masters with the same fade mix the same way. That point is
+  never more than the *maximum mix length* (4 s by default) before cue-out,
+  so overlaps stay short.
 - **Outro:** the analysis scans backwards from cue-out and finds where the
   level drops more than the *outro level drop* (6 dB by default) below the
   track's median loudness. The outro is never longer than 30 s by default.

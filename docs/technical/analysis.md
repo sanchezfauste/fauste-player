@@ -35,13 +35,16 @@ keeps what was decoded.
 
 ## Markers (`signal.rs`)
 
-An RMS envelope over `analysis.rms_window_ms` windows gives:
+The envelope holds an RMS level per `analysis.rms_window_ms` window and,
+per `peak_bucket_ms` bucket, the mono waveform peaks and the **stereo peak**
+(`peak_db`: the largest absolute sample of either channel, so one-sided or
+antiphase audio is not missed). They give:
 
 | Marker | Rule |
 |---|---|
-| `cue_in` | start of the first window ≥ `silence_threshold_db`, else 0 |
-| `cue_out` | end of the last window ≥ `silence_threshold_db`, else the duration |
-| `segue_start` | scanning back from `cue_out`: the end of the first window ≥ `segue_threshold_db`, clamped to `[cue_out − segue_max_secs, cue_out)` and `≥ cue_in`; none if no window reaches the threshold |
+| `cue_in` | start of the first bucket with `peak_db` ≥ `trim_threshold_db`, minus `trim_margin_ms` (≥ 0); else 0 |
+| `cue_out` | end of the last such bucket, plus `trim_margin_ms` (≤ the duration); else the duration |
+| `segue_start` | the end of the last body window (RMS windows overlapping `[cue_in, cue_out]`) ≥ median body RMS − `segue_drop_db`, clamped to `[cue_out − segue_max_secs, cue_out]` and `≥ cue_in` |
 | `outro_start` | scanning back from `cue_out`: the end of the first window ≥ median RMS − `outro_drop_db`, clamped to `≥ cue_out − outro_max_secs`, and `< cue_out` |
 
 Tracks shorter than `markers_min_duration_secs` get neither `segue_start`

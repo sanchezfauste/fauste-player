@@ -5,7 +5,7 @@
 | File | Document | Content |
 |---|---|---|
 | `config/config.json` | `ConfigDoc` | `schema_version`, `config` |
-| `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers), `playlists` (entries with `played_by`: the players that played each one), `ids`. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
+| `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers and the `analysis_version` of their automatic ones; an older version is analysed again), `playlists` (entries with `played_by`: the players that played each one), `ids`. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
 | `data/carts.json` | `CartsDoc` | `schema_version`, `pages[]` (id, name, rows, cols, `carts[]` with id, name, track, kind, looped, exclusive); cart files are tracks of the `playlists.json` library |
 | `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns, history: the entries the player left, oldest first — loaded leniently: an unparsable history is empty), `cartwall` (open, page shown) |
 
@@ -127,15 +127,20 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 
 | Field | Default | Range |
 |---|---|---|
-| `silence_threshold_db` | −40 | −96 … −10 |
-| `segue_threshold_db` | −18 | −60 … 0 |
-| `segue_max_secs` | 8 | 0 … 60 |
+| `trim_threshold_db` | −60 | −120 … −20 |
+| `trim_margin_ms` | 20 | 0 … 1000 |
+| `segue_drop_db` | 15 | 3 … 40 |
+| `segue_max_secs` | 4 | 0 … 60 |
 | `outro_drop_db` | 6 | 0 … 40 |
 | `outro_max_secs` | 30 | 0 … 300 |
 | `markers_min_duration_secs` | 60 | 0 … 3600 |
 | `peak_bucket_ms` | 10 | 1 … 1000 |
 | `rms_window_ms` | 50 | 5 … 1000 |
 | `cover_thumb_px` | 128 | 16 … 1024 |
+
+The fields `silence_threshold_db` and `segue_threshold_db` of earlier
+versions are ignored on load with a warning (their meaning changed), like
+any field this version does not have.
 
 ### `outputs` (Settings → Audio outputs; applied at the next start)
 

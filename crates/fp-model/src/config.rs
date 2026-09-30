@@ -179,8 +179,13 @@ impl Default for PlayersConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AnalysisSettings {
-    pub silence_threshold_db: f64,
-    pub segue_threshold_db: f64,
+    /// Buckets whose peak reaches this level (dBFS) are never trimmed.
+    pub trim_threshold_db: f64,
+    /// Kept around the first and last audible buckets.
+    pub trim_margin_ms: u32,
+    /// The segue starts where the level has fallen this far (dB) below the
+    /// median RMS of the track's body.
+    pub segue_drop_db: f64,
     pub segue_max_secs: f64,
     pub outro_drop_db: f64,
     pub outro_max_secs: f64,
@@ -193,9 +198,10 @@ pub struct AnalysisSettings {
 impl Default for AnalysisSettings {
     fn default() -> Self {
         Self {
-            silence_threshold_db: -40.0,
-            segue_threshold_db: -18.0,
-            segue_max_secs: 8.0,
+            trim_threshold_db: -60.0,
+            trim_margin_ms: 20,
+            segue_drop_db: 15.0,
+            segue_max_secs: 4.0,
             outro_drop_db: 6.0,
             outro_max_secs: 30.0,
             markers_min_duration_secs: 60.0,
@@ -475,17 +481,24 @@ impl Config {
 
         let a = &mut self.analysis;
         clamp_to(
-            &mut a.silence_threshold_db,
-            -96.0,
-            -10.0,
-            "analysis.silence_threshold_db",
+            &mut a.trim_threshold_db,
+            -120.0,
+            -20.0,
+            "analysis.trim_threshold_db",
             &mut w,
         );
         clamp_to(
-            &mut a.segue_threshold_db,
-            -60.0,
-            0.0,
-            "analysis.segue_threshold_db",
+            &mut a.trim_margin_ms,
+            0,
+            1000,
+            "analysis.trim_margin_ms",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.segue_drop_db,
+            3.0,
+            40.0,
+            "analysis.segue_drop_db",
             &mut w,
         );
         clamp_to(
@@ -740,6 +753,23 @@ mod tests {
     }
 
     #[test]
+    fn trim_and_segue_settings_have_their_defaults_and_ranges() {
+        let a = AnalysisSettings::default();
+        assert_eq!(a.trim_threshold_db, -60.0);
+        assert_eq!(a.trim_margin_ms, 20);
+        assert_eq!(a.segue_drop_db, 15.0);
+        assert_eq!(a.segue_max_secs, 4.0);
+        let mut c = Config::default();
+        c.analysis.trim_threshold_db = -500.0;
+        c.analysis.trim_margin_ms = 50_000;
+        c.analysis.segue_drop_db = 99.0;
+        c.validate();
+        assert_eq!(c.analysis.trim_threshold_db, -120.0);
+        assert_eq!(c.analysis.trim_margin_ms, 1000);
+        assert_eq!(c.analysis.segue_drop_db, 40.0);
+    }
+
+    #[test]
     fn the_default_waveform_colour_is_slate_and_a_stored_one_is_kept() {
         assert_eq!(Config::default().ui.wave_color, "slate");
         let c: Config = serde_json::from_str(r#"{"ui":{"wave_color":"sand"}}"#).unwrap();
@@ -754,8 +784,8 @@ mod tests {
         assert!(c.validate().is_empty());
         assert_eq!(c.players.count, 4);
         assert_eq!(c.players.fade_ms, 1000);
-        assert_eq!(c.analysis.segue_threshold_db, -18.0);
-        assert_eq!(c.analysis.segue_max_secs, 8.0);
+        assert_eq!(c.analysis.segue_drop_db, 15.0);
+        assert_eq!(c.analysis.segue_max_secs, 4.0);
         assert_eq!(c.limits.max_players, 16);
     }
 
@@ -771,15 +801,15 @@ mod tests {
     fn nan_and_out_of_range_values_are_clamped() {
         let mut c = Config::default();
         c.players.count = 0;
-        c.analysis.segue_threshold_db = f64::NAN;
+        c.analysis.segue_drop_db = f64::NAN;
         c.tuning.prebuffer_secs = 1e9;
         let warnings = c.validate();
         assert_eq!(c.players.count, 1);
-        assert_eq!(c.analysis.segue_threshold_db, -60.0);
+        assert_eq!(c.analysis.segue_drop_db, 3.0);
         assert_eq!(c.tuning.prebuffer_secs, 60.0);
         let fields: Vec<_> = warnings.iter().map(|w| w.field).collect();
         assert!(fields.contains(&"players.count"));
-        assert!(fields.contains(&"analysis.segue_threshold_db"));
+        assert!(fields.contains(&"analysis.segue_drop_db"));
         assert!(fields.contains(&"tuning.prebuffer_secs"));
         assert!(warnings[0].to_string().contains("using"));
     }

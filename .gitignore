@@ -4,3 +4,7 @@
 
 # Local git worktrees
 .worktrees/
+
+# Local real-music corpus for opt-in tests (see test-music/README.md)
+/test-music/*
+!/test-music/README.md
