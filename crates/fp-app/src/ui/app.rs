@@ -70,6 +70,9 @@ pub(crate) struct ViewState {
     pub about_open: bool,
     /// Where each player's waveform menu was opened, in seconds.
     pub wave_menu: HashMap<PlayerId, f64>,
+    /// The table width and column fractions each player's table was last
+    /// laid out with (a change resets egui's column widths).
+    pub table_layout: HashMap<PlayerId, (f32, Option<[f32; 4]>)>,
     /// Zoomed waveforms; a player without one shows the whole track.
     pub wave_zoom: HashMap<PlayerId, super::wave_view::WaveZoom>,
     /// A marker being dragged on a waveform, and the track it belongs to.

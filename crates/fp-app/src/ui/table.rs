@@ -15,6 +15,8 @@ use super::widgets::{self, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
 const ROW_HEIGHT: f32 = 28.0;
+/// The Duration column is never narrower than this ("00:00:00" fits).
+const DURATION_MIN: f32 = 52.0;
 
 fn header_label(ui: &mut Ui, text: &str) {
     ui.add_space(8.0);
@@ -45,10 +47,22 @@ pub(crate) fn track_table(
     let t = scene.i18n;
     let digits = format::number_width(list.entries.len());
     let columns = p.columns;
-    let number_w = columns.number.unwrap_or(digits as f32 * 8.0 + 26.0);
-    let title_w = columns
-        .title
-        .unwrap_or(((ui.available_width() - number_w - columns.duration) * 0.55).max(80.0));
+    // Proportional columns (feedback spec F6): pixel widths from the stored
+    // fractions every frame; egui's table keeps the widths it was given, so
+    // it is reset when the table's width or the fractions change (never
+    // while a handle is being dragged).
+    let width = ui.available_width();
+    let number_min = digits as f32 * 8.0 + 26.0;
+    let px = view::column_px(columns.fractions, width, number_min, DURATION_MIN);
+    let layout = (width, columns.fractions);
+    let changed = view_state
+        .table_layout
+        .get(&player)
+        .is_none_or(|(w, f)| (w - width).abs() > 0.5 || *f != columns.fractions);
+    let reset = changed && !view_state.resizing.contains(&player);
+    if reset {
+        view_state.table_layout.insert(player, layout);
+    }
     let area = ui.max_rect();
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     let mut built = 0;
@@ -62,18 +76,21 @@ pub(crate) fn track_table(
     let selected = view_state.selection.get(&player).copied();
     let mut clicked: Option<EntryId> = None;
     let mut dragged: Option<EntryId> = None;
-    TableBuilder::new(ui)
-        .id_salt(("tracks", player.0))
+    let builder = TableBuilder::new(ui).id_salt(("tracks", player.0));
+    if reset {
+        builder.reset();
+    }
+    builder
         .striped(false)
         .resizable(true)
         .vscroll(true)
         .auto_shrink([false, false])
         .sense(Sense::click_and_drag())
         .cell_layout(Layout::left_to_right(Align::Center))
-        .column(Column::initial(number_w).at_least(24.0).clip(true))
-        .column(Column::initial(title_w).at_least(60.0).clip(true))
+        .column(Column::initial(px[0]).at_least(24.0).clip(true))
+        .column(Column::initial(px[1]).at_least(60.0).clip(true))
         .column(Column::remainder().at_least(60.0).clip(true))
-        .column(Column::initial(columns.duration).at_least(40.0).clip(true))
+        .column(Column::initial(px[3]).at_least(40.0).clip(true))
         .header(HEADER_HEIGHT, |mut header| {
             header.col(|ui| header_label(ui, &t.tr("col-number")));
             header.col(|ui| header_label(ui, &t.tr("col-title")));
@@ -393,12 +410,10 @@ fn store_widths(
     }
     let pointer_down = ui.input(|i| i.pointer.primary_down());
     if !pointer_down && view_state.resizing.remove(&player) {
-        let [number, title, _, duration] = widths;
         let new = ColumnWidths {
-            number: Some(number),
-            title: Some(title),
-            duration,
-        };
+            fractions: Some(widths),
+        }
+        .normalized();
         if new != stored {
             scene.ctl.send(Command::SetColumnWidths(player, new));
         }

@@ -287,9 +287,7 @@ fn column_widths_are_stored_per_player() {
     let mut state = fixture(1);
     let p = p0(&state);
     let widths = ColumnWidths {
-        number: Some(40.0),
-        title: Some(200.0),
-        duration: 60.0,
+        fractions: Some([0.1, 0.5, 0.3, 0.1]),
     };
     apply(&mut state, Command::SetColumnWidths(p, widths)).unwrap();
     assert_eq!(state.player(p).unwrap().columns, widths);

@@ -213,3 +213,25 @@ fn a_broken_history_loads_as_empty() {
         assert!(s.history.is_empty());
     }
 }
+
+#[test]
+fn column_fractions_are_normalised_and_old_pixel_widths_ignored() {
+    use fp_model::ColumnWidths;
+    let c = ColumnWidths {
+        fractions: Some([1.0, 3.0, 2.0, 2.0]),
+    }
+    .normalized();
+    let f = c.fractions.unwrap();
+    assert!((f.iter().sum::<f32>() - 1.0).abs() < 1e-6);
+    assert!((f[1] - 0.375).abs() < 1e-6);
+    for broken in [[f32::NAN, 1.0, 1.0, 1.0], [-1.0, 1.0, 1.0, 1.0], [0.0; 4]] {
+        let c = ColumnWidths {
+            fractions: Some(broken),
+        };
+        assert_eq!(c.normalized().fractions, None, "{broken:?}");
+    }
+    let old: ColumnWidths =
+        serde_json::from_str(r#"{"number":40.0,"title":300.0,"duration":52.0}"#).unwrap();
+    assert_eq!(old, ColumnWidths::default());
+    assert_eq!(ColumnWidths::default().fractions, None);
+}
