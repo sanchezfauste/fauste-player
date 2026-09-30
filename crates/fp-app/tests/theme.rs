@@ -97,3 +97,10 @@ fn stop_after_is_a_play_triangle_then_a_stop_square() {
         assert!(rect.contains_rect(r), "{r:?}");
     }
 }
+
+#[test]
+fn meter_colours_are_the_muted_traffic_light() {
+    assert_eq!(theme::METER_NORMAL, Color32::from_rgb(0x7f, 0xb0, 0x8a));
+    assert_eq!(theme::METER_WARNING, Color32::from_rgb(0xd9, 0xb4, 0x5a));
+    assert_eq!(theme::METER_DANGER, Color32::from_rgb(0xd8, 0x64, 0x6a));
+}

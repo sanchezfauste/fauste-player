@@ -421,16 +421,16 @@ pub fn loudness_line(r: &MeterReading, c: &MeterConfig) -> Option<(String, bool)
 
 fn zone_colour(zone: Zone) -> Color32 {
     match zone {
-        Zone::Normal => theme::VU_GREEN,
-        Zone::Warning => theme::VU_YELLOW,
-        Zone::Danger => theme::VU_RED,
+        Zone::Normal => theme::METER_NORMAL,
+        Zone::Warning => theme::METER_WARNING,
+        Zone::Danger => theme::METER_DANGER,
     }
 }
 
 /// Accessible names of the meter's parts.
 pub struct MeterLabels {
-    /// The loudness line, when it is on.
-    pub loudness: String,
+    /// The meter's accessible name (the loudness line when it is on).
+    pub meter: String,
     /// The maximum readout.
     pub max: String,
     /// Tooltip of the maximum readout.
@@ -440,17 +440,29 @@ pub struct MeterLabels {
 /// Height of the maximum readout above the bars.
 const MAX_LINE_HEIGHT: f32 = 11.0;
 
-/// Stereo level meter (meters spec M4): a continuous bar per channel on
-/// the scale of the chosen meter's standard, its marks between the
-/// channels, the peak hold, the maximum readout above and the loudness line
-/// below when it is on. K-System meters show the average (RMS) as the
-/// solid body and the peak dimmed above it. Returns true when the operator
-/// clicked the maximum to restart it.
-pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLabels) -> bool {
-    let (rect, response) = ui.allocate_exact_size(vec2(30.0, 64.0), Sense::hover());
-    let max_rect = Rect::from_min_size(rect.min, vec2(rect.width(), MAX_LINE_HEIGHT));
+/// Stereo level meter (meters spec M4, feedback spec §3.2): the scale's
+/// labels on the left, a continuous bar per channel on the scale of the
+/// chosen meter's standard, reference lines across both bars, the peak
+/// hold, the maximum readout above and the loudness line below when it is
+/// on. K-System meters show the average (RMS) as the solid body and the
+/// peak dimmed above it. Returns true when the operator clicked the maximum
+/// to restart it.
+pub fn vu(
+    ui: &mut Ui,
+    height: f32,
+    reading: &MeterReading,
+    c: &MeterConfig,
+    labels: &MeterLabels,
+) -> bool {
+    let (rect, response) = ui.allocate_exact_size(vec2(METER_WIDTH, height), Sense::hover());
+    let meter_label = labels.meter.clone();
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Label, true, meter_label.clone())
+    });
+    let line = loudness_line(reading, c);
+    let l = meter_layout(rect, c, line.is_some());
     let max_response = ui
-        .interact(max_rect, response.id.with("max"), Sense::click())
+        .interact(l.max, response.id.with("max"), Sense::click())
         .on_hover_text(&labels.max_tip);
     let max_label = labels.max.clone();
     max_response.widget_info(|| {
@@ -460,26 +472,21 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
     if !ui.is_rect_visible(rect) {
         return clicked;
     }
-    let line = loudness_line(reading, c);
-    let bars_top = rect.top() + MAX_LINE_HEIGHT;
-    let bars_bottom = if line.is_some() {
-        rect.bottom() - 12.0
-    } else {
-        rect.bottom()
-    };
-    let height = (bars_bottom - bars_top).max(1.0);
     let painter = ui.painter();
     painter.text(
-        pos2(rect.center().x, rect.top()),
+        l.max.center_top(),
         Align2::CENTER_TOP,
         max_readout(reading.max_db),
         FontId::monospace(9.0),
         if zone_of(reading.max_db, c) == Zone::Danger {
-            theme::VU_RED
+            theme::METER_DANGER
         } else {
             theme::NEUTRAL_400
         },
     );
+    let [first, _] = l.bars;
+    let (bars_top, bars_bottom) = (first.top(), first.bottom());
+    let height = (bars_bottom - bars_top).max(1.0);
     let y_of = |db: f32| bars_bottom - meter_position(db, c) * height;
     // Where each zone starts on screen, bottom up.
     let zones = [
@@ -489,14 +496,14 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
     ];
     // Paints a bar from `bottom` up to `top` (screen y) in the colours of
     // the zones it crosses.
-    let column = |x: f32, top: f32, bottom: f32, alpha: f32| {
+    let column = |x: egui::Rangef, top: f32, bottom: f32, alpha: f32| {
         for (i, &(zone_bottom, zone)) in zones.iter().enumerate() {
             let zone_top = zones.get(i + 1).map_or(bars_top, |z| z.0);
             let low = zone_bottom.min(bottom);
             let high = zone_top.max(top);
             if low > high {
                 painter.rect_filled(
-                    Rect::from_x_y_ranges(x..=x + 14.0, high..=low),
+                    Rect::from_x_y_ranges(x, high..=low),
                     0.0,
                     zone_colour(zone).gamma_multiply(alpha),
                 );
@@ -504,13 +511,9 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
         }
     };
     let k_system = c.ballistics.k_reference_dbfs().is_some();
-    for ch in 0..2 {
-        let x = rect.left() + ch as f32 * 16.0;
-        painter.rect_filled(
-            Rect::from_x_y_ranges(x..=x + 14.0, bars_top..=bars_bottom),
-            0.0,
-            theme::NEUTRAL_800.gamma_multiply(0.55),
-        );
+    for (ch, bar) in l.bars.iter().enumerate() {
+        let x = bar.x_range();
+        painter.rect_filled(*bar, 0.0, theme::NEUTRAL_800.gamma_multiply(0.55));
         let level = y_of(reading.level_db.get(ch).copied().unwrap_or(-120.0));
         if k_system {
             let rms = y_of(reading.rms_db.get(ch).copied().unwrap_or(-120.0)).max(level);
@@ -523,83 +526,195 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
         let hold_y = y_of(hold);
         if c.peak_hold_secs > 0.0 && hold_y < bars_bottom && hold_y <= level {
             painter.rect_filled(
-                Rect::from_x_y_ranges(x..=x + 14.0, hold_y..=(hold_y + 2.0).min(bars_bottom)),
+                Rect::from_x_y_ranges(x, hold_y..=(hold_y + 2.0).min(bars_bottom)),
                 0.0,
                 zone_colour(zone_of(hold, c)),
             );
         }
     }
-    // The scale's marks in the gap between the channels, the alignment
-    // level (K-System 0) brighter.
-    for (y, width) in mark_rows(c, bars_top, bars_bottom) {
-        let colour = if width >= ALIGNMENT_MARK_WIDTH {
-            theme::NEUTRAL_300
+    // The scale: a reference line across both bars for every label (the
+    // alignment level heavier), nothing between the channels.
+    for m in &l.lines {
+        let (width, colour) = if m.alignment {
+            (ALIGNMENT_LINE_WIDTH, theme::NEUTRAL_300)
         } else {
-            theme::NEUTRAL_400.gamma_multiply(0.6)
+            (1.0, theme::NEUTRAL_400.gamma_multiply(REFERENCE_LINE_ALPHA))
         };
         painter.rect_filled(
-            Rect::from_x_y_ranges(
-                rect.left() + 14.0..=rect.left() + 16.0,
-                y - width / 2.0..=y + width / 2.0,
-            ),
+            Rect::from_x_y_ranges(l.lines_x, m.y - width / 2.0..=m.y + width / 2.0),
             0.0,
             colour,
         );
-    }
-    if let Some((text, on_target)) = line {
         painter.text(
-            pos2(rect.center().x, rect.bottom()),
+            pos2(l.labels_right, m.label_y),
+            Align2::RIGHT_CENTER,
+            &m.label,
+            FontId::monospace(LABEL_FONT_SIZE),
+            theme::NEUTRAL_400,
+        );
+    }
+    if let (Some((text, on_target)), Some(r)) = (line, l.loudness) {
+        painter.text(
+            r.center_bottom(),
             Align2::CENTER_BOTTOM,
             &text,
             FontId::monospace(9.0),
             if on_target {
-                theme::VU_GREEN
+                theme::METER_NORMAL
             } else {
                 theme::NEUTRAL_400
             },
         );
-        let label = labels.loudness.clone();
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, label.clone())
-        });
     }
     clicked
 }
 
-/// Thickness of the alignment mark; the scale's other marks are 1 px.
-const ALIGNMENT_MARK_WIDTH: f32 = 2.0;
+/// Opacity of the reference lines over the bars (feedback spec §3.2).
+const REFERENCE_LINE_ALPHA: f32 = 0.35;
+/// Size of the scale's labels.
+const LABEL_FONT_SIZE: f32 = 8.0;
 
-/// The closest two scale marks may be drawn, in pixels.
-pub const MIN_MARK_GAP: f32 = 3.0;
+/// Width of the meter: the label column, then two bars with a gap.
+const LABEL_COLUMN: f32 = 18.0;
+const LABEL_GAP: f32 = 2.0;
+const BAR_WIDTH: f32 = 14.0;
+const BAR_GAP: f32 = 2.0;
+pub const METER_WIDTH: f32 = LABEL_COLUMN + LABEL_GAP + 2.0 * BAR_WIDTH + BAR_GAP;
+/// Height of the loudness line under the bars.
+const LOUDNESS_LINE_HEIGHT: f32 = 12.0;
+/// The closest two labels may be, centre to centre (monospace 9 px).
+const LABEL_ROW: f32 = 10.0;
+/// Two levels closer than this (dB) are the same mark.
+const SAME_MARK_DB: f32 = 0.05;
+/// Thickness of the alignment line; the other lines are 1 px.
+const ALIGNMENT_LINE_WIDTH: f32 = 2.0;
 
-/// Where the meter draws its marks between `top` and `bottom` (screen y):
-/// the centre and thickness of each, the alignment mark last.
-pub fn mark_rows(c: &MeterConfig, top: f32, bottom: f32) -> Vec<(f32, f32)> {
-    let height = (bottom - top).max(1.0);
+/// One labelled mark of the meter's scale (see [`meter_layout`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeterLine {
+    pub y: f32,
+    pub label_y: f32,
+    /// Empty for an alignment level the scale does not name.
+    pub label: String,
+    pub alignment: bool,
+}
+
+/// Where the meter draws each of its parts (feedback spec §3.2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeterLayout {
+    pub labels_right: f32,
+    pub bars: [Rect; 2],
+    pub max: Rect,
+    pub loudness: Option<Rect>,
+    pub lines_x: egui::Rangef,
+    pub lines: Vec<MeterLine>,
+}
+
+/// The label of the scale mark at `db` dBFS, in the chosen meter's own
+/// units: EBU relative to TEST (shown as `TEST`), DIN to its 0, VU to 0 VU,
+/// K-System to its 0, the digital meter in dBFS.
+pub fn mark_label(db: f32, c: &MeterConfig) -> String {
+    let zero = match c.ballistics {
+        MeterBallistics::EbuPpm => c.reference_dbfs,
+        MeterBallistics::DinPpm => c.reference_dbfs + PERMITTED_MAXIMUM_DB,
+        MeterBallistics::Vu => c.reference_dbfs,
+        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => alignment_dbfs(c),
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => 0.0,
+    };
+    let value = (db - zero).round() as i32;
+    if c.ballistics == MeterBallistics::EbuPpm && value == 0 {
+        "TEST".to_owned()
+    } else if value > 0 {
+        format!("+{value}")
+    } else {
+        value.to_string()
+    }
+}
+
+/// Lays the meter out in `rect`: the maximum readout on top, the loudness
+/// line at the bottom when `loudness`, the labels on the left and the two
+/// bars. Labels are kept top down while they have room; the alignment mark
+/// always keeps its line and label.
+pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout {
+    let bars_left = rect.left() + LABEL_COLUMN + LABEL_GAP;
+    let top = rect.top() + MAX_LINE_HEIGHT;
+    let bottom = if loudness {
+        rect.bottom() - LOUDNESS_LINE_HEIGHT
+    } else {
+        rect.bottom()
+    }
+    .max(top + 1.0);
+    let bar = |i: f32| {
+        let x = bars_left + i * (BAR_WIDTH + BAR_GAP);
+        Rect::from_x_y_ranges(x..=x + BAR_WIDTH, top..=bottom)
+    };
+    let bars = [bar(0.0), bar(1.0)];
+    let bars_right = bars_left + 2.0 * BAR_WIDTH + BAR_GAP;
+    let height = bottom - top;
     let y_of = |db: f32| bottom - meter_position(db, c) * height;
-    // Inside the bars, even at the very top or bottom of the scale.
-    let place = |db: f32, width: f32| {
+    // The label is centred on its line but kept inside the bars' span.
+    let label_y = |y: f32| {
+        let half = LABEL_ROW / 2.0;
+        y.clamp(top + half, (bottom - half).max(top + half))
+    };
+    let line = |db: f32, alignment: bool| {
+        let width = if alignment { ALIGNMENT_LINE_WIDTH } else { 1.0 };
         let y = y_of(db).clamp(
             top + width / 2.0,
             (bottom - width / 2.0).max(top + width / 2.0),
         );
-        (y, width)
+        MeterLine {
+            y,
+            label_y: label_y(y),
+            label: mark_label(db, c),
+            alignment,
+        }
     };
-    let alignment = place(alignment_dbfs(c), ALIGNMENT_MARK_WIDTH);
-    // Top down, so where the scale is dense the upper marks are kept.
-    let mut rows: Vec<(f32, f32)> = Vec::new();
-    for mark in scale_marks(c).into_iter().rev() {
-        let row = place(mark, 1.0);
-        let crowded = rows
+    let marks = scale_marks(c);
+    let mut alignment = line(alignment_dbfs(c), true);
+    // The alignment level is labelled only where the scale names it (EBU
+    // TEST, K 0, 0 VU); elsewhere (the digital meter's −18) the heavier
+    // line alone marks it, and the round labels stay.
+    if !marks
+        .iter()
+        .any(|m| (m - alignment_dbfs(c)).abs() < SAME_MARK_DB)
+    {
+        alignment.label.clear();
+    }
+    let mut lines: Vec<MeterLine> = Vec::new();
+    // Both ends of the scale first, so its range is always labelled; then
+    // top down, so where the scale is dense the upper marks are kept.
+    let ends = [marks.last().copied(), marks.first().copied()];
+    let middle = marks
+        .iter()
+        .rev()
+        .skip(1)
+        .take(marks.len().saturating_sub(2));
+    for mark in ends.into_iter().flatten().chain(middle.copied()) {
+        if (mark - alignment_dbfs(c)).abs() < SAME_MARK_DB {
+            continue;
+        }
+        let candidate = line(mark, false);
+        let crowded = lines
             .iter()
             .chain(std::iter::once(&alignment))
-            .any(|kept| (kept.0 - row.0).abs() < MIN_MARK_GAP);
+            .filter(|kept| !kept.label.is_empty())
+            .any(|kept| (kept.label_y - candidate.label_y).abs() < LABEL_ROW);
         if !crowded {
-            rows.push(row);
+            lines.push(candidate);
         }
     }
-    rows.push(alignment);
-    rows
+    lines.push(alignment);
+    lines.sort_by(|a, b| a.label_y.total_cmp(&b.label_y));
+    MeterLayout {
+        labels_right: rect.left() + LABEL_COLUMN,
+        bars,
+        max: Rect::from_x_y_ranges(bars_left..=bars_right, rect.top()..=top),
+        loudness: loudness
+            .then(|| Rect::from_x_y_ranges(bars_left..=bars_right, bottom..=rect.bottom())),
+        lines_x: egui::Rangef::new(bars_left, bars_right),
+        lines,
+    }
 }
 
 /// The alignment level the meter marks, in dBFS: the K-System's 0, or
@@ -636,13 +751,17 @@ fn zone_start(zone: Zone, c: &MeterConfig) -> f32 {
     }
 }
 
+/// Width of the volume fader.
+pub const FADER_WIDTH: f32 = 22.0;
+
 /// Fader travel moved by one mouse-wheel event (3 dB near the top).
 const FADER_WHEEL_STEP: f32 = 0.05;
 
 /// Vertical volume fader (drag or wheel). Returns the new fader position
 /// (0 bottom … 1 top) when the user moved it.
-pub fn fader(ui: &mut Ui, position: f32, label: &str) -> Option<f32> {
-    let (rect, response) = ui.allocate_exact_size(vec2(22.0, 64.0), Sense::click_and_drag());
+pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str) -> Option<f32> {
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(FADER_WIDTH, height), Sense::click_and_drag());
     let owned = label.to_owned();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Slider, true, owned.clone()));
     let mut changed = None;

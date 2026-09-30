@@ -177,7 +177,7 @@ A player has:
     - it shows elapsed cue time in blue;
     - it never affects the Main output.
 16. **Keyboard.** Keys `1`–`9` press Play on players 1–9 (shortcuts become remappable in Phase 2). `Delete`/`Backspace` removes the selected entry, subject to rule 13. `Esc` closes menus and dialogs.
-17. **Countdown** shows `-remaining` to `cue_out`, with tenths, and `elapsed / total` next to it. During the last `end_warning_secs` (default 10) the countdown turns red.
+17. **Countdown** shows `-remaining` to `cue_out`, with tenths, and `elapsed / total` on the row under the transport. During the last `end_warning_secs` (default 10) the countdown turns red.
 18. **Intro indicator.**
     - Shown only if the track has a manual `intro_end`.
     - While `position < intro_end`, a blue "INTRO nn.n" badge counts down, and it blinks during the last 3 s.
@@ -415,11 +415,13 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
 
 - **Player column**, one per configured player (min width 380 px; any number of players is laid out in a horizontally scrollable row):
   - **Header:** `P1`…`Pn`, state dot and label ("On air", "Stopped", "Paused"), fade and stop-after badges, BP badge (inactive until Phase 4), SINGLE|CONT segmented control (one border, the active mode filled), CUE button.
-  - **Info row:** 64 px cover (placeholder vinyl icon if none), stereo VU (20 segments green/yellow/red with peak hold), vertical volume fader (drag + wheel, dB tooltip), title, artist, and the next line with the green square (plus cue time in blue when cueing).
+  - **Info row:** 64 px cover (placeholder vinyl icon if none), title, artist, and the next line with the green square (plus cue time in blue when cueing).
+  - **Meter column** at the right, spanning the info row and the transport: labelled dB scale, stereo meter with reference lines and peak hold (meters spec M4), vertical volume fader (drag + wheel, dB tooltip).
   - **Transport:**
     - Play/NEXT button spanning 2 rows;
     - Stop, Fade stop, Pause and Stop-after-current in a 2×2 grid, with 6 px gaps, all equal size;
-    - big countdown with tenths, `elapsed / total`.
+    - big countdown with tenths;
+    - `elapsed / total` on a row under the transport, right-aligned.
   - **Waveform:**
     - played/unplayed colours, intro/outro shading, dashed amber MIX marker, playhead;
     - drawn continuously, one column per pixel, as audio editors draw it: the peak envelope in the colour dimmed, and the RMS level of the same span as a solid body inside it. On a loud master the peaks fill the height but the body still shows the track's dynamics. Both are linear in amplitude and symmetric about the centre line; a column's peak is the largest of its buckets, its RMS the root of their mean square;

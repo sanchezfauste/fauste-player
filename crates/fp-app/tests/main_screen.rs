@@ -460,3 +460,69 @@ fn single_and_cont_are_one_joined_control() {
         vec![Command::SetMode(fake.player(0), fp_model::PlayMode::Single)]
     );
 }
+
+#[test]
+fn the_meter_and_fader_form_a_column_right_of_the_transport() {
+    let (h, _) = harness(quiet_meter(state(1, 3)));
+    let play = h.get_by_label("Play").rect();
+    let meter = h.get_by_label("Level meter").rect();
+    let fader = h
+        .query_all_by_label_contains("Volume")
+        .next()
+        .unwrap()
+        .rect();
+    let wave = h.get_by_label("Waveform: click to seek").rect();
+    let countdown = h.get_by_label("-00:00.0").rect();
+    // The column spans the info row and the transport row.
+    assert!(meter.top() < play.top() - 40.0, "{meter:?} {play:?}");
+    assert!(
+        (meter.bottom() - play.bottom()).abs() <= 1.0,
+        "{meter:?} {play:?}"
+    );
+    assert!(meter.left() > countdown.right(), "{meter:?} {countdown:?}");
+    assert!(fader.left() >= meter.right());
+    assert!((fader.bottom() - meter.bottom()).abs() <= 1.0);
+    // The waveform keeps the player's full width.
+    assert!(wave.right() >= fader.right() - 1.0, "{wave:?} {fader:?}");
+    // Elapsed / total sits under the block, right-aligned.
+    let time = h.get_by_label("00:00 / 00:00").rect();
+    assert!(time.top() >= play.bottom());
+    assert!(time.bottom() <= wave.top());
+    assert!(
+        (time.right() - fader.right()).abs() <= 1.0,
+        "{time:?} {fader:?}"
+    );
+}
+
+#[test]
+fn at_the_minimum_player_width_the_countdown_still_fits() {
+    let (h, _) =
+        support::harness_sized(quiet_meter(state(1, 3)), egui::vec2(380.0, 700.0), |ui| ui);
+    let countdown = h.get_by_label("-00:00.0").rect();
+    let meter = h.get_by_label("Level meter").rect();
+    let grid = h.get_by_label("Stop after the current track").rect();
+    assert!(countdown.right() <= meter.left(), "{countdown:?} {meter:?}");
+    assert!(countdown.left() >= grid.right(), "{countdown:?} {grid:?}");
+}
+
+#[test]
+fn an_hour_long_countdown_fits_between_the_grid_and_the_meter() {
+    let mut state = quiet_meter(state(1, 3));
+    for track in state.library.iter_mut() {
+        track.duration_secs = 3700.0;
+    }
+    let p = state.players[0].id;
+    fp_model::apply(&mut state, Command::Play(p)).unwrap();
+    let (h, _) = support::harness_sized(state, egui::vec2(380.0, 700.0), |ui| ui);
+    let countdown = h.get_by_label_contains("-1:01:40").rect();
+    let meter = h.get_by_label("Level meter").rect();
+    let grid = h.get_by_label("Stop after the current track").rect();
+    assert!(countdown.right() <= meter.left(), "{countdown:?} {meter:?}");
+    assert!(countdown.left() >= grid.right(), "{countdown:?} {grid:?}");
+}
+
+/// The state with the loudness line off, so the meter is named "Level meter".
+fn quiet_meter(mut state: fp_model::AppState) -> fp_model::AppState {
+    state.config.meter.loudness = fp_model::LoudnessReadout::Off;
+    state
+}

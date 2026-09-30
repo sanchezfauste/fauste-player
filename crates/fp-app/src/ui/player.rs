@@ -68,8 +68,8 @@ pub(crate) fn column(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, id, index, &pv);
-            info_row(ui, scene, covers, id, &pv, &telemetry);
-            transport(ui, scene, id, &pv);
+            top_block(ui, scene, covers, id, &pv, &telemetry);
+            time_row(ui, &pv);
             wave(ui, scene, view_state, id, &pv);
         });
     tabs(ui, scene, view_state, id, player.playlist);
@@ -294,6 +294,103 @@ fn cover(
     }
 }
 
+/// Width of the meter and fader column, and its gap to the left part.
+const METER_COLUMN_WIDTH: f32 = widgets::METER_WIDTH + 6.0 + widgets::FADER_WIDTH;
+const METER_COLUMN_GAP: f32 = 10.0;
+/// Vertical gap between the info row and the transport.
+const ROW_GAP: f32 = 8.0;
+/// The countdown shrinks to fit down to this share of its size (38 → 24 px).
+const COUNTDOWN_MIN_SCALE: f32 = 24.0 / 38.0;
+
+/// The info row and the transport on the left, the meter and fader column
+/// on the right spanning both (feedback spec §3.2).
+fn top_block(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    covers: &mut HashMap<TrackId, TextureHandle>,
+    id: PlayerId,
+    pv: &PlayerView,
+    telemetry: &fp_engine::engine::PlayerTelemetry,
+) {
+    let height = PLAY_SIZE * 2.0 + ROW_GAP;
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
+    let split = (rect.right() - METER_COLUMN_WIDTH).max(rect.left());
+    let left = Rect::from_min_max(
+        rect.min,
+        pos2((split - METER_COLUMN_GAP).max(rect.left()), rect.bottom()),
+    );
+    let right = Rect::from_min_max(pos2(split, rect.top()), rect.max);
+    let mut left_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(left)
+            .layout(Layout::top_down(Align::Min)),
+    );
+    left_ui.spacing_mut().item_spacing = vec2(6.0, ROW_GAP);
+    info_row(&mut left_ui, scene, covers, id, pv, telemetry);
+    transport(&mut left_ui, scene, id, pv);
+    let mut right_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(right)
+            .layout(Layout::left_to_right(Align::Min)),
+    );
+    meter_column(&mut right_ui, scene, id, telemetry, height);
+}
+
+/// The level meter and the volume fader, `height` tall.
+fn meter_column(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    id: PlayerId,
+    telemetry: &fp_engine::engine::PlayerTelemetry,
+    height: f32,
+) {
+    let t = scene.i18n;
+    ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+    let meter = &scene.state.config.meter;
+    let name = widgets::loudness_line(&telemetry.meter, meter)
+        .map(|(value, _)| t.tr_args("meter-loudness", &[("value", value.into())]))
+        .unwrap_or_else(|| t.tr("meter-label"));
+    let labels = widgets::MeterLabels {
+        meter: name,
+        max: t.tr_args(
+            "meter-max",
+            &[("value", widgets::max_readout(telemetry.meter.max_db).into())],
+        ),
+        max_tip: t.tr("tip-meter-max"),
+    };
+    if widgets::vu(ui, height, &telemetry.meter, meter, &labels) {
+        scene.ctl.reset_meter_max(id);
+    }
+    let volume = scene.state.player(id).map_or(1.0, |p| p.volume);
+    let db = match view::volume_db(volume) {
+        Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),
+        None => t.tr("volume-silent"),
+    };
+    let tip = t.tr_args("tip-volume", &[("db", db.into())]);
+    if let Some(pos) = widgets::fader(ui, height, view::fader_from_gain(volume), &tip) {
+        scene
+            .ctl
+            .send(Command::SetVolume(id, view::gain_from_fader(pos)));
+    }
+}
+
+/// `elapsed / total` under the transport, right-aligned (mockup C).
+fn time_row(ui: &mut Ui, pv: &PlayerView) {
+    ui.add_space(-4.0);
+    ui.allocate_ui_with_layout(
+        vec2(ui.available_width(), 14.0),
+        Layout::right_to_left(Align::Center),
+        |ui| {
+            let text = format!(
+                "{} / {}",
+                format::clock(pv.elapsed),
+                format::clock(pv.total.unwrap_or(0.0))
+            );
+            widgets::tabular_label(ui, &text, &font(12.0), theme::NEUTRAL_400);
+        },
+    );
+}
+
 fn info_row(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -316,32 +413,6 @@ fn info_row(
         |ui| {
             ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
             cover(ui, scene, covers, current_track);
-            let meter = &scene.state.config.meter;
-            let loudness = widgets::loudness_line(&telemetry.meter, meter)
-                .map(|(value, _)| t.tr_args("meter-loudness", &[("value", value.into())]))
-                .unwrap_or_default();
-            let labels = widgets::MeterLabels {
-                loudness,
-                max: t.tr_args(
-                    "meter-max",
-                    &[("value", widgets::max_readout(telemetry.meter.max_db).into())],
-                ),
-                max_tip: t.tr("tip-meter-max"),
-            };
-            if widgets::vu(ui, &telemetry.meter, meter, &labels) {
-                scene.ctl.reset_meter_max(id);
-            }
-            let volume = scene.state.player(id).map_or(1.0, |p| p.volume);
-            let db = match view::volume_db(volume) {
-                Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),
-                None => t.tr("volume-silent"),
-            };
-            let tip = t.tr_args("tip-volume", &[("db", db.into())]);
-            if let Some(pos) = widgets::fader(ui, view::fader_from_gain(volume), &tip) {
-                scene
-                    .ctl
-                    .send(Command::SetVolume(id, view::gain_from_fader(pos)));
-            }
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = vec2(6.0, 2.0);
                 let title = pv.title.clone().unwrap_or_else(|| t.tr("no-track"));
@@ -578,46 +649,20 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             });
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
-                let total = pv.total.unwrap_or(0.0);
-                let total_text = format!("/ {}", format::clock(total));
-                let elapsed_text = format::clock(pv.elapsed);
-                let small = font(12.0);
-                let w = widgets::tabular_size(ui.painter(), &total_text, &small)
-                    .x
-                    .max(widgets::tabular_size(ui.painter(), &elapsed_text, &small).x)
-                    .max(40.0)
-                    + 10.0;
-                let h = 36.0;
-                let (rect, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
-                let p = ui.painter();
-                p.rect_filled(
-                    Rect::from_min_size(rect.left_top(), vec2(1.0, h)),
-                    0.0,
-                    theme::NEUTRAL_800,
-                );
-                widgets::paint_tabular(
-                    p,
-                    pos2(rect.left() + 9.0, rect.top() + 2.0),
-                    &elapsed_text,
-                    &small,
-                    theme::NEUTRAL_300,
-                );
-                let bottom = widgets::tabular_size(p, &total_text, &small).y;
-                widgets::paint_tabular(
-                    p,
-                    pos2(rect.left() + 9.0, rect.bottom() - 2.0 - bottom),
-                    &total_text,
-                    &small,
-                    theme::NEUTRAL_500,
-                );
                 let (main, tenths) = format::countdown(pv.remaining);
                 let colour = if pv.end_warning && (pv.remaining * 2.0).floor() as i64 % 2 == 1 {
                     theme::ON_AIR_TEXT
                 } else {
                     theme::TEXT
                 };
-                let big = font_medium(38.0);
-                let tenths_font = font_medium(17.0);
+                // Full size when it fits; smaller in a narrow player or for an
+                // hour-long time, so it never runs into the buttons.
+                let natural = widgets::tabular_size(ui.painter(), &main, &font_medium(38.0)).x
+                    + widgets::tabular_size(ui.painter(), &tenths, &font_medium(17.0)).x;
+                let scale =
+                    (ui.available_width() / natural.max(1.0)).clamp(COUNTDOWN_MIN_SCALE, 1.0);
+                let big = font_medium(38.0 * scale);
+                let tenths_font = font_medium(17.0 * scale);
                 let main_size = widgets::tabular_size(ui.painter(), &main, &big);
                 let tenths_size = widgets::tabular_size(ui.painter(), &tenths, &tenths_font);
                 let (rect, response) = ui.allocate_exact_size(
@@ -634,7 +679,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                     ui.painter(),
                     pos2(
                         rect.left() + main_size.x,
-                        rect.bottom() - tenths_size.y - 4.0,
+                        rect.bottom() - tenths_size.y - 4.0 * scale,
                     ),
                     &tenths,
                     &tenths_font,

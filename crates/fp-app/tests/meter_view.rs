@@ -11,8 +11,8 @@ mod support;
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::widgets::{
-    MIN_MARK_GAP, Zone, alignment_dbfs, loudness_line, mark_rows, max_readout, meter_position,
-    scale_marks, zone_of,
+    METER_WIDTH, Zone, alignment_dbfs, loudness_line, mark_label, max_readout, meter_layout,
+    meter_position, scale_marks, zone_of,
 };
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::PlayerTelemetry;
@@ -198,43 +198,141 @@ fn the_maximum_reads_with_one_decimal() {
     assert_eq!(max_readout(f32::NAN), "—", "never a NaN on screen");
 }
 
-/// The meter's bars at its size in the player column.
-const BARS: (f32, f32) = (11.0, 64.0);
+/// Label rows are this far apart at least (monospace 9 px text).
+const LABEL_ROW: f32 = 10.0;
+
+fn column(height: f32) -> egui::Rect {
+    egui::Rect::from_min_size(egui::pos2(100.0, 20.0), egui::vec2(METER_WIDTH, height))
+}
 
 #[test]
-fn marks_stay_inside_the_bars() {
-    for ballistics in [
-        MeterBallistics::DigitalPeak,
-        MeterBallistics::EbuPpm,
-        MeterBallistics::DinPpm,
-        MeterBallistics::Vu,
-        MeterBallistics::K12,
-    ] {
-        for (y, width) in mark_rows(&meter(ballistics), BARS.0, BARS.1) {
-            assert!(
-                y - width / 2.0 >= BARS.0 && y + width / 2.0 <= BARS.1,
-                "{ballistics:?}: {y} ± {width}"
-            );
+fn labels_never_overlap_and_the_alignment_line_stays() {
+    for ballistics in ALL_METERS {
+        for height in [64.0, 136.0] {
+            for loudness in [false, true] {
+                let c = meter(ballistics);
+                let l = meter_layout(column(height), &c, loudness);
+                let ys: Vec<f32> = l
+                    .lines
+                    .iter()
+                    .filter(|m| !m.label.is_empty())
+                    .map(|m| m.label_y)
+                    .collect();
+                for pair in ys.windows(2) {
+                    assert!(
+                        pair[1] - pair[0] >= LABEL_ROW,
+                        "{ballistics:?} {height} {loudness}: {ys:?}"
+                    );
+                }
+                assert_eq!(
+                    l.lines.iter().filter(|m| m.alignment).count(),
+                    1,
+                    "{ballistics:?} {height}"
+                );
+            }
         }
     }
 }
 
 #[test]
-fn marks_too_close_to_read_are_left_out() {
-    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::K20] {
-        let rows = mark_rows(&meter(ballistics), BARS.0, BARS.1);
-        let plain: Vec<f32> = rows.iter().filter(|r| r.1 < 2.0).map(|r| r.0).collect();
-        for pair in plain.windows(2) {
+fn lines_cross_both_bars_and_nothing_sits_between_them() {
+    let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
+    let [left, right] = l.bars;
+    assert!(left.right() < right.left(), "a gap between the channels");
+    assert!(l.lines_x.min <= left.left() && l.lines_x.max >= right.right());
+    assert!(l.labels_right <= left.left());
+    for m in &l.lines {
+        assert!(m.y >= left.top() && m.y <= left.bottom(), "{}", m.y);
+    }
+}
+
+#[test]
+fn labels_stay_between_the_readouts() {
+    for loudness in [false, true] {
+        let l = meter_layout(
+            column(136.0),
+            &meter(MeterBallistics::DigitalPeak),
+            loudness,
+        );
+        let bars = l.bars[0];
+        for m in &l.lines {
             assert!(
-                (pair[0] - pair[1]).abs() >= MIN_MARK_GAP,
-                "{ballistics:?}: {plain:?}"
+                m.label_y - LABEL_ROW / 2.0 >= bars.top() - 0.01,
+                "{}",
+                m.label
+            );
+            assert!(
+                m.label_y + LABEL_ROW / 2.0 <= bars.bottom() + 0.01,
+                "{}",
+                m.label
             );
         }
-        assert!(rows.iter().any(|r| r.1 == 2.0), "the alignment mark stays");
+        assert!(l.max.bottom() <= bars.top());
+        if let Some(r) = l.loudness {
+            assert!(r.top() >= bars.bottom());
+        }
+        assert_eq!(l.loudness.is_some(), loudness);
     }
-    // A tall meter shows every mark of the scale.
+}
+
+#[test]
+fn both_ends_of_every_scale_are_labelled() {
+    for ballistics in ALL_METERS {
+        for loudness in [false, true] {
+            let c = meter(ballistics);
+            let marks = scale_marks(&c);
+            let l = meter_layout(column(136.0), &c, loudness);
+            let labels: Vec<&str> = l.lines.iter().map(|m| m.label.as_str()).collect();
+            for end in [marks.first().unwrap(), marks.last().unwrap()] {
+                let want = mark_label(*end, &c);
+                assert!(
+                    labels.contains(&want.as_str()),
+                    "{ballistics:?}: {want} in {labels:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_tall_digital_meter_labels_its_main_marks() {
+    let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
+    let labels: Vec<&str> = l.lines.iter().map(|m| m.label.as_str()).collect();
+    for want in ["0", "-10", "-20", "-30", "-40", "-60"] {
+        assert!(labels.contains(&want), "{labels:?}");
+    }
+    // A very tall meter labels every mark.
     let c = meter(MeterBallistics::DigitalPeak);
-    assert_eq!(mark_rows(&c, 0.0, 400.0).len(), scale_marks(&c).len() + 1);
+    let tall = meter_layout(column(600.0), &c, false);
+    assert_eq!(tall.lines.len(), scale_marks(&c).len() + 1);
+    // The digital meter's alignment (−18 dBFS) is a heavier, unlabelled
+    // line; the scale's round labels stay.
+    let alignment = l.lines.iter().find(|m| m.alignment).unwrap();
+    assert!(alignment.label.is_empty());
+}
+
+#[test]
+fn each_meter_labels_its_own_units() {
+    let ebu = meter(MeterBallistics::EbuPpm);
+    assert_eq!(mark_label(ebu.reference_dbfs + 8.0, &ebu), "+8");
+    assert_eq!(mark_label(ebu.reference_dbfs, &ebu), "TEST");
+    let din = meter(MeterBallistics::DinPpm);
+    assert_eq!(mark_label(din.reference_dbfs + 9.0, &din), "0");
+    assert_eq!(mark_label(din.reference_dbfs + 9.0 - 50.0, &din), "-50");
+    let vu = meter(MeterBallistics::Vu);
+    assert_eq!(mark_label(vu.reference_dbfs - 20.0, &vu), "-20");
+    assert_eq!(mark_label(vu.reference_dbfs + 3.0, &vu), "+3");
+    let k = meter(MeterBallistics::K14);
+    assert_eq!(mark_label(-14.0, &k), "0");
+    let layout = meter_layout(column(136.0), &k, false);
+    let alignment = layout.lines.iter().find(|m| m.alignment).unwrap();
+    assert_eq!(alignment.label, "0", "K-System names its alignment level");
+    assert_eq!(layout.lines.iter().filter(|m| m.label == "0").count(), 1);
+    assert_eq!(mark_label(-10.0, &k), "+4");
+    assert_eq!(mark_label(0.0, &k), "+14");
+    let d = meter(MeterBallistics::DigitalPeak);
+    assert_eq!(mark_label(-18.0, &d), "-18");
+    assert_eq!(mark_label(0.0, &d), "0");
 }
 
 #[test]
@@ -387,5 +485,50 @@ fn programme_meters_turn_red_where_their_scale_does() {
         assert_eq!(zone_of(-9.5, &c), Zone::Normal, "{ppm:?}");
         assert_eq!(zone_of(-9.0, &c), Zone::Danger, "{ppm:?}");
         assert!(meter_position(-9.0, &c) < 1.0, "{ppm:?}: on the scale");
+    }
+}
+
+#[test]
+fn the_meter_and_fader_fill_the_height_they_are_given() {
+    let mut h = egui_kittest::Harness::new_ui(|ui| {
+        ui.horizontal(|ui| {
+            let labels = fp_app::ui::widgets::MeterLabels {
+                meter: "Level meter".to_owned(),
+                max: "Maximum".to_owned(),
+                max_tip: String::new(),
+            };
+            fp_app::ui::widgets::vu(
+                ui,
+                120.0,
+                &MeterReading::default(),
+                &MeterConfig::default(),
+                &labels,
+            );
+            fp_app::ui::widgets::fader(ui, 120.0, 0.5, "Volume");
+        });
+    });
+    h.run();
+    let meter = h.get_by_label("Level meter").rect();
+    let fader = h.get_by_label("Volume").rect();
+    assert_eq!(meter.height(), 120.0);
+    assert_eq!(meter.width(), METER_WIDTH);
+    assert_eq!(fader.height(), 120.0);
+    assert!(fader.left() >= meter.right());
+}
+
+#[test]
+fn a_meter_too_short_to_draw_lays_out_without_panicking() {
+    for ballistics in ALL_METERS {
+        for height in [0.0, 1.0, 5.0, 12.0, 24.0] {
+            for loudness in [false, true] {
+                let l = meter_layout(column(height), &meter(ballistics), loudness);
+                for m in &l.lines {
+                    assert!(
+                        m.y.is_finite() && m.label_y.is_finite(),
+                        "{ballistics:?} {height}"
+                    );
+                }
+            }
+        }
     }
 }

@@ -18,11 +18,14 @@ playlist tabs, transport, volume and outputs.
 ## Info row
 
 - **Cover** of the track on air, or a vinyl placeholder.
-- **Stereo meter:** the level the player puts out, after its volume.
+- **Stereo meter** (in the column at the right of the player, next to the
+  fader; it spans the info row and the transport): the level the player
+  puts out, after its volume.
   - One continuous bar per channel, on the scale of the meter type's
     standard (the digital peak meter by default: −60 to 0 dBFS, with the
-    top 20 dB taking half the height). The scale's marks sit between the
-    channels; the brighter one is the alignment level (−18 dBFS).
+    top 20 dB taking half the height). The scale is labelled on the left,
+    with a faint line across both bars for each label; the brighter, heavier
+    line is the alignment level (−18 dBFS).
   - The bar is green, yellow from the warning level (−9 dBFS), and red
     from the danger level (−3 dBFS). The other meter types turn red where
     their scale does (from 0 VU, from the permitted maximum on a PPM).
@@ -38,7 +41,7 @@ playlist tabs, transport, volume and outputs.
     ±1 LU of the target (−23 LUFS).
   - The meter type and every level can be changed in
     [Settings → Meters](settings.md#meters).
-- **Volume fader:** drag it or use the mouse wheel, one step per notch. The
+- **Volume fader** (right of the meter, as tall as it): drag it or use the mouse wheel, one step per notch. The
   tooltip shows the level in dB; the top is 0 dB and the bottom is silence.
 - **Title, artist** and the **next** line, with a green square. While CUE is
   on, the pre-listen position shows in blue.
@@ -64,7 +67,8 @@ playlist tabs, transport, volume and outputs.
 ## Countdown
 
 The large number is the time left until the end of the track (its cue-out),
-with tenths. Next to it are the elapsed time and the total. During the last
+with tenths. The elapsed time and the total are on the row under the
+transport, on the right. During the last
 seconds before the end (10 by default, set in Settings) the countdown blinks
 red.
 
