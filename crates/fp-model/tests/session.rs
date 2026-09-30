@@ -59,6 +59,7 @@ fn dangling_session_references_are_dropped() {
         position_secs: f64::NAN,
         volume: 7.0,
         columns: Default::default(),
+        history: Vec::new(),
     };
     let (restored, actions) = AppState::restore(parts(&state), &[session], "Main");
     let player = &restored.players[0];
@@ -103,6 +104,7 @@ fn restoring_with_no_playlists_creates_a_default_one_and_moves_ids_forward() {
         position_secs: 0.0,
         volume: 0.5,
         columns: Default::default(),
+        history: Vec::new(),
     };
     let (mut restored, _) = AppState::restore(parts, &[duplicate.clone(), duplicate], "Main");
     assert_eq!(restored.playlists.len(), 1);
@@ -181,4 +183,33 @@ fn orphan_library_tracks_are_dropped_on_restore() {
     let (restored, _) = AppState::restore(parts(&state), &[], "Main");
     assert!(restored.library.get(fp_model::TrackId(777)).is_none());
     assert_eq!(restored.library.iter().count(), 1);
+}
+
+#[test]
+fn the_history_survives_a_session_round_trip_and_drops_gone_entries() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    for _ in 0..3 {
+        apply(&mut state, Command::Play(p)).unwrap();
+        fp_model::on_event(
+            &mut state,
+            fp_model::EngineEvent::FadeCompleted { player: p },
+        );
+    }
+    assert_eq!(state.player(p).unwrap().history, vec![e[0], e[1]]);
+    let sessions = state.sessions(|_| 0.0);
+    apply(&mut state, Command::RemoveEntry(e[1])).unwrap();
+    let (restored, _) = AppState::restore(parts(&state), &sessions, "Main");
+    assert_eq!(restored.player(p).unwrap().history, vec![e[0]]);
+}
+
+#[test]
+fn a_broken_history_loads_as_empty() {
+    let good = serde_json::to_value(fixture(1).sessions(|_| 0.0).remove(0)).unwrap();
+    for broken in [serde_json::json!("oops"), serde_json::json!([3, "x", 4])] {
+        let mut doc = good.clone();
+        doc["history"] = broken;
+        let s: PlayerSession = serde_json::from_value(doc).unwrap();
+        assert!(s.history.is_empty());
+    }
 }

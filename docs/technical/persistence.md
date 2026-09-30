@@ -7,7 +7,7 @@
 | `config/config.json` | `ConfigDoc` | `schema_version`, `config` |
 | `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers), `playlists` (entries with `played_by`: the players that played each one), `ids`. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
 | `data/carts.json` | `CartsDoc` | `schema_version`, `pages[]` (id, name, rows, cols, `carts[]` with id, name, track, kind, looped, exclusive); cart files are tracks of the `playlists.json` library |
-| `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns), `cartwall` (open, page shown) |
+| `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns, history: the entries the player left, oldest first — loaded leniently: an unparsable history is empty), `cartwall` (open, page shown) |
 
 The paths come from `AppPaths::system()` (`directories::ProjectDirs` for
 `org`/`Fauste`/`Fauste Player`), or from `AppPaths::under($FAUSTE_HOME)`. See
@@ -121,6 +121,7 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 | `fade_ms` | 1000 | 50 … 10000 |
 | `auto_segue` | true | |
 | `end_warning_secs` | 10 | 0 … 120 |
+| `history_len` | 50 | 0 … 1000 (entries Previous can go back; not in Settings) |
 
 ### `analysis` (Settings → Analysis)
 

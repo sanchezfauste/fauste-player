@@ -66,6 +66,8 @@ fn drawn_icons_stay_inside_their_rectangle() {
     for shapes in [
         icons::fade_stop(rect, theme::TEXT),
         icons::stop_after(rect, theme::TEXT),
+        icons::restart(rect, theme::TEXT),
+        icons::previous(rect, theme::TEXT),
     ] {
         assert!(!shapes.is_empty());
         for shape in shapes {
@@ -103,4 +105,26 @@ fn meter_colours_are_the_muted_traffic_light() {
     assert_eq!(theme::METER_NORMAL, Color32::from_rgb(0x7f, 0xb0, 0x8a));
     assert_eq!(theme::METER_WARNING, Color32::from_rgb(0xd9, 0xb4, 0x5a));
     assert_eq!(theme::METER_DANGER, Color32::from_rgb(0xd8, 0x64, 0x6a));
+}
+
+#[test]
+fn restart_is_a_bar_then_one_triangle_and_previous_a_bar_then_two() {
+    use fp_app::ui::icons;
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(18.0, 13.0));
+    let restart = icons::restart(rect, theme::TEXT);
+    let previous = icons::previous(rect, theme::TEXT);
+    assert_eq!(restart.len(), 2);
+    assert_eq!(previous.len(), 3);
+    for shapes in [restart, previous] {
+        assert!(matches!(shapes[0], egui::Shape::Rect(_)), "{:?}", shapes[0]);
+        let bar = shapes[0].visual_bounding_rect();
+        let mut left = bar.right();
+        for tri in &shapes[1..] {
+            let r = tri.visual_bounding_rect();
+            assert!(r.left() >= left - 0.01, "{r:?} after {left}");
+            assert!((r.center().y - bar.center().y).abs() < 0.01);
+            assert!(rect.contains_rect(r), "{r:?}");
+            left = r.right();
+        }
+    }
 }

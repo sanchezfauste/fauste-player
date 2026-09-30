@@ -16,6 +16,11 @@ pub enum Command {
     Pause(PlayerId),
     Stop(PlayerId),
     FadeStop(PlayerId),
+    /// R23: back to the current entry's cue-in; a paused player stays
+    /// paused.
+    Restart(PlayerId),
+    /// R24: crossfade back to the last entry this player left.
+    Previous(PlayerId),
     SetNext(PlayerId, EntryId),
     InsertPaths {
         playlist: PlaylistId,

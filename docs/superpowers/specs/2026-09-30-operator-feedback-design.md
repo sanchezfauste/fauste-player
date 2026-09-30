@@ -72,13 +72,15 @@ The main spec's §3 is updated by the plan that implements them.
 
 ### 2.2 Rules
 
-**R23 Restart.** If the player has a current entry and is not Stopped, Restart
+**R23 Restart.** If the player has a current entry, is not Stopped and no fade
+stop runs, Restart
 seeks to its `cue_in`, with the same anti-click replace-source path as a seek
 (spec §4.1). A paused player stays paused. Otherwise, nothing happens.
 
 **R24 Previous.** Only while Playing and not fading:
 - entries are popped from the player's `history` until one still exists in a
-  playlist and is playable (not `Missing` or `Unreadable`); the others are
+  playlist, is playable (not `Missing` or `Unreadable`) and is not the current
+  entry; the others are
   discarded. If none is left, nothing happens;
 - the popped entry starts at full level and the current one fades out over
   `fade_ms`, exactly as Play-while-Playing (rule 5);
@@ -87,8 +89,9 @@ seeks to its `cue_in`, with the same anti-click replace-source path as a seek
   bouncing between two entries;
 - `next` becomes the old current, with `next_explicit = true`.
 
-**R25 History.** Every advance of rule 12 (a transition, Play-while-Playing,
-Play-while-Stopped after a track) pushes the outgoing current onto `history`,
+**R25 History.** Every advance of rule 12 (a transition, Play-while-Playing)
+and every stop (rule 7: Stop, the end of a fade stop, Single mode,
+stop-after-current, a failed source) pushes the outgoing current onto `history`,
 dropping the oldest entry beyond `players.history_len`. Previous (R24) does not
 push. Removing an entry from its playlist does not edit histories; stale entries
 are skipped when popped.
@@ -125,7 +128,7 @@ transport actions make sense now:
 | Pause | Playing and not fading, or Paused |
 | Stop | there is a current entry |
 | Fade stop | Playing and no fade stop running |
-| Restart | there is a current entry and the player is not Stopped |
+| Restart | there is a current entry, the player is not Stopped, and no fade stop runs |
 | Previous | Playing, not fading, and the history holds a playable entry |
 | Stop after current | Continuous mode |
 | Cue | `next` exists, or a cue is running |

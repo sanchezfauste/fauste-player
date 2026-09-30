@@ -67,6 +67,10 @@ pub enum ShortcutAction {
     StopPlayer(u16),
     FadeStopPlayer(u16),
     CuePlayer(u16),
+    /// Back to the start of the current entry (R23); no default key.
+    RestartPlayer(u16),
+    /// Back to the previous entry (R24); no default key.
+    PreviousPlayer(u16),
     /// Fire the n-th cart (1-based) of the page shown.
     FireCart(u16),
     StopAllCarts,
@@ -84,6 +88,8 @@ impl ShortcutAction {
             | Self::StopPlayer(n)
             | Self::FadeStopPlayer(n)
             | Self::CuePlayer(n)
+            | Self::RestartPlayer(n)
+            | Self::PreviousPlayer(n)
             | Self::FireCart(n) => Some(n),
             Self::StopAllCarts
             | Self::ToggleCartwall

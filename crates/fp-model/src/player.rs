@@ -64,6 +64,9 @@ pub struct PlayerState {
     /// Linear gain 0.0–1.0.
     pub volume: f32,
     pub columns: ColumnWidths,
+    /// Entries this player left, oldest first (R25); Previous pops from the
+    /// end.
+    pub history: Vec<EntryId>,
     /// Entry the engine was last asked to preload.
     /// Entry and start position the engine was last asked to preload (the
     /// position changes when analysis finds the real cue-in).
@@ -94,6 +97,7 @@ impl PlayerState {
             cue: None,
             volume: 1.0,
             columns: ColumnWidths::default(),
+            history: Vec::new(),
             preloaded: None,
             scheduled: None,
             fade_stop_pending: false,

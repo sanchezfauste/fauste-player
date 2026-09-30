@@ -39,6 +39,8 @@ pub(crate) fn action_name(scene: &Scene<'_>, action: ShortcutAction) -> String {
         ShortcutAction::StopPlayer(p) => n("shortcut-stop", p),
         ShortcutAction::FadeStopPlayer(p) => n("shortcut-fade-stop", p),
         ShortcutAction::CuePlayer(p) => n("shortcut-cue", p),
+        ShortcutAction::RestartPlayer(p) => n("shortcut-restart", p),
+        ShortcutAction::PreviousPlayer(p) => n("shortcut-previous", p),
         ShortcutAction::FireCart(c) => n("shortcut-fire-cart", c),
         ShortcutAction::StopAllCarts => t.tr("shortcut-stop-all-carts"),
         ShortcutAction::ToggleCartwall => t.tr("shortcut-toggle-cartwall"),
@@ -62,6 +64,8 @@ fn actions(scene: &Scene<'_>) -> Vec<ShortcutAction> {
     for p in 1..=players {
         out.extend([
             ShortcutAction::PlayPlayer(p),
+            ShortcutAction::PreviousPlayer(p),
+            ShortcutAction::RestartPlayer(p),
             ShortcutAction::PausePlayer(p),
             ShortcutAction::StopPlayer(p),
             ShortcutAction::FadeStopPlayer(p),

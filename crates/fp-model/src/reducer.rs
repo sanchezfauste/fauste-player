@@ -24,6 +24,21 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::Pause(id) => pause(state, id, &mut out)?,
         Command::Stop(id) => stop(state, id, &mut out)?,
         Command::FadeStop(id) => fade_stop(state, id, &mut out)?,
+        Command::Restart(id) => {
+            let i = state.player_index(id)?;
+            let player = &state.players[i];
+            // A fade stop has already taken the source: nothing to seek.
+            if player.transport != Transport::Stopped
+                && !player.fade_stopping()
+                && let Some(request) = player.current.and_then(|c| state.request_from_cue_in(c))
+            {
+                out.push(EngineAction::Seek {
+                    player: id,
+                    secs: request.from_secs,
+                });
+            }
+        }
+        Command::Previous(id) => previous(state, id, &mut out)?,
         Command::SetNext(id, entry) => set_next(state, id, entry)?,
         Command::InsertPaths {
             playlist,
@@ -203,7 +218,7 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                         ..
                     })
                 );
-                if advance_to(state, i, entry).is_some() {
+                if advance_to(state, i, entry, true).is_some() {
                     state.players[i].fading = overlapping;
                 } else {
                     stop_player(state, i);
@@ -259,6 +274,45 @@ fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Resu
                 });
             }
         }
+    }
+    Ok(())
+}
+
+/// R24: pops the history until an entry that still exists and can play,
+/// crossfades into it like Play-while-Playing, and queues the entry left as
+/// the explicit next without recording it (so Previous keeps going back).
+fn previous(
+    state: &mut AppState,
+    id: PlayerId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let i = state.player_index(id)?;
+    let player = &state.players[i];
+    if player.transport != Transport::Playing || player.fading {
+        return Ok(());
+    }
+    let left = player.current;
+    let target = loop {
+        let Some(entry) = state.players[i].history.pop() else {
+            return Ok(());
+        };
+        if Some(entry) != left && state.playable_request(entry).is_some() {
+            break entry;
+        }
+    };
+    let fade_ms = state.config.players.fade_ms;
+    if let Some(request) = advance_to(state, i, target, false) {
+        let player = &mut state.players[i];
+        player.fading = true;
+        if let Some(left) = left {
+            player.next = Some(left);
+            player.next_explicit = true;
+        }
+        out.push(EngineAction::Crossfade {
+            player: id,
+            request,
+            fade_ms,
+        });
     }
     Ok(())
 }
@@ -670,17 +724,36 @@ fn set_player_count(
 /// current source, or `None` (state untouched) when there is nothing to play.
 pub(crate) fn advance(state: &mut AppState, i: usize) -> Option<SourceRequest> {
     let next = state.players[i].next?;
-    advance_to(state, i, next)
+    advance_to(state, i, next, true)
+}
+
+/// R25: records that the player left `entry`, keeping at most
+/// `players.history_len` entries.
+pub(crate) fn push_history(state: &mut AppState, i: usize, entry: EntryId) {
+    let cap = state.config.players.history_len;
+    let history = &mut state.players[i].history;
+    history.push(entry);
+    let excess = history.len().saturating_sub(cap);
+    history.drain(..excess);
 }
 
 /// Makes `target` the current entry: the normal advance when it is the next,
 /// or whatever the engine really started. An explicit next that differs from
-/// `target` is kept; otherwise the next is derived from the playlist.
-pub(crate) fn advance_to(state: &mut AppState, i: usize, target: EntryId) -> Option<SourceRequest> {
+/// `target` is kept; otherwise the next is derived from the playlist. The
+/// entry left is recorded in the history when `record` (not by Previous).
+pub(crate) fn advance_to(
+    state: &mut AppState,
+    i: usize,
+    target: EntryId,
+    record: bool,
+) -> Option<SourceRequest> {
     let request = state.request_from_cue_in(target)?;
     if let Some(current) = state.players[i].current {
         let player = state.players[i].id;
         state.playlists.mark_played(current, player);
+        if record {
+            push_history(state, i, current);
+        }
     }
     let following = state.playlists.next_playable_after(target, &state.library);
     let player = &mut state.players[i];
@@ -705,6 +778,7 @@ pub(crate) fn stop_player(state: &mut AppState, i: usize) {
     if let Some(current) = state.players[i].current {
         let player = state.players[i].id;
         state.playlists.mark_played(current, player);
+        push_history(state, i, current);
         if !state.players[i].next_explicit || state.players[i].next.is_none() {
             state.players[i].next = state.playlists.next_playable_after(current, &state.library);
             state.players[i].next_explicit = false;

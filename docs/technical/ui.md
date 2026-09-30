@@ -34,8 +34,11 @@ Each frame, `AppUi::ui`:
 3. handles the keyboard, unless a text field has focus. Bindings come from
    `config.shortcuts` (the key name and exact modifiers must match). Only
    first presses count, and repeats are ignored. Player and cart positions
-   are resolved against the players and the cart page shown;
-4. draws the screen and sends `Command`s through `ctl.send`;
+   are resolved against the players and the cart page shown. A shortcut
+   whose command `fp_model::command_available` rejects (R28) is dropped;
+4. draws the screen and sends `Command`s through `ctl.send`. Transport
+   buttons take `enabled` from `fp_model::availability`, so unavailable ones
+   are dimmed and inert;
 5. requests a repaint: continuously while anything plays, fades or cues,
    otherwise every 100 ms for the clock.
 
