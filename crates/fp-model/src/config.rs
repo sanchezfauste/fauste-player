@@ -25,6 +25,8 @@ pub struct Config {
     pub shortcuts: Vec<Shortcut>,
     /// Level meters (meters spec M3).
     pub meter: MeterConfig,
+    /// MIDI control surfaces (feedback spec §6).
+    pub midi: crate::midi::MidiConfig,
 }
 
 impl Default for Config {
@@ -39,6 +41,7 @@ impl Default for Config {
             cartwall: CartwallConfig::default(),
             shortcuts: default_shortcuts(),
             meter: MeterConfig::default(),
+            midi: crate::midi::MidiConfig::default(),
         }
     }
 }
@@ -747,6 +750,15 @@ impl Config {
                 message: "raised to the warning level".to_owned(),
             });
         }
+
+        clamp_to(
+            &mut self.midi.rescan_interval_ms,
+            250,
+            60_000,
+            "midi.rescan_interval_ms",
+            &mut w,
+        );
+        self.midi.validate(&mut w);
 
         w
     }
