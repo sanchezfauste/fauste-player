@@ -30,13 +30,13 @@ pub fn availability(state: &AppState, player: PlayerId) -> Availability {
     let has_previous = p
         .history
         .iter()
-        .any(|e| Some(*e) != p.current && state.request_from_cue_in(*e).is_some());
+        .any(|e| Some(*e) != p.current && state.playable_request(*e).is_some());
     Availability {
         play: (paused && p.current.is_some()) || (p.next.is_some() && !p.fading),
         pause: (playing && !p.fading) || paused,
         stop: p.current.is_some(),
         fade_stop: playing && !p.fade_stopping(),
-        restart: p.current.is_some() && p.transport != Transport::Stopped,
+        restart: p.current.is_some() && p.transport != Transport::Stopped && !p.fade_stopping(),
         previous: playing && !p.fading && has_previous,
         stop_after_current: p.mode == PlayMode::Continuous,
         cue: p.next.is_some() || p.cue.is_some(),

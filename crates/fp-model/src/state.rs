@@ -68,6 +68,16 @@ impl AppState {
         self.library.get(e.track)
     }
 
+    /// As `request_from_cue_in`, only for an entry whose file is not known
+    /// to be missing or unreadable.
+    pub fn playable_request(&self, entry: EntryId) -> Option<SourceRequest> {
+        let track = self.track_for_entry(entry)?;
+        if !track.file_state.is_playable() {
+            return None;
+        }
+        self.request_from_cue_in(entry)
+    }
+
     /// A request that starts the entry at its cue-in point.
     pub fn request_from_cue_in(&self, entry: EntryId) -> Option<SourceRequest> {
         let track = self.track_for_entry(entry)?;

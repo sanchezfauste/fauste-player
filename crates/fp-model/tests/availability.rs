@@ -135,3 +135,30 @@ fn command_available_filters_transport_commands_only() {
     assert!(command_available(&s, &Command::Play(p)));
     assert!(command_available(&s, &Command::SetVolume(p, 0.5)));
 }
+
+#[test]
+fn an_unplayable_history_entry_does_not_offer_previous() {
+    let (mut s, p) = three();
+    next(&mut s, p);
+    next(&mut s, p);
+    let first = entries(&s)[0];
+    let track = s.playlists.entry(first).unwrap().track;
+    apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: fp_model::FileState::Unreadable,
+        },
+    )
+    .unwrap();
+    assert!(!availability(&s, p).previous);
+}
+
+#[test]
+fn restart_waits_while_a_fade_stop_runs() {
+    let (mut s, p) = three();
+    next(&mut s, p);
+    apply(&mut s, Command::FadeStop(p)).unwrap();
+    assert!(!availability(&s, p).restart);
+    assert!(apply(&mut s, Command::Restart(p)).unwrap().is_empty());
+}

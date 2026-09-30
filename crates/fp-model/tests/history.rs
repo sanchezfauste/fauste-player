@@ -209,3 +209,26 @@ fn r24_previous_does_nothing_stopped_paused_or_fading() {
         "fade stop"
     );
 }
+
+/// The track behind `entry`.
+fn track_of(s: &AppState, entry: EntryId) -> fp_model::TrackId {
+    s.playlists.entry(entry).unwrap().track
+}
+
+#[test]
+fn r24_missing_or_unreadable_entries_are_skipped() {
+    for state in [
+        fp_model::FileState::Missing,
+        fp_model::FileState::Unreadable,
+    ] {
+        let (mut s, p, [a, b, c]) = three();
+        for _ in 0..3 {
+            next(&mut s, p);
+        }
+        let track = track_of(&s, b);
+        apply(&mut s, Command::SetFileState { track, state }).unwrap();
+        apply(&mut s, Command::Previous(p)).unwrap();
+        assert_eq!(s.player(p).unwrap().current, Some(a), "{state:?}");
+        let _ = c;
+    }
+}

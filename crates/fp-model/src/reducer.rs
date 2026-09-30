@@ -27,7 +27,9 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::Restart(id) => {
             let i = state.player_index(id)?;
             let player = &state.players[i];
+            // A fade stop has already taken the source: nothing to seek.
             if player.transport != Transport::Stopped
+                && !player.fade_stopping()
                 && let Some(request) = player.current.and_then(|c| state.request_from_cue_in(c))
             {
                 out.push(EngineAction::Seek {
@@ -294,7 +296,7 @@ fn previous(
         let Some(entry) = state.players[i].history.pop() else {
             return Ok(());
         };
-        if Some(entry) != left && state.request_from_cue_in(entry).is_some() {
+        if Some(entry) != left && state.playable_request(entry).is_some() {
             break entry;
         }
     };
