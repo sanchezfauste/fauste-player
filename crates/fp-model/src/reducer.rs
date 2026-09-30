@@ -24,6 +24,19 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::Pause(id) => pause(state, id, &mut out)?,
         Command::Stop(id) => stop(state, id, &mut out)?,
         Command::FadeStop(id) => fade_stop(state, id, &mut out)?,
+        Command::Restart(id) => {
+            let i = state.player_index(id)?;
+            let player = &state.players[i];
+            if player.transport != Transport::Stopped
+                && let Some(request) = player.current.and_then(|c| state.request_from_cue_in(c))
+            {
+                out.push(EngineAction::Seek {
+                    player: id,
+                    secs: request.from_secs,
+                });
+            }
+        }
+        Command::Previous(id) => previous(state, id, &mut out)?,
         Command::SetNext(id, entry) => set_next(state, id, entry)?,
         Command::InsertPaths {
             playlist,
@@ -259,6 +272,45 @@ fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Resu
                 });
             }
         }
+    }
+    Ok(())
+}
+
+/// R24: pops the history until an entry that still exists and can play,
+/// crossfades into it like Play-while-Playing, and queues the entry left as
+/// the explicit next without recording it (so Previous keeps going back).
+fn previous(
+    state: &mut AppState,
+    id: PlayerId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let i = state.player_index(id)?;
+    let player = &state.players[i];
+    if player.transport != Transport::Playing || player.fading {
+        return Ok(());
+    }
+    let left = player.current;
+    let target = loop {
+        let Some(entry) = state.players[i].history.pop() else {
+            return Ok(());
+        };
+        if Some(entry) != left && state.request_from_cue_in(entry).is_some() {
+            break entry;
+        }
+    };
+    let fade_ms = state.config.players.fade_ms;
+    if let Some(request) = advance_to(state, i, target, false) {
+        let player = &mut state.players[i];
+        player.fading = true;
+        if let Some(left) = left {
+            player.next = Some(left);
+            player.next_explicit = true;
+        }
+        out.push(EngineAction::Crossfade {
+            player: id,
+            request,
+            fade_ms,
+        });
     }
     Ok(())
 }
