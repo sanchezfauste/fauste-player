@@ -4,6 +4,10 @@
 #
 #   scripts/package/macos.sh [version]
 #
+# PREBUILT_DIR, when set, holds binaries already built for this release as
+# <dir>/macos-binary-<target>/fauste-player (the CI build artefacts); they
+# are used instead of compiling that architecture again.
+#
 # Signing and notarisation run when their secrets are set:
 #   APPLE_CERT_P12 (base64 of a Developer ID Application .p12),
 #   APPLE_CERT_PASSWORD, and for notarisation APPLE_ID, APPLE_TEAM_ID,
@@ -27,6 +31,13 @@ mkdir -p "${work}" "${app}/Contents/MacOS" "${app}/Contents/Resources/licenses"
 # 1. One binary for both architectures.
 binaries=()
 for target in "${targets[@]}"; do
+  prebuilt="${PREBUILT_DIR:-}/macos-binary-${target}/fauste-player"
+  if [ -n "${PREBUILT_DIR:-}" ] && [ -f "${prebuilt}" ]; then
+    # Artefacts lose the executable bit.
+    chmod +x "${prebuilt}"
+    binaries+=("${prebuilt}")
+    continue
+  fi
   rustup target add "${target}" >/dev/null
   (cd "${root}" && cargo build --release --locked --target "${target}" -p fp-app \
     --bin fauste-player ${FEATURES:+--features "${FEATURES}"})
