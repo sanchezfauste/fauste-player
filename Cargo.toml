@@ -45,6 +45,7 @@ egui_extras = "0.36.2"
 egui-phosphor = { version = "0.14.0", features = ["regular", "fill"] }
 egui_kittest = "0.36.2"
 rfd = "0.17.2"
+open = "5.4.4"
 pollster = "0.4.0"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 fluent-bundle = "0.16.0"

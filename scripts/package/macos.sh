@@ -57,6 +57,7 @@ for n in 16 32 128 256 512; do
 done
 iconutil -c icns -o "${app}/Contents/Resources/fauste-player.icns" "${iconset}"
 cp "${root}/crates/fp-app/assets/fonts/OFL.txt" "${app}/Contents/Resources/licenses/Inter-OFL.txt"
+cp "${root}/crates/fp-app/assets/licenses/Phosphor-MIT.txt" "${app}/Contents/Resources/licenses/Phosphor-MIT.txt"
 if command -v cargo-about >/dev/null; then
   (cd "${root}" && cargo about generate --locked -m crates/fp-app/Cargo.toml -c about.toml \
     ${FEATURES:+--features "${FEATURES}"} \

@@ -1,5 +1,6 @@
 //! egui user interface.
 
+pub mod about;
 pub mod app;
 pub mod cart_view;
 mod cartwall;

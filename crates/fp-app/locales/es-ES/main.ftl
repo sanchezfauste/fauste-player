@@ -265,3 +265,15 @@ meter-loudness = Sonoridad { $value } LUFS
 meter-max = Máximo { $value } dBFS
 tip-meter-max = Nivel más alto desde que empezó a sonar la pista. Haz clic para reiniciarlo.
 tip-on-air-elsewhere = En el aire en el reproductor { $n }
+
+# About window
+tip-about = Acerca de Fauste Player
+about-version = Versión { $version }
+about-copyright = Copyright © Marc Sánchez Fauste. Todos los derechos reservados.
+about-bundled = Este programa incluye los siguientes componentes bajo sus propias licencias:
+about-inter = Fuente Inter — SIL Open Font License 1.1
+about-phosphor = Phosphor Icons — Licencia MIT
+about-crates = También está construido con bibliotecas Rust de código abierto, cada una bajo su propia licencia. Sus avisos están en el fichero de licencias de terceros.
+about-third-party = Licencias de terceros
+about-third-party-missing = El fichero de licencias de terceros se instala con los paquetes de release.
+about-close = Cerrar

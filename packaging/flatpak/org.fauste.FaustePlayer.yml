@@ -40,6 +40,7 @@ modules:
       - install -Dm644 packaging/icons/fauste-player.svg /app/share/icons/hicolor/scalable/apps/org.fauste.FaustePlayer.svg
       - for n in 16 32 48 64 128 256 512; do install -Dm644 packaging/icons/fauste-player-$n.png /app/share/icons/hicolor/${n}x${n}/apps/org.fauste.FaustePlayer.png; done
       - install -Dm644 crates/fp-app/assets/fonts/OFL.txt /app/share/licenses/org.fauste.FaustePlayer/Inter-OFL.txt
+      - install -Dm644 crates/fp-app/assets/licenses/Phosphor-MIT.txt /app/share/licenses/org.fauste.FaustePlayer/Phosphor-MIT.txt
     sources:
       - type: dir
         path: ../..

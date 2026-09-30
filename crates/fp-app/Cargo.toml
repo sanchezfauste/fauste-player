@@ -26,6 +26,7 @@ egui.workspace = true
 egui_extras.workspace = true
 egui-phosphor.workspace = true
 rfd.workspace = true
+open.workspace = true
 pollster.workspace = true
 chrono.workspace = true
 fluent-bundle.workspace = true
@@ -82,6 +83,7 @@ assets = [
     ["../../README.md", "usr/share/doc/fauste-player/", "644"],
     ["../../dist/staging/THIRD-PARTY.html", "usr/share/doc/fauste-player/", "644"],
     ["assets/fonts/OFL.txt", "usr/share/doc/fauste-player/Inter-OFL.txt", "644"],
+    ["assets/licenses/Phosphor-MIT.txt", "usr/share/doc/fauste-player/Phosphor-MIT.txt", "644"],
 ]
 
 [package.metadata.generate-rpm]
@@ -104,6 +106,7 @@ assets = [
     { source = "../../README.md", dest = "/usr/share/doc/fauste-player/README.md", mode = "644", doc = true },
     { source = "../../dist/staging/THIRD-PARTY.html", dest = "/usr/share/doc/fauste-player/THIRD-PARTY.html", mode = "644", doc = true },
     { source = "assets/fonts/OFL.txt", dest = "/usr/share/doc/fauste-player/Inter-OFL.txt", mode = "644", doc = true },
+    { source = "assets/licenses/Phosphor-MIT.txt", dest = "/usr/share/doc/fauste-player/Phosphor-MIT.txt", mode = "644", doc = true },
 ]
 
 # Window system libraries loaded at run time, by soname so any distribution
