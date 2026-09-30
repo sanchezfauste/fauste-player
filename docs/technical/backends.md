@@ -18,6 +18,13 @@ The engine only knows this trait. A `Renderer` is called on the device's
 real-time thread with an interleaved `f32` buffer. Stream errors are reported
 through an RT-safe sink: it sets atomics, which the bus watchdog reads.
 
+`OutputStream::config()` is the configuration in use, not the one asked for:
+cpal reports the fixed buffer size it was given or, with the device's
+default, the largest block called back so far; WASAPI exclusive reports the
+buffer size the driver settled on. When WASAPI refuses a period and the
+aligned retry fails too, the error keeps the first refusal (the reason), and
+the bus logs it when it falls back to shared.
+
 **Exclusive access (Phase 4):**
 - `StreamConfig::exclusive` asks for sole, unconverted access. A backend that
   cannot give it for the device returns `BackendError::Unsupported`.

@@ -1,7 +1,7 @@
 //! Backend built on cpal: one per audio system (cpal host) compiled in.
 
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -75,6 +75,10 @@ impl StreamErrorSink for MarkLost {
 
 struct CpalStream {
     config: StreamConfig,
+    /// The fixed buffer size cpal was given, if any.
+    fixed_frames: Option<u32>,
+    /// The largest block the device has asked for so far.
+    called_frames: Arc<AtomicU32>,
     format: SampleFormat,
     _stream: cpal::Stream,
     /// Exclusive access held for the stream's life (Core Audio hog mode),
@@ -84,11 +88,29 @@ struct CpalStream {
 
 impl OutputStream for CpalStream {
     fn config(&self) -> StreamConfig {
-        self.config
+        StreamConfig {
+            buffer_frames: frames_in_use(
+                self.config.buffer_frames,
+                self.fixed_frames,
+                self.called_frames.load(Ordering::Relaxed),
+            ),
+            ..self.config
+        }
     }
 
     fn sample_format(&self) -> SampleFormat {
         self.format
+    }
+}
+
+/// The buffer size a stream runs with: the fixed size it was given, or with
+/// the device's default the largest block called back so far (the request
+/// until the first callback).
+fn frames_in_use(requested: u32, fixed: Option<u32>, called: u32) -> u32 {
+    match fixed {
+        Some(frames) => frames,
+        None if called > 0 => called,
+        None => requested,
     }
 }
 
@@ -358,17 +380,22 @@ impl CpalBackend {
             // exists, so a failed attempt never loses it.
             let (mut handoff, receiver) = rtrb::RingBuffer::<Box<dyn Renderer>>::new(1);
             let errors = errors.clone();
+            let fixed_frames = match buffer_size {
+                cpal::BufferSize::Fixed(frames) => Some(frames),
+                cpal::BufferSize::Default => None,
+            };
+            let called_frames = Arc::new(AtomicU32::new(0));
+            let io = Io {
+                handoff: receiver,
+                errors,
+                scratch_frames,
+                called_frames: called_frames.clone(),
+            };
             let built = match format {
-                cpal::SampleFormat::I16 => {
-                    build::<i16>(&dev, cpal_config, receiver, errors, scratch_frames)
-                }
-                cpal::SampleFormat::I32 => {
-                    build::<i32>(&dev, cpal_config, receiver, errors, scratch_frames)
-                }
-                cpal::SampleFormat::I24 => {
-                    build::<cpal::I24>(&dev, cpal_config, receiver, errors, scratch_frames)
-                }
-                _ => build::<f32>(&dev, cpal_config, receiver, errors, scratch_frames),
+                cpal::SampleFormat::I16 => build::<i16>(&dev, cpal_config, io),
+                cpal::SampleFormat::I32 => build::<i32>(&dev, cpal_config, io),
+                cpal::SampleFormat::I24 => build::<cpal::I24>(&dev, cpal_config, io),
+                _ => build::<f32>(&dev, cpal_config, io),
             };
             match built {
                 Ok(stream) => {
@@ -395,6 +422,8 @@ impl CpalBackend {
                     stream.play().map_err(backend_error)?;
                     return Ok(Box::new(CpalStream {
                         config,
+                        fixed_frames,
+                        called_frames,
                         format,
                         _stream: stream,
                         _exclusive: held,
@@ -415,24 +444,40 @@ impl CpalBackend {
     }
 }
 
+/// What a stream's callback takes with it.
+struct Io {
+    /// Where the renderer arrives once the stream exists.
+    handoff: rtrb::Consumer<Box<dyn Renderer>>,
+    errors: Arc<dyn StreamErrorSink>,
+    scratch_frames: usize,
+    /// The largest block called back, for `OutputStream::config`.
+    called_frames: Arc<AtomicU32>,
+}
+
 /// Builds an output stream in sample type `T`. The callback renders f32 into
 /// a scratch buffer allocated here (never in the callback) and converts.
 fn build<T>(
     dev: &cpal::Device,
     config: cpal::StreamConfig,
-    mut handoff: rtrb::Consumer<Box<dyn Renderer>>,
-    errors: Arc<dyn StreamErrorSink>,
-    scratch_frames: usize,
+    io: Io,
 ) -> Result<cpal::Stream, cpal::Error>
 where
     T: cpal::SizedSample + cpal::FromSample<f32> + Send + 'static,
 {
+    let Io {
+        mut handoff,
+        errors,
+        scratch_frames,
+        called_frames,
+    } = io;
     let channels = usize::from(config.channels).max(1);
     let mut scratch = vec![0.0f32; scratch_frames.max(1) * channels];
     let mut renderer: Option<Box<dyn Renderer>> = None;
     dev.build_output_stream::<T, _, _>(
         config,
         move |out: &mut [T], _info: &cpal::OutputCallbackInfo| {
+            let frames = u32::try_from(out.len() / channels).unwrap_or(u32::MAX);
+            called_frames.fetch_max(frames, Ordering::Relaxed);
             if renderer.is_none() {
                 renderer = handoff.pop().ok();
             }
@@ -627,5 +672,21 @@ mod tests {
         assert_eq!(choose_buffer_frames(&[(64, 4096)], 512), Some(512));
         assert_eq!(choose_buffer_frames(&[(1024, 4096)], 512), None);
         assert_eq!(choose_buffer_frames(&[], 512), None);
+    }
+
+    #[test]
+    fn the_reported_buffer_size_is_the_one_in_use() {
+        use super::frames_in_use;
+        assert_eq!(frames_in_use(512, Some(256), 0), 256, "a fixed size");
+        assert_eq!(
+            frames_in_use(512, None, 0),
+            512,
+            "default, before a callback"
+        );
+        assert_eq!(
+            frames_in_use(512, None, 1_024),
+            1_024,
+            "default, as called back"
+        );
     }
 }

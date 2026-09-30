@@ -108,16 +108,17 @@ fn open_on_thread(endpoint: &str, config: StreamConfig) -> Result<Opened, Backen
         .calculate_aligned_period_near(wanted, Some(128), &format)
         .map_err(unsupported)?;
     let mode = StreamMode::EventsExclusive { period_hns: period };
-    if client
-        .initialize_client(&format, &Direction::Render, &mode)
-        .is_err()
-    {
+    if let Err(first) = client.initialize_client(&format, &Direction::Render, &mode) {
         // Some drivers want the period aligned to their own buffer size:
-        // the documented recovery is a new client with that size.
-        let frames = client.get_buffer_size().map_err(unsupported)?;
+        // the documented recovery is a new client with that size. Whatever
+        // fails, the first refusal is kept in the error: it is the reason.
+        let refused = |e: &dyn std::fmt::Display| {
+            BackendError::Unsupported(format!("{first} (aligned retry: {e})"))
+        };
+        let frames = client.get_buffer_size().map_err(|e| refused(&e))?;
         let aligned =
             wasapi::calculate_period_100ns(i64::from(frames), i64::from(config.sample_rate));
-        client = device.get_iaudioclient().map_err(unsupported)?;
+        client = device.get_iaudioclient().map_err(|e| refused(&e))?;
         client
             .initialize_client(
                 &format,
@@ -126,7 +127,7 @@ fn open_on_thread(endpoint: &str, config: StreamConfig) -> Result<Opened, Backen
                     period_hns: aligned,
                 },
             )
-            .map_err(unsupported)?;
+            .map_err(|e| refused(&e))?;
     }
     let event = client.set_get_eventhandle().map_err(unsupported)?;
     let render = client.get_audiorenderclient().map_err(unsupported)?;
@@ -224,7 +225,8 @@ pub(crate) fn open(
         .spawn(move || match open_on_thread(&endpoint, config) {
             Ok(opened) => {
                 // `open` gave up waiting: it has already fallen back.
-                if tx.send(Ok(opened.format)).is_ok() && !flag.load(Ordering::Acquire) {
+                let negotiated = (opened.format, opened.buffer_frames);
+                if tx.send(Ok(negotiated)).is_ok() && !flag.load(Ordering::Acquire) {
                     render_loop(
                         &opened,
                         channels,
@@ -243,8 +245,8 @@ pub(crate) fn open(
             }
         })
         .map_err(|e| BackendError::Backend(e.to_string()))?;
-    let format = match rx.recv_timeout(OPEN_TIMEOUT) {
-        Ok(Ok(format)) => format,
+    let (format, buffer_frames) = match rx.recv_timeout(OPEN_TIMEOUT) {
+        Ok(Ok(negotiated)) => negotiated,
         Ok(Err(e)) => {
             let _ = thread.join();
             return Err(e);
@@ -259,7 +261,11 @@ pub(crate) fn open(
         }
     };
     Ok(Box::new(ExclusiveStream {
-        config,
+        // The buffer size the driver settled on, not the one asked for.
+        config: StreamConfig {
+            buffer_frames: u32::try_from(buffer_frames).unwrap_or(u32::MAX),
+            ..config
+        },
         format,
         stop,
         thread: Some(thread),

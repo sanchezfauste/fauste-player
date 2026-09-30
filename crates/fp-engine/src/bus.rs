@@ -183,7 +183,9 @@ impl Bus {
         {
             // Bit-perfect needs exclusive access; without it the device must
             // still play (Phase 4 spec B4).
-            tracing::warn!(bus = ?self.key, "exclusive access refused; opening shared");
+            if let Err(e) = &opened {
+                tracing::warn!(bus = ?self.key, error = %e, "exclusive access refused; opening shared");
+            }
             let renderer = Box::new(MixerRenderer {
                 mixer: self.mixer.clone(),
                 shared: self.handle.shared.clone(),
