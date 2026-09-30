@@ -16,6 +16,7 @@ fp-decode = { path = "crates/fp-decode" }
 fp-analysis = { path = "crates/fp-analysis" }
 fp-engine = { path = "crates/fp-engine" }
 fp-store = { path = "crates/fp-store" }
+fp-control = { path = "crates/fp-control" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.21"
@@ -46,6 +47,7 @@ egui-phosphor = { version = "0.14.0", features = ["regular", "fill"] }
 egui_kittest = "0.36.2"
 rfd = "0.17.2"
 open = "5.4.4"
+midir = "0.11.0"
 pollster = "0.4.0"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 fluent-bundle = "0.16.0"
