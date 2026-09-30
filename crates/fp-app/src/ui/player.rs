@@ -16,9 +16,14 @@ use super::icons;
 use super::table;
 use super::theme;
 use super::view::{self, PlayerStatus, PlayerView};
+use super::wave_view::{WaveView, WaveZoom, min_span};
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
 const PLAY_SIZE: f32 = 64.0;
+/// One wheel notch zooms the waveform in to this share of its span.
+const WAVE_ZOOM_STEP: f64 = 0.8;
+/// One sideways notch pans the waveform by this share of its width.
+const WAVE_PAN_STEP: f32 = 0.1;
 const GAP: f32 = 6.0;
 const WAVE_HEIGHT: f32 = 56.0;
 const TABS_HEIGHT: f32 = 30.0;
@@ -732,14 +737,27 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
 
 fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId, pv: &PlayerView) {
     let t = scene.i18n;
-    let track = scene
-        .state
-        .player(id)
-        .ok()
-        .and_then(|p| p.current)
+    let current = scene.state.player(id).ok().and_then(|p| p.current);
+    let track = current
         .and_then(|e| scene.state.playlists.entry(e))
         .map(|e| e.track);
     let media = track.and_then(|t| scene.media.get(t));
+    let total = pv.total.filter(|t| *t > 0.0);
+    // A zoom belongs to the entry it was made on.
+    let mut zoom = view_state
+        .wave_zoom
+        .get(&id)
+        .copied()
+        .filter(|z| Some(z.entry) == current && total.is_some());
+    // While zoomed, follow the playhead once the operator's last move is
+    // older than the grace (feedback spec F17).
+    if let (Some(z), Some(total), Some(f)) = (zoom.as_mut(), total, pv.markers.position) {
+        let grace = scene.state.config.ui.follow_current_grace_secs;
+        if scene.time - z.moved_at >= grace {
+            z.view = z.view.follow(f64::from(f) * total, total);
+        }
+    }
+    let view = zoom.map(|z| z.view);
     let mix_label = t.tr("mix-marker");
     let label = t.tr("tip-waveform");
     let input = widgets::WaveInput {
@@ -751,17 +769,106 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         mix_active: pv.mode == PlayMode::Continuous,
         mix_label: &mix_label,
         accessible_label: &label,
-        view: None,
+        view,
     };
     let (response, seek) = widgets::waveform(ui, WAVE_HEIGHT, &input);
     if let Some(secs) = seek {
         scene.ctl.send(Command::Seek(id, secs));
     }
-    if let (Some(track), Some(total)) = (track, pv.total.filter(|t| *t > 0.0)) {
-        edit_markers(ui, scene, view_state, id, track, total, pv, &response);
-    }
     let rect = response.rect;
+    if let (Some(track), Some(total)) = (track, total) {
+        let shown = view.unwrap_or_else(|| WaveView::full(total));
+        edit_markers(ui, scene, view_state, id, track, shown, pv, &response);
+    }
+    // The wheel zooms around the pointer; Shift or a sideways wheel pans.
+    if let (Some(entry), Some(total), Some(p)) = (current, total, response.hover_pos()) {
+        let inner = rect.shrink(1.0);
+        let bucket = media.as_ref().map_or(
+            f64::from(scene.state.config.analysis.peak_bucket_ms) / 1000.0,
+            |m| m.peak_bucket_secs,
+        );
+        let min = min_span(bucket, inner.width());
+        let wheels: Vec<(egui::Vec2, bool)> = ui.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::MouseWheel {
+                        delta, modifiers, ..
+                    } if *delta != egui::Vec2::ZERO => Some((*delta, modifiers.shift)),
+                    _ => None,
+                })
+                .collect()
+        });
+        if !wheels.is_empty() {
+            let mut v = view.unwrap_or_else(|| WaveView::full(total));
+            for (delta, shift) in wheels {
+                if shift || delta.x != 0.0 {
+                    let step = if delta.x != 0.0 { delta.x } else { delta.y };
+                    v = v.pan(step.signum() * inner.width() * WAVE_PAN_STEP, inner, total);
+                } else {
+                    let factor = if delta.y > 0.0 {
+                        WAVE_ZOOM_STEP
+                    } else {
+                        1.0 / WAVE_ZOOM_STEP
+                    };
+                    v = v.zoom_at(p.x, inner, factor, total, min);
+                }
+            }
+            zoom = (!v.is_full(total)).then_some(WaveZoom {
+                view: v,
+                entry,
+                moved_at: scene.time,
+            });
+            // The wheel was for the waveform, not for a scroll area around it.
+            ui.ctx()
+                .input_mut(|i| i.smooth_scroll_delta = egui::Vec2::ZERO);
+            ui.ctx().request_repaint();
+        }
+    }
     let painter = ui.painter_at(rect);
+    let mut badge_right = rect.right() - 4.0;
+    if zoom.is_some() {
+        let text = t.tr("wave-full-view");
+        let width = painter
+            .layout_no_wrap(text.clone(), font(10.0), theme::TEXT)
+            .size()
+            .x
+            + 12.0;
+        let button = Rect::from_min_size(
+            pos2(rect.right() - 4.0 - width, rect.top() + 4.0),
+            vec2(width, 18.0),
+        );
+        let mut child = ui.new_child(UiBuilder::new().max_rect(button));
+        if widgets::tile(
+            &mut child,
+            button.size(),
+            &text,
+            true,
+            TileStyle::plain(),
+            |p, r, c| {
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    &text,
+                    font(10.0),
+                    c,
+                );
+            },
+        )
+        .clicked()
+        {
+            zoom = None;
+        }
+        badge_right = button.left() - 4.0;
+    }
+    match zoom {
+        Some(z) => {
+            view_state.wave_zoom.insert(id, z);
+        }
+        None => {
+            view_state.wave_zoom.remove(&id);
+        }
+    }
     if let Some(left) = pv.intro {
         let fill = if pv.intro_blink == Some(true) {
             theme::INTRO_BADGE_BLINK
@@ -784,7 +891,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
     if let Some(left) = pv.outro {
         widgets::time_badge(
             &painter,
-            rect.right_top() + vec2(-4.0, 4.0),
+            pos2(badge_right, rect.top() + 4.0),
             true,
             &t.tr("wave-outro"),
             &format!("{left:.1}"),
@@ -1013,14 +1120,15 @@ fn edit_markers(
     view_state: &mut ViewState,
     id: PlayerId,
     track: TrackId,
-    total: f64,
+    view: WaveView,
     pv: &PlayerView,
     response: &egui::Response,
 ) {
     let t = scene.i18n;
     let inner = response.rect.shrink(1.0);
-    let secs_at = |x: f32| f64::from(((x - inner.left()) / inner.width()).clamp(0.0, 1.0)) * total;
-    let x_of = |f: f32| inner.left() + f * inner.width();
+    let total = pv.total.unwrap_or(0.0);
+    let secs_at = |x: f32| view.secs_at(x, inner);
+    let x_of = |f: f32| view.x_of(f64::from(f) * total, inner);
     let m = pv.markers;
     let handles = [
         (MarkerKind::CueIn, m.cue_in),

@@ -3,6 +3,17 @@
 //! handles, the hover tooltip and seeking all share.
 
 use egui::{Rect, pos2};
+use fp_model::EntryId;
+
+/// A player's zoomed waveform: the view, the entry it belongs to (another
+/// entry returns to the full view) and when the operator last moved it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WaveZoom {
+    pub view: WaveView,
+    pub entry: EntryId,
+    /// `Scene::time` of the last zoom or pan.
+    pub moved_at: f64,
+}
 
 /// The visible stretch of a track, in seconds.
 #[derive(Debug, Clone, Copy, PartialEq)]

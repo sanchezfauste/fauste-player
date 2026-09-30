@@ -70,6 +70,8 @@ pub(crate) struct ViewState {
     pub about_open: bool,
     /// Where each player's waveform menu was opened, in seconds.
     pub wave_menu: HashMap<PlayerId, f64>,
+    /// Zoomed waveforms; a player without one shows the whole track.
+    pub wave_zoom: HashMap<PlayerId, super::wave_view::WaveZoom>,
     /// A marker being dragged on a waveform, and the track it belongs to.
     pub marker_drag: Option<(PlayerId, fp_model::MarkerKind, TrackId)>,
     /// A cart to open in Settings → Cartwall (`Edit…` on a cart).

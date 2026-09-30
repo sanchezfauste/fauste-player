@@ -281,6 +281,10 @@ pub struct UiConfig {
     pub music_dir: Option<PathBuf>,
     /// BCP-47 tag; `None` follows the OS locale.
     pub language: Option<String>,
+    /// After the operator moves a view (a zoomed waveform, a scrolled
+    /// playlist), it stops following what plays for this long (seconds);
+    /// 0 follows at once.
+    pub follow_current_grace_secs: f64,
 }
 
 impl Default for UiConfig {
@@ -289,6 +293,7 @@ impl Default for UiConfig {
             wave_color: "slate".to_owned(),
             music_dir: None,
             language: None,
+            follow_current_grace_secs: 10.0,
         }
     }
 }
@@ -478,6 +483,14 @@ impl Config {
             &mut w,
         );
         clamp_to(&mut p.history_len, 0, 1000, "players.history_len", &mut w);
+
+        clamp_to(
+            &mut self.ui.follow_current_grace_secs,
+            0.0,
+            600.0,
+            "ui.follow_current_grace_secs",
+            &mut w,
+        );
 
         let a = &mut self.analysis;
         clamp_to(
@@ -742,6 +755,15 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_follow_grace_is_validated() {
+        let mut c = Config::default();
+        assert_eq!(c.ui.follow_current_grace_secs, 10.0);
+        c.ui.follow_current_grace_secs = 9999.0;
+        c.validate();
+        assert_eq!(c.ui.follow_current_grace_secs, 600.0);
+    }
 
     #[test]
     fn the_history_length_is_validated() {

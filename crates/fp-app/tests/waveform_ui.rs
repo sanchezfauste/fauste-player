@@ -143,3 +143,230 @@ fn a_plain_click_still_seeks_at_once() {
     assert_eq!(s.len(), 1);
     assert!((s[0] - 90.0).abs() < 1.5, "{s:?}");
 }
+
+fn wheel(h: &mut Harness<'_, AppUi>, at: Pos2, dx: f32, dy: f32, modifiers: Modifiers) {
+    h.event(Event::PointerMoved(at));
+    h.event(Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(dx, dy),
+        phase: egui::TouchPhase::Move,
+        modifiers,
+    });
+    h.run_steps(1);
+}
+
+fn click(h: &mut Harness<'_, AppUi>, at: Pos2) {
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    press(h, at, true);
+    press(h, at, false);
+    h.run_steps(2);
+}
+
+#[test]
+fn the_wheel_zooms_around_the_pointer_and_clicks_seek_in_the_zoomed_view() {
+    let (mut h, fake) = harness(playing());
+    let w = wave(&h);
+    let centre = pos2(x_of(w, 90.0), w.center().y);
+    for _ in 0..3 {
+        wheel(&mut h, centre, 0.0, 1.0, Modifiers::NONE);
+    }
+    // 0.8³ of 180 s = 92.16 s around 90 s: from 43.92 s. A click three
+    // quarters across lands at 43.92 + 0.75 · 92.16 ≈ 113 s, not 135 s.
+    click(&mut h, pos2(x_of(w, 135.0), w.center().y));
+    let s = seeks(&fake);
+    assert_eq!(s.len(), 1, "{s:?}");
+    assert!((s[0] - 113.0).abs() < 2.0, "{s:?}");
+}
+
+#[test]
+fn shift_wheel_pans_the_zoomed_view() {
+    let (mut h, fake) = harness(playing());
+    let w = wave(&h);
+    let centre = pos2(x_of(w, 90.0), w.center().y);
+    for _ in 0..3 {
+        wheel(&mut h, centre, 0.0, 1.0, Modifiers::NONE);
+    }
+    wheel(&mut h, centre, 0.0, -1.0, Modifiers::SHIFT);
+    click(&mut h, centre);
+    let s = seeks(&fake);
+    assert_eq!(s.len(), 1);
+    assert!((s[0] - 90.0).abs() > 5.0, "the view moved: {s:?}");
+}
+
+#[test]
+fn full_view_appears_only_while_zoomed_and_resets_it() {
+    let (mut h, fake) = harness(playing());
+    assert!(h.query_by_label("Full view").is_none());
+    let w = wave(&h);
+    let centre = pos2(x_of(w, 90.0), w.center().y);
+    wheel(&mut h, centre, 0.0, 1.0, Modifiers::NONE);
+    h.get_by_label("Full view").click();
+    h.run_steps(2);
+    assert!(h.query_by_label("Full view").is_none());
+    fake.take_sent();
+    click(&mut h, pos2(x_of(w, 135.0), w.center().y));
+    let s = seeks(&fake);
+    assert!((s[0] - 135.0).abs() < 1.5, "{s:?}");
+}
+
+#[test]
+fn zooming_out_fully_returns_to_the_full_view() {
+    let (mut h, _) = harness(playing());
+    let w = wave(&h);
+    let centre = pos2(x_of(w, 90.0), w.center().y);
+    wheel(&mut h, centre, 0.0, 1.0, Modifiers::NONE);
+    assert!(h.query_by_label("Full view").is_some());
+    for _ in 0..3 {
+        wheel(&mut h, centre, 0.0, -1.0, Modifiers::NONE);
+    }
+    assert!(h.query_by_label("Full view").is_none());
+}
+
+#[test]
+fn a_new_track_returns_to_the_full_view() {
+    let (mut h, fake) = harness(playing());
+    let w = wave(&h);
+    wheel(
+        &mut h,
+        pos2(x_of(w, 90.0), w.center().y),
+        0.0,
+        1.0,
+        Modifiers::NONE,
+    );
+    assert!(h.query_by_label("Full view").is_some());
+    let mut s = (*fake.state.load_full()).clone();
+    let p = s.players[0].id;
+    let second = s.playlists.iter().next().unwrap().entries[1].id;
+    apply(&mut s, Command::SetNext(p, second)).unwrap();
+    apply(&mut s, Command::Play(p)).unwrap();
+    fake.state.store(std::sync::Arc::new(s));
+    h.run_steps(2);
+    assert!(h.query_by_label("Full view").is_none());
+}
+
+/// Reports `secs` as the playhead of P1.
+fn at_position(fake: &Fake, secs: f64) {
+    let p = fake.player(0);
+    fake.telemetry
+        .store(std::sync::Arc::new(fp_engine::conductor::Telemetry {
+            players: vec![(
+                p,
+                fp_engine::engine::PlayerTelemetry {
+                    position_secs: Some(secs),
+                    ..Default::default()
+                },
+            )],
+            ..Default::default()
+        }));
+}
+
+#[test]
+fn a_zoomed_view_follows_the_playhead_after_the_grace() {
+    let mut s = playing();
+    s.config.ui.follow_current_grace_secs = 0.0;
+    let (mut h, fake) = harness(s);
+    at_position(&fake, 20.0);
+    h.run_steps(1);
+    let w = wave(&h);
+    for _ in 0..6 {
+        wheel(
+            &mut h,
+            pos2(x_of(w, 20.0), w.center().y),
+            0.0,
+            1.0,
+            Modifiers::NONE,
+        );
+    }
+    // The playhead moves out of the zoomed stretch: the view goes with it.
+    at_position(&fake, 150.0);
+    h.run_steps(2);
+    fake.take_sent();
+    click(&mut h, pos2(x_of(w, 90.0), w.center().y));
+    let s = seeks(&fake);
+    assert_eq!(s.len(), 1);
+    assert!(
+        s[0] > 140.0 && s[0] < 180.0,
+        "the view follows the playhead: {s:?}"
+    );
+}
+
+#[test]
+fn a_recent_pan_holds_the_view_still() {
+    let (mut h, fake) = harness(playing());
+    at_position(&fake, 20.0);
+    h.run_steps(1);
+    let w = wave(&h);
+    for _ in 0..6 {
+        wheel(
+            &mut h,
+            pos2(x_of(w, 20.0), w.center().y),
+            0.0,
+            1.0,
+            Modifiers::NONE,
+        );
+    }
+    at_position(&fake, 150.0);
+    h.run_steps(2);
+    fake.take_sent();
+    click(&mut h, pos2(x_of(w, 90.0), w.center().y));
+    let s = seeks(&fake);
+    assert!(s[0] < 60.0, "within the 10 s grace the view stays: {s:?}");
+}
+
+#[test]
+fn alt_dragging_a_marker_in_a_zoomed_view_sets_the_zoomed_time() {
+    let mut s = playing();
+    let track = s.library.iter().next().unwrap().id;
+    apply(
+        &mut s,
+        Command::SetMarker {
+            track,
+            kind: fp_model::MarkerKind::SegueStart,
+            secs: Some(100.0),
+        },
+    )
+    .unwrap();
+    let (mut h, fake) = harness(s);
+    let w = wave(&h);
+    // Zoom twice around 100 s: 0.64 · 180 = 115.2 s, from 100 − 0.5·115.2.
+    let mix = pos2(x_of(w, 100.0), w.center().y);
+    wheel(&mut h, mix, 0.0, 1.0, Modifiers::NONE);
+    wheel(&mut h, mix, 0.0, 1.0, Modifiers::NONE);
+    let to = pos2(mix.x + (w.width() - 2.0) * 0.25, mix.y);
+    h.event(Event::ModifiersChanged(Modifiers::ALT));
+    h.event(Event::PointerMoved(mix));
+    h.run_steps(1);
+    h.event(Event::PointerButton {
+        pos: mix,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::ALT,
+    });
+    h.run_steps(1);
+    for step in 1..=10 {
+        h.event(Event::PointerMoved(pos2(
+            mix.x + (to.x - mix.x) * step as f32 / 10.0,
+            mix.y,
+        )));
+        h.run_steps(1);
+    }
+    h.event(Event::PointerButton {
+        pos: to,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::ALT,
+    });
+    h.run_steps(2);
+    let set: Vec<f64> = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::SetMarker { secs, .. } => secs,
+            _ => None,
+        })
+        .collect();
+    // A quarter of the width is a quarter of 115.2 s: about 128.8 s.
+    assert_eq!(set.len(), 1, "{set:?}");
+    assert!((set[0] - 128.8).abs() < 2.0, "{set:?}");
+}
