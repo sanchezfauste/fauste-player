@@ -64,6 +64,10 @@ pub(crate) fn track_table(
         view_state.table_layout.insert(player, layout);
     }
     let area = ui.max_rect();
+    // Read before the table's scroll area takes the wheel for itself.
+    let wheel_over_table =
+        ui.rect_contains_pointer(area) && ui.input(|i| i.smooth_scroll_delta != egui::Vec2::ZERO);
+    let pressed_in_table = ui.rect_contains_pointer(area) && ui.input(|i| i.pointer.primary_down());
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     let mut built = 0;
     let mut widths = [0.0_f32; 4];
@@ -400,11 +404,12 @@ pub(crate) fn track_table(
                 .unwrap_or(entries.len()),
         });
     }
-    store_widths(ui, scene, view_state, player, columns, widths);
-    // The operator is using the table: scrolling it, dragging an entry, or
+    store_widths(ui, scene, view_state, player, columns, widths, reset);
+    // The operator is using the table: scrolling it (wheel or scroll bar),
+    // pressing in it, dragging an entry (for as long as the drag lasts), or
     // with a row menu open. Following waits (feedback spec F18).
-    let scrolled = pointer_in && ui.input(|i| i.smooth_scroll_delta != egui::Vec2::ZERO);
-    if scrolled || menu_open || dragged.is_some() {
+    let entry_drag = egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx());
+    if wheel_over_table || pressed_in_table || menu_open || dragged.is_some() || entry_drag {
         view_state.table_touched.insert(player, scene.time);
     }
 }
@@ -417,16 +422,20 @@ fn store_widths(
     player: PlayerId,
     stored: ColumnWidths,
     widths: [f32; 4],
+    relaid: bool,
 ) {
     if widths.iter().all(|w| *w <= 0.0) {
         return;
     }
     let previous = view_state.widths.insert(player, widths);
-    let moved = previous.is_some_and(|p| {
-        p.iter()
-            .zip(widths.iter())
-            .any(|(a, b)| (a - b).abs() > 0.5)
-    });
+    // Widths that changed because the table was laid out again (a new
+    // window width) are not the operator's: only a handle drag is.
+    let moved = !relaid
+        && previous.is_some_and(|p| {
+            p.iter()
+                .zip(widths.iter())
+                .any(|(a, b)| (a - b).abs() > 0.5)
+        });
     if moved {
         view_state.resizing.insert(player);
     }

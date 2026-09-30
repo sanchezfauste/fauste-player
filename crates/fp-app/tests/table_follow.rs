@@ -8,7 +8,7 @@
 
 mod support;
 
-use egui::{Event, Modifiers, pos2};
+use egui::{Event, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::app::AppUi;
@@ -131,5 +131,52 @@ fn each_player_follows_its_own_current() {
     h.run_steps(4);
     assert!(visible(&h, "Song 151"));
     assert!(visible(&h, "Song 21"));
-    let _ = pos2(0.0, 0.0);
+}
+
+#[test]
+fn a_scroll_a_second_ago_still_holds_the_table() {
+    let (mut h, fake) = harness(state(1, 200));
+    let e = entries(&fake.state.load_full());
+    let row = h.get_by_label("Song 3").rect().center();
+    h.event(Event::PointerMoved(row));
+    h.event(Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, -3.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Modifiers::NONE,
+    });
+    // Let the smooth scroll finish: about a second.
+    h.run_steps(50);
+    play(&fake, 0, e[150]);
+    h.run_steps(50);
+    assert!(
+        !visible(&h, "Song 151"),
+        "within the 10 s grace the table stays"
+    );
+}
+
+#[test]
+fn a_long_entry_drag_holds_the_table() {
+    let mut s = state(1, 200);
+    s.config.ui.follow_current_grace_secs = 0.5;
+    let (mut h, fake) = harness(s);
+    let e = entries(&fake.state.load_full());
+    let from = h.get_by_label("Song 2").rect().center();
+    h.event(Event::PointerMoved(from));
+    h.event(Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    h.run_steps(1);
+    h.event(Event::PointerMoved(from + egui::vec2(0.0, 30.0)));
+    h.run_steps(1);
+    play(&fake, 0, e[150]);
+    // Held for 2 s, four times the grace.
+    h.run_steps(100);
+    assert!(
+        !visible(&h, "Song 151"),
+        "the table waits while an entry is dragged"
+    );
 }

@@ -716,3 +716,19 @@ fn stored_fractions_are_applied() {
     let w = shares(h.state().column_widths(p).unwrap());
     assert!(w[2] > w[1], "Artist wider than Title as stored: {w:?}");
 }
+
+#[test]
+fn resizing_the_window_does_not_store_column_widths() {
+    let (mut h, fake) = harness(state(1, 3));
+    fake.take_sent();
+    h.set_size(egui::vec2(1400.0, 700.0));
+    h.run_steps(3);
+    h.set_size(egui::vec2(1200.0, 700.0));
+    h.run_steps(3);
+    assert!(
+        !sent(&fake)
+            .iter()
+            .any(|c| matches!(c, Command::SetColumnWidths(..))),
+        "only a handle release stores widths"
+    );
+}

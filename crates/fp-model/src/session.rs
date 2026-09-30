@@ -30,11 +30,25 @@ pub struct PlayerSession {
     pub position_secs: f64,
     #[serde(default = "full_volume")]
     pub volume: f32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient_columns")]
     pub columns: ColumnWidths,
     /// Entries the player left, oldest first (R25).
     #[serde(default, deserialize_with = "lenient_history")]
     pub history: Vec<EntryId>,
+}
+
+/// Column widths that do not parse load as the default layout.
+fn lenient_columns<'de, D: serde::Deserializer<'de>>(d: D) -> Result<ColumnWidths, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Lenient {
+        Widths(ColumnWidths),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Lenient::deserialize(d)? {
+        Lenient::Widths(w) => w.normalized(),
+        Lenient::Other(_) => ColumnWidths::default(),
+    })
 }
 
 /// A history that does not parse loads as empty: it only feeds Previous.
@@ -233,7 +247,7 @@ fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     };
     player.stop_after_current = s.mode == PlayMode::Continuous && s.stop_after_current;
     player.volume = volume;
-    player.columns = s.columns;
+    player.columns = s.columns.normalized();
     // Only entries that still exist, and no more than the configured depth.
     let kept: Vec<EntryId> = s
         .history
