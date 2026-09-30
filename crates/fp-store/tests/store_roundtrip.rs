@@ -327,3 +327,29 @@ fn repeated_playlist_ids_are_repaired_with_a_warning() {
         loaded.warnings
     );
 }
+
+#[test]
+fn analysis_fields_this_version_dropped_are_ignored_with_a_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    write_config(
+        &s,
+        r#"{"schema_version":1,"config":{"analysis":{
+            "silence_threshold_db":-45.0,"segue_threshold_db":-20.0,"outro_drop_db":8.0}}}"#,
+    );
+    let loaded = s.load("Main");
+    let a = &loaded.state.config.analysis;
+    assert_eq!(a.outro_drop_db, 8.0, "valid fields are kept");
+    assert_eq!(a.trim_threshold_db, -60.0);
+    assert_eq!(a.segue_drop_db, 15.0);
+    for old in ["silence_threshold_db", "segue_threshold_db"] {
+        assert!(
+            loaded
+                .warnings
+                .iter()
+                .any(|w| w.contains(old) && w.contains("not used")),
+            "{old}: {:?}",
+            loaded.warnings
+        );
+    }
+}

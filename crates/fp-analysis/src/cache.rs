@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::analyze::Analysis;
 
 /// Bump when the analysis algorithm or output format changes.
-pub const ANALYSIS_VERSION: u32 = 5;
+pub const ANALYSIS_VERSION: u32 = 6;
 
 #[derive(Serialize, Deserialize)]
 struct CachedAnalysis {

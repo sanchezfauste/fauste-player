@@ -48,6 +48,12 @@ fn merge(root: &mut Value, parent: &str, user: &Value, warnings: &mut Vec<String
     for (key, value) in fields {
         let field = format!("{parent}/{}", escape(key));
         let default = root.pointer(&field).cloned();
+        // A field this version does not have (dropped, or from a newer
+        // version): its meaning is unknown here, so it is not kept.
+        if default.is_none() {
+            warnings.push(format!("config{field}: not used by this version; ignored"));
+            continue;
+        }
         if let (Some(Value::Object(_)), Value::Object(_)) = (&default, value) {
             merge(root, &field, value, warnings);
             continue;
