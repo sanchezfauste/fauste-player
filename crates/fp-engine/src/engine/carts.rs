@@ -224,7 +224,8 @@ impl Engine {
 
     pub(super) fn start_cart_cue(&mut self, request: &CartRequest, now: Instant) {
         if !self.ensure_cartwall(now) {
-            self.events.push(EngineEvent::CartCueEnded);
+            self.events
+                .push(EngineEvent::CartCueEnded { cart: request.cart });
             return;
         }
         self.stop_cart_cue();
@@ -243,7 +244,9 @@ impl Engine {
                 }
             }
             // No Cue output: nothing can be heard, end it at once.
-            Err(_) => self.events.push(EngineEvent::CartCueEnded),
+            Err(_) => self
+                .events
+                .push(EngineEvent::CartCueEnded { cart: request.cart }),
         }
     }
 
@@ -325,7 +328,7 @@ impl Engine {
                 self.release_cart(&source);
             }
             self.events.push(if is_cue {
-                EngineEvent::CartCueEnded
+                EngineEvent::CartCueEnded { cart }
             } else {
                 EngineEvent::CartFailed { cart }
             });
@@ -366,8 +369,9 @@ impl Engine {
                 if c.cue_src.as_ref().is_some_and(is) {
                     if let Some(source) = c.cue_src.take() {
                         self.release_cart(&source);
+                        self.events
+                            .push(EngineEvent::CartCueEnded { cart: source.cart });
                     }
-                    self.events.push(EngineEvent::CartCueEnded);
                     return true;
                 }
                 if let Some(i) = c.stopping.iter().position(is) {

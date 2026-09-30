@@ -136,14 +136,16 @@ pub enum EngineEvent {
     TransitionStarted { player: PlayerId, entry: EntryId },
     /// A source could not be decoded or read.
     SourceFailed { player: PlayerId, entry: EntryId },
-    /// The cue source reached its end.
-    CueEnded { player: PlayerId },
+    /// The cue source of `entry` reached its end (or could not start).
+    /// Ignored unless `entry` is still the player's cue.
+    CueEnded { player: PlayerId, entry: EntryId },
     /// A cart that is not looped reached its cue-out (C5).
     CartEnded { cart: CartId },
     /// A cart's file could not be decoded or read.
     CartFailed { cart: CartId },
-    /// The cart pre-listen reached its end.
-    CartCueEnded,
+    /// The pre-listen of `cart` reached its end (or could not start).
+    /// Ignored unless `cart` is still the one pre-listened.
+    CartCueEnded { cart: CartId },
 }
 
 /// Everything the engine needs to open and position one source.

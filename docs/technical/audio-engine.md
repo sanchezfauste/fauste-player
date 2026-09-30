@@ -13,7 +13,8 @@ halves:
 
 They share a `SourceShared` block of atomics: position, peaks, underruns,
 `ready`, `eof` and `failed`. The ring holds `tuning.prebuffer_secs` (5 s).
-The source is *ready* once `tuning.ready_threshold_ms` (500 ms) is buffered.
+The source is *ready* once `tuning.ready_threshold_ms` (500 ms) is buffered,
+measured at the rate the source plays at (the worker scales the threshold).
 
 A **seek** replaces the source: a new one is prepared at the target and the
 old one is retired.
@@ -66,7 +67,9 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   - All of it accumulates in `SourceShared` atomics.
 - **The conductor meters.**
   - Every tick, `Engine::take_meter_input` takes a player's measurement
-    (current plus fading sources; the pre-listen's is dropped).
+    (current plus fading sources; the pre-listen's is dropped). The sums are
+    taken one by one, inside `BusShared::whole_blocks`: a block rendered
+    meanwhile is taken whole in the same reading, never split across ticks.
   - `meter::MeterState` applies the fall of each preset: 20 dB / 1.7 s,
     24 dB / 2.8 s, 20 dB / 1.5 s, or 26 dB / 3 s (K-System peak).
     Non-finite measurements read as silence.
@@ -115,6 +118,11 @@ error, or no heartbeat for `tuning.watchdog_timeout_ms` (500 ms; startup grace
 thread then renders the same mixer into a discard buffer at real-time pace,
 so countdowns, segues and chaining continue. The device is reopened every
 `tuning.reconnect_interval_ms` (2 s) and takes the mixer back when it opens.
+The virtual clock stops before each attempt (and starts again if it fails),
+so it and a stream that renders at once never both advance the timeline. A
+reader that waits for a block to finish (`BusShared::consistent`,
+`whole_blocks`) gives up after 50 ms, so a render thread gone mid-block
+cannot hang the conductor.
 
 ### Rates and bit-perfect buses
 
@@ -139,8 +147,13 @@ so countdowns, segues and chaining continue. The device is reopened every
 - **What survives a reopen:** the mixer, its frame counter and its slots.
   Only the stream is replaced, and `reopen_waiting` re-creates the idle
   sources on the bus (preloads, tracks loaded paused) at the new rate.
-- **Refusals:** a refused rate restores the previous one. A double failure
-  leaves the bus `Lost`, for the watchdog.
+- **Refusals:** a refused rate restores the previous one and is remembered
+  (`Bus::refused_rates`), so later starts do not reopen the device to ask
+  again; the list is cleared when the device comes back after a loss. On an
+  exclusive stream the new rate is tried exclusive only (a refusal there is of
+  the rate, not of exclusive access); a bus already shared may change rate
+  shared. A double failure leaves the bus `Lost`, for the watchdog. The mixer's
+  volume smoothing keeps its duration at the new rate (`Mixer::follow_rate`).
 - While anything on the bus sounds, the rate never changes, since every
   timeline on the bus is in its frames. Preloads never decide the rate.
 - **`PlayerTelemetry::bit_perfect`** is set when all of these hold:
@@ -177,11 +190,15 @@ the next changed meanwhile. The model follows the engine
 (`TransitionStarted`). A transition counts as executed only once the bus has
 rendered past its frame (`now_frame > at_frame`): at exactly that frame it
 is still pending, so a fade stop or pause arriving then takes it back
-instead of fading a source that never started.
+instead of fading a source that never started. A next that is not buffered
+yet when its transition is dispatched (or when the current source ends)
+starts as soon as it is ready, rather than on the frame as silence counted
+as underruns.
 
 It turns bus events back into model events: `TransitionStarted`,
-`ReachedEnd`, `FadeCompleted`, `SourceFailed` and `CueEnded`. Stale events
-(for an entry that is no longer current) are ignored by the model.
+`ReachedEnd`, `FadeCompleted`, `SourceFailed` and `CueEnded { entry }`. Stale
+events (for an entry that is no longer current, or no longer the cue) are
+ignored by the model.
 
 **Routing:** `route_target` maps a configured route to a bus and a channel
 pair. A route to a backend this machine does not have falls back to the
@@ -189,7 +206,9 @@ default output, so a config copied from another OS still plays.
 
 **Test tones** (`play_test_tone`) render a short sine directly into a source
 and attach it to any route. The slot is only taken when both commands fit the
-queue, and it is released on `Finished`.
+queue, and it is released on `Finished`. The synthesis (1.5 s, a few
+milliseconds even at 768 kHz) runs on the conductor, well within
+`schedule_lead_ms`.
 
 ## Cartwall
 
@@ -199,7 +218,8 @@ added.
 - A dedicated worker (`fp-cartwall`) decodes them.
 - **Routes:** they play on the cartwall routes (`config.outputs.cartwall`).
   Main falls back to the default output. Without a Cue route, a cart
-  pre-listen ends at once (`CartCueEnded`).
+  pre-listen ends at once (`CartCueEnded { cart }`; the model ignores the end
+  of a pre-listen that is no longer the current one).
 - **Exact ends and loops:** each load carries `until_secs` (the cue-out) and
   `looped`. The worker cuts the frames past the end, so a cart finishes
   exactly at its cue-out. A looped cart reopens at its cue-in and keeps

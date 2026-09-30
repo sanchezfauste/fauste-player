@@ -165,3 +165,13 @@ fn slots_are_reused_only_after_the_mixer_hands_them_back() {
     device.render(16).unwrap();
     assert!(bus.alloc_slot().is_some());
 }
+
+#[test]
+fn a_failed_reconnection_keeps_the_virtual_clock_running() {
+    let (_b, _device, mut bus, t0) = setup(false);
+    bus.supervise(t0 + Duration::from_secs(3)); // retries; the device is still away
+    assert_eq!(bus.health(), BusHealth::Lost);
+    let before = bus.now_frame();
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(bus.now_frame() > before, "the timeline keeps moving");
+}

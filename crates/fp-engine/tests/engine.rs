@@ -18,7 +18,7 @@ use fp_model::{
     Config, EngineAction, EngineEvent, EntryId, PlayerId, PlayerRoutes, Route, SOURCE_END,
     SourceRequest, TrackId, TransitionPlan,
 };
-use support::tagged_opener;
+use support::{gated_opener, tagged_opener};
 
 const RATE: f64 = 48_000.0;
 const BLOCK: usize = 480;
@@ -45,6 +45,10 @@ fn request(track: u64, from_secs: f64) -> SourceRequest {
 }
 
 fn rig(track_frames: u64, with_cue_route: bool) -> Rig {
+    rig_with(tagged_opener(track_frames), with_cue_route)
+}
+
+fn rig_with(opener: fp_engine::worker::SourceOpener, with_cue_route: bool) -> Rig {
     let backend = OfflineBackend::new();
     let main = backend.add_device("main", 2);
     let cue = backend.add_device("cue", 2);
@@ -66,11 +70,7 @@ fn rig(track_frames: u64, with_cue_route: bool) -> Rig {
     }];
     config.tuning.gain_smoothing_ms = 0.0;
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
-    let mut engine = Engine::new(
-        backends,
-        EngineSettings::from_config(&config),
-        tagged_opener(track_frames),
-    );
+    let mut engine = Engine::new(backends, EngineSettings::from_config(&config), opener);
     let clock = Instant::now();
     engine.execute(EngineAction::AddPlayer { player: P }, clock);
     Rig {
@@ -401,7 +401,10 @@ fn cue_plays_only_on_the_cue_output_and_ends_by_itself() {
         r.heard.iter().all(|v| *v == 0.0),
         "the main output never hears the cue"
     );
-    assert!(r.events.contains(&EngineEvent::CueEnded { player: P }));
+    assert!(r.events.contains(&EngineEvent::CueEnded {
+        player: P,
+        entry: EntryId(3)
+    }));
 }
 
 #[test]
@@ -412,7 +415,10 @@ fn cue_without_a_cue_output_ends_immediately() {
         request: request(3, 0.0),
     });
     r.settle();
-    assert!(r.events.contains(&EngineEvent::CueEnded { player: P }));
+    assert!(r.events.contains(&EngineEvent::CueEnded {
+        player: P,
+        entry: EntryId(3)
+    }));
 }
 
 #[test]
@@ -697,5 +703,54 @@ fn a_fade_stop_on_the_exact_frame_of_a_transition_still_ends() {
         r.engine.attached_sources(),
         1,
         "only the preloaded next is left, waiting"
+    );
+}
+
+#[test]
+fn a_transition_to_a_next_not_ready_yet_starts_it_when_ready_without_underruns() {
+    let gate = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut r = rig_with(gated_opener(96_000, Arc::clone(&gate)), false);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(SourceRequest {
+            path: PathBuf::from("slow2"),
+            ..request(2, 0.0)
+        }),
+    });
+    r.run(1);
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: 0.1,
+            fade_current_until_secs: None,
+        }),
+    });
+    r.run(30); // past the transition, the next still opening
+    gate.store(true, std::sync::atomic::Ordering::Release);
+    r.settle();
+    r.run(10);
+    assert!(
+        r.events.contains(&EngineEvent::TransitionStarted {
+            player: P,
+            entry: EntryId(2),
+        }),
+        "{:?}",
+        r.events
+    );
+    let first = r.heard.iter().position(|v| tag(*v).0 == 2).unwrap();
+    assert_eq!(
+        tag(r.heard[first]),
+        (2, 0),
+        "the next starts from its first frame"
+    );
+    assert_eq!(
+        r.engine.telemetry(P).underruns,
+        0,
+        "no silence played as audio"
     );
 }

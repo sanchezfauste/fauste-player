@@ -320,6 +320,9 @@ pub(crate) fn failed(state: &mut AppState, cart: CartId) {
     }
 }
 
-pub(crate) fn cue_ended(state: &mut AppState) {
-    state.cartwall.cue = None;
+/// The pre-listen of `cart` ended; a newer pre-listen stays.
+pub(crate) fn cue_ended(state: &mut AppState, cart: CartId) {
+    if state.cartwall.cue == Some(cart) {
+        state.cartwall.cue = None;
+    }
 }

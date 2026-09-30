@@ -112,6 +112,9 @@ pub struct Bus {
     opened_beat: u64,
     /// Whether the open stream got the exclusive access it asked for.
     exclusive_granted: bool,
+    /// Rates this device refused, not asked for again until it comes back
+    /// from a loss (it may be another device by then).
+    refused_rates: std::collections::HashSet<u32>,
 }
 
 impl Bus {
@@ -146,14 +149,18 @@ impl Bus {
             last_error: None,
             opened_beat: 0,
             exclusive_granted: false,
+            refused_rates: std::collections::HashSet::new(),
         };
-        if !bus.try_open(now) {
+        if !bus.try_open(now, true) {
             bus.virtual_clock = VirtualClock::start(bus.mixer.clone(), bus.config);
         }
         bus
     }
 
-    fn try_open(&mut self, now: Instant) -> bool {
+    /// Opens the stream. With `shared_fallback`, a device that refuses
+    /// exclusive access opens shared; a rate change passes `false`, since
+    /// there the refusal is of the rate, not of exclusive access.
+    fn try_open(&mut self, now: Instant, shared_fallback: bool) -> bool {
         self.last_retry = now;
         self.handle.shared.lost.store(false, Ordering::Release);
         // Sources attached from now on measure at this rate (K-weighting).
@@ -170,7 +177,10 @@ impl Bus {
             self.backend
                 .open_output(&self.device, self.config, renderer, errors.clone());
         self.exclusive_granted = self.config.exclusive && opened.is_ok();
-        if self.config.exclusive && matches!(opened, Err(BackendError::Unsupported(_))) {
+        if shared_fallback
+            && self.config.exclusive
+            && matches!(opened, Err(BackendError::Unsupported(_)))
+        {
             // Bit-perfect needs exclusive access; without it the device must
             // still play (Phase 4 spec B4).
             tracing::warn!(bus = ?self.key, "exclusive access refused; opening shared");
@@ -239,20 +249,38 @@ impl Bus {
         if rate == previous {
             return true;
         }
+        if self.refused_rates.contains(&rate) {
+            return false;
+        }
         self.stream = None;
         self.virtual_clock = None;
         self.config.sample_rate = rate;
-        if self.try_open(now) {
+        self.follow_rate(previous, rate);
+        // On an exclusive stream, a refusal is of the rate: keep exclusive
+        // access at the previous rate. A device that is shared anyway may
+        // change rate shared.
+        let shared_fallback = !self.exclusive_granted;
+        if self.try_open(now, shared_fallback) {
             tracing::info!(bus = ?self.key, rate, "stream rate follows the file");
             return true;
         }
         tracing::warn!(bus = ?self.key, rate, error = ?self.last_error, "rate refused; keeping the previous one");
+        self.refused_rates.insert(rate);
         self.config.sample_rate = previous;
-        if !self.try_open(now) {
+        self.follow_rate(rate, previous);
+        if !self.try_open(now, true) {
             self.health = BusHealth::Lost;
             self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
         }
         false
+    }
+
+    /// Keeps the mixer's frame-based durations at their length in time.
+    fn follow_rate(&self, from_rate: u32, to_rate: u32) {
+        self.mixer
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .follow_rate(from_rate, to_rate);
     }
 
     /// Current bus time in frames.
@@ -291,11 +319,16 @@ impl Bus {
             }
             BusHealth::Lost => {
                 if now.saturating_duration_since(self.last_retry) >= self.timing.reconnect_interval
-                    && self.try_open(now)
                 {
-                    tracing::info!(bus = ?self.key, "output device back");
-                    // The device renders from now on; stop the stand-in.
+                    // Stop the stand-in first, so it and a stream that starts
+                    // rendering at once never both advance the timeline.
                     self.virtual_clock = None;
+                    if self.try_open(now, true) {
+                        tracing::info!(bus = ?self.key, "output device back");
+                        self.refused_rates.clear();
+                    } else {
+                        self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
+                    }
                 }
             }
         }

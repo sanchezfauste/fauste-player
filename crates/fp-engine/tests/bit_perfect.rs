@@ -373,3 +373,18 @@ fn a_track_resumed_after_a_restart_follows_its_rate() {
     let heard = r.run(4_410);
     assert!(heard.iter().any(|v| *v != 0.0), "it plays");
 }
+
+#[test]
+fn a_refused_rate_is_not_tried_again_on_every_start() {
+    let mut r = rig(true, true);
+    r.dac.refuse_rate(44_100);
+    let path = wav(r.dir.path(), "a.wav", 44_100);
+    r.start(request(1, path.clone(), pcm16(44_100)));
+    r.run(2_400);
+    r.act(EngineAction::StopNow { player: P });
+    r.run(2_400);
+    let attempts = r.dac.open_attempts();
+    r.start(request(2, path, pcm16(44_100)));
+    assert_eq!(r.dac.open_attempts(), attempts, "the device said no once");
+    assert_eq!(r.rate(), 48_000);
+}

@@ -82,8 +82,31 @@ fn rule15_cue_toggles_prelisten_of_next_and_ends_on_event() {
         vec![EngineAction::StopCue { player: p }]
     );
     apply(&mut state, Command::CueEntry(p, e[2])).unwrap();
-    on_event(&mut state, EngineEvent::CueEnded { player: p });
+    on_event(
+        &mut state,
+        EngineEvent::CueEnded {
+            player: p,
+            entry: e[2],
+        },
+    );
     assert_eq!(state.player(p).unwrap().cue, None);
+}
+
+#[test]
+fn a_stale_cue_end_does_not_end_a_newer_cue() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    apply(&mut state, Command::CueEntry(p, e[1])).unwrap();
+    apply(&mut state, Command::CueEntry(p, e[2])).unwrap();
+    // The first cue's end arrives after the second one started.
+    on_event(
+        &mut state,
+        EngineEvent::CueEnded {
+            player: p,
+            entry: e[1],
+        },
+    );
+    assert_eq!(state.player(p).unwrap().cue.map(|c| c.entry), Some(e[2]));
 }
 
 #[test]

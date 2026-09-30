@@ -232,3 +232,47 @@ fn a_zero_length_loop_ends() {
     drain(&mut c, &mut got);
     assert!(got.is_empty());
 }
+
+/// Gives `frames` frames, then nothing more (a stalled read), counting calls.
+struct Stalling {
+    frames: usize,
+    calls: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl SampleSource for Stalling {
+    fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        out.extend(std::iter::repeat_n(
+            0.5,
+            std::mem::take(&mut self.frames) * 2,
+        ));
+        std::thread::sleep(Duration::from_millis(1));
+        Ok(true)
+    }
+}
+
+fn stalling_after(frames: usize, calls: Arc<std::sync::atomic::AtomicUsize>) -> SourceOpener {
+    Arc::new(move |_path, _from, _rate| {
+        Ok(Box::new(Stalling {
+            frames,
+            calls: Arc::clone(&calls),
+        }) as Box<dyn SampleSource>)
+    })
+}
+
+#[test]
+fn the_ready_threshold_is_the_same_time_at_any_source_rate() {
+    // 100 frames at the worker's 48 kHz; 150 frames is enough there, but
+    // only 1.56 ms at 96 kHz, short of the same 2.08 ms.
+    for (rate, ready) in [(48_000, true), (96_000, false)] {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (w, _failures) = worker(stalling_after(150, Arc::clone(&calls)));
+        let (p, _c) = source_pair(4_000);
+        let shared = p.shared.clone();
+        w.load_at(SourceKey(1), PathBuf::from("x"), 0.0, p, rate);
+        wait_until("the stall", || {
+            calls.load(std::sync::atomic::Ordering::Acquire) >= 3
+        });
+        assert_eq!(shared.is_ready(), ready, "at {rate} Hz");
+    }
+}

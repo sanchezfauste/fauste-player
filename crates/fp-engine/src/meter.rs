@@ -57,6 +57,14 @@ impl MeterInput {
         self.frames = self.frames.max(other.frames);
     }
 
+    /// Appends a later measurement of the same source: the spans follow
+    /// each other, so their frames add up.
+    pub fn extend(&mut self, later: MeterInput) {
+        let frames = self.frames.saturating_add(later.frames);
+        self.merge(later);
+        self.frames = frames;
+    }
+
     /// The measurement with every non-finite value (a NaN or infinite
     /// sample in a file) read as silence, so it cannot stick in a meter.
     fn finite(mut self) -> Self {

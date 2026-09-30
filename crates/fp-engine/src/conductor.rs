@@ -81,13 +81,29 @@ pub struct ConductorHandle {
     thread: Option<JoinHandle<()>>,
 }
 
+/// Characters of a command kept in a log line.
+const LOGGED_COMMAND_CHARS: usize = 120;
+
+/// The start of `command`'s debug form, so a dropped command with a huge
+/// payload (thousands of paths, a whole configuration) logs one short line.
+fn command_summary(command: &Command) -> String {
+    let full = format!("{command:?}");
+    match full.char_indices().nth(LOGGED_COMMAND_CHARS) {
+        Some((cut, _)) => format!("{}…", full.get(..cut).unwrap_or_default()),
+        None => full,
+    }
+}
+
 impl ConductorHandle {
     /// Queues a command; never blocks. `false` if the queue is full.
     pub fn send(&self, command: Command) -> bool {
         match self.commands.try_send(command) {
             Ok(()) => true,
             Err(TrySendError::Full(c)) => {
-                tracing::warn!(command = ?c, "command queue full; command dropped");
+                tracing::warn!(
+                    command = %command_summary(&c),
+                    "command queue full; command dropped"
+                );
                 false
             }
             Err(TrySendError::Disconnected(_)) => false,
@@ -319,5 +335,27 @@ impl Conductor {
         handle.stop = Some(stop);
         handle.thread = Some(thread);
         Ok(handle)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::command_summary;
+    use fp_model::Command;
+    use std::path::PathBuf;
+
+    #[test]
+    fn a_dropped_command_is_logged_briefly() {
+        let paths = (0..10_000)
+            .map(|n| PathBuf::from(format!("/m/{n}.flac")))
+            .collect();
+        let command = Command::InsertPaths {
+            playlist: fp_model::PlaylistId(1),
+            index: 0,
+            paths,
+        };
+        let summary = command_summary(&command);
+        assert!(summary.starts_with("InsertPaths"), "{summary}");
+        assert!(summary.chars().count() <= 121, "{} chars", summary.len());
     }
 }

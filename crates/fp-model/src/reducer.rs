@@ -216,9 +216,11 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
         }
         EngineEvent::CartEnded { cart } => cart_rules::ended(state, cart),
         EngineEvent::CartFailed { cart } => cart_rules::failed(state, cart),
-        EngineEvent::CartCueEnded => cart_rules::cue_ended(state),
-        EngineEvent::CueEnded { player } => {
-            if let Ok(i) = state.player_index(player) {
+        EngineEvent::CartCueEnded { cart } => cart_rules::cue_ended(state, cart),
+        EngineEvent::CueEnded { player, entry } => {
+            if let Ok(i) = state.player_index(player)
+                && state.players[i].cue.is_some_and(|c| c.entry == entry)
+            {
                 state.players[i].cue = None;
             }
         }

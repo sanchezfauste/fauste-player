@@ -133,3 +133,24 @@ impl SampleSource for Tagged {
         Ok(true)
     }
 }
+
+/// Like `tagged_opener`, but opening a path named `slow<N>` (played as
+/// `track<N>`) waits until `gate` is set: a preload that is not ready yet.
+pub fn gated_opener(frames: u64, gate: Arc<std::sync::atomic::AtomicBool>) -> SourceOpener {
+    let tagged = tagged_opener(frames);
+    Arc::new(move |path, from_secs, rate| {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        match name.strip_prefix("slow") {
+            Some(n) => {
+                while !gate.load(std::sync::atomic::Ordering::Acquire) {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                tagged(&PathBuf::from(format!("track{n}")), from_secs, rate)
+            }
+            None => tagged(path, from_secs, rate),
+        }
+    })
+}
