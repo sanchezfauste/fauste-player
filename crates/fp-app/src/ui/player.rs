@@ -385,9 +385,10 @@ fn info_row(
                             .map(format::clock)
                             .unwrap_or_default();
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            widgets::tabular_label(ui, &cue, &font(11.0), theme::CUE);
                             ui.add(
                                 egui::Label::new(
-                                    RichText::new(format!("{} {cue}", icon::HEADPHONES))
+                                    RichText::new(icon::HEADPHONES)
                                         .font(font(11.0))
                                         .color(theme::CUE),
                                 )
@@ -584,19 +585,15 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
                 let total = pv.total.unwrap_or(0.0);
-                let (w, h) = (
-                    ui.painter()
-                        .layout_no_wrap(
-                            format!("/ {}", format::clock(total)),
-                            font(12.0),
-                            theme::NEUTRAL_500,
-                        )
-                        .size()
-                        .x
-                        .max(40.0)
-                        + 10.0,
-                    36.0,
-                );
+                let total_text = format!("/ {}", format::clock(total));
+                let elapsed_text = format::clock(pv.elapsed);
+                let small = font(12.0);
+                let w = widgets::tabular_size(ui.painter(), &total_text, &small)
+                    .x
+                    .max(widgets::tabular_size(ui.painter(), &elapsed_text, &small).x)
+                    .max(40.0)
+                    + 10.0;
+                let h = 36.0;
                 let (rect, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
                 let p = ui.painter();
                 p.rect_filled(
@@ -604,18 +601,19 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                     0.0,
                     theme::NEUTRAL_800,
                 );
-                p.text(
+                widgets::paint_tabular(
+                    p,
                     pos2(rect.left() + 9.0, rect.top() + 2.0),
-                    egui::Align2::LEFT_TOP,
-                    format::clock(pv.elapsed),
-                    font(12.0),
+                    &elapsed_text,
+                    &small,
                     theme::NEUTRAL_300,
                 );
-                p.text(
-                    pos2(rect.left() + 9.0, rect.bottom() - 2.0),
-                    egui::Align2::LEFT_BOTTOM,
-                    format!("/ {}", format::clock(total)),
-                    font(12.0),
+                let bottom = widgets::tabular_size(p, &total_text, &small).y;
+                widgets::paint_tabular(
+                    p,
+                    pos2(rect.left() + 9.0, rect.bottom() - 2.0 - bottom),
+                    &total_text,
+                    &small,
                     theme::NEUTRAL_500,
                 );
                 let (main, tenths) = format::countdown(pv.remaining);
@@ -624,21 +622,30 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 } else {
                     theme::TEXT
                 };
-                let mut job = egui::text::LayoutJob::default();
-                job.append(
-                    &main,
-                    0.0,
-                    egui::TextFormat::simple(font_medium(38.0), colour),
+                let big = font_medium(38.0);
+                let tenths_font = font_medium(17.0);
+                let main_size = widgets::tabular_size(ui.painter(), &main, &big);
+                let tenths_size = widgets::tabular_size(ui.painter(), &tenths, &tenths_font);
+                let (rect, response) = ui.allocate_exact_size(
+                    vec2(main_size.x + tenths_size.x, main_size.y),
+                    Sense::hover(),
                 );
-                job.append(
+                let spoken = format!("{main}{tenths}");
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Label, true, spoken.clone())
+                });
+                widgets::paint_tabular(ui.painter(), rect.left_top(), &main, &big, colour);
+                // The tenths sit on the bottom of the big digits, smaller and dimmed.
+                widgets::paint_tabular(
+                    ui.painter(),
+                    pos2(
+                        rect.left() + main_size.x,
+                        rect.bottom() - tenths_size.y - 4.0,
+                    ),
                     &tenths,
-                    0.0,
-                    egui::TextFormat {
-                        valign: Align::BOTTOM,
-                        ..egui::TextFormat::simple(font_medium(17.0), theme::NEUTRAL_500)
-                    },
+                    &tenths_font,
+                    theme::NEUTRAL_500,
                 );
-                ui.add(egui::Label::new(job).selectable(false));
             });
         },
     );
@@ -892,27 +899,27 @@ fn footer(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: PlaylistId) {
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.add_space(10.0);
         ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
-        let mut job = egui::text::LayoutJob::default();
-        job.append(
-            &format!("{} ", t.tr("footer-total")),
-            0.0,
-            egui::TextFormat::simple(font(11.0), theme::NEUTRAL_500),
-        );
-        job.append(
+        widgets::tabular_label(
+            ui,
             &format::clock(times.total),
-            0.0,
-            egui::TextFormat::simple(font(11.0), theme::NEUTRAL_300),
+            &font(11.0),
+            theme::NEUTRAL_300,
         );
-        ui.add(egui::Label::new(job).selectable(false));
-        let (r, _) = ui.allocate_exact_size(vec2(1.0, 14.0), Sense::hover());
-        ui.painter().rect_filled(r, 0.0, theme::NEUTRAL_800);
         ui.add(
             egui::Label::new(
-                RichText::new(format!("-{}", format::clock(times.remaining)))
-                    .font(font_medium(13.0))
-                    .color(theme::TEXT),
+                RichText::new(t.tr("footer-total"))
+                    .font(font(11.0))
+                    .color(theme::NEUTRAL_500),
             )
             .selectable(false),
+        );
+        let (r, _) = ui.allocate_exact_size(vec2(1.0, 14.0), Sense::hover());
+        ui.painter().rect_filled(r, 0.0, theme::NEUTRAL_800);
+        widgets::tabular_label(
+            ui,
+            &format!("-{}", format::clock(times.remaining)),
+            &font_medium(13.0),
+            theme::TEXT,
         );
     });
 }
