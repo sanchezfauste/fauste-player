@@ -11,7 +11,7 @@ use fp_app::ui::theme::{self, WAVE_PALETTE, wave_colors};
 
 #[test]
 fn every_waveform_colour_name_resolves() {
-    assert_eq!(WAVE_PALETTE.len(), 8);
+    assert_eq!(WAVE_PALETTE.len(), 9);
     for (name, colours) in WAVE_PALETTE {
         assert_eq!(wave_colors(name), *colours, "{name}");
         assert_eq!(
@@ -24,7 +24,10 @@ fn every_waveform_colour_name_resolves() {
         wave_colors("sand").played,
         Color32::from_rgb(0xe0, 0xcf, 0xac)
     );
-    assert_eq!(wave_colors("no such colour"), wave_colors("sand"));
+    let slate = wave_colors("slate");
+    assert_eq!(slate.played, theme::NEUTRAL_300);
+    assert_eq!(slate.unplayed, Color32::from_rgb(0x4a, 0x4e, 0x5c));
+    assert_eq!(wave_colors("no such colour"), slate);
 }
 
 #[test]
@@ -71,5 +74,26 @@ fn drawn_icons_stay_inside_their_rectangle() {
                 "{shape:?}"
             );
         }
+    }
+}
+
+#[test]
+fn stop_after_is_a_play_triangle_then_a_stop_square() {
+    use fp_app::ui::icons;
+    // The player draws it in an 18 × 13 rectangle.
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(18.0, 13.0));
+    let shapes = icons::stop_after(rect, theme::TEXT);
+    assert_eq!(shapes.len(), 2);
+    let triangle = shapes[0].visual_bounding_rect();
+    let square = shapes[1].visual_bounding_rect();
+    assert!(matches!(shapes[1], egui::Shape::Rect(_)), "{:?}", shapes[1]);
+    assert!(triangle.right() < square.left(), "{triangle:?} {square:?}");
+    assert!(
+        (square.width() - square.height()).abs() < 0.01,
+        "{square:?}"
+    );
+    assert!((triangle.center().y - square.center().y).abs() < 0.01);
+    for r in [triangle, square] {
+        assert!(rect.contains_rect(r), "{r:?}");
     }
 }
