@@ -100,6 +100,83 @@ pub fn tile(
     response.on_hover_text(label)
 }
 
+/// One option of a [`segmented`] control: its visible text and its
+/// accessible name (also the tooltip).
+pub struct Segment<'a> {
+    pub text: &'a str,
+    pub label: &'a str,
+}
+
+/// A segmented control: the options side by side inside one border, the
+/// selected one filled, so they read as one choice. Returns the index of an
+/// option clicked when it is not the selected one.
+pub fn segmented(
+    ui: &mut Ui,
+    id: egui::Id,
+    options: &[Segment<'_>],
+    selected: usize,
+) -> Option<usize> {
+    const HEIGHT: f32 = 20.0;
+    const PAD: f32 = 7.0;
+    let text_font = font_semibold(9.0);
+    let widths: Vec<f32> = options
+        .iter()
+        .map(|o| {
+            ui.painter()
+                .layout_no_wrap(o.text.to_owned(), text_font.clone(), theme::TEXT)
+                .size()
+                .x
+                + 2.0 * PAD
+        })
+        .collect();
+    let (rect, _) = ui.allocate_exact_size(vec2(widths.iter().sum(), HEIGHT), Sense::hover());
+    let mut clicked = None;
+    let mut x = rect.left();
+    for (i, (option, width)) in options.iter().zip(&widths).enumerate() {
+        let r = Rect::from_min_size(pos2(x, rect.top()), vec2(*width, HEIGHT));
+        x += width;
+        let on = i == selected;
+        let response = ui
+            .interact(r, id.with(i), Sense::click())
+            .on_hover_text(option.label);
+        let label = option.label.to_owned();
+        response
+            .widget_info(|| WidgetInfo::selected(WidgetType::RadioButton, true, on, label.clone()));
+        if response.clicked() && !on {
+            clicked = Some(i);
+        }
+        if ui.is_rect_visible(r) {
+            let fill = if on {
+                theme::NEUTRAL_700
+            } else if response.hovered() {
+                theme::NEUTRAL_900
+            } else {
+                Color32::TRANSPARENT
+            };
+            let content = if on || response.hovered() {
+                theme::TEXT
+            } else {
+                theme::NEUTRAL_500
+            };
+            ui.painter().rect_filled(r, 0.0, fill);
+            ui.painter().text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                option.text,
+                text_font.clone(),
+                content,
+            );
+        }
+    }
+    ui.painter().rect_stroke(
+        rect,
+        0.0,
+        Stroke::new(1.0, theme::NEUTRAL_700),
+        StrokeKind::Inside,
+    );
+    clicked
+}
+
 /// Paints a Phosphor glyph centred in `rect`.
 pub fn glyph(painter: &Painter, rect: Rect, icon: &str, size: f32, color: Color32, fill: bool) {
     let family = if fill {

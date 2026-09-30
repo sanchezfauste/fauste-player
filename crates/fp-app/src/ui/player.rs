@@ -192,36 +192,30 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                 {
                     scene.ctl.send(Command::ToggleCue(id));
                 }
-                for (mode, key, tip) in [
-                    (PlayMode::Continuous, "mode-cont", "tip-cont"),
-                    (PlayMode::Single, "mode-single", "tip-single"),
-                ] {
-                    let on = pv.mode == mode;
-                    let text = t.tr(key);
-                    let style = TileStyle {
-                        fill: if on {
-                            theme::NEUTRAL_700
-                        } else {
-                            Color32::TRANSPARENT
+                let single_text = t.tr("mode-single");
+                let cont_text = t.tr("mode-cont");
+                let single_tip = t.tr("tip-single");
+                let cont_tip = t.tr("tip-cont");
+                let modes = [PlayMode::Single, PlayMode::Continuous];
+                let selected = usize::from(pv.mode == PlayMode::Continuous);
+                if let Some(mode) = widgets::segmented(
+                    ui,
+                    egui::Id::new(("play-mode", id)),
+                    &[
+                        widgets::Segment {
+                            text: &single_text,
+                            label: &single_tip,
                         },
-                        content: if on { theme::TEXT } else { theme::NEUTRAL_500 },
-                        ..TileStyle::plain()
-                    };
-                    let width = if mode == PlayMode::Single { 46.0 } else { 40.0 };
-                    if widgets::tile(ui, vec2(width, 20.0), &t.tr(tip), true, style, |p, r, c| {
-                        p.text(
-                            r.center(),
-                            egui::Align2::CENTER_CENTER,
-                            &text,
-                            font_semibold(9.0),
-                            c,
-                        );
-                    })
-                    .clicked()
-                        && !on
-                    {
-                        scene.ctl.send(Command::SetMode(id, mode));
-                    }
+                        widgets::Segment {
+                            text: &cont_text,
+                            label: &cont_tip,
+                        },
+                    ],
+                    selected,
+                )
+                .and_then(|i| modes.get(i).copied())
+                {
+                    scene.ctl.send(Command::SetMode(id, mode));
                 }
                 let bp = t.tr("badge-bp");
                 let (tip, content) = if pv.bit_perfect {
