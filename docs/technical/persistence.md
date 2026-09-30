@@ -167,7 +167,7 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 
 | Field | Default | Meaning |
 |---|---|---|
-| `wave_color` | `sand` | `violet`, `amber`, `cyan`, `white`, `orange`, `magenta`, `ice`, `sand` |
+| `wave_color` | `slate` | `violet`, `amber`, `cyan`, `white`, `orange`, `magenta`, `ice`, `sand`, `slate` |
 | `music_dir` | none | the folder where file dialogs start |
 | `language` | none (OS locale) | BCP-47 tag (`en-US`, `es-ES`) |
 

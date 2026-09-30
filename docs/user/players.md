@@ -12,7 +12,7 @@ playlist tabs, transport, volume and outputs.
 | **Mixing** / **Fading** badge | A crossfade into the next track, or a fade stop, is running |
 | **Stop after** badge | The player stops when the current track ends |
 | **BP** | Lit while the current track reaches its Main device unchanged (see [Bit-perfect output](bit-perfect.md)) |
-| **SINGLE** / **CONT** | Play mode (see below) |
+| **SINGLE** \| **CONT** | Play mode (see below): one joined control, the lit half is the active mode |
 | **CUE** | Pre-listen the next track on the CUE output |
 
 ## Info row
@@ -51,7 +51,7 @@ playlist tabs, transport, volume and outputs.
 | **Stop** | Stop at once (with a short de-click ramp) |
 | **Fade stop** | Fade out and stop |
 | **Pause** | Pause or resume; blinks amber while paused |
-| **Stop after** | Stop when the current track ends (continuous mode only) |
+| **Stop after** (a play triangle then a square) | Stop when the current track ends (continuous mode only) |
 
 ## Modes
 

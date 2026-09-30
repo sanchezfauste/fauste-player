@@ -19,7 +19,8 @@
 | `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
 | `ui/shell.rs` | Panic isolation around each frame |
 | `ui/view.rs`, `ui/format.rs` | Pure view model: what to show, how to format it (unit-tested) |
-| `ui/widgets.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, VU, fader, waveform), drawn icons, the Nocturne theme |
+| `ui/widgets.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, segmented control, tabular times, VU, fader, waveform), drawn icons, the Nocturne theme |
+| `ui/about.rs` | The About window: version, copyright, bundled notices, and the third-party notices file (located at start-up, opened on a helper thread) |
 | `ui/controller.rs` | The `Controller` trait between the UI and the rest |
 | `ui/files.rs` | Accepted audio extensions and folder expansion |
 
@@ -66,6 +67,10 @@ language the interface was built with.
 
 Native file and folder dialogs (`rfd::AsyncFileDialog` driven by `pollster`),
 scans of dropped folders and device enumeration all run on helper threads.
+`main.rs` looks for the third-party notices (`about::find_notices`: next to
+the executable, `../Resources/licenses`, `../share/doc/fauste-player`,
+`../share/licenses/org.fauste.FaustePlayer`) once before the first frame, and
+the About window opens the file with `open` on the `fp-open-notices` thread.
 Their results come back through channels.
 
 ## Theme and fonts
@@ -74,7 +79,9 @@ Their results come back through channels.
 `oklch` colours are converted once. Corners are square. Inter (400/500/600,
 OFL) is embedded, and Phosphor icons come from `egui-phosphor`, regular and
 fill. Waveform colours are a named palette (`WAVE_PALETTE`); an unknown name
-falls back to Sand. Fonts are installed on the first frame, and drawing starts
+falls back to Slate. Inter's digits are proportional, so times are painted
+with `widgets::paint_tabular`/`tabular_label`, which centre every digit in a
+cell as wide as the widest one: a countdown keeps its width as it runs. Fonts are installed on the first frame, and drawing starts
 on the next one, when they are bound.
 
 ## Panic isolation

@@ -31,7 +31,10 @@ audio engine that the interface can never block.
 - **Independent players:** four by default, any number configurable. Each
   has Play/Next, Stop, Fade stop, Pause and Stop-after-current, SINGLE and
   CONT modes, a countdown with tenths, a stereo meter, a volume fader and
-  its own playlist tabs.
+  its own playlist tabs. Times keep a fixed width as they count.
+- **About window:** the version sits next to the name in the top bar; a
+  click opens the copyright and the licence notices of the bundled
+  components.
 - **Standard level meters:** digital peak (IEC 60268-18), EBU and DIN PPM
   (IEC 60268-10), VU (IEC 60268-17) and K-System (K-20, K-14, K-12), each
   with its own ballistics and scale. Optional true peak and EBU R128
@@ -318,6 +321,10 @@ their own licences:
 
 - the Inter font: SIL Open Font License 1.1,
   [`OFL.txt`](crates/fp-app/assets/fonts/OFL.txt);
-- the Phosphor icons: MIT;
+- the Phosphor icons: MIT,
+  [`Phosphor-MIT.txt`](crates/fp-app/assets/licenses/Phosphor-MIT.txt);
 - every Rust dependency: listed in `licenses/THIRD-PARTY.html` inside each
   release archive.
+
+The About window (click the name in the top bar) shows the copyright, both
+bundled notices and a button that opens the installed `THIRD-PARTY.html`.
