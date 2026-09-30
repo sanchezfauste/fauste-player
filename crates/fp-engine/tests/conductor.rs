@@ -518,6 +518,26 @@ fn the_meter_maximum_outlasts_a_stop_and_restarts_with_the_next_entry() {
 }
 
 #[test]
+fn the_meter_maximum_restarts_when_the_same_entry_plays_again() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 1));
+    let p = conductor.state().players[0].id;
+    let (_, stopped) = play_then_stop(&mut conductor, &handle, &device, &mut now);
+    let first = conductor.state().playlists.iter().next().unwrap().entries[0].id;
+    assert!(handle.send(Command::Play(p)));
+    conductor.tick(now);
+    assert_eq!(
+        conductor.state().players[0].current,
+        Some(first),
+        "the same entry"
+    );
+    let restarted = meter_of(&handle, p);
+    assert!(
+        restarted.max_db < stopped.max_db - 3.0,
+        "playing it again restarts it: {restarted:?}"
+    );
+}
+
+#[test]
 fn the_meter_maximum_restarts_on_request() {
     let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
     let p = conductor.state().players[0].id;

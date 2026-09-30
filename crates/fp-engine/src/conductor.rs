@@ -238,9 +238,11 @@ impl Conductor {
         let ids: Vec<PlayerId> = self.state.players.iter().map(|p| p.id).collect();
         self.meters.retain(|id, _| ids.contains(id));
         self.metered_entries.retain(|id, _| ids.contains(id));
-        // A new entry restarts the maximum; a stop (no entry) keeps it.
+        // A new entry, or the same one played again, restarts the maximum;
+        // a stop (no entry) keeps it on show until then.
         for player in &self.state.players {
             let Some(entry) = player.current else {
+                self.metered_entries.remove(&player.id);
                 continue;
             };
             if self.metered_entries.insert(player.id, entry) != Some(entry)

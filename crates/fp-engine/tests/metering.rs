@@ -705,6 +705,23 @@ fn a_restarted_maximum_ignores_the_bar_still_falling_from_before() {
 }
 
 #[test]
+fn a_restarted_vu_maximum_ignores_the_needle_still_falling_from_before() {
+    // A loud track cut into a quiet one with sharp peaks: the VU reads the
+    // quiet track's average, so its maximum must not follow the needle on
+    // its way down, capped only by the raw peaks.
+    let c = config(MeterBallistics::Vu);
+    let mut m = MeterState::default();
+    run(&mut m, &c, peak(0.9), 1.0);
+    m.reset_max();
+    let quiet = MeterInput {
+        peak: [0.9; 2],
+        ..peak(0.1)
+    };
+    let r = run(&mut m, &c, quiet, 0.05);
+    assert!((r.max_db + 20.0).abs() < 0.1, "{}", r.max_db);
+}
+
+#[test]
 fn a_non_finite_block_does_not_break_the_meter() {
     let c = MeterConfig::default();
     let mut m = MeterState::default();

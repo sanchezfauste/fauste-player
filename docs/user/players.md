@@ -32,7 +32,8 @@ playlist tabs, transport, volume and outputs.
   - The highest level stays lit for a moment as a line (the peak hold).
   - The number above is the highest level since the entry started, in
     dBFS, red in the danger zone. It stays after a stop and starts again
-    with the next entry, or when you click it.
+    when an entry plays (the next one or the same again), or when you
+    click it.
   - The number underneath is the loudness in LUFS (EBU R128), green within
     ±1 LU of the target (−23 LUFS).
   - The meter type and every level can be changed in

@@ -407,19 +407,24 @@ impl MeterState {
             let Some(linear) = self.linear.get_mut(ch) else {
                 continue;
             };
+            // What this tick measured, on the meter's own terms: the VU
+            // reads the calibrated rectified average, the others the peak.
+            let measured = if b.vu {
+                let sum = input.sum_abs.get(ch).copied().unwrap_or(0.0);
+                if input.frames > 0 {
+                    sum / input.frames as f64 * VU_SINE_CALIBRATION
+                } else {
+                    0.0
+                }
+            } else {
+                f64::from(input.peak.get(ch).copied().unwrap_or(0.0))
+            };
             if let Some(span) = span {
                 if b.vu {
-                    let (Some(sum), Some((position, velocity))) =
-                        (input.sum_abs.get(ch), self.vu.get_mut(ch))
-                    else {
+                    let Some((position, velocity)) = self.vu.get_mut(ch) else {
                         continue;
                     };
-                    let average = if input.frames > 0 {
-                        sum / input.frames as f64
-                    } else {
-                        0.0
-                    };
-                    move_vu(position, velocity, average * VU_SINE_CALIBRATION, span);
+                    move_vu(position, velocity, measured, span);
                     *linear = position.max(0.0) as f32;
                 } else {
                     move_level(linear, &b, &input, ch, span);
@@ -432,8 +437,7 @@ impl MeterState {
             // Only what this tick measured counts: after a restart the bar
             // may still be falling from the previous entry.
             if input.frames > 0 {
-                let measured = to_db(input.peak.get(ch).copied().unwrap_or(0.0));
-                self.max_db = self.max_db.max(db.min(measured));
+                self.max_db = self.max_db.max(db.min(to_db(measured as f32)));
             }
             if let (Some(span), Some(ms), Some(sum)) =
                 (span, self.mean_square.get_mut(ch), input.sum_sq.get(ch))

@@ -14,7 +14,8 @@ blocks. The result holds:
   reading the file;
 - `peaks`: one `WavePeak { min, max, rms }` (`i16`, full scale =
   `i16::MAX`) per `analysis.peak_bucket_ms` (10 ms) of the mono sum. The
-  waveform draws the peaks dimmed and the RMS level as a solid body;
+  waveform draws the peaks dimmed and the RMS level as a solid body, one
+  mesh of 1 px columns whose reduction is kept per track, span and width;
 - `cover_png`: a PNG thumbnail of the embedded cover (`analysis.cover_thumb_px`,
   128 px).
 
@@ -69,6 +70,9 @@ that is analysed but has no format), the
 analysis settings and the cover limits. The key is taken *before* analysing,
 and the result is only stored if the file did not change meanwhile. Writes
 use unique temporary files. Corrupt entries are ignored and recomputed.
+File names are `v<ANALYSIS_VERSION>-<hash>.bin`: opening the cache removes
+entries of any other version (they can never match a key again) and
+leftover temporary files.
 
 ## Pool (`analyzer.rs`)
 

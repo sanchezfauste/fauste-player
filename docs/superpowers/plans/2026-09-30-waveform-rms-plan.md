@@ -51,3 +51,12 @@
   - about 2 rects per pixel per player every frame, and the bucket reduction runs every frame (cache it per track and width, or build one mesh);
   - cache entries grow from about 6 to about 8 bytes per bucket, and old-version entries are never pruned;
   - no tests for a silent bucket, a NaN bucket length, or an old-version cache key missing.
+
+## Follow-up (fix/meter-waveform-minors)
+
+- Fixed: column boundaries get a 1e-6 bucket nudge so the last bucket is kept; a non-finite bucket length or span draws nothing; `a0 + 1` saturates.
+- Fixed: the reduction is memoised per track (`Arc` identity), span and width (`memo_columns`), and the columns are drawn as one mesh.
+- Fixed: cache file names carry the analysis version, and opening the cache prunes other versions.
+- Fixed: tests for a silent bucket, non-finite inputs, a huge span and old-version pruning.
+- Ruling: no cap on the column count — it is the widget's pixel width, bounded by the screen — cost if wrong: one allocation per frame of an absurd width.
+- Ruling: the RMS byte pair per bucket stays (about 8 bytes per 10 ms, about 2.9 MB for a 1 h track) — it is what the solid body is drawn from — cost if wrong: a larger cache directory.

@@ -255,5 +255,5 @@ settings-loudness-target = Loudness target
 settings-hint-loudness-target = The readout is green within ±1 LU (EBU R128: −23 LUFS).
 meter-loudness = Loudness { $value } LUFS
 meter-max = Maximum { $value } dBFS
-tip-meter-max = Highest level since the track started. Click to restart it.
+tip-meter-max = Highest level since the track started playing. Click to restart it.
 tip-on-air-elsewhere = On air on player { $n }

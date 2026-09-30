@@ -1,6 +1,8 @@
 //! One postcard file per analysed track. The key covers everything that can
 //! change the result: the file (path, size, mtime), the analysis code
-//! version, the analysis settings and the cover limits.
+//! version, the analysis settings and the cover limits. File names start
+//! with the analysis version, so entries of older versions, which can never
+//! be read again, are removed when the cache opens.
 
 use std::fs;
 use std::io::{self, Write};
@@ -33,6 +35,11 @@ pub struct AnalysisCache {
     tmp_counter: AtomicU64,
 }
 
+/// How the names of this analysis version's entries start.
+fn version_prefix() -> String {
+    format!("v{ANALYSIS_VERSION}-")
+}
+
 /// FNV-1a 64: a stable hash (unlike `DefaultHasher`) for cache file names.
 fn fnv1a(bytes: &[u8]) -> u64 {
     bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| {
@@ -42,12 +49,20 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 
 impl AnalysisCache {
     /// Opens (or creates on first store) a cache in `dir`. Temporary files
-    /// left by an interrupted run are swept.
+    /// left by an interrupted run and entries of older analysis versions
+    /// are swept.
     pub fn new(dir: PathBuf, limits: &Limits) -> Self {
+        let current = version_prefix();
         if let Ok(entries) = fs::read_dir(&dir) {
             for entry in entries.flatten() {
-                if entry.path().extension().is_some_and(|e| e == "tmp") {
-                    let _ = fs::remove_file(entry.path());
+                let path = entry.path();
+                let stale = match path.extension().and_then(|e| e.to_str()) {
+                    Some("tmp") => true,
+                    Some("bin") => !entry.file_name().to_string_lossy().starts_with(&current),
+                    _ => false,
+                };
+                if stale {
+                    let _ = fs::remove_file(path);
                 }
             }
         }
@@ -78,8 +93,11 @@ impl AnalysisCache {
     }
 
     fn file_for(&self, key: &CacheKey) -> PathBuf {
-        self.dir
-            .join(format!("{:016x}.bin", fnv1a(key.0.as_bytes())))
+        self.dir.join(format!(
+            "{}{:016x}.bin",
+            version_prefix(),
+            fnv1a(key.0.as_bytes())
+        ))
     }
 
     /// The cached analysis for `key`. A corrupt or oversized entry is
