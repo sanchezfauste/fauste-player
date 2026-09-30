@@ -276,6 +276,25 @@ fn labels_stay_between_the_readouts() {
 }
 
 #[test]
+fn both_ends_of_every_scale_are_labelled() {
+    for ballistics in ALL_METERS {
+        for loudness in [false, true] {
+            let c = meter(ballistics);
+            let marks = scale_marks(&c);
+            let l = meter_layout(column(136.0), &c, loudness);
+            let labels: Vec<&str> = l.lines.iter().map(|m| m.label.as_str()).collect();
+            for end in [marks.first().unwrap(), marks.last().unwrap()] {
+                let want = mark_label(*end, &c);
+                assert!(
+                    labels.contains(&want.as_str()),
+                    "{ballistics:?}: {want} in {labels:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn a_tall_digital_meter_labels_its_main_marks() {
     let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
     let labels: Vec<&str> = l.lines.iter().map(|m| m.label.as_str()).collect();

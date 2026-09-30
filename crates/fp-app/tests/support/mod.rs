@@ -134,6 +134,15 @@ pub fn harness_from(
     state: AppState,
     build: impl FnOnce(AppUi) -> AppUi,
 ) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    harness_sized(state, egui::vec2(1000.0, 700.0), build)
+}
+
+/// As `harness_from`, in a window of `size`.
+pub fn harness_sized(
+    state: AppState,
+    size: egui::Vec2,
+    build: impl FnOnce(AppUi) -> AppUi,
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let fake = Fake::new(state);
     let ui = build(AppUi::new(
         fake.clone(),
@@ -142,7 +151,7 @@ pub fn harness_from(
     ));
     // Short frames, so that two clicks fall within the double-click delay.
     let mut harness = Harness::builder()
-        .with_size(egui::vec2(1000.0, 700.0))
+        .with_size(size)
         .with_step_dt(0.02)
         .build_ui_state(|ui, app: &mut AppUi| app.ui(ui), ui);
     harness.run_steps(2);

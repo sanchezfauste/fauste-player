@@ -679,8 +679,15 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         alignment.label.clear();
     }
     let mut lines: Vec<MeterLine> = Vec::new();
-    // Top down, so where the scale is dense the upper marks are kept.
-    for mark in marks.into_iter().rev() {
+    // Both ends of the scale first, so its range is always labelled; then
+    // top down, so where the scale is dense the upper marks are kept.
+    let ends = [marks.last().copied(), marks.first().copied()];
+    let middle = marks
+        .iter()
+        .rev()
+        .skip(1)
+        .take(marks.len().saturating_sub(2));
+    for mark in ends.into_iter().flatten().chain(middle.copied()) {
         if (mark - alignment_dbfs(c)).abs() < SAME_MARK_DB {
             continue;
         }
