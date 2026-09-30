@@ -22,8 +22,16 @@ last playlist, and a playlist with a track on air, cannot be deleted.
 | Artist | From the tags; "Unknown artist" when there is none |
 | Dur. | Playing length, from cue-in to cue-out |
 
-Columns can be resized by dragging the header separators. The widths are
-remembered per player.
+The columns fill the table and keep their proportions when the window is
+resized; Title gets the most room. Drag the header separators to change the
+proportions; they are remembered per player.
+
+When a player moves on to another track, its table shows that track's
+playlist and scrolls its row to the top, unless you used the table in the
+last 10 seconds (scrolled it, dragged a track, opened a track's menu or
+clicked a tab): then it waits until you leave it alone for that long. The
+time is `ui.follow_current_grace_secs` in `config.json`; 0 turns following
+off.
 
 Players are independent: several players can show the same playlist, each
 with its own next track, its own played marks and its own times in the

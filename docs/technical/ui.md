@@ -66,6 +66,23 @@ language the interface was built with.
   nearest to the press origin (`ViewState::marker_drag`) and sends a single
   `SetMarker` on release. A waveform click never seeks while Alt is held.
 
+## Track table layout and follow
+
+`view::column_px` turns `ColumnWidths.fractions` (or the default layout) into
+pixel widths for the table's width every frame; `ViewState::table_layout`
+remembers the width and fractions last applied, and `TableBuilder::reset()`
+runs when either changes (not during a handle drag), since egui keeps the
+widths it was first given. On handle release the widths are stored back as
+fractions.
+
+`player::follow_current` watches each player's current entry
+(`ViewState::followed`). A change waits in `follow_pending` until
+`scene.time − table_touched ≥ ui.follow_current_grace_secs` (a scroll over
+the table, an entry drag, an open row menu or a tab click update
+`table_touched`); then it sends `ShowPlaylist` if needed and puts the entry
+in `follow_scroll`, which `track_table` turns into `scroll_to_row(i,
+Align::TOP)` once the playlist is shown. A grace of 0 never follows.
+
 ## Waveform view
 
 `ui/wave_view.rs::WaveView { start_secs, span_secs }` is the one mapping
