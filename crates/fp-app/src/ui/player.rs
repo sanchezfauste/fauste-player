@@ -657,6 +657,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
     let mix_label = t.tr("mix-marker");
     let label = t.tr("tip-waveform");
     let input = widgets::WaveInput {
+        id: egui::Id::new(("waveform", id)),
         media: media.as_ref(),
         total: pv.total,
         markers: pv.markers,

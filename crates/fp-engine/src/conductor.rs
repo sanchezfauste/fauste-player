@@ -12,7 +12,8 @@ use std::time::{Duration, Instant};
 use arc_swap::ArcSwap;
 use crossbeam_channel::{Receiver, Sender, TrySendError};
 use fp_model::{
-    AppState, CartId, Command, EngineAction, EntryId, ModelError, PlayerId, Route, apply, on_event,
+    AppState, CartId, Command, EngineAction, EngineEvent, EntryId, ModelError, PlayerId, Route,
+    apply, on_event,
 };
 
 use crate::engine::{BusStatus, CartTelemetry, Engine, PlayerTelemetry};
@@ -63,6 +64,9 @@ pub struct Conductor {
     metered_at: Option<Instant>,
     /// The entry each player's meter maximum belongs to.
     metered_entries: HashMap<PlayerId, EntryId>,
+    /// Players that started an entry since the last metering: each start
+    /// restarts the maximum, even of the same entry.
+    started: Vec<PlayerId>,
 }
 
 /// The UI's side of the conductor.
@@ -154,6 +158,7 @@ impl Conductor {
             meters: HashMap::new(),
             metered_at: None,
             metered_entries: HashMap::new(),
+            started: Vec::new(),
         };
         let handle = ConductorHandle {
             commands: tx,
@@ -175,6 +180,16 @@ impl Conductor {
         &self.engine
     }
 
+    /// Runs `action` on the engine, noting the players it starts.
+    fn execute(&mut self, action: EngineAction, now: Instant) {
+        if let EngineAction::StartCurrent { player, .. } | EngineAction::Crossfade { player, .. } =
+            action
+        {
+            self.started.push(player);
+        }
+        self.engine.execute(action, now);
+    }
+
     /// One iteration: commands, engine, events, snapshots.
     pub fn tick(&mut self, now: Instant) {
         let mut changed = false;
@@ -184,7 +199,7 @@ impl Conductor {
                 Ok(actions) => {
                     changed = true;
                     for action in actions {
-                        self.engine.execute(action, now);
+                        self.execute(action, now);
                     }
                 }
                 Err(e) => {
@@ -216,8 +231,11 @@ impl Conductor {
         }
         for event in self.engine.tick(now) {
             changed = true;
+            if let EngineEvent::TransitionStarted { player, .. } = event {
+                self.started.push(player);
+            }
             for action in on_event(&mut self.state, event) {
-                self.engine.execute(action, now);
+                self.execute(action, now);
             }
         }
         if changed {
@@ -238,14 +256,17 @@ impl Conductor {
         let ids: Vec<PlayerId> = self.state.players.iter().map(|p| p.id).collect();
         self.meters.retain(|id, _| ids.contains(id));
         self.metered_entries.retain(|id, _| ids.contains(id));
-        // A new entry, or the same one played again, restarts the maximum;
-        // a stop (no entry) keeps it on show until then.
+        // A new entry, or any start of one (the same entry played again,
+        // or segued into itself), restarts the maximum; a stop keeps it on
+        // show until then.
+        let started = std::mem::take(&mut self.started);
         for player in &self.state.players {
             let Some(entry) = player.current else {
                 self.metered_entries.remove(&player.id);
                 continue;
             };
-            if self.metered_entries.insert(player.id, entry) != Some(entry)
+            let new_entry = self.metered_entries.insert(player.id, entry) != Some(entry);
+            if (new_entry || started.contains(&player.id))
                 && let Some(meter) = self.meters.get_mut(&player.id)
             {
                 meter.reset_max();

@@ -2,7 +2,7 @@
 //! change the result: the file (path, size, mtime), the analysis code
 //! version, the analysis settings and the cover limits. File names start
 //! with the analysis version, so entries of older versions, which can never
-//! be read again, are removed when the cache opens.
+//! be read again, are swept by the analysis pool.
 
 use std::fs;
 use std::io::{self, Write};
@@ -48,29 +48,35 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 }
 
 impl AnalysisCache {
-    /// Opens (or creates on first store) a cache in `dir`. Temporary files
-    /// left by an interrupted run and entries of older analysis versions
-    /// are swept.
+    /// Opens (or creates on first store) a cache in `dir`, without touching
+    /// the disk: `sweep` tidies it, off the caller's thread.
     pub fn new(dir: PathBuf, limits: &Limits) -> Self {
-        let current = version_prefix();
-        if let Ok(entries) = fs::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let stale = match path.extension().and_then(|e| e.to_str()) {
-                    Some("tmp") => true,
-                    Some("bin") => !entry.file_name().to_string_lossy().starts_with(&current),
-                    _ => false,
-                };
-                if stale {
-                    let _ = fs::remove_file(path);
-                }
-            }
-        }
         Self {
             dir,
             max_bytes: limits.max_state_file_bytes,
             cover_limits: (limits.max_cover_bytes, limits.max_cover_pixels),
             tmp_counter: AtomicU64::new(0),
+        }
+    }
+
+    /// Removes temporary files left by an interrupted run and entries of
+    /// other analysis versions, which can never match a key again. The
+    /// analysis pool runs it before its first job.
+    pub fn sweep(&self) {
+        let current = version_prefix();
+        let Ok(entries) = fs::read_dir(&self.dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let stale = match path.extension().and_then(|e| e.to_str()) {
+                Some("tmp") => true,
+                Some("bin") => !entry.file_name().to_string_lossy().starts_with(&current),
+                _ => false,
+            };
+            if stale {
+                let _ = fs::remove_file(path);
+            }
         }
     }
 

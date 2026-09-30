@@ -659,6 +659,8 @@ pub fn memo_columns(
 
 /// What the waveform shows.
 pub struct WaveInput<'a> {
+    /// Stable per player: keys the memoised columns.
+    pub id: egui::Id,
     pub media: Option<&'a Arc<TrackMedia>>,
     pub total: Option<f64>,
     pub markers: MarkerFractions,
@@ -684,6 +686,11 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         StrokeKind::Inside,
     );
     let inner = rect.shrink(1.0);
+    // A player with no waveform lets go of the last track's columns.
+    let memo_id = input.id.with("wave-columns");
+    if input.media.is_none_or(|m| m.peaks.is_empty()) {
+        ui.data_mut(|d| d.remove_temp::<Option<WaveMemo>>(memo_id));
+    }
     let mid = inner.center().y;
     let w = inner.width();
     let x_of = |f: f32| inner.left() + f * w;
@@ -717,7 +724,6 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         let amp = (inner.height() / 2.0 - 3.0).max(1.0);
         // One column per pixel: the peaks as a faint outline, the RMS level
         // as the solid body inside it, all in one mesh.
-        let memo_id = response.id.with("wave-columns");
         let mut memo = ui
             .data(|d| d.get_temp::<Option<WaveMemo>>(memo_id))
             .flatten();

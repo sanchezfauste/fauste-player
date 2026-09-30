@@ -56,8 +56,31 @@ pub fn write_atomic(path: &Path, bytes: &[u8], backups: usize) -> io::Result<()>
         file.sync_all()?;
     }
     rotate_backups(path, backups)?;
-    fs::rename(&tmp, path)?;
+    retry_locked(|| fs::rename(&tmp, path))?;
     sync_dir(dir)
+}
+
+/// Attempts of an operation on a file another process holds for a moment
+/// (on Windows, a virus scanner or indexer opening the file just written).
+const LOCKED_ATTEMPTS: u32 = 5;
+/// The first wait between attempts; it doubles each time (310 ms in all).
+const LOCKED_FIRST_WAIT_MS: u64 = 10;
+
+/// Runs `op`, retrying it a few times while it fails with "permission
+/// denied", the error a sharing violation gives.
+fn retry_locked<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    let mut wait = LOCKED_FIRST_WAIT_MS;
+    let mut attempt = 1;
+    loop {
+        match op() {
+            Err(e) if e.kind() == io::ErrorKind::PermissionDenied && attempt < LOCKED_ATTEMPTS => {
+                std::thread::sleep(std::time::Duration::from_millis(wait));
+                wait *= 2;
+                attempt += 1;
+            }
+            result => return result,
+        }
+    }
 }
 
 fn rotate_backups(path: &Path, backups: usize) -> io::Result<()> {
@@ -67,11 +90,11 @@ fn rotate_backups(path: &Path, backups: usize) -> io::Result<()> {
     for n in (1..backups).rev() {
         let from = backup_path(path, n);
         if from.exists() {
-            fs::rename(&from, backup_path(path, n + 1))?;
+            retry_locked(|| fs::rename(&from, backup_path(path, n + 1)))?;
         }
     }
     // Copy (not rename) so the primary stays in place until the new one replaces it.
-    fs::copy(path, backup_path(path, 1))?;
+    retry_locked(|| fs::copy(path, backup_path(path, 1)))?;
     Ok(())
 }
 
@@ -100,12 +123,25 @@ fn read_limited(path: &Path, max_bytes: u64) -> io::Result<Option<Vec<u8>>> {
     fs::read(path).map(Some)
 }
 
-fn quarantine(path: &Path, warnings: &mut Vec<String>) {
+/// `path` with a `<kind>-<seconds>` suffix that no file has yet: a second
+/// one within the same second gets `-2`, `-3`…
+fn unused_sibling(path: &Path, kind: &str) -> PathBuf {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let target = sibling(path, &format!("corrupt-{stamp}"));
+    let first = sibling(path, &format!("{kind}-{stamp}"));
+    if !first.exists() {
+        return first;
+    }
+    (2u32..)
+        .map(|n| sibling(path, &format!("{kind}-{stamp}-{n}")))
+        .find(|candidate| !candidate.exists())
+        .unwrap_or(first)
+}
+
+fn quarantine(path: &Path, warnings: &mut Vec<String>) {
+    let target = unused_sibling(path, "corrupt");
     if let Err(e) = fs::rename(path, &target) {
         warnings.push(format!("{}: could not quarantine: {e}", path.display()));
     }
@@ -126,11 +162,7 @@ fn preserve(path: &Path, bytes: &[u8], warnings: &mut Vec<String>) {
     if already {
         return;
     }
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let target = sibling(path, &format!("newer-{stamp}"));
+    let target = unused_sibling(path, "newer");
     match fs::write(&target, bytes) {
         Ok(()) => warnings.push(format!(
             "{}: kept a copy at {}",
@@ -282,5 +314,41 @@ mod tests {
         assert_eq!(loaded.source, LoadSource::Defaults);
         assert!(loaded.warnings[0].contains("limit"));
         assert!(file.exists());
+    }
+
+    #[test]
+    fn two_quarantines_in_the_same_second_keep_both_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("s.json");
+        fs::write(&file, b"bad one").unwrap();
+        load_with_fallback(&file, 0, 1024, parse_text);
+        fs::write(&file, b"bad two").unwrap();
+        load_with_fallback(&file, 0, 1024, parse_text);
+        let kept: Vec<String> = names(dir.path())
+            .into_iter()
+            .filter(|n| n.starts_with("s.json.corrupt-"))
+            .collect();
+        assert_eq!(kept.len(), 2, "{kept:?}");
+    }
+
+    #[test]
+    fn a_briefly_locked_file_is_retried() {
+        let mut calls = 0;
+        let result = retry_locked(|| {
+            calls += 1;
+            if calls < 3 {
+                Err(io::Error::from(io::ErrorKind::PermissionDenied))
+            } else {
+                Ok(calls)
+            }
+        });
+        assert_eq!(result.unwrap(), 3);
+        let mut calls = 0;
+        let result: io::Result<()> = retry_locked(|| {
+            calls += 1;
+            Err(io::Error::from(io::ErrorKind::NotFound))
+        });
+        assert!(result.is_err());
+        assert_eq!(calls, 1, "other errors are not retried");
     }
 }

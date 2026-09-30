@@ -344,3 +344,27 @@ fn a_transition_reported_after_stop_does_not_restart_the_player() {
             .any(|a| matches!(a, EngineAction::StartCurrent { .. }))
     );
 }
+
+// Deferred minor — a hand-edited playlists.json with repeated ids.
+#[test]
+fn restore_gives_repeated_playlist_and_entry_ids_new_ones() {
+    let state = fixture(3);
+    let mut edited = parts(&state);
+    let mut lists = serde_json::to_value(&edited.playlists).unwrap();
+    let copy = lists[0].clone();
+    lists.as_array_mut().unwrap().push(copy); // same playlist id, same entry ids
+    edited.playlists = serde_json::from_value(lists).unwrap();
+    let (restored, _) = AppState::restore(edited, &state.sessions(|_| 0.0), "Main");
+    let lists: Vec<_> = restored.playlists.iter().collect();
+    assert_eq!(lists.len(), 2);
+    assert_ne!(lists[0].id, lists[1].id);
+    let mut seen = std::collections::HashSet::new();
+    for entry in lists.iter().flat_map(|l| &l.entries) {
+        assert!(seen.insert(entry.id), "entry {:?} twice", entry.id);
+    }
+    assert_eq!(
+        lists[0].entries,
+        state.playlists.iter().next().unwrap().entries,
+        "the first keeps its ids"
+    );
+}

@@ -111,6 +111,8 @@ impl AppState {
                 config.cartwall.default_cols,
             ));
         }
+        // After every id is observed, so a new one cannot collide.
+        let _ = playlists.normalize(&mut ids);
         if playlists.is_empty() {
             playlists.add(Playlist::new(ids.playlist(), default_playlist_name));
         }

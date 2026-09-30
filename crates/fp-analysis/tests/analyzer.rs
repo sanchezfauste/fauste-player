@@ -262,3 +262,24 @@ fn a_file_changed_during_analysis_is_not_cached_under_its_new_key() {
         "stale result cached for the new file"
     );
 }
+
+#[test]
+fn the_pool_sweeps_old_cache_entries_off_the_callers_thread() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache_dir = dir.path().join("cache");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    let stale = cache_dir.join("0123456789abcdef.bin");
+    std::fs::write(&stale, b"unversioned").unwrap();
+    let cache = AnalysisCache::new(cache_dir, &Limits::default());
+    assert!(stale.exists(), "opening the cache does not sweep");
+    let analyzer = Analyzer::spawn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        Some(cache),
+    )
+    .unwrap();
+    analyzer.submit(TrackId(1), wav(dir.path(), "a.wav"));
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    assert!(!stale.exists(), "swept before the first job");
+}

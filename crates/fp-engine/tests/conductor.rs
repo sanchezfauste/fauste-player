@@ -538,6 +538,31 @@ fn the_meter_maximum_restarts_when_the_same_entry_plays_again() {
 }
 
 #[test]
+fn the_meter_maximum_restarts_when_the_entry_restarts_within_one_tick() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 1));
+    let p = conductor.state().players[0].id;
+    let (_, stopped) = play_then_stop(&mut conductor, &handle, &device, &mut now);
+    // Play, then Stop and Play again before the conductor meters once more.
+    assert!(handle.send(Command::Play(p)));
+    for _ in 0..20 {
+        conductor.tick(now);
+        device.render(BLOCK);
+        now += Duration::from_millis(10);
+    }
+    conductor.tick(now); // meters the last block
+    let playing = meter_of(&handle, p);
+    assert!(handle.send(Command::Stop(p)));
+    assert!(handle.send(Command::Play(p)));
+    conductor.tick(now);
+    let restarted = meter_of(&handle, p);
+    assert!(playing.max_db > -60.0 && stopped.max_db > -60.0);
+    assert!(
+        restarted.max_db < playing.max_db - 3.0,
+        "a new start restarts it: {restarted:?}"
+    );
+}
+
+#[test]
 fn the_meter_maximum_restarts_on_request() {
     let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
     let p = conductor.state().players[0].id;

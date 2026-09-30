@@ -114,7 +114,15 @@ impl Analyzer {
             handles.push(
                 std::thread::Builder::new()
                     .name(format!("fp-analysis-{n}"))
-                    .spawn(move || worker(&rx, &tx, &shared))?,
+                    .spawn(move || {
+                        // One worker tidies the cache before taking jobs.
+                        if n == 0
+                            && let Some(cache) = &shared.cache
+                        {
+                            cache.sweep();
+                        }
+                        worker(&rx, &tx, &shared)
+                    })?,
             );
         }
         Ok(Self {

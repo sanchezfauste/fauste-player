@@ -37,15 +37,24 @@ concrete folders.
 3. renames the temporary file over the target;
 4. `fsync`s the directory (Unix).
 
+A rename or copy that fails with "permission denied" (on Windows, a
+sharing violation while a scanner or indexer holds the file) is retried up to
+five times, waiting 10 ms and doubling (`retry_locked`).
+
 ## Loading
 
 `load_with_fallback` tries the file, then `.bak1`…`.bakN`. A file that
-fails to parse or validate is renamed `*.corrupt-<stamp>` and kept.
+fails to parse or validate is renamed `*.corrupt-<stamp>` and kept (a
+second one within the same second gets `-2`, `-3`…).
 A document written by a *newer* version of the application is rejected
 (this build cannot know its shape), and a copy is kept as `*.newer-<stamp>`
 so a later save never destroys it. Input larger than `limits.max_state_file_bytes` is refused. If
 everything fails, the store starts from defaults, and the application always
 starts.
+
+On restore, a playlist or entry whose id is already taken (a hand-edited
+`playlists.json`) gets a new id; the first holder keeps its own
+(`Playlists::normalize`, like `Cartwall::normalize` for carts).
 
 `config.json` is read **leniently** (`lenient.rs`): each field is taken on its
 own, so one bad value falls back to its default instead of discarding the

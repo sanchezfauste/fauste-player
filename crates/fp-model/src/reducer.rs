@@ -50,11 +50,11 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::CueEntry(id, entry) => cue_entry(state, id, entry, &mut out)?,
         Command::SetVolume(id, volume) => {
             let i = state.player_index(id)?;
-            let volume = if volume.is_nan() {
-                0.0
-            } else {
-                volume.clamp(0.0, 1.0)
-            };
+            // A broken value never silences what is on air: it is ignored.
+            if volume.is_nan() {
+                return Ok(out);
+            }
+            let volume = volume.clamp(0.0, 1.0);
             state.players[i].volume = volume;
             out.push(EngineAction::SetVolume { player: id, volume });
         }
@@ -122,11 +122,7 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::RenamePlaylist { playlist, name } => state.playlists.rename(playlist, name)?,
         Command::DeletePlaylist(playlist) => delete_playlist(state, playlist, &mut out)?,
         Command::SetPlayerCount(count) => set_player_count(state, count, &mut out)?,
-        Command::UpdateConfig(config) => {
-            let mut config: Config = *config;
-            config.players.count = state.config.players.count;
-            state.config = config;
-        }
+        Command::UpdateConfig(config) => update_config(state, *config, &mut out)?,
         Command::FireCart(cart) => cart_rules::fire(state, cart, &mut out)?,
         Command::StopCart(cart) => cart_rules::stop(state, cart, &mut out)?,
         Command::StopAllCarts => cart_rules::stop_all(state, &mut out),
@@ -605,6 +601,30 @@ fn delete_playlist(
     detach_entries(state, &ids, |_, _| None, out);
     forget_unreferenced(state, removed.entries.iter().map(|e| e.track));
     refresh_next(state);
+    Ok(())
+}
+
+/// Takes a new configuration, validated. The player count only changes
+/// through `SetPlayerCount`, except that a lower `limits.max_players`
+/// removes the players above it, refused while one of them is busy.
+fn update_config(
+    state: &mut AppState,
+    mut config: Config,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let _ = config.validate();
+    let count = state.players.len().min(config.limits.max_players);
+    if let Some(busy) = state.players[count..]
+        .iter()
+        .find(|p| p.transport != Transport::Stopped || p.cue.is_some())
+    {
+        return Err(ModelError::PlayerBusy(busy.id));
+    }
+    config.players.count = state.config.players.count;
+    state.config = config;
+    if count < state.players.len() {
+        set_player_count(state, count, out)?;
+    }
     Ok(())
 }
 

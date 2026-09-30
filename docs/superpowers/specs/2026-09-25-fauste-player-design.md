@@ -136,7 +136,7 @@ A player has:
 - `mode ∈ {Single, Continuous}`.
 - `stop_after_current: bool`.
 - `cue: Option<CueState>`.
-- `volume` (linear 0.0–1.0, **default 1.0**).
+- `volume` (linear 0.0–1.0, **default 1.0**; values outside are clamped, and a NaN is ignored so it never silences what is on air).
 
 ### 3.2 Rules
 
@@ -184,7 +184,7 @@ A player has:
     - The waveform shades the intro region blue.
 19. **Outro indicator.** When `position ≥ outro_start`, an amber badge counts down to `cue_out`. The waveform shades the outro region warm.
 20. **Playlist footer:** `-remaining | elapsed / total` for the whole playlist, in the same format as the current track, from this player's point of view (its played entries and its current position).
-21. **Player count** is configurable at runtime (default 4, minimum 1). There is no architectural maximum: players are identified by `PlayerId` and stored in growable collections. Config validation caps the count at `limits.max_players` (default 16) only as a resource guard. Reducing the count is refused while a player that would be removed is playing.
+21. **Player count** is configurable at runtime (default 4, minimum 1). There is no architectural maximum: players are identified by `PlayerId` and stored in growable collections. Config validation caps the count at `limits.max_players` (default 16) only as a resource guard. Reducing the count is refused while a player that would be removed is playing. A configuration update is validated like a loaded one; a lower `limits.max_players` removes the idle players above it, and is refused while one of them is busy.
 22. **Players are independent.** A player's `current`, `next` and played marks change only through that player's own transport commands and engine events. Several players may show the same playlist, each at its own position, and the same entry may be on air on several players at once. Two things still look across players: an entry on air on any player cannot be removed (rule 13), and edits to a playlist (insert, move, remove) or a file becoming unreadable re-derive the next of every player that shows it (rules 12 and 13). (This replaces the Phase 1 rule "no duplicate on air by default", which moved every other player's next whenever one player started an entry.)
 
 ---
@@ -365,7 +365,7 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
   - `postcard`-encoded file per track in the OS cache dir;
   - the key is a hash of (canonical path, size, mtime) plus the analysis version;
   - a corrupt cache entry is discarded and recomputed;
-  - entries of older analysis versions are removed when the cache opens.
+  - entries of older analysis versions are removed by the analysis pool, off the start-up path.
 - **Playability before analysis.** A track can be played before its analysis finishes. Until then it has no waveform or segue start, and `cue_in = 0`, `cue_out = duration`. If analysis finishes while the track is current or next, its markers apply to scheduling that has not happened yet.
 
 Supported formats (via `symphonia`): WAV, AIFF, FLAC, MP3, OGG Vorbis, AAC/M4A, ALAC. **Opus is not supported in Phase 1.**
