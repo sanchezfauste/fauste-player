@@ -283,7 +283,7 @@ pub struct UiConfig {
     pub language: Option<String>,
     /// After the operator moves a view (a zoomed waveform, a scrolled
     /// playlist), it stops following what plays for this long (seconds);
-    /// 0 follows at once.
+    /// 0 never follows.
     pub follow_current_grace_secs: f64,
 }
 

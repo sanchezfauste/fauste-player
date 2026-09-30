@@ -82,6 +82,7 @@ pub(crate) fn column(
             time_row(ui, &pv);
             wave(ui, scene, view_state, id, &pv);
         });
+    follow_current(scene, view_state, id, player.playlist);
     tabs(ui, scene, view_state, id, player.playlist);
     let footer_top = ui.max_rect().bottom() - FOOTER_HEIGHT;
     let table_rect = Rect::from_min_max(
@@ -101,6 +102,48 @@ pub(crate) fn column(
             .layout(Layout::left_to_right(Align::Center)),
     );
     footer(&mut footer_ui, scene, id, player.playlist);
+}
+
+/// Follows the player's current entry in its table (feedback spec F18):
+/// when it changes, and once the operator has left the table and tabs alone
+/// for `ui.follow_current_grace_secs` (0 never follows), the tab of its
+/// playlist is shown and its row scrolled to the top.
+fn follow_current(scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId, shown: PlaylistId) {
+    let current = scene.state.player(id).ok().and_then(|p| p.current);
+    if view_state.followed.get(&id) != Some(&current) {
+        view_state.followed.insert(id, current);
+        match current {
+            Some(entry) => {
+                view_state.follow_pending.insert(id, entry);
+            }
+            None => {
+                view_state.follow_pending.remove(&id);
+            }
+        }
+    }
+    let Some(entry) = view_state.follow_pending.get(&id).copied() else {
+        return;
+    };
+    let grace = scene.state.config.ui.follow_current_grace_secs;
+    if grace <= 0.0 {
+        view_state.follow_pending.remove(&id);
+        return;
+    }
+    let idle = view_state
+        .table_touched
+        .get(&id)
+        .is_none_or(|t| scene.time - t >= grace);
+    if !idle {
+        return;
+    }
+    view_state.follow_pending.remove(&id);
+    let Some((playlist, _)) = scene.state.playlists.find(entry) else {
+        return;
+    };
+    if playlist != shown {
+        scene.ctl.send(Command::ShowPlaylist(id, playlist));
+    }
+    view_state.follow_scroll.insert(id, entry);
 }
 
 fn small_caps(text: &str, color: Color32) -> RichText {
@@ -763,7 +806,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         let grace = scene.state.config.ui.follow_current_grace_secs;
         if dragging {
             z.moved_at = scene.time;
-        } else if scene.time - z.moved_at >= grace {
+        } else if grace > 0.0 && scene.time - z.moved_at >= grace {
             z.view = z.view.follow(f64::from(f) * total, total);
         }
     }
@@ -979,6 +1022,9 @@ fn tabs(
                 index: pl.entries.len(),
             });
             view_state.drop = None;
+        }
+        if response.clicked() {
+            view_state.table_touched.insert(id, scene.time);
         }
         if response.clicked() && pl.id != shown {
             scene.ctl.send(Command::ShowPlaylist(id, pl.id));

@@ -264,7 +264,7 @@ fn at_position(fake: &Fake, secs: f64) {
 #[test]
 fn a_zoomed_view_follows_the_playhead_after_the_grace() {
     let mut s = playing();
-    s.config.ui.follow_current_grace_secs = 0.0;
+    s.config.ui.follow_current_grace_secs = 0.01;
     let (mut h, fake) = harness(s);
     at_position(&fake, 20.0);
     h.run_steps(1);
@@ -497,7 +497,7 @@ fn dragging_from_the_full_view_button_does_not_seek() {
 #[test]
 fn the_view_does_not_follow_while_a_drag_is_held() {
     let mut s = playing();
-    s.config.ui.follow_current_grace_secs = 0.0;
+    s.config.ui.follow_current_grace_secs = 0.01;
     let (mut h, fake) = harness(s);
     at_position(&fake, 20.0);
     h.run_steps(1);
@@ -526,4 +526,29 @@ fn the_view_does_not_follow_while_a_drag_is_held() {
         s[0] < 60.0,
         "the release lands in the view the drag started in: {s:?}"
     );
+}
+
+#[test]
+fn a_zero_grace_never_follows_the_playhead() {
+    let mut s = playing();
+    s.config.ui.follow_current_grace_secs = 0.0;
+    let (mut h, fake) = harness(s);
+    at_position(&fake, 20.0);
+    h.run_steps(1);
+    let w = wave(&h);
+    for _ in 0..6 {
+        wheel(
+            &mut h,
+            pos2(x_of(w, 20.0), w.center().y),
+            0.0,
+            1.0,
+            Modifiers::NONE,
+        );
+    }
+    at_position(&fake, 150.0);
+    h.run_steps(30);
+    fake.take_sent();
+    click(&mut h, pos2(x_of(w, 90.0), w.center().y));
+    let s = seeks(&fake);
+    assert!(s[0] < 60.0, "{s:?}");
 }

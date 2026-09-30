@@ -76,10 +76,25 @@ pub(crate) fn track_table(
     let selected = view_state.selection.get(&player).copied();
     let mut clicked: Option<EntryId> = None;
     let mut dragged: Option<EntryId> = None;
-    let builder = TableBuilder::new(ui).id_salt(("tracks", player.0));
+    let mut builder = TableBuilder::new(ui).id_salt(("tracks", player.0));
     if reset {
         builder.reset();
     }
+    // A current entry being followed: scroll its row to the top once.
+    if let Some(entry) = view_state.follow_scroll.get(&player).copied() {
+        match entries.iter().position(|e| e.id == entry) {
+            Some(i) => {
+                builder = builder.scroll_to_row(i, Some(Align::TOP));
+                view_state.follow_scroll.remove(&player);
+            }
+            // Not in this playlist: wait for its tab, unless it is gone.
+            None if scene.state.playlists.find(entry).is_none() => {
+                view_state.follow_scroll.remove(&player);
+            }
+            None => {}
+        }
+    }
+    let mut menu_open = false;
     builder
         .striped(false)
         .resizable(true)
@@ -320,6 +335,7 @@ pub(crate) fn track_table(
                     released = Some((*payload, if below { i + 1 } else { i }));
                 }
                 response.context_menu(|ui| {
+                    menu_open = true;
                     clicked = Some(entry.id);
                     context_menu(ui, scene, player, playlist, entry.id, i, &track.title);
                 });
@@ -385,6 +401,12 @@ pub(crate) fn track_table(
         });
     }
     store_widths(ui, scene, view_state, player, columns, widths);
+    // The operator is using the table: scrolling it, dragging an entry, or
+    // with a row menu open. Following waits (feedback spec F18).
+    let scrolled = pointer_in && ui.input(|i| i.smooth_scroll_delta != egui::Vec2::ZERO);
+    if scrolled || menu_open || dragged.is_some() {
+        view_state.table_touched.insert(player, scene.time);
+    }
 }
 
 /// Sends the column widths once the user lets go of a resize handle.
