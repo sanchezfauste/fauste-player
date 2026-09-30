@@ -219,6 +219,16 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             }
         }
         EngineEvent::TransitionStarted { player, entry } => {
+            // R26: a repeating entry started again. It stays current, and the
+            // engine used up the preload and the plan: `reconcile` sends new
+            // ones for the next pass.
+            if let Ok(i) = state.player_index(player)
+                && state.players[i].current == Some(entry)
+                && repeating(state, &state.players[i])
+            {
+                state.players[i].preloaded = None;
+                state.players[i].scheduled = None;
+            }
             // A transition reported after the player was stopped is stale: the
             // engine has already been told to stop everything.
             if let Ok(i) = state.player_index(player)
@@ -489,8 +499,22 @@ pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan
     if player.transport == Transport::Stopped || player.fade_stop_pending {
         return None;
     }
-    let track = state.track_for_entry(player.current?)?;
+    let current = player.current?;
+    let track = state.track_for_entry(current)?;
     let end = track.known_cue_out_secs().unwrap_or(SOURCE_END);
+    // R27: an entry marked "stop after" stops the player, in any mode.
+    if state.playlists.entry(current).is_some_and(|e| e.stop_after) {
+        return Some(TransitionPlan::StopAt { at_secs: end });
+    }
+    // R26: a repeating entry starts again at its own cue-in, gaplessly, as a
+    // hard transition into itself (its preload is the entry, see
+    // `preload_target`).
+    if repeating(state, player) {
+        return Some(TransitionPlan::StartNextAt {
+            at_secs: end,
+            fade_current_until_secs: None,
+        });
+    }
     if player.mode == PlayMode::Single || player.stop_after_current || player.next.is_none() {
         return Some(TransitionPlan::StopAt { at_secs: end });
     }
@@ -848,13 +872,39 @@ pub(crate) fn fill_empty_next(state: &mut AppState) {
     }
 }
 
+/// R26: the player's current entry repeats (and R27, stop-after-current or
+/// a fade stop do not end it first).
+fn repeating(state: &AppState, player: &PlayerState) -> bool {
+    player.transport != Transport::Stopped
+        && !player.fade_stop_pending
+        && !player.stop_after_current
+        && player
+            .current
+            .and_then(|c| state.playlists.entry(c))
+            .is_some_and(|e| e.repeat && !e.stop_after)
+}
+
+/// The entry to preload: the current one while it repeats, else the next.
+fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
+    if repeating(state, player) {
+        player.current
+    } else {
+        player.next
+    }
+}
+
 /// Derives the engine work implied by the state: preload whatever is next.
 pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
     let preloads: Vec<(usize, Option<SourceRequest>)> = state
         .players
         .iter()
         .enumerate()
-        .map(|(i, p)| (i, p.next.and_then(|e| state.request_from_cue_in(e))))
+        .map(|(i, p)| {
+            (
+                i,
+                preload_target(state, p).and_then(|e| state.request_from_cue_in(e)),
+            )
+        })
         .filter(|(i, request)| {
             let wanted = request.as_ref().map(|r| (r.entry, r.from_secs));
             state.players[*i].preloaded != wanted
