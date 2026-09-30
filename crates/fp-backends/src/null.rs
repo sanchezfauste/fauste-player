@@ -54,6 +54,7 @@ impl AudioBackend for NullBackend {
         Ok(vec![DeviceInfo {
             id: DeviceId(NULL_DEVICE.to_owned()),
             name: "Null output".to_owned(),
+            detail: None,
             channels: 64,
             sample_rates: vec![(8_000, 768_000)],
             buffer_frames: Some((16, 16_384)),

@@ -18,6 +18,14 @@ The engine only knows this trait. A `Renderer` is called on the device's
 real-time thread with an interleaved `f32` buffer. Stream errors are reported
 through an RT-safe sink: it sets atomics, which the bus watchdog reads.
 
+`DeviceInfo::detail` is what sets a device apart from others with the same
+name: cpal's ALSA host lists every output profile of a card (front,
+surround, direct hardware…) under the card's name, and the first extended
+description line that is not the name names the profile (else the device's
+address, when it differs from the name). Pickers show
+`device_labels(&devices)`: the name, then ` — detail`, then ` (id)` for any
+label still shared.
+
 `OutputStream::config()` is the configuration in use, not the one asked for:
 cpal reports the fixed buffer size it was given or, with the device's
 default, the largest block called back so far; WASAPI exclusive reports the

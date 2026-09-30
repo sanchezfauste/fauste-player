@@ -43,6 +43,9 @@ pub enum Availability {
 pub struct DeviceInfo {
     pub id: DeviceId,
     pub name: String,
+    /// What sets this device apart from others with the same name (the
+    /// output profile of a sound card), when the backend says.
+    pub detail: Option<String>,
     pub channels: u16,
     /// Inclusive sample-rate ranges the device reports.
     pub sample_rates: Vec<(u32, u32)>,
@@ -50,6 +53,42 @@ pub struct DeviceInfo {
     pub buffer_frames: Option<(u32, u32)>,
     pub exclusive_capable: bool,
     pub rate_switching: bool,
+}
+
+/// The labels an output picker shows for `devices`, in order: the name (the
+/// id when it is blank), then ` — detail` when the backend gives one that adds something, then
+/// ` (id)` for any label two devices still share, so that every choice can
+/// be told apart.
+pub fn device_labels(devices: &[DeviceInfo]) -> Vec<String> {
+    let base: Vec<String> = devices
+        .iter()
+        .map(|d| {
+            // A device with no name is known by its id.
+            let name = match d.name.trim() {
+                "" => d.id.0.as_str(),
+                name => name,
+            };
+            match d
+                .detail
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty() && *s != name)
+            {
+                Some(detail) => format!("{name} — {detail}"),
+                None => name.to_owned(),
+            }
+        })
+        .collect();
+    base.iter()
+        .zip(devices)
+        .map(|(label, d)| {
+            if base.iter().filter(|l| *l == label).count() > 1 {
+                format!("{label} ({})", d.id.0)
+            } else {
+                label.clone()
+            }
+        })
+        .collect()
 }
 
 /// What the engine asks a backend to open.

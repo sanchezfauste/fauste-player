@@ -434,3 +434,29 @@ fn a_shortcut_on_tab_does_not_move_the_focus() {
     assert_eq!(h.ctx.memory(|m| m.focused()), before, "the focus stays");
     assert_eq!(sent(&fake).len(), 1, "the shortcut fired");
 }
+
+#[test]
+fn single_and_cont_are_one_joined_control() {
+    let (mut h, fake) = harness(state(1, 3));
+    let single = h.get_by_label("Stop after every track").rect();
+    let cont = h
+        .get_by_label("Continuous: chain tracks at the mix point")
+        .rect();
+    // Side by side with no gap, SINGLE first.
+    assert!(
+        (single.right() - cont.left()).abs() < 0.5,
+        "{single:?} {cont:?}"
+    );
+    assert_eq!(single.top(), cont.top());
+    // Continuous is the default: clicking it does nothing, SINGLE switches.
+    h.get_by_label("Continuous: chain tracks at the mix point")
+        .click();
+    h.run_steps(2);
+    assert!(sent(&fake).is_empty());
+    h.get_by_label("Stop after every track").click();
+    h.run_steps(2);
+    assert_eq!(
+        sent(&fake),
+        vec![Command::SetMode(fake.player(0), fp_model::PlayMode::Single)]
+    );
+}

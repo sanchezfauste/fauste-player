@@ -234,10 +234,11 @@ impl AudioBackend for CpalBackend {
         let mut list = Vec::new();
         for device in host.output_devices().map_err(backend_error)? {
             let Ok(id) = device.id() else { continue };
-            let name = device
-                .description()
-                .map(|d| d.name().to_owned())
-                .unwrap_or_else(|_| id.to_string());
+            let description = device.description().ok();
+            let name = description
+                .as_ref()
+                .map_or_else(|| id.to_string(), |d| d.name().to_owned());
+            let detail = description.as_ref().and_then(device_detail);
             let mut channels = 0;
             let mut sample_rates = Vec::new();
             let mut buffer_frames: Option<(u32, u32)> = None;
@@ -260,6 +261,7 @@ impl AudioBackend for CpalBackend {
             list.push(DeviceInfo {
                 id: DeviceId(id.to_string()),
                 name,
+                detail,
                 channels,
                 sample_rates,
                 buffer_frames,
@@ -527,12 +529,47 @@ fn render_converted<T>(
     }
 }
 
+/// The first description line beyond the name, else the device's address:
+/// ALSA lists every output profile of a card under the card's name, and
+/// this line names the profile.
+fn device_detail(d: &cpal::DeviceDescription) -> Option<String> {
+    let adds = |line: &&str| !line.is_empty() && *line != d.name();
+    d.extended()
+        .map(str::trim)
+        .find(adds)
+        .or_else(|| d.address().map(str::trim).filter(adds))
+        .map(str::to_owned)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        HostCache, choose_buffer_frames, choose_sample_format, exclusive_capable, render_converted,
+        HostCache, choose_buffer_frames, choose_sample_format, device_detail, exclusive_capable,
+        render_converted,
     };
     use crate::Renderer;
+    use cpal::DeviceDescriptionBuilder;
+
+    #[test]
+    fn the_detail_is_the_first_extended_line_beyond_the_name() {
+        let d = DeviceDescriptionBuilder::new("HDA Intel PCH")
+            .extended(["HDA Intel PCH", "", "5.1 Surround output"])
+            .address("hw:0,0")
+            .build();
+        assert_eq!(device_detail(&d).as_deref(), Some("5.1 Surround output"));
+    }
+
+    #[test]
+    fn without_extended_lines_the_detail_is_the_address() {
+        let d = DeviceDescriptionBuilder::new("Speakers")
+            .address("USB 2-1.4")
+            .build();
+        assert_eq!(device_detail(&d).as_deref(), Some("USB 2-1.4"));
+        let same = DeviceDescriptionBuilder::new("Speakers")
+            .address("Speakers")
+            .build();
+        assert_eq!(device_detail(&same), None);
+    }
 
     /// Plays back fixed samples.
     struct Samples(Vec<f32>, usize);

@@ -277,7 +277,7 @@ pub struct UiConfig {
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
-            wave_color: "sand".to_owned(),
+            wave_color: "slate".to_owned(),
             music_dir: None,
             language: None,
         }
@@ -725,6 +725,15 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_default_waveform_colour_is_slate_and_a_stored_one_is_kept() {
+        assert_eq!(Config::default().ui.wave_color, "slate");
+        let c: Config = serde_json::from_str(r#"{"ui":{"wave_color":"sand"}}"#).unwrap();
+        assert_eq!(c.ui.wave_color, "sand");
+        let c: Config = serde_json::from_str(r#"{"ui":{}}"#).unwrap();
+        assert_eq!(c.ui.wave_color, "slate");
+    }
 
     #[test]
     fn defaults_are_valid() {

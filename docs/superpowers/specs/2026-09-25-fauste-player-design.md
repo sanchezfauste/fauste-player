@@ -400,11 +400,11 @@ Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opu
 ### 8.1 Framework and theme
 
 - `eframe`/`egui` with the `wgpu` renderer (falling back to `glow` if wgpu initialisation fails).
-- **Native window decorations.** The in-app top bar keeps the app name, the "Settings" button and the clock.
+- **Native window decorations.** The in-app top bar keeps the app name with the version (a click opens the About window: copyright, bundled licence notices, third-party notices file), the "Settings" button and the clock.
 - `theme` module: Nocturne tokens as constants. The design's `oklch` values are converted once to sRGB and stored as precomputed constants, with a unit test that checks the conversion. Rounding is 0 and spacing follows the design.
 - **Fonts:** Inter embedded (OFL); Phosphor icons via `egui-phosphor`.
 - **Player-specific icons** (fade stop, stop after current) are drawn as vector shapes, as in the design.
-- **Waveform colours:** Violet, Amber, Cyan, White, Orange, Magenta, Ice, Sand (default **Sand**). They are a named palette in the theme, so more can be added without code changes elsewhere.
+- **Waveform colours:** Violet, Amber, Cyan, White, Orange, Magenta, Ice, Sand, Slate (default **Slate**). They are a named palette in the theme, so more can be added without code changes elsewhere.
 - **Repaint policy:** at display rate while anything plays or a fade runs; otherwise every 100 ms (clock).
 
 ### 8.2 Data flow
@@ -414,7 +414,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
 ### 8.3 Main screen (matches v3)
 
 - **Player column**, one per configured player (min width 380 px; any number of players is laid out in a horizontally scrollable row):
-  - **Header:** `P1`…`Pn`, state dot and label ("On air", "Stopped", "Paused"), fade and stop-after badges, BP badge (inactive until Phase 4), SINGLE/CONT toggle, CUE button.
+  - **Header:** `P1`…`Pn`, state dot and label ("On air", "Stopped", "Paused"), fade and stop-after badges, BP badge (inactive until Phase 4), SINGLE|CONT segmented control (one border, the active mode filled), CUE button.
   - **Info row:** 64 px cover (placeholder vinyl icon if none), stereo VU (20 segments green/yellow/red with peak hold), vertical volume fader (drag + wheel, dB tooltip), title, artist, and the next line with the green square (plus cue time in blue when cueing).
   - **Transport:**
     - Play/NEXT button spanning 2 rows;

@@ -2,8 +2,8 @@
 //! volume fader and the waveform.
 
 use egui::{
-    Align2, Color32, FontFamily, FontId, Painter, Rect, Response, Sense, Stroke, StrokeKind, Ui,
-    Vec2, WidgetInfo, WidgetType, pos2, vec2,
+    Align2, Color32, FontFamily, FontId, Painter, Pos2, Rect, Response, Sense, Stroke, StrokeKind,
+    Ui, Vec2, WidgetInfo, WidgetType, pos2, vec2,
 };
 
 use fp_engine::meter::MeterReading;
@@ -100,6 +100,83 @@ pub fn tile(
     response.on_hover_text(label)
 }
 
+/// One option of a [`segmented`] control: its visible text and its
+/// accessible name (also the tooltip).
+pub struct Segment<'a> {
+    pub text: &'a str,
+    pub label: &'a str,
+}
+
+/// A segmented control: the options side by side inside one border, the
+/// selected one filled, so they read as one choice. Returns the index of an
+/// option clicked when it is not the selected one.
+pub fn segmented(
+    ui: &mut Ui,
+    id: egui::Id,
+    options: &[Segment<'_>],
+    selected: usize,
+) -> Option<usize> {
+    const HEIGHT: f32 = 20.0;
+    const PAD: f32 = 7.0;
+    let text_font = font_semibold(9.0);
+    let widths: Vec<f32> = options
+        .iter()
+        .map(|o| {
+            ui.painter()
+                .layout_no_wrap(o.text.to_owned(), text_font.clone(), theme::TEXT)
+                .size()
+                .x
+                + 2.0 * PAD
+        })
+        .collect();
+    let (rect, _) = ui.allocate_exact_size(vec2(widths.iter().sum(), HEIGHT), Sense::hover());
+    let mut clicked = None;
+    let mut x = rect.left();
+    for (i, (option, width)) in options.iter().zip(&widths).enumerate() {
+        let r = Rect::from_min_size(pos2(x, rect.top()), vec2(*width, HEIGHT));
+        x += width;
+        let on = i == selected;
+        let response = ui
+            .interact(r, id.with(i), Sense::click())
+            .on_hover_text(option.label);
+        let label = option.label.to_owned();
+        response
+            .widget_info(|| WidgetInfo::selected(WidgetType::RadioButton, true, on, label.clone()));
+        if response.clicked() && !on {
+            clicked = Some(i);
+        }
+        if ui.is_rect_visible(r) {
+            let fill = if on {
+                theme::NEUTRAL_700
+            } else if response.hovered() {
+                theme::NEUTRAL_900
+            } else {
+                Color32::TRANSPARENT
+            };
+            let content = if on || response.hovered() {
+                theme::TEXT
+            } else {
+                theme::NEUTRAL_500
+            };
+            ui.painter().rect_filled(r, 0.0, fill);
+            ui.painter().text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                option.text,
+                text_font.clone(),
+                content,
+            );
+        }
+    }
+    ui.painter().rect_stroke(
+        rect,
+        0.0,
+        Stroke::new(1.0, theme::NEUTRAL_700),
+        StrokeKind::Inside,
+    );
+    clicked
+}
+
 /// Paints a Phosphor glyph centred in `rect`.
 pub fn glyph(painter: &Painter, rect: Rect, icon: &str, size: f32, color: Color32, fill: bool) {
     let family = if fill {
@@ -114,6 +191,70 @@ pub fn glyph(painter: &Painter, rect: Rect, icon: &str, size: f32, color: Color3
         FontId::new(size, family),
         color,
     );
+}
+
+/// Width of one digit cell: the widest of `0`–`9` in `font`. Times laid out
+/// in such cells keep their width as they change (tabular figures, which
+/// the UI font does not offer through egui).
+fn digit_cell(painter: &Painter, font: &FontId) -> f32 {
+    ('0'..='9')
+        .map(|d| {
+            painter
+                .layout_no_wrap(d.to_string(), font.clone(), Color32::WHITE)
+                .size()
+                .x
+        })
+        .fold(0.0, f32::max)
+}
+
+/// The size `text` takes when painted by [`paint_tabular`].
+pub fn tabular_size(painter: &Painter, text: &str, font: &FontId) -> Vec2 {
+    let cell = digit_cell(painter, font);
+    let mut size = Vec2::ZERO;
+    for c in text.chars() {
+        let glyph = painter
+            .layout_no_wrap(c.to_string(), font.clone(), Color32::WHITE)
+            .size();
+        size.x += if c.is_ascii_digit() { cell } else { glyph.x };
+        size.y = size.y.max(glyph.y);
+    }
+    size
+}
+
+/// Paints `text` from `left_top` with every digit centred in a cell of the
+/// same width. Returns the rectangle it covers.
+pub fn paint_tabular(
+    painter: &Painter,
+    left_top: Pos2,
+    text: &str,
+    font: &FontId,
+    color: Color32,
+) -> Rect {
+    let cell = digit_cell(painter, font);
+    let mut x = left_top.x;
+    let mut height: f32 = 0.0;
+    for c in text.chars() {
+        let galley = painter.layout_no_wrap(c.to_string(), font.clone(), color);
+        let size = galley.size();
+        let width = if c.is_ascii_digit() { cell } else { size.x };
+        painter.galley(pos2(x + (width - size.x) / 2.0, left_top.y), galley, color);
+        x += width;
+        height = height.max(size.y);
+    }
+    Rect::from_min_max(left_top, pos2(x, left_top.y + height))
+}
+
+/// A label whose digits keep their width (see [`paint_tabular`]). Its
+/// accessible name is the text.
+pub fn tabular_label(ui: &mut Ui, text: &str, font: &FontId, color: Color32) -> Response {
+    let size = tabular_size(ui.painter(), text, font);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    let owned = text.to_owned();
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, owned.clone()));
+    if ui.is_rect_visible(rect) {
+        paint_tabular(ui.painter(), rect.left_top(), text, font, color);
+    }
+    response
 }
 
 /// Colour zone of a meter level (meters spec M4).

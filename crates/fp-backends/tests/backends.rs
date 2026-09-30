@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use fp_backends::{
-    AudioBackend, BackendError, DeviceId, NullBackend, OfflineBackend, Renderer, SampleFormat,
-    StreamConfig, StreamErrorKind, StreamErrorSink,
+    AudioBackend, BackendError, DeviceId, DeviceInfo, NullBackend, OfflineBackend, Renderer,
+    SampleFormat, StreamConfig, StreamErrorKind, StreamErrorSink, device_labels,
 };
 
 /// Writes an increasing counter into every sample and counts frames.
@@ -251,4 +251,78 @@ fn null_refuses_exclusive_access() {
         backend.open_output(&device, exclusive, counter().0, Arc::new(Errors::default())),
         Err(BackendError::Unsupported(_))
     ));
+}
+
+fn device(id: &str, name: &str, detail: Option<&str>) -> DeviceInfo {
+    DeviceInfo {
+        id: DeviceId(id.to_owned()),
+        name: name.to_owned(),
+        detail: detail.map(str::to_owned),
+        channels: 2,
+        sample_rates: vec![(44_100, 48_000)],
+        buffer_frames: None,
+        exclusive_capable: false,
+        rate_switching: false,
+    }
+}
+
+#[test]
+fn device_labels_tell_same_named_devices_apart() {
+    let list = [
+        device(
+            "alsa:front:CARD=PCH,DEV=0",
+            "HDA Intel PCH",
+            Some("Front output / input"),
+        ),
+        device(
+            "alsa:surround51:CARD=PCH,DEV=0",
+            "HDA Intel PCH",
+            Some("5.1 Surround output to Front, Center, Rear and Subwoofer speakers"),
+        ),
+        device(
+            "alsa:hw:CARD=PCH,DEV=0",
+            "HDA Intel PCH",
+            Some("Direct hardware device without any conversions"),
+        ),
+    ];
+    assert_eq!(
+        device_labels(&list),
+        vec![
+            "HDA Intel PCH — Front output / input".to_owned(),
+            "HDA Intel PCH — 5.1 Surround output to Front, Center, Rear and Subwoofer speakers"
+                .to_owned(),
+            "HDA Intel PCH — Direct hardware device without any conversions".to_owned(),
+        ]
+    );
+}
+
+#[test]
+fn device_labels_fall_back_to_the_name_and_then_the_id() {
+    let list = [
+        device("a", "Speakers", None),
+        device("b", "Speakers", Some("  ")),
+        device("c", "Headphones", Some("Headphones")),
+        device("d", "USB DAC", None),
+    ];
+    assert_eq!(
+        device_labels(&list),
+        vec![
+            "Speakers (a)".to_owned(),
+            "Speakers (b)".to_owned(),
+            "Headphones".to_owned(),
+            "USB DAC".to_owned(),
+        ]
+    );
+}
+
+#[test]
+fn a_device_with_no_name_is_labelled_by_its_id() {
+    let list = [
+        device("alsa:hw:CARD=X", "  ", None),
+        device("b", "", Some("Line out")),
+    ];
+    assert_eq!(
+        device_labels(&list),
+        vec!["alsa:hw:CARD=X".to_owned(), "b — Line out".to_owned()]
+    );
 }

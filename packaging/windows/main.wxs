@@ -61,6 +61,10 @@
                             <File Id='fontlicense' Name='Inter-OFL.txt' DiskId='1'
                                 Source='crates\fp-app\assets\fonts\OFL.txt' KeyPath='yes'/>
                         </Component>
+                        <Component Id='iconlicense' Guid='*'>
+                            <File Id='iconlicense' Name='Phosphor-MIT.txt' DiskId='1'
+                                Source='crates\fp-app\assets\licenses\Phosphor-MIT.txt' KeyPath='yes'/>
+                        </Component>
                     </Directory>
                 </Directory>
             </Directory>
@@ -96,6 +100,7 @@
             <ComponentRef Id='binary0'/>
             <ComponentRef Id='notices'/>
             <ComponentRef Id='fontlicense'/>
+            <ComponentRef Id='iconlicense'/>
             <ComponentRef Id='shortcut'/>
         </Feature>
 

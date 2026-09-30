@@ -159,7 +159,12 @@ fn run(
         .with_services(requests)
         .with_service_faults(faults)
         .with_backends(backends)
-        .with_platform(platform);
+        .with_platform(platform)
+        .with_notices(
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| fp_app::ui::about::find_notices(&exe)),
+        );
     for playlist in playlists {
         tracing::info!(path = %playlist.display(), "importing a playlist given at start");
         app.import_playlist(playlist);

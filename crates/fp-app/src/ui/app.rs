@@ -18,6 +18,7 @@ use fp_model::{
     TrackId, Transport,
 };
 
+use super::about::{self, NoticeOpener};
 use super::cartwall;
 use super::controller::Controller;
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
@@ -66,6 +67,7 @@ pub(crate) struct ViewState {
     pub resizing: HashSet<PlayerId>,
     pub rows_built: usize,
     pub settings_open: bool,
+    pub about_open: bool,
     /// Where each player's waveform menu was opened, in seconds.
     pub wave_menu: HashMap<PlayerId, f64>,
     /// A marker being dragged on a waveform, and the track it belongs to.
@@ -148,6 +150,9 @@ pub struct AppUi {
     language: Option<Option<String>>,
     backends: Vec<Arc<dyn AudioBackend>>,
     service_faults: Option<Arc<std::sync::atomic::AtomicU64>>,
+    /// The installed third-party notices, found at start-up.
+    notices: Option<PathBuf>,
+    opener: NoticeOpener,
 }
 
 impl AppUi {
@@ -178,6 +183,8 @@ impl AppUi {
             language: None,
             backends: Vec::new(),
             service_faults: None,
+            notices: None,
+            opener: about::system_opener(),
         }
     }
 
@@ -202,6 +209,18 @@ impl AppUi {
     /// The backend/OS label in the status bar.
     pub fn with_platform(mut self, platform: String) -> Self {
         self.platform = platform;
+        self
+    }
+
+    /// The installed third-party notices file (see `about::find_notices`).
+    pub fn with_notices(mut self, notices: Option<PathBuf>) -> Self {
+        self.notices = notices;
+        self
+    }
+
+    /// How the About window opens the notices file.
+    pub fn with_notice_opener(mut self, opener: NoticeOpener) -> Self {
+        self.opener = opener;
         self
     }
 
@@ -404,7 +423,12 @@ impl AppUi {
             self.view.settings_open = settings::show(&ctx, &scene, &mut self.settings, &deps);
         } else {
             self.settings_shown = false;
-            self.file_drops(&ctx, &state);
+            if self.view.about_open {
+                self.view.about_open =
+                    about::show(&ctx, &scene, self.notices.as_deref(), &self.opener);
+            } else {
+                self.file_drops(&ctx, &state);
+            }
         }
         let busy = state
             .players
@@ -470,6 +494,12 @@ impl AppUi {
         if self.view.settings_open {
             if escape && !self.settings.capturing() {
                 self.view.settings_open = false;
+            }
+            return;
+        }
+        if self.view.about_open {
+            if escape {
+                self.view.about_open = false;
             }
             return;
         }
@@ -734,7 +764,7 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         )
         .selectable(false),
     );
-    ui.add(
+    let name = ui.add(
         egui::Label::new(
             RichText::new(scene.i18n.tr("app-name"))
                 .font(font_medium(12.0))
@@ -742,6 +772,29 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         )
         .selectable(false),
     );
+    let version = ui.add(
+        egui::Label::new(
+            RichText::new(format!("v{}", about::VERSION))
+                .font(font(11.0))
+                .color(theme::NEUTRAL_500),
+        )
+        .selectable(false),
+    );
+    let about_label = scene.i18n.tr("tip-about");
+    let response = ui
+        .interact(
+            name.rect.union(version.rect),
+            ui.id().with("about"),
+            Sense::click(),
+        )
+        .on_hover_text(&about_label);
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, about_label.clone())
+    });
+    if response.clicked() {
+        view_state.about_open = true;
+    }
+
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.spacing_mut().item_spacing = vec2(12.0, 0.0);
         ui.add_space(10.0);
