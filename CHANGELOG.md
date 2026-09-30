@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.1](https://github.com/sanchezfauste/fauste-player/compare/v0.3.0...v0.3.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **ui:** settle the meter and waveform review minors ([821044c](https://github.com/sanchezfauste/fauste-player/commit/821044c87da0d77e235f075090403a7e99b6955d))
+* **ui:** settle the meter and waveform review minors ([c926384](https://github.com/sanchezfauste/fauste-player/commit/c9263843fe45fc790d7a7fec63ac402e319873d3))
+
+
+### Documentation
+
+* record the follow-up review's minors ([104e511](https://github.com/sanchezfauste/fauste-player/commit/104e51124d21ac7ecab3a9008c5a04789c2bae6e))
+* refresh the main screen screenshot ([819fce8](https://github.com/sanchezfauste/fauste-player/commit/819fce86f75896deafe770d3d24fce2a8a88e3e1))
+
 ## [0.3.0](https://github.com/sanchezfauste/fauste-player/compare/v0.2.0...v0.3.0) (2026-09-29)
 
 
