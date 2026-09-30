@@ -965,13 +965,23 @@ pub struct WaveInput<'a> {
     pub accessible_label: &'a str,
     /// The stretch shown; `None` is the whole track.
     pub view: Option<WaveView>,
+    /// The entry shown: a drag seeks only into the entry it started on.
+    pub entry: Option<fp_model::EntryId>,
+    /// An area drawn over the waveform (a button) where no seek starts.
+    pub shield: Option<Rect>,
 }
 
 /// A drag on the waveform that seeks where it is released (feedback spec
 /// F2); Esc cancels it.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 struct SeekDrag {
     cancelled: bool,
+    entry: Option<fp_model::EntryId>,
+}
+
+/// Whether a seek drag is held on the waveform `id`.
+pub fn seek_dragging(ui: &Ui, id: egui::Id) -> bool {
+    ui.data(|d| d.get_temp::<SeekDrag>(id.with("seek-drag")).is_some())
 }
 
 /// Draws the waveform; returns the seek target (seconds) on click.
@@ -1001,7 +1011,19 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         0.0,
         theme::NEUTRAL_800,
     );
+    // A drag belongs to the entry it started on, and ends with its button:
+    // one left over from another entry, or whose release this waveform
+    // never saw, is dropped before it could seek.
+    let drag_id = input.id.with("seek-drag");
+    let pointer_down = ui.input(|i| i.pointer.primary_down());
+    if ui
+        .data(|d| d.get_temp::<SeekDrag>(drag_id))
+        .is_some_and(|d| d.entry != input.entry || (!pointer_down && !response.drag_stopped()))
+    {
+        ui.data_mut(|d| d.remove::<SeekDrag>(drag_id));
+    }
     let Some(total) = input.total.filter(|t| *t > 0.0) else {
+        ui.data_mut(|d| d.remove::<SeekDrag>(drag_id));
         return (response, None);
     };
     let view = input.view.unwrap_or_else(|| WaveView::full(total));
@@ -1126,9 +1148,21 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
     );
     // Alt (Option) is for marker editing: it never seeks.
     let alt = ui.input(|i| i.modifiers.alt);
-    let drag_id = input.id.with("seek-drag");
-    if response.drag_started_by(egui::PointerButton::Primary) && !alt {
-        ui.data_mut(|d| d.insert_temp(drag_id, SeekDrag::default()));
+    let shielded = |p: Pos2| input.shield.is_some_and(|r| r.contains(p));
+    let origin = ui.input(|i| i.pointer.press_origin());
+    if response.drag_started_by(egui::PointerButton::Primary)
+        && !alt
+        && !origin.is_some_and(shielded)
+    {
+        ui.data_mut(|d| {
+            d.insert_temp(
+                drag_id,
+                SeekDrag {
+                    cancelled: false,
+                    entry: input.entry,
+                },
+            );
+        });
     }
     let mut drag = ui.data(|d| d.get_temp::<SeekDrag>(drag_id));
     if let Some(d) = drag.as_mut()
@@ -1171,7 +1205,7 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
             }
         }
         None => {
-            if let Some(p) = response.hover_pos() {
+            if let Some(p) = response.hover_pos().filter(|p| !shielded(*p)) {
                 preview(p.x);
                 if response.clicked() && !alt {
                     seek = Some(view.secs_at(p.x, inner));

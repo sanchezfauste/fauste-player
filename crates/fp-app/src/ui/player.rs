@@ -24,6 +24,11 @@ const PLAY_SIZE: f32 = 64.0;
 const WAVE_ZOOM_STEP: f64 = 0.8;
 /// One sideways notch pans the waveform by this share of its width.
 const WAVE_PAN_STEP: f32 = 0.1;
+/// Smooth-scrolling wheels and trackpads report points: this many make a
+/// notch.
+const WAVE_POINTS_PER_NOTCH: f32 = 50.0;
+/// A wheel that reports pages: one page is this many notches.
+const WAVE_NOTCHES_PER_PAGE: f32 = 3.0;
 const GAP: f32 = 6.0;
 const WAVE_HEIGHT: f32 = 56.0;
 const TABS_HEIGHT: f32 = 30.0;
@@ -749,19 +754,41 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         .get(&id)
         .copied()
         .filter(|z| Some(z.entry) == current && total.is_some());
+    let wave_id = egui::Id::new(("waveform", id));
     // While zoomed, follow the playhead once the operator's last move is
-    // older than the grace (feedback spec F17).
+    // older than the grace (feedback spec F17), but never under a held drag.
+    let dragging = widgets::seek_dragging(ui, wave_id)
+        || view_state.marker_drag.is_some_and(|(p, _, _)| p == id);
     if let (Some(z), Some(total), Some(f)) = (zoom.as_mut(), total, pv.markers.position) {
         let grace = scene.state.config.ui.follow_current_grace_secs;
-        if scene.time - z.moved_at >= grace {
+        if dragging {
+            z.moved_at = scene.time;
+        } else if scene.time - z.moved_at >= grace {
             z.view = z.view.follow(f64::from(f) * total, total);
         }
     }
     let view = zoom.map(|z| z.view);
+    // Where the Full view button goes while zoomed: no seek starts under it.
+    let wave_rect = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), WAVE_HEIGHT));
+    let full_view_text = t.tr("wave-full-view");
+    let full_view_width = ui
+        .painter()
+        .layout_no_wrap(full_view_text.clone(), font(10.0), theme::TEXT)
+        .size()
+        .x
+        + 12.0;
+    let button_rect = Rect::from_min_size(
+        pos2(
+            wave_rect.right() - 4.0 - full_view_width,
+            wave_rect.top() + 4.0,
+        ),
+        vec2(full_view_width, 18.0),
+    );
+    let full_view_button = zoom.map(|_| button_rect);
     let mix_label = t.tr("mix-marker");
     let label = t.tr("tip-waveform");
     let input = widgets::WaveInput {
-        id: egui::Id::new(("waveform", id)),
+        id: wave_id,
         media: media.as_ref(),
         total: pv.total,
         markers: pv.markers,
@@ -770,6 +797,8 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         mix_label: &mix_label,
         accessible_label: &label,
         view,
+        entry: current,
+        shield: full_view_button,
     };
     let (response, seek) = widgets::waveform(ui, WAVE_HEIGHT, &input);
     if let Some(secs) = seek {
@@ -788,29 +817,41 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
             |m| m.peak_bucket_secs,
         );
         let min = min_span(bucket, inner.width());
+        // In notches: a line is one, points and pages are converted, so a
+        // trackpad zooms in proportion instead of one step per event.
         let wheels: Vec<(egui::Vec2, bool)> = ui.input(|i| {
             i.events
                 .iter()
                 .filter_map(|e| match e {
                     egui::Event::MouseWheel {
-                        delta, modifiers, ..
-                    } if *delta != egui::Vec2::ZERO => Some((*delta, modifiers.shift)),
+                        unit,
+                        delta,
+                        modifiers,
+                        ..
+                    } if *delta != egui::Vec2::ZERO && !modifiers.command => {
+                        let notches = match unit {
+                            egui::MouseWheelUnit::Line => *delta,
+                            egui::MouseWheelUnit::Point => *delta / WAVE_POINTS_PER_NOTCH,
+                            egui::MouseWheelUnit::Page => *delta * WAVE_NOTCHES_PER_PAGE,
+                        };
+                        Some((notches, modifiers.shift))
+                    }
                     _ => None,
                 })
                 .collect()
         });
         if !wheels.is_empty() {
             let mut v = view.unwrap_or_else(|| WaveView::full(total));
-            for (delta, shift) in wheels {
-                if shift || delta.x != 0.0 {
-                    let step = if delta.x != 0.0 { delta.x } else { delta.y };
-                    v = v.pan(step.signum() * inner.width() * WAVE_PAN_STEP, inner, total);
-                } else {
-                    let factor = if delta.y > 0.0 {
-                        WAVE_ZOOM_STEP
+            for (notches, shift) in wheels {
+                if shift || notches.x.abs() > notches.y.abs() {
+                    let step = if notches.x.abs() > notches.y.abs() {
+                        notches.x
                     } else {
-                        1.0 / WAVE_ZOOM_STEP
+                        notches.y
                     };
+                    v = v.pan(step * inner.width() * WAVE_PAN_STEP, inner, total);
+                } else {
+                    let factor = WAVE_ZOOM_STEP.powf(f64::from(notches.y));
                     v = v.zoom_at(p.x, inner, factor, total, min);
                 }
             }
@@ -828,16 +869,8 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
     let painter = ui.painter_at(rect);
     let mut badge_right = rect.right() - 4.0;
     if zoom.is_some() {
-        let text = t.tr("wave-full-view");
-        let width = painter
-            .layout_no_wrap(text.clone(), font(10.0), theme::TEXT)
-            .size()
-            .x
-            + 12.0;
-        let button = Rect::from_min_size(
-            pos2(rect.right() - 4.0 - width, rect.top() + 4.0),
-            vec2(width, 18.0),
-        );
+        let button = button_rect;
+        let text = full_view_text;
         let mut child = ui.new_child(UiBuilder::new().max_rect(button));
         if widgets::tile(
             &mut child,

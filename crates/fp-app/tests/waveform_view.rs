@@ -175,6 +175,8 @@ fn a_player_that_unloads_lets_go_of_its_waveform() {
             mix_label: "MIX",
             accessible_label: "Waveform",
             view: None,
+            entry: None,
+            shield: None,
         };
         waveform(ui, 40.0, &input);
     });
