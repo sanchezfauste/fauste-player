@@ -271,6 +271,11 @@ impl AppUi {
         self.view.rows_built
     }
 
+    /// The pixel widths of a player's table columns in the last frame.
+    pub fn column_widths(&self, player: PlayerId) -> Option<[f32; 4]> {
+        self.view.widths.get(&player).copied()
+    }
+
     pub fn ui(&mut self, ui: &mut Ui) {
         #[cfg(feature = "test-hooks")]
         if std::mem::take(&mut self.fail_next_frame) {
