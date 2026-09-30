@@ -66,6 +66,19 @@ language the interface was built with.
   nearest to the press origin (`ViewState::marker_drag`) and sends a single
   `SetMarker` on release. A waveform click never seeks while Alt is held.
 
+## Waveform view
+
+`ui/wave_view.rs::WaveView { start_secs, span_secs }` is the one mapping
+between seconds and pixels: drawing (`wave_columns_in` reduces only the
+visible stretch, memoised per start, span and width), marker lines and
+handles, the hover time, drag-to-seek and the context menu all use it.
+`ViewState::wave_zoom` keeps a `WaveZoom` per zoomed player (view, the entry
+it belongs to, when it was last moved); no entry means the full view. The
+wheel is read from the frame's `MouseWheel` events while the waveform is
+hovered, and the frame's scroll delta is then cleared so no scroll area
+moves too. A drag to seek lives in egui temp data (`SeekDrag`) keyed on the
+waveform id.
+
 ## Nothing blocks the UI thread
 
 Native file and folder dialogs (`rfd::AsyncFileDialog` driven by `pollster`),

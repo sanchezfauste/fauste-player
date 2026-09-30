@@ -90,7 +90,19 @@ red.
 - An orange shaded area at the end marks the **outro**, with its own countdown.
 - A dashed amber line with a **MIX** tag marks where the next track starts in
   continuous mode. It is dimmed in single mode.
+- The whole file is drawn. The silent start and end that playback skips (before
+  cue-in and after cue-out) are drawn darker, with a thin line where playback
+  starts and ends.
 - Hover to see the time under the pointer. **Click to jump** there.
+- **Press and drag** to look for a spot: a line shows the time, and the jump
+  happens when you release the button over the waveform. Release outside it,
+  or press `Esc`, to cancel.
+- **Mouse wheel** over the waveform: zoom in and out around the pointer, down
+  to the finest detail the analysis has. **Shift+wheel** (or a sideways wheel)
+  moves along the track. While zoomed, the view follows the playing position,
+  except for 10 seconds after you zoom or move it
+  (`ui.follow_current_grace_secs`). **Full view**, in the top-right corner,
+  zooming all the way out or a new track show the whole track again.
 
 ## CUE (pre-listen)
 

@@ -173,6 +173,7 @@ any field this version does not have.
 
 | Field | Default | Meaning |
 |---|---|---|
+| `follow_current_grace_secs` | 10 | 0 … 600 (seconds a moved view waits before following what plays) |
 | `wave_color` | `slate` | `violet`, `amber`, `cyan`, `white`, `orange`, `magenta`, `ice`, `sand`, `slate` |
 | `music_dir` | none | the folder where file dialogs start |
 | `language` | none (OS locale) | BCP-47 tag (`en-US`, `es-ES`) |
