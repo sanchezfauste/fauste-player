@@ -500,7 +500,25 @@ fn at_the_minimum_player_width_the_countdown_still_fits() {
         support::harness_sized(quiet_meter(state(1, 3)), egui::vec2(380.0, 700.0), |ui| ui);
     let countdown = h.get_by_label("-00:00.0").rect();
     let meter = h.get_by_label("Level meter").rect();
+    let grid = h.get_by_label("Stop after the current track").rect();
     assert!(countdown.right() <= meter.left(), "{countdown:?} {meter:?}");
+    assert!(countdown.left() >= grid.right(), "{countdown:?} {grid:?}");
+}
+
+#[test]
+fn an_hour_long_countdown_fits_between_the_grid_and_the_meter() {
+    let mut state = quiet_meter(state(1, 3));
+    for track in state.library.iter_mut() {
+        track.duration_secs = 3700.0;
+    }
+    let p = state.players[0].id;
+    fp_model::apply(&mut state, Command::Play(p)).unwrap();
+    let (h, _) = support::harness_sized(state, egui::vec2(380.0, 700.0), |ui| ui);
+    let countdown = h.get_by_label_contains("-1:01:40").rect();
+    let meter = h.get_by_label("Level meter").rect();
+    let grid = h.get_by_label("Stop after the current track").rect();
+    assert!(countdown.right() <= meter.left(), "{countdown:?} {meter:?}");
+    assert!(countdown.left() >= grid.right(), "{countdown:?} {grid:?}");
 }
 
 /// The state with the loudness line off, so the meter is named "Level meter".

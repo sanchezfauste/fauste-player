@@ -659,7 +659,10 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     };
     let line = |db: f32, alignment: bool| {
         let width = if alignment { ALIGNMENT_LINE_WIDTH } else { 1.0 };
-        let y = y_of(db).clamp(top + width / 2.0, (bottom - width / 2.0).max(top));
+        let y = y_of(db).clamp(
+            top + width / 2.0,
+            (bottom - width / 2.0).max(top + width / 2.0),
+        );
         MeterLine {
             y,
             label_y: label_y(y),

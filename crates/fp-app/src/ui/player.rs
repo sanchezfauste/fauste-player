@@ -299,6 +299,8 @@ const METER_COLUMN_WIDTH: f32 = widgets::METER_WIDTH + 6.0 + widgets::FADER_WIDT
 const METER_COLUMN_GAP: f32 = 10.0;
 /// Vertical gap between the info row and the transport.
 const ROW_GAP: f32 = 8.0;
+/// The countdown shrinks to fit down to this share of its size (38 → 24 px).
+const COUNTDOWN_MIN_SCALE: f32 = 24.0 / 38.0;
 
 /// The info row and the transport on the left, the meter and fader column
 /// on the right spanning both (feedback spec §3.2).
@@ -653,8 +655,14 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 } else {
                     theme::TEXT
                 };
-                let big = font_medium(38.0);
-                let tenths_font = font_medium(17.0);
+                // Full size when it fits; smaller in a narrow player or for an
+                // hour-long time, so it never runs into the buttons.
+                let natural = widgets::tabular_size(ui.painter(), &main, &font_medium(38.0)).x
+                    + widgets::tabular_size(ui.painter(), &tenths, &font_medium(17.0)).x;
+                let scale =
+                    (ui.available_width() / natural.max(1.0)).clamp(COUNTDOWN_MIN_SCALE, 1.0);
+                let big = font_medium(38.0 * scale);
+                let tenths_font = font_medium(17.0 * scale);
                 let main_size = widgets::tabular_size(ui.painter(), &main, &big);
                 let tenths_size = widgets::tabular_size(ui.painter(), &tenths, &tenths_font);
                 let (rect, response) = ui.allocate_exact_size(
@@ -671,7 +679,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                     ui.painter(),
                     pos2(
                         rect.left() + main_size.x,
-                        rect.bottom() - tenths_size.y - 4.0,
+                        rect.bottom() - tenths_size.y - 4.0 * scale,
                     ),
                     &tenths,
                     &tenths_font,

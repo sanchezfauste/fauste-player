@@ -515,3 +515,20 @@ fn the_meter_and_fader_fill_the_height_they_are_given() {
     assert_eq!(fader.height(), 120.0);
     assert!(fader.left() >= meter.right());
 }
+
+#[test]
+fn a_meter_too_short_to_draw_lays_out_without_panicking() {
+    for ballistics in ALL_METERS {
+        for height in [0.0, 1.0, 5.0, 12.0, 24.0] {
+            for loudness in [false, true] {
+                let l = meter_layout(column(height), &meter(ballistics), loudness);
+                for m in &l.lines {
+                    assert!(
+                        m.y.is_finite() && m.label_y.is_finite(),
+                        "{ballistics:?} {height}"
+                    );
+                }
+            }
+        }
+    }
+}
