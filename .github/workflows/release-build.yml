@@ -38,6 +38,12 @@ on:
 permissions:
   contents: write
 
+# A new push to a pull request cancels the dry run it supersedes; a release
+# build is never cancelled.
+concurrency:
+  group: release-build-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -120,6 +126,13 @@ jobs:
           TAG: ${{ inputs.tag }}
           WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+      - name: Keep the macOS binary for the universal disk image
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binary-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/fauste-player
+          retention-days: 1
       - name: Upload to the release
         if: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
         shell: bash
@@ -134,6 +147,11 @@ jobs:
 
   macos-dmg:
     name: macOS disk image (universal)
+    # Joins the binaries the macOS builds made instead of compiling them
+    # again. It still runs when a build failed: the script then compiles the
+    # missing architecture itself.
+    needs: build
+    if: ${{ !cancelled() }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -141,9 +159,10 @@ jobs:
           ref: ${{ inputs.tag }}
       - name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/download-artifact@v4
         with:
-          key: macos-universal
+          pattern: macos-binary-*
+          path: prebuilt
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-about
@@ -155,6 +174,7 @@ jobs:
           echo "dmg=$(printf '%s\n' "${out}" | tail -n1)" >> "$GITHUB_OUTPUT"
         env:
           TAG: ${{ inputs.tag }}
+          PREBUILT_DIR: ${{ github.workspace }}/prebuilt
           APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
           APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}

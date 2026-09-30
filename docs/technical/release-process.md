@@ -109,8 +109,8 @@ scripts/package-release.sh x86_64-unknown-linux-gnu  # → dist/fauste-player-<v
 |---|---|---|
 | `build` (Linux matrix entries, ubuntu-22.04 and 22.04-arm) | archive, `.deb` (cargo-deb), `.rpm` (cargo-generate-rpm), AppImage (appimagetool) | `scripts/package-release.sh`, `scripts/package/linux.sh` |
 | `build` (Windows) | archive, `.msi` (cargo-wix, WiX Toolset v3) | `scripts/package/windows.sh` |
-| `build` (macOS entries) | archives per architecture | `scripts/package-release.sh` |
-| `macos-dmg` | universal `.app` (lipo) in a `.dmg` | `scripts/package/macos.sh` |
+| `build` (macOS entries) | archives per architecture; each also keeps its binary as a one-day artefact | `scripts/package-release.sh` |
+| `macos-dmg` | universal `.app` (lipo of the two `build` binaries, `PREBUILT_DIR`) in a `.dmg`; it compiles an architecture only when its build failed | `scripts/package/macos.sh` |
 | `flatpak-sources`, `flatpak`, `flatpak-release` | `cargo-sources.json` (flatpak-cargo-generator), then the bundle built offline with flatpak-builder | `packaging/flatpak/org.fauste.FaustePlayer.yml` |
 | `unsigned-note` | a section in the release notes listing the installers built without their signing secrets, with a link to the user guide's instructions (added once) | `release-build.yml` |
 
@@ -145,6 +145,11 @@ or `release-build.yml` runs `release-build` as a dry run: it builds every
 package, including the MSI, the dmg and the Flatpak, and uploads nothing.
 The same run can be started by hand with `dry_run` checked and any ref as
 `tag`.
+
+**Superseded runs:** a new push to a pull request cancels the CI run,
+the commit check and the dry run it replaces. Runs on `master` and release
+builds are never cancelled. Editing only the PR description runs no check,
+and editing the title re-checks only the title.
 
 ### Signing (optional secrets)
 

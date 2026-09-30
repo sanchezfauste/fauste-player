@@ -11,8 +11,16 @@ permissions:
   contents: read
   pull-requests: read
 
+# A new push cancels the check it supersedes. Edits have their own group: an
+# edit skips the commit check, so it must not cancel one in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ github.event.action == 'edited' && 'edit' || 'push' }}
+  cancel-in-progress: true
+
 jobs:
   title:
+    # An edit of the description alone changes neither the title nor a commit.
+    if: github.event.action != 'edited' || github.event.changes.title
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@v5
@@ -20,6 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   commits:
+    if: github.event.action != 'edited'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
