@@ -367,6 +367,31 @@ fn seek_replaces_the_source_at_the_new_position() {
 }
 
 #[test]
+fn an_unreadable_preload_is_reported_as_a_preload_failure() {
+    let mut r = rig(96_000, false);
+    let mut bad = request(2, 0.0);
+    bad.path = PathBuf::from("corrupt.mp3");
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(bad),
+    });
+    r.settle();
+    assert!(
+        r.events.contains(&EngineEvent::PreloadFailed {
+            player: P,
+            entry: EntryId(2)
+        }),
+        "{:?}",
+        r.events
+    );
+    assert!(
+        !r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::SourceFailed { .. }))
+    );
+}
+
+#[test]
 fn an_unreadable_file_is_reported_with_its_entry() {
     let mut r = rig(96_000, false);
     let mut bad = request(1, 0.0);

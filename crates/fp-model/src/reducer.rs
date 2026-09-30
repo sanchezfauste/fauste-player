@@ -219,15 +219,20 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             }
         }
         EngineEvent::TransitionStarted { player, entry } => {
-            // R26: a repeating entry started again. It stays current, and the
-            // engine used up the preload and the plan: `reconcile` sends new
-            // ones for the next pass.
+            // The engine started the entry that is already current: a
+            // repeating entry's next pass (R26), perhaps committed just before
+            // a command changed the model. It stays current; the engine used
+            // up its preload and plan, so `reconcile` sends new ones, and the
+            // audio is playing whatever the model asked meanwhile (a pause
+            // that arrived after the restart does not stop it).
             if let Ok(i) = state.player_index(player)
                 && state.players[i].current == Some(entry)
-                && repeating(state, &state.players[i])
+                && state.players[i].transport != Transport::Stopped
             {
-                state.players[i].preloaded = None;
-                state.players[i].scheduled = None;
+                let p = &mut state.players[i];
+                p.preloaded = None;
+                p.scheduled = None;
+                p.transport = Transport::Playing;
             }
             // A transition reported after the player was stopped is stale: the
             // engine has already been told to stop everything.
@@ -249,6 +254,9 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                     out.push(EngineAction::StopNow { player });
                 }
             }
+        }
+        EngineEvent::PreloadFailed { player, entry } => {
+            preload_failed(state, player, entry, &mut out)
         }
         EngineEvent::SourceFailed { player, entry } => {
             source_failed(state, player, entry, &mut out)
@@ -471,6 +479,37 @@ fn source_failed(
         }
     }
     refresh_next(state);
+}
+
+/// The source prepared to play next could not be opened: its file is
+/// unreadable, and whoever was going to play it gets another next. What is
+/// on air plays on, even when it is the same entry (a repeat, R26): its
+/// pass ends normally and the player moves on.
+fn preload_failed(
+    state: &mut AppState,
+    player: PlayerId,
+    entry: EntryId,
+    out: &mut Vec<EngineAction>,
+) {
+    let on_air = state
+        .player_index(player)
+        .is_ok_and(|i| state.players[i].current == Some(entry));
+    if !on_air {
+        source_failed(state, player, entry, out);
+        return;
+    }
+    if let Some(t) = state
+        .playlists
+        .entry(entry)
+        .map(|e| e.track)
+        .and_then(|track| state.library.get_mut(track))
+    {
+        t.file_state = FileState::Unreadable;
+    }
+    if let Ok(i) = state.player_index(player) {
+        // The failed preload is gone.
+        state.players[i].preloaded = None;
+    }
 }
 
 /// The two playable entries that follow `entry` in its playlist, so a
@@ -882,6 +921,11 @@ fn repeating(state: &AppState, player: &PlayerState) -> bool {
             .current
             .and_then(|c| state.playlists.entry(c))
             .is_some_and(|e| e.repeat && !e.stop_after)
+        // A file that can no longer be opened plays its pass out, once.
+        && player
+            .current
+            .and_then(|c| state.track_for_entry(c))
+            .is_some_and(|t| t.file_state.is_playable())
 }
 
 /// The entry to preload: the current one while it repeats, else the next.

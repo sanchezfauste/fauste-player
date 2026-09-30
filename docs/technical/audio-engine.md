@@ -200,9 +200,15 @@ back and the waiting next goes back to idle, and a transition counts as
 executed only once the next was sent its `Start`.
 
 It turns bus events back into model events: `TransitionStarted`,
-`ReachedEnd`, `FadeCompleted`, `SourceFailed` and `CueEnded { entry }`. Stale
-events (for an entry that is no longer current, or no longer the cue) are
-ignored by the model.
+`ReachedEnd`, `FadeCompleted`, `SourceFailed`, `PreloadFailed` and
+`CueEnded { entry }`. Stale events (for an entry that is no longer current,
+or no longer the cue) are ignored by the model. A preload that cannot be
+opened is `PreloadFailed`, never `SourceFailed`: the source on air plays on
+even when it is the same entry (a repeat). When a command such as Next
+arrives in the tick where the mixer has just started a scheduled transition
+into something else (a repeating entry's next pass), `start_current`
+replaces that start at once and drops its `TransitionStarted`, so the model
+stays on the entry it chose.
 
 **Routing:** `route_target` maps a configured route to a bus and a channel
 pair. A route to a backend this machine does not have falls back to the

@@ -235,3 +235,70 @@ fn r26_two_players_repeat_the_same_entry_independently() {
     assert_eq!(preload(&out, q), None, "the other player is untouched");
     assert_eq!(s.player(q).unwrap().current, Some(a));
 }
+
+// Races at a pass boundary: the engine restarted the entry just before the
+// model's command reached it.
+
+#[test]
+fn r26_turning_repeat_off_at_a_boundary_still_plans_the_next_track() {
+    let (mut s, p, [a, b, _]) = three();
+    apply(&mut s, Command::ToggleEntryRepeat(a)).unwrap();
+    apply(&mut s, Command::Play(p)).unwrap();
+    apply(&mut s, Command::ToggleEntryRepeat(a)).unwrap();
+    // The engine had already committed the restart: its preload and plan
+    // are used up.
+    let out = on_event(
+        &mut s,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: a,
+        },
+    );
+    assert_eq!(preload(&out, p), Some(Some(b)), "{out:?}");
+    assert!(
+        out.iter()
+            .any(|x| matches!(x, EngineAction::Schedule { player, plan: Some(_) } if *player == p)),
+        "a new plan, or the player stops at the end of the pass: {out:?}"
+    );
+}
+
+#[test]
+fn r26_a_restart_that_beat_a_pause_leaves_the_player_playing() {
+    let (mut s, p, [a, _, _]) = three();
+    apply(&mut s, Command::ToggleEntryRepeat(a)).unwrap();
+    apply(&mut s, Command::Play(p)).unwrap();
+    apply(&mut s, Command::Pause(p)).unwrap();
+    on_event(
+        &mut s,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: a,
+        },
+    );
+    assert_eq!(s.player(p).unwrap().transport, Transport::Playing);
+}
+
+#[test]
+fn r26_a_repeat_whose_file_cannot_be_reopened_finishes_its_pass_then_moves_on() {
+    let (mut s, p, [a, b, _]) = three();
+    apply(&mut s, Command::ToggleEntryRepeat(a)).unwrap();
+    apply(&mut s, Command::Play(p)).unwrap();
+    let out = on_event(
+        &mut s,
+        EngineEvent::PreloadFailed {
+            player: p,
+            entry: a,
+        },
+    );
+    let player = s.player(p).unwrap();
+    assert_eq!(player.current, Some(a), "the pass on air goes on");
+    assert_eq!(player.transport, Transport::Playing);
+    assert!(
+        !out.iter().any(|x| matches!(
+            x,
+            EngineAction::StopNow { .. } | EngineAction::StartCurrent { .. }
+        )),
+        "{out:?}"
+    );
+    assert_eq!(preload(&out, p), Some(Some(b)), "{out:?}");
+}
