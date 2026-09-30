@@ -153,3 +153,101 @@ fn a_binding_for_a_player_that_does_not_exist_does_nothing() {
     let mut r = router(&[(note(1), MidiAction::Button(ShortcutAction::PlayPlayer(5)))]);
     assert_eq!(r.on_message("APC", on(1), &s), None);
 }
+
+// Soft takeover (feedback spec §6.3).
+
+use fp_model::volume::{fader_from_gain, gain_from_fader};
+
+/// P1's volume set to the fader travel `travel`.
+fn at_travel(mut s: AppState, travel: f32) -> AppState {
+    let p = s.players[0].id;
+    apply(&mut s, Command::SetVolume(p, gain_from_fader(travel))).unwrap();
+    s
+}
+
+fn volume_router() -> Router {
+    router(&[(cc(7), MidiAction::Volume(1))])
+}
+
+/// The travel a CC value stands for.
+fn travel_of(value: u8) -> f32 {
+    f32::from(value) / 127.0
+}
+
+fn volume_of(command: Option<Command>) -> Option<f32> {
+    match command {
+        Some(Command::SetVolume(_, v)) => Some(fader_from_gain(v)),
+        _ => None,
+    }
+}
+
+#[test]
+fn a_fader_does_nothing_until_it_reaches_the_volume() {
+    let s = at_travel(state(), travel_of(100));
+    let mut r = volume_router();
+    for v in [10, 40, 80, 99] {
+        assert_eq!(r.on_message("APC", cc_value(7, v), &s), None, "{v}");
+    }
+    // Crossing from below picks it up.
+    let got = volume_of(r.on_message("APC", cc_value(7, 105), &s)).unwrap();
+    assert!((got - travel_of(105)).abs() < 1e-3);
+}
+
+#[test]
+fn crossing_from_above_or_landing_exactly_picks_up() {
+    let s = at_travel(state(), travel_of(50));
+    let mut r = volume_router();
+    assert_eq!(r.on_message("APC", cc_value(7, 90), &s), None);
+    assert!(
+        r.on_message("APC", cc_value(7, 40), &s).is_some(),
+        "crossed from above"
+    );
+    let mut r = volume_router();
+    assert!(
+        r.on_message("APC", cc_value(7, 50), &s).is_some(),
+        "landed on it"
+    );
+}
+
+#[test]
+fn once_picked_up_every_move_counts_even_jitter() {
+    let mut s = at_travel(state(), travel_of(50));
+    let mut r = volume_router();
+    let p = s.players[0].id;
+    for v in [50, 51, 50, 49, 50, 52] {
+        let c = r.on_message("APC", cc_value(7, v), &s);
+        assert!(c.is_some(), "{v}");
+        apply(&mut s, c.unwrap()).unwrap();
+    }
+    assert!((fader_from_gain(s.player(p).unwrap().volume) - travel_of(52)).abs() < 1e-3);
+}
+
+#[test]
+fn another_change_of_the_volume_re_arms_the_pickup() {
+    let s = at_travel(state(), travel_of(50));
+    let mut r = volume_router();
+    assert!(r.on_message("APC", cc_value(7, 50), &s).is_some());
+    // The on-screen fader moved the volume to 90.
+    let s = at_travel(s, travel_of(90));
+    assert_eq!(
+        r.on_message("APC", cc_value(7, 55), &s),
+        None,
+        "not picked up any more"
+    );
+    assert!(
+        r.on_message("APC", cc_value(7, 95), &s).is_some(),
+        "crossed 90"
+    );
+}
+
+#[test]
+fn a_pitch_bend_fader_uses_its_full_range() {
+    let s = at_travel(state(), 1.0);
+    let mut r = router(&[(MidiTrigger::PitchBend { channel: 0 }, MidiAction::Volume(1))]);
+    let top = MidiMessage::PitchBend {
+        channel: 0,
+        value: 16_383,
+    };
+    let got = volume_of(r.on_message("APC", top, &s)).unwrap();
+    assert!((got - 1.0).abs() < 1e-4);
+}
