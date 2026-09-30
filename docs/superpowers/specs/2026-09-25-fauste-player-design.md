@@ -364,7 +364,8 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
 - **Cache:**
   - `postcard`-encoded file per track in the OS cache dir;
   - the key is a hash of (canonical path, size, mtime) plus the analysis version;
-  - a corrupt cache entry is discarded and recomputed.
+  - a corrupt cache entry is discarded and recomputed;
+  - entries of older analysis versions are removed when the cache opens.
 - **Playability before analysis.** A track can be played before its analysis finishes. Until then it has no waveform or segue start, and `cue_in = 0`, `cue_out = duration`. If analysis finishes while the track is current or next, its markers apply to scheduling that has not happened yet.
 
 Supported formats (via `symphonia`): WAV, AIFF, FLAC, MP3, OGG Vorbis, AAC/M4A, ALAC. **Opus is not supported in Phase 1.**

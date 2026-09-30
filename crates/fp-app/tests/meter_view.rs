@@ -11,7 +11,8 @@ mod support;
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::widgets::{
-    Zone, alignment_dbfs, loudness_line, max_readout, meter_position, scale_marks, zone_of,
+    MIN_MARK_GAP, Zone, alignment_dbfs, loudness_line, mark_rows, max_readout, meter_position,
+    scale_marks, zone_of,
 };
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::PlayerTelemetry;
@@ -164,7 +165,28 @@ fn the_k_system_has_its_own_zones() {
     let c = meter(MeterBallistics::K20);
     assert_eq!(zone_of(-20.5, &c), Zone::Normal, "below 0");
     assert_eq!(zone_of(-20.0, &c), Zone::Warning, "0 to +4: amber");
-    assert_eq!(zone_of(-16.0, &c), Zone::Danger, "above +4");
+    assert_eq!(
+        zone_of(-16.0, &c),
+        Zone::Warning,
+        "+4 itself is still amber"
+    );
+    assert_eq!(zone_of(-15.9, &c), Zone::Danger, "above +4");
+}
+
+#[test]
+fn the_digital_scale_reaches_down_to_a_low_floor() {
+    let c = MeterConfig {
+        floor_db: -96.0,
+        ..meter(MeterBallistics::DigitalPeak)
+    };
+    let (p96, p90, p80, p70) = (
+        meter_position(-96.0, &c),
+        meter_position(-90.0, &c),
+        meter_position(-80.0, &c),
+        meter_position(-70.0, &c),
+    );
+    assert_eq!(p96, 0.0, "the floor is the bottom");
+    assert!(0.0 < p90 && p90 < p80 && p80 < p70, "{p90} {p80} {p70}");
 }
 
 #[test]
@@ -173,6 +195,46 @@ fn the_maximum_reads_with_one_decimal() {
     assert_eq!(max_readout(0.4), "+0.4");
     assert_eq!(max_readout(-0.04), "0.0");
     assert_eq!(max_readout(-120.0), "—", "nothing measured");
+    assert_eq!(max_readout(f32::NAN), "—", "never a NaN on screen");
+}
+
+/// The meter's bars at its size in the player column.
+const BARS: (f32, f32) = (11.0, 64.0);
+
+#[test]
+fn marks_stay_inside_the_bars() {
+    for ballistics in [
+        MeterBallistics::DigitalPeak,
+        MeterBallistics::EbuPpm,
+        MeterBallistics::DinPpm,
+        MeterBallistics::Vu,
+        MeterBallistics::K12,
+    ] {
+        for (y, width) in mark_rows(&meter(ballistics), BARS.0, BARS.1) {
+            assert!(
+                y - width / 2.0 >= BARS.0 && y + width / 2.0 <= BARS.1,
+                "{ballistics:?}: {y} ± {width}"
+            );
+        }
+    }
+}
+
+#[test]
+fn marks_too_close_to_read_are_left_out() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::K20] {
+        let rows = mark_rows(&meter(ballistics), BARS.0, BARS.1);
+        let plain: Vec<f32> = rows.iter().filter(|r| r.1 < 2.0).map(|r| r.0).collect();
+        for pair in plain.windows(2) {
+            assert!(
+                (pair[0] - pair[1]).abs() >= MIN_MARK_GAP,
+                "{ballistics:?}: {plain:?}"
+            );
+        }
+        assert!(rows.iter().any(|r| r.1 == 2.0), "the alignment mark stays");
+    }
+    // A tall meter shows every mark of the scale.
+    let c = meter(MeterBallistics::DigitalPeak);
+    assert_eq!(mark_rows(&c, 0.0, 400.0).len(), scale_marks(&c).len() + 1);
 }
 
 #[test]

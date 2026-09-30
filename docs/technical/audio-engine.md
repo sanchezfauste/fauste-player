@@ -76,8 +76,9 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
     stages on the mean square (τ = 102.7 ms, so a step reads 99 % of its
     RMS value in 600 ms) solved exactly per tick and read by the AES17
     convention (a sine reads its peak level); and the maximum, counted
-    only from what each tick measured, which restarts when the player's
-    current entry changes and on `EngineRequest::ResetMeterMax` (a click
+    only from what each tick measured (for the VU, its calibrated
+    average), which restarts when the player's current entry changes or
+    plays again after a stop, and on `EngineRequest::ResetMeterMax` (a click
     on the readout). It also computes momentary (400 ms) and short-term
     (3 s) loudness from 5 ms blocks: L = −0.691 + 10·log10(z_L + z_R).
   - A tick without a device block within 50 ms leaves the level standing,

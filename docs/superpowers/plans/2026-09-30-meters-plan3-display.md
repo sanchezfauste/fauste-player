@@ -55,3 +55,19 @@
 ### Task 3: docs
 
 - [ ] Update README, `docs/user/players.md`, `docs/user/settings.md`, `docs/technical/audio-engine.md`, `docs/technical/persistence.md` and the spec. Commit `docs: describe the standard meter scales and the K-System`.
+
+## Follow-up (fix/meter-waveform-minors)
+
+The final review's minors, fixed test-first:
+
+- the VU maximum is capped by the tick's calibrated average, not its raw peak (`a_restarted_vu_maximum_ignores_the_needle_still_falling_from_before`);
+- the maximum restarts when the same entry plays again after a stop (`the_meter_maximum_restarts_when_the_same_entry_plays_again`);
+- the digital scale's last slope (0.25 %/dB) carries on below −70, so a floor down to −96 has height (`the_digital_scale_reaches_down_to_a_low_floor`);
+- marks stay inside the bars and those closer than 3 px are left out (`marks_stay_inside_the_bars`, `marks_too_close_to_read_are_left_out`);
+- `max_readout(NaN)` shows a dash;
+- the K-System red zone starts above +4, not at it.
+
+Deferred minors (follow-up review):
+
+- the maximum does not restart when the same entry stops and starts within one conductor tick, or when a looping one-entry playlist segues into itself (a per-start counter would catch both);
+- at the column size the DIN −10 mark gives way to the alignment tick (DIN −9), by the legibility rule.

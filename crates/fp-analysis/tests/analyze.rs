@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use fp_analysis::cache::AnalysisCache;
+use fp_analysis::cache::{ANALYSIS_VERSION, AnalysisCache};
 use fp_analysis::{AnalysisError, analyze_file};
 use fp_model::{AnalysisSettings, Limits};
 
@@ -188,5 +188,36 @@ fn the_analysis_records_the_rate_and_bits() {
             bits: Some(16),
             channels: 1,
         })
+    );
+}
+
+#[test]
+fn entries_of_older_analysis_versions_are_pruned() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = fixture(dir.path(), "a.wav", 5);
+    let a = analyze_file(&path, &settings(), &Limits::default()).unwrap();
+    cache(dir.path()).store(&path, &settings(), &a).unwrap();
+    let cache_dir = dir.path().join("cache");
+    let old = ANALYSIS_VERSION - 1;
+    std::fs::write(cache_dir.join("0123456789abcdef.bin"), b"unversioned").unwrap();
+    std::fs::write(
+        cache_dir.join(format!("v{old}-0123456789abcdef.bin")),
+        b"old",
+    )
+    .unwrap();
+    let c = cache(dir.path());
+    let names: Vec<String> = std::fs::read_dir(&cache_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names.len(), 1, "{names:?}");
+    assert!(
+        names[0].starts_with(&format!("v{ANALYSIS_VERSION}-")),
+        "{names:?}"
+    );
+    assert_eq!(
+        c.load(&path, &settings()),
+        Some(a),
+        "the current entry stays"
     );
 }

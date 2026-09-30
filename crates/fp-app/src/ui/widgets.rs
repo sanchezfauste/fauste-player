@@ -14,6 +14,7 @@ use super::theme::{self, WaveColors};
 use super::view::MarkerFractions;
 use crate::services::TrackMedia;
 use fp_analysis::WavePeak;
+use std::sync::Arc;
 
 pub fn font(size: f32) -> FontId {
     FontId::proportional(size)
@@ -124,7 +125,8 @@ pub enum Zone {
 }
 
 /// The digital scale's deflection (meters spec M4), in % of 0 dBFS: the
-/// slope in %/dB of each 10 dB below −20, from −30 down to −70.
+/// slope in %/dB of each 10 dB below −20, from −30 down to −70. The last
+/// slope carries on below −70, so a lower floor still has height.
 const DIGITAL_SLOPES: [f32; 5] = [2.0, 1.5, 0.75, 0.5, 0.25];
 
 fn digital_deflection(db: f32) -> f32 {
@@ -140,7 +142,7 @@ fn digital_deflection(db: f32) -> f32 {
         top -= 10.0 * slope;
         at -= 10.0;
     }
-    0.0
+    top - (at - db) * DIGITAL_SLOPES.last().copied().unwrap_or(0.25)
 }
 
 /// The K-System scale: linear in dB from the top to −24 over this share of
@@ -220,9 +222,15 @@ pub fn scale_marks(c: &MeterConfig) -> Vec<f32> {
 }
 
 /// The zone `db` falls in: the configured ones, or the K-System's own
-/// (amber from 0, red from +4).
+/// (amber from 0, red above +4).
 pub fn zone_of(db: f32, c: &MeterConfig) -> Zone {
-    if db >= zone_start(Zone::Danger, c) {
+    let danger = zone_start(Zone::Danger, c);
+    let in_danger = if c.ballistics.k_reference_dbfs().is_some() {
+        db > danger
+    } else {
+        db >= danger
+    };
+    if in_danger {
         Zone::Danger
     } else if db >= zone_start(Zone::Warning, c) {
         Zone::Warning
@@ -234,7 +242,7 @@ pub fn zone_of(db: f32, c: &MeterConfig) -> Zone {
 /// The maximum readout: one decimal with its sign, or a dash when nothing
 /// was measured.
 pub fn max_readout(db: f32) -> String {
-    if db <= -100.0 {
+    if db.is_nan() || db <= -100.0 {
         return "—".to_owned();
     }
     let tenths = (db * 10.0).round();
@@ -382,13 +390,11 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
     }
     // The scale's marks in the gap between the channels, the alignment
     // level (K-System 0) brighter.
-    let marks = scale_marks(c).into_iter().map(|m| (m, false));
-    for (mark, alignment) in marks.chain(std::iter::once((alignment_dbfs(c), true))) {
-        let y = y_of(mark);
-        let (width, colour) = if alignment {
-            (2.0, theme::NEUTRAL_300)
+    for (y, width) in mark_rows(c, bars_top, bars_bottom) {
+        let colour = if width >= ALIGNMENT_MARK_WIDTH {
+            theme::NEUTRAL_300
         } else {
-            (1.0, theme::NEUTRAL_400.gamma_multiply(0.6))
+            theme::NEUTRAL_400.gamma_multiply(0.6)
         };
         painter.rect_filled(
             Rect::from_x_y_ranges(
@@ -417,6 +423,42 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
         });
     }
     clicked
+}
+
+/// Thickness of the alignment mark; the scale's other marks are 1 px.
+const ALIGNMENT_MARK_WIDTH: f32 = 2.0;
+
+/// The closest two scale marks may be drawn, in pixels.
+pub const MIN_MARK_GAP: f32 = 3.0;
+
+/// Where the meter draws its marks between `top` and `bottom` (screen y):
+/// the centre and thickness of each, the alignment mark last.
+pub fn mark_rows(c: &MeterConfig, top: f32, bottom: f32) -> Vec<(f32, f32)> {
+    let height = (bottom - top).max(1.0);
+    let y_of = |db: f32| bottom - meter_position(db, c) * height;
+    // Inside the bars, even at the very top or bottom of the scale.
+    let place = |db: f32, width: f32| {
+        let y = y_of(db).clamp(
+            top + width / 2.0,
+            (bottom - width / 2.0).max(top + width / 2.0),
+        );
+        (y, width)
+    };
+    let alignment = place(alignment_dbfs(c), ALIGNMENT_MARK_WIDTH);
+    // Top down, so where the scale is dense the upper marks are kept.
+    let mut rows: Vec<(f32, f32)> = Vec::new();
+    for mark in scale_marks(c).into_iter().rev() {
+        let row = place(mark, 1.0);
+        let crowded = rows
+            .iter()
+            .chain(std::iter::once(&alignment))
+            .any(|kept| (kept.0 - row.0).abs() < MIN_MARK_GAP);
+        if !crowded {
+            rows.push(row);
+        }
+    }
+    rows.push(alignment);
+    rows
 }
 
 /// The alignment level the meter marks, in dBFS: the K-System's 0, or
@@ -519,6 +561,9 @@ pub fn fader(ui: &mut Ui, position: f32, label: &str) -> Option<f32> {
 /// relative to its solid RMS body.
 const WAVE_PEAK_ALPHA: f32 = 0.45;
 
+/// Rounding slack, in buckets, for column boundaries.
+const BUCKET_EPSILON: f64 = 1e-6;
+
 /// One pixel column of the waveform, as fractions of full scale.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct WaveColumn {
@@ -540,13 +585,19 @@ pub fn wave_columns(
 ) -> Vec<WaveColumn> {
     let full = f32::from(i16::MAX);
     let mut out = vec![WaveColumn::default(); columns];
-    if bucket_secs <= 0.0 || span_secs <= 0.0 {
+    let valid = |secs: f64| secs.is_finite() && secs > 0.0;
+    if !valid(bucket_secs) || !valid(span_secs) {
         return out;
     }
-    let bucket_at = |c: usize| ((c as f64 / columns as f64) * span_secs / bucket_secs) as usize;
+    // The bucket where column `c` starts. The nudge keeps a boundary that
+    // division leaves a hair below a whole bucket (28.999… for 29) on it,
+    // so the last bucket is not lost; a huge span saturates.
+    let bucket_at = |c: usize| {
+        ((c as f64 / columns as f64) * span_secs / bucket_secs + BUCKET_EPSILON) as usize
+    };
     for (c, column) in out.iter_mut().enumerate() {
         let a0 = bucket_at(c);
-        let a1 = bucket_at(c + 1).max(a0 + 1);
+        let a1 = bucket_at(c + 1).max(a0.saturating_add(1));
         let Some(buckets) = peaks.get(a0.min(peaks.len())..a1.min(peaks.len())) else {
             continue;
         };
@@ -571,9 +622,44 @@ pub fn wave_columns(
     out
 }
 
+/// The last reduction one waveform drew: it is reused until the track,
+/// the span or the width changes.
+#[derive(Clone)]
+pub struct WaveMemo {
+    /// Held, so no other track can take its address while it is the key.
+    media: Arc<TrackMedia>,
+    span_secs: f64,
+    columns: Arc<[WaveColumn]>,
+}
+
+/// The columns of `media` over `span_secs` at `columns` pixels, from `memo`
+/// when it holds them, reduced (and remembered) otherwise.
+pub fn memo_columns(
+    memo: &mut Option<WaveMemo>,
+    media: &Arc<TrackMedia>,
+    span_secs: f64,
+    columns: usize,
+) -> Arc<[WaveColumn]> {
+    if let Some(m) = memo.as_ref().filter(|m| {
+        Arc::ptr_eq(&m.media, media)
+            && m.span_secs.to_bits() == span_secs.to_bits()
+            && m.columns.len() == columns
+    }) {
+        return Arc::clone(&m.columns);
+    }
+    let reduced: Arc<[WaveColumn]> =
+        wave_columns(&media.peaks, media.peak_bucket_secs, span_secs, columns).into();
+    *memo = Some(WaveMemo {
+        media: Arc::clone(media),
+        span_secs,
+        columns: Arc::clone(&reduced),
+    });
+    reduced
+}
+
 /// What the waveform shows.
 pub struct WaveInput<'a> {
-    pub media: Option<&'a TrackMedia>,
+    pub media: Option<&'a Arc<TrackMedia>>,
     pub total: Option<f64>,
     pub markers: MarkerFractions,
     pub colors: WaveColors,
@@ -630,8 +716,14 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         let span = covered.max(total);
         let amp = (inner.height() / 2.0 - 3.0).max(1.0);
         // One column per pixel: the peaks as a faint outline, the RMS level
-        // as the solid body inside it.
-        let columns = wave_columns(&media.peaks, media.peak_bucket_secs, span, w as usize);
+        // as the solid body inside it, all in one mesh.
+        let memo_id = response.id.with("wave-columns");
+        let mut memo = ui
+            .data(|d| d.get_temp::<Option<WaveMemo>>(memo_id))
+            .flatten();
+        let columns = memo_columns(&mut memo, media, span, w as usize);
+        ui.data_mut(|d| d.insert_temp(memo_id, memo));
+        let mut mesh = egui::Mesh::default();
         for (i, column) in columns.iter().enumerate() {
             let px = inner.left() + i as f32;
             let color = if px < play_x {
@@ -641,21 +733,20 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
             };
             let peak = column.peak * amp;
             if peak > 0.0 {
-                painter.rect_filled(
+                mesh.add_colored_rect(
                     Rect::from_min_max(pos2(px, mid - peak), pos2(px + 1.0, mid + peak)),
-                    0.0,
                     color.gamma_multiply(WAVE_PEAK_ALPHA),
                 );
             }
             let rms = column.rms * amp;
             if rms > 0.0 {
-                painter.rect_filled(
+                mesh.add_colored_rect(
                     Rect::from_min_max(pos2(px, mid - rms), pos2(px + 1.0, mid + rms)),
-                    0.0,
                     color,
                 );
             }
         }
+        painter.add(mesh);
     }
     let label_font = font_semibold(9.0);
     if let Some(f) = m.intro_end {
