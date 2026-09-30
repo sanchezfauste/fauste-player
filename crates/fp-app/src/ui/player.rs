@@ -176,7 +176,7 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                     ui,
                     vec2(50.0, 20.0),
                     &t.tr("tip-cue"),
-                    true,
+                    fp_model::availability(scene.state, id).cue,
                     cue_style,
                     |p, r, c| {
                         p.text(
@@ -299,8 +299,9 @@ const METER_COLUMN_WIDTH: f32 = widgets::METER_WIDTH + 6.0 + widgets::FADER_WIDT
 const METER_COLUMN_GAP: f32 = 10.0;
 /// Vertical gap between the info row and the transport.
 const ROW_GAP: f32 = 8.0;
-/// The countdown shrinks to fit down to this share of its size (38 → 24 px).
-const COUNTDOWN_MIN_SCALE: f32 = 24.0 / 38.0;
+/// The countdown shrinks to fit down to this share of its size (38 → 18 px:
+/// an hour-long time in a player at its minimum width).
+const COUNTDOWN_MIN_SCALE: f32 = 18.0 / 38.0;
 
 /// The info row and the transport on the left, the meter and fader column
 /// on the right spanning both (feedback spec §3.2).
@@ -486,6 +487,30 @@ fn next_line(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
     );
 }
 
+/// Draws a transport button's content in its rectangle and colour.
+type PaintFn = Box<dyn Fn(&egui::Painter, Rect, Color32)>;
+
+/// One button of the transport grid.
+struct GridButton {
+    tip: String,
+    enabled: bool,
+    style: TileStyle,
+    paint: PaintFn,
+    command: Command,
+}
+
+impl GridButton {
+    fn new(tip: String, enabled: bool, style: TileStyle, paint: PaintFn, command: Command) -> Self {
+        Self {
+            tip,
+            enabled,
+            style,
+            paint,
+            command,
+        }
+    }
+}
+
 fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
     let t = scene.i18n;
     let blink = (scene.time * 2.0).floor() as i64 % 2 == 0;
@@ -494,6 +519,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
         Layout::left_to_right(Align::Center),
         |ui| {
             ui.spacing_mut().item_spacing = vec2(GAP, GAP);
+            let available = fp_model::availability(scene.state, id);
             let playing = pv.status == PlayerStatus::OnAir;
             let play_label = if playing {
                 t.tr("tip-next")
@@ -525,7 +551,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 ui,
                 vec2(PLAY_SIZE, PLAY_SIZE),
                 &play_label,
-                true,
+                available.play,
                 play_style,
                 |p, r, c| {
                     widgets::glyph(p, r.translate(vec2(0.0, -6.0)), glyph, 28.0, c, true);
@@ -543,109 +569,123 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 scene.ctl.send(Command::Play(id));
             }
             let small = vec2((PLAY_SIZE - GAP) / 2.0, (PLAY_SIZE - GAP) / 2.0);
+            let paused = pv.status == PlayerStatus::Paused;
+            let pause_style = if paused {
+                TileStyle {
+                    fill: if blink {
+                        theme::AMBER_BG
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                    content: if blink {
+                        theme::AMBER_TEXT
+                    } else {
+                        theme::AMBER_DIM
+                    },
+                    ..TileStyle::plain()
+                }
+            } else {
+                TileStyle::plain()
+            };
+            let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
+            let fade_style = if fade_stopping {
+                TileStyle {
+                    fill: theme::NEUTRAL_800,
+                    content: theme::TEXT,
+                    ..TileStyle::plain()
+                }
+            } else {
+                TileStyle::plain()
+            };
+            let sa_style = if pv.stop_after_current {
+                TileStyle {
+                    fill: theme::AMBER_BG,
+                    border: theme::AMBER,
+                    content: theme::AMBER_TEXT,
+                    ..TileStyle::plain()
+                }
+            } else {
+                TileStyle::plain()
+            };
+            let sa_tip = if pv.mode == PlayMode::Single {
+                t.tr("tip-stop-after-single")
+            } else {
+                t.tr("tip-stop-after")
+            };
+            let glyph = |g: &'static str| -> PaintFn {
+                Box::new(move |p, r, c| widgets::glyph(p, r, g, 13.0, c, true))
+            };
+            let drawn = |f: fn(Rect, Color32) -> Vec<egui::Shape>, w: f32, h: f32| -> PaintFn {
+                Box::new(move |p, r, c| {
+                    p.extend(f(Rect::from_center_size(r.center(), vec2(w, h)), c))
+                })
+            };
+            // Two rows of three (feedback spec §3.2): Previous and Restart
+            // first, then Stop and Pause over Fade stop and Stop after.
+            let rows: [[GridButton; 3]; 2] = [
+                [
+                    GridButton::new(
+                        t.tr("tip-previous"),
+                        available.previous,
+                        TileStyle::plain(),
+                        drawn(icons::previous, 16.0, 12.0),
+                        Command::Previous(id),
+                    ),
+                    GridButton::new(
+                        t.tr("tip-stop"),
+                        available.stop,
+                        TileStyle::plain(),
+                        glyph(egui_phosphor::fill::STOP),
+                        Command::Stop(id),
+                    ),
+                    GridButton::new(
+                        t.tr("tip-pause"),
+                        available.pause,
+                        pause_style,
+                        glyph(egui_phosphor::fill::PAUSE),
+                        Command::Pause(id),
+                    ),
+                ],
+                [
+                    GridButton::new(
+                        t.tr("tip-restart"),
+                        available.restart,
+                        TileStyle::plain(),
+                        drawn(icons::restart, 14.0, 12.0),
+                        Command::Restart(id),
+                    ),
+                    GridButton::new(
+                        t.tr("tip-fade-stop"),
+                        available.fade_stop,
+                        fade_style,
+                        drawn(icons::fade_stop, 16.0, 12.0),
+                        Command::FadeStop(id),
+                    ),
+                    GridButton::new(
+                        sa_tip,
+                        available.stop_after_current,
+                        sa_style,
+                        drawn(icons::stop_after, 18.0, 13.0),
+                        Command::ToggleStopAfterCurrent(id),
+                    ),
+                ],
+            ];
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = vec2(GAP, GAP);
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing = vec2(GAP, GAP);
-                    if widgets::tile(
-                        ui,
-                        small,
-                        &t.tr("tip-stop"),
-                        true,
-                        TileStyle::plain(),
-                        |p, r, c| {
-                            widgets::glyph(p, r, egui_phosphor::fill::STOP, 13.0, c, true);
-                        },
-                    )
-                    .clicked()
-                    {
-                        scene.ctl.send(Command::Stop(id));
-                    }
-                    let paused = pv.status == PlayerStatus::Paused;
-                    let pause_style = if paused {
-                        TileStyle {
-                            fill: if blink {
-                                theme::AMBER_BG
-                            } else {
-                                Color32::TRANSPARENT
-                            },
-                            content: if blink {
-                                theme::AMBER_TEXT
-                            } else {
-                                theme::AMBER_DIM
-                            },
-                            ..TileStyle::plain()
+                for row in rows {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing = vec2(GAP, GAP);
+                        for b in row {
+                            if widgets::tile(ui, small, &b.tip, b.enabled, b.style, |p, r, c| {
+                                (b.paint)(p, r, c);
+                            })
+                            .clicked()
+                            {
+                                scene.ctl.send(b.command);
+                            }
                         }
-                    } else {
-                        TileStyle::plain()
-                    };
-                    if widgets::tile(
-                        ui,
-                        small,
-                        &t.tr("tip-pause"),
-                        true,
-                        pause_style,
-                        |p, r, c| {
-                            widgets::glyph(p, r, egui_phosphor::fill::PAUSE, 13.0, c, true);
-                        },
-                    )
-                    .clicked()
-                    {
-                        scene.ctl.send(Command::Pause(id));
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing = vec2(GAP, GAP);
-                    let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
-                    let fade_style = if fade_stopping {
-                        TileStyle {
-                            fill: theme::NEUTRAL_800,
-                            content: theme::TEXT,
-                            ..TileStyle::plain()
-                        }
-                    } else {
-                        TileStyle::plain()
-                    };
-                    if widgets::tile(
-                        ui,
-                        small,
-                        &t.tr("tip-fade-stop"),
-                        true,
-                        fade_style,
-                        |p, r, c| {
-                            let icon_rect = Rect::from_center_size(r.center(), vec2(16.0, 12.0));
-                            p.extend(icons::fade_stop(icon_rect, c));
-                        },
-                    )
-                    .clicked()
-                    {
-                        scene.ctl.send(Command::FadeStop(id));
-                    }
-                    let single = pv.mode == PlayMode::Single;
-                    let sa_style = if pv.stop_after_current {
-                        TileStyle {
-                            fill: theme::AMBER_BG,
-                            border: theme::AMBER,
-                            content: theme::AMBER_TEXT,
-                            ..TileStyle::plain()
-                        }
-                    } else {
-                        TileStyle::plain()
-                    };
-                    let tip = if single {
-                        t.tr("tip-stop-after-single")
-                    } else {
-                        t.tr("tip-stop-after")
-                    };
-                    if widgets::tile(ui, small, &tip, !single, sa_style, |p, r, c| {
-                        let icon_rect = Rect::from_center_size(r.center(), vec2(18.0, 13.0));
-                        p.extend(icons::stop_after(icon_rect, c));
-                    })
-                    .clicked()
-                    {
-                        scene.ctl.send(Command::ToggleStopAfterCurrent(id));
-                    }
-                });
+                    });
+                }
             });
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing = vec2(8.0, 0.0);

@@ -35,3 +35,42 @@ pub fn stop_after(rect: Rect, color: Color32) -> Vec<Shape> {
         Shape::rect_filled(square, 0.0, color),
     ]
 }
+
+/// A bar followed by `count` triangles pointing left, each `tri` × side
+/// wide, centred in `rect`: the "back" transport glyphs.
+fn bar_then_left_triangles(rect: Rect, color: Color32, count: usize, tri: f32) -> Vec<Shape> {
+    const BAR: f32 = 0.2;
+    let r = rect.shrink(rect.height() * 0.1);
+    let units = BAR + tri * count as f32;
+    let side = (r.height() * 0.8).min(r.width() / units);
+    let left = r.center().x - side * units / 2.0;
+    let top = r.center().y - side / 2.0;
+    let mut shapes = vec![Shape::rect_filled(
+        Rect::from_min_size(pos2(left, top), egui::vec2(side * BAR, side)),
+        0.0,
+        color,
+    )];
+    for i in 0..count {
+        let x = left + side * (BAR + tri * i as f32);
+        shapes.push(Shape::convex_polygon(
+            vec![
+                pos2(x + side * tri, top),
+                pos2(x, top + side / 2.0),
+                pos2(x + side * tri, top + side),
+            ],
+            color,
+            Stroke::NONE,
+        ));
+    }
+    shapes
+}
+
+/// Restart: a bar and one triangle pointing left (back to the start).
+pub fn restart(rect: Rect, color: Color32) -> Vec<Shape> {
+    bar_then_left_triangles(rect, color, 1, 0.8)
+}
+
+/// Previous: a bar and two triangles pointing left, as on a CD player.
+pub fn previous(rect: Rect, color: Color32) -> Vec<Shape> {
+    bar_then_left_triangles(rect, color, 2, 0.6)
+}
