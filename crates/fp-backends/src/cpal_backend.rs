@@ -234,10 +234,11 @@ impl AudioBackend for CpalBackend {
         let mut list = Vec::new();
         for device in host.output_devices().map_err(backend_error)? {
             let Ok(id) = device.id() else { continue };
-            let name = device
-                .description()
-                .map(|d| d.name().to_owned())
-                .unwrap_or_else(|_| id.to_string());
+            let description = device.description().ok();
+            let name = description
+                .as_ref()
+                .map_or_else(|| id.to_string(), |d| d.name().to_owned());
+            let detail = description.as_ref().and_then(device_detail);
             let mut channels = 0;
             let mut sample_rates = Vec::new();
             let mut buffer_frames: Option<(u32, u32)> = None;
@@ -260,6 +261,7 @@ impl AudioBackend for CpalBackend {
             list.push(DeviceInfo {
                 id: DeviceId(id.to_string()),
                 name,
+                detail,
                 channels,
                 sample_rates,
                 buffer_frames,
@@ -525,6 +527,15 @@ fn render_converted<T>(
             *o = T::from_sample(*s);
         }
     }
+}
+
+/// The first description line beyond the name: ALSA lists every output
+/// profile of a card under the card's name, and this line names the profile.
+fn device_detail(d: &cpal::DeviceDescription) -> Option<String> {
+    d.extended()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && *line != d.name())
+        .map(str::to_owned)
 }
 
 #[cfg(test)]

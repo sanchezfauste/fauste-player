@@ -662,11 +662,18 @@ fn bit_perfect(
     }
     let listed = &scene.state.config.outputs.bit_perfect;
     for device in chosen {
-        let info = backends
+        let backend_devices = backends
             .iter()
             .find(|b| b.id == device.backend)
-            .and_then(|b| b.devices.iter().find(|d| d.id.0 == device.device));
-        let name = info.map_or(device.device.as_str(), |d| d.name.as_str());
+            .map(|b| b.devices.as_slice())
+            .unwrap_or_default();
+        let labels = fp_backends::device_labels(backend_devices);
+        let found = backend_devices
+            .iter()
+            .zip(&labels)
+            .find(|(d, _)| d.id.0 == device.device);
+        let info = found.map(|(d, _)| d);
+        let name = found.map_or(device.device.as_str(), |(_, label)| label.as_str());
         let capable = info.is_some_and(|d| d.exclusive_capable);
         let mut on = listed.contains(device);
         // A listed device can always be turned off, even when it is not
@@ -773,13 +780,15 @@ fn route_picker(
             Bus::Cue => t.tr("settings-none"),
         };
         let device = route.as_ref().map(|r| r.device.clone());
+        let labels = fp_backends::device_labels(devices);
         let shown = device
             .as_ref()
             .map(|d| {
                 devices
                     .iter()
-                    .find(|x| &x.id.0 == d)
-                    .map_or_else(|| d.clone(), |x| x.name.clone())
+                    .zip(&labels)
+                    .find(|(x, _)| &x.id.0 == d)
+                    .map_or_else(|| d.clone(), |(_, label)| label.clone())
             })
             .unwrap_or_else(|| none_text.clone());
         egui::ComboBox::from_id_salt(("device", owner, bus == Bus::Main))
@@ -789,9 +798,9 @@ fn route_picker(
                 if ui.selectable_label(device.is_none(), &none_text).clicked() {
                     update(scene, |c| set_route(c, owner, bus, None));
                 }
-                for d in devices {
+                for (d, label) in devices.iter().zip(&labels) {
                     let on = device.as_deref() == Some(d.id.0.as_str());
-                    if ui.selectable_label(on, &d.name).clicked()
+                    if ui.selectable_label(on, label).clicked()
                         && let Some(backend) = backend
                     {
                         let r = Route {

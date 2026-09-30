@@ -172,6 +172,7 @@ impl AudioBackend for OfflineBackend {
                 DeviceInfo {
                     id: d.id.clone(),
                     name: d.id.0.clone(),
+                    detail: None,
                     channels: d.channels,
                     sample_rates: vec![(8_000, 768_000)],
                     buffer_frames: Some((16, 16_384)),
