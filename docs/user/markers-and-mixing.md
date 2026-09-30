@@ -48,7 +48,7 @@ short windows (50 ms by default).
   than the *segue drop* (15 dB by default) below its own typical loudness, so
   loud and quiet masters with the same fade mix the same way. That point is
   never more than the *maximum mix length* (4 s by default) before cue-out,
-  which gives short overlaps of about 1–3 s on typical music.
+  so overlaps stay short.
 - **Outro:** the analysis scans backwards from cue-out and finds where the
   level drops more than the *outro level drop* (6 dB by default) below the
   track's median loudness. The outro is never longer than 30 s by default.

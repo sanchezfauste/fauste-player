@@ -320,9 +320,12 @@ impl Services {
             if self.in_flight.contains(&id) {
                 continue;
             }
-            // Tracks analysed before formats were recorded (Phase 4) are
-            // analysed again, once, so bit-perfect output knows their rate.
-            let outdated = track.analyzed && track.format.is_none();
+            // Tracks analysed before formats were recorded (Phase 4), or by
+            // an older analysis version (other marker rules), are analysed
+            // again, once.
+            let outdated = track.analyzed
+                && (track.format.is_none()
+                    || track.analysis_version < fp_analysis::cache::ANALYSIS_VERSION);
             let analyse = self.forced.contains(&id)
                 || ((!track.analyzed || outdated)
                     && !self.done.contains(&id)

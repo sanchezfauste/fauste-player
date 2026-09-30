@@ -25,6 +25,7 @@ fn analysis(duration: f64) -> TrackAnalysis {
             bits: Some(16),
             channels: 2,
         }),
+        version: 1,
     }
 }
 

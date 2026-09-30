@@ -104,7 +104,7 @@ In priority order:
 
 | Group (in `config.json`) | Audience | Examples | Where edited |
 |---|---|---|---|
-| `players`, `analysis`, `outputs`, `ui` | operator | player count, `fade_ms`, auto-segue, segue/silence thresholds, routes, wave colour | Settings UI |
+| `players`, `analysis`, `outputs`, `ui` | operator | player count, `fade_ms`, auto-segue, trim threshold and margin, segue drop, routes, wave colour | Settings UI |
 | `limits` | resource guards | `max_players` (16), `max_cover_bytes`, `max_state_file_bytes`, `backup_count` | config file only |
 | `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `reconnect_interval_ms`, `gain_smoothing_ms`, `save_debounce_ms` | config file only (an "advanced" section) |
 
@@ -456,7 +456,7 @@ A modal window, closed with `Esc` or "Close", with these sections:
   - per player, Main and Cue device and channel pair;
   - "Test Main" / "Test Cue" buttons that play a test tone (defaults: 1 kHz / 440 Hz, 1.5 s, −18 dBFS) through the real engine route.
 - **Players:** player count, default mode, `fade_ms`, auto-segue on/off, `end_warning_secs` (`history_len` is set in `config.json`).
-- **Analysis:** every `AnalysisSettings` field (silence threshold, segue threshold and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action. Manual markers are kept.
+- **Analysis:** every `AnalysisSettings` field (trim threshold and margin, segue drop and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action. Manual markers are kept.
 - **Playlists:** music folder, and create/rename/delete playlists. The last playlist cannot be deleted, nor a playlist containing a current entry.
 
 The Cartwall and Shortcuts sections, plus M3U import/export and the language selector, come in Phase 2. In Phase 1 the language follows the OS locale.

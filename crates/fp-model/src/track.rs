@@ -173,6 +173,10 @@ pub struct Track {
     /// Known once analysed (Phase 4); libraries saved earlier have none.
     #[serde(default)]
     pub format: Option<AudioFormat>,
+    /// The analysis version that produced the automatic markers; 0 before
+    /// versions were recorded. An older one is analysed again.
+    #[serde(default)]
+    pub analysis_version: u32,
 }
 
 impl Track {
@@ -194,6 +198,7 @@ impl Track {
             markers: Markers::default(),
             analyzed: false,
             format: None,
+            analysis_version: 0,
         }
     }
 
@@ -251,6 +256,9 @@ pub struct TrackAnalysis {
     /// The file's rate and sample size (Phase 4 spec B2).
     #[serde(default)]
     pub format: Option<AudioFormat>,
+    /// The analysis version that computed this result.
+    #[serde(default)]
+    pub version: u32,
 }
 
 impl Track {
@@ -280,6 +288,7 @@ impl Track {
         if analysis.format.is_some() {
             self.format = analysis.format;
         }
+        self.analysis_version = analysis.version;
         self.analyzed = true;
         self.file_state = FileState::Ok;
     }
