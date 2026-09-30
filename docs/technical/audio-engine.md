@@ -176,7 +176,7 @@ cannot hang the conductor.
 
 | Action | Effect |
 |---|---|
-| `Preload` | ask the worker for a source of the next entry at its cue-in; attach it idle |
+| `Preload` | ask the worker for a source of the next entry at its cue-in; attach it idle. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut) |
 | `StartCurrent` | start the preloaded source, or open one, once ready |
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs }`) to the mixer as exact frames once it is within `schedule_lead_ms` |
