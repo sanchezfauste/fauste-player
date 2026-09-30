@@ -28,10 +28,11 @@ pub const AMBER: Color32 = Color32::from_rgb(0xf0, 0xb1, 0x35);
 pub const CUE: Color32 = Color32::from_rgb(0x6b, 0xcb, 0xf7);
 pub const PLAY: Color32 = Color32::from_rgb(0x3f, 0xc1, 0x68);
 
-/// Meter segments.
-pub const VU_GREEN: Color32 = Color32::from_rgb(0x4c, 0xc1, 0x57);
-pub const VU_YELLOW: Color32 = Color32::from_rgb(0xf2, 0xcf, 0x3b);
-pub const VU_RED: Color32 = Color32::from_rgb(0xf1, 0x38, 0x3e);
+/// Meter zones: muted traffic-light tones that sit with the Nocturne
+/// neutrals (feedback spec F9).
+pub const METER_NORMAL: Color32 = Color32::from_rgb(0x7f, 0xb0, 0x8a);
+pub const METER_WARNING: Color32 = Color32::from_rgb(0xd9, 0xb4, 0x5a);
+pub const METER_DANGER: Color32 = Color32::from_rgb(0xd8, 0x64, 0x6a);
 
 /// Waveform markers.
 pub const INTRO: Color32 = Color32::from_rgb(0x43, 0xb2, 0xe1);

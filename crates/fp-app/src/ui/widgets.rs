@@ -421,9 +421,9 @@ pub fn loudness_line(r: &MeterReading, c: &MeterConfig) -> Option<(String, bool)
 
 fn zone_colour(zone: Zone) -> Color32 {
     match zone {
-        Zone::Normal => theme::VU_GREEN,
-        Zone::Warning => theme::VU_YELLOW,
-        Zone::Danger => theme::VU_RED,
+        Zone::Normal => theme::METER_NORMAL,
+        Zone::Warning => theme::METER_WARNING,
+        Zone::Danger => theme::METER_DANGER,
     }
 }
 
@@ -475,7 +475,7 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
         max_readout(reading.max_db),
         FontId::monospace(9.0),
         if zone_of(reading.max_db, c) == Zone::Danger {
-            theme::VU_RED
+            theme::METER_DANGER
         } else {
             theme::NEUTRAL_400
         },
@@ -553,7 +553,7 @@ pub fn vu(ui: &mut Ui, reading: &MeterReading, c: &MeterConfig, labels: &MeterLa
             &text,
             FontId::monospace(9.0),
             if on_target {
-                theme::VU_GREEN
+                theme::METER_NORMAL
             } else {
                 theme::NEUTRAL_400
             },
