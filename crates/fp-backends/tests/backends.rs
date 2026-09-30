@@ -252,6 +252,7 @@ fn null_refuses_exclusive_access() {
         Err(BackendError::Unsupported(_))
     ));
 }
+
 fn device(id: &str, name: &str, detail: Option<&str>) -> DeviceInfo {
     DeviceInfo {
         id: DeviceId(id.to_owned()),
@@ -311,5 +312,17 @@ fn device_labels_fall_back_to_the_name_and_then_the_id() {
             "Headphones".to_owned(),
             "USB DAC".to_owned(),
         ]
+    );
+}
+
+#[test]
+fn a_device_with_no_name_is_labelled_by_its_id() {
+    let list = [
+        device("alsa:hw:CARD=X", "  ", None),
+        device("b", "", Some("Line out")),
+    ];
+    assert_eq!(
+        device_labels(&list),
+        vec!["alsa:hw:CARD=X".to_owned(), "b — Line out".to_owned()]
     );
 }

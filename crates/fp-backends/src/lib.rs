@@ -55,22 +55,27 @@ pub struct DeviceInfo {
     pub rate_switching: bool,
 }
 
-/// The labels an output picker shows for `devices`, in order: the name,
-/// then ` — detail` when the backend gives one that adds something, then
+/// The labels an output picker shows for `devices`, in order: the name (the
+/// id when it is blank), then ` — detail` when the backend gives one that adds something, then
 /// ` (id)` for any label two devices still share, so that every choice can
 /// be told apart.
 pub fn device_labels(devices: &[DeviceInfo]) -> Vec<String> {
     let base: Vec<String> = devices
         .iter()
         .map(|d| {
+            // A device with no name is known by its id.
+            let name = match d.name.trim() {
+                "" => d.id.0.as_str(),
+                name => name,
+            };
             match d
                 .detail
                 .as_deref()
                 .map(str::trim)
-                .filter(|s| !s.is_empty() && *s != d.name)
+                .filter(|s| !s.is_empty() && *s != name)
             {
-                Some(detail) => format!("{} — {detail}", d.name),
-                None => d.name.clone(),
+                Some(detail) => format!("{name} — {detail}"),
+                None => name.to_owned(),
             }
         })
         .collect();

@@ -67,11 +67,12 @@ language the interface was built with.
 
 Native file and folder dialogs (`rfd::AsyncFileDialog` driven by `pollster`),
 scans of dropped folders and device enumeration all run on helper threads.
+Their results come back through channels.
+
 `main.rs` looks for the third-party notices (`about::find_notices`: next to
 the executable, `../Resources/licenses`, `../share/doc/fauste-player`,
 `../share/licenses/org.fauste.FaustePlayer`) once before the first frame, and
 the About window opens the file with `open` on the `fp-open-notices` thread.
-Their results come back through channels.
 
 ## Theme and fonts
 

@@ -21,7 +21,8 @@ through an RT-safe sink: it sets atomics, which the bus watchdog reads.
 `DeviceInfo::detail` is what sets a device apart from others with the same
 name: cpal's ALSA host lists every output profile of a card (front,
 surround, direct hardware…) under the card's name, and the first extended
-description line that is not the name names the profile. Pickers show
+description line that is not the name names the profile (else the device's
+address, when it differs from the name). Pickers show
 `device_labels(&devices)`: the name, then ` — detail`, then ` (id)` for any
 label still shared.
 
