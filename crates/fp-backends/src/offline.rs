@@ -24,6 +24,7 @@ struct DeviceState {
     open: Option<Open>,
     exclusive_capable: bool,
     refused_rates: HashSet<u32>,
+    open_attempts: u64,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -75,6 +76,11 @@ impl OfflineDevice {
     /// Lets streams on this device be opened with `exclusive`.
     pub fn set_exclusive_capable(&self, capable: bool) {
         lock(&self.state).exclusive_capable = capable;
+    }
+
+    /// How many times a stream was opened, or tried to be, on this device.
+    pub fn open_attempts(&self) -> u64 {
+        lock(&self.state).open_attempts
     }
 
     /// Makes opens at `rate` fail with `Unsupported`.
@@ -203,6 +209,7 @@ impl AudioBackend for OfflineBackend {
             )));
         }
         let mut state = lock(&dev.state);
+        state.open_attempts += 1;
         if !state.plugged {
             return Err(BackendError::DeviceNotFound(device.clone()));
         }

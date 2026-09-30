@@ -180,8 +180,10 @@ jobs:
       - name: Generate cargo-sources.json from Cargo.lock
         run: |
           pip install aiohttp tomlkit
+          # A fixed commit of the generator, checked against its SHA-256.
           curl -fsSL -o flatpak-cargo-generator.py \
-            https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
+            https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/41c20aa10819cdb2a4f3ca171758a96d1955c018/cargo/flatpak-cargo-generator.py
+          echo "0a2db6be87d75910facef28ab46d4d6460802e8419ab850d0caa6a364d26b380  flatpak-cargo-generator.py" | sha256sum -c -
           python3 flatpak-cargo-generator.py Cargo.lock -o packaging/flatpak/cargo-sources.json
       - uses: actions/upload-artifact@v4
         with:
@@ -231,3 +233,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+
+  unsigned-note:
+    name: Say in the release which installers are unsigned
+    needs: [build, macos-dmg]
+    if: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Append the note once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          WINDOWS_SIGNED: ${{ secrets.WINDOWS_CERT_PFX != '' }}
+          # Gatekeeper opens the app only when it is signed and notarised.
+          MACOS_SIGNED: ${{ secrets.APPLE_CERT_P12 != '' && secrets.APPLE_ID != '' }}
+          GUIDE: https://github.com/${{ github.repository }}/blob/${{ inputs.tag }}/docs/user/getting-started.md
+        run: |
+          marker="<!-- unsigned-installers -->"
+          body="$(gh release view "${TAG}" --json body --jq .body --repo "${GITHUB_REPOSITORY}")"
+          case "${body}" in *"${marker}"*) exit 0 ;; esac
+          unsigned=()
+          [ "${WINDOWS_SIGNED}" = true ] || unsigned+=("the Windows installer (SmartScreen warns about an unknown publisher)")
+          [ "${MACOS_SIGNED}" = true ] || unsigned+=("the macOS app (not signed or notarised: macOS asks before its first start)")
+          [ "${#unsigned[@]}" -gt 0 ] || exit 0
+          {
+            printf '%s\n\n%s\n\n### Unsigned installers\n\n' "${body}" "${marker}"
+            for item in "${unsigned[@]}"; do printf -- '- %s\n' "${item}"; done
+            printf '\nHow to open them: [Getting started](%s).\n' "${GUIDE}"
+          } > notes.md
+          gh release edit "${TAG}" --notes-file notes.md --repo "${GITHUB_REPOSITORY}"

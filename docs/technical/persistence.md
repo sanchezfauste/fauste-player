@@ -37,15 +37,24 @@ concrete folders.
 3. renames the temporary file over the target;
 4. `fsync`s the directory (Unix).
 
+A rename or copy that fails with "permission denied" (on Windows, a
+sharing violation while a scanner or indexer holds the file) is retried up to
+five times, waiting 10 ms and doubling (`retry_locked`).
+
 ## Loading
 
 `load_with_fallback` tries the file, then `.bak1`…`.bakN`. A file that
-fails to parse or validate is renamed `*.corrupt-<stamp>` and kept.
+fails to parse or validate is renamed `*.corrupt-<stamp>` and kept (a
+second one within the same second gets `-2`, `-3`…).
 A document written by a *newer* version of the application is rejected
 (this build cannot know its shape), and a copy is kept as `*.newer-<stamp>`
 so a later save never destroys it. Input larger than `limits.max_state_file_bytes` is refused. If
 everything fails, the store starts from defaults, and the application always
 starts.
+
+On restore, a playlist or entry whose id is already taken (a hand-edited
+`playlists.json`) gets a new id; the first holder keeps its own
+(`Playlists::normalize`, like `Cartwall::normalize` for carts).
 
 `config.json` is read **leniently** (`lenient.rs`): each field is taken on its
 own, so one bad value falls back to its default instead of discarding the
@@ -55,17 +64,25 @@ warnings, which are logged.
 ## Playlist and cart page files (`playlist_io.rs`)
 
 - `parse_playlist` reads M3U, M3U8 and PLS. It is tolerant:
-  - `#EXTINF` hints are used; comments and unknown lines are ignored;
+  - `#EXTINF` hints are used (the title starts after the first comma outside
+    quotes, so quoted attributes may hold commas); comments and unknown lines
+    are ignored;
   - BOM and CRLF are handled;
   - text is UTF-8, with a Windows-1252 fallback for M3U;
-  - `file://` URLs are percent-decoded;
+  - `file://` URLs are percent-decoded, as UTF-8 or, when that fails, as
+    Windows-1252 (older players encode "ú" as `%FA`);
+  - PLS entries are keyed by their number as written, so `File1` and
+    `File01` are two entries, each with its own `Title…` and `Length…`;
   - relative paths (with `/` or `\\` separators) are resolved against the
     playlist's folder; absolute paths from another OS (`C:\\…` on Linux) are
     kept as written and show as unavailable;
   - streams are skipped and counted.
 
-  Input is capped at `limits.max_playlist_file_bytes`. `write_m3u8` writes
-  `#EXTINF` and absolute paths.
+  Input is capped at `limits.max_playlist_file_bytes`, and `read_bounded`
+  refuses a longer file after reading one byte past the limit, without
+  loading it whole. `write_m3u8` writes `#EXTINF` and the paths; a relative
+  path starting with `#` is written as `./#…` so it is not read back as a
+  comment.
 - Cart pages use a versioned JSON format (`"format": "fauste-cart-page"`,
   `"version": 1`), with 1-based positions, relative files resolved against
   the file's folder, and the grid clamped to the limits.

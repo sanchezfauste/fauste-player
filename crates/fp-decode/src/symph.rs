@@ -4,13 +4,13 @@
 use std::fs::File;
 use std::path::Path;
 
-use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
-use symphonia::core::errors::Error;
+use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions, well_known};
+use symphonia::core::errors::{Error, SeekErrorKind};
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::units::Time;
+use symphonia::core::units::{Time, TimeBase};
 
 use crate::downmix;
 
@@ -23,9 +23,27 @@ pub(crate) struct SymphoniaDecoder {
     channels: usize,
     frames_hint: Option<u64>,
     scratch: Vec<f32>,
-    /// Frames still to drop after a seek (the decoder lands before the target).
-    skip_frames: u64,
+    /// The track's time base, to place each decoded packet in time.
+    time_base: Option<TimeBase>,
+    /// After a seek, the time (seconds) the output must start at: frames of
+    /// a packet placed before it are dropped.
+    target_secs: Option<f64>,
+    /// How far before a seek target decoding restarts, so the decoder has
+    /// converged (and produces output) by the target: 80 ms for Opus
+    /// (RFC 7845 §4.6), the longest block for Vorbis (its first packet
+    /// after a reset only primes the overlap), none for the rest.
+    preroll_secs: f64,
+    /// A seek went past the end: nothing more to play (as for the other
+    /// decoders), instead of an error.
+    at_end: bool,
+    /// Whether anything was read yet: a seek to 0 before that is a no-op.
+    read_any: bool,
 }
+
+/// Opus needs this much decoded audio before a seek target (RFC 7845 §4.6).
+const OPUS_PREROLL_SECS: f64 = 0.08;
+/// The longest Vorbis block, in frames (Vorbis I §4.2.2).
+const VORBIS_MAX_BLOCK: f64 = 8192.0;
 
 impl SymphoniaDecoder {
     pub(crate) fn open(path: &Path) -> Result<Self, String> {
@@ -62,6 +80,12 @@ impl SymphoniaDecoder {
         let bits_per_sample = params.bits_per_sample.filter(|b| *b > 0);
         let frames_hint = track.num_frames;
         let track_id = track.id;
+        let preroll_secs = match params.codec {
+            well_known::CODEC_ID_OPUS => OPUS_PREROLL_SECS,
+            well_known::CODEC_ID_VORBIS => VORBIS_MAX_BLOCK / f64::from(sample_rate.max(1)),
+            _ => 0.0,
+        };
+        let time_base = track.time_base;
         Ok(Self {
             format,
             decoder,
@@ -71,7 +95,11 @@ impl SymphoniaDecoder {
             channels,
             frames_hint,
             scratch: Vec::new(),
-            skip_frames: 0,
+            time_base,
+            target_secs: None,
+            preroll_secs,
+            at_end: false,
+            read_any: false,
         })
     }
 
@@ -96,38 +124,49 @@ impl SymphoniaDecoder {
 
     /// Positions the stream so that the next frame produced is at `secs`.
     pub(crate) fn seek(&mut self, secs: f64) -> Result<(), String> {
-        if secs <= 0.0 {
+        if secs <= 0.0 && !self.read_any && !self.at_end {
             return Ok(());
         }
-        let time = Time::try_from_secs_f64(secs).ok_or("seek position out of range")?;
-        let seeked = self
-            .format
-            .seek(
-                SeekMode::Accurate,
-                SeekTo::Time {
-                    time,
-                    track_id: Some(self.track_id),
-                },
-            )
-            .map_err(|e| e.to_string())?;
+        let secs = secs.max(0.0);
+        // The pre-roll is dropped by placing packets in time, which needs
+        // the time base; without it, decoding starts at the target.
+        let preroll = if self.time_base.is_some() {
+            self.preroll_secs
+        } else {
+            0.0
+        };
+        let from = (secs - preroll).max(0.0);
+        let time = Time::try_from_secs_f64(from).ok_or("seek position out of range")?;
+        match self.format.seek(
+            SeekMode::Accurate,
+            SeekTo::Time {
+                time,
+                track_id: Some(self.track_id),
+            },
+        ) {
+            Ok(_) => {}
+            Err(Error::SeekError(SeekErrorKind::OutOfRange)) => {
+                self.at_end = true;
+                return Ok(());
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+        self.at_end = false;
         self.decoder.reset();
-        let time_base = self
-            .format
-            .tracks()
-            .iter()
-            .find(|t| t.id == self.track_id)
-            .and_then(|t| t.time_base);
-        let landed = time_base.map_or(secs, |tb| {
-            tb.calc_time_saturating(seeked.actual_ts).as_secs_f64()
-        });
-        let behind = (secs - landed).max(0.0);
-        self.skip_frames = (behind * f64::from(self.sample_rate)).round() as u64;
+        // Each packet is placed by its timestamp, so a codec that yields
+        // nothing for its first packet after a reset still starts on time.
+        // Without a time base the landing is taken as the target.
+        self.target_secs = self.time_base.map(|_| secs);
         Ok(())
     }
 
     /// Appends the next decoded packet as interleaved stereo. Returns `false`
     /// at the end of the stream. Corrupt packets are skipped.
     pub(crate) fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
+        if self.at_end {
+            return Ok(false);
+        }
+        self.read_any = true;
         loop {
             let packet = match self.format.next_packet() {
                 Ok(Some(packet)) => packet,
@@ -151,10 +190,22 @@ impl SymphoniaDecoder {
             let frames = buf.frames();
             self.scratch.resize(frames * channels, 0.0);
             buf.copy_to_slice_interleaved(self.scratch.as_mut_slice());
-            let skip = usize::try_from(self.skip_frames)
-                .unwrap_or(usize::MAX)
-                .min(frames);
-            self.skip_frames -= skip as u64;
+            let skip = match (self.target_secs, self.time_base) {
+                (Some(target), Some(tb)) => {
+                    // The decoded frames end where the packet's valid frames end.
+                    let end = tb
+                        .calc_time_saturating(packet.pts.saturating_add(packet.dur))
+                        .as_secs_f64();
+                    let rate = f64::from(self.sample_rate.max(1));
+                    let start = end - frames as f64 / rate;
+                    if end > target {
+                        self.target_secs = None;
+                    }
+                    let behind = ((target - start) * rate).round().max(0.0);
+                    (behind as usize).min(frames)
+                }
+                _ => 0,
+            };
             for frame in self.scratch.chunks_exact(channels).skip(skip) {
                 let (l, r) = downmix(frame);
                 out.push(l);

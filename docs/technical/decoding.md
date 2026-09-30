@@ -35,8 +35,22 @@ family 0).
 Decoders are opened with gapless decoding on (symphonia's default): each
 decoder removes the encoder delay and end padding the container marks on its
 packets (`trim_start`, `trim_end`), so the Opus decoder does it too (Opus
-pre-skip). The backend must not trim again (`tests/gapless.rs`). A seek lands
-on the packet before the target and `skip_frames` drops the rest.
+pre-skip). The backend must not trim again (`tests/gapless.rs`). Matroska
+shifts timestamps by its `CodecDelay`, and symphonia turns that into the same
+trims (`tests/opus.rs` checks an Opus track in Matroska against Ogg).
+
+**Seeking** (`SymphoniaDecoder::seek`): decoding restarts a codec's pre-roll
+before the target, 80 ms for Opus (RFC 7845 §4.6) and the longest block
+(8192 frames) for Vorbis, whose first packet after a reset only primes the
+overlap. Each decoded packet is then placed by its timestamp (its frames end
+where `pts + dur` ends), and the frames before the target are dropped, so the
+output starts on the target frame whatever the decoder yields first. A seek
+past the end is the end of the stream, as for the other backends.
+
+The Opus decoder goes through 16-bit PCM inside `opus-decoder`: its noise
+(about −96 dBFS) is far below Opus's own coding noise. A decoder without that
+step exists (`opus-pure`), but it uses `unsafe` code, which the formats spec
+rules out for decoding untrusted files.
 
 ## DSD
 
@@ -51,7 +65,9 @@ DSF block groups only; DST-compressed DSDIFF is refused.
   DSD rate, flat to 20 kHz within ±0.1 dB and at least 100 dB down from the
   output's Nyquist frequency (unit tests check both);
 - evaluated through one 256-entry table per byte of the window, so each
-  output sample costs 100 lookups;
+  output sample costs 100 lookups, straight over the buffered bytes except at
+  the edges of the stream (about 16 % of a core for DSD512 5.1 in a release
+  build; `dsd_surround_decoding_speed`, an ignored test, measures it);
 - ±1 bits, unity gain at DC: a 50 % sine (the SACD reference level) reads
   −6 dBFS. The tests encode a 1 kHz sine with a 5th-order sigma-delta
   modulator and measure −6.02 dBFS and THD+N of about −100 dB.
@@ -59,13 +75,17 @@ DSF block groups only; DST-compressed DSDIFF is refused.
 Output frame `k` is the filter centred on DSD byte `4k`. Bytes outside the
 stream read as the idle pattern `0x69`, which the filter turns into silence.
 A seek re-reads from the start of the window (the containing DSF block), so
-it yields exactly the samples of a decode from the start.
+it yields exactly the samples of a decode from the start. DSF blocks are read
+several at a time (about 4096 bytes per channel), so a file with tiny blocks
+costs no more reads than the usual one.
 
 ## WavPack
 
 `wavpack.rs` indexes the block headers when it opens the file, and decodes one
 block at a time with `wavicle::decode_stream`: every WavPack block carries its
-own starting state. A seek starts at the block that holds the target frame.
+own starting state. A seek starts at the block that holds the target frame,
+counting from the first block's index (which need not be 0 in a file cut out
+of a longer stream).
 A block size larger than the format allows is refused before `wavicle` sees it
 (the crate adds to it unchecked). Hybrid, multichannel and 8-bit files are
 refused, since `wavicle` does not decode them.

@@ -168,6 +168,13 @@ impl Store {
             let mut probe_ids = ids.clone();
             probe_ids.observe(probe.max_raw_id());
             warnings.extend(probe.normalize(&config.limits, &mut probe_ids, &library));
+            // And in the playlists: ids a hand edit repeated get new ones.
+            let mut lists = playlists.clone();
+            probe_ids.observe(lists.max_raw_id());
+            for s in &sessions {
+                probe_ids.observe(s.id.0);
+            }
+            warnings.extend(lists.normalize(&mut probe_ids));
         }
         let (state, actions) = AppState::restore(
             RestoreParts {

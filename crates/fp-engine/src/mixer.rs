@@ -123,6 +123,9 @@ pub struct BusShared {
     pub fall_db_per_sec: AtomicF32,
 }
 
+/// How long a reader waits for a block to finish rendering.
+const CONSISTENT_WAIT: std::time::Duration = std::time::Duration::from_millis(50);
+
 impl BusShared {
     pub fn frames_rendered(&self) -> u64 {
         self.frames_rendered.load(Ordering::Acquire)
@@ -132,17 +135,49 @@ impl BusShared {
         self.heartbeat.load(Ordering::Acquire)
     }
 
+    /// Runs `take` (which moves measurements out of the sources) until one
+    /// pass runs with no block rendered meanwhile. A block that lands
+    /// half-way through a pass is taken whole by the next one, so every
+    /// block's measurements end up in the same reading. Bounded like
+    /// `consistent`.
+    pub fn whole_blocks(&self, mut take: impl FnMut()) {
+        let started = std::time::Instant::now();
+        loop {
+            let before = self.render_seq.load(Ordering::Acquire);
+            if before % 2 == 1 && started.elapsed() <= CONSISTENT_WAIT {
+                std::thread::yield_now();
+                continue;
+            }
+            take();
+            if self.render_seq.load(Ordering::Acquire) == before
+                || started.elapsed() > CONSISTENT_WAIT
+            {
+                return;
+            }
+        }
+    }
+
     /// Runs `read` so that it observes a state between two blocks, never
     /// half-way through one (source positions and the bus clock agree).
+    ///
+    /// A block renders in well under `CONSISTENT_WAIT`; a render that never
+    /// finishes (a device thread gone mid-block) gets a best-effort read
+    /// instead of a hung conductor.
     pub fn consistent<T>(&self, read: impl Fn() -> T) -> T {
+        let started = std::time::Instant::now();
         loop {
             let before = self.render_seq.load(Ordering::Acquire);
             if before % 2 == 1 {
-                std::hint::spin_loop();
+                if started.elapsed() > CONSISTENT_WAIT {
+                    return read();
+                }
+                std::thread::yield_now();
                 continue;
             }
             let value = read();
-            if self.render_seq.load(Ordering::Acquire) == before {
+            if self.render_seq.load(Ordering::Acquire) == before
+                || started.elapsed() > CONSISTENT_WAIT
+            {
                 return value;
             }
         }
@@ -217,6 +252,8 @@ pub struct Mixer {
     shared: Arc<BusShared>,
     config: MixerConfig,
     volume_step: f32,
+    /// The volume smoothing as configured, and the rate it was sized for.
+    smoothing_base: Option<(u32, u32)>,
 }
 
 impl Mixer {
@@ -237,6 +274,7 @@ impl Mixer {
             shared: shared.clone(),
             config,
             volume_step,
+            smoothing_base: None,
         };
         (
             mixer,
@@ -394,6 +432,20 @@ impl Mixer {
                 self.retire(Retired::Storage(storage));
             }
         }
+    }
+
+    /// The stream moved from `from_rate` to `to_rate` (a bit-perfect
+    /// reopen): durations held in frames keep their length in time. Called
+    /// while no stream renders.
+    pub fn follow_rate(&mut self, from_rate: u32, to_rate: u32) {
+        // Always from the first known size and rate, so chains of changes
+        // between unrelated rates do not drift by rounding.
+        let (base_frames, base_rate) = *self
+            .smoothing_base
+            .get_or_insert((self.config.volume_smoothing_frames, from_rate.max(1)));
+        let frames = u64::from(base_frames) * u64::from(to_rate) / u64::from(base_rate);
+        self.config.volume_smoothing_frames = u32::try_from(frames.max(1)).unwrap_or(u32::MAX);
+        self.volume_step = 1.0 / self.config.volume_smoothing_frames as f32;
     }
 
     /// Mixes one block into `out` (interleaved, `channels` per frame).
@@ -739,7 +791,8 @@ impl Renderer for MixerRenderer {
 
 #[cfg(test)]
 mod tests {
-    use super::MeterMode;
+    use super::{BusShared, MeterMode};
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn a_programme_meter_falls_to_exact_zero_in_silence() {
@@ -758,5 +811,58 @@ mod tests {
             mode.integrate(&mut stages, 0.0);
         }
         assert_eq!(stages, [0.0, 0.0], "no subnormal tail");
+    }
+
+    #[test]
+    fn a_render_that_never_finishes_does_not_hang_the_reader() {
+        let shared = BusShared::default();
+        shared.render_seq.store(1, Ordering::Release); // a render left open
+        assert_eq!(shared.consistent(|| 7), 7);
+    }
+
+    #[test]
+    fn a_block_rendered_during_a_take_is_taken_whole() {
+        let shared = BusShared::default();
+        let mut passes = 0;
+        shared.whole_blocks(|| {
+            passes += 1;
+            if passes == 1 {
+                // A block renders between two of the take's reads.
+                shared.render_seq.fetch_add(2, Ordering::AcqRel);
+            }
+        });
+        assert_eq!(
+            passes, 2,
+            "the rest of that block is taken in the same tick"
+        );
+        let mut passes = 0;
+        shared.whole_blocks(|| passes += 1);
+        assert_eq!(passes, 1);
+    }
+
+    #[test]
+    fn volume_smoothing_keeps_its_duration_when_the_rate_changes() {
+        let config = super::MixerConfig {
+            volume_smoothing_frames: 480, // 10 ms at 48 kHz
+            max_commands_per_block: 8,
+        };
+        let (mut mixer, _handle) = super::Mixer::new(1, config);
+        mixer.follow_rate(48_000, 96_000);
+        assert!(
+            (mixer.volume_step - 1.0 / 960.0).abs() < 1e-9,
+            "{}",
+            mixer.volume_step
+        );
+        // Back and forth between unrelated rates: no drift.
+        let config = super::MixerConfig {
+            volume_smoothing_frames: 500,
+            max_commands_per_block: 8,
+        };
+        let (mut mixer, _handle) = super::Mixer::new(1, config);
+        for _ in 0..3 {
+            mixer.follow_rate(48_000, 44_100);
+            mixer.follow_rate(44_100, 48_000);
+        }
+        assert_eq!(mixer.config.volume_smoothing_frames, 500);
     }
 }

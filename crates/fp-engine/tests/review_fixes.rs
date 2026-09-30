@@ -399,6 +399,9 @@ fn a_player_cue_route_to_a_missing_backend_never_plays_on_main() {
         request: track(3),
     });
     r.run(5);
-    assert!(r.events.contains(&EngineEvent::CueEnded { player: P }));
+    assert!(r.events.contains(&EngineEvent::CueEnded {
+        player: P,
+        entry: EntryId(3)
+    }));
     assert!(r.channel(0).iter().all(|v| *v == 0.0));
 }

@@ -206,6 +206,12 @@ fn entries_of_older_analysis_versions_are_pruned() {
     )
     .unwrap();
     let c = cache(dir.path());
+    assert_eq!(
+        std::fs::read_dir(&cache_dir).unwrap().count(),
+        3,
+        "opening is quick"
+    );
+    c.sweep();
     let names: Vec<String> = std::fs::read_dir(&cache_dir)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())

@@ -1,5 +1,7 @@
 //! Playlists: ordered lists of entries pointing at library tracks.
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::ModelError;
@@ -91,6 +93,27 @@ impl Playlists {
 
     pub fn add(&mut self, playlist: Playlist) {
         self.lists.push(playlist);
+    }
+
+    /// Gives a playlist or entry whose id is already taken (a hand-edited
+    /// file) a new one; the first holder keeps it. Returns what was
+    /// repaired. Idempotent.
+    pub fn normalize(&mut self, ids: &mut crate::ids::IdGen) -> Vec<String> {
+        let mut notes = Vec::new();
+        let (mut lists, mut entries) = (HashSet::new(), HashSet::new());
+        for list in &mut self.lists {
+            if !lists.insert(list.id) {
+                list.id = ids.playlist();
+                notes.push(format!("playlist \"{}\" had a duplicate id", list.name));
+            }
+            for entry in &mut list.entries {
+                if !entries.insert(entry.id) {
+                    entry.id = ids.entry();
+                    notes.push(format!("an entry of \"{}\" had a duplicate id", list.name));
+                }
+            }
+        }
+        notes
     }
 
     pub fn rename(&mut self, id: PlaylistId, name: String) -> Result<(), ModelError> {

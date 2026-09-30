@@ -82,8 +82,31 @@ fn rule15_cue_toggles_prelisten_of_next_and_ends_on_event() {
         vec![EngineAction::StopCue { player: p }]
     );
     apply(&mut state, Command::CueEntry(p, e[2])).unwrap();
-    on_event(&mut state, EngineEvent::CueEnded { player: p });
+    on_event(
+        &mut state,
+        EngineEvent::CueEnded {
+            player: p,
+            entry: e[2],
+        },
+    );
     assert_eq!(state.player(p).unwrap().cue, None);
+}
+
+#[test]
+fn a_stale_cue_end_does_not_end_a_newer_cue() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    apply(&mut state, Command::CueEntry(p, e[1])).unwrap();
+    apply(&mut state, Command::CueEntry(p, e[2])).unwrap();
+    // The first cue's end arrives after the second one started.
+    on_event(
+        &mut state,
+        EngineEvent::CueEnded {
+            player: p,
+            entry: e[1],
+        },
+    );
+    assert_eq!(state.player(p).unwrap().cue.map(|c| c.entry), Some(e[2]));
 }
 
 #[test]
@@ -215,19 +238,16 @@ fn rule21_player_count_respects_the_resource_limit_and_busy_players() {
 }
 
 #[test]
-fn volume_is_clamped_and_nan_is_silence() {
+fn volume_is_clamped_and_nan_keeps_the_volume() {
     let mut state = fixture(1);
     let p = p0(&state);
     apply(&mut state, Command::SetVolume(p, 1.7)).unwrap();
     assert_eq!(state.player(p).unwrap().volume, 1.0);
+    apply(&mut state, Command::SetVolume(p, 0.5)).unwrap();
+    // A broken value never silences what is on air.
     let actions = apply(&mut state, Command::SetVolume(p, f32::NAN)).unwrap();
-    assert_eq!(
-        actions,
-        vec![EngineAction::SetVolume {
-            player: p,
-            volume: 0.0
-        }]
-    );
+    assert!(actions.is_empty(), "{actions:?}");
+    assert_eq!(state.player(p).unwrap().volume, 0.5);
 }
 
 #[test]
@@ -309,4 +329,32 @@ fn a_playlist_can_be_created_from_imported_paths() {
             std::path::PathBuf::from("/m/b.mp3")
         ]
     );
+}
+
+#[test]
+fn a_config_update_is_validated_and_a_lower_player_limit_removes_idle_players() {
+    let mut state = fixture(1);
+    apply(&mut state, Command::SetPlayerCount(4)).unwrap();
+    let last = state.players[3].id;
+    let mut config = state.config.clone();
+    config.limits.max_players = 3;
+    config.players.fade_ms = 0; // out of range: validated
+    let actions = apply(&mut state, Command::UpdateConfig(Box::new(config))).unwrap();
+    assert!(actions.contains(&EngineAction::RemovePlayer { player: last }));
+    assert_eq!(state.players.len(), 3);
+    assert_eq!(state.config.players.count, 3);
+    assert_eq!(state.config.players.fade_ms, 50, "clamped to its range");
+}
+
+#[test]
+fn a_lower_player_limit_is_refused_while_a_player_it_removes_is_busy() {
+    let mut state = fixture(1);
+    apply(&mut state, Command::SetPlayerCount(2)).unwrap();
+    let second = state.players[1].id;
+    apply(&mut state, Command::Play(second)).unwrap();
+    let mut config = state.config.clone();
+    config.limits.max_players = 1;
+    let before = state.clone();
+    assert!(apply(&mut state, Command::UpdateConfig(Box::new(config))).is_err());
+    assert_eq!(state, before, "state unchanged on refusal");
 }

@@ -744,3 +744,14 @@ fn a_non_finite_block_does_not_break_the_meter() {
     assert!((r.rms_db[1] + 20.0).abs() < 0.2, "{r:?}");
     assert!((r.level_db[0] + 20.0).abs() < 0.2, "{r:?}");
 }
+
+#[test]
+fn a_later_measurement_of_the_same_source_adds_its_frames() {
+    let mut first = peak(0.5);
+    first.extend(peak(0.25));
+    assert_eq!(first.frames, 480, "consecutive spans add up");
+    assert_eq!(first.peak, [0.5; 2]);
+    let mut parallel = peak(0.5);
+    parallel.merge(peak(0.25));
+    assert_eq!(parallel.frames, 240, "parallel sources share the span");
+}

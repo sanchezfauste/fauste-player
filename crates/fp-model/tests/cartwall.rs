@@ -269,8 +269,19 @@ fn c9_the_cue_ends_by_itself() {
     let mut state = fixture(0);
     let a = load(&mut state, 0, 10.0);
     apply(&mut state, Command::CueCart(a)).unwrap();
-    on_event(&mut state, EngineEvent::CartCueEnded);
+    on_event(&mut state, EngineEvent::CartCueEnded { cart: a });
     assert_eq!(state.cartwall.cue, None);
+}
+
+#[test]
+fn a_stale_cart_cue_end_does_not_end_a_newer_cue() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    let b = load(&mut state, 1, 10.0);
+    apply(&mut state, Command::CueCart(a)).unwrap();
+    apply(&mut state, Command::CueCart(b)).unwrap();
+    on_event(&mut state, EngineEvent::CartCueEnded { cart: a });
+    assert_eq!(state.cartwall.cue, Some(b));
 }
 
 #[test]

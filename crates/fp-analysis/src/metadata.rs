@@ -206,9 +206,15 @@ pub fn read_intro(path: &Path) -> Option<f64> {
     use lofty::mp4::{AtomData, AtomIdent};
     use lofty::tag::ItemValue;
 
+    // TXXX descriptions are matched without regard to case, like Vorbis
+    // comment and APE keys: tools write "Intro" as often as "INTRO".
     let from_id3 = |t: Option<&Id3v2Tag>| {
-        t.and_then(|t| t.get_user_text(INTRO_KEY))
-            .map(str::to_owned)
+        t.into_iter().flatten().find_map(|frame| match frame {
+            lofty::id3::v2::Frame::UserText(f) if f.description.eq_ignore_ascii_case(INTRO_KEY) => {
+                Some(f.content.to_string())
+            }
+            _ => None,
+        })
     };
     let from_ape = |t: Option<&ApeTag>| {
         t.and_then(|t| t.get(INTRO_KEY))

@@ -129,3 +129,51 @@ fn a_wavpack_file_with_a_leading_id3_tag_still_decodes() {
     std::fs::write(&path, &bytes).unwrap();
     assert!(decode_all(&path) == scaled(&samples, 16));
 }
+
+#[test]
+fn a_32_bit_float_wavpack_decodes_exactly() {
+    let dir = tempfile::tempdir().unwrap();
+    let samples: Vec<f32> = (0..50_000)
+        .flat_map(|i| {
+            let v = (i as f32 * 0.01).sin() * 0.8;
+            [v, -v * 0.5]
+        })
+        .collect();
+    let path = dir.path().join("float.wv");
+    std::fs::write(&path, wavicle::encode_float(2, 44_100, &samples).unwrap()).unwrap();
+    let d = FileDecoder::open(&path).unwrap();
+    assert_eq!(d.bits_per_sample(), None, "float is not integer PCM");
+    assert!(decode_all(&path) == samples);
+}
+
+/// Adds `by` to every block's starting frame, as in a file cut out of a
+/// longer stream.
+fn shift_block_index(bytes: &mut [u8], by: u32) {
+    let mut at = 0;
+    while at + 32 <= bytes.len() && &bytes[at..at + 4] == b"wvpk" {
+        let size = u32::from_le_bytes(bytes[at + 4..at + 8].try_into().unwrap()) as usize;
+        let index = u32::from_le_bytes(bytes[at + 16..at + 20].try_into().unwrap());
+        bytes[at + 16..at + 20].copy_from_slice(&(index + by).to_le_bytes());
+        at += size + 8;
+    }
+}
+
+#[test]
+fn seeking_counts_from_the_first_block_whatever_its_index() {
+    let dir = tempfile::tempdir().unwrap();
+    let samples = source(16, 100_000);
+    let path = encode(dir.path(), "cut.wv", 16, &samples);
+    let mut bytes = std::fs::read(&path).unwrap();
+    shift_block_index(&mut bytes, 44_100);
+    std::fs::write(&path, bytes).unwrap();
+    let full = scaled(&samples, 16);
+    let mut d = FileDecoder::open(&path).unwrap();
+    d.seek(0.5).unwrap();
+    let mut out = Vec::new();
+    while d.next_block(&mut out).unwrap() {}
+    assert!(
+        out == full[2 * 22_050..],
+        "{} frames after the seek",
+        out.len() / 2
+    );
+}

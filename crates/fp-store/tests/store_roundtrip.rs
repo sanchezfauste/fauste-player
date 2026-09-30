@@ -294,3 +294,36 @@ fn a_schema_1_playlists_file_counts_its_played_entries_for_every_player() {
     assert!(players.iter().all(|p| entries[0].is_played_by(*p)));
     assert!(players.iter().all(|p| !entries[1].is_played_by(*p)));
 }
+
+#[test]
+fn repeated_playlist_ids_are_repaired_with_a_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    let mut state = s.load("Main").state;
+    let playlist = state.playlists.first_id().unwrap();
+    apply(
+        &mut state,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths: vec![PathBuf::from("/music/a.mp3")],
+        },
+    )
+    .unwrap();
+    s.save_playlists(&state).unwrap();
+    // A hand edit copies the playlist, ids and all.
+    let path = dir.path().join("data/playlists.json");
+    let mut doc: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    let lists = doc["playlists"].as_array_mut().unwrap();
+    let copy = lists[0].clone();
+    lists.push(copy);
+    fs::write(&path, serde_json::to_string(&doc).unwrap()).unwrap();
+    let loaded = s.load("Main");
+    assert_eq!(loaded.state.playlists.len(), 2);
+    assert!(
+        loaded.warnings.iter().any(|w| w.contains("duplicate id")),
+        "{:?}",
+        loaded.warnings
+    );
+}

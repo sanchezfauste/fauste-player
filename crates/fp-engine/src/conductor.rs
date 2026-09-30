@@ -12,7 +12,8 @@ use std::time::{Duration, Instant};
 use arc_swap::ArcSwap;
 use crossbeam_channel::{Receiver, Sender, TrySendError};
 use fp_model::{
-    AppState, CartId, Command, EngineAction, EntryId, ModelError, PlayerId, Route, apply, on_event,
+    AppState, CartId, Command, EngineAction, EngineEvent, EntryId, ModelError, PlayerId, Route,
+    apply, on_event,
 };
 
 use crate::engine::{BusStatus, CartTelemetry, Engine, PlayerTelemetry};
@@ -63,6 +64,9 @@ pub struct Conductor {
     metered_at: Option<Instant>,
     /// The entry each player's meter maximum belongs to.
     metered_entries: HashMap<PlayerId, EntryId>,
+    /// Players that started an entry since the last metering: each start
+    /// restarts the maximum, even of the same entry.
+    started: Vec<PlayerId>,
 }
 
 /// The UI's side of the conductor.
@@ -77,13 +81,29 @@ pub struct ConductorHandle {
     thread: Option<JoinHandle<()>>,
 }
 
+/// Characters of a command kept in a log line.
+const LOGGED_COMMAND_CHARS: usize = 120;
+
+/// The start of `command`'s debug form, so a dropped command with a huge
+/// payload (thousands of paths, a whole configuration) logs one short line.
+fn command_summary(command: &Command) -> String {
+    let full = format!("{command:?}");
+    match full.char_indices().nth(LOGGED_COMMAND_CHARS) {
+        Some((cut, _)) => format!("{}…", full.get(..cut).unwrap_or_default()),
+        None => full,
+    }
+}
+
 impl ConductorHandle {
     /// Queues a command; never blocks. `false` if the queue is full.
     pub fn send(&self, command: Command) -> bool {
         match self.commands.try_send(command) {
             Ok(()) => true,
             Err(TrySendError::Full(c)) => {
-                tracing::warn!(command = ?c, "command queue full; command dropped");
+                tracing::warn!(
+                    command = %command_summary(&c),
+                    "command queue full; command dropped"
+                );
                 false
             }
             Err(TrySendError::Disconnected(_)) => false,
@@ -154,6 +174,7 @@ impl Conductor {
             meters: HashMap::new(),
             metered_at: None,
             metered_entries: HashMap::new(),
+            started: Vec::new(),
         };
         let handle = ConductorHandle {
             commands: tx,
@@ -175,6 +196,16 @@ impl Conductor {
         &self.engine
     }
 
+    /// Runs `action` on the engine, noting the players it starts.
+    fn execute(&mut self, action: EngineAction, now: Instant) {
+        if let EngineAction::StartCurrent { player, .. } | EngineAction::Crossfade { player, .. } =
+            action
+        {
+            self.started.push(player);
+        }
+        self.engine.execute(action, now);
+    }
+
     /// One iteration: commands, engine, events, snapshots.
     pub fn tick(&mut self, now: Instant) {
         let mut changed = false;
@@ -184,7 +215,7 @@ impl Conductor {
                 Ok(actions) => {
                     changed = true;
                     for action in actions {
-                        self.engine.execute(action, now);
+                        self.execute(action, now);
                     }
                 }
                 Err(e) => {
@@ -216,8 +247,11 @@ impl Conductor {
         }
         for event in self.engine.tick(now) {
             changed = true;
+            if let EngineEvent::TransitionStarted { player, .. } = event {
+                self.started.push(player);
+            }
             for action in on_event(&mut self.state, event) {
-                self.engine.execute(action, now);
+                self.execute(action, now);
             }
         }
         if changed {
@@ -238,14 +272,17 @@ impl Conductor {
         let ids: Vec<PlayerId> = self.state.players.iter().map(|p| p.id).collect();
         self.meters.retain(|id, _| ids.contains(id));
         self.metered_entries.retain(|id, _| ids.contains(id));
-        // A new entry, or the same one played again, restarts the maximum;
-        // a stop (no entry) keeps it on show until then.
+        // A new entry, or any start of one (the same entry played again,
+        // or segued into itself), restarts the maximum; a stop keeps it on
+        // show until then.
+        let started = std::mem::take(&mut self.started);
         for player in &self.state.players {
             let Some(entry) = player.current else {
                 self.metered_entries.remove(&player.id);
                 continue;
             };
-            if self.metered_entries.insert(player.id, entry) != Some(entry)
+            let new_entry = self.metered_entries.insert(player.id, entry) != Some(entry);
+            if (new_entry || started.contains(&player.id))
                 && let Some(meter) = self.meters.get_mut(&player.id)
             {
                 meter.reset_max();
@@ -298,5 +335,27 @@ impl Conductor {
         handle.stop = Some(stop);
         handle.thread = Some(thread);
         Ok(handle)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::command_summary;
+    use fp_model::Command;
+    use std::path::PathBuf;
+
+    #[test]
+    fn a_dropped_command_is_logged_briefly() {
+        let paths = (0..10_000)
+            .map(|n| PathBuf::from(format!("/m/{n}.flac")))
+            .collect();
+        let command = Command::InsertPaths {
+            playlist: fp_model::PlaylistId(1),
+            index: 0,
+            paths,
+        };
+        let summary = command_summary(&command);
+        assert!(summary.starts_with("InsertPaths"), "{summary}");
+        assert!(summary.chars().count() <= 121, "{} chars", summary.len());
     }
 }

@@ -22,6 +22,7 @@ mod meters;
 use super::format;
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
+use crate::i18n::Arg;
 use crate::services::ServiceRequest;
 pub(crate) use keys::RESERVED_KEYS;
 
@@ -1335,7 +1336,7 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             if widgets::tile(
                 ui,
                 vec2(56.0, 30.0),
-                &t.tr("tip-export-playlist"),
+                &t.tr_args("tip-export-playlist", &[("name", Arg::Text(name.clone()))]),
                 true,
                 TileStyle {
                     border: Color32::TRANSPARENT,

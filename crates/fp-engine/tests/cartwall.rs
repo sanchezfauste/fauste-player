@@ -226,7 +226,10 @@ fn without_a_cue_route_the_cart_cue_ends_at_once() {
     let mut r = rig(2, Some(route(0)), None, 48_000);
     r.act(EngineAction::StartCartCue(cart(1, 0.0, SOURCE_END, false)));
     r.run(1);
-    assert!(r.events.contains(&EngineEvent::CartCueEnded));
+    assert!(
+        r.events
+            .contains(&EngineEvent::CartCueEnded { cart: CartId(1) })
+    );
     assert_eq!(audible(&r.channel(0)), 0);
 }
 
@@ -265,7 +268,10 @@ fn a_cue_route_to_a_missing_backend_never_plays_on_main() {
     let mut r = rig(2, Some(route(0)), Some(foreign), 48_000);
     r.act(EngineAction::StartCartCue(cart(1, 0.0, SOURCE_END, false)));
     r.run(5);
-    assert!(r.events.contains(&EngineEvent::CartCueEnded));
+    assert!(
+        r.events
+            .contains(&EngineEvent::CartCueEnded { cart: CartId(1) })
+    );
     assert_eq!(audible(&r.channel(0)), 0);
 }
 
@@ -274,7 +280,10 @@ fn a_cue_route_equal_to_main_is_refused() {
     let mut r = rig(2, Some(route(0)), Some(route(0)), 48_000);
     r.act(EngineAction::StartCartCue(cart(1, 0.0, SOURCE_END, false)));
     r.run(5);
-    assert!(r.events.contains(&EngineEvent::CartCueEnded));
+    assert!(
+        r.events
+            .contains(&EngineEvent::CartCueEnded { cart: CartId(1) })
+    );
     assert_eq!(audible(&r.channel(0)), 0);
 }
 

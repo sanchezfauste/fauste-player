@@ -68,11 +68,20 @@ if want appimage; then
   esac
   tool="${APPIMAGETOOL:-$(command -v appimagetool || true)}"
   if [ -z "${tool}" ]; then
-    tool="${work}/tools/appimagetool-$(uname -m).AppImage"
+    # A fixed release, checked against its SHA-256 before it runs.
+    appimagetool_version=1.9.1
+    case "$(uname -m)" in
+      x86_64) appimagetool_sha256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 ;;
+      aarch64) appimagetool_sha256=f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158 ;;
+      *) echo "no appimagetool for $(uname -m)" >&2; exit 1 ;;
+    esac
+    tool="${work}/tools/appimagetool-${appimagetool_version}-$(uname -m).AppImage"
     if [ ! -x "${tool}" ]; then
       mkdir -p "${work}/tools"
-      curl -fsSL -o "${tool}" \
-        "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$(uname -m).AppImage"
+      curl -fsSL -o "${tool}.part" \
+        "https://github.com/AppImage/appimagetool/releases/download/${appimagetool_version}/appimagetool-$(uname -m).AppImage"
+      echo "${appimagetool_sha256}  ${tool}.part" | sha256sum -c - >&2
+      mv "${tool}.part" "${tool}"
       chmod +x "${tool}"
     fi
   fi

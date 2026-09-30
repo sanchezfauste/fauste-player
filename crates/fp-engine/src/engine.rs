@@ -435,15 +435,25 @@ impl Engine {
         }
         for p in rt.current.iter().chain(rt.outgoing.iter()) {
             let s = &p.shared;
-            input.merge(crate::meter::MeterInput {
-                peak: [s.peak_l.take(), s.peak_r.take()],
-                sum_sq: [s.sum_sq_l.take(), s.sum_sq_r.take()],
-                sum_abs: [s.sum_abs_l.take(), s.sum_abs_r.take()],
-                k_sum: [s.k_sum_l.take(), s.k_sum_r.take()],
-                frames: s
-                    .measured_frames
-                    .swap(0, std::sync::atomic::Ordering::AcqRel),
-            });
+            let mut source = crate::meter::MeterInput::default();
+            let mut take = || {
+                source.extend(crate::meter::MeterInput {
+                    peak: [s.peak_l.take(), s.peak_r.take()],
+                    sum_sq: [s.sum_sq_l.take(), s.sum_sq_r.take()],
+                    sum_abs: [s.sum_abs_l.take(), s.sum_abs_r.take()],
+                    k_sum: [s.k_sum_l.take(), s.k_sum_r.take()],
+                    frames: s
+                        .measured_frames
+                        .swap(0, std::sync::atomic::Ordering::AcqRel),
+                });
+            };
+            // The sums are taken one by one: a block rendered meanwhile is
+            // taken whole in the same reading (a tick never gets half a block).
+            match self.buses.get(&p.bus) {
+                Some(bus) => bus.shared().whole_blocks(take),
+                None => take(),
+            }
+            input.merge(source);
         }
         input
     }
@@ -1047,10 +1057,17 @@ impl Engine {
         };
         // `now_frame` is the next frame the device will play: a transition
         // at exactly that frame has not happened yet.
-        let executed = rt
-            .current
+        // The transition happened only if the next was sent its `Start`: a
+        // next still waiting for its file has not started, whatever the frame.
+        let sent = rt
+            .preload
             .as_ref()
-            .is_some_and(|c| self.now_frame(&c.bus) > at_frame);
+            .is_some_and(|p| matches!(p.start, StartState::Requested | StartState::Started));
+        let executed = sent
+            && rt
+                .current
+                .as_ref()
+                .is_some_and(|c| self.now_frame(&c.bus) > at_frame);
         if executed && matches!(plan, TransitionPlan::StartNextAt { .. }) && rt.preload.is_some() {
             self.promote(player);
             return true;
@@ -1063,11 +1080,17 @@ impl Engine {
         if let Some(c) = rt.current.as_ref() {
             cancels.push((c.bus.clone(), c.slot));
         }
-        if let Some(p) = rt.preload.as_mut()
-            && p.start == StartState::Requested
-        {
-            p.start = StartState::Idle;
-            cancels.push((p.bus.clone(), p.slot));
+        if let Some(p) = rt.preload.as_mut() {
+            match p.start {
+                StartState::Requested => {
+                    p.start = StartState::Idle;
+                    cancels.push((p.bus.clone(), p.slot));
+                }
+                // Waiting for its file: it was sent nothing, and must not
+                // start by itself once the file is read.
+                StartState::WhenReady { .. } => p.start = StartState::Idle,
+                StartState::Idle | StartState::Started => {}
+            }
         }
         for (bus, slot) in cancels {
             self.send(&bus, BusCommand::Cancel { slot });
@@ -1380,7 +1403,10 @@ impl Engine {
                 }
             }
             // No Cue output (or no slot): nothing can be heard, end it at once.
-            Err(_) => self.events.push(EngineEvent::CueEnded { player }),
+            Err(_) => self.events.push(EngineEvent::CueEnded {
+                player,
+                entry: request.entry,
+            }),
         }
     }
 }
@@ -1541,8 +1567,9 @@ impl Engine {
                             .get_mut(&player)
                             .and_then(|rt| rt.cue_src.take())
                         {
+                            let entry = p.entry;
                             self.release(p);
-                            self.events.push(EngineEvent::CueEnded { player });
+                            self.events.push(EngineEvent::CueEnded { player, entry });
                         }
                     }
                     Role::Preload => {
@@ -1590,15 +1617,18 @@ impl Engine {
                 .get(&player)
                 .and_then(|rt| rt.preload.as_ref())
                 .filter(|p| p.start != StartState::Started)
-                .map(|p| (p.bus.clone(), p.slot)),
+                .map(|p| (p.bus.clone(), p.slot, p.shared.is_ready())),
             _ => None,
         };
         match next {
             // End of stream before (or instead of) the scheduled transition:
-            // start the next right now; `promote` runs on its `Started` event.
-            Some((bus, slot)) => {
+            // start the next right now, or as soon as it is buffered;
+            // `promote` runs on its `Started` event.
+            Some((bus, slot, ready)) => {
                 let at = self.now_frame(&bus);
-                self.send(&bus, BusCommand::Start { slot, at_frame: at });
+                if ready {
+                    self.send(&bus, BusCommand::Start { slot, at_frame: at });
+                }
                 if let Some(rt) = self.players.get_mut(&player) {
                     rt.plan = Plan::Dispatched(
                         TransitionPlan::StartNextAt {
@@ -1608,7 +1638,11 @@ impl Engine {
                         at,
                     );
                     if let Some(p) = rt.preload.as_mut() {
-                        p.start = StartState::Requested;
+                        p.start = if ready {
+                            StartState::Requested
+                        } else {
+                            StartState::WhenReady { fade_in: false }
+                        };
                     }
                 }
             }
@@ -1622,25 +1656,56 @@ impl Engine {
     }
 
     fn start_ready_sources(&mut self) {
+        /// Queues the start of `p` if it waits to be ready and now is.
+        fn take_ready(
+            p: &mut Playing,
+            earliest: u64,
+            starts: &mut Vec<(BusKey, usize, bool, u64)>,
+        ) {
+            if let StartState::WhenReady { fade_in } = p.start
+                // Also set when the worker failed: whatever it buffered still plays.
+                && p.shared.is_ready()
+                // A failed source with nothing buffered has nothing to play:
+                // it waits for its failure to be handled instead.
+                && !(p.shared.is_failed() && p.shared.is_drained())
+            {
+                p.start = StartState::Requested;
+                starts.push((p.bus.clone(), p.slot, fade_in, earliest));
+            }
+        }
         self.start_ready_carts();
-        let mut starts: Vec<(BusKey, usize, bool)> = Vec::new();
+        // (bus, slot, fade in, earliest frame).
+        let mut starts: Vec<(BusKey, usize, bool, u64)> = Vec::new();
         for rt in self.players.values_mut() {
-            let current = if rt.paused { None } else { rt.current.as_mut() };
-            for p in current.into_iter().chain(rt.cue_src.iter_mut()) {
-                if let StartState::WhenReady { fade_in } = p.start
-                    // Also set when the worker failed: whatever it buffered still plays.
-                    && p.shared.is_ready()
-                    // A failed source with nothing buffered has nothing to play:
-                    // it waits for its failure to be handled instead.
-                    && !(p.shared.is_failed() && p.shared.is_drained())
-                {
-                    p.start = StartState::Requested;
-                    starts.push((p.bus.clone(), p.slot, fade_in));
+            if rt.paused {
+                for p in rt.cue_src.iter_mut() {
+                    take_ready(p, 0, &mut starts);
+                }
+                continue;
+            }
+            // A preload only waits to start after a dispatched transition,
+            // and never before the frame it was dispatched for.
+            let dispatched = match rt.plan {
+                Plan::Dispatched(TransitionPlan::StartNextAt { .. }, at_frame) => Some(at_frame),
+                _ => None,
+            };
+            for p in rt.current.iter_mut().chain(rt.cue_src.iter_mut()) {
+                take_ready(p, 0, &mut starts);
+            }
+            if let Some(p) = rt.preload.as_mut() {
+                match dispatched {
+                    Some(frame) => take_ready(p, frame, &mut starts),
+                    // Its transition is gone (taken back, or the current
+                    // source failed): it goes back to waiting idle.
+                    None if matches!(p.start, StartState::WhenReady { .. }) => {
+                        p.start = StartState::Idle;
+                    }
+                    None => {}
                 }
             }
         }
-        for (bus, slot, fade_in) in starts {
-            let now = self.now_frame(&bus);
+        for (bus, slot, fade_in, earliest) in starts {
+            let now = self.now_frame(&bus).max(earliest);
             let declick = u32::try_from(self.frames_on(&bus, self.settings.tuning.declick_ms))
                 .unwrap_or(u32::MAX);
             if fade_in {
@@ -1734,8 +1799,15 @@ impl Engine {
         let (cur_bus, cur_slot) = (current.bus.clone(), current.slot);
         let next = match plan {
             TransitionPlan::StartNextAt { .. } => rt.preload.as_mut().map(|p| {
-                p.start = StartState::Requested;
-                (p.bus.clone(), p.slot)
+                // A next that is not buffered yet starts as soon as it is,
+                // instead of on the frame as silence counted as underruns.
+                let ready = p.shared.is_ready();
+                p.start = if ready {
+                    StartState::Requested
+                } else {
+                    StartState::WhenReady { fade_in: false }
+                };
+                (p.bus.clone(), p.slot, ready)
             }),
             TransitionPlan::StopAt { .. } => None,
         };
@@ -1746,9 +1818,11 @@ impl Engine {
                     at_secs,
                     fade_current_until_secs,
                 },
-                Some((bus, slot)),
+                Some((bus, slot, ready)),
             ) => {
-                self.send(&bus, BusCommand::Start { slot, at_frame });
+                if ready {
+                    self.send(&bus, BusCommand::Start { slot, at_frame });
+                }
                 match fade_current_until_secs {
                     Some(until) => {
                         let len = (((until - at_secs) * rate).round() as u64).max(declick);

@@ -6,7 +6,12 @@ use std::path::{Path, PathBuf};
 
 use crossbeam_channel::Sender;
 use fp_model::{AppState, Limits, PlaylistId};
-use fp_store::playlist_io::{ExportEntry, ImportedPlaylist, parse_playlist, write_m3u8};
+use fp_store::playlist_io::{
+    CartPageFileError, ExportEntry, ImportedPlaylist, PlaylistFileError, parse_playlist,
+    read_bounded, write_m3u8,
+};
+
+use crate::i18n::I18n;
 
 /// Extensions read as playlist files.
 pub const PLAYLIST_EXTENSIONS: &[&str] = &["m3u", "m3u8", "pls"];
@@ -44,9 +49,76 @@ pub fn safe_file_name(name: &str) -> String {
 pub enum FileOutcome {
     Imported {
         name: String,
-        result: Result<ImportedPlaylist, String>,
+        result: Result<ImportedPlaylist, FileError>,
     },
-    Exported(Result<PathBuf, String>),
+    Exported(Result<PathBuf, FileError>),
+}
+
+/// Why a playlist or cart page file could not be read or written, told in
+/// the interface language.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileError {
+    TooLarge {
+        limit: u64,
+    },
+    NotFound,
+    Denied,
+    NotACartPage,
+    TooNew,
+    Invalid,
+    /// Anything else, with the system's own (untranslated) description.
+    Other(String),
+}
+
+impl FileError {
+    pub fn from_io(e: &std::io::Error) -> Self {
+        Self::from_kind(e.kind(), e.to_string())
+    }
+
+    fn from_kind(kind: std::io::ErrorKind, detail: String) -> Self {
+        match kind {
+            std::io::ErrorKind::NotFound => Self::NotFound,
+            std::io::ErrorKind::PermissionDenied => Self::Denied,
+            _ => Self::Other(detail),
+        }
+    }
+
+    /// The reason, as a clause for the import and export notices.
+    pub fn text(&self, i18n: &I18n) -> String {
+        match self {
+            Self::TooLarge { limit } => {
+                i18n.tr_args("file-error-too-large", &[("limit", (*limit as f64).into())])
+            }
+            Self::NotFound => i18n.tr("file-error-not-found"),
+            Self::Denied => i18n.tr("file-error-denied"),
+            Self::NotACartPage => i18n.tr("file-error-not-a-cart-page"),
+            Self::TooNew => i18n.tr("file-error-too-new"),
+            Self::Invalid => i18n.tr("file-error-invalid"),
+            Self::Other(detail) => {
+                i18n.tr_args("file-error-other", &[("detail", detail.clone().into())])
+            }
+        }
+    }
+}
+
+impl From<PlaylistFileError> for FileError {
+    fn from(e: PlaylistFileError) -> Self {
+        match e {
+            PlaylistFileError::TooLarge { limit } => Self::TooLarge { limit },
+            PlaylistFileError::Unreadable { kind, message } => Self::from_kind(kind, message),
+        }
+    }
+}
+
+impl From<CartPageFileError> for FileError {
+    fn from(e: CartPageFileError) -> Self {
+        match e {
+            CartPageFileError::TooLarge { limit } => Self::TooLarge { limit },
+            CartPageFileError::NotACartPage => Self::NotACartPage,
+            CartPageFileError::TooNew(_) => Self::TooNew,
+            CartPageFileError::Invalid(_) => Self::Invalid,
+        }
+    }
 }
 
 /// The entries of `playlist` as they are written to an M3U8 file.
@@ -90,9 +162,9 @@ fn read(path: &Path, limits: &Limits) -> FileOutcome {
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let result = std::fs::read(path)
-        .map_err(|e| e.to_string())
-        .and_then(|bytes| parse_playlist(&bytes, path, limits).map_err(|e| e.to_string()));
+    let result = read_bounded(path, limits.max_playlist_file_bytes)
+        .and_then(|bytes| parse_playlist(&bytes, path, limits))
+        .map_err(FileError::from);
     FileOutcome::Imported { name, result }
 }
 
@@ -135,7 +207,7 @@ pub(crate) fn export_with_dialog(
             let path = file.path().to_path_buf();
             let result = std::fs::write(&path, write_m3u8(&entries))
                 .map(|()| path)
-                .map_err(|e| e.to_string());
+                .map_err(|e| FileError::from_io(&e));
             let _ = tx.send(FileOutcome::Exported(result));
         }
     });

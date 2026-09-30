@@ -227,3 +227,19 @@ fn the_last_cart_is_reachable_in_a_small_window() {
     h.run_steps(2);
     assert!(fake.take_sent().contains(&Command::FireCart(last)));
 }
+
+#[test]
+fn an_empty_cart_can_be_edited_from_its_menu() {
+    let (mut h, _fake) = harness(with_cart());
+    h.get_by_label("Cart 2, empty").click_secondary();
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("Pre-listen on CUE").is_none(),
+        "nothing to cue"
+    );
+    h.get_by_label("Edit…").click();
+    h.run_steps(3);
+    // Settings opens on that cart's editor, where a file is chosen.
+    assert!(h.query_by_label("No file").is_some());
+    assert!(h.query_by_label("Choose…").is_some());
+}

@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "pages": [
+    {
+      "id": 6,
+      "name": "General",
+      "rows": 2,
+      "cols": 8,
+      "carts": [
+        {
+          "id": 7,
+          "name": "Jingle - ID emisora 01",
+          "track": 37,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": true
+        },
+        {
+          "id": 8,
+          "name": "Dunas - Faro",
+          "track": 38,
+          "kind": "Effect",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 9,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 10,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 11,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 12,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 13,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 14,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 15,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 16,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 17,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 18,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 19,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 20,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 21,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 22,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "name": "Effects",
+      "rows": 2,
+      "cols": 8,
+      "carts": [
+        {
+          "id": 40,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 41,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 42,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 43,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 44,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 45,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 46,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 47,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 48,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 49,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 50,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 51,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 52,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 53,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 54,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        },
+        {
+          "id": 55,
+          "name": "",
+          "track": null,
+          "kind": "Jingle",
+          "looped": false,
+          "exclusive": false
+        }
+      ]
+    }
+  ]
+}

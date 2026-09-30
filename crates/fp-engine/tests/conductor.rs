@@ -49,6 +49,19 @@ fn model(players: usize, tracks: u64) -> AppState {
     state
 }
 
+/// Ticks until every source has been filled by its worker (bounded), instead
+/// of sleeping a fixed time.
+fn settle(conductor: &mut Conductor, now: Instant) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        conductor.tick(now);
+        if conductor.engine().unsettled_sources() == 0 || Instant::now() > deadline {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
 fn offline_conductor(state: AppState) -> (Conductor, ConductorHandle, OfflineDevice, Instant) {
     let backend = OfflineBackend::new();
     let device = backend.add_device("main", 2);
@@ -78,8 +91,7 @@ fn continuous_playback_chains_tracks_in_the_model_and_on_air() {
     let e = entries(conductor.state());
     let p = conductor.state().players[0].id;
     assert!(handle.send(Command::Play(p)));
-    conductor.tick(now);
-    std::thread::sleep(Duration::from_millis(30));
+    settle(&mut conductor, now);
     let mut heard = Vec::new();
     for _ in 0..150 {
         conductor.tick(now);
@@ -395,8 +407,7 @@ fn the_meter_follows_a_playing_source_and_falls_after_stop() {
             .unwrap()
     };
     assert!(handle.send(Command::Play(p)));
-    conductor.tick(now);
-    std::thread::sleep(Duration::from_millis(30));
+    settle(&mut conductor, now);
     for _ in 0..20 {
         conductor.tick(now);
         device.render(BLOCK);
@@ -472,8 +483,7 @@ fn play_then_stop(
             .unwrap()
     };
     assert!(handle.send(Command::Play(p)));
-    conductor.tick(*now);
-    std::thread::sleep(Duration::from_millis(30));
+    settle(conductor, *now);
     for _ in 0..20 {
         conductor.tick(*now);
         device.render(BLOCK);
@@ -534,6 +544,32 @@ fn the_meter_maximum_restarts_when_the_same_entry_plays_again() {
     assert!(
         restarted.max_db < stopped.max_db - 3.0,
         "playing it again restarts it: {restarted:?}"
+    );
+}
+
+#[test]
+fn the_meter_maximum_restarts_when_the_entry_restarts_within_one_tick() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 1));
+    let p = conductor.state().players[0].id;
+    let (_, stopped) = play_then_stop(&mut conductor, &handle, &device, &mut now);
+    // Play, then Stop and Play again before the conductor meters once more.
+    assert!(handle.send(Command::Play(p)));
+    settle(&mut conductor, now);
+    for _ in 0..20 {
+        conductor.tick(now);
+        device.render(BLOCK);
+        now += Duration::from_millis(10);
+    }
+    conductor.tick(now); // meters the last block
+    let playing = meter_of(&handle, p);
+    assert!(handle.send(Command::Stop(p)));
+    assert!(handle.send(Command::Play(p)));
+    conductor.tick(now);
+    let restarted = meter_of(&handle, p);
+    assert!(playing.max_db > -60.0 && stopped.max_db > -60.0);
+    assert!(
+        restarted.max_db < playing.max_db - 3.0,
+        "a new start restarts it: {restarted:?}"
     );
 }
 

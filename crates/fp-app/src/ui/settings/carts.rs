@@ -2,11 +2,12 @@
 
 use std::path::PathBuf;
 
+use super::super::playlist_files::FileError;
 use crossbeam_channel::Receiver;
 use egui::{Color32, RichText, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::{CartEdit, CartKind, CartPageId, CartPageImport, Command};
-use fp_store::playlist_io::{parse_cart_page, write_cart_page};
+use fp_store::playlist_io::{parse_cart_page, read_bounded, write_cart_page};
 
 use super::super::app::Scene;
 use super::super::cartwall::page_name;
@@ -25,8 +26,8 @@ pub(crate) struct CartsState {
     page_name: String,
     page_name_for: Option<CartPageId>,
     file: Option<Receiver<Option<PathBuf>>>,
-    import: Option<Receiver<Option<Result<CartPageImport, String>>>>,
-    export: Option<Receiver<Option<Result<PathBuf, String>>>>,
+    import: Option<Receiver<Option<Result<CartPageImport, FileError>>>>,
+    export: Option<Receiver<Option<Result<PathBuf, FileError>>>>,
     message: Option<String>,
     /// Grid size being dragged, applied on release.
     grid_draft: Option<(CartPageId, u16, u16)>,
@@ -130,7 +131,10 @@ fn poll(scene: &Scene<'_>, c: &mut CartsState) {
                 scene.ctl.send(Command::ImportCartPage(Box::new(import)));
             }
             Some(Err(e)) => {
-                c.message = Some(t.tr_args("settings-cart-import-failed", &[("error", e.into())]))
+                c.message = Some(t.tr_args(
+                    "settings-cart-import-failed",
+                    &[("error", e.text(t).into())],
+                ))
             }
             None => {}
         }
@@ -144,7 +148,10 @@ fn poll(scene: &Scene<'_>, c: &mut CartsState) {
                 "settings-cart-exported",
                 &[("path", path.display().to_string().into())],
             )),
-            Some(Err(e)) => Some(t.tr_args("settings-cart-export-failed", &[("error", e.into())])),
+            Some(Err(e)) => Some(t.tr_args(
+                "settings-cart-export-failed",
+                &[("error", e.text(t).into())],
+            )),
             None => None,
         };
         c.export = None;
@@ -222,10 +229,10 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 )?;
                 let path = file.path().to_path_buf();
                 Some(
-                    std::fs::read(&path)
-                        .map_err(|e| e.to_string())
+                    read_bounded(&path, limits.max_playlist_file_bytes)
+                        .map_err(FileError::from)
                         .and_then(|bytes| {
-                            parse_cart_page(&bytes, &path, &limits).map_err(|e| e.to_string())
+                            parse_cart_page(&bytes, &path, &limits).map_err(FileError::from)
                         }),
                 )
             });
@@ -252,7 +259,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 Some(
                     std::fs::write(&path, text)
                         .map(|()| path)
-                        .map_err(|e| e.to_string()),
+                        .map_err(|e| FileError::from_io(&e)),
                 )
             });
         }

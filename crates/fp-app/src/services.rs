@@ -89,6 +89,9 @@ pub struct Services {
     failed: HashSet<TrackId>,
     /// Tracks to analyse again even if already analysed.
     forced: HashSet<TrackId>,
+    /// Tracks whose result was lost to a panic once already: a second loss
+    /// gives up on them (as failed) instead of retrying forever.
+    retried: HashSet<TrackId>,
     /// Tracks seen analysed in a snapshot. One that turns unanalysed again
     /// (markers reset) is analysed again.
     seen_analyzed: HashSet<TrackId>,
@@ -97,6 +100,8 @@ pub struct Services {
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
     fail_steps: u32,
+    #[cfg(feature = "test-hooks")]
+    fail_routes: u32,
     saved_version: u64,
     dirty_since: Option<Instant>,
     last_session_save: Option<Instant>,
@@ -121,11 +126,14 @@ impl Services {
             done: HashSet::new(),
             failed: HashSet::new(),
             forced: HashSet::new(),
+            retried: HashSet::new(),
             seen_analyzed: HashSet::new(),
             settings: None,
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
+            #[cfg(feature = "test-hooks")]
+            fail_routes: 0,
             saved_version: 0,
             dirty_since: None,
             last_session_save: None,
@@ -147,6 +155,13 @@ impl Services {
     #[cfg(feature = "test-hooks")]
     pub fn fail_steps(&mut self, count: u32) {
         self.fail_steps = count;
+    }
+
+    /// Makes applying the next `count` analysis results panic, after the
+    /// result was taken. Used to test that no result is lost for good.
+    #[cfg(feature = "test-hooks")]
+    pub fn fail_routes(&mut self, count: u32) {
+        self.fail_routes = count;
     }
 
     /// One round of work. Never blocks on the analyzer. A panic inside is
@@ -190,8 +205,24 @@ impl Services {
         self.follow_settings(state);
         self.submit_new(state);
         let wanted = Self::wanted(state);
-        while let Ok(result) = self.analyzer.results().try_recv() {
-            self.route(result, &wanted);
+        let results: Vec<AnalysisResult> = self.analyzer.results().try_iter().collect();
+        for result in results {
+            // A result taken from the analyzer is gone from it: if applying
+            // it panics, the track is asked for again (once) instead of
+            // staying "in progress" until the next start.
+            let track = result.track;
+            let routed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                self.route(result, &wanted);
+            }));
+            if routed.is_err() {
+                self.faults.fetch_add(1, Ordering::AcqRel);
+                tracing::error!(?track, "applying an analysis result panicked");
+                self.in_flight.remove(&track);
+                self.done.remove(&track);
+                if !self.retried.insert(track) {
+                    self.failed.insert(track);
+                }
+            }
         }
     }
 
@@ -243,6 +274,7 @@ impl Services {
         }
         self.done.clear();
         self.failed.clear();
+        self.retried.clear();
         self.forced = state.library.iter().map(|t| t.id).collect();
     }
 
@@ -267,6 +299,7 @@ impl Services {
         self.done.retain(|id| known.contains(id));
         self.failed.retain(|id| known.contains(id));
         self.forced.retain(|id| known.contains(id));
+        self.retried.retain(|id| known.contains(id));
         self.seen_analyzed.retain(|id| known.contains(id));
         for track in state.library.iter() {
             if track.analyzed {
@@ -307,6 +340,14 @@ impl Services {
     fn route(&mut self, result: AnalysisResult, wanted: &HashSet<TrackId>) {
         if matches!(result.outcome, Err(AnalysisError::Cancelled)) {
             return;
+        }
+        #[cfg(feature = "test-hooks")]
+        if self.fail_routes > 0 {
+            self.fail_routes -= 1;
+            #[allow(clippy::panic)]
+            {
+                panic!("injected routing failure");
+            }
         }
         self.in_flight.remove(&result.track);
         self.done.insert(result.track);

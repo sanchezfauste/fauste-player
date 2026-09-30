@@ -657,6 +657,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
     let mix_label = t.tr("mix-marker");
     let label = t.tr("tip-waveform");
     let input = widgets::WaveInput {
+        id: egui::Id::new(("waveform", id)),
         media: media.as_ref(),
         total: pv.total,
         markers: pv.markers,
@@ -947,7 +948,7 @@ fn edit_markers(
         view_state.wave_menu.insert(id, secs_at(p.x));
     }
     let at = view_state.wave_menu.get(&id).copied();
-    response.context_menu(|ui| {
+    let open = response.context_menu(|ui| {
         ui.set_min_width(220.0);
         let item = |ui: &mut Ui, key: &str| {
             let text = t.tr(key);
@@ -990,6 +991,10 @@ fn edit_markers(
             ui.close();
         }
     });
+    // Once the menu is closed, the point it was opened at is forgotten.
+    if open.is_none() && !response.secondary_clicked() {
+        view_state.wave_menu.remove(&id);
+    }
     let alt = ui.input(|i| i.modifiers.alt);
     // The drag starts once the pointer has moved; pick the marker under
     // the point where the button went down.

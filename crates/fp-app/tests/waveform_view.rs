@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use fp_analysis::WavePeak;
 use fp_app::services::TrackMedia;
-use fp_app::ui::widgets::{WaveColumn, WaveMemo, memo_columns, wave_columns};
+use fp_app::ui::theme;
+use fp_app::ui::view::MarkerFractions;
+use fp_app::ui::widgets::{WaveColumn, WaveInput, WaveMemo, memo_columns, wave_columns, waveform};
 
 const FULL: f32 = i16::MAX as f32;
 
@@ -155,4 +157,37 @@ fn the_columns_are_reduced_once_per_track_and_width() {
     assert!(close(other[0].peak, 0.9), "a new track: {:?}", other[0]);
     let longer = memo_columns(&mut memo, &media(0.9), 2.0, 80);
     assert!(longer[79] == WaveColumn::default(), "a new span");
+}
+
+#[test]
+fn a_player_that_unloads_lets_go_of_its_waveform() {
+    let track = media(0.5);
+    let shown = std::rc::Rc::new(std::cell::Cell::new(true));
+    let (held, flag) = (Arc::clone(&track), std::rc::Rc::clone(&shown));
+    let mut harness = egui_kittest::Harness::new_ui(move |ui| {
+        let input = WaveInput {
+            id: egui::Id::new(("wave", 1)),
+            media: flag.get().then_some(&held),
+            total: Some(1.0),
+            markers: MarkerFractions::default(),
+            colors: theme::wave_colors("sand"),
+            mix_active: false,
+            mix_label: "MIX",
+            accessible_label: "Waveform",
+        };
+        waveform(ui, 40.0, &input);
+    });
+    harness.run();
+    assert_eq!(
+        Arc::strong_count(&track),
+        3,
+        "the memo holds it while shown"
+    );
+    shown.set(false);
+    harness.run();
+    assert_eq!(
+        Arc::strong_count(&track),
+        2,
+        "only the test and the closure"
+    );
 }

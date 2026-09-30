@@ -191,3 +191,17 @@ fn an_intro_tag_is_read_from_dsf() {
     std::fs::write(&path, f).unwrap();
     assert_eq!(read_intro(&path), Some(0.1));
 }
+
+#[test]
+fn the_id3_intro_description_is_matched_without_regard_to_case() {
+    // Vorbis comments and APE items ignore case; so does TXXX here, as
+    // tagging tools write "Intro" or "intro" as often as "INTRO".
+    let dir = tempfile::tempdir().unwrap();
+    for (n, key) in ["intro", "Intro"].into_iter().enumerate() {
+        let path = tone(dir.path(), &format!("t{n}.wav"), 2);
+        let mut tag = Id3v2Tag::new();
+        tag.insert_user_text(key.into(), "1.25".into());
+        tag.save_to_path(&path, WriteOptions::default()).unwrap();
+        assert_eq!(read_intro(&path), Some(1.25), "{key}");
+    }
+}

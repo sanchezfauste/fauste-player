@@ -1,0 +1,12 @@
+{
+  "format": "fauste-cart-page",
+  "version": 1,
+  "name": "Jingles",
+  "rows": 2,
+  "cols": 4,
+  "carts": [
+    { "position": 1, "name": "Station ID", "kind": "jingle", "file": "id.wav", "loop": false },
+    { "position": 3, "name": "Bed", "kind": "effect", "file": "/carts/bed.flac", "loop": true },
+    { "position": 8, "name": "", "kind": "spot" }
+  ]
+}

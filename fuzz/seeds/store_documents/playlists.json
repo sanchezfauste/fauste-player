@@ -1,0 +1,204 @@
+{
+  "schema_version": 2,
+  "library": [
+    {
+      "id": 25,
+      "path": "/tmp/fp-seed/music/Dunas - Faro.wav",
+      "title": "Dunas - Faro",
+      "artist": "",
+      "album": "",
+      "duration_secs": 0.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null
+    },
+    {
+      "id": 27,
+      "path": "/tmp/fp-seed/music/Jingle - ID emisora 01.wav",
+      "title": "Jingle - ID emisora 01",
+      "artist": "",
+      "album": "",
+      "duration_secs": 0.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null
+    },
+    {
+      "id": 29,
+      "path": "/tmp/fp-seed/music/Jingle - ID emisora 01.wav",
+      "title": "Jingle - ID emisora 01",
+      "artist": "",
+      "album": "",
+      "duration_secs": 0.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null
+    },
+    {
+      "id": 31,
+      "path": "/tmp/fp-seed/music/Dunas - Faro.wav",
+      "title": "Dunas - Faro",
+      "artist": "",
+      "album": "",
+      "duration_secs": 0.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null
+    },
+    {
+      "id": 33,
+      "path": "/tmp/fp-seed/music/Dunas - Faro.wav",
+      "title": "Dunas - Faro",
+      "artist": "",
+      "album": "",
+      "duration_secs": 0.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null
+    },
+    {
+      "id": 35,
+      "path": "/tmp/fp-seed/music/Jingle - ID emisora 01.wav",
+      "title": "Jingle - ID emisora 01",
+      "artist": "",
+      "album": "",
+      "duration_secs": 0.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null
+    },
+    {
+      "id": 37,
+      "path": "/tmp/fp-seed/music/Jingle - ID emisora 01.wav",
+      "title": "Jingle - ID emisora 01",
+      "artist": "",
+      "album": "",
+      "duration_secs": 0.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null
+    },
+    {
+      "id": 38,
+      "path": "/tmp/fp-seed/music/Dunas - Faro.wav",
+      "title": "Dunas - Faro",
+      "artist": "",
+      "album": "",
+      "duration_secs": 0.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null
+    }
+  ],
+  "playlists": [
+    {
+      "id": 1,
+      "name": "Morning",
+      "entries": [
+        {
+          "id": 26,
+          "track": 25
+        },
+        {
+          "id": 28,
+          "track": 27
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "Afternoon",
+      "entries": [
+        {
+          "id": 30,
+          "track": 29
+        },
+        {
+          "id": 32,
+          "track": 31
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "Night",
+      "entries": [
+        {
+          "id": 34,
+          "track": 33
+        },
+        {
+          "id": 36,
+          "track": 35
+        }
+      ]
+    }
+  ],
+  "ids": {
+    "last": 55
+  }
+}

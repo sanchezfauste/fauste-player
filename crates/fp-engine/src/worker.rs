@@ -297,7 +297,9 @@ fn run(
             .filter(|j| !j.done && j.producer.free_frames() > 0)
             .min_by_key(|j| j.producer.buffered_frames())
         {
-            let outcome = catch_unwind(AssertUnwindSafe(|| step(job, opener, ready_frames)));
+            // The threshold is a time: scale it to the rate the source plays at.
+            let ready = scaled_frames(ready_frames, job.rate, bus_rate);
+            let outcome = catch_unwind(AssertUnwindSafe(|| step(job, opener, ready)));
             let error = match outcome {
                 Ok(Ok(())) => None,
                 Ok(Err(e)) => Some(e),
@@ -321,6 +323,12 @@ fn finish(job: &mut Job) -> Result<(), String> {
     job.producer.shared.eof.store(true, Ordering::Release);
     job.producer.shared.ready.store(true, Ordering::Release);
     Ok(())
+}
+
+/// `frames` at `from_rate`, as the same duration at `to_rate`.
+fn scaled_frames(frames: usize, to_rate: u32, from_rate: u32) -> usize {
+    let scaled = frames as u64 * u64::from(to_rate) / u64::from(from_rate.max(1));
+    usize::try_from(scaled).unwrap_or(usize::MAX)
 }
 
 /// Opens the job if needed and moves at most one decoded block into its ring.

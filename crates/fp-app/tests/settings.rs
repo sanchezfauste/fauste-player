@@ -396,3 +396,28 @@ fn a_listed_device_can_always_be_turned_off() {
     h.run_steps(2);
     assert!(bit_perfect_devices(&fake).is_empty());
 }
+
+#[test]
+fn each_playlist_export_button_names_its_playlist() {
+    let mut state = state(1, 1);
+    fp_model::apply(
+        &mut state,
+        Command::CreatePlaylist {
+            name: "Night".into(),
+        },
+    )
+    .unwrap();
+    let (mut h, _fake) = harness(state);
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Playlists").click();
+    h.run_steps(2);
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Export Main as M3U8")
+            .is_some()
+    );
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Export Night as M3U8")
+            .is_some()
+    );
+}
