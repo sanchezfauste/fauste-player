@@ -16,9 +16,19 @@ use super::icons;
 use super::table;
 use super::theme;
 use super::view::{self, PlayerStatus, PlayerView};
+use super::wave_view::{WaveView, WaveZoom, min_span};
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
 const PLAY_SIZE: f32 = 64.0;
+/// One wheel notch zooms the waveform in to this share of its span.
+const WAVE_ZOOM_STEP: f64 = 0.8;
+/// One sideways notch pans the waveform by this share of its width.
+const WAVE_PAN_STEP: f32 = 0.1;
+/// Smooth-scrolling wheels and trackpads report points: this many make a
+/// notch.
+const WAVE_POINTS_PER_NOTCH: f32 = 50.0;
+/// A wheel that reports pages: one page is this many notches.
+const WAVE_NOTCHES_PER_PAGE: f32 = 3.0;
 const GAP: f32 = 6.0;
 const WAVE_HEIGHT: f32 = 56.0;
 const TABS_HEIGHT: f32 = 30.0;
@@ -732,18 +742,53 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
 
 fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId, pv: &PlayerView) {
     let t = scene.i18n;
-    let track = scene
-        .state
-        .player(id)
-        .ok()
-        .and_then(|p| p.current)
+    let current = scene.state.player(id).ok().and_then(|p| p.current);
+    let track = current
         .and_then(|e| scene.state.playlists.entry(e))
         .map(|e| e.track);
     let media = track.and_then(|t| scene.media.get(t));
+    let total = pv.total.filter(|t| *t > 0.0);
+    // A zoom belongs to the entry it was made on.
+    let mut zoom = view_state
+        .wave_zoom
+        .get(&id)
+        .copied()
+        .filter(|z| Some(z.entry) == current && total.is_some());
+    let wave_id = egui::Id::new(("waveform", id));
+    // While zoomed, follow the playhead once the operator's last move is
+    // older than the grace (feedback spec F17), but never under a held drag.
+    let dragging = widgets::seek_dragging(ui, wave_id)
+        || view_state.marker_drag.is_some_and(|(p, _, _)| p == id);
+    if let (Some(z), Some(total), Some(f)) = (zoom.as_mut(), total, pv.markers.position) {
+        let grace = scene.state.config.ui.follow_current_grace_secs;
+        if dragging {
+            z.moved_at = scene.time;
+        } else if scene.time - z.moved_at >= grace {
+            z.view = z.view.follow(f64::from(f) * total, total);
+        }
+    }
+    let view = zoom.map(|z| z.view);
+    // Where the Full view button goes while zoomed: no seek starts under it.
+    let wave_rect = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), WAVE_HEIGHT));
+    let full_view_text = t.tr("wave-full-view");
+    let full_view_width = ui
+        .painter()
+        .layout_no_wrap(full_view_text.clone(), font(10.0), theme::TEXT)
+        .size()
+        .x
+        + 12.0;
+    let button_rect = Rect::from_min_size(
+        pos2(
+            wave_rect.right() - 4.0 - full_view_width,
+            wave_rect.top() + 4.0,
+        ),
+        vec2(full_view_width, 18.0),
+    );
+    let full_view_button = zoom.map(|_| button_rect);
     let mix_label = t.tr("mix-marker");
     let label = t.tr("tip-waveform");
     let input = widgets::WaveInput {
-        id: egui::Id::new(("waveform", id)),
+        id: wave_id,
         media: media.as_ref(),
         total: pv.total,
         markers: pv.markers,
@@ -751,16 +796,112 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         mix_active: pv.mode == PlayMode::Continuous,
         mix_label: &mix_label,
         accessible_label: &label,
+        view,
+        entry: current,
+        shield: full_view_button,
     };
     let (response, seek) = widgets::waveform(ui, WAVE_HEIGHT, &input);
     if let Some(secs) = seek {
         scene.ctl.send(Command::Seek(id, secs));
     }
-    if let (Some(track), Some(total)) = (track, pv.total.filter(|t| *t > 0.0)) {
-        edit_markers(ui, scene, view_state, id, track, total, pv, &response);
-    }
     let rect = response.rect;
+    if let (Some(track), Some(total)) = (track, total) {
+        let shown = view.unwrap_or_else(|| WaveView::full(total));
+        edit_markers(ui, scene, view_state, id, track, shown, pv, &response);
+    }
+    // The wheel zooms around the pointer; Shift or a sideways wheel pans.
+    if let (Some(entry), Some(total), Some(p)) = (current, total, response.hover_pos()) {
+        let inner = rect.shrink(1.0);
+        let bucket = media.as_ref().map_or(
+            f64::from(scene.state.config.analysis.peak_bucket_ms) / 1000.0,
+            |m| m.peak_bucket_secs,
+        );
+        let min = min_span(bucket, inner.width());
+        // In notches: a line is one, points and pages are converted, so a
+        // trackpad zooms in proportion instead of one step per event.
+        let wheels: Vec<(egui::Vec2, bool)> = ui.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::MouseWheel {
+                        unit,
+                        delta,
+                        modifiers,
+                        ..
+                    } if *delta != egui::Vec2::ZERO && !modifiers.command => {
+                        let notches = match unit {
+                            egui::MouseWheelUnit::Line => *delta,
+                            egui::MouseWheelUnit::Point => *delta / WAVE_POINTS_PER_NOTCH,
+                            egui::MouseWheelUnit::Page => *delta * WAVE_NOTCHES_PER_PAGE,
+                        };
+                        Some((notches, modifiers.shift))
+                    }
+                    _ => None,
+                })
+                .collect()
+        });
+        if !wheels.is_empty() {
+            let mut v = view.unwrap_or_else(|| WaveView::full(total));
+            for (notches, shift) in wheels {
+                if shift || notches.x.abs() > notches.y.abs() {
+                    let step = if notches.x.abs() > notches.y.abs() {
+                        notches.x
+                    } else {
+                        notches.y
+                    };
+                    v = v.pan(step * inner.width() * WAVE_PAN_STEP, inner, total);
+                } else {
+                    let factor = WAVE_ZOOM_STEP.powf(f64::from(notches.y));
+                    v = v.zoom_at(p.x, inner, factor, total, min);
+                }
+            }
+            zoom = (!v.is_full(total)).then_some(WaveZoom {
+                view: v,
+                entry,
+                moved_at: scene.time,
+            });
+            // The wheel was for the waveform, not for a scroll area around it.
+            ui.ctx()
+                .input_mut(|i| i.smooth_scroll_delta = egui::Vec2::ZERO);
+            ui.ctx().request_repaint();
+        }
+    }
     let painter = ui.painter_at(rect);
+    let mut badge_right = rect.right() - 4.0;
+    if zoom.is_some() {
+        let button = button_rect;
+        let text = full_view_text;
+        let mut child = ui.new_child(UiBuilder::new().max_rect(button));
+        if widgets::tile(
+            &mut child,
+            button.size(),
+            &text,
+            true,
+            TileStyle::plain(),
+            |p, r, c| {
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    &text,
+                    font(10.0),
+                    c,
+                );
+            },
+        )
+        .clicked()
+        {
+            zoom = None;
+        }
+        badge_right = button.left() - 4.0;
+    }
+    match zoom {
+        Some(z) => {
+            view_state.wave_zoom.insert(id, z);
+        }
+        None => {
+            view_state.wave_zoom.remove(&id);
+        }
+    }
     if let Some(left) = pv.intro {
         let fill = if pv.intro_blink == Some(true) {
             theme::INTRO_BADGE_BLINK
@@ -783,7 +924,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
     if let Some(left) = pv.outro {
         widgets::time_badge(
             &painter,
-            rect.right_top() + vec2(-4.0, 4.0),
+            pos2(badge_right, rect.top() + 4.0),
             true,
             &t.tr("wave-outro"),
             &format!("{left:.1}"),
@@ -1012,14 +1153,15 @@ fn edit_markers(
     view_state: &mut ViewState,
     id: PlayerId,
     track: TrackId,
-    total: f64,
+    view: WaveView,
     pv: &PlayerView,
     response: &egui::Response,
 ) {
     let t = scene.i18n;
     let inner = response.rect.shrink(1.0);
-    let secs_at = |x: f32| f64::from(((x - inner.left()) / inner.width()).clamp(0.0, 1.0)) * total;
-    let x_of = |f: f32| inner.left() + f * inner.width();
+    let total = pv.total.unwrap_or(0.0);
+    let secs_at = |x: f32| view.secs_at(x, inner);
+    let x_of = |f: f32| view.x_of(f64::from(f) * total, inner);
     let m = pv.markers;
     let handles = [
         (MarkerKind::CueIn, m.cue_in),

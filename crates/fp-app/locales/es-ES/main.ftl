@@ -112,6 +112,7 @@ unit-s = { $value } s
 unit-db = { $value } dB
 wave-intro = INTRO
 wave-outro = OUTRO
+wave-full-view = Vista completa
 dialog-audio-files = Archivos de audio
 tip-add = Añadir pistas a esta playlist
 footer-total = Total

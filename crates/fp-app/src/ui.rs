@@ -15,4 +15,5 @@ pub mod shell;
 mod table;
 pub mod theme;
 pub mod view;
+pub mod wave_view;
 pub mod widgets;
