@@ -67,7 +67,4 @@ The final review's minors, fixed test-first:
 - `max_readout(NaN)` shows a dash;
 - the K-System red zone starts above +4, not at it.
 
-Deferred minors (follow-up review):
-
-- the maximum does not restart when the same entry stops and starts within one conductor tick, or when a looping one-entry playlist segues into itself (a per-start counter would catch both);
-- at the column size the DIN −10 mark gives way to the alignment tick (DIN −9), by the legibility rule.
+Deferred minors (follow-up review): settled in [`2026-09-30-deferred-minors.md`](2026-09-30-deferred-minors.md).

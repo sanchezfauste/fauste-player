@@ -60,6 +60,4 @@
 - Fixed: tests for a silent bucket, non-finite inputs, a huge span and old-version pruning.
 - Ruling: no cap on the column count — it is the widget's pixel width, bounded by the screen — cost if wrong: one large allocation whenever the track, span or width changes at an absurd width.
 - Ruling: the RMS byte pair per bucket stays (about 8 bytes per 10 ms, about 2.9 MB for a 1 h track) — it is what the solid body is drawn from — cost if wrong: a larger cache directory.
-- Deferred minors (follow-up review):
-  - the memo keeps the last track's peaks alive after the player unloads, and an auto id change orphans one entry per layout variant (use a stable id per player and drop the memo when there is no media);
-  - the first start after the upgrade deletes the old unversioned entries before the window opens (the sweep could run on the analysis pool).
+Deferred minors (follow-up review): settled in [`2026-09-30-deferred-minors.md`](2026-09-30-deferred-minors.md).
