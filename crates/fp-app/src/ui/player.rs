@@ -319,16 +319,16 @@ fn info_row(
             let meter = &scene.state.config.meter;
             let loudness = widgets::loudness_line(&telemetry.meter, meter)
                 .map(|(value, _)| t.tr_args("meter-loudness", &[("value", value.into())]))
-                .unwrap_or_default();
+                .unwrap_or_else(|| t.tr("meter-label"));
             let labels = widgets::MeterLabels {
-                loudness,
+                meter: loudness,
                 max: t.tr_args(
                     "meter-max",
                     &[("value", widgets::max_readout(telemetry.meter.max_db).into())],
                 ),
                 max_tip: t.tr("tip-meter-max"),
             };
-            if widgets::vu(ui, &telemetry.meter, meter, &labels) {
+            if widgets::vu(ui, 64.0, &telemetry.meter, meter, &labels) {
                 scene.ctl.reset_meter_max(id);
             }
             let volume = scene.state.player(id).map_or(1.0, |p| p.volume);
@@ -337,7 +337,7 @@ fn info_row(
                 None => t.tr("volume-silent"),
             };
             let tip = t.tr_args("tip-volume", &[("db", db.into())]);
-            if let Some(pos) = widgets::fader(ui, view::fader_from_gain(volume), &tip) {
+            if let Some(pos) = widgets::fader(ui, 64.0, view::fader_from_gain(volume), &tip) {
                 scene
                     .ctl
                     .send(Command::SetVolume(id, view::gain_from_fader(pos)));

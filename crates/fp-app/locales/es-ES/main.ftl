@@ -262,6 +262,7 @@ loudness-short-term = Corto plazo (3 s)
 settings-loudness-target = Objetivo de sonoridad
 settings-hint-loudness-target = La lectura se ve en verde a ±1 LU del objetivo (EBU R128: −23 LUFS).
 meter-loudness = Sonoridad { $value } LUFS
+meter-label = Medidor de nivel
 meter-max = Máximo { $value } dBFS
 tip-meter-max = Nivel más alto desde que empezó a sonar la pista. Haz clic para reiniciarlo.
 tip-on-air-elsewhere = En el aire en el reproductor { $n }
