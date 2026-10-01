@@ -21,7 +21,7 @@ struct Bridge {
 impl Bridge {
     /// The cached analysis of `track`, read from disk (blocking).
     fn analysis(&self, track: TrackId) -> Option<fp_analysis::Analysis> {
-        let model = self.conductor.model.load();
+        let model = self.conductor.model.load_full();
         let path = &model.library.get(track)?.path;
         self.cache.load(path, &model.config.analysis)
     }

@@ -474,6 +474,10 @@ pub async fn reset_markers(State(ctx): State<Ctx>, Path(raw): Path<String>) -> R
     run_edit(&ctx, Edit::ResetMarkers(TrackId(id(&raw)?)))
 }
 
+pub async fn method_not_allowed() -> ApiError {
+    ApiError::MethodNotAllowed
+}
+
 pub async fn not_found() -> ApiError {
     ApiError::NotFound
 }

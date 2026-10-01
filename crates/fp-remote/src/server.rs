@@ -19,6 +19,8 @@ use crate::http::{Ctx, EVENT_BUFFER, router};
 
 /// How often the configuration in the snapshot is looked at.
 const CONFIG_POLL: Duration = Duration::from_millis(250);
+/// How often a server whose address could not be bound tries again.
+const BIND_RETRY: Duration = Duration::from_secs(2);
 /// How long open requests may take to finish when the server stops.
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
 
@@ -117,7 +119,9 @@ struct Running {
 impl Running {
     async fn stop(self) {
         if let Some(streams) = &self.streams {
-            let _ = streams.send(true);
+            // `send_replace` keeps the value even with no stream open, so a
+            // stream that starts now sees it.
+            streams.send_replace(true);
         }
         let _ = self.shutdown.send(());
         let mut task = self.task;
@@ -142,8 +146,19 @@ async fn supervise(
     let mut applied_osc: Option<OscRemoteConfig> = None;
     let mut osc: Option<Running> = None;
     let mut current = RemoteStatus::default();
+    let mut tried = tokio::time::Instant::now();
     loop {
         let remote = control.model().config.remote.clone();
+        // A port that was busy may have been freed: try it again.
+        if tried.elapsed() >= BIND_RETRY {
+            tried = tokio::time::Instant::now();
+            if matches!(current.http, ServerStatus::Error(ServerError::Bind(_))) {
+                applied = None;
+            }
+            if matches!(current.osc, ServerStatus::Error(ServerError::Bind(_))) {
+                applied_osc = None;
+            }
+        }
         if applied.as_ref() != Some(&remote.http) {
             if let Some(server) = running.take() {
                 server.stop().await;
@@ -202,7 +217,11 @@ async fn publish(control: Arc<dyn RemoteControl>, events: broadcast::Sender<Arc<
         }
         let every = Duration::from_millis(model.config.remote.events.position_interval_ms.into());
         if last_position.elapsed() >= every {
-            last_position = tokio::time::Instant::now();
+            // Keep the cadence: advance by the interval, unless far behind.
+            last_position += every;
+            if last_position.elapsed() >= every {
+                last_position = tokio::time::Instant::now();
+            }
             if let Some(p) = events::position(&model, &playback) {
                 let _ = events.send(Arc::new(Envelope::new(
                     playback.revision,

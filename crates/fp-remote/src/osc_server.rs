@@ -33,7 +33,7 @@ pub(crate) async fn run(
     let mut buf = vec![0u8; MAX_PACKET];
     let ttl = Duration::from_secs(config.subscription_ttl_secs.into());
     let mut subs = Subscribers::new(config.max_subscribers as usize, ttl);
-    let mut shape: Option<(usize, Option<CartPageId>)> = None;
+    let mut shape: Option<(usize, Option<CartPageId>, usize)> = None;
     let log = Throttle::default();
     let mut expiry = tokio::time::interval(EXPIRY_CHECK);
     loop {
@@ -112,16 +112,18 @@ async fn push(
     socket: &UdpSocket,
     control: &dyn RemoteControl,
     subs: &mut Subscribers,
-    shape: &mut Option<(usize, Option<CartPageId>)>,
+    shape: &mut Option<(usize, Option<CartPageId>, usize)>,
     log: &Throttle,
 ) {
     if subs.is_empty() {
         return;
     }
     let model = control.model();
+    let shown = model.cartwall.shown_page();
     let now = (
         model.players.len(),
-        model.cartwall.shown_page().map(|p| p.id),
+        shown.map(|p| p.id),
+        shown.map_or(0, |p| p.carts.len()),
     );
     if *shape != Some(now) {
         subs.reset();

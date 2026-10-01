@@ -156,3 +156,45 @@ fn disabling_osc_closes_the_socket_and_dropping_stops_it() {
     assert!(UdpSocket::bind(("127.0.0.1", port)).is_ok(), "port freed");
     drop(handle);
 }
+
+#[test]
+fn a_grid_resize_sends_everything_again() {
+    let fake = FakeControl::new(demo_state());
+    enabled(&fake);
+    let handle = spawn(fake.clone()).unwrap();
+    let to = osc_addr(&handle);
+    let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+    send(&sock, to, "/fauste/subscribe", vec![]);
+    let mut buf = [0u8; 65536];
+    sock.set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
+    let mut first = 0;
+    while sock.recv_from(&mut buf).is_ok() {
+        first += 1;
+    }
+    assert!(first > 0, "no dump");
+    fake.edit(|s| {
+        let page = s.cartwall.pages[0].id;
+        let (rows, cols) = (s.cartwall.pages[0].rows, s.cartwall.pages[0].cols);
+        fp_model::apply(
+            s,
+            Command::ResizeCartPage {
+                page,
+                rows: rows + 1,
+                cols,
+            },
+        )
+        .unwrap();
+    });
+    sock.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        assert!(Instant::now() < deadline, "no full dump after the resize");
+        let (n, _) = sock.recv_from(&mut buf).unwrap();
+        if let Ok((_, OscPacket::Message(m))) = decoder::decode_udp(&buf[..n])
+            && m.addr == "/fauste/player/1/transport"
+        {
+            break;
+        }
+    }
+}

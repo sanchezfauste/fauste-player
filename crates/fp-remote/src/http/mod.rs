@@ -159,8 +159,12 @@ pub fn router(ctx: Ctx) -> Router {
         .route("/carts/{id}/cue", put(h::cart_cue));
     let config = ctx.config.clone();
     Router::new()
-        .nest("/api/v1", api)
+        .nest(
+            "/api/v1",
+            api.method_not_allowed_fallback(h::method_not_allowed),
+        )
         .fallback(h::not_found)
+        .method_not_allowed_fallback(h::method_not_allowed)
         .layer(middleware::from_fn_with_state(ctx.clone(), guard::guard))
         .layer(DefaultBodyLimit::max(config.max_body_bytes as usize))
         .layer(cors(&config))

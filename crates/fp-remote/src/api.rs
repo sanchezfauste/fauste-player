@@ -48,6 +48,7 @@ pub enum ApiError {
     Unavailable(String),
     PayloadTooLarge,
     UnsupportedMediaType,
+    MethodNotAllowed,
     Busy,
 }
 
@@ -58,6 +59,7 @@ impl ApiError {
             Self::Unauthorized => 401,
             Self::ForbiddenOrigin => 403,
             Self::NotFound | Self::NotAnalyzed => 404,
+            Self::MethodNotAllowed => 405,
             Self::Unavailable(_) => 409,
             Self::PayloadTooLarge => 413,
             Self::UnsupportedMediaType => 415,
@@ -75,6 +77,7 @@ impl ApiError {
             Self::Unavailable(_) => "unavailable",
             Self::PayloadTooLarge => "payload_too_large",
             Self::UnsupportedMediaType => "unsupported_media_type",
+            Self::MethodNotAllowed => "method_not_allowed",
             Self::Busy => "busy",
         }
     }
@@ -88,6 +91,7 @@ impl ApiError {
             Self::NotAnalyzed => "the track has not been analysed yet".to_owned(),
             Self::PayloadTooLarge => "the request body is too large".to_owned(),
             Self::UnsupportedMediaType => "the body must be application/json".to_owned(),
+            Self::MethodNotAllowed => "this resource does not take that method".to_owned(),
             Self::Busy => "the player is busy; try again".to_owned(),
         }
     }
