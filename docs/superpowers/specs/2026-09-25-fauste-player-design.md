@@ -177,7 +177,7 @@ A player has:
     - it shows elapsed cue time in blue;
     - it never affects the Main output.
 16. **Keyboard.** Keys `1`–`9` press Play on players 1–9 (shortcuts become remappable in Phase 2). `Delete`/`Backspace` removes the selected entry, subject to rule 13. `Esc` closes menus and dialogs.
-17. **Countdown** shows `-remaining` to `cue_out`, with tenths, and `elapsed / total` on the row under the transport. During the last `end_warning_secs` (default 10) the countdown turns red.
+17. **Countdown** shows `-remaining` to `cue_out`, with tenths, and `elapsed / total` on the row under the waveform. During the last `end_warning_secs` (default 10) the countdown turns red.
 18. **Intro indicator.**
     - Shown only if the track has a manual `intro_end`.
     - While `position < intro_end`, a blue "INTRO nn.n" badge counts down, and it blinks during the last 3 s.
@@ -426,8 +426,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
   - **Transport:**
     - Play/NEXT button spanning 2 rows;
     - a 3×2 grid, 6 px gaps, all equal size: Previous, Stop, Pause on top; Restart, Fade stop, Stop-after-current below. Buttons whose action is unavailable (rule 26) are dimmed and inert, the Play button and the header's CUE included;
-    - big countdown with tenths;
-    - `elapsed / total` on a row under the transport, right-aligned.
+    - big countdown with tenths.
   - **Waveform:**
     - played/unplayed colours, intro/outro shading, dashed amber MIX marker, playhead;
     - drawn continuously, one column per pixel, as audio editors draw it: the peak envelope in the colour dimmed, and the RMS level of the same span as a solid body inside it. On a loud master the peaks fill the height but the body still shows the track's dynamics. Both are linear in amplitude and symmetric about the centre line; a column's peak is the largest of its buckets, its RMS the root of their mean square;
@@ -435,6 +434,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - hover time tooltip, click to seek; press-and-drag previews and seeks on release inside (outside or Esc cancels; Alt-drag edits markers);
     - wheel zoom around the pointer down to one bucket per pixel, Shift or sideways wheel pans, a "Full view" button while zoomed; the view follows the playhead unless moved within `ui.follow_current_grace_secs`, and resets on a new entry (feedback spec §3.3);
     - intro and outro badges per §3 (rules 18 and 19).
+  - `elapsed / total` on a row under the waveform, right-aligned.
   - **Playlist tabs:** reordering and dropping entries on a tab appends them.
   - **Track table:**
     - `egui_extras::TableBuilder` with resizable `#`, Title, Artist and Duration columns (resize handles padded away from labels); widths are stored per player as fractions of the table and laid out every frame, so the columns fill the table and keep their proportions on resize (`#` and Duration have content minimums, Title:Artist default 60:40);

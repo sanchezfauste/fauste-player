@@ -75,7 +75,7 @@ during a fade. A player remembers the last 50 tracks it played
 
 The large number is the time left until the end of the track (its cue-out),
 with tenths. The elapsed time and the total are on the row under the
-transport, on the right. During the last
+waveform, on the right. During the last
 seconds before the end (10 by default, set in Settings) the countdown blinks
 red.
 

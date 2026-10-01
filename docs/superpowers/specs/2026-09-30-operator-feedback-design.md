@@ -224,7 +224,7 @@ The layout follows mockup C, as approved:
   the waveform). From left to right: the scale labels, the L and R bars side by
   side, then the fader. The maximum readout sits above the bars, and the
   loudness line below them when it is on.
-- **Time.** `elapsed / total` moves under the transport, right-aligned.
+- **Time.** `elapsed / total` moves under the transport, right-aligned (later moved under the waveform, plan 4 of the remote control).
 - **Transport grid (plan 3).** The grid becomes 3×2 in plan 3, together with
   the buttons it adds: its first column holds Previous (top) and Restart
   (bottom). Stop, Pause, Fade stop and Stop after current keep their relative

@@ -79,8 +79,8 @@ pub(crate) fn column(
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, id, index, &pv);
             top_block(ui, scene, covers, id, &pv, &telemetry);
-            time_row(ui, &pv);
             wave(ui, scene, view_state, id, &pv);
+            time_row(ui, &pv);
         });
     follow_current(scene, view_state, id, player.playlist);
     tabs(ui, scene, view_state, id, player.playlist);
@@ -428,7 +428,7 @@ fn meter_column(
     }
 }
 
-/// `elapsed / total` under the transport, right-aligned (mockup C).
+/// `elapsed / total` under the waveform, right-aligned, close to it.
 fn time_row(ui: &mut Ui, pv: &PlayerView) {
     ui.add_space(-4.0);
     ui.allocate_ui_with_layout(
