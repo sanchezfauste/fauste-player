@@ -34,6 +34,20 @@ const CUE_TONE_HZ: f32 = 440.0;
 const SAMPLE_RATES: [u32; 6] = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000];
 const BUFFER_SIZES: [u32; 7] = [64, 128, 256, 512, 1024, 2048, 4096];
 
+/// The Settings window has one size whatever the section (feedback 2 spec
+/// O3); the section body scrolls inside it.
+const WINDOW_SIZE: egui::Vec2 = vec2(900.0, 640.0);
+/// Room kept around the window inside the main window.
+const SCREEN_MARGIN: egui::Vec2 = vec2(48.0, 82.0);
+const MIN_WINDOW_SIZE: egui::Vec2 = vec2(320.0, 300.0);
+
+/// `WINDOW_SIZE`, shrunk to fit `screen`.
+pub(crate) fn window_size(screen: egui::Vec2) -> egui::Vec2 {
+    (screen - SCREEN_MARGIN)
+        .min(WINDOW_SIZE)
+        .max(MIN_WINDOW_SIZE)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum Section {
     #[default]
@@ -180,11 +194,7 @@ pub(crate) fn show(
     }
     let t = scene.i18n;
     let mut open = true;
-    let screen = ctx.content_rect();
-    let size = vec2(
-        (screen.width() - 48.0).clamp(320.0, 980.0),
-        (screen.height() - 82.0).clamp(300.0, 680.0),
-    );
+    let size = window_size(ctx.content_rect().size());
     let modal = egui::Modal::new(egui::Id::new("settings"))
         .frame(egui::Frame::new().fill(theme::SURFACE))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
@@ -228,7 +238,7 @@ pub(crate) fn show(
                     ui.painter().rect_filled(line, 0.0, theme::NEUTRAL_800);
                     ui.vertical(|ui| {
                         ui.set_min_size(vec2(ui.available_width(), body_height));
-                        egui::ScrollArea::vertical()
+                        egui::ScrollArea::both()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 egui::Frame::new()
@@ -1502,5 +1512,17 @@ fn pick_folder(scene: &Scene<'_>) -> Option<Receiver<Option<PathBuf>>> {
             tracing::error!(error = %e, "could not open the folder dialog");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_window_has_one_size_clamped_to_the_screen() {
+        assert_eq!(window_size(vec2(1600.0, 940.0)), WINDOW_SIZE);
+        assert_eq!(window_size(vec2(700.0, 500.0)), vec2(652.0, 418.0));
+        assert_eq!(window_size(vec2(100.0, 100.0)), MIN_WINDOW_SIZE);
     }
 }

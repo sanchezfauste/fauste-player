@@ -80,7 +80,6 @@ fn an_up_to_date_library_shows_no_notice() {
 #[test]
 fn settings_offers_the_outdated_tracks_too() {
     let (tx, rx) = crossbeam_channel::bounded(4);
-    // Tall enough for the whole Analysis section.
     let (mut h, _) = support::harness_sized(library(5, 2), egui::vec2(1000.0, 1600.0), move |ui| {
         ui.with_services(tx)
     });
@@ -91,6 +90,10 @@ fn settings_offers_the_outdated_tracks_too() {
     h.run_steps(2);
     h.get_by_role_and_label(Role::Button, "Analysis").click();
     h.run_steps(2);
+    // The window has a fixed size: the section body scrolls.
+    h.get_by_role_and_label(Role::Button, "Analyse outdated tracks (2)")
+        .scroll_to_me();
+    h.run_steps(3);
     h.get_by_role_and_label(Role::Button, "Analyse outdated tracks (2)")
         .click();
     h.run_steps(2);
