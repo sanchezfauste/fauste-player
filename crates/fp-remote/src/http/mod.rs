@@ -15,7 +15,7 @@ use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::middleware;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, patch, post, put};
 use fp_model::HttpRemoteConfig;
 use serde_json::json;
 use tokio::sync::{broadcast, watch};
@@ -127,8 +127,25 @@ pub fn router(ctx: Ctx) -> Router {
             put(h::stop_after_current),
         )
         .route("/players/{id}/playlist", put(h::show_playlist))
-        .route("/playlists", get(h::playlists))
-        .route("/playlists/{id}", get(h::playlist))
+        .route("/playlists", get(h::playlists).post(h::create_playlist))
+        .route(
+            "/playlists/{id}",
+            get(h::playlist)
+                .patch(h::rename_playlist)
+                .delete(h::delete_playlist),
+        )
+        .route("/playlists/{id}/entries", post(h::insert_entry))
+        .route("/entries/{id}", delete(h::remove_entry))
+        .route("/entries/{id}/move", post(h::move_entry))
+        .route("/entries/{id}/duplicate", post(h::duplicate_entry))
+        .route("/cartwall/pages", post(h::create_cart_page))
+        .route(
+            "/cartwall/pages/{id}",
+            patch(h::edit_cart_page).delete(h::delete_cart_page),
+        )
+        .route("/cartwall/pages/{id}/carts/{index}", put(h::set_cart))
+        .route("/tracks/{id}/markers/{kind}", put(h::set_marker))
+        .route("/tracks/{id}/markers/reset", post(h::reset_markers))
         .route("/entries/{id}/repeat", put(h::entry_repeat))
         .route("/entries/{id}/stop-after", put(h::entry_stop_after))
         .route("/tracks/{id}", get(h::track))

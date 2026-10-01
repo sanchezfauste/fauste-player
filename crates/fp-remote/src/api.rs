@@ -6,8 +6,8 @@
 
 use fp_model::volume::gain_from_fader;
 use fp_model::{
-    AppState, CartId, CartPageId, Command, EntryId, ModelError, PlayMode, PlayerId, PlaylistId,
-    Transport, command_available,
+    AppState, CartEdit, CartId, CartPageId, Command, EntryId, MarkerKind, ModelError, PlayMode,
+    PlayerId, PlaylistId, TrackId, Transport, command_available,
 };
 
 /// One action of a remote client.
@@ -242,4 +242,215 @@ fn dry_run(state: &AppState, commands: &[Command]) -> Result<(), ApiError> {
         fp_model::apply(&mut copy, command.clone()).map_err(ApiError::from_model)?;
     }
     Ok(())
+}
+
+/// One editing action of a remote client (remote control spec §3.4).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Edit {
+    CreatePlaylist(String),
+    RenamePlaylist(PlaylistId, String),
+    DeletePlaylist(PlaylistId),
+    InsertTrack {
+        playlist: PlaylistId,
+        index: usize,
+        track: TrackId,
+    },
+    RemoveEntry(EntryId),
+    MoveEntry {
+        entry: EntryId,
+        playlist: PlaylistId,
+        index: usize,
+    },
+    DuplicateEntry(EntryId),
+    CreateCartPage(String),
+    EditCartPage {
+        page: CartPageId,
+        name: Option<String>,
+        rows: Option<u16>,
+        cols: Option<u16>,
+    },
+    DeleteCartPage(CartPageId),
+    SetCart {
+        page: CartPageId,
+        index: usize,
+        edit: CartEdit,
+        track: Option<TrackId>,
+    },
+    SetMarker {
+        track: TrackId,
+        kind: MarkerKind,
+        secs: Option<f64>,
+    },
+    ResetMarkers(TrackId),
+}
+
+/// The commands for `edit` in `state`, already known to be accepted by it.
+pub fn plan_edit(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError> {
+    let commands = edit_commands(state, edit)?;
+    dry_run(state, &commands)?;
+    Ok(commands)
+}
+
+fn name(raw: &str) -> Result<String, ApiError> {
+    let name = raw.trim();
+    if name.is_empty() {
+        Err(ApiError::BadRequest(
+            "the name must not be empty".to_owned(),
+        ))
+    } else {
+        Ok(name.to_owned())
+    }
+}
+
+fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError> {
+    let list_len = |id: PlaylistId| {
+        state
+            .playlists
+            .get(id)
+            .map(|l| l.entries.len())
+            .ok_or(ApiError::NotFound)
+    };
+    let track = |id: TrackId| state.library.get(id).ok_or(ApiError::NotFound);
+    let page = |id: CartPageId| state.cartwall.page(id).ok_or(ApiError::NotFound);
+    Ok(match edit {
+        Edit::CreatePlaylist(n) => vec![Command::CreatePlaylist { name: name(&n)? }],
+        Edit::RenamePlaylist(playlist, n) => {
+            list_len(playlist)?;
+            vec![Command::RenamePlaylist {
+                playlist,
+                name: name(&n)?,
+            }]
+        }
+        Edit::DeletePlaylist(playlist) => {
+            list_len(playlist)?;
+            vec![Command::DeletePlaylist(playlist)]
+        }
+        Edit::InsertTrack {
+            playlist,
+            index,
+            track: t,
+        } => {
+            let len = list_len(playlist)?;
+            track(t)?;
+            vec![Command::InsertTracks {
+                playlist,
+                index: index.min(len),
+                tracks: vec![t],
+            }]
+        }
+        Edit::RemoveEntry(entry) => {
+            state.playlists.entry(entry).ok_or(ApiError::NotFound)?;
+            vec![Command::RemoveEntry(entry)]
+        }
+        Edit::MoveEntry {
+            entry,
+            playlist,
+            index,
+        } => {
+            state.playlists.entry(entry).ok_or(ApiError::NotFound)?;
+            let len = list_len(playlist)?;
+            vec![Command::MoveEntry {
+                entry,
+                to: playlist,
+                index: index.min(len),
+            }]
+        }
+        Edit::DuplicateEntry(entry) => {
+            state.playlists.entry(entry).ok_or(ApiError::NotFound)?;
+            vec![Command::DuplicateEntry(entry)]
+        }
+        Edit::CreateCartPage(n) => vec![Command::CreateCartPage { name: name(&n)? }],
+        Edit::EditCartPage {
+            page: id,
+            name: new_name,
+            rows,
+            cols,
+        } => {
+            let p = page(id)?;
+            if new_name.is_none() && rows.is_none() && cols.is_none() {
+                return Err(ApiError::BadRequest("nothing to change".to_owned()));
+            }
+            let mut out = Vec::new();
+            if let Some(n) = new_name {
+                out.push(Command::RenameCartPage {
+                    page: id,
+                    name: name(&n)?,
+                });
+            }
+            if rows.is_some() || cols.is_some() {
+                let limits = &state.config.limits;
+                let rows = rows.unwrap_or(p.rows);
+                let cols = cols.unwrap_or(p.cols);
+                if !(1..=limits.max_cart_rows).contains(&rows)
+                    || !(1..=limits.max_cart_cols).contains(&cols)
+                {
+                    return Err(ApiError::BadRequest(format!(
+                        "rows must be within 1..={} and cols within 1..={}",
+                        limits.max_cart_rows, limits.max_cart_cols
+                    )));
+                }
+                out.push(Command::ResizeCartPage {
+                    page: id,
+                    rows,
+                    cols,
+                });
+            }
+            out
+        }
+        Edit::DeleteCartPage(id) => {
+            page(id)?;
+            vec![Command::DeleteCartPage(id)]
+        }
+        Edit::SetCart {
+            page: id,
+            index,
+            edit,
+            track: wanted,
+        } => {
+            let cart = page(id)?.carts.get(index).ok_or(ApiError::NotFound)?;
+            let mut out = vec![Command::SetCart {
+                page: id,
+                index,
+                edit,
+            }];
+            match wanted {
+                Some(t) if cart.track != Some(t) => {
+                    track(t)?;
+                    out.push(Command::AssignCartTrack {
+                        page: id,
+                        index,
+                        track: t,
+                    });
+                }
+                None if cart.track.is_some() => {
+                    out.push(Command::ClearCartFile { page: id, index })
+                }
+                _ => {}
+            }
+            out
+        }
+        Edit::SetMarker {
+            track: t,
+            kind,
+            secs,
+        } => {
+            track(t)?;
+            if let Some(s) = secs
+                && !(s.is_finite() && s >= 0.0)
+            {
+                return Err(ApiError::BadRequest(
+                    "secs must be a position in the track".to_owned(),
+                ));
+            }
+            vec![Command::SetMarker {
+                track: t,
+                kind,
+                secs,
+            }]
+        }
+        Edit::ResetMarkers(t) => {
+            track(t)?;
+            vec![Command::ResetMarkers { track: t }]
+        }
+    })
 }
