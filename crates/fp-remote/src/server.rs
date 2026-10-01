@@ -61,6 +61,12 @@ impl RemoteHandle {
     pub fn status(&self) -> RemoteStatus {
         (**self.status.load()).clone()
     }
+
+    /// Where the status is published, for a reader that outlives a borrow
+    /// of the handle (the interface).
+    pub fn status_cell(&self) -> Arc<ArcSwap<RemoteStatus>> {
+        self.status.clone()
+    }
 }
 
 impl Drop for RemoteHandle {
