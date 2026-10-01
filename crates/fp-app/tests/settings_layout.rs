@@ -148,3 +148,36 @@ fn a_small_screen_keeps_one_size_inside_it() {
     );
     assert!(rights[0] <= small.x - 16.0);
 }
+
+fn left_of(h: &Harness<'static, AppUi>, role: Role, label: &str) -> f32 {
+    h.get_by_role_and_label(role, label).rect().left()
+}
+
+#[test]
+fn rows_share_one_label_column() {
+    let mut h = open_settings(SCREEN, state(1, 1));
+    open(&mut h, "Analysis");
+    let short = left_of(&h, Role::Slider, "Trim margin");
+    let long = left_of(&h, Role::Slider, "Minimum length for mix and outro markers");
+    assert!((short - long).abs() < 0.5, "{short} vs {long}");
+}
+
+#[test]
+fn outputs_test_buttons_line_up_in_columns() {
+    let mut h = open_settings(SCREEN, routed());
+    open(&mut h, "Audio outputs");
+    wait_for_devices(&mut h);
+    for label in ["Test Main", "Test Cue"] {
+        let lefts: Vec<f32> = h.get_all_by_label(label).map(|n| n.rect().left()).collect();
+        // Player 1 (routed), player 2 (not routed) and the cartwall.
+        assert_eq!(lefts.len(), 3, "{label}");
+        assert!(
+            lefts.iter().all(|x| (x - lefts[0]).abs() < 0.5),
+            "{label}: {lefts:?}"
+        );
+    }
+    let main = h.get_all_by_label("Test Main").next().unwrap().rect();
+    let cue = h.get_all_by_label("Test Cue").next().unwrap().rect();
+    assert!((main.left() - cue.left()).abs() < 0.5);
+    assert!((main.right() - cue.right()).abs() < 0.5);
+}
