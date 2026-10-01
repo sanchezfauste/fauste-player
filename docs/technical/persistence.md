@@ -260,3 +260,4 @@ See [Remote control API](remote-api.md).
 | `reconnect_interval_ms` | 2000 | device retry period |
 | `gain_smoothing_ms` | 20 | volume smoothing |
 | `save_debounce_ms` | 1000 | autosave delay |
+| `missing_recheck_ms` | 30000 | how often files not found are looked for again |
