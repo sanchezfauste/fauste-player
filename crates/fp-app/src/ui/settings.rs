@@ -374,6 +374,9 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
                 }
             });
             if response.clicked() {
+                if st.section == Section::Remote && section != Section::Remote {
+                    remote::flush(scene, &mut st.remote);
+                }
                 st.section = section;
             }
         }

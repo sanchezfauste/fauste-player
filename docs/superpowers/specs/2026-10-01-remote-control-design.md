@@ -415,6 +415,9 @@ fp-app ──(Bridge: impl RemoteControl)──► fp-remote
   in `config.json` only, documented in the user guide.
 - Saving applies at once (the remote thread follows the model's
   configuration); no restart.
+- Text and number fields apply when they lose focus, when another section
+  is opened and when Settings closes; an invalid value is dropped and the
+  one in use kept; Escape cancels the edit.
 - All strings are in both locales.
 
 ---
