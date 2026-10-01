@@ -9,7 +9,7 @@ use fp_model::{MidiAction, MidiTrigger, ShortcutAction};
 use super::super::app::Scene;
 use super::super::theme;
 use super::super::widgets::font;
-use super::{SettingsState, button, heading, row, update};
+use super::{SettingsState, button, row, update};
 
 /// The actions a player offers to MIDI, with their names.
 fn actions(n: u16) -> [(MidiAction, &'static str); 8] {
@@ -65,7 +65,6 @@ pub(super) fn section(
     midi: Option<&MidiHandle>,
 ) {
     let t = scene.i18n;
-    heading(ui, &t.tr("settings-tab-midi"));
     let Some(midi) = midi else {
         text(ui, t.tr("midi-unavailable"), theme::NEUTRAL_400);
         return;

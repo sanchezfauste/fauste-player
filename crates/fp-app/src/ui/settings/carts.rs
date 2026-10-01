@@ -14,7 +14,7 @@ use super::super::cartwall::page_name;
 use super::super::files::AUDIO_EXTENSIONS;
 use super::super::theme;
 use super::super::widgets::{self, TileStyle, font};
-use super::{SettingsState, heading, labelled_row, row, toggle};
+use super::{SettingsState, labelled_row, row, toggle};
 
 #[derive(Default)]
 pub(crate) struct CartsState {
@@ -154,7 +154,6 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let c = &mut st.carts;
     poll(scene, c);
-    heading(ui, &t.tr("settings-tab-cartwall"));
     let wall = &scene.state.cartwall;
     let page = c
         .page

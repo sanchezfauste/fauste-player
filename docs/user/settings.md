@@ -3,6 +3,11 @@
 Open **Settings** in the top bar. Close it with **Close** or `Esc`. Most
 changes apply at once and are saved automatically.
 
+The Players, Meters, Analysis and Keyboard shortcuts sections have a
+**Restore defaults** button in their header. It asks for confirmation and then
+resets only that section (Players keeps the number of players and the
+language). Audio outputs, Playlists, Cartwall, MIDI and Remote have none.
+
 ## Audio outputs
 
 Changes in this section apply **the next time the application starts**.

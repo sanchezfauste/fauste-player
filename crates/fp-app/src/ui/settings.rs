@@ -12,6 +12,7 @@ use egui_phosphor::regular as icon;
 use fp_backends::{AudioBackend, Availability, DeviceInfo};
 use fp_model::{
     Command, Config, OutputDevice, PlayMode, PlayerId, PlayerRoutes, PlaylistId, Route,
+    SettingsSection,
 };
 
 use super::app::Scene;
@@ -78,6 +79,8 @@ pub(crate) struct SettingsState {
     /// The MIDI action waiting for a control (MIDI learn).
     pub(super) midi_learning: Option<fp_model::MidiAction>,
     pub(super) remote: remote::RemoteState,
+    /// The section whose "Restore defaults" waits for an answer.
+    pub(super) confirm_restore: Option<SettingsSection>,
     backends: Option<Vec<BackendChoice>>,
     loading: Option<Receiver<Vec<BackendChoice>>>,
     names: HashMap<PlaylistId, String>,
@@ -90,7 +93,7 @@ impl SettingsState {
     /// True while Settings waits for a key to bind (Esc then cancels the
     /// capture, not the dialog).
     pub fn capturing(&self) -> bool {
-        self.keys.capturing() || self.midi_learning.is_some()
+        self.keys.capturing() || self.midi_learning.is_some() || self.confirm_restore.is_some()
     }
 
     /// Opens the Cartwall section on one cart (`Edit…` on a cart button).
@@ -238,11 +241,17 @@ pub(crate) fn show(
                     ui.painter().rect_filled(line, 0.0, theme::NEUTRAL_800);
                     ui.vertical(|ui| {
                         ui.set_min_size(vec2(ui.available_width(), body_height));
+                        section_header(ui, scene, st);
                         egui::ScrollArea::both()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 egui::Frame::new()
-                                    .inner_margin(egui::Margin::symmetric(24, 20))
+                                    .inner_margin(egui::Margin {
+                                        left: 24,
+                                        right: 24,
+                                        top: 0,
+                                        bottom: 20,
+                                    })
                                     .show(ui, |ui| {
                                         ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
                                         match st.section {
@@ -314,6 +323,7 @@ pub(crate) fn show(
                 },
             );
         });
+    confirm_restore(ctx, scene, st);
     if modal.should_close() && !capturing {
         open = false;
     }
@@ -331,25 +341,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
         ui.painter()
             .rect_filled(ui.max_rect(), 0.0, theme::NEUTRAL_900);
         ui.add_space(8.0);
-        for (section, glyph, key) in [
-            (Section::Outputs, icon::SPEAKER_HIGH, "settings-tab-outputs"),
-            (
-                Section::Players,
-                icon::SLIDERS_HORIZONTAL,
-                "settings-tab-players",
-            ),
-            (Section::Meters, icon::GAUGE, "settings-tab-meters"),
-            (Section::Analysis, icon::WAVEFORM, "settings-tab-analysis"),
-            (Section::Playlists, icon::PLAYLIST, "settings-tab-playlists"),
-            (
-                Section::Cartwall,
-                icon::SQUARES_FOUR,
-                "settings-tab-cartwall",
-            ),
-            (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
-            (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
-            (Section::Remote, icon::BROADCAST, "settings-tab-remote"),
-        ] {
+        for (section, glyph, key) in SECTIONS {
             let on = st.section == section;
             let label = t.tr(key);
             let style = TileStyle {
@@ -414,16 +406,123 @@ fn button(ui: &mut Ui, text: &str) -> bool {
     .clicked()
 }
 
-fn heading(ui: &mut Ui, text: &str) {
-    ui.add(
-        egui::Label::new(
-            RichText::new(text)
-                .font(font_medium(20.0))
-                .color(theme::TEXT),
-        )
-        .selectable(false),
+/// Every section: its nav glyph and its title.
+const SECTIONS: [(Section, &str, &str); 9] = [
+    (Section::Outputs, icon::SPEAKER_HIGH, "settings-tab-outputs"),
+    (
+        Section::Players,
+        icon::SLIDERS_HORIZONTAL,
+        "settings-tab-players",
+    ),
+    (Section::Meters, icon::GAUGE, "settings-tab-meters"),
+    (Section::Analysis, icon::WAVEFORM, "settings-tab-analysis"),
+    (Section::Playlists, icon::PLAYLIST, "settings-tab-playlists"),
+    (
+        Section::Cartwall,
+        icon::SQUARES_FOUR,
+        "settings-tab-cartwall",
+    ),
+    (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
+    (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
+    (Section::Remote, icon::BROADCAST, "settings-tab-remote"),
+];
+
+const SECTION_HEADER_HEIGHT: f32 = 56.0;
+
+/// The model section a Settings section restores; `None` where the spec
+/// gives no button (hardware, security, show data).
+fn restorable(section: Section) -> Option<SettingsSection> {
+    match section {
+        Section::Players => Some(SettingsSection::Players),
+        Section::Meters => Some(SettingsSection::Meters),
+        Section::Analysis => Some(SettingsSection::Analysis),
+        Section::Shortcuts => Some(SettingsSection::Shortcuts),
+        Section::Outputs
+        | Section::Playlists
+        | Section::Cartwall
+        | Section::Midi
+        | Section::Remote => None,
+    }
+}
+
+/// The section's title, and "Restore defaults" on the right where the
+/// section has one. It stays put while the body scrolls.
+fn section_header(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+    let t = scene.i18n;
+    let key = SECTIONS
+        .iter()
+        .find(|(s, _, _)| *s == st.section)
+        .map_or("settings-title", |(_, _, key)| *key);
+    let width = ui.available_width();
+    ui.allocate_ui_with_layout(
+        vec2(width, SECTION_HEADER_HEIGHT),
+        Layout::left_to_right(Align::Center),
+        |ui| {
+            ui.set_width(width);
+            ui.add_space(24.0);
+            ui.add(
+                egui::Label::new(
+                    RichText::new(t.tr(key))
+                        .font(font_medium(20.0))
+                        .color(theme::TEXT),
+                )
+                .selectable(false),
+            );
+            if let Some(section) = restorable(st.section) {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.add_space(24.0);
+                    if button(ui, &t.tr("settings-restore")) {
+                        st.confirm_restore = Some(section);
+                    }
+                });
+            }
+        },
     );
-    ui.add_space(8.0);
+}
+
+/// Asks before restoring; drawn over Settings.
+fn confirm_restore(ctx: &egui::Context, scene: &Scene<'_>, st: &mut SettingsState) {
+    let Some(section) = st.confirm_restore else {
+        return;
+    };
+    let t = scene.i18n;
+    let mut answer = None;
+    let modal = egui::Modal::new(egui::Id::new("settings-restore"))
+        .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
+        .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.5))
+        .show(ctx, |ui| {
+            ui.set_width(360.0);
+            ui.spacing_mut().item_spacing = vec2(8.0, 12.0);
+            ui.add(
+                egui::Label::new(
+                    RichText::new(t.tr("settings-restore-question"))
+                        .font(font(13.0))
+                        .color(theme::TEXT),
+                )
+                .selectable(false)
+                .wrap(),
+            );
+            ui.horizontal(|ui| {
+                if button(ui, &t.tr("settings-restore-cancel")) {
+                    answer = Some(false);
+                }
+                if button(ui, &t.tr("settings-restore-confirm")) {
+                    answer = Some(true);
+                }
+            });
+        });
+    // Esc or a click on the backdrop is "cancel".
+    if answer.is_none() && modal.should_close() {
+        answer = Some(false);
+    }
+    match answer {
+        Some(true) => {
+            scene.ctl.send(Command::RestoreDefaults(section));
+            st.confirm_restore = None;
+        }
+        Some(false) => st.confirm_restore = None,
+        None => {}
+    }
 }
 
 /// The label column of every Settings row (feedback 2 spec O3).
@@ -517,7 +616,6 @@ fn slider<T: egui::emath::Numeric>(
 fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let config = &scene.state.config;
-    heading(ui, &t.tr("settings-tab-outputs"));
     ui.add(
         egui::Label::new(
             RichText::new(format!("{}  {}", icon::INFO, t.tr("settings-restart-note")))
@@ -1036,7 +1134,6 @@ fn device_box(
 fn players(ui: &mut Ui, scene: &Scene<'_>) {
     let t = scene.i18n;
     let config = &scene.state.config;
-    heading(ui, &t.tr("settings-tab-players"));
     let max = config.limits.max_players;
     let mut count = scene.state.players.len();
     let label = t.tr("settings-player-count");
@@ -1197,7 +1294,6 @@ fn toggle(ui: &mut Ui, on: &mut bool, label: &str) -> bool {
 fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
     let t = scene.i18n;
     let a = scene.state.config.analysis.clone();
-    heading(ui, &t.tr("settings-tab-analysis"));
     type Field = (
         &'static str,
         f64,
@@ -1350,7 +1446,6 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
 
 fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
-    heading(ui, &t.tr("settings-tab-playlists"));
     let dir = scene
         .state
         .config

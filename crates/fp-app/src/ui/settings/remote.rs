@@ -12,7 +12,7 @@ use fp_remote::{RemoteStatus, ServerError, ServerStatus};
 use super::super::app::Scene;
 use super::super::theme;
 use super::super::widgets::font;
-use super::{button, heading, labelled_row, update};
+use super::{button, labelled_row, update};
 
 #[derive(Default)]
 pub(crate) struct RemoteState {
@@ -203,7 +203,6 @@ pub(super) fn section(
 ) {
     let t = scene.i18n;
     let st = &mut st.remote;
-    heading(ui, &t.tr("settings-tab-remote"));
     let Some(status) = status else {
         let _ = text(ui, t.tr("remote-unavailable"), theme::NEUTRAL_400);
         return;

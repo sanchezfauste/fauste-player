@@ -5,7 +5,7 @@
 use egui::{Color32, Ui, vec2};
 use fp_model::{LoudnessReadout, MeterBallistics};
 
-use super::{heading, row, slider, toggle, update};
+use super::{row, slider, toggle, update};
 use crate::ui::app::Scene;
 use crate::ui::theme;
 use crate::ui::widgets::{self, TileStyle, font};
@@ -24,7 +24,6 @@ const PRESETS: [(MeterBallistics, &str); 8] = [
 pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
     let t = scene.i18n;
     let m = scene.state.config.meter.clone();
-    heading(ui, &t.tr("settings-tab-meters"));
 
     row(
         ui,
