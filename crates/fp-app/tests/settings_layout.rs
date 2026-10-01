@@ -201,3 +201,42 @@ fn a_long_device_name_stays_inside_its_box() {
         assert!(r.left() >= tag.right() - 0.5, "{r:?} vs tag {tag:?}");
     }
 }
+
+#[test]
+fn controls_start_at_the_same_x_in_every_section() {
+    let mut h = open_settings(SCREEN, state(1, 1));
+    open(&mut h, "Players");
+    let players = left_of(&h, Role::Slider, "Fade time");
+
+    let mut with_cart = state(1, 0);
+    let page = with_cart.cartwall.pages[0].id;
+    fp_model::apply(
+        &mut with_cart,
+        fp_model::Command::AssignCartFile {
+            page,
+            index: 0,
+            path: std::path::PathBuf::from("/carts/id.wav"),
+        },
+    )
+    .unwrap();
+    let mut h = open_settings(SCREEN, with_cart);
+    open(&mut h, "Cartwall");
+    let cartwall = left_of(&h, Role::TextInput, "Cart name");
+
+    let cell = Arc::new(arc_swap::ArcSwap::from_pointee(
+        fp_remote::RemoteStatus::default(),
+    ));
+    let (mut h, _) = harness_sized(state(1, 0), SCREEN, move |ui| ui.with_remote_status(cell));
+    h.get_by_label("Settings").click();
+    h.run_steps(3);
+    open(&mut h, "Remote");
+    let remote = h
+        .get_all_by_role_and_label(Role::TextInput, "Address")
+        .next()
+        .unwrap()
+        .rect()
+        .left();
+
+    assert!((players - cartwall).abs() < 0.5, "{players} vs {cartwall}");
+    assert!((players - remote).abs() < 0.5, "{players} vs {remote}");
+}
