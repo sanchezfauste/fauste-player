@@ -291,6 +291,7 @@ file-unreadable-tip = No se puede leer el archivo: { $path }
 
 # About window
 tip-about = Acerca de Fauste Player
+tip-about-name = Acerca de Fauste Player (nombre y versión)
 about-version = Versión { $version }
 about-copyright = Copyright © Marc Sánchez Fauste. Todos los derechos reservados.
 about-bundled = Este programa incluye los siguientes componentes bajo sus propias licencias:

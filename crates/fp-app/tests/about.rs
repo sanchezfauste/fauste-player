@@ -17,6 +17,7 @@ use fp_app::ui::about::{self, NoticeOpener, find_notices, notice_candidates};
 use support::{harness, harness_from, state};
 
 const ABOUT: &str = "About Fauste Player";
+const ABOUT_NAME: &str = "About Fauste Player (name and version)";
 
 fn recorder() -> (NoticeOpener, Arc<Mutex<Vec<PathBuf>>>) {
     let opened = Arc::new(Mutex::new(Vec::new()));
@@ -32,9 +33,23 @@ fn the_top_bar_shows_the_version() {
 }
 
 #[test]
+fn the_info_button_sits_next_to_settings_and_opens_about() {
+    let (mut h, _) = harness(state(1, 1));
+    let button = h.get_by_label(ABOUT);
+    let settings = h.get_by_label_contains("Settings");
+    let (b, s) = (button.rect(), settings.rect());
+    assert!(b.right() <= s.left() && (b.center().y - s.center().y).abs() < 2.0);
+    // A tile next to Settings, not the name area at the far left.
+    assert!(b.width() <= 30.0 && s.left() - b.right() <= 20.0);
+    button.click();
+    h.run_steps(2);
+    assert!(h.query_by_label_contains("All rights reserved").is_some());
+}
+
+#[test]
 fn clicking_the_name_opens_about_and_escape_closes_it() {
     let (mut h, fake) = harness(state(1, 1));
-    h.get_by_label(ABOUT).click();
+    h.get_by_label(ABOUT_NAME).click();
     h.run_steps(2);
     assert!(h.query_by_label_contains("All rights reserved").is_some());
     assert!(

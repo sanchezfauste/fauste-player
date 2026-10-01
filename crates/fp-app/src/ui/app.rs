@@ -933,7 +933,7 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         )
         .selectable(false),
     );
-    let about_label = scene.i18n.tr("tip-about");
+    let about_label = scene.i18n.tr("tip-about-name");
     let response = ui
         .interact(
             name.rect.union(version.rect),
@@ -984,6 +984,26 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         .clicked()
         {
             view_state.settings_open = true;
+        }
+        let about = scene.i18n.tr("tip-about");
+        let style = TileStyle {
+            border: theme::NEUTRAL_800,
+            hover_fill: theme::NEUTRAL_800,
+            ..TileStyle::plain()
+        };
+        if widgets::tile(ui, vec2(24.0, 24.0), &about, true, style, |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                egui_phosphor::regular::INFO,
+                font(14.0),
+                c,
+            );
+        })
+        .on_hover_text(&about)
+        .clicked()
+        {
+            view_state.about_open = true;
         }
     });
 }
