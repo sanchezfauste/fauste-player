@@ -13,5 +13,7 @@ crossbeam-channel.workspace = true
 arc-swap.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+
 [lints]
 workspace = true
