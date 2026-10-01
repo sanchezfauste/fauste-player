@@ -9,8 +9,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
-use fp_model::HttpRemoteConfig;
-use tokio::net::TcpListener;
+use fp_model::{HttpRemoteConfig, OscRemoteConfig};
+use tokio::net::{TcpListener, UdpSocket};
 use tokio::sync::{broadcast, oneshot, watch};
 
 use crate::control::RemoteControl;
@@ -45,6 +45,7 @@ pub enum ServerStatus {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RemoteStatus {
     pub http: ServerStatus,
+    pub osc: ServerStatus,
 }
 
 /// Owns the remote thread; dropping it stops the servers and joins.
@@ -96,8 +97,10 @@ fn run(
         Ok(rt) => rt.block_on(supervise(control, status, stop)),
         Err(e) => {
             tracing::error!(error = %e, "remote control could not start");
+            let failed = ServerStatus::Error(ServerError::Runtime(e.to_string()));
             status.store(Arc::new(RemoteStatus {
-                http: ServerStatus::Error(ServerError::Runtime(e.to_string())),
+                http: failed.clone(),
+                osc: failed,
             }));
         }
     }
@@ -136,23 +139,37 @@ async fn supervise(
     let publisher = tokio::spawn(publish(control.clone(), events.clone()));
     let mut applied: Option<HttpRemoteConfig> = None;
     let mut running: Option<Running> = None;
+    let mut applied_osc: Option<OscRemoteConfig> = None;
+    let mut osc: Option<Running> = None;
+    let mut current = RemoteStatus::default();
     loop {
-        let wanted = control.model().config.remote.http.clone();
-        if applied.as_ref() != Some(&wanted) {
+        let remote = control.model().config.remote.clone();
+        if applied.as_ref() != Some(&remote.http) {
             if let Some(server) = running.take() {
                 server.stop().await;
             }
-            let (http, server) = start(&control, &wanted, &events).await;
-            status.store(Arc::new(RemoteStatus { http }));
+            let (http, server) = start(&control, &remote.http, &events).await;
+            current.http = http;
+            status.store(Arc::new(current.clone()));
             running = server;
-            applied = Some(wanted);
+            applied = Some(remote.http);
+        }
+        if applied_osc.as_ref() != Some(&remote.osc) {
+            if let Some(server) = osc.take() {
+                server.stop().await;
+            }
+            let (state, server) = start_osc(&control, &remote.osc, &events).await;
+            current.osc = state;
+            status.store(Arc::new(current.clone()));
+            osc = server;
+            applied_osc = Some(remote.osc);
         }
         tokio::select! {
             _ = stop.changed() => break,
             () = tokio::time::sleep(CONFIG_POLL) => {}
         }
     }
-    if let Some(server) = running.take() {
+    for server in [running.take(), osc.take()].into_iter().flatten() {
         server.stop().await;
     }
     publisher.abort();
@@ -248,6 +265,46 @@ async fn start(
             shutdown,
             task,
             streams: Some(streams),
+        }),
+    )
+}
+
+async fn start_osc(
+    control: &Arc<dyn RemoteControl>,
+    config: &OscRemoteConfig,
+    events: &broadcast::Sender<Arc<Envelope>>,
+) -> (ServerStatus, Option<Running>) {
+    if !config.enabled {
+        return (ServerStatus::Off, None);
+    }
+    let Some(ip) = config.bind_addr() else {
+        return (ServerStatus::Error(ServerError::InvalidBind), None);
+    };
+    let socket = match UdpSocket::bind((ip, config.port)).await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(bind = %ip, port = config.port, error = %e, "remote OSC could not listen");
+            return (ServerStatus::Error(ServerError::Bind(e.to_string())), None);
+        }
+    };
+    let addr = socket
+        .local_addr()
+        .unwrap_or_else(|_| SocketAddr::new(ip, config.port));
+    let (shutdown, signal) = oneshot::channel();
+    let task = tokio::spawn(crate::osc_server::run(
+        socket,
+        control.clone(),
+        config.clone(),
+        events.subscribe(),
+        signal,
+    ));
+    tracing::info!(%addr, "remote OSC listening");
+    (
+        ServerStatus::Listening(addr),
+        Some(Running {
+            shutdown,
+            task,
+            streams: None,
         }),
     )
 }
