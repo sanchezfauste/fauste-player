@@ -432,3 +432,57 @@ fn an_outdated_track_whose_file_is_missing_is_not_counted() {
     });
     assert_eq!(fp_app::services::outdated_tracks(&r.handle.model.load()), 0);
 }
+
+/// Files not found are looked for again every second here.
+fn recheck_rig(files: &[PathBuf], dir: tempfile::TempDir) -> Rig {
+    rig_with(files, dir, Duration::ZERO, |s| {
+        s.config.tuning.missing_recheck_ms = 1_000.0;
+    })
+}
+
+fn missing(r: &Rig) -> bool {
+    r.handle
+        .model
+        .load()
+        .library
+        .iter()
+        .all(|t| t.file_state == FileState::Missing)
+}
+
+/// A drive mounted after the start: its tracks come back by themselves.
+#[test]
+fn a_missing_file_that_comes_back_becomes_playable() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("later.wav");
+    let staging = tempfile::tempdir().unwrap();
+    let mut r = recheck_rig(std::slice::from_ref(&path), dir);
+    r.run_until("missing state", missing);
+    // Written elsewhere, then moved: never seen half-written.
+    std::fs::rename(wav(staging.path(), "later.wav", 1), &path).unwrap();
+    r.run_until("the file found again", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.file_state == FileState::Ok && t.analyzed)
+    });
+}
+
+/// Looking again for a file still missing changes nothing in the model, so
+/// nothing is saved every interval.
+#[test]
+fn a_file_still_missing_is_looked_for_without_touching_the_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = recheck_rig(&[PathBuf::from("/definitely/missing.flac")], dir);
+    r.run_until("missing state", missing);
+    let looked = r.analyses.load(Ordering::SeqCst);
+    let version = r.handle.telemetry.load().model_version;
+    let until = r.now + Duration::from_millis(3_500);
+    r.run_until("three intervals", |r| r.now >= until);
+    assert!(
+        r.analyses.load(Ordering::SeqCst) >= looked + 3,
+        "looked for again"
+    );
+    assert_eq!(r.handle.telemetry.load().model_version, version);
+}

@@ -106,6 +106,12 @@ The services thread submits tracks when either:
   works; re-analysing a library costs the processor for a while; or
 - they are **shown** (current, next or cue on any player) and their peaks are
   not in memory.
+- their file was not found (`Missing`) and `tuning.missing_recheck_ms`
+  (30 s) has passed since the last look (`Services::recheck_missing`): a
+  drive mounted after the start brings its tracks back by themselves, from
+  the cache when they were analysed before. A file still missing sends
+  nothing to the model, so nothing is saved every interval. `Unreadable`
+  files are not retried by themselves.
 
 Results go to the model as `ApplyAnalysis` or `SetFileState`. Peaks and covers
 are kept in the `MediaCache` only for shown tracks. The disk cache brings

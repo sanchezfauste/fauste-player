@@ -117,6 +117,8 @@ pub struct Services {
     /// (markers reset) is analysed again.
     seen_analyzed: HashSet<TrackId>,
     settings: Option<AnalysisSettings>,
+    /// When files not found were last looked for again.
+    last_recheck: Option<Instant>,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -151,6 +153,7 @@ impl Services {
             retried: HashSet::new(),
             seen_analyzed: HashSet::new(),
             settings: None,
+            last_recheck: None,
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -197,7 +200,7 @@ impl Services {
         // Analysis and saving are isolated from each other: a fault in one
         // never stops the other.
         let analysis = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            self.analysis_step(&state);
+            self.analysis_step(&state, now);
         }));
         let saving = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.autosave(&state, version, now);
@@ -210,7 +213,7 @@ impl Services {
         }
     }
 
-    fn analysis_step(&mut self, state: &AppState) {
+    fn analysis_step(&mut self, state: &AppState, now: Instant) {
         #[cfg(feature = "test-hooks")]
         if self.fail_steps > 0 {
             self.fail_steps -= 1;
@@ -226,6 +229,7 @@ impl Services {
             }
         }
         self.follow_settings(state);
+        self.recheck_missing(state, now);
         self.submit_new(state);
         let wanted = Self::wanted(state);
         let results: Vec<AnalysisResult> = self.analyzer.results().try_iter().collect();
@@ -235,7 +239,7 @@ impl Services {
             // staying "in progress" until the next start.
             let track = result.track;
             let routed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                self.route(result, &wanted);
+                self.route(result, state, &wanted);
             }));
             if routed.is_err() {
                 self.faults.fetch_add(1, Ordering::AcqRel);
@@ -301,6 +305,31 @@ impl Services {
         self.forced = state.library.iter().map(|t| t.id).collect();
     }
 
+    /// Every `tuning.missing_recheck_ms`, files not found (a drive not
+    /// mounted yet) are sent to the analysis pool again: one that is back is
+    /// answered from the cache. The pool touches the file system, never this
+    /// thread, so a hung network mount cannot stall autosave. Unreadable
+    /// files wait for *Re-analyse all*: retrying them would decode them
+    /// every time.
+    fn recheck_missing(&mut self, state: &AppState, now: Instant) {
+        let interval =
+            Duration::from_secs_f64(state.config.tuning.missing_recheck_ms.max(0.0) / 1000.0);
+        let Some(last) = self.last_recheck else {
+            self.last_recheck = Some(now);
+            return;
+        };
+        if now.saturating_duration_since(last) < interval {
+            return;
+        }
+        self.last_recheck = Some(now);
+        for track in state.library.iter() {
+            if track.file_state == FileState::Missing && !self.in_flight.contains(&track.id) {
+                self.failed.remove(&track.id);
+                self.forced.insert(track.id);
+            }
+        }
+    }
+
     /// Tracks the screen draws: current, next and cue entries of the players.
     fn wanted(state: &AppState) -> HashSet<TrackId> {
         state
@@ -360,7 +389,7 @@ impl Services {
         }
     }
 
-    fn route(&mut self, result: AnalysisResult, wanted: &HashSet<TrackId>) {
+    fn route(&mut self, result: AnalysisResult, state: &AppState, wanted: &HashSet<TrackId>) {
         if matches!(result.outcome, Err(AnalysisError::Cancelled)) {
             return;
         }
@@ -409,6 +438,16 @@ impl Services {
             }
             Err(AnalysisError::Cancelled) => return,
         };
+        // A file still missing changes nothing: no new model version, so
+        // nothing is saved every recheck.
+        if let Command::SetFileState {
+            track,
+            state: file_state,
+        } = &command
+            && state.library.get(*track).map(|t| t.file_state) == Some(*file_state)
+        {
+            return;
+        }
         if !self.conductor.send(command) {
             // The queue is full: try again on a later round.
             self.done.remove(&result.track);
