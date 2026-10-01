@@ -32,6 +32,11 @@ const APP_ID: &str = "org.fauste.FaustePlayer";
 /// How often the running instance looks for playlists handed over.
 const INBOX_INTERVAL: Duration = Duration::from_millis(500);
 
+/// Tries at the instance lock, and the pause between them: a restarting
+/// instance probes the lock for an instant while it waits for this one.
+const LOCK_ATTEMPTS: usize = 3;
+const LOCK_RETRY_PAUSE: Duration = Duration::from_millis(20);
+
 /// How the interface ended.
 enum Exit {
     Quit,
@@ -69,7 +74,8 @@ fn main() -> ExitCode {
     };
     // One instance per data folder: a second start (a playlist opened from
     // the file manager during a show) hands its playlists over and ends.
-    let lock = match instance::acquire(&paths.data_dir) {
+    let lock = match instance::acquire_with_retry(&paths.data_dir, LOCK_ATTEMPTS, LOCK_RETRY_PAUSE)
+    {
         Ok(Some(lock)) => lock,
         Ok(None) => return hand_over(&paths.data_dir, &playlists),
         Err(e) => {

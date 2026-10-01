@@ -5,7 +5,32 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use fp_app::instance::{acquire, collect, deliver, watch};
+use fp_app::instance::{acquire, acquire_with_retry, collect, deliver, watch};
+
+#[test]
+fn a_lock_held_for_an_instant_is_taken_on_a_retry() {
+    // A restarting instance probes the lock while it waits for the new one.
+    let dir = tempfile::tempdir().unwrap();
+    let probe = acquire(dir.path()).unwrap().unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(10));
+        drop(probe);
+    });
+    let lock = acquire_with_retry(dir.path(), 3, Duration::from_millis(20)).unwrap();
+    release.join().unwrap();
+    assert!(lock.is_some());
+}
+
+#[test]
+fn a_running_instance_still_wins_after_the_retries() {
+    let dir = tempfile::tempdir().unwrap();
+    let _running = acquire(dir.path()).unwrap().unwrap();
+    assert!(
+        acquire_with_retry(dir.path(), 3, Duration::from_millis(1))
+            .unwrap()
+            .is_none()
+    );
+}
 
 #[test]
 fn a_second_instance_cannot_take_the_lock_until_the_first_ends() {

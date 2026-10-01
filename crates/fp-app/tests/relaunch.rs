@@ -165,3 +165,24 @@ fn the_wait_for_the_handoff_is_bounded() {
     assert_eq!(handoff.unwrap(), Handoff::TimedOut);
     assert!(started.elapsed() < Duration::from_secs(5));
 }
+
+#[cfg(unix)]
+#[test]
+fn an_appimage_behind_a_symlinked_folder_is_still_ours() {
+    let dir = tempfile::tempdir().unwrap();
+    let real = dir.path().join("real");
+    std::fs::create_dir_all(real.join("usr/bin")).unwrap();
+    std::fs::write(real.join("usr/bin/fauste-player"), b"").unwrap();
+    let link = dir.path().join("link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let launcher = Launcher {
+        appimage: Some("/home/op/Apps/Fauste_Player.AppImage".into()),
+        appdir: Some(link),
+        exe: Some(real.join("usr/bin/fauste-player")),
+        ..Launcher::default()
+    };
+    assert_eq!(
+        launcher.plan().unwrap().program,
+        OsString::from("/home/op/Apps/Fauste_Player.AppImage")
+    );
+}

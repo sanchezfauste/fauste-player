@@ -37,8 +37,9 @@ pub fn acquire(dir: &Path) -> io::Result<Option<InstanceLock>> {
 }
 
 /// True while an instance holds the lock in `dir`. The probe takes the
-/// lock for an instant when it is free, so it is for a caller that is
-/// about to end, not for the running instance.
+/// lock for an instant when it is free: a start whose `acquire` lands in
+/// that instant would take this caller for a running instance and hand
+/// over. Starts use `acquire_with_retry`, which covers that instant.
 pub fn is_held(dir: &Path) -> io::Result<bool> {
     let file = match OpenOptions::new().write(true).open(dir.join(LOCK_FILE)) {
         Ok(file) => file,
@@ -50,6 +51,25 @@ pub fn is_held(dir: &Path) -> io::Result<bool> {
         Err(TryLockError::WouldBlock) => Ok(true),
         Err(TryLockError::Error(e)) => Err(e),
     }
+}
+
+/// Like `acquire`, trying up to `attempts` times, `pause` apart, so a lock
+/// held for an instant (the probe of `is_held`) does not pass for a running
+/// instance.
+pub fn acquire_with_retry(
+    dir: &Path,
+    attempts: usize,
+    pause: Duration,
+) -> io::Result<Option<InstanceLock>> {
+    for attempt in 1..=attempts.max(1) {
+        if let Some(lock) = acquire(dir)? {
+            return Ok(Some(lock));
+        }
+        if attempt < attempts {
+            std::thread::sleep(pause);
+        }
+    }
+    Ok(None)
 }
 
 /// Hands `paths` to the running instance of `dir`.

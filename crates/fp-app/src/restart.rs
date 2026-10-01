@@ -74,7 +74,9 @@ impl Launcher {
         let image = self.appimage.as_ref()?;
         let appdir = self.appdir.as_ref()?;
         let exe = self.exe.as_ref()?;
-        exe.starts_with(appdir).then_some(image)
+        // A symlinked folder (`/tmp`) must not defeat the match.
+        let real = |p: &PathBuf| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone());
+        real(exe).starts_with(real(appdir)).then_some(image)
     }
 
     /// How to start the application again; `None` when this executable
