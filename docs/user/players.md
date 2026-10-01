@@ -24,8 +24,8 @@ playlist tabs, transport, volume and outputs.
   - One continuous bar per channel, on the scale of the meter type's
     standard (the digital peak meter by default: −60 to 0 dBFS, with the
     top 20 dB taking half the height). The scale is labelled on the left,
-    with a faint line across both bars for each label; the brighter, heavier
-    line is the alignment level (−18 dBFS).
+    with a faint line across both bars for each label; two short notches
+    at the outer edges of the bars mark the alignment level (−18 dBFS).
   - The bar is green, yellow from the warning level (−9 dBFS), and red
     from the danger level (−3 dBFS). The other meter types turn red where
     their scale does (from 0 VU, from the permitted maximum on a PPM).

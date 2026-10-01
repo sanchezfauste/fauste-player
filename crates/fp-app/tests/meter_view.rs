@@ -532,3 +532,20 @@ fn a_meter_too_short_to_draw_lays_out_without_panicking() {
         }
     }
 }
+
+/// The alignment level is two short notches at the outer edges of the
+/// bars, not a bright bar across the signal.
+#[test]
+fn the_alignment_level_is_two_notches_at_the_outer_edges() {
+    let c = MeterConfig::default();
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(METER_WIDTH, 120.0));
+    let l = meter_layout(rect, &c, false);
+    let a = l.lines.iter().find(|m| m.alignment).unwrap();
+    let [left, right] = l.alignment_notches;
+    for n in [left, right] {
+        assert!(n.width() <= 3.0 + f32::EPSILON, "{n:?}");
+        assert!((n.center().y - a.y).abs() < 0.5, "{n:?} {}", a.y);
+    }
+    assert!((left.left() - l.bars[0].left()).abs() < 0.5);
+    assert!((right.right() - l.bars[1].right()).abs() < 0.5);
+}
