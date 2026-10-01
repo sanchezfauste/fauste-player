@@ -7,9 +7,14 @@ station's automation or a control surface can use them. It is
 
 ## Turning it on
 
-Settings has no page for it yet. Close Fauste Player, open `config.json`
-(see [Data and backups](data-and-backups.md) for where it is), and inside
-the `"config"` object set `remote.http.enabled` to `true`:
+Open **Settings → Remote** and tick **Allow remote control over HTTP**
+(or **Allow OSC control**). The line under each switch says whether the
+server is listening, and where, or why it did not start. Changes apply at
+once; there is no need to restart.
+
+You can also edit `config.json` while Fauste Player is closed (see
+[Data and backups](data-and-backups.md) for where it is). Inside the
+`"config"` object, set `remote.http.enabled` to `true`:
 
     {
       "schema_version": 1,
@@ -21,13 +26,16 @@ the `"config"` object set `remote.http.enabled` to `true`:
       }
     }
 
-On the next start it listens on `http://127.0.0.1:7380`. Starting it never
-plays anything; only requests act.
+It listens on `http://127.0.0.1:7380`. Starting it never plays anything;
+only requests act.
 
 ## Listening on the studio network
 
 To reach it from other computers, set `bind` to `0.0.0.0` (or one of this
 computer's addresses) and set a **token** of at least 16 characters.
+In Settings → Remote, **Generate** makes a long random token. It is hidden
+until you press **Show**, and **Copy** puts it on the clipboard for the
+client.
 Without a token the server refuses to start, and the log says why.
 
     "remote": {
@@ -61,7 +69,15 @@ A client can:
 - choose the next entry, pre-listen, and seek;
 - set volumes, modes, stop-after-current, and the repeat and stop-after
   marks of an entry;
-- fire, stop and pre-listen carts, and change the cart page shown.
+- fire, stop and pre-listen carts, and change the cart page shown;
+- edit: create, rename and delete playlists; add a track that is already
+  loaded, and remove, move or duplicate entries; create, rename, resize and
+  delete cart pages, and set up a cart with a loaded track; set or reset
+  markers.
+
+Removing what is on air is refused, as it is on screen. Files that are not
+loaded yet cannot be added remotely: they live on this computer, so add
+them here first.
 
 A button that is greyed out on screen is refused remotely too. The full
 reference is in [the technical documentation](../technical/remote-api.md).
@@ -107,6 +123,10 @@ to keep receiving:
 
     oscdump 9000 &
     oscsend localhost 7381 /fauste/subscribe i 9000
+
+A subscriber can name any port of its own address, and up to
+`max_subscribers` are kept. Anyone allowed to send can therefore also
+subscribe. This is one more reason to keep OSC on a trusted network.
 
 `oscsend` and `oscdump` come with liblo (`liblo-tools` on Debian and
 Ubuntu). The full list of addresses is in

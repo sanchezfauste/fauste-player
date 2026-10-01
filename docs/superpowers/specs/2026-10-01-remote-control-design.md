@@ -159,16 +159,21 @@ the UI's clamping rules are not repeated here.
 | `POST /playlists` | `{"name"}` | `CreatePlaylist` |
 | `PATCH /playlists/{id}` | `{"name"}` | `RenamePlaylist` |
 | `DELETE /playlists/{id}` | — | `DeletePlaylist` |
-| `POST /playlists/{id}/entries` | `{"track": id, "index": n}` | `InsertPaths` with the track's path |
+| `POST /playlists/{id}/entries` | `{"track": id, "index": n}` | `InsertTracks` (the same library track) |
 | `DELETE /entries/{id}` | — | `RemoveEntry` |
 | `POST /entries/{id}/move` | `{"playlist": id, "index": n}` | `MoveEntry` |
 | `POST /entries/{id}/duplicate` | — | `DuplicateEntry` |
 | `POST /cartwall/pages` | `{"name"}` | `CreateCartPage` |
 | `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | `RenameCartPage`, `ResizeCartPage` |
 | `DELETE /cartwall/pages/{id}` | — | `DeleteCartPage` |
-| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | `SetCart`, then `AssignCartFile` with the track's path or `ClearCartFile` |
+| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | `SetCart`, then `AssignCartTrack` (when the track changes) or `ClearCartFile` |
 | `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | `SetMarker` |
 | `POST /tracks/{id}/markers/reset` | — | `ResetMarkers` |
+
+Editing reuses tracks already in the library: inserting an entry and
+setting a cart refer to the same track, with its markers and analysis
+(`Command::InsertTracks`, `Command::AssignCartTrack`). A path inserted
+again would make a new track.
 
 Marker kinds in paths are `cue-in`, `intro-end`, `outro-start`,
 `segue-start`, `cue-out`. Rows and columns are validated against
@@ -392,7 +397,8 @@ fp-app ──(Bridge: impl RemoteControl)──► fp-remote
   join with a timeout. If the thread dies the error is logged and shown, and
   the application carries on, as with MIDI.
 - **Bind failures** (port in use, permission) are logged, shown in Settings,
-  and the application runs without that server.
+  and the application runs without that server. They are tried again every
+  2 s, so a port freed later is taken without a restart.
 - **Token generation.** Settings offers "Generate": 32 random bytes from
   `getrandom`, base64url without padding.
 

@@ -209,6 +209,7 @@ fn every_error_has_its_status_and_code() {
             415,
             "unsupported_media_type",
         ),
+        (ApiError::MethodNotAllowed, 405, "method_not_allowed"),
         (ApiError::Busy, 503, "busy"),
     ];
     for (e, status, code) in cases {

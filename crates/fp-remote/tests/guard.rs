@@ -186,3 +186,14 @@ async fn a_preflight_from_a_listed_origin_is_answered() {
         "https://studio.example"
     );
 }
+
+#[test]
+fn the_bearer_scheme_is_case_insensitive() {
+    for scheme in ["Bearer", "bearer", "BEARER"] {
+        let h = headers(&[
+            ("host", "pc:7380"),
+            ("authorization", &format!("{scheme} {TOKEN}")),
+        ]);
+        assert_eq!(check(&lan(), &h, None), Ok(()), "{scheme}");
+    }
+}

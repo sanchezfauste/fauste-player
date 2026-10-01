@@ -232,12 +232,17 @@ pub fn cartwall(model: &AppState, playback: &Playback) -> CartwallDto {
             let elapsed = playback
                 .cart_position(pc.cart)
                 .or_else(|| track.map(Track::cue_in_secs));
+            // As the cart button shows it: within the play length, and
+            // nothing while the duration is unknown.
+            let length = track.map_or(0.0, Track::play_length_secs);
+            let known = track.is_some_and(|t| t.duration_secs > 0.0) && length > 0.0;
             PlayingCartDto {
                 cart: pc.cart,
                 elapsed_secs: elapsed,
                 remaining_secs: track
                     .zip(elapsed)
-                    .map(|(t, e)| (t.cue_out_secs() - e).max(0.0)),
+                    .filter(|_| known)
+                    .map(|(t, e)| (t.cue_out_secs() - e).clamp(0.0, length)),
             }
         })
         .collect();

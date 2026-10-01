@@ -27,6 +27,13 @@ pub enum Command {
         index: usize,
         paths: Vec<PathBuf>,
     },
+    /// Entries for tracks already in the library (remote control spec
+    /// §3.4): the same tracks, with their markers and analysis.
+    InsertTracks {
+        playlist: PlaylistId,
+        index: usize,
+        tracks: Vec<TrackId>,
+    },
     SetMode(PlayerId, PlayMode),
     ToggleStopAfterCurrent(PlayerId),
     ToggleCue(PlayerId),
@@ -112,6 +119,12 @@ pub enum Command {
         page: CartPageId,
         index: usize,
         path: PathBuf,
+    },
+    /// Gives a cart a track already in the library. Stops it if playing (C8).
+    AssignCartTrack {
+        page: CartPageId,
+        index: usize,
+        track: TrackId,
     },
     ClearCartFile {
         page: CartPageId,

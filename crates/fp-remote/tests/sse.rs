@@ -156,3 +156,29 @@ async fn the_token_may_come_in_the_query_only_for_events() {
         .unwrap();
     assert_eq!(wrong.status(), StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn a_stream_opened_after_a_stop_ends_after_the_state() {
+    let (ctx, _tx) = ctx_with(HttpRemoteConfig::default(), 16);
+    // As `Running::stop` does, with no stream open yet.
+    ctx.stop.send_replace(true);
+    let res = router(ctx).oneshot(get("/api/v1/events")).await.unwrap();
+    let mut body = res.into_body();
+    assert!(next(&mut body).await.unwrap().contains("event: state"));
+    assert_eq!(next(&mut body).await, None);
+}
+
+#[tokio::test]
+async fn after_a_resync_old_buffered_events_are_skipped() {
+    let (ctx, tx) = ctx_with(HttpRemoteConfig::default(), 2);
+    let res = router(ctx).oneshot(get("/api/v1/events")).await.unwrap();
+    let mut body = res.into_body();
+    assert!(next(&mut body).await.unwrap().contains("event: state"));
+    for n in 0..5 {
+        tx.send(removed(n)).unwrap();
+    }
+    assert!(next(&mut body).await.unwrap().contains("event: resync"));
+    tx.send(removed(99)).unwrap();
+    let after = next(&mut body).await.unwrap();
+    assert!(after.contains("{\"id\":99}"), "{after}");
+}

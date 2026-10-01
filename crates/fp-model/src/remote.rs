@@ -162,6 +162,11 @@ fn same_prefix(a: u128, b: u128, prefix: u8, bits: u32) -> bool {
 const MIN_TOKEN_CHARS: usize = 16;
 
 impl HttpRemoteConfig {
+    /// Whether `token` can be used: empty (none), or long enough.
+    pub fn token_acceptable(token: &str) -> bool {
+        token.is_empty() || token.chars().count() >= MIN_TOKEN_CHARS
+    }
+
     /// The address to listen on, if `bind` is an IP literal.
     pub fn bind_addr(&self) -> Option<IpAddr> {
         self.bind.parse().ok()
@@ -189,7 +194,7 @@ impl RemoteConfig {
             h.bind = "127.0.0.1".to_owned();
         }
         clamp_to(&mut h.port, 1024, u16::MAX, "remote.http.port", w);
-        if !h.token.is_empty() && h.token.chars().count() < MIN_TOKEN_CHARS {
+        if !HttpRemoteConfig::token_acceptable(&h.token) {
             h.token.clear();
             w.push(ConfigWarning {
                 field: "remote.http.token",

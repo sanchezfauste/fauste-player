@@ -257,6 +257,36 @@ pub(crate) fn assign_file(
     path: Option<PathBuf>,
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
+    cart_at(state, page, index)?;
+    let track = path.map(|path| {
+        let track = state.ids.track();
+        state.library.insert(Track::new(track, path));
+        track
+    });
+    set_track(state, page, index, track, out)
+}
+
+pub(crate) fn assign_track(
+    state: &mut AppState,
+    page: CartPageId,
+    index: usize,
+    track: TrackId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    if state.library.get(track).is_none() {
+        return Err(ModelError::UnknownTrack(track));
+    }
+    set_track(state, page, index, Some(track), out)
+}
+
+/// Stops the cart, gives it `track` and forgets the old one if unused (C8).
+fn set_track(
+    state: &mut AppState,
+    page: CartPageId,
+    index: usize,
+    track: Option<TrackId>,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
     let (id, old) = {
         let cart = cart_at(state, page, index)?;
         (cart.id, cart.track)
@@ -265,11 +295,6 @@ pub(crate) fn assign_file(
     if state.cartwall.cue == Some(id) {
         stop_cue(state, out);
     }
-    let track = path.map(|path| {
-        let track = state.ids.track();
-        state.library.insert(Track::new(track, path));
-        track
-    });
     cart_at_mut(state, page, index)?.track = track;
     forget_tracks(state, old);
     Ok(())

@@ -15,6 +15,7 @@
 | `ui/table.rs` | The track table (virtualised rows, drag and drop, context menu, column widths) |
 | `ui/settings.rs` | The Settings modal (outputs, players and language, analysis, playlists) |
 | `ui/settings/carts.rs`, `ui/settings/keys.rs` | Settings → Cartwall (pages, grid, cart editor, import and export) and → Keyboard shortcuts (capture, conflicts) |
+| `ui/settings/remote.rs` | Settings → Remote: the HTTP and OSC switches, addresses, token, origins and senders, and each server's state read from the remote thread's status cell |
 | `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall strip, and its pure view model (status, countdown, progress) |
 | `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
 | `ui/shell.rs` | Panic isolation around each frame |

@@ -58,10 +58,11 @@ audio engine that the interface can never block.
   fader can be learned onto a MIDI controller, with soft takeover for
   faders, LED feedback and hot-plug.
 - **Remote control:** an HTTP/JSON API with live events (Server-Sent
-  Events) and OSC, off by default. A web page, a phone app, automation or a
-  control surface can follow the players, playlists and cartwall and
-  operate them. A token, origin checks and source allow-lists protect it
-  when it listens on the network.
+  Events) and OSC, off by default and set up in Settings → Remote. A web
+  page, a phone app, automation or a control surface can follow the
+  players, playlists and cartwall, operate them, and edit playlists, cart
+  pages and markers. A token, origin checks and source allow-lists protect
+  it when it listens on the network.
 - **M3U / M3U8 / PLS import and M3U8 export.**
 - **Bit-perfect output:** a device can be played with exclusive access,
   following each file's sample rate while idle; at 100 % volume with no fade

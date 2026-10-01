@@ -170,6 +170,8 @@ pub struct AppUi {
     opener: NoticeOpener,
     /// The MIDI service's handle (Settings > MIDI), when it started.
     midi: Option<fp_control::service::MidiHandle>,
+    /// The remote servers' state (Settings > Remote), when they started.
+    remote_status: Option<Arc<arc_swap::ArcSwap<fp_remote::RemoteStatus>>>,
 }
 
 impl AppUi {
@@ -203,6 +205,7 @@ impl AppUi {
             notices: None,
             opener: about::system_opener(),
             midi: None,
+            remote_status: None,
         }
     }
 
@@ -239,6 +242,15 @@ impl AppUi {
     /// The MIDI service, for Settings > MIDI.
     pub fn with_midi(mut self, midi: fp_control::service::MidiHandle) -> Self {
         self.midi = Some(midi);
+        self
+    }
+
+    /// The remote servers' state, for Settings > Remote.
+    pub fn with_remote_status(
+        mut self,
+        status: Arc<arc_swap::ArcSwap<fp_remote::RemoteStatus>>,
+    ) -> Self {
+        self.remote_status = Some(status);
         self
     }
 
@@ -449,6 +461,7 @@ impl AppUi {
                     .filter(|(_, until)| *until > time)
                     .map(|(text, _)| text.clone()),
                 midi: self.midi.as_ref(),
+                remote: self.remote_status.as_ref().map(|s| (**s.load()).clone()),
             };
             self.view.settings_open = settings::show(&ctx, &scene, &mut self.settings, &deps);
         } else {

@@ -87,24 +87,27 @@ pub async fn events(State(ctx): State<Ctx>, RawQuery(query): RawQuery) -> Respon
             return Some((Ok::<_, Infallible>(first), f));
         }
         loop {
-            tokio::select! {
-                _ = f.stop.changed() => return None,
-                received = f.rx.recv() => match received {
-                    Ok(env) => {
-                        if f.wants(env.event.name()) {
-                            let e = SseEvent::default()
-                                .event(env.event.name())
-                                .id(env.revision.to_string())
-                                .data(env.json.as_str());
-                            return Some((Ok(e), f));
-                        }
-                    }
-                    Err(RecvError::Lagged(_)) => {
-                        let e = f.full("resync");
+            let received = tokio::select! {
+                _ = f.stop.wait_for(|stopped| *stopped) => return None,
+                received = f.rx.recv() => received,
+            };
+            match received {
+                Ok(env) => {
+                    if f.wants(env.event.name()) {
+                        let e = SseEvent::default()
+                            .event(env.event.name())
+                            .id(env.revision.to_string())
+                            .data(env.json.as_str());
                         return Some((Ok(e), f));
                     }
-                    Err(RecvError::Closed) => return None,
-                },
+                }
+                Err(RecvError::Lagged(_)) => {
+                    // What is still buffered is older than the state sent now.
+                    f.rx = f.rx.resubscribe();
+                    let e = f.full("resync");
+                    return Some((Ok(e), f));
+                }
+                Err(RecvError::Closed) => return None,
             }
         }
     });

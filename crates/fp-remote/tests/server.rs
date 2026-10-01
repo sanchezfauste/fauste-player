@@ -197,3 +197,22 @@ fn an_event_stream_sees_a_change_made_after_it_connected() {
     }
     drop(handle);
 }
+
+#[test]
+fn a_port_that_frees_later_is_taken_without_a_restart() {
+    let taken = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = taken.local_addr().unwrap().port();
+    let fake = FakeControl::new(demo_state());
+    fake.edit(|s| {
+        s.config.remote.http.enabled = true;
+        s.config.remote.http.port = port;
+    });
+    let handle = spawn(fake).unwrap();
+    wait_for(&handle, "error", |s| matches!(s, ServerStatus::Error(_)));
+    drop(taken);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !matches!(handle.status().http, ServerStatus::Listening(_)) {
+        assert!(Instant::now() < deadline, "{:?}", handle.status());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}

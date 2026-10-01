@@ -120,3 +120,28 @@ fn a_playing_cart_reports_its_times() {
     assert_eq!(out.playing[0].elapsed_secs, Some(10.0));
     assert_eq!(out.playing[0].remaining_secs, Some(170.0));
 }
+
+#[test]
+fn cart_times_are_clamped_and_unknown_without_a_duration() {
+    let mut s = demo_state();
+    let cart = s.cartwall.pages[0].carts[0].id;
+    fp_model::apply(&mut s, Command::FireCart(cart)).unwrap();
+    let late = Playback {
+        carts: vec![(cart, 500.0)],
+        ..Default::default()
+    };
+    assert_eq!(
+        dto::cartwall(&s, &late).playing[0].remaining_secs,
+        Some(0.0)
+    );
+    let t = s.cartwall.pages[0].carts[0].track.unwrap();
+    s.library.get_mut(t).unwrap().duration_secs = 0.0;
+    let out = dto::cartwall(
+        &s,
+        &Playback {
+            carts: vec![(cart, 3.0)],
+            ..Default::default()
+        },
+    );
+    assert_eq!(out.playing[0].remaining_secs, None);
+}

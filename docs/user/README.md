@@ -15,7 +15,7 @@ by themselves.
 | [Playlists](playlists.md) | Tabs, the track table, drag and drop, the context menu, M3U/PLS files |
 | [Cartwall](cartwall.md) | Instant carts: firing, pages, loops, exclusive carts, setup |
 | [Markers and mixing](markers-and-mixing.md) | Cue in/out, the MIX point, intro and outro, automatic analysis |
-| [Settings](settings.md) | Audio outputs, players, analysis, playlists |
+| [Settings](settings.md) | Audio outputs, players, analysis, playlists, MIDI, remote control |
 | [Bit-perfect output](bit-perfect.md) | Exclusive devices that follow each file's rate, the BP badge, checking a chain |
 | [Keyboard](keyboard.md) | Shortcuts |
 | [MIDI control surfaces](midi.md) | Buttons, faders and lights on MIDI controllers |

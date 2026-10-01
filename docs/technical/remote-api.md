@@ -3,9 +3,8 @@
 The HTTP/JSON API lets other programs read and operate Fauste Player: a
 web page, a phone app, a station's automation. The design is the
 [remote control spec](../superpowers/specs/2026-10-01-remote-control-design.md).
-This page describes what is implemented: reading and operating over HTTP,
-live events over Server-Sent Events, and OSC. Editing routes and the
-Settings page are not implemented yet (spec §10, plan 3).
+This page describes what is implemented: reading, operating and editing
+over HTTP, live events over Server-Sent Events, OSC, and Settings → Remote.
 
 ## Overview
 
@@ -122,6 +121,30 @@ or whose cache entry is gone, answers `404 not_found`.
 | `POST /cartwall/stop-all` | — | |
 | `PUT /cartwall/shown` | `{"page": id}` | Show a cart page |
 
+### Editing
+
+Editing reuses tracks already loaded: an inserted entry or a cart refers
+to the same library track, with its markers and analysis
+(`InsertTracks`, `AssignCartTrack`). Files cannot be added remotely.
+
+| Method and path | Body | Effect |
+|---|---|---|
+| `POST /playlists` | `{"name"}` | Create a playlist |
+| `PATCH /playlists/{id}` | `{"name"}` | Rename it |
+| `DELETE /playlists/{id}` | — | Delete it (refused while it is on air) |
+| `POST /playlists/{id}/entries` | `{"track": id, "index": n}` | Insert a loaded track; an index past the end is the end |
+| `DELETE /entries/{id}` | — | Remove an entry (refused while on air) |
+| `POST /entries/{id}/move` | `{"playlist": id, "index": n}` | Move it, also to another playlist |
+| `POST /entries/{id}/duplicate` | — | Duplicate it |
+| `POST /cartwall/pages` | `{"name"}` | Create a cart page |
+| `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | Rename or resize it, within `limits.max_cart_rows` and `limits.max_cart_cols` |
+| `DELETE /cartwall/pages/{id}` | — | Delete it |
+| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | Set up a cart; `kind` is `jingle`, `effect` or `spot`. Keeping its track does not stop it; a new track or `null` does (C8) |
+| `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | Set a marker by hand, or with `null` let analysis fill it again; `kind` is `cue-in`, `intro-end`, `outro-start`, `segue-start` or `cue-out` |
+| `POST /tracks/{id}/markers/reset` | — | Drop every manual marker and analyse again |
+
+Names are trimmed and must not be empty.
+
 ## Events (SSE)
 
 `GET /api/v1/events` is a Server-Sent Events stream
@@ -220,7 +243,7 @@ Errors carry `{"error": code, "message": text}`.
 | 403 | `forbidden_origin` | An `Origin` not in `cors_origins`, or a `Host` that is not loopback on a loopback bind |
 | 404 | `not_found` | Unknown id, path or cover |
 | 404 | `not_analyzed` | Cover or peaks of a track not analysed yet |
-| 405 | (empty) | A route that exists with another method |
+| 405 | `method_not_allowed` | A route that exists with another method |
 | 408 | (empty) | The request took longer than `request_timeout_ms` |
 | 409 | `unavailable` | The action is not available now, or the model refuses it |
 | 413 | `payload_too_large` | Body over `max_body_bytes` |
@@ -306,6 +329,12 @@ configuration (see [Persistence and configuration](persistence.md)):
   events on a `broadcast` channel of 256, and every `position_interval_ms`
   it adds a `position` while something plays. It does no work while nobody
   listens. SSE streams and the OSC socket read that channel.
+- A server whose address could not be bound (in use, no permission) is
+  tried again every 2 s, so a port freed later is taken without a restart.
+- Settings → Remote (`ui/settings/remote.rs`) edits `config.remote` through
+  `UpdateConfig`, and reads each server's state from
+  `RemoteHandle::status_cell`, an `ArcSwap` the remote thread publishes.
+  It generates tokens with `getrandom` (32 bytes, base64url).
 - Stopping a server ends its event streams, gives open requests two
   seconds, then aborts it. Dropping the handle stops both servers and joins
   the thread.

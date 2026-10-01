@@ -316,3 +316,11 @@ async fn cover_and_peaks_come_from_the_control_once_analysed() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(bytes, vec![0x89, b'P', b'N', b'G']);
 }
+
+#[tokio::test]
+async fn a_wrong_method_is_a_json_405() {
+    let fake = FakeControl::new(demo_state());
+    let (status, body, _) = call(ctx(&fake), "GET", "/api/v1/players/1/play", None).await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(body["error"], "method_not_allowed");
+}

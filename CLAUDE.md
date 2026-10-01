@@ -176,16 +176,24 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
 - UI tests use `egui_kittest`, with `Harness::builder().with_step_dt(0.02)`
   (double clicks) and the recording `Fake` controller in
   `crates/fp-app/tests/support`.
-- Screenshots for a visual check (Linux, X11):
-  1. run `env -u WAYLAND_DISPLAY FAUSTE_HOME=<dir> target/release/fauste-player`;
-  2. find the window with `xwininfo -name "Fauste Player"`;
-  3. capture it with `import -window <id> shot.png`.
-- Driving the running app (for a screenshot with a player on air): enable
-  `remote.http` inside `"config"` in the scratch `config.json` and use `curl`
-  (see `docs/user/remote-control.md`), or click with `xdotool`
-  (`xdotool search --name "Fauste Player"`, then
-  `xdotool mousemove --window <id> <x> <y> click 1`). `xdotool` is needed
-  for clicks; install it with the system's package manager.
+- Screenshots for a visual check (Linux): run the app in a virtual X
+  server, so nothing asks for permissions and the desktop is untouched
+  (`xvfb`, `xdotool` and ImageMagick's `import` must be installed):
+  1. `Xvfb :77 -screen 0 1920x1080x24 -nolisten tcp &`;
+  2. `env -u WAYLAND_DISPLAY DISPLAY=:77 FAUSTE_HOME=<dir> target/release/fauste-player &`
+     (the window opens at its default 1600×940);
+  3. drive it with the remote API (enable `remote.http` inside `"config"`
+     in the scratch `config.json`, then `curl`; see
+     `docs/user/remote-control.md`) or with
+     `DISPLAY=:77 xdotool mousemove --window <id> <x> <y> click 1`;
+  4. find the window with `DISPLAY=:77 xwininfo -name "Fauste Player"` and
+     capture it with `DISPLAY=:77 import -window <id> shot.png`.
+
+  On a GNOME Wayland desktop, `xdotool` clicks into XWayland windows need
+  the "remote interaction" permission every session; Xvfb avoids that.
+- Tagged test audio without encoders: WAV files with a RIFF `LIST/INFO`
+  chunk (`INAM` title, `IART` artist) written from Python are read by the
+  analysis like any tagged file.
 - Remote API tests drive the axum router with `tower::ServiceExt::oneshot`
   (no sockets) and the recording `FakeControl` in
   `crates/fp-remote/tests/support`; server tests bind `127.0.0.1` on free

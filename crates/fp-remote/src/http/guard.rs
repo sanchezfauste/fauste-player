@@ -39,7 +39,9 @@ pub fn check(
         let given = headers
             .get(header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "));
+            .and_then(|v| v.split_once(' '))
+            .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
+            .map(|(_, token)| token.trim());
         let header_ok = given.is_some_and(|t| same(t.as_bytes(), token));
         let query_ok = query_token.is_some_and(|t| same(t.as_bytes(), token));
         if !(header_ok || query_ok) {

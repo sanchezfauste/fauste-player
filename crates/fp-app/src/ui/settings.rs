@@ -20,6 +20,7 @@ mod carts;
 mod keys;
 mod meters;
 mod midi;
+mod remote;
 use super::format;
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
@@ -44,6 +45,7 @@ pub(crate) enum Section {
     Cartwall,
     Shortcuts,
     Midi,
+    Remote,
 }
 
 /// One audio system and what it offers.
@@ -61,6 +63,7 @@ pub(crate) struct SettingsState {
     pub(super) keys: keys::KeysState,
     /// The MIDI action waiting for a control (MIDI learn).
     pub(super) midi_learning: Option<fp_model::MidiAction>,
+    pub(super) remote: remote::RemoteState,
     backends: Option<Vec<BackendChoice>>,
     loading: Option<Receiver<Vec<BackendChoice>>>,
     names: HashMap<PlaylistId, String>,
@@ -155,6 +158,7 @@ pub(crate) struct SettingsDeps<'a> {
     pub services: Option<&'a Sender<ServiceRequest>>,
     pub notice: Option<String>,
     pub midi: Option<&'a fp_control::service::MidiHandle>,
+    pub remote: Option<fp_remote::RemoteStatus>,
 }
 
 /// Draws the modal; returns `false` once it should close.
@@ -245,6 +249,9 @@ pub(crate) fn show(
                                             Section::Midi => {
                                                 midi::section(ui, scene, st, deps.midi)
                                             }
+                                            Section::Remote => {
+                                                remote::section(ui, scene, st, deps.remote.as_ref())
+                                            }
                                         }
                                     });
                             });
@@ -331,6 +338,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
             ),
             (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
             (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
+            (Section::Remote, icon::BROADCAST, "settings-tab-remote"),
         ] {
             let on = st.section == section;
             let label = t.tr(key);

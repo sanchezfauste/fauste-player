@@ -171,6 +171,9 @@ fn run(
                 .ok()
                 .and_then(|exe| fp_app::ui::about::find_notices(&exe)),
         );
+    if let Some(r) = &remote {
+        app = app.with_remote_status(r.status_cell());
+    }
     if let Some(midi) = fp_app::midi::start(handle.clone()) {
         app = app.with_midi(midi);
     }
