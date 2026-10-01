@@ -176,15 +176,25 @@ pub(crate) struct SettingsDeps<'a> {
     pub notice: Option<String>,
     pub midi: Option<&'a fp_control::service::MidiHandle>,
     pub remote: Option<fp_remote::RemoteStatus>,
+    /// A start-up setting changed: the footer offers Restart now.
+    pub restart_pending: bool,
 }
 
-/// Draws the modal; returns `false` once it should close.
+/// What the modal asks of the application after a frame.
+pub(crate) struct Outcome {
+    /// `false` once the modal should close.
+    pub open: bool,
+    /// The operator pressed Restart now.
+    pub restart: bool,
+}
+
+/// Draws the modal for one frame.
 pub(crate) fn show(
     ctx: &egui::Context,
     scene: &Scene<'_>,
     st: &mut SettingsState,
     deps: &SettingsDeps<'_>,
-) -> bool {
+) -> Outcome {
     let capturing = st.capturing();
     st.poll();
     if let Some(rx) = &st.folder
@@ -197,6 +207,7 @@ pub(crate) fn show(
     }
     let t = scene.i18n;
     let mut open = true;
+    let mut restart = false;
     let size = window_size(ctx.content_rect().size());
     let modal = egui::Modal::new(egui::Id::new("settings"))
         .frame(egui::Frame::new().fill(theme::SURFACE))
@@ -308,11 +319,38 @@ pub(crate) fn show(
                     {
                         open = false;
                     }
+                    if deps.restart_pending {
+                        let label = t.tr("settings-restart-now");
+                        let width = ui
+                            .painter()
+                            .layout_no_wrap(label.clone(), font_medium(13.0), theme::TEXT)
+                            .size()
+                            .x
+                            + 28.0;
+                        let style = TileStyle {
+                            border: theme::AMBER,
+                            ..TileStyle::plain()
+                        };
+                        if widgets::tile(ui, vec2(width, 30.0), &label, true, style, |p, r, c| {
+                            p.text(
+                                r.center(),
+                                egui::Align2::CENTER_CENTER,
+                                &label,
+                                font_medium(13.0),
+                                c,
+                            );
+                        })
+                        .clicked()
+                        {
+                            restart = true;
+                        }
+                    }
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                         ui.add_space(16.0);
-                        let (text, color) = match &deps.notice {
-                            Some(n) => (n.clone(), theme::AMBER),
-                            None => (t.tr("settings-applies-now"), theme::NEUTRAL_500),
+                        let (text, color) = match (&deps.notice, deps.restart_pending) {
+                            (Some(n), _) => (n.clone(), theme::AMBER),
+                            (None, true) => (t.tr("settings-restart-pending"), theme::AMBER),
+                            (None, false) => (t.tr("settings-applies-now"), theme::NEUTRAL_500),
                         };
                         ui.add(
                             egui::Label::new(RichText::new(text).font(font(11.0)).color(color))
@@ -323,11 +361,15 @@ pub(crate) fn show(
                 },
             );
         });
+    // A typed address or token is saved before the window closes.
+    if restart {
+        remote::flush(scene, &mut st.remote);
+    }
     confirm_restore(ctx, scene, st);
     if modal.should_close() && !capturing {
         open = false;
     }
-    open
+    Outcome { open, restart }
 }
 
 fn separator(ui: &mut Ui, width: f32) {
@@ -636,16 +678,6 @@ fn backend_name(t: &crate::i18n::I18n, id: &str) -> String {
 fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let config = &scene.state.config;
-    ui.add(
-        egui::Label::new(
-            RichText::new(format!("{}  {}", icon::INFO, t.tr("settings-restart-note")))
-                .font(font(12.0))
-                .color(theme::AMBER),
-        )
-        .selectable(false)
-        .wrap(),
-    );
-    ui.add_space(8.0);
     let Some(backends) = st.backends.clone() else {
         ui.add(
             egui::Label::new(
