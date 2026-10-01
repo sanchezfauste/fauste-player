@@ -407,3 +407,28 @@ fn a_result_lost_to_a_panic_is_asked_for_again() {
     assert_eq!(r.services.faults().load(Ordering::SeqCst), 1);
     assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "analysed again once");
 }
+
+/// A track whose file is gone cannot be analysed again: counting it would
+/// bring the start-up notice back at every start, forever.
+#[test]
+fn an_outdated_track_whose_file_is_missing_is_not_counted() {
+    let dir = tempfile::tempdir().unwrap();
+    let present = wav(dir.path(), "present.wav", 1);
+    let missing = PathBuf::from("/definitely/missing.flac");
+    let mut r = outdated_rig(&[present, missing], dir, |t| t.analysis_version = 0);
+    assert!(
+        r.services
+            .requests()
+            .try_send(ServiceRequest::AnalyseOutdated)
+            .is_ok()
+    );
+    r.run_until("the present track analysed, the other marked", |r| {
+        let state = r.handle.model.load();
+        state.library.iter().any(current)
+            && state
+                .library
+                .iter()
+                .any(|t| t.file_state == FileState::Missing)
+    });
+    assert_eq!(fp_app::services::outdated_tracks(&r.handle.model.load()), 0);
+}

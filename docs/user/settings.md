@@ -88,7 +88,8 @@ version keep their markers and waveforms, which still work. At start,
 Fauste Player says how many there are and offers **Analyse now** or
 **Later**; **Analyse outdated tracks (N)** here does the same at any time.
 The tracks on the players are brought up to date anyway, as they are
-shown.
+shown. Tracks whose file is missing are not counted until the file is
+back.
 
 ## Playlists
 

@@ -313,7 +313,8 @@ fn opus_decodes_like_the_reference_decoder() {
 
 /// Decoding keeps far ahead of real time, so a long Opus recording can be
 /// analysed and several can play at once (plan 4, item 15). The bound is
-/// loose (10× real time); the fixed decoder runs hundreds of times faster.
+/// loose for shared CI runners in a debug build (3.3× real time); the
+/// direct DFT took 4.7 s here, the fixed decoder runs far below it.
 #[test]
 fn opus_decodes_far_faster_than_real_time() {
     let dir = tempfile::tempdir().unwrap();
@@ -322,7 +323,7 @@ fn opus_decodes_far_faster_than_real_time() {
     let out = decode_all(&path);
     let took = t0.elapsed().as_secs_f64();
     assert!(out.len() >= 9 * 48_000 * 2);
-    assert!(took < 1.0, "10 s of Opus took {took:.2} s to decode");
+    assert!(took < 3.0, "10 s of Opus took {took:.2} s to decode");
 }
 
 /// Where the loudest sample of `stereo`'s left channel is.

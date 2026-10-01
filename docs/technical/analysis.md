@@ -100,7 +100,7 @@ The services thread submits tracks when either:
 - they are not analysed yet (or were forced by *Re-analyse all* or by a
   settings change, which also cancels running jobs); or
 - an earlier version analysed them (no format recorded, or an older
-  `analysis_version`: `services::outdated`) **and** the operator asked for
+  `analysis_version`, and a readable file: `services::outdated`) **and** the operator asked for
   it (`ServiceRequest::AnalyseOutdated`, from the start-up notice or
   Settings → Analysis). Until then they keep that analysis, which still
   works; re-analysing a library costs the processor for a while; or

@@ -77,9 +77,12 @@ pub enum ServiceRequest {
 }
 
 /// Whether `track` was analysed by an earlier version: before formats were
-/// recorded (Phase 4), or under other marker rules.
+/// recorded (Phase 4), or under other marker rules. A track whose file
+/// cannot be read is left out: it cannot be analysed again, and counting it
+/// would bring the start-up notice back at every start.
 pub fn outdated(track: &fp_model::Track) -> bool {
     track.analyzed
+        && track.file_state.is_playable()
         && (track.format.is_none() || track.analysis_version < fp_analysis::cache::ANALYSIS_VERSION)
 }
 
