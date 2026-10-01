@@ -429,6 +429,19 @@ fn the_meter_follows_a_playing_source_and_falls_after_stop() {
     assert!(stopped.level_db[0] > -120.0, "not cut to silence at once");
 }
 
+/// A VU reads the sampled signal: true peak stays off under it (meters
+/// spec M3).
+#[test]
+fn true_peak_is_off_for_a_meter_type_that_does_not_read_peaks() {
+    let (mut conductor, handle, _device, now) = offline_conductor(model(1, 1));
+    let mut config = conductor.state().config.clone();
+    config.meter.true_peak = true;
+    config.meter.ballistics = fp_model::MeterBallistics::Vu;
+    assert!(handle.send(Command::UpdateConfig(Box::new(config))));
+    conductor.tick(now);
+    assert!(!conductor.engine().true_peak());
+}
+
 #[test]
 fn true_peak_can_be_switched_while_playing() {
     let (mut conductor, handle, _device, now) = offline_conductor(model(1, 1));

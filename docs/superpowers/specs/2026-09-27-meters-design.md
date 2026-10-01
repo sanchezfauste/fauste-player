@@ -80,6 +80,16 @@
 | `loudness` | `ShortTerm` | `Off`, `Momentary`, `ShortTerm` | readout under the meter |
 | `loudness_target_lufs` | −23 | −36 … −10 | readout green within ±1 LU |
 
+**Used by** (`MeterBallistics::settings`): Settings shows, and the meter applies, only the fields its standard leaves open; the others keep their value for when the type is chosen again.
+
+| Type | `attack_ms`, `release_db_per_sec` | `floor_db` | `peak_hold_secs` | `reference_dbfs` | `warning_dbfs`, `danger_dbfs` | `true_peak` |
+|---|---|---|---|---|---|---|
+| `DigitalPeak` | – | ✓ | ✓ (IEC 60268-18 allows a hold) | ✓ | ✓ | ✓ |
+| `Custom` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `EbuPpm`, `DinPpm` | – | – (fixed scale) | – (no hold in IEC 60268-10) | ✓ (TEST, −9) | – (red from the permitted maximum) | – (quasi-peak of the sampled signal) |
+| `Vu` | – | – | – (a needle) | ✓ (0 VU) | – (red from 0 VU) | – (reads the average) |
+| `K20`, `K14`, `K12` | – | – | ✓ (peak section) | – (its own 0) | – | ✓ (peak section) |
+
 `Config::validate` keeps the zones ordered: floor < reference, and warning ≤ danger. Changes apply at once; `true_peak` reaches running buses through their flag.
 
 ## M4. Display

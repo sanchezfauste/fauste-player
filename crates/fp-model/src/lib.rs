@@ -30,8 +30,8 @@ pub use command::{
 };
 pub use config::{
     AnalysisSettings, CartwallConfig, CartwallRoutes, Config, ConfigWarning, Limits,
-    LoudnessReadout, MeterBallistics, MeterConfig, OutputDevice, OutputsConfig, PlayerRoutes,
-    PlayersConfig, Route, Tuning, UiConfig,
+    LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig,
+    PlayerRoutes, PlayersConfig, Route, Tuning, UiConfig,
 };
 pub use error::ModelError;
 pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};

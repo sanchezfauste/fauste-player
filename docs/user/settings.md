@@ -38,16 +38,20 @@ the device is reopened when it comes back (see
 
 ## Meters
 
-Changes apply at once.
+Changes apply at once. Settings shows only what the chosen meter type
+uses: the EBU, DIN and VU meters have the scale, red zone and behaviour
+their standard fixes (only the alignment level is set), and a K-System
+meter's alignment is its own 0. A value you set is kept for when you
+choose that type again.
 
 | Setting | Default | Meaning |
 |---|---|---|
 | Meter type | Digital peak | How the bar rises and falls, and its scale, after a standard (see below) |
 | Rise time, Fall rate | 5 ms, 11.8 dB/s | Only for **Custom**. The rise time is an integration time: a tone burst that long reads 2 dB low; 0 shows every peak. |
-| True peak | Off | Measure between samples, with the 4× oversampling filter ITU-R BS.1770 publishes. It shows peaks that exceed 0 dBFS after conversion, which a sample-peak meter misses. As the standard allows, an isolated one-sample click can read up to about 0.3 dB below its sample value. |
+| True peak | Off | Digital peak, custom and K-System only. Measure between samples, with the 4× oversampling filter ITU-R BS.1770 publishes. It shows peaks that exceed 0 dBFS after conversion, which a sample-peak meter misses. As the standard allows, an isolated one-sample click can read up to about 0.3 dB below its sample value. |
 | Scale floor | −60 dBFS | The bottom of the digital scale (digital peak and custom). The other meters show the range their standard gives. |
-| Peak hold | 2 s | How long the highest level stays lit; 0 turns it off |
-| Alignment level | −18 dBFS | Marked on the scale (EBU R68). It is also where the EBU TEST mark, the DIN −9 mark and 0 VU sit. |
+| Peak hold | 2 s | Digital peak, custom and K-System only: how long the highest level stays lit; 0 turns it off. Programme meters and the VU have no hold. |
+| Alignment level | −18 dBFS | All but the K-System. Marked on the scale (EBU R68). It is also where the EBU TEST mark, the DIN −9 mark and 0 VU sit. |
 | Warning from | −9 dBFS | Yellow from here (EBU permitted maximum), for the digital peak and custom meters |
 | Danger from | −3 dBFS | Red from here, for the digital peak and custom meters. The others turn red where their scale does: VU from 0 VU, EBU and DIN PPM from the permitted maximum (EBU +9, DIN 0), the K-System from +4. |
 | Loudness readout | Short-term | The loudness under the meter: off, momentary (last 400 ms) or short-term (last 3 s), EBU R128 |

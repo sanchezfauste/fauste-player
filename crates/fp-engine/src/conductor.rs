@@ -258,8 +258,9 @@ impl Conductor {
             self.version += 1;
             self.model.store(Arc::new(self.state.clone()));
         }
-        if self.engine.true_peak() != self.state.config.meter.true_peak {
-            self.engine.set_true_peak(self.state.config.meter.true_peak);
+        let true_peak = self.state.config.meter.true_peak_in_use();
+        if self.engine.true_peak() != true_peak {
+            self.engine.set_true_peak(true_peak);
         }
         let integration = crate::meter::mixer_integration(&self.state.config.meter);
         if self.engine.meter_integration() != integration {

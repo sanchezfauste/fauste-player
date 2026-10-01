@@ -549,3 +549,48 @@ fn the_alignment_level_is_two_notches_at_the_outer_edges() {
     assert!((left.left() - l.bars[0].left()).abs() < 0.5);
     assert!((right.right() - l.bars[1].right()).abs() < 0.5);
 }
+
+/// Settings > Meters shows only what the chosen type uses (meters spec M3).
+#[test]
+fn each_meter_type_shows_only_its_settings() {
+    let (mut h, _) = harness(state(1, 1));
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Meters").click();
+    h.run_steps(2);
+    let shown = |h: &egui_kittest::Harness<'_, fp_app::ui::app::AppUi>, label: &str| {
+        h.query_all_by_label(label).next().is_some()
+    };
+    for label in [
+        "Scale floor",
+        "Peak hold",
+        "Alignment level",
+        "Warning from",
+        "Danger from",
+        "True peak",
+    ] {
+        assert!(shown(&h, label), "digital peak shows {label}");
+    }
+    assert!(!shown(&h, "Rise time"));
+    h.get_by_role_and_label(Role::Button, "VU (IEC 60268-17)")
+        .click();
+    h.run_steps(3);
+    assert!(shown(&h, "Alignment level"));
+    for label in [
+        "Scale floor",
+        "Peak hold",
+        "Warning from",
+        "Danger from",
+        "True peak",
+    ] {
+        assert!(!shown(&h, label), "VU hides {label}");
+    }
+    h.get_by_role_and_label(Role::Button, "K-20 (K-System)")
+        .click();
+    h.run_steps(3);
+    assert!(shown(&h, "Peak hold") && shown(&h, "True peak"));
+    assert!(!shown(&h, "Alignment level") && !shown(&h, "Warning from"));
+    h.get_by_role_and_label(Role::Button, "Custom").click();
+    h.run_steps(3);
+    assert!(shown(&h, "Rise time") && shown(&h, "Scale floor"));
+}

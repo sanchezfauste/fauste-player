@@ -525,7 +525,7 @@ pub fn vu(
         }
         let hold = reading.hold_db.get(ch).copied().unwrap_or(-120.0);
         let hold_y = y_of(hold);
-        if c.peak_hold_secs > 0.0 && hold_y < bars_bottom && hold_y <= level {
+        if c.peak_hold_in_use() && hold_y < bars_bottom && hold_y <= level {
             painter.rect_filled(
                 Rect::from_x_y_ranges(x, hold_y..=(hold_y + 2.0).min(bars_bottom)),
                 0.0,

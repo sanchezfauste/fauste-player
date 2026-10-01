@@ -62,7 +62,9 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
             });
         },
     );
-    if m.ballistics == MeterBallistics::Custom {
+    // Only what the chosen type's standard defines (meters spec M3).
+    let uses = m.ballistics.settings();
+    if uses.custom_ballistics {
         let mut attack = m.attack_ms;
         let label = t.tr("settings-meter-attack");
         row(ui, &label, None, |ui| {
@@ -78,17 +80,19 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
             }
         });
     }
-    let mut true_peak = m.true_peak;
-    row(
-        ui,
-        &t.tr("settings-true-peak"),
-        Some(&t.tr("settings-hint-true-peak")),
-        |ui| {
-            if toggle(ui, &mut true_peak, &t.tr("settings-true-peak")) {
-                update(scene, |c| c.meter.true_peak = true_peak);
-            }
-        },
-    );
+    if uses.true_peak {
+        let mut true_peak = m.true_peak;
+        row(
+            ui,
+            &t.tr("settings-true-peak"),
+            Some(&t.tr("settings-hint-true-peak")),
+            |ui| {
+                if toggle(ui, &mut true_peak, &t.tr("settings-true-peak")) {
+                    update(scene, |c| c.meter.true_peak = true_peak);
+                }
+            },
+        );
+    }
     let db_slider = |ui: &mut Ui,
                      key: &str,
                      hint: Option<&str>,
@@ -105,53 +109,63 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
             }
         });
     };
-    db_slider(
-        ui,
-        "settings-meter-floor",
-        None,
-        m.floor_db,
-        -96.0..=-20.0,
-        " dBFS",
-        |c, v| {
-            c.floor_db = v;
-        },
-    );
-    db_slider(
-        ui,
-        "settings-meter-hold",
-        Some("settings-hint-meter-hold"),
-        m.peak_hold_secs,
-        0.0..=10.0,
-        " s",
-        |c, v| c.peak_hold_secs = v,
-    );
-    db_slider(
-        ui,
-        "settings-meter-reference",
-        Some("settings-hint-meter-reference"),
-        m.reference_dbfs,
-        -30.0..=0.0,
-        " dBFS",
-        |c, v| c.reference_dbfs = v,
-    );
-    db_slider(
-        ui,
-        "settings-meter-warning",
-        Some("settings-hint-meter-warning"),
-        m.warning_dbfs,
-        -30.0..=0.0,
-        " dBFS",
-        |c, v| c.warning_dbfs = v,
-    );
-    db_slider(
-        ui,
-        "settings-meter-danger",
-        Some("settings-hint-meter-danger"),
-        m.danger_dbfs,
-        -30.0..=0.0,
-        " dBFS",
-        |c, v| c.danger_dbfs = v,
-    );
+    if uses.floor {
+        db_slider(
+            ui,
+            "settings-meter-floor",
+            None,
+            m.floor_db,
+            -96.0..=-20.0,
+            " dBFS",
+            |c, v| {
+                c.floor_db = v;
+            },
+        );
+    }
+    if uses.peak_hold {
+        db_slider(
+            ui,
+            "settings-meter-hold",
+            Some("settings-hint-meter-hold"),
+            m.peak_hold_secs,
+            0.0..=10.0,
+            " s",
+            |c, v| c.peak_hold_secs = v,
+        );
+    }
+    if uses.alignment {
+        db_slider(
+            ui,
+            "settings-meter-reference",
+            Some("settings-hint-meter-reference"),
+            m.reference_dbfs,
+            -30.0..=0.0,
+            " dBFS",
+            |c, v| c.reference_dbfs = v,
+        );
+    }
+    if uses.zones {
+        db_slider(
+            ui,
+            "settings-meter-warning",
+            Some("settings-hint-meter-warning"),
+            m.warning_dbfs,
+            -30.0..=0.0,
+            " dBFS",
+            |c, v| c.warning_dbfs = v,
+        );
+    }
+    if uses.zones {
+        db_slider(
+            ui,
+            "settings-meter-danger",
+            Some("settings-hint-meter-danger"),
+            m.danger_dbfs,
+            -30.0..=0.0,
+            " dBFS",
+            |c, v| c.danger_dbfs = v,
+        );
+    }
     row(
         ui,
         &t.tr("settings-loudness"),
