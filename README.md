@@ -35,6 +35,9 @@ audio engine that the interface can never block.
 - **About window:** the version sits next to the name in the top bar; a
   click on it, or on the info button next to Settings, opens the copyright
   and the licence notices of the bundled components.
+- **Restore defaults and Restart now:** Players, Meters, Analysis and
+  Shortcuts can each be reset to their defaults; settings that need a
+  restart show a "Restart pending" pill, and Restart now applies them.
 - **Close guard:** closing the window while audio is on air asks first,
   lists what is sounding, and offers Stop and close or Cancel.
 - **Standard level meters:** digital peak (IEC 60268-18), EBU and DIN PPM

@@ -467,6 +467,8 @@ A modal window, closed with `Esc` or "Close", with these sections:
 - **Analysis:** every `AnalysisSettings` field (trim threshold and margin, segue drop and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action. Manual markers are kept.
 - **Playlists:** music folder, and create/rename/delete playlists. The last playlist cannot be deleted, nor a playlist containing a current entry.
 
+Settings has one fixed size (900 × 640, clamped to the window) and its section body scrolls. The Players, Meters, Analysis and Shortcuts sections have **Restore defaults** (with confirmation; Players keeps the player count and the language). Settings that only a restart applies (audio system, sample rate, buffer size, routes, bit-perfect, limits, tuning) show a notice and **Restart now** in the footer, and a "Restart pending" pill in the top bar; the restart goes through the on-air guard when something is on air.
+
 The Cartwall and Shortcuts sections, plus M3U import/export and the language selector, come in Phase 2. In Phase 1 the language follows the OS locale.
 
 ### 8.5 Panic isolation

@@ -3,18 +3,44 @@
 Open **Settings** in the top bar. Close it with **Close** or `Esc`. Most
 changes apply at once and are saved automatically.
 
+The window has one size (900 × 640, smaller on a small screen) whatever the
+section, and the section scrolls inside it. Every section lines its labels up
+in one column.
+
 The Players, Meters, Analysis and Keyboard shortcuts sections have a
 **Restore defaults** button in their header. It asks for confirmation and then
 resets only that section (Players keeps the number of players and the
-language). Audio outputs, Playlists, Cartwall, MIDI and Remote have none.
+language; Shortcuts has no other reset button). Audio outputs, Playlists, Cartwall, MIDI and Remote have none.
+
+## Restart pending
+
+Some changes only take effect when the application starts again: the audio
+system, sample rate, buffer size, the Main and Cue outputs (players and
+cartwall), the bit-perfect devices, the limits and the engine tuning in the
+configuration file. The number of players is not one of them: it applies at
+once.
+
+While one of these is waiting, the Settings footer says "Some changes take
+effect after a restart." and offers **Restart now**, and the top bar shows a
+**Restart pending** pill. Hover the pill to see what is waiting. Both do the
+same thing:
+
+- When nothing is on air, **Restart now** (or the pill) restarts at once.
+- When something is on air, the window that lists what is sounding appears,
+  with **Stop and restart** or **Cancel**.
+
+The session is saved first, the application starts again with the same data
+folder (`FAUSTE_HOME`), and nothing goes on air by itself afterwards. If the
+application cannot start again, it says so; start it from your applications
+menu.
 
 ## Audio outputs
 
-Changes in this section apply **the next time the application starts**.
+Changes in this section wait for a restart: see [Restart pending](#restart-pending).
 
 | Setting | Meaning |
 |---|---|
-| Audio system | Linux: PipeWire (in builds that include it), PulseAudio, JACK or ALSA. Windows: WASAPI, ASIO (in builds that include it) or JACK. macOS: Core Audio or JACK. Systems missing on this computer, or with no output device (a JACK server that is not running), are shown as unavailable. "System default" uses the first available one in that order. |
+| Audio system | The silent test backend is not listed, unless it is the one configured: it then shows as "No output (silent)". Linux: PipeWire (in builds that include it), PulseAudio, JACK or ALSA. Windows: WASAPI, ASIO (in builds that include it) or JACK. macOS: Core Audio or JACK. Systems missing on this computer, or with no output device (a JACK server that is not running), are shown as unavailable. "System default" uses the first available one in that order. |
 | Sample rate | The rate every output runs at; files are converted to it with high-quality resampling. Bit-perfect devices start at this rate and then follow the files. |
 | Buffer size | Frames per audio block; the resulting latency is shown below it |
 | Outputs per player | For each player, a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. A sound card that offers several output profiles (ALSA lists front, surround, direct hardware…) shows each as *card — profile*; two entries that would still read the same get their device id in brackets. Multichannel interfaces can carry several players on different pairs. |

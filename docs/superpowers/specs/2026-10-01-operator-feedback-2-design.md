@@ -99,9 +99,11 @@
     spans the window, that Outputs' test buttons share their x positions, and
     that switching sections never changes the window size.
 - **O2 Restore defaults.**
-  - Sections with a button: Meters, Analysis, Players, Shortcuts, Cartwall.
-    Sections without one: Outputs and MIDI (they depend on the hardware) and
-    Remote (it holds security settings).
+  - Sections with a button: Players, Meters, Analysis and Shortcuts. Players
+    keeps the player count and the interface language. Sections without one:
+    Outputs and MIDI (they depend on the hardware), Remote (it holds security
+    settings), Playlists, and Cartwall (the maintainer's decision: its pages
+    are the operator's own content).
   - The button sits in the section header and asks for confirmation
     ("Restore the default values of this section?").
   - The rule is pure: `fp_model::restore_defaults(&mut Config, SettingsSection)`
@@ -111,16 +113,22 @@
   - At start-up the app keeps the configuration the engine was built with.
   - A pure function `fp_model::restart_pending(started: &Config, current:
     &Config) -> Vec<RestartReason>` lists the changed fields that apply only on
-    restart: outputs, player count, limits and tuning. Plan 2 checks each
-    `Config` field and lists the final set in the spec and the user guide.
+    restart. The final set: audio system, sample rate, buffer size, routes
+    (players and cartwall), bit-perfect devices, limits and tuning. The
+    player count is not in it: the player count applies live.
   - While the list is not empty:
     - the Settings footer shows "Some changes take effect after a restart."
       with a **Restart now** button;
-    - the top bar shows a small "Restart pending" pill that opens the same
-      action.
+    - the top bar shows a small "Restart pending" pill that runs **Restart
+      now**: at once when nothing is on air, through the on-air guard
+      otherwise.
   - **Restart now** asks the plan 1 on-air confirmation when something is on
     air. It then stops everything, saves the session, starts the same
-    executable with the same arguments and environment, and exits. After the
+    executable with no arguments (the playlists given at the first start were
+    imported and saved already, and passing them again would import them
+    twice), with the same environment, and exits. In an AppImage it starts
+    `$APPIMAGE`; in a Flatpak it uses `flatpak-spawn` and waits for the
+    hand-off (`tuning.restart_handoff_ms`). After the
     restart nothing is on air (rule 10).
   - The existing note "Changes to audio outputs take effect the next time…" is
     replaced by this notice.

@@ -87,6 +87,9 @@ with release packages). Close it with **Close** or `Esc`. `fauste-player --help`
 the options. Playlist files given as arguments are imported as new
 playlists.
 
+When a setting needs a restart, a **Restart pending** pill appears in the top
+bar: press it to restart (see [Settings](settings.md#restart-pending)).
+
 ### Closing while audio is on air
 
 Closing the window while something is on air does not quit. The window comes
