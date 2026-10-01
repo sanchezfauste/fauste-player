@@ -91,12 +91,14 @@ playlists.
 
 Closing the window while something is on air does not quit. The window comes
 to the front (even if it was minimised) and an **Audio is on air** dialog
-lists what is sounding: players that are playing or paused, and playing
-carts. A player or cartwall CUE does not count. Choose **Cancel** (or `Esc`)
-to keep playing, or **Stop and close** to stop every player on air and all
-carts and then quit. The session is saved as on any other exit. With nothing
-on air the window closes at once. The dialog takes precedence over Settings
-and About, and shortcuts do nothing while it is open.
+lists what is sounding: players that are playing or paused (`P1 — title`),
+and playing carts with their number on the page (`Cart 3 — title`). A player
+or cartwall CUE does not count. Choose **Cancel** (or `Esc`, or click outside
+the dialog) to keep playing, or **Stop and close** to stop every player on
+air and all carts and then quit. The session is saved as on any other exit.
+With nothing on air the window closes at once. The dialog takes precedence
+over Settings and About, and keyboard shortcuts do nothing while it is open
+(MIDI and remote commands still act).
 
 ## First start
 

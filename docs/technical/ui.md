@@ -138,13 +138,17 @@ The close is checked from eframe's `logic`, in `Shell::logic`, not from the
 drawing pass, so it also runs while the window is minimised. When a close is
 requested and something is on air, `AppUi::guard_close` cancels it, restores
 and focuses the window and sets `view.exit_guard`. The next frame draws the
-modal (`exit_guard::show`): **Cancel** or `Esc` dismisses it, **Stop and
-close** sends the stop commands (every player on air, all carts) and then
-closes; the session is saved on shutdown as before. The guard dismisses itself
-if nothing is on air any more. It takes precedence over Settings and About,
-and shortcuts are ignored while it is open. In degraded mode (the banner after
-a UI panic) the close is not guarded, because the dialog cannot be drawn.
-`ExitIntent` names why the guard opened, so other exits can reuse it.
+modal (`exit_guard::show`): **Cancel**, `Esc` (answered in `keyboard` before
+the text-field check) or a click on the backdrop (the modal's `should_close`)
+dismisses it, **Stop and close** sends the stop commands (every player on air,
+all carts) and then closes; the session is saved on shutdown as before. The
+guard dismisses itself if nothing is on air any more. It takes precedence over
+Settings and About (it is drawn after them, so it is the top modal), and
+keyboard shortcuts are ignored while it is open; MIDI and remote commands still
+act. Each cart is listed with its 1-based position on its page. In degraded
+mode (the banner after a UI panic) the close is not guarded, because the dialog
+cannot be drawn. `ExitIntent` names why the guard opened, so other exits can
+reuse it.
 
 ## Panic isolation
 

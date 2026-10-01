@@ -33,8 +33,10 @@ audio engine that the interface can never block.
   CONT modes, a countdown with tenths, a stereo meter, a volume fader and
   its own playlist tabs. Times keep a fixed width as they count.
 - **About window:** the version sits next to the name in the top bar; a
-  click opens the copyright and the licence notices of the bundled
-  components.
+  click on it, or on the info button next to Settings, opens the copyright
+  and the licence notices of the bundled components.
+- **Close guard:** closing the window while audio is on air asks first,
+  lists what is sounding, and offers Stop and close or Cancel.
 - **Standard level meters:** digital peak (IEC 60268-18), EBU and DIN PPM
   (IEC 60268-10), VU (IEC 60268-17) and K-System (K-20, K-14, K-12), each
   with its own ballistics and scale. Optional true peak and EBU R128
@@ -336,5 +338,5 @@ their own licences:
 - every Rust dependency: listed in `licenses/THIRD-PARTY.html` inside each
   release archive.
 
-The About window (click the name in the top bar) shows the copyright, both
+The About window (click the name or the info button in the top bar) shows the copyright, both
 bundled notices and a button that opens the installed `THIRD-PARTY.html`.
