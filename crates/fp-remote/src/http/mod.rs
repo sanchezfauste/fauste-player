@@ -19,7 +19,7 @@ use axum::routing::{delete, get, patch, post, put};
 use fp_model::HttpRemoteConfig;
 use serde_json::json;
 use tokio::sync::{broadcast, watch};
-use tower::limit::ConcurrencyLimitLayer;
+use tower::limit::GlobalConcurrencyLimitLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::timeout::TimeoutLayer;
 
@@ -172,13 +172,16 @@ pub fn router(ctx: Ctx) -> Router {
             StatusCode::REQUEST_TIMEOUT,
             Duration::from_millis(config.request_timeout_ms.into()),
         ))
-        .layer(ConcurrencyLimitLayer::new(IN_FLIGHT_REQUESTS))
+        .layer(GlobalConcurrencyLimitLayer::new(IN_FLIGHT_REQUESTS))
         .with_state(ctx)
 }
 
-/// Requests served at once; more wait their turn. An engineering bound
-/// that keeps a flood from growing memory, not an operator setting.
-const IN_FLIGHT_REQUESTS: usize = 64;
+/// Requests served at once across the whole server; more wait their turn.
+/// One semaphore is shared by every route (a per-route limit would allow
+/// this many per route). An open event stream has answered, so it holds
+/// no slot. An engineering bound that keeps a flood from growing memory,
+/// not an operator setting.
+pub const IN_FLIGHT_REQUESTS: usize = 64;
 
 /// How long a browser may cache a preflight answer.
 const PREFLIGHT_MAX_AGE: Duration = Duration::from_secs(600);

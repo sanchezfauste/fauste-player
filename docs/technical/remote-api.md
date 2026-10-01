@@ -270,8 +270,9 @@ Errors carry `{"error": code, "message": text}`.
 - **CORS.** Preflights from listed origins are answered for `GET`, `POST`,
   `PUT`, `PATCH` and `DELETE`, with the `Authorization` and `Content-Type`
   headers.
-- **Limits.** Request timeout, body size, and 64 requests in flight (the
-  rest wait their turn).
+- **Limits.** Request timeout, body size, and 64 requests in flight
+  across the whole server (the rest wait their turn; an open event stream
+  does not count).
 - **Logging.** A refused request is logged at most once per second per
   source address.
 - There is no TLS. Beyond a trusted network, a reverse proxy terminates

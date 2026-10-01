@@ -3,8 +3,8 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 
 use arc_swap::ArcSwap;
 use fp_model::{AppState, Command, Config, TrackId};
@@ -18,6 +18,10 @@ pub struct FakeControl {
     pub accept: AtomicBool,
     pub covers: Mutex<HashMap<TrackId, Vec<u8>>>,
     pub peaks: Mutex<HashMap<TrackId, WaveformData>>,
+    /// False holds every `cover` call until `open_covers`.
+    cover_gate: Mutex<bool>,
+    cover_open: Condvar,
+    waiting: AtomicUsize,
 }
 
 impl FakeControl {
@@ -29,7 +33,24 @@ impl FakeControl {
             accept: AtomicBool::new(true),
             covers: Mutex::new(HashMap::new()),
             peaks: Mutex::new(HashMap::new()),
+            cover_gate: Mutex::new(true),
+            cover_open: Condvar::new(),
+            waiting: AtomicUsize::new(0),
         })
+    }
+
+    pub fn close_covers(&self) {
+        *self.cover_gate.lock().unwrap() = false;
+    }
+
+    pub fn open_covers(&self) {
+        *self.cover_gate.lock().unwrap() = true;
+        self.cover_open.notify_all();
+    }
+
+    /// `cover` calls held by the gate now.
+    pub fn covers_waiting(&self) -> usize {
+        self.waiting.load(Ordering::SeqCst)
     }
 
     pub fn take_sent(&self) -> Vec<Command> {
@@ -58,6 +79,13 @@ impl RemoteControl for FakeControl {
         true
     }
     fn cover(&self, track: TrackId) -> Option<Vec<u8>> {
+        self.waiting.fetch_add(1, Ordering::SeqCst);
+        let mut open = self.cover_gate.lock().unwrap();
+        while !*open {
+            open = self.cover_open.wait(open).unwrap();
+        }
+        drop(open);
+        self.waiting.fetch_sub(1, Ordering::SeqCst);
         self.covers.lock().unwrap().get(&track).cloned()
     }
     fn peaks(&self, track: TrackId) -> Option<WaveformData> {

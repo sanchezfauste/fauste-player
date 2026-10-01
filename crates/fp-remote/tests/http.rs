@@ -324,3 +324,102 @@ async fn a_wrong_method_is_a_json_405() {
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
     assert_eq!(body["error"], "method_not_allowed");
 }
+
+fn get_req(uri: &str) -> Request<Body> {
+    Request::builder()
+        .uri(uri)
+        .header("host", "127.0.0.1:7380")
+        .body(Body::empty())
+        .unwrap()
+}
+
+/// Releases held covers even when an assertion fails, so the runtime's
+/// blocking threads can end.
+struct OpenOnDrop(Arc<FakeControl>);
+
+impl Drop for OpenOnDrop {
+    fn drop(&mut self) {
+        self.0.open_covers();
+    }
+}
+
+/// An analysed track with a cover, and every `cover` call held.
+fn held_covers() -> (Arc<FakeControl>, String) {
+    let mut s = demo_state();
+    let t = s.playlists.iter().next().unwrap().entries[0].track;
+    s.library.get_mut(t).unwrap().analyzed = true;
+    let fake = FakeControl::new(s);
+    fake.covers.lock().unwrap().insert(t, vec![0x89, b'P']);
+    fake.close_covers();
+    (fake, format!("/api/v1/tracks/{}/cover", t.0))
+}
+
+async fn wait_waiting(fake: &FakeControl, n: usize) {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    while fake.covers_waiting() < n {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "{} waiting",
+            fake.covers_waiting()
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+}
+
+/// The in-flight limit counts every route together: request N+1 waits.
+#[tokio::test]
+async fn the_request_limit_is_shared_by_every_route() {
+    use fp_remote::http::IN_FLIGHT_REQUESTS;
+    let (fake, cover) = held_covers();
+    let _open = OpenOnDrop(fake.clone());
+    let app = router(ctx(&fake));
+    let held: Vec<_> = (0..IN_FLIGHT_REQUESTS)
+        .map(|_| tokio::spawn(app.clone().oneshot(get_req(&cover))))
+        .collect();
+    wait_waiting(&fake, IN_FLIGHT_REQUESTS).await;
+    let mut state = tokio::spawn(app.clone().oneshot(get_req("/api/v1/state")));
+    let early = tokio::time::timeout(std::time::Duration::from_millis(300), &mut state).await;
+    assert!(early.is_err(), "request N+1 waits for a free slot");
+    fake.open_covers();
+    let res = tokio::time::timeout(std::time::Duration::from_secs(5), state)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    for h in held {
+        assert_eq!(h.await.unwrap().unwrap().status(), StatusCode::OK);
+    }
+}
+
+/// An open event stream has answered: it holds no slot while it streams.
+#[tokio::test]
+async fn an_open_event_stream_holds_no_slot() {
+    use fp_remote::http::IN_FLIGHT_REQUESTS;
+    let (fake, cover) = held_covers();
+    let _open = OpenOnDrop(fake.clone());
+    let app = router(ctx(&fake));
+    let stream = app
+        .clone()
+        .oneshot(get_req("/api/v1/events"))
+        .await
+        .unwrap();
+    assert_eq!(stream.status(), StatusCode::OK);
+    let held: Vec<_> = (0..IN_FLIGHT_REQUESTS - 1)
+        .map(|_| tokio::spawn(app.clone().oneshot(get_req(&cover))))
+        .collect();
+    wait_waiting(&fake, IN_FLIGHT_REQUESTS - 1).await;
+    let res = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        app.clone().oneshot(get_req("/api/v1/state")),
+    )
+    .await
+    .expect("the stream must not hold a slot")
+    .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    fake.open_covers();
+    for h in held {
+        h.await.unwrap().unwrap();
+    }
+    drop(stream);
+}
