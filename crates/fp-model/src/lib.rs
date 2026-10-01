@@ -10,6 +10,7 @@ pub mod config;
 pub mod error;
 pub mod ids;
 pub mod midi;
+pub mod on_air;
 pub mod player;
 pub mod playlist;
 pub mod reducer;
@@ -36,6 +37,7 @@ pub use config::{
 pub use error::ModelError;
 pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
 pub use midi::{MidiAction, MidiBinding, MidiConfig, MidiDevice, MidiTrigger};
+pub use on_air::{OnAir, on_air};
 pub use player::{ColumnWidths, CueState, PlayMode, PlayerState, Transport};
 pub use playlist::{Playlist, PlaylistEntry, Playlists};
 pub use reducer::{apply, on_event, plan_for};

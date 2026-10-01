@@ -291,6 +291,7 @@ file-unreadable-tip = No se puede leer el archivo: { $path }
 
 # About window
 tip-about = Acerca de Fauste Player
+tip-about-name = Acerca de Fauste Player (nombre y versión)
 about-version = Versión { $version }
 about-copyright = Copyright © Marc Sánchez Fauste. Todos los derechos reservados.
 about-bundled = Este programa incluye los siguientes componentes bajo sus propias licencias:
@@ -350,3 +351,13 @@ remote-status-listening = Escuchando en { $addr }
 remote-error-token = No iniciado: hace falta un token fuera de este ordenador.
 remote-error-address = No iniciado: la dirección no es válida.
 remote-error-other = No iniciado: { $reason }
+
+# Close guard
+exit-guard-title = Hay audio en el aire
+exit-guard-close-body = Al cerrar se detendrá todo lo que está sonando:
+exit-guard-cancel = Cancelar
+exit-guard-close-confirm = Detener y cerrar
+on-air-player = P{ $n } — { $title }
+on-air-player-empty = P{ $n }
+on-air-cart = Cartucho { $n } — { $title }
+on-air-cart-empty = Cartucho { $n }

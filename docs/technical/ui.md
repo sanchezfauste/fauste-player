@@ -18,7 +18,8 @@
 | `ui/settings/remote.rs` | Settings → Remote: the HTTP and OSC switches, addresses, token, origins and senders, and each server's state read from the remote thread's status cell |
 | `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall strip, and its pure view model (status, countdown, progress) |
 | `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
-| `ui/shell.rs` | Panic isolation around each frame |
+| `ui/shell.rs` | Panic isolation around each frame, and the close check in `Shell::logic` |
+| `ui/exit_guard.rs` | The "Audio is on air" modal: the `ExitIntent`, the list of what is sounding, and the stop commands |
 | `ui/view.rs`, `ui/format.rs` | Pure view model: what to show, how to format it (unit-tested) |
 | `ui/widgets.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, segmented control, tabular times, meter, fader, waveform), drawn icons, the Nocturne theme. The meter's geometry is the pure `meter_layout` (labels, lines, bars, readouts), unit-tested |
 | `ui/about.rs` | The About window: version, copyright, bundled notices, and the third-party notices file (located at start-up, opened on a helper thread) |
@@ -118,6 +119,36 @@ falls back to Slate. Inter's digits are proportional, so times are painted
 with `widgets::paint_tabular`/`tabular_label`, which centre every digit in a
 cell as wide as the widest one: a countdown keeps its width as it runs. Fonts are installed on the first frame, and drawing starts
 on the next one, when they are bound.
+
+## Window decorations
+
+On Linux, `fp-app` enables winit's `wayland-csd-adwaita` feature. `eframe` is
+built without its default features, which would otherwise bring it. A Wayland
+compositor without server-side decorations (GNOME) leaves the frame to the
+client, and without that feature winit draws a bare fallback frame with
+non-standard buttons. With it, the title bar has the usual minimise, maximise
+and close buttons. Windows and macOS use their native frames.
+
+## Exit guard
+
+`fp_model::on_air` decides what is on air: players that are playing or paused
+and playing carts. A player CUE or a cartwall CUE does not count.
+
+The close is checked from eframe's `logic`, in `Shell::logic`, not from the
+drawing pass, so it also runs while the window is minimised. When a close is
+requested and something is on air, `AppUi::guard_close` cancels it, restores
+and focuses the window and sets `view.exit_guard`. The next frame draws the
+modal (`exit_guard::show`): **Cancel**, `Esc` (answered in `keyboard` before
+the text-field check) or a click on the backdrop (the modal's `should_close`)
+dismisses it, **Stop and close** sends the stop commands (every player on air,
+all carts) and then closes; the session is saved on shutdown as before. The
+guard dismisses itself if nothing is on air any more. It takes precedence over
+Settings and About (it is drawn after them, so it is the top modal), and
+keyboard shortcuts are ignored while it is open; MIDI and remote commands still
+act. Each cart is listed with its 1-based position on its page. In degraded
+mode (the banner after a UI panic) the close is not guarded, because the dialog
+cannot be drawn. `ExitIntent` names why the guard opened, so other exits can
+reuse it.
 
 ## Panic isolation
 

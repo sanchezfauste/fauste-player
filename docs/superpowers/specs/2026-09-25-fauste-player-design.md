@@ -408,7 +408,8 @@ Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opu
 ### 8.1 Framework and theme
 
 - `eframe`/`egui` with the `wgpu` renderer (falling back to `glow` if wgpu initialisation fails).
-- **Native window decorations.** The in-app top bar keeps the app name with the version (a click opens the About window: copyright, bundled licence notices, third-party notices file), the "Settings" button and the clock.
+- **Native window decorations.** The in-app top bar keeps the app name with the version (a click opens the About window: copyright, bundled licence notices, third-party notices file), an "About" button (info icon, left of "Settings", opens the same window), the "Settings" button and the clock. On Linux winit's Adwaita-style frame gives Wayland compositors without server-side decorations the standard window buttons.
+- **Closing while on air.** A close request while any player is playing or paused, or any cart is playing (a CUE does not count), is cancelled: the window is restored and focused and an "Audio is on air" modal lists what is sounding, with Cancel and "Stop and close". Confirming stops every player on air and all carts, then closes (the session is saved as usual). The modal takes precedence over Settings and About; `Esc` cancels. The check runs from the frame's `logic` step, so it works while minimised. In degraded mode (after a UI panic) the close is not guarded.
 - `theme` module: Nocturne tokens as constants. The design's `oklch` values are converted once to sRGB and stored as precomputed constants, with a unit test that checks the conversion. Rounding is 0 and spacing follows the design.
 - **Fonts:** Inter embedded (OFL); Phosphor icons via `egui-phosphor`.
 - **Player-specific icons** (fade stop, stop after current) are drawn as vector shapes, as in the design.

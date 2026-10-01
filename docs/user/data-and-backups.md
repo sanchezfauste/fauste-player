@@ -47,7 +47,7 @@ ending it at once.
 
 ## Editing `config.json` by hand
 
-Close the application first. Unknown or out-of-range values are corrected to
-the nearest valid value when the file is loaded, and the corrections are
-logged. The `limits` and `tuning` sections hold advanced values (resource
+Close the application first (if audio is on air, it asks before closing).
+Unknown or out-of-range values are corrected to the nearest valid value when
+the file is loaded, and the corrections are logged. The `limits` and `tuning` sections hold advanced values (resource
 limits, engine timing) that are not in the Settings window.

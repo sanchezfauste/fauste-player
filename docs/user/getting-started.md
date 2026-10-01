@@ -80,11 +80,25 @@ one computer), give each its own folder with `FAUSTE_HOME`.
 ### Command line
 
 `fauste-player --version` prints the version. The top bar shows it too, next
-to the name: click either to open **About**, with the copyright and the
+to the name: click either, or the **About** button (an info icon, left of
+**Settings**), to open **About**, with the copyright and the
 licence notices (**Third-party licences** opens the notices file installed
 with release packages). Close it with **Close** or `Esc`. `fauste-player --help` lists
 the options. Playlist files given as arguments are imported as new
 playlists.
+
+### Closing while audio is on air
+
+Closing the window while something is on air does not quit. The window comes
+to the front (even if it was minimised) and an **Audio is on air** dialog
+lists what is sounding: players that are playing or paused (`P1 — title`),
+and playing carts with their number on the page (`Cart 3 — title`). A player
+or cartwall CUE does not count. Choose **Cancel** (or `Esc`, or click outside
+the dialog) to keep playing, or **Stop and close** to stop every player on
+air and all carts and then quit. The session is saved as on any other exit.
+With nothing on air the window closes at once. The dialog takes precedence
+over Settings and About, and keyboard shortcuts do nothing while it is open
+(MIDI and remote commands still act).
 
 ## First start
 

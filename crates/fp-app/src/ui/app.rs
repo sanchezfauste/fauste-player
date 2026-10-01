@@ -21,6 +21,7 @@ use fp_model::{
 use super::about::{self, NoticeOpener};
 use super::cartwall;
 use super::controller::Controller;
+use super::exit_guard::{self, ExitIntent};
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::notice;
 use super::player;
@@ -69,6 +70,10 @@ pub(crate) struct ViewState {
     pub rows_built: usize,
     pub settings_open: bool,
     pub about_open: bool,
+    /// The close guard is asking the operator (feedback 2 spec O6).
+    pub exit_guard: Option<ExitIntent>,
+    /// The operator confirmed the close: let the window go.
+    pub close_confirmed: bool,
     /// The notice about tracks an earlier version analysed is open.
     pub outdated_open: bool,
     /// Where each player's waveform menu was opened, in seconds.
@@ -465,6 +470,9 @@ impl AppUi {
             self.view.outdated_open =
                 self.services.is_some() && crate::services::outdated_tracks(&state) > 0;
         }
+        // Files dropped on the window, when no dialog is up (handled once
+        // the dialogs are drawn).
+        let mut take_drops = false;
         if self.view.settings_open {
             if !self.settings_shown {
                 self.settings.reset();
@@ -515,8 +523,37 @@ impl AppUi {
                     None => {}
                 }
             } else {
-                self.file_drops(&ctx, &state);
+                take_drops = true;
             }
+        }
+        // The guard takes precedence over Settings and About: drawn last, it
+        // is the top modal.
+        if let Some(intent) = self.view.exit_guard {
+            let items = fp_model::on_air(&state);
+            if items.is_empty() {
+                // Everything stopped meanwhile: nothing left to confirm.
+                self.view.exit_guard = None;
+            } else {
+                match exit_guard::show(&ctx, &scene, intent, &items) {
+                    Some(true) => {
+                        for command in exit_guard::stop_commands(&items) {
+                            scene.ctl.send(command);
+                        }
+                        self.view.exit_guard = None;
+                        match intent {
+                            ExitIntent::Close => {
+                                self.view.close_confirmed = true;
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                        }
+                    }
+                    Some(false) => self.view.exit_guard = None,
+                    None => {}
+                }
+            }
+        }
+        if take_drops {
+            self.file_drops(&ctx, &state);
         }
         let busy = state
             .players
@@ -529,7 +566,48 @@ impl AppUi {
         }
     }
 
+    /// O6: a close request while something is on air waits for the
+    /// operator. Runs once per frame from `eframe::App::logic`, which
+    /// eframe also calls while the window is minimized or hidden (when
+    /// `ui` does not run), so a close can never bypass it.
+    pub fn guard_close(&mut self, ctx: &egui::Context) {
+        let close_requested = ctx.input(|i| i.viewport().close_requested());
+        if !close_requested || self.view.close_confirmed {
+            return;
+        }
+        if fp_model::on_air(&self.ctl.model()).is_empty() {
+            // Nothing to cut: let the window close.
+            return;
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        // The dialog must be visible even if the window was minimized.
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        self.view.exit_guard = Some(ExitIntent::Close);
+    }
+
     fn keyboard(&mut self, ctx: &egui::Context, state: &AppState) {
+        // The close guard owns the keyboard while it is open, even over a
+        // focused text field: Esc cancels it and no shortcut acts. (Esc is
+        // answered here, before the modal is drawn, so the modal never
+        // sees it; its own `should_close` covers the backdrop click.)
+        if self.view.exit_guard.is_some() {
+            let escape = ctx.input(|i| {
+                i.events.iter().any(|e| {
+                    matches!(e, egui::Event::Key {
+                        key: Key::Escape,
+                        pressed: true,
+                        repeat: false,
+                        modifiers,
+                        ..
+                    } if modifiers.is_none())
+                })
+            });
+            if escape {
+                self.view.exit_guard = None;
+            }
+            return;
+        }
         if ctx.text_edit_focused() {
             return;
         }
@@ -877,7 +955,7 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         )
         .selectable(false),
     );
-    let about_label = scene.i18n.tr("tip-about");
+    let about_label = scene.i18n.tr("tip-about-name");
     let response = ui
         .interact(
             name.rect.union(version.rect),
@@ -928,6 +1006,26 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         .clicked()
         {
             view_state.settings_open = true;
+        }
+        let about = scene.i18n.tr("tip-about");
+        let style = TileStyle {
+            border: theme::NEUTRAL_800,
+            hover_fill: theme::NEUTRAL_800,
+            ..TileStyle::plain()
+        };
+        if widgets::tile(ui, vec2(24.0, 24.0), &about, true, style, |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                egui_phosphor::regular::INFO,
+                font(14.0),
+                c,
+            );
+        })
+        .on_hover_text(&about)
+        .clicked()
+        {
+            view_state.about_open = true;
         }
     });
 }
