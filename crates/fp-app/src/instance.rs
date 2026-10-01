@@ -36,6 +36,22 @@ pub fn acquire(dir: &Path) -> io::Result<Option<InstanceLock>> {
     }
 }
 
+/// True while an instance holds the lock in `dir`. The probe takes the
+/// lock for an instant when it is free, so it is for a caller that is
+/// about to end, not for the running instance.
+pub fn is_held(dir: &Path) -> io::Result<bool> {
+    let file = match OpenOptions::new().write(true).open(dir.join(LOCK_FILE)) {
+        Ok(file) => file,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e),
+    };
+    match file.try_lock() {
+        Ok(()) => Ok(false),
+        Err(TryLockError::WouldBlock) => Ok(true),
+        Err(TryLockError::Error(e)) => Err(e),
+    }
+}
+
 /// Hands `paths` to the running instance of `dir`.
 pub fn deliver(dir: &Path, paths: &[PathBuf]) -> io::Result<()> {
     let inbox = dir.join(INBOX);

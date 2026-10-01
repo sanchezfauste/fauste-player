@@ -35,8 +35,11 @@ const INBOX_INTERVAL: Duration = Duration::from_millis(500);
 /// How the interface ended.
 enum Exit {
     Quit,
-    /// The operator asked for a restart (feedback 2 spec O4).
-    Restart,
+    /// The operator asked for a restart (feedback 2 spec O4); inside a
+    /// Flatpak, this process waits at most `handoff` for the new one.
+    Restart {
+        handoff: Duration,
+    },
 }
 
 fn main() -> ExitCode {
@@ -83,6 +86,7 @@ fn main() -> ExitCode {
         fp_model::Limits::default().max_crash_reports,
     );
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");
+    let data_dir = paths.data_dir.clone();
     let result = run(paths, playlists);
     drop(lock);
     match result {
@@ -90,9 +94,9 @@ fn main() -> ExitCode {
             tracing::info!("stopped");
             ExitCode::SUCCESS
         }
-        Ok(Exit::Restart) => {
+        Ok(Exit::Restart { handoff }) => {
             // The lock is released above: the new process can take it.
-            match fp_app::restart::relaunch() {
+            match fp_app::restart::relaunch(&data_dir, handoff) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
                     tracing::error!(error = %e, "could not start again");
@@ -232,6 +236,16 @@ fn run(
             Ok(Box::new(Shell::new(app)))
         }),
     );
+    let handoff = Duration::from_secs_f64(
+        handle
+            .model
+            .load()
+            .config
+            .tuning
+            .restart_handoff_ms
+            .max(0.0)
+            / 1000.0,
+    );
     // Final save with the current positions, then stop the audio.
     drop(remote);
     services.shutdown();
@@ -239,7 +253,7 @@ fn run(
     result.map_err(|e| e.to_string())?;
     // Only a confirmed Restart now sets the flag; a plain close quits.
     Ok(if restart.load(std::sync::atomic::Ordering::Acquire) {
-        Exit::Restart
+        Exit::Restart { handoff }
     } else {
         Exit::Quit
     })

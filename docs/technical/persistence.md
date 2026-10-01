@@ -261,3 +261,4 @@ See [Remote control API](remote-api.md).
 | `gain_smoothing_ms` | 20 | volume smoothing |
 | `save_debounce_ms` | 1000 | autosave delay |
 | `missing_recheck_ms` | 30000 | how often files not found are looked for again |
+| `restart_handoff_ms` | 5000 | inside a Flatpak, how long Restart now waits for the new instance to take the instance lock (500–60000) |
