@@ -107,7 +107,8 @@
   - The button sits in the section header and asks for confirmation
     ("Restore the default values of this section?").
   - The rule is pure: `fp_model::restore_defaults(&mut Config, SettingsSection)`
-    resets exactly that section's fields to `Config::default()`. One test per
+    resets that section's whole configuration group to `Config::default()`,
+    including fields the section does not show. One test per
     section checks that the other sections are untouched.
 - **O4 Restart.**
   - At start-up the app keeps the configuration the engine was built with.
@@ -115,7 +116,10 @@
     &Config) -> Vec<RestartReason>` lists the changed fields that apply only on
     restart. The final set: audio system, sample rate, buffer size, routes
     (players and cartwall), bit-perfect devices, limits and tuning. The
-    player count is not in it: the player count applies live.
+    player count is not in it: the player count applies live. Nothing
+    changes limits or tuning while the app runs (they are edited in the
+    configuration file with the app closed), so in practice they apply at
+    the next start without raising the notice.
   - While the list is not empty:
     - the Settings footer shows "Some changes take effect after a restart."
       with a **Restart now** button;
@@ -128,7 +132,8 @@
     imported and saved already, and passing them again would import them
     twice), with the same environment, and exits. In an AppImage it starts
     `$APPIMAGE`; in a Flatpak it uses `flatpak-spawn` and waits for the
-    hand-off (`tuning.restart_handoff_ms`). After the
+    hand-off (`tuning.restart_handoff_ms`); a hand-off that times out is
+    reported as a failed restart. After the
     restart nothing is on air (rule 10).
   - The existing note "Changes to audio outputs take effect the next time…" is
     replaced by this notice.

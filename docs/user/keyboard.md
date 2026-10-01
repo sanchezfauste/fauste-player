@@ -22,8 +22,8 @@
 In **Settings → Keyboard shortcuts**, click an action and press the key (with
 Ctrl, Alt, Shift or Cmd if you like). If another action already uses that
 key, its name is shown. Choose **Assign** to move the key, or **Cancel**.
-**Unbind** removes a shortcut and **Restore defaults** (top right of the section) restores the table
-above. Available actions, for every player and cart:
+**Unbind** removes a shortcut and **Restore defaults** (top right of the
+section) restores the table above. Available actions, for every player and cart:
 
 - play, previous, restart, pause, stop, fade stop and CUE on a player
   (previous and restart have no default key);

@@ -163,7 +163,9 @@ a section is selected. The section header (title and **Restore defaults**) is
 fixed; the body below it sits in `ScrollArea::both`. Rows use
 `labelled_row`, with a label column of `LABEL_WIDTH` (180 px), so every section
 shares one grid. The footer spans the window width and holds the restart notice
-and **Restart now** while `fp_model::restart_pending` is not empty.
+and **Restart now** while `fp_model::restart_pending` is not empty. A transient
+notice (`SettingsDeps::notice`) briefly takes the place of the restart text;
+**Restart now** stays.
 
 ## Panic isolation
 

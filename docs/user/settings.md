@@ -10,33 +10,40 @@ in one column.
 The Players, Meters, Analysis and Keyboard shortcuts sections have a
 **Restore defaults** button in their header. It asks for confirmation and then
 resets only that section (Players keeps the number of players and the
-language; Shortcuts has no other reset button). Audio outputs, Playlists, Cartwall, MIDI and Remote have none.
+language; Shortcuts has no other reset button). Audio outputs, Playlists,
+Cartwall, MIDI and Remote have none.
 
 ## Restart pending
 
 Some changes only take effect when the application starts again: the audio
 system, sample rate, buffer size, the Main and Cue outputs (players and
-cartwall), the bit-perfect devices, the limits and the engine tuning in the
-configuration file. The number of players is not one of them: it applies at
-once.
+cartwall) and the bit-perfect devices. The number of players is not one of
+them: it applies at once.
+
+The limits and the engine tuning also apply at the next start, but they are
+edited in the configuration file with the application closed (see
+[Data and backups](data-and-backups.md)), so they never show as pending.
 
 While one of these is waiting, the Settings footer says "Some changes take
 effect after a restart." and offers **Restart now**, and the top bar shows a
-**Restart pending** pill. Hover the pill to see what is waiting. Both do the
-same thing:
+**Restart pending** pill. Hover the pill to see what is waiting. A short
+notice (for example, that a setting was saved) can take the place of the
+footer text for a moment; **Restart now** stays. Both do the same thing:
 
 - When nothing is on air, **Restart now** (or the pill) restarts at once.
 - When something is on air, the window that lists what is sounding appears,
   with **Stop and restart** or **Cancel**.
 
-The session is saved first, the application starts again with the same data
-folder (`FAUSTE_HOME`), and nothing goes on air by itself afterwards. If the
-application cannot start again, it says so; start it from your applications
-menu.
+The session is saved first and the audio and MIDI control stop, then the
+application starts again with the same data folder (`FAUSTE_HOME`), and
+nothing goes on air by itself afterwards. If the application cannot start
+again (in a Flatpak, also when the new one does not start in time), it says so;
+start it from your applications menu.
 
 ## Audio outputs
 
-Changes in this section wait for a restart: see [Restart pending](#restart-pending).
+Changes in this section wait for a restart: see
+[Restart pending](#restart-pending).
 
 | Setting | Meaning |
 |---|---|
