@@ -207,7 +207,7 @@ carts).
 | `devices` | `[]` | `{ "input": port name, "output": port name or null }`: where an input's LED feedback goes |
 | `bindings` | `[]` | `{ "device": port name, "trigger": { "Note": { "channel", "note" } } \| { "ControlChange": { "channel", "controller" } } \| { "PitchBend": { "channel" } }, "action": { "Button": shortcut action } \| { "Volume": n } }`; channels 0–15. Bindings to other actions, out of MIDI's range, or a volume on a note are dropped with a warning |
 
-### `remote` (config file only for now)
+### `remote` (Settings → Remote)
 
 | Field | Default | Range |
 |---|---|---|

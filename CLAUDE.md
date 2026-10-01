@@ -182,10 +182,15 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   3. capture it with `import -window <id> shot.png`.
 - Driving the running app (for a screenshot with a player on air): enable
   `remote.http` inside `"config"` in the scratch `config.json` and use `curl`
-  (see `docs/user/remote-control.md`), or click with `xdotool`
-  (`xdotool search --name "Fauste Player"`, then
-  `xdotool mousemove --window <id> <x> <y> click 1`). `xdotool` is needed
-  for clicks; install it with the system's package manager.
+  (see `docs/user/remote-control.md`). `xdotool` (install it with the
+  system's package manager) can click on a real X11 session
+  (`xdotool mousemove --window <id> <x> <y> click 1`); on a Wayland session
+  it moves the pointer but its clicks do not reach XWayland windows, so use
+  the remote API there. `xdotool mousemove 0 0` keeps the pointer from
+  highlighting a row in the shot.
+- Tagged test audio without encoders: WAV files with a RIFF `LIST/INFO`
+  chunk (`INAM` title, `IART` artist) written from Python are read by the
+  analysis like any tagged file.
 - Remote API tests drive the axum router with `tower::ServiceExt::oneshot`
   (no sockets) and the recording `FakeControl` in
   `crates/fp-remote/tests/support`; server tests bind `127.0.0.1` on free

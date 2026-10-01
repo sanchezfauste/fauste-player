@@ -102,3 +102,23 @@ See [Keyboard](keyboard.md).
 
 Turn MIDI control surfaces on, see the input ports, and learn a control
 for each player action. See [MIDI control surfaces](midi.md).
+
+## Remote
+
+Remote control over the network, for web pages, phone apps, automation and
+control surfaces. See [Remote control](remote-control.md).
+
+- **Allow remote control over HTTP**, its **address** and **port**, and a
+  line that says whether it is listening.
+- **Token**, required beyond this computer. **Generate** makes a random one,
+  **Show** reveals it, and **Copy** puts it on the clipboard. A warning
+  appears when the address reaches beyond this computer and there is no
+  token.
+- **Web pages allowed to use the API**: one origin per line.
+- **Allow OSC control**, its **address** and **port**, and the **senders
+  allowed** (addresses or subnets, one per line).
+- **Publish times every**: how often elapsed and remaining times are sent
+  while something plays.
+
+Text fields apply when you leave them. An invalid value is corrected, and
+the field shows what was kept.

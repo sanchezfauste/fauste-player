@@ -170,6 +170,11 @@ the UI's clamping rules are not repeated here.
 | `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | `SetMarker` |
 | `POST /tracks/{id}/markers/reset` | — | `ResetMarkers` |
 
+Editing reuses tracks already in the library: inserting an entry and
+setting a cart refer to the same track, with its markers and analysis
+(`Command::InsertTracks`, `Command::AssignCartTrack`). A path inserted
+again would make a new track.
+
 Marker kinds in paths are `cue-in`, `intro-end`, `outro-start`,
 `segue-start`, `cue-out`. Rows and columns are validated against
 `limits.max_cart_rows` and `limits.max_cart_cols`; an index past the playlist's
@@ -392,7 +397,8 @@ fp-app ──(Bridge: impl RemoteControl)──► fp-remote
   join with a timeout. If the thread dies the error is logged and shown, and
   the application carries on, as with MIDI.
 - **Bind failures** (port in use, permission) are logged, shown in Settings,
-  and the application runs without that server.
+  and the application runs without that server. They are tried again every
+  2 s, so a port freed later is taken without a restart.
 - **Token generation.** Settings offers "Generate": 32 random bytes from
   `getrandom`, base64url without padding.
 
