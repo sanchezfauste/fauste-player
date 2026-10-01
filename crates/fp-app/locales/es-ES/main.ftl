@@ -73,6 +73,7 @@ settings-tab-players = Players
 settings-tab-analysis = Análisis
 settings-tab-playlists = Playlists
 settings-backend = Sistema de audio
+settings-backend-null = Sin salida (silencio)
 settings-backend-unavailable = { $name } (no disponible)
 settings-rate = Frecuencia de muestreo
 settings-buffer = Tamaño de búfer

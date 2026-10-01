@@ -421,3 +421,43 @@ fn each_playlist_export_button_names_its_playlist() {
             .is_some()
     );
 }
+
+fn outputs_with_null(
+    configured: Option<&str>,
+) -> egui_kittest::Harness<'static, fp_app::ui::app::AppUi> {
+    let mut s = state(1, 1);
+    s.config.outputs.backend = configured.map(str::to_owned);
+    let backends: Vec<Arc<dyn AudioBackend>> = vec![
+        Arc::new(OfflineBackend::new()),
+        Arc::new(fp_backends::NullBackend),
+    ];
+    let (mut h, _) = harness_with_backends(s, backends);
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Audio outputs")
+        .click();
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_all_by_label("Test Main").next().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    h
+}
+
+#[test]
+fn the_null_backend_is_not_offered() {
+    let mut h = outputs_with_null(Some("offline"));
+    h.get_by_value("Offline").click();
+    h.run_steps(2);
+    assert!(h.query_by_label("System default").is_some());
+    assert!(h.query_by_label("Null").is_none());
+    assert!(h.query_by_label("No output (silent)").is_none());
+}
+
+#[test]
+fn a_configured_null_backend_shows_as_no_output() {
+    let h = outputs_with_null(Some("null"));
+    assert!(h.query_by_value("No output (silent)").is_some());
+}

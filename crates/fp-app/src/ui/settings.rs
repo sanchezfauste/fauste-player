@@ -613,6 +613,26 @@ fn slider<T: egui::emath::Numeric>(
     response.changed()
 }
 
+/// The audio systems the list offers. `null` (silence) is for tests and
+/// headless use: it shows only when the configuration names it
+/// (feedback 2 spec O5).
+fn listed_backends<'a>(
+    all: &'a [BackendChoice],
+    configured: Option<&str>,
+) -> Vec<&'a BackendChoice> {
+    all.iter()
+        .filter(|b| b.id != "null" || configured == Some("null"))
+        .collect()
+}
+
+fn backend_name(t: &crate::i18n::I18n, id: &str) -> String {
+    if id == "null" {
+        t.tr("settings-backend-null")
+    } else {
+        fp_backends::display_name(id).to_owned()
+    }
+}
+
 fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let config = &scene.state.config;
@@ -641,7 +661,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     row(ui, &t.tr("settings-backend"), None, |ui| {
         let shown = current
             .as_deref()
-            .map(|id| fp_backends::display_name(id).to_owned())
+            .map(|id| backend_name(t, id))
             .unwrap_or_else(|| t.tr("settings-default-backend"));
         egui::ComboBox::from_id_salt("backend")
             .selected_text(shown)
@@ -653,13 +673,13 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 {
                     update(scene, |c| c.outputs.backend = None);
                 }
-                for b in &backends {
+                for b in listed_backends(&backends, current.as_deref()) {
                     let text = match &b.unavailable {
                         Some(_) => t.tr_args(
                             "settings-backend-unavailable",
-                            &[("name", fp_backends::display_name(&b.id).to_owned().into())],
+                            &[("name", backend_name(t, &b.id).into())],
                         ),
-                        None => fp_backends::display_name(&b.id).to_owned(),
+                        None => backend_name(t, &b.id),
                     };
                     let response = ui.add_enabled(
                         b.unavailable.is_none(),
@@ -1716,5 +1736,27 @@ mod tests {
         assert_eq!(window_size(vec2(1600.0, 940.0)), WINDOW_SIZE);
         assert_eq!(window_size(vec2(700.0, 500.0)), vec2(652.0, 418.0));
         assert_eq!(window_size(vec2(100.0, 100.0)), MIN_WINDOW_SIZE);
+    }
+
+    fn choice(id: &str) -> BackendChoice {
+        BackendChoice {
+            id: id.to_owned(),
+            unavailable: None,
+            devices: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn null_is_listed_only_when_configured() {
+        let all = [choice("alsa"), choice("null")];
+        let ids = |configured| -> Vec<String> {
+            listed_backends(&all, configured)
+                .into_iter()
+                .map(|b| b.id.clone())
+                .collect()
+        };
+        assert_eq!(ids(None), vec!["alsa"]);
+        assert_eq!(ids(Some("alsa")), vec!["alsa"]);
+        assert_eq!(ids(Some("null")), vec!["alsa", "null"]);
     }
 }
