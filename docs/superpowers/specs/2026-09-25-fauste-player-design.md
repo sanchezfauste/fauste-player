@@ -106,7 +106,7 @@ In priority order:
 |---|---|---|---|
 | `players`, `analysis`, `outputs`, `ui` | operator | player count, `fade_ms`, auto-segue, trim threshold and margin, segue drop, routes, wave colour | Settings UI |
 | `limits` | resource guards | `max_players` (16), `max_cover_bytes`, `max_state_file_bytes`, `backup_count` | config file only |
-| `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `reconnect_interval_ms`, `gain_smoothing_ms`, `save_debounce_ms` | config file only (an "advanced" section) |
+| `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `reconnect_interval_ms`, `gain_smoothing_ms`, `save_debounce_ms`, `missing_recheck_ms` | config file only (an "advanced" section) |
 
 - Every group is a typed struct with `Default` values documented in code. They are validated on load: out-of-range values are clamped to the valid range with a logged warning, never rejected with a crash.
 - Engine capacities (mixer slots, scratch buffers) are **derived** from the configuration at the moment a mixer is built (§4.3), never fixed constants.
@@ -373,6 +373,7 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
   - a corrupt cache entry is discarded and recomputed;
   - entries of older analysis versions are removed by the analysis pool, off the start-up path;
   - tracks an earlier version analysed (an older `analysis_version`, or no format) keep that analysis until the operator asks: at start a notice gives their number with **Analyse now** and **Later**, and Settings → Analysis offers the same. Only tracks on screen, which need their waveform, are analysed at once. Re-analysing a library costs the processor for a while on an on-air machine.
+- **Missing files come back by themselves.** A track whose file was not found (`Missing`: a drive not mounted yet, a share offline) is looked for again every `tuning.missing_recheck_ms` (default 30 s): the services thread submits it to the analysis pool again, where a file that is back is answered from the cache. When the file is found the track is playable again, with its markers. A file still missing changes nothing in the model (no autosave). `Unreadable` files are not retried by themselves (that would decode them every time): *Re-analyse all* checks them again.
 - **Playability before analysis.** A track can be played before its analysis finishes. Until then it has no waveform or segue start, and `cue_in = 0`, `cue_out = duration`. If analysis finishes while the track is current or next, its markers apply to scheduling that has not happened yet.
 
 Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opus, Matroska/WebM audio, WavPack, Monkey's Audio and DSD (DSF, DSDIFF). The extensions and decoders are in the [audio formats spec](2026-09-27-audio-formats-design.md) F1 (Phase 1 had symphonia's formats only).
@@ -442,7 +443,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - follows the current entry: when it changes and the table and tabs were not used within `ui.follow_current_grace_secs` (0 = never), the tab of its playlist is shown and its row scrolled to the top; a drag or open row menu makes it wait (feedback spec F18);
     - virtualised rows;
     - `#` zero-padded to the digit count of the playlist length (3 digits for ≥ 100 entries);
-    - this player's current row red with a speaker icon, its next row green with an arrow icon, entries on air on another player marked "P<n>", rows this player has played dimmed, missing/unreadable rows with a warning icon; entries marked to repeat or to stop after show a repeat icon or the stop-after icon at the right of the title, in the row's text colour, and the row menu has checkable "Repeat this track" and "Stop after this track".
+    - this player's current row red with a speaker icon, its next row green with an arrow icon, entries on air on another player marked "P<n>", rows this player has played dimmed, missing/unreadable rows with a warning icon whose tooltip gives the reason (not found, or cannot be read) and the file path (the cartwall's warning sign does the same); entries marked to repeat or to stop after show a repeat icon or the stop-after icon at the right of the title, in the row's text colour, and the row menu has checkable "Repeat this track" and "Stop after this track".
   - **Footer:** "+ Add" (native file dialog via `rfd`, defaulting to the music folder), entry count, playlist times (§3, rule 20).
 - **Interactions:**
   - single click selects, double click sets next;
