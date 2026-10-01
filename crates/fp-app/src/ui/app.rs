@@ -344,17 +344,6 @@ impl AppUi {
             return;
         }
         let state = self.ctl.model();
-        // O6: a close request while something is on air waits for the
-        // operator.
-        let close_requested = ctx.input(|i| i.viewport().close_requested());
-        if close_requested && !self.view.close_confirmed {
-            if fp_model::on_air(&state).is_empty() {
-                // Nothing to cut: let the window close.
-            } else {
-                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                self.view.exit_guard = Some(ExitIntent::Close);
-            }
-        }
         // Follow a language change made in Settings (the first frame only
         // records what the interface was built with).
         let wanted = state.config.ui.language.clone();
@@ -568,6 +557,26 @@ impl AppUi {
         } else {
             ctx.request_repaint_after(IDLE_REPAINT);
         }
+    }
+
+    /// O6: a close request while something is on air waits for the
+    /// operator. Runs once per frame from `eframe::App::logic`, which
+    /// eframe also calls while the window is minimized or hidden (when
+    /// `ui` does not run), so a close can never bypass it.
+    pub fn guard_close(&mut self, ctx: &egui::Context) {
+        let close_requested = ctx.input(|i| i.viewport().close_requested());
+        if !close_requested || self.view.close_confirmed {
+            return;
+        }
+        if fp_model::on_air(&self.ctl.model()).is_empty() {
+            // Nothing to cut: let the window close.
+            return;
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        // The dialog must be visible even if the window was minimized.
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        self.view.exit_guard = Some(ExitIntent::Close);
     }
 
     fn keyboard(&mut self, ctx: &egui::Context, state: &AppState) {

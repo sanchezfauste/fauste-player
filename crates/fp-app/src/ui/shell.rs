@@ -46,6 +46,15 @@ impl Shell {
         self.banner(ui);
     }
 
+    /// Runs before every frame, shown or not (see `AppUi::guard_close`).
+    pub fn logic(&mut self, ctx: &egui::Context) {
+        // In degraded mode the dialog cannot be drawn, and a cancelled
+        // close with no dialog would trap the operator: do not guard.
+        if !self.degraded {
+            self.app.guard_close(ctx);
+        }
+    }
+
     fn banner(&mut self, ui: &mut Ui) {
         let rect = ui.available_rect_before_wrap();
         ui.painter().rect_filled(rect, 0.0, theme::BG);
@@ -105,6 +114,10 @@ impl Shell {
 }
 
 impl eframe::App for Shell {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        Shell::logic(self, ctx);
+    }
+
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         Shell::ui(self, ui);
     }

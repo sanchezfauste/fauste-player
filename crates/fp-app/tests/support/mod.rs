@@ -153,7 +153,14 @@ pub fn harness_sized(
     let mut harness = Harness::builder()
         .with_size(size)
         .with_step_dt(0.02)
-        .build_ui_state(|ui, app: &mut AppUi| app.ui(ui), ui);
+        .build_ui_state(
+            |ui, app: &mut AppUi| {
+                // As eframe: `logic`, then `ui`.
+                app.guard_close(ui.ctx());
+                app.ui(ui);
+            },
+            ui,
+        );
     harness.run_steps(2);
     (harness, fake)
 }
