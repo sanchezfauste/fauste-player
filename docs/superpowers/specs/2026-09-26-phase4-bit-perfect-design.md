@@ -32,7 +32,7 @@
   - the channel count. Files with more than two channels are downmixed, so they are never bit-perfect.
 - **The track keeps it:** `Track::format` is persisted with serde default `None`.
 - **The request carries it:** `SourceRequest.format` and `CartRequest.format` pass it to the engine, so the engine decides rates with no file I/O.
-- `ANALYSIS_VERSION` becomes 4. A track that is analysed but has no format (a library from an earlier version) is analysed again, once, in the background.
+- `ANALYSIS_VERSION` becomes 4. A track that is analysed but has no format (a library from an earlier version) is analysed again, once, when the operator asks or a player shows it (main spec, analysis cache).
 - **A track not yet analysed** (format unknown) plays at the bus rate, as in Phase 1.
 
 ## B3. Stream rate follows the file

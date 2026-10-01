@@ -83,6 +83,13 @@ The thresholds described in [Markers and mixing](markers-and-mixing.md).
 **Re-analyse all tracks** runs the analysis again for the whole library;
 manual markers are kept.
 
+After an update whose analysis has changed, tracks analysed by the earlier
+version keep their markers and waveforms, which still work. At start,
+Fauste Player says how many there are and offers **Analyse now** or
+**Later**; **Analyse outdated tracks (N)** here does the same at any time.
+The tracks on the players are brought up to date anyway, as they are
+shown.
+
 ## Playlists
 
 - **Music folder:** where the file dialogs start.

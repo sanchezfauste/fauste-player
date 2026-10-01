@@ -68,8 +68,9 @@ its Main device unchanged. All of these must hold:
   24-bit, and the device format holds its sample size (a 24-bit file on a
   16-bit device is not bit-perfect);
 - the track has been analysed, since that is how its rate and sample size
-  are known. Libraries from earlier versions are analysed again in the
-  background;
+  are known. Tracks an earlier version analysed get their format once
+  analysed again (the start-up notice, or Settings → Analysis), or as soon
+  as a player shows them;
 - volume is 100 %, no fade runs, and nothing else plays on the same outputs.
 
 Some files are never shown as bit-perfect:

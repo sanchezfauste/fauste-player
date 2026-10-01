@@ -97,6 +97,15 @@ settings-outro-drop = Caída de nivel del outro
 settings-outro-max = Duración máxima del outro
 settings-min-duration = Duración mínima para marcadores de mezcla y outro
 settings-reanalyse = Volver a analizar todas las pistas
+outdated-title = Algunas pistas necesitan un nuevo análisis
+outdated-body = { $count ->
+    [one] Una pista se analizó con una versión anterior de Fauste Player. Analizarla de nuevo actualiza sus marcadores y su forma de onda.
+   *[other] { $count } pistas se analizaron con una versión anterior de Fauste Player. Analizarlas de nuevo actualiza sus marcadores y sus formas de onda.
+} Usa el procesador durante un rato; la reproducción no se ve afectada. También puedes hacerlo más tarde en Configuración > Análisis.
+outdated-now = Analizar ahora
+outdated-later = Más tarde
+settings-analyse-outdated = Analizar las pistas desactualizadas ({ $count })
+settings-hint-analyse-outdated = Las pistas que analizó una versión anterior conservan ese análisis hasta que pidas uno nuevo.
 settings-music-dir = Carpeta de música
 settings-browse = Examinar…
 settings-new-playlist = Nueva playlist

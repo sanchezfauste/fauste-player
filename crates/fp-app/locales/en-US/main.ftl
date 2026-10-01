@@ -97,6 +97,15 @@ settings-outro-drop = Outro level drop
 settings-outro-max = Maximum outro length
 settings-min-duration = Minimum length for mix and outro markers
 settings-reanalyse = Re-analyse all tracks
+outdated-title = Some tracks need a new analysis
+outdated-body = { $count ->
+    [one] One track was analysed by an earlier version of Fauste Player. Analysing it again updates its markers and waveform.
+   *[other] { $count } tracks were analysed by an earlier version of Fauste Player. Analysing them again updates their markers and waveforms.
+} It uses the processor for a while; playback is not affected. You can also do it later in Settings > Analysis.
+outdated-now = Analyse now
+outdated-later = Later
+settings-analyse-outdated = Analyse outdated tracks ({ $count })
+settings-hint-analyse-outdated = Tracks an earlier version analysed keep that analysis until you ask for a new one.
 settings-music-dir = Music folder
 settings-browse = Browse…
 settings-new-playlist = New playlist
