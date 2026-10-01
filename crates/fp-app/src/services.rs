@@ -57,22 +57,33 @@ impl Probe {
     }
 }
 
-/// The tracks of `batch` whose file exists. A folder is looked at once: a
-/// whole album or drive that is gone costs one look, not one per file.
+/// The tracks of `batch` whose file exists. Each folder is looked at once,
+/// from the root down, and the folders under one that is gone are not
+/// looked at: a drive that is not mounted costs one look, not one per
+/// album or file.
 fn present(batch: Vec<(TrackId, PathBuf)>) -> Vec<TrackId> {
     let mut folders: HashMap<PathBuf, bool> = HashMap::new();
     batch
         .into_iter()
         .filter(|(_, path)| {
-            let folder = path.parent().is_none_or(|dir| {
-                *folders
-                    .entry(dir.to_path_buf())
-                    .or_insert_with(|| dir.is_dir())
-            });
-            folder && path.is_file()
+            path.parent()
+                .is_none_or(|dir| folder_exists(dir, &mut folders))
+                && path.is_file()
         })
         .map(|(id, _)| id)
         .collect()
+}
+
+fn folder_exists(dir: &std::path::Path, seen: &mut HashMap<PathBuf, bool>) -> bool {
+    if let Some(known) = seen.get(dir) {
+        return *known;
+    }
+    let exists = match dir.parent() {
+        Some(up) if !up.as_os_str().is_empty() && !folder_exists(up, seen) => false,
+        _ => dir.is_dir(),
+    };
+    seen.insert(dir.to_path_buf(), exists);
+    exists
 }
 
 /// What the UI draws for a track besides its model data.
@@ -375,11 +386,23 @@ impl Services {
         let Some(probe) = &mut self.probe else {
             return;
         };
-        for found in probe.found.try_iter() {
-            probe.busy = false;
-            for id in found {
-                self.failed.remove(&id);
-                self.forced.insert(id);
+        loop {
+            match probe.found.try_recv() {
+                Ok(found) => {
+                    probe.busy = false;
+                    // One in flight already (Re-analyse all) needs no second
+                    // analysis.
+                    for id in found.into_iter().filter(|id| !self.in_flight.contains(id)) {
+                        self.failed.remove(&id);
+                        self.forced.insert(id);
+                    }
+                }
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    tracing::error!("the file probe stopped; missing files stay missing");
+                    self.probe = None;
+                    return;
+                }
             }
         }
         let interval =
@@ -400,7 +423,12 @@ impl Services {
             .map(|t| (t.id, t.path.clone()))
             .collect();
         if !missing.is_empty() {
-            probe.busy = probe.paths.send(missing).is_ok();
+            if probe.paths.send(missing).is_ok() {
+                probe.busy = true;
+            } else {
+                tracing::error!("the file probe stopped; missing files stay missing");
+                self.probe = None;
+            }
         }
     }
 
@@ -447,7 +475,7 @@ impl Services {
                 // Loaded on a player while queued with the library: its
                 // waveform is needed now.
                 if wanted.contains(&id) {
-                    self.analyzer.promote(id, track.path.clone());
+                    self.analyzer.promote(id, &track.path);
                 }
                 continue;
             }

@@ -326,8 +326,8 @@ fn urgent_jobs_go_ahead_of_the_queue() {
 fn a_queued_job_promoted_goes_ahead_once() {
     let dir = tempfile::tempdir().unwrap();
     let (analyzer, file) = busy_pool(dir.path());
-    analyzer.promote(TrackId(10), file.clone());
-    analyzer.promote(TrackId(10), file);
+    analyzer.promote(TrackId(10), &file);
+    analyzer.promote(TrackId(10), &file);
     let order = order(&analyzer, 10);
     let at = order.iter().position(|t| *t == TrackId(10)).unwrap();
     assert!(at <= 1, "after at most the running job: {order:?}");
@@ -348,7 +348,7 @@ fn promoting_a_job_already_answered_does_nothing() {
         Analyzer::spawn(1, AnalysisSettings::default(), Limits::default(), None).unwrap();
     analyzer.submit(TrackId(1), file.clone());
     analyzer.results().recv_timeout(WAIT).unwrap();
-    analyzer.promote(TrackId(1), file);
+    analyzer.promote(TrackId(1), &file);
     assert!(
         analyzer
             .results()

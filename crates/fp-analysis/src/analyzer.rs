@@ -201,9 +201,9 @@ impl Analyzer {
 
     /// Moves a normal job still waiting for `track` ahead of the queue;
     /// nothing if no job is waiting (none, or its result already sent).
-    pub fn promote(&self, track: TrackId, path: PathBuf) {
+    pub fn promote(&self, track: TrackId, path: &Path) {
         if lock(&self.shared.book).latest.contains_key(&track) {
-            self.submit_urgent(track, path);
+            self.submit_urgent(track, path.to_path_buf());
         }
     }
 

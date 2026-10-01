@@ -485,6 +485,30 @@ fn a_file_still_missing_is_looked_for_without_touching_the_model_or_the_pool() {
     assert_eq!(r.handle.telemetry.load().model_version, version);
 }
 
+/// After looks that found nothing, the file is still looked for.
+#[test]
+fn a_file_is_still_looked_for_after_looks_that_found_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    // Two folders that do not exist yet, as on a drive not mounted.
+    let path = dir.path().join("drive/album/late.wav");
+    let staging = tempfile::tempdir().unwrap();
+    let root = dir.path().join("drive");
+    let mut r = recheck_rig(std::slice::from_ref(&path), dir);
+    r.run_until("missing state", missing);
+    let until = r.now + Duration::from_millis(3_500);
+    r.run_until("three looks", |r| r.now >= until);
+    std::fs::create_dir_all(root.join("album")).unwrap();
+    std::fs::rename(wav(staging.path(), "late.wav", 1), &path).unwrap();
+    r.run_until("the file found again", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.file_state == FileState::Ok)
+    });
+}
+
 /// A track loaded on a player gets its waveform ahead of the library being
 /// analysed, not after it.
 #[test]
@@ -504,6 +528,31 @@ fn a_track_on_a_player_is_analysed_ahead_of_the_library() {
     r.run_until("peaks for the loaded track", |r| r.media.contains(track));
     assert!(
         r.analyses.load(Ordering::SeqCst) <= 3,
+        "{} analyses ran first",
+        r.analyses.load(Ordering::SeqCst)
+    );
+}
+
+/// A track loaded while it waits in the queue with the library moves ahead.
+#[test]
+fn a_queued_track_loaded_on_a_player_moves_ahead() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=12)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = rig_slow(&files, dir, Duration::from_millis(40));
+    r.run_until("the library queued", |r| {
+        r.analyses.load(Ordering::SeqCst) >= 1
+    });
+    let model = r.handle.model.load_full();
+    let last = model.playlists.iter().next().unwrap().entries[11].clone();
+    r.handle
+        .send(Command::SetNext(model.players[0].id, last.id));
+    r.run_until("peaks for the loaded track", |r| {
+        r.media.contains(last.track)
+    });
+    assert!(
+        r.analyses.load(Ordering::SeqCst) <= 4,
         "{} analyses ran first",
         r.analyses.load(Ordering::SeqCst)
     );
