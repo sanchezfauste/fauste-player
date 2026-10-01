@@ -425,6 +425,9 @@ pub struct Tuning {
     pub reconnect_interval_ms: f64,
     pub gain_smoothing_ms: f64,
     pub save_debounce_ms: f64,
+    /// How often files not found (a drive not mounted yet) are looked for
+    /// again.
+    pub missing_recheck_ms: f64,
 }
 
 impl Default for Tuning {
@@ -443,6 +446,7 @@ impl Default for Tuning {
             reconnect_interval_ms: 2000.0,
             gain_smoothing_ms: 20.0,
             save_debounce_ms: 1000.0,
+            missing_recheck_ms: 30_000.0,
         }
     }
 }
@@ -741,6 +745,13 @@ impl Config {
             "tuning.save_debounce_ms",
             &mut w,
         );
+        clamp_to(
+            &mut t.missing_recheck_ms,
+            1_000.0,
+            3_600_000.0,
+            "tuning.missing_recheck_ms",
+            &mut w,
+        );
 
         // One chord per action and one action per chord; the first wins.
         let mut chords = std::collections::HashSet::new();
@@ -919,6 +930,24 @@ mod tests {
         assert!(fields.contains(&"analysis.segue_drop_db"));
         assert!(fields.contains(&"tuning.prebuffer_secs"));
         assert!(warnings[0].to_string().contains("using"));
+    }
+
+    #[test]
+    fn the_missing_file_recheck_has_its_default_and_range() {
+        assert_eq!(Tuning::default().missing_recheck_ms, 30_000.0);
+        let c: Config = serde_json::from_str(r#"{"tuning":{}}"#).unwrap();
+        assert_eq!(c.tuning.missing_recheck_ms, 30_000.0);
+        for (set, kept) in [(10.0, 1_000.0), (1e7, 3_600_000.0)] {
+            let mut c = Config::default();
+            c.tuning.missing_recheck_ms = set;
+            let warnings = c.validate();
+            assert_eq!(c.tuning.missing_recheck_ms, kept);
+            assert!(
+                warnings
+                    .iter()
+                    .any(|w| w.field == "tuning.missing_recheck_ms")
+            );
+        }
     }
 
     #[test]

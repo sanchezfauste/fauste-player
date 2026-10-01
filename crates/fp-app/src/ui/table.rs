@@ -211,7 +211,9 @@ pub(crate) fn track_table(
                             Some(icon::ARROW_BEND_DOWN_RIGHT.to_owned()),
                             theme::NEUTRAL_100,
                         ),
-                        RowStatus::Unavailable => (Some(icon::WARNING.to_owned()), theme::AMBER),
+                        RowStatus::Unavailable => {
+                            (Some(view::file_icon(track).to_owned()), theme::AMBER)
+                        }
                         _ => (None, theme::NEUTRAL_600),
                     };
                     if let RowStatus::OnAirElsewhere(n) = status {
@@ -240,7 +242,7 @@ pub(crate) fn track_table(
                     } else {
                         egui::FontFamily::Proportional
                     };
-                    ui.add(
+                    let number = ui.add(
                         egui::Label::new(
                             RichText::new(label)
                                 .font(egui::FontId::new(12.0, family))
@@ -248,6 +250,11 @@ pub(crate) fn track_table(
                         )
                         .selectable(false),
                     );
+                    if status == RowStatus::Unavailable
+                        && let Some(tip) = scene.file_tip(entry.track)
+                    {
+                        number.on_hover_text(tip);
+                    }
                 });
                 row.col(|ui| {
                     line(ui);
@@ -265,6 +272,14 @@ pub(crate) fn track_table(
                         if entry.repeat {
                             flag(ui, &t.tr("flag-repeat"), |p, r| {
                                 widgets::glyph(p, r, icon::REPEAT, 13.0, text, false);
+                            });
+                        }
+                        // Shown tracks are brought up to date anyway, so
+                        // the flag only stays on the ones waiting.
+                        if crate::services::outdated(track) {
+                            flag(ui, &t.tr("flag-outdated"), |p, r| {
+                                let c = theme::NEUTRAL_500;
+                                widgets::glyph(p, r, icon::ARROWS_CLOCKWISE, 13.0, c, false);
                             });
                         }
                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {

@@ -243,3 +243,25 @@ fn an_empty_cart_can_be_edited_from_its_menu() {
     assert!(h.query_by_label("No file").is_some());
     assert!(h.query_by_label("Choose…").is_some());
 }
+
+#[test]
+fn hovering_an_unavailable_cart_says_why() {
+    let mut s = with_cart();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: FileState::Missing,
+        },
+    )
+    .unwrap();
+    let (mut h, _fake) = harness(s);
+    h.get_by_label("Station ID").hover();
+    h.run_steps(40);
+    assert!(
+        h.query_by_label_contains("File not found: /carts/id.wav")
+            .is_some(),
+        "the tooltip gives the reason and the path"
+    );
+}

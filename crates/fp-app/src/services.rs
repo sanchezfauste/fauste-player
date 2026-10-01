@@ -4,6 +4,7 @@
 //! non-blocking handle.
 
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 use std::thread::JoinHandle;
@@ -18,6 +19,74 @@ use fp_store::Store;
 
 /// How often the services thread wakes up when running on its own.
 const PERIOD: Duration = Duration::from_millis(50);
+
+/// The thread that looks for files not found, off the services thread: a
+/// share that is offline can make each look block for seconds.
+struct Probe {
+    paths: Sender<Vec<(TrackId, PathBuf)>>,
+    found: Receiver<Vec<TrackId>>,
+    /// A look was sent and its answer has not come back.
+    busy: bool,
+}
+
+impl Probe {
+    fn spawn() -> Option<Self> {
+        let (paths, jobs) = crossbeam_channel::unbounded::<Vec<(TrackId, PathBuf)>>();
+        let (answers, found) = crossbeam_channel::unbounded();
+        let spawned = std::thread::Builder::new()
+            .name("fp-file-probe".to_owned())
+            .spawn(move || {
+                // Ends when the services drop their side.
+                while let Ok(batch) = jobs.recv() {
+                    if answers.send(present(batch)).is_err() {
+                        break;
+                    }
+                }
+            });
+        match spawned {
+            Ok(_) => Some(Self {
+                paths,
+                found,
+                busy: false,
+            }),
+            Err(e) => {
+                tracing::error!(error = %e, "cannot start the file probe; missing files stay missing");
+                None
+            }
+        }
+    }
+}
+
+/// The tracks of `batch` whose file exists. Each folder is looked at once,
+/// from the root down, and the folders under one that is gone are not
+/// looked at: a drive that is not mounted costs one look, not one per
+/// album or file.
+fn present(batch: Vec<(TrackId, PathBuf)>) -> Vec<TrackId> {
+    let mut folders: HashMap<PathBuf, bool> = HashMap::new();
+    batch
+        .into_iter()
+        .filter(|(_, path)| {
+            path.parent()
+                .is_none_or(|dir| folder_exists(dir, &mut folders))
+                && path.is_file()
+        })
+        .map(|(id, _)| id)
+        .collect()
+}
+
+fn folder_exists(dir: &std::path::Path, seen: &mut HashMap<PathBuf, bool>) -> bool {
+    if let Some(known) = seen.get(dir) {
+        return *known;
+    }
+    let exists = match dir.parent() {
+        Some(up) if !up.as_os_str().is_empty() && !folder_exists(up, seen) => false,
+        // A bare relative name: the file itself decides.
+        _ if dir.as_os_str().is_empty() => true,
+        _ => dir.is_dir(),
+    };
+    seen.insert(dir.to_path_buf(), exists);
+    exists
+}
 
 /// What the UI draws for a track besides its model data.
 #[derive(Debug, Clone, PartialEq)]
@@ -117,6 +186,10 @@ pub struct Services {
     /// (markers reset) is analysed again.
     seen_analyzed: HashSet<TrackId>,
     settings: Option<AnalysisSettings>,
+    /// When files not found were last looked for again.
+    last_recheck: Option<Instant>,
+    /// Looks for them; `None` if its thread could not start.
+    probe: Option<Probe>,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -151,6 +224,8 @@ impl Services {
             retried: HashSet::new(),
             seen_analyzed: HashSet::new(),
             settings: None,
+            last_recheck: None,
+            probe: Probe::spawn(),
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -197,7 +272,7 @@ impl Services {
         // Analysis and saving are isolated from each other: a fault in one
         // never stops the other.
         let analysis = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            self.analysis_step(&state);
+            self.analysis_step(&state, now);
         }));
         let saving = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.autosave(&state, version, now);
@@ -210,7 +285,7 @@ impl Services {
         }
     }
 
-    fn analysis_step(&mut self, state: &AppState) {
+    fn analysis_step(&mut self, state: &AppState, now: Instant) {
         #[cfg(feature = "test-hooks")]
         if self.fail_steps > 0 {
             self.fail_steps -= 1;
@@ -226,6 +301,7 @@ impl Services {
             }
         }
         self.follow_settings(state);
+        self.recheck_missing(state, now);
         self.submit_new(state);
         let wanted = Self::wanted(state);
         let results: Vec<AnalysisResult> = self.analyzer.results().try_iter().collect();
@@ -235,7 +311,7 @@ impl Services {
             // staying "in progress" until the next start.
             let track = result.track;
             let routed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                self.route(result, &wanted);
+                self.route(result, state, &wanted);
             }));
             if routed.is_err() {
                 self.faults.fetch_add(1, Ordering::AcqRel);
@@ -301,6 +377,63 @@ impl Services {
         self.forced = state.library.iter().map(|t| t.id).collect();
     }
 
+    /// Every `tuning.missing_recheck_ms`, files not found (a drive not
+    /// mounted yet) are looked for again on the probe thread; the ones found
+    /// go to the analysis pool, which answers from the cache when they were
+    /// analysed before. Neither this thread nor the pool waits on a share
+    /// that is offline, so autosave and real analyses go on. Unreadable
+    /// files wait for *Re-analyse all*: retrying them would decode them
+    /// every time.
+    fn recheck_missing(&mut self, state: &AppState, now: Instant) {
+        let Some(probe) = &mut self.probe else {
+            return;
+        };
+        loop {
+            match probe.found.try_recv() {
+                Ok(found) => {
+                    probe.busy = false;
+                    // One in flight already (Re-analyse all) needs no second
+                    // analysis.
+                    for id in found.into_iter().filter(|id| !self.in_flight.contains(id)) {
+                        self.failed.remove(&id);
+                        self.forced.insert(id);
+                    }
+                }
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    tracing::error!("the file probe stopped; missing files stay missing");
+                    self.probe = None;
+                    return;
+                }
+            }
+        }
+        let interval =
+            Duration::from_secs_f64(state.config.tuning.missing_recheck_ms.max(0.0) / 1000.0);
+        let Some(last) = self.last_recheck else {
+            self.last_recheck = Some(now);
+            return;
+        };
+        // One look at a time: a hung mount only delays the next one.
+        if probe.busy || now.saturating_duration_since(last) < interval {
+            return;
+        }
+        self.last_recheck = Some(now);
+        let missing: Vec<(TrackId, PathBuf)> = state
+            .library
+            .iter()
+            .filter(|t| t.file_state == FileState::Missing && !self.in_flight.contains(&t.id))
+            .map(|t| (t.id, t.path.clone()))
+            .collect();
+        if !missing.is_empty() {
+            if probe.paths.send(missing).is_ok() {
+                probe.busy = true;
+            } else {
+                tracing::error!("the file probe stopped; missing files stay missing");
+                self.probe = None;
+            }
+        }
+    }
+
     /// Tracks the screen draws: current, next and cue entries of the players.
     fn wanted(state: &AppState) -> HashSet<TrackId> {
         state
@@ -341,6 +474,11 @@ impl Services {
         for track in state.library.iter() {
             let id = track.id;
             if self.in_flight.contains(&id) {
+                // Loaded on a player while queued with the library: its
+                // waveform is needed now.
+                if wanted.contains(&id) {
+                    self.analyzer.promote(id, &track.path);
+                }
                 continue;
             }
             // Tracks an earlier version analysed are analysed again, once,
@@ -355,12 +493,16 @@ impl Services {
             if analyse || show {
                 self.forced.remove(&id);
                 self.in_flight.insert(id);
-                self.analyzer.submit(id, track.path.clone());
+                if wanted.contains(&id) {
+                    self.analyzer.submit_urgent(id, track.path.clone());
+                } else {
+                    self.analyzer.submit(id, track.path.clone());
+                }
             }
         }
     }
 
-    fn route(&mut self, result: AnalysisResult, wanted: &HashSet<TrackId>) {
+    fn route(&mut self, result: AnalysisResult, state: &AppState, wanted: &HashSet<TrackId>) {
         if matches!(result.outcome, Err(AnalysisError::Cancelled)) {
             return;
         }
@@ -409,6 +551,16 @@ impl Services {
             }
             Err(AnalysisError::Cancelled) => return,
         };
+        // A file still missing changes nothing: no new model version, so
+        // nothing is saved every recheck.
+        if let Command::SetFileState {
+            track,
+            state: file_state,
+        } = &command
+            && state.library.get(*track).map(|t| t.file_state) == Some(*file_state)
+        {
+            return;
+        }
         if !self.conductor.send(command) {
             // The queue is full: try again on a later round.
             self.done.remove(&result.track);

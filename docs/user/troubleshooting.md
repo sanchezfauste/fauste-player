@@ -46,11 +46,17 @@ The players keep counting and mixing on an internal clock, so the automation
 does not stall. The device is retried every 2 seconds and takes over again
 when it returns. Reconnect the cable or power the interface back on.
 
-## A track shows a warning icon
+## A track shows a warning icon or a file with a cross
 
-The file is missing (moved, deleted, unmounted) or cannot be decoded. The
-players skip it. Put the file back, then use **Settings → Analysis →
-Re-analyse all tracks** to check it again.
+The file is missing (moved, deleted, unmounted: a file with a cross) or
+cannot be decoded (a warning sign). The players skip it. Hover the icon
+to see which, and the file's path.
+
+A missing file is looked for again every 30 seconds
+(`tuning.missing_recheck_ms` in the configuration file): when the drive
+is mounted or the file is put back, the track becomes playable by itself. A
+file that cannot be decoded is checked again only with **Settings →
+Analysis → Re-analyse all tracks**.
 
 ## Audio dropouts
 

@@ -1,7 +1,9 @@
 //! What each part of the screen shows, derived from the model snapshot and
 //! the engine telemetry. Pure functions: everything here is unit-tested.
 
-use fp_model::{AppState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, Transport};
+use fp_model::{
+    AppState, EntryId, FileState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, Track, Transport,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerStatus {
@@ -78,6 +80,13 @@ fn line(title: &str, artist: &str) -> String {
     }
 }
 
+/// The entry a player shows: its current one, or, when stopped, its next
+/// (the one Play starts), ready at its cue-in.
+pub fn shown_entry(state: &AppState, player: PlayerId) -> Option<EntryId> {
+    let p = state.player(player).ok()?;
+    p.current.or(p.next)
+}
+
 /// Everything a player column shows. `position` comes from the engine;
 /// `blink_phase` is a clock in seconds for blinking elements.
 pub fn player_view(
@@ -96,7 +105,10 @@ pub fn player_view(
         .next
         .and_then(|e| state.track_for_entry(e))
         .map(|t| line(&t.title, &t.artist));
-    let current = p.current.and_then(|e| state.track_for_entry(e));
+    let current = shown_entry(state, player).and_then(|e| state.track_for_entry(e));
+    // A track waiting to be played has no position yet: one reported now
+    // is left over from the last track.
+    let position = position.filter(|_| p.current.is_some());
     let mut view = PlayerView {
         status,
         title: None,
@@ -137,7 +149,9 @@ pub fn player_view(
     {
         let left = intro_end - pos;
         view.intro = Some((left * 10.0).round() / 10.0);
-        view.intro_blink = (left <= 3.0).then(|| blink_phase.rem_euclid(1.0) < 0.5);
+        // The talk-over warning blinks only for a track on its way.
+        view.intro_blink =
+            (left <= 3.0 && p.current.is_some()).then(|| blink_phase.rem_euclid(1.0) < 0.5);
     }
     if let Some(outro) = track.outro_start_secs()
         && pos >= outro
@@ -157,7 +171,25 @@ pub fn player_view(
     Some(view)
 }
 
-/// How a track-table row is drawn (spec §3 rule 1).
+/// Why a track cannot be played, as the Fluent key of its tooltip (which
+/// takes the file's `$path`); `None` when it can.
+pub fn file_problem(track: &Track) -> Option<&'static str> {
+    match track.file_state {
+        FileState::Ok => None,
+        FileState::Missing => Some("file-missing-tip"),
+        FileState::Unreadable => Some("file-unreadable-tip"),
+    }
+}
+
+/// The icon of a track that cannot be played: a file with a cross when it
+/// is not found, a warning sign when it cannot be read.
+pub fn file_icon(track: &Track) -> &'static str {
+    match track.file_state {
+        FileState::Missing => egui_phosphor::regular::FILE_X,
+        FileState::Ok | FileState::Unreadable => egui_phosphor::regular::WARNING,
+    }
+}
+
 /// How a track-table row is drawn (spec §3 rule 1). Takes the row's entry
 /// directly: the table already has it, so nothing is searched per row.
 pub fn row_status(state: &AppState, player: PlayerId, entry: &PlaylistEntry) -> RowStatus {

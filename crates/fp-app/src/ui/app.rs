@@ -110,6 +110,15 @@ pub(crate) struct Scene<'a> {
 }
 
 impl Scene<'_> {
+    /// Why `track` cannot be played, with its path, for the tooltip of its
+    /// warning icon; `None` when it can.
+    pub fn file_tip(&self, track: TrackId) -> Option<String> {
+        let track = self.state.library.get(track)?;
+        let key = super::view::file_problem(track)?;
+        let path = track.path.display().to_string();
+        Some(self.i18n.tr_args(key, &[("path", path.into())]))
+    }
+
     /// Opens the native file dialog without blocking the interface.
     pub fn pick_files(&self, playlist: PlaylistId, index: usize) {
         let tx = self.picks.clone();

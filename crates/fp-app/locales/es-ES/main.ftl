@@ -51,6 +51,7 @@ menu-repeat = Repetir esta pista
 menu-stop-after = Parar después de esta pista
 flag-repeat = Se repite
 flag-stop-after = Para al acabar
+flag-outdated = Analizada por una versión anterior: Configuración → Análisis → Analizar las pistas desactualizadas
 menu-move-to = Mover a
 menu-remove = Quitar de la playlist
 menu-remove-on-air = No se puede quitar una pista que está sonando
@@ -285,6 +286,8 @@ meter-label = Medidor de nivel
 meter-max = Máximo { $value } dBFS
 tip-meter-max = Nivel más alto desde que empezó a sonar la pista. Haz clic para reiniciarlo.
 tip-on-air-elsewhere = En el aire en el reproductor { $n }
+file-missing-tip = No se encuentra el archivo: { $path }
+file-unreadable-tip = No se puede leer el archivo: { $path }
 
 # About window
 tip-about = Acerca de Fauste Player

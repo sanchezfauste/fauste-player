@@ -454,11 +454,7 @@ fn info_row(
     telemetry: &fp_engine::engine::PlayerTelemetry,
 ) {
     let t = scene.i18n;
-    let current_track = scene
-        .state
-        .player(id)
-        .ok()
-        .and_then(|p| p.current)
+    let current_track = view::shown_entry(scene.state, id)
         .and_then(|e| scene.state.playlists.entry(e))
         .map(|e| e.track);
     ui.allocate_ui_with_layout(
@@ -785,7 +781,8 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
 
 fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId, pv: &PlayerView) {
     let t = scene.i18n;
-    let current = scene.state.player(id).ok().and_then(|p| p.current);
+    // The current track, or the next one waiting while stopped.
+    let current = view::shown_entry(scene.state, id);
     let track = current
         .and_then(|e| scene.state.playlists.entry(e))
         .map(|e| e.track);
@@ -806,7 +803,12 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         let grace = scene.state.config.ui.follow_current_grace_secs;
         if dragging {
             z.moved_at = scene.time;
-        } else if grace > 0.0 && scene.time - z.moved_at >= grace {
+        } else if grace > 0.0
+            && scene.time - z.moved_at >= grace
+            && pv.status != PlayerStatus::Stopped
+        {
+            // A stopped player's position is pinned at the cue-in: following
+            // it would undo a zoom made to prepare the next track.
             z.view = z.view.follow(f64::from(f) * total, total);
         }
     }
@@ -842,6 +844,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         view,
         entry: current,
         shield: full_view_button,
+        seekable: pv.status != PlayerStatus::Stopped,
     };
     let (response, seek) = widgets::waveform(ui, WAVE_HEIGHT, &input);
     if let Some(secs) = seek {

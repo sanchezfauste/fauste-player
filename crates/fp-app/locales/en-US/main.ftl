@@ -51,6 +51,7 @@ menu-repeat = Repeat this track
 menu-stop-after = Stop after this track
 flag-repeat = Repeats
 flag-stop-after = Stops after
+flag-outdated = Analysed by an earlier version: Settings → Analysis → Analyse outdated tracks
 menu-move-to = Move to
 menu-remove = Remove from playlist
 menu-remove-on-air = A track that is on air cannot be removed
@@ -285,6 +286,8 @@ meter-label = Level meter
 meter-max = Maximum { $value } dBFS
 tip-meter-max = Highest level since the track started playing. Click to restart it.
 tip-on-air-elsewhere = On air on player { $n }
+file-missing-tip = File not found: { $path }
+file-unreadable-tip = Cannot read the file: { $path }
 
 # About window
 tip-about = About Fauste Player
