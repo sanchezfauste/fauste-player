@@ -145,9 +145,11 @@ impl MidiCore {
                 MidiRequest::Learn(action) => Some(action),
                 MidiRequest::CancelLearn => None,
             };
+            // Learning listens to every input: connect them now.
+            self.next_scan = None;
         }
         if self.next_scan.is_none_or(|t| now >= t) {
-            self.scan(config.enabled);
+            self.scan(config);
             self.next_scan =
                 Some(now + Duration::from_millis(u64::from(config.rescan_interval_ms)));
         }
@@ -190,16 +192,42 @@ impl MidiCore {
 
     /// Connects the ports that appeared (by name), drops the ones that are
     /// gone, and publishes the list.
-    fn scan(&mut self, enabled: bool) {
-        let inputs = self.ports.inputs();
-        let outputs = self.ports.outputs();
+    fn scan(&mut self, config: &fp_model::MidiConfig) {
+        if !config.enabled {
+            // Off: no port is opened or even listed.
+            self.inputs.clear();
+            self.outputs.clear();
+            self.feedback.reset();
+            if !self.status.load().inputs.is_empty() {
+                self.status.store(Arc::new(MidiStatus::default()));
+            }
+            return;
+        }
+        // Never our own ports (each connection is a client of its own).
+        let ours = |name: &String| !name.starts_with(crate::ports::CLIENT);
+        let inputs: Vec<String> = self.ports.inputs().into_iter().filter(ours).collect();
+        let outputs: Vec<String> = self.ports.outputs().into_iter().filter(ours).collect();
+        // Only the devices that are bound are opened (ports can be
+        // exclusive), every input while learning.
+        let bound: Vec<&str> = config.bindings.iter().map(|b| b.device.as_str()).collect();
+        let feedback_port = |device: &str| {
+            config
+                .devices
+                .iter()
+                .find(|d| d.input == device)
+                .and_then(|d| d.output.clone())
+                .unwrap_or_else(|| device.to_owned())
+        };
+        let wanted_outputs: Vec<String> = bound.iter().map(|d| feedback_port(d)).collect();
+        let learning = self.learning.is_some();
+        let wanted_input = |name: &String| learning || bound.contains(&name.as_str());
         self.inputs
-            .retain(|name, _| enabled && inputs.contains(name));
+            .retain(|name, _| inputs.contains(name) && wanted_input(name));
         self.outputs
-            .retain(|name, _| enabled && outputs.contains(name));
+            .retain(|name, _| outputs.contains(name) && wanted_outputs.contains(name));
         let mut reconnected = false;
-        if enabled {
-            for name in &inputs {
+        {
+            for name in inputs.iter().filter(|n| wanted_input(n)) {
                 if !self.inputs.contains_key(name) {
                     match self.ports.connect_input(name, self.messages.0.clone()) {
                         Ok(connection) => {
@@ -212,7 +240,7 @@ impl MidiCore {
                     }
                 }
             }
-            for name in &outputs {
+            for name in outputs.iter().filter(|n| wanted_outputs.contains(n)) {
                 if !self.outputs.contains_key(name) {
                     match self.ports.connect_output(name) {
                         Ok(out) => {
@@ -226,7 +254,7 @@ impl MidiCore {
                 }
             }
         }
-        if reconnected || !enabled {
+        if reconnected {
             // Every LED again, now that the surface listens.
             self.feedback.reset();
         }

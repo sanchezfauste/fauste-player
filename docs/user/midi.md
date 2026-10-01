@@ -9,7 +9,9 @@ lights show what each player is doing.
 
 Open **Settings → MIDI** and tick **Use MIDI control surfaces**. The list
 under **Input ports** shows every MIDI input the computer has and whether it
-is connected. Controllers can be plugged in or out while the program runs:
+is connected. Only the controllers you have bound are opened (some systems
+give a port to one program at a time), plus every input while you are
+learning a control; the program never listens to its own ports. Controllers can be plugged in or out while the program runs:
 every couple of seconds the ports are looked for again, and a controller that
 comes back is connected by its name, with its lights set again.
 

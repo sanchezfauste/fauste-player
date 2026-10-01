@@ -136,3 +136,17 @@ fn turning_midi_on_updates_the_config() {
     h.run_steps(2);
     assert!(fake.state.load().config.midi.enabled);
 }
+
+#[test]
+fn closing_settings_while_learning_cancels_it() {
+    let (mut h, _, surface) = with_midi();
+    h.get_all_by_label("Learn").next().unwrap().click();
+    h.run_steps(2);
+    let _ = surface.requests.try_recv();
+    h.get_by_label("Close").click();
+    h.run_steps(3);
+    assert_eq!(
+        surface.requests.try_recv().unwrap(),
+        MidiRequest::CancelLearn
+    );
+}

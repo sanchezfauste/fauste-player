@@ -23,6 +23,8 @@ struct Pickup {
     last_input: Option<f32>,
     /// The travel this fader last set.
     last_set: Option<f32>,
+    /// The model's travel at the previous message.
+    model_seen: Option<f32>,
 }
 
 /// Routes messages from the surfaces to commands, remembering what edge
@@ -71,10 +73,12 @@ impl Router {
                 controller,
                 value,
             } => {
+                // The first value heard is the control's state, not a press
+                // (a latched control reports it on connection: rule 10).
                 let last = self
                     .cc_last
                     .insert((device.to_owned(), channel, controller), value)
-                    .unwrap_or(0);
+                    .unwrap_or(value);
                 (
                     MidiTrigger::ControlChange {
                         channel,
@@ -112,10 +116,17 @@ impl Router {
                     .entry((device.to_owned(), trigger))
                     .or_default();
                 // Moved by other means since this fader last set it: pick
-                // it up again first.
-                if pickup
-                    .last_set
-                    .is_some_and(|set| (set - travel).abs() > PICKUP_TOLERANCE)
+                // it up again first. A model that has not caught up with this
+                // fader's own messages yet (unchanged since the last one) is
+                // not a move by other means.
+                let model_moved = pickup
+                    .model_seen
+                    .is_some_and(|seen| (seen - travel).abs() > PICKUP_TOLERANCE);
+                pickup.model_seen = Some(travel);
+                if model_moved
+                    && pickup
+                        .last_set
+                        .is_some_and(|set| (set - travel).abs() > PICKUP_TOLERANCE)
                 {
                     pickup.picked = false;
                     pickup.last_set = None;

@@ -79,3 +79,14 @@ fn every_truncated_message_is_ignored() {
         }
     }
 }
+
+#[test]
+fn alsa_port_numbers_are_not_part_of_the_name() {
+    use fp_control::ports::stable_name;
+    assert_eq!(
+        stable_name("APC MINI:APC MINI MIDI 1 20:0"),
+        "APC MINI:APC MINI MIDI 1"
+    );
+    assert_eq!(stable_name("APC mini"), "APC mini");
+    assert_eq!(stable_name("Port 2"), "Port 2");
+}

@@ -116,6 +116,10 @@ fn a_control_change_fires_when_it_rises_through_64() {
     let s = state();
     let mut r = router(&[(cc(20), MidiAction::Button(ShortcutAction::StopPlayer(1)))]);
     assert!(
+        r.on_message("APC", cc_value(20, 0), &s).is_none(),
+        "first heard"
+    );
+    assert!(
         r.on_message("APC", cc_value(20, 127), &s).is_some(),
         "0 → 127"
     );
@@ -250,4 +254,24 @@ fn a_pitch_bend_fader_uses_its_full_range() {
     };
     let got = volume_of(r.on_message("APC", top, &s)).unwrap();
     assert!((got - 1.0).abs() < 1e-4);
+}
+
+#[test]
+fn a_quick_move_against_a_model_that_has_not_caught_up_keeps_control() {
+    let s = at_travel(state(), travel_of(50));
+    let mut r = volume_router();
+    // Every message of the burst sees the same, stale snapshot.
+    for v in [50, 53, 56, 59, 62, 65, 68] {
+        assert!(r.on_message("APC", cc_value(7, v), &s).is_some(), "{v}");
+    }
+}
+
+#[test]
+fn a_control_already_up_when_first_heard_does_not_fire() {
+    let s = state();
+    let mut r = router(&[(cc(20), MidiAction::Button(ShortcutAction::StopPlayer(1)))]);
+    // A latched control reports 127 on connection: not a press.
+    assert!(r.on_message("APC", cc_value(20, 127), &s).is_none());
+    assert!(r.on_message("APC", cc_value(20, 0), &s).is_none());
+    assert!(r.on_message("APC", cc_value(20, 127), &s).is_some());
 }

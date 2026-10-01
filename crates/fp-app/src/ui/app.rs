@@ -453,6 +453,15 @@ impl AppUi {
             self.view.settings_open = settings::show(&ctx, &scene, &mut self.settings, &deps);
         } else {
             self.settings_shown = false;
+            // Closing Settings ends MIDI learn: the next press on a surface
+            // must act, not bind.
+            if self.settings.midi_learning.take().is_some()
+                && let Some(midi) = &self.midi
+            {
+                let _ = midi
+                    .requests
+                    .send(fp_control::service::MidiRequest::CancelLearn);
+            }
             if self.view.about_open {
                 self.view.about_open =
                     about::show(&ctx, &scene, self.notices.as_deref(), &self.opener);

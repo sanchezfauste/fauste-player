@@ -116,7 +116,9 @@ pub(super) fn section(
     ui.add_space(8.0);
     text(ui, t.tr("midi-ports"), theme::NEUTRAL_300);
     let status = midi.status.load();
-    if status.inputs.is_empty() {
+    if !config.enabled {
+        text(ui, t.tr("midi-off-ports"), theme::NEUTRAL_500);
+    } else if status.inputs.is_empty() {
         text(ui, t.tr("midi-no-ports"), theme::NEUTRAL_500);
     }
     for (name, connected) in &status.inputs {

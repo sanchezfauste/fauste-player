@@ -295,6 +295,7 @@ midi-enabled = Usar superficies de control MIDI
 midi-feedback = Encender los botones (LED)
 midi-ports = Puertos de entrada
 midi-no-ports = No se encuentra ningún puerto MIDI
+midi-off-ports = Activa MIDI para ver los puertos.
 midi-connected = conectado
 midi-missing = sin conectar
 midi-unavailable = MIDI no está disponible en este ordenador.

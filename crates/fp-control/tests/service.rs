@@ -18,6 +18,7 @@ struct Wires {
     outputs: Vec<String>,
     sinks: HashMap<String, Sender<(String, Vec<u8>)>>,
     sent: Vec<(String, Vec<u8>)>,
+    scans: usize,
 }
 
 #[derive(Clone, Default)]
@@ -38,7 +39,9 @@ impl MidiOutput for FakeOut {
 
 impl MidiPorts for FakePorts {
     fn inputs(&mut self) -> Vec<String> {
-        self.0.lock().unwrap().inputs.clone()
+        let mut w = self.0.lock().unwrap();
+        w.scans += 1;
+        w.inputs.clone()
     }
     fn outputs(&mut self) -> Vec<String> {
         self.0.lock().unwrap().outputs.clone()
@@ -161,7 +164,8 @@ fn disabled_midi_connects_nothing() {
     let c = control(false);
     let (mut core, handle) = core(&ports, &c);
     core.step(Instant::now());
-    assert_eq!(handle.status.load().inputs, vec![("APC".to_owned(), false)]);
+    assert_eq!(handle.status.load().inputs, vec![], "no scan while off");
+    assert_eq!(ports.0.lock().unwrap().scans, 0);
     ports.press("APC", &[0x90, 36, 100]);
     core.step(Instant::now());
     assert!(c.sent.lock().unwrap().is_empty());
@@ -291,4 +295,57 @@ fn the_service_thread_never_loses_a_learn_request() {
             .expect("the learn request was lost");
         assert_eq!(learned.action, stop);
     }
+}
+
+#[test]
+fn its_own_ports_are_never_connected() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    ports.plug("Fauste Player:fauste-player-out");
+    let c = control(true);
+    let (mut core, handle) = core(&ports, &c);
+    core.step(Instant::now());
+    let names: Vec<String> = handle
+        .status
+        .load()
+        .inputs
+        .iter()
+        .map(|i| i.0.clone())
+        .collect();
+    assert_eq!(names, vec!["APC".to_owned()]);
+    assert!(
+        !ports
+            .0
+            .lock()
+            .unwrap()
+            .sinks
+            .contains_key("Fauste Player:fauste-player-out")
+    );
+}
+
+#[test]
+fn only_bound_devices_are_opened_except_while_learning() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    ports.plug("Synth");
+    let c = control(true);
+    let (mut core, handle) = core(&ports, &c);
+    let mut t = Instant::now();
+    core.step(t);
+    assert_eq!(
+        handle.status.load().inputs,
+        vec![("APC".to_owned(), true), ("Synth".to_owned(), false)],
+        "a device with no binding is left alone"
+    );
+    handle
+        .requests
+        .send(MidiRequest::Learn(MidiAction::Volume(1)))
+        .unwrap();
+    t += Duration::from_millis(10);
+    core.step(t);
+    assert_eq!(
+        handle.status.load().inputs[1],
+        ("Synth".to_owned(), true),
+        "learning listens to every input"
+    );
 }
