@@ -11,6 +11,7 @@ use crate::config::{ConfigWarning, clamp_to};
 #[serde(default)]
 pub struct RemoteConfig {
     pub http: HttpRemoteConfig,
+    pub osc: OscRemoteConfig,
     pub events: RemoteEventsConfig,
 }
 
@@ -61,6 +62,100 @@ impl Default for RemoteEventsConfig {
             position_interval_ms: 250,
         }
     }
+}
+
+/// OSC over UDP (remote control spec §4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OscRemoteConfig {
+    pub enabled: bool,
+    pub bind: String,
+    pub port: u16,
+    /// IP addresses or CIDR subnets whose packets are accepted.
+    pub allowed_sources: Vec<String>,
+    pub max_subscribers: u32,
+    /// A subscription not renewed within this time ends.
+    pub subscription_ttl_secs: u32,
+}
+
+impl Default for OscRemoteConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bind: "127.0.0.1".to_owned(),
+            port: 7381,
+            allowed_sources: vec!["127.0.0.1/32".to_owned(), "::1/128".to_owned()],
+            max_subscribers: 16,
+            subscription_ttl_secs: 60,
+        }
+    }
+}
+
+impl OscRemoteConfig {
+    pub fn bind_addr(&self) -> Option<IpAddr> {
+        self.bind.parse().ok()
+    }
+
+    /// Whether a packet from `source` is accepted.
+    pub fn allows(&self, source: IpAddr) -> bool {
+        self.allowed_sources
+            .iter()
+            .filter_map(|s| Cidr::parse(s))
+            .any(|net| net.contains(source))
+    }
+}
+
+/// An address with a prefix length: `10.0.0.0/8`, `::1/128`, or a bare
+/// address (all of it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cidr {
+    addr: IpAddr,
+    prefix: u8,
+}
+
+/// IPv4 seen through a dual-stack socket arrives as `::ffff:a.b.c.d`.
+fn canonical(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
+        v4 => v4,
+    }
+}
+
+impl Cidr {
+    pub fn parse(text: &str) -> Option<Self> {
+        let (addr, prefix) = match text.split_once('/') {
+            Some((a, p)) => (a, Some(p)),
+            None => (text, None),
+        };
+        let addr = canonical(addr.trim().parse().ok()?);
+        let max = if addr.is_ipv4() { 32 } else { 128 };
+        let prefix = match prefix {
+            Some(p) => p.trim().parse::<u8>().ok().filter(|p| *p <= max)?,
+            None => max,
+        };
+        Some(Self { addr, prefix })
+    }
+
+    pub fn contains(&self, ip: IpAddr) -> bool {
+        match (self.addr, canonical(ip)) {
+            (IpAddr::V4(net), IpAddr::V4(ip)) => same_prefix(
+                u128::from(u32::from(net)),
+                u128::from(u32::from(ip)),
+                self.prefix,
+                32,
+            ),
+            (IpAddr::V6(net), IpAddr::V6(ip)) => {
+                same_prefix(u128::from(net), u128::from(ip), self.prefix, 128)
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Whether the first `prefix` of `bits` bits of `a` and `b` agree.
+fn same_prefix(a: u128, b: u128, prefix: u8, bits: u32) -> bool {
+    let prefix = u32::from(prefix);
+    prefix == 0 || ((a ^ b) >> (bits - prefix)) == 0
 }
 
 /// Shortest token accepted: guessing 16 random characters is out of reach.
@@ -134,6 +229,51 @@ impl RemoteConfig {
             "remote.http.max_body_bytes",
             w,
         );
+        let o = &mut self.osc;
+        if o.bind_addr().is_none() {
+            w.push(ConfigWarning {
+                field: "remote.osc.bind",
+                message: format!("{:?} is not an IP address; using 127.0.0.1", o.bind),
+            });
+            o.bind = "127.0.0.1".to_owned();
+        }
+        clamp_to(&mut o.port, 1024, u16::MAX, "remote.osc.port", w);
+        if o.port == self.http.port && o.bind == self.http.bind {
+            let moved = if self.http.port == u16::MAX {
+                self.http.port - 1
+            } else {
+                self.http.port + 1
+            };
+            w.push(ConfigWarning {
+                field: "remote.osc.port",
+                message: format!("same as the HTTP port; using {moved}"),
+            });
+            o.port = moved;
+        }
+        o.allowed_sources.retain(|s| {
+            let ok = Cidr::parse(s).is_some();
+            if !ok {
+                w.push(ConfigWarning {
+                    field: "remote.osc.allowed_sources",
+                    message: format!("{s:?} is not an address or subnet; dropped"),
+                });
+            }
+            ok
+        });
+        clamp_to(
+            &mut o.max_subscribers,
+            1,
+            256,
+            "remote.osc.max_subscribers",
+            w,
+        );
+        clamp_to(
+            &mut o.subscription_ttl_secs,
+            5,
+            3600,
+            "remote.osc.subscription_ttl_secs",
+            w,
+        );
         clamp_to(
             &mut self.events.position_interval_ms,
             50,
@@ -146,7 +286,80 @@ impl RemoteConfig {
 
 #[cfg(test)]
 mod tests {
+    use super::Cidr;
     use crate::Config;
+    use std::net::IpAddr;
+
+    fn ip(s: &str) -> IpAddr {
+        s.parse().unwrap()
+    }
+
+    #[test]
+    fn osc_is_off_and_local_by_default() {
+        let c = Config::default();
+        assert!(!c.remote.osc.enabled);
+        assert_eq!(c.remote.osc.bind, "127.0.0.1");
+        assert_eq!(c.remote.osc.port, 7381);
+        assert_eq!(
+            c.remote.osc.allowed_sources,
+            vec!["127.0.0.1/32", "::1/128"]
+        );
+        assert_eq!(c.remote.osc.max_subscribers, 16);
+        assert_eq!(c.remote.osc.subscription_ttl_secs, 60);
+        assert!(c.remote.osc.allows(ip("127.0.0.1")));
+        assert!(c.remote.osc.allows(ip("::1")));
+        assert!(!c.remote.osc.allows(ip("192.168.1.20")));
+    }
+
+    #[test]
+    fn subnets_match_by_prefix() {
+        let net = Cidr::parse("192.168.1.0/24").unwrap();
+        assert!(net.contains(ip("192.168.1.200")));
+        assert!(!net.contains(ip("192.168.2.1")));
+        assert!(Cidr::parse("10.1.2.3").unwrap().contains(ip("10.1.2.3")));
+        assert!(Cidr::parse("0.0.0.0/0").unwrap().contains(ip("8.8.8.8")));
+        assert!(Cidr::parse("fd00::/8").unwrap().contains(ip("fd12::1")));
+        assert!(!Cidr::parse("fd00::/8").unwrap().contains(ip("10.0.0.1")));
+        for bad in ["", "x", "10.0.0.0/33", "::/129", "10.0.0.0/-1", "10.0.0.0/"] {
+            assert!(Cidr::parse(bad).is_none(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn ipv4_mapped_sources_count_as_ipv4() {
+        let c = Config::default();
+        assert!(c.remote.osc.allows(ip("::ffff:127.0.0.1")));
+        assert!(!c.remote.osc.allows(ip("::ffff:192.168.1.1")));
+    }
+
+    #[test]
+    fn osc_values_are_brought_into_range() {
+        let mut c = Config::default();
+        c.remote.osc.bind = "nowhere".into();
+        c.remote.osc.port = 10;
+        c.remote.osc.allowed_sources = vec!["10.0.0.0/8".into(), "bogus".into()];
+        c.remote.osc.max_subscribers = 0;
+        c.remote.osc.subscription_ttl_secs = 1;
+        let w = c.validate();
+        assert_eq!(c.remote.osc.bind, "127.0.0.1");
+        assert_eq!(c.remote.osc.port, 1024);
+        assert_eq!(c.remote.osc.allowed_sources, vec!["10.0.0.0/8"]);
+        assert_eq!(c.remote.osc.max_subscribers, 1);
+        assert_eq!(c.remote.osc.subscription_ttl_secs, 5);
+        assert_eq!(w.len(), 5);
+    }
+
+    #[test]
+    fn osc_moves_off_the_http_port_on_the_same_bind() {
+        let mut c = Config::default();
+        c.remote.osc.port = c.remote.http.port;
+        let w = c.validate();
+        assert_eq!(c.remote.osc.port, 7381);
+        assert_eq!(w[0].field, "remote.osc.port");
+        c.remote.osc.bind = "0.0.0.0".into();
+        c.remote.osc.port = c.remote.http.port;
+        assert!(c.validate().is_empty());
+    }
 
     #[test]
     fn remote_control_is_off_and_local_by_default() {

@@ -149,7 +149,7 @@ hand: release-please writes it from the commits.
 | `crates/fp-engine` | Mixer, sources, buses, workers, engine, conductor |
 | `crates/fp-analysis` | Metadata, signal analysis, cache, pool |
 | `crates/fp-control` | MIDI control surfaces: parsing, bindings, soft takeover, LED feedback, learn, the MIDI thread |
-| `crates/fp-remote` | Remote control over the network: HTTP/JSON API, security guard, the remote thread |
+| `crates/fp-remote` | Remote control over the network: HTTP/JSON API, SSE events, OSC, security guard, the remote thread |
 | `crates/fp-app` | UI (`src/ui/*`), services thread, bootstrap, logging, crash reports, locales, fonts |
 | `docs/superpowers/specs` | The binding design spec |
 | `docs/superpowers/plans` | Implementation plans (one per step of a phase) |
@@ -189,4 +189,4 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
 - Remote API tests drive the axum router with `tower::ServiceExt::oneshot`
   (no sockets) and the recording `FakeControl` in
   `crates/fp-remote/tests/support`; server tests bind `127.0.0.1` on free
-  ports.
+  ports, and OSC tests use UDP sockets on `127.0.0.1:0`.

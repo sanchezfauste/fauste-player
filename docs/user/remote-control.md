@@ -1,7 +1,8 @@
 # Remote control
 
 Fauste Player can be read and operated over the network through an HTTP
-API. A web page, a phone app or a station's automation can use it. It is
+API, with live updates, and through OSC. A web page, a phone app, a
+station's automation or a control surface can use them. It is
 **off** until you turn it on, and at first it only answers on this computer.
 
 ## Turning it on
@@ -70,6 +71,47 @@ Try it from a terminal:
     curl -s http://127.0.0.1:7380/api/v1/players
     curl -s -X POST http://127.0.0.1:7380/api/v1/players/<id>/play
 
+## Live updates
+
+A client can follow changes as they happen instead of asking again and
+again. `GET /api/v1/events` is a stream of events: the whole state first,
+then each player, playlist, track or cartwall change, and the times of what
+is playing a few times a second.
+
+    curl -sN http://127.0.0.1:7380/api/v1/events
+
+A web page uses `EventSource`. Browsers cannot send the token as a header
+there, so it goes in the address:
+`/api/v1/events?token=<token>`.
+
+## OSC
+
+OSC is the usual protocol of control surfaces, lighting desks and show
+control software. Turn it on with `remote.osc.enabled`. It listens on UDP
+port 7381 of this computer. To accept packets from other computers, set
+`remote.osc.bind` to `0.0.0.0` and list their addresses or subnets in
+`remote.osc.allowed_sources` (for example `"192.168.1.0/24"`). OSC has no
+password, so keep it on a trusted studio network.
+
+Players are numbered 1, 2, 3… as they appear on screen. Carts are numbered
+in the page shown.
+
+    oscsend localhost 7381 /fauste/player/1/play
+    oscsend localhost 7381 /fauste/player/2/volume f 0.8
+    oscsend localhost 7381 /fauste/cart/3/fire
+
+A surface that wants to show the state (lights, names, countdowns)
+subscribes, and then receives every value once and afterwards only what
+changes. It must subscribe again within a minute (`subscription_ttl_secs`)
+to keep receiving:
+
+    oscdump 9000 &
+    oscsend localhost 7381 /fauste/subscribe i 9000
+
+`oscsend` and `oscdump` come with liblo (`liblo-tools` on Debian and
+Ubuntu). The full list of addresses is in
+[the technical documentation](../technical/remote-api.md#osc).
+
 ## All settings
 
 | Setting | Default | Meaning |
@@ -81,8 +123,14 @@ Try it from a terminal:
 | `remote.http.cors_origins` | none | Web origins allowed to call the API |
 | `remote.http.request_timeout_ms` | `10000` | Longest a request may take |
 | `remote.http.max_body_bytes` | `65536` | Largest request body |
-| `remote.http.max_event_clients` | `16` | Live event streams at once (coming) |
-| `remote.events.position_interval_ms` | `250` | How often times are published while playing (coming) |
+| `remote.http.max_event_clients` | `16` | Live event streams at once |
+| `remote.osc.enabled` | `false` | Turn OSC on |
+| `remote.osc.bind` | `127.0.0.1` | Address to listen on |
+| `remote.osc.port` | `7381` | UDP port (1024–65535) |
+| `remote.osc.allowed_sources` | this computer | Addresses or subnets whose packets are accepted |
+| `remote.osc.max_subscribers` | `16` | Subscribers at once |
+| `remote.osc.subscription_ttl_secs` | `60` | A subscription not renewed within this time ends |
+| `remote.events.position_interval_ms` | `250` | How often times are published while playing |
 
 Values out of range are corrected when the file is loaded, and the
 correction is logged.

@@ -11,7 +11,7 @@
 | `fp-engine` | Real-time mixer, buses with watchdog and virtual clock, per-player decode workers, resampling, the `Engine` and the `Conductor` thread | `fp-model`, `fp-backends`, `fp-decode` |
 | `fp-analysis` | Tags and covers (lofty, image), waveform peaks, automatic markers, the analysis cache and the background pool | `fp-model`, `fp-decode` |
 | `fp-control` | Control surfaces: MIDI parsing, bindings to commands (edge detection, soft takeover, availability), LED feedback, learn, and the MIDI service thread over `midir` (ALSA, CoreMIDI, WinMM) | `fp-model` |
-| `fp-remote` | Remote control over the network: the HTTP/JSON API (axum on a tokio current-thread runtime), its security guard and the remote thread; reaches the application through the `RemoteControl` trait ([Remote control API](remote-api.md)) | `fp-model` |
+| `fp-remote` | Remote control over the network: the HTTP/JSON API with SSE events (axum on a tokio current-thread runtime), OSC over UDP (rosc), the security guard and the remote thread; reaches the application through the `RemoteControl` trait ([Remote control API](remote-api.md)) | `fp-model` |
 | `fp-app` | The egui application and the `fauste-player` binary: bootstrap, logging, crash reports, services thread, UI | all of the above |
 
 ```

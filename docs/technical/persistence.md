@@ -219,6 +219,12 @@ carts).
 | `http.max_event_clients` | 16 | 1 … 256 |
 | `http.request_timeout_ms` | 10000 | 1000 … 120000 |
 | `http.max_body_bytes` | 65536 | 1024 … 1048576 |
+| `osc.enabled` | false | |
+| `osc.bind` | `"127.0.0.1"` | an IPv4 or IPv6 literal, else `127.0.0.1` with a warning |
+| `osc.port` | 7381 | 1024 … 65535; moved off the HTTP port on the same bind |
+| `osc.allowed_sources` | `["127.0.0.1/32", "::1/128"]` | addresses or CIDR subnets; invalid ones dropped with a warning |
+| `osc.max_subscribers` | 16 | 1 … 256 |
+| `osc.subscription_ttl_secs` | 60 | 5 … 3600 |
 | `events.position_interval_ms` | 250 | 50 … 5000 |
 
 See [Remote control API](remote-api.md).

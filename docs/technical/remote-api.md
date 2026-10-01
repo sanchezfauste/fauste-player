@@ -3,9 +3,9 @@
 The HTTP/JSON API lets other programs read and operate Fauste Player: a
 web page, a phone app, a station's automation. The design is the
 [remote control spec](../superpowers/specs/2026-10-01-remote-control-design.md).
-This page describes what is implemented. The event stream (SSE), OSC,
-editing routes and the Settings page are not implemented yet (spec §10,
-plans 2 and 3).
+This page describes what is implemented: reading and operating over HTTP,
+live events over Server-Sent Events, and OSC. Editing routes and the
+Settings page are not implemented yet (spec §10, plan 3).
 
 ## Overview
 
@@ -89,6 +89,7 @@ The file path is never exposed.
 | `GET /tracks/{id}/cover` | The cover thumbnail, `image/png` |
 | `GET /tracks/{id}/peaks` | `{bucket_secs, full_scale: 32767, peaks: [[min, max, rms], …]}` |
 | `GET /cartwall` | Cartwall |
+| `GET /events` | The event stream (see [Events](#events-sse)) |
 
 The cover and peaks come from the interface's media cache, or else from the
 analysis cache on disk. Neither ever starts an analysis. A track not
@@ -120,6 +121,93 @@ or whose cache entry is gone, answers `404 not_found`.
 | `PUT /carts/{id}/cue` | `{"on": bool}` | Pre-listen a cart |
 | `POST /cartwall/stop-all` | — | |
 | `PUT /cartwall/shown` | `{"page": id}` | Show a cart page |
+
+## Events (SSE)
+
+`GET /api/v1/events` is a Server-Sent Events stream
+(`text/event-stream`). Each event has `event: <type>`, `id: <revision>` and
+one line of JSON `data`.
+
+| Event | Data |
+|---|---|
+| `state` | The whole State, always first |
+| `player` | A Player whose state, entries or settings changed |
+| `playlist` | A Playlist whose name or entries changed (or a new one) |
+| `playlist-removed` | `{id}` |
+| `cartwall` | The Cartwall, when pages, carts, the page shown, carts playing or the cart cue changed |
+| `track` | A Track of some playlist or cart whose metadata or markers changed (for example when analysis finishes) |
+| `position` | `{players: [{id, elapsed_secs, remaining_secs}], carts: [{cart, elapsed_secs, remaining_secs}]}`, every `events.position_interval_ms` while a player or cart plays |
+| `resync` | The whole State again, after the client fell behind |
+
+- Events carry whole resources, not patches. A moving position alone is not
+  a `player` change; `position` reports it.
+- A change in the number of players sends a `state`.
+- **Reconnection.** The server keeps no history: every connection, with or
+  without `Last-Event-ID`, starts with a full `state`.
+- **Slow clients.** The publisher never waits. A client more than 256
+  events behind gets `resync` and carries on.
+- **Keep-alive.** A `:keepalive` comment every 15 s.
+- **Topics.** `?topics=player,position` limits the stream to those types;
+  `state` and `resync` are always sent.
+- **Token.** Browsers' `EventSource` cannot set headers, so this route also
+  accepts `?token=<token>`. No other route does.
+- More than `http.max_event_clients` open streams answer `503 busy`.
+
+```sh
+curl -sN 'http://127.0.0.1:7380/api/v1/events?topics=player,position'
+```
+
+```js
+const events = new EventSource('http://studio-pc:7380/api/v1/events?token=' + token);
+events.addEventListener('player', (e) => update(JSON.parse(e.data)));
+```
+
+## OSC
+
+OSC 1.0 over UDP, on `osc.bind`:`osc.port` (default `127.0.0.1:7381`).
+Packets are accepted only from `osc.allowed_sources`. OSC has no
+authentication, so keep it on a trusted network. Players and carts are
+numbered from 1 in screen order: `n` is a player's position, `c` a cart of
+the page shown, `p` a page.
+
+**Input**
+
+| Address | Arguments | Effect |
+|---|---|---|
+| `/fauste/player/{n}/play` (also `pause`, `stop`, `fade-stop`, `restart`, `previous`) | none, or a number | Acts with no argument or a number above 0, so a surface that sends 1 on press and 0 on release acts once |
+| `/fauste/player/{n}/cue` | a number or boolean | Cue on (above 0, true) or off |
+| `/fauste/player/{n}/volume` | `f` 0–1 | Fader travel |
+| `/fauste/cart/{c}/fire` | as `play` | Fire a cart of the page shown |
+| `/fauste/cartwall/page/{p}/cart/{c}/fire` | as `play` | Fire a cart of a given page |
+| `/fauste/cartwall/stop-all` | as `play` | Stop every cart |
+| `/fauste/cartwall/page/next`, `/fauste/cartwall/page/previous` | as `play` | Change the page shown |
+| `/fauste/subscribe` | none, or `i` port | Subscribe this address (on that port, or the packet's source port) |
+| `/fauste/unsubscribe` | none, or `i` port | Unsubscribe |
+
+Bundles are accepted. Their messages act in order, on arrival (time tags
+are ignored). An unavailable action, an unknown address or a malformed
+packet is dropped with a log line, at most one per source per second.
+
+**Output to subscribers**
+
+| Address | Type |
+|---|---|
+| `/fauste/player/{n}/transport` | `s`: `stopped`, `playing` or `paused` |
+| `/fauste/player/{n}/fading`, `/cueing`, `/stop-after-current` | `i` 0/1 |
+| `/fauste/player/{n}/volume` | `f` fader travel |
+| `/fauste/player/{n}/title`, `/artist` | `s` (empty without a current entry) |
+| `/fauste/player/{n}/elapsed`, `/remaining` | `f` seconds |
+| `/fauste/player/{n}/next/entry` | `h` (int64) entry id, -1 for none |
+| `/fauste/player/{n}/next/title`, `/next/artist` | `s` |
+| `/fauste/cart/{c}/playing` | `i` 0/1, for the page shown |
+| `/fauste/cart/{c}/name` | `s`, for the page shown |
+| `/fauste/cartwall/page` | `i` 1-based page shown |
+
+A new subscriber gets every address once, then only values that change.
+Times follow `events.position_interval_ms`. A change in the player count or
+the page shown sends everything again. A subscription ends after
+`osc.subscription_ttl_secs` unless the client subscribes again, and at most
+`osc.max_subscribers` are kept.
 
 ## Errors
 
@@ -176,10 +264,16 @@ configuration (see [Persistence and configuration](persistence.md)):
 | `http.port` | `7380` | 1024–65535 |
 | `http.token` | `""` | Empty, or at least 16 characters (a shorter one is dropped with a warning) |
 | `http.cors_origins` | `[]` | `http://` or `https://` origins with no path; `"*"` only with a token |
-| `http.max_event_clients` | `16` | 1–256 (for the event stream, plan 2) |
+| `http.max_event_clients` | `16` | 1–256 |
 | `http.request_timeout_ms` | `10000` | 1000–120000 |
 | `http.max_body_bytes` | `65536` | 1024–1048576 |
-| `events.position_interval_ms` | `250` | 50–5000 (for the event stream, plan 2) |
+| `osc.enabled` | `false` | |
+| `osc.bind` | `"127.0.0.1"` | An IPv4 or IPv6 literal, else `127.0.0.1` with a warning |
+| `osc.port` | `7381` | 1024–65535; moved off the HTTP port on the same bind |
+| `osc.allowed_sources` | `["127.0.0.1/32", "::1/128"]` | IP addresses or CIDR subnets; invalid ones dropped with a warning. IPv4 seen through a dual-stack socket counts as IPv4 |
+| `osc.max_subscribers` | `16` | 1–256 |
+| `osc.subscription_ttl_secs` | `60` | 5–3600 |
+| `events.position_interval_ms` | `250` | 50–5000 |
 
 ## Implementation
 
@@ -193,22 +287,36 @@ configuration (see [Persistence and configuration](persistence.md)):
   - `http`: the axum router, its handlers, the JSON body extractor, the
     guard (token, `Origin`, `Host`), and the CORS, body-limit, timeout and
     concurrency layers;
+  - `events`: the snapshot diff into resource events, and the position
+    event (pure);
+  - `http/events`: the SSE stream;
+  - `osc`: OSC addresses into operations, the values table, and the
+    subscribers with what each was last sent (pure);
+  - `osc_server`: the UDP loop;
+  - `throttle`: one log line per source per second;
   - `server`: the `fp-remote` thread.
 - `fp_remote::spawn` starts one thread with a tokio `current_thread`
-  runtime. Every 250 ms the thread compares `config.remote.http` in the
-  model snapshot with the configuration it is running, and restarts the
-  server when they differ. A change from Settings therefore applies with no
-  restart. The status (`Off`, `Listening(addr)`, `Error(…)`) is published
-  through `ArcSwap` and read with `RemoteHandle::status`. Dropping the
-  handle stops the server (open requests get two seconds) and joins the
-  thread.
+  runtime. Every 250 ms the thread compares `config.remote.http` and
+  `config.remote.osc` in the model snapshot with what it is running, and
+  restarts the server whose settings changed. A change from Settings
+  therefore applies with no restart. The status of each server (`Off`,
+  `Listening(addr)`, `Error(…)`) is published through `ArcSwap` and read
+  with `RemoteHandle::status`.
+- A publisher task looks for a new snapshot every 50 ms. It diffs it into
+  events on a `broadcast` channel of 256, and every `position_interval_ms`
+  it adds a `position` while something plays. It does no work while nobody
+  listens. SSE streams and the OSC socket read that channel.
+- Stopping a server ends its event streams, gives open requests two
+  seconds, then aborts it. Dropping the handle stops both servers and joins
+  the thread.
 - `fp-app::remote::Bridge` implements `RemoteControl` over the
   `ConductorHandle` (snapshot, telemetry, non-blocking `send`), the media
   cache and the analysis cache. Covers and peaks are read in
   `spawn_blocking`.
 - Tests: the pure modules directly; the router through
   `tower::ServiceExt::oneshot` with the recording `FakeControl`; the server
-  on free loopback ports; an `fp-app` integration test that plays through
+  on free loopback ports; SSE through `oneshot` and over TCP; OSC with UDP
+  sockets on `127.0.0.1:0`; an `fp-app` integration test that plays through
   the real conductor.
 
 ## Examples

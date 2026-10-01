@@ -234,7 +234,7 @@ replies.
 | `/fauste/player/{n}/volume` | `f` |
 | `/fauste/player/{n}/title`, `/artist` | `s` |
 | `/fauste/player/{n}/elapsed`, `/remaining` | `f` (seconds) |
-| `/fauste/player/{n}/next/entry` | `i` (entry id, -1 for none) |
+| `/fauste/player/{n}/next/entry` | `h` (int64 entry id, -1 for none: ids are `u64` and may pass `i32`) |
 | `/fauste/player/{n}/next/title`, `/next/artist` | `s` |
 | `/fauste/cart/{c}/playing` | `i` (0/1), for the page shown |
 | `/fauste/cart/{c}/name` | `s`, for the page shown |

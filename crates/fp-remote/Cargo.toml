@@ -1,6 +1,6 @@
 [package]
 name = "fp-remote"
-description = "Remote control over the network: HTTP/JSON API"
+description = "Remote control over the network: HTTP/JSON API, live events and OSC"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,8 @@ fp-model.workspace = true
 arc-swap.workspace = true
 axum.workspace = true
 tokio.workspace = true
+futures-util.workspace = true
+rosc.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 serde.workspace = true
