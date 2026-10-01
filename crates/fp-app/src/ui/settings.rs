@@ -19,6 +19,7 @@ use super::app::Scene;
 mod carts;
 mod keys;
 mod meters;
+mod midi;
 use super::format;
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
@@ -42,6 +43,7 @@ pub(crate) enum Section {
     Playlists,
     Cartwall,
     Shortcuts,
+    Midi,
 }
 
 /// One audio system and what it offers.
@@ -57,6 +59,8 @@ pub(crate) struct SettingsState {
     pub section: Section,
     pub(super) carts: carts::CartsState,
     pub(super) keys: keys::KeysState,
+    /// The MIDI action waiting for a control (MIDI learn).
+    pub(super) midi_learning: Option<fp_model::MidiAction>,
     backends: Option<Vec<BackendChoice>>,
     loading: Option<Receiver<Vec<BackendChoice>>>,
     names: HashMap<PlaylistId, String>,
@@ -69,7 +73,7 @@ impl SettingsState {
     /// True while Settings waits for a key to bind (Esc then cancels the
     /// capture, not the dialog).
     pub fn capturing(&self) -> bool {
-        self.keys.capturing()
+        self.keys.capturing() || self.midi_learning.is_some()
     }
 
     /// Opens the Cartwall section on one cart (`Edit…` on a cart button).
@@ -150,6 +154,7 @@ pub(crate) struct SettingsDeps<'a> {
     pub backends: &'a [Arc<dyn AudioBackend>],
     pub services: Option<&'a Sender<ServiceRequest>>,
     pub notice: Option<String>,
+    pub midi: Option<&'a fp_control::service::MidiHandle>,
 }
 
 /// Draws the modal; returns `false` once it should close.
@@ -237,6 +242,9 @@ pub(crate) fn show(
                                             Section::Playlists => playlists(ui, scene, st),
                                             Section::Cartwall => carts::section(ui, scene, st),
                                             Section::Shortcuts => keys::section(ui, scene, st),
+                                            Section::Midi => {
+                                                midi::section(ui, scene, st, deps.midi)
+                                            }
                                         }
                                     });
                             });
@@ -322,6 +330,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
                 "settings-tab-cartwall",
             ),
             (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
+            (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
         ] {
             let on = st.section == section;
             let label = t.tr(key);

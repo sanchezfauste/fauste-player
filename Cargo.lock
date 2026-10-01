@@ -1649,6 +1649,7 @@ dependencies = [
  "fp-analysis",
  "fp-app",
  "fp-backends",
+ "fp-control",
  "fp-engine",
  "fp-model",
  "fp-store",

@@ -168,6 +168,8 @@ pub struct AppUi {
     /// The installed third-party notices, found at start-up.
     notices: Option<PathBuf>,
     opener: NoticeOpener,
+    /// The MIDI service's handle (Settings > MIDI), when it started.
+    midi: Option<fp_control::service::MidiHandle>,
 }
 
 impl AppUi {
@@ -200,6 +202,7 @@ impl AppUi {
             service_faults: None,
             notices: None,
             opener: about::system_opener(),
+            midi: None,
         }
     }
 
@@ -230,6 +233,12 @@ impl AppUi {
     /// The installed third-party notices file (see `about::find_notices`).
     pub fn with_notices(mut self, notices: Option<PathBuf>) -> Self {
         self.notices = notices;
+        self
+    }
+
+    /// The MIDI service, for Settings > MIDI.
+    pub fn with_midi(mut self, midi: fp_control::service::MidiHandle) -> Self {
+        self.midi = Some(midi);
         self
     }
 
@@ -439,6 +448,7 @@ impl AppUi {
                     .as_ref()
                     .filter(|(_, until)| *until > time)
                     .map(|(text, _)| text.clone()),
+                midi: self.midi.as_ref(),
             };
             self.view.settings_open = settings::show(&ctx, &scene, &mut self.settings, &deps);
         } else {

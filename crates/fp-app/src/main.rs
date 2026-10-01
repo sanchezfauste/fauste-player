@@ -165,6 +165,9 @@ fn run(
                 .ok()
                 .and_then(|exe| fp_app::ui::about::find_notices(&exe)),
         );
+    if let Some(midi) = fp_app::midi::start(handle.clone()) {
+        app = app.with_midi(midi);
+    }
     for playlist in playlists {
         tracing::info!(path = %playlist.display(), "importing a playlist given at start");
         app.import_playlist(playlist);
