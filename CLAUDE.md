@@ -92,6 +92,14 @@ Progress ledgers live in `.superpowers/sdd/<plan>/progress.md` (git-ignored).
 Record every deviation from a plan as
 `Ruling: <decision> — <why> — <cost if wrong>`.
 
+### Finding code
+
+When a local CodeGraph index exists (`.codegraph/` at the repo root,
+git-ignored; build it with `codegraph init`), use it before grep or reading
+files: the `codegraph_explore` MCP tool (pass this repo as `projectPath`) or
+`codegraph explore "<symbols or question>"` returns the relevant source and
+the call paths between symbols. `vendor/` and `target/` are not indexed.
+
 ### Pull requests
 
 Every change reaches `master` through a pull request on GitHub; nothing is
