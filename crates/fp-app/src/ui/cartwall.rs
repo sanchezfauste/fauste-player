@@ -7,6 +7,7 @@ use fp_model::{CartKind, CartPageId, Command};
 use super::app::{Scene, ViewState};
 use super::cart_view::{CartStatus, cart_view, page_on_air};
 use super::theme;
+use super::view;
 use super::widgets::{self, TileStyle, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
@@ -269,7 +270,13 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                             dot,
                         );
                         let title = match view.status {
-                            CartStatus::Unavailable => format!("{} {shown}", icon::WARNING),
+                            CartStatus::Unavailable => {
+                                let glyph = cart
+                                    .track
+                                    .and_then(|t| scene.state.library.get(t))
+                                    .map_or(icon::WARNING, view::file_icon);
+                                format!("{glyph} {shown}")
+                            }
                             _ => shown.clone(),
                         };
                         let name_color = if empty { theme::NEUTRAL_600 } else { c };

@@ -774,3 +774,49 @@ fn hovering_an_unavailable_row_says_why() {
         "the tooltip gives the reason and the path"
     );
 }
+
+#[test]
+fn a_missing_file_and_an_unreadable_one_have_their_own_icons() {
+    use egui_phosphor::regular::{FILE_X, WARNING};
+    let mut s = state(1, 3);
+    let playlist = s.playlists.first_id().unwrap();
+    let entries = s.playlists.get(playlist).unwrap().entries.clone();
+    for (entry, file_state) in [
+        (&entries[1], fp_model::FileState::Missing),
+        (&entries[2], fp_model::FileState::Unreadable),
+    ] {
+        fp_model::apply(
+            &mut s,
+            Command::SetFileState {
+                track: entry.track,
+                state: file_state,
+            },
+        )
+        .unwrap();
+    }
+    let (h, _fake) = harness(s);
+    assert!(h.query_by_label(&format!("{FILE_X}02")).is_some());
+    assert!(h.query_by_label(&format!("{WARNING}03")).is_some());
+}
+
+#[test]
+fn a_track_an_earlier_version_analysed_shows_the_reload_flag() {
+    let mut s = state(1, 2);
+    let playlist = s.playlists.first_id().unwrap();
+    let track = s.playlists.get(playlist).unwrap().entries[1].track;
+    // No format and version 0: an earlier version's analysis.
+    fp_model::apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::default(),
+        },
+    )
+    .unwrap();
+    let (h, _fake) = harness(s);
+    assert_eq!(
+        h.query_all_by_label_contains("Analysed by an earlier version")
+            .count(),
+        1
+    );
+}

@@ -89,7 +89,17 @@ just added, *Analyse now*, *Re-analyse all*) got its waveform last.
   generations so nothing is analysed twice. `Services::submit_new` sends
   wanted tracks urgent and promotes wanted tracks already in flight.
 
-### 5. Finish
+### 5. Icons (maintainer request)
+
+- Tests first: a missing row's number shows a file with a cross, an
+  unreadable one a warning sign (`view::file_icon`, also on carts); a track
+  an earlier version analysed shows reload arrows at the right of its
+  title with the tooltip "Analysed by an earlier version: Settings →
+  Analysis → Analyse outdated tracks".
+- Locale key `flag-outdated` in both locales; playlists, cartwall and
+  troubleshooting legends.
+
+### 6. Finish
 
 - Gate (fmt, clippy, tests), a fresh review on the most capable model,
   PR, CI on the three OSes, merge.

@@ -169,6 +169,15 @@ pub fn file_problem(track: &Track) -> Option<&'static str> {
     }
 }
 
+/// The icon of a track that cannot be played: a file with a cross when it
+/// is not found, a warning sign when it cannot be read.
+pub fn file_icon(track: &Track) -> &'static str {
+    match track.file_state {
+        FileState::Missing => egui_phosphor::regular::FILE_X,
+        FileState::Ok | FileState::Unreadable => egui_phosphor::regular::WARNING,
+    }
+}
+
 /// How a track-table row is drawn (spec §3 rule 1). Takes the row's entry
 /// directly: the table already has it, so nothing is searched per row.
 pub fn row_status(state: &AppState, player: PlayerId, entry: &PlaylistEntry) -> RowStatus {

@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
-    PlayerStatus, RowStatus, fader_from_gain, file_problem, gain_from_fader, player_view,
-    playlist_times, row_status, volume_db,
+    PlayerStatus, RowStatus, fader_from_gain, file_icon, file_problem, gain_from_fader,
+    player_view, playlist_times, row_status, volume_db,
 };
 use fp_model::{AppState, Command, Config, EntryId, FileState, MarkerKind, PlayerId, apply};
 
@@ -96,8 +96,10 @@ fn an_unavailable_track_says_why() {
     assert_eq!(file_problem(t), None);
     t.file_state = FileState::Missing;
     assert_eq!(file_problem(t), Some("file-missing-tip"));
+    assert_eq!(file_icon(t), egui_phosphor::regular::FILE_X);
     t.file_state = FileState::Unreadable;
     assert_eq!(file_problem(t), Some("file-unreadable-tip"));
+    assert_eq!(file_icon(t), egui_phosphor::regular::WARNING);
 }
 
 #[test]
