@@ -14,9 +14,12 @@ pub enum SettingsSection {
     Shortcuts,
 }
 
-/// Resets the fields `section` shows. In Players, the player count is
+/// Resets the whole configuration group behind `section` (`players`,
+/// `meter`, `analysis` or `shortcuts`), including fields the section does
+/// not show, such as `players.history_len`. In Players, the player count is
 /// kept (it adds or removes players, which is the show's layout, not a
-/// preference) and so is the interface language (the operator's own).
+/// preference). The interface language lives in `ui`, which no section
+/// resets.
 pub fn restore_defaults(config: &mut Config, section: SettingsSection) {
     let defaults = Config::default();
     match section {

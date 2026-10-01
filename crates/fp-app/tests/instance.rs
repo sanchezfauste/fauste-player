@@ -16,7 +16,9 @@ fn a_lock_held_for_an_instant_is_taken_on_a_retry() {
         std::thread::sleep(Duration::from_millis(10));
         drop(probe);
     });
-    let lock = acquire_with_retry(dir.path(), 3, Duration::from_millis(20)).unwrap();
+    // A generous budget (about a second) against a 10 ms hold, so a slow
+    // runner cannot fail it; production uses fewer, shorter tries.
+    let lock = acquire_with_retry(dir.path(), 50, Duration::from_millis(20)).unwrap();
     release.join().unwrap();
     assert!(lock.is_some());
 }

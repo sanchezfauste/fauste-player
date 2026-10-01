@@ -73,11 +73,13 @@ fn open(h: &mut Harness<'static, AppUi>, section: &str) {
 
 /// Devices are listed by a helper thread.
 fn wait_for_devices(h: &mut Harness<'static, AppUi>) {
-    for _ in 0..200 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
         h.run_steps(1);
         if h.query_all_by_label("Test Main").next().is_some() {
             break;
         }
+        assert!(std::time::Instant::now() < deadline, "devices never listed");
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
     h.run_steps(3);
@@ -100,7 +102,14 @@ fn every_section_has_the_same_window() {
     }
     // The window is centred: Close sits 16 px inside its right edge.
     let right = (SCREEN.x + WINDOW.x) / 2.0 - 16.0;
+    let first = seen[0].1;
     for (section, rect) in seen {
+        assert!(
+            (rect.bottom() - first.bottom()).abs() < 0.5,
+            "{section}: Close ends at {} instead of {}",
+            rect.bottom(),
+            first.bottom()
+        );
         assert!(
             (rect.right() - right).abs() < 1.5,
             "{section}: Close ends at {} instead of {right}",
@@ -134,19 +143,26 @@ fn the_footer_spans_the_window() {
 fn a_small_screen_keeps_one_size_inside_it() {
     let small = egui::vec2(700.0, 500.0);
     let mut h = open_settings(small, routed());
-    let mut rights = Vec::new();
+    let mut rects = Vec::new();
     for section in SECTIONS {
         open(&mut h, section);
         if section == "Audio outputs" {
             wait_for_devices(&mut h);
         }
-        rights.push(close_rect(&h).right());
+        rects.push(close_rect(&h));
     }
+    let first = rects[0];
     assert!(
-        rights.iter().all(|r| (r - rights[0]).abs() < 0.5),
-        "{rights:?}"
+        rects.iter().all(|r| (r.right() - first.right()).abs() < 0.5
+            && (r.bottom() - first.bottom()).abs() < 0.5),
+        "{rects:?}"
     );
-    assert!(rights[0] <= small.x - 16.0);
+    assert!(first.right() <= small.x - 16.0);
+    assert!(
+        first.bottom() <= small.y,
+        "Close ends at {}",
+        first.bottom()
+    );
 }
 
 fn left_of(h: &Harness<'static, AppUi>, role: Role, label: &str) -> f32 {
