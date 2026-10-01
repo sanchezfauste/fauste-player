@@ -12,6 +12,7 @@ arc-swap.workspace = true
 axum.workspace = true
 tokio.workspace = true
 futures-util.workspace = true
+rosc.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 serde.workspace = true

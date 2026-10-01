@@ -61,6 +61,7 @@ tokio = { version = "1.53.1", features = ["rt", "net", "time", "sync", "macros"]
 tower = { version = "0.5.3", features = ["util", "limit"] }
 tower-http = { version = "0.7.1", features = ["cors", "timeout", "limit"] }
 http-body-util = "0.1.5"
+rosc = "0.11.4"
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]
