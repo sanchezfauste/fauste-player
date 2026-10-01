@@ -470,31 +470,9 @@ impl AppUi {
             self.view.outdated_open =
                 self.services.is_some() && crate::services::outdated_tracks(&state) > 0;
         }
-        // The guard takes precedence over Settings and About.
-        if let Some(intent) = self.view.exit_guard {
-            let items = fp_model::on_air(&state);
-            if items.is_empty() {
-                // Everything stopped meanwhile: nothing left to confirm.
-                self.view.exit_guard = None;
-            } else {
-                match exit_guard::show(&ctx, &scene, intent, &items) {
-                    Some(true) => {
-                        for command in exit_guard::stop_commands(&items) {
-                            scene.ctl.send(command);
-                        }
-                        self.view.exit_guard = None;
-                        match intent {
-                            ExitIntent::Close => {
-                                self.view.close_confirmed = true;
-                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                            }
-                        }
-                    }
-                    Some(false) => self.view.exit_guard = None,
-                    None => {}
-                }
-            }
-        }
+        // Files dropped on the window, when no dialog is up (handled once
+        // the dialogs are drawn).
+        let mut take_drops = false;
         if self.view.settings_open {
             if !self.settings_shown {
                 self.settings.reset();
@@ -545,8 +523,37 @@ impl AppUi {
                     None => {}
                 }
             } else {
-                self.file_drops(&ctx, &state);
+                take_drops = true;
             }
+        }
+        // The guard takes precedence over Settings and About: drawn last, it
+        // is the top modal.
+        if let Some(intent) = self.view.exit_guard {
+            let items = fp_model::on_air(&state);
+            if items.is_empty() {
+                // Everything stopped meanwhile: nothing left to confirm.
+                self.view.exit_guard = None;
+            } else {
+                match exit_guard::show(&ctx, &scene, intent, &items) {
+                    Some(true) => {
+                        for command in exit_guard::stop_commands(&items) {
+                            scene.ctl.send(command);
+                        }
+                        self.view.exit_guard = None;
+                        match intent {
+                            ExitIntent::Close => {
+                                self.view.close_confirmed = true;
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                        }
+                    }
+                    Some(false) => self.view.exit_guard = None,
+                    None => {}
+                }
+            }
+        }
+        if take_drops {
+            self.file_drops(&ctx, &state);
         }
         let busy = state
             .players
@@ -580,6 +587,27 @@ impl AppUi {
     }
 
     fn keyboard(&mut self, ctx: &egui::Context, state: &AppState) {
+        // The close guard owns the keyboard while it is open, even over a
+        // focused text field: Esc cancels it and no shortcut acts. (Esc is
+        // answered here, before the modal is drawn, so the modal never
+        // sees it; its own `should_close` covers the backdrop click.)
+        if self.view.exit_guard.is_some() {
+            let escape = ctx.input(|i| {
+                i.events.iter().any(|e| {
+                    matches!(e, egui::Event::Key {
+                        key: Key::Escape,
+                        pressed: true,
+                        repeat: false,
+                        modifiers,
+                        ..
+                    } if modifiers.is_none())
+                })
+            });
+            if escape {
+                self.view.exit_guard = None;
+            }
+            return;
+        }
         if ctx.text_edit_focused() {
             return;
         }
@@ -629,12 +657,6 @@ impl AppUi {
                 first_press(Key::Escape, None),
             )
         });
-        if self.view.exit_guard.is_some() {
-            if escape {
-                self.view.exit_guard = None;
-            }
-            return;
-        }
         if self.view.settings_open {
             if escape && !self.settings.capturing() {
                 self.view.settings_open = false;

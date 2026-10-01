@@ -3,6 +3,7 @@
 
 use crate::{AppState, CartId, EntryId, PlayerId, Transport};
 
+/// One thing that is on air: a player or a cart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnAir {
     /// A player that is playing or paused, with its current entry.

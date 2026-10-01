@@ -359,4 +359,5 @@ exit-guard-cancel = Cancel
 exit-guard-close-confirm = Stop and close
 on-air-player = P{ $n } — { $title }
 on-air-player-empty = P{ $n }
-on-air-cart = Cart — { $title }
+on-air-cart = Cart { $n } — { $title }
+on-air-cart-empty = Cart { $n }

@@ -359,4 +359,5 @@ exit-guard-cancel = Cancelar
 exit-guard-close-confirm = Detener y cerrar
 on-air-player = P{ $n } — { $title }
 on-air-player-empty = P{ $n }
-on-air-cart = Cartucho — { $title }
+on-air-cart = Cartucho { $n } — { $title }
+on-air-cart-empty = Cartucho { $n }

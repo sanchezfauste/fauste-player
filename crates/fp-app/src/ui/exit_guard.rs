@@ -52,7 +52,13 @@ fn describe(scene: &Scene<'_>, state: &AppState, item: &OnAir) -> String {
             }
         }
         OnAir::Cart(id) => {
-            let cart = state.cartwall.cart(*id);
+            // 1-based position on its page, as on the cartwall.
+            let (n, cart) = state
+                .cartwall
+                .pages
+                .iter()
+                .find_map(|page| page.carts.iter().enumerate().find(|(_, c)| c.id == *id))
+                .map_or((0, None), |(i, c)| (i + 1, Some(c)));
             let title = cart
                 .map(|c| c.name.clone())
                 .filter(|name| !name.is_empty())
@@ -61,8 +67,13 @@ fn describe(scene: &Scene<'_>, state: &AppState, item: &OnAir) -> String {
                         .and_then(|track| state.library.get(track))
                         .map(|track| track.title.clone())
                 })
-                .unwrap_or_default();
-            t.tr_args("on-air-cart", &[("title", title.into())])
+                .filter(|title| !title.is_empty());
+            match title {
+                Some(title) => {
+                    t.tr_args("on-air-cart", &[("n", n.into()), ("title", title.into())])
+                }
+                None => t.tr_args("on-air-cart-empty", &[("n", n.into())]),
+            }
         }
     }
 }
@@ -91,7 +102,8 @@ fn button(ui: &mut egui::Ui, label: &str, border: Option<egui::Color32>) -> bool
 }
 
 /// Draws the guard. `Some(true)` is "stop and go on", `Some(false)` is
-/// "cancel", `None` keeps it open.
+/// "cancel" (the button, Esc or a click on the backdrop), `None` keeps it
+/// open.
 pub(crate) fn show(
     ctx: &egui::Context,
     scene: &Scene<'_>,
@@ -104,7 +116,7 @@ pub(crate) fn show(
     };
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 440.0);
     let mut answer = None;
-    egui::Modal::new(egui::Id::new("exit-guard"))
+    let modal = egui::Modal::new(egui::Id::new("exit-guard"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {
@@ -148,6 +160,10 @@ pub(crate) fn show(
                 }
             });
         });
+    // A click on the backdrop, or Esc, is "cancel".
+    if answer.is_none() && modal.should_close() {
+        answer = Some(false);
+    }
     answer
 }
 
