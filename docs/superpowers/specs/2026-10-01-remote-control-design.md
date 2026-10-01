@@ -159,14 +159,14 @@ the UI's clamping rules are not repeated here.
 | `POST /playlists` | `{"name"}` | `CreatePlaylist` |
 | `PATCH /playlists/{id}` | `{"name"}` | `RenamePlaylist` |
 | `DELETE /playlists/{id}` | — | `DeletePlaylist` |
-| `POST /playlists/{id}/entries` | `{"track": id, "index": n}` | `InsertPaths` with the track's path |
+| `POST /playlists/{id}/entries` | `{"track": id, "index": n}` | `InsertTracks` (the same library track) |
 | `DELETE /entries/{id}` | — | `RemoveEntry` |
 | `POST /entries/{id}/move` | `{"playlist": id, "index": n}` | `MoveEntry` |
 | `POST /entries/{id}/duplicate` | — | `DuplicateEntry` |
 | `POST /cartwall/pages` | `{"name"}` | `CreateCartPage` |
 | `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | `RenameCartPage`, `ResizeCartPage` |
 | `DELETE /cartwall/pages/{id}` | — | `DeleteCartPage` |
-| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | `SetCart`, then `AssignCartFile` with the track's path or `ClearCartFile` |
+| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | `SetCart`, then `AssignCartTrack` (when the track changes) or `ClearCartFile` |
 | `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | `SetMarker` |
 | `POST /tracks/{id}/markers/reset` | — | `ResetMarkers` |
 

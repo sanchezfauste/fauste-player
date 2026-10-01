@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 
 use egui::{RichText, Ui, vec2};
+use fp_model::HttpRemoteConfig;
 use fp_remote::{RemoteStatus, ServerError, ServerStatus};
 
 use super::super::app::Scene;
@@ -18,10 +19,12 @@ pub(crate) struct RemoteState {
     /// Text being typed, per field, until it loses focus.
     drafts: HashMap<&'static str, String>,
     show_token: bool,
+    /// Numbers being dragged or typed, per field, until released.
+    numbers: HashMap<&'static str, u32>,
 }
 
-fn text(ui: &mut Ui, s: impl Into<String>, color: egui::Color32) {
-    ui.label(RichText::new(s.into()).font(font(13.0)).color(color));
+fn text(ui: &mut Ui, s: impl Into<String>, color: egui::Color32) -> egui::Response {
+    ui.label(RichText::new(s.into()).font(font(13.0)).color(color))
 }
 
 /// A text field over a configuration value. Returns the new text when the
@@ -30,6 +33,7 @@ fn field(
     ui: &mut Ui,
     st: &mut RemoteState,
     key: &'static str,
+    label: egui::Id,
     current: &str,
     multiline: bool,
     password: bool,
@@ -40,7 +44,7 @@ fn field(
     } else {
         egui::TextEdit::singleline(draft).password(password)
     };
-    let response = ui.add(edit.desired_width(320.0));
+    let response = ui.add(edit.desired_width(320.0)).labelled_by(label);
     if response.has_focus() {
         return None;
     }
@@ -51,7 +55,48 @@ fn field(
         return None;
     }
     st.drafts.remove(key);
+    // Escape cancels the edit; it does not apply it.
+    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        return None;
+    }
     changed
+}
+
+/// A number over a configuration value. Returns the new value once, when a
+/// drag is released or typing ends, never the steps in between (each would
+/// restart a server).
+fn number(
+    ui: &mut Ui,
+    st: &mut RemoteState,
+    key: &'static str,
+    label: egui::Id,
+    current: u32,
+    range: std::ops::RangeInclusive<u32>,
+    suffix: &str,
+) -> Option<u32> {
+    let value = st.numbers.entry(key).or_insert(current);
+    let response = ui
+        .add(
+            egui::DragValue::new(value)
+                .range(range)
+                .suffix(suffix)
+                .update_while_editing(false),
+        )
+        .labelled_by(label);
+    let value = *value;
+    if response.dragged() || response.has_focus() {
+        return None;
+    }
+    st.numbers.remove(key);
+    (value != current).then_some(value)
+}
+
+/// An IP address literal, as `bind` takes it.
+fn address(text: &str) -> Option<String> {
+    let text = text.trim();
+    text.parse::<std::net::IpAddr>()
+        .ok()
+        .map(|_| text.to_owned())
 }
 
 fn lines(text: &str) -> Vec<String> {
@@ -96,38 +141,58 @@ pub(super) fn section(
     let st = &mut st.remote;
     heading(ui, &t.tr("settings-tab-remote"));
     let Some(status) = status else {
-        text(ui, t.tr("remote-unavailable"), theme::NEUTRAL_400);
+        let _ = text(ui, t.tr("remote-unavailable"), theme::NEUTRAL_400);
         return;
     };
     let config = scene.state.config.remote.clone();
 
     // HTTP
-    text(ui, t.tr("remote-http"), theme::TEXT);
+    let _ = text(ui, t.tr("remote-http"), theme::TEXT);
     let mut on = config.http.enabled;
     if ui.checkbox(&mut on, t.tr("remote-http-enabled")).changed() {
         update(scene, |c| c.remote.http.enabled = on);
     }
     let (line, color) = status_line(scene, &status.http);
-    text(ui, line, color);
+    let _ = text(ui, line, color);
     ui.horizontal(|ui| {
-        text(ui, t.tr("remote-bind"), theme::NEUTRAL_300);
-        if let Some(v) = field(ui, st, "http.bind", &config.http.bind, false, false) {
-            update(scene, |c| c.remote.http.bind = v.trim().to_owned());
-        }
-        text(ui, t.tr("remote-port"), theme::NEUTRAL_300);
-        let mut port = config.http.port;
-        if ui
-            .add(egui::DragValue::new(&mut port).range(1024..=65535))
-            .changed()
+        let label = text(ui, t.tr("remote-bind"), theme::NEUTRAL_300).id;
+        // An unfinished address keeps the one in use.
+        if let Some(v) = field(ui, st, "http.bind", label, &config.http.bind, false, false)
+            .and_then(|v| address(&v))
         {
+            update(scene, |c| c.remote.http.bind = v);
+        }
+        let label = text(ui, t.tr("remote-port"), theme::NEUTRAL_300).id;
+        let port = number(
+            ui,
+            st,
+            "http.port",
+            label,
+            config.http.port.into(),
+            1024..=65535,
+            "",
+        );
+        if let Some(port) = port.and_then(|p| u16::try_from(p).ok()) {
             update(scene, |c| c.remote.http.port = port);
         }
     });
     ui.horizontal(|ui| {
-        text(ui, t.tr("remote-token"), theme::NEUTRAL_300);
+        let label = text(ui, t.tr("remote-token"), theme::NEUTRAL_300).id;
         let masked = !st.show_token;
-        if let Some(v) = field(ui, st, "http.token", &config.http.token, false, masked) {
-            update(scene, |c| c.remote.http.token = v.trim().to_owned());
+        // A token too short to use keeps the one in use.
+        if let Some(v) = field(
+            ui,
+            st,
+            "http.token",
+            label,
+            &config.http.token,
+            false,
+            masked,
+        )
+        .map(|v| v.trim().to_owned())
+        .filter(|v| HttpRemoteConfig::token_acceptable(v))
+        {
+            update(scene, |c| c.remote.http.token = v);
         }
         let label = if st.show_token {
             t.tr("remote-token-hide")
@@ -149,13 +214,14 @@ pub(super) fn section(
     });
     let local = config.http.bind_addr().is_some_and(|ip| ip.is_loopback());
     if !local && config.http.token.is_empty() {
-        text(ui, t.tr("remote-token-needed"), theme::AMBER);
+        let _ = text(ui, t.tr("remote-token-needed"), theme::AMBER);
     }
-    text(ui, t.tr("remote-origins"), theme::NEUTRAL_300);
+    let label = text(ui, t.tr("remote-origins"), theme::NEUTRAL_300).id;
     if let Some(v) = field(
         ui,
         st,
         "http.origins",
+        label,
         &config.http.cors_origins.join("\n"),
         true,
         false,
@@ -165,32 +231,40 @@ pub(super) fn section(
 
     ui.add_space(16.0);
     // OSC
-    text(ui, t.tr("remote-osc"), theme::TEXT);
+    let _ = text(ui, t.tr("remote-osc"), theme::TEXT);
     let mut on = config.osc.enabled;
     if ui.checkbox(&mut on, t.tr("remote-osc-enabled")).changed() {
         update(scene, |c| c.remote.osc.enabled = on);
     }
     let (line, color) = status_line(scene, &status.osc);
-    text(ui, line, color);
+    let _ = text(ui, line, color);
     ui.horizontal(|ui| {
-        text(ui, t.tr("remote-bind"), theme::NEUTRAL_300);
-        if let Some(v) = field(ui, st, "osc.bind", &config.osc.bind, false, false) {
-            update(scene, |c| c.remote.osc.bind = v.trim().to_owned());
-        }
-        text(ui, t.tr("remote-port"), theme::NEUTRAL_300);
-        let mut port = config.osc.port;
-        if ui
-            .add(egui::DragValue::new(&mut port).range(1024..=65535))
-            .changed()
+        let label = text(ui, t.tr("remote-bind"), theme::NEUTRAL_300).id;
+        if let Some(v) = field(ui, st, "osc.bind", label, &config.osc.bind, false, false)
+            .and_then(|v| address(&v))
         {
+            update(scene, |c| c.remote.osc.bind = v);
+        }
+        let label = text(ui, t.tr("remote-port"), theme::NEUTRAL_300).id;
+        let port = number(
+            ui,
+            st,
+            "osc.port",
+            label,
+            config.osc.port.into(),
+            1024..=65535,
+            "",
+        );
+        if let Some(port) = port.and_then(|p| u16::try_from(p).ok()) {
             update(scene, |c| c.remote.osc.port = port);
         }
     });
-    text(ui, t.tr("remote-sources"), theme::NEUTRAL_300);
+    let label = text(ui, t.tr("remote-sources"), theme::NEUTRAL_300).id;
     if let Some(v) = field(
         ui,
         st,
         "osc.sources",
+        label,
         &config.osc.allowed_sources.join("\n"),
         true,
         false,
@@ -201,12 +275,9 @@ pub(super) fn section(
     ui.add_space(16.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
-        text(ui, t.tr("remote-position-interval"), theme::NEUTRAL_300);
-        let mut ms = config.events.position_interval_ms;
-        if ui
-            .add(egui::DragValue::new(&mut ms).range(50..=5000).suffix(" ms"))
-            .changed()
-        {
+        let label = text(ui, t.tr("remote-position-interval"), theme::NEUTRAL_300).id;
+        let every = config.events.position_interval_ms;
+        if let Some(ms) = number(ui, st, "events.position", label, every, 50..=5000, " ms") {
             update(scene, |c| c.remote.events.position_interval_ms = ms);
         }
     });

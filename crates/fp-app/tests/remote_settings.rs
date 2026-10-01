@@ -124,3 +124,137 @@ fn new_tokens_differ() {
     assert_ne!(a, b);
     assert_eq!(a.len(), 43);
 }
+
+const VALID: &str = "0123456789abcdef0123456789abcdef0123456789a";
+
+fn opened(
+    s: fp_model::AppState,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
+    let cell = Arc::new(ArcSwap::from_pointee(RemoteStatus::default()));
+    let (mut h, fake) = harness_from(s, move |ui| ui.with_remote_status(cell));
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Remote").click();
+    h.run_steps(2);
+    (h, fake)
+}
+
+/// Replaces the text of the `nth` field labelled `label`, then presses `end`.
+fn retype(
+    h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    role: Role,
+    label: &str,
+    nth: usize,
+    text: &str,
+    end: egui::Key,
+) {
+    h.get_all_by_role_and_label(role, label)
+        .nth(nth)
+        .unwrap()
+        .focus();
+    h.run_steps(2);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    // One character per frame, as a keyboard sends them.
+    for c in text.chars() {
+        h.get_all_by_role_and_label(role, label)
+            .nth(nth)
+            .unwrap()
+            .type_text(&c.to_string());
+        h.run_steps(1);
+    }
+    h.key_press(end);
+    h.run_steps(3);
+}
+
+fn sent_configs(fake: &support::Fake) -> Vec<fp_model::Config> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::UpdateConfig(c) => Some(*c),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_valid_address_applies_when_the_field_is_left() {
+    let (mut h, fake) = opened(state(1, 0));
+    retype(
+        &mut h,
+        Role::TextInput,
+        "Address",
+        0,
+        "10.0.0.9",
+        egui::Key::Tab,
+    );
+    assert_eq!(fake.state.load().config.remote.http.bind, "10.0.0.9");
+}
+
+#[test]
+fn a_half_typed_address_keeps_the_previous_one() {
+    let mut s = state(1, 0);
+    s.config.remote.http.bind = "0.0.0.0".into();
+    s.config.remote.http.token = VALID.into();
+    let (mut h, fake) = opened(s);
+    retype(
+        &mut h,
+        Role::TextInput,
+        "Address",
+        0,
+        "192.168.1.",
+        egui::Key::Tab,
+    );
+    assert_eq!(fake.state.load().config.remote.http.bind, "0.0.0.0");
+}
+
+#[test]
+fn a_short_token_does_not_replace_the_token() {
+    let mut s = state(1, 0);
+    s.config.remote.http.token = VALID.into();
+    let (mut h, fake) = opened(s);
+    h.get_by_label("Show").click();
+    h.run_steps(2);
+    retype(&mut h, Role::TextInput, "Token", 0, "short", egui::Key::Tab);
+    assert_eq!(fake.state.load().config.remote.http.token, VALID);
+}
+
+#[test]
+fn escape_discards_the_typed_text() {
+    let (mut h, fake) = opened(state(1, 0));
+    retype(
+        &mut h,
+        Role::TextInput,
+        "Address",
+        0,
+        "10.0.0.9",
+        egui::Key::Escape,
+    );
+    assert_eq!(fake.state.load().config.remote.http.bind, "127.0.0.1");
+    assert!(sent_configs(&fake).is_empty());
+}
+
+#[test]
+fn typing_a_port_applies_only_the_final_value() {
+    let (mut h, fake) = opened(state(1, 0));
+    retype(
+        &mut h,
+        Role::SpinButton,
+        "Port",
+        0,
+        "9000",
+        egui::Key::Enter,
+    );
+    let ports: Vec<u16> = sent_configs(&fake)
+        .iter()
+        .map(|c| c.remote.http.port)
+        .collect();
+    assert_eq!(
+        ports,
+        vec![9000],
+        "every intermediate value restarts the server"
+    );
+}
