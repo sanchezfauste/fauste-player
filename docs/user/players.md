@@ -18,6 +18,9 @@ playlist tabs, transport, volume and outputs.
 ## Info row
 
 - **Cover** of the track on air, or a vinyl placeholder.
+- **Title and artist** of the track on air. A stopped player shows the
+  track Play will start (its next), with its cover, its length and its
+  waveform, ready at the cue-in.
 - **Stereo meter** (in the column at the right of the player, next to the
   fader; it spans the info row and the transport): the level the player
   puts out, after its volume.
@@ -93,7 +96,8 @@ red.
 - The whole file is drawn. The silent start and end that playback skips (before
   cue-in and after cue-out) are drawn darker, with a thin line where playback
   starts and ends.
-- Hover to see the time under the pointer. **Click to jump** there.
+- Hover to see the time under the pointer. **Click to jump** there (while
+  playing or paused; a stopped player always starts at the cue-in).
 - **Press and drag** to look for a spot: a line shows the time, and the jump
   happens when you release the button over the waveform. Release outside it,
   or press `Esc`, to cancel.

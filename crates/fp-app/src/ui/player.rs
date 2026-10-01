@@ -454,11 +454,7 @@ fn info_row(
     telemetry: &fp_engine::engine::PlayerTelemetry,
 ) {
     let t = scene.i18n;
-    let current_track = scene
-        .state
-        .player(id)
-        .ok()
-        .and_then(|p| p.current)
+    let current_track = view::shown_entry(scene.state, id)
         .and_then(|e| scene.state.playlists.entry(e))
         .map(|e| e.track);
     ui.allocate_ui_with_layout(
@@ -785,7 +781,8 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
 
 fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId, pv: &PlayerView) {
     let t = scene.i18n;
-    let current = scene.state.player(id).ok().and_then(|p| p.current);
+    // The current track, or the next one waiting while stopped.
+    let current = view::shown_entry(scene.state, id);
     let track = current
         .and_then(|e| scene.state.playlists.entry(e))
         .map(|e| e.track);

@@ -99,7 +99,17 @@ just added, *Analyse now*, *Re-analyse all*) got its waveform last.
 - Locale key `flag-outdated` in both locales; playlists, cartwall and
   troubleshooting legends.
 
-### 6. Finish
+### 6. A stopped player shows its next track (maintainer request)
+
+- Test first: with no current entry, `player_view` shows the next entry
+  (title, length, remaining from the cue-in, markers) and ignores a stale
+  position; on air it shows the current one. The old test "an idle
+  player shows nothing" is replaced: the behaviour changed on purpose.
+- `view::shown_entry` (current, else next) for `player_view`, the cover
+  and the waveform. Seeking stays inert while stopped (the reducer
+  ignores it).
+
+### 7. Finish
 
 - Gate (fmt, clippy, tests), a fresh review on the most capable model,
   PR, CI on the three OSes, merge.

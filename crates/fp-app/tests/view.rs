@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     PlayerStatus, RowStatus, fader_from_gain, file_icon, file_problem, gain_from_fader,
-    player_view, playlist_times, row_status, volume_db,
+    player_view, playlist_times, row_status, shown_entry, volume_db,
 };
 use fp_model::{AppState, Command, Config, EntryId, FileState, MarkerKind, PlayerId, apply};
 
@@ -102,6 +102,33 @@ fn an_unavailable_track_says_why() {
     assert_eq!(file_icon(t), egui_phosphor::regular::WARNING);
 }
 
+/// A stopped player shows the track Play will start (its next), ready at
+/// its cue-in, with its waveform.
+#[test]
+fn a_stopped_player_shows_its_next_track_ready_to_play() {
+    let (mut s, e, p) = state(3);
+    let t1 = s.playlists.entry(e[1]).unwrap().track;
+    s.library
+        .get_mut(t1)
+        .unwrap()
+        .markers
+        .set_auto(MarkerKind::CueIn, Some(2.0));
+    apply(&mut s, Command::SetNext(p, e[1])).unwrap();
+    assert_eq!(shown_entry(&s, p), Some(e[1]));
+    // A position left over from the last track is not this one's.
+    let v = player_view(&s, p, Some(150.0), 0.0).unwrap();
+    assert_eq!(v.status, PlayerStatus::Stopped);
+    assert_eq!(v.title.as_deref(), Some("Song 1"));
+    assert_eq!((v.elapsed, v.total, v.remaining), (2.0, Some(200.0), 198.0));
+    assert!(!v.end_warning);
+    assert!(v.markers.position.is_some(), "the waveform has a position");
+    // On air, the current one is shown.
+    apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(shown_entry(&s, p), Some(e[1]));
+    apply(&mut s, Command::Stop(p)).unwrap();
+    assert_eq!(shown_entry(&s, p), Some(e[2]));
+}
+
 #[test]
 fn rule17_the_countdown_turns_red_in_the_last_seconds() {
     let (mut s, _e, p) = state(2);
@@ -183,12 +210,15 @@ fn the_fader_law_is_zero_db_at_the_top_and_silent_at_the_bottom() {
 }
 
 #[test]
-fn an_idle_player_shows_nothing_playing_and_its_next() {
+fn an_idle_player_shows_its_next_and_one_without_next_shows_nothing() {
     let (s, _e, p) = state(2);
     let v = player_view(&s, p, None, 0.0).unwrap();
     assert_eq!(v.status, PlayerStatus::Stopped);
-    assert!(v.title.is_none());
+    assert_eq!(v.title.as_deref(), Some("Song 0"));
     assert_eq!(v.next_line.as_deref(), Some("Song 0 – Artist"));
+    let (s, _e, p) = state(0);
+    let v = player_view(&s, p, None, 0.0).unwrap();
+    assert!(v.title.is_none());
 }
 
 #[test]

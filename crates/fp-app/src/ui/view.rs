@@ -2,7 +2,7 @@
 //! the engine telemetry. Pure functions: everything here is unit-tested.
 
 use fp_model::{
-    AppState, FileState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, Track, Transport,
+    AppState, EntryId, FileState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, Track, Transport,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,6 +82,13 @@ fn line(title: &str, artist: &str) -> String {
 
 /// Everything a player column shows. `position` comes from the engine;
 /// `blink_phase` is a clock in seconds for blinking elements.
+/// The entry a player shows: its current one, or, when stopped, its next
+/// (the one Play starts), ready at its cue-in.
+pub fn shown_entry(state: &AppState, player: PlayerId) -> Option<EntryId> {
+    let p = state.player(player).ok()?;
+    p.current.or(p.next)
+}
+
 pub fn player_view(
     state: &AppState,
     player: PlayerId,
@@ -98,7 +105,10 @@ pub fn player_view(
         .next
         .and_then(|e| state.track_for_entry(e))
         .map(|t| line(&t.title, &t.artist));
-    let current = p.current.and_then(|e| state.track_for_entry(e));
+    let current = shown_entry(state, player).and_then(|e| state.track_for_entry(e));
+    // A track waiting to be played has no position yet: one reported now
+    // is left over from the last track.
+    let position = position.filter(|_| p.current.is_some());
     let mut view = PlayerView {
         status,
         title: None,
