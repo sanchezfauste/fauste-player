@@ -54,6 +54,9 @@ audio engine that the interface can never block.
 - **Marker editing on the waveform:** cue in and out, intro, outro and MIX,
   set from a menu or with Alt-drag. An `INTRO` tag can also set the intro.
 - **Remappable keyboard shortcuts** for players and carts.
+- **MIDI control surfaces:** every player's transport buttons and volume
+  fader can be learned onto a MIDI controller, with soft takeover for
+  faders, LED feedback and hot-plug.
 - **M3U / M3U8 / PLS import and M3U8 export.**
 - **Bit-perfect output:** a device can be played with exclusive access,
   following each file's sample rate while idle; at 100 % volume with no fade

@@ -124,3 +124,34 @@ pub fn default_shortcuts() -> Vec<Shortcut> {
         }))
         .collect()
 }
+
+/// The command a per-player action stands for (Play/Next, Pause, Stop,
+/// Fade stop, Cue, Restart, Previous), for the player at its 1-based
+/// position; `None` for other actions or a player that does not exist.
+/// Keyboard shortcuts and MIDI buttons share it.
+pub fn player_command(
+    state: &crate::state::AppState,
+    action: ShortcutAction,
+) -> Option<crate::command::Command> {
+    use crate::command::Command;
+    let player = |n: u16| {
+        state
+            .players
+            .get(usize::from(n).checked_sub(1)?)
+            .map(|p| p.id)
+    };
+    Some(match action {
+        ShortcutAction::PlayPlayer(n) => Command::Play(player(n)?),
+        ShortcutAction::PausePlayer(n) => Command::Pause(player(n)?),
+        ShortcutAction::StopPlayer(n) => Command::Stop(player(n)?),
+        ShortcutAction::FadeStopPlayer(n) => Command::FadeStop(player(n)?),
+        ShortcutAction::CuePlayer(n) => Command::ToggleCue(player(n)?),
+        ShortcutAction::RestartPlayer(n) => Command::Restart(player(n)?),
+        ShortcutAction::PreviousPlayer(n) => Command::Previous(player(n)?),
+        ShortcutAction::FireCart(_)
+        | ShortcutAction::StopAllCarts
+        | ShortcutAction::ToggleCartwall
+        | ShortcutAction::NextCartPage
+        | ShortcutAction::PreviousCartPage => return None,
+    })
+}
