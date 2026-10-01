@@ -249,6 +249,11 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             }
         }
         Command::ResetShortcuts => state.config.shortcuts = default_shortcuts(),
+        Command::RestoreDefaults(section) => {
+            let mut config = state.config.clone();
+            crate::restore::restore_defaults(&mut config, section);
+            update_config(state, config, &mut out)?;
+        }
         Command::ResetMarkers { track } => {
             let t = state
                 .library

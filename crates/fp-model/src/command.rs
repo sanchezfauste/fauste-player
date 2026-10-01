@@ -166,6 +166,8 @@ pub enum Command {
         chord: Option<KeyChord>,
     },
     ResetShortcuts,
+    /// Resets one Settings section to its defaults (feedback 2 spec O2).
+    RestoreDefaults(crate::restore::SettingsSection),
 }
 
 /// Something the audio engine observed.
