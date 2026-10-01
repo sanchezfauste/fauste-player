@@ -4,5 +4,6 @@
 
 #![deny(clippy::indexing_slicing)]
 
+pub mod api;
 pub mod control;
 pub mod dto;
