@@ -1300,6 +1300,130 @@ when executing.
 
 ---
 
+### Task 15: Long recordings (1 h, 4 h and more) play, seek and analyse correctly
+
+A whole programme recording must behave like a song: decode, analyse, show
+its waveform, seek, count down and save its position. Nothing may overflow,
+lose precision or hold the whole file in memory.
+
+**Part A, audit (read, then measure).** Record each finding in the ledger
+as `fine` (with the reason), or as a bug that gets a failing test. Check:
+- **Time arithmetic:**
+  - frame counters and positions stored as `u32`, `f32` or `usize` on 32-bit
+    targets;
+  - `as f32` on seconds or frames in `fp-engine`, `fp-decode`, `fp-analysis`
+    and the UI (`grep -n "as f32\|as u32\|: f32" …`). Note that an `f32`
+    holds whole frames exactly only up to 2^24 (6.3 min at 44.1 kHz);
+  - `u32` frames overflow at 4h 8m at 288 kHz, or at 6h 12m at 192 kHz;
+- **Analysis memory:** does any step keep all the decoded samples (marker
+  detection, loudness, RMS waveform)? At 4 h and 44.1 kHz stereo `f32`
+  that is about 5 GB. It must stream, with bounded buffers;
+- **Waveform:** the number of buckets at `peak_bucket_secs`. For 4 h that
+  is 288 000 buckets. Check the cache entry size against `Limits`, the
+  `GET /tracks/{id}/peaks` body, and the drawing cost of `wave_view` per
+  frame (it must reduce to the pixels shown);
+- **Analysis cache:** any size cap in `Limits` that rejects a long track's
+  entry;
+- **Seeking:** a seek near the end of a 4 h file in each decoder (FLAC, MP3,
+  WAV/RF64, Opus, WavPack): it must be accurate and must not decode from
+  the start;
+- **Display:** countdowns, `elapsed / total`, playlist totals and the
+  remote DTOs past 1 h, 10 h and 100 h (there is
+  `an_hour_long_countdown_fits_…`; add 10 h);
+- **Session:** a position at 3 h 59 m is saved and restored exactly.
+
+**Part B, measure on real files** (local only, never in CI). Generate the
+files in the scratchpad with `ffmpeg`:
+- `-f lavfi -i "sine=f=440:d=14400" -ac 2` to FLAC;
+- MP3, if `libmp3lame` is there;
+- Opus;
+- a 1 h WAV;
+- an RF64 WAV past 4 GB, if the decoder claims to support it.
+
+Then:
+- run the analysis and record its time and peak RSS (`/usr/bin/time -v`);
+- load the files in the app under Xvfb, play, seek to 3:59:00 through the
+  API, and capture the screen.
+
+Add an `#[ignore]` test in `fp-analysis/tests/real_music.rs`'s style
+(`long_files`) that analyses whatever long files a folder holds, and
+asserts the duration within 0.1 s and the cue-out near the end.
+
+**Part C, fix.** Each bug found gets:
+- a failing test that runs in CI. Use synthetic sources and direct
+  arithmetic (for example the frame ↔ seconds conversion at 4 h at
+  192 kHz, or a stub decoder that reports a 10 h length), never a real
+  long file;
+- then the fix;
+- then one commit per fix: `fix(<crate>): …`.
+
+What cannot be tested in CI gets a `Ruling:` with the measured figures.
+
+**Docs.** `README.md` features and `docs/user/` mention that programme-length
+recordings are supported, and give the limits found (for example the
+analysis time per hour).
+
+---
+
+### Task 16: After an update, re-analysing old tracks is the operator's choice
+
+**Known:** tracks analysed by an older `ANALYSIS_VERSION` are re-analysed
+automatically and silently (`services.rs`, `outdated`). The maintainer saw
+errors on tracks after an update.
+
+**Step 1: debug first** (superpowers:systematic-debugging). Reproduce:
+- build the previous release tag in a worktree;
+- analyse a folder with it under a scratch `FAUSTE_HOME`;
+- start this branch's build on the same home.
+
+Then record what "error" shows (Unreadable or Missing state, waveform,
+markers, log lines) and why. If it is a bug (for example a cache key
+mismatch marking tracks Unreadable, or old analysis data that the new code
+misreads), fix it test-first in its own commit.
+
+**Step 2: the notice.** The design:
+- Outdated tracks keep their old analysis, which is still usable, and are
+  **no longer re-analysed automatically**. Re-analysing a whole library
+  takes CPU and disk on an on-air machine. Tracks never analysed are still
+  analysed at once, as now.
+- At start, when there are outdated tracks, the UI shows a modal:
+  - title: "Some tracks need a new analysis";
+  - body: "<N> tracks were analysed by an earlier version of Fauste Player.
+    Analysing them again updates their markers and waveforms. It uses the
+    processor for a while; playback is not affected. You can also do it
+    later in Settings > Analysis.";
+  - buttons: **Analyse now** and **Later**.
+
+  "Later" asks again at the next start.
+- Settings > Analysis gains "Analyse outdated tracks (N)", disabled at 0.
+- Nothing about it blocks the UI. The count is computed from the snapshot
+  (`library` and `analysis_version`). The request goes to the services
+  thread as `ServiceRequest::AnalyseOutdated`.
+
+**Files:**
+- `crates/fp-app/src/services.rs`: `outdated` no longer triggers analysis
+  unless an `analyse_outdated` flag is set by the request;
+- the UI: a startup modal in `ui/app.rs` (or its own `ui/notice.rs`), and
+  the button in Settings > Analysis;
+- both locales;
+- the main spec (analysis section);
+- `docs/user/` (updating, analysis);
+- `docs/technical/` (the services thread).
+
+**Tests:**
+- `services` (`tests/services.rs`): an outdated track is not submitted
+  until `AnalyseOutdated` is received, and then it is submitted once. A
+  track that was never analysed is still submitted at once;
+- UI (`egui_kittest`): with an outdated track in the state, the modal shows
+  the count. "Analyse now" sends the request and closes it; "Later" closes
+  it without sending. With no outdated tracks there is no modal;
+- the pure count: `outdated_tracks(&AppState) -> usize`, in `fp-app` next to
+  the services, or in `fp-model` if `ANALYSIS_VERSION` can be passed in.
+
+Commit: `feat(app): ask before analysing tracks of an older version`.
+
+---
+
 ## After the last task
 
 1. Run the whole gate.
