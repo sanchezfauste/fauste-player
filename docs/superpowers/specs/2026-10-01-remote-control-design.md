@@ -74,7 +74,9 @@ UTF-8), except cover images and the event stream.
   `paused`), `fading`, `mode` (`single` | `continuous`), `stop_after_current`,
   `fader`, `playlist` (the one shown), `current` and `next` (each `null` or
   `{entry, track}`), `cue` (`null` or `{entry}`), `elapsed_secs`,
-  `remaining_secs` (from the engine's telemetry; `null` when stopped).
+  `remaining_secs` (from the engine's telemetry, computed as the UI does:
+  elapsed is the position in track seconds, remaining is cue-out minus it;
+  both `null` when there is no current entry).
 - **Playlist summary:** `id`, `name`, `entry_count`.
 - **Playlist:** the summary plus `entries`: `id`, `track` (Track),
   `repeat`, `stop_after`, `on_air` (player ids playing it), `next_on`
@@ -95,8 +97,8 @@ UTF-8), except cover images and the event stream.
   (`null` or Track).
 - **State:** `revision`, `players`, `playlists` (summaries), `cartwall`.
 
-`revision` is a counter the server increments every time it observes a new
-model snapshot. It orders events (§5) and is not persisted.
+`revision` is the conductor's model version: it rises with every model
+change. It orders events (§5) and is not persisted.
 
 ### 3.2 Reading
 
@@ -109,13 +111,14 @@ model snapshot. It orders events (§5) and is not persisted.
 | `GET /playlists/{id}` | Playlist |
 | `GET /tracks/{id}` | Track |
 | `GET /tracks/{id}/cover` | The cover thumbnail (`image/png`) |
-| `GET /tracks/{id}/peaks` | `{bucket_secs, peaks: [[min, max, rms], …]}` |
+| `GET /tracks/{id}/peaks` | `{bucket_secs, full_scale: 32767, peaks: [[min, max, rms], …]}` |
 | `GET /cartwall` | Cartwall |
 | `GET /events` | Event stream (§5.2) |
 
-Cover and peaks come from the analysis cache on disk. They are read with
-`spawn_blocking` and never start an analysis: a track not analysed yet answers
-`404 not_analyzed`, a track without a cover `404 not_found`.
+Cover and peaks come from the UI's media cache, or else the analysis cache
+on disk, read with `spawn_blocking`. They never start an analysis: a track
+not analysed yet answers `404 not_analyzed`; an analysed track without a cover
+(or whose cache entry is gone) answers `404 not_found`.
 
 ### 3.3 Operating
 
@@ -172,7 +175,10 @@ end is clamped to the end, as a drop in the UI is.
 ### 3.5 Responses and errors
 
 - `202 Accepted` with `{"revision": n}` (the revision seen when the command was
-  queued): every command was queued.
+  queued): every command was queued. Before queuing, the commands are applied
+  to a copy of the current snapshot (a dry run): a refusal there is answered
+  `404` (an unknown id) or `409` with the model's reason, and nothing is
+  queued.
 - `200 OK`: reads.
 - Errors carry `{"error": code, "message": text}`:
 
@@ -184,6 +190,7 @@ end is clamped to the end, as a drop in the UI is.
 | 404 | `not_found` | Unknown id, path or cover |
 | 404 | `not_analyzed` | Peaks or cover of a track not analysed yet |
 | 409 | `unavailable` | R28 or a model rule forbids it now (a greyed-out button) |
+| 408 | (empty body) | The request took longer than `request_timeout_ms` |
 | 413 | `payload_too_large` | Body over `max_body_bytes` |
 | 415 | `unsupported_media_type` | A body that is not `application/json` |
 | 503 | `busy` | The controller queue is full, or too many event clients |
@@ -333,10 +340,11 @@ decision; the user guide says that OSC belongs on a trusted studio network.
 
 ### 6.4 Known limit
 
-`202` means queued. If the model later refuses a command (a `ModelError`, which
-today reaches the UI notice), the HTTP response has already been sent. The
-availability check against the snapshot catches the usual cases; the rest shows
-in the next event. Correlating commands with their verdict would change the
+`202` means queued. The dry run (§3.5) catches every refusal the snapshot can
+predict; a command can still be refused if the state changes between the
+snapshot and the conductor applying it (another operator acted in between).
+That refusal reaches the UI notice, and the client sees the outcome in the
+next event. Correlating commands with their verdict would change the
 conductor and is out of scope for v1.
 
 ---
@@ -373,8 +381,9 @@ fp-app ──(Bridge: impl RemoteControl)──► fp-remote
 
 - **Lifecycle.** `fp_remote::spawn(control, config) -> RemoteHandle` starts one
   thread with a `current_thread` runtime. It is neither an audio nor a UI
-  thread (rules 5 and 8 hold). `RemoteHandle::reconfigure(&RemoteConfig)`
-  restarts only the server whose settings changed. `RemoteHandle::status()`
+  thread (rules 5 and 8 hold). The thread follows `config.remote` in the model
+  snapshot (checked every 250 ms) and restarts only the server whose settings
+  changed, so Settings needs no extra wiring. `RemoteHandle::status()`
   reads each server's state (`disabled`, `listening(addr)`, `error(text)`)
   without blocking (`ArcSwap`). On exit: cancellation, SSE streams closed,
   join with a timeout. If the thread dies the error is logged and shown, and
@@ -394,8 +403,9 @@ fp-app ──(Bridge: impl RemoteControl)──► fp-remote
   OSC: the allowed sources.
 - Events: the position interval.
 - Advanced limits (event clients, timeouts, body size, subscribers, TTL) are
-  in `config.toml` only, documented in the user guide.
-- Saving applies at once through `RemoteHandle::reconfigure`; no restart.
+  in `config.json` only, documented in the user guide.
+- Saving applies at once (the remote thread follows the model's
+  configuration); no restart.
 - All strings are in both locales.
 
 ---
