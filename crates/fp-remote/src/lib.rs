@@ -8,3 +8,6 @@ pub mod api;
 pub mod control;
 pub mod dto;
 pub mod http;
+pub mod server;
+
+pub use server::{RemoteHandle, RemoteStatus, ServerError, ServerStatus, spawn};
