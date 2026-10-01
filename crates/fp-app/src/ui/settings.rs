@@ -970,6 +970,7 @@ fn channel_pair(
     egui::ComboBox::from_id_salt(("channels", owner, bus == Bus::Main))
         .selected_text(pair(r.first_channel))
         .width(CHANNELS_WIDTH - 8.0)
+        .truncate()
         .show_ui(ui, |ui| {
             for first in (0..channels.saturating_sub(1)).step_by(2) {
                 if ui
@@ -1011,6 +1012,7 @@ fn device_box(
     egui::ComboBox::from_id_salt(("device", owner, bus == Bus::Main))
         .selected_text(shown)
         .width(ui.available_width())
+        .truncate()
         .show_ui(ui, |ui| {
             if ui.selectable_label(device.is_none(), none_text).clicked() {
                 update(scene, |c| set_route(c, owner, bus, None));

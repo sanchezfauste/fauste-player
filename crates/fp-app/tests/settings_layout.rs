@@ -181,3 +181,23 @@ fn outputs_test_buttons_line_up_in_columns() {
     assert!((main.left() - cue.left()).abs() < 0.5);
     assert!((main.right() - cue.right()).abs() < 0.5);
 }
+
+#[test]
+fn a_long_device_name_stays_inside_its_box() {
+    let mut h = open_settings(SCREEN, routed());
+    open(&mut h, "Audio outputs");
+    wait_for_devices(&mut h);
+    let test = h.get_all_by_label("Test Main").next().unwrap().rect();
+    let tag = h.get_all_by_label("MAIN").next().unwrap().rect();
+    let boxes: Vec<egui::Rect> = h
+        .get_all_by_role(Role::ComboBox)
+        .map(|n| n.rect())
+        .filter(|r| (r.top() - test.top()).abs() < 20.0)
+        .collect();
+    assert!(!boxes.is_empty());
+
+    for r in &boxes {
+        assert!(r.right() <= test.left() + 0.5, "{r:?} vs test {test:?}");
+        assert!(r.left() >= tag.right() - 0.5, "{r:?} vs tag {tag:?}");
+    }
+}
