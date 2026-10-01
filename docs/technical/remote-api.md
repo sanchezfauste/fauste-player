@@ -125,7 +125,9 @@ or whose cache entry is gone, answers `404 not_found`.
 
 Editing reuses tracks already loaded: an inserted entry or a cart refers
 to the same library track, with its markers and analysis
-(`InsertTracks`, `AssignCartTrack`). Files cannot be added remotely.
+(`InsertTracks`, `EditCart`). Files cannot be added remotely. A page or
+cart edit is a single command, so a full queue (`503`) never leaves it
+half applied.
 
 | Method and path | Body | Effect |
 |---|---|---|

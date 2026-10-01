@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use fp_model::{CartEdit, CartKind, Command, HttpRemoteConfig, MarkerKind, TrackId};
+use fp_model::{
+    CartEdit, CartFileChange, CartKind, Command, HttpRemoteConfig, MarkerKind, TrackId,
+};
 use fp_remote::api::{ApiError, Edit, plan_edit};
 use fp_remote::http::{Ctx, router};
 use serde_json::{Value, json};
@@ -120,9 +122,10 @@ fn cart_pages_are_renamed_and_resized_within_limits() {
             }
         )
         .unwrap(),
-        vec![Command::RenameCartPage {
+        vec![Command::EditCartPage {
             page,
-            name: "Jingles".into()
+            name: Some("Jingles".into()),
+            grid: None
         }]
     );
     assert_eq!(
@@ -136,10 +139,10 @@ fn cart_pages_are_renamed_and_resized_within_limits() {
             }
         )
         .unwrap(),
-        vec![Command::ResizeCartPage {
+        vec![Command::EditCartPage {
             page,
-            rows: rows + 1,
-            cols
+            name: None,
+            grid: Some((rows + 1, cols))
         }]
     );
     let too_big = s.config.limits.max_cart_rows + 1;
@@ -195,10 +198,11 @@ fn a_cart_edit_keeping_its_track_does_not_reassign_it() {
             }
         )
         .unwrap(),
-        vec![Command::SetCart {
+        vec![Command::EditCart {
             page,
             index: 0,
-            edit: edit.clone()
+            edit: edit.clone(),
+            file: CartFileChange::Keep
         }]
     );
     let other = s.playlists.iter().next().unwrap().entries[1].track;
@@ -213,18 +217,12 @@ fn a_cart_edit_keeping_its_track_does_not_reassign_it() {
             }
         )
         .unwrap(),
-        vec![
-            Command::SetCart {
-                page,
-                index: 0,
-                edit: edit.clone()
-            },
-            Command::AssignCartTrack {
-                page,
-                index: 0,
-                track: other
-            },
-        ]
+        vec![Command::EditCart {
+            page,
+            index: 0,
+            edit: edit.clone(),
+            file: CartFileChange::Track(other)
+        }]
     );
     assert_eq!(
         plan_edit(
@@ -237,14 +235,12 @@ fn a_cart_edit_keeping_its_track_does_not_reassign_it() {
             }
         )
         .unwrap(),
-        vec![
-            Command::SetCart {
-                page,
-                index: 0,
-                edit: edit.clone()
-            },
-            Command::ClearCartFile { page, index: 0 }
-        ]
+        vec![Command::EditCart {
+            page,
+            index: 0,
+            edit: edit.clone(),
+            file: CartFileChange::Clear
+        }]
     );
     assert_eq!(
         plan_edit(
@@ -439,4 +435,27 @@ async fn moving_the_entry_on_air_is_accepted() {
         fake.take_sent().as_slice(),
         [Command::MoveEntry { .. }]
     ));
+}
+
+/// A page edit is one command: a full queue refuses it whole.
+#[tokio::test]
+async fn a_page_edit_is_queued_whole_or_not_at_all() {
+    let s = demo_state();
+    let page = s.cartwall.pages[0].id;
+    let rows = s.cartwall.pages[0].rows;
+    let fake = FakeControl::new(s);
+    let body = json!({"name": "Jingles", "rows": rows + 1});
+    let uri = format!("/api/v1/cartwall/pages/{}", page.0);
+    assert_eq!(
+        call(&fake, "PATCH", &uri, Some(body.clone())).await,
+        StatusCode::ACCEPTED
+    );
+    assert_eq!(fake.take_sent().len(), 1);
+    fake.accept
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(
+        call(&fake, "PATCH", &uri, Some(body)).await,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    assert!(fake.take_sent().is_empty());
 }

@@ -214,6 +214,15 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             cart_rules::resize_page(state, page, rows, cols)?
         }
         Command::SetCart { page, index, edit } => cart_rules::set_cart(state, page, index, edit)?,
+        Command::EditCartPage { page, name, grid } => {
+            cart_rules::edit_page(state, page, name, grid)?
+        }
+        Command::EditCart {
+            page,
+            index,
+            edit,
+            file,
+        } => cart_rules::edit_cart(state, page, index, edit, file, &mut out)?,
         Command::AssignCartFile { page, index, path } => {
             cart_rules::assign_file(state, page, index, Some(path), &mut out)?
         }

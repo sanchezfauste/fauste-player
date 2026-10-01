@@ -22,7 +22,8 @@ pub mod volume;
 
 pub use availability::{Availability, availability, command_available};
 pub use cartwall::{
-    Cart, CartEdit, CartKind, CartPage, CartPageImport, Cartwall, CartwallSession, PlayingCart,
+    Cart, CartEdit, CartFileChange, CartKind, CartPage, CartPageImport, Cartwall, CartwallSession,
+    PlayingCart,
 };
 pub use command::{
     CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,

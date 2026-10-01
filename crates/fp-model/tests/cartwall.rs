@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! Phase 2 spec P2.3: cartwall rules C1–C10.
+//! Phase 2 spec P2.3: cartwall rules C1–C11.
 
 mod common;
 
@@ -7,8 +7,8 @@ use std::path::PathBuf;
 
 use common::{entries, fixture};
 use fp_model::{
-    AppState, CartEdit, CartId, CartKind, CartPageId, CartRequest, Command, EngineAction,
-    EngineEvent, FileState, ModelError, SOURCE_END, TrackAnalysis, apply, on_event,
+    AppState, CartEdit, CartFileChange, CartId, CartKind, CartPageId, CartRequest, Command,
+    EngineAction, EngineEvent, FileState, ModelError, SOURCE_END, TrackAnalysis, apply, on_event,
 };
 
 fn page(state: &AppState) -> CartPageId {
@@ -465,4 +465,130 @@ fn importing_duplicate_positions_keeps_no_orphan_track() {
         1,
         "only the referenced track remains"
     );
+}
+
+fn plain(name: &str) -> CartEdit {
+    CartEdit {
+        name: name.into(),
+        kind: CartKind::Jingle,
+        looped: false,
+        exclusive: false,
+    }
+}
+
+/// C11: a page edit is checked whole, then applied whole.
+#[test]
+fn c11_a_page_edit_that_cannot_resize_does_not_rename() {
+    let mut s = fixture(1);
+    let p = page(&s);
+    load(&mut s, 5, 30.0);
+    let before = s.cartwall.page(p).unwrap().clone();
+    let e = apply(
+        &mut s,
+        Command::EditCartPage {
+            page: p,
+            name: Some("New".into()),
+            grid: Some((1, 1)),
+        },
+    );
+    assert_eq!(e, Err(ModelError::CartsWouldBeLost));
+    assert_eq!(s.cartwall.page(p).unwrap(), &before);
+}
+
+#[test]
+fn c11_a_page_edit_renames_and_resizes_together() {
+    let mut s = fixture(1);
+    let p = page(&s);
+    apply(
+        &mut s,
+        Command::EditCartPage {
+            page: p,
+            name: Some("New".into()),
+            grid: Some((2, 3)),
+        },
+    )
+    .unwrap();
+    let pg = s.cartwall.page(p).unwrap();
+    assert_eq!(
+        (pg.name.as_str(), pg.rows, pg.cols, pg.carts.len()),
+        ("New", 2, 3, 6)
+    );
+}
+
+#[test]
+fn c11_a_cart_edit_with_an_unknown_track_changes_nothing() {
+    let mut s = fixture(1);
+    let p = page(&s);
+    load(&mut s, 0, 30.0);
+    let before = s.cartwall.pages[0].carts[0].clone();
+    let unknown = fp_model::TrackId(9_999);
+    let e = apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 0,
+            edit: plain("X"),
+            file: CartFileChange::Track(unknown),
+        },
+    );
+    assert_eq!(e, Err(ModelError::UnknownTrack(unknown)));
+    assert_eq!(s.cartwall.pages[0].carts[0], before);
+}
+
+#[test]
+fn c11_a_cart_edit_keeping_its_file_does_not_stop_it() {
+    let mut s = fixture(1);
+    let c = load(&mut s, 0, 30.0);
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    apply(&mut s, Command::FireCart(c)).unwrap();
+    let p = page(&s);
+    for file in [CartFileChange::Keep, CartFileChange::Track(track)] {
+        let out = apply(
+            &mut s,
+            Command::EditCart {
+                page: p,
+                index: 0,
+                edit: plain("Kept"),
+                file,
+            },
+        )
+        .unwrap();
+        assert!(stopped(&out).is_empty(), "{out:?}");
+    }
+    assert_eq!(s.cartwall.pages[0].carts[0].name, "Kept");
+}
+
+#[test]
+fn c11_a_cart_edit_with_a_new_file_stops_it_first() {
+    let mut s = fixture(1);
+    let c = load(&mut s, 0, 30.0);
+    load(&mut s, 1, 30.0);
+    let other = s.cartwall.pages[0].carts[1].track.unwrap();
+    apply(&mut s, Command::FireCart(c)).unwrap();
+    let p = page(&s);
+    let out = apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 0,
+            edit: plain("New"),
+            file: CartFileChange::Track(other),
+        },
+    )
+    .unwrap();
+    assert_eq!(stopped(&out), vec![c]);
+    assert_eq!(s.cartwall.pages[0].carts[0].track, Some(other));
+    assert_eq!(s.cartwall.pages[0].carts[0].name, "New");
+    let out = apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 1,
+            edit: plain("Cleared"),
+            file: CartFileChange::Clear,
+        },
+    )
+    .unwrap();
+    assert!(stopped(&out).is_empty());
+    assert_eq!(s.cartwall.pages[0].carts[1].track, None);
 }

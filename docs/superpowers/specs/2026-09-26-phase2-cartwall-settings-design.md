@@ -87,12 +87,17 @@ so analysis, file state and cue-in/cue-out apply to them unchanged.
 - **C9. Cue.** Pre-listening a cart plays it on the cartwall Cue route. Only
   one cart pre-listens at a time, and it never reaches Main.
 - **C10. Stop all.** `StopAllCarts` stops every playing cart, and the cue.
+- **C11. Atomic edits.** `EditCartPage` (name and grid) and `EditCart` (a
+  cart's fields and its file: keep, another library track, or none) check
+  everything first and apply all or nothing. Keeping the same track is not
+  a new file, so it does not stop the cart (C8). The remote API edits pages
+  and carts through them.
 
 ### Commands, actions and events
 
 | Kind | Additions |
 |---|---|
-| `Command` | `FireCart(CartId)`, `StopCart(CartId)`, `StopAllCarts`, `CueCart(CartId)` (toggle), `CreateCartPage { name }`, `RenameCartPage`, `DeleteCartPage`, `ResizeCartPage { page, rows, cols }`, `SetCart { page, index, cart: CartEdit }`, `AssignCartFile { page, index, path }` (adds the track to the library), `ImportCartPage(CartPageImport)`, `SetMarker { track, kind, secs: Option<f64> }`, `ResetMarkers { track }`, `CreatePlaylistFromPaths { name, paths }` |
+| `Command` | `FireCart(CartId)`, `StopCart(CartId)`, `StopAllCarts`, `CueCart(CartId)` (toggle), `CreateCartPage { name }`, `RenameCartPage`, `DeleteCartPage`, `ResizeCartPage { page, rows, cols }`, `SetCart { page, index, cart: CartEdit }`, `EditCartPage { page, name, grid }`, `EditCart { page, index, edit, file: CartFileChange }` (C11), `AssignCartFile { page, index, path }` (adds the track to the library), `ImportCartPage(CartPageImport)`, `SetMarker { track, kind, secs: Option<f64> }`, `ResetMarkers { track }`, `CreatePlaylistFromPaths { name, paths }` |
 | `EngineAction` | `StartCart { cart, request: SourceRequest, until_secs: f64, looped: bool }`, `StopCart { cart }`, `StartCartCue { cart, request }`, `StopCartCue` |
 | `EngineEvent` | `CartEnded { cart }`, `CartFailed { cart }`, `CartCueEnded` |
 

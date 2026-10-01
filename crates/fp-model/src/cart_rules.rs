@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::cartwall::{Cart, CartEdit, CartPage, CartPageImport, PlayingCart};
+use crate::cartwall::{Cart, CartEdit, CartFileChange, CartPage, CartPageImport, PlayingCart};
 use crate::command::{CartRequest, EngineAction, SOURCE_END};
 use crate::error::ModelError;
 use crate::ids::{CartId, CartPageId, TrackId};
@@ -247,6 +247,56 @@ pub(crate) fn set_cart(
     cart.looped = edit.looped;
     cart.exclusive = edit.exclusive;
     Ok(())
+}
+
+/// C11: every check first (`resize_page` checks before it changes
+/// anything), then every change.
+pub(crate) fn edit_page(
+    state: &mut AppState,
+    page: CartPageId,
+    name: Option<String>,
+    grid: Option<(u16, u16)>,
+) -> Result<(), ModelError> {
+    state
+        .cartwall
+        .page(page)
+        .ok_or(ModelError::UnknownCartPage(page))?;
+    if let Some((rows, cols)) = grid {
+        resize_page(state, page, rows, cols)?;
+    }
+    if let Some(name) = name {
+        rename_page(state, page, name)?;
+    }
+    Ok(())
+}
+
+/// C8 and C11: a cart and its file change together or not at all; only a
+/// different file stops the cart.
+pub(crate) fn edit_cart(
+    state: &mut AppState,
+    page: CartPageId,
+    index: usize,
+    edit: CartEdit,
+    file: CartFileChange,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let current = cart_at(state, page, index)?.track;
+    let track = match file {
+        CartFileChange::Keep => None,
+        CartFileChange::Track(t) if current == Some(t) => None,
+        CartFileChange::Track(t) => {
+            if state.library.get(t).is_none() {
+                return Err(ModelError::UnknownTrack(t));
+            }
+            Some(Some(t))
+        }
+        CartFileChange::Clear => current.map(|_| None),
+    };
+    set_cart(state, page, index, edit)?;
+    match track {
+        Some(track) => set_track(state, page, index, track, out),
+        None => Ok(()),
+    }
 }
 
 /// C8: a new file stops the cart first; the old track is forgotten.

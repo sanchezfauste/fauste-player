@@ -164,9 +164,9 @@ the UI's clamping rules are not repeated here.
 | `POST /entries/{id}/move` | `{"playlist": id, "index": n}` | `MoveEntry` |
 | `POST /entries/{id}/duplicate` | — | `DuplicateEntry` |
 | `POST /cartwall/pages` | `{"name"}` | `CreateCartPage` |
-| `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | `RenameCartPage`, `ResizeCartPage` |
+| `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | `EditCartPage` (one command: all or nothing) |
 | `DELETE /cartwall/pages/{id}` | — | `DeleteCartPage` |
-| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | `SetCart`, then `AssignCartTrack` (when the track changes) or `ClearCartFile` |
+| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | `EditCart`, with the file kept, changed (when the track differs) or cleared: one command |
 | `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | `SetMarker` |
 | `POST /tracks/{id}/markers/reset` | — | `ResetMarkers` |
 
