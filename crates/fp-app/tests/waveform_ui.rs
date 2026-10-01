@@ -144,6 +144,41 @@ fn a_plain_click_still_seeks_at_once() {
     assert!((s[0] - 90.0).abs() < 1.5, "{s:?}");
 }
 
+/// A stopped player shows its next track, which always starts at its
+/// cue-in: its waveform shows times but does not seek.
+#[test]
+fn a_stopped_players_waveform_does_not_seek() {
+    let mut s = playing();
+    let p = s.players[0].id;
+    apply(&mut s, Command::Stop(p)).unwrap();
+    let next = s.players[0].next.unwrap();
+    let track = s.playlists.entry(next).unwrap().track;
+    let analysis = TrackAnalysis {
+        duration_secs: 180.0,
+        ..TrackAnalysis::default()
+    };
+    apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+    let (mut h, fake) = harness(s);
+    let w = wave(&h);
+    let at = pos2(w.center().x, w.center().y);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    press(&mut h, at, true);
+    press(&mut h, at, false);
+    h.run_steps(2);
+    drag_to(&mut h, at, pos2(at.x + 60.0, at.y));
+    press(&mut h, pos2(at.x + 60.0, at.y), false);
+    h.run_steps(2);
+    assert!(seeks(&fake).is_empty());
+}
+
 fn wheel(h: &mut Harness<'_, AppUi>, at: Pos2, dx: f32, dy: f32, modifiers: Modifiers) {
     h.event(Event::PointerMoved(at));
     h.event(Event::MouseWheel {

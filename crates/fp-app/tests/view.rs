@@ -122,6 +122,15 @@ fn a_stopped_player_shows_its_next_track_ready_to_play() {
     assert_eq!((v.elapsed, v.total, v.remaining), (2.0, Some(200.0), 198.0));
     assert!(!v.end_warning);
     assert!(v.markers.position.is_some(), "the waveform has a position");
+    // A short intro waiting to be played does not blink: nothing is on air.
+    s.library
+        .get_mut(t1)
+        .unwrap()
+        .markers
+        .set_auto(MarkerKind::IntroEnd, Some(4.0));
+    let v = player_view(&s, p, None, 0.25).unwrap();
+    assert_eq!(v.intro, Some(2.0));
+    assert_eq!(v.intro_blink, None);
     // On air, the current one is shown.
     apply(&mut s, Command::Play(p)).unwrap();
     assert_eq!(shown_entry(&s, p), Some(e[1]));

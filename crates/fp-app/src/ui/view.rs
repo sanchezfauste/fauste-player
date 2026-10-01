@@ -80,8 +80,6 @@ fn line(title: &str, artist: &str) -> String {
     }
 }
 
-/// Everything a player column shows. `position` comes from the engine;
-/// `blink_phase` is a clock in seconds for blinking elements.
 /// The entry a player shows: its current one, or, when stopped, its next
 /// (the one Play starts), ready at its cue-in.
 pub fn shown_entry(state: &AppState, player: PlayerId) -> Option<EntryId> {
@@ -89,6 +87,8 @@ pub fn shown_entry(state: &AppState, player: PlayerId) -> Option<EntryId> {
     p.current.or(p.next)
 }
 
+/// Everything a player column shows. `position` comes from the engine;
+/// `blink_phase` is a clock in seconds for blinking elements.
 pub fn player_view(
     state: &AppState,
     player: PlayerId,
@@ -149,7 +149,9 @@ pub fn player_view(
     {
         let left = intro_end - pos;
         view.intro = Some((left * 10.0).round() / 10.0);
-        view.intro_blink = (left <= 3.0).then(|| blink_phase.rem_euclid(1.0) < 0.5);
+        // The talk-over warning blinks only for a track on its way.
+        view.intro_blink =
+            (left <= 3.0 && p.current.is_some()).then(|| blink_phase.rem_euclid(1.0) < 0.5);
     }
     if let Some(outro) = track.outro_start_secs()
         && pos >= outro

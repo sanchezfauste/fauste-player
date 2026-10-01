@@ -803,7 +803,12 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         let grace = scene.state.config.ui.follow_current_grace_secs;
         if dragging {
             z.moved_at = scene.time;
-        } else if grace > 0.0 && scene.time - z.moved_at >= grace {
+        } else if grace > 0.0
+            && scene.time - z.moved_at >= grace
+            && pv.status != PlayerStatus::Stopped
+        {
+            // A stopped player's position is pinned at the cue-in: following
+            // it would undo a zoom made to prepare the next track.
             z.view = z.view.follow(f64::from(f) * total, total);
         }
     }
@@ -839,6 +844,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         view,
         entry: current,
         shield: full_view_button,
+        seekable: pv.status != PlayerStatus::Stopped,
     };
     let (response, seek) = widgets::waveform(ui, WAVE_HEIGHT, &input);
     if let Some(secs) = seek {

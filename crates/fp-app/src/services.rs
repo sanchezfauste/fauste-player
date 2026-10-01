@@ -80,6 +80,8 @@ fn folder_exists(dir: &std::path::Path, seen: &mut HashMap<PathBuf, bool>) -> bo
     }
     let exists = match dir.parent() {
         Some(up) if !up.as_os_str().is_empty() && !folder_exists(up, seen) => false,
+        // A bare relative name: the file itself decides.
+        _ if dir.as_os_str().is_empty() => true,
         _ => dir.is_dir(),
     };
     seen.insert(dir.to_path_buf(), exists);

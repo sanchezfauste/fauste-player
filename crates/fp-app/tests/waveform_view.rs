@@ -177,6 +177,7 @@ fn a_player_that_unloads_lets_go_of_its_waveform() {
             view: None,
             entry: None,
             shield: None,
+            seekable: true,
         };
         waveform(ui, 40.0, &input);
     });

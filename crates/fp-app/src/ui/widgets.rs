@@ -980,6 +980,9 @@ pub struct WaveInput<'a> {
     pub entry: Option<fp_model::EntryId>,
     /// An area drawn over the waveform (a button) where no seek starts.
     pub shield: Option<Rect>,
+    /// Clicks and drags seek. A stopped player's next track always starts
+    /// at its cue-in, so its waveform only shows times.
+    pub seekable: bool,
 }
 
 /// A drag on the waveform that seeks where it is released (feedback spec
@@ -1161,7 +1164,8 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
     let alt = ui.input(|i| i.modifiers.alt);
     let shielded = |p: Pos2| input.shield.is_some_and(|r| r.contains(p));
     let origin = ui.input(|i| i.pointer.press_origin());
-    if response.drag_started_by(egui::PointerButton::Primary)
+    if input.seekable
+        && response.drag_started_by(egui::PointerButton::Primary)
         && !alt
         && !origin.is_some_and(shielded)
     {
@@ -1218,7 +1222,7 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         None => {
             if let Some(p) = response.hover_pos().filter(|p| !shielded(*p)) {
                 preview(p.x);
-                if response.clicked() && !alt {
+                if input.seekable && response.clicked() && !alt {
                     seek = Some(view.secs_at(p.x, inner));
                 }
             }

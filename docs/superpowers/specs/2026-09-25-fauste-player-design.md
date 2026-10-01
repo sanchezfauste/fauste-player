@@ -423,7 +423,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
 
 - **Player column**, one per configured player (min width 380 px; any number of players is laid out in a horizontally scrollable row):
   - **Header:** `P1`…`Pn`, state dot and label ("On air", "Stopped", "Paused"), fade and stop-after badges, BP badge (inactive until Phase 4), SINGLE|CONT segmented control (one border, the active mode filled), CUE button.
-  - **Info row:** 64 px cover (placeholder vinyl icon if none), title, artist, and the next line with the green square (plus cue time in blue when cueing). With no current entry (stopped), the cover, title, artist, countdown and waveform show the `next` entry, the one Play starts, at its cue-in (`view::shown_entry`); a position the engine still reports is ignored, and the waveform does not seek.
+  - **Info row:** 64 px cover (placeholder vinyl icon if none), title, artist, and the next line with the green square (plus cue time in blue when cueing). With no current entry (stopped), the cover, title, artist, countdown and waveform show the `next` entry, the one Play starts, at its cue-in (`view::shown_entry`); a position the engine still reports is ignored; the waveform shows times but does not seek, a zoom on it does not follow the pinned position, and the intro badge does not blink. The next line keeps naming it.
   - **Meter column** at the right, spanning the info row and the transport: labelled dB scale, stereo meter with reference lines and peak hold (meters spec M4), vertical volume fader (drag + wheel, dB tooltip).
   - **Transport:**
     - Play/NEXT button spanning 2 rows;
