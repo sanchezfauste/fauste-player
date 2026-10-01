@@ -12,7 +12,7 @@ use fp_remote::{RemoteStatus, ServerError, ServerStatus};
 use super::super::app::Scene;
 use super::super::theme;
 use super::super::widgets::font;
-use super::{heading, update};
+use super::{button, heading, update};
 
 #[derive(Default)]
 pub(crate) struct RemoteState {
@@ -254,13 +254,13 @@ pub(super) fn section(
         } else {
             t.tr("remote-token-show")
         };
-        if ui.button(label).clicked() {
+        if button(ui, &label) {
             st.show_token = !st.show_token;
         }
-        if ui.button(t.tr("remote-token-copy")).clicked() {
+        if button(ui, &t.tr("remote-token-copy")) {
             ui.ctx().copy_text(config.http.token.clone());
         }
-        if ui.button(t.tr("remote-token-generate")).clicked()
+        if button(ui, &t.tr("remote-token-generate"))
             && let Some(token) = crate::remote::new_token()
         {
             st.drafts.remove("http.token");

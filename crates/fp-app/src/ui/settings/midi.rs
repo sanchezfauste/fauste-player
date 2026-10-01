@@ -8,8 +8,8 @@ use fp_model::{MidiAction, MidiTrigger, ShortcutAction};
 
 use super::super::app::Scene;
 use super::super::theme;
-use super::super::widgets::{self, TileStyle, font};
-use super::{SettingsState, heading, update};
+use super::super::widgets::font;
+use super::{SettingsState, button, heading, update};
 
 /// The actions a player offers to MIDI, with their names.
 fn actions(n: u16) -> [(MidiAction, &'static str); 8] {
@@ -52,26 +52,6 @@ fn trigger_text(scene: &Scene<'_>, trigger: MidiTrigger) -> String {
             &[("ch", (u16::from(channel) + 1).into())],
         ),
     }
-}
-
-fn button(ui: &mut Ui, text: &str) -> bool {
-    let w = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), font(12.0), theme::TEXT)
-        .size()
-        .x
-        + 20.0;
-    widgets::tile(
-        ui,
-        vec2(w, 24.0),
-        text,
-        true,
-        TileStyle::plain(),
-        |p, r, c| {
-            p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(12.0), c);
-        },
-    )
-    .clicked()
 }
 
 fn text(ui: &mut Ui, value: String, color: egui::Color32) {

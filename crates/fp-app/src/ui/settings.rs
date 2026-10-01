@@ -383,6 +383,27 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
     });
 }
 
+/// A plain Settings button, as wide as its label; true when clicked.
+fn button(ui: &mut Ui, text: &str) -> bool {
+    let w = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), font(12.0), theme::TEXT)
+        .size()
+        .x
+        + 20.0;
+    widgets::tile(
+        ui,
+        vec2(w, 24.0),
+        text,
+        true,
+        TileStyle::plain(),
+        |p, r, c| {
+            p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(12.0), c);
+        },
+    )
+    .clicked()
+}
+
 fn heading(ui: &mut Ui, text: &str) {
     ui.add(
         egui::Label::new(

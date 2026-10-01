@@ -326,3 +326,27 @@ fn escape_cancels_a_draft_whatever_else_closes() {
     assert_eq!(fake.state.load().config.remote.http.bind, "127.0.0.1");
     assert!(sent_configs(&fake).is_empty());
 }
+
+/// The token buttons are the Settings buttons MIDI uses: 24 px tall and
+/// as wide as their 12 px label plus 20 px.
+#[test]
+fn the_token_buttons_are_settings_buttons() {
+    let (h, _) = opened(state(1, 0));
+    for label in ["Show", "Copy", "Generate"] {
+        let r = h.get_by_label(label).rect();
+        let text = h.ctx.fonts_mut(|f| {
+            f.layout_no_wrap(
+                label.to_owned(),
+                fp_app::ui::widgets::font(12.0),
+                egui::Color32::WHITE,
+            )
+            .size()
+            .x
+        });
+        assert!((r.height() - 24.0).abs() < 0.5, "{label}: {r:?}");
+        assert!(
+            (r.width() - (text + 20.0)).abs() < 0.5,
+            "{label}: {r:?} text {text}"
+        );
+    }
+}
