@@ -55,6 +55,15 @@ short windows (50 ms by default).
 - Tracks shorter than the *minimum length for mix and outro markers* (60 s by
   default), such as jingles and ads, get no MIX and no outro.
 
+### Long recordings
+
+A whole programme (one, four or more hours) is analysed like a song, while
+it plays if need be: a 4-hour FLAC or Opus file takes under a minute on a
+current computer, and memory does not grow with the length. Seeking to any
+point, even near the end, is immediate. The waveform and markers are kept
+in the analysis cache up to about 16 hours of audio; a longer file works
+too, but is analysed again each time Fauste Player starts.
+
 All these values are in **Settings → Analysis**. After changing them, the
 tracks are analysed again automatically.
 

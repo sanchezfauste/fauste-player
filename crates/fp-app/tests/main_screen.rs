@@ -731,3 +731,22 @@ fn resizing_the_window_does_not_store_column_widths() {
         "only a handle release stores widths"
     );
 }
+
+/// A programme recording longer than ten hours still fits its countdown
+/// at the minimum player width (plan 4, item 15).
+#[test]
+fn a_ten_hour_countdown_fits_between_the_grid_and_the_meter() {
+    let mut state = quiet_meter(state(1, 3));
+    for track in state.library.iter_mut() {
+        track.duration_secs = 36_100.0;
+    }
+    let p = state.players[0].id;
+    fp_model::apply(&mut state, Command::Play(p)).unwrap();
+    let (h, _) = support::harness_sized(state, egui::vec2(380.0, 700.0), |ui| ui);
+    let countdown = h.get_by_label_contains("-10:01:40").rect();
+    let meter = h.get_by_label("Level meter").rect();
+    let grid = h.get_by_label("Stop after the current track").rect();
+    assert!(countdown.right() <= meter.left(), "{countdown:?} {meter:?}");
+    assert!(countdown.left() >= grid.right(), "{countdown:?} {grid:?}");
+    assert!(h.query_by_label("00:00 / 10:01:40").is_some());
+}
