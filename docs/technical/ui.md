@@ -119,6 +119,15 @@ with `widgets::paint_tabular`/`tabular_label`, which centre every digit in a
 cell as wide as the widest one: a countdown keeps its width as it runs. Fonts are installed on the first frame, and drawing starts
 on the next one, when they are bound.
 
+## Window decorations
+
+On Linux, `fp-app` enables winit's `wayland-csd-adwaita` feature. `eframe` is
+built without its default features, which would otherwise bring it. A Wayland
+compositor without server-side decorations (GNOME) leaves the frame to the
+client, and without that feature winit draws a bare fallback frame with
+non-standard buttons. With it, the title bar has the usual minimise, maximise
+and close buttons. Windows and macOS use their native frames.
+
 ## Panic isolation
 
 `Shell::ui` runs `AppUi::ui` inside `catch_unwind`. After a panic it draws only

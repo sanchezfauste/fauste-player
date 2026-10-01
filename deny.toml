@@ -8,6 +8,10 @@ ignore = [
   # `paste` is unmaintained but finished: a build-time proc-macro pulled in by
   # lofty, with no runtime code in the binary. Revisit when lofty drops it.
   { id = "RUSTSEC-2024-0436", reason = "build-time only proc-macro via lofty" },
+  # `ttf-parser` is unmaintained, an informational notice (no vulnerability).
+  # It parses the font of the Wayland title bar, through winit's sctk-adwaita
+  # (ab_glyph), on Linux only. Revisit when sctk-adwaita moves to another parser.
+  { id = "RUSTSEC-2026-0192", reason = "unmaintained notice; title-bar font via winit's sctk-adwaita" },
 ]
 
 [licenses]

@@ -37,6 +37,12 @@ unic-langid.workspace = true
 sys-locale.workspace = true
 image.workspace = true
 
+# Wayland compositors without server-side decorations (GNOME) need winit's
+# Adwaita-style frame; eframe is built without its default features, which
+# would otherwise bring it.
+[target.'cfg(target_os = "linux")'.dependencies]
+winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita"] }
+
 [features]
 default = []
 # Audio systems (see crates/fp-backends/Cargo.toml).
