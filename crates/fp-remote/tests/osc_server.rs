@@ -198,3 +198,34 @@ fn a_grid_resize_sends_everything_again() {
         }
     }
 }
+
+#[test]
+fn fewer_players_clear_the_addresses_of_the_removed_ones() {
+    let fake = FakeControl::new(demo_state());
+    enabled(&fake);
+    let handle = spawn(fake.clone()).unwrap();
+    let to = osc_addr(&handle);
+    let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+    send(&sock, to, "/fauste/subscribe", vec![]);
+    let mut buf = [0u8; 65536];
+    sock.set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
+    while sock.recv_from(&mut buf).is_ok() {}
+    fake.edit(|s| {
+        fp_model::apply(s, Command::SetPlayerCount(2)).unwrap();
+        assert_eq!(s.players.len(), 2);
+    });
+    sock.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        assert!(Instant::now() < deadline, "player 4 was never cleared");
+        let (n, _) = sock.recv_from(&mut buf).unwrap();
+        if let Ok((_, OscPacket::Message(m))) = decoder::decode_udp(&buf[..n])
+            && m.addr == "/fauste/player/4/transport"
+        {
+            assert_eq!(m.args, vec![OscType::String(String::new())]);
+            break;
+        }
+    }
+    drop(handle);
+}

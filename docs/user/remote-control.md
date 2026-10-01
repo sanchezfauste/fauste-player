@@ -121,7 +121,9 @@ in the page shown.
 
 A surface that wants to show the state (lights, names, countdowns)
 subscribes, and then receives every value once and afterwards only what
-changes. It must subscribe again within a minute (`subscription_ttl_secs`)
+changes. When a player or a cart button goes away (fewer players, a
+smaller page), its addresses receive an empty value once, so the surface
+clears them. It must subscribe again within a minute (`subscription_ttl_secs`)
 to keep receiving:
 
     oscdump 9000 &

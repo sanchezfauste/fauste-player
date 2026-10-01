@@ -290,7 +290,9 @@ replies.
 - The publisher keeps the last value sent per subscriber and address, and sends
   a message only when it changes. `elapsed` and `remaining` follow
   `position_interval_ms`. A change in the player count or the page shown
-  sends a full dump.
+  sends a full dump, and an address that no longer exists (a removed
+  player, a cart beyond a smaller grid) is sent once the empty value of its
+  type (`""`, `0`, `0.0`, `-1` for an entry id).
 - A failed UDP send is logged (rate-limited) and affects nothing else.
 
 ---

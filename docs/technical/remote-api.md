@@ -230,7 +230,10 @@ packet is dropped with a log line, at most one per source per second.
 
 A new subscriber gets every address once, then only values that change.
 Times follow `events.position_interval_ms`. A change in the player count or
-the page shown sends everything again. A subscription ends after
+the page shown sends everything again. An address that no longer exists
+(a removed player, a cart beyond a smaller grid) is sent its empty value
+once (`""`, `0`, `0.0`; `-1` for an entry id) so a surface does not keep
+showing it. A subscription ends after
 `osc.subscription_ttl_secs` unless the client subscribes again, and at most
 `osc.max_subscribers` are kept.
 
