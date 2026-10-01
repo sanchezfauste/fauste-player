@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use fp_app::instance;
-use fp_app::restart::{Handoff, Launcher, Relaunch, spawn, wait_for_handoff};
+use fp_app::restart::{Launcher, Relaunch, spawn, wait_for_handoff};
 
 fn plain(exe: &str) -> Launcher {
     Launcher {
@@ -144,8 +144,7 @@ fn the_handoff_is_done_when_the_new_instance_holds_the_lock() {
     let dir = tempfile::tempdir().unwrap();
     let _new_instance = instance::acquire(dir.path()).unwrap().unwrap();
     let mut child = cargo("--version").spawn().unwrap();
-    let handoff = wait_for_handoff(&mut child, dir.path(), Duration::from_secs(10));
-    assert_eq!(handoff.unwrap(), Handoff::Taken);
+    wait_for_handoff(&mut child, dir.path(), Duration::from_secs(10)).unwrap();
     let _ = child.wait();
 }
 
@@ -157,12 +156,13 @@ fn a_launcher_that_fails_is_an_error() {
 }
 
 #[test]
-fn the_wait_for_the_handoff_is_bounded() {
+fn a_handoff_that_times_out_is_an_error() {
     let dir = tempfile::tempdir().unwrap();
     let mut child = cargo("--version").spawn().unwrap();
     let started = std::time::Instant::now();
     let handoff = wait_for_handoff(&mut child, dir.path(), Duration::from_millis(300));
-    assert_eq!(handoff.unwrap(), Handoff::TimedOut);
+    // An error, so the operator is told the restart failed.
+    assert_eq!(handoff.unwrap_err().kind(), std::io::ErrorKind::TimedOut);
     assert!(started.elapsed() < Duration::from_secs(5));
 }
 

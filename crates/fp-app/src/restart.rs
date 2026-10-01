@@ -119,28 +119,21 @@ pub fn spawn(plan: &Relaunch) -> io::Result<Child> {
         .spawn()
 }
 
-/// How the wait for the new instance ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Handoff {
-    /// The new instance holds the instance lock in the data folder.
-    Taken,
-    /// `timeout` passed first.
-    TimedOut,
-}
-
 /// Waits, at most `timeout`, until the new instance holds the instance
-/// lock in `lock_dir`. An error when `launcher` ends with a failure first.
+/// lock in `lock_dir`. An error when `launcher` ends with a failure first,
+/// or (`ErrorKind::TimedOut`) when `timeout` passes: the operator must be
+/// told the restart failed.
 pub fn wait_for_handoff(
     launcher: &mut Child,
     lock_dir: &Path,
     timeout: Duration,
-) -> io::Result<Handoff> {
+) -> io::Result<()> {
     let start = Instant::now();
     let deadline = start.checked_add(timeout).unwrap_or(start);
     let mut launcher_done = false;
     loop {
         if instance::is_held(lock_dir)? {
-            return Ok(Handoff::Taken);
+            return Ok(());
         }
         if !launcher_done && let Some(status) = launcher.try_wait()? {
             if !status.success() {
@@ -153,7 +146,10 @@ pub fn wait_for_handoff(
         }
         let now = Instant::now();
         if now >= deadline {
-            return Ok(Handoff::TimedOut);
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!("the new instance did not start within {timeout:?}"),
+            ));
         }
         std::thread::sleep(HANDOFF_POLL.min(deadline - now));
     }
@@ -173,13 +169,8 @@ pub fn relaunch(lock_dir: &Path, handoff: Duration) -> io::Result<()> {
     tracing::info!(program = ?plan.program, args = ?plan.args, "starting again");
     let mut child = spawn(&plan)?;
     if launcher.needs_handoff() {
-        match wait_for_handoff(&mut child, lock_dir, handoff)? {
-            Handoff::Taken => tracing::info!("the new instance is running"),
-            Handoff::TimedOut => tracing::warn!(
-                ?handoff,
-                "the new instance did not start in time; ending anyway"
-            ),
-        }
+        wait_for_handoff(&mut child, lock_dir, handoff)?;
+        tracing::info!("the new instance is running");
     }
     Ok(())
 }
