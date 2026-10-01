@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use fp_analysis::analyze_file_cancellable;
 use fp_analysis::analyzer::{AnalyzeFn, Analyzer};
-use fp_app::services::{MediaCache, Services};
+use fp_app::services::{MediaCache, ServiceRequest, Services};
 use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
@@ -322,38 +322,9 @@ fn resetting_markers_analyses_the_track_again() {
     });
 }
 
-#[test]
-fn tracks_analysed_before_formats_existed_are_analysed_again() {
-    let dir = tempfile::tempdir().unwrap();
-    let files: Vec<PathBuf> = (0..4)
-        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
-        .collect();
-    // A library saved before Phase 4: analysed, without formats.
-    let mut r = rig_with(&files, dir, Duration::ZERO, |state| {
-        for track in state.library.iter_mut() {
-            track.analyzed = true;
-            track.duration_secs = 1.0;
-        }
-    });
-    r.run_until("every format", |r| {
-        r.handle
-            .model
-            .load()
-            .library
-            .iter()
-            .all(|t| t.format.is_some())
-    });
-}
-
-#[test]
-fn tracks_analysed_by_an_older_analysis_version_are_analysed_again() {
-    let dir = tempfile::tempdir().unwrap();
-    let files: Vec<PathBuf> = (0..4)
-        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
-        .collect();
-    // A library analysed before the current markers rules: formats known,
-    // version 0 (saved before versions were recorded).
-    let mut r = rig_with(&files, dir, Duration::ZERO, |state| {
+/// A library analysed by an older version: analysed, `older` says how.
+fn outdated_rig(files: &[PathBuf], dir: tempfile::TempDir, older: fn(&mut fp_model::Track)) -> Rig {
+    rig_with(files, dir, Duration::ZERO, move |state| {
         for track in state.library.iter_mut() {
             track.analyzed = true;
             track.duration_secs = 1.0;
@@ -362,16 +333,65 @@ fn tracks_analysed_by_an_older_analysis_version_are_analysed_again() {
                 bits: Some(16),
                 channels: 2,
             });
+            older(track);
         }
-    });
+    })
+}
+
+fn current(t: &fp_model::Track) -> bool {
+    t.format.is_some() && t.analysis_version == fp_analysis::cache::ANALYSIS_VERSION
+}
+
+/// Re-analysing a whole library takes the processor for a while on an
+/// on-air machine: tracks analysed by an older version keep their analysis
+/// until the operator asks (the start-up notice, or Settings > Analysis).
+/// Only the tracks on screen, which need their waveform, are analysed.
+fn older_tracks_wait_for_the_operator(older: fn(&mut fp_model::Track)) {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (0..6)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = outdated_rig(&files, dir, older);
+    for _ in 0..150 {
+        r.conductor.tick(r.now);
+        r.services.step(r.now);
+        let _ = r.device.render(480);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let left = r
+        .handle
+        .model
+        .load()
+        .library
+        .iter()
+        .filter(|t| !current(t))
+        .count();
+    assert!(left >= 4, "only the shown tracks are analysed; {left} left");
+    assert_eq!(
+        fp_app::services::outdated_tracks(&r.handle.model.load()),
+        left
+    );
+    assert!(
+        r.services
+            .requests()
+            .try_send(ServiceRequest::AnalyseOutdated)
+            .is_ok()
+    );
     r.run_until("every track at the current version", |r| {
-        r.handle
-            .model
-            .load()
-            .library
-            .iter()
-            .all(|t| t.analysis_version == fp_analysis::cache::ANALYSIS_VERSION)
+        r.handle.model.load().library.iter().all(current)
     });
+    assert_eq!(fp_app::services::outdated_tracks(&r.handle.model.load()), 0);
+}
+
+#[test]
+fn tracks_of_an_older_analysis_version_wait_for_the_operator() {
+    older_tracks_wait_for_the_operator(|t| t.analysis_version = 0);
+}
+
+#[test]
+fn tracks_analysed_before_formats_existed_wait_for_the_operator() {
+    older_tracks_wait_for_the_operator(|t| t.format = None);
 }
 
 #[test]
@@ -386,4 +406,29 @@ fn a_result_lost_to_a_panic_is_asked_for_again() {
     });
     assert_eq!(r.services.faults().load(Ordering::SeqCst), 1);
     assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "analysed again once");
+}
+
+/// A track whose file is gone cannot be analysed again: counting it would
+/// bring the start-up notice back at every start, forever.
+#[test]
+fn an_outdated_track_whose_file_is_missing_is_not_counted() {
+    let dir = tempfile::tempdir().unwrap();
+    let present = wav(dir.path(), "present.wav", 1);
+    let missing = PathBuf::from("/definitely/missing.flac");
+    let mut r = outdated_rig(&[present, missing], dir, |t| t.analysis_version = 0);
+    assert!(
+        r.services
+            .requests()
+            .try_send(ServiceRequest::AnalyseOutdated)
+            .is_ok()
+    );
+    r.run_until("the present track analysed, the other marked", |r| {
+        let state = r.handle.model.load();
+        state.library.iter().any(current)
+            && state
+                .library
+                .iter()
+                .any(|t| t.file_state == FileState::Missing)
+    });
+    assert_eq!(fp_app::services::outdated_tracks(&r.handle.model.load()), 0);
 }

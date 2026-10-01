@@ -114,7 +114,7 @@ change. It orders events (§5) and is not persisted.
 | `GET /playlists/{id}` | Playlist |
 | `GET /tracks/{id}` | Track |
 | `GET /tracks/{id}/cover` | The cover thumbnail (`image/png`) |
-| `GET /tracks/{id}/peaks` | `{bucket_secs, full_scale: 32767, peaks: [[min, max, rms], …]}` |
+| `GET /tracks/{id}/peaks[?buckets=n]` | `{bucket_secs, full_scale: 32767, peaks: [[min, max, rms], …]}`; with `buckets`, at most `n` buckets, each merging a whole group (lowest min, highest max, RMS of the RMS): a 4 h recording has 1.44 million buckets of 10 ms |
 | `GET /cartwall` | Cartwall |
 | `GET /events` | Event stream (§5.2) |
 
@@ -164,9 +164,9 @@ the UI's clamping rules are not repeated here.
 | `POST /entries/{id}/move` | `{"playlist": id, "index": n}` | `MoveEntry` |
 | `POST /entries/{id}/duplicate` | — | `DuplicateEntry` |
 | `POST /cartwall/pages` | `{"name"}` | `CreateCartPage` |
-| `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | `RenameCartPage`, `ResizeCartPage` |
+| `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | `EditCartPage` (one command: all or nothing) |
 | `DELETE /cartwall/pages/{id}` | — | `DeleteCartPage` |
-| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | `SetCart`, then `AssignCartTrack` (when the track changes) or `ClearCartFile` |
+| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | `EditCart`, with the file kept, changed (when the track differs) or cleared: one command |
 | `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | `SetMarker` |
 | `POST /tracks/{id}/markers/reset` | — | `ResetMarkers` |
 
@@ -290,7 +290,9 @@ replies.
 - The publisher keeps the last value sent per subscriber and address, and sends
   a message only when it changes. `elapsed` and `remaining` follow
   `position_interval_ms`. A change in the player count or the page shown
-  sends a full dump.
+  sends a full dump, and an address that no longer exists (a removed
+  player, a cart beyond a smaller grid) is sent once the empty value of its
+  type (`""`, `0`, `0.0`, `-1` for an entry id).
 - A failed UDP send is logged (rate-limited) and affects nothing else.
 
 ---
@@ -415,6 +417,9 @@ fp-app ──(Bridge: impl RemoteControl)──► fp-remote
   in `config.json` only, documented in the user guide.
 - Saving applies at once (the remote thread follows the model's
   configuration); no restart.
+- Text and number fields apply when they lose focus, when another section
+  is opened and when Settings closes; an invalid value is dropped and the
+  one in use kept; Escape cancels the edit.
 - All strings are in both locales.
 
 ---

@@ -258,3 +258,95 @@ fn typing_a_port_applies_only_the_final_value() {
         "every intermediate value restarts the server"
     );
 }
+
+/// Types `text` into the `nth` field labelled `label`, leaving it focused.
+fn type_into(
+    h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    label: &str,
+    nth: usize,
+    text: &str,
+) {
+    h.get_all_by_role_and_label(Role::TextInput, label)
+        .nth(nth)
+        .unwrap()
+        .focus();
+    h.run_steps(2);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    for c in text.chars() {
+        h.get_all_by_role_and_label(Role::TextInput, label)
+            .nth(nth)
+            .unwrap()
+            .type_text(&c.to_string());
+        h.run_steps(1);
+    }
+}
+
+#[test]
+fn a_draft_is_applied_when_another_section_is_opened() {
+    let (mut h, fake) = opened(state(1, 0));
+    type_into(&mut h, "Address", 0, "10.0.0.9");
+    h.get_by_role_and_label(Role::Button, "MIDI").click();
+    h.run_steps(3);
+    assert_eq!(fake.state.load().config.remote.http.bind, "10.0.0.9");
+}
+
+#[test]
+fn a_draft_is_applied_when_settings_closes() {
+    let (mut h, fake) = opened(state(1, 0));
+    type_into(&mut h, "Address", 0, "10.0.0.9");
+    h.get_by_label("Close").click();
+    h.run_steps(3);
+    assert_eq!(fake.state.load().config.remote.http.bind, "10.0.0.9");
+}
+
+#[test]
+fn an_invalid_draft_is_dropped_when_settings_closes() {
+    let (mut h, fake) = opened(state(1, 0));
+    type_into(&mut h, "Address", 0, "10.0.");
+    h.get_by_label("Close").click();
+    h.run_steps(3);
+    assert!(
+        sent_configs(&fake)
+            .iter()
+            .all(|c| c.remote.http.bind != "10.0.")
+    );
+    assert_eq!(fake.state.load().config.remote.http.bind, "127.0.0.1");
+}
+
+#[test]
+fn escape_cancels_a_draft_whatever_else_closes() {
+    let (mut h, fake) = opened(state(1, 0));
+    type_into(&mut h, "Address", 0, "10.0.0.9");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+    // A second Escape closes Settings, if the first did not.
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+    assert_eq!(fake.state.load().config.remote.http.bind, "127.0.0.1");
+    assert!(sent_configs(&fake).is_empty());
+}
+
+/// The token buttons are the Settings buttons MIDI uses: 24 px tall and
+/// as wide as their 12 px label plus 20 px.
+#[test]
+fn the_token_buttons_are_settings_buttons() {
+    let (h, _) = opened(state(1, 0));
+    for label in ["Show", "Copy", "Generate"] {
+        let r = h.get_by_label(label).rect();
+        let text = h.ctx.fonts_mut(|f| {
+            f.layout_no_wrap(
+                label.to_owned(),
+                fp_app::ui::widgets::font(12.0),
+                egui::Color32::WHITE,
+            )
+            .size()
+            .x
+        });
+        assert!((r.height() - 24.0).abs() < 0.5, "{label}: {r:?}");
+        assert!(
+            (r.width() - (text + 20.0)).abs() < 0.5,
+            "{label}: {r:?} text {text}"
+        );
+    }
+}

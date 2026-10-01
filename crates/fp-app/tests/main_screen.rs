@@ -490,13 +490,12 @@ fn the_meter_and_fader_form_a_column_right_of_the_transport() {
     assert!((fader.bottom() - meter.bottom()).abs() <= 1.0);
     // The waveform keeps the player's full width.
     assert!(wave.right() >= fader.right() - 1.0, "{wave:?} {fader:?}");
-    // Elapsed / total sits under the block, right-aligned.
+    // Elapsed / total sits under the waveform, right-aligned.
     let time = h.get_by_label("00:00 / 00:00").rect();
-    assert!(time.top() >= play.bottom());
-    assert!(time.bottom() <= wave.top());
+    assert!(time.top() >= wave.bottom(), "{time:?} {wave:?}");
     assert!(
-        (time.right() - fader.right()).abs() <= 1.0,
-        "{time:?} {fader:?}"
+        (time.right() - wave.right()).abs() <= 1.0,
+        "{time:?} {wave:?}"
     );
 }
 
@@ -731,4 +730,23 @@ fn resizing_the_window_does_not_store_column_widths() {
             .any(|c| matches!(c, Command::SetColumnWidths(..))),
         "only a handle release stores widths"
     );
+}
+
+/// A programme recording longer than ten hours still fits its countdown
+/// at the minimum player width (plan 4, item 15).
+#[test]
+fn a_ten_hour_countdown_fits_between_the_grid_and_the_meter() {
+    let mut state = quiet_meter(state(1, 3));
+    for track in state.library.iter_mut() {
+        track.duration_secs = 36_100.0;
+    }
+    let p = state.players[0].id;
+    fp_model::apply(&mut state, Command::Play(p)).unwrap();
+    let (h, _) = support::harness_sized(state, egui::vec2(380.0, 700.0), |ui| ui);
+    let countdown = h.get_by_label_contains("-10:01:40").rect();
+    let meter = h.get_by_label("Level meter").rect();
+    let grid = h.get_by_label("Stop after the current track").rect();
+    assert!(countdown.right() <= meter.left(), "{countdown:?} {meter:?}");
+    assert!(countdown.left() >= grid.right(), "{countdown:?} {grid:?}");
+    assert!(h.query_by_label("00:00 / 10:01:40").is_some());
 }

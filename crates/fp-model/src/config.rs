@@ -58,8 +58,8 @@ pub enum MeterBallistics {
     /// Quasi-peak programme meter, IEC 60268-10 type IIb (EBU): 10 ms
     /// integration, 24 dB fall in 2.8 s.
     EbuPpm,
-    /// Quasi-peak programme meter, IEC 60268-10 type I (DIN): 5 ms
-    /// integration, 20 dB fall in 1.7 s.
+    /// Quasi-peak programme meter, IEC 60268-10 type I (DIN 45406): 5 ms
+    /// integration, 20 dB fall in 1.5 s.
     DinPpm,
     /// Volume unit meter, IEC 60268-17: RMS, 300 ms rise and fall.
     Vu,
@@ -72,7 +72,64 @@ pub enum MeterBallistics {
     Custom,
 }
 
+/// Which `config.meter` fields a meter type uses (meters spec M3). The
+/// others are kept, for when the operator switches back, but neither
+/// shown nor applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MeterSettings {
+    /// `attack_ms` and `release_db_per_sec`.
+    pub custom_ballistics: bool,
+    /// `floor_db`: the other scales have the range their standard gives.
+    pub floor: bool,
+    /// `peak_hold_secs`: programme meters and the VU have no hold.
+    pub peak_hold: bool,
+    /// `reference_dbfs`: a K meter's alignment is its own 0.
+    pub alignment: bool,
+    /// `warning_dbfs` and `danger_dbfs`: the other scales have their own
+    /// red region.
+    pub zones: bool,
+    /// `true_peak`: only meters that read peaks.
+    pub true_peak: bool,
+}
+
 impl MeterBallistics {
+    /// The settings this type uses (meters spec M3).
+    pub fn settings(self) -> MeterSettings {
+        let digital = MeterSettings {
+            custom_ballistics: false,
+            floor: true,
+            peak_hold: true,
+            alignment: true,
+            zones: true,
+            true_peak: true,
+        };
+        match self {
+            MeterBallistics::DigitalPeak => digital,
+            MeterBallistics::Custom => MeterSettings {
+                custom_ballistics: true,
+                ..digital
+            },
+            MeterBallistics::EbuPpm | MeterBallistics::DinPpm | MeterBallistics::Vu => {
+                MeterSettings {
+                    custom_ballistics: false,
+                    floor: false,
+                    peak_hold: false,
+                    alignment: true,
+                    zones: false,
+                    true_peak: false,
+                }
+            }
+            MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => MeterSettings {
+                custom_ballistics: false,
+                floor: false,
+                peak_hold: true,
+                alignment: false,
+                zones: false,
+                true_peak: true,
+            },
+        }
+    }
+
     /// The level of a K-System meter's 0 in dBFS; `None` for other meters.
     pub fn k_reference_dbfs(self) -> Option<f32> {
         match self {
@@ -118,6 +175,18 @@ pub struct MeterConfig {
     pub loudness: LoudnessReadout,
     /// The readout is green within ±1 LU of this (EBU R128: −23 LUFS).
     pub loudness_target_lufs: f32,
+}
+
+impl MeterConfig {
+    /// True peak is measured only when it is on and the type reads peaks.
+    pub fn true_peak_in_use(&self) -> bool {
+        self.true_peak && self.ballistics.settings().true_peak
+    }
+
+    /// The peak hold is shown only when it is on and the type has one.
+    pub fn peak_hold_in_use(&self) -> bool {
+        self.peak_hold_secs > 0.0 && self.ballistics.settings().peak_hold
+    }
 }
 
 impl Default for MeterConfig {

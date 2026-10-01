@@ -22,6 +22,7 @@ use super::about::{self, NoticeOpener};
 use super::cartwall;
 use super::controller::Controller;
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
+use super::notice;
 use super::player;
 use super::playlist_files::{self, FileOutcome};
 use super::settings::{self, SettingsDeps, SettingsState};
@@ -68,6 +69,8 @@ pub(crate) struct ViewState {
     pub rows_built: usize,
     pub settings_open: bool,
     pub about_open: bool,
+    /// The notice about tracks an earlier version analysed is open.
+    pub outdated_open: bool,
     /// Where each player's waveform menu was opened, in seconds.
     pub wave_menu: HashMap<PlayerId, f64>,
     /// When the operator last used each player's table or tabs (scroll,
@@ -155,6 +158,8 @@ pub struct AppUi {
     fail_next_frame: bool,
     settings: SettingsState,
     settings_shown: bool,
+    /// Whether the start-up check for outdated analyses has run.
+    outdated_checked: bool,
     /// The egui context, once the first frame has run.
     ctx: Option<egui::Context>,
     /// Imports asked for before the first frame.
@@ -196,6 +201,7 @@ impl AppUi {
             fail_next_frame: false,
             settings: SettingsState::default(),
             settings_shown: false,
+            outdated_checked: false,
             ctx: None,
             pending_imports: Vec::new(),
             inbox: None,
@@ -443,6 +449,13 @@ impl AppUi {
             .map_or(0, |f| f.load(std::sync::atomic::Ordering::Acquire));
         status_bar(&mut status_ui, &scene, &self.view, &self.platform, faults);
         ui.allocate_rect(full, Sense::hover());
+        // Once, at start-up: tracks an earlier version analysed wait for
+        // the operator (they cost the processor for a while to redo).
+        if !self.outdated_checked {
+            self.outdated_checked = true;
+            self.view.outdated_open =
+                self.services.is_some() && crate::services::outdated_tracks(&state) > 0;
+        }
         if self.view.settings_open {
             if !self.settings_shown {
                 self.settings.reset();
@@ -478,6 +491,20 @@ impl AppUi {
             if self.view.about_open {
                 self.view.about_open =
                     about::show(&ctx, &scene, self.notices.as_deref(), &self.opener);
+            } else if self.view.outdated_open {
+                let count = crate::services::outdated_tracks(&state);
+                match notice::show(&ctx, &scene, count) {
+                    Some(notice::Answer::AnalyseNow) => {
+                        if let Some(services) = &self.services {
+                            let _ = services.try_send(ServiceRequest::AnalyseOutdated);
+                        }
+                        self.view.outdated_open = false;
+                    }
+                    Some(notice::Answer::Later) => self.view.outdated_open = false,
+                    // Tracks on screen are analysed anyway: nothing left.
+                    None if count == 0 => self.view.outdated_open = false,
+                    None => {}
+                }
             } else {
                 self.file_drops(&ctx, &state);
             }
@@ -552,6 +579,13 @@ impl AppUi {
         if self.view.about_open {
             if escape {
                 self.view.about_open = false;
+            }
+            return;
+        }
+        if self.view.outdated_open {
+            // Esc is "Later".
+            if escape {
+                self.view.outdated_open = false;
             }
             return;
         }

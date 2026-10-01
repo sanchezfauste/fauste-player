@@ -38,6 +38,14 @@ pub(crate) struct SymphoniaDecoder {
     at_end: bool,
     /// Whether anything was read yet: a seek to 0 before that is a no-op.
     read_any: bool,
+    /// Seconds the container's timestamps run ahead of the audio: an Ogg
+    /// Opus granule counts the pre-skip (RFC 7845 §4), which symphonia
+    /// keeps as the track's delay instead of trimming it. Matroska already
+    /// subtracts its codec delay, so it is 0 there.
+    ts_offset_secs: f64,
+    /// Frames still to drop from the start of the stream: Opus's pre-skip,
+    /// read from its header so it is exact in every container.
+    drop_frames: usize,
 }
 
 /// Opus needs this much decoded audio before a seek target (RFC 7845 §4.6).
@@ -78,7 +86,21 @@ impl SymphoniaDecoder {
         let channels = params.channels.as_ref().map_or(0, |c| c.count());
         // Lossy codecs have no sample size: their output is not integer PCM.
         let bits_per_sample = params.bits_per_sample.filter(|b| *b > 0);
-        let frames_hint = track.num_frames;
+        let is_opus = params.codec == well_known::CODEC_ID_OPUS;
+        // Opus starts with its pre-skip, which is dropped (RFC 7845 §4.2).
+        let pre_skip = if is_opus {
+            params
+                .extra_data
+                .as_deref()
+                .and_then(|head| head.get(10..12))
+                .and_then(|b| b.try_into().ok())
+                .map_or(0, u16::from_le_bytes)
+        } else {
+            0
+        };
+        let delay = if is_opus { track.delay.unwrap_or(0) } else { 0 };
+        let frames_hint = track.num_frames.map(|n| n.saturating_sub(u64::from(delay)));
+        let ts_offset_secs = f64::from(delay) / f64::from(sample_rate.max(1));
         let track_id = track.id;
         let preroll_secs = match params.codec {
             well_known::CODEC_ID_OPUS => OPUS_PREROLL_SECS,
@@ -100,6 +122,8 @@ impl SymphoniaDecoder {
             preroll_secs,
             at_end: false,
             read_any: false,
+            ts_offset_secs,
+            drop_frames: usize::from(pre_skip),
         })
     }
 
@@ -135,7 +159,7 @@ impl SymphoniaDecoder {
         } else {
             0.0
         };
-        let from = (secs - preroll).max(0.0);
+        let from = (secs - preroll).max(0.0) + self.ts_offset_secs;
         let time = Time::try_from_secs_f64(from).ok_or("seek position out of range")?;
         match self.format.seek(
             SeekMode::Accurate,
@@ -152,6 +176,7 @@ impl SymphoniaDecoder {
             Err(e) => return Err(e.to_string()),
         }
         self.at_end = false;
+        self.drop_frames = 0;
         self.decoder.reset();
         // Each packet is placed by its timestamp, so a codec that yields
         // nothing for its first packet after a reset still starts on time.
@@ -192,12 +217,18 @@ impl SymphoniaDecoder {
             buf.copy_to_slice_interleaved(self.scratch.as_mut_slice());
             let skip = match (self.target_secs, self.time_base) {
                 (Some(target), Some(tb)) => {
-                    // The decoded frames end where the packet's valid frames end.
-                    let end = tb
-                        .calc_time_saturating(packet.pts.saturating_add(packet.dur))
-                        .as_secs_f64();
                     let rate = f64::from(self.sample_rate.max(1));
-                    let start = end - frames as f64 / rate;
+                    let secs = |ts| tb.calc_time_saturating(ts).as_secs_f64() - self.ts_offset_secs;
+                    // The decoded frames end where the packet's valid frames
+                    // end; a container that gives no duration (Matroska
+                    // blocks) places them from the packet's start instead.
+                    let (start, end) = if packet.dur.get() > 0 {
+                        let end = secs(packet.pts.saturating_add(packet.dur));
+                        (end - frames as f64 / rate, end)
+                    } else {
+                        let start = secs(packet.pts);
+                        (start, start + frames as f64 / rate)
+                    };
                     if end > target {
                         self.target_secs = None;
                     }
@@ -206,6 +237,8 @@ impl SymphoniaDecoder {
                 }
                 _ => 0,
             };
+            let skip = skip.max(self.drop_frames.min(frames));
+            self.drop_frames = self.drop_frames.saturating_sub(frames);
             for frame in self.scratch.chunks_exact(channels).skip(skip) {
                 let (l, r) = downmix(frame);
                 out.push(l);

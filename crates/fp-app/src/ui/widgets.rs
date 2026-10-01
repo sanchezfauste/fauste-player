@@ -525,7 +525,7 @@ pub fn vu(
         }
         let hold = reading.hold_db.get(ch).copied().unwrap_or(-120.0);
         let hold_y = y_of(hold);
-        if c.peak_hold_secs > 0.0 && hold_y < bars_bottom && hold_y <= level {
+        if c.peak_hold_in_use() && hold_y < bars_bottom && hold_y <= level {
             painter.rect_filled(
                 Rect::from_x_y_ranges(x, hold_y..=(hold_y + 2.0).min(bars_bottom)),
                 0.0,
@@ -533,18 +533,14 @@ pub fn vu(
             );
         }
     }
-    // The scale: a reference line across both bars for every label (the
-    // alignment level heavier), nothing between the channels.
+    // The scale: a faint reference line across both bars for every label,
+    // nothing between the channels; the alignment level adds a notch at
+    // the outer edge of each bar, so no bright bar crosses the signal.
     for m in &l.lines {
-        let (width, colour) = if m.alignment {
-            (ALIGNMENT_LINE_WIDTH, theme::NEUTRAL_300)
-        } else {
-            (1.0, theme::NEUTRAL_400.gamma_multiply(REFERENCE_LINE_ALPHA))
-        };
         painter.rect_filled(
-            Rect::from_x_y_ranges(l.lines_x, m.y - width / 2.0..=m.y + width / 2.0),
+            Rect::from_x_y_ranges(l.lines_x, m.y - 0.5..=m.y + 0.5),
             0.0,
-            colour,
+            theme::NEUTRAL_400.gamma_multiply(REFERENCE_LINE_ALPHA),
         );
         painter.text(
             pos2(l.labels_right, m.label_y),
@@ -553,6 +549,9 @@ pub fn vu(
             FontId::monospace(LABEL_FONT_SIZE),
             theme::NEUTRAL_400,
         );
+    }
+    for notch in l.alignment_notches {
+        painter.rect_filled(notch, 0.0, theme::NEUTRAL_400);
     }
     if let (Some((text, on_target)), Some(r)) = (line, l.loudness) {
         painter.text(
@@ -587,8 +586,10 @@ const LOUDNESS_LINE_HEIGHT: f32 = 12.0;
 const LABEL_ROW: f32 = 10.0;
 /// Two levels closer than this (dB) are the same mark.
 const SAME_MARK_DB: f32 = 0.05;
-/// Thickness of the alignment line; the other lines are 1 px.
+/// Height of the alignment notches.
 const ALIGNMENT_LINE_WIDTH: f32 = 2.0;
+/// Width of each alignment notch, at the outer edge of its bar.
+const ALIGNMENT_NOTCH: f32 = 3.0;
 
 /// One labelled mark of the meter's scale (see [`meter_layout`]).
 #[derive(Debug, Clone, PartialEq)]
@@ -609,6 +610,8 @@ pub struct MeterLayout {
     pub loudness: Option<Rect>,
     pub lines_x: egui::Rangef,
     pub lines: Vec<MeterLine>,
+    /// The alignment level: a short notch at the outer edge of each bar.
+    pub alignment_notches: [Rect; 2],
 }
 
 /// The label of the scale mark at `db` dBFS, in the chosen meter's own
@@ -705,6 +708,13 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
             lines.push(candidate);
         }
     }
+    let notch = |x: f32| {
+        Rect::from_x_y_ranges(
+            x..=x + ALIGNMENT_NOTCH,
+            alignment.y - ALIGNMENT_LINE_WIDTH / 2.0..=alignment.y + ALIGNMENT_LINE_WIDTH / 2.0,
+        )
+    };
+    let alignment_notches = [notch(bars_left), notch(bars_right - ALIGNMENT_NOTCH)];
     lines.push(alignment);
     lines.sort_by(|a, b| a.label_y.total_cmp(&b.label_y));
     MeterLayout {
@@ -715,6 +725,7 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
             .then(|| Rect::from_x_y_ranges(bars_left..=bars_right, bottom..=rect.bottom())),
         lines_x: egui::Rangef::new(bars_left, bars_right),
         lines,
+        alignment_notches,
     }
 }
 

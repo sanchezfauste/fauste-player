@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-exclude = ["fuzz"]
+exclude = ["fuzz", "vendor"]
 
 [workspace.package]
 version = "0.3.1"
@@ -79,3 +79,10 @@ panic = "unwind"
 
 [profile.release]
 panic = "unwind"
+
+# `opus-decoder` 0.1.1 computes its CELT FFT as an O(n²) DFT: 5.5 ms per
+# 20 ms packet. The vendored copy replaces it with a mixed-radix FFT, still
+# without `unsafe` (see vendor/opus-decoder/VENDORED.md).
+[patch.crates-io]
+opus-decoder = { path = "vendor/opus-decoder" }
+

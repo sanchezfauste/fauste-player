@@ -86,7 +86,7 @@ The file path is never exposed.
 | `GET /playlists/{id}` | Playlist |
 | `GET /tracks/{id}` | Track |
 | `GET /tracks/{id}/cover` | The cover thumbnail, `image/png` |
-| `GET /tracks/{id}/peaks` | `{bucket_secs, full_scale: 32767, peaks: [[min, max, rms], …]}` |
+| `GET /tracks/{id}/peaks[?buckets=n]` | `{bucket_secs, full_scale: 32767, peaks: [[min, max, rms], …]}`; with `buckets`, at most `n` buckets, each merging a whole group (lowest min, highest max, RMS of the RMS): a 4 h recording has 1.44 million buckets of 10 ms |
 | `GET /cartwall` | Cartwall |
 | `GET /events` | The event stream (see [Events](#events-sse)) |
 
@@ -125,7 +125,9 @@ or whose cache entry is gone, answers `404 not_found`.
 
 Editing reuses tracks already loaded: an inserted entry or a cart refers
 to the same library track, with its markers and analysis
-(`InsertTracks`, `AssignCartTrack`). Files cannot be added remotely.
+(`InsertTracks`, `EditCart`). Files cannot be added remotely. A page or
+cart edit is a single command, so a full queue (`503`) never leaves it
+half applied.
 
 | Method and path | Body | Effect |
 |---|---|---|
@@ -134,7 +136,7 @@ to the same library track, with its markers and analysis
 | `DELETE /playlists/{id}` | — | Delete it (refused while it is on air) |
 | `POST /playlists/{id}/entries` | `{"track": id, "index": n}` | Insert a loaded track; an index past the end is the end |
 | `DELETE /entries/{id}` | — | Remove an entry (refused while on air) |
-| `POST /entries/{id}/move` | `{"playlist": id, "index": n}` | Move it, also to another playlist |
+| `POST /entries/{id}/move` | `{"playlist": id, "index": n}` | Move it, also to another playlist (allowed while on air: only removal is refused, rule 13) |
 | `POST /entries/{id}/duplicate` | — | Duplicate it |
 | `POST /cartwall/pages` | `{"name"}` | Create a cart page |
 | `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | Rename or resize it, within `limits.max_cart_rows` and `limits.max_cart_cols` |
@@ -228,7 +230,10 @@ packet is dropped with a log line, at most one per source per second.
 
 A new subscriber gets every address once, then only values that change.
 Times follow `events.position_interval_ms`. A change in the player count or
-the page shown sends everything again. A subscription ends after
+the page shown sends everything again. An address that no longer exists
+(a removed player, a cart beyond a smaller grid) is sent its empty value
+once (`""`, `0`, `0.0`; `-1` for an entry id) so a surface does not keep
+showing it. A subscription ends after
 `osc.subscription_ttl_secs` unless the client subscribes again, and at most
 `osc.max_subscribers` are kept.
 
@@ -268,8 +273,9 @@ Errors carry `{"error": code, "message": text}`.
 - **CORS.** Preflights from listed origins are answered for `GET`, `POST`,
   `PUT`, `PATCH` and `DELETE`, with the `Authorization` and `Content-Type`
   headers.
-- **Limits.** Request timeout, body size, and 64 requests in flight (the
-  rest wait their turn).
+- **Limits.** Request timeout, body size, and 64 requests in flight
+  across the whole server (the rest wait their turn; an open event stream
+  does not count).
 - **Logging.** A refused request is logged at most once per second per
   source address.
 - There is no TLS. Beyond a trusted network, a reverse proxy terminates
@@ -331,6 +337,8 @@ configuration (see [Persistence and configuration](persistence.md)):
   listens. SSE streams and the OSC socket read that channel.
 - A server whose address could not be bound (in use, no permission) is
   tried again every 2 s, so a port freed later is taken without a restart.
+  The failure is logged once, again when its reason changes, and every
+  5 minutes while it lasts (`BIND_LOG_EVERY`).
 - Settings → Remote (`ui/settings/remote.rs`) edits `config.remote` through
   `UpdateConfig`, and reads each server's state from
   `RemoteHandle::status_cell`, an `ArcSwap` the remote thread publishes.

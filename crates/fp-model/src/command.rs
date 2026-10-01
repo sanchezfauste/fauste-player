@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::cartwall::{CartEdit, CartPageImport};
+use crate::cartwall::{CartEdit, CartFileChange, CartPageImport};
 use crate::config::Config;
 use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{ColumnWidths, PlayMode};
@@ -113,6 +113,21 @@ pub enum Command {
         page: CartPageId,
         index: usize,
         edit: CartEdit,
+    },
+    /// Renames and/or resizes a page as one change: refused whole (C11).
+    EditCartPage {
+        page: CartPageId,
+        name: Option<String>,
+        /// Rows and columns.
+        grid: Option<(u16, u16)>,
+    },
+    /// Edits a cart and its file as one change: refused whole (C11); a new
+    /// file stops the cart first (C8).
+    EditCart {
+        page: CartPageId,
+        index: usize,
+        edit: CartEdit,
+        file: CartFileChange,
     },
     /// Gives a cart a file (a new library track). Stops it if playing (C8).
     AssignCartFile {

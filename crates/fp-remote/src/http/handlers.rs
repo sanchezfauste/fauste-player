@@ -1,7 +1,7 @@
 //! One handler per route of remote control spec §3.2–3.3.
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, RawQuery, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use fp_model::{
@@ -104,15 +104,38 @@ pub async fn cover(State(ctx): State<Ctx>, Path(raw): Path<String>) -> Reply {
     Ok(([(header::CONTENT_TYPE, "image/png")], png).into_response())
 }
 
-pub async fn peaks(State(ctx): State<Ctx>, Path(raw): Path<String>) -> Reply {
+/// The waveform as sent: serialised straight from the buckets, never as a
+/// `serde_json::Value` tree (a 4 h recording has 1.44 million of them).
+#[derive(serde::Serialize)]
+struct PeaksDto {
+    bucket_secs: f64,
+    full_scale: i16,
+    peaks: Vec<[i16; 3]>,
+}
+
+pub async fn peaks(
+    State(ctx): State<Ctx>,
+    Path(raw): Path<String>,
+    RawQuery(query): RawQuery,
+) -> Reply {
     let t = analysed(&ctx, &raw)?;
+    let max = match query.as_deref().and_then(|q| super::param(q, "buckets")) {
+        Some(n) => n
+            .parse::<usize>()
+            .map_err(|_| ApiError::BadRequest("buckets must be a whole number".to_owned()))?,
+        None => 0,
+    };
     let control = ctx.control.clone();
-    let w = tokio::task::spawn_blocking(move || control.peaks(t))
+    let w = tokio::task::spawn_blocking(move || control.peaks(t).map(|w| w.reduced(max)))
         .await
         .ok()
         .flatten()
         .ok_or(ApiError::NotFound)?;
-    ok(json!({ "bucket_secs": w.bucket_secs, "full_scale": i16::MAX, "peaks": w.peaks }))
+    ok(PeaksDto {
+        bucket_secs: w.bucket_secs,
+        full_scale: i16::MAX,
+        peaks: w.peaks,
+    })
 }
 
 pub async fn player_action(

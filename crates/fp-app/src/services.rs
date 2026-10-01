@@ -72,6 +72,25 @@ impl MediaCache {
 pub enum ServiceRequest {
     /// Analyse every track again (manual markers are kept by the model).
     ReanalyseAll,
+    /// Analyse the tracks an earlier version analysed (`outdated_tracks`).
+    AnalyseOutdated,
+}
+
+/// Whether `track` was analysed by an earlier version: before formats were
+/// recorded (Phase 4), or under other marker rules. A track whose file
+/// cannot be read is left out: it cannot be analysed again, and counting it
+/// would bring the start-up notice back at every start.
+pub fn outdated(track: &fp_model::Track) -> bool {
+    track.analyzed
+        && track.file_state.is_playable()
+        && (track.format.is_none() || track.analysis_version < fp_analysis::cache::ANALYSIS_VERSION)
+}
+
+/// How many tracks an earlier version analysed. They keep that analysis,
+/// still usable, until the operator asks for a new one: re-analysing a
+/// library takes the processor for a while on an on-air machine.
+pub fn outdated_tracks(state: &AppState) -> usize {
+    state.library.iter().filter(|t| outdated(t)).count()
 }
 
 pub struct Services {
@@ -89,6 +108,8 @@ pub struct Services {
     failed: HashSet<TrackId>,
     /// Tracks to analyse again even if already analysed.
     forced: HashSet<TrackId>,
+    /// The operator asked for the outdated tracks to be analysed again.
+    analyse_outdated: bool,
     /// Tracks whose result was lost to a panic once already: a second loss
     /// gives up on them (as failed) instead of retrying forever.
     retried: HashSet<TrackId>,
@@ -126,6 +147,7 @@ impl Services {
             done: HashSet::new(),
             failed: HashSet::new(),
             forced: HashSet::new(),
+            analyse_outdated: false,
             retried: HashSet::new(),
             seen_analyzed: HashSet::new(),
             settings: None,
@@ -200,6 +222,7 @@ impl Services {
         while let Ok(request) = self.requests.try_recv() {
             match request {
                 ServiceRequest::ReanalyseAll => self.restart_analysis(state),
+                ServiceRequest::AnalyseOutdated => self.analyse_outdated = true,
             }
         }
         self.follow_settings(state);
@@ -320,14 +343,11 @@ impl Services {
             if self.in_flight.contains(&id) {
                 continue;
             }
-            // Tracks analysed before formats were recorded (Phase 4), or by
-            // an older analysis version (other marker rules), are analysed
-            // again, once.
-            let outdated = track.analyzed
-                && (track.format.is_none()
-                    || track.analysis_version < fp_analysis::cache::ANALYSIS_VERSION);
+            // Tracks an earlier version analysed are analysed again, once,
+            // when the operator asks; the ones on screen are anyway (`show`).
+            let stale = self.analyse_outdated && outdated(track);
             let analyse = self.forced.contains(&id)
-                || ((!track.analyzed || outdated)
+                || ((!track.analyzed || stale)
                     && !self.done.contains(&id)
                     && !self.failed.contains(&id));
             let show =

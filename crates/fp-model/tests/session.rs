@@ -250,3 +250,49 @@ fn broken_column_fractions_load_as_the_default_layout() {
         assert_eq!(s.columns, fp_model::ColumnWidths::default());
     }
 }
+
+/// The `from_secs` the restored player `p` is loaded at.
+fn loaded_at(actions: &[EngineAction], p: fp_model::PlayerId) -> f64 {
+    actions
+        .iter()
+        .find_map(|a| match a {
+            EngineAction::LoadPaused { player, request } if *player == p => Some(request.from_secs),
+            _ => None,
+        })
+        .unwrap()
+}
+
+/// Crash recovery: a position at or past the cue-out would end the track
+/// the moment Play resumes it (stopped at once in Single, the next track
+/// at once in Continuous). It comes back at the cue-in instead.
+#[test]
+fn a_position_restored_at_the_end_comes_back_at_the_cue_in() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    let track = state.playlists.entry(e[0]).unwrap().track;
+    for (kind, secs) in [
+        (fp_model::MarkerKind::CueIn, 0.5),
+        (fp_model::MarkerKind::CueOut, 179.0),
+    ] {
+        apply(
+            &mut state,
+            Command::SetMarker {
+                track,
+                kind,
+                secs: Some(secs),
+            },
+        )
+        .unwrap();
+    }
+    apply(&mut state, Command::Play(p)).unwrap();
+    for (saved, restored) in [(179.0, 0.5), (240.0, 0.5), (178.9, 178.9)] {
+        let sessions = state.sessions(|_| saved);
+        let (restored_state, actions) = AppState::restore(parts(&state), &sessions, "Main");
+        assert_eq!(loaded_at(&actions, p), restored, "saved at {saved}");
+        assert_eq!(
+            restored_state.player(p).unwrap().transport,
+            Transport::Paused,
+            "nothing goes on air by itself"
+        );
+    }
+}

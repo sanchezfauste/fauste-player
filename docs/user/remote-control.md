@@ -10,7 +10,10 @@ station's automation or a control surface can use them. It is
 Open **Settings → Remote** and tick **Allow remote control over HTTP**
 (or **Allow OSC control**). The line under each switch says whether the
 server is listening, and where, or why it did not start. Changes apply at
-once; there is no need to restart.
+once; there is no need to restart. A text field (an address, the token, a
+list) applies when you leave it, open another section or close Settings;
+a value that is not valid yet keeps the one in use, and Esc cancels what
+you typed.
 
 You can also edit `config.json` while Fauste Player is closed (see
 [Data and backups](data-and-backups.md) for where it is). Inside the
@@ -118,7 +121,9 @@ in the page shown.
 
 A surface that wants to show the state (lights, names, countdowns)
 subscribes, and then receives every value once and afterwards only what
-changes. It must subscribe again within a minute (`subscription_ttl_secs`)
+changes. When a player or a cart button goes away (fewer players, a
+smaller page), its addresses receive an empty value once, so the surface
+clears them. It must subscribe again within a minute (`subscription_ttl_secs`)
 to keep receiving:
 
     oscdump 9000 &

@@ -11,6 +11,7 @@ pub mod events;
 pub mod http;
 pub mod osc;
 mod osc_server;
+pub mod repeat_log;
 pub mod server;
 pub mod throttle;
 

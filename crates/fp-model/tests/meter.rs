@@ -65,3 +65,80 @@ fn k_system_meters_are_presets_with_their_reference() {
     }
     assert_eq!(MeterBallistics::DigitalPeak.k_reference_dbfs(), None);
 }
+
+/// Meters spec M3: each meter type uses the settings its standard defines.
+#[test]
+fn each_meter_type_uses_the_settings_its_standard_defines() {
+    use fp_model::{MeterBallistics as B, MeterSettings as S};
+    let digital = S {
+        custom_ballistics: false,
+        floor: true,
+        peak_hold: true,
+        alignment: true,
+        zones: true,
+        true_peak: true,
+    };
+    assert_eq!(B::DigitalPeak.settings(), digital);
+    assert_eq!(
+        B::Custom.settings(),
+        S {
+            custom_ballistics: true,
+            ..digital
+        }
+    );
+    // Programme meters and the VU: a fixed scale and red zone, no hold,
+    // and a reading defined on the sampled signal.
+    let programme = S {
+        custom_ballistics: false,
+        floor: false,
+        peak_hold: false,
+        alignment: true,
+        zones: false,
+        true_peak: false,
+    };
+    for b in [B::EbuPpm, B::DinPpm, B::Vu] {
+        assert_eq!(b.settings(), programme, "{b:?}");
+    }
+    // K-System: its 0 is fixed by the type; the peak section holds and can
+    // read true peak.
+    let k = S {
+        custom_ballistics: false,
+        floor: false,
+        peak_hold: true,
+        alignment: false,
+        zones: false,
+        true_peak: true,
+    };
+    for b in [B::K20, B::K14, B::K12] {
+        assert_eq!(b.settings(), k, "{b:?}");
+    }
+}
+
+/// True peak reaches the meter only where the type reads peaks.
+#[test]
+fn true_peak_applies_only_to_peak_reading_meters() {
+    let mut m = fp_model::MeterConfig {
+        true_peak: true,
+        ..fp_model::MeterConfig::default()
+    };
+    assert!(m.true_peak_in_use());
+    m.ballistics = MeterBallistics::Vu;
+    assert!(!m.true_peak_in_use());
+    m.ballistics = MeterBallistics::K14;
+    assert!(m.true_peak_in_use());
+    m.true_peak = false;
+    assert!(!m.true_peak_in_use());
+}
+
+/// The hold is drawn only where the type has one and it is on.
+#[test]
+fn peak_hold_applies_only_to_meters_that_have_one() {
+    let mut m = fp_model::MeterConfig::default();
+    assert!(m.peak_hold_in_use());
+    m.ballistics = MeterBallistics::EbuPpm;
+    assert!(!m.peak_hold_in_use());
+    m.ballistics = MeterBallistics::K20;
+    assert!(m.peak_hold_in_use());
+    m.peak_hold_secs = 0.0;
+    assert!(!m.peak_hold_in_use());
+}

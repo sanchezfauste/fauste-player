@@ -277,3 +277,67 @@ fn deeply_nested_arrays_are_refused() {
     }
     assert!(on_small_stack(move || messages(&packet).is_err()));
 }
+
+#[test]
+fn an_address_that_disappears_is_sent_an_empty_value_once() {
+    let mut subs = Subscribers::new(4, Duration::from_secs(10));
+    let to: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+    subs.subscribe(to, Instant::now());
+    let all = vec![
+        ("/a".to_owned(), OscType::String("x".into())),
+        ("/b".to_owned(), OscType::Float(0.5)),
+        ("/c".to_owned(), OscType::Int(3)),
+        ("/d".to_owned(), OscType::Bool(true)),
+        ("/e".to_owned(), OscType::Long(7)),
+    ];
+    subs.changes(&all);
+    let only_a = vec![("/a".to_owned(), OscType::String("x".into()))];
+    let out = subs.changes(&only_a);
+    let mut got: Vec<(String, Vec<OscType>)> = out[0]
+        .1
+        .iter()
+        .map(|m| (m.addr.clone(), m.args.clone()))
+        .collect();
+    got.sort_by(|x, y| x.0.cmp(&y.0));
+    assert_eq!(
+        got,
+        vec![
+            ("/b".into(), vec![OscType::Float(0.0)]),
+            ("/c".into(), vec![OscType::Int(0)]),
+            ("/d".into(), vec![OscType::Bool(false)]),
+            // An entry id: -1 is "none", as `next/entry` sends it.
+            ("/e".into(), vec![OscType::Long(-1)]),
+        ]
+    );
+    assert!(
+        subs.changes(&only_a).is_empty(),
+        "cleared once, then forgotten"
+    );
+}
+
+#[test]
+fn a_reset_still_clears_what_disappeared() {
+    let mut subs = Subscribers::new(4, Duration::from_secs(10));
+    let to: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+    subs.subscribe(to, Instant::now());
+    subs.changes(&[
+        ("/a".to_owned(), OscType::Int(1)),
+        ("/b".to_owned(), OscType::Int(2)),
+    ]);
+    subs.reset();
+    let out = subs.changes(&[("/a".to_owned(), OscType::Int(1))]);
+    let mut got: Vec<(String, Vec<OscType>)> = out[0]
+        .1
+        .iter()
+        .map(|m| (m.addr.clone(), m.args.clone()))
+        .collect();
+    got.sort_by(|x, y| x.0.cmp(&y.0));
+    assert_eq!(
+        got,
+        vec![
+            ("/a".into(), vec![OscType::Int(1)]),
+            ("/b".into(), vec![OscType::Int(0)]),
+        ],
+        "a full dump, plus the cleared address"
+    );
+}

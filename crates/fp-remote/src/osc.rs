@@ -2,7 +2,7 @@
 //! operations, the values sent to subscribers, and what each subscriber was
 //! last sent. Pure; `osc_server` does the I/O.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
@@ -293,6 +293,24 @@ struct Subscriber {
     expires: Instant,
     /// The last value sent to it, per address.
     sent: HashMap<String, OscType>,
+    /// Send every value on the next `changes`, changed or not.
+    resend: bool,
+}
+
+/// The empty value of `value`'s type, sent once to an address that no
+/// longer exists (a removed player, a cart beyond a smaller grid) so a
+/// surface does not keep showing its last value. A `Long` is an entry id,
+/// whose "none" is -1.
+pub fn cleared(value: &OscType) -> OscType {
+    match value {
+        OscType::String(_) => OscType::String(String::new()),
+        OscType::Float(_) => OscType::Float(0.0),
+        OscType::Double(_) => OscType::Double(0.0),
+        OscType::Int(_) => OscType::Int(0),
+        OscType::Long(_) => OscType::Long(-1),
+        OscType::Bool(_) => OscType::Bool(false),
+        _ => OscType::Nil,
+    }
 }
 
 /// OSC subscribers and what each was last sent (spec §5.3).
@@ -325,6 +343,7 @@ impl Subscribers {
             Subscriber {
                 expires: now + self.ttl,
                 sent: HashMap::new(),
+                resend: false,
             },
         );
         true
@@ -338,10 +357,11 @@ impl Subscribers {
         self.list.retain(|_, s| s.expires > now);
     }
 
-    /// Forgets what was sent, so the next `changes` is a full dump.
+    /// Makes the next `changes` a full dump. What was sent is kept, so
+    /// addresses that disappeared are still cleared.
     pub fn reset(&mut self) {
         for s in self.list.values_mut() {
-            s.sent.clear();
+            s.resend = true;
         }
     }
 
@@ -353,13 +373,31 @@ impl Subscribers {
         self.list.len()
     }
 
-    /// For each subscriber, the messages whose value it has not been sent.
+    /// For each subscriber, the messages whose value it has not been sent,
+    /// and the empty value of each address it was sent that no longer
+    /// exists.
     pub fn changes(&mut self, values: &[(String, OscType)]) -> Vec<(SocketAddr, Vec<OscMessage>)> {
+        let current: HashSet<&str> = values.iter().map(|(a, _)| a.as_str()).collect();
         let mut out = Vec::new();
         for (to, s) in &mut self.list {
             let mut messages = Vec::new();
+            let gone: Vec<String> = s
+                .sent
+                .keys()
+                .filter(|a| !current.contains(a.as_str()))
+                .cloned()
+                .collect();
+            for addr in gone {
+                if let Some(old) = s.sent.remove(&addr) {
+                    messages.push(OscMessage {
+                        addr,
+                        args: vec![cleared(&old)],
+                    });
+                }
+            }
+            let resend = std::mem::take(&mut s.resend);
             for (addr, value) in values {
-                if s.sent.get(addr) != Some(value) {
+                if resend || s.sent.get(addr) != Some(value) {
                     s.sent.insert(addr.clone(), value.clone());
                     messages.push(OscMessage {
                         addr: addr.clone(),

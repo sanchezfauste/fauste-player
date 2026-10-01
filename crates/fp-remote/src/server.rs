@@ -16,6 +16,7 @@ use tokio::sync::{broadcast, oneshot, watch};
 use crate::control::RemoteControl;
 use crate::events::{self, Envelope, Event};
 use crate::http::{Ctx, EVENT_BUFFER, router};
+use crate::repeat_log::RepeatLog;
 
 /// How often the configuration in the snapshot is looked at.
 const CONFIG_POLL: Duration = Duration::from_millis(250);
@@ -23,6 +24,9 @@ const CONFIG_POLL: Duration = Duration::from_millis(250);
 const BIND_RETRY: Duration = Duration::from_secs(2);
 /// How long open requests may take to finish when the server stops.
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
+/// How often a bind failure that persists is logged again; the first
+/// failure, and a change of reason, are logged at once.
+pub const BIND_LOG_EVERY: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerError {
@@ -153,6 +157,8 @@ async fn supervise(
     let mut osc: Option<Running> = None;
     let mut current = RemoteStatus::default();
     let mut tried = tokio::time::Instant::now();
+    let mut http_log = RepeatLog::new(BIND_LOG_EVERY);
+    let mut osc_log = RepeatLog::new(BIND_LOG_EVERY);
     loop {
         let remote = control.model().config.remote.clone();
         // A port that was busy may have been freed: try it again.
@@ -169,7 +175,7 @@ async fn supervise(
             if let Some(server) = running.take() {
                 server.stop().await;
             }
-            let (http, server) = start(&control, &remote.http, &events).await;
+            let (http, server) = start(&control, &remote.http, &events, &mut http_log).await;
             current.http = http;
             status.store(Arc::new(current.clone()));
             running = server;
@@ -179,7 +185,7 @@ async fn supervise(
             if let Some(server) = osc.take() {
                 server.stop().await;
             }
-            let (state, server) = start_osc(&control, &remote.osc, &events).await;
+            let (state, server) = start_osc(&control, &remote.osc, &events, &mut osc_log).await;
             current.osc = state;
             status.store(Arc::new(current.clone()));
             osc = server;
@@ -242,8 +248,10 @@ async fn start(
     control: &Arc<dyn RemoteControl>,
     config: &HttpRemoteConfig,
     events: &broadcast::Sender<Arc<Envelope>>,
+    log: &mut RepeatLog,
 ) -> (ServerStatus, Option<Running>) {
     if !config.enabled {
+        log.clear();
         return (ServerStatus::Off, None);
     }
     let Some(ip) = config.bind_addr() else {
@@ -256,10 +264,13 @@ async fn start(
     let listener = match TcpListener::bind((ip, config.port)).await {
         Ok(l) => l,
         Err(e) => {
-            tracing::warn!(bind = %ip, port = config.port, error = %e, "remote HTTP could not listen");
+            if log.should_log(&e.to_string(), std::time::Instant::now()) {
+                tracing::warn!(bind = %ip, port = config.port, error = %e, "remote HTTP could not listen");
+            }
             return (ServerStatus::Error(ServerError::Bind(e.to_string())), None);
         }
     };
+    log.clear();
     let addr = listener
         .local_addr()
         .unwrap_or_else(|_| SocketAddr::new(ip, config.port));
@@ -295,8 +306,10 @@ async fn start_osc(
     control: &Arc<dyn RemoteControl>,
     config: &OscRemoteConfig,
     events: &broadcast::Sender<Arc<Envelope>>,
+    log: &mut RepeatLog,
 ) -> (ServerStatus, Option<Running>) {
     if !config.enabled {
+        log.clear();
         return (ServerStatus::Off, None);
     }
     let Some(ip) = config.bind_addr() else {
@@ -305,10 +318,13 @@ async fn start_osc(
     let socket = match UdpSocket::bind((ip, config.port)).await {
         Ok(s) => s,
         Err(e) => {
-            tracing::warn!(bind = %ip, port = config.port, error = %e, "remote OSC could not listen");
+            if log.should_log(&e.to_string(), std::time::Instant::now()) {
+                tracing::warn!(bind = %ip, port = config.port, error = %e, "remote OSC could not listen");
+            }
             return (ServerStatus::Error(ServerError::Bind(e.to_string())), None);
         }
     };
+    log.clear();
     let addr = socket
         .local_addr()
         .unwrap_or_else(|_| SocketAddr::new(ip, config.port));

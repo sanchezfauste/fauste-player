@@ -6,8 +6,8 @@
 
 use fp_model::volume::gain_from_fader;
 use fp_model::{
-    AppState, CartEdit, CartId, CartPageId, Command, EntryId, MarkerKind, ModelError, PlayMode,
-    PlayerId, PlaylistId, TrackId, Transport, command_available,
+    AppState, CartEdit, CartFileChange, CartId, CartPageId, Command, EntryId, MarkerKind,
+    ModelError, PlayMode, PlayerId, PlaylistId, TrackId, Transport, command_available,
 };
 
 /// One action of a remote client.
@@ -374,13 +374,8 @@ fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError>
             if new_name.is_none() && rows.is_none() && cols.is_none() {
                 return Err(ApiError::BadRequest("nothing to change".to_owned()));
             }
-            let mut out = Vec::new();
-            if let Some(n) = new_name {
-                out.push(Command::RenameCartPage {
-                    page: id,
-                    name: name(&n)?,
-                });
-            }
+            let new_name = new_name.map(|n| name(&n)).transpose()?;
+            let mut grid = None;
             if rows.is_some() || cols.is_some() {
                 let limits = &state.config.limits;
                 let rows = rows.unwrap_or(p.rows);
@@ -393,13 +388,14 @@ fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError>
                         limits.max_cart_rows, limits.max_cart_cols
                     )));
                 }
-                out.push(Command::ResizeCartPage {
-                    page: id,
-                    rows,
-                    cols,
-                });
+                grid = Some((rows, cols));
             }
-            out
+            // One command, so a full queue cannot leave the page half edited.
+            vec![Command::EditCartPage {
+                page: id,
+                name: new_name,
+                grid,
+            }]
         }
         Edit::DeleteCartPage(id) => {
             page(id)?;
@@ -412,26 +408,21 @@ fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError>
             track: wanted,
         } => {
             let cart = page(id)?.carts.get(index).ok_or(ApiError::NotFound)?;
-            let mut out = vec![Command::SetCart {
+            let file = match wanted {
+                Some(t) if cart.track != Some(t) => {
+                    track(t)?;
+                    CartFileChange::Track(t)
+                }
+                None if cart.track.is_some() => CartFileChange::Clear,
+                _ => CartFileChange::Keep,
+            };
+            // One command: the cart and its file change together (C11).
+            vec![Command::EditCart {
                 page: id,
                 index,
                 edit,
-            }];
-            match wanted {
-                Some(t) if cart.track != Some(t) => {
-                    track(t)?;
-                    out.push(Command::AssignCartTrack {
-                        page: id,
-                        index,
-                        track: t,
-                    });
-                }
-                None if cart.track.is_some() => {
-                    out.push(Command::ClearCartFile { page: id, index })
-                }
-                _ => {}
-            }
-            out
+                file,
+            }]
         }
         Edit::SetMarker {
             track: t,

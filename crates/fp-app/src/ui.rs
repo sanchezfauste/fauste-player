@@ -8,6 +8,7 @@ pub mod controller;
 pub mod files;
 pub mod format;
 pub mod icons;
+mod notice;
 mod player;
 pub mod playlist_files;
 mod settings;

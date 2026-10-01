@@ -177,7 +177,7 @@ A player has:
     - it shows elapsed cue time in blue;
     - it never affects the Main output.
 16. **Keyboard.** Keys `1`–`9` press Play on players 1–9 (shortcuts become remappable in Phase 2). `Delete`/`Backspace` removes the selected entry, subject to rule 13. `Esc` closes menus and dialogs.
-17. **Countdown** shows `-remaining` to `cue_out`, with tenths, and `elapsed / total` on the row under the transport. During the last `end_warning_secs` (default 10) the countdown turns red.
+17. **Countdown** shows `-remaining` to `cue_out`, with tenths, and `elapsed / total` on the row under the waveform. During the last `end_warning_secs` (default 10) the countdown turns red.
 18. **Intro indicator.**
     - Shown only if the track has a manual `intro_end`.
     - While `position < intro_end`, a blue "INTRO nn.n" badge counts down, and it blinks during the last 3 s.
@@ -371,7 +371,8 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
   - `postcard`-encoded file per track in the OS cache dir;
   - the key is a hash of (canonical path, size, mtime) plus the analysis version;
   - a corrupt cache entry is discarded and recomputed;
-  - entries of older analysis versions are removed by the analysis pool, off the start-up path.
+  - entries of older analysis versions are removed by the analysis pool, off the start-up path;
+  - tracks an earlier version analysed (an older `analysis_version`, or no format) keep that analysis until the operator asks: at start a notice gives their number with **Analyse now** and **Later**, and Settings → Analysis offers the same. Only tracks on screen, which need their waveform, are analysed at once. Re-analysing a library costs the processor for a while on an on-air machine.
 - **Playability before analysis.** A track can be played before its analysis finishes. Until then it has no waveform or segue start, and `cue_in = 0`, `cue_out = duration`. If analysis finishes while the track is current or next, its markers apply to scheduling that has not happened yet.
 
 Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opus, Matroska/WebM audio, WavPack, Monkey's Audio and DSD (DSF, DSDIFF). The extensions and decoders are in the [audio formats spec](2026-09-27-audio-formats-design.md) F1 (Phase 1 had symphonia's formats only).
@@ -395,7 +396,7 @@ Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opu
   5. `fsync` the directory (Unix).
 - **Load:** on parse error or failed validation, try `.bak1`…`.bakN` in order, show a non-blocking warning and log it. If everything fails, start with defaults and keep the corrupt files renamed `*.corrupt-<timestamp>`. **Never crash on bad data.**
 - **Autosave:** the conductor marks state dirty; saves are debounced by `tuning.save_debounce_ms` (default 1000 ms) and run on the background pool. `session.json` is refreshed at the same interval while any player plays.
-- **Crash recovery.** On startup, players restore their playlist, current, next and position, but always come up **Stopped/Paused**. Nothing goes on air by itself.
+- **Crash recovery.** On startup, players restore their playlist, current, next and position, but always come up **Stopped/Paused**. Nothing goes on air by itself. A saved position at or past the track's cue-out (known from analysis) is restored at its cue-in: resumed there, the track would end at once (Stop in Single mode, the next track in Continuous).
 - **Limits:** input files larger than `limits.max_state_file_bytes` (default 50 MB, JSON) or `limits.max_playlist_file_bytes` (default 10 MB, M3U/PLS) are rejected with a clear error.
 - **M3U/M3U8 and PLS:** Phase 2. A tolerant parser that ignores unknown lines, handles relative paths (resolved against the playlist's directory), non-UTF-8 paths and `#EXTINF`. It is fuzzed.
 
@@ -426,8 +427,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
   - **Transport:**
     - Play/NEXT button spanning 2 rows;
     - a 3×2 grid, 6 px gaps, all equal size: Previous, Stop, Pause on top; Restart, Fade stop, Stop-after-current below. Buttons whose action is unavailable (rule 26) are dimmed and inert, the Play button and the header's CUE included;
-    - big countdown with tenths;
-    - `elapsed / total` on a row under the transport, right-aligned.
+    - big countdown with tenths.
   - **Waveform:**
     - played/unplayed colours, intro/outro shading, dashed amber MIX marker, playhead;
     - drawn continuously, one column per pixel, as audio editors draw it: the peak envelope in the colour dimmed, and the RMS level of the same span as a solid body inside it. On a loud master the peaks fill the height but the body still shows the track's dynamics. Both are linear in amplitude and symmetric about the centre line; a column's peak is the largest of its buckets, its RMS the root of their mean square;
@@ -435,6 +435,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - hover time tooltip, click to seek; press-and-drag previews and seeks on release inside (outside or Esc cancels; Alt-drag edits markers);
     - wheel zoom around the pointer down to one bucket per pixel, Shift or sideways wheel pans, a "Full view" button while zoomed; the view follows the playhead unless moved within `ui.follow_current_grace_secs`, and resets on a new entry (feedback spec §3.3);
     - intro and outro badges per §3 (rules 18 and 19).
+  - `elapsed / total` on a row under the waveform, right-aligned.
   - **Playlist tabs:** reordering and dropping entries on a tab appends them.
   - **Track table:**
     - `egui_extras::TableBuilder` with resizable `#`, Title, Artist and Duration columns (resize handles padded away from labels); widths are stored per player as fractions of the table and laid out every frame, so the columns fill the table and keep their proportions on resize (`#` and Duration have content minimums, Title:Artist default 60:40);

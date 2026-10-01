@@ -5,7 +5,7 @@
 | File | Document | Content |
 |---|---|---|
 | `config/config.json` | `ConfigDoc` | `schema_version`, `config` |
-| `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers and the `analysis_version` of their automatic ones; an older version is analysed again), `playlists` (entries with `played_by`: the players that played each one, and `repeat` / `stop_after` when set), `ids`. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
+| `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers and the `analysis_version` of their automatic ones; an older version is analysed again when the operator asks), `playlists` (entries with `played_by`: the players that played each one, and `repeat` / `stop_after` when set), `ids`. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
 | `data/carts.json` | `CartsDoc` | `schema_version`, `pages[]` (id, name, rows, cols, `carts[]` with id, name, track, kind, looped, exclusive); cart files are tracks of the `playlists.json` library |
 | `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns, history: the entries the player left, oldest first — loaded leniently: an unparsable history is empty), `cartwall` (open, page shown) |
 

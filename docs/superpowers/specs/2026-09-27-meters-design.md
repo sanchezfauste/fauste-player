@@ -80,6 +80,16 @@
 | `loudness` | `ShortTerm` | `Off`, `Momentary`, `ShortTerm` | readout under the meter |
 | `loudness_target_lufs` | −23 | −36 … −10 | readout green within ±1 LU |
 
+**Used by** (`MeterBallistics::settings`): Settings shows, and the meter applies, only the fields its standard leaves open; the others keep their value for when the type is chosen again.
+
+| Type | `attack_ms`, `release_db_per_sec` | `floor_db` | `peak_hold_secs` | `reference_dbfs` | `warning_dbfs`, `danger_dbfs` | `true_peak` |
+|---|---|---|---|---|---|---|
+| `DigitalPeak` | – | ✓ | ✓ (IEC 60268-18 allows a hold) | ✓ | ✓ | ✓ |
+| `Custom` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `EbuPpm`, `DinPpm` | – | – (fixed scale) | – (no hold in IEC 60268-10) | ✓ (TEST, −9) | – (red from the permitted maximum) | – (quasi-peak of the sampled signal) |
+| `Vu` | – | – | – (a needle) | ✓ (0 VU) | – (red from 0 VU) | – (reads the average) |
+| `K20`, `K14`, `K12` | – | – | ✓ (peak section) | – (its own 0) | – | ✓ (peak section) |
+
 `Config::validate` keeps the zones ordered: floor < reference, and warning ≤ danger. Changes apply at once; `true_peak` reaches running buses through their flag.
 
 ## M4. Display
@@ -97,7 +107,7 @@
   | K-20, K-14, K-12 | +N (0 dBFS, the top), +4, 0, −4 … −24 every 4 dB, −30, −40, −50, −60 | 0 (−N dBFS) | linear in dB from the top to −24 over 80 % of the height; −24 to −60 over the rest. The K-System asks for 1 dB marks down to −24: at this meter's size, every 4 dB |
 
 - **Zones:** muted traffic-light colours (normal #7fb08a, warning #d9b45a, danger #d8646a). On the digital scale (digital peak, custom), green, yellow from `warning_dbfs`, red from `danger_dbfs`. The other scales use their own red region, which the configured levels could miss (a VU scale ends at −15 dBFS): VU red from 0 VU (its red arc); EBU and DIN red from the permitted maximum, 9 dB above alignment (EBU +9, DIN 0). The K-System: green below 0, amber from 0 to +4, red above.
-- **Alignment level:** a heavier, brighter 2 px line at `reference_dbfs` (the K-System's 0 for K meters), whether or not it is one of the scale's marks. It is labelled only where the scale names it (EBU TEST, K 0, 0 VU); the digital meter's −18 dBFS keeps the round labels around it.
+- **Alignment level:** two short notches (3 × 2 px, `NEUTRAL_400`) at the outer edges of the bars, over a faint 1 px reference line, at `reference_dbfs` (the K-System's 0 for K meters), whether or not it is one of the scale's marks. A bright line across the bars read as a fault in the signal. It is labelled only where the scale names it (EBU TEST, K 0, 0 VU); the digital meter's −18 dBFS keeps the round labels around it.
 - **Legibility:** lines stay inside the bars. Both ends of the scale are labelled first; then labels are kept top down while they are at least 10 px from every kept label, so they never overlap at the available height. A mark without a label gets no line.
 - **K-System bars show both sections:** the average (RMS) level is the solid body; the part up to the peak level is the same colour, dimmed. The other meters show one level, as their standard defines.
 - **Peak hold:** a two-pixel line at the hold level, in the colour of its zone.

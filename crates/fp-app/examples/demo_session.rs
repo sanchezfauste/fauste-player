@@ -1,6 +1,6 @@
 //! Writes a demo state under `FAUSTE_HOME`: four players and three
 //! playlists filled with the audio files of a folder, with the first
-//! players paused mid-track.
+//! players paused mid-track some way into their playlist.
 //!
 //! `FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music folder>`
 
@@ -66,7 +66,14 @@ fn main() -> ExitCode {
                 let _ = fp_model::apply(&mut state, Command::SetNext(*player, entry));
             }
         }
-        if n < 3 {
+        // Some way into the hour: player 1 on its 5th track, player 2 on
+        // its 3rd, player 3 on its 2nd (the played rows show dimmed);
+        // player 4 waits. Each stop leaves a played track behind.
+        let plays = [5, 3, 2].get(n).copied().unwrap_or(0);
+        for k in 0..plays {
+            if k > 0 {
+                let _ = fp_model::apply(&mut state, Command::Stop(*player));
+            }
             let _ = fp_model::apply(&mut state, Command::Play(*player));
         }
     }
@@ -114,7 +121,7 @@ fn main() -> ExitCode {
         .save_config(&state)
         .and_then(|()| store.save_playlists(&state))
         .and_then(|()| store.save_carts(&state))
-        .and_then(|()| store.save_session(&state, |p| 40.0 + f64::from(p.0 as u32 % 7) * 19.0));
+        .and_then(|()| store.save_session(&state, |p| 8.0 + f64::from(p.0 as u32 % 4) * 3.0));
     match saved {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

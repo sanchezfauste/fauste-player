@@ -154,6 +154,7 @@ hand: release-please writes it from the commits.
 | `docs/superpowers/specs` | The binding design spec |
 | `docs/superpowers/plans` | Implementation plans (one per step of a phase) |
 | `docs/user`, `docs/technical` | User and technical documentation. Keep them in sync with behaviour. |
+| `vendor/opus-decoder` | A patched copy of `opus-decoder` (a real FFT), used through `[patch.crates-io]`; excluded from the workspace. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
 | `.github/workflows` | CI, release-please, release builds and packages, commit checks |
 
@@ -188,6 +189,15 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
      `DISPLAY=:77 xdotool mousemove --window <id> <x> <y> click 1`;
   4. find the window with `DISPLAY=:77 xwininfo -name "Fauste Player"` and
      capture it with `DISPLAY=:77 import -window <id> shot.png`.
+
+  The README image (`docs/images/main-screen.png`) is 1920×1080, in English:
+  set `"ui": {"language": "en-US"}` inside `"config"`, resize the window
+  with `DISPLAY=:77 xdotool windowmove <id> 0 0 windowsize <id> 1920 1080`,
+  and build the scene with `examples/demo_session` (players some way into
+  their playlists) plus the API: Play on players 1 and 2, a seek to
+  mid-track, and one cart fired. Generated tones longer than 3 minutes,
+  named like music, stand in for real files (`ffmpeg` pink noise and a
+  sine, amplitude-modulated, through a limiter).
 
   On a GNOME Wayland desktop, `xdotool` clicks into XWayland windows need
   the "remote interaction" permission every session; Xvfb avoids that.

@@ -374,10 +374,34 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
                 }
             });
             if response.clicked() {
+                if st.section == Section::Remote && section != Section::Remote {
+                    remote::flush(scene, &mut st.remote);
+                }
                 st.section = section;
             }
         }
     });
+}
+
+/// A plain Settings button, as wide as its label; true when clicked.
+fn button(ui: &mut Ui, text: &str) -> bool {
+    let w = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), font(12.0), theme::TEXT)
+        .size()
+        .x
+        + 20.0;
+    widgets::tile(
+        ui,
+        vec2(w, 24.0),
+        text,
+        true,
+        TileStyle::plain(),
+        |p, r, c| {
+            p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(12.0), c);
+        },
+    )
+    .clicked()
 }
 
 fn heading(ui: &mut Ui, text: &str) {
@@ -1176,6 +1200,45 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
             let _ = services.try_send(ServiceRequest::ReanalyseAll);
         }
     });
+    // Tracks an earlier version analysed wait for the operator (the
+    // start-up notice offers the same).
+    let outdated = crate::services::outdated_tracks(scene.state);
+    let label = t.tr_args("settings-analyse-outdated", &[("count", outdated.into())]);
+    row(
+        ui,
+        &label,
+        Some(&t.tr("settings-hint-analyse-outdated")),
+        |ui| {
+            let width = ui
+                .painter()
+                .layout_no_wrap(label.clone(), font(12.0), theme::TEXT)
+                .size()
+                .x
+                + 36.0;
+            let enabled = deps.services.is_some() && outdated > 0;
+            if widgets::tile(
+                ui,
+                vec2(width, 30.0),
+                &label,
+                enabled,
+                TileStyle::plain(),
+                |p, r, c| {
+                    p.text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        format!("{} {label}", icon::ARROWS_CLOCKWISE),
+                        font(12.0),
+                        c,
+                    );
+                },
+            )
+            .clicked()
+                && let Some(services) = deps.services
+            {
+                let _ = services.try_send(ServiceRequest::AnalyseOutdated);
+            }
+        },
+    );
 }
 
 fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {

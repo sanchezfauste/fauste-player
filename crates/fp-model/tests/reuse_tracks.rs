@@ -87,3 +87,37 @@ fn a_cart_can_take_a_loaded_track() {
         .is_err()
     );
 }
+
+/// A track shared with a cart survives removing its playlist entry, and is
+/// forgotten once nothing uses it.
+#[test]
+fn removing_an_entry_keeps_a_track_a_cart_still_uses() {
+    let mut s = fixture(1);
+    let page = s.cartwall.pages[0].id;
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path: "/m/jingle.wav".into(),
+        },
+    )
+    .unwrap();
+    let t = s.cartwall.pages[0].carts[0].track.unwrap();
+    let list = s.playlists.first_id().unwrap();
+    apply(
+        &mut s,
+        Command::InsertTracks {
+            playlist: list,
+            index: 0,
+            tracks: vec![t],
+        },
+    )
+    .unwrap();
+    let entry = entries(&s)[0];
+    assert_eq!(s.playlists.entry(entry).unwrap().track, t);
+    apply(&mut s, Command::RemoveEntry(entry)).unwrap();
+    assert!(s.library.get(t).is_some(), "the cart still uses it");
+    apply(&mut s, Command::ClearCartFile { page, index: 0 }).unwrap();
+    assert!(s.library.get(t).is_none(), "forgotten once nothing uses it");
+}

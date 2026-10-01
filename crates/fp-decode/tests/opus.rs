@@ -271,3 +271,90 @@ fn opus_in_matroska_drops_its_codec_delay_like_ogg() {
         .unwrap();
     assert_eq!((lag, back), (0, 0), "Matroska starts {back} samples late");
 }
+
+/// Programme-like audio: two tones and a little noise.
+fn music(secs: f64) -> Vec<f32> {
+    stereo(secs, |t| {
+        let i = (t * RATE as f64) as u32;
+        let seed = i.wrapping_mul(2_654_435_761).rotate_left(13) ^ i;
+        let noise = f64::from(seed >> 8) / f64::from(1u32 << 24) - 0.5;
+        0.3 * (2.0 * PI * 220.0 * t).sin() + 0.2 * (2.0 * PI * 1_760.0 * t).sin() + 0.05 * noise
+    })
+}
+
+/// The same packets decoded by a reference decoder (byte-exact with libopus
+/// where the format allows) after the pre-skip: the output must match it.
+#[test]
+fn opus_decodes_like_the_reference_decoder() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = encode(dir.path(), "music.opus", &music(3.0));
+    let ours = decode_all(&path);
+    let mut reader = opus_pure::OggOpusReader::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let skip = usize::from(reader.head().pre_skip) * 2;
+    let mut reference_decoder = opus_pure::OpusDecoder::new(48_000, 2).unwrap();
+    let mut reference = Vec::new();
+    let mut pcm = vec![0f32; 5760 * 2];
+    while let Some(p) = reader.read_packet().unwrap() {
+        let n = reference_decoder.decode(&p.data, 5760, &mut pcm).unwrap();
+        reference.extend_from_slice(&pcm[..n * 2]);
+    }
+    // Ours drops the pre-skip; the reference's raw packets still hold it.
+    let reference = &reference[skip..];
+    let n = ours.len().min(reference.len());
+    assert!(n > 2 * 48_000 * 2, "{n}");
+    let worst = ours[..n]
+        .iter()
+        .zip(&reference[..n])
+        .map(|(a, b)| (a - b).abs())
+        .fold(0f32, f32::max);
+    // `opus-decoder` goes through 16-bit PCM: about 3e-5 apart.
+    assert!(worst < 1e-3, "worst difference {worst}");
+}
+
+/// Decoding keeps far ahead of real time, so a long Opus recording can be
+/// analysed and several can play at once (plan 4, item 15). The bound is
+/// loose for shared CI runners in a debug build (3.3× real time); the
+/// direct DFT took 4.7 s here, the fixed decoder runs far below it.
+#[test]
+fn opus_decodes_far_faster_than_real_time() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = encode(dir.path(), "long.opus", &music(10.0));
+    let t0 = std::time::Instant::now();
+    let out = decode_all(&path);
+    let took = t0.elapsed().as_secs_f64();
+    assert!(out.len() >= 9 * 48_000 * 2);
+    assert!(took < 3.0, "10 s of Opus took {took:.2} s to decode");
+}
+
+/// Where the loudest sample of `stereo`'s left channel is.
+fn loudest(stereo: &[f32]) -> usize {
+    left(stereo)
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+        .unwrap()
+        .0
+}
+
+/// The pre-skip (RFC 7845 §4.2) is dropped in Ogg and in Matroska: a click
+/// comes out where it went in, and the file is not longer than its source.
+#[test]
+fn the_pre_skip_is_dropped_so_audio_stays_in_place() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut pcm = vec![0f32; RATE * 2];
+    for i in 24_000..24_048 {
+        pcm[i * 2] = 0.8;
+        pcm[i * 2 + 1] = 0.8;
+    }
+    let ogg = decode_all(&encode(dir.path(), "click.opus", &pcm));
+    let (packets, pre_skip) = packets(&pcm);
+    let mka = decode_all(&matroska(dir.path(), "click.mka", &packets, pre_skip));
+    for (name, out) in [("ogg", &ogg), ("mka", &mka)] {
+        let at = loudest(out);
+        assert!(
+            (24_000..24_048).contains(&at),
+            "{name}: the click is at {at}"
+        );
+        assert!(out.len() / 2 <= RATE, "{name}: {} frames", out.len() / 2);
+    }
+}

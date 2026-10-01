@@ -59,6 +59,15 @@ pub struct CartEdit {
     pub exclusive: bool,
 }
 
+/// What an `EditCart` does to the cart's file (phase 2 spec C11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CartFileChange {
+    Keep,
+    /// A track already in the library; the same track is a `Keep`.
+    Track(TrackId),
+    Clear,
+}
+
 /// A tab of carts laid out as `rows × cols`, row-major.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CartPage {
