@@ -1,0 +1,64 @@
+//! Settings that apply only when the application starts (feedback 2 spec
+//! O4). The audio engine, its devices, the resource limits and the engine
+//! tuning are built once at start-up; every other setting is read while
+//! running.
+
+use std::collections::{BTreeMap, HashSet};
+
+use crate::config::{Config, OutputsConfig, Route};
+use crate::ids::PlayerId;
+
+/// Why a restart is needed, in the order the notice lists them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RestartReason {
+    AudioSystem,
+    SampleRate,
+    BufferSize,
+    /// A player's or the cartwall's Main or Cue output.
+    Routes,
+    BitPerfect,
+    Limits,
+    Tuning,
+}
+
+type Pair<'a> = (Option<&'a Route>, Option<&'a Route>);
+
+/// Each player's routes by player, without empty entries.
+fn player_routes(outputs: &OutputsConfig) -> BTreeMap<PlayerId, Pair<'_>> {
+    outputs
+        .routes
+        .iter()
+        .filter(|r| r.main.is_some() || r.cue.is_some())
+        .map(|r| (r.player, (r.main.as_ref(), r.cue.as_ref())))
+        .collect()
+}
+
+/// What changed between the configuration the application started with
+/// and the current one that only a restart applies.
+pub fn restart_pending(started: &Config, current: &Config) -> Vec<RestartReason> {
+    let (a, b) = (&started.outputs, &current.outputs);
+    let mut reasons = Vec::new();
+    if a.backend != b.backend {
+        reasons.push(RestartReason::AudioSystem);
+    }
+    if a.sample_rate != b.sample_rate {
+        reasons.push(RestartReason::SampleRate);
+    }
+    if a.buffer_frames != b.buffer_frames {
+        reasons.push(RestartReason::BufferSize);
+    }
+    if player_routes(a) != player_routes(b) || a.cartwall != b.cartwall {
+        reasons.push(RestartReason::Routes);
+    }
+    let set = |o: &OutputsConfig| o.bit_perfect.iter().cloned().collect::<HashSet<_>>();
+    if set(a) != set(b) {
+        reasons.push(RestartReason::BitPerfect);
+    }
+    if started.limits != current.limits {
+        reasons.push(RestartReason::Limits);
+    }
+    if started.tuning != current.tuning {
+        reasons.push(RestartReason::Tuning);
+    }
+    reasons
+}
