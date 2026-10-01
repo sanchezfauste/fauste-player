@@ -189,6 +189,15 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   4. find the window with `DISPLAY=:77 xwininfo -name "Fauste Player"` and
      capture it with `DISPLAY=:77 import -window <id> shot.png`.
 
+  The README image (`docs/images/main-screen.png`) is 1920×1080, in English:
+  set `"ui": {"language": "en-US"}` inside `"config"`, resize the window
+  with `DISPLAY=:77 xdotool windowmove <id> 0 0 windowsize <id> 1920 1080`,
+  and build the scene with `examples/demo_session` (players some way into
+  their playlists) plus the API: Play on players 1 and 2, a seek to
+  mid-track, and one cart fired. Generated tones longer than 3 minutes,
+  named like music, stand in for real files (`ffmpeg` pink noise and a
+  sine, amplitude-modulated, through a limiter).
+
   On a GNOME Wayland desktop, `xdotool` clicks into XWayland windows need
   the "remote interaction" permission every session; Xvfb avoids that.
 - Tagged test audio without encoders: WAV files with a RIFF `LIST/INFO`
