@@ -51,12 +51,12 @@ fn toggles_take_the_desired_value() {
     assert_eq!(plan(&s, O::SetStopAfterCurrent(p, false)).unwrap(), vec![]);
     assert_eq!(
         plan(&s, O::SetStopAfterCurrent(p, true)).unwrap(),
-        vec![Command::ToggleStopAfterCurrent(p)]
+        vec![Command::SetStopAfterCurrent(p, true)]
     );
     assert_eq!(plan(&s, O::SetCue(p, false)).unwrap(), vec![]);
     assert_eq!(
         plan(&s, O::SetCue(p, true)).unwrap(),
-        vec![Command::ToggleCue(p)]
+        vec![Command::SetCue(p, true)]
     );
     let e = s.playlists.iter().next().unwrap().entries[0].id;
     assert_eq!(plan(&s, O::SetEntryRepeat(e, false)).unwrap(), vec![]);
@@ -64,7 +64,7 @@ fn toggles_take_the_desired_value() {
     assert_eq!(plan(&s, O::SetEntryRepeat(e, true)).unwrap(), vec![]);
     assert_eq!(
         plan(&s, O::SetEntryRepeat(e, false)).unwrap(),
-        vec![Command::ToggleEntryRepeat(e)]
+        vec![Command::SetEntryRepeat(e, false)]
     );
 }
 
@@ -177,7 +177,7 @@ fn carts_fire_stop_and_cue_by_id() {
     assert_eq!(plan(&s, O::SetCartCue(c, false)).unwrap(), vec![]);
     assert_eq!(
         plan(&s, O::SetCartCue(c, true)).unwrap(),
-        vec![Command::CueCart(c)]
+        vec![Command::SetCartCue(c, true)]
     );
     assert_eq!(
         plan(&s, O::StopAllCarts).unwrap(),
@@ -215,4 +215,31 @@ fn every_error_has_its_status_and_code() {
         assert_eq!((e.status(), e.code()), (status, code));
         assert!(!e.message().is_empty());
     }
+}
+
+#[test]
+fn a_desired_value_planned_twice_from_one_snapshot_stays_set() {
+    // Two "on" requests decided before the conductor publishes the first
+    // one's effect must not cancel each other.
+    let s = demo_state();
+    let p = s.players[0].id;
+    let e = s.playlists.iter().next().unwrap().entries[0].id;
+    let c = s.cartwall.pages[0].carts[0].id;
+    let mut applied = s.clone();
+    for op in [
+        O::SetCue(p, true),
+        O::SetStopAfterCurrent(p, true),
+        O::SetEntryRepeat(e, true),
+        O::SetCartCue(c, true),
+    ] {
+        let first = plan(&s, op).unwrap();
+        let second = plan(&s, op).unwrap();
+        for command in first.into_iter().chain(second) {
+            fp_model::apply(&mut applied, command).unwrap();
+        }
+    }
+    assert!(applied.players[0].cue.is_some());
+    assert!(applied.players[0].stop_after_current);
+    assert!(applied.playlists.entry(e).unwrap().repeat);
+    assert_eq!(applied.cartwall.cue, Some(c));
 }

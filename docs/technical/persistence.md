@@ -215,7 +215,7 @@ carts).
 | `http.bind` | `"127.0.0.1"` | an IPv4 or IPv6 literal, else `127.0.0.1` with a warning |
 | `http.port` | 7380 | 1024 … 65535 |
 | `http.token` | `""` | empty, or at least 16 characters (a shorter one is dropped with a warning) |
-| `http.cors_origins` | `[]` | `http://` or `https://` origins without a path; `"*"` only with a loopback bind and no token |
+| `http.cors_origins` | `[]` | `http://` or `https://` origins without a path; `"*"` only with a token |
 | `http.max_event_clients` | 16 | 1 … 256 |
 | `http.request_timeout_ms` | 10000 | 1000 … 120000 |
 | `http.max_body_bytes` | 65536 | 1024 … 1048576 |

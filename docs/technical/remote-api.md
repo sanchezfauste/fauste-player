@@ -26,7 +26,9 @@ plans 2 and 3).
   then shows its usual notice.
 - **Desired values.** On/off settings take the value wanted (`{"on": true}`).
   If it is already in that state, nothing is sent and the answer is still
-  `202`, so a retried request never undoes itself.
+  `202`. Otherwise an idempotent model command (`SetCue`, …) is sent. It is
+  resolved when the conductor applies it, so a retried request, or two
+  clients asking for the same value at once, never undo each other.
 - **Volume** is fader travel `0.0`–`1.0`, with the on-screen fader's curve.
 
 ## Resources
@@ -173,7 +175,7 @@ configuration (see [Persistence and configuration](persistence.md)):
 | `http.bind` | `"127.0.0.1"` | An IPv4 or IPv6 literal, else `127.0.0.1` with a warning |
 | `http.port` | `7380` | 1024–65535 |
 | `http.token` | `""` | Empty, or at least 16 characters (a shorter one is dropped with a warning) |
-| `http.cors_origins` | `[]` | `http://` or `https://` origins with no path; `"*"` only with a loopback bind and no token |
+| `http.cors_origins` | `[]` | `http://` or `https://` origins with no path; `"*"` only with a token |
 | `http.max_event_clients` | `16` | 1–256 (for the event stream, plan 2) |
 | `http.request_timeout_ms` | `10000` | 1000–120000 |
 | `http.max_body_bytes` | `65536` | 1024–1048576 |

@@ -53,9 +53,12 @@
   pages are addressed by the model's ids (`u64`, persisted across restarts).
   OSC addresses players and carts by their 1-based position on screen, like
   shortcuts and MIDI, because control surfaces think in positions.
-- **Desired values, not toggles.** Every on/off setting is set to a value. The
-  server sends the model's toggle only when the current state differs, so a
-  retried request never undoes itself.
+- **Desired values, not toggles.** Every on/off setting is set to a value.
+  The model has idempotent commands for them (`SetCue`, `SetStopAfterCurrent`,
+  `SetEntryRepeat`, `SetEntryStopAfter`, `SetCartCue`), resolved when the
+  conductor applies them, so neither a retried request nor two requests
+  planned from the same snapshot can undo each other. A value already in
+  place sends nothing.
 - **Volume is fader travel** `0.0–1.0`, mapped with `gain_from_fader` like the
   UI fader and MIDI.
 - **Nothing goes on air by itself** (rule 10). Starting a server or a client
@@ -130,19 +133,19 @@ not analysed yet answers `404 not_analyzed`; an analysed track without a cover
 | `POST /players/{id}/fade-stop` | — | `FadeStop` |
 | `POST /players/{id}/restart` | — | `Restart` (R23) |
 | `POST /players/{id}/previous` | — | `Previous` (R24) |
-| `PUT /players/{id}/cue` | `{"on": bool}` | `ToggleCue` if it differs |
+| `PUT /players/{id}/cue` | `{"on": bool}` | `SetCue` if it differs |
 | `PUT /players/{id}/next` | `{"entry": id}` | `SetNext` |
 | `POST /players/{id}/cue-entry` | `{"entry": id}` | `CueEntry` |
 | `POST /players/{id}/seek` | `{"secs": f64}` | `Seek` |
 | `PUT /players/{id}/volume` | `{"fader": f32}` | `SetVolume(gain_from_fader(fader))` |
 | `PUT /players/{id}/mode` | `{"mode": "single" \| "continuous"}` | `SetMode` |
-| `PUT /players/{id}/stop-after-current` | `{"on": bool}` | `ToggleStopAfterCurrent` if it differs |
+| `PUT /players/{id}/stop-after-current` | `{"on": bool}` | `SetStopAfterCurrent` if it differs |
 | `PUT /players/{id}/playlist` | `{"playlist": id}` | `ShowPlaylist` |
-| `PUT /entries/{id}/repeat` | `{"on": bool}` | `ToggleEntryRepeat` if it differs |
-| `PUT /entries/{id}/stop-after` | `{"on": bool}` | `ToggleEntryStopAfter` if it differs |
+| `PUT /entries/{id}/repeat` | `{"on": bool}` | `SetEntryRepeat` if it differs |
+| `PUT /entries/{id}/stop-after` | `{"on": bool}` | `SetEntryStopAfter` if it differs |
 | `POST /carts/{id}/fire` | — | `FireCart` (as the cart button: fires, or stops a playing cart) |
 | `POST /carts/{id}/stop` | — | `StopCart` |
-| `PUT /carts/{id}/cue` | `{"on": bool}` | `CueCart` if it differs |
+| `PUT /carts/{id}/cue` | `{"on": bool}` | `SetCartCue` if it differs |
 | `POST /cartwall/stop-all` | — | `StopAllCarts` |
 | `PUT /cartwall/shown` | `{"page": id}` | `ShowCartPage` |
 
@@ -300,7 +303,7 @@ Loaded leniently (an invalid field falls back to its default with a
 | `http.bind` | `"127.0.0.1"` | An IPv4 or IPv6 literal |
 | `http.port` | `7380` | 1024–65535 |
 | `http.token` | `""` | Empty, or at least 16 characters |
-| `http.cors_origins` | `[]` | Origins (`scheme://host[:port]`); `"*"` only with a loopback bind and no token |
+| `http.cors_origins` | `[]` | Origins (`scheme://host[:port]`); `"*"` only with a token (without one, any web page could drive the station) |
 | `http.max_event_clients` | `16` | 1–256 |
 | `http.request_timeout_ms` | `10000` | 1000–120000 |
 | `http.max_body_bytes` | `65536` | 1024–1048576 |

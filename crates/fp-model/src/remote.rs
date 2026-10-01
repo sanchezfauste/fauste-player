@@ -71,10 +71,6 @@ impl HttpRemoteConfig {
     pub fn bind_addr(&self) -> Option<IpAddr> {
         self.bind.parse().ok()
     }
-
-    fn is_local(&self) -> bool {
-        self.bind_addr().is_some_and(|ip| ip.is_loopback())
-    }
 }
 
 /// `scheme://host[:port]` with an http or https scheme and nothing after.
@@ -105,7 +101,8 @@ impl RemoteConfig {
                 message: format!("shorter than {MIN_TOKEN_CHARS} characters; ignored"),
             });
         }
-        let wildcard_ok = h.is_local() && h.token.is_empty();
+        // "*" lets any web page call the API, so it needs the token.
+        let wildcard_ok = !h.token.is_empty();
         h.cors_origins.retain(|o| {
             let ok = if o == "*" { wildcard_ok } else { is_origin(o) };
             if !ok {
@@ -226,18 +223,19 @@ mod tests {
     }
 
     #[test]
-    fn a_wildcard_origin_is_only_kept_locally_without_a_token() {
+    fn a_wildcard_origin_needs_a_token() {
+        // Without a token, "*" would let any web page drive the station.
         let mut c = Config::default();
         c.remote.http.cors_origins = vec!["*".into()];
-        assert!(c.validate().is_empty());
+        assert_eq!(c.validate()[0].field, "remote.http.cors_origins");
+        assert!(c.remote.http.cors_origins.is_empty());
         c.remote.http.token = "0123456789abcdef".into();
-        c.validate();
-        assert!(c.remote.http.cors_origins.is_empty());
-        c.remote.http.token.clear();
-        c.remote.http.bind = "0.0.0.0".into();
         c.remote.http.cors_origins = vec!["*".into()];
-        c.validate();
-        assert!(c.remote.http.cors_origins.is_empty());
+        assert!(c.validate().is_empty());
+        assert_eq!(c.remote.http.cors_origins, vec!["*"]);
+        c.remote.http.bind = "0.0.0.0".into();
+        assert!(c.validate().is_empty());
+        assert_eq!(c.remote.http.cors_origins, vec!["*"]);
     }
 
     #[test]

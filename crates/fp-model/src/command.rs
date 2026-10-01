@@ -30,6 +30,10 @@ pub enum Command {
     SetMode(PlayerId, PlayMode),
     ToggleStopAfterCurrent(PlayerId),
     ToggleCue(PlayerId),
+    /// Cue on or off, whatever it is now: sending it twice is harmless
+    /// (remote control spec §2). Likewise the other `Set…` toggles below.
+    SetCue(PlayerId, bool),
+    SetStopAfterCurrent(PlayerId, bool),
     CueEntry(PlayerId, EntryId),
     SetVolume(PlayerId, f32),
     Seek(PlayerId, f64),
@@ -56,6 +60,8 @@ pub enum Command {
     ToggleEntryRepeat(EntryId),
     /// R27: the player stops after the entry, every time it plays.
     ToggleEntryStopAfter(EntryId),
+    SetEntryRepeat(EntryId, bool),
+    SetEntryStopAfter(EntryId, bool),
     CreatePlaylist {
         name: String,
     },
@@ -80,6 +86,8 @@ pub enum Command {
     StopAllCarts,
     /// Pre-listens a cart on the cartwall Cue route, or stops it (C9).
     CueCart(CartId),
+    /// Pre-listens a cart, or stops it, whatever it does now.
+    SetCartCue(CartId, bool),
     CreateCartPage {
         name: String,
     },

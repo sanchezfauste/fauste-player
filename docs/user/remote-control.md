@@ -47,7 +47,8 @@ proxy with HTTPS.
 A web page served from another address can use the API only if its origin
 (for example `https://studio.example`) is listed in `cors_origins`. Requests
 from other pages are refused, even on this computer, so a page you happen
-to have open cannot drive the player.
+to have open cannot drive the player. `"*"` (any origin) is only accepted
+together with a token.
 
 ## What a client can do
 

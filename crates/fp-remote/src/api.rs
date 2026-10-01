@@ -120,11 +120,14 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
     let player = |id: PlayerId| state.player(id).map_err(|_| ApiError::NotFound);
     let entry = |id: EntryId| state.playlists.entry(id).ok_or(ApiError::NotFound);
     let cart = |id: CartId| state.cartwall.cart(id).ok_or(ApiError::NotFound);
-    let toggle = |current: bool, wanted: bool, command: Command| {
+    // A value already in place sends nothing. Otherwise the toggle's
+    // availability decides, and the idempotent `Set…` command is sent, so
+    // two requests planned from one snapshot cannot cancel each other.
+    let toggle = |current: bool, wanted: bool, toggle: Command, set: Command| {
         if current == wanted {
             Ok(Vec::new())
         } else {
-            available(state, command)
+            available(state, toggle).map(|_| vec![set])
         }
     };
     match op {
@@ -134,11 +137,17 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
         O::FadeStop(p) => player(p).and_then(|_| available(state, Command::FadeStop(p))),
         O::Restart(p) => player(p).and_then(|_| available(state, Command::Restart(p))),
         O::Previous(p) => player(p).and_then(|_| available(state, Command::Previous(p))),
-        O::SetCue(p, on) => toggle(player(p)?.cue.is_some(), on, Command::ToggleCue(p)),
+        O::SetCue(p, on) => toggle(
+            player(p)?.cue.is_some(),
+            on,
+            Command::ToggleCue(p),
+            Command::SetCue(p, on),
+        ),
         O::SetStopAfterCurrent(p, on) => toggle(
             player(p)?.stop_after_current,
             on,
             Command::ToggleStopAfterCurrent(p),
+            Command::SetStopAfterCurrent(p, on),
         ),
         O::SetNext(p, e) => {
             player(p)?;
@@ -183,15 +192,28 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
             state.playlists.get(list).ok_or(ApiError::NotFound)?;
             Ok(vec![Command::ShowPlaylist(p, list)])
         }
-        O::SetEntryRepeat(e, on) => toggle(entry(e)?.repeat, on, Command::ToggleEntryRepeat(e)),
-        O::SetEntryStopAfter(e, on) => {
-            toggle(entry(e)?.stop_after, on, Command::ToggleEntryStopAfter(e))
-        }
+        O::SetEntryRepeat(e, on) => toggle(
+            entry(e)?.repeat,
+            on,
+            Command::ToggleEntryRepeat(e),
+            Command::SetEntryRepeat(e, on),
+        ),
+        O::SetEntryStopAfter(e, on) => toggle(
+            entry(e)?.stop_after,
+            on,
+            Command::ToggleEntryStopAfter(e),
+            Command::SetEntryStopAfter(e, on),
+        ),
         O::FireCart(c) => cart(c).map(|_| vec![Command::FireCart(c)]),
         O::StopCart(c) => cart(c).map(|_| vec![Command::StopCart(c)]),
         O::SetCartCue(c, on) => {
             cart(c)?;
-            toggle(state.cartwall.cue == Some(c), on, Command::CueCart(c))
+            toggle(
+                state.cartwall.cue == Some(c),
+                on,
+                Command::CueCart(c),
+                Command::SetCartCue(c, on),
+            )
         }
         O::StopAllCarts => Ok(vec![Command::StopAllCarts]),
         O::ShowCartPage(page) => {
