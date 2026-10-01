@@ -17,6 +17,7 @@ fp-engine.workspace = true
 fp-backends.workspace = true
 fp-analysis.workspace = true
 fp-control.workspace = true
+fp-remote.workspace = true
 arc-swap.workspace = true
 crossbeam-channel.workspace = true
 tracing.workspace = true

@@ -115,3 +115,19 @@ fn candidates(value: &Value, default: Option<&Value>) -> Vec<Value> {
         _ => vec![value.clone()],
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::config_from_value;
+
+    #[test]
+    fn a_bad_remote_port_keeps_the_other_remote_fields() {
+        let user: serde_json::Value =
+            serde_json::from_str(r#"{"remote":{"http":{"enabled":true,"port":"x"}}}"#).unwrap();
+        let mut warnings = Vec::new();
+        let c = config_from_value(&user, &mut warnings);
+        assert!(c.remote.http.enabled);
+        assert_eq!(c.remote.http.port, 7380);
+        assert_eq!(warnings.len(), 1);
+    }
+}

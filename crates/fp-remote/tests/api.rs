@@ -1,0 +1,245 @@
+#![allow(clippy::unwrap_used)]
+mod support;
+
+use fp_model::volume::gain_from_fader;
+use fp_model::{CartId, Command, EntryId, PlayMode, PlayerId, PlaylistId};
+use fp_remote::api::{ApiError, Operation as O, plan};
+use support::demo_state;
+
+#[test]
+fn play_on_a_player_with_a_next_entry_is_one_play_command() {
+    let s = demo_state();
+    let p = s.players[0].id;
+    assert_eq!(plan(&s, O::Play(p)).unwrap(), vec![Command::Play(p)]);
+}
+
+#[test]
+fn an_unavailable_action_is_a_conflict() {
+    let s = demo_state();
+    let p = s.players[0].id;
+    // Nothing is on air: Pause, Stop, Fade stop, Restart and Previous are off (R28).
+    for op in [
+        O::Pause(p),
+        O::Stop(p),
+        O::FadeStop(p),
+        O::Restart(p),
+        O::Previous(p),
+    ] {
+        let e = plan(&s, op).unwrap_err();
+        assert_eq!(e.status(), 409, "{op:?}");
+        assert_eq!(e.code(), "unavailable");
+    }
+}
+
+#[test]
+fn an_unknown_player_is_not_found_even_for_transport() {
+    let s = demo_state();
+    assert_eq!(
+        plan(&s, O::Play(PlayerId(999_999))).unwrap_err(),
+        ApiError::NotFound
+    );
+    assert_eq!(
+        plan(&s, O::SetFader(PlayerId(999_999), 0.5)).unwrap_err(),
+        ApiError::NotFound
+    );
+}
+
+#[test]
+fn toggles_take_the_desired_value() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    assert_eq!(plan(&s, O::SetStopAfterCurrent(p, false)).unwrap(), vec![]);
+    assert_eq!(
+        plan(&s, O::SetStopAfterCurrent(p, true)).unwrap(),
+        vec![Command::SetStopAfterCurrent(p, true)]
+    );
+    assert_eq!(plan(&s, O::SetCue(p, false)).unwrap(), vec![]);
+    assert_eq!(
+        plan(&s, O::SetCue(p, true)).unwrap(),
+        vec![Command::SetCue(p, true)]
+    );
+    let e = s.playlists.iter().next().unwrap().entries[0].id;
+    assert_eq!(plan(&s, O::SetEntryRepeat(e, false)).unwrap(), vec![]);
+    fp_model::apply(&mut s, Command::ToggleEntryRepeat(e)).unwrap();
+    assert_eq!(plan(&s, O::SetEntryRepeat(e, true)).unwrap(), vec![]);
+    assert_eq!(
+        plan(&s, O::SetEntryRepeat(e, false)).unwrap(),
+        vec![Command::SetEntryRepeat(e, false)]
+    );
+}
+
+#[test]
+fn stop_after_current_in_single_mode_is_a_conflict() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::SetMode(p, PlayMode::Single)).unwrap();
+    assert_eq!(
+        plan(&s, O::SetStopAfterCurrent(p, true))
+            .unwrap_err()
+            .status(),
+        409
+    );
+}
+
+#[test]
+fn the_fader_maps_through_the_ui_curve_and_must_be_in_range() {
+    let s = demo_state();
+    let p = s.players[0].id;
+    assert_eq!(
+        plan(&s, O::SetFader(p, 0.8)).unwrap(),
+        vec![Command::SetVolume(p, gain_from_fader(0.8))]
+    );
+    for bad in [-0.1, 1.1, f32::NAN, f32::INFINITY] {
+        assert_eq!(
+            plan(&s, O::SetFader(p, bad)).unwrap_err().status(),
+            400,
+            "{bad}"
+        );
+    }
+}
+
+#[test]
+fn seek_needs_a_running_entry_and_a_position_inside_its_cue_range() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    assert_eq!(plan(&s, O::Seek(p, 10.0)).unwrap_err().status(), 409);
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(
+        plan(&s, O::Seek(p, 10.0)).unwrap(),
+        vec![Command::Seek(p, 10.0)]
+    );
+    assert_eq!(plan(&s, O::Seek(p, 500.0)).unwrap_err().status(), 400);
+    assert_eq!(plan(&s, O::Seek(p, f64::NAN)).unwrap_err().status(), 400);
+}
+
+#[test]
+fn next_and_cue_entry_need_known_ids() {
+    let s = demo_state();
+    let p = s.players[0].id;
+    let e = s.playlists.iter().next().unwrap().entries[2].id;
+    assert_eq!(
+        plan(&s, O::SetNext(p, e)).unwrap(),
+        vec![Command::SetNext(p, e)]
+    );
+    assert_eq!(
+        plan(&s, O::CueEntry(p, e)).unwrap(),
+        vec![Command::CueEntry(p, e)]
+    );
+    assert_eq!(
+        plan(&s, O::SetNext(p, EntryId(999_999))).unwrap_err(),
+        ApiError::NotFound
+    );
+}
+
+#[test]
+fn the_dry_run_turns_a_model_refusal_into_a_conflict() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    let current = s.players[0].current.unwrap();
+    let e = plan(&s, O::SetNext(p, current)).unwrap_err();
+    assert_eq!(e.status(), 409);
+    assert!(e.message().contains("current"), "{}", e.message());
+}
+
+#[test]
+fn an_id_that_vanished_is_not_found() {
+    let mut s = demo_state();
+    let night = s.playlists.iter().nth(1).unwrap().id;
+    let p = s.players[0].id;
+    assert_eq!(
+        plan(&s, O::ShowPlaylist(p, night)).unwrap(),
+        vec![Command::ShowPlaylist(p, night)]
+    );
+    fp_model::apply(&mut s, Command::DeletePlaylist(night)).unwrap();
+    assert_eq!(
+        plan(&s, O::ShowPlaylist(p, night)).unwrap_err(),
+        ApiError::NotFound
+    );
+    assert_eq!(
+        plan(&s, O::ShowPlaylist(p, PlaylistId(424_242))).unwrap_err(),
+        ApiError::NotFound
+    );
+}
+
+#[test]
+fn carts_fire_stop_and_cue_by_id() {
+    let s = demo_state();
+    let c = s.cartwall.pages[0].carts[0].id;
+    assert_eq!(
+        plan(&s, O::FireCart(c)).unwrap(),
+        vec![Command::FireCart(c)]
+    );
+    assert_eq!(
+        plan(&s, O::StopCart(c)).unwrap(),
+        vec![Command::StopCart(c)]
+    );
+    assert_eq!(plan(&s, O::SetCartCue(c, false)).unwrap(), vec![]);
+    assert_eq!(
+        plan(&s, O::SetCartCue(c, true)).unwrap(),
+        vec![Command::SetCartCue(c, true)]
+    );
+    assert_eq!(
+        plan(&s, O::StopAllCarts).unwrap(),
+        vec![Command::StopAllCarts]
+    );
+    assert_eq!(
+        plan(&s, O::FireCart(CartId(999_999))).unwrap_err(),
+        ApiError::NotFound
+    );
+    let page = s.cartwall.pages[0].id;
+    assert_eq!(
+        plan(&s, O::ShowCartPage(page)).unwrap(),
+        vec![Command::ShowCartPage(page)]
+    );
+}
+
+#[test]
+fn every_error_has_its_status_and_code() {
+    let cases = [
+        (ApiError::BadRequest("x".into()), 400, "bad_request"),
+        (ApiError::Unauthorized, 401, "unauthorized"),
+        (ApiError::ForbiddenOrigin, 403, "forbidden_origin"),
+        (ApiError::NotFound, 404, "not_found"),
+        (ApiError::NotAnalyzed, 404, "not_analyzed"),
+        (ApiError::Unavailable("x".into()), 409, "unavailable"),
+        (ApiError::PayloadTooLarge, 413, "payload_too_large"),
+        (
+            ApiError::UnsupportedMediaType,
+            415,
+            "unsupported_media_type",
+        ),
+        (ApiError::Busy, 503, "busy"),
+    ];
+    for (e, status, code) in cases {
+        assert_eq!((e.status(), e.code()), (status, code));
+        assert!(!e.message().is_empty());
+    }
+}
+
+#[test]
+fn a_desired_value_planned_twice_from_one_snapshot_stays_set() {
+    // Two "on" requests decided before the conductor publishes the first
+    // one's effect must not cancel each other.
+    let s = demo_state();
+    let p = s.players[0].id;
+    let e = s.playlists.iter().next().unwrap().entries[0].id;
+    let c = s.cartwall.pages[0].carts[0].id;
+    let mut applied = s.clone();
+    for op in [
+        O::SetCue(p, true),
+        O::SetStopAfterCurrent(p, true),
+        O::SetEntryRepeat(e, true),
+        O::SetCartCue(c, true),
+    ] {
+        let first = plan(&s, op).unwrap();
+        let second = plan(&s, op).unwrap();
+        for command in first.into_iter().chain(second) {
+            fp_model::apply(&mut applied, command).unwrap();
+        }
+    }
+    assert!(applied.players[0].cue.is_some());
+    assert!(applied.players[0].stop_after_current);
+    assert!(applied.playlists.entry(e).unwrap().repeat);
+    assert_eq!(applied.cartwall.cue, Some(c));
+}

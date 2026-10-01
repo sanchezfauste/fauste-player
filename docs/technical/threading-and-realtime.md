@@ -10,6 +10,7 @@
 | Decode worker, one per player | `fp-player-<id>` | normal | producer halves of the player's sources; decoders and resamplers | file I/O |
 | Conductor | `fp-conductor` | normal | `AppState`, the `Engine` and all bus bookkeeping | no: it polls with a tick of `tuning.conductor_tick_ms` (5 ms) |
 | Services | `fp-services` | normal | the analyzer handle, the store, the media cache writer | file I/O (saves) |
+| Remote | `fp-remote` | normal | the tokio runtime of the HTTP API; follows `config.remote` every 250 ms | network I/O (async); covers and peaks in `spawn_blocking` |
 | Analysis pool (2) | `fp-analysis-<n>` | normal | one job at a time each | file I/O, CPU |
 | Helpers | `fp-file-dialog`, `fp-folder-dialog`, `fp-drop-scan`, `fp-device-scan` | normal | native dialogs, folder scans and device enumeration, off the UI thread | yes (by design) |
 | UI | main thread | normal | view state only | no |

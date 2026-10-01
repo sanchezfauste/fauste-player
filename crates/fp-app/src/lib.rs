@@ -7,5 +7,6 @@ pub mod i18n;
 pub mod instance;
 pub mod logging;
 pub mod midi;
+pub mod remote;
 pub mod services;
 pub mod ui;

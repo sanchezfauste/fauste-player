@@ -207,6 +207,22 @@ carts).
 | `devices` | `[]` | `{ "input": port name, "output": port name or null }`: where an input's LED feedback goes |
 | `bindings` | `[]` | `{ "device": port name, "trigger": { "Note": { "channel", "note" } } \| { "ControlChange": { "channel", "controller" } } \| { "PitchBend": { "channel" } }, "action": { "Button": shortcut action } \| { "Volume": n } }`; channels 0–15. Bindings to other actions, out of MIDI's range, or a volume on a note are dropped with a warning |
 
+### `remote` (config file only for now)
+
+| Field | Default | Range |
+|---|---|---|
+| `http.enabled` | false | |
+| `http.bind` | `"127.0.0.1"` | an IPv4 or IPv6 literal, else `127.0.0.1` with a warning |
+| `http.port` | 7380 | 1024 … 65535 |
+| `http.token` | `""` | empty, or at least 16 characters (a shorter one is dropped with a warning) |
+| `http.cors_origins` | `[]` | `http://` or `https://` origins without a path; `"*"` only with a token |
+| `http.max_event_clients` | 16 | 1 … 256 |
+| `http.request_timeout_ms` | 10000 | 1000 … 120000 |
+| `http.max_body_bytes` | 65536 | 1024 … 1048576 |
+| `events.position_interval_ms` | 250 | 50 … 5000 |
+
+See [Remote control API](remote-api.md).
+
 ### `limits` (config file only)
 
 | Field | Default |

@@ -27,6 +27,8 @@ pub struct Config {
     pub meter: MeterConfig,
     /// MIDI control surfaces (feedback spec §6).
     pub midi: crate::midi::MidiConfig,
+    /// Remote control over the network (remote control spec).
+    pub remote: crate::remote::RemoteConfig,
 }
 
 impl Default for Config {
@@ -42,6 +44,7 @@ impl Default for Config {
             shortcuts: default_shortcuts(),
             meter: MeterConfig::default(),
             midi: crate::midi::MidiConfig::default(),
+            remote: crate::remote::RemoteConfig::default(),
         }
     }
 }
@@ -390,7 +393,7 @@ impl fmt::Display for ConfigWarning {
 
 /// Clamps `value` into `min..=max`. NaN (which fails every comparison) becomes `min`.
 #[allow(clippy::neg_cmp_op_on_partial_ord)] // negated comparisons are deliberate: they catch NaN
-fn clamp_to<T: PartialOrd + Copy + fmt::Display>(
+pub(crate) fn clamp_to<T: PartialOrd + Copy + fmt::Display>(
     value: &mut T,
     min: T,
     max: T,
@@ -759,6 +762,7 @@ impl Config {
             &mut w,
         );
         self.midi.validate(&mut w);
+        self.remote.validate(&mut w);
 
         w
     }

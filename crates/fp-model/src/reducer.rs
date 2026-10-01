@@ -62,6 +62,16 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             player.stop_after_current = !player.stop_after_current;
         }
         Command::ToggleCue(id) => toggle_cue(state, id, &mut out)?,
+        Command::SetCue(id, on) => {
+            if state.player(id)?.cue.is_some() != on {
+                toggle_cue(state, id, &mut out)?;
+            }
+        }
+        Command::SetStopAfterCurrent(id, on) => {
+            if state.player(id)?.stop_after_current != on {
+                out.extend(apply(state, Command::ToggleStopAfterCurrent(id))?);
+            }
+        }
         Command::CueEntry(id, entry) => cue_entry(state, id, entry, &mut out)?,
         Command::SetVolume(id, volume) => {
             let i = state.player_index(id)?;
@@ -124,6 +134,20 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
                 .ok_or(ModelError::UnknownEntry(entry))?;
             e.repeat = !e.repeat;
         }
+        Command::SetEntryRepeat(entry, on) => {
+            state
+                .playlists
+                .entry_mut(entry)
+                .ok_or(ModelError::UnknownEntry(entry))?
+                .repeat = on;
+        }
+        Command::SetEntryStopAfter(entry, on) => {
+            state
+                .playlists
+                .entry_mut(entry)
+                .ok_or(ModelError::UnknownEntry(entry))?
+                .stop_after = on;
+        }
         Command::ToggleEntryStopAfter(entry) => {
             let e = state
                 .playlists
@@ -156,6 +180,15 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::StopCart(cart) => cart_rules::stop(state, cart, &mut out)?,
         Command::StopAllCarts => cart_rules::stop_all(state, &mut out),
         Command::CueCart(cart) => cart_rules::cue(state, cart, &mut out)?,
+        Command::SetCartCue(cart, on) => {
+            state
+                .cartwall
+                .cart(cart)
+                .ok_or(ModelError::UnknownCart(cart))?;
+            if (state.cartwall.cue == Some(cart)) != on {
+                cart_rules::cue(state, cart, &mut out)?;
+            }
+        }
         Command::CreateCartPage { name } => cart_rules::create_page(state, name),
         Command::RenameCartPage { page, name } => cart_rules::rename_page(state, page, name)?,
         Command::DeleteCartPage(page) => cart_rules::delete_page(state, page, &mut out)?,
