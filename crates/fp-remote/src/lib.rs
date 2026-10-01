@@ -7,3 +7,4 @@
 pub mod api;
 pub mod control;
 pub mod dto;
+pub mod http;
