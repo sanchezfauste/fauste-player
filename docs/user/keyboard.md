@@ -6,7 +6,7 @@
 | `F1` … `F12` | Fire carts 1–12 of the cart page shown |
 | `Ctrl+Space` | Stop every cart |
 | `Delete` / `Backspace` | Remove the selected track from the playlist shown (not while it is on air) |
-| `Esc` | Close menus and Settings; clear the selection |
+| `Esc` | Close menus and Settings; cancel the "Audio is on air" dialog; clear the selection |
 
 - Holding a key does not repeat it: a held `1` presses Play once.
 - A shortcut key does only its shortcut: if a button has the keyboard focus,
