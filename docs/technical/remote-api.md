@@ -331,6 +331,8 @@ configuration (see [Persistence and configuration](persistence.md)):
   listens. SSE streams and the OSC socket read that channel.
 - A server whose address could not be bound (in use, no permission) is
   tried again every 2 s, so a port freed later is taken without a restart.
+  The failure is logged once, again when its reason changes, and every
+  5 minutes while it lasts (`BIND_LOG_EVERY`).
 - Settings → Remote (`ui/settings/remote.rs`) edits `config.remote` through
   `UpdateConfig`, and reads each server's state from
   `RemoteHandle::status_cell`, an `ArcSwap` the remote thread publishes.
