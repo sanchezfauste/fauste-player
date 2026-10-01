@@ -148,6 +148,7 @@ hand: release-please writes it from the commits.
 | `crates/fp-backends` | `AudioBackend` trait, cpal, Null, Offline |
 | `crates/fp-engine` | Mixer, sources, buses, workers, engine, conductor |
 | `crates/fp-analysis` | Metadata, signal analysis, cache, pool |
+| `crates/fp-control` | MIDI control surfaces: parsing, bindings, soft takeover, LED feedback, learn, the MIDI thread |
 | `crates/fp-app` | UI (`src/ui/*`), services thread, bootstrap, logging, crash reports, locales, fonts |
 | `docs/superpowers/specs` | The binding design spec |
 | `docs/superpowers/plans` | Implementation plans (one per step of a phase) |

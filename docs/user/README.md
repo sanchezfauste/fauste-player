@@ -18,6 +18,7 @@ by themselves.
 | [Settings](settings.md) | Audio outputs, players, analysis, playlists |
 | [Bit-perfect output](bit-perfect.md) | Exclusive devices that follow each file's rate, the BP badge, checking a chain |
 | [Keyboard](keyboard.md) | Shortcuts |
+| [MIDI control surfaces](midi.md) | Buttons, faders and lights on MIDI controllers |
 | [Data and backups](data-and-backups.md) | Where files live, autosave, crash recovery, portable mode |
 | [Troubleshooting](troubleshooting.md) | No sound, device lost, files marked unavailable, logs |
 

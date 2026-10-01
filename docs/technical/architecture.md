@@ -10,6 +10,7 @@
 | `fp-backends` | The `AudioBackend` trait; `CpalBackend` (ALSA, WASAPI shared, Core Audio), `NullBackend`, `OfflineBackend` | — |
 | `fp-engine` | Real-time mixer, buses with watchdog and virtual clock, per-player decode workers, resampling, the `Engine` and the `Conductor` thread | `fp-model`, `fp-backends`, `fp-decode` |
 | `fp-analysis` | Tags and covers (lofty, image), waveform peaks, automatic markers, the analysis cache and the background pool | `fp-model`, `fp-decode` |
+| `fp-control` | Control surfaces: MIDI parsing, bindings to commands (edge detection, soft takeover, availability), LED feedback, learn, and the MIDI service thread over `midir` (ALSA, CoreMIDI, WinMM) | `fp-model` |
 | `fp-app` | The egui application and the `fauste-player` binary: bootstrap, logging, crash reports, services thread, UI | all of the above |
 
 ```
@@ -38,6 +39,9 @@ or `panic` outside tests.
 
  Services thread: Analyzer results ──► Command::ApplyAnalysis / SetFileState
                   model_version changes ──► Store (debounced saves)
+
+ MIDI thread (fp-midi): port callbacks ──bytes──► Router ──Command──► Conductor
+                        Arc<AppState> ──► LED diffs ──► output ports
 ```
 
 1. The UI sends a `Command` over a bounded channel and never waits.

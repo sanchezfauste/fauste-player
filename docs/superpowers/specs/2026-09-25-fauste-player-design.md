@@ -22,7 +22,7 @@ Fauste Player is a desktop **radio-automation playout application**: several ind
 ### Non-goals
 
 - Android and iOS (not viable for this product; revisit later if ever).
-- Network features, streaming, telemetry, remote control.
+- Network features, streaming, telemetry, remote control over a network. (Local MIDI control surfaces are in scope: feedback spec §6.)
 - A music library browser or database (the design has none; files are added by drag & drop or a file dialog).
 - Scheduling / clock-based automation (log import, time-fixed events) — not in the design.
 

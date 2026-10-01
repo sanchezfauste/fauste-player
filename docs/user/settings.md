@@ -97,3 +97,8 @@ Pages, grid size, the cart editor, and cart page import and export. See
 ## Keyboard shortcuts
 
 See [Keyboard](keyboard.md).
+
+## MIDI
+
+Turn MIDI control surfaces on, see the input ports, and learn a control
+for each player action. See [MIDI control surfaces](midi.md).
