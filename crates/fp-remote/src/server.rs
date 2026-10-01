@@ -196,10 +196,7 @@ async fn publish(control: Arc<dyn RemoteControl>, events: broadcast::Sender<Arc<
         let playback = control.playback();
         if !Arc::ptr_eq(&last, &model) {
             for event in events::diff(&last, &model, &playback) {
-                let _ = events.send(Arc::new(Envelope {
-                    revision: playback.revision,
-                    event,
-                }));
+                let _ = events.send(Arc::new(Envelope::new(playback.revision, event)));
             }
             last = model.clone();
         }
@@ -207,10 +204,10 @@ async fn publish(control: Arc<dyn RemoteControl>, events: broadcast::Sender<Arc<
         if last_position.elapsed() >= every {
             last_position = tokio::time::Instant::now();
             if let Some(p) = events::position(&model, &playback) {
-                let _ = events.send(Arc::new(Envelope {
-                    revision: playback.revision,
-                    event: Event::Position(p),
-                }));
+                let _ = events.send(Arc::new(Envelope::new(
+                    playback.revision,
+                    Event::Position(p),
+                )));
             }
         }
     }

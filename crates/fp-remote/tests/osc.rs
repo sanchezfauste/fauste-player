@@ -230,3 +230,50 @@ fn subscriptions_expire_renew_and_are_capped() {
     subs.unsubscribe(a);
     assert!(subs.is_empty());
 }
+
+/// A bundle nested `depth` times around one message, built by hand (the
+/// encoder itself would recurse that deep).
+fn nested_bundle(depth: usize) -> Vec<u8> {
+    let mut inner =
+        encoder::encode(&OscPacket::Message(msg("/fauste/player/1/play", vec![]))).unwrap();
+    for _ in 0..depth {
+        let mut b = b"#bundle\0".to_vec();
+        b.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 1]);
+        b.extend_from_slice(&u32::try_from(inner.len()).unwrap().to_be_bytes());
+        b.extend_from_slice(&inner);
+        inner = b;
+    }
+    inner
+}
+
+/// Runs `f` on a thread with the remote thread's default stack (2 MiB).
+fn on_small_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::Builder::new()
+        .stack_size(2 * 1024 * 1024)
+        .spawn(f)
+        .unwrap()
+        .join()
+        .unwrap()
+}
+
+#[test]
+fn a_deeply_nested_bundle_is_refused_without_overflowing_the_stack() {
+    let packet = nested_bundle(3000);
+    assert!(on_small_stack(move || messages(&packet).is_err()));
+    let shallow = nested_bundle(3);
+    assert_eq!(messages(&shallow).unwrap().len(), 1);
+}
+
+#[test]
+fn deeply_nested_arrays_are_refused() {
+    let mut packet = b"/fauste/player/1/play\0\0\0".to_vec();
+    let mut tags = String::from(",");
+    tags.push_str(&"[".repeat(30_000));
+    tags.push_str(&"]".repeat(30_000));
+    packet.extend_from_slice(tags.as_bytes());
+    packet.push(0);
+    while !packet.len().is_multiple_of(4) {
+        packet.push(0);
+    }
+    assert!(on_small_stack(move || messages(&packet).is_err()));
+}

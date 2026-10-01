@@ -95,7 +95,7 @@ pub async fn events(State(ctx): State<Ctx>, RawQuery(query): RawQuery) -> Respon
                             let e = SseEvent::default()
                                 .event(env.event.name())
                                 .id(env.revision.to_string())
-                                .data(env.event.json());
+                                .data(env.json.as_str());
                             return Some((Ok(e), f));
                         }
                     }

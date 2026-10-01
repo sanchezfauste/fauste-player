@@ -13,8 +13,13 @@ use crate::api::Operation;
 use crate::control::Playback;
 use crate::dto;
 
-/// Bundles nested deeper than this are ignored.
+/// Bundles nested deeper than this are refused. rosc decodes them
+/// recursively, so the check runs on the raw bytes first: a hostile packet
+/// would otherwise overflow the remote thread's stack.
 const MAX_BUNDLE_DEPTH: usize = 8;
+/// Arrays (`[` in the type tags) nested deeper than this are refused, for
+/// the same reason.
+const MAX_ARRAY_DEPTH: usize = 4;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OscRequest {
@@ -26,10 +31,65 @@ pub enum OscRequest {
 
 /// The messages of a packet, bundles flattened in order (time tags ignored).
 pub fn messages(packet: &[u8]) -> Result<Vec<OscMessage>, &'static str> {
+    if !within_limits(packet, 0) {
+        return Err("OSC packet nested too deeply or malformed");
+    }
     let (_, packet) = rosc::decoder::decode_udp(packet).map_err(|_| "malformed OSC packet")?;
     let mut out = Vec::new();
     flatten(packet, &mut out, 0);
     Ok(out)
+}
+
+/// Whether `packet` nests bundles and arrays within the limits. Recursion
+/// here is bounded by `MAX_BUNDLE_DEPTH`.
+fn within_limits(packet: &[u8], depth: usize) -> bool {
+    if packet.starts_with(b"#bundle\0") {
+        if depth >= MAX_BUNDLE_DEPTH {
+            return false;
+        }
+        // Tag (8 bytes) and time tag (8 bytes), then size-prefixed elements.
+        let mut rest = packet.get(16..).unwrap_or_default();
+        while !rest.is_empty() {
+            let Some(size) = rest.get(..4).and_then(|b| <[u8; 4]>::try_from(b).ok()) else {
+                return false;
+            };
+            let size = u32::from_be_bytes(size) as usize;
+            let Some(element) = rest.get(4..4 + size) else {
+                return false;
+            };
+            if !within_limits(element, depth + 1) {
+                return false;
+            }
+            rest = rest.get(4 + size..).unwrap_or_default();
+        }
+        true
+    } else {
+        arrays_within_limits(packet)
+    }
+}
+
+/// The type tags of a message (the string after the padded address) nest
+/// arrays no deeper than `MAX_ARRAY_DEPTH`.
+fn arrays_within_limits(message: &[u8]) -> bool {
+    let Some(end) = message.iter().position(|b| *b == 0) else {
+        return true; // not a message rosc can read; it refuses it itself
+    };
+    let tags_at = (end / 4 + 1) * 4;
+    let tags = message.get(tags_at..).unwrap_or_default();
+    let mut depth = 0usize;
+    for b in tags.iter().take_while(|b| **b != 0) {
+        match b {
+            b'[' => {
+                depth += 1;
+                if depth > MAX_ARRAY_DEPTH {
+                    return false;
+                }
+            }
+            b']' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    true
 }
 
 fn flatten(packet: OscPacket, out: &mut Vec<OscMessage>, depth: usize) {

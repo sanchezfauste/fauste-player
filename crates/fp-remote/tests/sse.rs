@@ -39,12 +39,12 @@ async fn next(body: &mut Body) -> Option<String> {
 }
 
 fn removed(id: u64) -> Arc<Envelope> {
-    Arc::new(Envelope {
-        revision: 5,
-        event: Event::PlaylistRemoved(RemovedDto {
+    Arc::new(Envelope::new(
+        5,
+        Event::PlaylistRemoved(RemovedDto {
             id: fp_model::PlaylistId(id),
         }),
-    })
+    ))
 }
 
 #[tokio::test]
@@ -74,13 +74,13 @@ async fn topics_filter_the_stream() {
     let mut body = res.into_body();
     assert!(next(&mut body).await.unwrap().contains("event: state"));
     tx.send(removed(1)).unwrap();
-    tx.send(Arc::new(Envelope {
-        revision: 6,
-        event: Event::Position(fp_remote::events::PositionDto {
+    tx.send(Arc::new(Envelope::new(
+        6,
+        Event::Position(fp_remote::events::PositionDto {
             players: vec![],
             carts: vec![],
         }),
-    }))
+    )))
     .unwrap();
     let got = next(&mut body).await.unwrap();
     assert!(got.contains("event: position"), "{got}");
