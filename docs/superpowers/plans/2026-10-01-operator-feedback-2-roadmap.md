@@ -26,7 +26,7 @@ runs, against the code that the earlier plans left. Each plan reaches
 | # | Plan | Items | Branch | Status |
 |---|---|---|---|---|
 | 1 | Window and lifecycle | O6, O14, O20 | `feat/window-lifecycle` | done |
-| 2 | Settings window | O2, O3, O4, O5 | `feat/settings-window` | outline |
+| 2 | Settings window | O2, O3, O4, O5 | `feat/settings-window` | written |
 | 3 | Meter scale | O11, O13 | `fix/meter-scale` | outline |
 | 4 | Cartwall stop | O18, O19 | `feat/cartwall-stop-all` | outline |
 | 5 | Cue markers off | O15 | `feat/cue-markers-off` | outline |
