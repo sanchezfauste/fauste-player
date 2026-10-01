@@ -21,6 +21,7 @@ use fp_model::{
 use super::about::{self, NoticeOpener};
 use super::cartwall;
 use super::controller::Controller;
+use super::exit_guard::{self, ExitIntent};
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::notice;
 use super::player;
@@ -69,6 +70,10 @@ pub(crate) struct ViewState {
     pub rows_built: usize,
     pub settings_open: bool,
     pub about_open: bool,
+    /// The close guard is asking the operator (feedback 2 spec O6).
+    pub exit_guard: Option<ExitIntent>,
+    /// The operator confirmed the close: let the window go.
+    pub close_confirmed: bool,
     /// The notice about tracks an earlier version analysed is open.
     pub outdated_open: bool,
     /// Where each player's waveform menu was opened, in seconds.
@@ -339,6 +344,17 @@ impl AppUi {
             return;
         }
         let state = self.ctl.model();
+        // O6: a close request while something is on air waits for the
+        // operator.
+        let close_requested = ctx.input(|i| i.viewport().close_requested());
+        if close_requested && !self.view.close_confirmed {
+            if fp_model::on_air(&state).is_empty() {
+                // Nothing to cut: let the window close.
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.view.exit_guard = Some(ExitIntent::Close);
+            }
+        }
         // Follow a language change made in Settings (the first frame only
         // records what the interface was built with).
         let wanted = state.config.ui.language.clone();
@@ -465,6 +481,31 @@ impl AppUi {
             self.view.outdated_open =
                 self.services.is_some() && crate::services::outdated_tracks(&state) > 0;
         }
+        // The guard takes precedence over Settings and About.
+        if let Some(intent) = self.view.exit_guard {
+            let items = fp_model::on_air(&state);
+            if items.is_empty() {
+                // Everything stopped meanwhile: nothing left to confirm.
+                self.view.exit_guard = None;
+            } else {
+                match exit_guard::show(&ctx, &scene, intent, &items) {
+                    Some(true) => {
+                        for command in exit_guard::stop_commands(&items) {
+                            scene.ctl.send(command);
+                        }
+                        self.view.exit_guard = None;
+                        match intent {
+                            ExitIntent::Close => {
+                                self.view.close_confirmed = true;
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                        }
+                    }
+                    Some(false) => self.view.exit_guard = None,
+                    None => {}
+                }
+            }
+        }
         if self.view.settings_open {
             if !self.settings_shown {
                 self.settings.reset();
@@ -579,6 +620,12 @@ impl AppUi {
                 first_press(Key::Escape, None),
             )
         });
+        if self.view.exit_guard.is_some() {
+            if escape {
+                self.view.exit_guard = None;
+            }
+            return;
+        }
         if self.view.settings_open {
             if escape && !self.settings.capturing() {
                 self.view.settings_open = false;

@@ -350,3 +350,12 @@ remote-status-listening = Listening on { $addr }
 remote-error-token = Not started: a token is required beyond this computer.
 remote-error-address = Not started: the address is not valid.
 remote-error-other = Not started: { $reason }
+
+# Close guard
+exit-guard-title = Audio is on air
+exit-guard-close-body = Closing stops everything that is playing:
+exit-guard-cancel = Cancel
+exit-guard-close-confirm = Stop and close
+on-air-player = P{ $n } — { $title }
+on-air-player-empty = P{ $n }
+on-air-cart = Cart — { $title }
