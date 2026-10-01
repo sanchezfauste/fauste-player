@@ -40,6 +40,34 @@ pub struct WaveformData {
     pub peaks: Vec<[i16; 3]>,
 }
 
+impl WaveformData {
+    /// At most `max` buckets (0: all), each merging a whole group of them:
+    /// the lowest minimum, the highest maximum and the RMS of their RMS, as
+    /// the interface draws a column. A programme recording has hundreds of
+    /// thousands of buckets; a client drawing it needs one per pixel.
+    pub fn reduced(&self, max: usize) -> WaveformData {
+        if max == 0 || self.peaks.len() <= max {
+            return self.clone();
+        }
+        let group = self.peaks.len().div_ceil(max);
+        let peaks = self
+            .peaks
+            .chunks(group)
+            .map(|g| {
+                let min = g.iter().map(|p| p[0]).min().unwrap_or(0);
+                let max = g.iter().map(|p| p[1]).max().unwrap_or(0);
+                let mean_square =
+                    g.iter().map(|p| f64::from(p[2]).powi(2)).sum::<f64>() / g.len() as f64;
+                [min, max, mean_square.sqrt().round() as i16]
+            })
+            .collect();
+        WaveformData {
+            bucket_secs: self.bucket_secs * group as f64,
+            peaks,
+        }
+    }
+}
+
 pub trait RemoteControl: Send + Sync + 'static {
     /// The current model snapshot.
     fn model(&self) -> Arc<AppState>;

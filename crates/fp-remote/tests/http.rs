@@ -423,3 +423,27 @@ async fn an_open_event_stream_holds_no_slot() {
     }
     drop(stream);
 }
+
+/// `?buckets=n` reduces a long waveform before it is sent.
+#[tokio::test]
+async fn peaks_can_be_reduced_to_a_number_of_buckets() {
+    let mut s = demo_state();
+    let t = s.playlists.iter().next().unwrap().entries[0].track;
+    s.library.get_mut(t).unwrap().analyzed = true;
+    let fake = FakeControl::new(s);
+    fake.peaks.lock().unwrap().insert(
+        t,
+        WaveformData {
+            bucket_secs: 0.01,
+            peaks: vec![[-1, 1, 1]; 1_000],
+        },
+    );
+    let uri = format!("/api/v1/tracks/{}/peaks?buckets=100", t.0);
+    let (status, body, _) = call(ctx(&fake), "GET", &uri, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["peaks"].as_array().unwrap().len(), 100);
+    assert!((body["bucket_secs"].as_f64().unwrap() - 0.1).abs() < 1e-9);
+    let uri = format!("/api/v1/tracks/{}/peaks?buckets=many", t.0);
+    let (status, _, _) = call(ctx(&fake), "GET", &uri, None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}

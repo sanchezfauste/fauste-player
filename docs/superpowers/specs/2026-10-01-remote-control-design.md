@@ -114,7 +114,7 @@ change. It orders events (§5) and is not persisted.
 | `GET /playlists/{id}` | Playlist |
 | `GET /tracks/{id}` | Track |
 | `GET /tracks/{id}/cover` | The cover thumbnail (`image/png`) |
-| `GET /tracks/{id}/peaks` | `{bucket_secs, full_scale: 32767, peaks: [[min, max, rms], …]}` |
+| `GET /tracks/{id}/peaks[?buckets=n]` | `{bucket_secs, full_scale: 32767, peaks: [[min, max, rms], …]}`; with `buckets`, at most `n` buckets, each merging a whole group (lowest min, highest max, RMS of the RMS): a 4 h recording has 1.44 million buckets of 10 ms |
 | `GET /cartwall` | Cartwall |
 | `GET /events` | Event stream (§5.2) |
 

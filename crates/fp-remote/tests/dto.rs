@@ -145,3 +145,22 @@ fn cart_times_are_clamped_and_unknown_without_a_duration() {
     );
     assert_eq!(out.playing[0].remaining_secs, None);
 }
+
+/// A long waveform is reduced to at most `max` buckets: whole groups of
+/// buckets, each with the lowest minimum, the highest maximum and the RMS
+/// of their RMS.
+#[test]
+fn a_waveform_reduces_to_at_most_n_buckets() {
+    let w = fp_remote::control::WaveformData {
+        bucket_secs: 0.01,
+        peaks: vec![[-1, 2, 3], [-5, 1, 4], [0, 9, 0], [-2, 2, 2], [-3, 3, 3]],
+    };
+    let r = w.reduced(2);
+    assert_eq!(r.peaks.len(), 2);
+    assert!((r.bucket_secs - 0.03).abs() < 1e-12, "{}", r.bucket_secs);
+    // sqrt((9 + 16 + 0) / 3) = 2.886… → 3
+    assert_eq!(r.peaks[0], [-5, 9, 3]);
+    assert_eq!(r.peaks[1], [-3, 3, 3]);
+    assert_eq!(w.reduced(10), w, "short enough already");
+    assert_eq!(w.reduced(0), w, "0 means no reduction");
+}
