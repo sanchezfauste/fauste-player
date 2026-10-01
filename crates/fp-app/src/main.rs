@@ -32,6 +32,13 @@ const APP_ID: &str = "org.fauste.FaustePlayer";
 /// How often the running instance looks for playlists handed over.
 const INBOX_INTERVAL: Duration = Duration::from_millis(500);
 
+/// How the interface ended.
+enum Exit {
+    Quit,
+    /// The operator asked for a restart (feedback 2 spec O4).
+    Restart,
+}
+
 fn main() -> ExitCode {
     let playlists = match cli::parse(std::env::args_os().skip(1)) {
         Ok(cli::Invocation::Version) => {
@@ -79,9 +86,26 @@ fn main() -> ExitCode {
     let result = run(paths, playlists);
     drop(lock);
     match result {
-        Ok(()) => {
+        Ok(Exit::Quit) => {
             tracing::info!("stopped");
             ExitCode::SUCCESS
+        }
+        Ok(Exit::Restart) => {
+            // The lock is released above: the new process can take it.
+            match fp_app::restart::relaunch() {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    tracing::error!(error = %e, "could not start again");
+                    let i18n = I18n::new(None);
+                    eprintln!("fauste-player: {}", i18n.tr("restart-failed"));
+                    let _ = rfd::MessageDialog::new()
+                        .set_title("Fauste Player")
+                        .set_description(i18n.tr("restart-failed"))
+                        .set_level(rfd::MessageLevel::Error)
+                        .show();
+                    ExitCode::FAILURE
+                }
+            }
         }
         Err(e) => {
             tracing::error!(error = %e, "could not start");
@@ -94,7 +118,7 @@ fn main() -> ExitCode {
 fn run(
     paths: fp_store::AppPaths,
     playlists: Vec<std::path::PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Exit, Box<dyn std::error::Error>> {
     let store = Store::new(paths.clone(), fp_model::Limits::default());
     let default_name = I18n::new(None).tr("default-playlist-name");
     let loaded = store.load(&default_name);
@@ -166,11 +190,14 @@ fn run(
         .with_service_faults(faults)
         .with_backends(backends)
         .with_platform(platform)
+        // The engine above was built from this configuration.
+        .with_started_config(config.clone())
         .with_notices(
             std::env::current_exe()
                 .ok()
                 .and_then(|exe| fp_app::ui::about::find_notices(&exe)),
         );
+    let restart = app.restart_flag();
     if let Some(r) = &remote {
         app = app.with_remote_status(r.status_cell());
     }
@@ -209,7 +236,13 @@ fn run(
     drop(remote);
     services.shutdown();
     drop(handle);
-    result.map_err(|e| e.to_string().into())
+    result.map_err(|e| e.to_string())?;
+    // Only a confirmed Restart now sets the flag; a plain close quits.
+    Ok(if restart.load(std::sync::atomic::Ordering::Acquire) {
+        Exit::Restart
+    } else {
+        Exit::Quit
+    })
 }
 
 /// Gives `playlists` to the instance already running; without any, tells
