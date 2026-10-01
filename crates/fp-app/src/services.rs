@@ -444,6 +444,11 @@ impl Services {
         for track in state.library.iter() {
             let id = track.id;
             if self.in_flight.contains(&id) {
+                // Loaded on a player while queued with the library: its
+                // waveform is needed now.
+                if wanted.contains(&id) {
+                    self.analyzer.promote(id, track.path.clone());
+                }
                 continue;
             }
             // Tracks an earlier version analysed are analysed again, once,
@@ -458,7 +463,11 @@ impl Services {
             if analyse || show {
                 self.forced.remove(&id);
                 self.in_flight.insert(id);
-                self.analyzer.submit(id, track.path.clone());
+                if wanted.contains(&id) {
+                    self.analyzer.submit_urgent(id, track.path.clone());
+                } else {
+                    self.analyzer.submit(id, track.path.clone());
+                }
             }
         }
     }

@@ -283,3 +283,76 @@ fn the_pool_sweeps_old_cache_entries_off_the_callers_thread() {
     analyzer.results().recv_timeout(WAIT).unwrap();
     assert!(!stale.exists(), "swept before the first job");
 }
+
+/// One worker, 30 ms per analysis, tracks 1 to 10 queued.
+fn busy_pool(dir: &Path) -> (Analyzer, PathBuf) {
+    let slow: AnalyzeFn = Arc::new(|path, settings, limits, _cancelled| {
+        std::thread::sleep(Duration::from_millis(30));
+        analyze_file(path, settings, limits)
+    });
+    let file = wav(dir, "a.wav");
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        None,
+        slow,
+    )
+    .unwrap();
+    for n in 1..=10 {
+        analyzer.submit(TrackId(n), file.clone());
+    }
+    (analyzer, file)
+}
+
+fn order(analyzer: &Analyzer, count: usize) -> Vec<TrackId> {
+    (0..count)
+        .map(|_| analyzer.results().recv_timeout(WAIT).unwrap().track)
+        .collect()
+}
+
+/// A track a player shows needs its waveform now, not after the library.
+#[test]
+fn urgent_jobs_go_ahead_of_the_queue() {
+    let dir = tempfile::tempdir().unwrap();
+    let (analyzer, file) = busy_pool(dir.path());
+    analyzer.submit_urgent(TrackId(99), file);
+    let order = order(&analyzer, 11);
+    let at = order.iter().position(|t| *t == TrackId(99)).unwrap();
+    assert!(at <= 1, "after at most the running job: {order:?}");
+}
+
+#[test]
+fn a_queued_job_promoted_goes_ahead_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (analyzer, file) = busy_pool(dir.path());
+    analyzer.promote(TrackId(10), file.clone());
+    analyzer.promote(TrackId(10), file);
+    let order = order(&analyzer, 10);
+    let at = order.iter().position(|t| *t == TrackId(10)).unwrap();
+    assert!(at <= 1, "after at most the running job: {order:?}");
+    assert!(
+        analyzer
+            .results()
+            .recv_timeout(Duration::from_millis(200))
+            .is_err(),
+        "analysed once"
+    );
+}
+
+#[test]
+fn promoting_a_job_already_answered_does_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = wav(dir.path(), "a.wav");
+    let analyzer =
+        Analyzer::spawn(1, AnalysisSettings::default(), Limits::default(), None).unwrap();
+    analyzer.submit(TrackId(1), file.clone());
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    analyzer.promote(TrackId(1), file);
+    assert!(
+        analyzer
+            .results()
+            .recv_timeout(Duration::from_millis(300))
+            .is_err()
+    );
+}

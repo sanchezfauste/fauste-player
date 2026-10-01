@@ -73,7 +73,23 @@ themselves" in the analysis section, and the track-table tooltip.
 - Docs: `docs/user/playlists.md` and `docs/user/cartwall.md` legends
   ("hover it for the reason").
 
-### 4. Finish
+### 4. Waveforms of loaded tracks come first
+
+Found while testing: the analysis pool had a single FIFO queue, and the
+services submitted the tracks on screen together with the rest of the
+library. A track loaded while a library was being analysed (a playlist
+just added, *Analyse now*, *Re-analyse all*) got its waveform last.
+
+- Tests first: in `fp-analysis`, an urgent job goes ahead of ten queued
+  ones, a promoted queued job goes ahead once, and promoting a job already
+  answered does nothing. In `fp-app`, a track set as next while twelve are
+  queued is analysed among the first.
+- `Analyzer::submit_urgent` and `promote` (a second queue, taken first
+  with `select_biased!`). The bookkeeping tracks urgent and running
+  generations so nothing is analysed twice. `Services::submit_new` sends
+  wanted tracks urgent and promotes wanted tracks already in flight.
+
+### 5. Finish
 
 - Gate (fmt, clippy, tests), a fresh review on the most capable model,
   PR, CI on the three OSes, merge.

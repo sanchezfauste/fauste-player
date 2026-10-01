@@ -484,3 +484,27 @@ fn a_file_still_missing_is_looked_for_without_touching_the_model_or_the_pool() {
     assert_eq!(r.analyses.load(Ordering::SeqCst), analyses);
     assert_eq!(r.handle.telemetry.load().model_version, version);
 }
+
+/// A track loaded on a player gets its waveform ahead of the library being
+/// analysed, not after it.
+#[test]
+fn a_track_on_a_player_is_analysed_ahead_of_the_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=12)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = rig_with(&files, dir, Duration::from_millis(40), |s| {
+        let p = s.players[0].id;
+        let last = s.playlists.iter().next().unwrap().entries[11].id;
+        fp_model::apply(s, Command::SetNext(p, last)).unwrap();
+    });
+    let model = r.handle.model.load_full();
+    let next = model.players[0].next.unwrap();
+    let track = model.playlists.entry(next).unwrap().track;
+    r.run_until("peaks for the loaded track", |r| r.media.contains(track));
+    assert!(
+        r.analyses.load(Ordering::SeqCst) <= 3,
+        "{} analyses ran first",
+        r.analyses.load(Ordering::SeqCst)
+    );
+}
