@@ -114,7 +114,7 @@ fn main() -> ExitCode {
         .save_config(&state)
         .and_then(|()| store.save_playlists(&state))
         .and_then(|()| store.save_carts(&state))
-        .and_then(|()| store.save_session(&state, |p| 40.0 + f64::from(p.0 as u32 % 7) * 19.0));
+        .and_then(|()| store.save_session(&state, |p| 8.0 + f64::from(p.0 as u32 % 4) * 3.0));
     match saved {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

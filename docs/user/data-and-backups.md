@@ -41,7 +41,9 @@ a USB stick, or to keep separate setups side by side.
 
 After a crash or a restart, every player comes back with its playlist, its
 current and next tracks, and its position, but **paused or stopped**. Nothing
-goes on air by itself.
+goes on air by itself. A player that was at the very end of its track comes back
+at the start of that track instead, so pressing Play plays it rather than
+ending it at once.
 
 ## Editing `config.json` by hand
 

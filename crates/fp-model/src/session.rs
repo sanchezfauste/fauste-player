@@ -183,10 +183,18 @@ impl AppState {
                 volume: p.volume,
             });
             if let Some(current) = p.current {
-                let position = sessions
+                let saved = sessions
                     .iter()
                     .find(|s| s.id == p.id)
                     .map_or(0.0, |s| s.position_secs);
+                // A position at or past the cue-out would end the track the
+                // moment Play resumes it: it comes back at the cue-in.
+                let position = match state.track_for_entry(current) {
+                    Some(t) if t.known_cue_out_secs().is_some_and(|out| saved >= out) => {
+                        t.cue_in_secs()
+                    }
+                    _ => saved,
+                };
                 if let Some(request) = state.request_at(current, position) {
                     out.push(EngineAction::LoadPaused {
                         player: p.id,

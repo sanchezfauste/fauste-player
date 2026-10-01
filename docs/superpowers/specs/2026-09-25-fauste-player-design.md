@@ -396,7 +396,7 @@ Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opu
   5. `fsync` the directory (Unix).
 - **Load:** on parse error or failed validation, try `.bak1`…`.bakN` in order, show a non-blocking warning and log it. If everything fails, start with defaults and keep the corrupt files renamed `*.corrupt-<timestamp>`. **Never crash on bad data.**
 - **Autosave:** the conductor marks state dirty; saves are debounced by `tuning.save_debounce_ms` (default 1000 ms) and run on the background pool. `session.json` is refreshed at the same interval while any player plays.
-- **Crash recovery.** On startup, players restore their playlist, current, next and position, but always come up **Stopped/Paused**. Nothing goes on air by itself.
+- **Crash recovery.** On startup, players restore their playlist, current, next and position, but always come up **Stopped/Paused**. Nothing goes on air by itself. A saved position at or past the track's cue-out (known from analysis) is restored at its cue-in: resumed there, the track would end at once (Stop in Single mode, the next track in Continuous).
 - **Limits:** input files larger than `limits.max_state_file_bytes` (default 50 MB, JSON) or `limits.max_playlist_file_bytes` (default 10 MB, M3U/PLS) are rejected with a clear error.
 - **M3U/M3U8 and PLS:** Phase 2. A tolerant parser that ignores unknown lines, handles relative paths (resolved against the playlist's directory), non-UTF-8 paths and `#EXTINF`. It is fuzzed.
 
