@@ -155,6 +155,12 @@ fn run(
     let faults = services.faults();
     let services = services.spawn()?;
 
+    let remote = fp_app::remote::start(
+        handle.clone(),
+        media.clone(),
+        paths.cache_dir.join("analysis"),
+        &config.limits,
+    );
     let mut app = AppUi::new(handle.clone(), i18n, media)
         .with_services(requests)
         .with_service_faults(faults)
@@ -197,6 +203,7 @@ fn run(
         }),
     );
     // Final save with the current positions, then stop the audio.
+    drop(remote);
     services.shutdown();
     drop(handle);
     result.map_err(|e| e.to_string().into())

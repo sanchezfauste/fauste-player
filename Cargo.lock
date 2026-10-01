@@ -1700,6 +1700,7 @@ dependencies = [
  "fp-control",
  "fp-engine",
  "fp-model",
+ "fp-remote",
  "fp-store",
  "hound",
  "image",
