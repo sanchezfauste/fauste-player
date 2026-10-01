@@ -7,7 +7,7 @@
 **Architecture:**
 - **Rules in the model.** `fp_model::restore_defaults(&mut Config, SettingsSection)` resets one section, and `Command::RestoreDefaults` applies it through the reducer, so it is validated and keeps the player count. `fp_model::restart_pending(started, current) -> Vec<RestartReason>` compares the configuration the engine was built with against the model's current one.
 - **The window.** `settings::window_size` gives one size for every section. The header, the section header and the footer have fixed sizes, and the body is a `ScrollArea::both`, so wide content scrolls instead of widening the window. Every row goes through one helper, `labelled_row`, with a fixed label column whose controls fill the rest.
-- **Restart.** `AppUi` keeps the started configuration. While `restart_pending` is not empty, the Settings footer shows a notice and **Restart now**, and the top bar shows a "Restart pending" pill. Both ask plan 1's on-air guard, with a new `ExitIntent::Restart`. When it is confirmed (or nothing is on air), the UI sets a shared restart flag and closes the window. `main` runs the normal shutdown, which saves the session, then drops the instance lock and starts the application again through `fp_app::restart::relaunch`. A start never plays anything, so rule 10 holds.
+- **Restart.** `AppUi` keeps the started configuration. While `restart_pending` is not empty, the Settings footer shows a notice and **Restart now**, and the top bar shows a "Restart pending" pill that runs the same action. When something is on air, both ask plan 1's on-air guard, with a new `ExitIntent::Restart`; when nothing is, they restart at once. Once confirmed (or straight away), the UI sets a shared restart flag and closes the window. `main` runs the normal shutdown, which saves the session, then drops the instance lock and starts the application again through `fp_app::restart::relaunch`. A start never plays anything, so rule 10 holds.
 
 **Tech Stack:** Rust, egui/eframe 0.36.2, egui_kittest 0.36.2 (kittest 0.4), Fluent, std::process.
 
@@ -32,18 +32,15 @@ The spec leaves these points open, or the code answers them. Copy them into the 
 - **Relaunch target.**
   - Ruling: use `$APPIMAGE` inside an AppImage, because the mounted image goes away with the old process. Inside a Flatpak (`FLATPAK_ID`), use `flatpak-spawn <exe>` through the Flatpak portal, which is reachable without extra permissions, because the old sandbox dies with its process. In every other case, use `current_exe()`, with Linux's `" (deleted)"` suffix stripped after a package upgrade.
   - Cost if wrong: on that packaging the restart fails. The app logs it and shows a message, and the operator starts it by hand.
-- **Restore defaults in Players.**
-  - Ruling: reset `players.*` except `count`, plus `ui.language`, which is shown in that section.
-  - Why: the count adds or removes players, which changes the show's layout, not a preference.
-  - Cost if wrong: the maintainer may want the language kept.
-- **Restore defaults in Cartwall.**
-  - Ruling: reset `config.cartwall` (the grid of new pages), and add a row that shows it in the Cartwall section, so that the button has a visible effect. The cart pages are show data and are never reset.
-  - Cost if wrong: one extra row.
+- **Restore defaults in Players** (maintainer's decision).
+  - Ruling: reset `players.*` except `count`. The interface language, although shown in that section, is kept.
+  - Why: the count adds or removes players, which changes the show's layout, not a preference; the language is the operator's, not a tuning value.
+- **No Restore defaults in Cartwall** (maintainer's decision).
+  - Ruling: Cartwall gets no button and no new row. The section edits cart pages, which are show data, and `config.cartwall` (the grid of new pages) has no field in Settings. This departs from spec §3 O2, which listed Cartwall; Task 10 updates the spec.
 - **Shortcuts.**
   - Ruling: the header button replaces the section's old "Reset to defaults" button (`shortcut-reset`). `Command::ResetShortcuts` stays: a model test uses it.
-- **The pill.**
-  - Ruling: clicking "Restart pending" runs the same action as **Restart now**: the guard when something is on air, otherwise an immediate restart. Its tooltip lists the reasons.
-  - Cost if wrong: an unexpected restart while silent, a few seconds of downtime.
+- **The pill** (maintainer's decision).
+  - Ruling: clicking "Restart pending" runs the same action as **Restart now**. When nothing is on air, it restarts at once, with no confirmation. When something is on air, the on-air guard asks first. Its tooltip lists the reasons.
 
 ## Global Constraints
 
@@ -62,7 +59,7 @@ The spec leaves these points open, or the code answers them. Copy them into the 
 ## Review Focus
 
 - **A restart-only value changed and then changed back** (48 kHz → 44.1 kHz → 48 kHz). Expected: no notice, no pill. Pinned in Task 2 (`changing_back_clears_the_reason`) and Task 8 (`changing_back_hides_the_pill`).
-- **Restore defaults while the limits are lower than the defaults** (`limits.max_cart_cols = 4`, default 8). Expected: the restored value is clamped to 4, never invalid. Pinned in Task 1 (`the_command_validates_and_keeps_the_player_count`).
+- **Restore defaults in Players after the player count was changed** (2 players, default 4). Expected: the count and the players stay; only the other Players values go back. Pinned in Task 1 (`the_command_keeps_the_player_count`).
 - **A small main window** (700 × 500). Expected: the Settings window shrinks to fit and keeps one size across sections. Pinned in Task 3 (`a_small_screen_keeps_one_size_inside_it` and the `window_size` unit test).
 - **Restart now while a Remote text field still holds an unsaved draft.** Expected: the draft is applied before the window closes, as when switching sections. Pinned in Task 8 (`restart_now_applies_a_remote_draft_first`).
 - **The executable was replaced by a package upgrade while running** (Linux reports `/usr/bin/fauste-player (deleted)`). Expected: the new binary at `/usr/bin/fauste-player` starts. Pinned in Task 9 (`a_replaced_executable_starts_from_its_path`).
@@ -80,7 +77,7 @@ The spec leaves these points open, or the code answers them. Copy them into the 
 
 **Interfaces:**
 - Produces:
-  - `pub enum SettingsSection { Players, Meters, Analysis, Cartwall, Shortcuts }`, deriving `Debug, Clone, Copy, PartialEq, Eq, Hash`. Only the sections that have the button exist.
+  - `pub enum SettingsSection { Players, Meters, Analysis, Shortcuts }`, deriving `Debug, Clone, Copy, PartialEq, Eq, Hash`. Only the sections that have the button exist.
   - `pub fn restore_defaults(config: &mut Config, section: SettingsSection)`.
   - `Command::RestoreDefaults(SettingsSection)`: restores, validates and keeps `players.count` (through `update_config`).
 
@@ -94,7 +91,7 @@ mod common;
 
 use common::fixture;
 use fp_model::{
-    AnalysisSettings, CartwallConfig, Command, Config, MeterBallistics, MeterConfig,
+    AnalysisSettings, Command, Config, MeterBallistics, MeterConfig,
     PlayersConfig, SettingsSection, apply, default_shortcuts, restore_defaults,
 };
 
@@ -125,7 +122,7 @@ fn altered() -> Config {
 }
 
 #[test]
-fn players_resets_the_player_settings_and_the_language_but_not_the_count() {
+fn players_resets_the_player_settings_but_not_the_count_or_the_language() {
     let mut c = altered();
     restore_defaults(&mut c, SettingsSection::Players);
     let mut expected = altered();
@@ -133,7 +130,6 @@ fn players_resets_the_player_settings_and_the_language_but_not_the_count() {
         count: 6,
         ..PlayersConfig::default()
     };
-    expected.ui.language = None;
     assert_eq!(c, expected);
 }
 
@@ -156,15 +152,6 @@ fn analysis_resets_only_the_analysis() {
 }
 
 #[test]
-fn cartwall_resets_only_the_grid_of_new_pages() {
-    let mut c = altered();
-    restore_defaults(&mut c, SettingsSection::Cartwall);
-    let mut expected = altered();
-    expected.cartwall = CartwallConfig::default();
-    assert_eq!(c, expected);
-}
-
-#[test]
 fn shortcuts_resets_only_the_shortcuts() {
     let mut c = altered();
     restore_defaults(&mut c, SettingsSection::Shortcuts);
@@ -174,22 +161,17 @@ fn shortcuts_resets_only_the_shortcuts() {
 }
 
 #[test]
-fn the_command_validates_and_keeps_the_player_count() {
+fn the_command_keeps_the_player_count() {
     let mut s = fixture(1);
     apply(&mut s, Command::SetPlayerCount(2)).unwrap();
     let mut config = s.config.clone();
-    config.limits.max_cart_cols = 4;
-    config.cartwall.default_cols = 2;
     config.players.fade_ms = 3000;
+    config.ui.language = Some("es-ES".into());
     apply(&mut s, Command::UpdateConfig(Box::new(config))).unwrap();
-
-    apply(&mut s, Command::RestoreDefaults(SettingsSection::Cartwall)).unwrap();
-    // The default (8 columns) is above the limit: it is clamped.
-    assert_eq!(s.config.cartwall.default_cols, 4);
-    assert_eq!(s.config.cartwall.default_rows, 2);
 
     apply(&mut s, Command::RestoreDefaults(SettingsSection::Players)).unwrap();
     assert_eq!(s.config.players.fade_ms, 1000);
+    assert_eq!(s.config.ui.language.as_deref(), Some("es-ES"));
     assert_eq!(s.players.len(), 2);
     assert_eq!(s.config.players.count, 2);
 }
@@ -212,18 +194,18 @@ use crate::config::{Config, PlayersConfig};
 
 /// The Settings sections that offer "Restore defaults". Outputs and MIDI
 /// depend on the hardware, Remote holds security settings, and Playlists
-/// holds show data: they have no button.
+/// and Cartwall hold show data: they have no button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SettingsSection {
     Players,
     Meters,
     Analysis,
-    Cartwall,
     Shortcuts,
 }
 
-/// Resets the fields `section` shows. The player count is kept: it adds
-/// or removes players, which is the show's layout, not a preference.
+/// Resets the fields `section` shows. In Players, the player count is
+/// kept (it adds or removes players, which is the show's layout, not a
+/// preference) and so is the interface language (the operator's own).
 pub fn restore_defaults(config: &mut Config, section: SettingsSection) {
     let defaults = Config::default();
     match section {
@@ -232,11 +214,9 @@ pub fn restore_defaults(config: &mut Config, section: SettingsSection) {
                 count: config.players.count,
                 ..defaults.players
             };
-            config.ui.language = defaults.ui.language;
         }
         SettingsSection::Meters => config.meter = defaults.meter,
         SettingsSection::Analysis => config.analysis = defaults.analysis,
-        SettingsSection::Cartwall => config.cartwall = defaults.cartwall,
         SettingsSection::Shortcuts => config.shortcuts = defaults.shortcuts,
     }
 }
@@ -264,7 +244,7 @@ In `reducer.rs`, next to the `Command::ResetShortcuts` arm:
 - [ ] **Step 4: Run the tests and check that they pass**
 
 Run: `cargo test -p fp-model --test restore && cargo test -p fp-model`
-Expected: 6 passed, and the rest of the model suite stays green.
+Expected: 5 passed, and the rest of the model suite stays green.
 
 - [ ] **Step 5: Commit**
 
@@ -1262,12 +1242,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `section_header`, `restorable` and `confirm_restore`;
   - `SettingsState.confirm_restore`, and `capturing()`;
   - `heading` and its calls are removed.
-- Modify: `crates/fp-app/src/ui/settings/{carts,keys,meters,midi,remote}.rs` (remove `heading` calls and imports; `keys.rs` loses its Reset button; `carts.rs` gains the new-page grid row)
+- Modify: `crates/fp-app/src/ui/settings/{carts,keys,meters,midi,remote}.rs` (remove `heading` calls and imports; `keys.rs` loses its Reset button)
 - Modify: both `main.ftl` (add the keys below; remove `shortcut-reset`)
 - Test: `crates/fp-app/tests/settings_restore.rs` (new)
 
 **Interfaces:**
-- Consumes: `fp_model::{SettingsSection, Command::RestoreDefaults}` (Task 1), `row` and `slider` (exist).
+- Consumes: `fp_model::{SettingsSection, Command::RestoreDefaults}` (Task 1).
 - Produces:
   - `SettingsState.confirm_restore: Option<SettingsSection>`, `pub(super)`;
   - `fn restorable(section: Section) -> Option<SettingsSection>`;
@@ -1281,10 +1261,6 @@ settings-restore = Restore defaults
 settings-restore-question = Restore the default values of this section?
 settings-restore-cancel = Cancel
 settings-restore-confirm = Restore
-settings-cart-new-grid = Grid of new pages
-settings-hint-cart-new-grid = Rows and columns of the pages you create from now on.
-settings-cart-new-rows = Rows of new pages
-settings-cart-new-cols = Columns of new pages
 ```
 
 ```
@@ -1292,10 +1268,6 @@ settings-restore = Restaurar valores por defecto
 settings-restore-question = ¿Restaurar los valores por defecto de esta sección?
 settings-restore-cancel = Cancelar
 settings-restore-confirm = Restaurar
-settings-cart-new-grid = Cuadrícula de las páginas nuevas
-settings-hint-cart-new-grid = Filas y columnas de las páginas que crees a partir de ahora.
-settings-cart-new-rows = Filas de las páginas nuevas
-settings-cart-new-cols = Columnas de las páginas nuevas
 ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -1376,7 +1348,6 @@ fn each_section_with_the_button_restores_itself() {
     for (section, expected) in [
         ("Meters", SettingsSection::Meters),
         ("Analysis", SettingsSection::Analysis),
-        ("Cartwall", SettingsSection::Cartwall),
         ("Keyboard shortcuts", SettingsSection::Shortcuts),
     ] {
         let (mut h, fake) = open(section, state(1, 1));
@@ -1390,24 +1361,17 @@ fn each_section_with_the_button_restores_itself() {
 
 #[test]
 fn hardware_security_and_show_data_sections_have_no_button() {
-    for section in ["Audio outputs", "Playlists", "MIDI", "Remote"] {
+    for section in ["Audio outputs", "Playlists", "Cartwall", "MIDI", "Remote"] {
         let (h, _) = open(section, state(1, 1));
         assert!(h.query_by_label("Restore defaults").is_none(), "{section}");
     }
-}
-
-#[test]
-fn the_grid_of_new_pages_is_shown_in_cartwall() {
-    let (h, _) = open("Cartwall", state(1, 1));
-    assert!(h.query_by_role_and_label(Role::Slider, "Rows of new pages").is_some());
-    assert!(h.query_by_role_and_label(Role::Slider, "Columns of new pages").is_some());
 }
 ```
 
 - [ ] **Step 2: Run the tests and check that they fail**
 
 Run: `cargo test -p fp-app --test settings_restore`
-Expected: FAIL. There is no "Restore defaults" label, and no new-page grid sliders.
+Expected: FAIL. There is no "Restore defaults" label.
 
 - [ ] **Step 3: Implement**
 
@@ -1436,9 +1400,12 @@ fn restorable(section: Section) -> Option<SettingsSection> {
         Section::Players => Some(SettingsSection::Players),
         Section::Meters => Some(SettingsSection::Meters),
         Section::Analysis => Some(SettingsSection::Analysis),
-        Section::Cartwall => Some(SettingsSection::Cartwall),
         Section::Shortcuts => Some(SettingsSection::Shortcuts),
-        Section::Outputs | Section::Playlists | Section::Midi | Section::Remote => None,
+        Section::Outputs
+        | Section::Playlists
+        | Section::Cartwall
+        | Section::Midi
+        | Section::Remote => None,
     }
 }
 
@@ -1536,32 +1503,6 @@ Then:
 the help label in its `ui.horizontal`. Remove `shortcut-reset` from both
 locales.
 
-`carts.rs`, right after `poll(scene, c);`, the new-page grid:
-
-```rust
-    let limits = &scene.state.config.limits;
-    let grid = scene.state.config.cartwall.clone();
-    let (mut rows, mut cols) = (grid.default_rows, grid.default_cols);
-    row(
-        ui,
-        &t.tr("settings-cart-new-grid"),
-        Some(&t.tr("settings-hint-cart-new-grid")),
-        |ui| {
-            let rows_label = t.tr("settings-cart-new-rows");
-            if slider(ui, &mut rows, 1..=limits.max_cart_rows, 1.0, "", &rows_label) {
-                update(scene, |c| c.cartwall.default_rows = rows);
-            }
-            let cols_label = t.tr("settings-cart-new-cols");
-            if slider(ui, &mut cols, 1..=limits.max_cart_cols, 1.0, "", &cols_label) {
-                update(scene, |c| c.cartwall.default_cols = cols);
-            }
-        },
-    );
-```
-
-Import `slider` and `update` from `super`. If the name `limits` clashes
-with a later `let limits` in the function, rename this one `grid_limits`.
-
 - [ ] **Step 4: Run the tests and check that they pass**
 
 Run: `cargo test -p fp-app --test settings_restore && cargo test -p fp-app --test settings --test settings_layout --test midi_settings --test remote_settings --test i18n`
@@ -1575,7 +1516,8 @@ git commit -m "feat(ui): restore defaults per settings section
 
 Each section that holds preferences gets a Restore defaults button in a
 fixed header, with a confirmation. Outputs, MIDI and Remote depend on
-the hardware or hold security settings and have none.
+the hardware or hold security settings, and Playlists and Cartwall hold
+show data: they have none.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -1882,6 +1824,20 @@ fn restart_now_with_nothing_on_air_closes_for_a_restart() {
     fake.take_sent();
     h.get_by_label("Restart now").click();
     h.run_steps(1);
+    assert!(h.query_by_label("Audio is on air").is_none());
+    assert!(sent_viewport_command(&h, &ViewportCommand::Close));
+    assert!(h.state().restart_flag().load(Ordering::Acquire));
+    assert!(fake.take_sent().is_empty());
+}
+
+#[test]
+fn the_pill_restarts_at_once_when_nothing_is_on_air() {
+    let (mut h, fake) = harness(state(1, 3));
+    set_rate(&mut h, &fake, 44_100);
+    fake.take_sent();
+    h.get_by_label(PILL).click();
+    h.run_steps(1);
+    // No confirmation: nothing would be cut.
     assert!(h.query_by_label("Audio is on air").is_none());
     assert!(sent_viewport_command(&h, &ViewportCommand::Close));
     assert!(h.state().restart_flag().load(Ordering::Acquire));
@@ -2537,25 +2493,26 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `docs/user/settings.md`:
-  - the window and the section header with Restore defaults (and which sections have it);
-  - the Restart pending notice, the pill and Restart now, with the final list of restart-only settings;
+  - the window and the section header with Restore defaults: Players (the player count and the language are kept), Meters, Analysis and Keyboard shortcuts have it; Audio outputs, Playlists, Cartwall, MIDI and Remote do not;
+  - the Restart pending notice, the pill and Restart now, with the final list of restart-only settings. Say plainly that the pill restarts at once when nothing is on air;
   - line 8 ("apply the next time the application starts") becomes a pointer to Restart now;
-  - the Cartwall grid of new pages;
   - "No output (silent)" for the Null backend.
 - Modify: `docs/user/troubleshooting.md` (lines 8 and 63: "restart" means **Restart now**)
 - Modify: `docs/user/getting-started.md` (the top-bar pill, one line)
 - Modify: `docs/technical/ui.md`:
   - a "Settings window" section on `window_size`, `labelled_row`/`LABEL_WIDTH`, the fixed section header and `ScrollArea::both`;
   - in "Exit guard", `ExitIntent::Restart` and `begin_restart`.
-- Modify: `docs/technical/architecture.md` (the restart path: `restart_flag` → `run` returns `Exit::Restart` → shutdown → lock dropped → `restart::relaunch`; the AppImage and Flatpak cases)
+- Modify: `docs/technical/architecture.md` (the restart path: `restart_flag` → `run` returns `Exit::Restart` → shutdown → lock dropped → `restart::relaunch`; the AppImage and Flatpak cases, with one line saying that these two relaunch paths are not exercised in CI and need a manual check)
 - Modify: `README.md` (features: restore defaults, restart pending; keep the wording short)
 - Modify: `docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md` §3:
   - O4: the final restart set, without the player count, and why;
   - relaunch with no arguments, and why;
-  - O2: what Players and Cartwall reset;
-  - the pill runs Restart now.
+  - O2: Players keeps the player count and the interface language; Cartwall has no button (maintainer's decision), so the sections with one are Players, Meters, Analysis and Shortcuts;
+  - the pill runs Restart now: at once when nothing is on air, through the on-air guard otherwise.
 - Modify: `docs/superpowers/specs/2026-09-25-fauste-player-design.md` §8.4 (Restore defaults, Restart now, the fixed size)
 - Modify: `docs/superpowers/plans/2026-10-01-operator-feedback-2-roadmap.md` (plan 2 status: done)
+
+The PR description repeats that line: the AppImage and Flatpak relaunch need a manual check.
 
 - [ ] **Step 1:** Update the docs listed above. Write plain English, and describe behaviour in its own terms.
 - [ ] **Step 2:** Run the full gate: `cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace`. Expected: green.
