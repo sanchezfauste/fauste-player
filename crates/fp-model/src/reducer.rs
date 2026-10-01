@@ -45,6 +45,24 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             index,
             paths,
         } => insert_paths(state, playlist, index, paths)?,
+        Command::InsertTracks {
+            playlist,
+            index,
+            tracks,
+        } => {
+            if state.playlists.get(playlist).is_none() {
+                return Err(ModelError::UnknownPlaylist(playlist));
+            }
+            if let Some(missing) = tracks.iter().find(|t| state.library.get(**t).is_none()) {
+                return Err(ModelError::UnknownTrack(*missing));
+            }
+            let entries = tracks
+                .into_iter()
+                .map(|t| PlaylistEntry::new(state.ids.entry(), t))
+                .collect();
+            state.playlists.insert(playlist, index, entries)?;
+            refresh_next(state);
+        }
         Command::SetMode(id, mode) => {
             let i = state.player_index(id)?;
             let player = &mut state.players[i];
@@ -198,6 +216,9 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::SetCart { page, index, edit } => cart_rules::set_cart(state, page, index, edit)?,
         Command::AssignCartFile { page, index, path } => {
             cart_rules::assign_file(state, page, index, Some(path), &mut out)?
+        }
+        Command::AssignCartTrack { page, index, track } => {
+            cart_rules::assign_track(state, page, index, track, &mut out)?
         }
         Command::ClearCartFile { page, index } => {
             cart_rules::assign_file(state, page, index, None, &mut out)?
