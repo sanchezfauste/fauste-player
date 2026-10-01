@@ -35,7 +35,7 @@ An empty cart's menu has **Edit…** only, to choose its file.
 | Grey dot | Spot (commercial) |
 | ↻ after the type | Loops |
 | ✋ after the type | Stops the other carts when fired |
-| Warning sign | The file is missing or cannot be decoded; hover the cart for the reason and the path. A missing file is looked for again every 30 s. |
+| Warning sign | The file is missing or cannot be decoded; hover the cart for the reason and the path. A missing file is looked for again every 30 s (`tuning.missing_recheck_ms`). |
 | "Empty", dimmed | No file assigned |
 
 Carts use the same markers as tracks. They start at their cue-in and end at

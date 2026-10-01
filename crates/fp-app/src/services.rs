@@ -4,6 +4,7 @@
 //! non-blocking handle.
 
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 use std::thread::JoinHandle;
@@ -18,6 +19,61 @@ use fp_store::Store;
 
 /// How often the services thread wakes up when running on its own.
 const PERIOD: Duration = Duration::from_millis(50);
+
+/// The thread that looks for files not found, off the services thread: a
+/// share that is offline can make each look block for seconds.
+struct Probe {
+    paths: Sender<Vec<(TrackId, PathBuf)>>,
+    found: Receiver<Vec<TrackId>>,
+    /// A look was sent and its answer has not come back.
+    busy: bool,
+}
+
+impl Probe {
+    fn spawn() -> Option<Self> {
+        let (paths, jobs) = crossbeam_channel::unbounded::<Vec<(TrackId, PathBuf)>>();
+        let (answers, found) = crossbeam_channel::unbounded();
+        let spawned = std::thread::Builder::new()
+            .name("fp-file-probe".to_owned())
+            .spawn(move || {
+                // Ends when the services drop their side.
+                while let Ok(batch) = jobs.recv() {
+                    if answers.send(present(batch)).is_err() {
+                        break;
+                    }
+                }
+            });
+        match spawned {
+            Ok(_) => Some(Self {
+                paths,
+                found,
+                busy: false,
+            }),
+            Err(e) => {
+                tracing::error!(error = %e, "cannot start the file probe; missing files stay missing");
+                None
+            }
+        }
+    }
+}
+
+/// The tracks of `batch` whose file exists. A folder is looked at once: a
+/// whole album or drive that is gone costs one look, not one per file.
+fn present(batch: Vec<(TrackId, PathBuf)>) -> Vec<TrackId> {
+    let mut folders: HashMap<PathBuf, bool> = HashMap::new();
+    batch
+        .into_iter()
+        .filter(|(_, path)| {
+            let folder = path.parent().is_none_or(|dir| {
+                *folders
+                    .entry(dir.to_path_buf())
+                    .or_insert_with(|| dir.is_dir())
+            });
+            folder && path.is_file()
+        })
+        .map(|(id, _)| id)
+        .collect()
+}
 
 /// What the UI draws for a track besides its model data.
 #[derive(Debug, Clone, PartialEq)]
@@ -119,6 +175,8 @@ pub struct Services {
     settings: Option<AnalysisSettings>,
     /// When files not found were last looked for again.
     last_recheck: Option<Instant>,
+    /// Looks for them; `None` if its thread could not start.
+    probe: Option<Probe>,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -154,6 +212,7 @@ impl Services {
             seen_analyzed: HashSet::new(),
             settings: None,
             last_recheck: None,
+            probe: Probe::spawn(),
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -306,27 +365,42 @@ impl Services {
     }
 
     /// Every `tuning.missing_recheck_ms`, files not found (a drive not
-    /// mounted yet) are sent to the analysis pool again: one that is back is
-    /// answered from the cache. The pool touches the file system, never this
-    /// thread, so a hung network mount cannot stall autosave. Unreadable
+    /// mounted yet) are looked for again on the probe thread; the ones found
+    /// go to the analysis pool, which answers from the cache when they were
+    /// analysed before. Neither this thread nor the pool waits on a share
+    /// that is offline, so autosave and real analyses go on. Unreadable
     /// files wait for *Re-analyse all*: retrying them would decode them
     /// every time.
     fn recheck_missing(&mut self, state: &AppState, now: Instant) {
+        let Some(probe) = &mut self.probe else {
+            return;
+        };
+        for found in probe.found.try_iter() {
+            probe.busy = false;
+            for id in found {
+                self.failed.remove(&id);
+                self.forced.insert(id);
+            }
+        }
         let interval =
             Duration::from_secs_f64(state.config.tuning.missing_recheck_ms.max(0.0) / 1000.0);
         let Some(last) = self.last_recheck else {
             self.last_recheck = Some(now);
             return;
         };
-        if now.saturating_duration_since(last) < interval {
+        // One look at a time: a hung mount only delays the next one.
+        if probe.busy || now.saturating_duration_since(last) < interval {
             return;
         }
         self.last_recheck = Some(now);
-        for track in state.library.iter() {
-            if track.file_state == FileState::Missing && !self.in_flight.contains(&track.id) {
-                self.failed.remove(&track.id);
-                self.forced.insert(track.id);
-            }
+        let missing: Vec<(TrackId, PathBuf)> = state
+            .library
+            .iter()
+            .filter(|t| t.file_state == FileState::Missing && !self.in_flight.contains(&t.id))
+            .map(|t| (t.id, t.path.clone()))
+            .collect();
+        if !missing.is_empty() {
+            probe.busy = probe.paths.send(missing).is_ok();
         }
     }
 

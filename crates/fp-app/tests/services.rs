@@ -470,19 +470,17 @@ fn a_missing_file_that_comes_back_becomes_playable() {
 }
 
 /// Looking again for a file still missing changes nothing in the model, so
-/// nothing is saved every interval.
+/// nothing is saved every interval, and keeps it out of the analysis pool:
+/// a library on a share that is offline must not hold up real analyses.
 #[test]
-fn a_file_still_missing_is_looked_for_without_touching_the_model() {
+fn a_file_still_missing_is_looked_for_without_touching_the_model_or_the_pool() {
     let dir = tempfile::tempdir().unwrap();
     let mut r = recheck_rig(&[PathBuf::from("/definitely/missing.flac")], dir);
     r.run_until("missing state", missing);
-    let looked = r.analyses.load(Ordering::SeqCst);
+    let analyses = r.analyses.load(Ordering::SeqCst);
     let version = r.handle.telemetry.load().model_version;
     let until = r.now + Duration::from_millis(3_500);
     r.run_until("three intervals", |r| r.now >= until);
-    assert!(
-        r.analyses.load(Ordering::SeqCst) >= looked + 3,
-        "looked for again"
-    );
+    assert_eq!(r.analyses.load(Ordering::SeqCst), analyses);
     assert_eq!(r.handle.telemetry.load().model_version, version);
 }

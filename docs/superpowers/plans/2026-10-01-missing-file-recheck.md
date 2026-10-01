@@ -19,14 +19,15 @@ themselves" in the analysis section, and the track-table tooltip.
 - `Tuning::missing_recheck_ms: f64`, default 30 000, clamped to
   1 000 … 3 600 000 by `Config::validate`. In `tuning` (config file only),
   next to `reconnect_interval_ms`, which plays the same role for devices.
-- `Services` keeps `last_recheck: Option<Instant>`. When the interval has
-  passed, every track whose `file_state` is `Missing` and that is not in
-  flight leaves `failed` and joins `forced`, so `submit_new` sends it to the
-  analysis pool again. A file that is back is answered from the cache (the
-  key is path, size and mtime), so a returning library costs little; a
-  file still missing fails at once on its pool thread. The services
-  thread never touches the file system itself, so a hung network mount
-  cannot stall autosave.
+- `Services` keeps `last_recheck: Option<Instant>` and a probe thread
+  (`fp-file-probe`). When the interval has passed and no look is running,
+  the paths of the `Missing` tracks not in flight go to the probe, which
+  checks each folder once and then each file in a folder that exists. The
+  tracks found leave `failed` and join `forced`, so `submit_new` sends them
+  to the analysis pool, which answers from the cache (path, size, mtime)
+  when they were analysed before. Neither the services thread nor the pool
+  waits on a share that is offline (review I1: the first version sent
+  every missing track to the pool each interval).
 - `route` sends `SetFileState` only when the state changes: a file still
   missing must not bump the model version and trigger an autosave every
   interval.
