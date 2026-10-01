@@ -277,7 +277,8 @@ fn the_service_thread_never_loses_a_learn_request() {
     let ports = FakePorts::default();
     ports.plug("APC");
     let c = control(true);
-    let handle = fp_control::service::spawn(Box::new(ports.clone()), c.clone()).unwrap();
+    let service = fp_control::service::spawn(Box::new(ports.clone()), c.clone()).unwrap();
+    let handle = service.handle();
     // Wait for the connection.
     let deadline = Instant::now() + Duration::from_secs(5);
     while handle.status.load().inputs != vec![("APC".to_owned(), true)] {
@@ -295,6 +296,38 @@ fn the_service_thread_never_loses_a_learn_request() {
             .expect("the learn request was lost");
         assert_eq!(learned.action, stop);
     }
+}
+
+#[test]
+fn shutting_the_service_down_ends_its_thread_and_releases_the_control() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    let c = control(true);
+    let service = fp_control::service::spawn(Box::new(ports.clone()), c.clone()).unwrap();
+    let handle = service.handle();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while handle.status.load().inputs != vec![("APC".to_owned(), true)] {
+        assert!(Instant::now() < deadline, "not connected");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(Arc::strong_count(&c) > 1, "the service holds the control");
+    service.shutdown();
+    // Joined: the thread's state is gone, with its share of the control
+    // (the conductor in the application) and its input connections.
+    assert_eq!(Arc::strong_count(&c), 1);
+    let sink = ports.0.lock().unwrap().sinks.get("APC").cloned().unwrap();
+    assert!(sink.send(("APC".to_owned(), vec![0x90, 36, 100])).is_err());
+    // The interface's side outlives it harmlessly.
+    assert!(handle.requests.send(MidiRequest::CancelLearn).is_err());
+}
+
+#[test]
+fn dropping_the_service_stops_it_too() {
+    let ports = FakePorts::default();
+    let c = control(true);
+    let service = fp_control::service::spawn(Box::new(ports.clone()), c.clone()).unwrap();
+    drop(service);
+    assert_eq!(Arc::strong_count(&c), 1);
 }
 
 #[test]

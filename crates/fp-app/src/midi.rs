@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use fp_control::service::{MidiControl, MidiHandle};
+use fp_control::service::{MidiControl, MidiService};
 use fp_engine::conductor::ConductorHandle;
 use fp_model::{AppState, Command};
 
@@ -20,8 +20,9 @@ impl MidiControl for Bridge {
 }
 
 /// Starts MIDI control on the system's ports. A failure is logged and the
-/// application runs without it.
-pub fn start(handle: Arc<ConductorHandle>) -> Option<MidiHandle> {
+/// application runs without it. The service holds a share of the conductor
+/// until it is shut down.
+pub fn start(handle: Arc<ConductorHandle>) -> Option<MidiService> {
     match fp_control::service::spawn(
         Box::new(fp_control::ports::MidirPorts),
         Arc::new(Bridge(handle)),

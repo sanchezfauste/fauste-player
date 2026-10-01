@@ -16,7 +16,7 @@ use fp_app::{bootstrap, cli, crash, instance, logging};
 use fp_backends::{
     AudioBackend, Availability, NullBackend, choose_default_backend, display_name, system_backends,
 };
-use fp_engine::conductor::Conductor;
+use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
 use fp_store::Store;
@@ -44,6 +44,8 @@ enum Exit {
     /// Flatpak, this process waits at most `handoff` for the new one.
     Restart {
         handoff: Duration,
+        /// `ui.language`, for a failure message after the shutdown.
+        language: Option<String>,
     },
 }
 
@@ -100,13 +102,13 @@ fn main() -> ExitCode {
             tracing::info!("stopped");
             ExitCode::SUCCESS
         }
-        Ok(Exit::Restart { handoff }) => {
+        Ok(Exit::Restart { handoff, language }) => {
             // The lock is released above: the new process can take it.
             match fp_app::restart::relaunch(&data_dir, handoff) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
                     tracing::error!(error = %e, "could not start again");
-                    let i18n = I18n::new(None);
+                    let i18n = I18n::new(language.as_deref());
                     eprintln!("fauste-player: {}", i18n.tr("restart-failed"));
                     let _ = rfd::MessageDialog::new()
                         .set_title("Fauste Player")
@@ -170,7 +172,12 @@ fn run(
         .clone()
         .unwrap_or_else(|| "null".to_owned());
     tracing::info!(backend = %in_use, ?availability, "audio systems");
-    let platform = format!("{} · {}", os_name(), display_name(&in_use));
+    let output = if in_use == "null" {
+        i18n.tr("settings-backend-null")
+    } else {
+        display_name(&in_use).to_owned()
+    };
+    let platform = format!("{} · {}", os_name(), output);
     let engine = Engine::new(backends.clone(), settings, file_opener());
     let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
     let tick = Duration::from_secs_f64(config.tuning.conductor_tick_ms.max(1.0) / 1000.0);
@@ -211,8 +218,9 @@ fn run(
     if let Some(r) = &remote {
         app = app.with_remote_status(r.status_cell());
     }
-    if let Some(midi) = fp_app::midi::start(handle.clone()) {
-        app = app.with_midi(midi);
+    let midi = fp_app::midi::start(handle.clone());
+    if let Some(midi) = &midi {
+        app = app.with_midi(midi.handle());
     }
     for playlist in playlists {
         tracing::info!(path = %playlist.display(), "importing a playlist given at start");
@@ -242,27 +250,43 @@ fn run(
             Ok(Box::new(Shell::new(app)))
         }),
     );
-    let handoff = Duration::from_secs_f64(
-        handle
-            .model
-            .load()
-            .config
-            .tuning
-            .restart_handoff_ms
-            .max(0.0)
-            / 1000.0,
-    );
-    // Final save with the current positions, then stop the audio.
+    let final_config = handle.model.load_full();
+    let handoff =
+        Duration::from_secs_f64(final_config.config.tuning.restart_handoff_ms.max(0.0) / 1000.0);
+    let language = final_config.config.ui.language.clone();
+    drop(final_config);
+    // Everything that can send commands stops first; then the final save
+    // with the current positions, then the audio.
     drop(remote);
+    if let Some(midi) = midi {
+        midi.shutdown();
+    }
     services.shutdown();
-    drop(handle);
+    stop_engine(handle);
     result.map_err(|e| e.to_string())?;
     // Only a confirmed Restart now sets the flag; a plain close quits.
     Ok(if restart.load(std::sync::atomic::Ordering::Acquire) {
-        Exit::Restart { handoff }
+        Exit::Restart { handoff, language }
     } else {
         Exit::Quit
     })
+}
+
+/// Stops the conductor and the engine, closing the output streams, now:
+/// a restarted instance may need the same device. Every other holder of the
+/// handle must have stopped already.
+fn stop_engine(handle: Arc<ConductorHandle>) {
+    match Arc::try_unwrap(handle) {
+        Ok(conductor) => {
+            drop(conductor);
+            tracing::info!("the audio engine is stopped");
+        }
+        Err(handle) => tracing::warn!(
+            holders = Arc::strong_count(&handle) - 1,
+            "the audio engine is still held by another part of the application; \
+             it stops when the process ends"
+        ),
+    }
 }
 
 /// Gives `playlists` to the instance already running; without any, tells
