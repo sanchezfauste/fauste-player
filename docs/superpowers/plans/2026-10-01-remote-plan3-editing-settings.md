@@ -44,8 +44,9 @@
 ## Review Focus
 
 - **Editing an entry or a cart that is on air:** deleting the playlist on
-  air, or moving or removing the current entry, answers `409` with the
-  model's reason, and nothing is queued (Task 2 tests).
+  air, or removing the current entry, answers `409` with the model's
+  reason, and nothing is queued (Task 2 tests). Moving the current entry is
+  allowed: rule 13 forbids only its removal (corrected in plan 4).
 - **A cart edit that keeps the same track:** it does not stop the cart on
   air (C8 only applies to a new file) (Task 2 tests).
 - **Text fields in Settings:** a half-typed bind address, or a short token,

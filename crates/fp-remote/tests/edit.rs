@@ -417,3 +417,26 @@ async fn every_editing_route_answers() {
         StatusCode::BAD_REQUEST
     );
 }
+
+/// Rule 13 refuses only removing the entry on air; moving it is accepted.
+#[tokio::test]
+async fn moving_the_entry_on_air_is_accepted() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    let current = s.players[0].current.unwrap();
+    let main = s.playlists.first_id().unwrap();
+    let fake = FakeControl::new(s);
+    let status = call(
+        &fake,
+        "POST",
+        &format!("/api/v1/entries/{}/move", current.0),
+        Some(json!({"playlist": main.0, "index": 2})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert!(matches!(
+        fake.take_sent().as_slice(),
+        [Command::MoveEntry { .. }]
+    ));
+}

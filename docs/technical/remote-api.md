@@ -134,7 +134,7 @@ to the same library track, with its markers and analysis
 | `DELETE /playlists/{id}` | — | Delete it (refused while it is on air) |
 | `POST /playlists/{id}/entries` | `{"track": id, "index": n}` | Insert a loaded track; an index past the end is the end |
 | `DELETE /entries/{id}` | — | Remove an entry (refused while on air) |
-| `POST /entries/{id}/move` | `{"playlist": id, "index": n}` | Move it, also to another playlist |
+| `POST /entries/{id}/move` | `{"playlist": id, "index": n}` | Move it, also to another playlist (allowed while on air: only removal is refused, rule 13) |
 | `POST /entries/{id}/duplicate` | — | Duplicate it |
 | `POST /cartwall/pages` | `{"name"}` | Create a cart page |
 | `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | Rename or resize it, within `limits.max_cart_rows` and `limits.max_cart_cols` |

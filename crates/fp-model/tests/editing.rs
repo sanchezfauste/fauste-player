@@ -356,3 +356,28 @@ fn a_lower_player_limit_is_refused_while_a_player_it_removes_is_busy() {
     assert!(apply(&mut state, Command::UpdateConfig(Box::new(config))).is_err());
     assert_eq!(state, before, "state unchanged on refusal");
 }
+
+/// Rule 13 forbids removing an entry on air, not moving it (rule 22).
+#[test]
+fn rule13_the_entry_on_air_can_be_moved() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    apply(&mut state, Command::Play(p)).unwrap();
+    let list = state.playlists.first_id().unwrap();
+    apply(
+        &mut state,
+        Command::MoveEntry {
+            entry: e[0],
+            to: list,
+            index: 3,
+        },
+    )
+    .unwrap();
+    assert_eq!(state.player(p).unwrap().current, Some(e[0]), "still on air");
+    assert_eq!(entries(&state), vec![e[1], e[2], e[0]]);
+    assert_eq!(
+        state.player(p).unwrap().next,
+        None,
+        "nothing after it any more"
+    );
+}
