@@ -154,6 +154,7 @@ hand: release-please writes it from the commits.
 | `docs/superpowers/specs` | The binding design spec |
 | `docs/superpowers/plans` | Implementation plans (one per step of a phase) |
 | `docs/user`, `docs/technical` | User and technical documentation. Keep them in sync with behaviour. |
+| `vendor/opus-decoder` | A patched copy of `opus-decoder` (a real FFT), used through `[patch.crates-io]`; excluded from the workspace. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
 | `.github/workflows` | CI, release-please, release builds and packages, commit checks |
 
