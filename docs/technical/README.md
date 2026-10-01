@@ -14,6 +14,7 @@ the implementation differs from the spec or defers part of it.
 | [Decoding](decoding.md) | Formats, the backends behind `FileDecoder`, DSD to PCM, seeking |
 | [Analysis](analysis.md) | Tags, covers, peaks, markers, the cache and the analysis pool |
 | [Persistence and configuration](persistence.md) | Files, atomic writes, backups, migrations, every configuration field |
+| [Remote control API](remote-api.md) | The HTTP/JSON API: resources, routes, errors, security, the remote thread |
 | [User interface](ui.md) | The egui app: view model, controller, services, panic isolation, i18n |
 | [Testing](testing.md) | Test layers, the Offline backend, stress and soak, UI tests |
 | [Release process](release-process.md) | Versioning, commits, release-please, artefacts, rebuilding a release |

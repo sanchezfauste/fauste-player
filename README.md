@@ -57,6 +57,10 @@ audio engine that the interface can never block.
 - **MIDI control surfaces:** every player's transport buttons and volume
   fader can be learned onto a MIDI controller, with soft takeover for
   faders, LED feedback and hot-plug.
+- **Remote control API:** an HTTP/JSON API, off by default, lets a web page,
+  a phone app or automation read the players, playlists and cartwall and
+  operate them, with a token and origin checks when it listens on the
+  network.
 - **M3U / M3U8 / PLS import and M3U8 export.**
 - **Bit-perfect output:** a device can be played with exclusive access,
   following each file's sample rate while idle; at 100 % volume with no fade

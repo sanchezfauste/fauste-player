@@ -149,6 +149,7 @@ hand: release-please writes it from the commits.
 | `crates/fp-engine` | Mixer, sources, buses, workers, engine, conductor |
 | `crates/fp-analysis` | Metadata, signal analysis, cache, pool |
 | `crates/fp-control` | MIDI control surfaces: parsing, bindings, soft takeover, LED feedback, learn, the MIDI thread |
+| `crates/fp-remote` | Remote control over the network: HTTP/JSON API, security guard, the remote thread |
 | `crates/fp-app` | UI (`src/ui/*`), services thread, bootstrap, logging, crash reports, locales, fonts |
 | `docs/superpowers/specs` | The binding design spec |
 | `docs/superpowers/plans` | Implementation plans (one per step of a phase) |
@@ -179,3 +180,13 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   1. run `env -u WAYLAND_DISPLAY FAUSTE_HOME=<dir> target/release/fauste-player`;
   2. find the window with `xwininfo -name "Fauste Player"`;
   3. capture it with `import -window <id> shot.png`.
+- Driving the running app (for a screenshot with a player on air): enable
+  `remote.http` inside `"config"` in the scratch `config.json` and use `curl`
+  (see `docs/user/remote-control.md`), or click with `xdotool`
+  (`xdotool search --name "Fauste Player"`, then
+  `xdotool mousemove --window <id> <x> <y> click 1`). `xdotool` is needed
+  for clicks; install it with the system's package manager.
+- Remote API tests drive the axum router with `tower::ServiceExt::oneshot`
+  (no sockets) and the recording `FakeControl` in
+  `crates/fp-remote/tests/support`; server tests bind `127.0.0.1` on free
+  ports.

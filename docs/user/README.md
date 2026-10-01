@@ -19,6 +19,7 @@ by themselves.
 | [Bit-perfect output](bit-perfect.md) | Exclusive devices that follow each file's rate, the BP badge, checking a chain |
 | [Keyboard](keyboard.md) | Shortcuts |
 | [MIDI control surfaces](midi.md) | Buttons, faders and lights on MIDI controllers |
+| [Remote control](remote-control.md) | Operating Fauste Player over the network: HTTP API, security |
 | [Data and backups](data-and-backups.md) | Where files live, autosave, crash recovery, portable mode |
 | [Troubleshooting](troubleshooting.md) | No sound, device lost, files marked unavailable, logs |
 
