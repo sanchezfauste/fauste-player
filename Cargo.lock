@@ -1790,6 +1790,7 @@ dependencies = [
  "arc-swap",
  "axum",
  "fp-model",
+ "futures-util",
  "http-body-util",
  "serde",
  "serde_json",

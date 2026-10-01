@@ -11,10 +11,11 @@ use std::time::Duration;
 use arc_swap::ArcSwap;
 use fp_model::HttpRemoteConfig;
 use tokio::net::TcpListener;
-use tokio::sync::{oneshot, watch};
+use tokio::sync::{broadcast, oneshot, watch};
 
 use crate::control::RemoteControl;
-use crate::http::{Ctx, router};
+use crate::events::{self, Envelope, Event};
+use crate::http::{Ctx, EVENT_BUFFER, router};
 
 /// How often the configuration in the snapshot is looked at.
 const CONFIG_POLL: Duration = Duration::from_millis(250);
@@ -105,13 +106,24 @@ fn run(
 /// A server that is running, and how to stop it.
 struct Running {
     shutdown: oneshot::Sender<()>,
-    task: tokio::task::JoinHandle<std::io::Result<()>>,
+    task: tokio::task::JoinHandle<()>,
+    /// Ends the server's open event streams.
+    streams: Option<Arc<watch::Sender<bool>>>,
 }
 
 impl Running {
     async fn stop(self) {
+        if let Some(streams) = &self.streams {
+            let _ = streams.send(true);
+        }
         let _ = self.shutdown.send(());
-        let _ = tokio::time::timeout(SHUTDOWN_GRACE, self.task).await;
+        let mut task = self.task;
+        if tokio::time::timeout(SHUTDOWN_GRACE, &mut task)
+            .await
+            .is_err()
+        {
+            task.abort();
+        }
     }
 }
 
@@ -120,6 +132,8 @@ async fn supervise(
     status: Arc<ArcSwap<RemoteStatus>>,
     mut stop: watch::Receiver<bool>,
 ) {
+    let (events, _) = broadcast::channel::<Arc<Envelope>>(EVENT_BUFFER);
+    let publisher = tokio::spawn(publish(control.clone(), events.clone()));
     let mut applied: Option<HttpRemoteConfig> = None;
     let mut running: Option<Running> = None;
     loop {
@@ -128,7 +142,7 @@ async fn supervise(
             if let Some(server) = running.take() {
                 server.stop().await;
             }
-            let (http, server) = start(&control, &wanted).await;
+            let (http, server) = start(&control, &wanted, &events).await;
             status.store(Arc::new(RemoteStatus { http }));
             running = server;
             applied = Some(wanted);
@@ -141,12 +155,54 @@ async fn supervise(
     if let Some(server) = running.take() {
         server.stop().await;
     }
+    publisher.abort();
     status.store(Arc::new(RemoteStatus::default()));
+}
+
+/// How often the publisher looks for a new snapshot.
+const PUBLISH_EVERY: Duration = Duration::from_millis(50);
+
+/// Diffs snapshots into events, and reports positions every
+/// `position_interval_ms` while something plays. Idle without listeners.
+async fn publish(control: Arc<dyn RemoteControl>, events: broadcast::Sender<Arc<Envelope>>) {
+    let mut last = control.model();
+    let mut last_position = tokio::time::Instant::now();
+    let mut tick = tokio::time::interval(PUBLISH_EVERY);
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        tick.tick().await;
+        let model = control.model();
+        if events.receiver_count() == 0 {
+            last = model;
+            continue;
+        }
+        let playback = control.playback();
+        if !Arc::ptr_eq(&last, &model) {
+            for event in events::diff(&last, &model, &playback) {
+                let _ = events.send(Arc::new(Envelope {
+                    revision: playback.revision,
+                    event,
+                }));
+            }
+            last = model.clone();
+        }
+        let every = Duration::from_millis(model.config.remote.events.position_interval_ms.into());
+        if last_position.elapsed() >= every {
+            last_position = tokio::time::Instant::now();
+            if let Some(p) = events::position(&model, &playback) {
+                let _ = events.send(Arc::new(Envelope {
+                    revision: playback.revision,
+                    event: Event::Position(p),
+                }));
+            }
+        }
+    }
 }
 
 async fn start(
     control: &Arc<dyn RemoteControl>,
     config: &HttpRemoteConfig,
+    events: &broadcast::Sender<Arc<Envelope>>,
 ) -> (ServerStatus, Option<Running>) {
     if !config.enabled {
         return (ServerStatus::Off, None);
@@ -168,21 +224,30 @@ async fn start(
     let addr = listener
         .local_addr()
         .unwrap_or_else(|_| SocketAddr::new(ip, config.port));
-    let app = router(Ctx::new(control.clone(), Arc::new(config.clone())));
+    let ctx = Ctx::new(control.clone(), Arc::new(config.clone())).with_events(events.clone());
+    let streams = ctx.stop.clone();
+    let app = router(ctx);
     let (shutdown, signal) = oneshot::channel::<()>();
     let task = tokio::spawn(async move {
-        axum::serve(
+        let served = axum::serve(
             listener,
             app.into_make_service_with_connect_info::<SocketAddr>(),
         )
         .with_graceful_shutdown(async {
             let _ = signal.await;
         })
-        .await
+        .await;
+        if let Err(e) = served {
+            tracing::warn!(error = %e, "remote HTTP stopped with an error");
+        }
     });
     tracing::info!(%addr, "remote HTTP listening");
     (
         ServerStatus::Listening(addr),
-        Some(Running { shutdown, task }),
+        Some(Running {
+            shutdown,
+            task,
+            streams: Some(streams),
+        }),
     )
 }

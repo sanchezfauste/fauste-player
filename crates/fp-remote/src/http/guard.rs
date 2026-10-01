@@ -2,10 +2,7 @@
 //! is set, no foreign `Origin`, and on a loopback bind a loopback `Host`, so
 //! a web page in the operator's browser cannot drive the local server.
 
-use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::{Mutex, PoisonError};
-use std::time::{Duration, Instant};
 
 use axum::extract::{ConnectInfo, Request, State};
 use axum::http::{HeaderMap, header};
@@ -16,12 +13,13 @@ use fp_model::HttpRemoteConfig;
 use super::Ctx;
 use crate::api::ApiError;
 
-/// One log line per source and per this long, so an attack cannot flood the log.
-const LOG_EVERY: Duration = Duration::from_secs(1);
-/// Sources remembered for log throttling before old ones are forgotten.
-const LOG_SOURCES: usize = 256;
-
-pub fn check(config: &HttpRemoteConfig, headers: &HeaderMap) -> Result<(), ApiError> {
+/// `query_token` is the `token` query parameter, offered only on the event
+/// stream (browsers' `EventSource` cannot set headers).
+pub fn check(
+    config: &HttpRemoteConfig,
+    headers: &HeaderMap,
+    query_token: Option<&str>,
+) -> Result<(), ApiError> {
     if let Some(origin) = headers.get(header::ORIGIN) {
         let allowed = origin
             .to_str()
@@ -37,11 +35,14 @@ pub fn check(config: &HttpRemoteConfig, headers: &HeaderMap) -> Result<(), ApiEr
         }
     }
     if !config.token.is_empty() {
+        let token = config.token.as_bytes();
         let given = headers
             .get(header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.strip_prefix("Bearer "));
-        if !given.is_some_and(|t| same(t.as_bytes(), config.token.as_bytes())) {
+        let header_ok = given.is_some_and(|t| same(t.as_bytes(), token));
+        let query_ok = query_token.is_some_and(|t| same(t.as_bytes(), token));
+        if !(header_ok || query_ok) {
             return Err(ApiError::Unauthorized);
         }
     }
@@ -63,38 +64,18 @@ fn same(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-/// Throttles the log lines of refused requests.
-#[derive(Default)]
-pub struct RejectLog {
-    last: Mutex<HashMap<Option<IpAddr>, Instant>>,
-}
-
-impl RejectLog {
-    fn note(&self, source: Option<IpAddr>, error: &ApiError) {
-        let now = Instant::now();
-        let mut last = self.last.lock().unwrap_or_else(PoisonError::into_inner);
-        if last.len() >= LOG_SOURCES {
-            last.retain(|_, at| now.duration_since(*at) < LOG_EVERY);
-        }
-        let due = last
-            .get(&source)
-            .is_none_or(|at| now.duration_since(*at) >= LOG_EVERY);
-        if due {
-            last.insert(source, now);
-            tracing::warn!(?source, code = error.code(), "remote request refused");
-        }
-    }
-}
-
 pub async fn guard(State(ctx): State<Ctx>, req: Request, next: Next) -> Response {
-    match check(&ctx.config, req.headers()) {
+    let query_token = (req.uri().path() == super::EVENTS_PATH)
+        .then(|| req.uri().query().and_then(|q| super::param(q, "token")))
+        .flatten();
+    match check(&ctx.config, req.headers(), query_token.as_deref()) {
         Ok(()) => next.run(req).await,
         Err(error) => {
             let source = req
                 .extensions()
                 .get::<ConnectInfo<SocketAddr>>()
                 .map(|c| c.0.ip());
-            ctx.rejections.note(source, &error);
+            ctx.rejections.note(source, error.code());
             error.into_response()
         }
     }

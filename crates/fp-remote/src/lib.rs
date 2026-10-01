@@ -10,5 +10,6 @@ pub mod dto;
 pub mod events;
 pub mod http;
 pub mod server;
+pub mod throttle;
 
 pub use server::{RemoteHandle, RemoteStatus, ServerError, ServerStatus, spawn};

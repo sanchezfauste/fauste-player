@@ -1,10 +1,12 @@
 //! The HTTP/JSON API (remote control spec §3).
 
+mod events;
 pub mod guard;
 mod handlers;
 mod json;
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
 use axum::Json;
@@ -16,19 +18,31 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use fp_model::HttpRemoteConfig;
 use serde_json::json;
+use tokio::sync::{broadcast, watch};
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::timeout::TimeoutLayer;
 
 use crate::api::ApiError;
 use crate::control::RemoteControl;
+use crate::events::Envelope;
+use crate::throttle::Throttle;
+
+/// Events buffered per stream before a slow client gets a `resync`.
+pub const EVENT_BUFFER: usize = 256;
+
+pub(crate) const EVENTS_PATH: &str = "/api/v1/events";
 
 /// What every handler sees.
 #[derive(Clone)]
 pub struct Ctx {
     pub control: Arc<dyn RemoteControl>,
     pub config: Arc<HttpRemoteConfig>,
-    pub rejections: Arc<guard::RejectLog>,
+    pub rejections: Arc<Throttle>,
+    pub events: broadcast::Sender<Arc<Envelope>>,
+    pub event_clients: Arc<AtomicUsize>,
+    /// Set to true to end every open event stream.
+    pub stop: Arc<watch::Sender<bool>>,
 }
 
 impl Ctx {
@@ -37,8 +51,53 @@ impl Ctx {
             control,
             config,
             rejections: Arc::default(),
+            events: broadcast::channel(EVENT_BUFFER).0,
+            event_clients: Arc::default(),
+            stop: Arc::new(watch::channel(false).0),
         }
     }
+
+    /// Streams events from the server's publisher.
+    pub fn with_events(mut self, events: broadcast::Sender<Arc<Envelope>>) -> Self {
+        self.events = events;
+        self
+    }
+}
+
+/// The value of `name` in a query string, percent-decoded.
+pub(crate) fn param(query: &str, name: &str) -> Option<String> {
+    query.split('&').find_map(|pair| {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        (key == name).then(|| percent_decode(value))
+    })
+}
+
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while let Some(&b) = bytes.get(i) {
+        let hex = (b == b'%')
+            .then(|| bytes.get(i + 1..i + 3))
+            .flatten()
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match (b, hex) {
+            (_, Some(v)) => {
+                out.push(v);
+                i += 3;
+            }
+            (b'+', None) => {
+                out.push(b' ');
+                i += 1;
+            }
+            (b, None) => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 impl IntoResponse for ApiError {
@@ -53,6 +112,7 @@ pub fn router(ctx: Ctx) -> Router {
     use handlers as h;
     let api = Router::new()
         .route("/state", get(h::state))
+        .route("/events", get(events::events))
         .route("/players", get(h::players))
         .route("/players/{id}", get(h::player))
         .route("/players/{id}/{action}", post(h::player_action))

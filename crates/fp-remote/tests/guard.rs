@@ -44,7 +44,7 @@ fn locally_without_a_token_any_loopback_host_passes() {
         "127.1.2.3",
     ] {
         assert_eq!(
-            check(&local(), &headers(&[("host", host)])),
+            check(&local(), &headers(&[("host", host)]), None),
             Ok(()),
             "{host}"
         );
@@ -55,13 +55,13 @@ fn locally_without_a_token_any_loopback_host_passes() {
 fn locally_a_foreign_host_is_refused() {
     for host in ["evil.example", "evil.example:7380", "192.168.1.10:7380", ""] {
         assert_eq!(
-            check(&local(), &headers(&[("host", host)])),
+            check(&local(), &headers(&[("host", host)]), None),
             Err(ApiError::ForbiddenOrigin),
             "{host:?}"
         );
     }
     assert_eq!(
-        check(&local(), &HeaderMap::new()),
+        check(&local(), &HeaderMap::new(), None),
         Err(ApiError::ForbiddenOrigin)
     );
 }
@@ -72,13 +72,13 @@ fn a_foreign_origin_is_refused_whatever_the_bind() {
         ("host", "127.0.0.1:7380"),
         ("origin", "https://evil.example"),
     ]);
-    assert_eq!(check(&local(), &h), Err(ApiError::ForbiddenOrigin));
+    assert_eq!(check(&local(), &h, None), Err(ApiError::ForbiddenOrigin));
     let h = headers(&[
         ("host", "10.0.0.2:7380"),
         ("origin", "https://evil.example"),
         ("authorization", &format!("Bearer {TOKEN}")),
     ]);
-    assert_eq!(check(&lan(), &h), Err(ApiError::ForbiddenOrigin));
+    assert_eq!(check(&lan(), &h, None), Err(ApiError::ForbiddenOrigin));
 }
 
 #[test]
@@ -89,13 +89,13 @@ fn a_listed_origin_and_the_wildcard_pass() {
         ("host", "127.0.0.1:7380"),
         ("origin", "https://studio.example"),
     ]);
-    assert_eq!(check(&c, &h), Ok(()));
+    assert_eq!(check(&c, &h, None), Ok(()));
     c.cors_origins = vec!["*".into()];
     let h = headers(&[
         ("host", "127.0.0.1:7380"),
         ("origin", "https://any.example"),
     ]);
-    assert_eq!(check(&c, &h), Ok(()));
+    assert_eq!(check(&c, &h, None), Ok(()));
 }
 
 #[test]
@@ -104,7 +104,7 @@ fn with_a_token_the_bearer_must_match_and_any_host_is_fine() {
         ("host", "studio-pc:7380"),
         ("authorization", &format!("Bearer {TOKEN}")),
     ]);
-    assert_eq!(check(&lan(), &ok), Ok(()));
+    assert_eq!(check(&lan(), &ok, None), Ok(()));
     for auth in [
         "",
         "Bearer",
@@ -113,10 +113,14 @@ fn with_a_token_the_bearer_must_match_and_any_host_is_fine() {
         &format!("bearer {TOKEN}x"),
     ] {
         let h = headers(&[("host", "studio-pc:7380"), ("authorization", auth)]);
-        assert_eq!(check(&lan(), &h), Err(ApiError::Unauthorized), "{auth:?}");
+        assert_eq!(
+            check(&lan(), &h, None),
+            Err(ApiError::Unauthorized),
+            "{auth:?}"
+        );
     }
     let h = headers(&[("host", "studio-pc:7380")]);
-    assert_eq!(check(&lan(), &h), Err(ApiError::Unauthorized));
+    assert_eq!(check(&lan(), &h, None), Err(ApiError::Unauthorized));
 }
 
 #[test]
@@ -124,12 +128,12 @@ fn a_local_server_with_a_token_also_checks_host_and_token() {
     let mut c = local();
     c.token = TOKEN.into();
     let h = headers(&[("host", "127.0.0.1:7380")]);
-    assert_eq!(check(&c, &h), Err(ApiError::Unauthorized));
+    assert_eq!(check(&c, &h, None), Err(ApiError::Unauthorized));
     let h = headers(&[
         ("host", "evil.example"),
         ("authorization", &format!("Bearer {TOKEN}")),
     ]);
-    assert_eq!(check(&c, &h), Err(ApiError::ForbiddenOrigin));
+    assert_eq!(check(&c, &h, None), Err(ApiError::ForbiddenOrigin));
 }
 
 fn app(config: HttpRemoteConfig) -> axum::Router {

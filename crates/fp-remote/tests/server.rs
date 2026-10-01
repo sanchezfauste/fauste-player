@@ -141,11 +141,59 @@ fn dropping_the_handle_stops_the_server() {
         s.config.remote.http.port = port;
     });
     let handle = spawn(fake).unwrap();
-    wait_for(&handle, "listening", |s| {
+    let ServerStatus::Listening(addr) = wait_for(&handle, "listening", |s| {
         matches!(s, ServerStatus::Listening(_))
-    });
+    }) else {
+        unreachable!()
+    };
+    // An open event stream must not keep the server alive.
+    let mut stream = TcpStream::connect(addr).unwrap();
+    write!(
+        stream,
+        "GET /api/v1/events HTTP/1.1\r\nHost: {addr}\r\n\r\n"
+    )
+    .unwrap();
+    let mut buf = [0u8; 1024];
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    assert!(stream.read(&mut buf).unwrap() > 0);
     let started = Instant::now();
     drop(handle);
     assert!(started.elapsed() < Duration::from_secs(5));
     assert!(TcpStream::connect(("127.0.0.1", port)).is_err());
+}
+#[test]
+fn an_event_stream_sees_a_change_made_after_it_connected() {
+    let fake = FakeControl::new(demo_state());
+    let port = free_port();
+    fake.edit(|s| {
+        s.config.remote.http.enabled = true;
+        s.config.remote.http.port = port;
+    });
+    let handle = spawn(fake.clone()).unwrap();
+    let ServerStatus::Listening(addr) = wait_for(&handle, "listening", |s| {
+        matches!(s, ServerStatus::Listening(_))
+    }) else {
+        unreachable!()
+    };
+    let mut s = TcpStream::connect(addr).unwrap();
+    s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    write!(s, "GET /api/v1/events HTTP/1.1\r\nHost: {addr}\r\n\r\n").unwrap();
+    let mut seen = String::new();
+    let mut buf = [0u8; 4096];
+    while !seen.contains("event: state") {
+        let n = s.read(&mut buf).unwrap();
+        seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+    }
+    let night = fake.state.load().playlists.iter().nth(1).unwrap().id;
+    fake.edit(|st| {
+        fp_model::apply(st, fp_model::Command::DeletePlaylist(night)).unwrap();
+    });
+    while !seen.contains("event: playlist-removed") {
+        let n = s.read(&mut buf).unwrap();
+        assert!(n > 0, "stream closed: {seen}");
+        seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+    }
+    drop(handle);
 }
