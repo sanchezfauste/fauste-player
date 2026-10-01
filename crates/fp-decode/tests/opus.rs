@@ -290,6 +290,7 @@ fn opus_decodes_like_the_reference_decoder() {
     let path = encode(dir.path(), "music.opus", &music(3.0));
     let ours = decode_all(&path);
     let mut reader = opus_pure::OggOpusReader::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let skip = usize::from(reader.head().pre_skip) * 2;
     let mut reference_decoder = opus_pure::OpusDecoder::new(48_000, 2).unwrap();
     let mut reference = Vec::new();
     let mut pcm = vec![0f32; 5760 * 2];
@@ -297,7 +298,8 @@ fn opus_decodes_like_the_reference_decoder() {
         let n = reference_decoder.decode(&p.data, 5760, &mut pcm).unwrap();
         reference.extend_from_slice(&pcm[..n * 2]);
     }
-    // Compared as decoded, before either side drops the pre-skip.
+    // Ours drops the pre-skip; the reference's raw packets still hold it.
+    let reference = &reference[skip..];
     let n = ours.len().min(reference.len());
     assert!(n > 2 * 48_000 * 2, "{n}");
     let worst = ours[..n]
@@ -321,4 +323,37 @@ fn opus_decodes_far_faster_than_real_time() {
     let took = t0.elapsed().as_secs_f64();
     assert!(out.len() >= 9 * 48_000 * 2);
     assert!(took < 1.0, "10 s of Opus took {took:.2} s to decode");
+}
+
+/// Where the loudest sample of `stereo`'s left channel is.
+fn loudest(stereo: &[f32]) -> usize {
+    left(stereo)
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+        .unwrap()
+        .0
+}
+
+/// The pre-skip (RFC 7845 §4.2) is dropped in Ogg and in Matroska: a click
+/// comes out where it went in, and the file is not longer than its source.
+#[test]
+fn the_pre_skip_is_dropped_so_audio_stays_in_place() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut pcm = vec![0f32; RATE * 2];
+    for i in 24_000..24_048 {
+        pcm[i * 2] = 0.8;
+        pcm[i * 2 + 1] = 0.8;
+    }
+    let ogg = decode_all(&encode(dir.path(), "click.opus", &pcm));
+    let (packets, pre_skip) = packets(&pcm);
+    let mka = decode_all(&matroska(dir.path(), "click.mka", &packets, pre_skip));
+    for (name, out) in [("ogg", &ogg), ("mka", &mka)] {
+        let at = loudest(out);
+        assert!(
+            (24_000..24_048).contains(&at),
+            "{name}: the click is at {at}"
+        );
+        assert!(out.len() / 2 <= RATE, "{name}: {} frames", out.len() / 2);
+    }
 }

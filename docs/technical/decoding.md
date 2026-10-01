@@ -34,16 +34,23 @@ family 0).
 
 Decoders are opened with gapless decoding on (symphonia's default): each
 decoder removes the encoder delay and end padding the container marks on its
-packets (`trim_start`, `trim_end`), so the Opus decoder does it too (Opus
-pre-skip). The backend must not trim again (`tests/gapless.rs`). Matroska
-shifts timestamps by its `CodecDelay`, and symphonia turns that into the same
-trims (`tests/opus.rs` checks an Opus track in Matroska against Ogg).
+packets (`trim_start`, `trim_end`), so the Opus decoder does it too. The
+backend must not trim again (`tests/gapless.rs`).
+
+The Opus **pre-skip** (RFC 7845 §4.2) is not marked that way: symphonia
+0.6 keeps it as the track's delay in Ogg, whose granule positions count it,
+and Matroska shifts its timestamps by `CodecDelay` rounded to its 1 ms
+resolution. `SymphoniaDecoder` therefore drops exactly the pre-skip of the
+`OpusHead` from the start of the stream in both containers, and shifts Ogg
+Opus timestamps back by it when seeking and placing packets
+(`ts_offset_secs`). A click comes out where it went in (`tests/opus.rs`).
 
 **Seeking** (`SymphoniaDecoder::seek`): decoding restarts a codec's pre-roll
 before the target, 80 ms for Opus (RFC 7845 §4.6) and the longest block
 (8192 frames) for Vorbis, whose first packet after a reset only primes the
 overlap. Each decoded packet is then placed by its timestamp (its frames end
-where `pts + dur` ends), and the frames before the target are dropped, so the
+where `pts + dur` ends, or start at `pts` when the container gives no
+duration, as Matroska blocks), and the frames before the target are dropped, so the
 output starts on the target frame whatever the decoder yields first. A seek
 past the end is the end of the stream, as for the other backends.
 
@@ -51,6 +58,11 @@ The Opus decoder goes through 16-bit PCM inside `opus-decoder`: its noise
 (about −96 dBFS) is far below Opus's own coding noise. A decoder without that
 step exists (`opus-pure`), but it uses `unsafe` code, which the formats spec
 rules out for decoding untrusted files.
+
+`opus-decoder` is vendored (`vendor/opus-decoder`, through
+`[patch.crates-io]`): version 0.1.1 computed its FFT as a direct O(n²) DFT,
+5.5 ms per 20 ms packet, and the copy uses a mixed-radix FFT instead,
+about 55 µs, still without `unsafe` (`vendor/opus-decoder/VENDORED.md`).
 
 ## DSD
 
