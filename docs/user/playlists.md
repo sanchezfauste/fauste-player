@@ -48,7 +48,7 @@ Row colours:
 | Red **P2** (or another number) in the number column | On air on that player |
 | **Green**, with an arrow | This player's next track |
 | Dimmed | Already played on this player |
-| Warning icon | File missing or unreadable (it is skipped) |
+| Warning icon | File missing or unreadable (it is skipped); hover it for the reason and the path. A missing file is looked for again every 30 s. |
 | Violet | Selected |
 
 ## Mouse

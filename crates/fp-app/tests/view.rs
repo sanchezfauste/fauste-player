@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
-    PlayerStatus, RowStatus, fader_from_gain, gain_from_fader, player_view, playlist_times,
-    row_status, volume_db,
+    PlayerStatus, RowStatus, fader_from_gain, file_problem, gain_from_fader, player_view,
+    playlist_times, row_status, volume_db,
 };
 use fp_model::{AppState, Command, Config, EntryId, FileState, MarkerKind, PlayerId, apply};
 
@@ -86,6 +86,18 @@ fn rows_show_on_air_next_played_and_unavailable() {
     assert_eq!(row_status(&s, p, &entry(&s, e[1])), RowStatus::Current);
     assert_eq!(row_status(&s, p, &entry(&s, e[2])), RowStatus::Next);
     assert_eq!(row_status(&s, p, &entry(&s, e[3])), RowStatus::Unavailable);
+}
+
+#[test]
+fn an_unavailable_track_says_why() {
+    let (mut s, e, _p) = state(1);
+    let id = s.playlists.entry(e[0]).unwrap().track;
+    let t = s.library.get_mut(id).unwrap();
+    assert_eq!(file_problem(t), None);
+    t.file_state = FileState::Missing;
+    assert_eq!(file_problem(t), Some("file-missing-tip"));
+    t.file_state = FileState::Unreadable;
+    assert_eq!(file_problem(t), Some("file-unreadable-tip"));
 }
 
 #[test]

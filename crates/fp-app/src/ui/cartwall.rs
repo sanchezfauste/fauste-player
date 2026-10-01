@@ -317,6 +317,10 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                         }
                     },
                 );
+                let response = match cart.track.and_then(|t| scene.file_tip(t)) {
+                    Some(tip) => response.on_hover_text(tip),
+                    None => response,
+                };
                 if response.clicked() {
                     scene.ctl.send(Command::FireCart(cart.id));
                 }

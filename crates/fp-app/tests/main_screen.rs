@@ -750,3 +750,27 @@ fn a_ten_hour_countdown_fits_between_the_grid_and_the_meter() {
     assert!(countdown.left() >= grid.right(), "{countdown:?} {grid:?}");
     assert!(h.query_by_label("00:00 / 10:01:40").is_some());
 }
+
+#[test]
+fn hovering_an_unavailable_row_says_why() {
+    let mut s = state(1, 3);
+    let playlist = s.playlists.first_id().unwrap();
+    let track = s.playlists.get(playlist).unwrap().entries[1].track;
+    fp_model::apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: fp_model::FileState::Unreadable,
+        },
+    )
+    .unwrap();
+    let (mut h, _fake) = harness(s);
+    h.get_by_label_contains(egui_phosphor::regular::WARNING)
+        .hover();
+    h.run_steps(40);
+    assert!(
+        h.query_by_label_contains("Cannot read the file: /music/Song 2.mp3")
+            .is_some(),
+        "the tooltip gives the reason and the path"
+    );
+}

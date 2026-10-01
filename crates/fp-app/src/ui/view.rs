@@ -1,7 +1,9 @@
 //! What each part of the screen shows, derived from the model snapshot and
 //! the engine telemetry. Pure functions: everything here is unit-tested.
 
-use fp_model::{AppState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, Transport};
+use fp_model::{
+    AppState, FileState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, Track, Transport,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerStatus {
@@ -157,7 +159,16 @@ pub fn player_view(
     Some(view)
 }
 
-/// How a track-table row is drawn (spec §3 rule 1).
+/// Why a track cannot be played, as the Fluent key of its tooltip (which
+/// takes the file's `$path`); `None` when it can.
+pub fn file_problem(track: &Track) -> Option<&'static str> {
+    match track.file_state {
+        FileState::Ok => None,
+        FileState::Missing => Some("file-missing-tip"),
+        FileState::Unreadable => Some("file-unreadable-tip"),
+    }
+}
+
 /// How a track-table row is drawn (spec §3 rule 1). Takes the row's entry
 /// directly: the table already has it, so nothing is searched per row.
 pub fn row_status(state: &AppState, player: PlayerId, entry: &PlaylistEntry) -> RowStatus {

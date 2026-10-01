@@ -240,7 +240,7 @@ pub(crate) fn track_table(
                     } else {
                         egui::FontFamily::Proportional
                     };
-                    ui.add(
+                    let number = ui.add(
                         egui::Label::new(
                             RichText::new(label)
                                 .font(egui::FontId::new(12.0, family))
@@ -248,6 +248,11 @@ pub(crate) fn track_table(
                         )
                         .selectable(false),
                     );
+                    if status == RowStatus::Unavailable
+                        && let Some(tip) = scene.file_tip(entry.track)
+                    {
+                        number.on_hover_text(tip);
+                    }
                 });
                 row.col(|ui| {
                     line(ui);

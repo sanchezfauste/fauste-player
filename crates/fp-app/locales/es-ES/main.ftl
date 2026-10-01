@@ -285,6 +285,8 @@ meter-label = Medidor de nivel
 meter-max = Máximo { $value } dBFS
 tip-meter-max = Nivel más alto desde que empezó a sonar la pista. Haz clic para reiniciarlo.
 tip-on-air-elsewhere = En el aire en el reproductor { $n }
+file-missing-tip = No se encuentra el archivo: { $path }
+file-unreadable-tip = No se puede leer el archivo: { $path }
 
 # About window
 tip-about = Acerca de Fauste Player
