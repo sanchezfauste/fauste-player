@@ -7,7 +7,8 @@
   (M4 display), the [cartwall and settings spec](2026-09-26-phase2-cartwall-settings-design.md)
   and the [first operator feedback spec](2026-09-30-operator-feedback-design.md)
   (F2 is replaced by O10 here).
-- **Scope:** 24 items of operator feedback (O1–O24), grouped into ten plans.
+- **Scope:** 30 items of operator feedback (O1–O30), grouped into eleven plans.
+  O25–O30 were added on 2026-10-02.
   Each plan is written in full just before it runs, against the code the
   previous plan left. Each reaches `master` through its own pull request and
   updates the main spec, the user guide and the technical docs for what it
@@ -19,7 +20,7 @@
 
 | Item | Summary | Plan |
 |---|---|---|
-| O1 | Project website with downloads and the user guide | 10 |
+| O1 | Project website with downloads and the user guide | 11 |
 | O2 | Restore defaults in Settings sections | 2 |
 | O3 | Settings window layout and a fixed size | 2 |
 | O4 | Restart the app to apply pending settings | 2 |
@@ -43,6 +44,12 @@
 | O22 | Reset the played marks of a playlist | 8 |
 | O23 | Tag tooltip and tag editor | 7 |
 | O24 | Choose and order the table columns | 8 |
+| O25 | DSD output: native, DoP or conversion to PCM | 10 |
+| O26 | Audit of the audio path (no dropouts, no clicks) | 10 |
+| O27 | Show "No output (silent)" in the audio system list again | 10 |
+| O28 | Screenshots in the user guide | 11 |
+| O29 | A truer README screenshot | 11 |
+| O30 | Repository description and website link | 11 |
 
 | Plan | Title | Items | Depends on |
 |---|---|---|---|
@@ -55,7 +62,8 @@
 | 7 | Track tags | O23 | — |
 | 8 | Track table | O7, O9, O16, O22, O24 | 7 (the tag fields) |
 | 9 | Audit follow-ups | O21 | — |
-| 10 | Website | O1 | all (it publishes the final docs) |
+| 10 | Audio path | O25, O26, O27 | 2 (O27 reverses part of O5) |
+| 11 | Website and guide | O1, O28, O29, O30 | all (it publishes the final docs) |
 
 ---
 
@@ -437,7 +445,62 @@ The audit of every earlier plan found these items still open.
   2. Seek to 3:59:00 through the remote API.
   3. Record the result in the ledger.
 
-## 11. Plan 10 — Website
+## 11. Plan 10 — Audio path
+
+- **O26 Audit first.** Task 1 reviews the whole path from file to device and
+  writes the result to `docs/technical/audio-path-audit.md`. Every claim is
+  backed by a test or by a line of code. It covers:
+  - decoding: errors in the middle of a file, gapless starts and ends, seeking,
+    and the decode-ahead margin against slow disks;
+  - resampling quality and its passband, and the switch between resampled and
+    bit-perfect playback;
+  - the mixer: summing, headroom and clipping, and gain ramps on every start,
+    stop, pause, seek, fade and fader move (no step in level, so no click);
+  - output: the f32 to integer conversion, and dither when the device is not
+    bit-perfect and narrower than the source;
+  - buffer sizes against underruns, xrun counting and reporting, device loss
+    and recovery, and rate changes on bit-perfect devices;
+  - real-time safety of the callback (CLAUDE.md rule 5).
+
+  Every defect the audit confirms is fixed test-first in this plan. Anything
+  too large becomes its own plan item in the roadmap. Findings that need no
+  change are recorded as such.
+- **O25 DSD output.**
+  - Each bit-perfect device gets a DSD mode, `DsdOutput`:
+    - `Pcm` (the default): DSD is converted to PCM, as today;
+    - `Dop`: DSD over PCM (DoP 1.1), 24-bit samples at the DSD rate ÷ 16,
+      with the alternating 0x05/0xFA markers;
+    - `Native`: raw DSD to the device. It is offered only on Linux, through
+      ALSA on hardware devices that report a DSD sample format.
+
+    The setting sits next to the device's bit-perfect switch, and only the
+    modes the device can take are offered.
+  - DSD reaches the device unchanged only on a bit-perfect device that is idle
+    when the DSD track starts, and only when the device accepts the rate the
+    track needs. DoP for DSD256 needs 705.6 kHz, for example. Otherwise the
+    track is converted to PCM, as today, and the log says why. While DSD goes
+    out unchanged, the player's **BP** indicator reads **DSD**. The fader and
+    the gain stay at unity, and the meters show the level of the PCM
+    conversion, computed alongside.
+  - Starts, stops and every switch between DSD and PCM send DSD silence
+    (0x69) for a configurable time, so that the DAC locks without a pop.
+  - **Mixing.** DSD cannot be mixed. What happens when another source needs
+    the same output (the segue to the next track, a cart, another player) is
+    a setting, `audio.dsd_mix`:
+    - `ConvertToPcm` (the default): the DSD track goes on as PCM from that
+      moment, mixed as usual, and **BP** goes off.
+    - `HoldOthers`: nothing interrupts the DSD stream. The player's next track
+      starts only when the DSD track ends, with no overlap. Other sources
+      routed to that output are muted on it while the DSD plays, and a notice
+      says so.
+  - Both settings are `Config` fields with defaults, ranges and lenient
+    loading. They are documented in the user guide's bit-perfect page.
+- **O27 No output.** The internal `null` backend shows again in the audio
+  system list, after the real systems, as "No output (silent)". It discards
+  audio at real-time pace. This reverses the hiding part of O5; the name O5
+  chose stays.
+
+## 12. Plan 11 — Website and guide
 
 - **Guide.**
   - mdBook builds the user guide straight from `docs/user/`; nothing is
@@ -466,8 +529,25 @@ The audit of every earlier plan found these items still open.
 - **Maintainer step.** GitHub Pages must use "GitHub Actions" as its source.
 - `README.md` links the website, and `CLAUDE.md` documents the local build
   command.
+- **O28 Screenshots in the guide.**
+  - Each guide page whose subject is a screen or a window gets a screenshot
+    of it: the main screen, a player, the playlist, the cartwall, the CUE
+    window, the tag editor, Settings and its sections, and the remote API
+    page if it has a UI.
+  - Each is taken in English, in Xvfb, from a scripted scene, as CLAUDE.md
+    describes, and saved under `docs/images/guide/`.
+  - A script regenerates them, so that they follow the UI.
+- **O29 README screenshot.**
+  - In one of the two playing players, the entry marked next is 3 or 4
+    entries after the one on air, not the following one.
+  - Every track in the scene has its own waveform: the generated tones
+    differ in their envelope, so that no two waveforms look alike.
+- **O30 Repository About.** The GitHub description is refreshed, and the
+  website URL is set as the repository homepage (`gh repo edit
+  --description … --homepage …`) once the site is live. README and the
+  site link each other.
 
-## 12. Global constraints
+## 13. Global constraints
 
 `CLAUDE.md` rules 1–10 apply to every plan. In particular:
 
