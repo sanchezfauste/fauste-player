@@ -122,6 +122,33 @@ impl MediaCache {
         self.version.load(Ordering::Acquire)
     }
 
+    /// Replaces the cover thumbnail of `track` (`None` removes it), keeping
+    /// its peaks: the tag editor changed the cover in the file. A track with
+    /// no entry has nothing to refresh: the analysis that fills the cache
+    /// when it is shown next reads the new cover from the file (the analysis
+    /// cache is keyed on the file's size and modification time, so the
+    /// edited file is analysed again).
+    pub fn set_cover(&self, track: TrackId, cover: Option<Arc<[u8]>>) {
+        let mut items = self.items.write().unwrap_or_else(PoisonError::into_inner);
+        let Some(current) = items.get(&track) else {
+            return;
+        };
+        let updated = TrackMedia {
+            peaks: current.peaks.clone(),
+            peak_bucket_secs: current.peak_bucket_secs,
+            cover_png: cover,
+        };
+        items.insert(track, Arc::new(updated));
+        self.version.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Puts `media` in the cache as the services thread does after an
+    /// analysis (tests).
+    #[cfg(feature = "test-hooks")]
+    pub fn seed(&self, track: TrackId, media: TrackMedia) {
+        self.insert(track, media);
+    }
+
     fn insert(&self, track: TrackId, media: TrackMedia) {
         let mut items = self.items.write().unwrap_or_else(PoisonError::into_inner);
         items.insert(track, Arc::new(media));

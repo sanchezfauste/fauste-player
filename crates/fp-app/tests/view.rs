@@ -13,7 +13,7 @@ use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     PlayerStatus, RowStatus, TipField, cue_follow_target, cue_window_view, fader_from_gain,
     file_icon, file_problem, gain_from_fader, player_view, playlist_times, row_status, shown_entry,
-    track_tooltip, volume_db,
+    tag_edit_availability, track_tooltip, volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayerId, Track, apply,
@@ -586,5 +586,29 @@ fn the_format_line_leaves_out_what_is_unknown() {
         track_tooltip(&t)
             .iter()
             .all(|(f, _)| *f != TipField::Format)
+    );
+}
+
+#[test]
+fn tag_edit_availability_combines_the_rule_and_the_extension() {
+    let (mut s, entries, p) = state(2);
+    for t in s.library.iter_mut() {
+        t.analyzed = true;
+        t.tags_read = true;
+    }
+    let track = |s: &AppState, e: EntryId| s.playlists.entry(e).unwrap().track;
+    let t0 = track(&s, entries[0]);
+    assert_eq!(tag_edit_availability(&s, t0), None, "a flac at rest");
+    s.library.get_mut(t0).unwrap().path = PathBuf::from("/m/a.dsf");
+    assert_eq!(
+        tag_edit_availability(&s, t0),
+        Some(fp_model::TagEditBlock::UnsupportedFormat)
+    );
+    s.library.get_mut(t0).unwrap().path = PathBuf::from("/m/a.flac");
+    apply(&mut s, Command::SetNext(p, entries[0])).unwrap();
+    apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(
+        tag_edit_availability(&s, t0),
+        Some(fp_model::TagEditBlock::OnAir)
     );
 }

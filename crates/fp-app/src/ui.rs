@@ -17,6 +17,7 @@ pub mod playlist_files;
 mod settings;
 pub mod shell;
 mod table;
+mod tag_editor;
 pub mod theme;
 pub mod view;
 pub mod wave_view;

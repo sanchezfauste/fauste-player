@@ -448,3 +448,17 @@ fn format_line(track: &Track) -> String {
     }
     parts.join(" · ")
 }
+
+/// Why the tags of `track` cannot be edited now, if they cannot: the model's
+/// rule plus the format's writability, judged from the path's extension (no
+/// I/O on the interface thread).
+pub fn tag_edit_availability(
+    state: &AppState,
+    track: fp_model::TrackId,
+) -> Option<fp_model::TagEditBlock> {
+    let writable = state
+        .library
+        .get(track)
+        .is_some_and(|t| fp_analysis::tags::can_write_tags(&t.path));
+    fp_model::tag_edit_block(state, track, writable)
+}
