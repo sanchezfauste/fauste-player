@@ -182,7 +182,7 @@ pub(crate) fn track_table(
         .sense(Sense::click_and_drag())
         .cell_layout(Layout::left_to_right(Align::Center));
     for w in &px {
-        builder = builder.column(Column::exact(w.max(0.0)));
+        builder = builder.column(Column::exact(w.max(0.0)).clip(true));
     }
     // A current entry being followed: scroll its row to the top once.
     if let Some(FollowScroll {
