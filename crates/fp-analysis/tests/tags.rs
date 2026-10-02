@@ -381,3 +381,52 @@ fn an_invalid_date_is_refused_and_the_file_is_untouched() {
     assert_eq!(std::fs::read(&path).unwrap(), original);
     assert_eq!(names(dir.path()), ["x.wav"]);
 }
+
+/// A minimal MP3: MPEG-1 Layer III frames (128 kbps, 44.1 kHz, 417 bytes
+/// each) with silent payloads.
+fn mp3(dir: &Path, name: &str) -> PathBuf {
+    let path = dir.join(name);
+    let mut bytes = Vec::new();
+    for _ in 0..10 {
+        let mut frame = vec![0u8; 417];
+        frame[..4].copy_from_slice(&0xFFFB_9064u32.to_be_bytes());
+        bytes.extend_from_slice(&frame);
+    }
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+#[test]
+fn the_recording_date_round_trips_through_id3v2_and_survives_an_edit() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3(dir.path(), "x.mp3");
+    assert!(can_write_tags(&path));
+
+    let tagged = tagged_by_date(&path, "2019-05-14");
+    assert_eq!(tagged.date.as_deref(), Some("2019-05-14"));
+
+    let file = lofty::probe::Probe::open(&path)
+        .unwrap()
+        .guess_file_type()
+        .unwrap()
+        .read()
+        .unwrap();
+    let id3 = file.tag(lofty::tag::TagType::Id3v2).expect("an ID3v2 tag");
+    assert_eq!(
+        id3.get_string(ItemKey::RecordingDate),
+        Some("2019-05-14"),
+        "TDRC holds the full date"
+    );
+
+    let raw = std::fs::read(&path).unwrap();
+    assert!(raw.windows(4).any(|w| w == b"TDRC"), "the frame is TDRC");
+
+    let after = TrackTags {
+        title: "Edited".into(),
+        ..tagged.clone()
+    };
+    write_tags(&path, &tagged, &after, &limits()).unwrap();
+    let read = read_track_tags(&path, &limits());
+    assert_eq!(read.title, "Edited");
+    assert_eq!(read.date.as_deref(), Some("2019-05-14"));
+}
