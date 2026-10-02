@@ -42,7 +42,13 @@ impl Bridge {
         if let Some(analysis) = self.cache.load(path, settings) {
             return Some(analysis);
         }
-        let analysis = fp_analysis::analyze_file(path, settings, &model.config.limits).ok()?;
+        let analysis = match fp_analysis::analyze_file(path, settings, &model.config.limits) {
+            Ok(analysis) => analysis,
+            Err(error) => {
+                tracing::warn!(path = %path.display(), %error, "cannot analyse the track");
+                return None;
+            }
+        };
         if let Err(error) = self.cache.store(path, settings, &analysis) {
             tracing::warn!(path = %path.display(), %error, "cannot cache the analysis");
         }

@@ -31,6 +31,19 @@ fn tone(path: &std::path::Path) {
     w.finalize().unwrap();
 }
 
+#[derive(Clone, Default)]
+struct Lines(Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl Write for Lines {
+    fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(b);
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 fn request(addr: SocketAddr, method: &str, path: &str) -> (u16, String) {
     let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).unwrap();
     s.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
@@ -191,6 +204,12 @@ fn the_peaks_of_an_outdated_track_are_available() {
 /// 9: bad data degrades), and the request ends.
 #[test]
 fn the_peaks_of_an_undecodable_file_are_not_found() {
+    let lines = Lines::default();
+    let writer = lines.clone();
+    tracing_subscriber::fmt()
+        .with_writer(move || writer.clone())
+        .with_ansi(false)
+        .init();
     let dir = tempfile::tempdir().unwrap();
     let junk = dir.path().join("junk.wav");
     std::fs::write(&junk, b"this is not audio").unwrap();
@@ -204,6 +223,11 @@ fn the_peaks_of_an_undecodable_file_are_not_found() {
     let track = model.library.iter().next().unwrap().id;
     let (status, body) = get(served.addr, &format!("/api/v1/tracks/{}/peaks", track.0));
     assert_eq!(status, 404, "{body}");
+    let text = String::from_utf8(lines.0.lock().unwrap().clone()).unwrap();
+    assert!(
+        text.contains("cannot analyse the track") && text.contains("junk.wav"),
+        "{text}"
+    );
     drop(served.remote);
 }
 
