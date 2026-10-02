@@ -197,6 +197,10 @@ pub struct Services {
     tag_worker: Option<TagWorker>,
     /// Tracks sent to it and not answered yet.
     tags_in_flight: HashSet<TrackId>,
+    /// Tracks whose tag read was answered and sent to the model, but whose
+    /// snapshot does not show it yet. Without it a snapshot taken before the
+    /// command lands still says "unread" and the track is read twice.
+    tags_answered: HashSet<TrackId>,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -239,6 +243,7 @@ impl Services {
                 })
                 .ok(),
             tags_in_flight: HashSet::new(),
+            tags_answered: HashSet::new(),
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -272,6 +277,13 @@ impl Services {
     #[cfg(feature = "test-hooks")]
     pub fn fail_routes(&mut self, count: u32) {
         self.fail_routes = count;
+    }
+
+    /// Runs the tag pass on `state` alone. Used to test the pass against a
+    /// snapshot older than its own answers.
+    #[cfg(feature = "test-hooks")]
+    pub fn tag_pass_on(&mut self, state: &AppState) {
+        self.tag_pass(state);
     }
 
     /// One round of work. Never blocks on the analyzer. A panic inside is
@@ -471,8 +483,15 @@ impl Services {
         };
         self.tags_in_flight
             .retain(|id| state.library.get(*id).is_some());
+        // An answer stays here until a snapshot shows it (`tags_read`), so a
+        // later reset (a new analysis) brings the read back.
+        self.tags_answered
+            .retain(|id| state.library.get(*id).is_some_and(|t| !t.tags_read));
         for track in state.library.iter() {
-            if track.needs_tag_read() && self.tags_in_flight.insert(track.id) {
+            if track.needs_tag_read()
+                && !self.tags_answered.contains(&track.id)
+                && self.tags_in_flight.insert(track.id)
+            {
                 let job = TagJob::Read {
                     track: track.id,
                     path: track.path.clone(),
@@ -491,6 +510,7 @@ impl Services {
                 // Answered either way. If the command is refused the track
                 // still needs its read, so the next round asks again.
                 self.tags_in_flight.remove(&track);
+                self.tags_answered.insert(track);
                 self.conductor.send(Command::ApplyTags {
                     track,
                     tags: Box::new(tags),
@@ -582,6 +602,8 @@ impl Services {
                         },
                     );
                 }
+                // It resets `tags_read`: the tags are read again.
+                self.tags_answered.remove(&result.track);
                 Command::ApplyAnalysis {
                     track: result.track,
                     analysis: Box::new(analysis.analysis),

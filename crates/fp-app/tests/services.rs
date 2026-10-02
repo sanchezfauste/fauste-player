@@ -669,3 +669,38 @@ fn a_new_analysis_result_brings_the_tag_pass_back() {
     r.run_until("the genre read again", |r| only_track(r).genre == "Blues");
     assert!(only_track(&r).tags_read);
 }
+
+#[test]
+fn a_stale_snapshot_does_not_read_a_track_twice() {
+    let dir = tempfile::tempdir().unwrap();
+    let junk = dir.path().join("Band - Junk.wav");
+    std::fs::write(&junk, b"this is not audio").unwrap();
+    let mut r = rig_with(&[junk], dir, Duration::ZERO, |state| {
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.format = Some(fp_model::AudioFormat {
+                sample_rate: 44_100,
+                bits: Some(16),
+                channels: 2,
+            });
+            track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+        }
+    });
+    let version = r.handle.telemetry.load().model_version;
+    // A snapshot that never shows the answer, as one taken before the
+    // command lands.
+    let stale = r.handle.model.load_full();
+    assert!(!only_track(&r).tags_read);
+    let until = Instant::now() + Duration::from_millis(400);
+    while Instant::now() < until {
+        r.services.tag_pass_on(&stale);
+        // Each tick with a command is one new model version.
+        r.conductor.tick(r.now);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(
+        r.handle.telemetry.load().model_version,
+        version + 1,
+        "exactly one ApplyTags"
+    );
+}
