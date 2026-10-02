@@ -143,7 +143,6 @@ settings-delete = Eliminar
 error-last-playlist = No se puede eliminar la última playlist.
 error-playlist-on-air = No se puede eliminar una playlist con una pista sonando.
 error-entry-on-air = No se puede quitar una pista que está sonando.
-error-next-is-current = La pista que suena no puede ser la siguiente.
 error-stop-after-single = Stop al final no está disponible en modo SINGLE.
 error-player-count = El número de players debe estar entre 1 y { $max }.
 error-player-busy = No se puede quitar un player que está sonando.

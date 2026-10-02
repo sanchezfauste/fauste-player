@@ -19,8 +19,6 @@ pub enum ModelError {
     PlaylistOnAir(PlaylistId),
     #[error("entry {0:?} is on air and cannot be removed")]
     EntryOnAir(EntryId),
-    #[error("the current entry cannot be set as next")]
-    NextIsCurrent,
     #[error("stop after current is only available in continuous mode")]
     StopAfterInSingle,
     #[error("player count {requested} is outside 1..={max}")]

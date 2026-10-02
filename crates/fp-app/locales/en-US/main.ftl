@@ -143,7 +143,6 @@ settings-delete = Delete
 error-last-playlist = The last playlist cannot be deleted.
 error-playlist-on-air = A playlist with a track on air cannot be deleted.
 error-entry-on-air = A track that is on air cannot be removed.
-error-next-is-current = The track on air cannot be set as next.
 error-stop-after-single = Stop after the current track is not available in SINGLE mode.
 error-player-count = The number of players must be between 1 and { $max }.
 error-player-busy = A player that is playing cannot be removed.

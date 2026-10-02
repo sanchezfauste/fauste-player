@@ -3,7 +3,7 @@ mod support;
 
 use fp_model::volume::gain_from_fader;
 use fp_model::{CartId, Command, EntryId, PlayMode, PlayerId, PlaylistId};
-use fp_remote::api::{ApiError, Operation as O, plan};
+use fp_remote::api::{ApiError, Edit, Operation as O, plan, plan_edit};
 use support::demo_state;
 
 #[test]
@@ -137,9 +137,9 @@ fn the_dry_run_turns_a_model_refusal_into_a_conflict() {
     let p = s.players[0].id;
     fp_model::apply(&mut s, Command::Play(p)).unwrap();
     let current = s.players[0].current.unwrap();
-    let e = plan(&s, O::SetNext(p, current)).unwrap_err();
+    let e = plan_edit(&s, Edit::RemoveEntry(current)).unwrap_err();
     assert_eq!(e.status(), 409);
-    assert!(e.message().contains("current"), "{}", e.message());
+    assert!(e.message().contains("on air"), "{}", e.message());
 }
 
 #[test]

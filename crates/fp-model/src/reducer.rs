@@ -305,15 +305,28 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
         }
         EngineEvent::TransitionStarted { player, entry } => {
             // The engine started the entry that is already current: a
-            // repeating entry's next pass (R26), perhaps committed just before
-            // a command changed the model. It stays current; the engine used
-            // up its preload and plan, so `reconcile` sends new ones, and the
-            // audio is playing whatever the model asked meanwhile (a pause
-            // that arrived after the restart does not stop it).
+            // repeating entry's next pass (R26) or the replay of an entry set
+            // as its own next (O37), perhaps committed just before a command
+            // changed the model. The engine used up its preload and plan, so
+            // `reconcile` sends new ones, and the audio is playing whatever
+            // the model asked meanwhile (a pause that arrived after the
+            // restart does not stop it).
             if let Ok(i) = state.player_index(player)
                 && state.players[i].current == Some(entry)
                 && state.players[i].transport != Transport::Stopped
             {
+                // A repeat pass keeps the entry as it is. Otherwise a
+                // self-next is the replay: an ordinary play of the same
+                // entry (played mark, history, next derived from the playlist).
+                let replay =
+                    !repeating(state, &state.players[i]) && state.players[i].next == Some(entry);
+                if replay && advance_to(state, i, entry, true).is_none() {
+                    // The file cannot be read any more: the pass already
+                    // started plays out; the next is the entry after it.
+                    let following = state.playlists.next_playable_after(entry, &state.library);
+                    state.players[i].next = following;
+                    state.players[i].next_explicit = false;
+                }
                 let p = &mut state.players[i];
                 p.preloaded = None;
                 p.scheduled = None;
@@ -487,13 +500,11 @@ fn fade_stop(
     Ok(())
 }
 
+/// O37: the entry on air is accepted; it plays once more.
 fn set_next(state: &mut AppState, id: PlayerId, entry: EntryId) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
     if state.playlists.entry(entry).is_none() {
         return Err(ModelError::UnknownEntry(entry));
-    }
-    if state.players[i].current == Some(entry) {
-        return Err(ModelError::NextIsCurrent);
     }
     state.players[i].next = Some(entry);
     state.players[i].next_explicit = true;
@@ -642,6 +653,20 @@ pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan
     }
     if player.mode == PlayMode::Single || player.stop_after_current || player.next.is_none() {
         return Some(TransitionPlan::StopAt { at_secs: end });
+    }
+    // O37: the entry on air was set as next. It plays once more from its
+    // cue-in, as a hard transition into itself (like a repeat, so no segue:
+    // it would overlap the file with itself). A file that can no longer be
+    // opened plays its pass out and stops.
+    if player.next == Some(current) {
+        return Some(if track.file_state.is_playable() {
+            TransitionPlan::StartNextAt {
+                at_secs: end,
+                fade_current_until_secs: None,
+            }
+        } else {
+            TransitionPlan::StopAt { at_secs: end }
+        });
     }
     // A segue only makes sense strictly inside the effective cue range (an
     // automatic one may be stale against a manual cue-out).
@@ -1081,7 +1106,8 @@ fn repeating(state: &AppState, player: &PlayerState) -> bool {
             .is_some_and(|t| t.file_state.is_playable())
 }
 
-/// The entry to preload: the current one while it repeats, else the next.
+/// The entry to preload: the current one while it repeats, else the next
+/// (with a self-next, O37, that is the current entry too).
 fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
     if repeating(state, player) {
         player.current

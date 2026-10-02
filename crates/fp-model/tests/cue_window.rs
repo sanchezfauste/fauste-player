@@ -141,15 +141,13 @@ fn load_as_next_makes_the_cued_entry_the_explicit_next_and_keeps_the_cue() {
 }
 
 #[test]
-fn load_as_next_of_the_current_entry_is_refused() {
+fn load_as_next_of_the_current_entry_is_accepted() {
     let (mut s, p, e) = cueing();
     apply(&mut s, Command::Play(p)).unwrap();
     assert_eq!(s.players[0].current, Some(e[0]));
     apply(&mut s, Command::CueEntry(p, e[0])).unwrap();
-    assert_eq!(
-        apply(&mut s, Command::CueToNext(p)),
-        Err(ModelError::NextIsCurrent)
-    );
+    assert!(apply(&mut s, Command::CueToNext(p)).is_ok());
+    assert_eq!(s.players[0].next, Some(e[0]));
 }
 
 #[test]
