@@ -22,6 +22,7 @@ pub mod session;
 pub mod shortcuts;
 pub mod state;
 mod tag_edit;
+mod tag_sheet;
 pub mod track;
 pub mod volume;
 
@@ -53,6 +54,10 @@ pub use session::{PlayerSession, RestoreParts};
 pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, player_command};
 pub use state::AppState;
 pub use tag_edit::{TagEditBlock, tag_edit_block};
+pub use tag_sheet::{
+    CoverArt, TagField, TagFieldKind, TagSheet, changed_fields, cover_blocked, cover_changed,
+    cover_unstored, invalid_fields, unstored_fields,
+};
 pub use track::{
     AudioFormat, FileState, InvalidDate, Library, Marker, MarkerKind, MarkerSource, Markers,
     PlayRange, Track, TrackAnalysis, TrackKind, TrackTags, parse_tag_date,

@@ -172,7 +172,7 @@ pub struct TrackTags {
 }
 
 /// Cuts `text` to `max_chars` characters after trimming it.
-fn cut(text: &mut String, max_chars: usize) {
+pub(crate) fn cut(text: &mut String, max_chars: usize) {
     let trimmed = text.trim();
     let end = trimmed
         .char_indices()
