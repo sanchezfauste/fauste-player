@@ -261,6 +261,12 @@ pub fn file_icon(track: &Track) -> &'static str {
     }
 }
 
+/// O37: the row of `entry` is the player's next, whatever else it is: the
+/// entry on air can be its own next (it plays once more).
+pub fn row_is_next(state: &AppState, player: PlayerId, entry: EntryId) -> bool {
+    state.player(player).is_ok_and(|p| p.next == Some(entry))
+}
+
 /// How a track-table row is drawn (spec §3 rule 1). Takes the row's entry
 /// directly: the table already has it, so nothing is searched per row.
 pub fn row_status(state: &AppState, player: PlayerId, entry: &PlaylistEntry) -> RowStatus {

@@ -60,7 +60,7 @@ playlist tabs, transport, volume and outputs.
 
 | Button | Action |
 |---|---|
-| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)). Paused: resume. |
+| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)). Paused: resume. With the track on air as next, Play restarts that track with the usual fade. |
 | **Stop** | Stop at once (with a short de-click ramp) |
 | **Fade stop** | Fade out and stop |
 | **Pause** | Pause or resume; blinks amber while paused |

@@ -12,8 +12,8 @@ use std::path::PathBuf;
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     PlayerStatus, RowStatus, TipField, cue_follow_target, cue_window_view, fader_from_gain,
-    file_icon, file_problem, gain_from_fader, player_view, playlist_times, row_status, shown_entry,
-    start_scroll_target, tag_edit_availability, track_tooltip, volume_db,
+    file_icon, file_problem, gain_from_fader, player_view, playlist_times, row_is_next, row_status,
+    shown_entry, start_scroll_target, tag_edit_availability, track_tooltip, volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayerId, Track, apply,
@@ -607,4 +607,20 @@ fn there_is_no_start_scroll_without_a_next_or_for_another_playlist() {
         "next is in another playlist"
     );
     assert_eq!(start_scroll_target(&s, PlayerId(999_999)), None);
+}
+
+#[test]
+fn the_playing_row_is_also_marked_as_next_when_it_is_the_explicit_next() {
+    let (mut s, e, p) = state(3);
+    apply(&mut s, Command::Play(p)).unwrap();
+    let playing = e[0];
+    assert!(!row_is_next(&s, p, playing));
+    apply(&mut s, Command::SetNext(p, playing)).unwrap();
+    assert_eq!(
+        row_status(&s, p, &entry(&s, playing)),
+        RowStatus::Current,
+        "still on air"
+    );
+    assert!(row_is_next(&s, p, playing));
+    assert!(!row_is_next(&s, p, e[1]));
 }
