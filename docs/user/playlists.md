@@ -18,20 +18,51 @@ last playlist, and a playlist with a track on air, cannot be deleted.
 | Column | Content |
 |---|---|
 | `#` | Position, zero-padded; an icon replaces it for the current and next tracks |
-| Title | From the tags, or the file name (`Artist - Title.mp3` is split) |
+| Title | From the tags, or the file name (`Artist - Title.mp3` is split). The repeat and stop-after icons of a track sit before it |
 | Artist | From the tags; "Unknown artist" when there is none |
+| Album | From the tags |
+| Date | The recording date as the file stores it (`2019`, `2019-05` or `2019-05-14`, with a time if there is one) |
+| Genre | From the tags |
 | Dur. | Playing length, from cue-in to cue-out (the whole file with **Use cue-in and cue-out** off) |
+| Intro | How long the intro lasts, from where the track starts playing to its intro marker; empty when the track has no intro marker |
+| File name | The name of the file, with its extension |
+
+A new installation shows `#`, Title, Artist and Dur. The other columns are
+optional; see **Choosing the columns** below. A track that lacks a value
+shows an empty cell.
 
 The columns fill the table and keep their proportions when the window is
-resized; Title gets the most room. Drag the header separators to change the
-proportions; they are remembered per player.
+resized; the text columns get the most room. Drag the header separators to
+change the proportions: the columns to the right of the separator follow the
+pointer on every frame (they share what is left in proportion to their
+width), the ones to its left stay, and the widths are saved when you let go.
+No column gets narrower than its minimum. The widths are remembered per
+player; a column you show later starts with its default width and the others
+keep their proportions.
 
-Which columns the tables show, and in which order, is the same for every
-player. Drag a header onto another to move its column (a line shows where it
-will land), or right-click the header to tick the optional columns: Number,
-Artist, Album, Date, Genre, Intro and File name (Title and Duration are
-always shown). **Settings > Playlists > Table columns** has the same list with
-up and down arrows and a **Default columns** button.
+### Choosing the columns
+
+Title and Dur. are always shown. Every other column can be shown or hidden,
+and any column, those two included, can be moved. The list is the same for
+every player and playlist, and it is saved in `config.json` as
+`ui.table_columns`. Three ways to change it:
+
+- **Settings → Playlists → Table columns:** tick the columns to show; the
+  arrows move a shown column up or down (they read left to right in the
+  tables). **Default columns** goes back to `#`, Title, Artist and Dur.
+- **Right-click a header:** a menu with a checkbox for every optional column.
+  A column you show appears at the right end; drag it from there.
+- **Drag a header** onto another: drop it on the left half of a header to put
+  the column before it, on the right half to put it after it. Dropping
+  anywhere else does nothing.
+
+A name in `ui.table_columns` that this version does not know is ignored, and
+a missing Title or Dur. is added back.
+
+When the application opens, each table scrolls so that its player's next
+track is in the middle of the table (as near as the ends of the list allow).
+That happens once, at start-up, and only when the next track is in the
+playlist the table shows.
 
 When a player moves on to another track, its table shows that track's
 playlist and scrolls its row to the top, unless you used the table in the
@@ -75,8 +106,8 @@ Row colours:
 | Edit tags… | Open the tag editor for this track. **Save** writes the changes into the audio file; **Cancel** (or Esc, when no save is running) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |
 | Add tracks below… | Pick files to insert after this track |
 | Duplicate | Insert an unplayed copy below (with its repeat and stop-after marks) |
-| Repeat this track | Tick to play it again and again, without a gap, until you press Play (next), Previous, Stop or Fade stop, or turn on Stop after. Pause keeps it repeating. A repeat icon shows at the right of the title |
-| Stop after this track | Tick to stop the player when this track ends, every time it plays (in any mode). Unlike the player's **Stop after** button, the mark stays with the track and is saved with the playlist. The stop-after icon shows at the right of the title. It wins over Repeat |
+| Repeat this track | Tick to play it again and again, without a gap, until you press Play (next), Previous, Stop or Fade stop, or turn on Stop after. Pause keeps it repeating. A repeat icon shows before the title |
+| Stop after this track | Tick to stop the player when this track ends, every time it plays (in any mode). Unlike the player's **Stop after** button, the mark stays with the track and is saved with the playlist. The stop-after icon shows before the title. It wins over Repeat |
 | Move to ▸ | Move it to the end of another playlist |
 | Remove from playlist | Remove it; not possible while it is on air |
 
@@ -158,8 +189,13 @@ shortcut acts, and files dropped on the application window are ignored.
 ## Footer
 
 **+ Add** opens a file dialog, starting in the music folder set in
-Settings. The footer also shows the number of tracks, the time left in the
-playlist and its total length.
+Settings. **Reset played** (the arrow icon next to it) clears the dimmed
+"already played" mark of every track of the playlist, for every player,
+after asking "Clear the played mark of every track in this playlist?"
+(**Cancel**, Esc or a click outside keep the marks). The track that is on
+air keeps its state and is marked when the player leaves it. The button is
+dimmed when there is nothing to clear. The footer also shows the number of
+tracks, the time left in the playlist and its total length.
 
 ## Playlist files
 

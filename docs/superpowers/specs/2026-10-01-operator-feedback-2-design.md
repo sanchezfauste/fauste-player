@@ -1,7 +1,7 @@
 # Operator Feedback 2 — Design Spec
 
 - **Date:** 2026-10-01
-- **Status:** Approved in brainstorming, pending written review
+- **Status:** Approved. Plans 1 to 8 are built; each plan's section ends with its "As built" notes.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§2 threads,
   §3 rules, §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md)
   (M4 display), the [cartwall and settings spec](2026-09-26-phase2-cartwall-settings-design.md)
@@ -415,6 +415,14 @@
   - Column widths become fractions keyed by column. Widths stored in the old
     `[f32; 4]` form are converted when they map cleanly; otherwise the default
     layout is used.
+
+- **As built.**
+  - O16: `egui_extras` 0.36's `TableBuilder` cannot recompute the other columns during a drag (it changes only the dragged column, a frame late, and keeps resizable widths), so the table draws its own resize handles. Every column is `Column::exact(px)` from `table_layout::column_px`; `live_widths` follows the raw pointer on every frame with the pure `resize_px`; one `SetColumnWidths` is sent on release, only if something moved. A double click on an edge no longer auto-sizes.
+  - O7: `view::start_scroll_target` (the player's next, when it is in the shown playlist) and `player::scroll_to_next_once` give `FollowScroll { align: Center, animated: false }` once per player, on the first frame its column is drawn. `TableBuilder::min_scrolled_height(0.0)` stops the footer from covering the last rows in a short window.
+  - O9: the Title cell draws the repeat icon, the stop-after icon and then the title; the outdated-analysis flag stays at the right.
+  - O22: `Command::ResetPlayed(PlaylistId)`; `fp_model::{resettable_entries, can_reset_played}`. The current entry of any player keeps its marks; other playlists, flags, histories and explicit nexts are untouched; the derived next is recomputed with `refresh_next`. The footer button asks first (`reset_played::show`) and is dimmed when nothing can be cleared.
+  - O24: `fp_model::TableColumn` (`Number`, `Title`, `Artist`, `Album`, `Date`, `Genre`, `Duration`, `Intro`, `FileName`; file names are snake case), `ui.table_columns` with `normalize_columns` (first duplicate wins; a missing Title goes first, after `#` when that leads; a missing Duration goes last) in `Config::validate`; `with_column_shown`, `move_column`, `move_column_before` and `column_rows` are the pure edit rules. `ColumnWidths.fractions` is `Option<BTreeMap<TableColumn, f32>>`; the old four-number array converts to `#`, Title, Artist and Duration. `Track::intro_secs` feeds Intro. The list is edited in Settings → Playlists (`settings/columns.rs`), in the header's menu and by dragging a header (`DragColumn`); `Scene::set_table_columns` sends one `UpdateConfig`.
+  - Not exposed through the remote API, MIDI or the session file beyond the widths.
 
 ## 10. Plan 9 — Audit follow-ups
 

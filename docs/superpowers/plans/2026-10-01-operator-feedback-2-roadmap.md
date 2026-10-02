@@ -32,7 +32,7 @@ runs, against the code that the earlier plans left. Each plan reaches
 | 5 | Cue markers off | O15 | `feat/cue-markers-off` | done |
 | 6 | Player and CUE | O8, O10, O12, O17 | `feat/cue-window` | done |
 | 7 | Track tags | O23 | `feat/track-tags` | done |
-| 8 | Track table | O7, O9, O16, O22, O24 | `feat/table-columns` | outline |
+| 8 | Track table | O7, O9, O16, O22, O24 | `feat/table-columns` | done |
 | 9 | Audit follow-ups | O21 | `fix/audit-follow-ups` | outline |
 | 10 | Audio path | O25, O26, O27 | `feat/audio-path` | outline |
 | 11 | Website and guide | O1, O28, O29, O30 | `docs/website` | outline |

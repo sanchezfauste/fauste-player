@@ -62,6 +62,7 @@ audio engine that the interface can never block.
   disc numbers, genre, BPM, key, lyrics and more) and the front cover (view,
   change, remove) of MP3, FLAC, MP4, WAV and other files, written safely
   into the file.
+- **Configurable track tables:** choose and order the columns (title, artist, album, date, genre, intro, file name and more) from Settings, the header menu or by dragging a header; columns resize live; tables open at the next track; **Reset played** clears a playlist's played marks.
 - **Marker editing on the waveform:** cue in and out, intro, outro and MIX,
   set from a menu or with Alt-drag. An `INTRO` tag can also set the intro.
   A setting makes players ignore cue-in and cue-out and play whole files.
