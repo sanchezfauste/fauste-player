@@ -49,7 +49,8 @@ loaded there.
 
 By default **F1**…**F12** fire carts 1–12 of the page shown, and
 **Ctrl+Space** stops every cart (the same as **Stop all**; it also stops a
-cart you are pre-listening on CUE, even when no cart is playing). See [Keyboard](keyboard.md) to change them.
+cart you are pre-listening on CUE, even when no cart is playing). See
+[Keyboard](keyboard.md) to change them.
 
 ## Setting up carts
 

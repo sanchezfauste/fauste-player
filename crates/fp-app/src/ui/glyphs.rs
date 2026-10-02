@@ -1,7 +1,8 @@
 //! One icon per transport action (operator feedback 2, O18).
 //!
-//! The player, the cartwall and the CUE window draw their transport icons
-//! only through this module, so the same action looks the same everywhere.
+//! The player, the cartwall and the track table draw their transport icons
+//! only through this module (the CUE window will too), so the same action
+//! looks the same everywhere.
 //! An icon is either a Phosphor font glyph or a shape drawn by
 //! [`super::icons`] (the actions Phosphor has no icon for).
 

@@ -54,8 +54,8 @@ audio engine that the interface can never block.
 - **CUE pre-listen** on a separate device or channel pair.
 - **Cartwall:** pages of instant carts (jingles, effects, spots), each with a
   configurable grid. Carts overlap by default; they can loop gaplessly or stop
-  the others, and a **Stop all** button stops every playing cart. They have their own Main and Cue outputs. Pages can be
-  imported and exported.
+  the others, and a **Stop all** button stops every playing cart. They have
+  their own Main and Cue outputs. Pages can be imported and exported.
 - **Marker editing on the waveform:** cue in and out, intro, outro and MIX,
   set from a menu or with Alt-drag. An `INTRO` tag can also set the intro.
 - **Remappable keyboard shortcuts** for players and carts.
