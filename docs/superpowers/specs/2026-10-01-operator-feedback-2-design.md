@@ -292,10 +292,39 @@
   title, artist, album, date (as stored), genre, duration, format (codec,
   sample rate, bit depth) and path. A missing field is left out.
 - **Editor.**
-  - The row context menu gains "Edit tags…". It opens a modal with title,
-    artist, album, album artist, date, genre, composer and comment, for one
-    track. The field is labelled "Date"; a date that is not ISO 8601 blocks
-    **Save** and the field is marked.
+  - The row context menu gains "Edit tags…". It opens a modal for one track.
+    The modal reads the file's tags on a helper thread when it opens and shows
+    "Reading tags…" until they arrive. The library keeps only the summary
+    fields above; the full set is read from the file each time.
+  - **Fields.** The editor covers the fields that common players and tag
+    editors show, not every key a format can hold. Each field uses its
+    format's own standard mapping (ID3v2 frames, Vorbis comments, MP4 atoms,
+    APE items, RIFF INFO) through lofty's `ItemKey`; nothing is renamed or
+    invented.
+    - Always shown, in this order: Title, Artist, Album, Album artist, Date,
+      Track number (number and total), Disc number (number and total), Genre,
+      Composer, Comment.
+    - Shown when the file has them, and offered by an **Add field** menu
+      otherwise: Subtitle, Grouping, BPM, Initial key, Mood, ISRC, Publisher,
+      Catalog number, Copyright, Original artist, Original album, Original
+      release date, Lyricist, Conductor, Remixer, Arranger, Performer,
+      Language, Encoded by, Lyrics, Sort title, Sort artist, Sort album,
+      Sort album artist, Sort composer, Artist website.
+    - **Add field** lists only the fields the file's tag format can store. A
+      field the format cannot store is never shown as editable.
+    - Clearing a field removes it from the file. An added field left empty is
+      not written.
+    - A field that holds several values (for example two artists) shows one
+      value per line, and Save writes one value per line through the format's
+      own multi-value mechanism.
+    - Date and Original release date are ISO 8601 (`YYYY`, `YYYY-MM` or
+      `YYYY-MM-DD`, optional time). Track and disc number and total, and BPM,
+      are whole numbers. An invalid value blocks **Save** and its field is
+      marked.
+    - Everything else in the file (other standard keys, custom keys such as
+      ID3v2 `TXXX` or private Vorbis keys, pictures, binary frames) is not
+      shown and is kept byte for byte. The modal says how many such tags are
+      kept.
   - **Save** writes the tags into the file on a helper thread, never on the UI
     thread:
     1. copy the file to a temporary file in the same folder;
