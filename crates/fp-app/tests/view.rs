@@ -11,8 +11,8 @@ use std::path::PathBuf;
 
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
-    PlayerStatus, RowStatus, fader_from_gain, file_icon, file_problem, gain_from_fader,
-    player_view, playlist_times, row_status, shown_entry, volume_db,
+    PlayerStatus, RowStatus, cue_window_view, fader_from_gain, file_icon, file_problem,
+    gain_from_fader, player_view, playlist_times, row_status, shown_entry, volume_db,
 };
 use fp_model::{AppState, Command, Config, EntryId, FileState, MarkerKind, PlayerId, apply};
 
@@ -394,5 +394,79 @@ fn the_player_view_carries_the_entry_notice() {
     assert_eq!(
         player_view(&s, p, None, 0.0).unwrap().entry_notice,
         Some(fp_model::EntryNotice::Repeats)
+    );
+}
+
+#[test]
+fn the_cue_window_view_needs_a_running_cue() {
+    let (s, _, p) = state(2);
+    assert_eq!(cue_window_view(&s, p, None), None);
+}
+
+#[test]
+fn the_cue_window_view_shows_the_cued_entry_its_times_and_its_state() {
+    let (mut s, e, p) = state(3);
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let v = cue_window_view(&s, p, Some(50.0)).unwrap();
+    assert_eq!(v.entry, e[0]);
+    assert_eq!(v.title, "Song 0");
+    assert_eq!(v.artist.as_deref(), Some("Artist"));
+    assert_eq!(v.elapsed, 50.0);
+    assert_eq!(v.total, Some(200.0));
+    assert_eq!(v.remaining, 150.0, "to the end of the file");
+    assert_eq!(v.position, Some(0.25));
+    assert!(!v.paused);
+    apply(&mut s, Command::SetCuePaused(p, true)).unwrap();
+    assert!(cue_window_view(&s, p, Some(50.0)).unwrap().paused);
+}
+
+#[test]
+fn a_cue_window_without_a_position_shows_the_start_of_the_range() {
+    let (mut s, e, p) = state(2);
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    mark(&mut s, t, MarkerKind::CueIn, 12.0);
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let v = cue_window_view(&s, p, None).unwrap();
+    assert_eq!(v.elapsed, 12.0);
+    let broken = cue_window_view(&s, p, Some(f64::NAN)).unwrap();
+    assert_eq!(broken.elapsed, 12.0);
+}
+
+#[test]
+fn a_position_past_the_end_is_clamped() {
+    let (mut s, _, p) = state(2);
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let v = cue_window_view(&s, p, Some(900.0)).unwrap();
+    assert_eq!((v.elapsed, v.remaining), (200.0, 0.0));
+}
+
+#[test]
+fn an_unknown_length_gives_zero_times_and_no_position() {
+    let (mut s, e, p) = state(2);
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    s.library.get_mut(t).unwrap().duration_secs = 0.0;
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let v = cue_window_view(&s, p, Some(5.0)).unwrap();
+    assert_eq!((v.total, v.remaining, v.position), (None, 0.0, None));
+}
+
+#[test]
+fn load_as_next_is_offered_only_when_it_changes_something() {
+    let (mut s, e, p) = state(3);
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    // Cued entry is the derived next: loading it makes it explicit.
+    assert!(cue_window_view(&s, p, None).unwrap().can_load_next);
+    apply(&mut s, Command::CueToNext(p)).unwrap();
+    assert!(
+        !cue_window_view(&s, p, None).unwrap().can_load_next,
+        "already explicit"
+    );
+    apply(&mut s, Command::CueEntry(p, e[2])).unwrap();
+    assert!(cue_window_view(&s, p, None).unwrap().can_load_next);
+    apply(&mut s, Command::Play(p)).unwrap();
+    apply(&mut s, Command::CueEntry(p, e[0])).unwrap();
+    assert!(
+        !cue_window_view(&s, p, None).unwrap().can_load_next,
+        "the current entry cannot be the next"
     );
 }

@@ -92,6 +92,61 @@ pub fn shown_entry(state: &AppState, player: PlayerId) -> Option<EntryId> {
     p.current.or(p.next)
 }
 
+/// What a CUE window shows (feedback 2 spec O12). A CUE plays the whole
+/// file, so its times run to the end of the file, not to the cue-out.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CueWindowView {
+    pub player: PlayerId,
+    pub entry: EntryId,
+    pub title: String,
+    pub artist: Option<String>,
+    pub elapsed: f64,
+    /// File length, when known.
+    pub total: Option<f64>,
+    /// Seconds to the end of the file; 0 while the length is unknown.
+    pub remaining: f64,
+    pub paused: bool,
+    /// The position as a fraction of the file, for the waveform.
+    pub position: Option<f32>,
+    /// "Load as next" has something to do: the cued entry is not the
+    /// current one and not already the explicit next.
+    pub can_load_next: bool,
+}
+
+/// The CUE window of `player`, or `None` while it has no CUE. `position`
+/// is the engine's CUE position; without one (or a broken one) the CUE
+/// shows the start of its play range, where it begins.
+pub fn cue_window_view(
+    state: &AppState,
+    player: PlayerId,
+    position: Option<f64>,
+) -> Option<CueWindowView> {
+    let p = state.player(player).ok()?;
+    let cue = p.cue?;
+    let track = state.track_for_entry(cue.entry)?;
+    let total = (track.duration_secs > 0.0).then_some(track.duration_secs);
+    let start = track
+        .play_range(state.config.players.use_cue_markers)
+        .cue_in;
+    let mut elapsed = position.filter(|v| v.is_finite()).unwrap_or(start).max(0.0);
+    if let Some(total) = total {
+        elapsed = elapsed.min(total);
+    }
+    Some(CueWindowView {
+        player,
+        entry: cue.entry,
+        title: track.title.clone(),
+        artist: Some(track.artist.clone()).filter(|a| !a.is_empty()),
+        elapsed,
+        total,
+        remaining: total.map_or(0.0, |t| (t - elapsed).max(0.0)),
+        paused: cue.paused,
+        position: fraction(Some(elapsed), total.unwrap_or(0.0)),
+        can_load_next: p.current != Some(cue.entry)
+            && !(p.next == Some(cue.entry) && p.next_explicit),
+    })
+}
+
 /// Everything a player column shows. `position` comes from the engine;
 /// `blink_phase` is a clock in seconds for blinking elements.
 pub fn player_view(

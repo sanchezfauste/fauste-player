@@ -85,6 +85,7 @@ fn the_screens_do_not_name_transport_icons_themselves() {
         ("player.rs", include_str!("../src/ui/player.rs")),
         ("cartwall.rs", include_str!("../src/ui/cartwall.rs")),
         ("table.rs", include_str!("../src/ui/table.rs")),
+        ("cue_window.rs", include_str!("../src/ui/cue_window.rs")),
     ];
     for (name, source) in sources {
         for forbidden in [
