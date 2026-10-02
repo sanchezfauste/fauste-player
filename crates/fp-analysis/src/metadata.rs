@@ -29,7 +29,7 @@ fn non_empty(s: Option<std::borrow::Cow<'_, str>>) -> Option<String> {
 }
 
 /// The recording date of `tag` as ISO 8601 text, if it is a valid one.
-fn tag_date(tag: &lofty::tag::Tag) -> Option<String> {
+pub(crate) fn tag_date(tag: &lofty::tag::Tag) -> Option<String> {
     let text = tag.date()?.to_string();
     match fp_model::parse_tag_date(&text) {
         Ok(date) => date,
@@ -38,6 +38,16 @@ fn tag_date(tag: &lofty::tag::Tag) -> Option<String> {
             None
         }
     }
+}
+
+/// The picture the application shows for `tag`: the front cover, else the
+/// first picture. The library's thumbnail and the tag editor share this rule.
+pub(crate) fn display_picture(tag: &lofty::tag::Tag) -> Option<&lofty::picture::Picture> {
+    let pictures = tag.pictures();
+    pictures
+        .iter()
+        .find(|p| p.pic_type() == lofty::picture::PictureType::CoverFront)
+        .or_else(|| pictures.first())
 }
 
 /// Reads tags with lofty. Unreadable or untagged files yield empty `Tags`.
@@ -74,12 +84,7 @@ pub fn read_tags(path: &Path, limits: &Limits) -> Tags {
     let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) else {
         return Tags::default();
     };
-    let pictures = tag.pictures();
-    let cover = pictures
-        .iter()
-        .find(|p| p.pic_type() == lofty::picture::PictureType::CoverFront)
-        .or_else(|| pictures.first())
-        .map(|p| p.data().to_vec());
+    let cover = display_picture(tag).map(|p| p.data().to_vec());
     Tags {
         title: non_empty(tag.title()),
         artist: non_empty(tag.artist()),
