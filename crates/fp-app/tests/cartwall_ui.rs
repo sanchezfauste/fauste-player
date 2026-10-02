@@ -12,7 +12,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use egui_kittest::kittest::{NodeT, Queryable};
-use fp_app::ui::cart_view::{CartStatus, cart_view, page_on_air};
+use fp_app::ui::cart_view::{
+    BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, button_height, cart_view, page_on_air,
+};
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::CartTelemetry;
 use fp_model::{AppState, CartEdit, CartKind, Command, FileState, TrackAnalysis, apply};
@@ -424,4 +426,54 @@ fn stop_all_stays_at_the_right_end_in_a_narrow_window() {
     assert!(stop.width() > 40.0, "not squeezed: {stop:?}");
     assert!(h.query_by_label("CARTWALL").is_some(), "title kept");
     assert!(h.query_by_label("Carts 1").is_some(), "a page tab kept");
+}
+
+#[test]
+fn buttons_take_the_height_there_is_within_their_limits() {
+    // Room for the nominal height: unchanged.
+    assert_eq!(
+        button_height(4.0 * BUTTON_HEIGHT + 3.0 * GAP, 4),
+        BUTTON_HEIGHT
+    );
+    assert_eq!(button_height(1000.0, 4), BUTTON_HEIGHT);
+    // Less room: they shrink, gaps included.
+    let h = button_height(130.0, 4);
+    assert!((h - (130.0 - 3.0 * GAP) / 4.0).abs() < 0.01, "{h}");
+    // Never below the minimum, whatever the room.
+    assert_eq!(button_height(10.0, 4), MIN_BUTTON_HEIGHT);
+    assert_eq!(button_height(f32::NAN, 4), BUTTON_HEIGHT);
+    assert_eq!(button_height(-5.0, 4), MIN_BUTTON_HEIGHT);
+}
+
+#[test]
+fn one_row_keeps_the_nominal_button_height() {
+    assert_eq!(button_height(BUTTON_HEIGHT, 1), BUTTON_HEIGHT);
+    assert_eq!(button_height(500.0, 1), BUTTON_HEIGHT);
+    assert_eq!(button_height(100.0, 0), BUTTON_HEIGHT);
+}
+
+#[test]
+fn four_rows_fit_a_short_window_without_scrolling() {
+    // 4 rows at 40 px do not fit the 60% the strip may take of a 360 px
+    // window; at the minimum height they do.
+    let (mut h, _fake) = support::harness_sized(with_cart(), egui::vec2(700.0, 360.0), |ui| ui);
+    h.run_steps(3);
+    let first = h.get_all_by_label("Station ID").next().unwrap().rect();
+    let last = h.get_all_by_label("Cart 16, empty").next().unwrap().rect();
+    assert!(
+        first.height() < BUTTON_HEIGHT && first.height() >= MIN_BUTTON_HEIGHT,
+        "{first:?}"
+    );
+    // The last row is on screen without scrolling (above the 24 px status bar).
+    assert!(last.bottom() <= 360.0 - 24.0, "{last:?}");
+    assert!(last.top() > first.top());
+}
+
+#[test]
+fn a_collapsed_cartwall_draws_no_buttons() {
+    let mut s = with_cart();
+    apply(&mut s, Command::SetCartwallOpen(false)).unwrap();
+    let (mut h, _fake) = support::harness(s);
+    h.run_steps(3);
+    assert!(h.query_by_label("Station ID").is_none());
 }

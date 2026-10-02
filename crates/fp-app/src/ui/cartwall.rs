@@ -5,15 +5,13 @@ use egui_phosphor::regular as icon;
 use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
-use super::cart_view::{CartStatus, cart_view, page_on_air};
+use super::cart_view::{BUTTON_HEIGHT, CartStatus, GAP, button_height, cart_view, page_on_air};
 use super::glyphs::{self, TransportAction};
 use super::theme;
 use super::view;
 use super::widgets::{self, TileStyle, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
-const BUTTON_HEIGHT: f32 = 40.0;
-const GAP: f32 = 6.0;
 const MIN_BUTTON_WIDTH: f32 = 56.0;
 
 /// Height the strip needs, collapsed or open.
@@ -45,10 +43,11 @@ pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) 
     }
     ui.add_space(GAP);
     // A grid larger than the strip scrolls instead of being cut off.
+    let available = ui.available_height();
     egui::ScrollArea::both()
         .id_salt("cart-grid")
         .auto_shrink([false, false])
-        .show(ui, |ui| grid(ui, scene, view_state));
+        .show(ui, |ui| grid(ui, scene, view_state, available));
 }
 
 fn header(ui: &mut Ui, scene: &Scene<'_>) {
@@ -244,7 +243,7 @@ fn kind_label(scene: &Scene<'_>, kind: CartKind) -> String {
     })
 }
 
-fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f32) {
     let t = scene.i18n;
     let Some(page) = scene.state.cartwall.shown_page() else {
         return;
@@ -253,6 +252,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     let width =
         ((ui.available_width() - GAP * (cols as f32 - 1.0)) / cols as f32).max(MIN_BUTTON_WIDTH);
     let page_id = page.id;
+    let button = button_height(available, page.carts.chunks(cols).count());
     for (row_index, row) in page.carts.chunks(cols).enumerate() {
         if row_index > 0 {
             ui.add_space(GAP);
@@ -290,13 +290,8 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                     border_width: 1.0,
                 };
                 let kind = kind_label(scene, view.kind);
-                let response = widgets::tile(
-                    ui,
-                    vec2(width, BUTTON_HEIGHT),
-                    &label,
-                    !empty,
-                    style,
-                    |p, r, c| {
+                let response =
+                    widgets::tile(ui, vec2(width, button), &label, !empty, style, |p, r, c| {
                         if playing {
                             let bar = Rect::from_min_size(
                                 r.min,
@@ -371,8 +366,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                                 StrokeKind::Inside,
                             );
                         }
-                    },
-                );
+                    });
                 let response = match cart.track.and_then(|t| scene.file_tip(t)) {
                     Some(tip) => response.on_hover_text(tip),
                     None => response,

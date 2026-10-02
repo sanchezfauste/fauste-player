@@ -5,6 +5,24 @@ use fp_model::{AppState, CartId, CartKind, CartPageId};
 
 use super::format;
 
+/// Height of a cart button when there is room (feedback 2 spec O31).
+pub const BUTTON_HEIGHT: f32 = 40.0;
+/// The least a cart button shrinks to: room for the name and the detail line.
+pub const MIN_BUTTON_HEIGHT: f32 = 28.0;
+/// Gap between cart buttons and below the header.
+pub const GAP: f32 = 6.0;
+
+/// The height of a cart button when `rows` rows share `available` pixels
+/// (gaps included): what fits, between `MIN_BUTTON_HEIGHT` and
+/// `BUTTON_HEIGHT`. The grid scrolls only when even the minimum does not fit.
+pub fn button_height(available: f32, rows: usize) -> f32 {
+    if rows == 0 || available.is_nan() {
+        return BUTTON_HEIGHT;
+    }
+    let gaps = GAP * (rows - 1) as f32;
+    ((available - gaps) / rows as f32).clamp(MIN_BUTTON_HEIGHT, BUTTON_HEIGHT)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CartStatus {
     /// No file.

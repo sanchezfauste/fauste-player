@@ -30,6 +30,9 @@ An empty cart's menu has **Edit…** only, to choose its file.
 - **Pages:** the tabs next to **CARTWALL** switch pages. A red dot shows
   that a cart on that page is playing.
 - Click **CARTWALL** to collapse the strip or expand it again.
+- When the window is short, the buttons shrink (down to a minimum height) so
+  that all the configured rows fit; the cartwall scrolls only when even the
+  smallest buttons do not fit.
 
 | Button look | Meaning |
 |---|---|
