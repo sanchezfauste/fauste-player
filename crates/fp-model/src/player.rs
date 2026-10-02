@@ -1,7 +1,10 @@
 //! Per-player state.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
+use crate::columns::TableColumn;
 use crate::command::TransitionPlan;
 use crate::ids::{EntryId, PlayerId, PlaylistId};
 
@@ -29,23 +32,72 @@ pub struct CueState {
     pub paused: bool,
 }
 
-/// The track table's column widths as fractions of its width (`#`, Title,
-/// Artist, Duration), summing to 1; `None` is the default layout
-/// (feedback spec §2.3). Pixel widths saved by earlier versions are ignored.
-#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+/// The track table's column widths as fractions of its width, keyed by
+/// column and summing to 1 over the columns that were shown when they were
+/// stored; `None` is the default layout (feedback 2 spec O24). A column
+/// missing from the map takes its default width. Widths saved by earlier
+/// versions as four fractions (`#`, Title, Artist, Duration) are converted
+/// when they are four good numbers; pixel widths and anything else give the
+/// default layout.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ColumnWidths {
-    pub fractions: Option<[f32; 4]>,
+    #[serde(deserialize_with = "lenient_fractions")]
+    pub fractions: Option<BTreeMap<TableColumn, f32>>,
+}
+
+/// The four columns the old fraction array described, in its order.
+const LEGACY_COLUMNS: [TableColumn; 4] = [
+    TableColumn::Number,
+    TableColumn::Title,
+    TableColumn::Artist,
+    TableColumn::Duration,
+];
+
+fn lenient_fractions<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<BTreeMap<TableColumn, f32>>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Raw {
+        Legacy(Vec<f32>),
+        Keyed(BTreeMap<String, f32>),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Option::<Raw>::deserialize(d)? {
+        Some(Raw::Legacy(values)) if values.len() == LEGACY_COLUMNS.len() => {
+            Some(LEGACY_COLUMNS.into_iter().zip(values).collect())
+        }
+        Some(Raw::Keyed(map)) => Some(
+            map.into_iter()
+                .filter_map(|(name, f)| TableColumn::from_name(&name).map(|c| (c, f)))
+                .collect(),
+        ),
+        _ => None,
+    })
 }
 
 impl ColumnWidths {
-    /// Fractions scaled to sum to 1; broken ones (not finite, negative, all
-    /// zero) give the default layout.
+    /// Widths from `(column, fraction)` pairs, normalised.
+    pub fn keyed(pairs: impl IntoIterator<Item = (TableColumn, f32)>) -> Self {
+        Self {
+            fractions: Some(pairs.into_iter().collect()),
+        }
+        .normalized()
+    }
+
+    /// The stored fraction of `column`, if any.
+    pub fn fraction(&self, column: TableColumn) -> Option<f32> {
+        self.fractions.as_ref()?.get(&column).copied()
+    }
+
+    /// Fractions scaled to sum to 1; broken ones (not finite, negative, none
+    /// left, all zero) give the default layout.
     pub fn normalized(self) -> Self {
         let fractions = self.fractions.and_then(|f| {
-            let valid = f.iter().all(|x| x.is_finite() && *x >= 0.0);
-            let sum: f32 = f.iter().sum();
-            (valid && sum > 0.0).then(|| f.map(|x| x / sum))
+            let valid = f.values().all(|x| x.is_finite() && *x >= 0.0);
+            let sum: f32 = f.values().sum();
+            (valid && sum > 0.0).then(|| f.into_iter().map(|(c, x)| (c, x / sum)).collect())
         });
         Self { fractions }
     }

@@ -275,45 +275,6 @@ fn playlist_times_follow_each_player() {
     assert_eq!(theirs.elapsed, 0.0, "P2 has played nothing: {theirs:?}");
 }
 
-mod columns {
-    use fp_app::ui::view::column_px;
-
-    fn sum(px: [f32; 4]) -> f32 {
-        px.iter().sum()
-    }
-
-    #[test]
-    fn the_default_gives_the_minimums_and_splits_the_rest_60_40() {
-        let px = column_px(None, 1000.0, 40.0, 60.0);
-        assert_eq!((px[0], px[3]), (40.0, 60.0));
-        assert!(
-            (px[1] - 540.0).abs() < 0.01 && (px[2] - 360.0).abs() < 0.01,
-            "{px:?}"
-        );
-        assert!((sum(px) - 1000.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn fractions_scale_with_the_width() {
-        let f = Some([0.05, 0.5, 0.35, 0.1]);
-        let a = column_px(f, 1000.0, 40.0, 60.0);
-        let b = column_px(f, 1500.0, 40.0, 60.0);
-        assert!((sum(b) - 1500.0).abs() < 0.01);
-        assert!((b[1] / a[1] - 1.5).abs() < 0.01, "{a:?} {b:?}");
-        assert!((b[2] / a[2] - 1.5).abs() < 0.01);
-    }
-
-    #[test]
-    fn the_minimums_win_in_a_narrow_table() {
-        let px = column_px(Some([0.01, 0.6, 0.38, 0.01]), 360.0, 40.0, 60.0);
-        assert!(px[0] >= 40.0 && px[3] >= 60.0, "{px:?}");
-        assert!(px.iter().all(|w| *w >= 0.0 && w.is_finite()));
-        assert!((sum(px) - 360.0).abs() < 0.01);
-        let tiny = column_px(None, 50.0, 40.0, 60.0);
-        assert!(tiny.iter().all(|w| *w >= 0.0 && w.is_finite()), "{tiny:?}");
-    }
-}
-
 fn mark(s: &mut AppState, track: fp_model::TrackId, kind: MarkerKind, secs: f64) {
     apply(
         s,

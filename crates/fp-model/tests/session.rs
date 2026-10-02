@@ -216,20 +216,26 @@ fn a_broken_history_loads_as_empty() {
 
 #[test]
 fn column_fractions_are_normalised_and_old_pixel_widths_ignored() {
-    use fp_model::ColumnWidths;
-    let c = ColumnWidths {
-        fractions: Some([1.0, 3.0, 2.0, 2.0]),
-    }
-    .normalized();
+    use fp_model::{ColumnWidths, TableColumn};
+    let c = ColumnWidths::keyed([
+        (TableColumn::Number, 1.0),
+        (TableColumn::Title, 3.0),
+        (TableColumn::Artist, 2.0),
+        (TableColumn::Duration, 2.0),
+    ]);
     let f = c.fractions.unwrap();
-    assert!((f.iter().sum::<f32>() - 1.0).abs() < 1e-6);
-    assert!((f[1] - 0.375).abs() < 1e-6);
-    for broken in [[f32::NAN, 1.0, 1.0, 1.0], [-1.0, 1.0, 1.0, 1.0], [0.0; 4]] {
+    assert!((f.values().sum::<f32>() - 1.0).abs() < 1e-6);
+    assert!((f[&TableColumn::Title] - 0.375).abs() < 1e-6);
+    for broken in [f32::NAN, -1.0] {
         let c = ColumnWidths {
-            fractions: Some(broken),
+            fractions: Some([(TableColumn::Title, broken), (TableColumn::Artist, 1.0)].into()),
         };
         assert_eq!(c.normalized().fractions, None, "{broken:?}");
     }
+    let zero = ColumnWidths {
+        fractions: Some([(TableColumn::Title, 0.0)].into()),
+    };
+    assert_eq!(zero.normalized().fractions, None);
     let old: ColumnWidths =
         serde_json::from_str(r#"{"number":40.0,"title":300.0,"duration":52.0}"#).unwrap();
     assert_eq!(old, ColumnWidths::default());

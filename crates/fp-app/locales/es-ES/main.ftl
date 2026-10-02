@@ -50,6 +50,11 @@ col-number = #
 col-title = Título
 col-artist = Artista
 col-duration = Dur.
+col-album = Álbum
+col-date = Fecha
+col-genre = Género
+col-intro = Intro
+col-file_name = Archivo
 footer-add = Añadir
 footer-count = { $count ->
     [one] 1 pista

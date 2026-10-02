@@ -18,6 +18,7 @@ mod reset_played;
 mod settings;
 pub mod shell;
 mod table;
+pub mod table_layout;
 mod tag_editor;
 pub mod theme;
 pub mod view;

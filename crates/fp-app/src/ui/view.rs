@@ -2,7 +2,8 @@
 //! the engine telemetry. Pure functions: everything here is unit-tested.
 
 use fp_model::{
-    AppState, EntryId, FileState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, Track, Transport,
+    AppState, EntryId, FileState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, TableColumn,
+    Track, Transport,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -358,44 +359,35 @@ pub fn volume_db(gain: f32) -> Option<f32> {
     (gain > 0.0 && !gain.is_nan()).then(|| 20.0 * gain.log10())
 }
 
-/// Title and Artist are never narrower than this while the table allows.
-const TEXT_COLUMN_MIN: f32 = 60.0;
-
-/// Pixel widths of the track table's columns (`#`, Title, Artist, Duration)
-/// for a table `width` wide (feedback spec §2.3): the stored fractions, or
-/// by default the minimums for `#` and Duration and 60:40 of the rest. The
-/// minimums win, and the widths always sum to `width`.
-pub fn column_px(
-    fractions: Option<[f32; 4]>,
-    width: f32,
-    number_min: f32,
-    duration_min: f32,
-) -> [f32; 4] {
-    let width = if width.is_finite() {
-        width.max(0.0)
-    } else {
-        0.0
-    };
-    let wanted = fp_model::ColumnWidths { fractions }
-        .normalized()
-        .fractions
-        .map(|f| f.map(|x| x * width));
-    let [n, t, a, d] = wanted.unwrap_or([number_min, 0.6, 0.4, duration_min]);
-    let (mut number, mut duration) = (n.max(number_min), d.max(duration_min));
-    if number + duration > width {
-        // Not even the minimums fit: share what there is.
-        let scale = width / (number + duration).max(f32::EPSILON);
-        number *= scale;
-        duration *= scale;
-        return [number, 0.0, 0.0, duration];
+/// The text a table cell shows for `column` (feedback 2 spec O24). The `#`
+/// column draws its own icon and number, so it has none here. A column the
+/// track has no value for is empty; the times follow the play range
+/// (`use_markers` is `players.use_cue_markers`).
+pub fn cell_text(track: &Track, column: TableColumn, use_markers: bool) -> String {
+    match column {
+        TableColumn::Number => String::new(),
+        TableColumn::Title => track.title.clone(),
+        TableColumn::Artist => track.artist.clone(),
+        TableColumn::Album => track.album.clone(),
+        TableColumn::Date => track.date.clone().unwrap_or_default(),
+        TableColumn::Genre => track.genre.clone(),
+        TableColumn::Duration => {
+            if track.duration_secs > 0.0 {
+                super::format::clock(track.play_range(use_markers).length())
+            } else {
+                String::new()
+            }
+        }
+        TableColumn::Intro => track
+            .intro_secs(use_markers)
+            .map(super::format::clock)
+            .unwrap_or_default(),
+        TableColumn::FileName => track
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
     }
-    let rest = width - number - duration;
-    let share = if t + a > 0.0 { t / (t + a) } else { 0.6 };
-    let mut title = rest * share;
-    if rest >= 2.0 * TEXT_COLUMN_MIN {
-        title = title.clamp(TEXT_COLUMN_MIN, rest - TEXT_COLUMN_MIN);
-    }
-    [number, title, rest - title, duration]
 }
 
 /// A line of the row tooltip (feedback 2 spec O23).

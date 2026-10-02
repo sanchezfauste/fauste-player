@@ -4,31 +4,116 @@
 use egui::{Align, Color32, Layout, Rect, RichText, Sense, Ui, pos2, vec2};
 use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
-use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, Transport};
+use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, TableColumn, Transport};
 
 use super::app::{DragEntry, DropTarget, FollowScroll, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
+use super::table_layout;
 use super::theme;
 use super::view::{self, RowStatus};
 use super::widgets::{self, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
 const ROW_HEIGHT: f32 = 28.0;
-/// The Duration column is never narrower than this ("00:00:00" fits).
-const DURATION_MIN: f32 = 52.0;
+/// How long a released column edge keeps its widths while the model catches
+/// up with the command that stores them.
+const HOLD_SECS: f64 = 0.5;
 
-fn header_label(ui: &mut Ui, text: &str) {
-    ui.add_space(8.0);
-    ui.add(
-        egui::Label::new(
-            RichText::new(text.to_uppercase())
-                .font(font(10.0))
-                .color(theme::NEUTRAL_500),
-        )
-        .selectable(false)
-        .truncate(),
-    );
+/// A column edge being dragged (feedback 2 spec O16): the widths are
+/// recomputed from the pointer on every frame and sent once, on release.
+pub(crate) struct LiveResize {
+    player: PlayerId,
+    /// The column whose right edge is dragged.
+    edge: usize,
+    columns: Vec<TableColumn>,
+    /// The table width the drag began with.
+    width: f32,
+    start_px: Vec<f32>,
+    start_x: f32,
+    /// The widths now.
+    px: Vec<f32>,
+    /// Set on release: the stored widths at that moment, and until when the
+    /// released widths are still drawn.
+    released: Option<(ColumnWidths, f64)>,
+}
+
+fn header_label(ui: &mut Ui, text: &str, right: bool) {
+    let label = egui::Label::new(
+        RichText::new(text.to_uppercase())
+            .font(font(10.0))
+            .color(theme::NEUTRAL_500),
+    )
+    .selectable(false);
+    if right {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.add_space(8.0);
+            ui.add(label);
+        });
+    } else {
+        ui.add_space(8.0);
+        ui.add(label.truncate());
+    }
+}
+
+/// The widths to draw: the model's, or the ones of a column edge being
+/// dragged (or just released). Called before anything is drawn, so a drag
+/// shows in the same frame as the pointer move.
+#[allow(clippy::too_many_arguments)]
+fn live_widths(
+    ui: &Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    player: PlayerId,
+    columns: &[TableColumn],
+    mins: &[f32],
+    stored: &ColumnWidths,
+    width: f32,
+    from_model: Vec<f32>,
+) -> Vec<f32> {
+    let Some(live) = view_state
+        .live_resize
+        .as_mut()
+        .filter(|l| l.player == player)
+    else {
+        return from_model;
+    };
+    if live.released.is_none() {
+        let (down, pointer) = ui.input(|i| (i.pointer.primary_down(), i.pointer.latest_pos()));
+        if down {
+            if let Some(pos) = pointer
+                && let Some(start) = live.start_px.get(live.edge)
+            {
+                let wanted = start + pos.x - live.start_x;
+                live.px = table_layout::resize_px(&live.start_px, mins, live.edge, wanted);
+            }
+        } else {
+            // Only a drag that moved something stores widths: a click on an
+            // edge, or a drag back to where it began, does not.
+            let moved = live
+                .px
+                .iter()
+                .zip(&live.start_px)
+                .any(|(a, b)| (a - b).abs() > 0.5);
+            let new = table_layout::fractions_of(&live.columns, &live.px);
+            if moved && new != *stored {
+                scene.ctl.send(Command::SetColumnWidths(player, new));
+            }
+            live.released = Some((stored.clone(), scene.time + HOLD_SECS));
+        }
+    }
+    let stale = live.columns != columns
+        || (live.width - width).abs() > 0.5
+        || live
+            .released
+            .as_ref()
+            .is_some_and(|(before, until)| scene.time >= *until || stored != before);
+    if stale {
+        view_state.live_resize = None;
+        from_model
+    } else {
+        live.px.clone()
+    }
 }
 
 pub(crate) fn track_table(
@@ -46,23 +131,25 @@ pub(crate) fn track_table(
     };
     let t = scene.i18n;
     let digits = format::number_width(list.entries.len());
-    let columns = p.columns;
+    let use_markers = scene.state.config.players.use_cue_markers;
+    // O24: one list of columns for every table.
+    let columns = fp_model::normalize_columns(&scene.state.config.ui.table_columns);
+    let mins: Vec<f32> = columns
+        .iter()
+        .map(|c| table_layout::column_min(*c, digits))
+        .collect();
     // Proportional columns (feedback spec F6): pixel widths from the stored
-    // fractions every frame; egui's table keeps the widths it was given, so
-    // it is reset when the table's width or the fractions change (never
-    // while a handle is being dragged).
-    let width = ui.available_width();
-    let number_min = digits as f32 * 8.0 + 26.0;
-    let px = view::column_px(columns.fractions, width, number_min, DURATION_MIN);
-    let layout = (width, columns.fractions);
-    let changed = view_state
-        .table_layout
-        .get(&player)
-        .is_none_or(|(w, f)| (w - width).abs() > 0.5 || *f != columns.fractions);
-    let reset = changed && !view_state.resizing.contains(&player);
-    if reset {
-        view_state.table_layout.insert(player, layout);
-    }
+    // fractions every frame, so that they follow the window (O24: fractions
+    // keyed by column). While an edge is dragged the widths of all the
+    // columns are recomputed from the pointer every frame and stored on
+    // release (O16). The table never keeps widths of its own: every column
+    // is given its exact width on every frame.
+    let width = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
+    let from_model = table_layout::column_px(&columns, &p.columns, width, digits);
+    let px = live_widths(
+        ui, scene, view_state, player, &columns, &mins, &p.columns, width, from_model,
+    );
+    view_state.widths.insert(player, px.clone());
     let area = ui.max_rect();
     // Read before the table's scroll area takes the wheel for itself.
     let wheel_over_table =
@@ -70,7 +157,6 @@ pub(crate) fn track_table(
     let pressed_in_table = ui.rect_contains_pointer(area) && ui.input(|i| i.pointer.primary_down());
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     let mut built = 0;
-    let mut widths = [0.0_f32; 4];
     let mut hovered_row: Option<(usize, bool)> = None;
     let mut pointer_row: Option<(usize, bool)> = None;
     let pointer = ui.ctx().pointer_hover_pos();
@@ -84,9 +170,19 @@ pub(crate) fn track_table(
     // O23: the track whose tags the operator asked to edit.
     let mut edit_tags: Option<fp_model::TrackId> = None;
     let mut dragged: Option<EntryId> = None;
-    let mut builder = TableBuilder::new(ui).id_salt(("tracks", player.0));
-    if reset {
-        builder.reset();
+    let mut builder = TableBuilder::new(ui)
+        .id_salt(("tracks", player.0))
+        .striped(false)
+        .resizable(false)
+        .vscroll(true)
+        // The table's default minimum body is 200 points: in a short window
+        // the footer would cover the last rows, out of reach of the scroll.
+        .min_scrolled_height(0.0)
+        .auto_shrink([false, false])
+        .sense(Sense::click_and_drag())
+        .cell_layout(Layout::left_to_right(Align::Center));
+    for w in &px {
+        builder = builder.column(Column::exact(w.max(0.0)));
     }
     // A current entry being followed: scroll its row to the top once.
     if let Some(FollowScroll {
@@ -111,41 +207,15 @@ pub(crate) fn track_table(
     }
     let mut menu_open = false;
     builder
-        .striped(false)
-        .resizable(true)
-        .vscroll(true)
-        // The table's default minimum body is 200 points: in a short window
-        // the footer would cover the last rows, out of reach of the scroll.
-        .min_scrolled_height(0.0)
-        .auto_shrink([false, false])
-        .sense(Sense::click_and_drag())
-        .cell_layout(Layout::left_to_right(Align::Center))
-        .column(Column::initial(px[0]).at_least(24.0).clip(true))
-        .column(Column::initial(px[1]).at_least(60.0).clip(true))
-        .column(Column::remainder().at_least(60.0).clip(true))
-        .column(Column::initial(px[3]).at_least(40.0).clip(true))
         .header(HEADER_HEIGHT, |mut header| {
-            header.col(|ui| header_label(ui, &t.tr("col-number")));
-            header.col(|ui| header_label(ui, &t.tr("col-title")));
-            header.col(|ui| header_label(ui, &t.tr("col-artist")));
-            header.col(|ui| {
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.add_space(8.0);
-                    ui.add(
-                        egui::Label::new(
-                            RichText::new(t.tr("col-duration").to_uppercase())
-                                .font(font(10.0))
-                                .color(theme::NEUTRAL_500),
-                        )
-                        .selectable(false),
-                    );
+            for column in &columns {
+                header.col(|ui| {
+                    let right = matches!(column, TableColumn::Duration | TableColumn::Intro);
+                    header_label(ui, &t.tr(&format!("col-{}", column.name())), right);
                 });
-            });
+            }
         })
         .body(|body| {
-            if let Some(w) = body.widths().get(..4) {
-                widths.copy_from_slice(w);
-            }
             body.rows(ROW_HEIGHT, entries.len(), |mut row| {
                 built += 1;
                 let i = row.index();
@@ -208,149 +278,178 @@ pub(crate) fn track_table(
                         }
                     }
                 };
-                row.col(|ui| {
-                    line(ui);
-                    ui.add_space(10.0);
-                    let (glyph, color) = match status {
-                        RowStatus::Current => {
-                            let playing = p.transport == Transport::Playing;
-                            let g = if playing {
-                                egui_phosphor::fill::SPEAKER_HIGH
-                            } else {
-                                egui_phosphor::fill::PAUSE
-                            };
-                            (Some(g.to_owned()), theme::NEUTRAL_100)
-                        }
-                        RowStatus::Next => (
-                            Some(icon::ARROW_BEND_DOWN_RIGHT.to_owned()),
-                            theme::NEUTRAL_100,
-                        ),
-                        RowStatus::Unavailable => {
-                            (Some(view::file_icon(track).to_owned()), theme::AMBER)
-                        }
-                        _ => (None, theme::NEUTRAL_600),
-                    };
-                    if let RowStatus::OnAirElsewhere(n) = status {
-                        // Marked, not highlighted: it is another player's.
-                        let tip = scene
-                            .i18n
-                            .tr_args("tip-on-air-elsewhere", &[("n", n.into())]);
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(format!("P{n}"))
-                                    .font(egui::FontId::proportional(11.0))
-                                    .color(theme::ON_AIR_TEXT),
-                            )
-                            .selectable(false),
-                        )
-                        .on_hover_text(tip);
-                        return;
-                    }
-                    let label = match glyph {
-                        Some(g) if hi => g,
-                        Some(g) => format!("{g}{:0digits$}", i + 1),
-                        None => format!("{:0digits$}", i + 1),
-                    };
-                    let family = if matches!(status, RowStatus::Current) {
-                        egui::FontFamily::Name(theme::ICONS_FILL.into())
-                    } else {
-                        egui::FontFamily::Proportional
-                    };
-                    let number = ui.add(
-                        egui::Label::new(
-                            RichText::new(label)
-                                .font(egui::FontId::new(12.0, family))
-                                .color(color),
-                        )
-                        .selectable(false),
-                    );
-                    if status == RowStatus::Unavailable
-                        && let Some(tip) = scene.file_tip(entry.track)
-                    {
-                        number.on_hover_text(tip);
-                    }
-                });
-                row.col(|ui| {
-                    line(ui);
-                    ui.add_space(8.0);
-                    // The entry's repeat and stop icons sit before the title,
-                    // in the row's text colour (feedback 2 spec O9); the
-                    // "analysed by an earlier version" flag stays at the right.
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.spacing_mut().item_spacing.x = 4.0;
-                        ui.add_space(4.0);
-                        // Shown tracks are brought up to date anyway, so
-                        // the flag only stays on the ones waiting.
-                        if crate::services::outdated(track) {
-                            flag(ui, &t.tr("flag-outdated"), |p, r| {
-                                let c = theme::NEUTRAL_500;
-                                widgets::glyph(p, r, icon::ARROWS_CLOCKWISE, 13.0, c, false);
-                            });
-                        }
-                        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing.x = 4.0;
-                            if entry.repeat {
-                                flag(ui, &t.tr("flag-repeat"), |p, r| {
-                                    widgets::glyph(p, r, icon::REPEAT, 13.0, text, false);
-                                });
-                            }
-                            if entry.stop_after {
-                                flag(ui, &t.tr("flag-stop-after"), |p, r| {
-                                    // Drawn into the flag's own 16x12 box, as before (paint would
-                                    // centre the grid's 18x13 size instead).
-                                    if let Some(d) = glyphs::drawn(TransportAction::StopAfter) {
-                                        p.extend((d.draw)(r, text));
+                for column in &columns {
+                    row.col(|ui| {
+                        line(ui);
+                        match column {
+                            TableColumn::Number => {
+                                ui.add_space(10.0);
+                                let (glyph, color) = match status {
+                                    RowStatus::Current => {
+                                        let playing = p.transport == Transport::Playing;
+                                        let g = if playing {
+                                            egui_phosphor::fill::SPEAKER_HIGH
+                                        } else {
+                                            egui_phosphor::fill::PAUSE
+                                        };
+                                        (Some(g.to_owned()), theme::NEUTRAL_100)
                                     }
+                                    RowStatus::Next => (
+                                        Some(icon::ARROW_BEND_DOWN_RIGHT.to_owned()),
+                                        theme::NEUTRAL_100,
+                                    ),
+                                    RowStatus::Unavailable => {
+                                        (Some(view::file_icon(track).to_owned()), theme::AMBER)
+                                    }
+                                    _ => (None, theme::NEUTRAL_600),
+                                };
+                                if let RowStatus::OnAirElsewhere(n) = status {
+                                    // Marked, not highlighted: it is another player's.
+                                    let tip = scene
+                                        .i18n
+                                        .tr_args("tip-on-air-elsewhere", &[("n", n.into())]);
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(format!("P{n}"))
+                                                .font(egui::FontId::proportional(11.0))
+                                                .color(theme::ON_AIR_TEXT),
+                                        )
+                                        .selectable(false),
+                                    )
+                                    .on_hover_text(tip);
+                                    return;
+                                }
+                                let label = match glyph {
+                                    Some(g) if hi => g,
+                                    Some(g) => format!("{g}{:0digits$}", i + 1),
+                                    None => format!("{:0digits$}", i + 1),
+                                };
+                                let family = if matches!(status, RowStatus::Current) {
+                                    egui::FontFamily::Name(theme::ICONS_FILL.into())
+                                } else {
+                                    egui::FontFamily::Proportional
+                                };
+                                let number = ui.add(
+                                    egui::Label::new(
+                                        RichText::new(label)
+                                            .font(egui::FontId::new(12.0, family))
+                                            .color(color),
+                                    )
+                                    .selectable(false),
+                                );
+                                if status == RowStatus::Unavailable
+                                    && let Some(tip) = scene.file_tip(entry.track)
+                                {
+                                    number.on_hover_text(tip);
+                                }
+                            }
+                            TableColumn::Title => {
+                                ui.add_space(8.0);
+                                // The entry's repeat and stop icons sit before the title,
+                                // in the row's text colour (feedback 2 spec O9); the
+                                // "analysed by an earlier version" flag stays at the right.
+                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                    ui.spacing_mut().item_spacing.x = 4.0;
+                                    ui.add_space(4.0);
+                                    // Shown tracks are brought up to date anyway, so
+                                    // the flag only stays on the ones waiting.
+                                    if crate::services::outdated(track) {
+                                        flag(ui, &t.tr("flag-outdated"), |p, r| {
+                                            let c = theme::NEUTRAL_500;
+                                            widgets::glyph(
+                                                p,
+                                                r,
+                                                icon::ARROWS_CLOCKWISE,
+                                                13.0,
+                                                c,
+                                                false,
+                                            );
+                                        });
+                                    }
+                                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                                        ui.spacing_mut().item_spacing.x = 4.0;
+                                        if entry.repeat {
+                                            flag(ui, &t.tr("flag-repeat"), |p, r| {
+                                                widgets::glyph(
+                                                    p,
+                                                    r,
+                                                    icon::REPEAT,
+                                                    13.0,
+                                                    text,
+                                                    false,
+                                                );
+                                            });
+                                        }
+                                        if entry.stop_after {
+                                            flag(ui, &t.tr("flag-stop-after"), |p, r| {
+                                                // Drawn into the flag's own 16x12 box, as before (paint would
+                                                // centre the grid's 18x13 size instead).
+                                                if let Some(d) =
+                                                    glyphs::drawn(TransportAction::StopAfter)
+                                                {
+                                                    p.extend((d.draw)(r, text));
+                                                }
+                                            });
+                                        }
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(&track.title)
+                                                    .font(row_font.clone())
+                                                    .color(text),
+                                            )
+                                            .selectable(false)
+                                            .truncate(),
+                                        );
+                                    });
                                 });
                             }
-                            ui.add(
-                                egui::Label::new(
-                                    RichText::new(&track.title)
-                                        .font(row_font.clone())
-                                        .color(text),
-                                )
-                                .selectable(false)
-                                .truncate(),
-                            );
-                        });
+                            TableColumn::Artist => {
+                                ui.add_space(8.0);
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(if track.artist.is_empty() {
+                                            t.tr("unknown-artist")
+                                        } else {
+                                            track.artist.clone()
+                                        })
+                                        .font(font(12.0))
+                                        .color(artist_color),
+                                    )
+                                    .selectable(false)
+                                    .truncate(),
+                                );
+                            }
+                            TableColumn::Duration | TableColumn::Intro => {
+                                // Times sit at the right, like the duration.
+                                let d = view::cell_text(track, *column, use_markers);
+                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                    ui.add_space(10.0);
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(d).font(font(12.0)).color(text),
+                                        )
+                                        .selectable(false),
+                                    );
+                                });
+                            }
+                            TableColumn::Album
+                            | TableColumn::Date
+                            | TableColumn::Genre
+                            | TableColumn::FileName => {
+                                ui.add_space(8.0);
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(view::cell_text(track, *column, use_markers))
+                                            .font(font(12.0))
+                                            .color(artist_color),
+                                    )
+                                    .selectable(false)
+                                    .truncate(),
+                                );
+                            }
+                        }
                     });
-                });
-                row.col(|ui| {
-                    line(ui);
-                    ui.add_space(8.0);
-                    ui.add(
-                        egui::Label::new(
-                            RichText::new(if track.artist.is_empty() {
-                                t.tr("unknown-artist")
-                            } else {
-                                track.artist.clone()
-                            })
-                            .font(font(12.0))
-                            .color(artist_color),
-                        )
-                        .selectable(false)
-                        .truncate(),
-                    );
-                });
-                row.col(|ui| {
-                    line(ui);
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.add_space(10.0);
-                        let d = if track.duration_secs > 0.0 {
-                            format::clock(
-                                track
-                                    .play_range(scene.state.config.players.use_cue_markers)
-                                    .length(),
-                            )
-                        } else {
-                            String::new()
-                        };
-                        ui.add(
-                            egui::Label::new(RichText::new(d).font(font(12.0)).color(text))
-                                .selectable(false),
-                        );
-                    });
-                });
+                }
                 let response = row.response();
                 if response.clicked() {
                     clicked = Some(entry.id);
@@ -390,6 +489,7 @@ pub(crate) fn track_table(
                 });
             });
         });
+
     view_state.rows_built += built;
     if let Some(entry) = clicked.or(dragged) {
         view_state.selection.insert(player, entry);
@@ -455,7 +555,7 @@ pub(crate) fn track_table(
                 .unwrap_or(entries.len()),
         });
     }
-    store_widths(ui, scene, view_state, player, columns, widths, reset);
+    resize_handles(ui, view_state, player, &columns, &px, area);
     // The operator is using the table: scrolling it (wheel or scroll bar),
     // pressing in it, dragging an entry (for as long as the drag lasts), or
     // with a row menu open. Following waits (feedback spec F18).
@@ -465,40 +565,57 @@ pub(crate) fn track_table(
     }
 }
 
-/// Sends the column widths once the user lets go of a resize handle.
-fn store_widths(
-    ui: &Ui,
-    scene: &Scene<'_>,
+/// The grab zones on the column edges (feedback 2 spec O16): they start a
+/// drag, which `live_widths` follows from the next frame on, and draw the
+/// separator lines. They sit over the rows, as the table's own did.
+fn resize_handles(
+    ui: &mut Ui,
     view_state: &mut ViewState,
     player: PlayerId,
-    stored: ColumnWidths,
-    widths: [f32; 4],
-    relaid: bool,
+    columns: &[TableColumn],
+    px: &[f32],
+    area: Rect,
 ) {
-    if widths.iter().all(|w| *w <= 0.0) {
-        return;
-    }
-    let previous = view_state.widths.insert(player, widths);
-    // Widths that changed because the table was laid out again (a new
-    // window width) are not the operator's: only a handle drag is.
-    let moved = !relaid
-        && previous.is_some_and(|p| {
-            p.iter()
-                .zip(widths.iter())
-                .any(|(a, b)| (a - b).abs() > 0.5)
-        });
-    if moved {
-        view_state.resizing.insert(player);
-    }
-    let pointer_down = ui.input(|i| i.pointer.primary_down());
-    if !pointer_down && view_state.resizing.remove(&player) {
-        let new = ColumnWidths {
-            fractions: Some(widths),
+    let grab = ui.style().interaction.resize_grab_radius_side;
+    let mut x = area.left();
+    for (edge, w) in px.iter().take(columns.len().saturating_sub(1)).enumerate() {
+        x += w;
+        let rect = Rect::from_min_max(pos2(x - grab, area.top()), pos2(x + grab, area.bottom()));
+        let id = ui.id().with(("column-edge", player.0, edge));
+        let response = ui.interact(rect, id, Sense::drag());
+        let dragging = view_state
+            .live_resize
+            .as_ref()
+            .is_some_and(|l| l.player == player && l.edge == edge && l.released.is_none());
+        if response.drag_started() {
+            let start_x = ui
+                .input(|i| i.pointer.press_origin())
+                .map_or(x, |origin| origin.x);
+            view_state.live_resize = Some(LiveResize {
+                player,
+                edge,
+                columns: columns.to_vec(),
+                width: px.iter().sum(),
+                start_px: px.to_vec(),
+                start_x,
+                px: px.to_vec(),
+                released: None,
+            });
         }
-        .normalized();
-        if new != stored {
-            scene.ctl.send(Command::SetColumnWidths(player, new));
+        let hot = (response.hovered() && !ui.input(|i| i.pointer.any_down())) || dragging;
+        if hot {
+            ui.set_cursor_icon(egui::CursorIcon::ResizeColumn);
         }
+        let visuals = ui.visuals();
+        let stroke = if dragging {
+            visuals.widgets.active.bg_stroke
+        } else if hot {
+            visuals.widgets.hovered.bg_stroke
+        } else {
+            visuals.widgets.noninteractive.bg_stroke
+        };
+        ui.painter()
+            .line_segment([pos2(x, area.top()), pos2(x, area.bottom())], stroke);
     }
 }
 

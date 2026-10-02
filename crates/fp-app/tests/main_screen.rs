@@ -712,9 +712,9 @@ fn flagged_entries_show_their_icons() {
     );
 }
 
-fn shares(w: [f32; 4]) -> [f32; 4] {
+fn shares(w: &[f32]) -> Vec<f32> {
     let sum: f32 = w.iter().sum();
-    w.map(|x| x / sum)
+    w.iter().map(|x| x / sum).collect()
 }
 
 #[test]
@@ -729,7 +729,7 @@ fn columns_fill_the_table_and_keep_their_shares_when_the_window_grows() {
     h.set_size(egui::vec2(1400.0, 700.0));
     h.run_steps(3);
     let after = h.state().column_widths(p).unwrap();
-    let (a, b) = (shares(before), shares(after));
+    let (a, b) = (shares(&before), shares(&after));
     for i in 1..3 {
         assert!((a[i] - b[i]).abs() < 0.03, "{before:?} → {after:?}");
     }
@@ -744,14 +744,17 @@ fn stored_fractions_are_applied() {
         &mut s,
         Command::SetColumnWidths(
             p,
-            fp_model::ColumnWidths {
-                fractions: Some([0.1, 0.3, 0.5, 0.1]),
-            },
+            fp_model::ColumnWidths::keyed([
+                (fp_model::TableColumn::Number, 0.1),
+                (fp_model::TableColumn::Title, 0.3),
+                (fp_model::TableColumn::Artist, 0.5),
+                (fp_model::TableColumn::Duration, 0.1),
+            ]),
         ),
     )
     .unwrap();
     let (h, _) = harness(s);
-    let w = shares(h.state().column_widths(p).unwrap());
+    let w = shares(&h.state().column_widths(p).unwrap());
     assert!(w[2] > w[1], "Artist wider than Title as stored: {w:?}");
 }
 

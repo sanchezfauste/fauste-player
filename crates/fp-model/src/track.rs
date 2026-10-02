@@ -433,6 +433,16 @@ impl Track {
             }
         }
     }
+
+    /// Feedback 2 spec O24 (Intro column): how long the intro lasts, from
+    /// the start of the audible part (the cue-in, with markers on) to the
+    /// intro-end marker. `None` without a marker, or when the marker is not
+    /// after the start.
+    pub fn intro_secs(&self, use_markers: bool) -> Option<f64> {
+        let end = self.intro_end_secs()?;
+        let length = end - self.play_range(use_markers).cue_in;
+        (length > 0.0).then_some(length)
+    }
 }
 
 /// What analysis learned about a file (spec §6). Metadata fields are

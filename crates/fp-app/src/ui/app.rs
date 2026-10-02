@@ -81,8 +81,11 @@ pub(crate) struct ViewState {
     pub active_player: Option<PlayerId>,
     pub drop: Option<DropTarget>,
     pub file_drop: Option<DropTarget>,
-    pub widths: HashMap<PlayerId, [f32; 4]>,
-    pub resizing: HashSet<PlayerId>,
+    /// The pixel widths of each player's table columns in the last frame,
+    /// in the order of `ui.table_columns`.
+    pub widths: HashMap<PlayerId, Vec<f32>>,
+    /// The column edge being dragged (feedback 2 spec O16).
+    pub(crate) live_resize: Option<super::table::LiveResize>,
     pub rows_built: usize,
     pub settings_open: bool,
     pub about_open: bool,
@@ -109,9 +112,6 @@ pub(crate) struct ViewState {
     /// The players whose table already had its start-up scroll to the next
     /// entry (feedback 2 spec O7); it happens once, on their first frame.
     pub startup_scrolled: HashSet<PlayerId>,
-    /// The table width and column fractions each player's table was last
-    /// laid out with (a change resets egui's column widths).
-    pub table_layout: HashMap<PlayerId, (f32, Option<[f32; 4]>)>,
     /// Zoomed waveforms; a player without one shows the whole track.
     pub wave_zoom: HashMap<PlayerId, super::wave_view::WaveZoom>,
     /// A marker being dragged on a waveform, and the track it belongs to.
@@ -408,9 +408,10 @@ impl AppUi {
         self.view.rows_built
     }
 
-    /// The pixel widths of a player's table columns in the last frame.
-    pub fn column_widths(&self, player: PlayerId) -> Option<[f32; 4]> {
-        self.view.widths.get(&player).copied()
+    /// The pixel widths of a player's table columns in the last frame, in
+    /// the order of `ui.table_columns`.
+    pub fn column_widths(&self, player: PlayerId) -> Option<Vec<f32>> {
+        self.view.widths.get(&player).cloned()
     }
 
     pub fn ui(&mut self, ui: &mut Ui) {
