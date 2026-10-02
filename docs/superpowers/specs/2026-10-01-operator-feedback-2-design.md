@@ -322,11 +322,40 @@
       are whole numbers. An invalid value blocks **Save** and its field is
       marked.
     - Everything else in the file (other standard keys, custom keys such as
-      ID3v2 `TXXX` or private Vorbis keys, pictures, binary frames) is not
-      shown and is kept byte for byte. The modal says how many such tags are
-      kept.
-  - **Save** writes the tags into the file on a helper thread, never on the UI
-    thread:
+      ID3v2 `TXXX` or private Vorbis keys, pictures other than the front
+      cover, binary frames) is not shown and is kept as it is: values,
+      pictures and frames the editor cannot map are not changed. The modal
+      says how many such tags are kept.
+    - Two caveats, stated here so they are not a surprise:
+      - the format re-encodes the items it maps when the file is saved, so
+        the bytes of a kept item can differ (for example the text encoding or
+        the order of frames) while its value does not;
+      - the count of kept tags covers what the tag library can enumerate. When
+        the format also holds frames it cannot count, the modal says "and
+        more".
+  - **Cover.**
+    - The modal shows the front cover as a thumbnail. If the file has no front
+      cover it shows the first picture, the rule the library's cover
+      thumbnail follows. The image is decoded on a helper thread under
+      `limits.max_cover_bytes` and `limits.max_cover_pixels`, with the same
+      safe decoding as the library's thumbnails.
+    - **Change…** opens a file dialog, on a helper thread, for a JPEG or PNG
+      image of at most `limits.max_cover_bytes` that decodes. If it does not,
+      the editor says why and nothing changes. **Remove** clears the front
+      cover.
+    - The change is staged in the draft and written by **Save**, through the
+      same safe write as the fields. **Cancel** discards it. The new cover is
+      written as a picture of type front cover with its MIME type.
+    - Other pictures (back cover, artist and so on) are never touched. A
+      picture that is only shown because the file has no front cover is kept
+      as it is: **Remove** is off for it, and **Change…** adds a front cover.
+    - A format that cannot store pictures (RIFF INFO, AIFF text, ID3v1) shows
+      the cover area disabled, with a note.
+    - After a successful save, the cover the application shows elsewhere (the
+      player's cover and the remote API's cover of a track the player holds)
+      shows the new cover, or none after a removal.
+  - **Save** writes the tags and the cover into the file on a helper thread,
+    never on the UI thread:
     1. copy the file to a temporary file in the same folder;
     2. write the tags to the copy;
     3. fsync it;

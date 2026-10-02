@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `Track` carries the recording date, genre, album artist, composer and comment, read from the file's tags in a cheap tag-only pass (O23); hovering a table row shows a tooltip with the track's tags, format and path; the row menu opens an "Edit tags…" modal that edits the common tag fields of the file (10 always shown, 26 offered by an Add field menu, only those the format can store) and writes them into the file safely, on a helper thread, keeping every other tag as it is.
+**Goal:** `Track` carries the recording date, genre, album artist, composer and comment, read from the file's tags in a cheap tag-only pass (O23); hovering a table row shows a tooltip with the track's tags, format and path; the row menu opens an "Edit tags…" modal that edits the common tag fields of the file (10 always shown, 26 offered by an Add field menu, only those the format can store) and its front cover (view, change, remove), and writes them into the file safely, on a helper thread, keeping every other tag and picture as it is.
 
 **Architecture:**
 - **Model first.** `Track` gains five tag fields and `tags_read`; `TrackTags` is the one value type for what the UI shows, what the editor edits and what the file reader returns. `Command::ApplyTags` stores it. Whether a track may be edited is a pure function, `fp_model::tag_edit_block`. The cap on tag text is a `Config` field, `limits.max_tag_chars`.
-- **Tag I/O.** `fp-analysis` gains `tags.rs` on top of lofty (already a dependency, so no new crate): `read_track_tags` (the summary the library keeps), `can_write_tags`, `write_tags` (the summary write) and, for the editor, `read_tag_sheet` and `write_tag_sheet`. Both writes go through one helper that copies the file to a temporary file in the same folder, changes only what changed in the copy, fsyncs it and renames it over the original. `fp-app` gains `tags.rs`, a small worker thread (`TagWorker`) that runs the read and write jobs. The services thread uses one worker for the tag-only pass over tracks whose tags were not read yet; the UI uses another for the editor.
-- **The tag sheet.** `fp-model` owns `TagField` (the 36 fields of the editor in the shown order), `TagSheet` (the values per field, the fields the format can store, a count of other kept tags) and pure functions on sheets: which values are invalid, which fields changed, which changes the file did not keep. The file reader and writer map each field to lofty's `ItemKey` for the tag type of the file.
-- **UI.** `view::track_tooltip` is a pure function; the table shows it with `on_hover_ui`. The row context menu gets "Edit tags…", disabled with a tooltip reason from `tag_edit_block`; `ui/tag_editor.rs` draws the modal over a draft of the sheet ("Reading tags…" until the worker answers) and `AppUi` runs the read and the save and reports the outcome in the modal and in the notice area.
+- **Tag I/O.** `fp-analysis` gains `tags.rs` on top of lofty (already a dependency, so no new crate): `read_track_tags` (the summary the library keeps), `can_write_tags`, `write_tags` (the summary write) and, for the editor, `read_tag_sheet` and `write_tag_sheet`, plus the cover helpers `load_cover_file`, `with_cover_thumbnail` and `can_store_pictures`. Both writes go through one helper that copies the file to a temporary file in the same folder, changes only what changed in the copy, fsyncs it and renames it over the original. `fp-app` gains `tags.rs`, a small worker thread (`TagWorker`) that runs the read, write and cover-load jobs. The services thread uses one worker for the tag-only pass over tracks whose tags were not read yet; the UI uses another for the editor.
+- **The tag sheet.** `fp-model` owns `TagField` (the 36 fields of the editor in the shown order), `TagSheet` (the values per field, the fields the format can store, the front cover as `CoverArt`, a count of other kept tags) and pure functions on sheets: which values are invalid, which fields changed, which changes the file did not keep. The file reader and writer map each field to lofty's `ItemKey` for the tag type of the file.
+- **UI.** `view::track_tooltip` is a pure function; the table shows it with `on_hover_ui`. The row context menu gets "Edit tags…", disabled with a tooltip reason from `tag_edit_block`; `ui/tag_editor.rs` draws the modal over a draft of the sheet ("Reading tags…" until the worker answers), with the cover area (thumbnail, **Change…**, **Remove**), and `AppUi` runs the read, the image dialog (on its own helper thread), the image check, the save and the refresh of the cover cache, and reports the outcome in the modal and in the notice area.
 
 **Tech Stack:** Rust, lofty 0.25.4 (existing dependency), egui/eframe 0.36.2, egui_kittest 0.36.2, `hound` (dev-dependency) for generated WAV files. No new dependency, so `cargo deny check` needs no new entry (Task 2 still runs it).
 
@@ -22,9 +22,15 @@ The spec leaves these open. Each is the most conservative reading.
 - **The fields.** Exactly the spec's 36: the ten always shown (title, artist, album, album artist, date, track number, disc number, genre, composer, comment) and 26 optional ones. Each maps to lofty's `ItemKey` for the tag type of the file (Task 5 lists the keys); a field the format cannot store is never offered by Add field, and an always-shown one is drawn disabled with a note.
 - **Several values.** One item per value under the field's key (`Tag::push`), which each format stores its own way (ID3v2.4: one frame with the multi-value separator; Vorbis: one comment per value; RIFF INFO: repeated chunks). The multi-value fields are artist, album artist, genre, composer, mood, original artist, lyricist, conductor, remixer, arranger, performer and language; any other field the file happens to hold twice is shown one value per line as well, so nothing is merged silently. Comment and lyrics are one value over several lines.
 - **Number and total.** One field with two boxes (`TagSheet::pair`). A total needs a number (lofty would write number 0), and a value written as `3/12` into one key is split when read. A changed pair rewrites both items.
-- **What the sheet owns.** Items of the field's key with an empty description. A comment with a description, other keys, custom frames, unmapped frames and pictures are "other": kept as they are and counted in the "N other tags are kept" line (frames lofty keeps without mapping them cannot be counted, so the line says "and more" when the format holds such frames).
+- **What the sheet owns.** Items of the field's key with an empty description. A comment with a description, other keys, custom frames, unmapped frames and pictures that are not a front cover are "other": kept as they are and counted in the "N other tags are kept" line (frames lofty keeps without mapping them cannot be counted, so the line says "and more" when the format holds such frames).
 - **Validation.** Date and original release date through `parse_tag_date`; track and disc number, their totals and BPM are whole numbers (`u32`). Only a field the operator changed is checked: a value the file already had is kept as it is and never blocks Save. A changed field the format cannot store is invalid too, so the writer never silently drops a change.
 - **The file is the truth after a save.** After the write, the worker reads the file back twice, as the summary (`ApplyTags` stores it) and as a sheet. The changed fields whose read-back value differs from what was written are named in the notice ("the file did not keep: …"), so a format quirk is never silent.
+- **The front cover.** The sheet owns the front-cover picture (`PictureType::CoverFront`) and nothing else. The editor shows the front cover; if the file has none it shows the first picture, through the one function (`metadata::display_picture`) the library's thumbnail also uses, so the two never disagree. A picture that is only shown for lack of a front cover is "other": it is kept, **Remove** is off for it, and **Change…** adds a front cover next to it (`TagSheet::remove_front_cover` puts the shown picture back instead of clearing it). Replacing or removing the cover removes every front-cover picture of the tag and, for a replacement, adds one new picture of type front cover with its MIME type; back cover, artist and every other picture are never touched. Two covers are equal when their bytes are, so choosing the file's own cover again is no change.
+- **Which images and which limits.** A new cover is a JPEG or PNG file (by its content, not its name) of at most `limits.max_cover_bytes` that decodes within `limits.max_cover_pixels`, through the same `thumbnail_png` decode the library's thumbnails use (bounded width, height and allocation; a parser panic is contained). `load_cover_file` checks it on the tag worker when the operator chooses it, so a bad image is reported at once and changes nothing; `write_tag_sheet` checks it again before it touches the disk, so no caller can write an image that does not decode. The decoder is built with JPEG and PNG only, so an existing GIF, BMP or WebP cover is shown as "cannot be shown" and kept as it is. No new `Config` field: the cover reuses `limits.max_cover_bytes`, `limits.max_cover_pixels` and `analysis.cover_thumb_px` (the thumbnail size, one PNG that serves the modal and the player).
+- **The cover dialog.** **Change…** opens the native file dialog on its own helper thread (`fp-cover-dialog`, like the audio-file dialog), starting in the track's folder, and sends the chosen path back over a channel; the next frame hands it to the tag worker (`TagJob::LoadCover`). While the dialog is open or the image is being read, **Change…** and **Save** are off and **Cancel** works. In tests the dialog is replaced by a closure behind the `test-hooks` feature (`AppUi::set_cover_picker`), which runs on the same helper thread.
+- **Formats without pictures.** A cover is stored by ID3v2, Vorbis comments (FLAC, Ogg, Opus), MP4 and APE tags (`can_store_pictures`). RIFF INFO (WAV), AIFF text and ID3v1 have no place for one and lofty drops a picture silently, so the cover area is drawn disabled with a note, and a cover change for such a file is refused (`TagWriteError::CoverNotStorable`) before the disk is touched.
+- **The cover shown elsewhere.** The player's cover is the PNG thumbnail in the media cache (`MediaCache`, filled by the analysis of the tracks the players hold; textures are rebuilt when its version changes). After a save that changed the cover, `AppUi` calls `MediaCache::set_cover(track, thumbnail of the re-read cover)`: it replaces only the cover of an existing entry (the peaks stay), bumps the version so the textures are rebuilt, and does nothing for a track with no entry. That is the smallest correct refresh: a new analysis would also work (the analysis cache is keyed on the file's size and modification time, which a save changes, so a track shown later is analysed again and reads the new cover) but it would redo the decode for a change of a few kilobytes and leave the old cover on screen until it finished. The remote API's cover of a track the cache holds follows the same entry. A cover save never touches markers or analysis data.
+- **A lofty 0.25.4 defect, second one.** `Tag::take_filter` (and so `Tag::take` and `take_strings`) swaps items around while it removes them, whatever its documentation says, so removing the genre can turn the artists "First, Second" into "Second, First". An earlier draft of this plan used it, and its Task 6 save test failed about one run in three until the cause was found. The sheet removes with `Tag::retain` (order-preserving) and `urls_as_text` uses `get_items` and `remove_key`; `a_save_keeps_the_order_of_the_values_it_did_not_change` guards both.
 - **Which tag is edited.** The primary tag of the format if the file has one, otherwise the first tag it has (the same choice `read_tags` makes when reading), otherwise a new primary tag. Other tags, covers, the `INTRO` marker and unknown items stay as they are, because the same tag object is saved. If the file cannot be parsed with its covers, the save fails; it never retries without them (that would drop the cover).
 - **Symlinks.** The write targets the canonical path, so a symlink is not replaced by a regular file.
 - **Which tracks are blocked.** `tag_edit_block` refuses, in this order: a track whose file is not `Ok` (missing or unreadable), a format lofty cannot write (decided from the extension only, so the UI thread never touches the disk), a track whose tags are not read yet (`tags_read == false`, so the editor never shows stale fields or races the tag-only pass), a track that is the current entry of any player (playing or paused), a track that is the CUE entry of any player, and a track on a playing cart. It judges the track, not the entry: the same file in another playlist is blocked too, because it is the same file.
@@ -41,11 +47,11 @@ The spec leaves these open. Each is the most conservative reading.
 - All code, identifiers, comments, docs and commit messages are in English. Never mention other products.
 - Spec O23 model: "`Track` gains `date`, `genre`, `album_artist`, `composer` and `comment`, read by `fp-analysis` with lofty. Loading is lenient. Tracks from earlier versions show the new fields empty until their tags are read again. That is a tag-only pass, not a full re-analysis."
 - Spec O23 tooltip: "Hovering a table row, after the usual tooltip delay, shows the title, artist, album, date (as stored), genre, duration, format (codec, sample rate, bit depth) and path. A missing field is left out."
-- Spec O23 editor (binding, spec §8 "Editor"): "The row context menu gains "Edit tags…". It opens a modal for one track. The modal reads the file's tags on a helper thread when it opens and shows "Reading tags…" until they arrive. The library keeps only the summary fields above; the full set is read from the file each time." **Fields:** "The editor covers the fields that common players and tag editors show, not every key a format can hold. Each field uses its format's own standard mapping (ID3v2 frames, Vorbis comments, MP4 atoms, APE items, RIFF INFO) through lofty's `ItemKey`; nothing is renamed or invented. Always shown, in this order: Title, Artist, Album, Album artist, Date, Track number (number and total), Disc number (number and total), Genre, Composer, Comment. Shown when the file has them, and offered by an **Add field** menu otherwise: Subtitle, Grouping, BPM, Initial key, Mood, ISRC, Publisher, Catalog number, Copyright, Original artist, Original album, Original release date, Lyricist, Conductor, Remixer, Arranger, Performer, Language, Encoded by, Lyrics, Sort title, Sort artist, Sort album, Sort album artist, Sort composer, Artist website. **Add field** lists only the fields the file's tag format can store. A field the format cannot store is never shown as editable. Clearing a field removes it from the file. An added field left empty is not written. A field that holds several values (for example two artists) shows one value per line, and Save writes one value per line through the format's own multi-value mechanism. Date and Original release date are ISO 8601 (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`, optional time). Track and disc number and total, and BPM, are whole numbers. An invalid value blocks **Save** and its field is marked. Everything else in the file (other standard keys, custom keys such as ID3v2 `TXXX` or private Vorbis keys, pictures, binary frames) is not shown and is kept byte for byte. The modal says how many such tags are kept." **Save** "writes the tags into the file on a helper thread, never on the UI thread: 1. copy the file to a temporary file in the same folder; 2. write the tags to the copy; 3. fsync it; 4. rename it over the original. On success, the library takes the new tags; markers and analysis are kept. On any error, the original file is untouched and the notice area reports it. The menu item is disabled, with the reason as a tooltip, when: the track is current or cued in any player; it is on a playing cart; its format has no writable tags in lofty; the file is missing."
-- CLAUDE.md rule 4: anything an operator might change is a `Config` field with a documented default, a range in `Config::validate` and lenient loading (Task 1: `limits.max_tag_chars`; Task 5: `limits.max_tag_values`).
+- Spec O23 editor (binding, spec §8 "Editor"): "The row context menu gains "Edit tags…". It opens a modal for one track. The modal reads the file's tags on a helper thread when it opens and shows "Reading tags…" until they arrive. The library keeps only the summary fields above; the full set is read from the file each time." **Fields:** "The editor covers the fields that common players and tag editors show, not every key a format can hold. Each field uses its format's own standard mapping (ID3v2 frames, Vorbis comments, MP4 atoms, APE items, RIFF INFO) through lofty's `ItemKey`; nothing is renamed or invented. Always shown, in this order: Title, Artist, Album, Album artist, Date, Track number (number and total), Disc number (number and total), Genre, Composer, Comment. Shown when the file has them, and offered by an **Add field** menu otherwise: Subtitle, Grouping, BPM, Initial key, Mood, ISRC, Publisher, Catalog number, Copyright, Original artist, Original album, Original release date, Lyricist, Conductor, Remixer, Arranger, Performer, Language, Encoded by, Lyrics, Sort title, Sort artist, Sort album, Sort album artist, Sort composer, Artist website. **Add field** lists only the fields the file's tag format can store. A field the format cannot store is never shown as editable. Clearing a field removes it from the file. An added field left empty is not written. A field that holds several values (for example two artists) shows one value per line, and Save writes one value per line through the format's own multi-value mechanism. Date and Original release date are ISO 8601 (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`, optional time). Track and disc number and total, and BPM, are whole numbers. An invalid value blocks **Save** and its field is marked. Everything else in the file (other standard keys, custom keys such as ID3v2 `TXXX` or private Vorbis keys, pictures other than the front cover, binary frames) is not shown and is kept as it is: values, pictures and frames the editor cannot map are not changed. The modal says how many such tags are kept. Two caveats, stated here so they are not a surprise: the format re-encodes the items it maps when the file is saved, so the bytes of a kept item can differ (for example the text encoding or the order of frames) while its value does not; the count of kept tags covers what the tag library can enumerate. When the format also holds frames it cannot count, the modal says "and more"." **Cover:** "The modal shows the front cover as a thumbnail. If the file has no front cover it shows the first picture, the rule the library's cover thumbnail follows. The image is decoded on a helper thread under `limits.max_cover_bytes` and `limits.max_cover_pixels`, with the same safe decoding as the library's thumbnails. **Change…** opens a file dialog, on a helper thread, for a JPEG or PNG image of at most `limits.max_cover_bytes` that decodes. If it does not, the editor says why and nothing changes. **Remove** clears the front cover. The change is staged in the draft and written by **Save**, through the same safe write as the fields. **Cancel** discards it. The new cover is written as a picture of type front cover with its MIME type. Other pictures (back cover, artist and so on) are never touched. A picture that is only shown because the file has no front cover is kept as it is: **Remove** is off for it, and **Change…** adds a front cover. A format that cannot store pictures (RIFF INFO, AIFF text, ID3v1) shows the cover area disabled, with a note. After a successful save, the cover the application shows elsewhere (the player's cover and the remote API's cover of a track the player holds) shows the new cover, or none after a removal." **Save** "writes the tags and the cover into the file on a helper thread, never on the UI thread: 1. copy the file to a temporary file in the same folder; 2. write the tags to the copy; 3. fsync it; 4. rename it over the original. On success, the library takes the new tags; markers and analysis are kept. On any error, the original file is untouched and the notice area reports it. The menu item is disabled, with the reason as a tooltip, when: the track is current or cued in any player; it is on a playing cart; its format has no writable tags in lofty; the file is missing."
+- CLAUDE.md rule 4: anything an operator might change is a `Config` field with a documented default, a range in `Config::validate` and lenient loading (Task 1: `limits.max_tag_chars`; Task 5: `limits.max_tag_values`). The cover adds none: it reuses `limits.max_cover_bytes`, `limits.max_cover_pixels` and `analysis.cover_thumb_px`.
 - CLAUDE.md rule 6: no `unwrap`, `expect` or `panic` outside tests; `fp-analysis` denies `clippy::indexing_slicing` (use `get`).
-- CLAUDE.md rules 8 and 9: the UI never blocks (tag reading and writing run on worker threads; the UI only checks the extension) and untrusted tags, covers and files degrade to "not available" with a log line. A panic inside tag code is caught and reported as a failed job.
-- Behaviour lives in `fp-model` as pure functions (`apply_tags`, `tag_edit_block`, `needs_tag_read`, `TrackTags::clamped`, `parse_tag_date`, and for the editor `TagSheet`, `invalid_fields`, `changed_fields`, `unstored_fields`); the UI only displays and sends commands.
+- CLAUDE.md rules 8 and 9: the UI never blocks (tag reading and writing, the image check and decode, and the native image dialog run on worker or helper threads; the UI only checks the extension) and untrusted tags, covers, images and files degrade to "not available" with a log line. A panic inside tag or image code is caught and reported as a failed job.
+- Behaviour lives in `fp-model` as pure functions (`apply_tags`, `tag_edit_block`, `needs_tag_read`, `TrackTags::clamped`, `parse_tag_date`, and for the editor `TagSheet`, `CoverArt`, `invalid_fields`, `changed_fields`, `unstored_fields`, `cover_changed`, `cover_blocked`, `cover_unstored`); the UI only displays and sends commands.
 - Nothing goes on air by itself: this plan starts no audio.
 - UI strings are Fluent messages in `crates/fp-app/locales/en-US/main.ftl` (source) and `es-ES/main.ftl`, always both (`tests/i18n.rs::both_locales_define_the_same_keys` checks it).
 - Test files are generated in `tempfile` directories (WAV through `hound`, tagged through lofty); no network, no encoders, no real music.
@@ -58,19 +64,21 @@ The spec leaves these open. Each is the most conservative reading.
 Failure modes the spec implies and its tests do not name; each has a test in the task named.
 
 1. A save that fails half way or must be refused (read-only folder or file, the file vanished, a format lofty cannot write, a corrupt file, an invalid value, a change to a field the format cannot store): the original file must be byte-identical and no `*.fptag-*` temporary file may be left behind. (Task 2 `a_failed_write_leaves_the_original_and_no_temporary_file`, `an_unwritable_format_is_refused_without_touching_the_file`; Task 5 `a_failed_sheet_write_leaves_the_original_and_no_temporary_file`, `an_invalid_value_is_refused_and_the_file_is_untouched`, `a_field_the_format_cannot_store_is_refused_before_the_disk_is_touched`; Task 6 `a_failed_save_keeps_the_modal_and_says_why`.)
-2. A file whose tags the editor does not show must not lose them: covers, other tag types, custom ID3v2 frames (`TXXX`), comments with a description, URL frames (which lofty 0.25.4 drops on save unless re-added as text), items such as `INTRO`, and fields the operator did not change. (Task 2 `fields_that_did_not_change_are_not_written`, `a_cover_and_other_items_survive_a_write`; Task 5 `custom_items_and_pictures_survive_an_edit_untouched`, `a_summary_write_keeps_the_url_frames_too`, `only_the_changed_fields_are_written`.)
+2. A file whose tags the editor does not show must not lose them: pictures that are not the front cover, other tag types, custom ID3v2 frames (`TXXX`), comments with a description, URL frames (which lofty 0.25.4 drops on save unless re-added as text), items such as `INTRO`, and fields the operator did not change. (Task 2 `fields_that_did_not_change_are_not_written`, `a_cover_and_other_items_survive_a_write`; Task 5 `custom_items_and_pictures_survive_an_edit_untouched`, `a_summary_write_keeps_the_url_frames_too`, `only_the_changed_fields_are_written`, `a_save_keeps_the_order_of_the_values_it_did_not_change`; Task 5 cover tests `an_unrelated_edit_keeps_the_cover_byte_for_byte`, `a_back_cover_survives_a_front_cover_change`, `without_a_front_cover_the_first_picture_is_shown_and_never_changed`; Task 6 `a_back_cover_is_untouched_by_a_front_cover_change`.)
 3. Hostile or huge tag text (a 5 MB comment, thousands of values in one field, control characters, text with only spaces) must neither bloat the library or the modal nor crash. (Task 1 `tag_text_is_trimmed_and_cut`; Task 2 `a_huge_comment_is_cut_when_read`; Task 5 `the_text_and_the_values_are_cut_when_read`, `what_is_written_is_cut_to_the_limits`.)
 4. Tracks that must not be edited or written: on air in a player, cued, on a playing cart, tags not read yet, missing file, unwritable format; and the state changing while the modal is open (the track goes on air, is removed from the library). (Task 1 `tag_edit_block_*`; Task 6 `the_menu_item_is_disabled_with_the_reason`, `saving_is_refused_when_the_track_went_on_air`, `the_modal_closes_when_the_track_is_removed`, `no_shortcut_acts_under_the_editor`.)
 5. A library from an earlier version (no new fields, `tags_read` false) must load, show empty fields, and be filled by the tag-only pass without a full analysis; a failed read must not loop. (Task 1 `an_old_library_entry_loads_with_empty_tags`; Task 3 `the_tag_pass_fills_the_tags_of_analysed_tracks_once`, `a_track_whose_tags_cannot_be_read_is_not_asked_again`.)
+6. The cover: an image that is not a JPEG or PNG, is too large, is truncated or has too many pixels must change nothing and be reported; a cover change must not be written to a format with no pictures (lofty would drop it silently); the front cover must not take other pictures with it; the dialog must never run on the UI thread; and after a save the cover on screen must follow the file. (Task 5 `an_oversized_image_is_rejected`, `an_undecodable_or_other_image_is_rejected`, `an_unusable_cover_is_refused_before_the_disk_is_touched`, `a_format_without_pictures_shows_no_cover_and_refuses_one`, `the_front_cover_can_be_replaced`, `the_front_cover_can_be_removed`; Task 6 `an_image_that_cannot_be_used_changes_nothing_and_says_why`, `the_image_dialog_never_blocks_the_interface`, `a_saved_cover_reaches_the_cover_the_player_shows`, `a_format_that_cannot_store_a_cover_disables_the_area`, `cancel_discards_a_staged_cover`.)
+7. lofty's `Tag::take_filter` reorders the items it leaves (see Decisions): saving one field must not change the order of the values of another. (Task 5 `a_save_keeps_the_order_of_the_values_it_did_not_change`.)
 
 ## File Structure
 
 - Modify `crates/fp-model/src/track.rs` (`TrackTags`, `InvalidDate`, `parse_tag_date`, new `Track` fields, `Track::tags`, `apply_tags`, `needs_tag_read`), `config.rs` (`Limits::max_tag_chars`), `command.rs` (`Command::ApplyTags`), `reducer.rs` (the arm), `lib.rs` (exports).
 - Create `crates/fp-model/src/tag_edit.rs`: `TagEditBlock`, `tag_edit_block`.
-- Create `crates/fp-model/src/tag_sheet.rs`: `TagField`, `TagFieldKind`, `TagSheet`, `changed_fields`, `invalid_fields`, `unstored_fields`; `config.rs` also gets `Limits::max_tag_values`.
-- Create `crates/fp-model/tests/track_tags.rs` and `tests/tag_sheet.rs`.
-- Modify `crates/fp-analysis/src/metadata.rs` (`Tags` gains five fields), `lib.rs`; create `crates/fp-analysis/src/tags.rs` (`read_track_tags`, `can_write_tags`, `write_tags`, `TagWriteError`; Task 5 adds `safe_edit`, `storable_fields`, `read_tag_sheet`, `write_tag_sheet`); create `crates/fp-analysis/tests/tags.rs` and `tests/tag_sheet.rs`.
-- Create `crates/fp-app/src/tags.rs` (`TagWorker`, `TagJob`, `TagOutcome`; Task 5 adds the sheet jobs and `SheetSaved`); modify `crates/fp-app/src/lib.rs`, `services.rs` (the tag-only pass); modify `crates/fp-app/tests/services.rs`.
+- Create `crates/fp-model/src/tag_sheet.rs`: `TagField`, `TagFieldKind`, `TagSheet`, `CoverArt`, `changed_fields`, `invalid_fields`, `unstored_fields`, `cover_changed`, `cover_blocked`, `cover_unstored`; `config.rs` also gets `Limits::max_tag_values`.
+- Create `crates/fp-model/tests/track_tags.rs`, `tests/tag_sheet.rs` and `tests/tag_cover.rs`.
+- Modify `crates/fp-analysis/src/metadata.rs` (`Tags` gains five fields), `lib.rs`; create `crates/fp-analysis/src/tags.rs` (`read_track_tags`, `can_write_tags`, `write_tags`, `TagWriteError`; Task 5 adds `safe_edit`, `storable_fields`, `read_tag_sheet`, `write_tag_sheet`, `can_store_pictures`, `CoverError`, `load_cover_file`, `with_cover_thumbnail`); Task 5 also makes `metadata::display_picture` the one rule for the shown picture; create `crates/fp-analysis/tests/tags.rs`, `tests/tag_sheet.rs` and `tests/tag_cover.rs`.
+- Create `crates/fp-app/src/tags.rs` (`TagWorker`, `TagJob`, `TagOutcome`; Task 5 adds the sheet jobs, the cover load and `SheetSaved`); modify `crates/fp-app/src/lib.rs`, `services.rs` (the tag-only pass; Task 6: `MediaCache::set_cover` and its test hook); modify `crates/fp-app/tests/services.rs`.
 - Modify `crates/fp-app/src/ui/view.rs` (`TrackTip`, `track_tooltip`, `tag_edit_availability`), `ui/table.rs` (tooltip, menu item), `ui/app.rs` (state, worker, modal, notice), `ui.rs`.
 - Create `crates/fp-app/src/ui/tag_editor.rs`.
 - Modify `crates/fp-app/locales/en-US/main.ftl`, `es-ES/main.ftl`.
@@ -2139,14 +2147,16 @@ git commit -m "feat(ui): a tooltip with the tags, format and path on each table 
 
 ### Task 5: The tag sheet (model, analysis and worker)
 
-The editor shows a **sheet**: every field of the spec's "Editor" bullet (10 always shown, 26 optional), read from the file and written back through the safe copy of Task 2. This task builds the sheet and everything under it, with no UI. Three parts, one commit each: the pure model (`fp-model`), the file reader and writer (`fp-analysis`), and the worker jobs (`fp-app`).
+The editor shows a **sheet**: every field of the spec's "Editor" bullet (10 always shown, 26 optional) and the front cover, read from the file and written back through the safe copy of Task 2. This task builds the sheet and everything under it, with no UI. Three parts, one commit each: the pure model (`fp-model`), the file reader and writer (`fp-analysis`), and the worker jobs (`fp-app`).
 
 lofty 0.25.4 facts the code relies on (checked against `src/tag/item.rs`, `src/tag/mod.rs`, `src/id3/v2/tag.rs` and `src/id3/v2/tag/conversion.rs`, and by the round-trip tests below; every call in this task exists in that version):
 
 - **Keys.** `lofty::tag::ItemKey` has one variant per field: `TrackTitle`, `TrackArtist`, `AlbumTitle`, `AlbumArtist`, `RecordingDate`, `TrackNumber`/`TrackTotal`, `DiscNumber`/`DiscTotal`, `Genre`, `Composer`, `Comment`, `TrackSubtitle`, `ContentGroup` (grouping), `IntegerBpm` and `Bpm`, `InitialKey`, `Mood`, `Isrc`, `Publisher`, `CatalogNumber`, `CopyrightMessage`, `OriginalArtist`, `OriginalAlbumTitle`, `OriginalReleaseDate`, `Lyricist`, `Conductor`, `Remixer`, `Arranger`, `Performer`, `Language`, `EncodedBy`, `Lyrics` and `UnsyncLyrics`, `TrackTitleSortOrder`, `TrackArtistSortOrder`, `AlbumTitleSortOrder`, `AlbumArtistSortOrder`, `ComposerSortOrder`, `TrackArtistUrl` (artist website). `ItemKey::supported_keys(tag_type: TagType) -> &'static [ItemKey]` lists what a tag type can store (it also covers ID3v1, which `ItemKey::map_key` does not).
 - **Format differences.** ID3v2 stores BPM only as `IntegerBpm` (`TBPM`) and lyrics only as `UnsyncLyrics` (`USLT`) and has no performer frame; Vorbis comments store `Bpm` and `Lyrics`; RIFF INFO stores 11 of the 36 fields (no album artist, no disc number); AIFF text chunks store four (title, artist, comment, copyright). A field therefore tries its `ItemKey`s in order and uses the first the tag type supports.
 - **Numbers.** `TrackNumber` and `TrackTotal` are two items that ID3v2 merges into one `TRCK` frame (`n/t`), `DiscNumber` and `DiscTotal` into `TPOS`. Writing a total without its number makes lofty write number `0` (observed), so the sheet refuses a total without a number.
-- **Several values.** `Tag::push(TagItem)` appends without replacing, so several items can share one `ItemKey`. ID3v2.4 joins them into one frame with its multi-value separator and reads them back as separate items; Vorbis writes one comment per value; RIFF INFO writes repeated chunks (a round-trip test below proves it). `Tag::insert_text` and `Tag::insert` replace every item of the key, so the sheet uses `Tag::take_filter` and `Tag::push` instead.
+- **Several values.** `Tag::push(TagItem)` appends without replacing, so several items can share one `ItemKey`. ID3v2.4 joins them into one frame with its multi-value separator and reads them back as separate items; Vorbis writes one comment per value; RIFF INFO writes repeated chunks (a round-trip test below proves it). `Tag::insert_text` and `Tag::insert` replace every item of the key, so the sheet removes the items it owns with `Tag::retain` and adds the new values with `Tag::push`.
+- **`take_filter` reorders.** `Tag::take_filter` (which `Tag::take` and `Tag::take_strings` call) swaps matching items to the front while it scans, so the items it leaves come back in another order despite its documentation (`src/tag/mod.rs`, `split_idx`/`swap`). Removing the genre then turns the artists "First, Second" into "Second, First". `Tag::retain` and `Tag::remove_key` keep the order; nothing in this plan uses the three that swap.
+- **Pictures.** `Tag::pictures()`, `Tag::push_picture(Picture)` and `Tag::remove_picture_type(PictureType)` are generic. `Picture::unchecked(data).pic_type(..).mime_type(..).build()` builds one. ID3v2 (`APIC`), Vorbis comments (a `METADATA_BLOCK_PICTURE` comment, a FLAC picture block), MP4 (`covr`) and APE (a binary cover item) store pictures; RIFF INFO, AIFF text and ID3v1 do not, and lofty drops a picture pushed into them without an error when it saves. `can_store_pictures(tag_type)` says which. The image decoder (`image`, built with JPEG and PNG only) is the one the library's thumbnails use.
 - **Items with a description.** An ID3v2 comment can carry a description (`TagItem::description()`); the plain comment is the one with an empty description. The sheet owns only items whose description is empty and leaves the others alone.
 - **Unknown items.** A parsed `Tag` keeps the frames lofty cannot map (for example a custom `TXXX`) in a companion tag (`GlobalOptions::preserve_format_specific_items` is on by default, `Tag::has_format_specific_items()` tells) and writes them back untouched.
 - **A lofty 0.25.4 defect.** ID3v2 URL frames that lofty maps (`WOAR`, `WCOM`, ...) are parsed as `ItemValue::Locator`, and saving a `Tag` drops locators (its frame builder only accepts `ItemValue::Text`; observed with a probe). The shared writer therefore re-adds every ID3v2 locator as text before editing (`urls_as_text`), which makes lofty write them back as URL frames. Without it a save would delete URLs the editor does not show.
@@ -2154,9 +2164,9 @@ lofty 0.25.4 facts the code relies on (checked against `src/tag/item.rs`, `src/t
 **Files:**
 - Create: `crates/fp-model/src/tag_sheet.rs`
 - Modify: `crates/fp-model/src/track.rs` (`cut` becomes `pub(crate)`), `lib.rs` (module and exports), `config.rs` (`Limits::max_tag_values`)
-- Test: Create `crates/fp-model/tests/tag_sheet.rs`
-- Modify: `crates/fp-analysis/src/tags.rs`, `crates/fp-analysis/src/metadata.rs` (`tag_date` becomes `pub(crate)`)
-- Test: Create `crates/fp-analysis/tests/tag_sheet.rs` (`tests/tags.rs` must keep passing unchanged)
+- Test: Create `crates/fp-model/tests/tag_sheet.rs` and `tests/tag_cover.rs`
+- Modify: `crates/fp-analysis/src/tags.rs`, `crates/fp-analysis/src/metadata.rs` (`tag_date` becomes `pub(crate)`; `display_picture` is the shared rule for the shown picture)
+- Test: Create `crates/fp-analysis/tests/tag_sheet.rs` and `tests/tag_cover.rs` (`tests/tags.rs` must keep passing unchanged)
 - Modify: `crates/fp-app/src/tags.rs` (jobs, outcomes, tests)
 
 **Interfaces:**
@@ -2167,14 +2177,15 @@ lofty 0.25.4 facts the code relies on (checked against `src/tag/item.rs`, `src/t
   - `fp_model::TagSheet` (`Debug, Clone, Default, PartialEq, Eq`) with `pub other_kept: usize`, `pub other_kept_more: bool` and `new(storable: impl IntoIterator<Item = TagField>, other_kept: usize, other_kept_more: bool)`, `values(field) -> &[String]`, `set_values(field, Vec<String>)`, `can_store(field) -> bool`, `has(field) -> bool`, `text(field) -> String`, `set_text(field, &str, as_lines: bool)`, `pair(field) -> (String, String)`, `set_pair(field, &str, &str)`, `shows_lines(field) -> bool`, `visible_fields(&BTreeSet<TagField>) -> Vec<TagField>`, `addable_fields(&BTreeSet<TagField>) -> Vec<TagField>`, `clamped(self, max_chars: usize, max_values: usize) -> TagSheet`.
   - `fp_model::{changed_fields, invalid_fields, unstored_fields}`: `fn changed_fields(before: &TagSheet, after: &TagSheet) -> Vec<TagField>`, `fn invalid_fields(before: &TagSheet, after: &TagSheet) -> Vec<TagField>`, `fn unstored_fields(before: &TagSheet, after: &TagSheet, read_back: &TagSheet) -> Vec<TagField>`.
   - `Limits::max_tag_values: usize` (default 32, range 1..=1000).
-  - `fp_analysis::tags::storable_fields(tag_type: lofty::tag::TagType) -> Vec<TagField>`, `read_tag_sheet(path: &Path, limits: &Limits) -> Option<TagSheet>` (`None`: no writable tags or unparsable file), `write_tag_sheet(path: &Path, before: &TagSheet, after: &TagSheet, limits: &Limits) -> Result<(), TagWriteError>`, and `TagWriteError::InvalidField(TagField)`.
-  - `fp_app::tags::{TagJob::ReadSheet { track, path, limits }, TagJob::WriteSheet { track, path, before: Box<TagSheet>, after: Box<TagSheet>, limits }, TagOutcome::SheetRead { track, sheet: Option<Box<TagSheet>> }, TagOutcome::SheetWritten { track, result: Result<Box<SheetSaved>, TagWriteError> }, SheetSaved { tags: TrackTags, sheet: Option<TagSheet> }}`.
+  - `fp_model::CoverArt` (`Debug, Clone, PartialEq, Eq`; equal when kind and bytes are, the thumbnail does not count): `new(data: Vec<u8>, front: bool)`, `with_thumb(self, Option<Vec<u8>>)`, `data() -> &[u8]`, `thumb_png() -> Option<&[u8]>`, `thumb_shared() -> Option<Arc<[u8]>>`, `is_front()`. `TagSheet` gains `with_cover_support(bool)`, `can_store_cover()`, `cover() -> Option<&CoverArt>`, `set_cover(Option<CoverArt>)`, `remove_front_cover(&mut self, original: &TagSheet)`; and `fp_model::{cover_changed, cover_blocked, cover_unstored}`: `fn cover_changed(before: &TagSheet, after: &TagSheet) -> bool`, `fn cover_blocked(before, after) -> bool` (changed, and the format cannot store it), `fn cover_unstored(before, after, read_back) -> bool`.
+  - `fp_analysis::tags::storable_fields(tag_type: lofty::tag::TagType) -> Vec<TagField>`, `read_tag_sheet(path: &Path, limits: &Limits) -> Option<TagSheet>` (`None`: no writable tags or unparsable file), `write_tag_sheet(path: &Path, before: &TagSheet, after: &TagSheet, limits: &Limits) -> Result<(), TagWriteError>`, and `TagWriteError::{InvalidField(TagField), CoverNotStorable, InvalidCover(CoverError)}`; `fp_analysis::tags::{can_store_pictures(tag_type: TagType) -> bool, CoverError { TooLarge, UnsupportedFormat, Undecodable, Unreadable(String) }, load_cover_file(path: &Path, limits: &Limits, thumb_px: u32) -> Result<CoverArt, CoverError>, with_cover_thumbnail(sheet: TagSheet, limits: &Limits, px: u32) -> TagSheet}`. `read_tag_sheet` returns the cover without a thumbnail (`with_cover_thumbnail` adds it, so the file reader stays free of a size setting).
+  - `fp_app::tags::{TagJob::ReadSheet { track, path, limits, thumb_px }, TagJob::WriteSheet { track, path, before: Box<TagSheet>, after: Box<TagSheet>, limits, thumb_px }, TagJob::LoadCover { track, path, limits, thumb_px }, TagOutcome::SheetRead { track, sheet: Option<Box<TagSheet>> }, TagOutcome::SheetWritten { track, result: Result<Box<SheetSaved>, TagWriteError> }, TagOutcome::CoverLoaded { track, result: Result<CoverArt, CoverError> }, SheetSaved { tags: TrackTags, sheet: Option<TagSheet> }}`. `thumb_px` is `analysis.cover_thumb_px`; the sheets the worker returns carry their cover with a thumbnail.
 
 #### Part A: the sheet in `fp-model`
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `crates/fp-model/tests/tag_sheet.rs`:
+Create `crates/fp-model/tests/tag_sheet.rs`, and, for the cover, `crates/fp-model/tests/tag_cover.rs` (below it):
 
 ```rust
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -2511,14 +2522,128 @@ fn the_value_cap_is_a_validated_config_field() {
 }
 ```
 
+`crates/fp-model/tests/tag_cover.rs`: the cover in the sheet. `CoverArt` equality, what a change is (replaced, removed, a picture that is only shown is never removed), when a change cannot be written, and what the file did not keep.
+
+```rust
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+//! Feedback 2 spec O23: the front cover in the tag sheet and its pure rules.
+
+use fp_model::{CoverArt, TagField, TagSheet, cover_blocked, cover_changed, cover_unstored};
+
+fn sheet(cover: Option<CoverArt>) -> TagSheet {
+    let mut s = TagSheet::new(TagField::ALL, 0, false).with_cover_support(true);
+    s.set_cover(cover);
+    s
+}
+
+fn art(byte: u8, front: bool) -> CoverArt {
+    CoverArt::new(vec![byte; 8], front)
+}
+
+#[test]
+fn a_new_sheet_has_no_cover_and_cannot_store_one() {
+    let s = TagSheet::new(TagField::ALL, 0, false);
+    assert!(s.cover().is_none());
+    assert!(!s.can_store_cover());
+    assert!(TagSheet::default().cover().is_none());
+    assert!(s.with_cover_support(true).can_store_cover());
+}
+
+#[test]
+fn two_covers_are_equal_when_their_bytes_and_kind_are() {
+    assert_eq!(art(1, true), art(1, true));
+    assert_ne!(art(1, true), art(2, true));
+    assert_ne!(
+        art(1, true),
+        art(1, false),
+        "a back cover is another picture"
+    );
+    let with_thumb = art(1, true).with_thumb(Some(vec![9, 9]));
+    assert_eq!(with_thumb, art(1, true), "the thumbnail is not part of it");
+    assert_eq!(with_thumb.thumb_png(), Some(&[9u8, 9][..]));
+    assert_eq!(art(1, true).thumb_png(), None);
+    assert_eq!(art(7, true).data(), [7u8; 8]);
+}
+
+#[test]
+fn replacing_or_removing_the_cover_is_a_change() {
+    let before = sheet(Some(art(1, true)));
+    let mut after = before.clone();
+    assert!(!cover_changed(&before, &after));
+    after.set_cover(Some(art(2, true)));
+    assert!(cover_changed(&before, &after));
+    after.remove_front_cover(&before);
+    assert!(cover_changed(&before, &after));
+    assert!(after.cover().is_none());
+    let none = sheet(None);
+    let mut added = none.clone();
+    added.set_cover(Some(art(3, true)));
+    assert!(cover_changed(&none, &added));
+    let mut removed = added.clone();
+    removed.remove_front_cover(&none);
+    assert!(!cover_changed(&none, &removed), "back to what the file had");
+}
+
+#[test]
+fn a_picture_that_is_only_shown_is_never_removed() {
+    // The file has a back cover only: the editor shows it, Remove leaves it.
+    let before = sheet(Some(art(5, false)));
+    let mut after = before.clone();
+    after.set_cover(Some(art(6, true)));
+    assert!(cover_changed(&before, &after));
+    after.remove_front_cover(&before);
+    assert_eq!(after.cover(), before.cover());
+    assert!(!cover_changed(&before, &after));
+}
+
+#[test]
+fn a_cover_change_on_a_format_without_pictures_is_blocked() {
+    let before = TagSheet::new(TagField::ALL, 0, false);
+    let mut after = before.clone();
+    assert!(
+        !cover_blocked(&before, &after),
+        "no change, nothing to block"
+    );
+    after.set_cover(Some(art(1, true)));
+    assert!(cover_blocked(&before, &after));
+    let storable = before.with_cover_support(true);
+    let mut after = storable.clone();
+    after.set_cover(Some(art(1, true)));
+    assert!(!cover_blocked(&storable, &after));
+}
+
+#[test]
+fn the_cover_the_file_did_not_keep_is_named() {
+    let before = sheet(Some(art(1, true)));
+    let mut after = before.clone();
+    after.set_cover(Some(art(2, true)));
+    assert!(!cover_unstored(&before, &after, &after.clone()));
+    assert!(cover_unstored(&before, &after, &before));
+    assert!(
+        !cover_unstored(&before, &before, &sheet(None)),
+        "an untouched cover is not judged"
+    );
+}
+
+#[test]
+fn the_cover_survives_clamping_and_cloning_cheaply() {
+    let mut s = sheet(Some(art(1, true).with_thumb(Some(vec![1]))));
+    s.set_text(TagField::Title, &"x".repeat(500), false);
+    let clamped = s.clone().clamped(64, 2);
+    assert_eq!(clamped.cover(), s.cover());
+    assert_eq!(clamped.cover().unwrap().thumb_png(), Some(&[1u8][..]));
+    assert!(clamped.can_store_cover());
+}
+```
+
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p fp-model --test tag_sheet`
-Expected: FAIL to compile (`TagField`, `TagSheet`, `changed_fields`, ... are not in `fp_model`).
+Run: `cargo test -p fp-model --test tag_sheet` and `cargo test -p fp-model --test tag_cover`
+Expected: FAIL to compile (`TagField`, `TagSheet`, `CoverArt`, `changed_fields`, ... are not in `fp_model`).
 
 - [ ] **Step 3: Implement**
 
-Create `crates/fp-model/src/tag_sheet.rs`. Everything the editor decides without a file lives here: the fields and their order, which are always shown, how a value is typed, what `Add field` offers, and the validation and diff rules.
+Create `crates/fp-model/src/tag_sheet.rs`. Everything the editor decides without a file lives here: the fields and their order, which are always shown, how a value is typed, what `Add field` offers, the validation and diff rules, and what a cover change is (`CoverArt` holds the picture's bytes in an `Arc`, so a draft of the sheet is cheap to clone and comparing an untouched cover is a pointer check).
 
 ```rust
 //! The tag sheet (feedback 2 spec O23): every field the tag editor can show
@@ -2528,6 +2653,7 @@ Create `crates/fp-model/src/tag_sheet.rs`. Everything the editor decides without
 //! shown, which values are invalid and which fields changed.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use crate::track::{cut, parse_tag_date};
 
@@ -2768,11 +2894,77 @@ fn is_whole(text: &str) -> bool {
     text.is_empty() || (text.bytes().all(|b| b.is_ascii_digit()) && text.parse::<u32>().is_ok())
 }
 
+/// A picture of the sheet: the file's front cover or, when it has none, its
+/// first picture (the same rule the library's cover thumbnail follows). The
+/// bytes are shared (`Arc`), so a draft of the sheet is cheap to clone and
+/// two covers are equal when their bytes are.
+#[derive(Debug, Clone)]
+pub struct CoverArt {
+    data: Arc<[u8]>,
+    thumb: Option<Arc<[u8]>>,
+    front: bool,
+}
+
+impl CoverArt {
+    /// A picture with no thumbnail yet; `front` says whether its type is
+    /// front cover.
+    pub fn new(data: Vec<u8>, front: bool) -> Self {
+        Self {
+            data: data.into(),
+            thumb: None,
+            front,
+        }
+    }
+
+    /// The same picture with `thumb` (a small PNG, `None` when the image
+    /// could not be decoded) as its thumbnail.
+    #[must_use]
+    pub fn with_thumb(self, thumb: Option<Vec<u8>>) -> Self {
+        Self {
+            thumb: thumb.map(Into::into),
+            ..self
+        }
+    }
+
+    /// The image file as stored (JPEG, PNG, ...).
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    /// The thumbnail the interface draws; `None` if the image cannot be
+    /// decoded (it is still kept as it is).
+    pub fn thumb_png(&self) -> Option<&[u8]> {
+        self.thumb.as_deref()
+    }
+
+    /// The thumbnail as the media cache holds it.
+    pub fn thumb_shared(&self) -> Option<Arc<[u8]>> {
+        self.thumb.clone()
+    }
+
+    /// The picture is a front cover; otherwise it is only the first picture
+    /// of the file, shown for lack of one, and the editor never changes it.
+    pub fn is_front(&self) -> bool {
+        self.front
+    }
+}
+
+impl PartialEq for CoverArt {
+    fn eq(&self, other: &Self) -> bool {
+        self.front == other.front
+            && (Arc::ptr_eq(&self.data, &other.data) || self.data == other.data)
+    }
+}
+
+impl Eq for CoverArt {}
+
 /// What a file's tag holds, field by field, and what its format can store.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagSheet {
     values: BTreeMap<TagField, Vec<String>>,
     storable: BTreeSet<TagField>,
+    cover: Option<CoverArt>,
+    cover_storable: bool,
     /// Tags the sheet does not show (other standard keys, custom keys,
     /// pictures). They are kept as they are.
     pub other_kept: usize,
@@ -2791,9 +2983,42 @@ impl TagSheet {
         Self {
             values: BTreeMap::new(),
             storable: storable.into_iter().collect(),
+            cover: None,
+            cover_storable: false,
             other_kept,
             other_kept_more,
         }
+    }
+
+    /// The same sheet for a format that can (or cannot) store pictures. A
+    /// new sheet cannot.
+    #[must_use]
+    pub fn with_cover_support(mut self, storable: bool) -> Self {
+        self.cover_storable = storable;
+        self
+    }
+
+    /// The file's format can store a picture (ID3v2, Vorbis comments, MP4
+    /// and APE can; RIFF INFO, AIFF text and ID3v1 cannot).
+    pub fn can_store_cover(&self) -> bool {
+        self.cover_storable
+    }
+
+    /// The picture the editor shows: the front cover, else the first
+    /// picture of the file.
+    pub fn cover(&self) -> Option<&CoverArt> {
+        self.cover.as_ref()
+    }
+
+    /// Replaces the picture (the front cover when `cover.is_front()`).
+    pub fn set_cover(&mut self, cover: Option<CoverArt>) {
+        self.cover = cover;
+    }
+
+    /// Clears the front cover. A picture of another type that the sheet only
+    /// shows for lack of a front cover (`original`'s) stays as it is.
+    pub fn remove_front_cover(&mut self, original: &TagSheet) {
+        self.cover = original.cover.clone().filter(|cover| !cover.is_front());
     }
 
     /// The values of `field`: empty when the file has none; two entries
@@ -2910,6 +3135,23 @@ impl TagSheet {
     }
 }
 
+/// The operator changed the front cover (replaced or removed it).
+pub fn cover_changed(before: &TagSheet, after: &TagSheet) -> bool {
+    before.cover != after.cover
+}
+
+/// The cover was changed but the file's format cannot store pictures: the
+/// change cannot be written.
+pub fn cover_blocked(before: &TagSheet, after: &TagSheet) -> bool {
+    cover_changed(before, after) && !after.can_store_cover()
+}
+
+/// The cover was changed and the file does not hold it as written after the
+/// save (`read_back`).
+pub fn cover_unstored(before: &TagSheet, after: &TagSheet, read_back: &TagSheet) -> bool {
+    cover_changed(before, after) && after.cover != read_back.cover
+}
+
 /// The fields whose values differ between two sheets, in editor order.
 pub fn changed_fields(before: &TagSheet, after: &TagSheet) -> Vec<TagField> {
     TagField::ALL
@@ -2981,12 +3223,13 @@ Apply the three small changes (the `cut` helper is reused for each line, the mod
  pub mod track;
  pub mod volume;
  
-@@ -53,6 +54,9 @@
+@@ -53,6 +54,10 @@
  pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, player_command};
  pub use state::AppState;
  pub use tag_edit::{TagEditBlock, tag_edit_block};
 +pub use tag_sheet::{
-+    TagField, TagFieldKind, TagSheet, changed_fields, invalid_fields, unstored_fields,
++    CoverArt, TagField, TagFieldKind, TagSheet, changed_fields, cover_blocked, cover_changed,
++    cover_unstored, invalid_fields, unstored_fields,
 +};
  pub use track::{
      AudioFormat, FileState, InvalidDate, Library, Marker, MarkerKind, MarkerSource, Markers,
@@ -3029,8 +3272,8 @@ Apply the three small changes (the `cut` helper is reused for each line, the mod
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `cargo test -p fp-model --test tag_sheet` then `cargo test -p fp-model`
-Expected: PASS (16 tests in `tag_sheet`).
+Run: `cargo test -p fp-model --test tag_sheet` (16 tests), `cargo test -p fp-model --test tag_cover` (7 tests), then `cargo test -p fp-model`
+Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -3038,7 +3281,7 @@ Expected: PASS (16 tests in `tag_sheet`).
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
    && cargo test --workspace; then
   git add crates/fp-model
-  git commit -m "feat(model): the tag sheet, its 36 fields and its pure rules" -m "The tag editor covers the fields common players show. Which fields exist, which are always shown, what Add field offers, how a value is validated and which fields changed are pure functions of two sheets, so the UI and the file writer cannot disagree."
+  git commit -m "feat(model): the tag sheet, its 36 fields, its cover and its pure rules" -m "The tag editor covers the fields common players show, and the front cover. Which fields exist, which are always shown, what Add field offers, how a value is validated, which fields changed and whether the cover changed are pure functions of two sheets, so the UI and the file writer cannot disagree."
 fi
 ```
 
@@ -3046,7 +3289,7 @@ fi
 
 - [ ] **Step 6: Write the failing tests**
 
-Create `crates/fp-analysis/tests/tag_sheet.rs`. Its helpers build a fresh WAV (ID3v2 is lofty's primary tag type for it), a WAV with a RIFF INFO chunk, and a synthesized ID3v2.4 MP3; the "other tags" MP3 carries a custom `TXXX`, a comment with a description, two URL frames (`WOAR`, which is a field, and `WCOM`, which is not) and a picture.
+Create `crates/fp-analysis/tests/tag_sheet.rs` and, for the cover, `crates/fp-analysis/tests/tag_cover.rs` (below it). The helpers of `tag_sheet.rs` build a fresh WAV (ID3v2 is lofty's primary tag type for it), a WAV with a RIFF INFO chunk, and a synthesized ID3v2.4 MP3; the "other tags" MP3 carries a custom `TXXX`, a comment with a description, two URL frames (`WOAR`, which is a field, and `WCOM`, which is not) and a picture.
 
 ```rust
 #![allow(
@@ -3513,8 +3756,8 @@ fn custom_items_and_pictures_survive_an_edit_untouched() {
         ["http://artist.example"]
     );
     assert_eq!(
-        before.other_kept, 3,
-        "the described comment, the WCOM url and the picture"
+        before.other_kept, 2,
+        "the described comment and the WCOM url (the cover is the sheet's own)"
     );
     assert!(
         before.other_kept_more,
@@ -3527,7 +3770,7 @@ fn custom_items_and_pictures_survive_an_edit_untouched() {
         s.set_text(TagField::Genre, "Pop", true);
     });
     assert_eq!(after.values(TagField::Comment), ["a new comment"]);
-    assert_eq!(after.other_kept, 3, "nothing was lost");
+    assert_eq!(after.other_kept, 2, "nothing was lost");
     assert!(raw_contains(&path, b"MY_CUSTOM"), "the custom frame");
     assert!(raw_contains(&path, b"custom value"));
     assert!(raw_contains(&path, b"ReplayNote"), "the described comment");
@@ -3683,18 +3926,631 @@ fn a_full_date_is_not_reduced_by_an_unrelated_edit() {
     let s = edit(&path, |s| s.set_text(TagField::Genre, "Pop", true));
     assert_eq!(s.values(TagField::Date), ["2019-05-14T10:30"]);
 }
+
+/// The artists of a file, in the order they are stored.
+fn artists(path: &Path) -> Vec<String> {
+    sheet(path).values(TagField::Artist).to_vec()
+}
+
+#[test]
+fn a_save_keeps_the_order_of_the_values_it_did_not_change() {
+    // The order of the items of a parsed tag depends on the order of the
+    // frames in the file, which lofty writes in no fixed order, so each
+    // round tries another arrangement. lofty 0.25.4's `Tag::take_filter`
+    // swaps items and reorders the ones it leaves: a field written next to
+    // the artists must not turn "First, Second" into "Second, First".
+    let dir = tempfile::tempdir().unwrap();
+    for round in 0..16 {
+        let path = mp3_with_other_tags(dir.path());
+        edit(&path, |s| {
+            s.set_text(TagField::Artist, "First\nSecond\nThird", true);
+            s.set_text(TagField::Genre, "Pop", true);
+            s.set_pair(TagField::TrackNumber, "3", "12");
+        });
+        assert_eq!(
+            artists(&path),
+            ["First", "Second", "Third"],
+            "round {round}"
+        );
+        edit(&path, |s| {
+            s.set_text(TagField::Genre, "Jazz", true);
+            s.set_pair(TagField::TrackNumber, "3", "14");
+            s.set_text(TagField::Mood, "Calm", true);
+        });
+        assert_eq!(
+            artists(&path),
+            ["First", "Second", "Third"],
+            "round {round}: the artists did not change"
+        );
+    }
+}
+```
+
+`crates/fp-analysis/tests/tag_cover.rs`: the cover read from and written to real files (ID3v2 in an MP3 and a WAV, Vorbis comments in a FLAC stub, RIFF INFO for the format with no pictures), the image check, and the thumbnail.
+
+```rust
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
+//! Feedback 2 spec O23: the front cover in the tag sheet, read from and
+//! written to real files.
+
+use std::io::Cursor;
+use std::path::{Path, PathBuf};
+
+use fp_analysis::tags::{
+    CoverError, TagWriteError, can_store_pictures, load_cover_file, read_tag_sheet,
+    with_cover_thumbnail, write_tag_sheet,
+};
+use fp_model::{CoverArt, Limits, TagField, TagSheet};
+use lofty::config::WriteOptions;
+use lofty::id3::v2::{AttachedPictureFrame, Frame, Id3v2Tag};
+use lofty::picture::{MimeType, Picture, PictureType};
+use lofty::prelude::*;
+use lofty::tag::{Tag, TagType};
+
+fn limits() -> Limits {
+    Limits::default()
+}
+
+fn encode(format: image::ImageFormat, width: u32, color: [u8; 3]) -> Vec<u8> {
+    let img = image::RgbImage::from_pixel(width, 30, image::Rgb(color));
+    let mut out = Vec::new();
+    image::DynamicImage::ImageRgb8(img)
+        .write_to(&mut Cursor::new(&mut out), format)
+        .unwrap();
+    out
+}
+
+/// A red PNG, a blue JPEG and a green PNG: three different images.
+fn red_png() -> Vec<u8> {
+    encode(image::ImageFormat::Png, 40, [200, 30, 30])
+}
+
+fn blue_jpeg() -> Vec<u8> {
+    encode(image::ImageFormat::Jpeg, 50, [30, 30, 200])
+}
+
+fn green_png() -> Vec<u8> {
+    encode(image::ImageFormat::Png, 60, [30, 200, 30])
+}
+
+/// A minimal MP3: MPEG-1 Layer III frames with silent payloads.
+fn mp3(dir: &Path, name: &str) -> PathBuf {
+    let path = dir.join(name);
+    let mut bytes = Vec::new();
+    for _ in 0..10 {
+        let mut frame = vec![0u8; 417];
+        frame[..4].copy_from_slice(&0xFFFB_9064u32.to_be_bytes());
+        bytes.extend_from_slice(&frame);
+    }
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+fn picture(data: Vec<u8>, kind: PictureType, mime: MimeType) -> Frame<'static> {
+    Frame::Picture(AttachedPictureFrame::new(
+        lofty::TextEncoding::UTF8,
+        Picture::unchecked(data)
+            .pic_type(kind)
+            .mime_type(mime)
+            .build(),
+    ))
+}
+
+/// An MP3 with `pictures` (data, type, mime) and a title.
+fn mp3_with(dir: &Path, pictures: Vec<(Vec<u8>, PictureType, MimeType)>) -> PathBuf {
+    let path = mp3(dir, "x.mp3");
+    let mut tag = Id3v2Tag::new();
+    for (data, kind, mime) in pictures {
+        tag.insert(picture(data, kind, mime));
+    }
+    tag.set_title("Old title".to_owned());
+    tag.save_to_path(&path, WriteOptions::default()).unwrap();
+    path
+}
+
+fn wav(dir: &Path, name: &str) -> PathBuf {
+    let path = dir.join(name);
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 8_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    for _ in 0..800 {
+        w.write_sample(0i16).unwrap();
+    }
+    w.finalize().unwrap();
+    path
+}
+
+/// A WAV whose tag is RIFF INFO, which has no place for a picture.
+fn riff_wav(dir: &Path) -> PathBuf {
+    let path = wav(dir, "riff.wav");
+    let mut file = lofty::read_from_path(&path).unwrap();
+    file.insert_tag(Tag::new(TagType::RiffInfo));
+    file.tag_mut(TagType::RiffInfo)
+        .unwrap()
+        .set_title("Old title".into());
+    file.save_to_path(&path, WriteOptions::default()).unwrap();
+    path
+}
+
+fn sheet(path: &Path) -> TagSheet {
+    read_tag_sheet(path, &limits()).expect("a sheet")
+}
+
+fn pictures_of(path: &Path) -> Vec<(PictureType, Vec<u8>)> {
+    let file = lofty::read_from_path(path).unwrap();
+    file.primary_tag()
+        .unwrap()
+        .pictures()
+        .iter()
+        .map(|p| (p.pic_type(), p.data().to_vec()))
+        .collect()
+}
+
+fn names(dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    v.sort();
+    v
+}
+
+/// Saves `change` applied to the sheet of `path`.
+fn edit(path: &Path, change: impl FnOnce(&mut TagSheet)) -> TagSheet {
+    let before = sheet(path);
+    let mut after = before.clone();
+    change(&mut after);
+    write_tag_sheet(path, &before, &after, &limits()).unwrap();
+    sheet(path)
+}
+
+fn new_cover(data: Vec<u8>) -> CoverArt {
+    CoverArt::new(data, true)
+}
+
+#[test]
+fn the_sheet_shows_the_front_cover() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3_with(
+        dir.path(),
+        vec![
+            (blue_jpeg(), PictureType::CoverBack, MimeType::Jpeg),
+            (red_png(), PictureType::CoverFront, MimeType::Png),
+        ],
+    );
+    let s = sheet(&path);
+    let cover = s.cover().expect("a cover");
+    assert!(cover.is_front());
+    assert_eq!(
+        cover.data(),
+        red_png().as_slice(),
+        "the front, not the first"
+    );
+    assert!(s.can_store_cover());
+    assert_eq!(
+        s.other_kept, 1,
+        "the back cover is kept, the front is the sheet's"
+    );
+}
+
+#[test]
+fn without_a_front_cover_the_first_picture_is_shown_and_never_changed() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3_with(
+        dir.path(),
+        vec![(blue_jpeg(), PictureType::CoverBack, MimeType::Jpeg)],
+    );
+    let s = sheet(&path);
+    let cover = s.cover().expect("the first picture");
+    assert!(!cover.is_front());
+    assert_eq!(cover.data(), blue_jpeg().as_slice());
+    assert_eq!(s.other_kept, 1, "it is not the sheet's: it is kept");
+    // Changing another field leaves it alone; so does Remove.
+    let after = edit(&path, |s| {
+        let original = s.clone();
+        s.remove_front_cover(&original);
+        s.set_text(TagField::Genre, "Pop", true);
+    });
+    assert_eq!(after.cover().unwrap().data(), blue_jpeg().as_slice());
+    assert_eq!(
+        pictures_of(&path),
+        [(PictureType::CoverBack, blue_jpeg())],
+        "the back cover is still the only picture"
+    );
+}
+
+#[test]
+fn a_file_without_pictures_has_no_cover() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = sheet(&mp3(dir.path(), "x.mp3"));
+    assert!(s.cover().is_none());
+    assert!(s.can_store_cover());
+    assert_eq!(s.other_kept, 0);
+}
+
+#[test]
+fn the_front_cover_can_be_replaced() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3_with(
+        dir.path(),
+        vec![(red_png(), PictureType::CoverFront, MimeType::Png)],
+    );
+    let after = edit(&path, |s| s.set_cover(Some(new_cover(blue_jpeg()))));
+    assert_eq!(after.cover().unwrap().data(), blue_jpeg().as_slice());
+    assert!(after.cover().unwrap().is_front());
+    assert_eq!(
+        pictures_of(&path),
+        [(PictureType::CoverFront, blue_jpeg())],
+        "one front cover, the new one"
+    );
+    let file = lofty::read_from_path(&path).unwrap();
+    let tag = file.primary_tag().unwrap();
+    assert_eq!(tag.pictures()[0].mime_type(), Some(&MimeType::Jpeg));
+    // The other direction: a PNG over a JPEG gets the PNG type.
+    edit(&path, |s| s.set_cover(Some(new_cover(green_png()))));
+    let file = lofty::read_from_path(&path).unwrap();
+    let tag = file.primary_tag().unwrap();
+    assert_eq!(tag.pictures()[0].mime_type(), Some(&MimeType::Png));
+    assert_eq!(tag.pictures()[0].pic_type(), PictureType::CoverFront);
+}
+
+#[test]
+fn a_cover_can_be_added_to_a_file_that_has_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3(dir.path(), "x.mp3");
+    let after = edit(&path, |s| s.set_cover(Some(new_cover(green_png()))));
+    assert_eq!(after.cover().unwrap().data(), green_png().as_slice());
+    assert_eq!(pictures_of(&path), [(PictureType::CoverFront, green_png())]);
+}
+
+#[test]
+fn the_front_cover_can_be_removed() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3_with(
+        dir.path(),
+        vec![(red_png(), PictureType::CoverFront, MimeType::Png)],
+    );
+    let after = edit(&path, |s| {
+        let original = s.clone();
+        s.remove_front_cover(&original);
+    });
+    assert!(after.cover().is_none());
+    assert!(pictures_of(&path).is_empty());
+    assert_eq!(
+        after.values(TagField::Title),
+        ["Old title"],
+        "the text stays"
+    );
+}
+
+#[test]
+fn an_unrelated_edit_keeps_the_cover_byte_for_byte() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3_with(
+        dir.path(),
+        vec![(red_png(), PictureType::CoverFront, MimeType::Png)],
+    );
+    edit(&path, |s| {
+        s.set_text(TagField::Title, "New title", false);
+        s.set_text(TagField::Genre, "Pop", true);
+    });
+    assert_eq!(pictures_of(&path), [(PictureType::CoverFront, red_png())]);
+    let raw = std::fs::read(&path).unwrap();
+    let png = red_png();
+    assert!(
+        raw.windows(png.len()).any(|w| w == png.as_slice()),
+        "the image is in the file as it was"
+    );
+}
+
+#[test]
+fn a_back_cover_survives_a_front_cover_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3_with(
+        dir.path(),
+        vec![
+            (red_png(), PictureType::CoverFront, MimeType::Png),
+            (blue_jpeg(), PictureType::CoverBack, MimeType::Jpeg),
+            (green_png(), PictureType::Artist, MimeType::Png),
+        ],
+    );
+    edit(&path, |s| s.set_cover(Some(new_cover(green_png()))));
+    let mut pictures = pictures_of(&path);
+    pictures.sort_by_key(|(kind, _)| kind.as_u8());
+    assert_eq!(
+        pictures,
+        [
+            (PictureType::CoverFront, green_png()),
+            (PictureType::CoverBack, blue_jpeg()),
+            (PictureType::Artist, green_png()),
+        ]
+    );
+    // Removing the front cover leaves the two others too.
+    let after = edit(&path, |s| {
+        let original = s.clone();
+        s.remove_front_cover(&original);
+    });
+    let mut pictures = pictures_of(&path);
+    pictures.sort_by_key(|(kind, _)| kind.as_u8());
+    assert_eq!(
+        pictures,
+        [
+            (PictureType::CoverBack, blue_jpeg()),
+            (PictureType::Artist, green_png()),
+        ]
+    );
+    assert_eq!(after.other_kept, 2);
+}
+
+#[test]
+fn a_cover_change_and_a_field_change_are_one_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3(dir.path(), "x.mp3");
+    let after = edit(&path, |s| {
+        s.set_text(TagField::Album, "An Album", false);
+        s.set_cover(Some(new_cover(red_png())));
+    });
+    assert_eq!(after.values(TagField::Album), ["An Album"]);
+    assert_eq!(after.cover().unwrap().data(), red_png().as_slice());
+}
+
+#[test]
+fn a_format_without_pictures_shows_no_cover_and_refuses_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = riff_wav(dir.path());
+    let original = std::fs::read(&path).unwrap();
+    let before = sheet(&path);
+    assert!(!before.can_store_cover());
+    assert!(before.cover().is_none());
+    let mut after = before.clone();
+    after.set_cover(Some(new_cover(red_png())));
+    assert_eq!(
+        write_tag_sheet(&path, &before, &after, &limits()),
+        Err(TagWriteError::CoverNotStorable)
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert_eq!(names(dir.path()), ["riff.wav"]);
+    // A fresh WAV gets ID3v2, which stores one.
+    let fresh = wav(dir.path(), "fresh.wav");
+    assert!(sheet(&fresh).can_store_cover());
+}
+
+#[test]
+fn which_tag_types_store_pictures() {
+    for stored in [
+        TagType::Id3v2,
+        TagType::VorbisComments,
+        TagType::Mp4Ilst,
+        TagType::Ape,
+    ] {
+        assert!(can_store_pictures(stored), "{stored:?}");
+    }
+    for not_stored in [TagType::RiffInfo, TagType::AiffText, TagType::Id3v1] {
+        assert!(!can_store_pictures(not_stored), "{not_stored:?}");
+    }
+}
+
+#[test]
+fn an_oversized_image_is_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let png = dir.path().join("big.png");
+    std::fs::write(&png, red_png()).unwrap();
+    let small = Limits {
+        max_cover_bytes: 100,
+        ..limits()
+    };
+    assert_eq!(
+        load_cover_file(&png, &small, 64).unwrap_err(),
+        CoverError::TooLarge
+    );
+    // Too many pixels is a decode failure, not a crash or a huge allocation.
+    let few_pixels = Limits {
+        max_cover_pixels: 16,
+        ..limits()
+    };
+    assert_eq!(
+        load_cover_file(&png, &few_pixels, 64).unwrap_err(),
+        CoverError::Undecodable
+    );
+}
+
+#[test]
+fn an_undecodable_or_other_image_is_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let load = |name: &str, bytes: &[u8]| {
+        let path = dir.path().join(name);
+        std::fs::write(&path, bytes).unwrap();
+        load_cover_file(&path, &limits(), 64)
+    };
+    let png = red_png();
+    assert_eq!(
+        load("truncated.png", &png[..png.len() / 2]).unwrap_err(),
+        CoverError::Undecodable,
+        "a PNG cut in half"
+    );
+    assert_eq!(
+        load("noise.jpg", b"not an image at all").unwrap_err(),
+        CoverError::UnsupportedFormat
+    );
+    assert_eq!(
+        load("empty.png", b"").unwrap_err(),
+        CoverError::UnsupportedFormat
+    );
+    assert_eq!(
+        load("anim.gif", b"GIF89a\x01\x00\x01\x00\x00\x00\x00;").unwrap_err(),
+        CoverError::UnsupportedFormat,
+        "only JPEG and PNG"
+    );
+    assert!(matches!(
+        load_cover_file(&dir.path().join("missing.png"), &limits(), 64).unwrap_err(),
+        CoverError::Unreadable(_)
+    ));
+    assert!(matches!(
+        load_cover_file(dir.path(), &limits(), 64).unwrap_err(),
+        CoverError::Unreadable(_)
+    ));
+}
+
+#[test]
+fn a_valid_image_loads_as_a_front_cover_with_a_thumbnail() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("cover.jpg");
+    std::fs::write(&path, blue_jpeg()).unwrap();
+    let cover = load_cover_file(&path, &limits(), 16).unwrap();
+    assert!(cover.is_front());
+    assert_eq!(cover.data(), blue_jpeg().as_slice(), "the file as it is");
+    let thumb =
+        image::load_from_memory_with_format(cover.thumb_png().unwrap(), image::ImageFormat::Png)
+            .unwrap();
+    assert!(thumb.width() <= 16 && thumb.height() <= 16);
+}
+
+#[test]
+fn an_unusable_cover_is_refused_before_the_disk_is_touched() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3_with(
+        dir.path(),
+        vec![(red_png(), PictureType::CoverFront, MimeType::Png)],
+    );
+    let original = std::fs::read(&path).unwrap();
+    let before = sheet(&path);
+    let png = red_png();
+    for (bad, why) in [
+        (b"junk".to_vec(), CoverError::UnsupportedFormat),
+        (png[..png.len() / 2].to_vec(), CoverError::Undecodable),
+    ] {
+        let mut after = before.clone();
+        after.set_cover(Some(new_cover(bad)));
+        assert_eq!(
+            write_tag_sheet(&path, &before, &after, &limits()),
+            Err(TagWriteError::InvalidCover(why))
+        );
+    }
+    let small = Limits {
+        max_cover_bytes: 100,
+        ..limits()
+    };
+    let mut after = before.clone();
+    after.set_cover(Some(new_cover(blue_jpeg())));
+    assert_eq!(
+        write_tag_sheet(&path, &before, &after, &small),
+        Err(TagWriteError::InvalidCover(CoverError::TooLarge))
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert_eq!(names(dir.path()), ["x.mp3"]);
+}
+
+#[test]
+fn a_cover_that_does_not_decode_is_shown_without_a_thumbnail_and_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let broken = red_png()[..30].to_vec();
+    let path = mp3_with(
+        dir.path(),
+        vec![(broken.clone(), PictureType::CoverFront, MimeType::Png)],
+    );
+    let s = with_cover_thumbnail(sheet(&path), &limits(), 64);
+    let cover = s.cover().expect("it is still the cover");
+    assert!(cover.thumb_png().is_none());
+    // An edit of another field leaves it as it is.
+    edit(&path, |s| s.set_text(TagField::Genre, "Pop", true));
+    assert_eq!(pictures_of(&path), [(PictureType::CoverFront, broken)]);
+}
+
+#[test]
+fn the_thumbnail_of_a_cover_is_a_small_png() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3_with(
+        dir.path(),
+        vec![(red_png(), PictureType::CoverFront, MimeType::Png)],
+    );
+    let plain = sheet(&path);
+    assert!(plain.cover().unwrap().thumb_png().is_none(), "not yet");
+    let s = with_cover_thumbnail(plain.clone(), &limits(), 20);
+    let thumb = image::load_from_memory_with_format(
+        s.cover().unwrap().thumb_png().unwrap(),
+        image::ImageFormat::Png,
+    )
+    .unwrap();
+    assert!(thumb.width() <= 20 && thumb.height() <= 20);
+    assert_eq!(s, plain, "the thumbnail does not make the sheet differ");
+    let none = with_cover_thumbnail(sheet(&mp3(dir.path(), "none.mp3")), &limits(), 20);
+    assert!(none.cover().is_none());
+}
+
+#[test]
+fn a_summary_write_keeps_the_cover() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3_with(
+        dir.path(),
+        vec![(red_png(), PictureType::CoverFront, MimeType::Png)],
+    );
+    let before = fp_analysis::tags::read_track_tags(&path, &limits());
+    let after = fp_model::TrackTags {
+        title: "Another".into(),
+        ..before.clone()
+    };
+    fp_analysis::tags::write_tags(&path, &before, &after, &limits()).unwrap();
+    assert_eq!(pictures_of(&path), [(PictureType::CoverFront, red_png())]);
+}
+
+/// A FLAC file with a STREAMINFO block and a stub where the audio frames
+/// go: enough for lofty to read and write its Vorbis comments and pictures.
+fn flac(dir: &Path) -> PathBuf {
+    let path = dir.join("x.flac");
+    let mut bytes = b"fLaC".to_vec();
+    // The last metadata block: STREAMINFO, 34 bytes.
+    bytes.extend_from_slice(&[0x80, 0, 0, 34]);
+    bytes.extend_from_slice(&4096u16.to_be_bytes()); // minimum block size
+    bytes.extend_from_slice(&4096u16.to_be_bytes()); // maximum block size
+    bytes.extend_from_slice(&[0, 0, 0, 0, 0, 0]); // frame sizes (unknown)
+    // 44.1 kHz (20 bits), 2 channels (3 bits), 16 bits (5 bits), 0 samples.
+    let packed: u64 = (44_100u64 << 44) | (1u64 << 41) | (15u64 << 36);
+    bytes.extend_from_slice(&packed.to_be_bytes());
+    bytes.extend_from_slice(&[0u8; 16]); // MD5
+    // Something after the metadata, as in any real file.
+    bytes.extend_from_slice(&[0xFF, 0xF8, 0, 0, 0, 0, 0, 0]);
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+#[test]
+fn a_flac_file_stores_its_cover_as_a_picture_block() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = flac(dir.path());
+    let s = sheet(&path);
+    assert!(s.can_store_cover());
+    assert!(s.cover().is_none());
+    let after = edit(&path, |s| s.set_cover(Some(new_cover(red_png()))));
+    assert_eq!(after.cover().unwrap().data(), red_png().as_slice());
+    let again = edit(&path, |s| s.set_cover(Some(new_cover(blue_jpeg()))));
+    assert_eq!(again.cover().unwrap().data(), blue_jpeg().as_slice());
+    let removed = edit(&path, |s| {
+        let original = s.clone();
+        s.remove_front_cover(&original);
+    });
+    assert!(removed.cover().is_none());
+}
 ```
 
 - [ ] **Step 7: Run the tests to verify they fail**
 
-Run: `cargo test -p fp-analysis --test tag_sheet`
-Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields` and `TagWriteError::InvalidField` do not exist).
+Run: `cargo test -p fp-analysis --test tag_sheet` and `cargo test -p fp-analysis --test tag_cover`
+Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields`, `load_cover_file`, `CoverError` and `TagWriteError::InvalidField` do not exist).
 
 - [ ] **Step 8: Implement**
 
-`crates/fp-analysis/src/metadata.rs`: `tag_date` becomes `pub(crate)` so the sheet reads the date the way the summary does.
+`crates/fp-analysis/src/metadata.rs`: `tag_date` becomes `pub(crate)` so the sheet reads the date the way the summary does, and `display_picture` is the one rule for which picture is shown (the front cover, else the first), used by `read_tags` and by the sheet.
 
-`crates/fp-analysis/src/tags.rs`: factor the four safe-write steps into one helper, `safe_edit`, shared by `write_tags` (which keeps its signature and tests) and the new `write_tag_sheet`; share the lofty option and the choice of tag with the new reader; add the sheet. Apply the diff (the new section at the end is the whole sheet reader and writer):
+`crates/fp-analysis/src/tags.rs`: factor the four safe-write steps into one helper, `safe_edit`, shared by `write_tags` (which keeps its signature and tests) and the new `write_tag_sheet`; share the lofty option and the choice of tag with the new reader; add the sheet and, after it, the cover (checking and loading an image, the thumbnail, and replacing or removing the front cover). Apply the diff (the sections at the end are the whole sheet reader and writer and the cover code):
 
 ```diff
 --- a/crates/fp-analysis/src/metadata.rs
@@ -3708,47 +4564,87 @@ Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields
      let text = tag.date()?.to_string();
      match fp_model::parse_tag_date(&text) {
          Ok(date) => date,
+@@ -40,6 +40,16 @@
+     }
+ }
+ 
++/// The picture the application shows for `tag`: the front cover, else the
++/// first picture. The library's thumbnail and the tag editor share this rule.
++pub(crate) fn display_picture(tag: &lofty::tag::Tag) -> Option<&lofty::picture::Picture> {
++    let pictures = tag.pictures();
++    pictures
++        .iter()
++        .find(|p| p.pic_type() == lofty::picture::PictureType::CoverFront)
++        .or_else(|| pictures.first())
++}
++
+ /// Reads tags with lofty. Unreadable or untagged files yield empty `Tags`.
+ pub fn read_tags(path: &Path, limits: &Limits) -> Tags {
+     // lofty refuses tag blocks larger than its own allocation limit (16 MiB),
+@@ -74,12 +84,7 @@
+     let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) else {
+         return Tags::default();
+     };
+-    let pictures = tag.pictures();
+-    let cover = pictures
+-        .iter()
+-        .find(|p| p.pic_type() == lofty::picture::PictureType::CoverFront)
+-        .or_else(|| pictures.first())
+-        .map(|p| p.data().to_vec());
++    let cover = display_picture(tag).map(|p| p.data().to_vec());
+     Tags {
+         title: non_empty(tag.title()),
+         artist: non_empty(tag.artist()),
 --- a/crates/fp-analysis/src/tags.rs
 +++ b/crates/fp-analysis/src/tags.rs
-@@ -6,14 +6,16 @@
+@@ -6,14 +6,18 @@
  
  use std::path::{Path, PathBuf};
  
 -use fp_model::{Limits, TrackTags};
 +use fp_model::{
-+    Limits, TagField, TagFieldKind, TagSheet, TrackTags, changed_fields, invalid_fields,
++    CoverArt, Limits, TagField, TagFieldKind, TagSheet, TrackTags, changed_fields, cover_blocked,
++    cover_changed, invalid_fields,
 +};
  use lofty::config::WriteOptions;
 -use lofty::file::{FileType, TaggedFileExt};
 +use lofty::file::{FileType, TaggedFile, TaggedFileExt};
++use lofty::picture::{MimeType, Picture, PictureType};
  use lofty::prelude::*;
  use lofty::tag::items::Timestamp;
 -use lofty::tag::{ItemKey, Tag};
 +use lofty::tag::{ItemKey, ItemValue, Tag, TagItem, TagType};
  
 -use crate::metadata::{read_tags, title_from_file_name};
-+use crate::metadata::{read_tags, tag_date, title_from_file_name};
++use crate::metadata::{display_picture, read_tags, tag_date, thumbnail_png, title_from_file_name};
  
  /// Why tags could not be written. The original file is untouched in every
  /// case.
-@@ -27,6 +29,8 @@
+@@ -27,6 +31,13 @@
      Denied,
      /// The date is not an ISO 8601 date (`fp_model::parse_tag_date`).
      InvalidDate,
 +    /// The value of this field is not valid (`fp_model::invalid_fields`).
 +    InvalidField(TagField),
++    /// The file's format cannot store a picture, so the cover cannot change.
++    CoverNotStorable,
++    /// The new cover is not a JPEG or PNG image that decodes within the
++    /// limits.
++    InvalidCover(CoverError),
      /// Anything else, with the system's or lofty's own description.
      Other(String),
  }
-@@ -38,6 +42,7 @@
+@@ -38,6 +49,9 @@
              Self::NotFound => f.write_str("the file was not found"),
              Self::Denied => f.write_str("permission denied"),
              Self::InvalidDate => f.write_str("the date is not an ISO 8601 date"),
 +            Self::InvalidField(field) => write!(f, "the {} is not valid", field.slug()),
++            Self::CoverNotStorable => f.write_str("this format cannot store a cover"),
++            Self::InvalidCover(why) => write!(f, "the cover is not usable: {why}"),
              Self::Other(detail) => f.write_str(detail),
          }
      }
-@@ -99,14 +104,24 @@
+@@ -99,14 +113,24 @@
      after: &TrackTags,
      limits: &Limits,
  ) -> Result<(), TagWriteError> {
@@ -3775,7 +4671,7 @@ Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields
      if result.is_err() {
          let _ = std::fs::remove_file(&temp);
      }
-@@ -128,38 +143,54 @@
+@@ -128,38 +152,54 @@
      Some(real.with_file_name(name))
  }
  
@@ -3848,7 +4744,7 @@ Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields
      file.save_to_path(temp, WriteOptions::default())
          .map_err(lofty_error)?;
      std::fs::OpenOptions::new()
-@@ -170,6 +201,28 @@
+@@ -170,6 +210,35 @@
      Ok(())
  }
  
@@ -3867,7 +4763,14 @@ Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields
 +        }
 +    }
 +    for key in keys {
-+        let urls: Vec<String> = tag.take_strings(key).collect();
++        let urls: Vec<String> = tag
++            .get_items(key)
++            .filter_map(item_text)
++            .map(str::to_owned)
++            .collect();
++        // Not `Tag::take`: it swaps items around, which would reorder the
++        // values of the other fields.
++        tag.remove_key(key);
 +        for url in urls {
 +            tag.push(TagItem::new(key, ItemValue::Text(url)));
 +        }
@@ -3877,11 +4780,10 @@ Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields
  fn change_tag(tag: &mut Tag, before: &TrackTags, after: &TrackTags) -> Result<(), TagWriteError> {
      fn text(tag: &mut Tag, old: &str, new: &str, set: fn(&mut Tag, String), remove: fn(&mut Tag)) {
          if old == new {
-@@ -245,4 +298,242 @@
-         }
+@@ -246,3 +315,406 @@
      }
      Ok(())
-+}
+ }
 +
 +// ---------------------------------------------------------------------------
 +// The tag sheet: every field of the editor, read from and written to the tag.
@@ -4014,20 +4916,30 @@ Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields
 +    }
 +}
 +
-+/// The sheet of `tag`: the values of the fields its format can store, and
-+/// how many other tags (other keys, items with a description, pictures) it
-+/// keeps.
++/// The sheet of `tag`: the values of the fields its format can store, its
++/// front cover (or first picture), and how many other tags (other keys,
++/// items with a description, pictures that are not a front cover) it keeps.
 +fn sheet_of(tag: &Tag, limits: &Limits) -> TagSheet {
 +    let slots = slots(tag.tag_type());
 +    let other_items = tag
 +        .items()
 +        .filter(|item| !slots.iter().any(|slot| slot.owns(item)))
 +        .count();
-+    let other = other_items + usize::try_from(tag.picture_count()).unwrap_or(usize::MAX);
++    // The front cover is the sheet's own; every other picture is kept.
++    let other_pictures = tag
++        .pictures()
++        .iter()
++        .filter(|p| p.pic_type() != PictureType::CoverFront)
++        .count();
 +    let mut sheet = TagSheet::new(
 +        slots.iter().map(|s| s.field),
-+        other,
++        other_items + other_pictures,
 +        tag.has_format_specific_items(),
++    )
++    .with_cover_support(can_store_pictures(tag.tag_type()));
++    sheet.set_cover(
++        display_picture(tag)
++            .map(|p| CoverArt::new(p.data().to_vec(), p.pic_type() == PictureType::CoverFront)),
 +    );
 +    for slot in &slots {
 +        sheet.set_values(slot.field, read_slot(tag, slot));
@@ -4056,12 +4968,15 @@ Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields
 +
 +/// Writes the fields where `after` differs from `before` into the file,
 +/// through the same safe copy as `write_tags`. A changed field is replaced
-+/// by its new values, one item per value, or removed when it is empty. Items
-+/// the sheet does not own (other keys, items with a description such as an
-+/// ID3v2 comment with a description, custom frames, pictures) are not touched.
++/// by its new values, one item per value, or removed when it is empty. A
++/// changed front cover is replaced or removed (every front-cover picture,
++/// then the new one is added). Items the sheet does not own (other keys,
++/// items with a description such as an ID3v2 comment with a description,
++/// custom frames, pictures that are not a front cover) are not touched.
 +///
 +/// Refuses, before touching the disk, a sheet with a field that
-+/// `fp_model::invalid_fields` reports.
++/// `fp_model::invalid_fields` reports, a cover change in a format that has
++/// no pictures, and a new cover that is not a usable JPEG or PNG.
 +pub fn write_tag_sheet(
 +    path: &Path,
 +    before: &TagSheet,
@@ -4074,10 +4989,31 @@ Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields
 +    if let Some(field) = invalid_fields(before, &after).first() {
 +        return Err(TagWriteError::InvalidField(*field));
 +    }
-+    safe_edit(path, limits, |tag| change_sheet(tag, before, &after))
++    if cover_blocked(before, &after) {
++        return Err(TagWriteError::CoverNotStorable);
++    }
++    // The new cover is judged before the disk is touched.
++    let new_cover = match after.cover().filter(|c| c.is_front()) {
++        Some(cover) if cover_changed(before, &after) => {
++            let mime = cover_mime(cover.data(), limits).map_err(TagWriteError::InvalidCover)?;
++            Some((cover.clone(), mime))
++        }
++        _ => None,
++    };
++    safe_edit(path, limits, |tag| {
++        change_sheet(tag, before, &after, new_cover.as_ref())
++    })
 +}
 +
-+fn change_sheet(tag: &mut Tag, before: &TagSheet, after: &TagSheet) -> Result<(), TagWriteError> {
++fn change_sheet(
++    tag: &mut Tag,
++    before: &TagSheet,
++    after: &TagSheet,
++    new_cover: Option<&(CoverArt, MimeType)>,
++) -> Result<(), TagWriteError> {
++    if cover_changed(before, after) {
++        change_cover(tag, new_cover)?;
++    }
 +    for field in changed_fields(before, after) {
 +        let slot = Slot::of(field, tag.tag_type())
 +            .ok_or_else(|| lofty_error("the tag cannot store this field"))?;
@@ -4112,32 +5048,167 @@ Expected: FAIL to compile (`read_tag_sheet`, `write_tag_sheet`, `storable_fields
 +    key: ItemKey,
 +    values: &[String],
 +) -> Result<(), TagWriteError> {
-+    drop(tag.take_filter(key, |item| slot.owns(item)));
++    // Not `Tag::take_filter`: it swaps items around, which would reorder the
++    // values of the fields that did not change.
++    tag.retain(|item| !(item.key() == key && slot.owns(item)));
 +    for value in values.iter().filter(|v| !v.is_empty()) {
 +        if !tag.push(TagItem::new(key, ItemValue::Text(value.clone()))) {
 +            return Err(lofty_error("the tag cannot store this field"));
 +        }
 +    }
 +    Ok(())
- }
++}
++
++// ---------------------------------------------------------------------------
++// The front cover.
++// ---------------------------------------------------------------------------
++
++/// Whether tags of `tag_type` can hold a picture. (RIFF INFO, AIFF text and
++/// ID3v1 have no place for one: lofty drops it silently on save, so the
++/// editor must not offer it.)
++pub fn can_store_pictures(tag_type: TagType) -> bool {
++    matches!(
++        tag_type,
++        TagType::Id3v2 | TagType::VorbisComments | TagType::Mp4Ilst | TagType::Ape
++    )
++}
++
++/// Why an image cannot be used as a cover.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum CoverError {
++    /// The file is larger than `limits.max_cover_bytes`.
++    TooLarge,
++    /// Not a JPEG or PNG image.
++    UnsupportedFormat,
++    /// It looks like JPEG or PNG but does not decode within
++    /// `limits.max_cover_pixels` (broken, truncated or too big).
++    Undecodable,
++    /// The file could not be read, with the system's description.
++    Unreadable(String),
++}
++
++impl std::fmt::Display for CoverError {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        match self {
++            Self::TooLarge => f.write_str("the image is too large"),
++            Self::UnsupportedFormat => f.write_str("the image is not a JPEG or PNG"),
++            Self::Undecodable => f.write_str("the image cannot be decoded"),
++            Self::Unreadable(detail) => f.write_str(detail),
++        }
++    }
++}
++
++impl std::error::Error for CoverError {}
++
++/// Checks that `bytes` is a JPEG or PNG within the cover limits that
++/// decodes, with the safe decode path of the library's thumbnails, and
++/// returns its picture type and its thumbnail (at most `px` pixels wide).
++fn check_cover(bytes: &[u8], limits: &Limits, px: u32) -> Result<(MimeType, Vec<u8>), CoverError> {
++    if u64::try_from(bytes.len()).map_err(|_| CoverError::TooLarge)? > limits.max_cover_bytes {
++        return Err(CoverError::TooLarge);
++    }
++    let mime = match image::guess_format(bytes) {
++        Ok(image::ImageFormat::Jpeg) => MimeType::Jpeg,
++        Ok(image::ImageFormat::Png) => MimeType::Png,
++        _ => return Err(CoverError::UnsupportedFormat),
++    };
++    let thumb = std::panic::catch_unwind(|| thumbnail_png(bytes, limits, px))
++        .map_err(|_| CoverError::Undecodable)?
++        .ok_or(CoverError::Undecodable)?;
++    Ok((mime, thumb))
++}
++
++/// The MIME type of a cover that may be written (`check_cover` without the
++/// thumbnail the caller does not need).
++fn cover_mime(bytes: &[u8], limits: &Limits) -> Result<MimeType, CoverError> {
++    check_cover(bytes, limits, 1).map(|(mime, _)| mime)
++}
++
++/// Reads the image at `path` as a new front cover, with a thumbnail of at
++/// most `thumb_px` pixels for the editor. It must be a JPEG or PNG of at
++/// most `limits.max_cover_bytes` that decodes within `limits.max_cover_pixels`.
++pub fn load_cover_file(
++    path: &Path,
++    limits: &Limits,
++    thumb_px: u32,
++) -> Result<CoverArt, CoverError> {
++    use std::io::Read;
++
++    let unreadable = |e: std::io::Error| CoverError::Unreadable(e.to_string());
++    let meta = std::fs::metadata(path).map_err(unreadable)?;
++    // A pipe or a device would block or never end.
++    if !meta.is_file() {
++        return Err(CoverError::Unreadable("it is not a file".to_owned()));
++    }
++    if meta.len() > limits.max_cover_bytes {
++        return Err(CoverError::TooLarge);
++    }
++    let mut bytes = Vec::new();
++    std::fs::File::open(path)
++        .map_err(unreadable)?
++        .take(limits.max_cover_bytes.saturating_add(1))
++        .read_to_end(&mut bytes)
++        .map_err(unreadable)?;
++    let (_, thumb) = check_cover(&bytes, limits, thumb_px)?;
++    Ok(CoverArt::new(bytes, true).with_thumb(Some(thumb)))
++}
++
++/// `sheet` with the thumbnail of its cover decoded (at most `px` pixels),
++/// under the cover limits and with a parser panic contained. A cover that
++/// does not decode keeps no thumbnail and stays as it is in the file.
++#[must_use]
++pub fn with_cover_thumbnail(mut sheet: TagSheet, limits: &Limits, px: u32) -> TagSheet {
++    if let Some(cover) = sheet.cover().cloned() {
++        let thumb = std::panic::catch_unwind(|| thumbnail_png(cover.data(), limits, px))
++            .ok()
++            .flatten();
++        if thumb.is_none() {
++            tracing::debug!("the cover in the tag cannot be shown");
++        }
++        sheet.set_cover(Some(cover.with_thumb(thumb)));
++    }
++    sheet
++}
++
++/// Replaces every front-cover picture of `tag` by `cover` (none removes
++/// them). Pictures of other types are not touched.
++fn change_cover(tag: &mut Tag, cover: Option<&(CoverArt, MimeType)>) -> Result<(), TagWriteError> {
++    if !can_store_pictures(tag.tag_type()) {
++        return Err(TagWriteError::CoverNotStorable);
++    }
++    tag.remove_picture_type(PictureType::CoverFront);
++    if let Some((cover, mime)) = cover {
++        tag.push_picture(
++            Picture::unchecked(cover.data().to_vec())
++                .pic_type(PictureType::CoverFront)
++                .mime_type(mime.clone())
++                .build(),
++        );
++    }
++    Ok(())
++}
 ```
 
 Why each part is shaped as it is:
 
 - `candidates` gives each field its `ItemKey`s in order; `Slot::of(field, tag_type)` picks the first the tag type supports, so the same sheet works for ID3v2, Vorbis, MP4, APE, RIFF INFO and AIFF text. `storable_fields(tag_type)` is the list `Add field` is filtered by.
-- `Slot::owns` is what a field may read and replace: items of its key (a date also owns `Year`, a number its total) with an empty description. Everything else is "other": counted in `TagSheet::other_kept` together with the pictures, never touched.
-- A field is replaced by `take_filter` (remove its items) and `push` (one item per value). A changed number or total rewrites both items of the pair.
-- `write_tag_sheet` clamps the new sheet (`max_tag_chars`, `max_tag_values`), refuses invalid values with `InvalidField` before copying anything, and writes only `changed_fields`.
+- `Slot::owns` is what a field may read and replace: items of its key (a date also owns `Year`, a number its total) with an empty description. Everything else is "other": counted in `TagSheet::other_kept` together with the pictures that are not front covers, never touched.
+- A field is replaced by `retain` (remove its items, keeping the order of the others; see the lofty note above) and `push` (one item per value). A changed number or total rewrites both items of the pair.
+- `write_tag_sheet` clamps the new sheet (`max_tag_chars`, `max_tag_values`), refuses invalid values with `InvalidField`, a cover change in a format with no pictures with `CoverNotStorable` and an unusable new cover with `InvalidCover`, all before copying anything, and writes only `changed_fields` and, if it changed, the cover.
+- The cover: `sheet_of` takes the shown picture (`display_picture`) as `CoverArt` (front or not) and counts only the pictures that are not front covers as "other"; `change_cover` removes every `CoverFront` picture and pushes the new one with the MIME type found by `check_cover` (JPEG or PNG by content, within `max_cover_bytes`, decoded within `max_cover_pixels` by `thumbnail_png`). `load_cover_file` is the same check on a file the operator chose (a size check on the metadata first, only regular files, at most `max_cover_bytes + 1` bytes read). `with_cover_thumbnail` decodes the shown cover's thumbnail under `catch_unwind`; one that does not decode keeps no thumbnail and stays in the file.
 - `read_tag_sheet` never panics (the parser runs under `catch_unwind`) and degrades to `None` with a log line.
 
-- [ ] **Step 9: Watch the URL tests guard the defect**
+- [ ] **Step 9: Watch the tests guard the two lofty defects**
 
 Temporarily comment out the `urls_as_text(tag);` line in `rewrite` and run `cargo test -p fp-analysis --test tag_sheet`.
 Expected: exactly `custom_items_and_pictures_survive_an_edit_untouched` and `a_summary_write_keeps_the_url_frames_too` FAIL. Restore the line.
 
+Then, in `replace`, put `drop(tag.take_filter(key, |item| slot.owns(item)));` back in place of the `tag.retain(...)` line and run the same command.
+Expected: `a_save_keeps_the_order_of_the_values_it_did_not_change` FAILS (and only it). Restore the line.
+
 - [ ] **Step 10: Run the tests to verify they pass**
 
-Run: `cargo test -p fp-analysis --test tag_sheet` (18 tests) and `cargo test -p fp-analysis --test tags` (the 20 tests of Task 2 still pass through the refactor).
+Run: `cargo test -p fp-analysis --test tag_sheet` (19 tests), `cargo test -p fp-analysis --test tag_cover` (19 tests) and `cargo test -p fp-analysis --test tags` (the 20 tests of Task 2 still pass through the refactor).
 Expected: PASS.
 
 - [ ] **Step 11: Commit**
@@ -4146,7 +5217,7 @@ Expected: PASS.
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
    && cargo test --workspace; then
   git add crates/fp-analysis
-  git commit -m "feat(analysis): read and write the whole tag sheet through the safe copy" -m "One helper now does the copy, write, fsync and rename for both the summary write and the sheet write. The sheet changes only the fields the operator changed and never touches items it does not own. ID3v2 URL frames are re-added as text first because lofty drops parsed locators on save."
+  git commit -m "feat(analysis): read and write the whole tag sheet and its cover through the safe copy" -m "One helper now does the copy, write, fsync and rename for both the summary write and the sheet write. The sheet changes only the fields and the front cover the operator changed and never touches items or pictures it does not own. ID3v2 URL frames are re-added as text first because lofty drops parsed locators on save, and items are removed with retain because lofty's take_filter reorders the ones it leaves. A new cover is checked (JPEG or PNG, within the cover limits, decodable) before the disk is touched."
 fi
 ```
 
@@ -4154,12 +5225,12 @@ fi
 
 - [ ] **Step 12: Write the failing tests**
 
-In the `tests` module of `crates/fp-app/src/tags.rs` add the tests below (a `wav` helper, `next_outcome`, `sheet_job`, and five tests: a sheet read, a read of a file without tags, a sheet write answered with both read-backs, a failing write, and the shutdown rule for sheet reads and writes). The two tests that already exist stay.
+In the `tests` module of `crates/fp-app/src/tags.rs` add the tests below (the helpers `wav`, `next_outcome`, `sheet_job`, `png` and `load_job`, and nine tests: a sheet read, a read of a file without tags, a sheet write answered with both read-backs, a failing write, the shutdown rule for sheet reads and writes, a cover load, a cover load that fails, a sheet write with a new cover and the shutdown rule for a queued cover load). The tests that already exist stay, with `thumb_px` added to the jobs they build where the diff shows it.
 
 ```diff
---- pieces/tags_old_tests.rs	2026-10-02 13:53:58.437019331 +0200
-+++ pieces/tags_new_tests.rs	2026-10-02 13:53:58.437079962 +0200
-@@ -90,4 +90,147 @@
+--- pieces/tags_old_tests.rs
++++ pieces/tags_new_tests.rs
+@@ -90,4 +90,261 @@
          assert_eq!(outcomes, 2, "the read in progress and the write");
          assert_eq!(read_track_tags(&path, &limits).title, "Saved at shutdown");
      }
@@ -4192,6 +5263,7 @@ In the `tests` module of `crates/fp-app/src/tags.rs` add the tests below (a `wav
 +            track: TrackId(track),
 +            path: path.to_path_buf(),
 +            limits: Limits::default(),
++            thumb_px: 64,
 +        }
 +    }
 +
@@ -4242,6 +5314,7 @@ In the `tests` module of `crates/fp-app/src/tags.rs` add the tests below (a `wav
 +            before: Box::new(before),
 +            after: Box::new(after.clone()),
 +            limits,
++            thumb_px: 64,
 +        }));
 +        match next_outcome(&worker) {
 +            TagOutcome::SheetWritten {
@@ -4269,6 +5342,7 @@ In the `tests` module of `crates/fp-app/src/tags.rs` add the tests below (a `wav
 +            before: Box::new(before),
 +            after: Box::new(after),
 +            limits: Limits::default(),
++            thumb_px: 64,
 +        }));
 +        assert_eq!(
 +            next_outcome(&worker),
@@ -4297,6 +5371,7 @@ In the `tests` module of `crates/fp-app/src/tags.rs` add the tests below (a `wav
 +                before: Box::new(before.clone()),
 +                after: Box::new(after.clone()),
 +                limits: limits.clone(),
++                thumb_px: 64,
 +            }));
 +        });
 +        assert_eq!(outcomes, 2, "the read in progress and the write");
@@ -4306,54 +5381,179 @@ In the `tests` module of `crates/fp-app/src/tags.rs` add the tests below (a `wav
 +            ["Saved at shutdown"]
 +        );
 +    }
++
++    fn png(width: u32) -> Vec<u8> {
++        let img = image::RgbImage::from_pixel(width, 30, image::Rgb([200, 30, 30]));
++        let mut out = Vec::new();
++        image::DynamicImage::ImageRgb8(img)
++            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
++            .unwrap();
++        out
++    }
++
++    fn load_job(track: u64, path: &std::path::Path, limits: Limits) -> TagJob {
++        TagJob::LoadCover {
++            track: TrackId(track),
++            path: path.to_path_buf(),
++            limits,
++            thumb_px: 16,
++        }
++    }
++
++    #[test]
++    fn a_cover_load_answers_with_a_front_cover_and_its_thumbnail() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("cover.png");
++        std::fs::write(&path, png(40)).unwrap();
++        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
++        assert!(worker.submit(load_job(5, &path, Limits::default())));
++        match next_outcome(&worker) {
++            TagOutcome::CoverLoaded {
++                track,
++                result: Ok(cover),
++            } => {
++                assert_eq!(track, TrackId(5));
++                assert!(cover.is_front());
++                assert_eq!(cover.data(), png(40).as_slice());
++                assert!(cover.thumb_png().is_some());
++            }
++            other => panic!("{other:?}"),
++        }
++    }
++
++    #[test]
++    fn a_cover_load_that_fails_says_why() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("cover.png");
++        std::fs::write(&path, png(40)).unwrap();
++        let small = Limits {
++            max_cover_bytes: 10,
++            ..Limits::default()
++        };
++        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
++        assert!(worker.submit(load_job(5, &path, small)));
++        assert_eq!(
++            next_outcome(&worker),
++            TagOutcome::CoverLoaded {
++                track: TrackId(5),
++                result: Err(CoverError::TooLarge)
++            }
++        );
++    }
++
++    #[test]
++    fn a_sheet_write_with_a_new_cover_answers_with_the_cover_and_its_thumbnail() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = wav(dir.path(), "x.wav");
++        let limits = Limits::default();
++        let before = read_tag_sheet(&path, &limits).unwrap();
++        assert!(before.can_store_cover() && before.cover().is_none());
++        let mut after = before.clone();
++        after.set_cover(Some(CoverArt::new(png(40), true)));
++        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
++        assert!(worker.submit(TagJob::WriteSheet {
++            track: TrackId(3),
++            path: path.clone(),
++            before: Box::new(before),
++            after: Box::new(after.clone()),
++            limits,
++            thumb_px: 16,
++        }));
++        match next_outcome(&worker) {
++            TagOutcome::SheetWritten {
++                result: Ok(saved), ..
++            } => {
++                let sheet = saved.sheet.expect("a sheet");
++                assert_eq!(sheet.cover(), after.cover(), "the file kept the cover");
++                assert!(sheet.cover().unwrap().thumb_png().is_some());
++            }
++            other => panic!("{other:?}"),
++        }
++        // The next sheet read shows it, with a thumbnail.
++        assert!(worker.submit(sheet_job(3, &path)));
++        match next_outcome(&worker) {
++            TagOutcome::SheetRead {
++                sheet: Some(sheet), ..
++            } => assert!(sheet.cover().unwrap().thumb_png().is_some()),
++            other => panic!("{other:?}"),
++        }
++    }
++
++    #[test]
++    fn dropping_the_worker_skips_a_queued_cover_load() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("cover.png");
++        std::fs::write(&path, png(40)).unwrap();
++        let outcomes = outcomes_after_drop(|worker| {
++            for n in 1..=QUEUED {
++                assert!(worker.submit(load_job(n as u64, &path, Limits::default())));
++            }
++        });
++        assert_eq!(outcomes, 1, "only the load in progress");
++    }
  }
 ```
 
 - [ ] **Step 13: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --lib tags::`
-Expected: FAIL to compile (`TagJob::ReadSheet`, `TagJob::WriteSheet`, `TagOutcome::SheetRead`, `TagOutcome::SheetWritten`, `SheetSaved` do not exist).
+Expected: FAIL to compile (`TagJob::ReadSheet`, `TagJob::WriteSheet`, `TagJob::LoadCover`, `TagOutcome::SheetRead`, `TagOutcome::SheetWritten`, `TagOutcome::CoverLoaded`, `SheetSaved` do not exist).
 
 - [ ] **Step 14: Implement**
 
-Add the sheet jobs and outcomes to the worker. After a sheet write the worker reads the file twice: the summary `TrackTags` (what the library keeps, sent through `ApplyTags`) and the sheet (so the application can tell which changed fields the file did not keep). The job kind is now an enum so a panic is answered with the right outcome and queued reads of both kinds are skipped at shutdown while writes still run.
+Add the sheet jobs and outcomes to the worker. After a sheet write the worker reads the file twice: the summary `TrackTags` (what the library keeps, sent through `ApplyTags`) and the sheet (so the application can tell which changed fields and whether the cover the file did not keep), the sheet's cover with a thumbnail of `thumb_px` pixels (`read_sheet`). `LoadCover` checks and decodes an image the operator chose. The job kind is now an enum so a panic is answered with the right outcome and queued reads of every kind (summary, sheet, cover) are skipped at shutdown while writes still run.
 
 ```diff
 --- a/crates/fp-app/src/tags.rs
 +++ b/crates/fp-app/src/tags.rs
-@@ -10,12 +10,29 @@
+@@ -10,12 +10,44 @@
  use std::thread::JoinHandle;
  
  use crossbeam_channel::{Receiver, Sender};
 -use fp_analysis::tags::{TagWriteError, read_track_tags, write_tags};
 -use fp_model::{Limits, TrackId, TrackTags};
 +use fp_analysis::tags::{
-+    TagWriteError, read_tag_sheet, read_track_tags, write_tag_sheet, write_tags,
++    CoverError, TagWriteError, load_cover_file, read_tag_sheet, read_track_tags,
++    with_cover_thumbnail, write_tag_sheet, write_tags,
 +};
-+use fp_model::{Limits, TagSheet, TrackId, TrackTags};
++use fp_model::{CoverArt, Limits, TagSheet, TrackId, TrackTags};
  
  /// One piece of work for the worker.
  #[derive(Debug, Clone)]
  pub enum TagJob {
-+    /// Read the whole tag sheet of a file (the editor opening).
++    /// Read the whole tag sheet of a file (the editor opening). The cover
++    /// of the sheet comes with a thumbnail of at most `thumb_px` pixels.
 +    ReadSheet {
 +        track: TrackId,
 +        path: PathBuf,
 +        limits: Limits,
++        thumb_px: u32,
 +    },
-+    /// Write the fields where `after` differs from `before`, then read the
-+    /// file again, both as a sheet and as the summary the library keeps.
++    /// Write the fields and the cover where `after` differs from `before`,
++    /// then read the file again, both as a sheet (its cover with a
++    /// thumbnail of at most `thumb_px` pixels) and as the summary the
++    /// library keeps.
 +    WriteSheet {
 +        track: TrackId,
 +        path: PathBuf,
 +        before: Box<TagSheet>,
 +        after: Box<TagSheet>,
 +        limits: Limits,
++        thumb_px: u32,
++    },
++    /// Read the image file `path` as a new front cover for the editor of
++    /// `track`: it must be a JPEG or PNG that decodes within the cover
++    /// limits.
++    LoadCover {
++        track: TrackId,
++        path: PathBuf,
++        limits: Limits,
++        thumb_px: u32,
 +    },
      /// Read the tags of a file (the tag-only pass).
      Read {
          track: TrackId,
-@@ -33,9 +50,28 @@
+@@ -33,9 +65,33 @@
      },
  }
  
@@ -4379,20 +5579,33 @@ Add the sheet jobs and outcomes to the worker. After a sheet write the worker re
 +        track: TrackId,
 +        result: Result<Box<SheetSaved>, TagWriteError>,
 +    },
++    /// The answer to `LoadCover`.
++    CoverLoaded {
++        track: TrackId,
++        result: Result<CoverArt, CoverError>,
++    },
      Read {
          track: TrackId,
          tags: TrackTags,
-@@ -49,6 +85,29 @@
+@@ -47,8 +103,47 @@
+     },
+ }
  
++/// The sheet of `path` with the thumbnail of its cover decoded.
++fn read_sheet(path: &std::path::Path, limits: &Limits, thumb_px: u32) -> Option<TagSheet> {
++    read_tag_sheet(path, limits).map(|sheet| with_cover_thumbnail(sheet, limits, thumb_px))
++}
++
  fn run(job: TagJob) -> TagOutcome {
      match job {
 +        TagJob::ReadSheet {
 +            track,
 +            path,
 +            limits,
++            thumb_px,
 +        } => TagOutcome::SheetRead {
 +            track,
-+            sheet: read_tag_sheet(&path, &limits).map(Box::new),
++            sheet: read_sheet(&path, &limits, thumb_px).map(Box::new),
 +        },
 +        TagJob::WriteSheet {
 +            track,
@@ -4400,19 +5613,29 @@ Add the sheet jobs and outcomes to the worker. After a sheet write the worker re
 +            before,
 +            after,
 +            limits,
++            thumb_px,
 +        } => {
 +            let result = write_tag_sheet(&path, &before, &after, &limits).map(|()| {
 +                Box::new(SheetSaved {
 +                    tags: read_track_tags(&path, &limits),
-+                    sheet: read_tag_sheet(&path, &limits),
++                    sheet: read_sheet(&path, &limits, thumb_px),
 +                })
 +            });
 +            TagOutcome::SheetWritten { track, result }
 +        }
++        TagJob::LoadCover {
++            track,
++            path,
++            limits,
++            thumb_px,
++        } => TagOutcome::CoverLoaded {
++            track,
++            result: load_cover_file(&path, &limits, thumb_px),
++        },
          TagJob::Read {
              track,
              path,
-@@ -71,24 +130,62 @@
+@@ -71,24 +166,69 @@
      }
  }
  
@@ -4422,6 +5645,7 @@ Add the sheet jobs and outcomes to the worker. After a sheet write the worker re
 +enum Kind {
 +    Read,
 +    ReadSheet,
++    LoadCover,
 +    Write,
 +    WriteSheet,
 +}
@@ -4431,6 +5655,7 @@ Add the sheet jobs and outcomes to the worker. After a sheet write the worker re
 +        match self {
 +            Self::Read { .. } => Kind::Read,
 +            Self::ReadSheet { .. } => Kind::ReadSheet,
++            Self::LoadCover { .. } => Kind::LoadCover,
 +            Self::Write { .. } => Kind::Write,
 +            Self::WriteSheet { .. } => Kind::WriteSheet,
 +        }
@@ -4440,6 +5665,7 @@ Add the sheet jobs and outcomes to the worker. After a sheet write the worker re
 +        match self {
 +            Self::Read { track, .. }
 +            | Self::ReadSheet { track, .. }
++            | Self::LoadCover { track, .. }
 +            | Self::Write { track, .. }
 +            | Self::WriteSheet { track, .. } => *track,
 +        }
@@ -4448,7 +5674,7 @@ Add the sheet jobs and outcomes to the worker. After a sheet write the worker re
 +    /// A read nobody will see is not worth the disk once the worker is
 +    /// being dropped; a write is a save the operator asked for.
 +    fn is_read(&self) -> bool {
-+        matches!(self.kind(), Kind::Read | Kind::ReadSheet)
++        matches!(self.kind(), Kind::Read | Kind::ReadSheet | Kind::LoadCover)
 +    }
 +}
 +
@@ -4476,6 +5702,10 @@ Add the sheet jobs and outcomes to the worker. After a sheet write the worker re
 -            }
 +            },
 +            Kind::ReadSheet => TagOutcome::SheetRead { track, sheet: None },
++            Kind::LoadCover => TagOutcome::CoverLoaded {
++                track,
++                result: Err(CoverError::Unreadable("the image code failed".to_owned())),
++            },
 +            Kind::Write => TagOutcome::Written {
 +                track,
 +                result: Err(failed()),
@@ -4487,7 +5717,7 @@ Add the sheet jobs and outcomes to the worker. After a sheet write the worker re
          }
      })
  }
-@@ -115,7 +212,7 @@
+@@ -115,7 +255,7 @@
                  while let Ok(job) = jobs_rx.recv() {
                      // A read that nobody will see is not worth the disk; a
                      // write is a save the operator asked for and still runs.
@@ -4500,7 +5730,7 @@ Add the sheet jobs and outcomes to the worker. After a sheet write the worker re
 
 - [ ] **Step 15: Run the tests to verify they pass**
 
-Run: `cargo test -p fp-app --lib tags::` (7 tests) and `cargo test -p fp-app --test services` (the services thread still sends only `Read` jobs).
+Run: `cargo test -p fp-app --lib tags::` (11 tests) and `cargo test -p fp-app --test services` (the services thread still sends only `Read` jobs).
 Expected: PASS.
 
 - [ ] **Step 16: Commit**
@@ -4509,7 +5739,7 @@ Expected: PASS.
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
    && cargo test --workspace; then
   git add crates/fp-app
-  git commit -m "feat(app): the tag worker reads and writes whole tag sheets"
+  git commit -m "feat(app): the tag worker reads and writes whole tag sheets and loads covers"
 fi
 ```
 
@@ -4523,16 +5753,17 @@ fi
 - Modify: `crates/fp-app/src/ui.rs` (`mod tag_editor;`)
 - Modify: `crates/fp-app/src/ui/table.rs` (`context_menu` returns the track to edit; the item)
 - Modify: `crates/fp-app/src/ui/app.rs` (`ViewState::edit_tags` and `tag_editor`, the worker, the modal, the outcomes, the keyboard gate)
+- Modify: `crates/fp-app/src/services.rs` (`MediaCache::set_cover`, and `seed` behind `test-hooks`)
 - Modify: `crates/fp-app/locales/en-US/main.ftl`, `es-ES/main.ftl`
 - Test: Modify `crates/fp-app/tests/track_tags_ui.rs`, `crates/fp-app/tests/view.rs`
 
 **Interfaces:**
-- Consumes: Task 5 (`TagField`, `TagFieldKind`, `TagSheet`, `changed_fields`, `invalid_fields`, `unstored_fields`, `read_tag_sheet`, `TagJob::{ReadSheet, WriteSheet}`, `TagOutcome::{SheetRead, SheetWritten}`, `SheetSaved`, `TagWriteError::InvalidField`), Task 1 (`tag_edit_block`, `TagEditBlock`, `Command::ApplyTags`), `fp_analysis::tags::can_write_tags`.
+- Consumes: Task 5 (`TagField`, `TagFieldKind`, `TagSheet`, `changed_fields`, `invalid_fields`, `unstored_fields`, `read_tag_sheet`, `TagJob::{ReadSheet, WriteSheet, LoadCover}`, `TagOutcome::{SheetRead, SheetWritten, CoverLoaded}`, `SheetSaved`, `TagWriteError::{InvalidField, CoverNotStorable, InvalidCover}`, `CoverArt`, `CoverError`, `cover_changed`, `cover_blocked`, `cover_unstored`), Task 1 (`tag_edit_block`, `TagEditBlock`, `Command::ApplyTags`), `fp_analysis::tags::can_write_tags`.
 - Produces:
   - `view::tag_edit_availability(state: &AppState, track: TrackId) -> Option<TagEditBlock>`: `tag_edit_block(state, track, can_write_tags(&path))`, with the extension check on the track's path (no I/O).
-  - `pub(crate) struct TagEditor` (in `tag_editor.rs`): `TagEditor::reading(track) -> TagEditor` (shows "Reading tags…"), `fn arrived(&mut self, sheet: Option<TagSheet>)`, `fn changed(&self) -> Vec<TagField>`, `fn invalid(&self) -> Vec<TagField>`, `fn can_save(&self) -> bool`, `fn save_job(&self, path: &Path, limits: &Limits) -> Option<TagJob>`, `fn unstored(&self, saved: Option<&TagSheet>, limits: &Limits) -> Vec<TagField>`, `pub track`, `pub saving`, `pub error`; `pub(crate) fn show(ctx, scene, editor: &mut TagEditor, block: Option<TagEditBlock>) -> EditorAnswer` with `pub(crate) enum EditorAnswer { Open, Cancel, Save }`; `field_key(TagField) -> String` (`tag-field-<slug>`) and `block_key(TagEditBlock) -> &'static str`.
-  - `ViewState::edit_tags: Option<TrackId>` (the table's request, taken at the start of the next frame) and `ViewState::tag_editor: Option<TagEditor>`; `AppUi` owns `tag_worker: Option<TagWorker>` (spawned at first use, with `ctx.request_repaint` as its repaint callback).
-  - Locale keys (both locales): `menu-edit-tags` and `menu-edit-tags-file`, `-format`, `-unread`, `-on-air`, `-cued`, `-cart` (the disabled reasons), `tags-editor-title`, `tags-reading`, `tags-unreadable`, `tags-add-field`, `tags-total`, `tags-not-stored`, `tags-date-invalid`, `tags-number-invalid`, `tags-others-kept`, `tags-others-kept-more`, `tags-others-kept-uncounted`, `tags-save`, `tags-cancel`, `tags-saving`, `tags-saved`, `tags-saved-partly`, `tags-save-failed`, `tags-error-unsupported`, `-not-found`, `-denied`, `-invalid-date`, `-invalid-field`, `-other`, `-worker`, and the 36 labels `tag-field-<slug>`.
+  - `pub(crate) struct TagEditor` (in `tag_editor.rs`): `TagEditor::reading(track) -> TagEditor` (shows "Reading tags…"), `fn arrived(&mut self, sheet: Option<TagSheet>)`, `fn changed(&self) -> Vec<TagField>`, `fn invalid(&self) -> Vec<TagField>`, `fn dirty(&self) -> bool` (a field or the cover changed), `fn can_save(&self) -> bool`, `fn save_job(&self, path: &Path, limits: &Limits, thumb_px: u32) -> Option<TagJob>`, `fn unstored(&self, saved: Option<&TagSheet>, limits: &Limits) -> Vec<TagField>`, and for the cover `fn cover_changed(&self) -> bool`, `fn picking_cover(&mut self)`, `fn cover_not_picked(&mut self)`, `fn cover_loaded(&mut self, Result<CoverArt, CoverError>)`, `fn cover_unstored(&self, saved: Option<&TagSheet>) -> bool`, `pub track`, `pub saving`, `pub error`, `pub cover_busy`; `pub(crate) fn show(ctx, scene, editor: &mut TagEditor, block: Option<TagEditBlock>) -> EditorAnswer` with `pub(crate) enum EditorAnswer { Open, Cancel, Save, ChangeCover }`; `field_key(TagField) -> String` (`tag-field-<slug>`) and `block_key(TagEditBlock) -> &'static str`.
+  - `ViewState::edit_tags: Option<TrackId>` (the table's request, taken at the start of the next frame) and `ViewState::tag_editor: Option<TagEditor>`; `AppUi` owns `tag_worker: Option<TagWorker>` (spawned at first use, with `ctx.request_repaint` as its repaint callback) and a channel for the image dialog's answer; `AppUi::set_cover_picker(impl Fn() -> Option<PathBuf> + Send + Sync + 'static)` (behind `test-hooks`) replaces the native dialog in tests. `MediaCache::set_cover(&self, track: TrackId, cover: Option<Arc<[u8]>>)` replaces the cover of an existing entry (peaks kept, version bumped) and `MediaCache::seed(&self, track, TrackMedia)` (behind `test-hooks`) fills an entry for a test.
+  - Locale keys (both locales): `menu-edit-tags` and `menu-edit-tags-file`, `-format`, `-unread`, `-on-air`, `-cued`, `-cart` (the disabled reasons), `tags-editor-title`, `tags-reading`, `tags-unreadable`, `tags-add-field`, `tags-total`, `tags-not-stored`, `tags-date-invalid`, `tags-number-invalid`, `tags-others-kept`, `tags-others-kept-more`, `tags-others-kept-uncounted`, `tags-save`, `tags-cancel`, `tags-saving`, `tags-saved`, `tags-saved-partly`, `tags-save-failed`, `tags-error-unsupported`, `-not-found`, `-denied`, `-invalid-date`, `-invalid-field`, `-cover-not-stored`, `-cover`, `-other`, `-worker`, the cover area (`dialog-image-files`, `tags-cover`, `tags-cover-change`, `-remove`, `-none`, `-front`, `-first`, `-new`, `-removed`, `-not-stored`, `-hidden`, `-error`, `-too-large`, `-unsupported`, `-undecodable`), and the 36 labels `tag-field-<slug>`.
 
 How the modal behaves (the spec's "Editor" bullet):
 
@@ -4540,7 +5771,10 @@ How the modal behaves (the spec's "Editor" bullet):
 - Always-shown fields come first, in order; each optional field the file has follows; the **Add field** menu lists only optional fields the format can store (`TagSheet::addable_fields`). An always-shown field the format cannot store (album artist and disc number in RIFF INFO) is drawn disabled with "This format cannot store this field."
 - A field with several values (two artists, or a field the file holds twice) and the multi-value fields are one multi-line box, one value per line; Comment and Lyrics are multi-line boxes with one value; a track or disc field is two small boxes, number and total; Date and BPM are short boxes.
 - A changed field with an invalid value is marked (amber label and frame, a hint under it) and **Save** is disabled; so it is when nothing changed, while a save runs, and when `tag_edit_block` says the track went on air.
-- "N other tags are kept as they are." counts the sheet's other tags; the "more" wording says lofty also holds frames it cannot count.
+- "N other tags are kept as they are." counts the sheet's other tags (pictures that are not the front cover among them); the "more" wording says lofty also holds frames it cannot count.
+- The cover area sits above the fields: an 80-pixel thumbnail (a record glyph when there is none or it cannot be decoded), the label "Cover", **Change…**, **Remove** and a note that says what Save will do ("No cover.", "Front cover.", "No front cover: this is the first picture of the file, kept as it is.", "New cover, written when you save.", "The cover is removed when you save."). **Remove** is on only for a front cover. For a format with no pictures both buttons are off and the note says "This format cannot store a cover." An image that cannot be used is reported under the cover ("The image was not used: ...") and changes nothing.
+- **Change…** opens the native dialog on a helper thread (`start_cover_dialog`); the chosen path comes back over a channel, the next frame sends `TagJob::LoadCover`, and the worker's answer stages the cover in the draft (`TagEditor::cover_loaded`). While the dialog is open or the image is read, **Change…** and **Save** are off (`cover_busy`) and **Cancel** works. A closed dialog changes nothing.
+- After a save that changed the cover, `AppUi` hands the re-read cover's thumbnail to `MediaCache::set_cover`, so the player's cover follows the file; the notice names the cover among the fields the file did not keep when it did not.
 - **Save** is judged against the rule again in the frame it is pressed. The job runs on the tag worker. On success the library takes the read-back tags (`ApplyTags`), the modal closes and the notice area says so, or says which changed fields the file did not keep. On failure the modal stays open with the operator's text, the reason shown in the modal and in the notice area.
 - The modal is modal for the keyboard too: no shortcut, not even Delete, acts under it.
 
@@ -4590,12 +5824,12 @@ In `crates/fp-app/tests/view.rs` (it also adds `tag_edit_availability` to the `u
 +}
 ```
 
-In `crates/fp-app/tests/track_tags_ui.rs` change the imports at the top as below and append the editor tests. The helpers fix the three things that make modal tests flaky: the table row is the lowest "Song 1" node (the player header shows the title too, and a CUE window or a cart can as well), a menu needs three frames to open, and the modal sizes itself over a few frames, so `open_ready` settles it before any click aims at a button. The file-based tests read the files back with `read_tag_sheet`, the same reader the editor uses.
+In `crates/fp-app/tests/track_tags_ui.rs` change the imports at the top as below and append the editor tests. The helpers fix the three things that make modal tests flaky: the table row is the lowest "Song 1" node (the player header shows the title too, and a CUE window or a cart can as well), a menu needs three frames to open, and the modal sizes itself over a few frames, so `open_ready` settles it before any click aims at a button. The file-based tests read the files back with `read_tag_sheet`, the same reader the editor uses. The cover tests (at the end of the file) replace the native dialog with `AppUi::set_cover_picker`, which runs on the same helper thread, and one of them (`the_image_dialog_never_blocks_the_interface`) holds the picker open until the test lets it go, to prove the frames keep running and the dialog is not on the test's (UI) thread.
 
 ```diff
 --- a/crates/fp-app/tests/track_tags_ui.rs
 +++ b/crates/fp-app/tests/track_tags_ui.rs
-@@ -8,7 +8,19 @@
+@@ -8,10 +8,23 @@
  
  mod support;
  
@@ -4611,12 +5845,16 @@ In `crates/fp-app/tests/track_tags_ui.rs` change the imports at the top as below
 +    AppState, AudioFormat, Command, FileState, Limits, TagEditBlock, TagField, TagSheet,
 +};
 +use lofty::config::WriteOptions;
++use lofty::picture::PictureType;
 +use lofty::prelude::*;
 +use lofty::tag::{ItemKey, Tag, TagType};
  use support::{harness, state};
  
 +type Ui = egui_kittest::Harness<'static, fp_app::ui::app::AppUi>;
 +
+ /// `state(1, 3)` whose first track has tags and a format.
+ fn tagged_state() -> AppState {
+     let mut s = state(1, 3);
 ```
 
 ```rust
@@ -5146,14 +6384,468 @@ fn every_field_has_a_label_in_both_languages() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// The cover.
+// ---------------------------------------------------------------------------
+
+fn png(width: u32, color: [u8; 3]) -> Vec<u8> {
+    let img = image::RgbImage::from_pixel(width, 30, image::Rgb(color));
+    let mut out = Vec::new();
+    image::DynamicImage::ImageRgb8(img)
+        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+        .unwrap();
+    out
+}
+
+fn red() -> Vec<u8> {
+    png(40, [200, 30, 30])
+}
+
+fn blue() -> Vec<u8> {
+    png(50, [30, 30, 200])
+}
+
+/// `tagged_wav` with these pictures in its ID3v2 tag.
+fn wav_with_pictures(dir: &Path, pictures: &[(lofty::picture::PictureType, Vec<u8>)]) -> PathBuf {
+    let path = tagged_wav(dir, "a.wav");
+    let mut file = lofty::read_from_path(&path).unwrap();
+    let tag = file.primary_tag_mut().unwrap();
+    for (kind, data) in pictures {
+        tag.push_picture(
+            lofty::picture::Picture::unchecked(data.clone())
+                .pic_type(*kind)
+                .mime_type(lofty::picture::MimeType::Png)
+                .build(),
+        );
+    }
+    file.save_to_path(&path, WriteOptions::default()).unwrap();
+    path
+}
+
+fn pictures_of(path: &Path) -> Vec<(lofty::picture::PictureType, Vec<u8>)> {
+    let file = lofty::read_from_path(path).unwrap();
+    let mut pictures: Vec<_> = file
+        .primary_tag()
+        .unwrap()
+        .pictures()
+        .iter()
+        .map(|p| (p.pic_type(), p.data().to_vec()))
+        .collect();
+    pictures.sort_by_key(|(kind, _)| kind.as_u8());
+    pictures
+}
+
+/// The interface over `state`, with the image dialog replaced by `picker`
+/// and a media cache the test can see.
+fn harness_with_picker(
+    state: AppState,
+    media: fp_app::services::MediaCache,
+    picker: impl Fn() -> Option<PathBuf> + Send + Sync + 'static,
+) -> (Ui, std::sync::Arc<support::Fake>) {
+    let fake = support::Fake::new(state);
+    let mut app =
+        fp_app::ui::app::AppUi::new(fake.clone(), fp_app::i18n::I18n::new(Some("en-US")), media);
+    app.set_cover_picker(picker);
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1000.0, 700.0))
+        .with_step_dt(0.02)
+        .build_ui_state(|ui, app: &mut fp_app::ui::app::AppUi| app.ui(ui), app);
+    h.run_steps(2);
+    (h, fake)
+}
+
+fn button_enabled(h: &Ui, label: &str) -> bool {
+    !h.get_by_role_and_label(Role::Button, label)
+        .accesskit_node()
+        .is_disabled()
+}
+
+fn click(h: &mut Ui, label: &str) {
+    h.get_by_role_and_label(Role::Button, label).click();
+    h.run_steps(3);
+}
+
+fn write_file(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
+    let path = dir.join(name);
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+#[test]
+fn the_cover_area_says_what_the_file_has() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, _fake) = harness(state_at(&tagged_wav(dir.path(), "a.wav")));
+    open_ready(&mut h);
+    assert!(h.query_by_label("Cover").is_some());
+    assert!(h.query_by_label("No cover.").is_some());
+    assert!(button_enabled(&h, "Change…"));
+    assert!(!button_enabled(&h, "Remove"), "nothing to remove");
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let (mut h, _fake) = harness(state_at(&path));
+    open_ready(&mut h);
+    assert!(h.query_by_label("Front cover.").is_some());
+    assert!(button_enabled(&h, "Change…"));
+    assert!(button_enabled(&h, "Remove"));
+    assert!(!save_enabled(&h), "looking changes nothing");
+}
+
+#[test]
+fn a_picture_that_is_not_a_front_cover_is_shown_but_cannot_be_removed() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverBack, blue())]);
+    let (mut h, _fake) = harness(state_at(&path));
+    open_ready(&mut h);
+    assert!(h.query_by_label_contains("No front cover").is_some());
+    assert!(!button_enabled(&h, "Remove"), "it is not the front cover");
+    assert!(button_enabled(&h, "Change…"), "a front cover can be added");
+}
+
+#[test]
+fn a_format_that_cannot_store_a_cover_disables_the_area() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, _fake) = harness(state_at(&riff_wav(dir.path(), "a.wav")));
+    open_ready(&mut h);
+    assert!(
+        h.query_by_label("This format cannot store a cover.")
+            .is_some()
+    );
+    assert!(!button_enabled(&h, "Change…"));
+    assert!(!button_enabled(&h, "Remove"));
+    assert!(!save_enabled(&h));
+}
+
+#[test]
+fn a_new_cover_is_staged_and_written_by_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let image = write_file(dir.path(), "new.png", &blue());
+    let before = std::fs::read(&path).unwrap();
+    let (mut h, fake) = harness_with_picker(
+        state_at(&path),
+        fp_app::services::MediaCache::default(),
+        move || Some(image.clone()),
+    );
+    open_ready(&mut h);
+    click(&mut h, "Change…");
+    wait_for_text(&mut h, "New cover, written when you save.");
+    assert!(save_enabled(&h), "a changed cover is a change");
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "nothing is written before Save"
+    );
+    click(&mut h, "Save");
+    wait_for(&mut h, "the file has the new cover", |_| {
+        pictures_of(&path) == [(PictureType::CoverFront, blue())]
+    });
+    wait_for(&mut h, "the modal closes", |h| {
+        h.query_by_label("Edit tags").is_none()
+    });
+    let sheet = sheet_of(&path);
+    assert_eq!(
+        sheet.values(TagField::Genre),
+        ["Pop"],
+        "the text is as it was"
+    );
+    assert!(
+        fake.take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::ApplyTags { .. }))
+    );
+}
+
+#[test]
+fn the_cover_can_be_removed_and_save_writes_that() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let (mut h, _fake) = harness(state_at(&path));
+    open_ready(&mut h);
+    click(&mut h, "Remove");
+    assert!(
+        h.query_by_label("The cover is removed when you save.")
+            .is_some()
+    );
+    assert!(!button_enabled(&h, "Remove"));
+    assert!(save_enabled(&h));
+    click(&mut h, "Save");
+    wait_for(&mut h, "the cover is gone from the file", |_| {
+        pictures_of(&path).is_empty()
+    });
+    assert_eq!(sheet_of(&path).values(TagField::Title), ["Song 1"]);
+}
+
+#[test]
+fn cancel_discards_a_staged_cover() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let image = write_file(dir.path(), "new.png", &blue());
+    let before = std::fs::read(&path).unwrap();
+    let (mut h, fake) = harness_with_picker(
+        state_at(&path),
+        fp_app::services::MediaCache::default(),
+        move || Some(image.clone()),
+    );
+    open_ready(&mut h);
+    click(&mut h, "Change…");
+    wait_for_text(&mut h, "New cover, written when you save.");
+    click(&mut h, "Cancel");
+    assert!(h.query_by_label("Edit tags").is_none());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert!(
+        fake.take_sent()
+            .iter()
+            .all(|c| !matches!(c, Command::ApplyTags { .. }))
+    );
+    // Opened again, the editor starts from the file.
+    open_ready(&mut h);
+    assert!(h.query_by_label("Front cover.").is_some());
+}
+
+#[test]
+fn a_back_cover_is_untouched_by_a_front_cover_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(
+        dir.path(),
+        &[
+            (PictureType::CoverFront, red()),
+            (PictureType::CoverBack, blue()),
+        ],
+    );
+    let image = write_file(dir.path(), "new.png", &png(60, [30, 200, 30]));
+    let (mut h, _fake) = harness_with_picker(
+        state_at(&path),
+        fp_app::services::MediaCache::default(),
+        move || Some(image.clone()),
+    );
+    open_ready(&mut h);
+    assert!(
+        h.query_all_by_label_contains("1 other tag is kept")
+            .next()
+            .is_some(),
+        "the back cover is one of the other tags"
+    );
+    click(&mut h, "Change…");
+    wait_for_text(&mut h, "New cover, written when you save.");
+    click(&mut h, "Save");
+    wait_for(&mut h, "the front cover changed", |_| {
+        pictures_of(&path)
+            .iter()
+            .any(|(kind, data)| *kind == PictureType::CoverFront && *data == png(60, [30, 200, 30]))
+    });
+    assert!(
+        pictures_of(&path).contains(&(PictureType::CoverBack, blue())),
+        "the back cover is as it was"
+    );
+}
+
+#[test]
+fn an_image_that_cannot_be_used_changes_nothing_and_says_why() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let junk = write_file(dir.path(), "junk.png", b"this is not an image");
+    let truncated = write_file(dir.path(), "cut.png", &blue()[..40]);
+    let big = write_file(dir.path(), "big.png", &vec![0u8; 1024 * 1024 + 1]);
+    for (file, why) in [
+        (junk, "it is not a JPEG or PNG image"),
+        (truncated, "it cannot be read as an image"),
+        (big, "it is larger than 1 MiB"),
+    ] {
+        let mut s = state_at(&path);
+        s.config.limits.max_cover_bytes = 1024 * 1024;
+        let (mut h, _fake) =
+            harness_with_picker(s, fp_app::services::MediaCache::default(), move || {
+                Some(file.clone())
+            });
+        open_ready(&mut h);
+        click(&mut h, "Change…");
+        wait_for_text(&mut h, "The image was not used");
+        assert!(h.query_by_label_contains(why).is_some(), "{why}");
+        assert!(
+            h.query_by_label("Front cover.").is_some(),
+            "the cover is as it was"
+        );
+        assert!(!save_enabled(&h), "nothing changed");
+        assert!(
+            button_enabled(&h, "Change…"),
+            "the operator can choose again"
+        );
+    }
+}
+
+#[test]
+fn closing_the_dialog_without_a_choice_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let (mut h, _fake) = harness_with_picker(
+        state_at(&path),
+        fp_app::services::MediaCache::default(),
+        || None,
+    );
+    open_ready(&mut h);
+    click(&mut h, "Change…");
+    wait_for(&mut h, "Change is available again", |h| {
+        button_enabled(h, "Change…")
+    });
+    assert!(h.query_by_label("Front cover.").is_some());
+    assert!(!save_enabled(&h));
+}
+
+#[test]
+fn the_image_dialog_never_blocks_the_interface() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let image = write_file(dir.path(), "new.png", &blue());
+    let ui_thread = std::thread::current().id();
+    let (entered_tx, entered_rx) = crossbeam_channel::bounded::<bool>(1);
+    let (release_tx, release_rx) = crossbeam_channel::bounded::<()>(1);
+    let (mut h, _fake) = harness_with_picker(
+        state_at(&path),
+        fp_app::services::MediaCache::default(),
+        move || {
+            let _ = entered_tx.send(std::thread::current().id() != ui_thread);
+            let _ = release_rx.recv();
+            Some(image.clone())
+        },
+    );
+    open_ready(&mut h);
+    click(&mut h, "Change…");
+    assert!(
+        entered_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap(),
+        "the dialog runs on a helper thread"
+    );
+    // The dialog is open: frames keep running, a second Change is off, and
+    // Save waits for the image.
+    h.run_steps(5);
+    assert!(!button_enabled(&h, "Change…"));
+    assert!(!save_enabled(&h));
+    assert!(button_enabled(&h, "Cancel"));
+    release_tx.send(()).unwrap();
+    wait_for_text(&mut h, "New cover, written when you save.");
+    assert!(button_enabled(&h, "Change…"));
+    assert!(save_enabled(&h));
+}
+
+#[test]
+fn a_saved_cover_reaches_the_cover_the_player_shows() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let image = write_file(dir.path(), "new.png", &blue());
+    let s = state_at(&path);
+    let track = s.library.iter().next().unwrap().id;
+    let media = fp_app::services::MediaCache::default();
+    let old: std::sync::Arc<[u8]> = std::sync::Arc::from(&b"old thumbnail"[..]);
+    media.seed(
+        track,
+        fp_app::services::TrackMedia {
+            peaks: Vec::new(),
+            peak_bucket_secs: 0.1,
+            cover_png: Some(old.clone()),
+        },
+    );
+    let version = media.version();
+    let (mut h, _fake) = harness_with_picker(s, media.clone(), move || Some(image.clone()));
+    open_ready(&mut h);
+    click(&mut h, "Change…");
+    wait_for_text(&mut h, "New cover, written when you save.");
+    click(&mut h, "Save");
+    wait_for(&mut h, "the cache has the new thumbnail", |_| {
+        media
+            .get(track)
+            .is_some_and(|m| m.cover_png.as_deref() != Some(&old[..]))
+    });
+    assert!(
+        media.version() > version,
+        "the interface drops its textures"
+    );
+    let thumb = media.get(track).unwrap().cover_png.clone().unwrap();
+    let decoded = image::load_from_memory_with_format(&thumb, image::ImageFormat::Png).unwrap();
+    assert!(decoded.width() <= 128 && decoded.height() <= 128);
+    // Removing it clears the thumbnail but keeps the rest of the entry.
+    open_ready(&mut h);
+    click(&mut h, "Remove");
+    click(&mut h, "Save");
+    wait_for(&mut h, "the cache has no cover", |_| {
+        media.get(track).is_some_and(|m| m.cover_png.is_none())
+    });
+    assert_eq!(
+        media.get(track).unwrap().peak_bucket_secs,
+        0.1,
+        "peaks stay"
+    );
+}
+
+#[test]
+fn a_track_the_cache_does_not_hold_is_left_alone_after_a_cover_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let image = write_file(dir.path(), "new.png", &blue());
+    let media = fp_app::services::MediaCache::default();
+    let (mut h, _fake) =
+        harness_with_picker(state_at(&path), media.clone(), move || Some(image.clone()));
+    open_ready(&mut h);
+    click(&mut h, "Change…");
+    wait_for_text(&mut h, "New cover, written when you save.");
+    click(&mut h, "Save");
+    wait_for(&mut h, "the file has the new cover", |_| {
+        pictures_of(&path) == [(PictureType::CoverFront, blue())]
+    });
+    h.run_steps(5);
+    assert_eq!(media.version(), 0, "no entry, nothing to refresh");
+}
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p fp-app --test view tag_edit_availability_combines_the_rule_and_the_extension` and `cargo test -p fp-app --test track_tags_ui the_editor_shows_what_the_file_holds`
-Expected: FAIL (`tag_edit_availability` does not exist; there is no "Edit tags…" item).
+Run: `cargo test -p fp-app --test view tag_edit_availability_combines_the_rule_and_the_extension`, `cargo test -p fp-app --test track_tags_ui the_editor_shows_what_the_file_holds` and `cargo test -p fp-app --test track_tags_ui the_cover_area_says_what_the_file_has`
+Expected: FAIL (`tag_edit_availability` does not exist; there is no "Edit tags…" item; `AppUi::set_cover_picker` and `MediaCache::seed` do not exist, so `track_tags_ui` does not compile until Step 3).
 
 - [ ] **Step 3: Implement**
+
+`MediaCache` (the media cache the player's cover is read from) gets the one method the refresh needs, and a hook to fill an entry in tests:
+
+```diff
+--- a/crates/fp-app/src/services.rs
++++ b/crates/fp-app/src/services.rs
+@@ -122,6 +122,33 @@
+         self.version.load(Ordering::Acquire)
+     }
+ 
++    /// Replaces the cover thumbnail of `track` (`None` removes it), keeping
++    /// its peaks: the tag editor changed the cover in the file. A track with
++    /// no entry has nothing to refresh: the analysis that fills the cache
++    /// when it is shown next reads the new cover from the file (the analysis
++    /// cache is keyed on the file's size and modification time, so the
++    /// edited file is analysed again).
++    pub fn set_cover(&self, track: TrackId, cover: Option<Arc<[u8]>>) {
++        let mut items = self.items.write().unwrap_or_else(PoisonError::into_inner);
++        let Some(current) = items.get(&track) else {
++            return;
++        };
++        let updated = TrackMedia {
++            peaks: current.peaks.clone(),
++            peak_bucket_secs: current.peak_bucket_secs,
++            cover_png: cover,
++        };
++        items.insert(track, Arc::new(updated));
++        self.version.fetch_add(1, Ordering::AcqRel);
++    }
++
++    /// Puts `media` in the cache as the services thread does after an
++    /// analysis (tests).
++    #[cfg(feature = "test-hooks")]
++    pub fn seed(&self, track: TrackId, media: TrackMedia) {
++        self.insert(track, media);
++    }
++
+     fn insert(&self, track: TrackId, media: TrackMedia) {
+         let mut items = self.items.write().unwrap_or_else(PoisonError::into_inner);
+         items.insert(track, Arc::new(media));
+```
 
 `view.rs`, `ui.rs`, `table.rs`:
 
@@ -5276,9 +6968,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use egui::{RichText, vec2};
+use egui_phosphor::regular as icon;
+use fp_analysis::tags::CoverError;
 use fp_model::{
-    Limits, TagEditBlock, TagField, TagFieldKind, TagSheet, TrackId, changed_fields,
-    invalid_fields, unstored_fields,
+    CoverArt, Limits, TagEditBlock, TagField, TagFieldKind, TagSheet, TrackId, changed_fields,
+    cover_blocked, cover_changed, cover_unstored, invalid_fields, unstored_fields,
 };
 
 use super::app::Scene;
@@ -5292,6 +6986,8 @@ pub(crate) enum EditorAnswer {
     Open,
     Cancel,
     Save,
+    /// **Change…** on the cover: the application opens the image dialog.
+    ChangeCover,
 }
 
 /// The sheet and what the text boxes hold.
@@ -5333,6 +7029,22 @@ impl Form {
         invalid_fields(&self.original, &self.edited)
     }
 
+    /// The operator changed a field or the cover.
+    fn dirty(&self) -> bool {
+        !self.changed().is_empty() || cover_changed(&self.original, &self.edited)
+    }
+
+    /// Everything that is changed can be written: values are valid and the
+    /// cover, if changed, has a place in the format.
+    fn writable(&self) -> bool {
+        self.invalid().is_empty() && !cover_blocked(&self.original, &self.edited)
+    }
+
+    /// Clears the front cover (a picture only shown for lack of one stays).
+    fn remove_cover(&mut self) {
+        self.edited.remove_front_cover(&self.original);
+    }
+
     /// Copies the boxes into the edited sheet; `true` if that changed it.
     fn sync(&mut self) -> bool {
         let before = self.edited.clone();
@@ -5364,6 +7076,14 @@ pub(crate) struct TagEditor {
     pub error: Option<String>,
     /// Optional fields the operator added with **Add field**.
     added: BTreeSet<TagField>,
+    /// The image dialog is open or the chosen image is being read: no second
+    /// choice meanwhile, and no save.
+    pub cover_busy: bool,
+    /// Why the last image was not used, shown under the cover.
+    cover_error: Option<CoverError>,
+    /// The texture of the cover thumbnail on screen and the address of the
+    /// bytes it was decoded from.
+    cover_texture: Option<(usize, egui::TextureHandle)>,
     phase: Phase,
 }
 
@@ -5375,6 +7095,9 @@ impl TagEditor {
             saving: false,
             error: None,
             added: BTreeSet::new(),
+            cover_busy: false,
+            cover_error: None,
+            cover_texture: None,
             phase: Phase::Reading,
         }
     }
@@ -5406,13 +7129,26 @@ impl TagEditor {
         self.form().map(Form::invalid).unwrap_or_default()
     }
 
-    /// Something changed, every changed value is valid and no save runs.
-    pub fn can_save(&self) -> bool {
-        !self.saving && !self.changed().is_empty() && self.invalid().is_empty()
+    /// Something changed: a field or the cover.
+    pub fn dirty(&self) -> bool {
+        !self.changed().is_empty() || self.cover_changed()
     }
 
-    /// The job that writes the draft, if it can be saved.
-    pub fn save_job(&self, path: &Path, limits: &Limits) -> Option<TagJob> {
+    /// The front cover was replaced or removed.
+    pub fn cover_changed(&self) -> bool {
+        self.form()
+            .is_some_and(|form| cover_changed(&form.original, &form.edited))
+    }
+
+    /// Something changed (a field or the cover), all of it can be written,
+    /// and no save runs and no image is being read.
+    pub fn can_save(&self) -> bool {
+        !self.saving && !self.cover_busy && self.dirty() && self.form().is_some_and(Form::writable)
+    }
+
+    /// The job that writes the draft, if it can be saved. `thumb_px` is the
+    /// size of the thumbnails (`analysis.cover_thumb_px`).
+    pub fn save_job(&self, path: &Path, limits: &Limits, thumb_px: u32) -> Option<TagJob> {
         let form = self.form().filter(|_| self.can_save())?;
         Some(TagJob::WriteSheet {
             track: self.track,
@@ -5420,7 +7156,43 @@ impl TagEditor {
             before: Box::new(form.original.clone()),
             after: Box::new(form.edited.clone()),
             limits: limits.clone(),
+            thumb_px,
         })
+    }
+
+    /// **Change…** was pressed and the image dialog is opening.
+    pub fn picking_cover(&mut self) {
+        self.cover_busy = true;
+        self.cover_error = None;
+    }
+
+    /// The dialog was closed without a choice.
+    pub fn cover_not_picked(&mut self) {
+        self.cover_busy = false;
+    }
+
+    /// The tag worker's answer to reading the chosen image: a good one
+    /// becomes the draft's front cover (saved with **Save**); a bad one
+    /// changes nothing and is reported under the cover.
+    pub fn cover_loaded(&mut self, result: Result<CoverArt, CoverError>) {
+        self.cover_busy = false;
+        match (&mut self.phase, result) {
+            (Phase::Ready(form), Ok(cover)) => {
+                form.edited.set_cover(Some(cover));
+                self.cover_error = None;
+            }
+            (_, Err(why)) => self.cover_error = Some(why),
+            _ => {}
+        }
+    }
+
+    /// Whether the file does not hold the cover as written after the save
+    /// (judged against the sheet read back).
+    pub fn cover_unstored(&self, saved: Option<&TagSheet>) -> bool {
+        match (self.form(), saved) {
+            (Some(form), Some(saved)) => cover_unstored(&form.original, &form.edited, saved),
+            _ => false,
+        }
     }
 
     /// The changed fields the file does not hold as written, judged against
@@ -5576,6 +7348,121 @@ fn field_boxes(
     }
 }
 
+/// Side of the square the cover thumbnail is drawn in.
+const COVER_BOX: f32 = 80.0;
+
+/// The text of the reason an image was not used.
+fn cover_error_text(t: &crate::i18n::I18n, why: &CoverError, limits: &Limits) -> String {
+    let reason = match why {
+        CoverError::TooLarge => {
+            let mib = usize::try_from(limits.max_cover_bytes / (1024 * 1024)).unwrap_or(0);
+            t.tr_args("tags-cover-too-large", &[("limit", mib.into())])
+        }
+        CoverError::UnsupportedFormat => t.tr("tags-cover-unsupported"),
+        CoverError::Undecodable => t.tr("tags-cover-undecodable"),
+        CoverError::Unreadable(detail) => detail.clone(),
+    };
+    t.tr_args("tags-cover-error", &[("reason", reason.into())])
+}
+
+/// The texture of `cover`'s thumbnail, decoded once per thumbnail.
+fn cover_texture<'a>(
+    ctx: &egui::Context,
+    cover: &CoverArt,
+    slot: &'a mut Option<(usize, egui::TextureHandle)>,
+) -> Option<&'a egui::TextureHandle> {
+    let png = cover.thumb_png()?;
+    let key = png.as_ptr() as usize;
+    if slot.as_ref().map(|(k, _)| *k) != Some(key) {
+        let decoded = image::load_from_memory_with_format(png, image::ImageFormat::Png).ok()?;
+        let rgba = decoded.to_rgba8();
+        let size = [rgba.width() as usize, rgba.height() as usize];
+        let image = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
+        let handle = ctx.load_texture("tag-cover", image, egui::TextureOptions::LINEAR);
+        *slot = Some((key, handle));
+    }
+    slot.as_ref().map(|(_, handle)| handle)
+}
+
+/// The cover area: the thumbnail, **Change…**, **Remove** and a note on
+/// what Save will do. Returns `true` when **Change…** was pressed.
+fn cover_area(
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    t: &crate::i18n::I18n,
+    limits: &Limits,
+    form: &mut Form,
+    state: (bool, Option<&CoverError>),
+    texture: &mut Option<(usize, egui::TextureHandle)>,
+) -> bool {
+    let (busy, error) = state;
+    let storable = form.edited.can_store_cover();
+    let shown = form.edited.cover().cloned();
+    let front = shown.as_ref().is_some_and(CoverArt::is_front);
+    let mut change = false;
+    ui.horizontal(|ui| {
+        let (rect, _) = ui.allocate_exact_size(vec2(COVER_BOX, COVER_BOX), egui::Sense::hover());
+        ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
+        let handle = shown
+            .as_ref()
+            .and_then(|cover| cover_texture(ctx, cover, texture));
+        match handle {
+            Some(handle) => {
+                let size = handle.size_vec2();
+                let scale = COVER_BOX / size.x.max(size.y).max(1.0);
+                let fitted = egui::Rect::from_center_size(rect.center(), size * scale);
+                ui.painter().image(
+                    handle.id(),
+                    fitted,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
+            }
+            None => widgets::glyph(
+                ui.painter(),
+                rect,
+                icon::VINYL_RECORD,
+                32.0,
+                theme::TEXT.gamma_multiply(0.35),
+                false,
+            ),
+        }
+        ui.vertical(|ui| {
+            ui.label(
+                RichText::new(t.tr("tags-cover"))
+                    .font(font(12.0))
+                    .color(theme::NEUTRAL_400),
+            );
+            ui.horizontal(|ui| {
+                if button(ui, &t.tr("tags-cover-change"), storable && !busy, false) {
+                    change = true;
+                }
+                if button(ui, &t.tr("tags-cover-remove"), storable && front, false) {
+                    form.remove_cover();
+                }
+            });
+            let key = match (storable, &shown) {
+                (false, _) => "tags-cover-not-stored",
+                (true, None) if form.original.cover().is_some_and(CoverArt::is_front) => {
+                    "tags-cover-removed"
+                }
+                (true, None) => "tags-cover-none",
+                (true, Some(_)) if cover_changed(&form.original, &form.edited) => "tags-cover-new",
+                (true, Some(cover)) if cover.is_front() => "tags-cover-front",
+                (true, Some(_)) => "tags-cover-first",
+            };
+            note(ui, t.tr(key), theme::NEUTRAL_400);
+            if shown.as_ref().is_some_and(|c| c.thumb_png().is_none()) {
+                note(ui, t.tr("tags-cover-hidden"), theme::NEUTRAL_500);
+            }
+            if let Some(why) = error {
+                note(ui, cover_error_text(t, why, limits), theme::AMBER);
+            }
+        });
+    });
+    change
+}
+
 pub(crate) fn show(
     ctx: &egui::Context,
     scene: &Scene<'_>,
@@ -5593,7 +7480,7 @@ pub(crate) fn show(
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let width = (ctx.content_rect().width() - 48.0).clamp(360.0, 560.0);
-    let list_height = (ctx.content_rect().height() - 260.0).clamp(160.0, 560.0);
+    let list_height = (ctx.content_rect().height() - 360.0).clamp(140.0, 560.0);
     let invalid = editor.invalid();
     let mut can_save = false;
     let TagEditor {
@@ -5601,6 +7488,9 @@ pub(crate) fn show(
         error,
         added,
         phase,
+        cover_busy,
+        cover_error,
+        cover_texture,
         ..
     } = editor;
     let saving = *saving;
@@ -5633,6 +7523,17 @@ pub(crate) fn show(
                 Phase::Unreadable => note(ui, t.tr("tags-unreadable"), theme::AMBER),
                 Phase::Ready(form) => {
                     ui.add_enabled_ui(!saving, |ui| {
+                        if cover_area(
+                            ui,
+                            ctx,
+                            t,
+                            limits,
+                            form,
+                            (*cover_busy, cover_error.as_ref()),
+                            cover_texture,
+                        ) {
+                            answer = EditorAnswer::ChangeCover;
+                        }
                         egui::ScrollArea::vertical()
                             .max_height(list_height)
                             .auto_shrink([false, true])
@@ -5701,9 +7602,10 @@ pub(crate) fn show(
                             ctx.request_repaint();
                         }
                         can_save = !saving
+                            && !*cover_busy
                             && block.is_none()
-                            && !form.changed().is_empty()
-                            && form.invalid().is_empty();
+                            && form.dirty()
+                            && form.writable();
                         let addable = form.original.addable_fields(added);
                         ui.add_enabled_ui(!addable.is_empty(), |ui| {
                             ui.menu_button(t.tr("tags-add-field"), |ui| {
@@ -5805,7 +7707,7 @@ mod tests {
         assert!(e.changed().is_empty());
         assert!(!e.can_save());
         assert!(
-            e.save_job(Path::new("/x.mp3"), &Limits::default())
+            e.save_job(Path::new("/x.mp3"), &Limits::default(), 64)
                 .is_none()
         );
     }
@@ -5847,7 +7749,9 @@ mod tests {
     fn the_save_job_carries_what_was_read_and_what_is_wanted() {
         let mut e = ready();
         type_into(&mut e, TagField::Genre, "Jazz");
-        let job = e.save_job(Path::new("/x.mp3"), &Limits::default()).unwrap();
+        let job = e
+            .save_job(Path::new("/x.mp3"), &Limits::default(), 64)
+            .unwrap();
         let TagJob::WriteSheet {
             track,
             path,
@@ -5884,14 +7788,149 @@ mod tests {
         assert_eq!(field_key(TagField::AlbumArtist), "tag-field-album-artist");
         assert_eq!(block_key(TagEditBlock::OnAir), "menu-edit-tags-on-air");
     }
+
+    /// A ready editor whose file can hold a cover; `cover` is what it has.
+    fn ready_with_cover(cover: Option<CoverArt>) -> TagEditor {
+        let mut sheet = sheet().with_cover_support(true);
+        sheet.set_cover(cover);
+        let mut e = TagEditor::reading(TrackId(1));
+        e.arrived(Some(sheet));
+        e
+    }
+
+    fn art(byte: u8, front: bool) -> CoverArt {
+        CoverArt::new(vec![byte; 4], front).with_thumb(Some(vec![byte]))
+    }
+
+    fn shown(e: &TagEditor) -> Option<CoverArt> {
+        e.form().and_then(|f| f.edited.cover().cloned())
+    }
+
+    #[test]
+    fn a_staged_cover_is_a_change_that_can_be_saved() {
+        let mut e = ready_with_cover(Some(art(1, true)));
+        assert!(!e.cover_changed() && !e.dirty() && !e.can_save());
+        e.cover_loaded(Ok(art(2, true)));
+        assert!(e.cover_changed() && e.dirty());
+        assert!(e.changed().is_empty(), "no field changed");
+        assert!(e.can_save());
+        assert_eq!(shown(&e), Some(art(2, true)));
+        // Choosing the file's own cover again is no change.
+        e.cover_loaded(Ok(art(1, true)));
+        assert!(!e.cover_changed() && !e.can_save());
+    }
+
+    #[test]
+    fn removing_the_front_cover_is_a_change() {
+        let mut e = ready_with_cover(Some(art(1, true)));
+        let Phase::Ready(form) = &mut e.phase else {
+            panic!("not ready");
+        };
+        form.remove_cover();
+        assert!(e.cover_changed() && e.can_save());
+        assert_eq!(shown(&e), None);
+    }
+
+    #[test]
+    fn a_picture_that_is_only_shown_stays_when_remove_is_used() {
+        let mut e = ready_with_cover(Some(art(5, false)));
+        e.cover_loaded(Ok(art(6, true)));
+        assert!(e.cover_changed());
+        let Phase::Ready(form) = &mut e.phase else {
+            panic!("not ready");
+        };
+        form.remove_cover();
+        assert!(!e.cover_changed(), "back to showing the file's picture");
+        assert_eq!(shown(&e), Some(art(5, false)));
+    }
+
+    #[test]
+    fn a_bad_image_changes_nothing_and_is_remembered() {
+        let mut e = ready_with_cover(Some(art(1, true)));
+        e.picking_cover();
+        assert!(e.cover_busy && e.cover_error.is_none());
+        e.cover_loaded(Err(CoverError::Undecodable));
+        assert!(!e.cover_busy);
+        assert_eq!(e.cover_error, Some(CoverError::Undecodable));
+        assert!(!e.cover_changed() && !e.can_save());
+        assert_eq!(shown(&e), Some(art(1, true)));
+        // The next choice starts clean.
+        e.picking_cover();
+        assert!(e.cover_error.is_none());
+        e.cover_loaded(Ok(art(2, true)));
+        assert!(e.cover_error.is_none() && e.cover_changed());
+    }
+
+    #[test]
+    fn nothing_is_saved_while_an_image_is_being_read() {
+        let mut e = ready_with_cover(Some(art(1, true)));
+        e.cover_loaded(Ok(art(2, true)));
+        assert!(e.can_save());
+        e.picking_cover();
+        assert!(!e.can_save(), "the choice is not in yet");
+        e.cover_not_picked();
+        assert!(e.can_save(), "a closed dialog keeps the earlier choice");
+    }
+
+    #[test]
+    fn a_cover_change_in_a_format_without_pictures_cannot_be_saved() {
+        let mut e = TagEditor::reading(TrackId(1));
+        e.arrived(Some(sheet()));
+        e.cover_loaded(Ok(art(2, true)));
+        assert!(e.cover_changed());
+        assert!(!e.can_save(), "there is no place for it in the file");
+    }
+
+    #[test]
+    fn the_save_job_carries_the_cover_and_the_thumbnail_size() {
+        let mut e = ready_with_cover(Some(art(1, true)));
+        e.cover_loaded(Ok(art(2, true)));
+        let job = e
+            .save_job(Path::new("/x.mp3"), &Limits::default(), 96)
+            .unwrap();
+        let TagJob::WriteSheet {
+            before,
+            after,
+            thumb_px,
+            ..
+        } = job
+        else {
+            panic!("not a sheet write");
+        };
+        assert_eq!(before.cover(), Some(&art(1, true)));
+        assert_eq!(after.cover(), Some(&art(2, true)));
+        assert_eq!(thumb_px, 96);
+    }
+
+    #[test]
+    fn a_cover_the_file_did_not_keep_is_named() {
+        let mut e = ready_with_cover(Some(art(1, true)));
+        e.cover_loaded(Ok(art(2, true)));
+        let mut kept = sheet().with_cover_support(true);
+        kept.set_cover(Some(art(2, true)));
+        assert!(!e.cover_unstored(Some(&kept)));
+        let mut dropped = sheet().with_cover_support(true);
+        dropped.set_cover(Some(art(1, true)));
+        assert!(e.cover_unstored(Some(&dropped)));
+        assert!(!e.cover_unstored(None), "no read-back, no claim");
+    }
 }
 ```
 
-`app.rs`. Borrowing: `scene` borrows `self.ctl`, `self.i18n` and others for the rest of the frame, so everything that needs `&mut self` runs before it is built (`tag_outcomes`, `open_tag_editor`), and the save runs through the free function `start_tag_job` on the disjoint field `self.tag_worker`.
+`app.rs`. Borrowing: `scene` borrows `self.ctl`, `self.i18n` and others for the rest of the frame, so everything that needs `&mut self` runs before it is built (`tag_outcomes`, `cover_picks`, `open_tag_editor`), and the save and the image dialog run through the free functions `start_tag_job` and `start_cover_dialog` on the disjoint fields `self.tag_worker` and `self.cover_picks_tx`. The dialog's closure is `pick_cover_image` (the native `rfd` dialog, JPEG and PNG, starting in the track's folder) or, under `test-hooks`, the picker a test set.
 
 ```diff
 --- a/crates/fp-app/src/ui/app.rs
 +++ b/crates/fp-app/src/ui/app.rs
+@@ -2,7 +2,7 @@
+ //! every frame, sends commands, and keeps only view state.
+ 
+ use std::collections::{HashMap, HashSet};
+-use std::path::PathBuf;
++use std::path::{Path, PathBuf};
+ use std::sync::Arc;
+ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::time::Duration;
 @@ -29,10 +29,12 @@
  use super::player;
  use super::playlist_files::{self, FileOutcome};
@@ -5917,36 +7956,75 @@ mod tests {
      notice: Option<(String, f64)>,
  }
  
-@@ -200,6 +207,9 @@
+@@ -200,12 +207,26 @@
      /// Set once a restart is confirmed; `main` reads it after the window
      /// closes.
      restart: Arc<AtomicBool>,
 +    /// Reads and writes tags off the interface thread; started by the first
 +    /// use of the tag editor.
 +    tag_worker: Option<TagWorker>,
++    /// The image the operator chose for a cover (or `None`: the dialog was
++    /// closed), from the dialog's helper thread.
++    cover_picks_tx: Sender<(TrackId, Option<PathBuf>)>,
++    cover_picks_rx: Receiver<(TrackId, Option<PathBuf>)>,
++    /// Stands in for the native image dialog in tests.
++    #[cfg(feature = "test-hooks")]
++    cover_picker: Option<CoverPicker>,
  }
  
++/// Chooses an image file; runs on the dialog's helper thread.
++type CoverPicker = Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>;
++
  impl AppUi {
-@@ -238,6 +248,7 @@
+     pub fn new(ctl: Arc<dyn Controller>, i18n: I18n, media: MediaCache) -> Self {
+         let (picks_tx, picks_rx) = crossbeam_channel::unbounded();
+         let (files_tx, files_rx) = crossbeam_channel::unbounded();
++        let (cover_picks_tx, cover_picks_rx) = crossbeam_channel::unbounded();
+         let started = ctl.model().config.clone();
+         Self {
+             ctl,
+@@ -238,6 +259,11 @@
              remote_status: None,
              started,
              restart: Arc::new(AtomicBool::new(false)),
 +            tag_worker: None,
++            cover_picks_tx,
++            cover_picks_rx,
++            #[cfg(feature = "test-hooks")]
++            cover_picker: None,
          }
      }
  
-@@ -423,6 +434,10 @@
+@@ -318,6 +344,16 @@
+         self.covers.clear();
+     }
+ 
++    /// Makes the **Change…** button of the tag editor take its image from
++    /// `picker` instead of opening the native dialog. Used by tests.
++    #[cfg(feature = "test-hooks")]
++    pub fn set_cover_picker(
++        &mut self,
++        picker: impl Fn() -> Option<PathBuf> + Send + Sync + 'static,
++    ) {
++        self.cover_picker = Some(Arc::new(picker));
++    }
++
+     /// Makes the next frame panic. Used to test panic isolation.
+     #[cfg(feature = "test-hooks")]
+     pub fn fail_next_frame(&mut self) {
+@@ -423,6 +459,11 @@
                  });
              }
          }
 +        self.tag_outcomes(&state, time);
++        self.cover_picks(&ctx, &state);
 +        if let Some(track) = self.view.edit_tags.take() {
 +            self.open_tag_editor(&ctx, &state, track);
 +        }
          self.keyboard(&ctx, &state);
          let pending = fp_model::restart_pending(&self.started, &state.config);
          let scene = Scene {
-@@ -557,6 +572,38 @@
+@@ -557,6 +598,61 @@
                  take_drops = true;
              }
          }
@@ -5961,10 +8039,13 @@ mod tests {
 +                match tag_editor::show(&ctx, &scene, editor, block) {
 +                    tag_editor::EditorAnswer::Cancel => self.view.tag_editor = None,
 +                    tag_editor::EditorAnswer::Save => {
-+                        let job = state
-+                            .library
-+                            .get(editor.track)
-+                            .and_then(|track| editor.save_job(&track.path, &state.config.limits));
++                        let job = state.library.get(editor.track).and_then(|track| {
++                            editor.save_job(
++                                &track.path,
++                                &state.config.limits,
++                                state.config.analysis.cover_thumb_px,
++                            )
++                        });
 +                        // The rule is judged again now: the track may have
 +                        // gone on air since the modal last drew.
 +                        let started = block.is_none()
@@ -5978,6 +8059,26 @@ mod tests {
 +                            editor.error = Some(scene.i18n.tr("tags-error-worker"));
 +                        }
 +                    }
++                    tag_editor::EditorAnswer::ChangeCover => {
++                        if !editor.cover_busy {
++                            #[cfg(feature = "test-hooks")]
++                            let hook = self.cover_picker.clone();
++                            #[cfg(not(feature = "test-hooks"))]
++                            let hook: Option<CoverPicker> = None;
++                            let filter = scene.i18n.tr("dialog-image-files");
++                            let folder = state
++                                .library
++                                .get(editor.track)
++                                .and_then(|t| t.path.parent().map(Path::to_path_buf));
++                            let pick = move || match hook {
++                                Some(picker) => picker(),
++                                None => pick_cover_image(filter, folder),
++                            };
++                            if start_cover_dialog(&self.cover_picks_tx, &ctx, editor.track, pick) {
++                                editor.picking_cover();
++                            }
++                        }
++                    }
 +                    tag_editor::EditorAnswer::Open => {}
 +                }
 +            }
@@ -5985,7 +8086,7 @@ mod tests {
          // O4: Restart now asks the close guard first when audio is on air.
          if std::mem::take(&mut self.view.restart_requested) {
              if fp_model::on_air(&state).is_empty() {
-@@ -608,6 +655,112 @@
+@@ -608,6 +704,159 @@
          }
      }
  
@@ -5999,6 +8100,7 @@ mod tests {
 +            track,
 +            path: t.path.clone(),
 +            limits: state.config.limits.clone(),
++            thumb_px: state.config.analysis.cover_thumb_px,
 +        };
 +        if start_tag_job(&mut self.tag_worker, ctx, job) {
 +            self.view.tag_editor = Some(tag_editor::TagEditor::reading(track));
@@ -6031,9 +8133,41 @@ mod tests {
 +                TagOutcome::SheetWritten { track, result } => {
 +                    self.tag_saved(state, time, track, result);
 +                }
++                TagOutcome::CoverLoaded { track, result } => {
++                    if let Some(editor) = &mut self.view.tag_editor
++                        && editor.track == track
++                    {
++                        editor.cover_loaded(result);
++                    }
++                }
 +                // The services thread's reads and the summary writes have
 +                // their own consumers.
 +                TagOutcome::Read { .. } | TagOutcome::Written { .. } => {}
++            }
++        }
++    }
++
++    /// O23: hands the image the operator chose to the tag worker, which
++    /// checks and decodes it; a closed dialog frees the Change button.
++    fn cover_picks(&mut self, ctx: &egui::Context, state: &AppState) {
++        let picks: Vec<(TrackId, Option<PathBuf>)> = self.cover_picks_rx.try_iter().collect();
++        for (track, path) in picks {
++            let Some(editor) = self.view.tag_editor.as_mut().filter(|e| e.track == track) else {
++                continue;
++            };
++            let Some(path) = path else {
++                editor.cover_not_picked();
++                continue;
++            };
++            let job = TagJob::LoadCover {
++                track,
++                path,
++                limits: state.config.limits.clone(),
++                thumb_px: state.config.analysis.cover_thumb_px,
++            };
++            if !start_tag_job(&mut self.tag_worker, ctx, job) {
++                tracing::error!("the tag worker is not running");
++                editor.cover_not_picked();
 +            }
 +        }
 +    }
@@ -6057,13 +8191,27 @@ mod tests {
 +                    .as_ref()
 +                    .map(|e| e.unstored(saved.sheet.as_ref(), &state.config.limits))
 +                    .unwrap_or_default();
-+                let text = if unstored.is_empty() {
++                let cover_unstored = editor
++                    .as_ref()
++                    .is_some_and(|e| e.cover_unstored(saved.sheet.as_ref()));
++                // The cover shown elsewhere (the player, the remote API)
++                // follows the file.
++                if let Some(sheet) = &saved.sheet
++                    && editor.as_ref().is_some_and(|e| e.cover_changed())
++                {
++                    self.media
++                        .set_cover(track, sheet.cover().and_then(|c| c.thumb_shared()));
++                }
++                let text = if unstored.is_empty() && !cover_unstored {
 +                    self.i18n.tr_args("tags-saved", &[("title", title.into())])
 +                } else {
-+                    let names: Vec<String> = unstored
++                    let mut names: Vec<String> = unstored
 +                        .iter()
 +                        .map(|f| self.i18n.tr(&tag_editor::field_key(*f)))
 +                        .collect();
++                    if cover_unstored {
++                        names.push(self.i18n.tr("tags-cover"));
++                    }
 +                    self.i18n.tr_args(
 +                        "tags-saved-partly",
 +                        &[("title", title.into()), ("fields", names.join(", ").into())],
@@ -6098,7 +8246,7 @@ mod tests {
      /// O6: a close request while something is on air waits for the
      /// operator. Runs once per frame from `eframe::App::logic`, which
      /// eframe also calls while the window is minimized or hidden (when
-@@ -653,6 +806,10 @@
+@@ -653,6 +902,10 @@
          if ctx.text_edit_focused() {
              return;
          }
@@ -6109,7 +8257,7 @@ mod tests {
          // Configured shortcuts whose key the toolkit knows.
          let bindings: Vec<(Key, &KeyChord, ShortcutAction)> = state
              .config
-@@ -933,6 +1090,32 @@
+@@ -933,6 +1186,64 @@
      }
  }
  
@@ -6121,6 +8269,36 @@ mod tests {
 +        *worker = TagWorker::spawn(Box::new(move || repaint.request_repaint())).ok();
 +    }
 +    worker.as_ref().is_some_and(|w| w.submit(job))
++}
++
++/// Opens the image dialog on a helper thread and sends the chosen path (or
++/// `None`) back. `false` if the thread could not start.
++fn start_cover_dialog(
++    tx: &Sender<(TrackId, Option<PathBuf>)>,
++    ctx: &egui::Context,
++    track: TrackId,
++    pick: impl FnOnce() -> Option<PathBuf> + Send + 'static,
++) -> bool {
++    let (tx, ctx) = (tx.clone(), ctx.clone());
++    let spawned = std::thread::Builder::new()
++        .name("fp-cover-dialog".to_owned())
++        .spawn(move || {
++            let _ = tx.send((track, pick()));
++            ctx.request_repaint();
++        });
++    if let Err(e) = &spawned {
++        tracing::error!(error = %e, "could not open the image dialog");
++    }
++    spawned.is_ok()
++}
++
++/// The native dialog for a cover image (JPEG or PNG), starting in `folder`.
++fn pick_cover_image(filter: String, folder: Option<PathBuf>) -> Option<PathBuf> {
++    let mut dialog = rfd::AsyncFileDialog::new().add_filter(filter, &["jpg", "jpeg", "png"]);
++    if let Some(folder) = folder {
++        dialog = dialog.set_directory(folder);
++    }
++    pollster::block_on(dialog.pick_file()).map(|file| file.path().to_path_buf())
 +}
 +
 +/// Why a save failed, in the interface language.
@@ -6135,6 +8313,8 @@ mod tests {
 +            "tags-error-invalid-field",
 +            &[("field", i18n.tr(&tag_editor::field_key(*field)).into())],
 +        ),
++        E::CoverNotStorable => i18n.tr("tags-error-cover-not-stored"),
++        E::InvalidCover(_) => i18n.tr("tags-error-cover"),
 +        E::Other(detail) => i18n.tr_args("tags-error-other", &[("detail", detail.clone().into())]),
 +    }
 +}
@@ -6221,6 +8401,24 @@ tag-field-sort-album = Sort album
 tag-field-sort-album-artist = Sort album artist
 tag-field-sort-composer = Sort composer
 tag-field-artist-website = Artist website
+
+dialog-image-files = Images (JPEG, PNG)
+tags-cover = Cover
+tags-cover-change = Change…
+tags-cover-remove = Remove
+tags-cover-none = No cover.
+tags-cover-front = Front cover.
+tags-cover-first = No front cover: this is the first picture of the file, kept as it is.
+tags-cover-new = New cover, written when you save.
+tags-cover-removed = The cover is removed when you save.
+tags-cover-not-stored = This format cannot store a cover.
+tags-cover-hidden = The picture cannot be shown; it is kept as it is.
+tags-cover-error = The image was not used: { $reason }
+tags-cover-too-large = it is larger than { $limit } MiB
+tags-cover-unsupported = it is not a JPEG or PNG image
+tags-cover-undecodable = it cannot be read as an image of a size the player accepts
+tags-error-cover-not-stored = this format cannot store a cover
+tags-error-cover = the cover is not a usable JPEG or PNG image
 ```
 
 and to `crates/fp-app/locales/es-ES/main.ftl`:
@@ -6300,18 +8498,36 @@ tag-field-sort-album = Ordenar por álbum
 tag-field-sort-album-artist = Ordenar por artista del álbum
 tag-field-sort-composer = Ordenar por compositor
 tag-field-artist-website = Web del artista
+
+dialog-image-files = Imágenes (JPEG, PNG)
+tags-cover = Carátula
+tags-cover-change = Cambiar…
+tags-cover-remove = Quitar
+tags-cover-none = Sin carátula.
+tags-cover-front = Carátula frontal.
+tags-cover-first = Sin carátula frontal: es la primera imagen del archivo y se conserva tal como está.
+tags-cover-new = Carátula nueva, se escribe al guardar.
+tags-cover-removed = La carátula se quita al guardar.
+tags-cover-not-stored = Este formato no puede guardar una carátula.
+tags-cover-hidden = No se puede mostrar la imagen; se conserva tal como está.
+tags-cover-error = No se usó la imagen: { $reason }
+tags-cover-too-large = pesa más de { $limit } MiB
+tags-cover-unsupported = no es una imagen JPEG ni PNG
+tags-cover-undecodable = no se puede leer como una imagen de un tamaño que acepta el reproductor
+tags-error-cover-not-stored = este formato no puede guardar una carátula
+tags-error-cover = la carátula no es una imagen JPEG o PNG utilizable
 ```
 
 The test strings ("Save", "Cancel", the reasons, "Edit tags", "Reading tags…", "were not saved", "Use YYYY, YYYY-MM or YYYY-MM-DD", "Use whole numbers", "cannot store this field") must match these messages; keep them in step if a wording changes.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run each test of `track_tags_ui` by name, then `cargo test -p fp-app --test track_tags_ui` three times (the modal tests wait on a real thread), `cargo test -p fp-app --lib tag_editor`, `cargo test -p fp-app --test view`, `cargo test -p fp-app --test i18n`, `cargo test -p fp-app --test main_screen` (the context-menu tests there must still pass: the new item sits among the existing ones) and `cargo test -p fp-app --test glyphs`.
+Run each test of `track_tags_ui` by name, then `cargo test -p fp-app --test track_tags_ui` ten times (the modal tests wait on real threads; a failure that comes and goes is a defect to find, not to retry: an earlier draft of this task failed one run in three because lofty reordered values, see Decisions), `cargo test -p fp-app --lib tag_editor`, `cargo test -p fp-app --test view`, `cargo test -p fp-app --test i18n`, `cargo test -p fp-app --test main_screen` (the context-menu tests there must still pass: the new item sits among the existing ones) and `cargo test -p fp-app --test glyphs`.
 Expected: PASS.
 
 - [ ] **Step 5: Look at it**
 
-Following CLAUDE.md "Testing notes" (Xvfb, a scratch `FAUSTE_HOME`, `examples/demo_session` with a music folder, the remote API or `xdotool` to right-click a row), open "Edit tags…" on an MP3, a FLAC and a WAV with only RIFF INFO, and check: 10 fields on a bare file, the BPM and a second artist shown when present, the Add field menu, the amber marks on a bad date, the "N other tags" line, and that nothing is cut off at the default 1600×940 window and at 1280×720. Fix layout problems found here in `tag_editor.rs` (sizes are constants there), not in the tests.
+Following CLAUDE.md "Testing notes" (Xvfb, a scratch `FAUSTE_HOME`, `examples/demo_session` with a music folder, the remote API or `xdotool` to right-click a row), open "Edit tags…" on an MP3, a FLAC and a WAV with only RIFF INFO, and check: 10 fields on a bare file, the BPM and a second artist shown when present, the Add field menu, the amber marks on a bad date, the "N other tags" line, the cover area (a cover in an MP3 and a FLAC, **Change…** with a real JPEG and PNG and a non-image file, **Remove**, a WAV with only RIFF INFO where the area is disabled, and the player's cover after a save when the track is loaded on a player), and that nothing is cut off at the default 1600×940 window and at 1280×720. Fix layout problems found here in `tag_editor.rs` (sizes are constants there), not in the tests.
 
 - [ ] **Step 6: Commit**
 
@@ -6319,7 +8535,7 @@ Following CLAUDE.md "Testing notes" (Xvfb, a scratch `FAUSTE_HOME`, `examples/de
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
    && cargo test --workspace; then
   git add crates/fp-app
-  git commit -m "feat(ui): edit a track's tags from the row menu, saved off the UI thread"
+  git commit -m "feat(ui): edit a track's tags and cover from the row menu, saved off the UI thread"
 fi
 ```
 
@@ -6349,7 +8565,8 @@ fi
   2. *Add field.* The menu below the fields lists the other fields; it offers only what the file's tag format can store (a WAV with RIFF INFO, an AIFF or an old ID3v1 tag store fewer fields than ID3v2, FLAC or MP4). A field the format cannot store is greyed out with a note. Clearing a field removes it from the file; an added field left empty is not written.
   3. *Several values.* Fields that can hold several values (artists, genres, composers, credits, mood, language) show one value per line; Save writes one value per line in the format's own way. Comment and lyrics are free text over several lines.
   4. *Checks.* Date and original release date are ISO 8601 (`2019`, `2019-05` or `2019-05-14`, optionally with a time); track and disc number, their totals and the BPM are whole numbers, and a total needs its number. A field with an invalid value is marked and **Save** stays off. A value the file already had and you did not touch is kept as it is.
-  5. *What is kept.* Everything the editor does not show (other standard keys, custom keys, pictures, binary frames) stays in the file; the editor says how many such tags are kept.
+  5. *What is kept.* Everything the editor does not show (other standard keys, custom keys, pictures other than the front cover, binary frames) stays in the file with the same values; the editor says how many such tags are kept (and "more" when the format holds frames that cannot be counted). Saving re-encodes the items the editor maps, so a kept item can differ in its bytes (text encoding, frame order) but not in its value.
+  5b. *The cover.* The editor shows the front cover (or the first picture of the file when there is no front cover) as a thumbnail. **Change…** opens a file dialog for a JPEG or PNG image (at most `limits.max_cover_bytes`, which must decode); if it does not, the editor says why and nothing changes. **Remove** clears the front cover. The change is written by **Save** and discarded by **Cancel**; back covers and every other picture are never touched. A format with no place for pictures (WAV with RIFF INFO, AIFF, ID3v1) shows the area disabled. After a save the player's cover shows the new cover.
   6. *How a save works.* The file is copied next to the original, the copy gets the tags, is synced and replaces the original, so a failure leaves the file as it was; the reason shows in the editor (which stays open to retry) and in the status bar. Only the fields you changed are written. After a save the table shows the new tags at once while markers and the waveform are kept; if the file did not keep a field you changed, the status bar names it.
   7. Tracks of an earlier version get their date, genre and other tags filled in quietly in the background after an update (no full analysis).
 - If the user guide lists the `limits` keys of the configuration file, add `limits.max_tag_chars` (2000) and `limits.max_tag_values` (32).
@@ -6358,14 +8575,15 @@ fi
 
 `docs/technical/analysis.md`: in "Tags and covers (`metadata.rs`)" add that `Tags` now carries the recording date (ISO 8601 text, as the standards store it: ID3v2.4 `TDRC`, Vorbis `DATE`, MP4 `©day`, APE `Year`), genre, album artist, composer and comment. Add a section **Track tags (`tags.rs`)** with three parts:
 - the summary API: `read_track_tags` (file-name fallbacks, cut to `limits.max_tag_chars`), `can_write_tags` (extension only, from lofty's `FileType::tag_support`) and `write_tags` (changed fields only);
-- the tag sheet: `TagField` (36 fields in the shown order, 10 always shown), `storable_fields(tag_type)` (the first `ItemKey` of each field's candidate list that `ItemKey::supported_keys` lists), `read_tag_sheet` (the tag `read_tags` reads: primary, else first; items of the field's key with an empty description; a number and total pair, splitting `3/12` written into one key; `other_kept` counts the other items and the pictures, `other_kept_more` says the format also holds frames lofty cannot count), `write_tag_sheet` (clamps to `max_tag_chars` and `max_tag_values`, refuses `invalid_fields`, replaces each changed field with `take_filter` and `push`, one item per value; never touches items it does not own);
-- the safe write: `safe_edit` is the one helper (canonical path so a symlink is not replaced, extension check, copy to `name.fptag-<pid>.ext`, parse with covers or fail, `urls_as_text`, edit, `save_to_path`, fsync, rename; the copy is removed on any error), and `TagWriteError` with its mapping. Explain the lofty defect that makes `urls_as_text` necessary (locators are dropped on save) and name the tests that guard it.
+- the tag sheet: `TagField` (36 fields in the shown order, 10 always shown), `storable_fields(tag_type)` (the first `ItemKey` of each field's candidate list that `ItemKey::supported_keys` lists), `read_tag_sheet` (the tag `read_tags` reads: primary, else first; items of the field's key with an empty description; a number and total pair, splitting `3/12` written into one key; `other_kept` counts the other items and the pictures, `other_kept_more` says the format also holds frames lofty cannot count), `write_tag_sheet` (clamps to `max_tag_chars` and `max_tag_values`, refuses `invalid_fields`, replaces each changed field with `retain` and `push`, one item per value; never touches items it does not own);
+- the cover: `can_store_pictures`, `load_cover_file` and `check_cover` (JPEG or PNG by content, `limits.max_cover_bytes`, decoded by the same `thumbnail_png` as the library's thumbnails under `limits.max_cover_pixels`), `with_cover_thumbnail`, `change_cover` (every `CoverFront` picture replaced or removed, other pictures untouched), `metadata::display_picture` (the shared "front cover, else first picture" rule), and how the sheet counts pictures;
+- the safe write: `safe_edit` is the one helper (canonical path so a symlink is not replaced, extension check, copy to `name.fptag-<pid>.ext`, parse with covers or fail, `urls_as_text`, edit, `save_to_path`, fsync, rename; the copy is removed on any error), and `TagWriteError` with its mapping. Explain the two lofty defects that shape it (locators are dropped on save, so `urls_as_text` is necessary; `Tag::take_filter` reorders the items it leaves, so items are removed with `retain`) and name the tests that guard them.
 
-In "How the app uses it" describe the tag-only pass: `Track::needs_tag_read`, `Services::tag_pass`, the `fp-tags` worker (`fp-app/src/tags.rs`; its four jobs `Read`, `Write`, `ReadSheet`, `WriteSheet`, panics contained, queued reads skipped at shutdown while writes finish), that every `ApplyAnalysis` resets `tags_read`, and that no analysis version bump or cache change is involved.
+In "How the app uses it" describe the tag-only pass: `Track::needs_tag_read`, `Services::tag_pass`, the `fp-tags` worker (`fp-app/src/tags.rs`; its five jobs `Read`, `Write`, `ReadSheet`, `WriteSheet`, `LoadCover`, panics contained, queued reads skipped at shutdown while writes finish), that every `ApplyAnalysis` resets `tags_read`, and that no analysis version bump or cache change is involved.
 
-`docs/technical/persistence.md`: add `max_tag_chars` (2000; range 64 … 100000) and `max_tag_values` (32; range 1 … 1000) to the `limits` table, and in the library section list the new `Track` fields (`date`, `genre`, `album_artist`, `composer`, `comment`, `tags_read`), all optional on load. The tag sheet is never persisted: the editor reads the file each time.
+`docs/technical/persistence.md` (the cover reuses `limits.max_cover_bytes`, `limits.max_cover_pixels` and `analysis.cover_thumb_px`; no new key): add `max_tag_chars` (2000; range 64 … 100000) and `max_tag_values` (32; range 1 … 1000) to the `limits` table, and in the library section list the new `Track` fields (`date`, `genre`, `album_artist`, `composer`, `comment`, `tags_read`), all optional on load. The tag sheet is never persisted: the editor reads the file each time.
 
-`docs/technical/ui.md`: add rows for `ui/tag_editor.rs` (the modal, its draft and its phases) and for the worker in `fp-app/src/tags.rs`; in the table section describe the row tooltip (`view::track_tooltip`, `on_hover_ui`, the usual delay) and the menu item (`view::tag_edit_availability`, the reason tooltip, `ViewState::edit_tags` handed to `AppUi::open_tag_editor` on the next frame, the sheet arriving through `TagOutcome::SheetRead`, the save through `start_tag_job`, the outcomes drained at the start of each frame, the re-check at Save, the keyboard gate while the modal is open, why `scene` is built after the `&mut self` work).
+`docs/technical/ui.md`: add rows for `ui/tag_editor.rs` (the modal, its draft and its phases) and for the worker in `fp-app/src/tags.rs`; in the table section describe the row tooltip (`view::track_tooltip`, `on_hover_ui`, the usual delay) and the menu item (`view::tag_edit_availability`, the reason tooltip, `ViewState::edit_tags` handed to `AppUi::open_tag_editor` on the next frame, the sheet arriving through `TagOutcome::SheetRead`, the save through `start_tag_job`, the image dialog (`start_cover_dialog` on its own thread, the path back over a channel, `TagJob::LoadCover`, `TagOutcome::CoverLoaded`) and the refresh of the player's cover (`MediaCache::set_cover` after a save that changed it), the outcomes drained at the start of each frame, the re-check at Save, the keyboard gate while the modal is open, why `scene` is built after the `&mut self` work).
 
 - [ ] **Step 3: Update the spec, roadmap and README**
 
@@ -6377,9 +8595,11 @@ Spec §8 (after the editor bullets), mark the plan done and add:
   - Tag-only pass: every `ApplyAnalysis` clears `tags_read`; `Services::tag_pass` sends analysed, readable tracks with unread tags to the `fp-tags` worker; no analysis version bump.
   - Tooltip: `view::track_tooltip` (title, artist, album, date, genre, duration, format, path); the codec is the upper-cased extension.
   - Editor: `TagSheet` and `TagField` (36 fields, 10 always shown) with the pure rules `invalid_fields`, `changed_fields`, `unstored_fields`; `fp_analysis::tags::{read_tag_sheet, write_tag_sheet}` read and write them through lofty's `ItemKey`, the write using the same synced-copy helper as `write_tags` and touching only the fields that changed. A multi-value field is one item per value; a number and its total are two items (ID3v2 merges them into `TRCK`/`TPOS`); a total needs a number. Items the sheet does not own, including URL frames and comments with a description, are kept (the shared writer re-adds ID3v2 locators as text because lofty 0.25.4 drops them on save). `other_kept` counts the other items and pictures; frames lofty keeps without mapping them are not counted, and the modal says so. After a save the library takes the re-read summary; on failure the modal stays open and the notice area gives the reason.
+  - Cover: `CoverArt` in the sheet is the front cover, or the first picture when there is none (`metadata::display_picture`, shared with the library's thumbnail); `cover_changed`, `cover_blocked` and `cover_unstored` are pure. **Change…** takes a JPEG or PNG within `limits.max_cover_bytes` and `limits.max_cover_pixels` through a helper-thread dialog and the tag worker (`load_cover_file`); **Remove** clears the front cover; both are staged in the draft and written by Save through `write_tag_sheet`, which replaces or removes every front-cover picture and never touches other pictures, and refuses the change for a format with no pictures (RIFF INFO, AIFF text, ID3v1). After a save the player's cover follows the file (`MediaCache::set_cover`); a track with no cache entry reads the new cover from its next analysis, because the analysis cache is keyed on the file's size and modification time.
+  - Two lofty 0.25.4 defects are worked around and tested: URL frames are dropped on save unless re-added as text, and `Tag::take_filter` reorders the items it leaves.
 ```
 
-Roadmap: set row 7's status to `done`. README: add to the features list `- **Tag editor and track tooltip**: hover a track for its tags, format and path; edit the common tag fields (title, artist, album, date, track and disc numbers, genre, BPM, key, lyrics and more) of MP3, FLAC, MP4, WAV and other files, written safely into the file.`
+Roadmap: set row 7's status to `done`. README: add to the features list `- **Tag editor and track tooltip**: hover a track for its tags, format and path; edit the common tag fields (title, artist, album, date, track and disc numbers, genre, BPM, key, lyrics and more) and the front cover (view, change, remove) of MP3, FLAC, MP4, WAV and other files, written safely into the file.`
 
 - [ ] **Step 4: Check the docs**
 
@@ -6409,20 +8629,23 @@ fi
   - clearing removes, an empty added field is not written: Task 5 `a_cleared_field_is_removed_and_an_empty_added_field_is_not_written`; Task 6 `an_added_field_is_saved_and_an_empty_one_is_not`;
   - several values, one per line: Task 5 `riff_info_round_trips_its_fields_with_values_one_per_line`, `every_id3v2_field_round_trips` (two artists as two `TPE1` values); Task 6 `the_editor_shows_what_the_file_holds` (artist box);
   - date, original release date, track and disc number and total, BPM validated, invalid value blocks Save and is marked: Task 5 `the_values_of_a_changed_field_are_validated`, `an_invalid_value_is_refused_and_the_file_is_untouched`; Task 6 `save_needs_a_change_and_valid_values`;
-  - everything else kept byte for byte and counted: Task 5 `custom_items_and_pictures_survive_an_edit_untouched` (custom `TXXX`, described comment, URL frame, picture; the picture is compared byte for byte; mapped items are re-encoded by lofty with the same values, which the test checks by value, and unmapped frames stay verbatim). The count of other tags is in the sheet (`other_kept`) and in the modal.
+  - everything else kept and counted: Task 5 `custom_items_and_pictures_survive_an_edit_untouched` (custom `TXXX`, described comment, URL frame, picture; the picture is compared byte for byte; mapped items are re-encoded by lofty with the same values, which the test checks by value, and unmapped frames stay verbatim). The two caveats the spec states (the count is a lower bound, "and more"; mapped items are re-encoded) are the first and the fifth weak spots below. The count of other tags is in the sheet (`other_kept`) and in the modal.
+  - the cover: shown (front cover, else first picture) Task 5 `the_sheet_shows_the_front_cover`, `without_a_front_cover_the_first_picture_is_shown_and_never_changed`; change and remove, staged and written by Save, other pictures untouched, the same safe write: Task 5 `the_front_cover_can_be_replaced`, `the_front_cover_can_be_removed`, `a_back_cover_survives_a_front_cover_change`, `an_unrelated_edit_keeps_the_cover_byte_for_byte`; Task 6 `a_new_cover_is_staged_and_written_by_save`, `the_cover_can_be_removed_and_save_writes_that`, `cancel_discards_a_staged_cover`; JPEG or PNG within the limits that decodes: Task 5 `an_oversized_image_is_rejected`, `an_undecodable_or_other_image_is_rejected`, Task 6 `an_image_that_cannot_be_used_changes_nothing_and_says_why`; the dialog never on the UI thread: Task 6 `the_image_dialog_never_blocks_the_interface`; written as front cover with its MIME type: Task 5 `the_front_cover_can_be_replaced`; formats with no pictures: Task 5 `a_format_without_pictures_shows_no_cover_and_refuses_one`, Task 6 `a_format_that_cannot_store_a_cover_disables_the_area`; the cover elsewhere follows a save: Task 6 `a_saved_cover_reaches_the_cover_the_player_shows`, `a_track_the_cache_does_not_hold_is_left_alone_after_a_cover_save`.
   - Save on a helper thread with copy, write, fsync, rename (Task 2 `safe_edit` steps, Task 3 worker, Task 5 `write_tag_sheet`, Task 6 `start_tag_job`); the library takes the new tags and markers and analysis are kept (Task 6 `saving_writes_the_file_and_the_library_takes_the_tags` asserts `duration_secs` stays); on any error the original is untouched and the notice reports it (Task 5 failure tests, Task 6 `a_failed_save_keeps_the_modal_and_says_why`); the disabled cases with the reason as a tooltip (Task 1 rule, Task 6 `the_menu_item_is_disabled_with_the_reason`).
-- Docs, spec "As built", roadmap row 7, README: Task 7. Both locales inside Tasks 4 and 6 (`every_field_has_a_label_in_both_languages`, `tests/i18n.rs`). `Config` fields with default, range and lenient loading: Task 1 (`max_tag_chars`) and Task 5 (`max_tag_values`).
+- Docs, spec "As built", roadmap row 7, README: Task 7. Both locales inside Tasks 4 and 6 (the cover keys included) (`every_field_has_a_label_in_both_languages`, `tests/i18n.rs`). `Config` fields with default, range and lenient loading: Task 1 (`max_tag_chars`) and Task 5 (`max_tag_values`).
 
-**Placeholder scan.** No TBD. The code in Tasks 5 and 6 was compiled and its tests were run against the tree as of Task 4 before the plan was written, so the diffs and files are the real text.
+**Placeholder scan.** No TBD. The code in Tasks 5 and 6 was compiled and its tests were run against the tree as of Task 4 before the plan was written, so the diffs and files are the real text. Extracting every code block of Tasks 5 and 6 over the tree of Task 4 gives a tree where `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` pass.
 
-**Type consistency.** `TrackTags` (Task 1) is still the value of `Command::ApplyTags`, the result of `read_track_tags` (Task 2), the tag-only pass (Task 3) and the `tags` of `SheetSaved` (Task 5, applied in Task 6). `TagSheet` and `TagField` (Task 5, `fp-model`) are what `read_tag_sheet`/`write_tag_sheet` (Task 5, `fp-analysis`), `TagJob::{ReadSheet, WriteSheet}`/`TagOutcome::{SheetRead, SheetWritten}` (Task 5, `fp-app`) and `TagEditor` (Task 6) pass around. `tag_edit_block(state, track, format_writable)` (Task 1) is wrapped by `view::tag_edit_availability(state, track)` (Task 6), which `table.rs` and `app.rs` both call. `TagWriteError` variants match `tag_error_text` (including `InvalidField`). Locale keys named in Task 6 are the ones its tests look for; the 36 `tag-field-<slug>` keys follow `TagField::slug`.
+**Type consistency.** `TrackTags` (Task 1) is still the value of `Command::ApplyTags`, the result of `read_track_tags` (Task 2), the tag-only pass (Task 3) and the `tags` of `SheetSaved` (Task 5, applied in Task 6). `TagSheet` and `TagField` (Task 5, `fp-model`) are what `read_tag_sheet`/`write_tag_sheet` (Task 5, `fp-analysis`), `TagJob::{ReadSheet, WriteSheet}`/`TagOutcome::{SheetRead, SheetWritten}` (Task 5, `fp-app`) and `TagEditor` (Task 6) pass around; `CoverArt` (Task 5, `fp-model`) is what `read_tag_sheet`, `load_cover_file` and `TagJob::LoadCover`/`TagOutcome::CoverLoaded` produce, `write_tag_sheet` writes and `TagEditor::cover_loaded` stages, and `thumb_px` is always `config.analysis.cover_thumb_px`. `tag_edit_block(state, track, format_writable)` (Task 1) is wrapped by `view::tag_edit_availability(state, track)` (Task 6), which `table.rs` and `app.rs` both call. `TagWriteError` variants match `tag_error_text` (including `InvalidField`). Locale keys named in Task 6 are the ones its tests look for; the 36 `tag-field-<slug>` keys follow `TagField::slug`.
 
-**Review Focus.** Each of the five lines names a test in the task that owns the code.
+**Review Focus.** Each of the seven lines names a test in the task that owns the code.
 
 **Known weak spots to watch in review.**
 - The modal sizes itself over a few frames (egui `Modal` plus a `Grid` inside a `ScrollArea`), so UI tests settle it before clicking; if the layout is changed, re-run `track_tags_ui` several times.
 - `TagSheet::other_kept` is a lower bound for formats where lofty keeps frames it does not map (ID3v2 `TXXX` with an unknown description, for example); the modal says "and more" then. If the maintainer wants an exact count it needs lofty's per-format tag types instead of the generic `Tag`.
-- Mapped items are rebuilt by lofty from the generic `Tag` on every save (values are preserved, frame encoding details such as the text encoding may differ), so "byte for byte" holds for unmapped items and pictures, and "same value" for mapped ones.
+- The cover refresh covers the media cache (the player's cover and the remote API for a track the cache holds). A track with no entry is refreshed by its next analysis, which the saved file's new size and modification time force; an analysis already running for the track when the save lands could still bring the old cover (the track cannot be on air, so this needs a prefetch started just before the save).
+- Writing a cover was tested for ID3v2 (MP3, WAV) and Vorbis comments (a FLAC stub with only a STREAMINFO block). MP4 (`covr`) and APE tags are covered by `can_store_pictures` from lofty's source but no test writes a picture to one (no fixture without an encoder); an existing GIF, BMP or WebP cover is shown as "cannot be shown" because the decoder is built with JPEG and PNG only.
+- Mapped items are rebuilt by lofty from the generic `Tag` on every save (values are preserved, frame encoding details such as the text encoding may differ), which is the caveat the spec states: unmapped items and pictures keep their bytes, mapped items keep their values.
 - The editor's save path never calls `write_tags` (kept as the summary-level write of Task 2 and still used by its tests and by `TagJob::Write`).
 - An ID3v1-only file is edited as ID3v1 (its fields are short and few); the editor shows what the format can store and Add field offers nothing more.
 - The Spanish field names are the usual ones from common players; the maintainer may want to adjust them.
