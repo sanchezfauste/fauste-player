@@ -522,7 +522,7 @@ pub fn vu(
     for (ch, bar) in l.bars.iter().enumerate() {
         let x = bar.x_range();
         painter.rect_filled(*bar, 0.0, theme::NEUTRAL_800.gamma_multiply(0.55));
-        let level = y_of(reading.level_db.get(ch).copied().unwrap_or(-120.0));
+        let level = level_y.get(ch).copied().unwrap_or(bars_bottom);
         if k_system {
             let rms = y_of(reading.rms_db.get(ch).copied().unwrap_or(-120.0)).max(level);
             column(x, level, rms, 0.45);
@@ -763,17 +763,28 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     };
     // Both ends of the scale first, so its range is always labelled.
     let ends = [marks.last().copied(), marks.first().copied()];
+    // An end that is the alignment level is labelled by the alignment line:
+    // that label is kept, and the other end yields if they crowd.
+    let alignment_is_end = ends
+        .iter()
+        .flatten()
+        .any(|m| (m - alignment_dbfs(c)).abs() < SAME_MARK_DB);
     for mark in ends.into_iter().flatten() {
         if (mark - alignment_dbfs(c)).abs() < SAME_MARK_DB {
             continue;
         }
         let candidate = line(mark, false);
-        if !lines.iter().any(|kept| crowds(kept, &candidate)) {
+        let crowded = lines
+            .iter()
+            .chain(alignment_is_end.then_some(&alignment))
+            .any(|kept| crowds(kept, &candidate));
+        if !crowded {
             lines.push(candidate);
         }
     }
-    // The alignment label gives way to an end label; its line stays.
-    if lines.iter().any(|kept| crowds(kept, &alignment)) {
+    // The alignment label gives way to an end label (not to its own); its
+    // line stays.
+    if !alignment_is_end && lines.iter().any(|kept| crowds(kept, &alignment)) {
         alignment.label.clear();
     }
     // Then top down, so where the scale is dense the upper marks are kept.

@@ -395,6 +395,56 @@ fn both_ends_stay_labelled_at_every_height() {
     }
 }
 
+/// An end that is also the alignment level keeps its label when the other
+/// end crowds the alignment line.
+#[test]
+fn an_end_that_is_the_alignment_level_stays_labelled() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::Custom] {
+        for (floor, reference) in [
+            (-20.0, -20.0),
+            (-40.0, -40.0),
+            (-30.0, -30.0),
+            (-60.0, 0.0),
+            (-20.0, 0.0),
+            (-60.0, -60.0),
+            (-30.0, 0.0),
+        ] {
+            for height in [24.0, 32.0, 40.0, 48.0, 64.0, 136.0, 300.0] {
+                for loudness in [false, true] {
+                    let c = MeterConfig {
+                        ballistics,
+                        floor_db: floor,
+                        reference_dbfs: reference,
+                        ..MeterConfig::default()
+                    };
+                    let marks = scale_marks(&c);
+                    let l = meter_layout(column(height), &c, loudness);
+                    let labelled: Vec<&str> = l
+                        .lines
+                        .iter()
+                        .filter(|m| !m.label.is_empty())
+                        .map(|m| m.label.as_str())
+                        .collect();
+                    for end in [marks.first().unwrap(), marks.last().unwrap()] {
+                        // Below 64 px the two ends cannot both fit: the one
+                        // that is the alignment level is the one kept.
+                        let is_alignment = (end - alignment_dbfs(&c)).abs() < 1.0;
+                        if height < 64.0 && !is_alignment {
+                            continue;
+                        }
+                        let want = mark_label(*end, &c);
+                        assert!(
+                            labelled.contains(&want.as_str()),
+                            "{ballistics:?} floor {floor} {height}px loudness {loudness}: \
+                             {want} in {labelled:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn a_tall_digital_meter_labels_its_main_marks() {
     let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
