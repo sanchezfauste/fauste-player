@@ -17,7 +17,6 @@ use fp_app::ui::about::{self, NoticeOpener, find_notices, notice_candidates};
 use support::{harness, harness_from, state};
 
 const ABOUT: &str = "About Fauste Player";
-const ABOUT_NAME: &str = "About Fauste Player (name and version)";
 
 fn recorder() -> (NoticeOpener, Arc<Mutex<Vec<PathBuf>>>) {
     let opened = Arc::new(Mutex::new(Vec::new()));
@@ -27,9 +26,15 @@ fn recorder() -> (NoticeOpener, Arc<Mutex<Vec<PathBuf>>>) {
 }
 
 #[test]
-fn the_top_bar_shows_the_version() {
-    let (h, _) = harness(state(1, 1));
-    assert!(h.query_by_label_contains(about::VERSION).is_some());
+fn the_top_bar_no_longer_repeats_the_name_or_the_version() {
+    let (mut h, _fake) = harness(state(1, 0));
+    h.run_steps(2);
+    // The native title bar carries them now (feedback 2 spec O32).
+    assert!(h.query_by_label_contains(about::VERSION).is_none());
+    assert!(h.query_by_label("Fauste Player").is_none());
+    // What else the bar shows stays.
+    assert!(h.query_by_label_contains("Settings").is_some());
+    assert!(h.query_by_label("About Fauste Player").is_some());
 }
 
 #[test]
@@ -47,9 +52,9 @@ fn the_info_button_sits_next_to_settings_and_opens_about() {
 }
 
 #[test]
-fn clicking_the_name_opens_about_and_escape_closes_it() {
+fn the_info_button_opens_about_and_escape_closes_it() {
     let (mut h, fake) = harness(state(1, 1));
-    h.get_by_label(ABOUT_NAME).click();
+    h.get_by_label(ABOUT).click();
     h.run_steps(2);
     assert!(h.query_by_label_contains("All rights reserved").is_some());
     assert!(

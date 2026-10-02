@@ -32,9 +32,9 @@ audio engine that the interface can never block.
   has Play/Next, Stop, Fade stop, Pause and Stop-after-current, SINGLE and
   CONT modes, a countdown with tenths, a stereo meter, a volume fader and
   its own playlist tabs. Times keep a fixed width as they count.
-- **About window:** the version sits next to the name in the top bar; a
-  click on it, or on the info button next to Settings, opens the copyright
-  and the licence notices of the bundled components.
+- **About window:** the window's title bar shows "Fauste Player <version>";
+  the info button next to Settings opens the copyright and the licence
+  notices of the bundled components.
 - **Restore defaults and Restart now:** Players, Meters, Analysis and
   Shortcuts can each be reset to their defaults; settings that need a
   restart show a "Restart pending" pill, and Restart now applies them.
@@ -353,5 +353,5 @@ their own licences:
 - every Rust dependency: listed in `licenses/THIRD-PARTY.html` inside each
   release archive.
 
-The About window (click the name or the info button in the top bar) shows the copyright, both
+The About window (the info button in the top bar) shows the version, the copyright, both
 bundled notices and a button that opens the installed `THIRD-PARTY.html`.

@@ -230,7 +230,7 @@ fn run(
     instance::watch(paths.data_dir.clone(), inbox_tx, INBOX_INTERVAL)?;
     let app = app.with_inbox(inbox_rx);
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("Fauste Player")
+        .with_title(cli::window_title())
         // Matches the desktop entry, so the window gets its icon and name.
         .with_app_id(APP_ID)
         .with_inner_size([1600.0, 940.0])

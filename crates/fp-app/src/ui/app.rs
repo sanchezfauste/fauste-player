@@ -32,7 +32,7 @@ use super::reset_played;
 use super::settings::{self, SettingsDeps, SettingsState};
 use super::tag_editor;
 use super::theme;
-use super::widgets::{self, TileStyle, font, font_medium};
+use super::widgets::{self, TileStyle, font};
 use crate::i18n::I18n;
 use crate::services::{MediaCache, ServiceRequest};
 use crate::tags::{TagJob, TagOutcome, TagWorker};
@@ -1401,45 +1401,6 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, pending: 
     );
     ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
     ui.add_space(10.0);
-    ui.add(
-        egui::Label::new(
-            RichText::new(egui_phosphor::fill::BROADCAST)
-                .family(egui::FontFamily::Name(theme::ICONS_FILL.into()))
-                .size(15.0)
-                .color(theme::ACCENT),
-        )
-        .selectable(false),
-    );
-    let name = ui.add(
-        egui::Label::new(
-            RichText::new(scene.i18n.tr("app-name"))
-                .font(font_medium(12.0))
-                .color(theme::TEXT),
-        )
-        .selectable(false),
-    );
-    let version = ui.add(
-        egui::Label::new(
-            RichText::new(format!("v{}", about::VERSION))
-                .font(font(11.0))
-                .color(theme::NEUTRAL_500),
-        )
-        .selectable(false),
-    );
-    let about_label = scene.i18n.tr("tip-about-name");
-    let response = ui
-        .interact(
-            name.rect.union(version.rect),
-            ui.id().with("about"),
-            Sense::click(),
-        )
-        .on_hover_text(&about_label);
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, about_label.clone())
-    });
-    if response.clicked() {
-        view_state.about_open = true;
-    }
 
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.spacing_mut().item_spacing = vec2(12.0, 0.0);

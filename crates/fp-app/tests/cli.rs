@@ -75,3 +75,11 @@ fn the_window_icon_is_a_valid_square_image() {
     assert_eq!(icon.width, icon.height);
     assert!(icon.width >= 128);
 }
+
+#[test]
+fn the_window_title_is_the_name_and_the_version() {
+    assert_eq!(
+        fp_app::cli::window_title(),
+        format!("Fauste Player {}", fp_app::ui::about::VERSION)
+    );
+}

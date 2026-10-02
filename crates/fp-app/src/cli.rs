@@ -73,6 +73,12 @@ pub fn usage() -> String {
     )
 }
 
+/// The native window's title: the name and the version (feedback 2 spec
+/// O32). The window icon is `window_icon`.
+pub fn window_title() -> String {
+    format!("Fauste Player {}", env!("CARGO_PKG_VERSION"))
+}
+
 /// The application icon, for the window and the task bar.
 pub fn window_icon() -> Option<egui::IconData> {
     const PNG: &[u8] = include_bytes!("../../../packaging/icons/fauste-player-256.png");
