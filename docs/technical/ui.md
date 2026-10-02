@@ -10,7 +10,7 @@
 | `crash.rs` | Panic hook writing `crash-<nanos>.txt` (message, location, backtrace, version, OS), then chaining |
 | `i18n.rs` | Fluent bundles (`locales/en-US`, `locales/es-ES`), per-key fallback to `en-US` |
 | `services.rs` | The services thread (analysis and autosave; see [Persistence](persistence.md) and [Analysis](analysis.md)) |
-| `ui/app.rs` | `AppUi`: the main screen, keyboard, notices, OS drops, file-dialog results. The window title (`cli::window_title`, the name and the version) and icon (`cli::window_icon`) come from the native frame; the top bar has no brand block |
+| `ui/app.rs` | `AppUi`: the main screen, keyboard, notices, OS drops, file-dialog results. The window title (`cli::window_title`, the name and the version) and icon (`cli::window_icon`) are set on the `ViewportBuilder` in `main.rs` (`run`) and drawn by the native title bar; the top bar has no brand block |
 | `ui/player.rs` | One player column: header, info row, transport, waveform, tabs, footer |
 | `ui/table.rs` | The track table: virtualised rows, drag and drop, context menu, the configured columns, the header (drag to reorder, menu) and the live column resize |
 | `ui/tab_strip.rs` | The pure layout of the playlist tabs (O35): `layout` (tab width, overflow, view width), `clamp_offset`, `reveal`, `step`; unit-tested. `tabs` in `player.rs` draws them clipped to the view, with arrows and the wheel; the scroll lives in `ViewState::tab_scroll` per player, and the shown tab is revealed again only when the key (shown playlist, tab count, view width) changes, so the operator's scrolling is not undone every frame |

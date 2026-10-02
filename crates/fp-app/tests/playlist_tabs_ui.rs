@@ -160,9 +160,11 @@ fn a_playlist_shown_through_the_model_is_scrolled_into_view() {
 #[test]
 fn a_scrolled_strip_keeps_its_offset_on_later_frames() {
     let (mut h, _) = setup(many_playlists(30));
+    let x0 = h.get_by_label("List 4").rect().left();
     h.get_by_label("Scroll tabs right").click();
     h.run_steps(3);
     let x1 = h.get_by_label("List 4").rect().left();
+    assert!(x1 < x0 - 10.0, "the arrow moved the strip: {x0} {x1}");
     h.run_steps(10);
     let x2 = h.get_by_label("List 4").rect().left();
     assert!((x1 - x2).abs() < 0.5, "{x1} {x2}");
