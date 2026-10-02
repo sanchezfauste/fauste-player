@@ -197,6 +197,7 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             state.playlists.duplicate(entry, new_id)?;
             refresh_next(state);
         }
+        Command::ResetPlayed(playlist) => crate::reset_played::reset_played(state, playlist)?,
         Command::CreatePlaylist { name } => {
             let id = state.ids.playlist();
             state.playlists.add(Playlist::new(id, name));

@@ -5,8 +5,8 @@ mod common;
 
 use common::{entries, fixture, p0};
 use fp_model::{
-    ColumnWidths, Command, Config, EngineAction, EngineEvent, ModelError, PlaylistId, Transport,
-    apply, on_event,
+    ColumnWidths, Command, Config, EngineAction, EngineEvent, ModelError, PlaylistId, TableColumn,
+    Transport, apply, on_event,
 };
 
 #[test]
@@ -286,10 +286,13 @@ fn update_config_keeps_the_player_count() {
 fn column_widths_are_stored_per_player() {
     let mut state = fixture(1);
     let p = p0(&state);
-    let widths = ColumnWidths {
-        fractions: Some([0.1, 0.5, 0.3, 0.1]),
-    };
-    apply(&mut state, Command::SetColumnWidths(p, widths)).unwrap();
+    let widths = ColumnWidths::keyed([
+        (TableColumn::Number, 0.1),
+        (TableColumn::Title, 0.5),
+        (TableColumn::Artist, 0.3),
+        (TableColumn::Duration, 0.1),
+    ]);
+    apply(&mut state, Command::SetColumnWidths(p, widths.clone())).unwrap();
     assert_eq!(state.player(p).unwrap().columns, widths);
     assert_eq!(state.players[1].columns, ColumnWidths::default());
     assert_eq!(state.player(p).unwrap().transport, Transport::Stopped);

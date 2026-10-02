@@ -18,6 +18,7 @@ use fp_model::{
 use super::app::Scene;
 
 mod carts;
+mod columns;
 mod keys;
 mod meters;
 mod midi;
@@ -1747,6 +1748,9 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         });
     }
+    // O24: the columns of every player's table.
+    ui.add_space(16.0);
+    columns::section(ui, scene);
 }
 
 fn pick_folder(scene: &Scene<'_>) -> Option<Receiver<Option<PathBuf>>> {

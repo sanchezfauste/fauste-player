@@ -50,6 +50,11 @@ col-number = #
 col-title = Título
 col-artist = Artista
 col-duration = Dur.
+col-album = Álbum
+col-date = Fecha
+col-genre = Género
+col-intro = Intro
+col-file_name = Archivo
 footer-add = Añadir
 footer-count = { $count ->
     [one] 1 pista
@@ -495,3 +500,25 @@ tags-cover-unsupported = no es una imagen JPEG ni PNG
 tags-cover-undecodable = no se puede leer como una imagen de un tamaño que acepta el reproductor
 tags-error-cover-not-stored = este formato no puede guardar una carátula
 tags-error-cover = la carátula no es una imagen JPEG o PNG utilizable
+
+footer-reset-played = Reiniciar
+tip-reset-played = Quitar las marcas de reproducida de esta playlist
+reset-played-question = ¿Quitar la marca de reproducida a todas las pistas de esta playlist?
+reset-played-cancel = Cancelar
+reset-played-confirm = Reiniciar
+
+column-name-number = Número (#)
+column-name-title = Título
+column-name-artist = Artista
+column-name-album = Álbum
+column-name-date = Fecha
+column-name-genre = Género
+column-name-duration = Duración
+column-name-intro = Intro
+column-name-file_name = Nombre de archivo
+settings-columns = Columnas de la tabla
+settings-hint-columns = Las columnas de la tabla de cada reproductor. También puedes arrastrar una cabecera en una tabla, o hacer clic derecho en ella.
+settings-column-up = Subir { $column }
+settings-column-down = Bajar { $column }
+settings-columns-default = Columnas por defecto
+settings-column-required = Siempre visible

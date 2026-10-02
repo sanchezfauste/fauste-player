@@ -12,8 +12,11 @@
 | `services.rs` | The services thread (analysis and autosave; see [Persistence](persistence.md) and [Analysis](analysis.md)) |
 | `ui/app.rs` | `AppUi`: the main screen, keyboard, notices, OS drops, file-dialog results |
 | `ui/player.rs` | One player column: header, info row, transport, waveform, tabs, footer |
-| `ui/table.rs` | The track table (virtualised rows, drag and drop, context menu, column widths) |
-| `ui/settings.rs` | The Settings modal (outputs, players and language, analysis, playlists) |
+| `ui/table.rs` | The track table: virtualised rows, drag and drop, context menu, the configured columns, the header (drag to reorder, menu) and the live column resize |
+| `ui/table_layout.rs` | The pure widths of the table's columns: `column_min`, `fit`, `column_px`, `resize_px`, `fractions_of`; unit-tested |
+| `ui/reset_played.rs` | The Reset played question (O22): `show` returns `Some(true)`, `Some(false)` or `None`; the footer button in `player.rs` sets `ViewState::confirm_reset`, `AppUi` draws it below the close guard and sends `Command::ResetPlayed`; Esc and a deleted playlist close it; no shortcut or file drop acts under it |
+| `ui/settings.rs` | The Settings modal (outputs, players and language, analysis, playlists and their table columns) |
+| `ui/settings/columns.rs` | Settings → Playlists → Table columns: `column_rows`, the checkboxes, the arrows (`move_column`) and Default columns; every change goes through `Scene::set_table_columns` |
 | `ui/settings/carts.rs`, `ui/settings/keys.rs` | Settings → Cartwall (pages, grid, cart editor, import and export) and → Keyboard shortcuts (capture, conflicts) |
 | `ui/settings/remote.rs` | Settings → Remote: the HTTP and OSC switches, addresses, token, origins and senders, and each server's state read from the remote thread's status cell |
 | `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall strip, and its pure view model (status, countdown, progress). The bar's "Stop all (n)" button sends `Command::StopAllCarts` and shows `cartwall.playing.len()`; it is the first item of a right-to-left row so it never gives way to the tabs. |
@@ -48,7 +51,7 @@ Each frame, `AppUi::ui`:
    otherwise every 100 ms for the clock.
 
 The UI keeps only **view state**: selection, drag target,
-column widths being dragged, the Settings section. Everything else comes
+the column edge being dragged (`LiveResize`), the Settings section. Everything else comes
 from the snapshot.
 
 `Controller` is implemented by `ConductorHandle`. The tests use a fake that
@@ -76,22 +79,59 @@ language the interface was built with.
   Alt-drag editing is unchanged. The countdowns, the duration column and the
   playlist totals use `Track::play_range`.
 
-## Track table layout and follow
+## Track table layout, columns and follow
 
-`view::column_px` turns `ColumnWidths.fractions` (or the default layout) into
-pixel widths for the table's width every frame; `ViewState::table_layout`
-remembers the width and fractions last applied, and `TableBuilder::reset()`
-runs when either changes (not during a handle drag), since egui keeps the
-widths it was first given. On handle release the widths are stored back as
-fractions.
+**Columns.** The table draws `config.ui.table_columns` (repaired with
+`normalize_columns` on every frame, so a list set without `Config::validate`
+still has Title and Duration). Each cell is a `match` on `TableColumn` in
+`track_table`; the text of the plain columns is `view::cell_text`.
 
-`player::follow_current` watches each player's current entry
+**Widths.** `ColumnWidths.fractions` is a map from column to fraction (the
+old four-number array is converted when the session loads). `table_layout::column_px`
+turns it, the shown columns and the table's width into pixels on every frame:
+the stored fraction of each shown column scaled to the room left by the
+columns that have none (they take their default width), the minimums
+(`column_min`) winning, and the sum always equal to the width. Every column
+is given to egui as `Column::exact(px)` with `resizable(false)`, so
+`TableBuilder` keeps no width of its own (the old `TableBuilder::reset()` and
+`ViewState::table_layout` are gone). `TableBuilder::min_scrolled_height(0.0)`
+is set because its default of 200 points hides the last rows under the footer
+in a short window.
+
+**Live resize (O16).** `egui_extras` 0.36 recomputes only the dragged column,
+one frame late, so the table draws its own grab zones (`resize_handles`, after
+the body so they win over the rows). Dragging one creates
+`ViewState::live_resize`; `live_widths`, called before anything is drawn,
+reads the raw pointer and calls the pure `resize_px` (the columns left of the
+edge keep their width, the ones on its right share what is left in proportion
+to their widths when the drag began, minimums respected). On release, if
+anything moved, it sends one `SetColumnWidths` with `fractions_of(columns,
+px)` and keeps drawing those widths for up to `HOLD_SECS` until the model has
+them. A drag whose columns or table width changed is dropped. `AppUi::column_widths`
+reports the pixels of the last frame (tests use it).
+
+**Header.** Each header cell is dragged with a `DragColumn { index }` payload;
+a drop on the left half of a cell sends `Scene::set_table_columns(move_column_before(..))`,
+on the right half the slot after it; the drop line is drawn on the edge. The
+cell's context menu (`header_menu`) lists the optional columns with
+`with_column_shown`; the Settings list uses `with_column_shown` and
+`move_column`. The payload type is not `DragEntry`, so a dragged track
+never reorders columns nor the other way round. `set_table_columns` sends one
+`UpdateConfig`, validated by the reducer, unless the validated list is
+already in use.
+
+**Follow.** `player::follow_current` watches each player's current entry
 (`ViewState::followed`). A change waits in `follow_pending` until
 `scene.time − table_touched ≥ ui.follow_current_grace_secs` (a scroll over
 the table, an entry drag, an open row menu or a tab click update
-`table_touched`); then it sends `ShowPlaylist` if needed and puts the entry
-in `follow_scroll`, which `track_table` turns into `scroll_to_row(i,
-Align::TOP)` once the playlist is shown. A grace of 0 never follows.
+`table_touched`); then it sends `ShowPlaylist` if needed and puts a
+`FollowScroll { entry, align: TOP, animated: true }` in `follow_scroll`, which
+`track_table` turns into `scroll_to_row` once the playlist is shown. A grace
+of 0 never follows. At start-up `player::scroll_to_next_once` does the same
+once per player (`ViewState::startup_scrolled`) for `view::start_scroll_target`,
+the player's next entry when it is in the playlist the tab shows, with
+`Align::Center` and no animation; the scroll area's own clamping keeps it
+inside the list.
 
 ## Track tooltip and tag editor
 

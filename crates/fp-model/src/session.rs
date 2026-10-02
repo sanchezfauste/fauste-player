@@ -99,7 +99,7 @@ impl AppState {
                     0.0
                 },
                 volume: p.volume,
-                columns: p.columns,
+                columns: p.columns.clone(),
                 history: p.history.clone(),
             })
             .collect()
@@ -261,7 +261,7 @@ fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     };
     player.stop_after_current = s.mode == PlayMode::Continuous && s.stop_after_current;
     player.volume = volume;
-    player.columns = s.columns.normalized();
+    player.columns = s.columns.clone().normalized();
     // Only entries that still exist, and no more than the configured depth.
     let kept: Vec<EntryId> = s
         .history

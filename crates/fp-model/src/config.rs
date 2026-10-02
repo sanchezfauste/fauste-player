@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::columns::{TableColumn, default_columns, normalize_columns};
 use crate::ids::PlayerId;
 use crate::player::PlayMode;
 use crate::shortcuts::{Shortcut, default_shortcuts};
@@ -365,6 +366,9 @@ pub struct UiConfig {
     /// playlist), it stops following what plays for this long (seconds);
     /// 0 never follows.
     pub follow_current_grace_secs: f64,
+    /// The columns of the track tables, in order; one list for every player
+    /// and playlist (feedback 2 spec O24). Title and Duration are required.
+    pub table_columns: Vec<TableColumn>,
 }
 
 impl Default for UiConfig {
@@ -374,6 +378,7 @@ impl Default for UiConfig {
             music_dir: None,
             language: None,
             follow_current_grace_secs: 10.0,
+            table_columns: default_columns(),
         }
     }
 }
@@ -601,6 +606,14 @@ impl Config {
             "ui.follow_current_grace_secs",
             &mut w,
         );
+        let columns = normalize_columns(&self.ui.table_columns);
+        if columns != self.ui.table_columns {
+            w.push(ConfigWarning {
+                field: "ui.table_columns",
+                message: format!("{:?} repaired to {columns:?}", self.ui.table_columns),
+            });
+            self.ui.table_columns = columns;
+        }
 
         let a = &mut self.analysis;
         clamp_to(

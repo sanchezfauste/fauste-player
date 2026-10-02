@@ -5,6 +5,7 @@
 pub mod availability;
 mod cart_rules;
 pub mod cartwall;
+pub mod columns;
 pub mod command;
 pub mod config;
 mod entry_notice;
@@ -16,6 +17,7 @@ pub mod player;
 pub mod playlist;
 pub mod reducer;
 pub mod remote;
+pub mod reset_played;
 pub mod restart;
 pub mod restore;
 pub mod session;
@@ -30,6 +32,10 @@ pub use availability::{Availability, availability, command_available};
 pub use cartwall::{
     Cart, CartEdit, CartFileChange, CartKind, CartPage, CartPageImport, Cartwall, CartwallSession,
     PlayingCart,
+};
+pub use columns::{
+    TableColumn, column_rows, default_columns, move_column, move_column_before, normalize_columns,
+    with_column_shown,
 };
 pub use command::{
     CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
@@ -48,6 +54,7 @@ pub use player::{ColumnWidths, CueState, PlayMode, PlayerState, Transport};
 pub use playlist::{Playlist, PlaylistEntry, Playlists};
 pub use reducer::{apply, on_event, plan_for};
 pub use remote::{HttpRemoteConfig, OscRemoteConfig, RemoteConfig, RemoteEventsConfig};
+pub use reset_played::{can_reset_played, resettable_entries};
 pub use restart::{RestartReason, restart_pending};
 pub use restore::{SettingsSection, restore_defaults};
 pub use session::{PlayerSession, RestoreParts};

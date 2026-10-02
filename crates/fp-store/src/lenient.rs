@@ -154,4 +154,42 @@ mod tests {
         assert_eq!(c.remote.http.port, 7380);
         assert_eq!(warnings.len(), 1);
     }
+
+    fn columns(json: &str) -> (Vec<fp_model::TableColumn>, Vec<String>) {
+        let user: serde_json::Value = serde_json::from_str(json).unwrap();
+        let mut warnings = Vec::new();
+        let mut c = config_from_value(&user, &mut warnings);
+        let _ = c.validate();
+        (c.ui.table_columns, warnings)
+    }
+
+    #[test]
+    fn a_config_without_table_columns_gets_the_default() {
+        let (list, warnings) = columns(r#"{"ui":{"language":"es-ES"}}"#);
+        assert_eq!(list, fp_model::default_columns());
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn unknown_columns_are_dropped_and_the_others_kept() {
+        use fp_model::TableColumn::{Album, Duration, Title};
+        let (list, warnings) =
+            columns(r#"{"ui":{"table_columns":["title","bpm","album","duration"]}}"#);
+        assert_eq!(list, vec![Title, Album, Duration]);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+    }
+
+    #[test]
+    fn missing_required_columns_are_added_back() {
+        use fp_model::TableColumn::{Artist, Duration, Title};
+        let (list, _) = columns(r#"{"ui":{"table_columns":["artist"]}}"#);
+        assert_eq!(list, vec![Title, Artist, Duration]);
+    }
+
+    #[test]
+    fn a_table_columns_value_that_is_not_a_list_loads_as_the_default() {
+        let (list, warnings) = columns(r#"{"ui":{"table_columns":"title"}}"#);
+        assert_eq!(list, fp_model::default_columns());
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+    }
 }

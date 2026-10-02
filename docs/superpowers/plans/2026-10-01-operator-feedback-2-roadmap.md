@@ -2,7 +2,7 @@
 
 **Spec:** [`docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md`](../specs/2026-10-01-operator-feedback-2-design.md)
 
-The spec groups items O1–O24 into ten plans. Plan 1 is written in full in
+The spec groups items O1–O30 into eleven plans. Plan 1 is written in full in
 [`2026-10-01-feedback2-plan1-window-lifecycle.md`](2026-10-01-feedback2-plan1-window-lifecycle.md).
 Each later plan is written with `superpowers:writing-plans` just before it
 runs, against the code that the earlier plans left. Each plan reaches
@@ -32,9 +32,10 @@ runs, against the code that the earlier plans left. Each plan reaches
 | 5 | Cue markers off | O15 | `feat/cue-markers-off` | done |
 | 6 | Player and CUE | O8, O10, O12, O17 | `feat/cue-window` | done |
 | 7 | Track tags | O23 | `feat/track-tags` | done |
-| 8 | Track table | O7, O9, O16, O22, O24 | `feat/table-columns` | outline |
+| 8 | Track table | O7, O9, O16, O22, O24 | `feat/table-columns` | done |
 | 9 | Audit follow-ups | O21 | `fix/audit-follow-ups` | outline |
-| 10 | Website | O1 | `docs/website` | outline |
+| 10 | Audio path | O25, O26, O27 | `feat/audio-path` | outline |
+| 11 | Website and guide | O1, O28, O29, O30 | `docs/website` | outline |
 
 ## Notes for the later plans
 
@@ -44,4 +45,6 @@ runs, against the code that the earlier plans left. Each plan reaches
   button, its count, the shared glyphs module and the shortcut.
 - **Plan 6** draws the CUE window's icons through plan 4's `ui/glyphs.rs`.
 - **Plan 8** builds the new columns on plan 7's tag fields.
-- **Plan 10** runs last, so that it publishes the final docs.
+- **Plan 10** starts with the audio-path audit (O26); its findings may add
+  tasks before the DSD work (O25).
+- **Plan 11** runs last, so that it publishes the final docs.

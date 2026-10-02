@@ -50,6 +50,11 @@ col-number = #
 col-title = Title
 col-artist = Artist
 col-duration = Dur.
+col-album = Album
+col-date = Date
+col-genre = Genre
+col-intro = Intro
+col-file_name = File name
 footer-add = Add
 footer-count = { $count ->
     [one] 1 track
@@ -495,3 +500,25 @@ tags-cover-unsupported = it is not a JPEG or PNG image
 tags-cover-undecodable = it cannot be read as an image of a size the player accepts
 tags-error-cover-not-stored = this format cannot store a cover
 tags-error-cover = the cover is not a usable JPEG or PNG image
+
+footer-reset-played = Reset played
+tip-reset-played = Clear the played marks of this playlist
+reset-played-question = Clear the played mark of every track in this playlist?
+reset-played-cancel = Cancel
+reset-played-confirm = Reset played
+
+column-name-number = Number (#)
+column-name-title = Title
+column-name-artist = Artist
+column-name-album = Album
+column-name-date = Date
+column-name-genre = Genre
+column-name-duration = Duration
+column-name-intro = Intro
+column-name-file_name = File name
+settings-columns = Table columns
+settings-hint-columns = The columns of every player's table. You can also drag a header in a table, or right-click one.
+settings-column-up = Move { $column } up
+settings-column-down = Move { $column } down
+settings-columns-default = Default columns
+settings-column-required = Always shown

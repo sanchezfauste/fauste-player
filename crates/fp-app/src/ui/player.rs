@@ -10,7 +10,7 @@ use egui::{
 use egui_phosphor::regular as icon;
 use fp_model::{Command, MarkerKind, PlayMode, PlayerId, PlaylistId, TrackId};
 
-use super::app::{DragEntry, Scene, ViewState};
+use super::app::{DragEntry, FollowScroll, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::table;
@@ -82,6 +82,7 @@ pub(crate) fn column(
             wave(ui, scene, view_state, id, &pv);
             time_row(ui, &pv);
         });
+    scroll_to_next_once(scene, view_state, id);
     follow_current(scene, view_state, id, player.playlist);
     tabs(ui, scene, view_state, id, player.playlist);
     let footer_top = ui.max_rect().bottom() - FOOTER_HEIGHT;
@@ -101,7 +102,7 @@ pub(crate) fn column(
             .max_rect(footer_rect)
             .layout(Layout::left_to_right(Align::Center)),
     );
-    footer(&mut footer_ui, scene, id, player.playlist);
+    footer(&mut footer_ui, scene, view_state, id, player.playlist);
 }
 
 /// Follows the player's current entry in its table (feedback spec F18):
@@ -143,7 +144,34 @@ fn follow_current(scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId, s
     if playlist != shown {
         scene.ctl.send(Command::ShowPlaylist(id, playlist));
     }
-    view_state.follow_scroll.insert(id, entry);
+    view_state.follow_scroll.insert(
+        id,
+        FollowScroll {
+            entry,
+            align: Align::TOP,
+            animated: true,
+        },
+    );
+}
+
+/// O7: the first time a player's column is drawn (the start of the
+/// application, or a player added later), its table scrolls so that the
+/// next entry is in the middle. Never again: after that the operator, and
+/// the following of the current entry, own the scroll position.
+fn scroll_to_next_once(scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId) {
+    if !view_state.startup_scrolled.insert(id) {
+        return;
+    }
+    if let Some(entry) = view::start_scroll_target(scene.state, id) {
+        view_state.follow_scroll.insert(
+            id,
+            FollowScroll {
+                entry,
+                align: Align::Center,
+                animated: false,
+            },
+        );
+    }
 }
 
 fn small_caps(text: &str, color: Color32) -> RichText {
@@ -1129,7 +1157,13 @@ fn tabs(
     ui.painter().rect_filled(bottom, 0.0, theme::NEUTRAL_800);
 }
 
-fn footer(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: PlaylistId) {
+fn footer(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    id: PlayerId,
+    playlist: PlaylistId,
+) {
     let t = scene.i18n;
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
@@ -1171,6 +1205,34 @@ fn footer(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: PlaylistId) {
             .get(playlist)
             .map_or(0, |p| p.entries.len());
         scene.pick_files(playlist, len);
+    }
+    // O22: clear the played marks of this playlist, after a question.
+    let reset = t.tr("footer-reset-played");
+    let reset_width = ui
+        .painter()
+        .layout_no_wrap(reset.clone(), font(10.0), theme::NEUTRAL_300)
+        .size()
+        .x
+        + 26.0;
+    if widgets::tile(
+        ui,
+        vec2(reset_width, 18.0),
+        &t.tr("tip-reset-played"),
+        fp_model::can_reset_played(scene.state, playlist),
+        TileStyle::plain(),
+        |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                format!("{} {reset}", icon::ARROW_COUNTER_CLOCKWISE),
+                font(10.0),
+                c,
+            );
+        },
+    )
+    .clicked()
+    {
+        view_state.confirm_reset = Some(playlist);
     }
     let len = scene
         .state

@@ -28,6 +28,7 @@ use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::notice;
 use super::player;
 use super::playlist_files::{self, FileOutcome};
+use super::reset_played;
 use super::settings::{self, SettingsDeps, SettingsState};
 use super::tag_editor;
 use super::theme;
@@ -42,6 +43,13 @@ const STATUS_BAR_HEIGHT: f32 = 24.0;
 const NOTICE_SECS: f64 = 5.0;
 /// Idle repaint period (the clock).
 const IDLE_REPAINT: Duration = Duration::from_millis(100);
+
+/// The payload of a column header being dragged (feedback 2 spec O24): its
+/// position in the list of columns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DragColumn {
+    pub index: usize,
+}
 
 /// The payload of an entry being dragged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +70,17 @@ pub(crate) struct Picked {
     paths: Vec<PathBuf>,
 }
 
+/// A row a player's table scrolls to once its playlist is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FollowScroll {
+    pub entry: EntryId,
+    /// Where the row ends up: the top (following the current entry) or the
+    /// middle (the next entry at start-up).
+    pub align: Align,
+    /// Whether the table glides to the row; start-up jumps.
+    pub animated: bool,
+}
+
 /// Everything the UI remembers between frames.
 #[derive(Default)]
 pub(crate) struct ViewState {
@@ -69,8 +88,11 @@ pub(crate) struct ViewState {
     pub active_player: Option<PlayerId>,
     pub drop: Option<DropTarget>,
     pub file_drop: Option<DropTarget>,
-    pub widths: HashMap<PlayerId, [f32; 4]>,
-    pub resizing: HashSet<PlayerId>,
+    /// The pixel widths of each player's table columns in the last frame,
+    /// in the order of `ui.table_columns`.
+    pub widths: HashMap<PlayerId, Vec<f32>>,
+    /// The column edge being dragged (feedback 2 spec O16).
+    pub(crate) live_resize: Option<super::table::LiveResize>,
     pub rows_built: usize,
     pub settings_open: bool,
     pub about_open: bool,
@@ -92,11 +114,11 @@ pub(crate) struct ViewState {
     /// A current entry the table will follow once the operator's grace has
     /// passed (feedback spec F18).
     pub follow_pending: HashMap<PlayerId, EntryId>,
-    /// A row the table scrolls to the top once its playlist is shown.
-    pub follow_scroll: HashMap<PlayerId, EntryId>,
-    /// The table width and column fractions each player's table was last
-    /// laid out with (a change resets egui's column widths).
-    pub table_layout: HashMap<PlayerId, (f32, Option<[f32; 4]>)>,
+    /// A row the table scrolls to once its playlist is shown.
+    pub follow_scroll: HashMap<PlayerId, FollowScroll>,
+    /// The players whose table already had its start-up scroll to the next
+    /// entry (feedback 2 spec O7); it happens once, on their first frame.
+    pub startup_scrolled: HashSet<PlayerId>,
     /// Zoomed waveforms; a player without one shows the whole track.
     pub wave_zoom: HashMap<PlayerId, super::wave_view::WaveZoom>,
     /// A marker being dragged on a waveform, and the track it belongs to.
@@ -108,6 +130,9 @@ pub(crate) struct ViewState {
     pub edit_tags: Option<TrackId>,
     /// The tag editor, while it is open.
     pub(crate) tag_editor: Option<tag_editor::TagEditor>,
+    /// The playlist whose Reset played waits for the operator's answer
+    /// (feedback 2 spec O22).
+    pub confirm_reset: Option<PlaylistId>,
     notice: Option<(String, f64)>,
 }
 
@@ -133,6 +158,17 @@ impl Scene<'_> {
         let key = super::view::file_problem(track)?;
         let path = track.path.display().to_string();
         Some(self.i18n.tr_args(key, &[("path", path.into())]))
+    }
+
+    /// Sends the new list of table columns (feedback 2 spec O24), unless it
+    /// is the one in use. The model repairs it (`Config::validate`).
+    pub fn set_table_columns(&self, columns: Vec<fp_model::TableColumn>) {
+        let mut config = self.state.config.clone();
+        config.ui.table_columns = columns;
+        let _ = config.validate();
+        if config.ui.table_columns != self.state.config.ui.table_columns {
+            self.ctl.send(Command::UpdateConfig(Box::new(config)));
+        }
     }
 
     /// Opens the native file dialog without blocking the interface.
@@ -390,9 +426,10 @@ impl AppUi {
         self.view.rows_built
     }
 
-    /// The pixel widths of a player's table columns in the last frame.
-    pub fn column_widths(&self, player: PlayerId) -> Option<[f32; 4]> {
-        self.view.widths.get(&player).copied()
+    /// The pixel widths of a player's table columns in the last frame, in
+    /// the order of `ui.table_columns`.
+    pub fn column_widths(&self, player: PlayerId) -> Option<Vec<f32>> {
+        self.view.widths.get(&player).cloned()
     }
 
     pub fn ui(&mut self, ui: &mut Ui) {
@@ -665,6 +702,22 @@ impl AppUi {
                 }
             }
         }
+        // O22: Reset played asks before it clears the marks of a playlist.
+        if let Some(playlist) = self.view.confirm_reset {
+            if state.playlists.get(playlist).is_none() {
+                // The playlist went away meanwhile: nothing left to confirm.
+                self.view.confirm_reset = None;
+            } else {
+                match reset_played::show(&ctx, &scene) {
+                    Some(true) => {
+                        scene.ctl.send(Command::ResetPlayed(playlist));
+                        self.view.confirm_reset = None;
+                    }
+                    Some(false) => self.view.confirm_reset = None,
+                    None => {}
+                }
+            }
+        }
         // O4: Restart now asks the close guard first when audio is on air.
         if std::mem::take(&mut self.view.restart_requested) {
             if fp_model::on_air(&state).is_empty() {
@@ -703,7 +756,7 @@ impl AppUi {
             }
         }
         // Files dropped under the tag editor are discarded, like shortcuts.
-        if take_drops && self.view.tag_editor.is_none() {
+        if take_drops && self.view.tag_editor.is_none() && self.view.confirm_reset.is_none() {
             self.file_drops(&ctx, &state);
         }
         let busy = state
@@ -928,6 +981,24 @@ impl AppUi {
         }
         // The tag editor is modal: no shortcut, not even Delete, acts under it.
         if self.view.tag_editor.is_some() {
+            return;
+        }
+        // So is the Reset played question: Esc cancels it, nothing else acts.
+        if self.view.confirm_reset.is_some() {
+            let escape = ctx.input(|i| {
+                i.events.iter().any(|e| {
+                    matches!(e, egui::Event::Key {
+                        key: Key::Escape,
+                        pressed: true,
+                        repeat: false,
+                        modifiers,
+                        ..
+                    } if modifiers.is_none())
+                })
+            });
+            if escape {
+                self.view.confirm_reset = None;
+            }
             return;
         }
         // Configured shortcuts whose key the toolkit knows.

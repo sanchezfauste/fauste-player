@@ -137,6 +137,10 @@ back.
   and **delete** (trash icon).
 - **Import M3U / PLS…** creates a new playlist from a playlist file. **M3U**
   on each row exports it as M3U8. See [Playlists](playlists.md).
+- **Table columns:** which columns the track tables show and in which order,
+  for every player: a checkbox per column (Title and Dur. cannot be turned
+  off), up and down arrows for the shown ones, and **Default columns**. See
+  [Playlists](playlists.md).
 
 **Language:** System, English or Español. The interface switches at once.
 
