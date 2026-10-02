@@ -390,3 +390,29 @@ fn stop_keeps_the_self_next_so_play_starts_the_entry_again() {
     let out = apply(&mut s, Command::Play(p)).unwrap();
     assert!(starts_of(&out, a), "{out:?}");
 }
+
+#[test]
+fn an_ordinary_next_whose_file_went_missing_is_still_preloaded_so_it_can_fail_and_be_skipped() {
+    let (mut s, p, [_, b, c]) = three();
+    apply(&mut s, Command::Play(p)).unwrap();
+    let t = s.track_for_entry(c).unwrap().id;
+    apply(
+        &mut s,
+        Command::SetFileState {
+            track: t,
+            state: fp_model::FileState::Missing,
+        },
+    )
+    .unwrap();
+    let out = apply(&mut s, Command::SetNext(p, c)).unwrap();
+    assert_eq!(preload(&out, p), Some(Some(c)), "{out:?}");
+    let out = on_event(
+        &mut s,
+        EngineEvent::PreloadFailed {
+            player: p,
+            entry: c,
+        },
+    );
+    assert_ne!(s.player(p).unwrap().next, Some(c), "{out:?}");
+    let _ = b;
+}

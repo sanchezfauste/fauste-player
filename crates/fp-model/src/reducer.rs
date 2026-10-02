@@ -1128,17 +1128,11 @@ fn repeating(state: &AppState, player: &PlayerState) -> bool {
 /// The entry to preload: the current one while it repeats, else the next
 /// (with a self-next, O37, that is the current entry too).
 fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
-    let target = if repeating(state, player) {
+    if repeating(state, player) {
         player.current
     } else {
         player.next
-    };
-    // Never prepare an entry whose file cannot be played.
-    target.filter(|e| {
-        state
-            .track_for_entry(*e)
-            .is_none_or(|t| t.file_state.is_playable())
-    })
+    }
 }
 
 /// Derives the engine work implied by the state: preload whatever is next.
