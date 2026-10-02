@@ -507,14 +507,15 @@ impl Services {
         let outcomes: Vec<TagOutcome> = worker.results().try_iter().collect();
         for outcome in outcomes {
             if let TagOutcome::Read { track, tags } = outcome {
-                // Answered either way. If the command is refused the track
+                // Answered either way. If the command is not queued the track
                 // still needs its read, so the next round asks again.
                 self.tags_in_flight.remove(&track);
-                self.tags_answered.insert(track);
-                self.conductor.send(Command::ApplyTags {
+                if self.conductor.send(Command::ApplyTags {
                     track,
                     tags: Box::new(tags),
-                });
+                }) {
+                    self.tags_answered.insert(track);
+                }
             }
         }
     }
