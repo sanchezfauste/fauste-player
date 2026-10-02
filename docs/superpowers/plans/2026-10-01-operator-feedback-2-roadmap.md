@@ -36,7 +36,7 @@ runs, against the code that the earlier plans left. Each plan reaches
 | 9 | Audit follow-ups | O21 | `fix/audit-follow-ups` | done |
 | 10 | Audio path | O25, O26, O27, O34 | `feat/audio-path` | outline |
 | 11 | Website and guide | O1, O28, O29, O30 | `docs/website` | outline |
-| 12 | Window and layout | O31, O32, O33, O35, O36 | `fix/window-layout` | outline |
+| 12 | Window and layout | O31, O32, O33, O35, O36 | `fix/window-layout` | done |
 | 13 | Player rules | O37, O38 | `feat/player-rules` | outline |
 
 ## Notes for the later plans

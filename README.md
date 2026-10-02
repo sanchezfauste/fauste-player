@@ -31,7 +31,8 @@ audio engine that the interface can never block.
 - **Independent players:** four by default, any number configurable. Each
   has Play/Next, Stop, Fade stop, Pause and Stop-after-current, SINGLE and
   CONT modes, a countdown with tenths, a stereo meter, a volume fader and
-  its own playlist tabs. Times keep a fixed width as they count.
+  its own playlist tabs (they shrink, cut long names and scroll). Times keep
+  a fixed width as they count.
 - **About window:** the window's title bar shows "Fauste Player <version>";
   the info button next to Settings opens the copyright and the licence
   notices of the bundled components.
@@ -56,7 +57,8 @@ audio engine that the interface can never block.
 - **Cartwall:** pages of instant carts (jingles, effects, spots), each with a
   configurable grid. Carts overlap by default; they can loop gaplessly or stop
   the others, and a **Stop all** button stops every playing cart. They have
-  their own Main and Cue outputs. Pages can be imported and exported.
+  their own Main and Cue outputs. The configured rows always fit the window
+  (the buttons shrink to a minimum before the area scrolls). Pages can be imported and exported.
 - **Tag editor and track tooltip:** hover a track for its tags, format and
   path; edit the common tag fields (title, artist, album, date, track and
   disc numbers, genre, BPM, key, lyrics and more) and the front cover (view,
@@ -136,7 +138,8 @@ file has a `.sha256` next to it.
 
 See the [getting started guide](docs/user/getting-started.md) for installing,
 updating and removing each one, and for first starts of unsigned builds on
-macOS and Windows.
+macOS and Windows. The Windows release is a GUI program: it opens no console
+window.
 
 ## Build from source
 
