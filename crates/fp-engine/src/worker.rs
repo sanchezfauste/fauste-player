@@ -11,6 +11,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use fp_decode::priority::Priority;
 
 use crate::decode::FileDecoder;
 use crate::resample::{StreamResampler, aligned_preroll};
@@ -238,6 +239,10 @@ fn run(
     ready_frames: usize,
     failures: &Sender<WorkerFailure>,
 ) {
+    // Above normal, never real time (main spec §2.2): the ring buffers must
+    // not run dry because the interface or the analysis pool took the
+    // processor. A system that refuses leaves the thread at normal priority.
+    fp_decode::priority::set_current(Priority::AboveNormal, "decoder");
     let mut jobs: Vec<Job> = Vec::new();
     loop {
         let busy = jobs.iter().any(|j| !j.done && j.producer.free_frames() > 0);

@@ -356,3 +356,44 @@ fn promoting_a_job_already_answered_does_nothing() {
             .is_err()
     );
 }
+
+/// Analysis is background work (main spec §2.2): its threads run at the
+/// lowest priority, so decoding and the interface keep the processor.
+#[cfg(target_os = "linux")]
+#[test]
+fn the_pool_runs_at_low_priority() {
+    use std::sync::Mutex;
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let record = seen.clone();
+    let probe: AnalyzeFn = Arc::new(move |path, settings, limits, _cancelled| {
+        // The nice value of the thread running this job (field 19).
+        let stat = std::fs::read_to_string("/proc/thread-self/stat").unwrap();
+        let nice: i32 = stat
+            .rsplit_once(')')
+            .unwrap()
+            .1
+            .split_whitespace()
+            .nth(16)
+            .unwrap()
+            .parse()
+            .unwrap();
+        record.lock().unwrap().push(nice);
+        analyze_file(path, settings, limits)
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let analyzer = Analyzer::with_analyze_fn(
+        2,
+        AnalysisSettings::default(),
+        Limits::default(),
+        None,
+        probe,
+    )
+    .unwrap();
+    for n in 0..4 {
+        analyzer.submit(TrackId(n), wav(dir.path(), &format!("{n}.wav")));
+    }
+    for _ in 0..4 {
+        analyzer.results().recv_timeout(WAIT).unwrap();
+    }
+    assert_eq!(*seen.lock().unwrap(), vec![19; 4]);
+}
