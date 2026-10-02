@@ -354,12 +354,18 @@ pub fn scale_marks(c: &MeterConfig) -> Vec<f32> {
             marks.push(0.0);
             marks
         }
-        MeterBallistics::DigitalPeak | MeterBallistics::Custom => [
-            -60.0, -50.0, -40.0, -35.0, -30.0, -25.0, -20.0, -15.0, -10.0, -5.0, 0.0,
-        ]
-        .into_iter()
-        .filter(|m| *m >= c.floor_db)
-        .collect(),
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => {
+            // The floor is the bottom of the scale, so it is always a mark;
+            // the round marks above it stay.
+            let mut marks: Vec<f32> = [
+                -60.0, -50.0, -40.0, -35.0, -30.0, -25.0, -20.0, -15.0, -10.0, -5.0, 0.0,
+            ]
+            .into_iter()
+            .filter(|m| *m > c.floor_db + SAME_MARK_DB)
+            .collect();
+            marks.insert(0, c.floor_db);
+            marks
+        }
     }
 }
 
@@ -686,15 +692,33 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         alignment.label.clear();
     }
     let mut lines: Vec<MeterLine> = Vec::new();
-    // Both ends of the scale first, so its range is always labelled; then
-    // top down, so where the scale is dense the upper marks are kept.
+    let crowds = |kept: &MeterLine, candidate: &MeterLine| {
+        !kept.label.is_empty()
+            && !candidate.label.is_empty()
+            && (kept.label_y - candidate.label_y).abs() < LABEL_ROW
+    };
+    // Both ends of the scale first, so its range is always labelled.
     let ends = [marks.last().copied(), marks.first().copied()];
+    for mark in ends.into_iter().flatten() {
+        if (mark - alignment_dbfs(c)).abs() < SAME_MARK_DB {
+            continue;
+        }
+        let candidate = line(mark, false);
+        if !lines.iter().any(|kept| crowds(kept, &candidate)) {
+            lines.push(candidate);
+        }
+    }
+    // The alignment label gives way to an end label; its line stays.
+    if lines.iter().any(|kept| crowds(kept, &alignment)) {
+        alignment.label.clear();
+    }
+    // Then top down, so where the scale is dense the upper marks are kept.
     let middle = marks
         .iter()
         .rev()
         .skip(1)
         .take(marks.len().saturating_sub(2));
-    for mark in ends.into_iter().flatten().chain(middle.copied()) {
+    for mark in middle.copied() {
         if (mark - alignment_dbfs(c)).abs() < SAME_MARK_DB {
             continue;
         }
@@ -702,8 +726,7 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         let crowded = lines
             .iter()
             .chain(std::iter::once(&alignment))
-            .filter(|kept| !kept.label.is_empty())
-            .any(|kept| (kept.label_y - candidate.label_y).abs() < LABEL_ROW);
+            .any(|kept| crowds(kept, &candidate));
         if !crowded {
             lines.push(candidate);
         }

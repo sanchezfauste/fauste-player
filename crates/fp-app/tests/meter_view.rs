@@ -295,6 +295,67 @@ fn both_ends_of_every_scale_are_labelled() {
 }
 
 #[test]
+fn the_digital_floor_is_always_the_bottom_mark() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::Custom] {
+        for floor in [-96.0, -90.0, -55.0, -52.0, -45.0, -20.0] {
+            let c = MeterConfig {
+                ballistics,
+                floor_db: floor,
+                reference_dbfs: floor + 10.0,
+                ..MeterConfig::default()
+            };
+            let marks = scale_marks(&c);
+            assert_eq!(marks.first(), Some(&floor), "{ballistics:?} {floor}");
+            assert_eq!(marks.last(), Some(&0.0));
+            assert!(
+                marks.windows(2).all(|w| w[0] < w[1]),
+                "strictly increasing: {marks:?}"
+            );
+        }
+    }
+}
+
+/// Spec O11: every meter type at 64, 136 and 300 px, with and without the
+/// loudness line, and for several digital floors.
+#[test]
+fn both_ends_stay_labelled_at_every_height() {
+    for ballistics in ALL_METERS {
+        for floor in [-96.0, -60.0, -55.0, -20.0] {
+            for height in [64.0, 136.0, 300.0] {
+                for loudness in [false, true] {
+                    let c = MeterConfig {
+                        ballistics,
+                        floor_db: floor,
+                        reference_dbfs: if floor > -30.0 { floor + 5.0 } else { -18.0 },
+                        ..MeterConfig::default()
+                    };
+                    let marks = scale_marks(&c);
+                    let l = meter_layout(column(height), &c, loudness);
+                    let labelled: Vec<&str> = l
+                        .lines
+                        .iter()
+                        .filter(|m| !m.label.is_empty())
+                        .map(|m| m.label.as_str())
+                        .collect();
+                    for end in [marks.first().unwrap(), marks.last().unwrap()] {
+                        let want = mark_label(*end, &c);
+                        assert!(
+                            labelled.contains(&want.as_str()),
+                            "{ballistics:?} floor {floor} {height}px loudness {loudness}: \
+                             {want} in {labelled:?}"
+                        );
+                    }
+                    // Every label has its line, and the lines are on the bars.
+                    for m in l.lines.iter().filter(|m| !m.label.is_empty()) {
+                        assert!(m.y >= l.bars[0].top() && m.y <= l.bars[0].bottom());
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn a_tall_digital_meter_labels_its_main_marks() {
     let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
     let labels: Vec<&str> = l.lines.iter().map(|m| m.label.as_str()).collect();
