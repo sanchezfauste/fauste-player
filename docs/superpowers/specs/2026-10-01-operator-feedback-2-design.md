@@ -1,7 +1,7 @@
 # Operator Feedback 2 — Design Spec
 
 - **Date:** 2026-10-01
-- **Status:** Approved. Plans 1 to 9 and 12 are built; each plan's section ends with its "As built" notes.
+- **Status:** Approved. Plans 1 to 9, 12 and 13 are built; each plan's section ends with its "As built" notes.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§2 threads,
   §3 rules, §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md)
   (M4 display), the [cartwall and settings spec](2026-09-26-phase2-cartwall-settings-design.md)
@@ -665,6 +665,9 @@ The audit of every earlier plan found these items still open.
   the current entry repeats. In Single mode without a repeating entry it is
   refused as today (`StopAfterInSingle`, the remote API's `409`), since the
   player stops at the end anyway.
+- **As built.**
+  - **O37.** `set_next` accepts the entry on air; the self-next is `next == current` with `next_explicit` (a derived next never wraps, so it is always an operator choice). `plan_for` gives `StartNextAt` at cue-out, hard, never a segue (`StopAt` on an unplayable file); `preload_target` is unchanged, and a too-broad playable filter in it was removed so that an ordinary next whose file went missing is still preloaded. `on_event(TransitionStarted)` tells a repeat pass (`repeating`) from the replay (`next == entry`), and the replay runs `advance_to`, the ordinary play bookkeeping. `NextIsCurrent` and its message are gone. Repeat wins over a self-next, and the self-next survives Stop. Failing preloads and sources replace a self-next on an unreadable file by the following playable entry; the session restore keeps an explicit self-next. After replay then leaving, the history is [e, e] (it records entries left). The engine is unchanged (tests only). UI: the playing row keeps the on-air look and also shows the next arrow; the context menu "Set as next" is enabled on it (disabled when the row already is the explicit next); double-click on it still does nothing; the CUE window's "Load as next" accepts the entry on air.
+  - **O38.** `repeat_entry` (R26 without the flag test) guards `ToggleStopAfterCurrent`, `SetMode`, `availability` and the restore; `reconcile` drops a Single-mode flag as soon as the entry stops repeating. The remote API and MIDI follow `availability`; no code of their own (MIDI has no stop-after or set-next action). The tooltip `tip-stop-after-single` shows only when the control is unavailable.
 
 ## 15. Global constraints
 

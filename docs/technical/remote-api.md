@@ -112,12 +112,12 @@ file is missing, or whose file cannot be decoded, answers `404 not_found`.
 | `POST /players/{id}/restart` | — | Back to the current entry's cue-in (R23) |
 | `POST /players/{id}/previous` | — | Back to the previous entry (R24) |
 | `PUT /players/{id}/cue` | `{"on": bool}` | Pre-listen the next entry, or stop pre-listening |
-| `PUT /players/{id}/next` | `{"entry": id}` | Choose the next entry |
+| `PUT /players/{id}/next` | `{"entry": id}` | Choose the next entry. The entry on air is accepted: it plays once more from its cue-in when the current pass ends |
 | `POST /players/{id}/cue-entry` | `{"entry": id}` | Pre-listen an entry |
 | `POST /players/{id}/seek` | `{"secs": f64}` | Seek within the cue range of what is playing |
 | `PUT /players/{id}/volume` | `{"fader": f32}` | Fader travel 0–1 |
 | `PUT /players/{id}/mode` | `{"mode": "single" \| "continuous"}` | |
-| `PUT /players/{id}/stop-after-current` | `{"on": bool}` | |
+| `PUT /players/{id}/stop-after-current` | `{"on": bool}` | `409` in single mode unless the current entry repeats |
 | `PUT /players/{id}/playlist` | `{"playlist": id}` | Show that playlist in the player |
 | `PUT /entries/{id}/repeat` | `{"on": bool}` | R26 |
 | `PUT /entries/{id}/stop-after` | `{"on": bool}` | R27 |
