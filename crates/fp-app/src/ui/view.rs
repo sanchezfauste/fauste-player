@@ -35,6 +35,9 @@ pub struct MarkerFractions {
     pub outro_start: Option<f32>,
     pub segue_start: Option<f32>,
     pub cue_out: Option<f32>,
+    /// Players ignore cue-in and cue-out: the marks are drawn dimmed and
+    /// the head and tail are not shaded.
+    pub ignored: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -165,6 +168,7 @@ pub fn player_view(
             outro_start: fraction(track.outro_start_secs(), total),
             segue_start: fraction(track.segue_start_secs(), total),
             cue_out: fraction(track.markers.cue_out.map(|m| m.secs), total),
+            ignored: !state.config.players.use_cue_markers,
         };
     }
     Some(view)

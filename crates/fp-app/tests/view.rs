@@ -371,3 +371,16 @@ fn playlist_times_follow_the_play_range() {
     use_markers(&mut s, false);
     assert_eq!(playlist_times(&s, p, playlist, &[]).total, 600.0);
 }
+
+#[test]
+fn the_view_says_when_the_cue_marks_are_ignored() {
+    let (mut s, e, p) = state(2);
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    mark(&mut s, t, MarkerKind::CueIn, 12.0);
+    let on = player_view(&s, p, None, 0.0).unwrap().markers;
+    assert!(!on.ignored);
+    use_markers(&mut s, false);
+    let off = player_view(&s, p, None, 0.0).unwrap().markers;
+    assert!(off.ignored);
+    assert_eq!(off.cue_in, on.cue_in, "the marks are kept, only dimmed");
+}
