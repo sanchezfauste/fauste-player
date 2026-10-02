@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use common::{entries, fixture, p0};
 use fp_model::{
     AppState, CartEdit, CartKind, Command, Config, FileState, TagEditBlock, Track, TrackAnalysis,
-    TrackId, TrackTags, apply, parse_year, tag_edit_block,
+    TrackId, TrackTags, apply, parse_tag_date, tag_edit_block,
 };
 
 fn track_of(state: &AppState, n: usize) -> TrackId {
@@ -21,7 +21,7 @@ fn tags() -> TrackTags {
         artist: "Real Artist".into(),
         album: "An Album".into(),
         album_artist: "Various".into(),
-        year: Some(1999),
+        date: Some("1999-03-07".into()),
         genre: "Pop".into(),
         composer: "A. Composer".into(),
         comment: "A note".into(),
@@ -61,7 +61,7 @@ fn apply_tags_stores_every_field_and_marks_the_tags_read() {
     assert_eq!(track.tags(), tags());
     assert!(track.tags_read);
     assert_eq!(track.title, "Real Title");
-    assert_eq!(track.year, Some(1999));
+    assert_eq!(track.date.as_deref(), Some("1999-03-07"));
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn apply_tags_can_clear_a_field_but_never_the_title() {
     let cleared = TrackTags {
         title: String::new(),
         album: String::new(),
-        year: None,
+        date: None,
         ..tags()
     };
     apply(
@@ -83,7 +83,7 @@ fn apply_tags_can_clear_a_field_but_never_the_title() {
     .unwrap();
     let track = s.library.get(t).unwrap();
     assert_eq!(track.album, "");
-    assert_eq!(track.year, None);
+    assert_eq!(track.date, None);
     assert_eq!(
         track.title, "Real Title",
         "an empty title keeps the old one"
@@ -151,7 +151,7 @@ fn an_old_library_entry_loads_with_empty_tags() {
     let json = r#"{"id":7,"path":"/m/a.flac","title":"A","artist":"B","album":"C",
         "duration_secs":10.0,"kind":"Music","file_state":"Ok","markers":{},"analyzed":true}"#;
     let track: Track = serde_json::from_str(json).unwrap();
-    assert_eq!(track.year, None);
+    assert_eq!(track.date, None);
     assert_eq!(track.genre, "");
     assert!(!track.tags_read);
     assert!(track.needs_tag_read());
@@ -171,12 +171,71 @@ fn tag_text_is_trimmed_and_cut() {
 }
 
 #[test]
-fn years_are_whole_numbers_from_1_to_9999() {
-    assert_eq!(parse_year(""), Ok(None));
-    assert_eq!(parse_year("  1984 "), Ok(Some(1984)));
-    for bad in ["0", "10000", "-3", "19x4", "1984.5", "٣٣"] {
-        assert!(parse_year(bad).is_err(), "{bad}");
+fn a_tag_date_is_iso_8601_and_may_be_partial() {
+    assert_eq!(parse_tag_date(""), Ok(None));
+    assert_eq!(parse_tag_date("   "), Ok(None));
+    for ok in [
+        "1984",
+        "0001",
+        "9999",
+        "2019-05",
+        "2019-05-14",
+        "2019-05-14T08",
+        "2019-05-14T08:30",
+        "2019-05-14T23:59:59",
+        "2019-12-31T00:00:00",
+    ] {
+        assert_eq!(parse_tag_date(ok), Ok(Some(ok.to_owned())), "{ok}");
     }
+    assert_eq!(
+        parse_tag_date("  2019-05-14 "),
+        Ok(Some("2019-05-14".to_owned())),
+        "trimmed"
+    );
+}
+
+#[test]
+fn anything_but_an_iso_8601_date_is_refused() {
+    for bad in [
+        "0",
+        "0000",
+        "19",
+        "10000",
+        "-3",
+        "19x4",
+        "1984.5",
+        "٣٣٣٣",
+        "2019-5",
+        "2019-00",
+        "2019-13",
+        "2019-05-00",
+        "2019-05-32",
+        "2019/05/14",
+        "abc",
+        "2019-05-14T",
+        "2019-05-14T25",
+        "2019-05-14T08:60",
+        "2019-05-14T08:30:60",
+        "2019-05-14 08:30",
+        "2019-05-14T8",
+        "2019-05-14T08:30:00:00",
+        "2019-05-14T08:30:00Z",
+        "2019-",
+    ] {
+        assert!(parse_tag_date(bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn a_date_round_trips_through_apply_tags() {
+    let mut track = Track::new(TrackId(1), PathBuf::from("a.mp3"));
+    track.apply_tags(&TrackTags {
+        date: Some("2019-05-14".into()),
+        ..TrackTags::default()
+    });
+    assert_eq!(track.tags().date.as_deref(), Some("2019-05-14"));
+    track.apply_tags(&TrackTags::default());
+    assert_eq!(track.tags().date, None);
 }
 
 #[test]

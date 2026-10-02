@@ -14,7 +14,8 @@ pub struct Tags {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
-    pub year: Option<u32>,
+    /// The recording date, ISO 8601 text as `fp_model::parse_tag_date` accepts.
+    pub date: Option<String>,
     pub genre: Option<String>,
     pub album_artist: Option<String>,
     pub composer: Option<String>,
@@ -25,6 +26,18 @@ pub struct Tags {
 
 fn non_empty(s: Option<std::borrow::Cow<'_, str>>) -> Option<String> {
     s.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+}
+
+/// The recording date of `tag` as ISO 8601 text, if it is a valid one.
+fn tag_date(tag: &lofty::tag::Tag) -> Option<String> {
+    let text = tag.date()?.to_string();
+    match fp_model::parse_tag_date(&text) {
+        Ok(date) => date,
+        Err(_) => {
+            tracing::debug!("ignoring a tag date that is not ISO 8601: {text:?}");
+            None
+        }
+    }
 }
 
 /// Reads tags with lofty. Unreadable or untagged files yield empty `Tags`.
@@ -71,10 +84,7 @@ pub fn read_tags(path: &Path, limits: &Limits) -> Tags {
         title: non_empty(tag.title()),
         artist: non_empty(tag.artist()),
         album: non_empty(tag.album()),
-        year: tag
-            .date()
-            .map(|d| u32::from(d.year))
-            .filter(|y| (1..=9999).contains(y)),
+        date: tag_date(tag),
         genre: non_empty(tag.genre()),
         album_artist: non_empty(
             tag.get_string(lofty::tag::ItemKey::AlbumArtist)

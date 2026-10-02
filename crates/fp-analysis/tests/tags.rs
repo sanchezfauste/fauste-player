@@ -43,7 +43,7 @@ fn full() -> TrackTags {
         artist: "The Artist".into(),
         album: "An Album".into(),
         album_artist: "Various Artists".into(),
-        year: Some(1999),
+        date: Some("1999-03-07".into()),
         genre: "Pop".into(),
         composer: "A. Composer".into(),
         comment: "A note".into(),
@@ -81,7 +81,7 @@ fn an_untagged_file_reads_as_its_file_name() {
     assert_eq!(t.title, "Carretera norte");
     assert_eq!(t.artist, "Marta Oliva");
     assert_eq!(
-        (t.year, t.genre.as_str(), t.comment.as_str()),
+        (t.date, t.genre.as_str(), t.comment.as_str()),
         (None, "", "")
     );
 }
@@ -122,7 +122,7 @@ fn a_cleared_field_removes_the_tag() {
     let tagged = read_track_tags(&path, &limits());
     let cleared = TrackTags {
         album: String::new(),
-        year: None,
+        date: None,
         composer: String::new(),
         album_artist: String::new(),
         ..tagged.clone()
@@ -299,4 +299,85 @@ fn what_is_written_is_cut_to_the_limit() {
     };
     write_tags(&path, &untagged_tags(&path), &after, &small).unwrap();
     assert_eq!(read_track_tags(&path, &small).comment, "y".repeat(10));
+}
+
+fn tagged_by_date(path: &Path, date: &str) -> TrackTags {
+    let before = untagged_tags(path);
+    let after = TrackTags {
+        date: Some(date.into()),
+        ..before.clone()
+    };
+    write_tags(path, &before, &after, &limits()).unwrap();
+    read_track_tags(path, &limits())
+}
+
+#[test]
+fn a_full_date_is_written_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    assert_eq!(
+        tagged_by_date(&path, "2019-05-14").date.as_deref(),
+        Some("2019-05-14")
+    );
+}
+
+#[test]
+fn a_bare_year_is_written_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    assert_eq!(tagged_by_date(&path, "2019").date.as_deref(), Some("2019"));
+}
+
+#[test]
+fn a_date_with_a_time_is_written_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    assert_eq!(
+        tagged_by_date(&path, "2019-05-14T08:30").date.as_deref(),
+        Some("2019-05-14T08:30")
+    );
+}
+
+#[test]
+fn an_unrelated_edit_leaves_a_full_date_untouched() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    let tagged = tagged_by_date(&path, "2019-05-14");
+    let after = TrackTags {
+        artist: "Someone".into(),
+        ..tagged.clone()
+    };
+    write_tags(&path, &tagged, &after, &limits()).unwrap();
+    let read = read_track_tags(&path, &limits());
+    assert_eq!(read.date.as_deref(), Some("2019-05-14"));
+    assert_eq!(read.artist, "Someone");
+}
+
+#[test]
+fn clearing_the_date_removes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    let tagged = tagged_by_date(&path, "2019-05-14");
+    let after = TrackTags {
+        date: None,
+        ..tagged.clone()
+    };
+    write_tags(&path, &tagged, &after, &limits()).unwrap();
+    assert_eq!(read_track_tags(&path, &limits()).date, None);
+}
+
+#[test]
+fn an_invalid_date_is_refused_and_the_file_is_untouched() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    let original = std::fs::read(&path).unwrap();
+    let before = untagged_tags(&path);
+    let after = TrackTags {
+        date: Some("last spring".into()),
+        ..before.clone()
+    };
+    let result = write_tags(&path, &before, &after, &limits());
+    assert_eq!(result, Err(TagWriteError::InvalidDate));
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert_eq!(names(dir.path()), ["x.wav"]);
 }

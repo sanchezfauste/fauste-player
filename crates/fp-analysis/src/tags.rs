@@ -25,6 +25,8 @@ pub enum TagWriteError {
     NotFound,
     /// No permission to write there.
     Denied,
+    /// The date is not an ISO 8601 date (`fp_model::parse_tag_date`).
+    InvalidDate,
     /// Anything else, with the system's or lofty's own description.
     Other(String),
 }
@@ -35,6 +37,7 @@ impl std::fmt::Display for TagWriteError {
             Self::Unsupported => f.write_str("this format has no writable tags"),
             Self::NotFound => f.write_str("the file was not found"),
             Self::Denied => f.write_str("permission denied"),
+            Self::InvalidDate => f.write_str("the date is not an ISO 8601 date"),
             Self::Other(detail) => f.write_str(detail),
         }
     }
@@ -66,7 +69,7 @@ pub fn read_track_tags(path: &Path, limits: &Limits) -> TrackTags {
         artist: tags.artist.or(file_artist).unwrap_or_default(),
         album: tags.album.unwrap_or_default(),
         album_artist: tags.album_artist.unwrap_or_default(),
-        year: tags.year,
+        date: tags.date,
         genre: tags.genre.unwrap_or_default(),
         composer: tags.composer.unwrap_or_default(),
         comment: tags.comment.unwrap_or_default(),
@@ -156,7 +159,7 @@ fn rewrite(
             .first_tag_mut()
             .ok_or_else(|| lofty_error("the file has no tag to edit"))?,
     };
-    change_tag(tag, before, after);
+    change_tag(tag, before, after)?;
     file.save_to_path(temp, WriteOptions::default())
         .map_err(lofty_error)?;
     std::fs::OpenOptions::new()
@@ -167,7 +170,7 @@ fn rewrite(
     Ok(())
 }
 
-fn change_tag(tag: &mut Tag, before: &TrackTags, after: &TrackTags) {
+fn change_tag(tag: &mut Tag, before: &TrackTags, after: &TrackTags) -> Result<(), TagWriteError> {
     fn text(tag: &mut Tag, old: &str, new: &str, set: fn(&mut Tag, String), remove: fn(&mut Tag)) {
         if old == new {
             return;
@@ -230,20 +233,16 @@ fn change_tag(tag: &mut Tag, before: &TrackTags, after: &TrackTags) {
         &after.album_artist,
     );
     item(tag, ItemKey::Composer, &before.composer, &after.composer);
-    if before.year != after.year {
-        match after.year {
-            Some(year) => match u16::try_from(year) {
-                Ok(year) => tag.set_date(Timestamp {
-                    year,
-                    month: None,
-                    day: None,
-                    hour: None,
-                    minute: None,
-                    second: None,
-                }),
-                Err(_) => tag.remove_date(),
-            },
+    if before.date != after.date {
+        match &after.date {
+            Some(text) => {
+                let timestamp = text
+                    .parse::<Timestamp>()
+                    .map_err(|_| TagWriteError::InvalidDate)?;
+                tag.set_date(timestamp);
+            }
             None => tag.remove_date(),
         }
     }
+    Ok(())
 }

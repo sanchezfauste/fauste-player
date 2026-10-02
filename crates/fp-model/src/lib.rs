@@ -54,6 +54,6 @@ pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, playe
 pub use state::AppState;
 pub use tag_edit::{TagEditBlock, tag_edit_block};
 pub use track::{
-    AudioFormat, FileState, InvalidYear, Library, Marker, MarkerKind, MarkerSource, Markers,
-    PlayRange, Track, TrackAnalysis, TrackKind, TrackTags, parse_year,
+    AudioFormat, FileState, InvalidDate, Library, Marker, MarkerKind, MarkerSource, Markers,
+    PlayRange, Track, TrackAnalysis, TrackKind, TrackTags, parse_tag_date,
 };

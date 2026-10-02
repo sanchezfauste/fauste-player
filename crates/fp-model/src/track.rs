@@ -165,7 +165,7 @@ pub struct TrackTags {
     pub artist: String,
     pub album: String,
     pub album_artist: String,
-    pub year: Option<u32>,
+    pub date: Option<String>,
     pub genre: String,
     pub composer: String,
     pub comment: String,
@@ -198,26 +198,57 @@ impl TrackTags {
         ] {
             cut(text, max_chars);
         }
+        if let Some(date) = &mut self.date {
+            cut(date, max_chars);
+        }
         self
     }
 }
 
-/// The year field holds something that is not a year.
+/// The date field holds something that is not an ISO 8601 date.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InvalidYear;
+pub struct InvalidDate;
 
-/// Empty is no year; otherwise a whole number from 1 to 9999.
-pub fn parse_year(text: &str) -> Result<Option<u32>, InvalidYear> {
+/// Reads `digits` ASCII digits from the front of `text` as a number in
+/// `range`, and returns it with the rest of the text.
+fn field(text: &str, digits: usize, range: std::ops::RangeInclusive<u32>) -> Option<(u32, &str)> {
+    let (head, rest) = (text.get(..digits)?, text.get(digits..)?);
+    if !head.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let value = head.parse::<u32>().ok()?;
+    range.contains(&value).then_some((value, rest))
+}
+
+/// The recording date as the standards store it (ID3v2.4 `TDRC`, Vorbis
+/// `DATE`, MP4 `©day`, APE `Year`): an ISO 8601 timestamp that may be
+/// partial, `YYYY[-MM[-DD[THH[:MM[:SS]]]]]`. Empty is no date. The text
+/// comes back trimmed; the day is not checked against the month.
+pub fn parse_tag_date(text: &str) -> Result<Option<String>, InvalidDate> {
     let text = text.trim();
     if text.is_empty() {
         return Ok(None);
     }
-    if !text.chars().all(|c| c.is_ascii_digit()) {
-        return Err(InvalidYear);
+    // (separator, digits, range) of each field after the year.
+    const FIELDS: [(char, usize, std::ops::RangeInclusive<u32>); 5] = [
+        ('-', 2, 1..=12),
+        ('-', 2, 1..=31),
+        ('T', 2, 0..=23),
+        (':', 2, 0..=59),
+        (':', 2, 0..=59),
+    ];
+    let (_, mut rest) = field(text, 4, 1..=9999).ok_or(InvalidDate)?;
+    for (separator, digits, range) in FIELDS {
+        let Some(after) = rest.strip_prefix(separator) else {
+            break;
+        };
+        let (_, next) = field(after, digits, range).ok_or(InvalidDate)?;
+        rest = next;
     }
-    match text.parse::<u32>() {
-        Ok(year @ 1..=9999) => Ok(Some(year)),
-        _ => Err(InvalidYear),
+    if rest.is_empty() {
+        Ok(Some(text.to_owned()))
+    } else {
+        Err(InvalidDate)
     }
 }
 
@@ -242,9 +273,10 @@ pub struct Track {
     #[serde(default)]
     pub analysis_version: u32,
     /// Tags beyond title, artist and album (feedback 2 spec O23). Libraries
-    /// saved earlier have none until the tag-only pass reads them.
+    /// saved earlier have none until the tag-only pass reads them. The date
+    /// is the recording date, ISO 8601 text (`parse_tag_date`).
     #[serde(default)]
-    pub year: Option<u32>,
+    pub date: Option<String>,
     #[serde(default)]
     pub genre: String,
     #[serde(default)]
@@ -302,7 +334,7 @@ impl Track {
             analyzed: false,
             format: None,
             analysis_version: 0,
-            year: None,
+            date: None,
             genre: String::new(),
             album_artist: String::new(),
             composer: String::new(),
@@ -318,7 +350,7 @@ impl Track {
             artist: self.artist.clone(),
             album: self.album.clone(),
             album_artist: self.album_artist.clone(),
-            year: self.year,
+            date: self.date.clone(),
             genre: self.genre.clone(),
             composer: self.composer.clone(),
             comment: self.comment.clone(),
@@ -335,7 +367,7 @@ impl Track {
         self.artist.clone_from(&tags.artist);
         self.album.clone_from(&tags.album);
         self.album_artist.clone_from(&tags.album_artist);
-        self.year = tags.year;
+        self.date.clone_from(&tags.date);
         self.genre.clone_from(&tags.genre);
         self.composer.clone_from(&tags.composer);
         self.comment.clone_from(&tags.comment);
