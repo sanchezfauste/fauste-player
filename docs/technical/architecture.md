@@ -61,8 +61,9 @@ or `panic` outside tests.
 
 **Restart now** sets the `restart_flag` that `AppUi` shares with `main`, and
 closes the window (through the exit guard when something is on air). `run`
-returns `Exit::Restart { handoff }`, where `handoff` is
-`tuning.restart_handoff_ms`, after the normal shutdown: the remote server and
+returns `Exit::Restart { handoff, language }`, where `handoff` is
+`tuning.restart_handoff_ms` and `language` is the configured UI language (for
+the failure dialog), after the normal shutdown: the remote server and
 the MIDI service (`MidiService::shutdown`) stop, so nothing else can send
 commands, the services thread makes the final save, and `run` releases the
 last `Arc<ConductorHandle>`, which stops the conductor and the engine and
