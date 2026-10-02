@@ -79,6 +79,8 @@ pub(crate) fn track_table(
     let drop = view_state.drop.filter(|d| d.playlist == playlist);
     let selected = view_state.selection.get(&player).copied();
     let mut clicked: Option<EntryId> = None;
+    // O17: the entry a running CUE moves to after a primary click.
+    let mut cue_follow: Option<EntryId> = None;
     let mut dragged: Option<EntryId> = None;
     let mut builder = TableBuilder::new(ui).id_salt(("tracks", player.0));
     if reset {
@@ -338,6 +340,7 @@ pub(crate) fn track_table(
                 let response = row.response();
                 if response.clicked() {
                     clicked = Some(entry.id);
+                    cue_follow = view::cue_follow_target(scene.state, player, entry.id);
                 }
                 if response.double_clicked() && status != RowStatus::Current {
                     scene.ctl.send(Command::SetNext(player, entry.id));
@@ -372,6 +375,9 @@ pub(crate) fn track_table(
     if let Some(entry) = clicked.or(dragged) {
         view_state.selection.insert(player, entry);
         view_state.active_player = Some(player);
+    }
+    if let Some(entry) = cue_follow {
+        scene.ctl.send(Command::CueEntry(player, entry));
     }
     // Drop target for entries dragged inside the app.
     let pointer_in = ui

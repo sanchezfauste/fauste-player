@@ -147,6 +147,16 @@ pub fn cue_window_view(
     })
 }
 
+/// Feedback 2 spec O17: while `player`'s CUE runs, a single click on a row
+/// moves it to that entry. `Some(entry)` when the CUE is on another entry
+/// and `clicked` can be played; `None` for no CUE, the entry already cued,
+/// or a file that is missing or unreadable. Selection is UI state, so this
+/// decision is here and the move itself is the model's `CueEntry`.
+pub fn cue_follow_target(state: &AppState, player: PlayerId, clicked: EntryId) -> Option<EntryId> {
+    let cue = state.player(player).ok()?.cue?;
+    (cue.entry != clicked && state.playable_request(clicked).is_some()).then_some(clicked)
+}
+
 /// Everything a player column shows. `position` comes from the engine;
 /// `blink_phase` is a clock in seconds for blinking elements.
 pub fn player_view(
