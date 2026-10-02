@@ -63,6 +63,8 @@ pub struct PlayerView {
     pub markers: MarkerFractions,
     pub mode: PlayMode,
     pub stop_after_current: bool,
+    /// The current entry repeats or stops after itself (spec O8).
+    pub entry_notice: Option<fp_model::EntryNotice>,
     pub fading: bool,
     pub cueing: bool,
     /// The current source reaches its device unchanged (the BP badge).
@@ -127,6 +129,7 @@ pub fn player_view(
         markers: MarkerFractions::default(),
         mode: p.mode,
         stop_after_current: p.stop_after_current,
+        entry_notice: fp_model::entry_notice(state, player),
         fading: p.fading,
         cueing: p.cue.is_some(),
         bit_perfect: false,

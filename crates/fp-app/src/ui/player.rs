@@ -153,11 +153,17 @@ fn small_caps(text: &str, color: Color32) -> RichText {
 }
 
 fn outlined(ui: &mut Ui, text: &str, border: Color32, color: Color32) {
+    outlined_with_tip(ui, text, None, border, color);
+}
+
+/// As `outlined`, with a sentence that is the badge's tooltip and
+/// accessible name.
+fn outlined_with_tip(ui: &mut Ui, text: &str, tip: Option<&str>, border: Color32, color: Color32) {
     let galley = ui
         .painter()
         .layout_no_wrap(text.to_uppercase(), font(10.0), color);
     let size = vec2(galley.size().x + 12.0, 18.0);
-    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
     ui.painter()
         .rect_stroke(rect, 0.0, Stroke::new(1.0, border), StrokeKind::Inside);
     ui.painter().galley(
@@ -165,6 +171,13 @@ fn outlined(ui: &mut Ui, text: &str, border: Color32, color: Color32) {
         galley,
         color,
     );
+    if let Some(tip) = tip {
+        let owned = tip.to_owned();
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, owned.clone())
+        });
+        response.on_hover_text(tip);
+    }
 }
 
 fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &PlayerView) {
@@ -205,6 +218,19 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                 outlined(
                     ui,
                     &t.tr("badge-stop-after"),
+                    theme::AMBER,
+                    theme::AMBER_TEXT,
+                );
+            }
+            if let Some(notice) = pv.entry_notice {
+                let (text, tip) = match notice {
+                    fp_model::EntryNotice::Repeats => ("badge-entry-repeat", "tip-entry-repeat"),
+                    fp_model::EntryNotice::StopsAfter => ("badge-entry-stop", "tip-entry-stop"),
+                };
+                outlined_with_tip(
+                    ui,
+                    &t.tr(text),
+                    Some(&t.tr(tip)),
                     theme::AMBER,
                     theme::AMBER_TEXT,
                 );

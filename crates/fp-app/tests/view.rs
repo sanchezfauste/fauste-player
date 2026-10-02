@@ -384,3 +384,15 @@ fn the_view_says_when_the_cue_marks_are_ignored() {
     assert!(off.ignored);
     assert_eq!(off.cue_in, on.cue_in, "the marks are kept, only dimmed");
 }
+
+#[test]
+fn the_player_view_carries_the_entry_notice() {
+    let (mut s, e, p) = state(2);
+    apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(player_view(&s, p, None, 0.0).unwrap().entry_notice, None);
+    apply(&mut s, Command::ToggleEntryRepeat(e[0])).unwrap();
+    assert_eq!(
+        player_view(&s, p, None, 0.0).unwrap().entry_notice,
+        Some(fp_model::EntryNotice::Repeats)
+    );
+}
