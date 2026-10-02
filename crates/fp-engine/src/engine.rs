@@ -117,6 +117,9 @@ struct Playing {
     failed: bool,
     /// A pre-listen source (never paused with the player).
     cue: bool,
+    /// A CUE source held by the CUE window's Pause: the mixer never
+    /// evaluates a stop on a paused slot, so it is released directly.
+    held: bool,
 }
 
 /// Why a source could not be created. None of these is a problem with the
@@ -981,6 +984,7 @@ impl Engine {
             report_end: false,
             failed: false,
             cue,
+            held: false,
         })
     }
 
@@ -1018,7 +1022,7 @@ impl Engine {
     fn fade_out(&mut self, player: PlayerId, p: Playing, ms: f64, curve: Curve) -> bool {
         let frames = self.frames_on(&p.bus, ms);
         let paused = !p.cue && self.players.get(&player).is_some_and(|rt| rt.paused);
-        if p.start != StartState::Started || paused {
+        if p.start != StartState::Started || paused || p.held {
             self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
             self.release(p);
             return false;
@@ -1488,6 +1492,7 @@ impl Engine {
         let Some(cue) = rt.cue_src.as_mut() else {
             return;
         };
+        cue.held = paused;
         let (bus, slot) = (cue.bus.clone(), cue.slot);
         let send = match (paused, cue.start) {
             (true, StartState::WhenReady { .. }) => {

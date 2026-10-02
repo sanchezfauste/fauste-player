@@ -940,6 +940,7 @@ fn pausing_the_cue_holds_its_position_and_resuming_continues() {
             .any(|e| matches!(e, EngineEvent::CueEnded { .. })),
         "pausing never ends the CUE"
     );
+    assert_eq!(r.engine.used_slots(), 1);
 }
 
 #[test]
@@ -954,6 +955,8 @@ fn seeking_the_cue_replaces_the_source_at_the_new_position() {
     r.settle();
     let heard = r.run_hearing_cue(6);
     assert!(r.cue_position().unwrap() >= 3.0);
+    r.run_hearing_cue(20);
+    assert_eq!(r.engine.used_slots(), 1, "the old CUE source is released");
     let last = heard.iter().rev().find(|v| **v != 0.0).unwrap();
     // The tag's frame field overflows past 100 000 frames: undo the base.
     let frame = *last as u64 - 3 * 100_000;
@@ -990,6 +993,7 @@ fn seeking_a_paused_cue_stays_paused_at_the_new_position() {
     let heard = r.run_hearing_cue(10);
     assert!(heard.iter().any(|v| *v != 0.0));
     assert!(r.cue_position().unwrap() > at + 0.05);
+    assert_eq!(r.engine.used_slots(), 1);
 }
 
 #[test]
@@ -1043,4 +1047,51 @@ fn a_seek_past_the_end_ends_the_cue() {
         player: P,
         entry: EntryId(3)
     }));
+}
+
+/// Pauses a running CUE and lets its ramp finish; returns the rig and the
+/// slot count with one CUE attached.
+fn held_cue() -> (Rig, usize) {
+    let mut r = rig(480_000, true);
+    start_cue(&mut r, 0.0);
+    r.run_hearing_cue(4);
+    let used = r.engine.used_slots();
+    r.act(EngineAction::SetCuePaused {
+        player: P,
+        paused: true,
+    });
+    r.run_hearing_cue(10);
+    (r, used)
+}
+
+#[test]
+fn seeking_a_held_cue_releases_the_old_source() {
+    let (mut r, used) = held_cue();
+    r.act(EngineAction::SeekCue {
+        player: P,
+        secs: 2.0,
+    });
+    r.settle();
+    r.run_hearing_cue(20);
+    assert_eq!(r.engine.used_slots(), used, "no leaked slot");
+}
+
+#[test]
+fn a_new_cue_replaces_a_held_one_without_leaking() {
+    let (mut r, used) = held_cue();
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: request(4, 0.0),
+    });
+    r.settle();
+    r.run_hearing_cue(20);
+    assert_eq!(r.engine.used_slots(), used, "no leaked slot");
+}
+
+#[test]
+fn stopping_a_held_cue_releases_it() {
+    let (mut r, _) = held_cue();
+    r.act(EngineAction::StopCue { player: P });
+    r.run_hearing_cue(20);
+    assert_eq!(r.engine.used_slots(), 0, "no leaked slot");
 }
