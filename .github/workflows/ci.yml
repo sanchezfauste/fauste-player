@@ -49,6 +49,12 @@ jobs:
         shell: bash
       - run: cargo test --workspace --locked --no-fail-fast --features "$FEATURES"
         shell: bash
+      # The packaging check for the Windows GUI subsystem, on the shells
+      # that run it (Git Bash on the Windows release runner).
+      - name: Self-test the Windows GUI subsystem check
+        if: runner.os != 'macOS'
+        run: scripts/check-windows-gui.sh --self-test
+        shell: bash
 
   release-baseline:
     name: release build and Linux packages on the release image

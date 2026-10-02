@@ -79,13 +79,16 @@ one computer), give each its own folder with `FAUSTE_HOME`.
 
 ### Command line
 
-`fauste-player --version` prints the version. The top bar shows it too, next
-to the name: click either, or the **About** button (an info icon, left of
-**Settings**), to open **About**, with the copyright and the
+`fauste-player --version` prints the version. The window's title bar shows
+the name and the version, and the **About** button (an info icon, left of
+**Settings**) opens **About**, with the copyright and the
 licence notices (**Third-party licences** opens the notices file installed
 with release packages). Close it with **Close** or `Esc`. `fauste-player --help` lists
 the options. Playlist files given as arguments are imported as new
 playlists.
+
+On Windows the release program opens no console window: `--version`,
+`--help` and start-up errors appear in a message box instead.
 
 When a setting needs a restart, a **Restart pending** pill appears in the top
 bar: press it to restart (see [Settings](settings.md#restart-pending)).

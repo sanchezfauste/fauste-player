@@ -75,3 +75,26 @@ fn the_window_icon_is_a_valid_square_image() {
     assert_eq!(icon.width, icon.height);
     assert!(icon.width >= 128);
 }
+
+#[test]
+fn the_window_title_is_the_name_and_the_version() {
+    assert_eq!(
+        fp_app::cli::window_title(),
+        format!("Fauste Player {}", fp_app::ui::about::VERSION)
+    );
+}
+
+#[test]
+#[allow(clippy::assertions_on_constants)]
+fn console_is_the_default_off_windows() {
+    // Only a Windows release build is a GUI program (feedback 2 spec O36);
+    // the test suite itself always runs with a console.
+    assert!(fp_app::cli::CONSOLE);
+}
+
+#[test]
+fn emit_prints_on_a_console_build() {
+    // Must not panic or open a box where a console exists.
+    fp_app::cli::emit(fp_app::cli::Stream::Out, "");
+    fp_app::cli::emit(fp_app::cli::Stream::Err, "");
+}

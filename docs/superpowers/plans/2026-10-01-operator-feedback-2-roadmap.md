@@ -2,7 +2,7 @@
 
 **Spec:** [`docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md`](../specs/2026-10-01-operator-feedback-2-design.md)
 
-The spec groups items O1–O36 into twelve plans. Plan 1 is written in full in
+The spec groups items O1–O38 into thirteen plans. Plan 1 is written in full in
 [`2026-10-01-feedback2-plan1-window-lifecycle.md`](2026-10-01-feedback2-plan1-window-lifecycle.md).
 Each later plan is written with `superpowers:writing-plans` just before it
 runs, against the code that the earlier plans left. Each plan reaches
@@ -36,7 +36,8 @@ runs, against the code that the earlier plans left. Each plan reaches
 | 9 | Audit follow-ups | O21 | `fix/audit-follow-ups` | done |
 | 10 | Audio path | O25, O26, O27, O34 | `feat/audio-path` | outline |
 | 11 | Website and guide | O1, O28, O29, O30 | `docs/website` | outline |
-| 12 | Window and layout | O31, O32, O33, O35, O36 | `fix/window-layout` | outline |
+| 12 | Window and layout | O31, O32, O33, O35, O36 | `fix/window-layout` | done |
+| 13 | Player rules | O37, O38 | `feat/player-rules` | outline |
 
 ## Notes for the later plans
 
@@ -49,4 +50,6 @@ runs, against the code that the earlier plans left. Each plan reaches
 - **Plan 10** starts with the audio-path audit (O26); its findings may add
   tasks before the DSD work (O25).
 - **Plan 12** (window and layout) runs after plan 9 and before plan 10.
+- **Plan 13** (player rules) runs after plan 12 and before plan 10. Its rules
+  are reducer changes in `fp-model`, one test per rule.
 - **Plan 11** runs last, so that it publishes the final docs.

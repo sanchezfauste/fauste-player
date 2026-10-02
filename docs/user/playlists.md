@@ -7,6 +7,12 @@ playlists; each player chooses which one it shows. A dot on a tab shows where
 the player's tracks are: **red** for the track on air, **green** for the next
 one.
 
+The tabs share the width of the player. A name that does not fit ends in
+"…"; hover over the tab to read it in full. With many playlists the tabs stop
+shrinking at a minimum width, arrows appear at the ends of the row and the
+mouse wheel over the tabs scrolls them. The tab you choose, and the one a
+player shows, is brought into view.
+
 Switching tabs never changes what is on air or what is next. When a track
 ends, the player continues in the playlist that contains that track.
 

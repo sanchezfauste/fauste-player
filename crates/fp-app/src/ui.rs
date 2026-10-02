@@ -17,6 +17,7 @@ pub mod playlist_files;
 mod reset_played;
 mod settings;
 pub mod shell;
+pub mod tab_strip;
 mod table;
 pub mod table_layout;
 mod tag_editor;

@@ -94,6 +94,16 @@ cargo install cargo-about --locked --features cli   # optional outside CI
 scripts/package-release.sh x86_64-unknown-linux-gnu  # → dist/fauste-player-<v>-<target>.tar.gz
 ```
 
+The Windows release build is a GUI program (`windows_subsystem = "windows"`
+in `main.rs`, active only for `windows` without `debug_assertions`), so it
+opens no console window. `scripts/package/windows.sh` runs
+`scripts/check-windows-gui.sh` on `fauste-player.exe` and fails the job when
+the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
+(a synthetic header) on Linux and Windows. Debug builds keep their console, so
+`cargo run` still prints logs and `--version`. In a release build,
+`--version`, `--help` and start-up errors appear in a message box
+(`cli::emit`).
+
 ## Before merging a release PR
 
 - CI is green on all three OSes, and `cargo deny check` passes.

@@ -5,6 +5,40 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+/// Whether this build has a console to print to. A Windows release build is
+/// a GUI program (`windows_subsystem = "windows"` in `main.rs`) and has
+/// none; debug builds, and every other platform, do (feedback 2 spec O36).
+pub const CONSOLE: bool = cfg!(any(not(windows), debug_assertions));
+
+/// Which standard stream a message is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stream {
+    Out,
+    Err,
+}
+
+/// Tells the operator `text`: printed where there is a console, otherwise in
+/// a message box (information for `Out`, error for `Err`). Used only before
+/// the window exists or when the process is about to exit.
+pub fn emit(stream: Stream, text: &str) {
+    if CONSOLE {
+        match stream {
+            Stream::Out => print!("{text}"),
+            Stream::Err => eprint!("{text}"),
+        }
+        return;
+    }
+    let level = match stream {
+        Stream::Out => rfd::MessageLevel::Info,
+        Stream::Err => rfd::MessageLevel::Error,
+    };
+    let _ = rfd::MessageDialog::new()
+        .set_title("Fauste Player")
+        .set_description(text)
+        .set_level(level)
+        .show();
+}
+
 /// What the binary was asked to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Invocation {
@@ -71,6 +105,12 @@ pub fn usage() -> String {
          Environment:\n  FAUSTE_HOME    Keep configuration, data and logs in this folder\n",
         env!("CARGO_PKG_VERSION")
     )
+}
+
+/// The native window's title: the name and the version (feedback 2 spec
+/// O32). The window icon is `window_icon`.
+pub fn window_title() -> String {
+    format!("Fauste Player {}", env!("CARGO_PKG_VERSION"))
 }
 
 /// The application icon, for the window and the task bar.

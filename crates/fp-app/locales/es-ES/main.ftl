@@ -157,6 +157,8 @@ wave-outro = OUTRO
 wave-full-view = Vista completa
 dialog-audio-files = Archivos de audio
 tip-add = Añadir pistas a esta playlist
+tip-tabs-scroll-left = Desplazar las pestañas a la izquierda
+tip-tabs-scroll-right = Desplazar las pestañas a la derecha
 footer-total = Total
 tip-waveform = Forma de onda: clic para saltar
 settings-default-backend = Predeterminado del sistema
@@ -330,7 +332,6 @@ file-unreadable-tip = No se puede leer el archivo: { $path }
 
 # About window
 tip-about = Acerca de Fauste Player
-tip-about-name = Acerca de Fauste Player (nombre y versión)
 about-version = Versión { $version }
 about-copyright = Copyright © Marc Sánchez Fauste. Todos los derechos reservados.
 about-bundled = Este programa incluye los siguientes componentes bajo sus propias licencias:

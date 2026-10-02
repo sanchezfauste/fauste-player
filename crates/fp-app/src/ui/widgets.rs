@@ -245,6 +245,24 @@ pub fn paint_tabular(
     Rect::from_min_max(left_top, pos2(x, left_top.y + height))
 }
 
+/// As [`paint_tabular`], with the text ending at `right_top.x`.
+pub fn paint_tabular_right(
+    painter: &Painter,
+    right_top: Pos2,
+    text: &str,
+    font: &FontId,
+    color: Color32,
+) -> Rect {
+    let width = tabular_size(painter, text, font).x;
+    paint_tabular(
+        painter,
+        pos2(right_top.x - width, right_top.y),
+        text,
+        font,
+        color,
+    )
+}
+
 /// A label whose digits keep their width (see [`paint_tabular`]). Its
 /// accessible name is the text.
 pub fn tabular_label(ui: &mut Ui, text: &str, font: &FontId, color: Color32) -> Response {
@@ -1307,12 +1325,17 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
             theme::TEXT.gamma_multiply(0.6),
         );
         let text = format::clock(view.secs_at(x, inner));
-        let galley = painter.layout_no_wrap(text, font(10.0), theme::TEXT);
-        let tw = galley.size().x + 8.0;
+        let tw = tabular_size(&painter, &text, &font(10.0)).x + 8.0;
         let lx = (x + 4.0).min(inner.right() - tw);
         let bg = Rect::from_min_size(pos2(lx, inner.top() + 13.0), vec2(tw, 14.0));
         painter.rect_filled(bg, 0.0, theme::NEUTRAL_800);
-        painter.galley(pos2(lx + 4.0, bg.top() + 1.0), galley, theme::TEXT);
+        paint_tabular(
+            &painter,
+            pos2(lx + 4.0, bg.top() + 1.0),
+            &text,
+            &font(10.0),
+            theme::TEXT,
+        );
         if input.seekable && response.clicked() && !alt {
             seek = Some(view.secs_at(p.x, inner));
         }
@@ -1352,6 +1375,17 @@ pub fn cue_edge_look(ignored: bool) -> CueEdgeLook {
     }
 }
 
+/// The width of an intro / outro badge: the value box is sized for `00.0`
+/// (feedback 2 spec O33), so the badge does not change width from 9.9 to 10.0.
+pub fn time_badge_width(painter: &Painter, caption: &str, value: &str) -> f32 {
+    let cap = painter.layout_no_wrap(caption.to_owned(), font_semibold(9.0), Color32::WHITE);
+    let big = font_medium(22.0);
+    let value_w = tabular_size(painter, value, &big)
+        .x
+        .max(tabular_size(painter, "00.0", &big).x);
+    cap.size().x + 6.0 + value_w + 16.0
+}
+
 /// A small outlined badge with a caption and a big number (intro / outro).
 pub fn time_badge(
     painter: &Painter,
@@ -1363,9 +1397,9 @@ pub fn time_badge(
 ) {
     let (fill, border, text) = colors;
     let cap = painter.layout_no_wrap(caption.to_owned(), font_semibold(9.0), text);
-    let val = painter.layout_no_wrap(value.to_owned(), font_medium(22.0), text);
-    let width = cap.size().x + 6.0 + val.size().x + 16.0;
-    let height = val.size().y + 4.0;
+    let big = font_medium(22.0);
+    let width = time_badge_width(painter, caption, value);
+    let height = tabular_size(painter, value, &big).y + 4.0;
     let left = if right_aligned {
         anchor.x - width
     } else {
@@ -1380,9 +1414,11 @@ pub fn time_badge(
         cap.clone(),
         text,
     );
-    painter.galley(
+    paint_tabular(
+        painter,
         pos2(rect.left() + 8.0 + cap.size().x + 6.0, rect.top() + 2.0),
-        val,
+        value,
+        &big,
         text,
     );
 }

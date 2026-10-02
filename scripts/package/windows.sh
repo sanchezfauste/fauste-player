@@ -43,6 +43,7 @@ sign() {
     /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "$(cygpath -w "$1")"
 }
 
+"${root}/scripts/check-windows-gui.sh" "${exe}" >&2
 sign "${exe}"
 msi="${dist}/fauste-player-${version}-${target}.msi"
 (cd "${root}" && cargo wix -p fp-app --no-build --nocapture --target "${target}" \

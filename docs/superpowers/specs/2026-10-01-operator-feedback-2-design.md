@@ -1,15 +1,15 @@
 # Operator Feedback 2 — Design Spec
 
 - **Date:** 2026-10-01
-- **Status:** Approved. Plans 1 to 9 are built; each plan's section ends with its "As built" notes.
+- **Status:** Approved. Plans 1 to 9 and 12 are built; each plan's section ends with its "As built" notes.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§2 threads,
   §3 rules, §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md)
   (M4 display), the [cartwall and settings spec](2026-09-26-phase2-cartwall-settings-design.md)
   and the [first operator feedback spec](2026-09-30-operator-feedback-design.md)
   (F2 is replaced by O10 here).
-- **Scope:** 36 items of operator feedback (O1–O36), grouped into twelve plans.
-  O25–O36 were added on 2026-10-02. Plan 12 runs after plan 9 and before
-  plan 10.
+- **Scope:** 38 items of operator feedback (O1–O38), grouped into thirteen
+  plans. O25–O36 were added on 2026-10-02 and O37–O38 on 2026-10-03.
+  Plan 12 runs after plan 9, then plan 13, then plan 10.
   Each plan is written in full just before it runs, against the code the
   previous plan left. Each reaches `master` through its own pull request and
   updates the main spec, the user guide and the technical docs for what it
@@ -57,6 +57,8 @@
 | O34 | Digital peak meter readings above 0 dBFS | 10 |
 | O35 | Playlist tabs shrink and scroll instead of overflowing | 12 |
 | O36 | No console window on Windows | 12 |
+| O37 | The playing entry can be set as next, to play once more | 13 |
+| O38 | Stop after current in Single mode for a repeating entry | 13 |
 
 | Plan | Title | Items | Depends on |
 |---|---|---|---|
@@ -72,6 +74,7 @@
 | 10 | Audio path | O25, O26, O27, O34 | 2 (O27 reverses part of O5) |
 | 11 | Website and guide | O1, O28, O29, O30 | all (it publishes the final docs) |
 | 12 | Window and layout | O31, O32, O33, O35, O36 | — (runs after 9, before 10) |
+| 13 | Player rules | O37, O38 | — (runs after 12, before 10) |
 
 ---
 
@@ -606,8 +609,64 @@ The audit of every earlier plan found these items still open.
   plan keeps `--version` and `--help` useful without `unsafe` code (for
   example, debug builds stay console programs), and checks that CI and the
   packaging scripts do not depend on console output from the release binary.
+- **As built.**
+  - O31: `cart_view::button_height` gives the button height from the room the
+    grid has, between `MIN_BUTTON_HEIGHT` and `BUTTON_HEIGHT` (40 px, as
+    before); the minimum is 28 px, not 24, because at 24 the name and detail
+    lines overlap. The 60% cap is unchanged. The grid zeroes the vertical item
+    spacing, so `GAP` is the only row gap and the grid does not overflow.
+  - O32: `cli::window_title` gives the native title ("Fauste Player <version>")
+    and the icon on Windows and Linux; the top-bar brand block and the Fluent
+    key `tip-about-name` are removed. macOS shows the name and the version
+    only: its title bars draw no icon, by design. `docs/images/main-screen.png`
+    still shows the old brand block; it is refreshed at the next screenshot
+    update.
+  - O33: `paint_tabular_right`, `time_badge_width` and `time_badge` in
+    `widgets`. Changed: the cart countdown, the waveform hover time, the
+    marker-drag time, the top-bar clock and the intro and outro badges (value
+    box sized for `00.0`). Left alone because they were already tabular: the
+    player elapsed, total and remaining times, the big countdown and the CUE
+    window times.
+  - O35: `ui/tab_strip.rs` (pure layout) with a 72 px minimum tab width, equal
+    widths, a name cut with "…" (full name in the tooltip), arrow buttons and
+    the wheel; `ViewState::tab_scroll` keeps the offset and a reveal key brings
+    the shown tab into view only when the shown playlist changes, so a manual
+    scroll is not undone.
+  - O36: `windows_subsystem = "windows"` for release builds on Windows (debug
+    builds keep a console); `cli::emit` prints on a console and shows a message
+    box otherwise, used for `--version`, `--help` and start-up errors;
+    `scripts/check-windows-gui.sh` checks the PE Subsystem field and runs from
+    `scripts/package/windows.sh`. No workflow or packaging script depends on
+    console output from the Windows release binary. The check by hand on a real
+    Windows machine (no console on double-click; `--version` shows a message
+    box) has not been done yet. The ignored-argument warning is logged once
+    logging is up, so the GUI build keeps it in the log.
 
-## 14. Global constraints
+## 14. Plan 13 — Player rules
+
+- **O37 Play the current entry once more.** "Set as next" is accepted for
+  the entry that is on air (the `NextIsCurrent` refusal goes). The player
+  plays that entry once more from its cue-in when the current pass ends,
+  with the same gapless hard transition as a repeating entry (main spec
+  rule 27), and then goes on with the entry that follows it. Unlike
+  `repeat`, it acts once: the second pass is an ordinary play (it becomes
+  current again, is marked played and enters the history), and the next
+  entry is then worked out as usual. Everything that already wins over the
+  next entry still wins: Single mode, stop after current, an entry's "stop
+  after", a fade stop. In Single mode the player stops at the end and Play
+  starts the entry again. The playlist marks the playing row as next too,
+  and its "Set as next" action is enabled on that row. The remote API and
+  MIDI follow the same rule.
+- **O38 Stop after current in Single mode.** In Single mode, while the
+  current entry has `repeat`, the stop-after-current control is available:
+  it ends the repeat at the cue-out of the pass that is playing (main spec
+  rule 27 already lets stop-after-current end a repeat) and shows the same
+  notice as in Continuous mode. Switching to Single mode keeps the flag while
+  the current entry repeats. In Single mode without a repeating entry it is
+  refused as today (`StopAfterInSingle`, the remote API's `409`), since the
+  player stops at the end anyway.
+
+## 15. Global constraints
 
 `CLAUDE.md` rules 1–10 apply to every plan. In particular:
 

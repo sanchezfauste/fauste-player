@@ -10,16 +10,17 @@
 | `crash.rs` | Panic hook writing `crash-<nanos>.txt` (message, location, backtrace, version, OS), then chaining |
 | `i18n.rs` | Fluent bundles (`locales/en-US`, `locales/es-ES`), per-key fallback to `en-US` |
 | `services.rs` | The services thread (analysis and autosave; see [Persistence](persistence.md) and [Analysis](analysis.md)) |
-| `ui/app.rs` | `AppUi`: the main screen, keyboard, notices, OS drops, file-dialog results |
+| `ui/app.rs` | `AppUi`: the main screen, keyboard, notices, OS drops, file-dialog results. The window title (`cli::window_title`, the name and the version) and icon (`cli::window_icon`) are set on the `ViewportBuilder` in `main.rs` (`run`) and drawn by the native title bar; the top bar has no brand block |
 | `ui/player.rs` | One player column: header, info row, transport, waveform, tabs, footer |
 | `ui/table.rs` | The track table: virtualised rows, drag and drop, context menu, the configured columns, the header (drag to reorder, menu) and the live column resize |
+| `ui/tab_strip.rs` | The pure layout of the playlist tabs (O35): `layout` (tab width, overflow, view width), `clamp_offset`, `reveal`, `step`; unit-tested. `tabs` in `player.rs` draws them clipped to the view, with arrows and the wheel; the scroll lives in `ViewState::tab_scroll` per player, and the shown tab is revealed again only when the key (shown playlist, tab count, view width) changes, so the operator's scrolling is not undone every frame |
 | `ui/table_layout.rs` | The pure widths of the table's columns: `column_min`, `fit`, `column_px`, `resize_px`, `fractions_of`; unit-tested |
 | `ui/reset_played.rs` | The Reset played question (O22): `show` returns `Some(true)`, `Some(false)` or `None`; the footer button in `player.rs` sets `ViewState::confirm_reset`, `AppUi` draws it below the close guard and sends `Command::ResetPlayed`; Esc and a deleted playlist close it; no shortcut or file drop acts under it |
 | `ui/settings.rs` | The Settings modal (outputs, players and language, analysis, playlists and their table columns) |
 | `ui/settings/columns.rs` | Settings → Playlists → Table columns: `column_rows`, the checkboxes, the arrows (`move_column`) and Default columns; every change goes through `Scene::set_table_columns` |
 | `ui/settings/carts.rs`, `ui/settings/keys.rs` | Settings → Cartwall (pages, grid, cart editor, import and export) and → Keyboard shortcuts (capture, conflicts) |
 | `ui/settings/remote.rs` | Settings → Remote: the HTTP and OSC switches, addresses, token, origins and senders, and each server's state read from the remote thread's status cell |
-| `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall strip, and its pure view model (status, countdown, progress). The bar's "Stop all (n)" button sends `Command::StopAllCarts` and shows `cartwall.playing.len()`; it is the first item of a right-to-left row so it never gives way to the tabs. |
+| `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall strip, and its pure view model (status, countdown, progress). The bar's "Stop all (n)" button sends `Command::StopAllCarts` and shows `cartwall.playing.len()`; it is the first item of a right-to-left row so it never gives way to the tabs. Button height comes from `cart_view::button_height(available, rows)`: nominal 40 px, minimum 28 px, from the room the grid has (the 60% cap in `AppUi::ui` is unchanged); the grid scrolls only below the minimum. |
 | `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
 | `ui/shell.rs` | Panic isolation around each frame, and the close check in `Shell::logic` |
 | `ui/exit_guard.rs` | The "Audio is on air" modal: the `ExitIntent`, the list of what is sounding, and the stop commands |
@@ -253,6 +254,17 @@ falls back to Slate. Inter's digits are proportional, so times are painted
 with `widgets::paint_tabular`/`tabular_label`, which centre every digit in a
 cell as wide as the widest one: a countdown keeps its width as it runs. Fonts are installed on the first frame, and drawing starts
 on the next one, when they are bound.
+
+### Times
+
+Every time that changes while it is shown keeps a steady width: it is drawn in
+equal digit cells with `widgets::paint_tabular`, `paint_tabular_right` (the
+text ends at a given x) or `tabular_label`. The sites are the player's
+elapsed, total and remaining times and the big countdown, the cart countdown,
+the waveform hover time, the marker-drag time, the CUE window times and the
+top-bar clock. The intro and outro badges (`widgets::time_badge`) have a value
+box sized for `00.0` (`time_badge_width`), so the badge does not change width
+from 9.9 to 10.0.
 
 ## Window decorations
 

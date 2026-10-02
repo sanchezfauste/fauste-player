@@ -31,10 +31,11 @@ audio engine that the interface can never block.
 - **Independent players:** four by default, any number configurable. Each
   has Play/Next, Stop, Fade stop, Pause and Stop-after-current, SINGLE and
   CONT modes, a countdown with tenths, a stereo meter, a volume fader and
-  its own playlist tabs. Times keep a fixed width as they count.
-- **About window:** the version sits next to the name in the top bar; a
-  click on it, or on the info button next to Settings, opens the copyright
-  and the licence notices of the bundled components.
+  its own playlist tabs (they shrink, cut long names and scroll). Times keep
+  a fixed width as they count.
+- **About window:** the window's title bar shows "Fauste Player <version>";
+  the info button next to Settings opens the copyright and the licence
+  notices of the bundled components.
 - **Restore defaults and Restart now:** Players, Meters, Analysis and
   Shortcuts can each be reset to their defaults; settings that need a
   restart show a "Restart pending" pill, and Restart now applies them.
@@ -56,7 +57,8 @@ audio engine that the interface can never block.
 - **Cartwall:** pages of instant carts (jingles, effects, spots), each with a
   configurable grid. Carts overlap by default; they can loop gaplessly or stop
   the others, and a **Stop all** button stops every playing cart. They have
-  their own Main and Cue outputs. Pages can be imported and exported.
+  their own Main and Cue outputs. The configured rows always fit the window
+  (the buttons shrink to a minimum before the area scrolls). Pages can be imported and exported.
 - **Tag editor and track tooltip:** hover a track for its tags, format and
   path; edit the common tag fields (title, artist, album, date, track and
   disc numbers, genre, BPM, key, lyrics and more) and the front cover (view,
@@ -136,7 +138,8 @@ file has a `.sha256` next to it.
 
 See the [getting started guide](docs/user/getting-started.md) for installing,
 updating and removing each one, and for first starts of unsigned builds on
-macOS and Windows.
+macOS and Windows. The Windows release is a GUI program: it opens no console
+window.
 
 ## Build from source
 
@@ -353,5 +356,5 @@ their own licences:
 - every Rust dependency: listed in `licenses/THIRD-PARTY.html` inside each
   release archive.
 
-The About window (click the name or the info button in the top bar) shows the copyright, both
+The About window (the info button in the top bar) shows the version, the copyright, both
 bundled notices and a button that opens the installed `THIRD-PARTY.html`.

@@ -195,8 +195,8 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
      in the scratch `config.json`, then `curl`; see
      `docs/user/remote-control.md`) or with
      `DISPLAY=:77 xdotool mousemove --window <id> <x> <y> click 1`;
-  4. find the window with `DISPLAY=:77 xwininfo -name "Fauste Player"` and
-     capture it with `DISPLAY=:77 import -window <id> shot.png`.
+  4. find the window with `DISPLAY=:77 xwininfo -root -tree | grep "Fauste Player"`
+     (the title carries the version) and capture it with `DISPLAY=:77 import -window <id> shot.png`.
 
   The README image (`docs/images/main-screen.png`) is 1920×1080, in English:
   set `"ui": {"language": "en-US"}` inside `"config"`, resize the window
