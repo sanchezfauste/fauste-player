@@ -87,5 +87,4 @@ tracks are analysed again automatically.
   stops a track that is playing; the next track is prepared again.
 
 A track can be played before its analysis finishes. Until then it plays from
-the start to the end of the file, with no MIX point: the same way a track plays
-when cue markers are off.
+the start to the end of the file, with no MIX point.
