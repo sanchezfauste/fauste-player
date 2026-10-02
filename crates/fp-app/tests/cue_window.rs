@@ -142,8 +142,8 @@ fn the_window_shows_the_position_from_the_engine() {
             ..Default::default()
         }));
     h.run_steps(2);
-    // The player column may paint the same clock text.
-    assert!(h.query_all_by_label("01:05").next().is_some(), "elapsed");
+    // The player column paints the same clock text: the window is the second.
+    assert!(h.query_all_by_label("01:05").count() >= 2, "elapsed");
     assert!(h.query_by_label("-01:55").is_some(), "remaining");
 }
 
@@ -171,7 +171,8 @@ fn a_cue_without_a_known_length_shows_zero_and_cannot_seek() {
     h.run_steps(2);
     assert!(h.query_by_label(STOP).is_some());
     assert!(h.query_by_label(PAUSE).is_some());
-    assert!(h.get_all_by_label("00:00").next().is_some());
+    // The player column paints "00:00" too: the window is the second match.
+    assert!(h.get_all_by_label("00:00").count() >= 2);
     let wave = h.get_by_label(WAVE).rect();
     let at = wave.center();
     h.event(Event::PointerMoved(at));

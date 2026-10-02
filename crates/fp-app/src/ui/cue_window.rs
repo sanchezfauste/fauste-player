@@ -3,7 +3,7 @@
 //! time, and Pause/Resume, Stop and Load as next. Closing it stops the CUE.
 //! Everything it does is a command; nothing here waits for the engine.
 
-use egui::{Align, Color32, Layout, RichText, Stroke, pos2, vec2};
+use egui::{Align, Layout, RichText, Stroke, pos2, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::Command;
 
@@ -189,7 +189,7 @@ fn buttons(ui: &mut egui::Ui, scene: &Scene<'_>, v: &CueWindowView) {
             content: if v.can_load_next {
                 theme::CUE
             } else {
-                Color32::from_gray(0x80)
+                theme::NEUTRAL_600
             },
             ..TileStyle::plain()
         };
