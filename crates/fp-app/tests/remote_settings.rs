@@ -350,3 +350,63 @@ fn the_token_buttons_are_settings_buttons() {
         );
     }
 }
+
+/// Types `text` into the port field (a drag value), leaving it focused and
+/// the Enter key unpressed.
+fn type_port(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, text: &str) {
+    h.get_all_by_role_and_label(Role::SpinButton, "Port")
+        .next()
+        .unwrap()
+        .focus();
+    h.run_steps(2);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    for c in text.chars() {
+        h.get_all_by_role_and_label(Role::SpinButton, "Port")
+            .next()
+            .unwrap()
+            .type_text(&c.to_string());
+        h.run_steps(1);
+    }
+}
+
+#[test]
+fn a_typed_port_is_applied_when_another_section_is_opened() {
+    let (mut h, fake) = opened(state(1, 0));
+    type_port(&mut h, "9000");
+    h.get_by_role_and_label(Role::Button, "MIDI").click();
+    h.run_steps(3);
+    assert_eq!(fake.state.load().config.remote.http.port, 9000);
+}
+
+#[test]
+fn a_typed_port_is_applied_when_settings_closes() {
+    let (mut h, fake) = opened(state(1, 0));
+    type_port(&mut h, "9001");
+    h.get_by_label("Close").click();
+    h.run_steps(3);
+    assert_eq!(fake.state.load().config.remote.http.port, 9001);
+}
+
+#[test]
+fn escape_cancels_a_typed_port() {
+    let (mut h, fake) = opened(state(1, 0));
+    type_port(&mut h, "9002");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+    assert_ne!(fake.state.load().config.remote.http.port, 9002);
+    assert!(sent_configs(&fake).is_empty());
+}
+
+/// The number is applied as Enter would apply it, so a value below the
+/// range is the lowest allowed.
+#[test]
+fn a_typed_port_below_the_range_is_clamped_like_enter() {
+    let (mut h, fake) = opened(state(1, 0));
+    type_port(&mut h, "90");
+    h.get_by_role_and_label(Role::Button, "MIDI").click();
+    h.run_steps(3);
+    assert_eq!(fake.state.load().config.remote.http.port, 1024);
+}
