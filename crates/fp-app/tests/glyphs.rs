@@ -6,7 +6,7 @@
 )]
 //! Operator feedback 2, O18: one icon per transport action.
 
-use egui::{Rect, pos2, vec2};
+use egui::{Rect, pos2};
 use fp_app::ui::glyphs::{self, TransportAction};
 use fp_app::ui::theme;
 
@@ -74,10 +74,9 @@ fn drawn_actions_stay_inside_their_natural_size() {
         }
         assert!(d.size.x > 0.0 && d.size.y > 0.0 && d.size.x <= 24.0 && d.size.y <= 16.0);
     }
-    let _ = vec2(0.0, 0.0);
 }
 
-/// The player, the cartwall and the playlist menu draw transport icons only
+/// The player, the cartwall and the track table draw transport icons only
 /// through `glyphs` (a status marker such as the table's pause icon is not
 /// a transport action and may stay).
 #[test]
