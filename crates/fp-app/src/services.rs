@@ -191,6 +191,41 @@ pub fn outdated_tracks(state: &AppState) -> usize {
     state.library.iter().filter(|t| outdated(t)).count()
 }
 
+/// `outdated_tracks`, remembered for the model snapshot it was worked out
+/// on. Counting scans the whole library, which the interface would do on
+/// every frame while the start-up notice or Settings > Analysis is open;
+/// with this it scans once per new snapshot. It never compares libraries:
+/// a new snapshot is a new scan.
+#[derive(Default)]
+pub struct OutdatedCount {
+    /// Kept (not just its address), so that the address cannot be reused
+    /// by another snapshot while it is remembered.
+    snapshot: Option<Arc<AppState>>,
+    count: usize,
+    scans: u32,
+}
+
+impl OutdatedCount {
+    /// How many tracks an earlier version analysed, in `state`.
+    pub fn get(&mut self, state: &Arc<AppState>) -> usize {
+        if !self
+            .snapshot
+            .as_ref()
+            .is_some_and(|known| Arc::ptr_eq(known, state))
+        {
+            self.count = outdated_tracks(state);
+            self.snapshot = Some(Arc::clone(state));
+            self.scans += 1;
+        }
+        self.count
+    }
+
+    /// How many times the library was scanned.
+    pub fn scans(&self) -> u32 {
+        self.scans
+    }
+}
+
 pub struct Services {
     conductor: Arc<ConductorHandle>,
     store: Store,
