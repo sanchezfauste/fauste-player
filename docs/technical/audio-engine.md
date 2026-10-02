@@ -100,6 +100,13 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   of the chosen standard (`widgets::meter_position`, marks from
   `widgets::scale_marks`), coloured by `widgets::zone_of`, with
   `widgets::max_readout` and `widgets::loudness_line`.
+  The layout is pure (`widgets::meter_layout`): both ends of the scale are
+  always labelled (`scale_marks` includes the digital floor; the alignment
+  label gives way to an end label), each label is centred on its line or, at
+  the rect's edge, rests on or hangs from it (`MeterLine::label_align`), and
+  `widgets::reference_segments` says which pieces of a reference line lie
+  over the lit part of a bar. The line colours and opacities are the
+  `METER_LINE_*` constants in `ui/theme.rs`.
 - **Tests** (`tests/metering.rs`, `tests/mixer.rs`):
   - the BS.1770 coefficients and the 1 kHz gain at every rate;
   - EBU Tech 3341 cases 1, 2, 9, 11, 12 and 14 (loudness) and 15–23
