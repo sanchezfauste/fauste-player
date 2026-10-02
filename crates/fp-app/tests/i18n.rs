@@ -51,3 +51,19 @@ fn arguments_are_substituted() {
         "INTRO 11.4"
     );
 }
+
+#[test]
+fn the_stop_all_label_carries_its_count_in_both_languages() {
+    let en = I18n::new(Some("en-US"));
+    assert_eq!(en.tr("cartwall-stop-all"), "Stop all");
+    assert_eq!(
+        en.tr_args("cartwall-stop-all-count", &[("count", 2.into())]),
+        "Stop all (2)"
+    );
+    let es = I18n::new(Some("es-ES"));
+    assert_eq!(es.tr("cartwall-stop-all"), "Parar todo");
+    assert_eq!(
+        es.tr_args("cartwall-stop-all-count", &[("count", 12.into())]),
+        "Parar todo (12)"
+    );
+}

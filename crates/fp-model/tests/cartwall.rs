@@ -298,6 +298,41 @@ fn c10_stop_all_stops_carts_and_cue() {
 }
 
 #[test]
+fn c10_stop_all_stops_every_cart_the_way_each_single_stop_does() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    let b = load(&mut state, 1, 10.0);
+    let c = load(&mut state, 2, 10.0);
+    edit(&mut state, 1, |e| e.looped = true);
+    edit(&mut state, 2, |e| e.exclusive = false);
+    for id in [a, b, c] {
+        apply(&mut state, Command::FireCart(id)).unwrap();
+    }
+    let mut one_by_one = state.clone();
+    let mut each = Vec::new();
+    for id in [a, b, c] {
+        each.extend(apply(&mut one_by_one, Command::StopCart(id)).unwrap());
+    }
+    let all = apply(&mut state, Command::StopAllCarts).unwrap();
+    assert_eq!(stopped(&all), stopped(&each));
+    assert_eq!(stopped(&all), vec![a, b, c], "in firing order");
+    assert_eq!(state.cartwall.playing, one_by_one.cartwall.playing);
+    assert!(state.cartwall.playing.is_empty());
+}
+
+#[test]
+fn c10_stop_all_with_nothing_on_air_is_harmless_and_still_stops_the_cue() {
+    let mut state = fixture(0);
+    assert!(apply(&mut state, Command::StopAllCarts).unwrap().is_empty());
+    let a = load(&mut state, 0, 10.0);
+    apply(&mut state, Command::CueCart(a)).unwrap();
+    let actions = apply(&mut state, Command::StopAllCarts).unwrap();
+    assert!(stopped(&actions).is_empty());
+    assert!(actions.contains(&EngineAction::StopCartCue));
+    assert!(state.cartwall.cue.is_none());
+}
+
+#[test]
 fn shrinking_a_page_that_would_drop_files_is_refused() {
     let mut state = fixture(0);
     load(&mut state, 15, 10.0);

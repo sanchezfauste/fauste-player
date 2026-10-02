@@ -56,52 +56,100 @@ fn header(ui: &mut Ui, scene: &Scene<'_>) {
     let wall = &scene.state.cartwall;
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), HEADER_HEIGHT),
-        Layout::left_to_right(Align::Center),
+        Layout::right_to_left(Align::Center),
         |ui| {
             ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
-            let title = t.tr("cartwall-title");
-            let caret = if wall.open {
-                icon::CARET_DOWN
-            } else {
-                icon::CARET_RIGHT
-            };
-            let width = ui
-                .painter()
-                .layout_no_wrap(title.clone(), font(10.0), theme::NEUTRAL_300)
-                .size()
-                .x
-                + 24.0;
-            let style = TileStyle {
-                border: Color32::TRANSPARENT,
-                hover_fill: Color32::TRANSPARENT,
-                active_fill: Color32::TRANSPARENT,
-                ..TileStyle::plain()
-            };
-            if widgets::tile(ui, vec2(width, 20.0), &title, true, style, |p, r, c| {
-                p.text(
-                    r.left_center(),
-                    egui::Align2::LEFT_CENTER,
-                    format!("{caret} {title}"),
-                    font(10.0),
-                    c,
+            // First, so that it is always at the right end and always whole;
+            // the title, tabs and hint take what is left of the row.
+            stop_all(ui, scene);
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
+                let title = t.tr("cartwall-title");
+                let caret = if wall.open {
+                    icon::CARET_DOWN
+                } else {
+                    icon::CARET_RIGHT
+                };
+                let width = ui
+                    .painter()
+                    .layout_no_wrap(title.clone(), font(10.0), theme::NEUTRAL_300)
+                    .size()
+                    .x
+                    + 24.0;
+                let style = TileStyle {
+                    border: Color32::TRANSPARENT,
+                    hover_fill: Color32::TRANSPARENT,
+                    active_fill: Color32::TRANSPARENT,
+                    ..TileStyle::plain()
+                };
+                if widgets::tile(ui, vec2(width, 20.0), &title, true, style, |p, r, c| {
+                    p.text(
+                        r.left_center(),
+                        egui::Align2::LEFT_CENTER,
+                        format!("{caret} {title}"),
+                        font(10.0),
+                        c,
+                    );
+                })
+                .clicked()
+                {
+                    scene.ctl.send(Command::SetCartwallOpen(!wall.open));
+                }
+                tabs(ui, scene);
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(t.tr("cartwall-hint"))
+                            .font(font(10.0))
+                            .color(theme::NEUTRAL_500),
+                    )
+                    .selectable(false)
+                    .truncate(),
                 );
-            })
-            .clicked()
-            {
-                scene.ctl.send(Command::SetCartwallOpen(!wall.open));
-            }
-            tabs(ui, scene);
-            ui.add(
-                egui::Label::new(
-                    RichText::new(t.tr("cartwall-hint"))
-                        .font(font(10.0))
-                        .color(theme::NEUTRAL_500),
-                )
-                .selectable(false)
-                .truncate(),
-            );
+            });
         },
     );
+}
+
+/// "Stop all (n)": stops every playing cart (spec O19). Dimmed, and without
+/// a count, while no cart is playing. The count is the whole cartwall's.
+fn stop_all(ui: &mut Ui, scene: &Scene<'_>) {
+    const ICON_WIDTH: f32 = 14.0;
+    let t = scene.i18n;
+    let playing = scene.state.cartwall.playing.len();
+    let label = if playing == 0 {
+        t.tr("cartwall-stop-all")
+    } else {
+        t.tr_args("cartwall-stop-all-count", &[("count", playing.into())])
+    };
+    let text_width = ui
+        .painter()
+        .layout_no_wrap(label.clone(), font(10.0), theme::TEXT)
+        .size()
+        .x;
+    let width = 6.0 + ICON_WIDTH + 4.0 + text_width + 8.0;
+    let clicked = widgets::tile(
+        ui,
+        vec2(width, 20.0),
+        &label,
+        playing > 0,
+        TileStyle::plain(),
+        |p, r, c| {
+            let icon_rect =
+                Rect::from_min_size(pos2(r.left() + 6.0, r.top()), vec2(ICON_WIDTH, r.height()));
+            glyphs::paint(p, icon_rect, TransportAction::Stop, 11.0, c);
+            p.text(
+                pos2(icon_rect.right() + 4.0, r.center().y),
+                egui::Align2::LEFT_CENTER,
+                &label,
+                font(10.0),
+                c,
+            );
+        },
+    )
+    .clicked();
+    if clicked {
+        scene.ctl.send(Command::StopAllCarts);
+    }
 }
 
 fn tabs(ui: &mut Ui, scene: &Scene<'_>) {
