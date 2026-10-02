@@ -81,6 +81,16 @@ pub(crate) struct FollowScroll {
     pub animated: bool,
 }
 
+/// The scroll of one player's playlist tabs.
+#[derive(Default)]
+pub(crate) struct TabScroll {
+    pub offset: f32,
+    /// The shown playlist, the tab count and the view width (as bits) the
+    /// shown tab was last brought into view for; it is revealed again when
+    /// this key changes.
+    pub revealed: Option<(PlaylistId, usize, u32)>,
+}
+
 /// Everything the UI remembers between frames.
 #[derive(Default)]
 pub(crate) struct ViewState {
@@ -133,6 +143,9 @@ pub(crate) struct ViewState {
     /// The playlist whose Reset played waits for the operator's answer
     /// (feedback 2 spec O22).
     pub confirm_reset: Option<PlaylistId>,
+    /// How far each player's playlist tabs are scrolled (feedback 2 spec
+    /// O35).
+    pub tab_scroll: HashMap<PlayerId, TabScroll>,
     notice: Option<(String, f64)>,
 }
 

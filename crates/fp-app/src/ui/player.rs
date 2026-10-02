@@ -13,6 +13,7 @@ use fp_model::{Command, MarkerKind, PlayMode, PlayerId, PlaylistId, TrackId};
 use super::app::{DragEntry, FollowScroll, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
+use super::tab_strip;
 use super::table;
 use super::theme;
 use super::view::{self, PlayerStatus, PlayerView};
@@ -1057,17 +1058,105 @@ fn tabs(
         .map(|(pl, _)| pl);
     let (strip, _) =
         ui.allocate_exact_size(vec2(ui.available_width(), TABS_HEIGHT), Sense::hover());
-    let painter = ui.painter();
-    painter.rect_filled(strip, 0.0, theme::NEUTRAL_900);
-    let count = scene.state.playlists.len().max(1);
-    let width = strip.width() / count as f32;
+    ui.painter().rect_filled(strip, 0.0, theme::NEUTRAL_900);
+    let count = scene.state.playlists.len();
+    let l = tab_strip::layout(strip.width(), count);
+    let left_gap = if l.overflow {
+        tab_strip::ARROW_WIDTH
+    } else {
+        0.0
+    };
+    let view = Rect::from_min_size(
+        pos2(strip.left() + left_gap, strip.top()),
+        vec2(l.view_width, TABS_HEIGHT),
+    );
+    let st = view_state.tab_scroll.entry(id).or_default();
+    let key = (shown, count, l.view_width.to_bits());
+    if st.revealed != Some(key) {
+        if let Some(index) = scene.state.playlists.iter().position(|pl| pl.id == shown) {
+            st.offset = tab_strip::reveal(st.offset, index, &l);
+        }
+        st.revealed = Some(key);
+    }
+    if l.overflow && ui.rect_contains_pointer(strip) {
+        let delta = ui.input(|i| i.smooth_scroll_delta);
+        if delta != egui::Vec2::ZERO {
+            st.offset -= delta.x + delta.y;
+            // The wheel was for the tabs, not for the table below.
+            ui.ctx()
+                .input_mut(|i| i.smooth_scroll_delta = egui::Vec2::ZERO);
+        }
+    }
+    st.offset = if l.overflow {
+        tab_strip::clamp_offset(st.offset, l.content_width, l.view_width)
+    } else {
+        0.0
+    };
+    if l.overflow {
+        let max = (l.content_width - l.view_width).max(0.0);
+        for (direction, at, glyph, key) in [
+            (-1, strip.left(), icon::CARET_LEFT, "tip-tabs-scroll-left"),
+            (
+                1,
+                strip.right() - tab_strip::ARROW_WIDTH,
+                icon::CARET_RIGHT,
+                "tip-tabs-scroll-right",
+            ),
+        ] {
+            let enabled = if direction < 0 {
+                st.offset > 0.0
+            } else {
+                st.offset < max
+            };
+            let area = Rect::from_min_size(
+                pos2(at, strip.top()),
+                vec2(tab_strip::ARROW_WIDTH, TABS_HEIGHT),
+            );
+            let label = scene.i18n.tr(key);
+            let clicked = ui
+                .scope_builder(UiBuilder::new().max_rect(area), |ui| {
+                    widgets::tile(
+                        ui,
+                        area.size(),
+                        &label,
+                        enabled,
+                        TileStyle {
+                            border_width: 0.0,
+                            ..TileStyle::plain()
+                        },
+                        |p, r, c| {
+                            p.text(
+                                r.center(),
+                                egui::Align2::CENTER_CENTER,
+                                glyph,
+                                font(12.0),
+                                c,
+                            );
+                        },
+                    )
+                })
+                .inner
+                .clicked();
+            if clicked {
+                st.offset = tab_strip::step(st.offset, direction, &l);
+            }
+        }
+    }
+    let offset = st.offset;
     for (i, pl) in scene.state.playlists.iter().enumerate() {
         let rect = Rect::from_min_size(
-            pos2(strip.left() + i as f32 * width, strip.top()),
-            vec2(width, TABS_HEIGHT),
+            pos2(view.left() - offset + i as f32 * l.tab_width, strip.top()),
+            vec2(l.tab_width, TABS_HEIGHT),
         );
+        if !rect.intersects(view) {
+            continue;
+        }
         let response = ui
-            .interact(rect, ui.id().with(("tab", id.0, pl.id.0)), Sense::click())
+            .interact(
+                rect.intersect(view),
+                ui.id().with(("tab", id.0, pl.id.0)),
+                Sense::click(),
+            )
             .on_hover_text(&pl.name);
         let name = pl.name.clone();
         response.widget_info(|| {
@@ -1089,7 +1178,7 @@ fn tabs(
             scene.ctl.send(Command::ShowPlaylist(id, pl.id));
         }
         let on = pl.id == shown;
-        let painter = ui.painter();
+        let painter = ui.painter().with_clip_rect(view);
         let fill = if dropping {
             theme::ACCENT_900
         } else if on {
@@ -1120,12 +1209,14 @@ fn tabs(
         } else {
             theme::NEUTRAL_500
         };
-        let galley = painter.layout(
-            pl.name.clone(),
-            font(11.0),
-            color,
-            (rect.width() - 24.0).max(8.0),
-        );
+        let mut job = egui::text::LayoutJob::simple_singleline(pl.name.clone(), font(11.0), color);
+        job.wrap = egui::text::TextWrapping {
+            max_width: (l.tab_width - 24.0).max(8.0),
+            max_rows: 1,
+            break_anywhere: true,
+            overflow_character: Some('…'),
+        };
+        let galley = painter.layout_job(job);
         let dot = if current_pl == Some(pl.id) {
             Some(theme::ON_AIR_TEXT)
         } else if next_pl == Some(pl.id) {
@@ -1146,8 +1237,8 @@ fn tabs(
             pos2(start + 12.0, rect.center().y - galley.size().y / 2.0),
             vec2(text_w, galley.size().y),
         );
-        ui.painter()
-            .with_clip_rect(text_rect)
+        painter
+            .with_clip_rect(text_rect.intersect(view))
             .galley(text_rect.min, galley, color);
     }
     let bottom = Rect::from_min_size(
