@@ -10,12 +10,44 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 
 use crossbeam_channel::{Receiver, Sender};
-use fp_analysis::tags::{TagWriteError, read_track_tags, write_tags};
-use fp_model::{Limits, TrackId, TrackTags};
+use fp_analysis::tags::{
+    CoverError, TagWriteError, load_cover_file, read_tag_sheet, read_track_tags,
+    with_cover_thumbnail, write_tag_sheet, write_tags,
+};
+use fp_model::{CoverArt, Limits, TagSheet, TrackId, TrackTags};
 
 /// One piece of work for the worker.
 #[derive(Debug, Clone)]
 pub enum TagJob {
+    /// Read the whole tag sheet of a file (the editor opening). The cover
+    /// of the sheet comes with a thumbnail of at most `thumb_px` pixels.
+    ReadSheet {
+        track: TrackId,
+        path: PathBuf,
+        limits: Limits,
+        thumb_px: u32,
+    },
+    /// Write the fields and the cover where `after` differs from `before`,
+    /// then read the file again, both as a sheet (its cover with a
+    /// thumbnail of at most `thumb_px` pixels) and as the summary the
+    /// library keeps.
+    WriteSheet {
+        track: TrackId,
+        path: PathBuf,
+        before: Box<TagSheet>,
+        after: Box<TagSheet>,
+        limits: Limits,
+        thumb_px: u32,
+    },
+    /// Read the image file `path` as a new front cover for the editor of
+    /// `track`: it must be a JPEG or PNG that decodes within the cover
+    /// limits.
+    LoadCover {
+        track: TrackId,
+        path: PathBuf,
+        limits: Limits,
+        thumb_px: u32,
+    },
     /// Read the tags of a file (the tag-only pass).
     Read {
         track: TrackId,
@@ -33,9 +65,33 @@ pub enum TagJob {
     },
 }
 
+/// What the file holds after a sheet was written.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SheetSaved {
+    /// For the library (`Command::ApplyTags`).
+    pub tags: TrackTags,
+    /// For comparing with what was written; `None` if the file could not be
+    /// read again as a sheet.
+    pub sheet: Option<TagSheet>,
+}
+
 /// What a job produced.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TagOutcome {
+    /// `None`: the format has no writable tags or the file cannot be read.
+    SheetRead {
+        track: TrackId,
+        sheet: Option<Box<TagSheet>>,
+    },
+    SheetWritten {
+        track: TrackId,
+        result: Result<Box<SheetSaved>, TagWriteError>,
+    },
+    /// The answer to `LoadCover`.
+    CoverLoaded {
+        track: TrackId,
+        result: Result<CoverArt, CoverError>,
+    },
     Read {
         track: TrackId,
         tags: TrackTags,
@@ -47,8 +103,47 @@ pub enum TagOutcome {
     },
 }
 
+/// The sheet of `path` with the thumbnail of its cover decoded.
+fn read_sheet(path: &std::path::Path, limits: &Limits, thumb_px: u32) -> Option<TagSheet> {
+    read_tag_sheet(path, limits).map(|sheet| with_cover_thumbnail(sheet, limits, thumb_px))
+}
+
 fn run(job: TagJob) -> TagOutcome {
     match job {
+        TagJob::ReadSheet {
+            track,
+            path,
+            limits,
+            thumb_px,
+        } => TagOutcome::SheetRead {
+            track,
+            sheet: read_sheet(&path, &limits, thumb_px).map(Box::new),
+        },
+        TagJob::WriteSheet {
+            track,
+            path,
+            before,
+            after,
+            limits,
+            thumb_px,
+        } => {
+            let result = write_tag_sheet(&path, &before, &after, &limits).map(|()| {
+                Box::new(SheetSaved {
+                    tags: read_track_tags(&path, &limits),
+                    sheet: read_sheet(&path, &limits, thumb_px),
+                })
+            });
+            TagOutcome::SheetWritten { track, result }
+        }
+        TagJob::LoadCover {
+            track,
+            path,
+            limits,
+            thumb_px,
+        } => TagOutcome::CoverLoaded {
+            track,
+            result: load_cover_file(&path, &limits, thumb_px),
+        },
         TagJob::Read {
             track,
             path,
@@ -71,24 +166,69 @@ fn run(job: TagJob) -> TagOutcome {
     }
 }
 
+/// What a job is, for answering when it panics and for skipping it at
+/// shutdown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Read,
+    ReadSheet,
+    LoadCover,
+    Write,
+    WriteSheet,
+}
+
+impl TagJob {
+    fn kind(&self) -> Kind {
+        match self {
+            Self::Read { .. } => Kind::Read,
+            Self::ReadSheet { .. } => Kind::ReadSheet,
+            Self::LoadCover { .. } => Kind::LoadCover,
+            Self::Write { .. } => Kind::Write,
+            Self::WriteSheet { .. } => Kind::WriteSheet,
+        }
+    }
+
+    fn track(&self) -> TrackId {
+        match self {
+            Self::Read { track, .. }
+            | Self::ReadSheet { track, .. }
+            | Self::LoadCover { track, .. }
+            | Self::Write { track, .. }
+            | Self::WriteSheet { track, .. } => *track,
+        }
+    }
+
+    /// A read nobody will see is not worth the disk once the worker is
+    /// being dropped; a write is a save the operator asked for.
+    fn is_read(&self) -> bool {
+        matches!(self.kind(), Kind::Read | Kind::ReadSheet | Kind::LoadCover)
+    }
+}
+
 /// A panic inside a job is a failed job, not a dead worker.
 fn run_contained(job: TagJob) -> TagOutcome {
-    let (track, write) = match &job {
-        TagJob::Read { track, .. } => (*track, false),
-        TagJob::Write { track, .. } => (*track, true),
-    };
+    let (track, kind) = (job.track(), job.kind());
     catch_unwind(AssertUnwindSafe(|| run(job))).unwrap_or_else(|_| {
         tracing::error!(?track, "a tag job panicked");
-        if write {
-            TagOutcome::Written {
-                track,
-                result: Err(TagWriteError::Other("the tag code failed".to_owned())),
-            }
-        } else {
-            TagOutcome::Read {
+        let failed = || TagWriteError::Other("the tag code failed".to_owned());
+        match kind {
+            Kind::Read => TagOutcome::Read {
                 track,
                 tags: TrackTags::default(),
-            }
+            },
+            Kind::ReadSheet => TagOutcome::SheetRead { track, sheet: None },
+            Kind::LoadCover => TagOutcome::CoverLoaded {
+                track,
+                result: Err(CoverError::Unreadable("the image code failed".to_owned())),
+            },
+            Kind::Write => TagOutcome::Written {
+                track,
+                result: Err(failed()),
+            },
+            Kind::WriteSheet => TagOutcome::SheetWritten {
+                track,
+                result: Err(failed()),
+            },
         }
     })
 }
@@ -115,7 +255,7 @@ impl TagWorker {
                 while let Ok(job) = jobs_rx.recv() {
                     // A read that nobody will see is not worth the disk; a
                     // write is a save the operator asked for and still runs.
-                    if stopped.load(Ordering::Acquire) && matches!(job, TagJob::Read { .. }) {
+                    if stopped.load(Ordering::Acquire) && job.is_read() {
                         continue;
                     }
                     if results_tx.send(run_contained(job)).is_err() {
@@ -248,5 +388,262 @@ mod tests {
         });
         assert_eq!(outcomes, 2, "the read in progress and the write");
         assert_eq!(read_track_tags(&path, &limits).title, "Saved at shutdown");
+    }
+
+    fn wav(dir: &std::path::Path, name: &str) -> PathBuf {
+        let path = dir.join(name);
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 44_100,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for i in 0..4_410 {
+            w.write_sample((i % 100) as i16).unwrap();
+        }
+        w.finalize().unwrap();
+        path
+    }
+
+    fn next_outcome(worker: &TagWorker) -> TagOutcome {
+        worker
+            .results()
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("an outcome")
+    }
+
+    fn sheet_job(track: u64, path: &std::path::Path) -> TagJob {
+        TagJob::ReadSheet {
+            track: TrackId(track),
+            path: path.to_path_buf(),
+            limits: Limits::default(),
+            thumb_px: 64,
+        }
+    }
+
+    #[test]
+    fn a_sheet_read_answers_with_the_sheet() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = wav(dir.path(), "x.wav");
+        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
+        assert!(worker.submit(sheet_job(7, &path)));
+        match next_outcome(&worker) {
+            TagOutcome::SheetRead {
+                track,
+                sheet: Some(sheet),
+            } => {
+                assert_eq!(track, TrackId(7));
+                assert!(sheet.can_store(fp_model::TagField::AlbumArtist));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_sheet_read_of_a_file_without_tags_answers_none() {
+        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
+        assert!(worker.submit(sheet_job(1, std::path::Path::new("/nonexistent/x.wav"))));
+        assert_eq!(
+            next_outcome(&worker),
+            TagOutcome::SheetRead {
+                track: TrackId(1),
+                sheet: None
+            }
+        );
+    }
+
+    #[test]
+    fn a_sheet_write_answers_with_the_file_as_it_is_now() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = wav(dir.path(), "x.wav");
+        let limits = Limits::default();
+        let before = read_tag_sheet(&path, &limits).unwrap();
+        let mut after = before.clone();
+        after.set_text(fp_model::TagField::Title, "Sheet title", false);
+        after.set_text(fp_model::TagField::Mood, "Calm", false);
+        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
+        assert!(worker.submit(TagJob::WriteSheet {
+            track: TrackId(3),
+            path: path.clone(),
+            before: Box::new(before),
+            after: Box::new(after.clone()),
+            limits,
+            thumb_px: 64,
+        }));
+        match next_outcome(&worker) {
+            TagOutcome::SheetWritten {
+                track,
+                result: Ok(saved),
+            } => {
+                assert_eq!(track, TrackId(3));
+                assert_eq!(saved.tags.title, "Sheet title");
+                assert_eq!(saved.sheet, Some(after), "the file kept all of it");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_sheet_write_that_fails_says_why() {
+        let path = PathBuf::from("/nonexistent/folder/x.wav");
+        let before = TagSheet::new([fp_model::TagField::Title], 0, false);
+        let mut after = before.clone();
+        after.set_text(fp_model::TagField::Title, "x", false);
+        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
+        assert!(worker.submit(TagJob::WriteSheet {
+            track: TrackId(4),
+            path,
+            before: Box::new(before),
+            after: Box::new(after),
+            limits: Limits::default(),
+            thumb_px: 64,
+        }));
+        assert_eq!(
+            next_outcome(&worker),
+            TagOutcome::SheetWritten {
+                track: TrackId(4),
+                result: Err(TagWriteError::NotFound)
+            }
+        );
+    }
+
+    #[test]
+    fn dropping_the_worker_skips_queued_sheet_reads_and_runs_sheet_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = wav(dir.path(), "x.wav");
+        let limits = Limits::default();
+        let before = read_tag_sheet(&path, &limits).unwrap();
+        let mut after = before.clone();
+        after.set_text(fp_model::TagField::Title, "Saved at shutdown", false);
+        let outcomes = outcomes_after_drop(|worker| {
+            for n in 1..=QUEUED {
+                assert!(worker.submit(sheet_job(n as u64, &path)));
+            }
+            assert!(worker.submit(TagJob::WriteSheet {
+                track: TrackId(99),
+                path: path.clone(),
+                before: Box::new(before.clone()),
+                after: Box::new(after.clone()),
+                limits: limits.clone(),
+                thumb_px: 64,
+            }));
+        });
+        assert_eq!(outcomes, 2, "the read in progress and the write");
+        let sheet = read_tag_sheet(&path, &limits).unwrap();
+        assert_eq!(
+            sheet.values(fp_model::TagField::Title),
+            ["Saved at shutdown"]
+        );
+    }
+
+    fn png(width: u32) -> Vec<u8> {
+        let img = image::RgbImage::from_pixel(width, 30, image::Rgb([200, 30, 30]));
+        let mut out = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+            .unwrap();
+        out
+    }
+
+    fn load_job(track: u64, path: &std::path::Path, limits: Limits) -> TagJob {
+        TagJob::LoadCover {
+            track: TrackId(track),
+            path: path.to_path_buf(),
+            limits,
+            thumb_px: 16,
+        }
+    }
+
+    #[test]
+    fn a_cover_load_answers_with_a_front_cover_and_its_thumbnail() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cover.png");
+        std::fs::write(&path, png(40)).unwrap();
+        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
+        assert!(worker.submit(load_job(5, &path, Limits::default())));
+        match next_outcome(&worker) {
+            TagOutcome::CoverLoaded {
+                track,
+                result: Ok(cover),
+            } => {
+                assert_eq!(track, TrackId(5));
+                assert!(cover.is_front());
+                assert_eq!(cover.data(), png(40).as_slice());
+                assert!(cover.thumb_png().is_some());
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_cover_load_that_fails_says_why() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cover.png");
+        std::fs::write(&path, png(40)).unwrap();
+        let small = Limits {
+            max_cover_bytes: 10,
+            ..Limits::default()
+        };
+        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
+        assert!(worker.submit(load_job(5, &path, small)));
+        assert_eq!(
+            next_outcome(&worker),
+            TagOutcome::CoverLoaded {
+                track: TrackId(5),
+                result: Err(CoverError::TooLarge)
+            }
+        );
+    }
+
+    #[test]
+    fn a_sheet_write_with_a_new_cover_answers_with_the_cover_and_its_thumbnail() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = wav(dir.path(), "x.wav");
+        let limits = Limits::default();
+        let before = read_tag_sheet(&path, &limits).unwrap();
+        assert!(before.can_store_cover() && before.cover().is_none());
+        let mut after = before.clone();
+        after.set_cover(Some(CoverArt::new(png(40), true)));
+        let worker = TagWorker::spawn(Box::new(|| {})).unwrap();
+        assert!(worker.submit(TagJob::WriteSheet {
+            track: TrackId(3),
+            path: path.clone(),
+            before: Box::new(before),
+            after: Box::new(after.clone()),
+            limits,
+            thumb_px: 16,
+        }));
+        match next_outcome(&worker) {
+            TagOutcome::SheetWritten {
+                result: Ok(saved), ..
+            } => {
+                let sheet = saved.sheet.expect("a sheet");
+                assert_eq!(sheet.cover(), after.cover(), "the file kept the cover");
+                assert!(sheet.cover().unwrap().thumb_png().is_some());
+            }
+            other => panic!("{other:?}"),
+        }
+        // The next sheet read shows it, with a thumbnail.
+        assert!(worker.submit(sheet_job(3, &path)));
+        match next_outcome(&worker) {
+            TagOutcome::SheetRead {
+                sheet: Some(sheet), ..
+            } => assert!(sheet.cover().unwrap().thumb_png().is_some()),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn dropping_the_worker_skips_a_queued_cover_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cover.png");
+        std::fs::write(&path, png(40)).unwrap();
+        let outcomes = outcomes_after_drop(|worker| {
+            for n in 1..=QUEUED {
+                assert!(worker.submit(load_job(n as u64, &path, Limits::default())));
+            }
+        });
+        assert_eq!(outcomes, 1, "only the load in progress");
     }
 }
