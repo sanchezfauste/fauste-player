@@ -232,6 +232,10 @@ pub struct PlayersConfig {
     pub default_mode: PlayMode,
     pub fade_ms: u32,
     pub auto_segue: bool,
+    /// Players honour each track's cue-in and cue-out. Off, every player
+    /// entry plays from 0 to the end of the file; the markers are kept.
+    /// Carts always use theirs. Independent of `auto_segue`.
+    pub use_cue_markers: bool,
     pub end_warning_secs: f64,
     /// How many entries Previous can go back (R25); 0 disables Previous.
     pub history_len: usize,
@@ -244,6 +248,7 @@ impl Default for PlayersConfig {
             default_mode: PlayMode::Continuous,
             fade_ms: 1000,
             auto_segue: true,
+            use_cue_markers: true,
             end_warning_secs: 10.0,
             history_len: 50,
         }
