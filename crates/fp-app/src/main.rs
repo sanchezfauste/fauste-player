@@ -1,6 +1,8 @@
 //! Fauste Player: starts logging, loads the saved state, builds the audio
 //! engine, and runs the conductor, analysis, services and interface.
 
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -52,26 +54,34 @@ enum Exit {
 fn main() -> ExitCode {
     let playlists = match cli::parse(std::env::args_os().skip(1)) {
         Ok(cli::Invocation::Version) => {
-            println!("fauste-player {}", env!("CARGO_PKG_VERSION"));
+            cli::emit(
+                cli::Stream::Out,
+                &format!("fauste-player {}\n", env!("CARGO_PKG_VERSION")),
+            );
             return ExitCode::SUCCESS;
         }
         Ok(cli::Invocation::Help) => {
-            print!("{}", cli::usage());
+            cli::emit(cli::Stream::Out, &cli::usage());
             return ExitCode::SUCCESS;
         }
         Ok(cli::Invocation::Run { playlists, ignored }) => {
             for path in ignored {
+                // An ignored argument is not worth a message box.
                 eprintln!("fauste-player: not a playlist, ignored: {}", path.display());
+                tracing::warn!(path = %path.display(), "not a playlist, ignored");
             }
             playlists
         }
         Err(e) => {
-            eprintln!("fauste-player: {e}");
+            cli::emit(cli::Stream::Err, &format!("fauste-player: {e}\n"));
             return ExitCode::FAILURE;
         }
     };
     let Some(paths) = bootstrap::paths() else {
-        eprintln!("fauste-player: no home directory found; set FAUSTE_HOME");
+        cli::emit(
+            cli::Stream::Err,
+            "fauste-player: no home directory found; set FAUSTE_HOME\n",
+        );
         return ExitCode::FAILURE;
     };
     // One instance per data folder: a second start (a playlist opened from
@@ -81,9 +91,12 @@ fn main() -> ExitCode {
         Ok(Some(lock)) => lock,
         Ok(None) => return hand_over(&paths.data_dir, &playlists),
         Err(e) => {
-            eprintln!(
-                "fauste-player: cannot lock {}: {e}",
-                paths.data_dir.display()
+            cli::emit(
+                cli::Stream::Err,
+                &format!(
+                    "fauste-player: cannot lock {}: {e}\n",
+                    paths.data_dir.display()
+                ),
             );
             return ExitCode::FAILURE;
         }
@@ -121,7 +134,7 @@ fn main() -> ExitCode {
         }
         Err(e) => {
             tracing::error!(error = %e, "could not start");
-            eprintln!("fauste-player: {e}");
+            cli::emit(cli::Stream::Err, &format!("fauste-player: {e}\n"));
             ExitCode::FAILURE
         }
     }
@@ -296,7 +309,10 @@ fn hand_over(data_dir: &std::path::Path, playlists: &[std::path::PathBuf]) -> Ex
         return match instance::deliver(data_dir, playlists) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
-                eprintln!("fauste-player: cannot hand the playlists over: {e}");
+                cli::emit(
+                    cli::Stream::Err,
+                    &format!("fauste-player: cannot hand the playlists over: {e}\n"),
+                );
                 ExitCode::FAILURE
             }
         };

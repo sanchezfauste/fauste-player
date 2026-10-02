@@ -56,6 +56,10 @@ documents of a demo session). The working corpus (`fuzz/corpus/`) is not
 versioned. The `fuzz` workflow starts from the seeds, runs each target for
 five minutes every night and uploads any crash as an artefact.
 
+The Windows GUI attribute (no console window) is not covered by tests: the
+Windows packaging verifies it with the PE subsystem check
+`scripts/check-windows-gui.sh` (its `--self-test` runs on Linux).
+
 ## Checks run in CI
 
 ```sh
