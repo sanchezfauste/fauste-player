@@ -29,7 +29,7 @@ last playlist, and a playlist with a track on air, cannot be deleted.
 
 A new installation shows `#`, Title, Artist and Dur. The other columns are
 optional; see **Choosing the columns** below. A track that lacks a value
-shows an empty cell.
+shows an empty cell, except Artist, which shows "Unknown artist".
 
 The columns fill the table and keep their proportions when the window is
 resized; the text columns get the most room. Drag the header separators to
