@@ -29,7 +29,7 @@ runs, against the code that the earlier plans left. Each plan reaches
 | 2 | Settings window | O2, O3, O4, O5 | `feat/settings-window` | done |
 | 3 | Meter scale | O11, O13 | `fix/meter-scale` | done |
 | 4 | Cartwall stop | O18, O19 | `feat/cartwall-stop-all` | done |
-| 5 | Cue markers off | O15 | `feat/cue-markers-off` | outline |
+| 5 | Cue markers off | O15 | `feat/cue-markers-off` | done |
 | 6 | Player and CUE | O8, O10, O12, O17 | `feat/cue-window` | outline |
 | 7 | Track tags | O23 | `feat/track-tags` | outline |
 | 8 | Track table | O7, O9, O16, O22, O24 | `feat/table-columns` | outline |
