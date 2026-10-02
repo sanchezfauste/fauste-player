@@ -882,3 +882,165 @@ fn a_pause_while_the_next_waits_takes_the_transition_back() {
         "the next plays after the resume"
     );
 }
+impl Rig {
+    fn cue_position(&self) -> Option<f64> {
+        self.engine.telemetry(P).cue_position_secs
+    }
+
+    /// Renders `blocks` blocks and returns what the Cue device played
+    /// (left channel); the Main device is rendered too, as `run` does.
+    fn run_hearing_cue(&mut self, blocks: usize) -> Vec<f32> {
+        let mut heard = Vec::new();
+        for _ in 0..blocks {
+            let out = self.cue.render(BLOCK).unwrap();
+            heard.extend(out.chunks(2).map(|f| f[0]));
+            self.run(1);
+        }
+        heard
+    }
+}
+
+fn start_cue(r: &mut Rig, from_secs: f64) {
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: request(3, from_secs),
+    });
+    r.settle();
+}
+
+#[test]
+fn pausing_the_cue_holds_its_position_and_resuming_continues() {
+    let mut r = rig(480_000, true);
+    start_cue(&mut r, 0.0);
+    r.run_hearing_cue(10);
+    let before = r.cue_position().unwrap();
+    assert!(before > 0.0, "{before}");
+
+    r.act(EngineAction::SetCuePaused {
+        player: P,
+        paused: true,
+    });
+    // The pause ramps down; once it has, nothing more is played.
+    r.run_hearing_cue(10);
+    let held = r.cue_position().unwrap();
+    let silent = r.run_hearing_cue(10);
+    assert!(silent.iter().all(|v| *v == 0.0), "a held CUE is silent");
+    assert_eq!(r.cue_position().unwrap(), held, "the position holds");
+
+    r.act(EngineAction::SetCuePaused {
+        player: P,
+        paused: false,
+    });
+    let resumed = r.run_hearing_cue(10);
+    assert!(resumed.iter().any(|v| *v != 0.0), "it plays again");
+    assert!(r.cue_position().unwrap() > held + 0.05);
+    assert!(
+        !r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::CueEnded { .. })),
+        "pausing never ends the CUE"
+    );
+}
+
+#[test]
+fn seeking_the_cue_replaces_the_source_at_the_new_position() {
+    let mut r = rig(480_000, true);
+    start_cue(&mut r, 0.0);
+    r.run_hearing_cue(2);
+    r.act(EngineAction::SeekCue {
+        player: P,
+        secs: 3.0,
+    });
+    r.settle();
+    let heard = r.run_hearing_cue(6);
+    assert!(r.cue_position().unwrap() >= 3.0);
+    let last = heard.iter().rev().find(|v| **v != 0.0).unwrap();
+    // The tag's frame field overflows past 100 000 frames: undo the base.
+    let frame = *last as u64 - 3 * 100_000;
+    assert!(frame as f64 / RATE >= 3.0, "the Cue device plays from 3 s");
+    assert!(
+        r.heard.iter().all(|v| *v == 0.0),
+        "the main output never hears the CUE"
+    );
+}
+
+#[test]
+fn seeking_a_paused_cue_stays_paused_at_the_new_position() {
+    let mut r = rig(480_000, true);
+    start_cue(&mut r, 0.0);
+    r.run_hearing_cue(4);
+    r.act(EngineAction::SetCuePaused {
+        player: P,
+        paused: true,
+    });
+    r.run_hearing_cue(10);
+    r.act(EngineAction::SeekCue {
+        player: P,
+        secs: 2.0,
+    });
+    r.settle();
+    let silent = r.run_hearing_cue(10);
+    assert!(silent.iter().all(|v| *v == 0.0));
+    let at = r.cue_position().unwrap();
+    assert!((2.0..2.05).contains(&at), "held at the seek target: {at}");
+    r.act(EngineAction::SetCuePaused {
+        player: P,
+        paused: false,
+    });
+    let heard = r.run_hearing_cue(10);
+    assert!(heard.iter().any(|v| *v != 0.0));
+    assert!(r.cue_position().unwrap() > at + 0.05);
+}
+
+#[test]
+fn a_new_cue_after_a_pause_plays() {
+    let mut r = rig(480_000, true);
+    start_cue(&mut r, 0.0);
+    r.run_hearing_cue(4);
+    r.act(EngineAction::SetCuePaused {
+        player: P,
+        paused: true,
+    });
+    r.run_hearing_cue(10);
+    // The model starts the new CUE unpaused (it moved to another entry).
+    start_cue(&mut r, 0.0);
+    let heard = r.run_hearing_cue(10);
+    assert!(heard.iter().any(|v| *v != 0.0), "the new CUE is audible");
+}
+
+#[test]
+fn cue_commands_without_a_cue_source_are_ignored() {
+    let mut r = rig(48_000, true);
+    r.act(EngineAction::SeekCue {
+        player: P,
+        secs: 1.0,
+    });
+    r.act(EngineAction::SetCuePaused {
+        player: P,
+        paused: true,
+    });
+    r.act(EngineAction::SetCuePaused {
+        player: P,
+        paused: false,
+    });
+    r.settle();
+    r.run(2);
+    assert_eq!(r.cue_position(), None);
+    assert!(r.events.is_empty(), "{:?}", r.events);
+}
+
+#[test]
+fn a_seek_past_the_end_ends_the_cue() {
+    let mut r = rig(48_000, true);
+    start_cue(&mut r, 0.0);
+    r.act(EngineAction::SeekCue {
+        player: P,
+        secs: 5.0,
+    });
+    r.settle();
+    r.run_hearing_cue(10);
+    assert!(r.events.contains(&EngineEvent::CueEnded {
+        player: P,
+        entry: EntryId(3)
+    }));
+}

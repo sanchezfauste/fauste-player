@@ -25,6 +25,8 @@ pub enum Transport {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CueState {
     pub entry: EntryId,
+    /// The CUE window's Pause is on: the source is held on the Cue bus.
+    pub paused: bool,
 }
 
 /// The track table's column widths as fractions of its width (`#`, Title,

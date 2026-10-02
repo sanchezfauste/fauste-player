@@ -39,7 +39,10 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             }
         }
         Command::Previous(id) => previous(state, id, &mut out)?,
-        Command::SetNext(id, entry) => set_next(state, id, entry)?,
+        Command::SetNext(id, entry) => {
+            set_next(state, id, entry)?;
+            follow_cue(state, id, entry, &mut out)?;
+        }
         Command::InsertPaths {
             playlist,
             index,
@@ -91,6 +94,14 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             }
         }
         Command::CueEntry(id, entry) => cue_entry(state, id, entry, &mut out)?,
+        Command::SeekCue(id, secs) => seek_cue(state, id, secs, &mut out)?,
+        Command::SetCuePaused(id, paused) => set_cue_paused(state, id, paused, &mut out)?,
+        Command::CueToNext(id) => {
+            let i = state.player_index(id)?;
+            if let Some(cue) = state.players[i].cue {
+                set_next(state, id, cue.entry)?;
+            }
+        }
         Command::SetVolume(id, volume) => {
             let i = state.player_index(id)?;
             // A broken value never silences what is on air: it is ignored.
@@ -669,11 +680,72 @@ fn cue_entry(
     let request = state
         .request_from_cue_in(entry)
         .ok_or(ModelError::UnknownEntry(entry))?;
-    state.players[i].cue = Some(CueState { entry });
+    state.players[i].cue = Some(CueState {
+        entry,
+        paused: false,
+    });
     out.push(EngineAction::StartCue {
         player: id,
         request,
     });
+    Ok(())
+}
+
+/// Spec O17: a running CUE follows the player's new next, from its cue-in.
+/// The entry already cued is left running (no restart), and an entry that
+/// cannot be played leaves the CUE where it is.
+fn follow_cue(
+    state: &mut AppState,
+    id: PlayerId,
+    entry: EntryId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let i = state.player_index(id)?;
+    let moves = state.players[i].cue.is_some_and(|c| c.entry != entry);
+    if moves && state.playable_request(entry).is_some() {
+        cue_entry(state, id, entry, out)?;
+    }
+    Ok(())
+}
+
+/// Spec O12: seeks the running CUE inside its file. The model does not
+/// touch `paused`: a held CUE stays held at the new position.
+fn seek_cue(
+    state: &mut AppState,
+    id: PlayerId,
+    secs: f64,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let i = state.player_index(id)?;
+    let Some(cue) = state.players[i].cue else {
+        return Ok(());
+    };
+    if !secs.is_finite() {
+        return Ok(());
+    }
+    if let Some(request) = state.request_at(cue.entry, secs) {
+        out.push(EngineAction::SeekCue {
+            player: id,
+            secs: request.from_secs,
+        });
+    }
+    Ok(())
+}
+
+/// Spec O12: holds or releases the running CUE; only a change is sent.
+fn set_cue_paused(
+    state: &mut AppState,
+    id: PlayerId,
+    paused: bool,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let i = state.player_index(id)?;
+    if let Some(cue) = state.players[i].cue.as_mut()
+        && cue.paused != paused
+    {
+        cue.paused = paused;
+        out.push(EngineAction::SetCuePaused { player: id, paused });
+    }
     Ok(())
 }
 
