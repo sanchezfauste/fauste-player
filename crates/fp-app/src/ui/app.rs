@@ -44,6 +44,13 @@ const NOTICE_SECS: f64 = 5.0;
 /// Idle repaint period (the clock).
 const IDLE_REPAINT: Duration = Duration::from_millis(100);
 
+/// The payload of a column header being dragged (feedback 2 spec O24): its
+/// position in the list of columns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DragColumn {
+    pub index: usize,
+}
+
 /// The payload of an entry being dragged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DragEntry {
@@ -151,6 +158,17 @@ impl Scene<'_> {
         let key = super::view::file_problem(track)?;
         let path = track.path.display().to_string();
         Some(self.i18n.tr_args(key, &[("path", path.into())]))
+    }
+
+    /// Sends the new list of table columns (feedback 2 spec O24), unless it
+    /// is the one in use. The model repairs it (`Config::validate`).
+    pub fn set_table_columns(&self, columns: Vec<fp_model::TableColumn>) {
+        let mut config = self.state.config.clone();
+        config.ui.table_columns = columns;
+        let _ = config.validate();
+        if config.ui.table_columns != self.state.config.ui.table_columns {
+            self.ctl.send(Command::UpdateConfig(Box::new(config)));
+        }
     }
 
     /// Opens the native file dialog without blocking the interface.

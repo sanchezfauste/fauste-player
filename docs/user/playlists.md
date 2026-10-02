@@ -26,6 +26,13 @@ The columns fill the table and keep their proportions when the window is
 resized; Title gets the most room. Drag the header separators to change the
 proportions; they are remembered per player.
 
+Which columns the tables show, and in which order, is the same for every
+player. Drag a header onto another to move its column (a line shows where it
+will land), or right-click the header to tick the optional columns: Number,
+Artist, Album, Date, Genre, Intro and File name (Title and Duration are
+always shown). **Settings > Playlists > Table columns** has the same list with
+up and down arrows and a **Default columns** button.
+
 When a player moves on to another track, its table shows that track's
 playlist and scrolls its row to the top, unless you used the table in the
 last 10 seconds (scrolled it, dragged a track, opened a track's menu or

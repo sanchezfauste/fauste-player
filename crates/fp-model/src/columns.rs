@@ -125,6 +125,18 @@ pub fn move_column(list: &[TableColumn], from: usize, to: usize) -> Vec<TableCol
     out
 }
 
+/// `list` with the column at position `from` moved to sit just before the
+/// column now at position `slot` (`slot` equal to the length is the end):
+/// where a header dropped on the left half of a cell, or on the right half
+/// of the one before it, ends up. Dropping a column on either side of
+/// itself changes nothing.
+pub fn move_column_before(list: &[TableColumn], from: usize, slot: usize) -> Vec<TableColumn> {
+    let len = normalize_columns(list).len();
+    let slot = slot.min(len);
+    let to = if from < slot { slot - 1 } else { slot };
+    move_column(list, from, to)
+}
+
 /// The rows of the Settings list: the shown columns in their order (`true`),
 /// then the hidden ones in the order of [`TableColumn::ALL`] (`false`).
 pub fn column_rows(list: &[TableColumn]) -> Vec<(TableColumn, bool)> {

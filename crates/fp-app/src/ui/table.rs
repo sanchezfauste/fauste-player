@@ -6,7 +6,7 @@ use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
 use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, TableColumn, Transport};
 
-use super::app::{DragEntry, DropTarget, FollowScroll, Scene, ViewState};
+use super::app::{DragColumn, DragEntry, DropTarget, FollowScroll, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::table_layout;
@@ -206,12 +206,37 @@ pub(crate) fn track_table(
         }
     }
     let mut menu_open = false;
+    // O24: a header being dragged over another, and the move it ended in.
+    let mut column_slot: Option<usize> = None;
+    let mut column_move: Option<(usize, usize)> = None;
     builder
         .header(HEADER_HEIGHT, |mut header| {
-            for column in &columns {
-                header.col(|ui| {
+            for (index, column) in columns.iter().enumerate() {
+                let (_, response) = header.col(|ui| {
                     let right = matches!(column, TableColumn::Duration | TableColumn::Intro);
                     header_label(ui, &t.tr(&format!("col-{}", column.name())), right);
+                });
+                if response.drag_started() {
+                    response.dnd_set_drag_payload(DragColumn { index });
+                }
+                let right_half = |pos: egui::Pos2| pos.x > response.rect.center().x;
+                if response.dnd_hover_payload::<DragColumn>().is_some()
+                    && let Some(pos) = response.hover_pos()
+                {
+                    column_slot = Some(if right_half(pos) { index + 1 } else { index });
+                }
+                if let Some(payload) = response.dnd_release_payload::<DragColumn>() {
+                    let at = response.interact_pointer_pos().or(response.hover_pos());
+                    let slot = if at.is_some_and(right_half) {
+                        index + 1
+                    } else {
+                        index
+                    };
+                    column_move = Some((payload.index, slot));
+                }
+                response.context_menu(|ui| {
+                    menu_open = true;
+                    header_menu(ui, scene, &columns);
                 });
             }
         })
@@ -556,6 +581,21 @@ pub(crate) fn track_table(
         });
     }
     resize_handles(ui, view_state, player, &columns, &px, area);
+    if let Some((from, slot)) = column_move {
+        scene.set_table_columns(fp_model::move_column_before(&columns, from, slot));
+    }
+    if egui::DragAndDrop::has_payload_of_type::<DragColumn>(ui.ctx()) {
+        ui.set_cursor_icon(egui::CursorIcon::Grabbing);
+        // Where the dragged header would land: a line on that column edge.
+        if let Some(slot) = column_slot {
+            let x = area.left() + px.iter().take(slot).sum::<f32>();
+            ui.painter().rect_filled(
+                Rect::from_min_size(pos2(x - 1.0, area.top()), vec2(2.0, HEADER_HEIGHT)),
+                0.0,
+                theme::ACCENT,
+            );
+        }
+    }
     // The operator is using the table: scrolling it (wheel or scroll bar),
     // pressing in it, dragging an entry (for as long as the drag lasts), or
     // with a row menu open. Following waits (feedback spec F18).
@@ -616,6 +656,22 @@ fn resize_handles(
         };
         ui.painter()
             .line_segment([pos2(x, area.top()), pos2(x, area.bottom())], stroke);
+    }
+}
+
+/// The menu of the table header: shows and hides the optional columns
+/// (feedback 2 spec O24). Title and Duration are always shown, so they are
+/// not offered.
+fn header_menu(ui: &mut Ui, scene: &Scene<'_>, columns: &[TableColumn]) {
+    let t = scene.i18n;
+    ui.set_min_width(200.0);
+    for column in TableColumn::ALL.into_iter().filter(|c| !c.is_required()) {
+        let mut shown = columns.contains(&column);
+        let label = t.tr(&format!("column-name-{}", column.name()));
+        if ui.checkbox(&mut shown, label).changed() {
+            scene.set_table_columns(fp_model::with_column_shown(columns, column, shown));
+            ui.close();
+        }
     }
 }
 

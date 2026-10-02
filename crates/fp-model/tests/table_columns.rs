@@ -3,8 +3,8 @@
 
 use fp_model::TableColumn::{Album, Artist, Date, Duration, FileName, Genre, Intro, Number, Title};
 use fp_model::{
-    Config, TableColumn, column_rows, default_columns, move_column, normalize_columns,
-    with_column_shown,
+    Config, TableColumn, column_rows, default_columns, move_column, move_column_before,
+    normalize_columns, with_column_shown,
 };
 
 #[test]
@@ -149,6 +149,43 @@ fn validate_repairs_the_list_and_says_so() {
 fn the_list_is_written_with_stable_names() {
     let json = serde_json::to_string(&vec![Number, FileName, Intro]).unwrap();
     assert_eq!(json, r#"["number","file_name","intro"]"#);
+}
+
+#[test]
+fn a_header_dropped_before_a_slot_lands_just_before_that_column() {
+    let list = vec![Number, Title, Artist, Duration];
+    assert_eq!(
+        move_column_before(&list, 0, 3),
+        vec![Title, Artist, Number, Duration]
+    );
+    assert_eq!(
+        move_column_before(&list, 3, 0),
+        vec![Duration, Number, Title, Artist]
+    );
+    assert_eq!(
+        move_column_before(&list, 3, 1),
+        vec![Number, Duration, Title, Artist]
+    );
+}
+
+#[test]
+fn a_header_dropped_at_the_end_goes_last() {
+    let list = vec![Number, Title, Artist, Duration];
+    assert_eq!(
+        move_column_before(&list, 0, 4),
+        vec![Title, Artist, Duration, Number]
+    );
+    assert_eq!(
+        move_column_before(&list, 0, 99),
+        vec![Title, Artist, Duration, Number]
+    );
+}
+
+#[test]
+fn a_header_dropped_beside_itself_changes_nothing() {
+    let list = vec![Number, Title, Artist, Duration];
+    assert_eq!(move_column_before(&list, 2, 2), list);
+    assert_eq!(move_column_before(&list, 2, 3), list);
 }
 
 #[test]

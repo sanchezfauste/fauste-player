@@ -85,6 +85,14 @@ runs when either changes (not during a handle drag), since egui keeps the
 widths it was first given. On handle release the widths are stored back as
 fractions.
 
+Column order (feedback 2 spec O24): each header cell is a drag source
+(`app::DragColumn`); the drop slot comes from the half of the cell under the
+pointer and `fp_model::move_column_before` computes the new list. The header
+context menu and the Settings list (`ui/settings/columns.rs`) use
+`with_column_shown` and `move_column`. All go through
+`Scene::set_table_columns`, which sends one `UpdateConfig` unless the
+(validated) list is already in use.
+
 `player::follow_current` watches each player's current entry
 (`ViewState::followed`). A change waits in `follow_pending` until
 `scene.time − table_touched ≥ ui.follow_current_grace_secs` (a scroll over

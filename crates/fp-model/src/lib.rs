@@ -34,7 +34,8 @@ pub use cartwall::{
     PlayingCart,
 };
 pub use columns::{
-    TableColumn, column_rows, default_columns, move_column, normalize_columns, with_column_shown,
+    TableColumn, column_rows, default_columns, move_column, move_column_before, normalize_columns,
+    with_column_shown,
 };
 pub use command::{
     CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
