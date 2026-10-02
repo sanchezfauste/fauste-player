@@ -6,6 +6,7 @@ use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
 use super::cart_view::{CartStatus, cart_view, page_on_air};
+use super::glyphs::{self, TransportAction};
 use super::theme;
 use super::view;
 use super::widgets::{self, TileStyle, font, font_medium};
@@ -359,11 +360,20 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                             });
                             r
                         };
-                        if !empty && item(ui, icon::HEADPHONES, "menu-cue").clicked() {
+                        if !empty
+                            && item(ui, glyphs::glyph_text(TransportAction::Cue), "menu-cue")
+                                .clicked()
+                        {
                             scene.ctl.send(Command::CueCart(cart.id));
                             ui.close();
                         }
-                        if !empty && item(ui, egui_phosphor::fill::STOP, "menu-cart-stop").clicked()
+                        if !empty
+                            && item(
+                                ui,
+                                glyphs::glyph_text(TransportAction::Stop),
+                                "menu-cart-stop",
+                            )
+                            .clicked()
                         {
                             scene.ctl.send(Command::StopCart(cart.id));
                             ui.close();

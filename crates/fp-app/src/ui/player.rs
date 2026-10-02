@@ -12,7 +12,7 @@ use fp_model::{Command, MarkerKind, PlayMode, PlayerId, PlaylistId, TrackId};
 
 use super::app::{DragEntry, Scene, ViewState};
 use super::format;
-use super::icons;
+use super::glyphs::{self, TransportAction};
 use super::table;
 use super::theme;
 use super::view::{self, PlayerStatus, PlayerView};
@@ -235,7 +235,7 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                         p.text(
                             r.center(),
                             egui::Align2::CENTER_CENTER,
-                            format!("{} {cue_label}", icon::HEADPHONES),
+                            format!("{} {cue_label}", glyphs::glyph_text(TransportAction::Cue)),
                             font_semibold(9.0),
                             c,
                         );
@@ -503,7 +503,7 @@ fn info_row(
                             widgets::tabular_label(ui, &cue, &font(11.0), theme::CUE);
                             ui.add(
                                 egui::Label::new(
-                                    RichText::new(icon::HEADPHONES)
+                                    RichText::new(glyphs::glyph_text(TransportAction::Cue))
                                         .font(font(11.0))
                                         .color(theme::CUE),
                                 )
@@ -591,10 +591,10 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 hover_content: theme::PLAY_HOVER,
                 active_fill: theme::PLAY_ACTIVE_BG,
             };
-            let glyph = if playing {
-                egui_phosphor::fill::FAST_FORWARD
+            let play_action = if playing {
+                TransportAction::Next
             } else {
-                egui_phosphor::fill::PLAY
+                TransportAction::Play
             };
             if widgets::tile(
                 ui,
@@ -603,7 +603,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 available.play,
                 play_style,
                 |p, r, c| {
-                    widgets::glyph(p, r.translate(vec2(0.0, -6.0)), glyph, 28.0, c, true);
+                    glyphs::paint(p, r.translate(vec2(0.0, -6.0)), play_action, 28.0, c);
                     p.text(
                         pos2(r.center().x, r.bottom() - 12.0),
                         egui::Align2::CENTER_CENTER,
@@ -661,13 +661,8 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 t.tr("tip-stop-after")
             };
-            let glyph = |g: &'static str| -> PaintFn {
-                Box::new(move |p, r, c| widgets::glyph(p, r, g, 13.0, c, true))
-            };
-            let drawn = |f: fn(Rect, Color32) -> Vec<egui::Shape>, w: f32, h: f32| -> PaintFn {
-                Box::new(move |p, r, c| {
-                    p.extend(f(Rect::from_center_size(r.center(), vec2(w, h)), c))
-                })
+            let button = |action: TransportAction| -> PaintFn {
+                Box::new(move |p, r, c| glyphs::paint(p, r, action, 13.0, c))
             };
             // Two rows of three (feedback spec §3.2): Previous and Restart
             // first, then Stop and Pause over Fade stop and Stop after.
@@ -677,21 +672,21 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                         t.tr("tip-previous"),
                         available.previous,
                         TileStyle::plain(),
-                        drawn(icons::previous, 16.0, 12.0),
+                        button(TransportAction::Previous),
                         Command::Previous(id),
                     ),
                     GridButton::new(
                         t.tr("tip-stop"),
                         available.stop,
                         TileStyle::plain(),
-                        glyph(egui_phosphor::fill::STOP),
+                        button(TransportAction::Stop),
                         Command::Stop(id),
                     ),
                     GridButton::new(
                         t.tr("tip-pause"),
                         available.pause,
                         pause_style,
-                        glyph(egui_phosphor::fill::PAUSE),
+                        button(TransportAction::Pause),
                         Command::Pause(id),
                     ),
                 ],
@@ -700,21 +695,21 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                         t.tr("tip-restart"),
                         available.restart,
                         TileStyle::plain(),
-                        drawn(icons::restart, 14.0, 12.0),
+                        button(TransportAction::Restart),
                         Command::Restart(id),
                     ),
                     GridButton::new(
                         t.tr("tip-fade-stop"),
                         available.fade_stop,
                         fade_style,
-                        drawn(icons::fade_stop, 16.0, 12.0),
+                        button(TransportAction::FadeStop),
                         Command::FadeStop(id),
                     ),
                     GridButton::new(
                         sa_tip,
                         available.stop_after_current,
                         sa_style,
-                        drawn(icons::stop_after, 18.0, 13.0),
+                        button(TransportAction::StopAfter),
                         Command::ToggleStopAfterCurrent(id),
                     ),
                 ],
