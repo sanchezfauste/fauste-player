@@ -79,6 +79,9 @@ pub enum Command {
         index: usize,
     },
     DuplicateEntry(EntryId),
+    /// Feedback 2 spec O22: clears the played mark of every entry of the
+    /// playlist except the current entry of a player.
+    ResetPlayed(PlaylistId),
     /// R26: the entry repeats until the operator moves on.
     ToggleEntryRepeat(EntryId),
     /// R27: the player stops after the entry, every time it plays.
