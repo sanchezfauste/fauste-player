@@ -11,8 +11,8 @@ mod support;
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::widgets::{
-    METER_WIDTH, Zone, alignment_dbfs, loudness_line, mark_label, max_readout, meter_layout,
-    meter_position, scale_marks, zone_of,
+    LineShade, METER_WIDTH, Zone, alignment_dbfs, loudness_line, mark_label, max_readout,
+    meter_layout, meter_position, reference_segments, scale_marks, zone_of,
 };
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::PlayerTelemetry;
@@ -694,4 +694,42 @@ fn each_meter_type_shows_only_its_settings() {
     h.get_by_role_and_label(Role::Button, "Custom").click();
     h.run_steps(3);
     assert!(shown(&h, "Rise time") && shown(&h, "Scale floor"));
+}
+
+#[test]
+fn a_reference_line_is_cut_dark_over_the_lit_bar_and_light_over_the_rest() {
+    let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
+    let y = 100.0;
+    // Left level above the line (lit there), right level below it.
+    let [left, gap, right] = reference_segments(&l, y, [80.0, 120.0]);
+    assert_eq!(left.1, LineShade::Lit);
+    assert_eq!(right.1, LineShade::Unlit);
+    assert_eq!(
+        gap.1,
+        LineShade::Unlit,
+        "the gap between the bars is never lit"
+    );
+    assert_eq!(left.0.x_range(), l.bars[0].x_range());
+    assert_eq!(right.0.x_range(), l.bars[1].x_range());
+    assert!(gap.0.left() >= l.bars[0].right() && gap.0.right() <= l.bars[1].left());
+    for (r, _) in [left, gap, right] {
+        assert!((r.center().y - y).abs() < 1e-3 && (r.height() - 1.0).abs() < 1e-3);
+    }
+}
+
+#[test]
+fn reference_segments_are_unlit_at_the_floor_and_lit_at_the_top() {
+    let c = meter(MeterBallistics::DigitalPeak);
+    let l = meter_layout(column(136.0), &c, false);
+    let (top, bottom) = (l.bars[0].top(), l.bars[0].bottom());
+    for m in &l.lines {
+        // Silence: the level sits at the bottom of the bars.
+        let at_floor = reference_segments(&l, m.y, [bottom, bottom]);
+        assert_eq!(at_floor[0].1, LineShade::Unlit, "{}", m.label);
+        assert_eq!(at_floor[2].1, LineShade::Unlit, "{}", m.label);
+        // An over: the level is at (or past) the top.
+        let at_top = reference_segments(&l, m.y, [top, top - 50.0]);
+        assert_eq!(at_top[0].1, LineShade::Lit, "{}", m.label);
+        assert_eq!(at_top[2].1, LineShade::Lit, "{}", m.label);
+    }
 }

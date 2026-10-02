@@ -495,6 +495,7 @@ pub fn vu(
     let (bars_top, bars_bottom) = (first.top(), first.bottom());
     let height = (bars_bottom - bars_top).max(1.0);
     let y_of = |db: f32| bars_bottom - meter_position(db, c) * height;
+    let level_y = [0usize, 1].map(|ch| y_of(reading.level_db.get(ch).copied().unwrap_or(-120.0)));
     // Where each zone starts on screen, bottom up.
     let zones = [
         (bars_bottom, Zone::Normal),
@@ -543,11 +544,9 @@ pub fn vu(
     // nothing between the channels; the alignment level adds a notch at
     // the outer edge of each bar, so no bright bar crosses the signal.
     for m in &l.lines {
-        painter.rect_filled(
-            Rect::from_x_y_ranges(l.lines_x, m.y - 0.5..=m.y + 0.5),
-            0.0,
-            theme::NEUTRAL_400.gamma_multiply(REFERENCE_LINE_ALPHA),
-        );
+        for (piece, shade) in reference_segments(&l, m.y, level_y) {
+            painter.rect_filled(piece, 0.0, shade.colour());
+        }
         painter.text(
             pos2(l.labels_right, m.label_y),
             Align2([egui::Align::RIGHT, m.label_align]),
@@ -575,8 +574,6 @@ pub fn vu(
     clicked
 }
 
-/// Opacity of the reference lines over the bars (feedback spec §3.2).
-const REFERENCE_LINE_ALPHA: f32 = 0.35;
 /// Size of the scale's labels.
 const LABEL_FONT_SIZE: f32 = 8.0;
 
@@ -622,6 +619,50 @@ impl MeterLine {
             egui::Align::Max => self.label_y - half,
         }
     }
+}
+
+/// Whether a piece of a reference line lies over the lit part of a bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineShade {
+    Lit,
+    Unlit,
+}
+
+impl LineShade {
+    /// The colour the piece is painted in (constants in `theme`).
+    pub fn colour(self) -> Color32 {
+        match self {
+            LineShade::Lit => theme::METER_LINE_LIT.gamma_multiply(theme::METER_LINE_LIT_ALPHA),
+            LineShade::Unlit => {
+                theme::METER_LINE_UNLIT.gamma_multiply(theme::METER_LINE_UNLIT_ALPHA)
+            }
+        }
+    }
+}
+
+/// The reference line at screen height `y` as three pieces: over the first
+/// bar, over the gap between the bars and over the second bar. A piece over
+/// a bar is lit when that bar's level (`level_y`, screen height of each
+/// channel's level; the peak on K-System meters) is at or above the line;
+/// the gap is never lit.
+pub fn reference_segments(l: &MeterLayout, y: f32, level_y: [f32; 2]) -> [(Rect, LineShade); 3] {
+    let [first, second] = l.bars;
+    let piece = |x: egui::Rangef| Rect::from_x_y_ranges(x, y - 0.5..=y + 0.5);
+    let shade = |ch: usize| {
+        if level_y.get(ch).is_some_and(|ly| *ly <= y) {
+            LineShade::Lit
+        } else {
+            LineShade::Unlit
+        }
+    };
+    [
+        (piece(first.x_range()), shade(0)),
+        (
+            piece(egui::Rangef::new(first.right(), second.left())),
+            LineShade::Unlit,
+        ),
+        (piece(second.x_range()), shade(1)),
+    ]
 }
 
 /// Where the meter draws each of its parts (feedback spec §3.2).

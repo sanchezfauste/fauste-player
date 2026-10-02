@@ -128,3 +128,13 @@ fn restart_is_a_bar_then_one_triangle_and_previous_a_bar_then_two() {
         }
     }
 }
+
+#[test]
+fn the_meter_reference_lines_are_visible_over_both_parts_of_the_bar() {
+    // Unlit part: NEUTRAL_400 at about 60 % (was 35 %); lit part: a dark
+    // cut, NEUTRAL_900 at about 50 % (operator feedback 2, O13).
+    assert_eq!(theme::METER_LINE_UNLIT, theme::NEUTRAL_400);
+    assert_eq!(theme::METER_LINE_UNLIT_ALPHA, 0.60);
+    assert_eq!(theme::METER_LINE_LIT, theme::NEUTRAL_900);
+    assert_eq!(theme::METER_LINE_LIT_ALPHA, 0.50);
+}
