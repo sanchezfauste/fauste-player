@@ -477,3 +477,23 @@ fn a_collapsed_cartwall_draws_no_buttons() {
     h.run_steps(3);
     assert!(h.query_by_label("Station ID").is_none());
 }
+
+#[test]
+fn rows_are_exactly_one_gap_apart() {
+    // (Two rows here.) A window where the buttons shrink but stay above the minimum: the
+    // theme's own item spacing must not add to the gap, or the grid
+    // overflows its area and scrolls.
+    let (mut h, _fake) = support::harness_sized(with_cart(), egui::vec2(700.0, 420.0), |ui| ui);
+    h.run_steps(3);
+    let first = h.get_all_by_label("Station ID").next().unwrap().rect();
+    let last = h.get_all_by_label("Cart 16, empty").next().unwrap().rect();
+    assert!(
+        first.height() < BUTTON_HEIGHT && first.height() > MIN_BUTTON_HEIGHT,
+        "{first:?}"
+    );
+    let step = last.top() - first.top();
+    assert!(
+        (step - (first.height() + GAP)).abs() < 0.01,
+        "{step} {first:?} {last:?}"
+    );
+}

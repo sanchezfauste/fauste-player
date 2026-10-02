@@ -252,6 +252,8 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
     let width =
         ((ui.available_width() - GAP * (cols as f32 - 1.0)) / cols as f32).max(MIN_BUTTON_WIDTH);
     let page_id = page.id;
+    // GAP is the only space between rows: the theme's own would add to it.
+    ui.spacing_mut().item_spacing.y = 0.0;
     let button = button_height(available, page.carts.chunks(cols).count());
     for (row_index, row) in page.carts.chunks(cols).enumerate() {
         if row_index > 0 {

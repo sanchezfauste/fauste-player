@@ -21,7 +21,7 @@ The spec leaves these open. Each is the most conservative reading.
 
 - **O32, maintainer decision: one title bar, the native one.** The native bar shows the title `Fauste Player <version>` (spec: "Fauste Player 1.2.3", no `v`) and the icon on Windows and Linux. macOS title bars do not draw an application icon (the icon is the Dock and bundle icon, already set by the bundle); there the bar shows the name and the version. The title is not localised (the name is the same in both locales). The top bar loses the icon, the name, the `v1.2.3` text and the clickable name; it keeps the clock, Settings, the About button (info icon), the Restart pending pill and everything else. The About window is still opened by the info button and still shows the version. The Fluent key `tip-about-name` becomes unused and is removed from both locales; `app-name` stays (About window).
 - **CLAUDE.md screenshot recipe.** `xwininfo -name "Fauste Player"` matches the exact title, which now has the version; the recipe changes to `xwininfo -root -tree | grep "Fauste Player"` (Task 1).
-- **O31: the area keeps its rule, the buttons adapt.** `cartwall::height` still asks for the nominal height (rows × 40 px) and `app.rs` still caps the strip at 60% of the middle area. New: the buttons take their height from the room the grid really has, `button_height(available, rows)` = (available − gaps) / rows, clamped to `MIN_BUTTON_HEIGHT` (24 px) … `BUTTON_HEIGHT` (40 px, never taller than today). Only when the rows do not fit even at 24 px does the grid scroll. 24 px holds the 11 px name and the 10 px detail line of a cart button (the button has 4 px padding above and below).
+- **O31: the area keeps its rule, the buttons adapt.** `cartwall::height` still asks for the nominal height (rows × 40 px) and `app.rs` still caps the strip at 60% of the middle area. New: the buttons take their height from the room the grid really has, `button_height(available, rows)` = (available − gaps) / rows, clamped to `MIN_BUTTON_HEIGHT` (28 px) … `BUTTON_HEIGHT` (40 px, never taller than today). Only when the rows do not fit even at 28 px does the grid scroll. 28 px, not 24: at 24 the 11 px name and the 10 px detail line overlap (Ruling: raised to 28, confirmed in review — cost if wrong: one constant).
 - **O33: what "fixed width" means per site.** Digits are drawn in equal cells by the existing `widgets::paint_tabular` (the UI font has no tabular figures through egui). Audit of every live time (found with `grep -n "format::clock\|format::countdown\|Local::now\|time_badge"` in `crates/fp-app/src`):
   - already steady: the big countdown and the tenths, elapsed / total in the player info row, the CUE time in the info row, the CUE window times, the footer total and remaining;
   - changed here: the cart countdown (`view.time`, right aligned, so it needs a right-aligned tabular paint), the intro and outro badges (`time_badge`: the value box is sized for `00.0`, so 9.9 → 10.0 does not move the badge edge), the top-bar clock, the waveform hover time and the marker-drag time;
@@ -95,7 +95,7 @@ Failure modes the spec implies and its tests do not name; each has a test in the
 
 1. **Many playlists, or one with a very long name, in a narrow player column** (30 tabs, a 200-character name, a column narrower than the two arrows): the strip never spills outside its column, nothing panics, the name ends in "…", the shown tab is reachable. (Task 5 `a_name_of_200_characters_is_cut_and_the_strip_stays_in_its_column`, `thirty_tabs_scroll_and_the_shown_one_is_in_view`, `a_strip_narrower_than_its_arrows_does_not_panic`.)
 2. **One playlist, or none visible changes**: a single tab fills the strip, no arrows appear, deleting the shown playlist while scrolled keeps the offset valid. (Task 5 `few_tabs_fill_the_strip_without_arrows`, `the_offset_is_clamped_when_the_tabs_get_fewer`.)
-3. **A cartwall page with one row, a collapsed cartwall, or a window so small that even 24 px buttons do not fit**: one row keeps the 40 px buttons, collapsing draws nothing, and the small window scrolls with the last cart still reachable. (Task 3 `one_row_keeps_the_nominal_button_height`, `a_collapsed_cartwall_draws_no_buttons`, existing `the_last_cart_is_reachable_in_a_small_window`.)
+3. **A cartwall page with one row, a collapsed cartwall, or a window so small that even 28 px buttons do not fit**: one row keeps the 40 px buttons, collapsing draws nothing, and the small window scrolls with the last cart still reachable. (Task 3 `one_row_keeps_the_nominal_button_height`, `a_collapsed_cartwall_draws_no_buttons`, existing `the_last_cart_is_reachable_in_a_small_window`.)
 4. **A time of one hour or more, a NaN or a negative value**: the width stays steady inside each format and never panics. (Task 4 `hour_times_keep_their_width_inside_their_format`, `a_nan_time_still_has_a_width`.)
 5. **A Windows release binary started with `--version`, `--help`, a bad option, or when start-up fails**: the operator must get the text in a box instead of nothing, and a missing standard output must never panic. (Task 2 `emit_prints_on_a_console_build`, `console_is_the_default_off_windows`, `check-windows-gui.sh` self-test; Windows-only behaviour is verified by the PE check, see Task 2.)
 
@@ -376,7 +376,7 @@ scripts/check-commits.sh origin/master
 - Docs: `docs/user/cartwall.md`, `docs/technical/ui.md` (the `ui/cartwall.rs` row)
 
 **Interfaces:**
-- Produces in `fp_app::ui::cart_view` (public, pure): `pub const BUTTON_HEIGHT: f32 = 40.0; pub const MIN_BUTTON_HEIGHT: f32 = 24.0; pub const GAP: f32 = 6.0; pub fn button_height(available: f32, rows: usize) -> f32`.
+- Produces in `fp_app::ui::cart_view` (public, pure): `pub const BUTTON_HEIGHT: f32 = 40.0; pub const MIN_BUTTON_HEIGHT: f32 = 28.0; pub const GAP: f32 = 6.0; pub fn button_height(available: f32, rows: usize) -> f32`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -443,7 +443,7 @@ Run: `cargo test -p fp-app --test cartwall_ui -q`. Expected: compile error (the 
 /// Height of a cart button when there is room (feedback 2 spec O31).
 pub const BUTTON_HEIGHT: f32 = 40.0;
 /// The least a cart button shrinks to: room for the name and the detail line.
-pub const MIN_BUTTON_HEIGHT: f32 = 24.0;
+pub const MIN_BUTTON_HEIGHT: f32 = 28.0;
 /// Gap between cart buttons and below the header.
 pub const GAP: f32 = 6.0;
 
@@ -477,7 +477,7 @@ Run: `cargo test -p fp-app --test cartwall_ui -q`. Expected: PASS, including the
 
 - [ ] **Step 5: Look at it, then document**
 
-Optional visual check with the CLAUDE.md Xvfb recipe at a small window (for example `xdotool windowsize` 1000x500, one player). Docs: `docs/user/cartwall.md` one paragraph: the buttons shrink (to a minimum height) to fit the configured rows, and the cartwall scrolls only below that; `docs/technical/ui.md` row for `ui/cartwall.rs`: `cart_view::button_height`, nominal 40, minimum 24, the 60% cap in `AppUi::ui` unchanged.
+Optional visual check with the CLAUDE.md Xvfb recipe at a small window (for example `xdotool windowsize` 1000x500, one player). Docs: `docs/user/cartwall.md` one paragraph: the buttons shrink (to a minimum height) to fit the configured rows, and the cartwall scrolls only below that; `docs/technical/ui.md` row for `ui/cartwall.rs`: `cart_view::button_height`, nominal 40, minimum 28, the 60% cap in `AppUi::ui` unchanged.
 
 - [ ] **Step 6: Gate and commit**
 
@@ -893,7 +893,7 @@ Expected: nothing says the name or version is in the top bar; `tip-about-name` i
 
 - [ ] **Step 2: Spec**
 
-Header line `- **Status:** Approved. Plans 1 to 9 are built; ...` becomes `Plans 1 to 9 and 12 are built`. At the end of §13, after the O36 bullet, add an `- **As built.**` bullet list with one line per item, written from what the tasks really did: O31 `cart_view::button_height`, 40 → 24 px, 60% cap unchanged; O32 `cli::window_title`, top-bar brand removed, `tip-about-name` removed, macOS shows no icon in its title bar by design; O33 the sites changed and the sites left alone (with the reason); O35 `ui/tab_strip.rs`, 72 px minimum, equal widths, arrows and wheel, reveal key; O36 the attribute, `cli::emit`, the PE check in `windows.sh`, what was checked in CI and the packaging scripts, and that a Windows run by hand was not done in this plan unless it was.
+Header line `- **Status:** Approved. Plans 1 to 9 are built; ...` becomes `Plans 1 to 9 and 12 are built`. At the end of §13, after the O36 bullet, add an `- **As built.**` bullet list with one line per item, written from what the tasks really did: O31 `cart_view::button_height`, 40 → 28 px, 60% cap unchanged; O32 `cli::window_title`, top-bar brand removed, `tip-about-name` removed, macOS shows no icon in its title bar by design; O33 the sites changed and the sites left alone (with the reason); O35 `ui/tab_strip.rs`, 72 px minimum, equal widths, arrows and wheel, reveal key; O36 the attribute, `cli::emit`, the PE check in `windows.sh`, what was checked in CI and the packaging scripts, and that a Windows run by hand was not done in this plan unless it was.
 
 - [ ] **Step 3: Roadmap and verification**
 
@@ -934,5 +934,5 @@ Then the plan's end-of-plan review (superpowers:requesting-code-review, a fresh 
 
 **Known weak spots to watch in review.**
 - Task 5 changes a 140-line drawing function that also handles drag and drop onto tabs; the existing drag tests must keep passing and a drop onto a partly hidden tab should work on its visible part.
-- The cartwall minimum height (24 px) is a visual judgement; Task 3 Step 5 asks for a look at it.
+- The cartwall minimum height (28 px) is a visual judgement; Task 3 Step 5 asks for a look at it.
 - The Windows behaviour (no console, message boxes) is verified by the PE check and by compile only; nothing runs a Windows GUI in CI.
