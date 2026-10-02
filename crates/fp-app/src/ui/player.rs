@@ -1421,11 +1421,14 @@ fn edit_markers(
             0.0,
             theme::TEXT,
         );
-        painter.text(
-            pos2(x + 4.0, inner.bottom() - 4.0),
-            egui::Align2::LEFT_BOTTOM,
-            format::clock(secs_at(x)),
-            font(10.0),
+        let drag_time = format::clock(secs_at(x));
+        let drag_font = font(10.0);
+        let drag_h = widgets::tabular_size(&painter, &drag_time, &drag_font).y;
+        widgets::paint_tabular(
+            &painter,
+            pos2(x + 4.0, inner.bottom() - 4.0 - drag_h),
+            &drag_time,
+            &drag_font,
             theme::TEXT,
         );
         if response.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {

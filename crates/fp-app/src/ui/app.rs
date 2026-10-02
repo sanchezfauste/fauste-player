@@ -1406,14 +1406,7 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, pending: 
         ui.spacing_mut().item_spacing = vec2(12.0, 0.0);
         ui.add_space(10.0);
         let clock = chrono::Local::now().format("%H:%M:%S").to_string();
-        ui.add(
-            egui::Label::new(
-                RichText::new(clock)
-                    .font(font(13.0))
-                    .color(theme::NEUTRAL_200),
-            )
-            .selectable(false),
-        );
+        widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
         let label = scene.i18n.tr("top-settings");
         let width = ui
             .painter()

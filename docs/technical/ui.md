@@ -254,6 +254,17 @@ with `widgets::paint_tabular`/`tabular_label`, which centre every digit in a
 cell as wide as the widest one: a countdown keeps its width as it runs. Fonts are installed on the first frame, and drawing starts
 on the next one, when they are bound.
 
+### Times
+
+Every time that changes while it is shown keeps a steady width: it is drawn in
+equal digit cells with `widgets::paint_tabular`, `paint_tabular_right` (the
+text ends at a given x) or `tabular_label`. The sites are the player's
+elapsed, total and remaining times and the big countdown, the cart countdown,
+the waveform hover time, the marker-drag time, the CUE window times and the
+top-bar clock. The intro and outro badges (`widgets::time_badge`) have a value
+box sized for `00.0` (`time_badge_width`), so the badge does not change width
+from 9.9 to 10.0.
+
 ## Window decorations
 
 On Linux, `fp-app` enables winit's `wayland-csd-adwaita` feature. `eframe` is

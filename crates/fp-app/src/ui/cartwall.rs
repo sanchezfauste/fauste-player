@@ -348,11 +348,13 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                                 font(10.0),
                                 theme::NEUTRAL_500,
                             );
-                            p.text(
-                                inner.right_bottom(),
-                                egui::Align2::RIGHT_BOTTOM,
+                            let time_font = font(10.0);
+                            let time_h = widgets::tabular_size(p, &view.time, &time_font).y;
+                            widgets::paint_tabular_right(
+                                p,
+                                pos2(inner.right(), inner.bottom() - time_h),
                                 &view.time,
-                                font(10.0),
+                                &time_font,
                                 if playing {
                                     theme::NEUTRAL_100
                                 } else {
