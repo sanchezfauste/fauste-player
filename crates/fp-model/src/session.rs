@@ -260,7 +260,8 @@ fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     } else {
         Transport::Stopped
     };
-    player.stop_after_current = s.mode == PlayMode::Continuous && s.stop_after_current;
+    player.stop_after_current = s.stop_after_current
+        && (s.mode == PlayMode::Continuous || crate::reducer::repeat_entry(state, &player));
     player.volume = volume;
     player.columns = s.columns.clone().normalized();
     // Only entries that still exist, and no more than the configured depth.

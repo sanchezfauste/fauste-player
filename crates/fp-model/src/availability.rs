@@ -16,6 +16,7 @@ pub struct Availability {
     pub fade_stop: bool,
     pub restart: bool,
     pub previous: bool,
+    /// Continuous mode, or Single mode while the current entry repeats (O38).
     pub stop_after_current: bool,
     pub cue: bool,
 }
@@ -38,7 +39,8 @@ pub fn availability(state: &AppState, player: PlayerId) -> Availability {
         fade_stop: playing && !p.fade_stopping(),
         restart: p.current.is_some() && p.transport != Transport::Stopped && !p.fade_stopping(),
         previous: playing && !p.fading && has_previous,
-        stop_after_current: p.mode == PlayMode::Continuous,
+        stop_after_current: p.mode == PlayMode::Continuous
+            || crate::reducer::repeat_entry(state, p),
         cue: p.next.is_some() || p.cue.is_some(),
     }
 }

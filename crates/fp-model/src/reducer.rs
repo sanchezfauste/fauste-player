@@ -68,18 +68,20 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         }
         Command::SetMode(id, mode) => {
             let i = state.player_index(id)?;
-            let player = &mut state.players[i];
-            player.mode = mode;
-            if mode == PlayMode::Single {
-                player.stop_after_current = false;
+            state.players[i].mode = mode;
+            // O38: in Single mode the flag only makes sense while the current
+            // entry repeats.
+            if mode == PlayMode::Single && !repeat_entry(state, &state.players[i]) {
+                state.players[i].stop_after_current = false;
             }
         }
         Command::ToggleStopAfterCurrent(id) => {
             let i = state.player_index(id)?;
-            let player = &mut state.players[i];
-            if player.mode == PlayMode::Single {
+            if state.players[i].mode == PlayMode::Single && !repeat_entry(state, &state.players[i])
+            {
                 return Err(ModelError::StopAfterInSingle);
             }
+            let player = &mut state.players[i];
             player.stop_after_current = !player.stop_after_current;
         }
         Command::ToggleCue(id) => toggle_cue(state, id, &mut out)?,
@@ -1108,12 +1110,11 @@ pub(crate) fn fill_empty_next(state: &mut AppState) {
     }
 }
 
-/// R26: the player's current entry repeats (and R27, stop-after-current or
-/// a fade stop do not end it first).
-fn repeating(state: &AppState, player: &PlayerState) -> bool {
+/// R26 without the stop-after-current test: the current entry would repeat
+/// (O38 uses it to allow stop-after-current in Single mode).
+pub(crate) fn repeat_entry(state: &AppState, player: &PlayerState) -> bool {
     player.transport != Transport::Stopped
         && !player.fade_stop_pending
-        && !player.stop_after_current
         && player
             .current
             .and_then(|c| state.playlists.entry(c))
@@ -1123,6 +1124,12 @@ fn repeating(state: &AppState, player: &PlayerState) -> bool {
             .current
             .and_then(|c| state.track_for_entry(c))
             .is_some_and(|t| t.file_state.is_playable())
+}
+
+/// R26: the player's current entry repeats (and R27, stop-after-current or
+/// a fade stop do not end it first).
+fn repeating(state: &AppState, player: &PlayerState) -> bool {
+    !player.stop_after_current && repeat_entry(state, player)
 }
 
 /// The entry to preload: the current one while it repeats, else the next
@@ -1137,6 +1144,21 @@ fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
 
 /// Derives the engine work implied by the state: preload whatever is next.
 pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    // O38: in Single mode the flag lives only while the current entry
+    // repeats (it may have stopped applying: repeat off, a stop-after mark,
+    // Next into another entry, a file that cannot be read).
+    let stale: Vec<usize> = state
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| {
+            p.mode == PlayMode::Single && p.stop_after_current && !repeat_entry(state, p)
+        })
+        .map(|(i, _)| i)
+        .collect();
+    for i in stale {
+        state.players[i].stop_after_current = false;
+    }
     let preloads: Vec<(usize, Option<SourceRequest>)> = state
         .players
         .iter()

@@ -42,3 +42,17 @@ pub fn entries(state: &AppState) -> Vec<EntryId> {
 pub fn p0(state: &AppState) -> PlayerId {
     state.players[0].id
 }
+
+/// Snapshots the players' sessions and restores them over the same library
+/// and playlists, as after a restart.
+pub fn roundtrip(state: &AppState) -> AppState {
+    let parts = fp_model::RestoreParts {
+        config: state.config.clone(),
+        library: state.library.clone(),
+        playlists: state.playlists.clone(),
+        cart_pages: state.cartwall.pages.clone(),
+        cartwall_session: state.cartwall.session(),
+        ids: state.ids.clone(),
+    };
+    AppState::restore(parts, &state.sessions(|_| 10.0), "Main").0
+}
