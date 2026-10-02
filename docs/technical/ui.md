@@ -67,6 +67,11 @@ language the interface was built with.
 - with Alt held, handles are drawn on the markers. A drag picks the marker
   nearest to the press origin (`ViewState::marker_drag`) and sends a single
   `SetMarker` on release. A waveform click never seeks while Alt is held.
+- when `MarkerFractions::ignored` is set (`!players.use_cue_markers`),
+  `widgets::cue_edge_look` turns off the head and tail shading and the
+  cue-in and cue-out lines are drawn at `theme::CUE_EDGE_IGNORED_ALPHA`.
+  Alt-drag editing is unchanged. The countdowns, the duration column and the
+  playlist totals use `Track::play_range`.
 
 ## Track table layout and follow
 

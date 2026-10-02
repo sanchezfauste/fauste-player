@@ -77,6 +77,15 @@ tracks are analysed again automatically.
 - **Single mode**, or **Stop after**: the player stops at cue-out.
 - **Pressing Play while on air:** the next track starts at once and the
   current one fades out over the *fade time* (1 s by default).
+- **Use cue-in and cue-out off** (Settings → Players): every player plays
+  each track from 0 to the end of the file. Cue-in and cue-out, automatic and
+  manual, are kept, and the waveform draws them as dim lines. The MIX point,
+  intro and outro still work, within the whole file; **Automatic mix** is a
+  separate switch. Countdowns, the duration column, the playlist totals in
+  Settings and the remote API times follow the same range. Carts always use
+  their own cue-in and cue-out. Changing the setting never restarts, seeks or
+  stops a track that is playing; the next track is prepared again.
 
 A track can be played before its analysis finishes. Until then it plays from
-the start to the end of the file, with no MIX point.
+the start to the end of the file, with no MIX point: the same way a track plays
+when cue markers are off.

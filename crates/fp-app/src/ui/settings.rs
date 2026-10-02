@@ -1254,6 +1254,17 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
             }
         },
     );
+    let mut cue_markers = config.players.use_cue_markers;
+    row(
+        ui,
+        &t.tr("settings-use-cue-markers"),
+        Some(&t.tr("settings-hint-use-cue-markers")),
+        |ui| {
+            if toggle(ui, &mut cue_markers, &t.tr("settings-use-cue-markers")) {
+                update(scene, |c| c.players.use_cue_markers = cue_markers);
+            }
+        },
+    );
     let mut warning = config.players.end_warning_secs;
     let label = t.tr("settings-end-warning");
     row(ui, &label, Some(&t.tr("settings-hint-end-warning")), |ui| {

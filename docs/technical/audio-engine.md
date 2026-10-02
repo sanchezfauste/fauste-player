@@ -192,6 +192,14 @@ cannot hang the conductor.
 | `AddPlayer`, `RemovePlayer` | create or retire a worker and its bookkeeping |
 | `LoadPaused` | restore a session: load the source at a position, paused |
 
+The effective play range is `Track::play_range(use_markers)` in `fp-model`
+(`players.use_cue_markers`; off gives 0 to the end of the file, or the source
+end while the duration is unknown). `request_from_cue_in`, `request_at`,
+`plan_for`, the session restore and `set_marker` (MIX, intro, outro) use it.
+Toggling the setting re-preloads the next entry and re-schedules the plan but
+never moves a source already sounding. Carts use `cue_in_secs` and
+`known_cue_out_secs` and are unaffected.
+
 A known limit: a transition already dispatched to the mixer (within
 `schedule_lead_ms` of its frame) still starts the entry it was given, even if
 the next changed meanwhile. The model follows the engine

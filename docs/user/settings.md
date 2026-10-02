@@ -72,6 +72,7 @@ the device is reopened when it comes back (see
 | Default mode | CONT | The mode players start in |
 | Fade time | 1000 ms | Used by Play while on air and by Fade stop |
 | Automatic mix at the MIX point | On | Overlap tracks in continuous mode |
+| Use cue-in and cue-out | On | Off: players play every track from the start to the end of the file; the markers are kept and carts still use theirs. Durations and playlist totals follow the same range |
 | End-of-track warning | 10 s | When the countdown starts blinking red |
 
 ## Meters
