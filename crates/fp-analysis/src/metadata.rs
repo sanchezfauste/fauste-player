@@ -14,6 +14,11 @@ pub struct Tags {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    pub year: Option<u32>,
+    pub genre: Option<String>,
+    pub album_artist: Option<String>,
+    pub composer: Option<String>,
+    pub comment: Option<String>,
     /// Raw bytes of the front cover (or the first picture).
     pub cover: Option<Vec<u8>>,
 }
@@ -66,6 +71,20 @@ pub fn read_tags(path: &Path, limits: &Limits) -> Tags {
         title: non_empty(tag.title()),
         artist: non_empty(tag.artist()),
         album: non_empty(tag.album()),
+        year: tag
+            .date()
+            .map(|d| u32::from(d.year))
+            .filter(|y| (1..=9999).contains(y)),
+        genre: non_empty(tag.genre()),
+        album_artist: non_empty(
+            tag.get_string(lofty::tag::ItemKey::AlbumArtist)
+                .map(Into::into),
+        ),
+        composer: non_empty(
+            tag.get_string(lofty::tag::ItemKey::Composer)
+                .map(Into::into),
+        ),
+        comment: non_empty(tag.comment()),
         cover,
     }
 }

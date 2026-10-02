@@ -8,6 +8,7 @@ pub mod analyzer;
 pub mod cache;
 pub mod metadata;
 pub mod signal;
+pub mod tags;
 
 pub use analyze::{Analysis, AnalysisError, analyze_file, analyze_file_cancellable};
 pub use signal::WavePeak;
