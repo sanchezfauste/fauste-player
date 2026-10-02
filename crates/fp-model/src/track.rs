@@ -157,6 +157,70 @@ pub struct AudioFormat {
     pub channels: u32,
 }
 
+/// The text tags of a file as the player shows and edits them (feedback 2
+/// spec O23). Empty text and `None` mean the file has no such tag.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrackTags {
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub album_artist: String,
+    pub year: Option<u32>,
+    pub genre: String,
+    pub composer: String,
+    pub comment: String,
+}
+
+/// Cuts `text` to `max_chars` characters after trimming it.
+fn cut(text: &mut String, max_chars: usize) {
+    let trimmed = text.trim();
+    let end = trimmed
+        .char_indices()
+        .nth(max_chars)
+        .map_or(trimmed.len(), |(i, _)| i);
+    *text = trimmed.get(..end).unwrap_or_default().to_owned();
+}
+
+impl TrackTags {
+    /// Every text field trimmed and cut to `max_chars` characters
+    /// (`limits.max_tag_chars`): tag text comes from files and keyboards,
+    /// and must not bloat the library.
+    #[must_use]
+    pub fn clamped(mut self, max_chars: usize) -> Self {
+        for text in [
+            &mut self.title,
+            &mut self.artist,
+            &mut self.album,
+            &mut self.album_artist,
+            &mut self.genre,
+            &mut self.composer,
+            &mut self.comment,
+        ] {
+            cut(text, max_chars);
+        }
+        self
+    }
+}
+
+/// The year field holds something that is not a year.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvalidYear;
+
+/// Empty is no year; otherwise a whole number from 1 to 9999.
+pub fn parse_year(text: &str) -> Result<Option<u32>, InvalidYear> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    if !text.chars().all(|c| c.is_ascii_digit()) {
+        return Err(InvalidYear);
+    }
+    match text.parse::<u32>() {
+        Ok(year @ 1..=9999) => Ok(Some(year)),
+        _ => Err(InvalidYear),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Track {
     pub id: TrackId,
@@ -177,6 +241,22 @@ pub struct Track {
     /// versions were recorded. An older one is analysed again.
     #[serde(default)]
     pub analysis_version: u32,
+    /// Tags beyond title, artist and album (feedback 2 spec O23). Libraries
+    /// saved earlier have none until the tag-only pass reads them.
+    #[serde(default)]
+    pub year: Option<u32>,
+    #[serde(default)]
+    pub genre: String,
+    #[serde(default)]
+    pub album_artist: String,
+    #[serde(default)]
+    pub composer: String,
+    #[serde(default)]
+    pub comment: String,
+    /// The tags above were read from the file after the last analysis. False
+    /// asks for the tag-only pass (`needs_tag_read`).
+    #[serde(default)]
+    pub tags_read: bool,
 }
 
 /// Where a player plays a track: from `cue_in` to `cue_out`. See
@@ -222,7 +302,50 @@ impl Track {
             analyzed: false,
             format: None,
             analysis_version: 0,
+            year: None,
+            genre: String::new(),
+            album_artist: String::new(),
+            composer: String::new(),
+            comment: String::new(),
+            tags_read: false,
         }
+    }
+
+    /// The tags as shown and edited.
+    pub fn tags(&self) -> TrackTags {
+        TrackTags {
+            title: self.title.clone(),
+            artist: self.artist.clone(),
+            album: self.album.clone(),
+            album_artist: self.album_artist.clone(),
+            year: self.year,
+            genre: self.genre.clone(),
+            composer: self.composer.clone(),
+            comment: self.comment.clone(),
+        }
+    }
+
+    /// Stores what the file's tags say now. Unlike analysis, an empty field
+    /// clears the old value (the tag is gone); the title is the exception, as
+    /// a track always has one.
+    pub fn apply_tags(&mut self, tags: &TrackTags) {
+        if !tags.title.is_empty() {
+            self.title.clone_from(&tags.title);
+        }
+        self.artist.clone_from(&tags.artist);
+        self.album.clone_from(&tags.album);
+        self.album_artist.clone_from(&tags.album_artist);
+        self.year = tags.year;
+        self.genre.clone_from(&tags.genre);
+        self.composer.clone_from(&tags.composer);
+        self.comment.clone_from(&tags.comment);
+        self.tags_read = true;
+    }
+
+    /// Whether the tag-only pass should read this track's file: analysed,
+    /// readable, and not read since the last analysis.
+    pub fn needs_tag_read(&self) -> bool {
+        self.analyzed && !self.tags_read && self.file_state.is_playable()
     }
 
     pub fn cue_in_secs(&self) -> f64 {
@@ -331,6 +454,9 @@ impl Track {
             self.format = analysis.format;
         }
         self.analysis_version = analysis.version;
+        // Title, artist and album come from this analysis; the rest wait for
+        // the tag-only pass.
+        self.tags_read = false;
         self.analyzed = true;
         self.file_state = FileState::Ok;
     }

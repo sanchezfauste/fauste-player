@@ -142,6 +142,11 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
                 refresh_next(state);
             }
         }
+        Command::ApplyTags { track, tags } => {
+            if let Some(t) = state.library.get_mut(track) {
+                t.apply_tags(&tags);
+            }
+        }
         Command::SetFileState {
             track,
             state: file_state,

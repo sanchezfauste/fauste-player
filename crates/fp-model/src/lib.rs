@@ -21,6 +21,7 @@ pub mod restore;
 pub mod session;
 pub mod shortcuts;
 pub mod state;
+mod tag_edit;
 pub mod track;
 pub mod volume;
 
@@ -51,7 +52,8 @@ pub use restore::{SettingsSection, restore_defaults};
 pub use session::{PlayerSession, RestoreParts};
 pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, player_command};
 pub use state::AppState;
+pub use tag_edit::{TagEditBlock, tag_edit_block};
 pub use track::{
-    AudioFormat, FileState, Library, Marker, MarkerKind, MarkerSource, Markers, PlayRange, Track,
-    TrackAnalysis, TrackKind,
+    AudioFormat, FileState, InvalidYear, Library, Marker, MarkerKind, MarkerSource, Markers,
+    PlayRange, Track, TrackAnalysis, TrackKind, TrackTags, parse_year,
 };
