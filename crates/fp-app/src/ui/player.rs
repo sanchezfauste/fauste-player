@@ -101,7 +101,7 @@ pub(crate) fn column(
             .max_rect(footer_rect)
             .layout(Layout::left_to_right(Align::Center)),
     );
-    footer(&mut footer_ui, scene, id, player.playlist);
+    footer(&mut footer_ui, scene, view_state, id, player.playlist);
 }
 
 /// Follows the player's current entry in its table (feedback spec F18):
@@ -1129,7 +1129,13 @@ fn tabs(
     ui.painter().rect_filled(bottom, 0.0, theme::NEUTRAL_800);
 }
 
-fn footer(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: PlaylistId) {
+fn footer(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    id: PlayerId,
+    playlist: PlaylistId,
+) {
     let t = scene.i18n;
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
@@ -1171,6 +1177,34 @@ fn footer(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: PlaylistId) {
             .get(playlist)
             .map_or(0, |p| p.entries.len());
         scene.pick_files(playlist, len);
+    }
+    // O22: clear the played marks of this playlist, after a question.
+    let reset = t.tr("footer-reset-played");
+    let reset_width = ui
+        .painter()
+        .layout_no_wrap(reset.clone(), font(10.0), theme::NEUTRAL_300)
+        .size()
+        .x
+        + 26.0;
+    if widgets::tile(
+        ui,
+        vec2(reset_width, 18.0),
+        &t.tr("tip-reset-played"),
+        fp_model::can_reset_played(scene.state, playlist),
+        TileStyle::plain(),
+        |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                format!("{} {reset}", icon::ARROW_COUNTER_CLOCKWISE),
+                font(10.0),
+                c,
+            );
+        },
+    )
+    .clicked()
+    {
+        view_state.confirm_reset = Some(playlist);
     }
     let len = scene
         .state

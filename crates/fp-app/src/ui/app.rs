@@ -28,6 +28,7 @@ use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::notice;
 use super::player;
 use super::playlist_files::{self, FileOutcome};
+use super::reset_played;
 use super::settings::{self, SettingsDeps, SettingsState};
 use super::tag_editor;
 use super::theme;
@@ -108,6 +109,9 @@ pub(crate) struct ViewState {
     pub edit_tags: Option<TrackId>,
     /// The tag editor, while it is open.
     pub(crate) tag_editor: Option<tag_editor::TagEditor>,
+    /// The playlist whose Reset played waits for the operator's answer
+    /// (feedback 2 spec O22).
+    pub confirm_reset: Option<PlaylistId>,
     notice: Option<(String, f64)>,
 }
 
@@ -665,6 +669,22 @@ impl AppUi {
                 }
             }
         }
+        // O22: Reset played asks before it clears the marks of a playlist.
+        if let Some(playlist) = self.view.confirm_reset {
+            if state.playlists.get(playlist).is_none() {
+                // The playlist went away meanwhile: nothing left to confirm.
+                self.view.confirm_reset = None;
+            } else {
+                match reset_played::show(&ctx, &scene) {
+                    Some(true) => {
+                        scene.ctl.send(Command::ResetPlayed(playlist));
+                        self.view.confirm_reset = None;
+                    }
+                    Some(false) => self.view.confirm_reset = None,
+                    None => {}
+                }
+            }
+        }
         // O4: Restart now asks the close guard first when audio is on air.
         if std::mem::take(&mut self.view.restart_requested) {
             if fp_model::on_air(&state).is_empty() {
@@ -703,7 +723,7 @@ impl AppUi {
             }
         }
         // Files dropped under the tag editor are discarded, like shortcuts.
-        if take_drops && self.view.tag_editor.is_none() {
+        if take_drops && self.view.tag_editor.is_none() && self.view.confirm_reset.is_none() {
             self.file_drops(&ctx, &state);
         }
         let busy = state
@@ -928,6 +948,24 @@ impl AppUi {
         }
         // The tag editor is modal: no shortcut, not even Delete, acts under it.
         if self.view.tag_editor.is_some() {
+            return;
+        }
+        // So is the Reset played question: Esc cancels it, nothing else acts.
+        if self.view.confirm_reset.is_some() {
+            let escape = ctx.input(|i| {
+                i.events.iter().any(|e| {
+                    matches!(e, egui::Event::Key {
+                        key: Key::Escape,
+                        pressed: true,
+                        repeat: false,
+                        modifiers,
+                        ..
+                    } if modifiers.is_none())
+                })
+            });
+            if escape {
+                self.view.confirm_reset = None;
+            }
             return;
         }
         // Configured shortcuts whose key the toolkit knows.

@@ -495,3 +495,9 @@ tags-cover-unsupported = it is not a JPEG or PNG image
 tags-cover-undecodable = it cannot be read as an image of a size the player accepts
 tags-error-cover-not-stored = this format cannot store a cover
 tags-error-cover = the cover is not a usable JPEG or PNG image
+
+footer-reset-played = Reset played
+tip-reset-played = Clear the played marks of this playlist
+reset-played-question = Clear the played mark of every track in this playlist?
+reset-played-cancel = Cancel
+reset-played-confirm = Reset played

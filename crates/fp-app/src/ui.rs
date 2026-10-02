@@ -14,6 +14,7 @@ pub mod icons;
 mod notice;
 mod player;
 pub mod playlist_files;
+mod reset_played;
 mod settings;
 pub mod shell;
 mod table;
