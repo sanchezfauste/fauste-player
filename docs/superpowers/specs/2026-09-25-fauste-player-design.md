@@ -83,9 +83,11 @@ Dependency direction: `fp-app → fp-engine → {fp-backends, fp-model}`, `fp-ap
 In priority order:
 
 1. **Bus output threads** (one per open device stream). Created by the backend with real-time priority (SCHED_FIFO/rtkit on Linux, MMCSS "Pro Audio" on Windows, time-constraint policy on macOS). They run the bus **mixer**: sum the sources routed to the bus, apply per-sample gain ramps, update atomic telemetry. They must never allocate, free, block, do I/O, log or panic.
-2. **Player decoder threads** (one per player; later one for the cartwall). Each decodes all sources of its player (current, incoming, cue) with `symphonia`, resamples with `rubato` when the file rate ≠ bus rate, and fills each source's lock-free SPSC ring buffer (`rtrb`). Elevated (non-RT) priority.
+2. **Player decoder threads** (one per player; later one for the cartwall). Each decodes all sources of its player (current, incoming, cue) with `symphonia`, resamples with `rubato` when the file rate ≠ bus rate, and fills each source's lock-free SPSC ring buffer (`rtrb`). Above-normal (non-RT) priority, set by the thread itself with `thread-priority`.
 3. **Conductor thread.** Single owner of the authoritative application state (`fp-model` state + engine source bookkeeping). It consumes UI commands, reacts to engine events, applies player logic, schedules sample-accurate actions on buses, publishes snapshots to the UI and requests persistence.
-4. **Background worker pool** (low priority, 2 threads). Analysis jobs and persistence writes.
+4. **Background worker pool** (low priority, 2 threads). Analysis jobs. Persistence writes run on the services thread at normal priority.
+
+A priority change the system refuses is logged once and ignored: the thread keeps running at normal priority.
 5. **UI thread** (egui main thread). Reads snapshots, sends commands. Holds no lock that any other thread waits on.
 
 ### 2.3 Communication rules
@@ -528,7 +530,7 @@ The engine and conductor are unaffected. `panic = "unwind"` is required in all p
 
 ## 12. Dependencies (initial set)
 
-`symphonia` (all pure-Rust codecs), `rubato`, `rtrb`, `crossbeam-channel`, `arc-swap`, `cpal`, `lofty`, `image`, `postcard`, `serde`/`serde_json`, `directories`, `eframe`/`egui`/`egui_extras`, `egui-phosphor`, `rfd`, `fluent-bundle`, `unic-langid`, `sys-locale`, `tracing`/`tracing-subscriber`/`tracing-appender`, `thiserror`, `anyhow`, `audio_thread_priority`. Dev: `proptest`, `assert_no_alloc`.
+`symphonia` (all pure-Rust codecs), `rubato`, `rtrb`, `crossbeam-channel`, `arc-swap`, `cpal`, `lofty`, `image`, `postcard`, `serde`/`serde_json`, `directories`, `eframe`/`egui`/`egui_extras`, `egui-phosphor`, `rfd`, `fluent-bundle`, `unic-langid`, `sys-locale`, `tracing`/`tracing-subscriber`/`tracing-appender`, `thiserror`, `anyhow`, `audio_thread_priority`, `thread-priority`. Dev: `proptest`, `assert_no_alloc`.
 
 Exact versions are pinned in the Phase 1 plan after checking crates.io at implementation time.
 

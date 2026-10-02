@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 
 use crossbeam_channel::{Receiver, Sender};
+use fp_decode::priority::Priority;
 use fp_model::{AnalysisSettings, Limits, TrackId};
 
 use crate::analyze::{Analysis, AnalysisError, analyze_file_cancellable};
@@ -141,6 +142,9 @@ impl Analyzer {
                 std::thread::Builder::new()
                     .name(format!("fp-analysis-{n}"))
                     .spawn(move || {
+                        // Background work (main spec §2.2): it must never
+                        // take the processor from decoding or the interface.
+                        fp_decode::priority::set_current(Priority::Low, "analysis");
                         // One worker tidies the cache before taking jobs.
                         if n == 0
                             && let Some(cache) = &shared.cache

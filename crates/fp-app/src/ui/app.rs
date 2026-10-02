@@ -221,6 +221,8 @@ pub struct AppUi {
     settings_shown: bool,
     /// Whether the start-up check for outdated analyses has run.
     outdated_checked: bool,
+    /// How many tracks an earlier version analysed, per model snapshot.
+    outdated: crate::services::OutdatedCount,
     /// The egui context, once the first frame has run.
     ctx: Option<egui::Context>,
     /// Imports asked for before the first frame.
@@ -289,6 +291,7 @@ impl AppUi {
             settings: SettingsState::default(),
             settings_shown: false,
             outdated_checked: false,
+            outdated: crate::services::OutdatedCount::default(),
             ctx: None,
             pending_imports: Vec::new(),
             inbox: None,
@@ -580,8 +583,7 @@ impl AppUi {
         // the operator (they cost the processor for a while to redo).
         if !self.outdated_checked {
             self.outdated_checked = true;
-            self.view.outdated_open =
-                self.services.is_some() && crate::services::outdated_tracks(&state) > 0;
+            self.view.outdated_open = self.services.is_some() && self.outdated.get(&state) > 0;
         }
         // Files dropped on the window, when no dialog is up (handled once
         // the dialogs are drawn).
@@ -606,6 +608,7 @@ impl AppUi {
                 midi: self.midi.as_ref(),
                 remote: self.remote_status.as_ref().map(|s| (**s.load()).clone()),
                 restart_pending: !pending.is_empty(),
+                outdated: self.outdated.get(&state),
             };
             let outcome = settings::show(&ctx, &scene, &mut self.settings, &deps);
             self.view.settings_open = outcome.open;
@@ -625,7 +628,7 @@ impl AppUi {
                 self.view.about_open =
                     about::show(&ctx, &scene, self.notices.as_deref(), &self.opener);
             } else if self.view.outdated_open {
-                let count = crate::services::outdated_tracks(&state);
+                let count = self.outdated.get(&state);
                 match notice::show(&ctx, &scene, count) {
                     Some(notice::Answer::AnalyseNow) => {
                         if let Some(services) = &self.services {

@@ -11,6 +11,7 @@ use std::path::Path;
 mod ape;
 mod dsd;
 mod opus;
+pub mod priority;
 mod symph;
 mod wavpack;
 

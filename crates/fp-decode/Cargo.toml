@@ -10,6 +10,8 @@ publish.workspace = true
 ape-decoder.workspace = true
 opus-decoder.workspace = true
 symphonia.workspace = true
+thread-priority.workspace = true
+tracing.workspace = true
 wavicle.workspace = true
 
 [dev-dependencies]

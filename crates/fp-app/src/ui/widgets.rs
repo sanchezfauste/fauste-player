@@ -589,8 +589,9 @@ const LOUDNESS_LINE_HEIGHT: f32 = 12.0;
 const LABEL_ROW: f32 = 10.0;
 /// Two levels closer than this (dB) are the same mark.
 const SAME_MARK_DB: f32 = 0.05;
-/// Height of the alignment notches.
-const ALIGNMENT_LINE_WIDTH: f32 = 2.0;
+/// Thickness of the alignment line and of the notches: the vertical extent
+/// of the horizontal marks (not their length).
+const ALIGNMENT_LINE_THICKNESS: f32 = 2.0;
 /// Width of each alignment notch, at the outer edge of its bar.
 const ALIGNMENT_NOTCH: f32 = 3.0;
 
@@ -721,7 +722,11 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     let height = bottom - top;
     let y_of = |db: f32| bottom - meter_position(db, c) * height;
     let line = |db: f32, alignment: bool| {
-        let width = if alignment { ALIGNMENT_LINE_WIDTH } else { 1.0 };
+        let width = if alignment {
+            ALIGNMENT_LINE_THICKNESS
+        } else {
+            1.0
+        };
         let y = y_of(db).clamp(
             top + width / 2.0,
             (bottom - width / 2.0).max(top + width / 2.0),
@@ -809,7 +814,8 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     let notch = |x: f32| {
         Rect::from_x_y_ranges(
             x..=x + ALIGNMENT_NOTCH,
-            alignment.y - ALIGNMENT_LINE_WIDTH / 2.0..=alignment.y + ALIGNMENT_LINE_WIDTH / 2.0,
+            alignment.y - ALIGNMENT_LINE_THICKNESS / 2.0
+                ..=alignment.y + ALIGNMENT_LINE_THICKNESS / 2.0,
         )
     };
     let alignment_notches = [notch(bars_left), notch(bars_right - ALIGNMENT_NOTCH)];

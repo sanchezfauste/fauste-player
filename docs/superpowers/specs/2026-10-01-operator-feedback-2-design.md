@@ -1,14 +1,15 @@
 # Operator Feedback 2 — Design Spec
 
 - **Date:** 2026-10-01
-- **Status:** Approved. Plans 1 to 8 are built; each plan's section ends with its "As built" notes.
+- **Status:** Approved. Plans 1 to 9 are built; each plan's section ends with its "As built" notes.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§2 threads,
   §3 rules, §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md)
   (M4 display), the [cartwall and settings spec](2026-09-26-phase2-cartwall-settings-design.md)
   and the [first operator feedback spec](2026-09-30-operator-feedback-design.md)
   (F2 is replaced by O10 here).
-- **Scope:** 30 items of operator feedback (O1–O30), grouped into eleven plans.
-  O25–O30 were added on 2026-10-02.
+- **Scope:** 36 items of operator feedback (O1–O36), grouped into twelve plans.
+  O25–O36 were added on 2026-10-02. Plan 12 runs after plan 9 and before
+  plan 10.
   Each plan is written in full just before it runs, against the code the
   previous plan left. Each reaches `master` through its own pull request and
   updates the main spec, the user guide and the technical docs for what it
@@ -50,6 +51,12 @@
 | O28 | Screenshots in the user guide | 11 |
 | O29 | A truer README screenshot | 11 |
 | O30 | Repository description and website link | 11 |
+| O31 | The cartwall fits its rows without scrolling | 12 |
+| O32 | One title bar: icon, name and version in the native one | 12 |
+| O33 | Countdowns and live times keep a fixed width | 12 |
+| O34 | Digital peak meter readings above 0 dBFS | 10 |
+| O35 | Playlist tabs shrink and scroll instead of overflowing | 12 |
+| O36 | No console window on Windows | 12 |
 
 | Plan | Title | Items | Depends on |
 |---|---|---|---|
@@ -62,8 +69,9 @@
 | 7 | Track tags | O23 | — |
 | 8 | Track table | O7, O9, O16, O22, O24 | 7 (the tag fields) |
 | 9 | Audit follow-ups | O21 | — |
-| 10 | Audio path | O25, O26, O27 | 2 (O27 reverses part of O5) |
+| 10 | Audio path | O25, O26, O27, O34 | 2 (O27 reverses part of O5) |
 | 11 | Website and guide | O1, O28, O29, O30 | all (it publishes the final docs) |
+| 12 | Window and layout | O31, O32, O33, O35, O36 | — (runs after 9, before 10) |
 
 ---
 
@@ -452,6 +460,17 @@ The audit of every earlier plan found these items still open.
   1. In Xvfb, play a four-hour file in the app.
   2. Seek to 3:59:00 through the remote API.
   3. Record the result in the ledger.
+- **As built.**
+  - M1: `number()` in `ui/settings/remote.rs` no longer calls `update_while_editing(false)`, so the typed value reaches `RemoteState::numbers` and `remote::flush` applies it when another section opens (clamped to the range, as Enter would); Esc cancels.
+  - M4: `Services::cart_tracks`; a cart's track that is analysed, readable and has no format is analysed at once even after "Later". A cart track with a format but an older analysis version still waits.
+  - M5: `Bridge::analysis` analyses a track the cache has no current entry for, on the request's blocking thread, one at a time (`Bridge::on_demand`), and caches it. A track that is not analysed is still `404 not_analyzed`; an undecodable file is `404 not_found`.
+  - M6: `services::OutdatedCount` counts once per model snapshot; Settings gets it through `SettingsDeps::outdated`.
+  - M7: `ALIGNMENT_LINE_THICKNESS`; `fp_remote::{Timing, spawn_with}` and a `bind_log` test that waits for four published status snapshots instead of sleeping 5.5 s.
+  - M2 of the remote plan (Matroska Opus seek to 0 drops the pre-skip by timestamp, ±24 samples, 0.5 ms) stays a recorded ruling; nothing changed.
+  - Missing-file M2: the reason tooltip is also on the title label of an unavailable row.
+  - Docs: `players.md` says which meters have a peak hold (checked against `MeterBallistics::settings()`).
+  - Thread priority: `fp_decode::priority` over `thread-priority` 3.1.1 (MIT; `cargo deny check` passed with no change to `deny.toml`). Decode workers ask for `AboveNormal` (value 60: nice −5, above normal on Windows; 37 on macOS, since the crate checks the value against SCHED_OTHER's 15..=47 range there), the analysis pool for `Low` (nice 19, lowest). A refusal (the usual answer to a raise for an ordinary Linux user) is one `warn` per run. Persistence stays on the services thread; main spec §2.2 says so now. `threading-and-realtime.md` is aligned.
+  - Long-file check: a four-hour mono 44.1 kHz WAV (1.27 GB) played in the application under Xvfb, silently (fader at 0, no sound server, no usable ALSA device, so the timeline ran on the virtual clock); the seek to 3:59:00 through `POST /players/{id}/seek` was accepted in 10 ms and the position read 14340.99, 14341.99 and 14343.01 s one, two and three seconds later; seeking back to 100 s and to 14399.5 s worked and the player stopped at the end; no errors in the log. The compressed (MP3) variant was not repeated. No defect found.
 
 ## 11. Plan 10 — Audio path
 
@@ -503,6 +522,14 @@ The audit of every earlier plan found these items still open.
       says so.
   - Both settings are `Config` fields with defaults, ranges and lenient
     loading. They are documented in the user guide's bit-perfect page.
+- **O34 Readings above 0 dBFS.** The audit explains when the digital peak
+  meter reads above 0 dBFS. The mix is floating point, so a sample can exceed
+  full scale when a file already has overs, a gain or fader is above unity,
+  or several sources sum on one output. It confirms what the device receives
+  (the f32 to integer conversion clips), and how the meter shows that. If the
+  operator needs more, the audit proposes either a clear over indicator or an
+  optional output limiter (off by default, never on a bit-perfect path), and
+  the maintainer chooses before any change is built.
 - **O27 No output.** The internal `null` backend shows again in the audio
   system list, after the real systems, as "No output (silent)". It discards
   audio at real-time pace. This reverses the hiding part of O5; the name O5
@@ -555,7 +582,32 @@ The audit of every earlier plan found these items still open.
   --description … --homepage …`) once the site is live. README and the
   site link each other.
 
-## 13. Global constraints
+## 13. Plan 12 — Window and layout
+
+- **O31 Cartwall without scrolling.** The configured rows always fit the
+  cartwall area: the cart buttons take their height from the space there is,
+  down to a minimum height. The area scrolls only when the rows do not fit
+  even at that minimum.
+- **O32 One title bar.** The native title bar shows the icon, the name and
+  the version ("Fauste Player 1.2.3") on Windows, Linux and macOS. The app's
+  own top bar no longer repeats the icon, the name or the version; it keeps
+  everything else it shows.
+- **O33 Fixed-width times.** Every time that changes while it is shown (the
+  cart countdowns, the intro and outro countdowns, elapsed and remaining
+  times) keeps the same width: digits use tabular (fixed-width) figures, or
+  the text sits in a box sized for its longest value, so nothing beside it
+  moves.
+- **O35 Playlist tabs.** Tabs shrink, down to a minimum width, and cut long
+  names with "…"; the full name shows in a tooltip. When the tabs still do
+  not fit, the tab strip scrolls sideways (wheel and arrow buttons at its
+  ends), and the selected tab always stays in view.
+- **O36 No console on Windows.** The Windows executable is a GUI program
+  (`windows_subsystem = "windows"`), so no console window opens with it. The
+  plan keeps `--version` and `--help` useful without `unsafe` code (for
+  example, debug builds stay console programs), and checks that CI and the
+  packaging scripts do not depend on console output from the release binary.
+
+## 14. Global constraints
 
 `CLAUDE.md` rules 1–10 apply to every plan. In particular:
 

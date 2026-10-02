@@ -191,6 +191,41 @@ pub fn outdated_tracks(state: &AppState) -> usize {
     state.library.iter().filter(|t| outdated(t)).count()
 }
 
+/// `outdated_tracks`, remembered for the model snapshot it was worked out
+/// on. Counting scans the whole library, which the interface would do on
+/// every frame while the start-up notice or Settings > Analysis is open;
+/// with this it scans once per new snapshot. It never compares libraries:
+/// a new snapshot is a new scan.
+#[derive(Default)]
+pub struct OutdatedCount {
+    /// Kept (not just its address), so that the address cannot be reused
+    /// by another snapshot while it is remembered.
+    snapshot: Option<Arc<AppState>>,
+    count: usize,
+    scans: u32,
+}
+
+impl OutdatedCount {
+    /// How many tracks an earlier version analysed, in `state`.
+    pub fn get(&mut self, state: &Arc<AppState>) -> usize {
+        if !self
+            .snapshot
+            .as_ref()
+            .is_some_and(|known| Arc::ptr_eq(known, state))
+        {
+            self.count = outdated_tracks(state);
+            self.snapshot = Some(Arc::clone(state));
+            self.scans += 1;
+        }
+        self.count
+    }
+
+    /// How many times the library was scanned.
+    pub fn scans(&self) -> u32 {
+        self.scans
+    }
+}
+
 pub struct Services {
     conductor: Arc<ConductorHandle>,
     store: Store,
@@ -499,6 +534,17 @@ impl Services {
             .collect()
     }
 
+    /// Tracks assigned to a cart.
+    fn cart_tracks(state: &AppState) -> HashSet<TrackId> {
+        state
+            .cartwall
+            .pages
+            .iter()
+            .flat_map(|page| page.carts.iter())
+            .filter_map(|cart| cart.track)
+            .collect()
+    }
+
     /// The tag-only pass: tracks analysed but not read since (new ones, ones
     /// of an older library, re-analysed ones) get their tags read on the tag
     /// worker. A read that cannot parse the file still answers, with the
@@ -572,6 +618,7 @@ impl Services {
         // analysis cache brings them back when a track is shown again.
         let wanted = Self::wanted(state);
         self.media.retain(|id| wanted.contains(&id));
+        let on_carts = Self::cart_tracks(state);
         for track in state.library.iter() {
             let id = track.id;
             if self.in_flight.contains(&id) {
@@ -584,7 +631,11 @@ impl Services {
             }
             // Tracks an earlier version analysed are analysed again, once,
             // when the operator asks; the ones on screen are anyway (`show`).
-            let stale = self.analyse_outdated && outdated(track);
+            // A cart's track without a format is analysed at once: the cart
+            // bus opens bit-perfect only for a known format, and a cart must
+            // not wait for the operator's answer to play without resampling.
+            let stale = outdated(track)
+                && (self.analyse_outdated || (track.format.is_none() && on_carts.contains(&id)));
             let analyse = self.forced.contains(&id)
                 || ((!track.analyzed || stale)
                     && !self.done.contains(&id)

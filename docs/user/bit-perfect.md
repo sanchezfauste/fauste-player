@@ -70,7 +70,7 @@ its Main device unchanged. All of these must hold:
 - the track has been analysed, since that is how its rate and sample size
   are known. Tracks an earlier version analysed get their format once
   analysed again (the start-up notice, or Settings → Analysis), or as soon
-  as a player shows them;
+  as a player shows them or a cart holds them;
 - volume is 100 %, no fade runs, and nothing else plays on the same outputs.
 
 Some files are never shown as bit-perfect:

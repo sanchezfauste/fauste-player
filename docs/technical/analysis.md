@@ -210,7 +210,10 @@ The services thread submits tracks when either:
   the operator asked for it (`ServiceRequest::AnalyseOutdated`, from the
   start-up notice or
   Settings → Analysis). Until then they keep that analysis, which still
-  works; re-analysing a library costs the processor for a while; or
+  works; re-analysing a library costs the processor for a while. The
+  exception is a track on a cart that has no format recorded: the cart bus
+  opens bit-perfect only for a known format, so it is analysed at once
+  (`Services::cart_tracks`); or
 - they are **shown** (current, next or cue on any player) and their peaks are
   not in memory. Shown tracks go on the urgent queue, and one already
   queued with the library is promoted.

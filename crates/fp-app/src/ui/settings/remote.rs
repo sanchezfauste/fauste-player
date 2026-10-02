@@ -66,7 +66,9 @@ fn field(
 
 /// A number over a configuration value. Returns the new value once, when a
 /// drag is released or typing ends, never the steps in between (each would
-/// restart a server).
+/// restart a server). The value being typed is kept in `st` as it changes
+/// (the drag value does not wait for Enter), so that `flush` can apply it
+/// when another section is opened.
 fn number(
     ui: &mut Ui,
     st: &mut RemoteState,
@@ -78,12 +80,7 @@ fn number(
 ) -> Option<u32> {
     let value = st.numbers.entry(key).or_insert(current);
     let response = ui
-        .add(
-            egui::DragValue::new(value)
-                .range(range)
-                .suffix(suffix)
-                .update_while_editing(false),
-        )
+        .add(egui::DragValue::new(value).range(range).suffix(suffix))
         .labelled_by(label);
     let value = *value;
     if response.dragged() || response.has_focus() {

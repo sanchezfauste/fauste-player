@@ -7,13 +7,47 @@
 | Device callback, one per open output | set by the backend | real-time (rtkit/SCHED_FIFO on Linux, MMCSS on Windows, time-constraint on macOS, through cpal's `audio_thread_priority`) | nothing: it borrows the bus `Mixer` through `try_lock` | **never** |
 | Null output, one per open Null device | `fp-null-output` | normal | paces the mixer of a Null bus in real time | sleeps between blocks |
 | Virtual clock, one per lost bus | `fp-virtual-clock` | normal | renders the same mixer at real-time pace while the device is lost | sleeps between blocks |
-| Decode worker, one per player | `fp-player-<id>` | normal | producer halves of the player's sources; decoders and resamplers | file I/O |
+| Decode worker, one per player, and one for the cartwall | `fp-player-<id>`, `fp-cartwall` | above normal, not real time (`fp_decode::priority`) | producer halves of the player's sources; decoders and resamplers | file I/O |
 | Conductor | `fp-conductor` | normal | `AppState`, the `Engine` and all bus bookkeeping | no: it polls with a tick of `tuning.conductor_tick_ms` (5 ms) |
 | Services | `fp-services` | normal | the analyzer handle, the store, the media cache writer | file I/O (saves) |
 | Remote | `fp-remote` | normal | the tokio runtime of the HTTP API, the event publisher (every 50 ms) and the OSC socket; follows `config.remote` every 250 ms | network I/O (async); covers and peaks in `spawn_blocking` |
-| Analysis pool (2) | `fp-analysis-<n>` | normal | one job at a time each | file I/O, CPU |
+| Analysis pool (2) | `fp-analysis-<n>` | low (`fp_decode::priority`) | one job at a time each | file I/O, CPU |
 | Helpers | `fp-file-dialog`, `fp-folder-dialog`, `fp-drop-scan`, `fp-device-scan` | normal | native dialogs, folder scans and device enumeration, off the UI thread | yes (by design) |
 | UI | main thread | normal | view state only | no |
+
+## Thread priority
+
+Main spec §2.2: only the device callback is real time. The two other classes
+of thread that do heavy work are tuned with the `thread-priority` crate,
+through `fp_decode::priority::set_current(Priority, role)` called by the thread
+itself as its first action:
+
+| Class | Request | Linux | Windows | macOS |
+|---|---|---|---|---|
+| Decode workers (`PlayerWorker`) | `Priority::AboveNormal`: the crate's cross-platform value 60 (37 on macOS, inside the 15..=47 range the crate checks there) | nice −5 | above normal | a step above the default |
+| Analysis pool (`Analyzer`) | `Priority::Low`: the crate's minimum | nice 19 | lowest | lowest |
+
+- **Neither is real time.** A decoder at a real-time class could starve the
+  interface and the conductor, and it has a whole ring buffer of slack; the
+  device callback is the one thread with a deadline.
+- **Lowering a priority always works; raising one may not.** On Linux an
+  ordinary user may not lower a nice value (`RLIMIT_NICE` or `CAP_SYS_NICE`
+  is needed), so decoders
+  often stay at normal priority there, and the analysis pool, whose request is
+  always allowed, still yields to them.
+- **A refusal is logged once and ignored.** `set_current` returns `false` and
+  the thread keeps running at the normal priority. The first refusal of the run
+  is a `warn` line (`the system refused a thread priority change`, with the
+  role, the request and the operating system's error); later ones are silent,
+  since every thread would repeat it.
+- The conductor, the services thread, the remote thread and the helpers stay at
+  normal priority. The services thread's saves are short and bursty, and the
+  spec's "persistence writes on the background pool" is served by it running
+  beside the pool, not inside it.
+- Tests: `fp-decode` (`priority.rs`) reads the thread's nice value from
+  `/proc` on Linux; `fp-engine/tests/decoder_priority.rs` checks that decode
+  workers ask and that two refusals are one log line; `fp-analysis`
+  (`the_pool_runs_at_low_priority`) checks nice 19 inside a job.
 
 ## Rules for the real-time thread
 

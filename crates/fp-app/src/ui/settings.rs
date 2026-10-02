@@ -179,6 +179,8 @@ pub(crate) struct SettingsDeps<'a> {
     pub remote: Option<fp_remote::RemoteStatus>,
     /// A start-up setting changed: the footer offers Restart now.
     pub restart_pending: bool,
+    /// How many tracks an earlier version analysed.
+    pub outdated: usize,
 }
 
 /// What the modal asks of the application after a frame.
@@ -1469,7 +1471,7 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
     });
     // Tracks an earlier version analysed wait for the operator (the
     // start-up notice offers the same).
-    let outdated = crate::services::outdated_tracks(scene.state);
+    let outdated = deps.outdated;
     let label = t.tr_args("settings-analyse-outdated", &[("count", outdated.into())]);
     row(
         ui,

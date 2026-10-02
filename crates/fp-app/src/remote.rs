@@ -2,7 +2,7 @@
 //! caches that hold covers and waveforms.
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use fp_analysis::cache::AnalysisCache;
 use fp_engine::conductor::ConductorHandle;
@@ -16,15 +16,67 @@ struct Bridge {
     conductor: Arc<ConductorHandle>,
     media: MediaCache,
     cache: AnalysisCache,
+    /// Held while a track is analysed for a request: one at a time, so that
+    /// a client asking for many tracks cannot take every core.
+    on_demand: Mutex<()>,
 }
 
 impl Bridge {
-    /// The cached analysis of `track`, read from disk (blocking).
+    /// The analysis of `track` (blocking). It is read from the cache; a
+    /// track the cache has nothing for (one an earlier version analysed
+    /// that no player shows, or an entry that was removed) is analysed now
+    /// and cached, so that the next request, and the analysis the services
+    /// thread would run, find it. The analysis runs on its own thread at low
+    /// priority, like the analysis pool, so that a client cannot compete
+    /// with the decoders. A file that is not there is not tried.
     fn analysis(&self, track: TrackId) -> Option<fp_analysis::Analysis> {
         let model = self.conductor.model.load_full();
         let path = &model.library.get(track)?.path;
-        self.cache.load(path, &model.config.analysis)
+        let settings = &model.config.analysis;
+        if let Some(analysis) = self.cache.load(path, settings) {
+            return Some(analysis);
+        }
+        if !model.library.is_playable(track) {
+            return None;
+        }
+        let _one = self
+            .on_demand
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        // A request that waited for the lock finds the other one's result.
+        if let Some(analysis) = self.cache.load(path, settings) {
+            return Some(analysis);
+        }
+        let analysis = match analyse_low(path, settings, &model.config.limits) {
+            Ok(analysis) => analysis,
+            Err(error) => {
+                tracing::warn!(path = %path.display(), %error, "cannot analyse the track");
+                return None;
+            }
+        };
+        if let Err(error) = self.cache.store(path, settings, &analysis) {
+            tracing::warn!(path = %path.display(), %error, "cannot cache the analysis");
+        }
+        Some(analysis)
     }
+}
+
+/// Analyses `path` on a new thread at low priority and waits for it.
+fn analyse_low(
+    path: &std::path::Path,
+    settings: &fp_model::AnalysisSettings,
+    limits: &Limits,
+) -> Result<fp_analysis::Analysis, String> {
+    let (path, settings, limits) = (path.to_owned(), settings.clone(), limits.clone());
+    std::thread::Builder::new()
+        .name("remote-analysis".into())
+        .spawn(move || {
+            fp_decode::priority::set_current(fp_decode::priority::Priority::Low, "remote analysis");
+            fp_analysis::analyze_file(&path, &settings, &limits).map_err(|e| e.to_string())
+        })
+        .map_err(|e| format!("cannot start the analysis thread: {e}"))?
+        .join()
+        .map_err(|_| "the analysis thread stopped unexpectedly".to_owned())?
 }
 
 impl RemoteControl for Bridge {
@@ -87,6 +139,7 @@ pub fn start(
         conductor,
         media,
         cache: AnalysisCache::new(analysis_dir, limits),
+        on_demand: Mutex::new(()),
     };
     match fp_remote::spawn(Arc::new(bridge)) {
         Ok(handle) => Some(handle),
