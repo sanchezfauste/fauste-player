@@ -61,8 +61,8 @@ Row colours:
 | Item | Action |
 |---|---|
 | Play now | Start this track at once (mixing if the player is on air) |
-| Set as next | Same as double-click |
-| Pre-listen on CUE | Play it on the CUE output |
+| Set as next | Same as double-click. While a CUE is running it moves to the new next |
+| Pre-listen on CUE | Play it on the CUE output (it opens the CUE window) |
 | Add tracks below… | Pick files to insert after this track |
 | Duplicate | Insert an unplayed copy below (with its repeat and stop-after marks) |
 | Repeat this track | Tick to play it again and again, without a gap, until you press Play (next), Previous, Stop or Fade stop, or turn on Stop after. Pause keeps it repeating. A repeat icon shows at the right of the title |
