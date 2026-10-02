@@ -422,4 +422,6 @@ fn stop_all_stays_at_the_right_end_in_a_narrow_window() {
     assert!(stop.right() <= 420.0 + 0.5, "inside the window: {stop:?}");
     assert!(stop.right() > 420.0 - 60.0, "at the right end: {stop:?}");
     assert!(stop.width() > 40.0, "not squeezed: {stop:?}");
+    assert!(h.query_by_label("CARTWALL").is_some(), "title kept");
+    assert!(h.query_by_label("Carts 1").is_some(), "a page tab kept");
 }

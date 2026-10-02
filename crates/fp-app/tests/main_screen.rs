@@ -332,6 +332,43 @@ fn ctrl_space_stops_all_carts() {
 }
 
 #[test]
+fn stop_all_follows_a_rebound_shortcut() {
+    let mut s = state(1, 1);
+    fp_model::apply(
+        &mut s,
+        Command::SetShortcut {
+            action: fp_model::ShortcutAction::StopAllCarts,
+            chord: Some(fp_model::KeyChord::key("Q")),
+        },
+    )
+    .unwrap();
+    let (mut h, fake) = harness(s);
+    h.key_press(Key::Q);
+    h.run_steps(2);
+    assert_eq!(sent(&fake), vec![Command::StopAllCarts]);
+    h.key_press_modifiers(egui::Modifiers::CTRL, Key::Space);
+    h.run_steps(2);
+    assert!(sent(&fake).is_empty(), "Ctrl+Space lost its binding");
+}
+
+#[test]
+fn an_unbound_stop_all_shortcut_does_nothing() {
+    let mut s = state(1, 1);
+    fp_model::apply(
+        &mut s,
+        Command::SetShortcut {
+            action: fp_model::ShortcutAction::StopAllCarts,
+            chord: None,
+        },
+    )
+    .unwrap();
+    let (mut h, fake) = harness(s);
+    h.key_press_modifiers(egui::Modifiers::CTRL, Key::Space);
+    h.run_steps(2);
+    assert!(sent(&fake).is_empty());
+}
+
+#[test]
 fn a_rebound_key_plays_the_new_target() {
     let mut s = state(2, 1);
     fp_model::apply(

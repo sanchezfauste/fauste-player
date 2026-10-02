@@ -7,6 +7,9 @@ their own outputs, independently of the players.
 ## Using it
 
 - **Click a cart** to fire it. **Click it again** to stop it.
+- **Stop all** (right end of the bar) stops every cart that is playing, on
+  every page. Its label shows how many are playing, as in **Stop all (2)**;
+  with none playing it is dimmed and shows no count.
 - While a cart plays, its border turns red, a red bar shrinks as it plays,
   and its time counts down.
 - Carts **overlap** by default: firing a second one does not stop the first.
@@ -45,7 +48,8 @@ loaded there.
 ## Keyboard
 
 By default **F1**…**F12** fire carts 1–12 of the page shown, and
-**Ctrl+Space** stops every cart. See [Keyboard](keyboard.md) to change them.
+**Ctrl+Space** stops every cart (the same as **Stop all**; it also stops a
+cart you are pre-listening on CUE, even when no cart is playing). See [Keyboard](keyboard.md) to change them.
 
 ## Setting up carts
 

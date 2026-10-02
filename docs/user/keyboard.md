@@ -4,7 +4,7 @@
 |---|---|
 | `1` … `9` | Play on players 1–9 (same as their Play button) |
 | `F1` … `F12` | Fire carts 1–12 of the cart page shown |
-| `Ctrl+Space` | Stop every cart |
+| `Ctrl+Space` | Stop every cart, and the cart CUE (the cartwall's **Stop all** button) |
 | `Delete` / `Backspace` | Remove the selected track from the playlist shown (not while it is on air) |
 | `Esc` | Close menus and Settings; cancel the "Audio is on air" dialog; clear the selection |
 
@@ -15,7 +15,8 @@
 - Shortcuts are ignored while you type in a text field, such as a playlist
   name.
 - A shortcut whose button is dimmed does nothing (for example Stop on a
-  stopped player).
+  stopped player). The one exception is the stop-all-carts shortcut, which
+  also stops the cart CUE.
 
 ## Changing shortcuts
 
@@ -28,7 +29,7 @@ section) restores the table above. Available actions, for every player and cart:
 - play, previous, restart, pause, stop, fade stop and CUE on a player
   (previous and restart have no default key);
 - fire a cart of the page shown;
-- stop all carts;
+- stop every cart (the cartwall's **Stop all**);
 - show or hide the cartwall;
 - next or previous cart page.
 
