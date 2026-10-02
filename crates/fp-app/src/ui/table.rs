@@ -342,6 +342,9 @@ pub(crate) fn track_table(
                     clicked = Some(entry.id);
                     cue_follow = view::cue_follow_target(scene.state, player, entry.id);
                 }
+                response.clone().on_hover_ui(|ui| {
+                    track_tip(ui, scene, track);
+                });
                 if response.double_clicked() && status != RowStatus::Current {
                     scene.ctl.send(Command::SetNext(player, entry.id));
                 }
@@ -630,4 +633,37 @@ fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
         paint(ui.painter(), rect);
     }
     response.on_hover_text(label);
+}
+
+/// The row tooltip: label and value per line, at most as wide as the window.
+fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
+    let t = scene.i18n;
+    ui.set_max_width(420.0);
+    egui::Grid::new("track-tip")
+        .num_columns(2)
+        .spacing(vec2(10.0, 3.0))
+        .show(ui, |ui| {
+            for (field, value) in view::track_tooltip(track) {
+                let key = match field {
+                    view::TipField::Title => "tip-field-title",
+                    view::TipField::Artist => "tip-field-artist",
+                    view::TipField::Album => "tip-field-album",
+                    view::TipField::Date => "tip-field-date",
+                    view::TipField::Genre => "tip-field-genre",
+                    view::TipField::Duration => "tip-field-duration",
+                    view::TipField::Format => "tip-field-format",
+                    view::TipField::Path => "tip-field-path",
+                };
+                ui.label(
+                    RichText::new(t.tr(key))
+                        .font(font(11.0))
+                        .color(theme::NEUTRAL_400),
+                );
+                ui.add(
+                    egui::Label::new(RichText::new(value).font(font(12.0)).color(theme::TEXT))
+                        .wrap(),
+                );
+                ui.end_row();
+            }
+        });
 }

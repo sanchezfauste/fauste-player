@@ -52,6 +52,8 @@ Row colours:
 | Reload arrows at the right of the title | Analysed by an earlier version; it still plays with that analysis. **Settings → Analysis → Analyse outdated tracks** brings it up to date (tracks on a player are updated anyway) |
 | Violet | Selected |
 
+Hover a row for a moment to see the track's tags (title, artist, album, date, genre), its duration, its format (codec, sample rate, bit depth) and the path of its file. A field the track does not have is left out.
+
 ## Mouse
 
 - **Click** selects a track. **Double-click** makes it this player's next

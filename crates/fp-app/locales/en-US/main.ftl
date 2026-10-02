@@ -312,6 +312,14 @@ meter-label = Level meter
 meter-max = Maximum { $value } dBFS
 tip-meter-max = Highest level since the track started playing. Click to restart it.
 tip-on-air-elsewhere = On air on player { $n }
+tip-field-title = Title
+tip-field-artist = Artist
+tip-field-album = Album
+tip-field-date = Date
+tip-field-genre = Genre
+tip-field-duration = Duration
+tip-field-format = Format
+tip-field-path = Path
 file-missing-tip = File not found: { $path }
 file-unreadable-tip = Cannot read the file: { $path }
 

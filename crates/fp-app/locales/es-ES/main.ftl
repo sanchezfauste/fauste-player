@@ -312,6 +312,14 @@ meter-label = Medidor de nivel
 meter-max = Máximo { $value } dBFS
 tip-meter-max = Nivel más alto desde que empezó a sonar la pista. Haz clic para reiniciarlo.
 tip-on-air-elsewhere = En el aire en el reproductor { $n }
+tip-field-title = Título
+tip-field-artist = Artista
+tip-field-album = Álbum
+tip-field-date = Fecha
+tip-field-genre = Género
+tip-field-duration = Duración
+tip-field-format = Formato
+tip-field-path = Ruta
 file-missing-tip = No se encuentra el archivo: { $path }
 file-unreadable-tip = No se puede leer el archivo: { $path }
 
