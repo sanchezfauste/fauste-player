@@ -95,9 +95,11 @@ analysis cache on disk. A track not analysed yet answers `404 not_analyzed`
 and is never analysed for a request. A track the model calls analysed but
 whose cache has no entry of the current analysis version (one an earlier
 version analysed that no player shows) is analysed when asked, once at a
-time, and the result is cached; the model keeps what it had until the
-operator asks for the new analysis. An analysed track without a cover, or
-whose file cannot be decoded, answers `404 not_found`.
+time, on a thread at the analysis pool's low priority, and the result is
+cached; the model keeps what it had until the operator asks for the new
+analysis. The request waits for it (there is no timeout, and a client that
+disconnects does not stop it). An analysed track without a cover, whose
+file is missing, or whose file cannot be decoded, answers `404 not_found`.
 
 ### Operating
 

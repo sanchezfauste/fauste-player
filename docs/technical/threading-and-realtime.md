@@ -30,8 +30,9 @@ itself as its first action:
 - **Neither is real time.** A decoder at a real-time class could starve the
   interface and the conductor, and it has a whole ring buffer of slack; the
   device callback is the one thread with a deadline.
-- **Lowering always works; raising may not.** On Linux an ordinary user may not
-  lower a nice value (`RLIMIT_NICE` or `CAP_SYS_NICE` is needed), so decoders
+- **Lowering a priority always works; raising one may not.** On Linux an
+  ordinary user may not lower a nice value (`RLIMIT_NICE` or `CAP_SYS_NICE`
+  is needed), so decoders
   often stay at normal priority there, and the analysis pool, whose request is
   always allowed, still yields to them.
 - **A refusal is logged once and ignored.** `set_current` returns `false` and

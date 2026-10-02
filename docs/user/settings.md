@@ -128,8 +128,8 @@ Fauste Player says how many there are and offers **Analyse now** or
 **Later**; **Analyse outdated tracks (N)** here does the same at any time.
 The tracks on the players are brought up to date anyway, as they are
 shown, and so are the tracks of carts that have no recorded format (a cart
-plays bit-perfect only when its format is known). Tracks whose file is missing are not counted until the file is
-back.
+plays bit-perfect only when its format is known). Tracks whose file is
+missing are not counted until the file is back.
 
 ## Playlists
 

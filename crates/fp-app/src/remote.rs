@@ -26,13 +26,18 @@ impl Bridge {
     /// track the cache has nothing for (one an earlier version analysed
     /// that no player shows, or an entry that was removed) is analysed now
     /// and cached, so that the next request, and the analysis the services
-    /// thread would run, find it.
+    /// thread would run, find it. The analysis runs on its own thread at low
+    /// priority, like the analysis pool, so that a client cannot compete
+    /// with the decoders. A file that is not there is not tried.
     fn analysis(&self, track: TrackId) -> Option<fp_analysis::Analysis> {
         let model = self.conductor.model.load_full();
         let path = &model.library.get(track)?.path;
         let settings = &model.config.analysis;
         if let Some(analysis) = self.cache.load(path, settings) {
             return Some(analysis);
+        }
+        if !model.library.is_playable(track) {
+            return None;
         }
         let _one = self
             .on_demand
@@ -42,7 +47,7 @@ impl Bridge {
         if let Some(analysis) = self.cache.load(path, settings) {
             return Some(analysis);
         }
-        let analysis = match fp_analysis::analyze_file(path, settings, &model.config.limits) {
+        let analysis = match analyse_low(path, settings, &model.config.limits) {
             Ok(analysis) => analysis,
             Err(error) => {
                 tracing::warn!(path = %path.display(), %error, "cannot analyse the track");
@@ -54,6 +59,24 @@ impl Bridge {
         }
         Some(analysis)
     }
+}
+
+/// Analyses `path` on a new thread at low priority and waits for it.
+fn analyse_low(
+    path: &std::path::Path,
+    settings: &fp_model::AnalysisSettings,
+    limits: &Limits,
+) -> Result<fp_analysis::Analysis, String> {
+    let (path, settings, limits) = (path.to_owned(), settings.clone(), limits.clone());
+    std::thread::Builder::new()
+        .name("remote-analysis".into())
+        .spawn(move || {
+            fp_decode::priority::set_current(fp_decode::priority::Priority::Low, "remote analysis");
+            fp_analysis::analyze_file(&path, &settings, &limits).map_err(|e| e.to_string())
+        })
+        .map_err(|e| format!("cannot start the analysis thread: {e}"))?
+        .join()
+        .map_err(|_| "the analysis thread stopped unexpectedly".to_owned())?
 }
 
 impl RemoteControl for Bridge {

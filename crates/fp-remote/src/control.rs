@@ -74,8 +74,10 @@ pub trait RemoteControl: Send + Sync + 'static {
     fn playback(&self) -> Playback;
     /// Queues a command; never blocks. False when the queue is full.
     fn send(&self, command: Command) -> bool;
-    /// The cover thumbnail (PNG). May read the disk: call it off the
-    /// runtime's thread (`spawn_blocking`).
+    /// The cover thumbnail (PNG). May read the disk, and for a track with
+    /// no cached analysis analyse the whole file (minutes for a long one,
+    /// one track at a time): call it off the runtime's thread
+    /// (`spawn_blocking`).
     fn cover(&self, track: TrackId) -> Option<Vec<u8>>;
     /// The waveform. May read the disk, like `cover`.
     fn peaks(&self, track: TrackId) -> Option<WaveformData>;
