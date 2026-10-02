@@ -31,12 +31,12 @@ fn tone(path: &std::path::Path) {
     w.finalize().unwrap();
 }
 
-fn post(addr: SocketAddr, path: &str) -> (u16, String) {
+fn request(addr: SocketAddr, method: &str, path: &str) -> (u16, String) {
     let mut s = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).unwrap();
-    s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    s.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
     write!(
         s,
-        "POST {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+        "{method} {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
     )
     .unwrap();
     let mut out = String::new();
@@ -45,11 +45,29 @@ fn post(addr: SocketAddr, path: &str) -> (u16, String) {
     (status, out.split_once("\r\n\r\n").unwrap().1.to_owned())
 }
 
-#[test]
-fn a_remote_play_puts_the_player_on_air() {
-    let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("tone.wav");
-    tone(&file);
+fn post(addr: SocketAddr, path: &str) -> (u16, String) {
+    request(addr, "POST", path)
+}
+
+fn get(addr: SocketAddr, path: &str) -> (u16, String) {
+    request(addr, "GET", path)
+}
+
+/// A conductor on the Offline backend with the remote API listening on a
+/// free loopback port. `prepare` changes the state before it starts.
+struct Served {
+    conductor: Conductor,
+    handle: Arc<fp_engine::conductor::ConductorHandle>,
+    remote: fp_remote::RemoteHandle,
+    addr: SocketAddr,
+    _dir: tempfile::TempDir,
+}
+
+fn serve(
+    dir: tempfile::TempDir,
+    files: Vec<std::path::PathBuf>,
+    prepare: impl FnOnce(&mut fp_model::AppState),
+) -> Served {
     let paths = AppPaths::under(dir.path());
     let store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
@@ -69,11 +87,11 @@ fn a_remote_play_puts_the_player_on_air() {
         Command::InsertPaths {
             playlist,
             index: 0,
-            paths: vec![file],
+            paths: files,
         },
     )
     .unwrap();
-    let player = state.players[0].id;
+    prepare(state);
     let limits = state.config.limits.clone();
 
     let backend = OfflineBackend::new();
@@ -84,8 +102,7 @@ fn a_remote_play_puts_the_player_on_air() {
         EngineSettings::from_config(&loaded.state.config),
         file_opener(),
     );
-    let (mut conductor, handle) =
-        Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
+    let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
     let handle = Arc::new(handle);
     let remote = fp_app::remote::start(
         handle.clone(),
@@ -103,17 +120,126 @@ fn a_remote_play_puts_the_player_on_air() {
         assert!(Instant::now() < deadline, "{:?}", remote.status());
         std::thread::sleep(Duration::from_millis(10));
     };
-    let (status, body) = post(addr, &format!("/api/v1/players/{}/play", player.0));
+    Served {
+        conductor,
+        handle,
+        remote,
+        addr,
+        _dir: dir,
+    }
+}
+
+#[test]
+fn a_remote_play_puts_the_player_on_air() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("tone.wav");
+    tone(&file);
+    let mut served = serve(dir, vec![file], |_| {});
+    let player = served.handle.model.load().players[0].id;
+    let (status, body) = post(served.addr, &format!("/api/v1/players/{}/play", player.0));
     assert_eq!(status, 202, "{body}");
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        conductor.tick(Instant::now());
-        if handle.model.load().players[0].transport == Transport::Playing {
+        served.conductor.tick(Instant::now());
+        if served.handle.model.load().players[0].transport == Transport::Playing {
             break;
         }
         assert!(Instant::now() < deadline, "the player never started");
         std::thread::sleep(Duration::from_millis(5));
     }
-    drop(remote);
+    drop(served.remote);
+}
+
+/// A track an earlier version analysed has no cached analysis of this
+/// version (older entries are swept), and it is not on a player, so no
+/// waveform is in memory either: the peaks are worked out when asked for.
+#[test]
+fn the_peaks_of_an_outdated_track_are_available() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<_> = ["a.wav", "b.wav"]
+        .iter()
+        .map(|n| {
+            let f = dir.path().join(n);
+            tone(&f);
+            f
+        })
+        .collect();
+    let served = serve(dir, files, |state| {
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.duration_secs = 3.0;
+            track.format = None;
+            track.analysis_version = 0;
+        }
+    });
+    let model = served.handle.model.load();
+    let playlist = model.playlists.first_id().unwrap();
+    let second = model.playlists.get(playlist).unwrap().entries[1].track;
+    let (status, body) = get(served.addr, &format!("/api/v1/tracks/{}/peaks", second.0));
+    assert_eq!(status, 200, "{body}");
+    assert!(body.contains("\"peaks\":[["), "{body}");
+    // A second request answers the same.
+    let (status, _) = get(served.addr, &format!("/api/v1/tracks/{}/peaks", second.0));
+    assert_eq!(status, 200);
+    let (status, body) = get(served.addr, &format!("/api/v1/tracks/{}/cover", second.0));
+    assert_eq!(status, 404, "a track without a cover: {body}");
+    drop(served.remote);
+}
+
+/// A file that cannot be decoded answers "not found" for its peaks (rule
+/// 9: bad data degrades), and the request ends.
+#[test]
+fn the_peaks_of_an_undecodable_file_are_not_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let junk = dir.path().join("junk.wav");
+    std::fs::write(&junk, b"this is not audio").unwrap();
+    let served = serve(dir, vec![junk], |state| {
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.format = None;
+        }
+    });
+    let model = served.handle.model.load();
+    let track = model.library.iter().next().unwrap().id;
+    let (status, body) = get(served.addr, &format!("/api/v1/tracks/{}/peaks", track.0));
+    assert_eq!(status, 404, "{body}");
+    drop(served.remote);
+}
+
+/// Several clients asking for the same outdated track at once all get the
+/// peaks; the analyses are taken one at a time.
+#[test]
+fn two_requests_at_once_both_get_the_peaks() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<_> = ["a.wav", "b.wav"]
+        .iter()
+        .map(|n| {
+            let f = dir.path().join(n);
+            tone(&f);
+            f
+        })
+        .collect();
+    let served = serve(dir, files, |state| {
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.duration_secs = 3.0;
+            track.format = None;
+            track.analysis_version = 0;
+        }
+    });
+    let model = served.handle.model.load();
+    let playlist = model.playlists.first_id().unwrap();
+    let second = model.playlists.get(playlist).unwrap().entries[1].track;
+    let (addr, uri) = (served.addr, format!("/api/v1/tracks/{}/peaks", second.0));
+    let clients: Vec<_> = (0..2)
+        .map(|_| {
+            let uri = uri.clone();
+            std::thread::spawn(move || get(addr, &uri).0)
+        })
+        .collect();
+    for client in clients {
+        assert_eq!(client.join().unwrap(), 200);
+    }
+    drop(served.remote);
 }
