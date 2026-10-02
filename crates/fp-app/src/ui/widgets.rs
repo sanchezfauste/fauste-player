@@ -354,12 +354,18 @@ pub fn scale_marks(c: &MeterConfig) -> Vec<f32> {
             marks.push(0.0);
             marks
         }
-        MeterBallistics::DigitalPeak | MeterBallistics::Custom => [
-            -60.0, -50.0, -40.0, -35.0, -30.0, -25.0, -20.0, -15.0, -10.0, -5.0, 0.0,
-        ]
-        .into_iter()
-        .filter(|m| *m >= c.floor_db)
-        .collect(),
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => {
+            // The floor is the bottom of the scale, so it is always a mark;
+            // the round marks above it stay.
+            let mut marks: Vec<f32> = [
+                -60.0, -50.0, -40.0, -35.0, -30.0, -25.0, -20.0, -15.0, -10.0, -5.0, 0.0,
+            ]
+            .into_iter()
+            .filter(|m| *m > c.floor_db + SAME_MARK_DB)
+            .collect();
+            marks.insert(0, c.floor_db);
+            marks
+        }
     }
 }
 
@@ -489,6 +495,7 @@ pub fn vu(
     let (bars_top, bars_bottom) = (first.top(), first.bottom());
     let height = (bars_bottom - bars_top).max(1.0);
     let y_of = |db: f32| bars_bottom - meter_position(db, c) * height;
+    let level_y = [0usize, 1].map(|ch| y_of(reading.level_db.get(ch).copied().unwrap_or(-120.0)));
     // Where each zone starts on screen, bottom up.
     let zones = [
         (bars_bottom, Zone::Normal),
@@ -515,7 +522,7 @@ pub fn vu(
     for (ch, bar) in l.bars.iter().enumerate() {
         let x = bar.x_range();
         painter.rect_filled(*bar, 0.0, theme::NEUTRAL_800.gamma_multiply(0.55));
-        let level = y_of(reading.level_db.get(ch).copied().unwrap_or(-120.0));
+        let level = level_y.get(ch).copied().unwrap_or(bars_bottom);
         if k_system {
             let rms = y_of(reading.rms_db.get(ch).copied().unwrap_or(-120.0)).max(level);
             column(x, level, rms, 0.45);
@@ -537,14 +544,12 @@ pub fn vu(
     // nothing between the channels; the alignment level adds a notch at
     // the outer edge of each bar, so no bright bar crosses the signal.
     for m in &l.lines {
-        painter.rect_filled(
-            Rect::from_x_y_ranges(l.lines_x, m.y - 0.5..=m.y + 0.5),
-            0.0,
-            theme::NEUTRAL_400.gamma_multiply(REFERENCE_LINE_ALPHA),
-        );
+        for (piece, shade) in reference_segments(&l, m.y, level_y) {
+            painter.rect_filled(piece, 0.0, shade.colour());
+        }
         painter.text(
             pos2(l.labels_right, m.label_y),
-            Align2::RIGHT_CENTER,
+            Align2([egui::Align::RIGHT, m.label_align]),
             &m.label,
             FontId::monospace(LABEL_FONT_SIZE),
             theme::NEUTRAL_400,
@@ -569,8 +574,6 @@ pub fn vu(
     clicked
 }
 
-/// Opacity of the reference lines over the bars (feedback spec §3.2).
-const REFERENCE_LINE_ALPHA: f32 = 0.35;
 /// Size of the scale's labels.
 const LABEL_FONT_SIZE: f32 = 8.0;
 
@@ -595,10 +598,71 @@ const ALIGNMENT_NOTCH: f32 = 3.0;
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeterLine {
     pub y: f32,
+    /// Where the label is anchored vertically: the line's `y`.
     pub label_y: f32,
+    /// How the label hangs from `label_y`: centred on it, or its top
+    /// (`Min`) or bottom (`Max`) edge on it where the rect's edge is too
+    /// close for a centred label.
+    pub label_align: egui::Align,
     /// Empty for an alignment level the scale does not name.
     pub label: String,
     pub alignment: bool,
+}
+
+impl MeterLine {
+    /// The vertical centre of the label's row.
+    pub fn label_centre(&self) -> f32 {
+        let half = LABEL_ROW / 2.0;
+        match self.label_align {
+            egui::Align::Min => self.label_y + half,
+            egui::Align::Center => self.label_y,
+            egui::Align::Max => self.label_y - half,
+        }
+    }
+}
+
+/// Whether a piece of a reference line lies over the lit part of a bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineShade {
+    Lit,
+    Unlit,
+}
+
+impl LineShade {
+    /// The colour the piece is painted in (constants in `theme`).
+    pub fn colour(self) -> Color32 {
+        match self {
+            LineShade::Lit => theme::METER_LINE_LIT.gamma_multiply(theme::METER_LINE_LIT_ALPHA),
+            LineShade::Unlit => {
+                theme::METER_LINE_UNLIT.gamma_multiply(theme::METER_LINE_UNLIT_ALPHA)
+            }
+        }
+    }
+}
+
+/// The reference line at screen height `y` as three pieces: over the first
+/// bar, over the gap between the bars and over the second bar. A piece over
+/// a bar is lit when that bar's level (`level_y`, screen height of each
+/// channel's level; the peak on K-System meters) is at or above the line;
+/// the gap is never lit.
+pub fn reference_segments(l: &MeterLayout, y: f32, level_y: [f32; 2]) -> [(Rect, LineShade); 3] {
+    let [first, second] = l.bars;
+    let piece = |x: egui::Rangef| Rect::from_x_y_ranges(x, y - 0.5..=y + 0.5);
+    let shade = |ch: usize| {
+        if level_y.get(ch).is_some_and(|ly| *ly <= y) {
+            LineShade::Lit
+        } else {
+            LineShade::Unlit
+        }
+    };
+    [
+        (piece(first.x_range()), shade(0)),
+        (
+            piece(egui::Rangef::new(first.right(), second.left())),
+            LineShade::Unlit,
+        ),
+        (piece(second.x_range()), shade(1)),
+    ]
 }
 
 /// Where the meter draws each of its parts (feedback spec §3.2).
@@ -656,20 +720,26 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     let bars_right = bars_left + 2.0 * BAR_WIDTH + BAR_GAP;
     let height = bottom - top;
     let y_of = |db: f32| bottom - meter_position(db, c) * height;
-    // The label is centred on its line but kept inside the bars' span.
-    let label_y = |y: f32| {
-        let half = LABEL_ROW / 2.0;
-        y.clamp(top + half, (bottom - half).max(top + half))
-    };
     let line = |db: f32, alignment: bool| {
         let width = if alignment { ALIGNMENT_LINE_WIDTH } else { 1.0 };
         let y = y_of(db).clamp(
             top + width / 2.0,
             (bottom - width / 2.0).max(top + width / 2.0),
         );
+        // Centred on the line, unless that would cross the rect's edge:
+        // then the label hangs from or rests on the line, inside the rect.
+        let half = LABEL_ROW / 2.0;
+        let label_align = if y - half < rect.top() {
+            egui::Align::Min
+        } else if y + half > rect.bottom() {
+            egui::Align::Max
+        } else {
+            egui::Align::Center
+        };
         MeterLine {
             y,
-            label_y: label_y(y),
+            label_y: y,
+            label_align,
             label: mark_label(db, c),
             alignment,
         }
@@ -686,15 +756,44 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         alignment.label.clear();
     }
     let mut lines: Vec<MeterLine> = Vec::new();
-    // Both ends of the scale first, so its range is always labelled; then
-    // top down, so where the scale is dense the upper marks are kept.
+    let crowds = |kept: &MeterLine, candidate: &MeterLine| {
+        !kept.label.is_empty()
+            && !candidate.label.is_empty()
+            && (kept.label_centre() - candidate.label_centre()).abs() < LABEL_ROW
+    };
+    // Both ends of the scale first, so its range is always labelled.
     let ends = [marks.last().copied(), marks.first().copied()];
+    // An end that is the alignment level is labelled by the alignment line:
+    // that label is kept, and the other end yields if they crowd.
+    let alignment_is_end = ends
+        .iter()
+        .flatten()
+        .any(|m| (m - alignment_dbfs(c)).abs() < SAME_MARK_DB);
+    for mark in ends.into_iter().flatten() {
+        if (mark - alignment_dbfs(c)).abs() < SAME_MARK_DB {
+            continue;
+        }
+        let candidate = line(mark, false);
+        let crowded = lines
+            .iter()
+            .chain(alignment_is_end.then_some(&alignment))
+            .any(|kept| crowds(kept, &candidate));
+        if !crowded {
+            lines.push(candidate);
+        }
+    }
+    // The alignment label gives way to an end label (not to its own); its
+    // line stays.
+    if !alignment_is_end && lines.iter().any(|kept| crowds(kept, &alignment)) {
+        alignment.label.clear();
+    }
+    // Then top down, so where the scale is dense the upper marks are kept.
     let middle = marks
         .iter()
         .rev()
         .skip(1)
         .take(marks.len().saturating_sub(2));
-    for mark in ends.into_iter().flatten().chain(middle.copied()) {
+    for mark in middle.copied() {
         if (mark - alignment_dbfs(c)).abs() < SAME_MARK_DB {
             continue;
         }
@@ -702,8 +801,7 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         let crowded = lines
             .iter()
             .chain(std::iter::once(&alignment))
-            .filter(|kept| !kept.label.is_empty())
-            .any(|kept| (kept.label_y - candidate.label_y).abs() < LABEL_ROW);
+            .any(|kept| crowds(kept, &candidate));
         if !crowded {
             lines.push(candidate);
         }
@@ -716,7 +814,7 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     };
     let alignment_notches = [notch(bars_left), notch(bars_right - ALIGNMENT_NOTCH)];
     lines.push(alignment);
-    lines.sort_by(|a, b| a.label_y.total_cmp(&b.label_y));
+    lines.sort_by(|a, b| a.label_centre().total_cmp(&b.label_centre()));
     MeterLayout {
         labels_right: rect.left() + LABEL_COLUMN,
         bars,

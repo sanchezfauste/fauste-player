@@ -161,6 +161,19 @@
     50 %), so they read as segment gaps.
   - Both values are constants in `ui/theme.rs`. They are tuned with a
     screenshot and pinned by `tests/theme.rs`.
+- **As built.**
+  - The digital scale's floor is a mark of its own (`scale_marks`), so a −55
+    floor is labelled `-55`.
+  - A label is centred on its line; only where a centred label would cross
+    the meter's rect does it rest on the line (bottom) or hang from it (top).
+  - The alignment label gives way to an end label; its heavier line and
+    notches stay. An end that is itself the alignment level keeps that
+    label, and the other end yields if they crowd.
+  - A reference-line piece is lit when the bar's level (the peak on K-System
+    meters) is at or above the line; the gap between the bars is never lit.
+  - Constants: `METER_LINE_UNLIT` / `_ALPHA` (`NEUTRAL_400`, 0.60) and
+    `METER_LINE_LIT` / `_ALPHA` (`NEUTRAL_900`, 0.50), pinned by
+    `tests/theme.rs`.
 
 ## 5. Plan 4 — Cartwall stop
 

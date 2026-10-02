@@ -11,8 +11,8 @@ mod support;
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::widgets::{
-    METER_WIDTH, Zone, alignment_dbfs, loudness_line, mark_label, max_readout, meter_layout,
-    meter_position, scale_marks, zone_of,
+    LineShade, METER_WIDTH, Zone, alignment_dbfs, loudness_line, mark_label, max_readout,
+    meter_layout, meter_position, reference_segments, scale_marks, zone_of,
 };
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::PlayerTelemetry;
@@ -216,7 +216,7 @@ fn labels_never_overlap_and_the_alignment_line_stays() {
                     .lines
                     .iter()
                     .filter(|m| !m.label.is_empty())
-                    .map(|m| m.label_y)
+                    .map(|m| m.label_centre())
                     .collect();
                 for pair in ys.windows(2) {
                     assert!(
@@ -232,6 +232,45 @@ fn labels_never_overlap_and_the_alignment_line_stays() {
             }
         }
     }
+}
+
+#[test]
+fn end_labels_stay_inside_the_rect_on_their_line() {
+    for ballistics in ALL_METERS {
+        for height in [64.0, 136.0, 300.0] {
+            for loudness in [false, true] {
+                let c = meter(ballistics);
+                let rect = column(height);
+                let l = meter_layout(rect, &c, loudness);
+                for m in l.lines.iter().filter(|m| !m.label.is_empty()) {
+                    let centre = m.label_centre();
+                    assert!(
+                        centre - LABEL_ROW / 2.0 >= rect.top() - 0.01
+                            && centre + LABEL_ROW / 2.0 <= rect.bottom() + 0.01,
+                        "{ballistics:?} {height} {loudness}: {} outside the rect",
+                        m.label
+                    );
+                    // Never shifted off its line: the line is within the
+                    // label's own height.
+                    assert!(
+                        (centre - m.y).abs() <= LABEL_ROW / 2.0 + 0.01,
+                        "{ballistics:?} {height}: {} is off its line",
+                        m.label
+                    );
+                    assert_eq!(m.label_y, m.y, "the anchor is the line");
+                }
+            }
+        }
+    }
+    // Without the loudness line the bars end at the rect's bottom, so the
+    // bottom label rests on its line instead of being centred over it.
+    let c = meter(MeterBallistics::DigitalPeak);
+    let l = meter_layout(column(136.0), &c, false);
+    let bottom = l.lines.iter().find(|m| m.label == "-60").unwrap();
+    assert_eq!(bottom.label_align, egui::Align::Max);
+    // With room above and below, a label is centred on its line.
+    let middle = l.lines.iter().find(|m| m.label == "-30").unwrap();
+    assert_eq!(middle.label_align, egui::Align::Center);
 }
 
 #[test]
@@ -255,14 +294,15 @@ fn labels_stay_between_the_readouts() {
             loudness,
         );
         let bars = l.bars[0];
+        let rect = column(136.0);
         for m in &l.lines {
             assert!(
-                m.label_y - LABEL_ROW / 2.0 >= bars.top() - 0.01,
+                m.label_centre() - LABEL_ROW / 2.0 >= rect.top() - 0.01,
                 "{}",
                 m.label
             );
             assert!(
-                m.label_y + LABEL_ROW / 2.0 <= bars.bottom() + 0.01,
+                m.label_centre() + LABEL_ROW / 2.0 <= rect.bottom() + 0.01,
                 "{}",
                 m.label
             );
@@ -289,6 +329,117 @@ fn both_ends_of_every_scale_are_labelled() {
                     labels.contains(&want.as_str()),
                     "{ballistics:?}: {want} in {labels:?}"
                 );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_digital_floor_is_always_the_bottom_mark() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::Custom] {
+        for floor in [-96.0, -90.0, -55.0, -52.0, -45.0, -20.0] {
+            let c = MeterConfig {
+                ballistics,
+                floor_db: floor,
+                reference_dbfs: floor + 10.0,
+                ..MeterConfig::default()
+            };
+            let marks = scale_marks(&c);
+            assert_eq!(marks.first(), Some(&floor), "{ballistics:?} {floor}");
+            assert_eq!(marks.last(), Some(&0.0));
+            assert!(
+                marks.windows(2).all(|w| w[0] < w[1]),
+                "strictly increasing: {marks:?}"
+            );
+        }
+    }
+}
+
+/// Spec O11: every meter type at 64, 136 and 300 px, with and without the
+/// loudness line, and for several digital floors.
+#[test]
+fn both_ends_stay_labelled_at_every_height() {
+    for ballistics in ALL_METERS {
+        for floor in [-96.0, -60.0, -55.0, -20.0] {
+            for height in [64.0, 136.0, 300.0] {
+                for loudness in [false, true] {
+                    let c = MeterConfig {
+                        ballistics,
+                        floor_db: floor,
+                        reference_dbfs: if floor > -30.0 { floor + 5.0 } else { -18.0 },
+                        ..MeterConfig::default()
+                    };
+                    let marks = scale_marks(&c);
+                    let l = meter_layout(column(height), &c, loudness);
+                    let labelled: Vec<&str> = l
+                        .lines
+                        .iter()
+                        .filter(|m| !m.label.is_empty())
+                        .map(|m| m.label.as_str())
+                        .collect();
+                    for end in [marks.first().unwrap(), marks.last().unwrap()] {
+                        let want = mark_label(*end, &c);
+                        assert!(
+                            labelled.contains(&want.as_str()),
+                            "{ballistics:?} floor {floor} {height}px loudness {loudness}: \
+                             {want} in {labelled:?}"
+                        );
+                    }
+                    // Every label has its line, and the lines are on the bars.
+                    for m in l.lines.iter().filter(|m| !m.label.is_empty()) {
+                        assert!(m.y >= l.bars[0].top() && m.y <= l.bars[0].bottom());
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// An end that is also the alignment level keeps its label when the other
+/// end crowds the alignment line.
+#[test]
+fn an_end_that_is_the_alignment_level_stays_labelled() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::Custom] {
+        for (floor, reference) in [
+            (-20.0, -20.0),
+            (-40.0, -40.0),
+            (-30.0, -30.0),
+            (-60.0, 0.0),
+            (-20.0, 0.0),
+            (-60.0, -60.0),
+            (-30.0, 0.0),
+        ] {
+            for height in [24.0, 32.0, 40.0, 48.0, 64.0, 136.0, 300.0] {
+                for loudness in [false, true] {
+                    let c = MeterConfig {
+                        ballistics,
+                        floor_db: floor,
+                        reference_dbfs: reference,
+                        ..MeterConfig::default()
+                    };
+                    let marks = scale_marks(&c);
+                    let l = meter_layout(column(height), &c, loudness);
+                    let labelled: Vec<&str> = l
+                        .lines
+                        .iter()
+                        .filter(|m| !m.label.is_empty())
+                        .map(|m| m.label.as_str())
+                        .collect();
+                    for end in [marks.first().unwrap(), marks.last().unwrap()] {
+                        // Below 64 px the two ends cannot both fit: the one
+                        // that is the alignment level is the one kept.
+                        let is_alignment = (end - alignment_dbfs(&c)).abs() < 1.0;
+                        if height < 64.0 && !is_alignment {
+                            continue;
+                        }
+                        let want = mark_label(*end, &c);
+                        assert!(
+                            labelled.contains(&want.as_str()),
+                            "{ballistics:?} floor {floor} {height}px loudness {loudness}: \
+                             {want} in {labelled:?}"
+                        );
+                    }
+                }
             }
         }
     }
@@ -524,7 +675,7 @@ fn a_meter_too_short_to_draw_lays_out_without_panicking() {
                 let l = meter_layout(column(height), &meter(ballistics), loudness);
                 for m in &l.lines {
                     assert!(
-                        m.y.is_finite() && m.label_y.is_finite(),
+                        m.y.is_finite() && m.label_centre().is_finite(),
                         "{ballistics:?} {height}"
                     );
                 }
@@ -593,4 +744,42 @@ fn each_meter_type_shows_only_its_settings() {
     h.get_by_role_and_label(Role::Button, "Custom").click();
     h.run_steps(3);
     assert!(shown(&h, "Rise time") && shown(&h, "Scale floor"));
+}
+
+#[test]
+fn a_reference_line_is_cut_dark_over_the_lit_bar_and_light_over_the_rest() {
+    let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
+    let y = 100.0;
+    // Left level above the line (lit there), right level below it.
+    let [left, gap, right] = reference_segments(&l, y, [80.0, 120.0]);
+    assert_eq!(left.1, LineShade::Lit);
+    assert_eq!(right.1, LineShade::Unlit);
+    assert_eq!(
+        gap.1,
+        LineShade::Unlit,
+        "the gap between the bars is never lit"
+    );
+    assert_eq!(left.0.x_range(), l.bars[0].x_range());
+    assert_eq!(right.0.x_range(), l.bars[1].x_range());
+    assert!(gap.0.left() >= l.bars[0].right() && gap.0.right() <= l.bars[1].left());
+    for (r, _) in [left, gap, right] {
+        assert!((r.center().y - y).abs() < 1e-3 && (r.height() - 1.0).abs() < 1e-3);
+    }
+}
+
+#[test]
+fn reference_segments_are_unlit_at_the_floor_and_lit_at_the_top() {
+    let c = meter(MeterBallistics::DigitalPeak);
+    let l = meter_layout(column(136.0), &c, false);
+    let (top, bottom) = (l.bars[0].top(), l.bars[0].bottom());
+    for m in &l.lines {
+        // Silence: the level sits at the bottom of the bars.
+        let at_floor = reference_segments(&l, m.y, [bottom, bottom]);
+        assert_eq!(at_floor[0].1, LineShade::Unlit, "{}", m.label);
+        assert_eq!(at_floor[2].1, LineShade::Unlit, "{}", m.label);
+        // An over: the level is at (or past) the top.
+        let at_top = reference_segments(&l, m.y, [top, top - 50.0]);
+        assert_eq!(at_top[0].1, LineShade::Lit, "{}", m.label);
+        assert_eq!(at_top[2].1, LineShade::Lit, "{}", m.label);
+    }
 }
