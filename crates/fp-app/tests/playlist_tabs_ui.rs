@@ -142,3 +142,28 @@ fn few_tabs_show_no_arrows() {
     assert!(h.query_by_label("Scroll tabs left").is_none());
     assert!(h.query_by_label("Scroll tabs right").is_none());
 }
+
+#[test]
+fn a_playlist_shown_through_the_model_is_scrolled_into_view() {
+    let (mut h, fake) = setup(many_playlists(30));
+    let mut next = (*fake.state.load_full()).clone();
+    show(&mut next, "List 30");
+    fake.state.store(std::sync::Arc::new(next));
+    h.run_steps(5);
+    let tab = h.get_by_label("List 30").rect();
+    let left = h.get_by_label("Scroll tabs left").rect();
+    let right = h.get_by_label("Scroll tabs right").rect();
+    assert!(tab.right() <= right.left() + 1.0, "{tab:?}");
+    assert!(tab.left() >= left.right() - 1.0, "{tab:?}");
+}
+
+#[test]
+fn a_scrolled_strip_keeps_its_offset_on_later_frames() {
+    let (mut h, _) = setup(many_playlists(30));
+    h.get_by_label("Scroll tabs right").click();
+    h.run_steps(3);
+    let x1 = h.get_by_label("List 4").rect().left();
+    h.run_steps(10);
+    let x2 = h.get_by_label("List 4").rect().left();
+    assert!((x1 - x2).abs() < 0.5, "{x1} {x2}");
+}
