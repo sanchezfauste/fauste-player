@@ -394,6 +394,11 @@ pub struct Limits {
     /// Largest cart page grid.
     pub max_cart_rows: u16,
     pub max_cart_cols: u16,
+    /// Longest tag text kept per field, in characters (tags are trimmed and cut).
+    pub max_tag_chars: usize,
+    /// Most values kept per tag field (two artists are two values), so a
+    /// hostile file cannot fill the tag editor with thousands of lines.
+    pub max_tag_values: usize,
 }
 
 impl Default for Limits {
@@ -408,6 +413,8 @@ impl Default for Limits {
             max_crash_reports: 20,
             max_cart_rows: 8,
             max_cart_cols: 16,
+            max_tag_chars: 2000,
+            max_tag_values: 32,
         }
     }
 }
@@ -516,6 +523,20 @@ impl Config {
             256,
             30_000,
             "limits.max_cover_pixels",
+            &mut w,
+        );
+        clamp_to(
+            &mut l.max_tag_chars,
+            64,
+            100_000,
+            "limits.max_tag_chars",
+            &mut w,
+        );
+        clamp_to(
+            &mut l.max_tag_values,
+            1,
+            1000,
+            "limits.max_tag_values",
             &mut w,
         );
         clamp_to(

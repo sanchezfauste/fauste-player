@@ -5,7 +5,7 @@
 | File | Document | Content |
 |---|---|---|
 | `config/config.json` | `ConfigDoc` | `schema_version`, `config` |
-| `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers and the `analysis_version` of their automatic ones; an older version is analysed again when the operator asks), `playlists` (entries with `played_by`: the players that played each one, and `repeat` / `stop_after` when set), `ids`. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
+| `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers and the `analysis_version` of their automatic ones; an older version is analysed again when the operator asks), `playlists` (entries with `played_by`: the players that played each one, and `repeat` / `stop_after` when set), `ids`. Tracks also hold the tags the library shows: `date`, `genre`, `album_artist`, `composer`, `comment` and `tags_read`, all optional on load (a library from an earlier version loads with them empty and the tag-only pass fills them in). The editor's tag sheet is never persisted: it reads the file each time. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
 | `data/carts.json` | `CartsDoc` | `schema_version`, `pages[]` (id, name, rows, cols, `carts[]` with id, name, track, kind, looped, exclusive); cart files are tracks of the `playlists.json` library |
 | `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns, history: the entries the player left, oldest first — loaded leniently: an unparsable history is empty), `cartwall` (open, page shown) |
 
@@ -237,6 +237,8 @@ See [Remote control API](remote-api.md).
 | `max_players` | 16 |
 | `max_cover_bytes` | 20 MiB |
 | `max_cover_pixels` | 8000 |
+| `max_tag_chars` | 2000 (range 64 … 100000; longest tag text kept per field, in characters) |
+| `max_tag_values` | 32 (range 1 … 1000; most values kept per tag field) |
 | `max_state_file_bytes` | 50 MiB |
 | `max_playlist_file_bytes` | 10 MiB |
 | `backup_count` | 3 |

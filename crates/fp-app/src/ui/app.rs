@@ -2,7 +2,7 @@
 //! every frame, sends commands, and keeps only view state.
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -29,10 +29,12 @@ use super::notice;
 use super::player;
 use super::playlist_files::{self, FileOutcome};
 use super::settings::{self, SettingsDeps, SettingsState};
+use super::tag_editor;
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium};
 use crate::i18n::I18n;
 use crate::services::{MediaCache, ServiceRequest};
+use crate::tags::{TagJob, TagOutcome, TagWorker};
 
 const MIN_COLUMN_WIDTH: f32 = 380.0;
 const TOP_BAR_HEIGHT: f32 = 34.0;
@@ -101,6 +103,11 @@ pub(crate) struct ViewState {
     pub marker_drag: Option<(PlayerId, fp_model::MarkerKind, TrackId)>,
     /// A cart to open in Settings → Cartwall (`Edit…` on a cart).
     pub edit_cart: Option<(fp_model::CartPageId, usize)>,
+    /// A track whose tags the operator asked to edit (feedback 2 spec O23);
+    /// the next frame opens the editor.
+    pub edit_tags: Option<TrackId>,
+    /// The tag editor, while it is open.
+    pub(crate) tag_editor: Option<tag_editor::TagEditor>,
     notice: Option<(String, f64)>,
 }
 
@@ -200,12 +207,32 @@ pub struct AppUi {
     /// Set once a restart is confirmed; `main` reads it after the window
     /// closes.
     restart: Arc<AtomicBool>,
+    /// Reads and writes tags off the interface thread; started by the first
+    /// use of the tag editor.
+    tag_worker: Option<TagWorker>,
+    /// The image the operator chose for a cover (or `None`: the dialog was
+    /// closed), from the dialog's helper thread.
+    cover_picks_tx: Sender<CoverPick>,
+    cover_picks_rx: Receiver<CoverPick>,
+    /// Counts the openings of the tag editor.
+    tag_sessions: u64,
+    /// Stands in for the native image dialog in tests.
+    #[cfg(feature = "test-hooks")]
+    cover_picker: Option<CoverPicker>,
 }
+
+/// The answer of the image dialog: the track, the editor session that opened
+/// it, and the chosen file (`None` if the dialog was closed).
+type CoverPick = (TrackId, u64, Option<PathBuf>);
+
+/// Chooses an image file; runs on the dialog's helper thread.
+type CoverPicker = Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>;
 
 impl AppUi {
     pub fn new(ctl: Arc<dyn Controller>, i18n: I18n, media: MediaCache) -> Self {
         let (picks_tx, picks_rx) = crossbeam_channel::unbounded();
         let (files_tx, files_rx) = crossbeam_channel::unbounded();
+        let (cover_picks_tx, cover_picks_rx) = crossbeam_channel::unbounded();
         let started = ctl.model().config.clone();
         Self {
             ctl,
@@ -238,6 +265,12 @@ impl AppUi {
             remote_status: None,
             started,
             restart: Arc::new(AtomicBool::new(false)),
+            tag_worker: None,
+            cover_picks_tx,
+            cover_picks_rx,
+            tag_sessions: 0,
+            #[cfg(feature = "test-hooks")]
+            cover_picker: None,
         }
     }
 
@@ -316,6 +349,16 @@ impl AppUi {
         self.settings = SettingsState::default();
         self.settings_shown = false;
         self.covers.clear();
+    }
+
+    /// Makes the **Change…** button of the tag editor take its image from
+    /// `picker` instead of opening the native dialog. Used by tests.
+    #[cfg(feature = "test-hooks")]
+    pub fn set_cover_picker(
+        &mut self,
+        picker: impl Fn() -> Option<PathBuf> + Send + Sync + 'static,
+    ) {
+        self.cover_picker = Some(Arc::new(picker));
     }
 
     /// Makes the next frame panic. Used to test panic isolation.
@@ -422,6 +465,11 @@ impl AppUi {
                     paths: picked.paths,
                 });
             }
+        }
+        self.tag_outcomes(&state, time);
+        self.cover_picks(&ctx, &state);
+        if let Some(track) = self.view.edit_tags.take() {
+            self.open_tag_editor(&ctx, &state, track);
         }
         self.keyboard(&ctx, &state);
         let pending = fp_model::restart_pending(&self.started, &state.config);
@@ -557,6 +605,66 @@ impl AppUi {
                 take_drops = true;
             }
         }
+        // O23: the tag editor, under the dialogs that must stay above it.
+        if !self.view.settings_open
+            && let Some(editor) = &mut self.view.tag_editor
+        {
+            if state.library.get(editor.track).is_none() {
+                self.view.tag_editor = None;
+            } else {
+                let block = super::view::tag_edit_availability(&state, editor.track);
+                match tag_editor::show(&ctx, &scene, editor, block) {
+                    tag_editor::EditorAnswer::Cancel => self.view.tag_editor = None,
+                    tag_editor::EditorAnswer::Save => {
+                        let job = state.library.get(editor.track).and_then(|track| {
+                            editor.save_job(
+                                &track.path,
+                                &state.config.limits,
+                                state.config.analysis.cover_thumb_px,
+                            )
+                        });
+                        // The rule is judged again now: the track may have
+                        // gone on air since the modal last drew.
+                        let started = block.is_none()
+                            && job
+                                .is_some_and(|job| start_tag_job(&mut self.tag_worker, &ctx, job));
+                        if started {
+                            editor.saving = true;
+                            editor.error = None;
+                        } else if block.is_none() {
+                            tracing::error!("the tag worker is not running");
+                            editor.error = Some(scene.i18n.tr("tags-error-worker"));
+                        }
+                    }
+                    tag_editor::EditorAnswer::ChangeCover => {
+                        if !editor.cover_busy {
+                            #[cfg(feature = "test-hooks")]
+                            let hook = self.cover_picker.clone();
+                            #[cfg(not(feature = "test-hooks"))]
+                            let hook: Option<CoverPicker> = None;
+                            let filter = scene.i18n.tr("dialog-image-files");
+                            let folder = state
+                                .library
+                                .get(editor.track)
+                                .and_then(|t| t.path.parent().map(Path::to_path_buf));
+                            let pick = move || match hook {
+                                Some(picker) => picker(),
+                                None => pick_cover_image(filter, folder),
+                            };
+                            if start_cover_dialog(
+                                &self.cover_picks_tx,
+                                &ctx,
+                                (editor.track, editor.session),
+                                pick,
+                            ) {
+                                editor.picking_cover();
+                            }
+                        }
+                    }
+                    tag_editor::EditorAnswer::Open => {}
+                }
+            }
+        }
         // O4: Restart now asks the close guard first when audio is on air.
         if std::mem::take(&mut self.view.restart_requested) {
             if fp_model::on_air(&state).is_empty() {
@@ -594,7 +702,8 @@ impl AppUi {
                 }
             }
         }
-        if take_drops {
+        // Files dropped under the tag editor are discarded, like shortcuts.
+        if take_drops && self.view.tag_editor.is_none() {
             self.file_drops(&ctx, &state);
         }
         let busy = state
@@ -605,6 +714,170 @@ impl AppUi {
             ctx.request_repaint();
         } else {
             ctx.request_repaint_after(IDLE_REPAINT);
+        }
+    }
+
+    /// O23: opens the tag editor on `track` and asks the tag worker for its
+    /// sheet.
+    fn open_tag_editor(&mut self, ctx: &egui::Context, state: &AppState, track: TrackId) {
+        let Some(t) = state.library.get(track) else {
+            return;
+        };
+        let job = TagJob::ReadSheet {
+            track,
+            path: t.path.clone(),
+            limits: state.config.limits.clone(),
+            thumb_px: state.config.analysis.cover_thumb_px,
+        };
+        self.tag_sessions += 1;
+        if start_tag_job(&mut self.tag_worker, ctx, job) {
+            self.view.tag_editor = Some(tag_editor::TagEditor::reading(track, self.tag_sessions));
+        } else {
+            tracing::error!("the tag worker is not running");
+            self.view.notice = Some((
+                self.i18n.tr("tags-error-worker"),
+                ctx.input(|i| i.time) + NOTICE_SECS,
+            ));
+        }
+    }
+
+    /// O23: takes what the tag worker finished: a sheet for the editor, or
+    /// the result of a save.
+    fn tag_outcomes(&mut self, state: &AppState, time: f64) {
+        let outcomes: Vec<TagOutcome> = self
+            .tag_worker
+            .as_ref()
+            .map(|w| w.results().try_iter().collect())
+            .unwrap_or_default();
+        for outcome in outcomes {
+            match outcome {
+                TagOutcome::SheetRead { track, sheet } => {
+                    if let Some(editor) = &mut self.view.tag_editor
+                        && editor.track == track
+                    {
+                        editor.arrived(sheet.map(|s| *s));
+                    }
+                }
+                TagOutcome::SheetWritten { track, result } => {
+                    self.tag_saved(state, time, track, result);
+                }
+                TagOutcome::CoverLoaded {
+                    track,
+                    session,
+                    result,
+                } => {
+                    if let Some(editor) = &mut self.view.tag_editor
+                        && (editor.track, editor.session) == (track, session)
+                    {
+                        editor.cover_loaded(result);
+                    }
+                }
+                // The services thread's reads and the summary writes have
+                // their own consumers.
+                TagOutcome::Read { .. } | TagOutcome::Written { .. } => {}
+            }
+        }
+    }
+
+    /// O23: hands the image the operator chose to the tag worker, which
+    /// checks and decodes it; a closed dialog frees the Change button.
+    fn cover_picks(&mut self, ctx: &egui::Context, state: &AppState) {
+        let picks: Vec<CoverPick> = self.cover_picks_rx.try_iter().collect();
+        for (track, session, path) in picks {
+            let Some(editor) = self
+                .view
+                .tag_editor
+                .as_mut()
+                .filter(|e| (e.track, e.session) == (track, session))
+            else {
+                continue;
+            };
+            let Some(path) = path else {
+                editor.cover_not_picked();
+                continue;
+            };
+            let job = TagJob::LoadCover {
+                track,
+                session,
+                path,
+                limits: state.config.limits.clone(),
+                thumb_px: state.config.analysis.cover_thumb_px,
+            };
+            if !start_tag_job(&mut self.tag_worker, ctx, job) {
+                tracing::error!("the tag worker is not running");
+                editor.cover_not_picked();
+            }
+        }
+    }
+
+    fn tag_saved(
+        &mut self,
+        state: &AppState,
+        time: f64,
+        track: TrackId,
+        result: Result<Box<crate::tags::SheetSaved>, fp_analysis::tags::TagWriteError>,
+    ) {
+        let title = state
+            .library
+            .get(track)
+            .map(|t| t.title.clone())
+            .unwrap_or_default();
+        let editor = self.view.tag_editor.as_mut().filter(|e| e.track == track);
+        match result {
+            Ok(saved) => {
+                let unstored = editor
+                    .as_ref()
+                    .map(|e| e.unstored(saved.sheet.as_ref(), &state.config.limits))
+                    .unwrap_or_default();
+                let cover_unstored = editor
+                    .as_ref()
+                    .is_some_and(|e| e.cover_unstored(saved.sheet.as_ref()));
+                // The cover shown elsewhere (the player, the remote API)
+                // follows the file.
+                if let Some(sheet) = &saved.sheet
+                    && editor.as_ref().is_some_and(|e| e.cover_changed())
+                {
+                    self.media
+                        .set_cover(track, sheet.cover().and_then(|c| c.thumb_shared()));
+                }
+                let text = if unstored.is_empty() && !cover_unstored {
+                    self.i18n.tr_args("tags-saved", &[("title", title.into())])
+                } else {
+                    let mut names: Vec<String> = unstored
+                        .iter()
+                        .map(|f| self.i18n.tr(&tag_editor::field_key(*f)))
+                        .collect();
+                    if cover_unstored {
+                        names.push(self.i18n.tr("tags-cover"));
+                    }
+                    self.i18n.tr_args(
+                        "tags-saved-partly",
+                        &[("title", title.into()), ("fields", names.join(", ").into())],
+                    )
+                };
+                self.ctl.send(Command::ApplyTags {
+                    track,
+                    tags: Box::new(saved.tags),
+                });
+                self.view.notice = Some((text, time + NOTICE_SECS));
+                if editor.is_some() {
+                    self.view.tag_editor = None;
+                }
+            }
+            Err(e) => {
+                let text = self.i18n.tr_args(
+                    "tags-save-failed",
+                    &[
+                        ("title", title.into()),
+                        ("error", tag_error_text(&self.i18n, &e).into()),
+                    ],
+                );
+                if let Some(editor) = editor {
+                    editor.saving = false;
+                    editor.error = Some(text.clone());
+                }
+                self.view.notice = Some((text, time + NOTICE_SECS));
+            }
         }
     }
 
@@ -651,6 +924,10 @@ impl AppUi {
             return;
         }
         if ctx.text_edit_focused() {
+            return;
+        }
+        // The tag editor is modal: no shortcut, not even Delete, acts under it.
+        if self.view.tag_editor.is_some() {
             return;
         }
         // Configured shortcuts whose key the toolkit knows.
@@ -930,6 +1207,64 @@ fn default_platform() -> String {
         "windows" => "Windows".to_owned(),
         "macos" => "macOS".to_owned(),
         other => other.to_owned(),
+    }
+}
+
+/// Queues `job` on the tag worker, starting the worker first if it is not
+/// running yet. `false` if there is no worker to give it to.
+fn start_tag_job(worker: &mut Option<TagWorker>, ctx: &egui::Context, job: TagJob) -> bool {
+    if worker.is_none() {
+        let repaint = ctx.clone();
+        *worker = TagWorker::spawn(Box::new(move || repaint.request_repaint())).ok();
+    }
+    worker.as_ref().is_some_and(|w| w.submit(job))
+}
+
+/// Opens the image dialog on a helper thread and sends the chosen path (or
+/// `None`) back. `false` if the thread could not start.
+fn start_cover_dialog(
+    tx: &Sender<CoverPick>,
+    ctx: &egui::Context,
+    (track, session): (TrackId, u64),
+    pick: impl FnOnce() -> Option<PathBuf> + Send + 'static,
+) -> bool {
+    let (tx, ctx) = (tx.clone(), ctx.clone());
+    let spawned = std::thread::Builder::new()
+        .name("fp-cover-dialog".to_owned())
+        .spawn(move || {
+            let _ = tx.send((track, session, pick()));
+            ctx.request_repaint();
+        });
+    if let Err(e) = &spawned {
+        tracing::error!(error = %e, "could not open the image dialog");
+    }
+    spawned.is_ok()
+}
+
+/// The native dialog for a cover image (JPEG or PNG), starting in `folder`.
+fn pick_cover_image(filter: String, folder: Option<PathBuf>) -> Option<PathBuf> {
+    let mut dialog = rfd::AsyncFileDialog::new().add_filter(filter, &["jpg", "jpeg", "png"]);
+    if let Some(folder) = folder {
+        dialog = dialog.set_directory(folder);
+    }
+    pollster::block_on(dialog.pick_file()).map(|file| file.path().to_path_buf())
+}
+
+/// Why a save failed, in the interface language.
+fn tag_error_text(i18n: &I18n, error: &fp_analysis::tags::TagWriteError) -> String {
+    use fp_analysis::tags::TagWriteError as E;
+    match error {
+        E::Unsupported => i18n.tr("tags-error-unsupported"),
+        E::NotFound => i18n.tr("tags-error-not-found"),
+        E::Denied => i18n.tr("tags-error-denied"),
+        E::InvalidDate => i18n.tr("tags-error-invalid-date"),
+        E::InvalidField(field) => i18n.tr_args(
+            "tags-error-invalid-field",
+            &[("field", i18n.tr(&tag_editor::field_key(*field)).into())],
+        ),
+        E::CoverNotStorable => i18n.tr("tags-error-cover-not-stored"),
+        E::InvalidCover(_) => i18n.tr("tags-error-cover"),
+        E::Other(detail) => i18n.tr_args("tags-error-other", &[("detail", detail.clone().into())]),
     }
 }
 

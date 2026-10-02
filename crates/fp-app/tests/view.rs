@@ -11,10 +11,13 @@ use std::path::PathBuf;
 
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
-    PlayerStatus, RowStatus, cue_follow_target, cue_window_view, fader_from_gain, file_icon,
-    file_problem, gain_from_fader, player_view, playlist_times, row_status, shown_entry, volume_db,
+    PlayerStatus, RowStatus, TipField, cue_follow_target, cue_window_view, fader_from_gain,
+    file_icon, file_problem, gain_from_fader, player_view, playlist_times, row_status, shown_entry,
+    tag_edit_availability, track_tooltip, volume_db,
 };
-use fp_model::{AppState, Command, Config, EntryId, FileState, MarkerKind, PlayerId, apply};
+use fp_model::{
+    AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayerId, Track, apply,
+};
 
 fn state(tracks: usize) -> (AppState, Vec<EntryId>, PlayerId) {
     let mut state = AppState::new(Config::default(), "Main");
@@ -497,4 +500,115 @@ fn an_unknown_player_or_entry_gives_none() {
     apply(&mut s, Command::ToggleCue(p)).unwrap();
     assert_eq!(cue_follow_target(&s, PlayerId(99), e[1]), None);
     assert_eq!(cue_follow_target(&s, p, EntryId(9999)), None);
+}
+
+fn tip_track() -> Track {
+    let mut t = Track::new(fp_model::TrackId(1), PathBuf::from("/m/Artist - Song.flac"));
+    t.title = "Song".into();
+    t.artist = "Artist".into();
+    t.album = "Album".into();
+    t.date = Some("1999-03-07".into());
+    t.genre = "Pop".into();
+    t.duration_secs = 200.0;
+    t.format = Some(AudioFormat {
+        sample_rate: 44_100,
+        bits: Some(16),
+        channels: 2,
+    });
+    t
+}
+
+#[test]
+fn the_tooltip_lists_what_the_track_has_in_order() {
+    let tip = track_tooltip(&tip_track());
+    let fields: Vec<TipField> = tip.iter().map(|(f, _)| *f).collect();
+    assert_eq!(
+        fields,
+        [
+            TipField::Title,
+            TipField::Artist,
+            TipField::Album,
+            TipField::Date,
+            TipField::Genre,
+            TipField::Duration,
+            TipField::Format,
+            TipField::Path
+        ]
+    );
+    let value = |f| tip.iter().find(|(g, _)| *g == f).unwrap().1.clone();
+    assert_eq!(value(TipField::Date), "1999-03-07");
+    assert_eq!(value(TipField::Duration), "03:20");
+    assert_eq!(value(TipField::Format), "FLAC · 44.1 kHz · 16 bit");
+    assert_eq!(value(TipField::Path), "/m/Artist - Song.flac");
+}
+
+#[test]
+fn a_missing_field_is_left_out() {
+    let mut t = tip_track();
+    t.album.clear();
+    t.date = None;
+    t.genre.clear();
+    t.duration_secs = 0.0;
+    t.format = None;
+    let fields: Vec<TipField> = track_tooltip(&t).iter().map(|(f, _)| *f).collect();
+    // The file extension still names the codec, so the format line stays.
+    assert_eq!(
+        fields,
+        [
+            TipField::Title,
+            TipField::Artist,
+            TipField::Format,
+            TipField::Path
+        ]
+    );
+}
+
+#[test]
+fn the_format_line_leaves_out_what_is_unknown() {
+    let mut t = tip_track();
+    t.format = Some(AudioFormat {
+        sample_rate: 48_000,
+        bits: None,
+        channels: 2,
+    });
+    let line = track_tooltip(&t)
+        .into_iter()
+        .find(|(f, _)| *f == TipField::Format)
+        .unwrap()
+        .1;
+    assert_eq!(
+        line, "FLAC · 48 kHz",
+        "lossy: no bit depth; whole kHz without a decimal"
+    );
+    t.path = PathBuf::from("/m/no extension");
+    t.format = None;
+    assert!(
+        track_tooltip(&t)
+            .iter()
+            .all(|(f, _)| *f != TipField::Format)
+    );
+}
+
+#[test]
+fn tag_edit_availability_combines_the_rule_and_the_extension() {
+    let (mut s, entries, p) = state(2);
+    for t in s.library.iter_mut() {
+        t.analyzed = true;
+        t.tags_read = true;
+    }
+    let track = |s: &AppState, e: EntryId| s.playlists.entry(e).unwrap().track;
+    let t0 = track(&s, entries[0]);
+    assert_eq!(tag_edit_availability(&s, t0), None, "a flac at rest");
+    s.library.get_mut(t0).unwrap().path = PathBuf::from("/m/a.dsf");
+    assert_eq!(
+        tag_edit_availability(&s, t0),
+        Some(fp_model::TagEditBlock::UnsupportedFormat)
+    );
+    s.library.get_mut(t0).unwrap().path = PathBuf::from("/m/a.flac");
+    apply(&mut s, Command::SetNext(p, entries[0])).unwrap();
+    apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(
+        tag_edit_availability(&s, t0),
+        Some(fp_model::TagEditBlock::OnAir)
+    );
 }

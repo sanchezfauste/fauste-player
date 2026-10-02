@@ -81,6 +81,8 @@ pub(crate) fn track_table(
     let mut clicked: Option<EntryId> = None;
     // O17: the entry a running CUE moves to after a primary click.
     let mut cue_follow: Option<EntryId> = None;
+    // O23: the track whose tags the operator asked to edit.
+    let mut edit_tags: Option<fp_model::TrackId> = None;
     let mut dragged: Option<EntryId> = None;
     let mut builder = TableBuilder::new(ui).id_salt(("tracks", player.0));
     if reset {
@@ -342,6 +344,9 @@ pub(crate) fn track_table(
                     clicked = Some(entry.id);
                     cue_follow = view::cue_follow_target(scene.state, player, entry.id);
                 }
+                response.clone().on_hover_ui(|ui| {
+                    track_tip(ui, scene, track);
+                });
                 if response.double_clicked() && status != RowStatus::Current {
                     scene.ctl.send(Command::SetNext(player, entry.id));
                 }
@@ -367,7 +372,9 @@ pub(crate) fn track_table(
                 response.context_menu(|ui| {
                     menu_open = true;
                     clicked = Some(entry.id);
-                    context_menu(ui, scene, player, playlist, entry.id, i, &track.title);
+                    if context_menu(ui, scene, player, playlist, entry.id, i, track).is_some() {
+                        edit_tags = Some(track.id);
+                    }
                 });
             });
         });
@@ -378,6 +385,9 @@ pub(crate) fn track_table(
     }
     if let Some(entry) = cue_follow {
         scene.ctl.send(Command::CueEntry(player, entry));
+    }
+    if edit_tags.is_some() {
+        view_state.edit_tags = edit_tags;
     }
     // Drop target for entries dragged inside the app.
     let pointer_in = ui
@@ -487,13 +497,14 @@ fn context_menu(
     playlist: PlaylistId,
     entry: EntryId,
     index: usize,
-    title: &str,
-) {
+    track: &fp_model::Track,
+) -> Option<fp_model::TrackId> {
     let t = scene.i18n;
+    let mut edit_tags = None;
     ui.set_min_width(240.0);
     ui.add(
         egui::Label::new(
-            RichText::new(title)
+            RichText::new(&track.title)
                 .font(font(11.0))
                 .color(theme::NEUTRAL_400),
         )
@@ -558,6 +569,16 @@ fn context_menu(
         scene.ctl.send(Command::CueEntry(player, entry));
         ui.close();
     }
+    let block = view::tag_edit_availability(scene.state, track.id);
+    let edit = labelled(ui, icon::PENCIL_SIMPLE, "menu-edit-tags", block.is_none());
+    let edit = match block {
+        Some(reason) => edit.on_disabled_hover_text(t.tr(super::tag_editor::block_key(reason))),
+        None => edit,
+    };
+    if edit.clicked() {
+        edit_tags = Some(track.id);
+        ui.close();
+    }
     ui.separator();
     if labelled(ui, icon::PLUS, "menu-add-below", true).clicked() {
         scene.pick_files(playlist, index + 1);
@@ -618,6 +639,7 @@ fn context_menu(
         scene.ctl.send(Command::RemoveEntry(entry));
         ui.close();
     }
+    edit_tags
 }
 
 /// A small flag icon with `label` as its accessible name and tooltip.
@@ -630,4 +652,37 @@ fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
         paint(ui.painter(), rect);
     }
     response.on_hover_text(label);
+}
+
+/// The row tooltip: label and value per line, at most as wide as the window.
+fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
+    let t = scene.i18n;
+    ui.set_max_width(420.0);
+    egui::Grid::new("track-tip")
+        .num_columns(2)
+        .spacing(vec2(10.0, 3.0))
+        .show(ui, |ui| {
+            for (field, value) in view::track_tooltip(track) {
+                let key = match field {
+                    view::TipField::Title => "tip-field-title",
+                    view::TipField::Artist => "tip-field-artist",
+                    view::TipField::Album => "tip-field-album",
+                    view::TipField::Date => "tip-field-date",
+                    view::TipField::Genre => "tip-field-genre",
+                    view::TipField::Duration => "tip-field-duration",
+                    view::TipField::Format => "tip-field-format",
+                    view::TipField::Path => "tip-field-path",
+                };
+                ui.label(
+                    RichText::new(t.tr(key))
+                        .font(font(11.0))
+                        .color(theme::NEUTRAL_400),
+                );
+                ui.add(
+                    egui::Label::new(RichText::new(value).font(font(12.0)).color(theme::TEXT))
+                        .wrap(),
+                );
+                ui.end_row();
+            }
+        });
 }

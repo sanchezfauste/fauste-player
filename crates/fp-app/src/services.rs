@@ -17,6 +17,8 @@ use fp_engine::conductor::ConductorHandle;
 use fp_model::{AnalysisSettings, AppState, Command, FileState, PlayerId, TrackId, Transport};
 use fp_store::Store;
 
+use crate::tags::{TagJob, TagOutcome, TagWorker};
+
 /// How often the services thread wakes up when running on its own.
 const PERIOD: Duration = Duration::from_millis(50);
 
@@ -120,6 +122,33 @@ impl MediaCache {
         self.version.load(Ordering::Acquire)
     }
 
+    /// Replaces the cover thumbnail of `track` (`None` removes it), keeping
+    /// its peaks: the tag editor changed the cover in the file. A track with
+    /// no entry has nothing to refresh: the analysis that fills the cache
+    /// when it is shown next reads the new cover from the file (the analysis
+    /// cache is keyed on the file's size and modification time, so the
+    /// edited file is analysed again).
+    pub fn set_cover(&self, track: TrackId, cover: Option<Arc<[u8]>>) {
+        let mut items = self.items.write().unwrap_or_else(PoisonError::into_inner);
+        let Some(current) = items.get(&track) else {
+            return;
+        };
+        let updated = TrackMedia {
+            peaks: current.peaks.clone(),
+            peak_bucket_secs: current.peak_bucket_secs,
+            cover_png: cover,
+        };
+        items.insert(track, Arc::new(updated));
+        self.version.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Puts `media` in the cache as the services thread does after an
+    /// analysis (tests).
+    #[cfg(feature = "test-hooks")]
+    pub fn seed(&self, track: TrackId, media: TrackMedia) {
+        self.insert(track, media);
+    }
+
     fn insert(&self, track: TrackId, media: TrackMedia) {
         let mut items = self.items.write().unwrap_or_else(PoisonError::into_inner);
         items.insert(track, Arc::new(media));
@@ -190,6 +219,15 @@ pub struct Services {
     last_recheck: Option<Instant>,
     /// Looks for them; `None` if its thread could not start.
     probe: Option<Probe>,
+    /// Reads the tags of tracks that wait for the tag-only pass (feedback 2
+    /// spec O23); `None` if its thread could not start.
+    tag_worker: Option<TagWorker>,
+    /// Tracks sent to it and not answered yet.
+    tags_in_flight: HashSet<TrackId>,
+    /// Tracks whose tag read was answered and sent to the model, but whose
+    /// snapshot does not show it yet. Without it a snapshot taken before the
+    /// command lands still says "unread" and the track is read twice.
+    tags_answered: HashSet<TrackId>,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -226,6 +264,13 @@ impl Services {
             settings: None,
             last_recheck: None,
             probe: Probe::spawn(),
+            tag_worker: TagWorker::spawn(Box::new(|| {}))
+                .map_err(|e| {
+                    tracing::error!(error = %e, "cannot start the tag worker; tags stay unread");
+                })
+                .ok(),
+            tags_in_flight: HashSet::new(),
+            tags_answered: HashSet::new(),
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -259,6 +304,13 @@ impl Services {
     #[cfg(feature = "test-hooks")]
     pub fn fail_routes(&mut self, count: u32) {
         self.fail_routes = count;
+    }
+
+    /// Runs the tag pass on `state` alone. Used to test the pass against a
+    /// snapshot older than its own answers.
+    #[cfg(feature = "test-hooks")]
+    pub fn tag_pass_on(&mut self, state: &AppState) {
+        self.tag_pass(state);
     }
 
     /// One round of work. Never blocks on the analyzer. A panic inside is
@@ -303,6 +355,7 @@ impl Services {
         self.follow_settings(state);
         self.recheck_missing(state, now);
         self.submit_new(state);
+        self.tag_pass(state);
         let wanted = Self::wanted(state);
         let results: Vec<AnalysisResult> = self.analyzer.results().try_iter().collect();
         for result in results {
@@ -446,6 +499,54 @@ impl Services {
             .collect()
     }
 
+    /// The tag-only pass: tracks analysed but not read since (new ones, ones
+    /// of an older library, re-analysed ones) get their tags read on the tag
+    /// worker. A read that cannot parse the file still answers, with the
+    /// file-name title and empty fields, so a track is never asked twice for
+    /// the same analysis.
+    fn tag_pass(&mut self, state: &AppState) {
+        let Some(worker) = &self.tag_worker else {
+            return;
+        };
+        self.tags_in_flight
+            .retain(|id| state.library.get(*id).is_some());
+        // An answer stays here until a snapshot shows it (`tags_read`), so a
+        // later reset (a new analysis) brings the read back.
+        self.tags_answered
+            .retain(|id| state.library.get(*id).is_some_and(|t| !t.tags_read));
+        for track in state.library.iter() {
+            if track.needs_tag_read()
+                && !self.tags_answered.contains(&track.id)
+                && self.tags_in_flight.insert(track.id)
+            {
+                let job = TagJob::Read {
+                    track: track.id,
+                    path: track.path.clone(),
+                    limits: state.config.limits.clone(),
+                };
+                if !worker.submit(job) {
+                    tracing::error!("the tag worker stopped; tags stay unread");
+                    self.tag_worker = None;
+                    return;
+                }
+            }
+        }
+        let outcomes: Vec<TagOutcome> = worker.results().try_iter().collect();
+        for outcome in outcomes {
+            if let TagOutcome::Read { track, tags } = outcome {
+                // Answered either way. If the command is not queued the track
+                // still needs its read, so the next round asks again.
+                self.tags_in_flight.remove(&track);
+                if self.conductor.send(Command::ApplyTags {
+                    track,
+                    tags: Box::new(tags),
+                }) {
+                    self.tags_answered.insert(track);
+                }
+            }
+        }
+    }
+
     fn submit_new(&mut self, state: &AppState) {
         let known: HashSet<TrackId> = state.library.iter().map(|t| t.id).collect();
         for gone in self.in_flight.difference(&known) {
@@ -529,6 +630,8 @@ impl Services {
                         },
                     );
                 }
+                // It resets `tags_read`: the tags are read again.
+                self.tags_answered.remove(&result.track);
                 Command::ApplyAnalysis {
                     track: result.track,
                     analysis: Box::new(analysis.analysis),

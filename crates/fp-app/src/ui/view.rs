@@ -387,3 +387,78 @@ pub fn column_px(
     }
     [number, title, rest - title, duration]
 }
+
+/// A line of the row tooltip (feedback 2 spec O23).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TipField {
+    Title,
+    Artist,
+    Album,
+    Date,
+    Genre,
+    Duration,
+    Format,
+    Path,
+}
+
+/// What the row tooltip shows for `track`: the fields it has, in this
+/// order. Album artist, composer and comment are left to the editor.
+pub fn track_tooltip(track: &Track) -> Vec<(TipField, String)> {
+    let mut lines = Vec::new();
+    let mut text = |field, value: &str| {
+        if !value.is_empty() {
+            lines.push((field, value.to_owned()));
+        }
+    };
+    text(TipField::Title, &track.title);
+    text(TipField::Artist, &track.artist);
+    text(TipField::Album, &track.album);
+    text(TipField::Date, track.date.as_deref().unwrap_or_default());
+    text(TipField::Genre, &track.genre);
+    if track.duration_secs.is_finite() && track.duration_secs > 0.0 {
+        text(
+            TipField::Duration,
+            &super::format::clock(track.duration_secs),
+        );
+    }
+    text(TipField::Format, &format_line(track));
+    text(TipField::Path, &track.path.display().to_string());
+    lines
+}
+
+/// `FLAC · 44.1 kHz · 16 bit`: the codec is the file extension, in capitals.
+fn format_line(track: &Track) -> String {
+    let mut parts = Vec::new();
+    if let Some(ext) = track.path.extension().and_then(|e| e.to_str()) {
+        parts.push(ext.to_uppercase());
+    }
+    if let Some(f) = track.format {
+        if f.sample_rate > 0 {
+            let khz = f64::from(f.sample_rate) / 1000.0;
+            let text = if khz.fract().abs() < 1e-9 {
+                format!("{khz:.0}")
+            } else {
+                format!("{khz:.1}")
+            };
+            parts.push(format!("{text} kHz"));
+        }
+        if let Some(bits) = f.bits {
+            parts.push(format!("{bits} bit"));
+        }
+    }
+    parts.join(" · ")
+}
+
+/// Why the tags of `track` cannot be edited now, if they cannot: the model's
+/// rule plus the format's writability, judged from the path's extension (no
+/// I/O on the interface thread).
+pub fn tag_edit_availability(
+    state: &AppState,
+    track: fp_model::TrackId,
+) -> Option<fp_model::TagEditBlock> {
+    let writable = state
+        .library
+        .get(track)
+        .is_some_and(|t| fp_analysis::tags::can_write_tags(&t.path));
+    fp_model::tag_edit_block(state, track, writable)
+}

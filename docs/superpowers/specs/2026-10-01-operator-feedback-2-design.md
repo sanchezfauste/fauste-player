@@ -279,20 +279,83 @@
 ## 8. Plan 7 — Track tags
 
 - **Model.**
-  - `Track` gains `year`, `genre`, `album_artist`, `composer` and `comment`,
-    read by `fp-analysis` with lofty.
+  - `Track` gains `date`, `genre`, `album_artist`, `composer` and `comment`,
+    read by `fp-analysis` with lofty. The `date` is the recording date, kept
+    as the standard ISO 8601 text (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`, with an
+    optional time; ID3v2.4 `TDRC`, Vorbis `DATE`, MP4 `©day`, APE `Year`).
+    It is never reduced to a year, so a full date in a file survives an edit
+    of another field.
   - Loading is lenient. Tracks from earlier versions show the new fields empty
     until their tags are read again. That is a tag-only pass, not a full
     re-analysis.
 - **Tooltip.** Hovering a table row, after the usual tooltip delay, shows the
-  title, artist, album, year, genre, duration, format (codec, sample rate, bit
-  depth) and path. A missing field is left out.
+  title, artist, album, date (as stored), genre, duration, format (codec,
+  sample rate, bit depth) and path. A missing field is left out.
 - **Editor.**
-  - The row context menu gains "Edit tags…". It opens a modal with title,
-    artist, album, album artist, year, genre, composer and comment, for one
-    track.
-  - **Save** writes the tags into the file on a helper thread, never on the UI
-    thread:
+  - The row context menu gains "Edit tags…". It opens a modal for one track.
+    The modal reads the file's tags on a helper thread when it opens and shows
+    "Reading tags…" until they arrive. The library keeps only the summary
+    fields above; the full set is read from the file each time.
+  - **Fields.** The editor covers the fields that common players and tag
+    editors show, not every key a format can hold. Each field uses its
+    format's own standard mapping (ID3v2 frames, Vorbis comments, MP4 atoms,
+    APE items, RIFF INFO) through lofty's `ItemKey`; nothing is renamed or
+    invented.
+    - Always shown, in this order: Title, Artist, Album, Album artist, Date,
+      Track number (number and total), Disc number (number and total), Genre,
+      Composer, Comment.
+    - Shown when the file has them, and offered by an **Add field** menu
+      otherwise: Subtitle, Grouping, BPM, Initial key, Mood, ISRC, Publisher,
+      Catalog number, Copyright, Original artist, Original album, Original
+      release date, Lyricist, Conductor, Remixer, Arranger, Performer,
+      Language, Encoded by, Lyrics, Sort title, Sort artist, Sort album,
+      Sort album artist, Sort composer, Artist website.
+    - **Add field** lists only the fields the file's tag format can store. A
+      field the format cannot store is never shown as editable.
+    - Clearing a field removes it from the file. An added field left empty is
+      not written.
+    - A field that holds several values (for example two artists) shows one
+      value per line, and Save writes one value per line through the format's
+      own multi-value mechanism.
+    - Date and Original release date are ISO 8601 (`YYYY`, `YYYY-MM` or
+      `YYYY-MM-DD`, optional time). Track and disc number and total, and BPM,
+      are whole numbers. An invalid value blocks **Save** and its field is
+      marked.
+    - Everything else in the file (other standard keys, custom keys such as
+      ID3v2 `TXXX` or private Vorbis keys, pictures other than the front
+      cover, binary frames) is not shown and is kept as it is: values,
+      pictures and frames the editor cannot map are not changed. The modal
+      says how many such tags are kept.
+    - Two caveats, stated here so they are not a surprise:
+      - the format re-encodes the items it maps when the file is saved, so
+        the bytes of a kept item can differ (for example the text encoding or
+        the order of frames) while its value does not;
+      - the count of kept tags covers what the tag library can enumerate. When
+        the format also holds frames it cannot count, the modal says "and
+        more".
+  - **Cover.**
+    - The modal shows the front cover as a thumbnail. If the file has no front
+      cover it shows the first picture, the rule the library's cover
+      thumbnail follows. The image is decoded on a helper thread under
+      `limits.max_cover_bytes` and `limits.max_cover_pixels`, with the same
+      safe decoding as the library's thumbnails.
+    - **Change…** opens a file dialog, on a helper thread, for a JPEG or PNG
+      image of at most `limits.max_cover_bytes` that decodes. If it does not,
+      the editor says why and nothing changes. **Remove** clears the front
+      cover.
+    - The change is staged in the draft and written by **Save**, through the
+      same safe write as the fields. **Cancel** discards it. The new cover is
+      written as a picture of type front cover with its MIME type.
+    - Other pictures (back cover, artist and so on) are never touched. A
+      picture that is only shown because the file has no front cover is kept
+      as it is: **Remove** is off for it, and **Change…** adds a front cover.
+    - A format that cannot store pictures (RIFF INFO, AIFF text, ID3v1) shows
+      the cover area disabled, with a note.
+    - After a successful save, the cover the application shows elsewhere (the
+      player's cover and the remote API's cover of a track the player holds)
+      shows the new cover, or none after a removal.
+  - **Save** writes the tags and the cover into the file on a helper thread,
+    never on the UI thread:
     1. copy the file to a temporary file in the same folder;
     2. write the tags to the copy;
     3. fsync it;
@@ -305,6 +368,15 @@
     - it is on a playing cart;
     - its format has no writable tags in lofty;
     - the file is missing.
+- **As built.**
+  - Model: `TrackTags` is the summary the library keeps (read, tooltip, `ApplyTags`); `Track` gains `date: Option<String>` (ISO 8601 text, validated by `parse_tag_date`), `genre`, `album_artist`, `composer`, `comment` and `tags_read`; `fp_model::tag_edit_block(state, track, format_writable)` gives the reason an edit is refused (`FileUnavailable`, `UnsupportedFormat`, `TagsNotRead`, `OnAir`, `Cued`, `OnCart`) and judges the file, not the entry. `limits.max_tag_chars` (2000, 64..=100000) cuts tag text and `limits.max_tag_values` (32, 1..=1000) the values of a field.
+  - Tag-only pass: every `ApplyAnalysis` clears `tags_read`; `Services::tag_pass` sends analysed, readable tracks with unread tags to the `fp-tags` worker; no analysis version bump.
+  - Tooltip: `view::track_tooltip` (title, artist, album, date, genre, duration, format, path); the codec is the upper-cased extension.
+  - Editor: `TagSheet` and `TagField` (36 fields, 10 always shown) with the pure rules `invalid_fields`, `changed_fields`, `unstored_fields`; `fp_analysis::tags::{read_tag_sheet, write_tag_sheet}` read and write them through lofty's `ItemKey`, the write using the same synced-copy helper as `write_tags` and touching only the fields that changed. A multi-value field is one item per value; a number and its total are two items (ID3v2 merges them into `TRCK`/`TPOS`); a total needs a number. Items the sheet does not own, including URL frames and comments with a description, are kept (the shared writer re-adds ID3v2 locators as text because lofty 0.25.4 drops them on save). `other_kept` counts the other items and pictures; frames lofty keeps without mapping them are not counted, and the modal says so. After a save the library takes the re-read summary; on failure the modal stays open and the notice area gives the reason.
+  - Cut fields: a field whose text exceeded `limits.max_tag_chars` or that had more than `limits.max_tag_values` values when read is marked (`TagSheet::is_cut`), shown read-only with "Too long to edit here; kept as it is in the file", and never written back: `fp_model::field_problem` reports `FieldProblem::TooLongToEdit` for a change to it, `invalid_fields` includes it, and `write_tag_sheet` refuses the change.
+  - Cover: `CoverArt` in the sheet is the front cover, or the first picture when there is none (`metadata::display_picture`, shared with the library's thumbnail); `cover_changed`, `cover_blocked` and `cover_unstored` are pure. **Change…** takes a JPEG or PNG within `limits.max_cover_bytes` and `limits.max_cover_pixels` through a helper-thread dialog and the tag worker (`load_cover_file`); **Remove** clears the front cover and is off when the file has none (a non-front picture shown is display-only); both are staged in the draft and written by Save through `write_tag_sheet`, which replaces or removes every front-cover picture and never touches other pictures, and refuses the change for a format with no pictures (RIFF INFO, AIFF text, ID3v1). An existing cover that cannot be shown (an undecodable image, or GIF, BMP or WebP) is announced with "This cover cannot be shown; it is kept as it is"; Change… and Remove still work on it. After a save the player's cover follows the file (`MediaCache::set_cover`); a track with no cache entry reads the new cover from its next analysis, because the analysis cache is keyed on the file's size and modification time.
+  - Modal: while the editor is open no keyboard shortcut acts and files dropped on the window are discarded. Each editor session has an id, returned with an image choice and its decoded cover, so a stale choice from a closed editor never reaches a later one.
+  - Two lofty 0.25.4 defects are worked around and tested: URL frames are dropped on save unless re-added as text, and `Tag::take_filter` reorders the items it leaves.
 
 ## 9. Plan 8 — Track table
 
@@ -327,7 +399,7 @@
     leniently: unknown columns are dropped, and missing required columns are
     added back.
   - Required columns: Title and Duration. Optional columns: `#`, Artist,
-    Album, Year, Genre, Intro, File name.
+    Album, Date, Genre, Intro, File name.
   - All columns, required or not, can be reordered:
     - by dragging a header in the table;
     - in Settings > Playlists, with a checkbox list and up and down buttons.

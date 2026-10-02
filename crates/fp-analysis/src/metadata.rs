@@ -14,12 +14,40 @@ pub struct Tags {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    /// The recording date, ISO 8601 text as `fp_model::parse_tag_date` accepts.
+    pub date: Option<String>,
+    pub genre: Option<String>,
+    pub album_artist: Option<String>,
+    pub composer: Option<String>,
+    pub comment: Option<String>,
     /// Raw bytes of the front cover (or the first picture).
     pub cover: Option<Vec<u8>>,
 }
 
 fn non_empty(s: Option<std::borrow::Cow<'_, str>>) -> Option<String> {
     s.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+}
+
+/// The recording date of `tag` as ISO 8601 text, if it is a valid one.
+pub(crate) fn tag_date(tag: &lofty::tag::Tag) -> Option<String> {
+    let text = tag.date()?.to_string();
+    match fp_model::parse_tag_date(&text) {
+        Ok(date) => date,
+        Err(_) => {
+            tracing::debug!("ignoring a tag date that is not ISO 8601: {text:?}");
+            None
+        }
+    }
+}
+
+/// The picture the application shows for `tag`: the front cover, else the
+/// first picture. The library's thumbnail and the tag editor share this rule.
+pub(crate) fn display_picture(tag: &lofty::tag::Tag) -> Option<&lofty::picture::Picture> {
+    let pictures = tag.pictures();
+    pictures
+        .iter()
+        .find(|p| p.pic_type() == lofty::picture::PictureType::CoverFront)
+        .or_else(|| pictures.first())
 }
 
 /// Reads tags with lofty. Unreadable or untagged files yield empty `Tags`.
@@ -56,16 +84,22 @@ pub fn read_tags(path: &Path, limits: &Limits) -> Tags {
     let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) else {
         return Tags::default();
     };
-    let pictures = tag.pictures();
-    let cover = pictures
-        .iter()
-        .find(|p| p.pic_type() == lofty::picture::PictureType::CoverFront)
-        .or_else(|| pictures.first())
-        .map(|p| p.data().to_vec());
+    let cover = display_picture(tag).map(|p| p.data().to_vec());
     Tags {
         title: non_empty(tag.title()),
         artist: non_empty(tag.artist()),
         album: non_empty(tag.album()),
+        date: tag_date(tag),
+        genre: non_empty(tag.genre()),
+        album_artist: non_empty(
+            tag.get_string(lofty::tag::ItemKey::AlbumArtist)
+                .map(Into::into),
+        ),
+        composer: non_empty(
+            tag.get_string(lofty::tag::ItemKey::Composer)
+                .map(Into::into),
+        ),
+        comment: non_empty(tag.comment()),
         cover,
     }
 }

@@ -57,6 +57,11 @@ audio engine that the interface can never block.
   configurable grid. Carts overlap by default; they can loop gaplessly or stop
   the others, and a **Stop all** button stops every playing cart. They have
   their own Main and Cue outputs. Pages can be imported and exported.
+- **Tag editor and track tooltip:** hover a track for its tags, format and
+  path; edit the common tag fields (title, artist, album, date, track and
+  disc numbers, genre, BPM, key, lyrics and more) and the front cover (view,
+  change, remove) of MP3, FLAC, MP4, WAV and other files, written safely
+  into the file.
 - **Marker editing on the waveform:** cue in and out, intro, outro and MIX,
   set from a menu or with Alt-drag. An `INTRO` tag can also set the intro.
   A setting makes players ignore cue-in and cue-out and play whole files.

@@ -7,7 +7,7 @@ use crate::config::Config;
 use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{ColumnWidths, PlayMode};
 use crate::shortcuts::{KeyChord, ShortcutAction};
-use crate::track::{AudioFormat, FileState, MarkerKind, TrackAnalysis};
+use crate::track::{AudioFormat, FileState, MarkerKind, TrackAnalysis, TrackTags};
 
 /// A user intent, sent by the UI.
 #[derive(Debug, Clone, PartialEq)]
@@ -60,6 +60,12 @@ pub enum Command {
     ApplyAnalysis {
         track: TrackId,
         analysis: Box<TrackAnalysis>,
+    },
+    /// Feedback 2 spec O23: the file's tags as read after the tag-only pass
+    /// or written by the tag editor (ignored if the track is gone).
+    ApplyTags {
+        track: TrackId,
+        tags: Box<TrackTags>,
     },
     /// Records that a track's file is missing or unreadable (or back to Ok).
     SetFileState {
