@@ -706,9 +706,9 @@ fn flagged_entries_show_their_icons() {
     assert!(
         h.query_all_by_label("Song 1").any(|n| {
             let song = n.rect();
-            repeat.left() > song.left() && (repeat.center().y - song.center().y).abs() < 4.0
+            repeat.right() <= song.left() + 0.5 && (repeat.center().y - song.center().y).abs() < 4.0
         }),
-        "the icon sits in the row of its entry"
+        "the icon sits before the title, in the row of its entry"
     );
 }
 

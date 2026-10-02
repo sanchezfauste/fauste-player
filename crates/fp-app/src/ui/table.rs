@@ -263,25 +263,12 @@ pub(crate) fn track_table(
                 row.col(|ui| {
                     line(ui);
                     ui.add_space(8.0);
-                    // The entry's flags sit at the right of the title, in the
-                    // row's text colour (feedback spec §2.3).
+                    // The entry's repeat and stop icons sit before the title,
+                    // in the row's text colour (feedback 2 spec O9); the
+                    // "analysed by an earlier version" flag stays at the right.
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         ui.add_space(4.0);
-                        if entry.stop_after {
-                            flag(ui, &t.tr("flag-stop-after"), |p, r| {
-                                // Drawn into the flag's own 16x12 box, as before (paint would
-                                // centre the grid's 18x13 size instead).
-                                if let Some(d) = glyphs::drawn(TransportAction::StopAfter) {
-                                    p.extend((d.draw)(r, text));
-                                }
-                            });
-                        }
-                        if entry.repeat {
-                            flag(ui, &t.tr("flag-repeat"), |p, r| {
-                                widgets::glyph(p, r, icon::REPEAT, 13.0, text, false);
-                            });
-                        }
                         // Shown tracks are brought up to date anyway, so
                         // the flag only stays on the ones waiting.
                         if crate::services::outdated(track) {
@@ -291,6 +278,21 @@ pub(crate) fn track_table(
                             });
                         }
                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                            ui.spacing_mut().item_spacing.x = 4.0;
+                            if entry.repeat {
+                                flag(ui, &t.tr("flag-repeat"), |p, r| {
+                                    widgets::glyph(p, r, icon::REPEAT, 13.0, text, false);
+                                });
+                            }
+                            if entry.stop_after {
+                                flag(ui, &t.tr("flag-stop-after"), |p, r| {
+                                    // Drawn into the flag's own 16x12 box, as before (paint would
+                                    // centre the grid's 18x13 size instead).
+                                    if let Some(d) = glyphs::drawn(TransportAction::StopAfter) {
+                                        p.extend((d.draw)(r, text));
+                                    }
+                                });
+                            }
                             ui.add(
                                 egui::Label::new(
                                     RichText::new(&track.title)
