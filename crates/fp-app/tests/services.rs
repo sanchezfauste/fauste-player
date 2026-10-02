@@ -394,6 +394,128 @@ fn tracks_analysed_before_formats_existed_wait_for_the_operator() {
     older_tracks_wait_for_the_operator(|t| t.format = None);
 }
 
+/// A cart bus that plays bit-perfect needs the format of its files, so a
+/// cart's track that was analysed before formats were recorded is analysed
+/// again at once, even though the operator said "Later" for the library.
+#[test]
+fn a_cart_track_without_a_format_is_analysed_even_when_the_operator_said_later() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (0..6)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let jingle = wav(dir.path(), "jingle.wav", 1);
+    let mut r = rig_with(&files, dir, Duration::ZERO, |state| {
+        let page = state.cartwall.pages.first().unwrap().id;
+        fp_model::apply(
+            state,
+            Command::AssignCartFile {
+                page,
+                index: 0,
+                path: jingle.clone(),
+            },
+        )
+        .unwrap();
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.duration_secs = 1.0;
+            track.format = None;
+            track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+        }
+    });
+    let cart_track = r.handle.model.load().cartwall.pages[0].carts[0]
+        .track
+        .unwrap();
+    r.run_until("the cart's track has its format", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .get(cart_track)
+            .is_some_and(|t| t.format.is_some())
+    });
+    // "Later" still holds for the playlist tracks that are not on screen.
+    let waiting = r
+        .handle
+        .model
+        .load()
+        .library
+        .iter()
+        .filter(|t| t.id != cart_track && t.format.is_none())
+        .count();
+    assert!(
+        waiting >= 4,
+        "only the cart's track jumps the queue; {waiting} wait"
+    );
+}
+
+/// A cart track that already has its format, or whose file is gone, is not
+/// analysed again, and nothing loops.
+#[test]
+fn a_cart_track_that_has_its_format_is_left_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let jingle = wav(dir.path(), "jingle.wav", 1);
+    let mut r = rig_with(&[], dir, Duration::ZERO, |state| {
+        let page = state.cartwall.pages.first().unwrap().id;
+        fp_model::apply(
+            state,
+            Command::AssignCartFile {
+                page,
+                index: 0,
+                path: jingle.clone(),
+            },
+        )
+        .unwrap();
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.duration_secs = 1.0;
+            // An older version's analysis, but with its format: it waits.
+            track.format = Some(fp_model::AudioFormat {
+                sample_rate: 48_000,
+                bits: Some(16),
+                channels: 1,
+            });
+            track.analysis_version = 0;
+        }
+    });
+    for _ in 0..100 {
+        r.conductor.tick(r.now);
+        r.services.step(r.now);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn a_cart_track_whose_file_is_missing_is_not_analysed() {
+    let dir = tempfile::tempdir().unwrap();
+    let gone = dir.path().join("gone.wav");
+    let mut r = rig_with(&[], dir, Duration::ZERO, |state| {
+        let page = state.cartwall.pages.first().unwrap().id;
+        fp_model::apply(
+            state,
+            Command::AssignCartFile {
+                page,
+                index: 0,
+                path: gone.clone(),
+            },
+        )
+        .unwrap();
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.format = None;
+            track.file_state = FileState::Missing;
+        }
+    });
+    for _ in 0..100 {
+        r.conductor.tick(r.now);
+        r.services.step(r.now);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+}
+
 #[test]
 fn a_result_lost_to_a_panic_is_asked_for_again() {
     let dir = tempfile::tempdir().unwrap();

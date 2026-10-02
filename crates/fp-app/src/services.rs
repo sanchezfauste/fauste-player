@@ -499,6 +499,17 @@ impl Services {
             .collect()
     }
 
+    /// Tracks assigned to a cart.
+    fn cart_tracks(state: &AppState) -> HashSet<TrackId> {
+        state
+            .cartwall
+            .pages
+            .iter()
+            .flat_map(|page| page.carts.iter())
+            .filter_map(|cart| cart.track)
+            .collect()
+    }
+
     /// The tag-only pass: tracks analysed but not read since (new ones, ones
     /// of an older library, re-analysed ones) get their tags read on the tag
     /// worker. A read that cannot parse the file still answers, with the
@@ -572,6 +583,7 @@ impl Services {
         // analysis cache brings them back when a track is shown again.
         let wanted = Self::wanted(state);
         self.media.retain(|id| wanted.contains(&id));
+        let on_carts = Self::cart_tracks(state);
         for track in state.library.iter() {
             let id = track.id;
             if self.in_flight.contains(&id) {
@@ -584,7 +596,11 @@ impl Services {
             }
             // Tracks an earlier version analysed are analysed again, once,
             // when the operator asks; the ones on screen are anyway (`show`).
-            let stale = self.analyse_outdated && outdated(track);
+            // A cart's track without a format is analysed at once: the cart
+            // bus opens bit-perfect only for a known format, and a cart must
+            // not wait for the operator's answer to play without resampling.
+            let stale = outdated(track)
+                && (self.analyse_outdated || (track.format.is_none() && on_carts.contains(&id)));
             let analyse = self.forced.contains(&id)
                 || ((!track.analyzed || stale)
                     && !self.done.contains(&id)
