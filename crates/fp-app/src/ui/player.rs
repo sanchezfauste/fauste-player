@@ -10,7 +10,7 @@ use egui::{
 use egui_phosphor::regular as icon;
 use fp_model::{Command, MarkerKind, PlayMode, PlayerId, PlaylistId, TrackId};
 
-use super::app::{DragEntry, Scene, ViewState};
+use super::app::{DragEntry, FollowScroll, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::table;
@@ -82,6 +82,7 @@ pub(crate) fn column(
             wave(ui, scene, view_state, id, &pv);
             time_row(ui, &pv);
         });
+    scroll_to_next_once(scene, view_state, id);
     follow_current(scene, view_state, id, player.playlist);
     tabs(ui, scene, view_state, id, player.playlist);
     let footer_top = ui.max_rect().bottom() - FOOTER_HEIGHT;
@@ -143,7 +144,34 @@ fn follow_current(scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId, s
     if playlist != shown {
         scene.ctl.send(Command::ShowPlaylist(id, playlist));
     }
-    view_state.follow_scroll.insert(id, entry);
+    view_state.follow_scroll.insert(
+        id,
+        FollowScroll {
+            entry,
+            align: Align::TOP,
+            animated: true,
+        },
+    );
+}
+
+/// O7: the first time a player's column is drawn (the start of the
+/// application, or a player added later), its table scrolls so that the
+/// next entry is in the middle. Never again: after that the operator, and
+/// the following of the current entry, own the scroll position.
+fn scroll_to_next_once(scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId) {
+    if !view_state.startup_scrolled.insert(id) {
+        return;
+    }
+    if let Some(entry) = view::start_scroll_target(scene.state, id) {
+        view_state.follow_scroll.insert(
+            id,
+            FollowScroll {
+                entry,
+                align: Align::Center,
+                animated: false,
+            },
+        );
+    }
 }
 
 fn small_caps(text: &str, color: Color32) -> RichText {

@@ -63,6 +63,17 @@ pub(crate) struct Picked {
     paths: Vec<PathBuf>,
 }
 
+/// A row a player's table scrolls to once its playlist is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FollowScroll {
+    pub entry: EntryId,
+    /// Where the row ends up: the top (following the current entry) or the
+    /// middle (the next entry at start-up).
+    pub align: Align,
+    /// Whether the table glides to the row; start-up jumps.
+    pub animated: bool,
+}
+
 /// Everything the UI remembers between frames.
 #[derive(Default)]
 pub(crate) struct ViewState {
@@ -93,8 +104,11 @@ pub(crate) struct ViewState {
     /// A current entry the table will follow once the operator's grace has
     /// passed (feedback spec F18).
     pub follow_pending: HashMap<PlayerId, EntryId>,
-    /// A row the table scrolls to the top once its playlist is shown.
-    pub follow_scroll: HashMap<PlayerId, EntryId>,
+    /// A row the table scrolls to once its playlist is shown.
+    pub follow_scroll: HashMap<PlayerId, FollowScroll>,
+    /// The players whose table already had its start-up scroll to the next
+    /// entry (feedback 2 spec O7); it happens once, on their first frame.
+    pub startup_scrolled: HashSet<PlayerId>,
     /// The table width and column fractions each player's table was last
     /// laid out with (a change resets egui's column widths).
     pub table_layout: HashMap<PlayerId, (f32, Option<[f32; 4]>)>,

@@ -6,7 +6,7 @@ use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
 use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, Transport};
 
-use super::app::{DragEntry, DropTarget, Scene, ViewState};
+use super::app::{DragEntry, DropTarget, FollowScroll, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::theme;
@@ -89,10 +89,17 @@ pub(crate) fn track_table(
         builder.reset();
     }
     // A current entry being followed: scroll its row to the top once.
-    if let Some(entry) = view_state.follow_scroll.get(&player).copied() {
+    if let Some(FollowScroll {
+        entry,
+        align,
+        animated,
+    }) = view_state.follow_scroll.get(&player).copied()
+    {
         match entries.iter().position(|e| e.id == entry) {
             Some(i) => {
-                builder = builder.scroll_to_row(i, Some(Align::TOP));
+                builder = builder
+                    .scroll_to_row(i, Some(align))
+                    .animate_scrolling(animated);
                 view_state.follow_scroll.remove(&player);
             }
             // Not in this playlist: wait for its tab, unless it is gone.
@@ -107,6 +114,9 @@ pub(crate) fn track_table(
         .striped(false)
         .resizable(true)
         .vscroll(true)
+        // The table's default minimum body is 200 points: in a short window
+        // the footer would cover the last rows, out of reach of the scroll.
+        .min_scrolled_height(0.0)
         .auto_shrink([false, false])
         .sense(Sense::click_and_drag())
         .cell_layout(Layout::left_to_right(Align::Center))

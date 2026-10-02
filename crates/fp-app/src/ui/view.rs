@@ -288,6 +288,16 @@ pub fn row_status(state: &AppState, player: PlayerId, entry: &PlaylistEntry) -> 
     }
 }
 
+/// O7: the entry a player's table scrolls to when the application starts:
+/// its next entry, when that is in the playlist the table shows. A next in
+/// another playlist is left alone (the tab is not switched for it).
+pub fn start_scroll_target(state: &AppState, player: PlayerId) -> Option<EntryId> {
+    let p = state.player(player).ok()?;
+    let next = p.next?;
+    let (playlist, _) = state.playlists.find(next)?;
+    (playlist == p.playlist).then_some(next)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PlaylistTimes {
     pub total: f64,

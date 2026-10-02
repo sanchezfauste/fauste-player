@@ -13,7 +13,7 @@ use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     PlayerStatus, RowStatus, TipField, cue_follow_target, cue_window_view, fader_from_gain,
     file_icon, file_problem, gain_from_fader, player_view, playlist_times, row_status, shown_entry,
-    tag_edit_availability, track_tooltip, volume_db,
+    start_scroll_target, tag_edit_availability, track_tooltip, volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayerId, Track, apply,
@@ -611,4 +611,34 @@ fn tag_edit_availability_combines_the_rule_and_the_extension() {
         tag_edit_availability(&s, t0),
         Some(fp_model::TagEditBlock::OnAir)
     );
+}
+
+#[test]
+fn the_start_scroll_goes_to_the_next_entry_of_the_shown_playlist() {
+    let (mut s, e, p) = state(5);
+    assert_eq!(start_scroll_target(&s, p), Some(e[0]), "the derived next");
+    apply(&mut s, Command::SetNext(p, e[3])).unwrap();
+    assert_eq!(start_scroll_target(&s, p), Some(e[3]));
+}
+
+#[test]
+fn there_is_no_start_scroll_without_a_next_or_for_another_playlist() {
+    let (mut s, _, p) = state(0);
+    assert_eq!(start_scroll_target(&s, p), None, "an empty playlist");
+    apply(
+        &mut s,
+        Command::CreatePlaylistFromPaths {
+            name: "Other".into(),
+            paths: vec![PathBuf::from("/m/other.flac")],
+        },
+    )
+    .unwrap();
+    let other = s.playlists.iter().nth(1).unwrap().entries[0].id;
+    apply(&mut s, Command::SetNext(p, other)).unwrap();
+    assert_eq!(
+        start_scroll_target(&s, p),
+        None,
+        "next is in another playlist"
+    );
+    assert_eq!(start_scroll_target(&s, PlayerId(999_999)), None);
 }
