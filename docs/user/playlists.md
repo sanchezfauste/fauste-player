@@ -52,7 +52,7 @@ Row colours:
 | Reload arrows at the right of the title | Analysed by an earlier version; it still plays with that analysis. **Settings → Analysis → Analyse outdated tracks** brings it up to date (tracks on a player are updated anyway) |
 | Violet | Selected |
 
-Hover a row for a moment to see the track's tags (title, artist, album, date, genre), its duration, its format (codec, sample rate, bit depth) and the path of its file. A field the track does not have is left out.
+**Track tooltip.** Hover a row for a moment to see its title, artist, album, date, genre, length, format (type, sample rate and bit depth when known) and the path of its file. A field the file does not have is left out.
 
 ## Mouse
 
@@ -65,12 +65,78 @@ Hover a row for a moment to see the track's tags (title, artist, album, date, ge
 | Play now | Start this track at once (mixing if the player is on air) |
 | Set as next | Same as double-click. While a CUE is running it moves to the new next |
 | Pre-listen on CUE | Play it on the CUE output (it opens the CUE window) |
+| Edit tags… | Open the tag editor for this track. **Save** writes the changes into the audio file; **Cancel** (or Esc) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |
 | Add tracks below… | Pick files to insert after this track |
 | Duplicate | Insert an unplayed copy below (with its repeat and stop-after marks) |
 | Repeat this track | Tick to play it again and again, without a gap, until you press Play (next), Previous, Stop or Fade stop, or turn on Stop after. Pause keeps it repeating. A repeat icon shows at the right of the title |
 | Stop after this track | Tick to stop the player when this track ends, every time it plays (in any mode). Unlike the player's **Stop after** button, the mark stays with the track and is saved with the playlist. The stop-after icon shows at the right of the title. It wins over Repeat |
 | Move to ▸ | Move it to the end of another playlist |
 | Remove from playlist | Remove it; not possible while it is on air |
+
+## Editing tags
+
+**Edit tags…** opens a window for one track. While it is open no keyboard
+shortcut acts, and files dropped on the application window are ignored.
+
+- **What you see.** The editor reads the file when it opens (it shows
+  "Reading tags…" meanwhile). Always shown: title, artist, album, album
+  artist, date, track number and total, disc number and total, genre,
+  composer and comment. Shown when the file has them: subtitle, grouping,
+  BPM, initial key, mood, ISRC, publisher, catalog number, copyright,
+  original artist, original album, original release date, lyricist,
+  conductor, remixer, arranger, performer, language, encoded by, lyrics, sort
+  title, sort artist, sort album, sort album artist, sort composer and artist
+  website.
+- **Add field.** The menu below the fields lists the other fields. It offers
+  only what the file's tag format can store (a WAV with RIFF INFO, an AIFF or
+  an old ID3v1 tag store fewer fields than ID3v2, FLAC or MP4), and it is
+  dimmed when there is nothing left to add. One of the always-shown fields
+  that the format cannot store is greyed out with a note. Clearing a field
+  removes it from the file; an added field left empty is not written.
+- **Several values.** Fields that can hold several values (artist, album
+  artist, genre, composer, mood and the credits such as lyricist, conductor,
+  remixer, arranger and performer, and language) show one value per line;
+  **Save** writes one value per line in the format's own way. Comment and
+  lyrics are free text over several lines.
+- **Checks.** Date and original release date are ISO 8601 (`2019`,
+  `2019-05` or `2019-05-14`, optionally with a time); track and disc number,
+  their totals and the BPM are whole numbers, and a total needs its number. A
+  field with an invalid value is marked and **Save** stays off. A value the
+  file already had and you did not touch is kept as it is.
+- **Fields that are too long.** A field whose text is longer than
+  `limits.max_tag_chars`, or that holds more values than
+  `limits.max_tag_values`, is shown read-only with the note "Too long to edit
+  here; kept as it is in the file". It is never written back, so a save
+  cannot cut it.
+- **What is kept.** Everything the editor does not show (other standard
+  keys, custom keys, pictures other than the front cover, binary frames)
+  stays in the file with the same values. The editor says how many such tags
+  are kept (and "more" when the format holds frames that cannot be counted).
+  Saving re-encodes the items the editor maps, so a kept item can differ in
+  its bytes (text encoding, frame order) but not in its value.
+- **The cover.** The editor shows the front cover, or the first picture of
+  the file when there is no front cover, as a thumbnail.
+  - **Change…** opens a file dialog for a JPEG or PNG image (at most
+    `limits.max_cover_bytes`, and it must decode). If it does not, the editor
+    says why and nothing changes.
+  - **Remove** clears the front cover. It is off when the file has no front
+    cover: a picture shown only because there is no front cover is display
+    only and is kept as it is.
+  - A cover that is in the file but cannot be shown (an image that does not
+    decode, or a GIF, BMP or WebP) is announced with "This cover cannot be
+    shown; it is kept as it is". **Change…** and **Remove** still work.
+  - The change is written by **Save** and discarded by **Cancel**. Back
+    covers and every other picture are never touched. A format with no place
+    for pictures (WAV with RIFF INFO, AIFF, ID3v1) shows the area disabled.
+    After a save the player's cover shows the new cover.
+- **How a save works.** The file is copied next to the original, the copy
+  gets the tags, is synced and replaces the original, so a failure leaves the
+  file as it was. The reason shows in the editor, which stays open to retry,
+  and in the status bar. Only the fields you changed are written. After a
+  save the table shows the new tags at once, and markers and the waveform are
+  kept. If the file did not keep a field you changed, the status bar names it.
+- **After an update.** Tracks of an earlier version get their date, genre and
+  other tags filled in quietly in the background (no full analysis).
 
 ## Drag and drop
 

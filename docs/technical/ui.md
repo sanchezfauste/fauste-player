@@ -24,6 +24,8 @@
 | `ui/cue_window.rs` | One non-modal `egui::Window` per running CUE, drawn from the pure `view::cue_window_view`; icons through `ui/glyphs.rs` |
 | `ui/widgets.rs`, `ui/glyphs.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, segmented control, tabular times, meter, fader, waveform), drawn icons, the Nocturne theme. `ui/glyphs.rs` maps each transport action (`TransportAction`: play, next, pause, stop, fade stop, stop after, restart, previous, cue) to a Phosphor glyph or a drawn icon; the player, the cartwall and the playlist menu draw their transport icons only through it (`tests/glyphs.rs` guards that), and the CUE window too. The meter's geometry is the pure `meter_layout` (labels, lines, bars, readouts), unit-tested |
 | `ui/about.rs` | The About window: version, copyright, bundled notices, and the third-party notices file (located at start-up, opened on a helper thread) |
+| `ui/tag_editor.rs` | The tag editor modal (O23): `TagEditor` with its phases (`Reading`, `Unreadable`, `Ready` with a `Form` holding the sheet as read and the draft), the field boxes, the cover area and the pure checks it shares with `fp-model` |
+| `tags.rs` | The `fp-tags` worker: `TagJob` in, `TagOutcome` out (see below and [Analysis](analysis.md)) |
 | `ui/controller.rs` | The `Controller` trait between the UI and the rest |
 | `ui/files.rs` | Accepted audio extensions and folder expansion |
 
@@ -90,6 +92,64 @@ the table, an entry drag, an open row menu or a tab click update
 `table_touched`); then it sends `ShowPlaylist` if needed and puts the entry
 in `follow_scroll`, which `track_table` turns into `scroll_to_row(i,
 Align::TOP)` once the playlist is shown. A grace of 0 never follows.
+
+## Track tooltip and tag editor
+
+**Tooltip.** The row shows `view::track_tooltip` through `on_hover_ui`, after
+the usual tooltip delay: title, artist, album, date, genre, duration, format
+and path, leaving out what the track lacks. The format is the upper-cased
+extension, then the sample rate and the bit depth when known.
+
+**Menu item.** *Edit tags…* is enabled by `view::tag_edit_availability`
+(`fp_model::tag_edit_block` plus `fp_analysis::tags::can_write_tags`, judged
+from the extension so nothing touches the disk on the UI thread). A refused
+item is dimmed and its tooltip gives the reason (`block_key`). Choosing it
+sets `ViewState::edit_tags`; `AppUi` hands it to `open_tag_editor` on the next
+frame, which numbers the session, queues `TagJob::ReadSheet` and opens the
+modal in its `Reading` phase.
+
+**One frame.** At the start of each frame `AppUi` drains, before it builds
+the `scene` (which borrows `self`, so all the `&mut self` work comes first):
+
+- `tag_outcomes`: `TagOutcome::SheetRead` goes to the editor of that track;
+  `SheetWritten` goes to `tag_saved`; `CoverLoaded` goes to the editor only if
+  its track and session match;
+- `cover_picks`: the path the image dialog sent back becomes
+  `TagJob::LoadCover`.
+
+**Save.** The modal draws the draft and returns an `EditorAnswer`. On `Save`
+the rule is judged again (`tag_edit_availability` now: the track may have gone
+on air since the modal last drew), the job is built by `TagEditor::save_job`
+and sent with `start_tag_job`; the editor shows "Saving…" and cannot be
+cancelled meanwhile. `tag_saved` takes the result: on success the re-read
+summary goes to the library as `ApplyTags`, the notice names any field the
+file did not keep, the player's cover follows when the cover changed
+(`MediaCache::set_cover`; a track with no cache entry reads the new cover from
+its next analysis) and the modal closes; on failure the modal stays open with
+the reason, which is also in the notice.
+
+**Cover dialog.** `Change…` returns `EditorAnswer::ChangeCover`;
+`start_cover_dialog` runs the file dialog on its own thread and the chosen
+path comes back over a channel with the track and the session. The tag worker
+checks and decodes the image (`TagJob::LoadCover`, `TagOutcome::CoverLoaded`),
+so the UI thread never reads it. `cover_busy` blocks a second choice and the
+save meanwhile.
+
+**Sessions.** Each opening of the editor has an id (`TagEditor::session`). An
+image choice or a `CoverLoaded` answer carries the id of the session that
+asked, and one from a closed editor is dropped, so it never reaches a later
+editor for the same track.
+
+**Modal.** While the editor is open no keyboard shortcut acts (not even
+Delete: `AppUi::keyboard` returns early) and files dropped on the window are
+discarded. Esc or a click on the backdrop cancels, unless a save is running.
+The settings window opened over it is drawn above, and the close guard above
+both.
+
+**Fields.** A field cut when read (`TagSheet::is_cut`) is shown read-only with
+a note and is never copied back from its box into the draft. An existing
+cover with no thumbnail shows "This cover cannot be shown; it is kept as it
+is", and **Remove** is off unless the cover shown is a front cover.
 
 ## Waveform view
 
