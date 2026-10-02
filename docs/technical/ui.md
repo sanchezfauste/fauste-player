@@ -121,8 +121,9 @@ file. It only sends commands: `SeekCue` (a click on the waveform),
 and the close button). The model rules behind it: `seek_cue` leaves `paused`
 alone (a seek on a paused CUE stays paused), `set_cue_paused` only emits on a
 change, `cue_entry` clears `paused` (a moved CUE restarts unpaused from the
-entry's cue-in), and `follow_cue` runs on `SetNext` (a double-click or Load
-as next) to move a running CUE to a playable new next. A single click on a
+entry's cue-in), and `follow_cue` runs on `SetNext` (a double-click on a row)
+to move a running CUE to a playable new next; `CueToNext` only sets the next,
+since the CUE is already on that entry. A single click on a
 table row does the same through `view::cue_follow_target`, which gives the
 clicked entry when the player has a CUE on another entry and the file can be
 played; the table then sends `CueEntry`. A right-click only selects.
