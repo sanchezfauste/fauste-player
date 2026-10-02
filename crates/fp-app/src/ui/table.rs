@@ -8,7 +8,7 @@ use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, Transport};
 
 use super::app::{DragEntry, DropTarget, Scene, ViewState};
 use super::format;
-use super::icons;
+use super::glyphs::{self, TransportAction};
 use super::theme;
 use super::view::{self, RowStatus};
 use super::widgets::{self, font, font_medium};
@@ -266,7 +266,11 @@ pub(crate) fn track_table(
                         ui.add_space(4.0);
                         if entry.stop_after {
                             flag(ui, &t.tr("flag-stop-after"), |p, r| {
-                                p.extend(icons::stop_after(r, text));
+                                // Drawn into the flag's own 16x12 box, as before (paint would
+                                // centre the grid's 18x13 size instead).
+                                if let Some(d) = glyphs::drawn(TransportAction::StopAfter) {
+                                    p.extend((d.draw)(r, text));
+                                }
                             });
                         }
                         if entry.repeat {
@@ -507,7 +511,7 @@ fn context_menu(
     let fading = state.is_some_and(|p| p.fading);
     if labelled(
         ui,
-        egui_phosphor::fill::PLAY,
+        glyphs::glyph_text(TransportAction::Play),
         "menu-play-now",
         !own_current && !fading,
     )
@@ -533,7 +537,14 @@ fn context_menu(
         scene.ctl.send(Command::SetNext(player, entry));
         ui.close();
     }
-    if labelled(ui, icon::HEADPHONES, "menu-cue", true).clicked() {
+    if labelled(
+        ui,
+        glyphs::glyph_text(TransportAction::Cue),
+        "menu-cue",
+        true,
+    )
+    .clicked()
+    {
         scene.ctl.send(Command::CueEntry(player, entry));
         ui.close();
     }

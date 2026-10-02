@@ -192,6 +192,19 @@
   - `Command::StopAllCarts` stops every playing cart the same way the
     individual stop does, with one rule test.
   - `ShortcutAction::StopAllCarts` is added with no default key.
+- **As built.**
+  - `ui/glyphs.rs` has `TransportAction` (the spec's list plus `Next`, the play
+    button while a player is on air). The player, the cartwall menu and the
+    playlist menu draw only through it; `tests/glyphs.rs` guards that.
+  - The "Stop all (n)" button is the first item of a right-to-left row, so
+    it is always whole at the right end; the title, tabs and hint take the
+    rest. The count is `cartwall.playing.len()`, carts on every page. The
+    messages are `cartwall-stop-all` and `cartwall-stop-all-count`.
+  - `ShortcutAction::StopAllCarts` already existed, bound to `Ctrl+Space`
+    by default. The default stays: removing it would change a documented
+    and tested behaviour. It can be rebound or unbound. The shortcut is not
+    dimmed with the button: it also stops the cart CUE, so it works with no
+    cart playing.
 
 ## 6. Plan 5 — Cue markers off
 

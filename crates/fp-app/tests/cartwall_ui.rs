@@ -11,7 +11,7 @@ mod support;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::cart_view::{CartStatus, cart_view, page_on_air};
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::CartTelemetry;
@@ -264,4 +264,164 @@ fn hovering_an_unavailable_cart_says_why() {
             .is_some(),
         "the tooltip gives the reason and the path"
     );
+}
+
+/// Gives cart `index` of the first page a 10 s file called `name`.
+fn give_file(s: &mut AppState, index: usize, name: &str) {
+    let page = s.cartwall.pages[0].id;
+    apply(
+        s,
+        Command::AssignCartFile {
+            page,
+            index,
+            path: PathBuf::from(format!("/carts/{name}.wav")),
+        },
+    )
+    .unwrap();
+    let track = s.cartwall.pages[0].carts[index].track.unwrap();
+    let analysis = TrackAnalysis {
+        duration_secs: 10.0,
+        cue_in: Some(0.5),
+        cue_out: Some(9.5),
+        ..TrackAnalysis::default()
+    };
+    apply(
+        s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+}
+
+/// A state with `n` carts (the first is "Station ID") all playing.
+fn with_playing_carts(n: usize) -> AppState {
+    let mut s = with_cart();
+    for i in 1..n {
+        give_file(&mut s, i, &format!("c{i}"));
+    }
+    for i in 0..n {
+        let id = s.cartwall.pages[0].carts[i].id;
+        apply(&mut s, Command::FireCart(id)).unwrap();
+    }
+    s
+}
+
+fn stop_all_sent(fake: &Fake) -> bool {
+    fake.take_sent().contains(&Command::StopAllCarts)
+}
+
+#[test]
+fn stop_all_is_dimmed_and_has_no_count_while_no_cart_plays() {
+    let (mut h, fake) = harness(with_cart());
+    let button = h.get_by_label("Stop all");
+    assert!(button.accesskit_node().is_disabled());
+    button.click();
+    h.run_steps(2);
+    assert!(!stop_all_sent(&fake), "a dimmed button sends nothing");
+}
+
+#[test]
+fn stop_all_shows_the_number_of_playing_carts() {
+    let (mut h, _fake) = harness(with_playing_carts(2));
+    h.run_steps(2);
+    let button = h.get_by_label("Stop all (2)");
+    assert!(!button.accesskit_node().is_disabled());
+    assert!(
+        h.query_by_label("Stop all").is_none(),
+        "no label without a count"
+    );
+}
+
+#[test]
+fn stop_all_counts_carts_on_every_page() {
+    let mut s = with_playing_carts(2);
+    apply(
+        &mut s,
+        Command::CreateCartPage {
+            name: "Sports".into(),
+        },
+    )
+    .unwrap();
+    let sports = s.cartwall.pages[1].id;
+    apply(&mut s, Command::ShowCartPage(sports)).unwrap();
+    let (h, _fake) = harness(s);
+    assert!(
+        h.query_by_label("Station ID").is_none(),
+        "the carts playing are on the page not shown"
+    );
+    assert!(h.query_by_label("Stop all (2)").is_some());
+}
+
+#[test]
+fn clicking_stop_all_stops_every_cart() {
+    let (mut h, fake) = harness(with_playing_carts(2));
+    h.get_by_label("Stop all (2)").click();
+    h.run_steps(3);
+    assert!(stop_all_sent(&fake));
+    assert!(fake.state.load().cartwall.playing.is_empty());
+}
+
+#[test]
+fn stop_all_dims_again_when_the_last_cart_stops() {
+    let (mut h, fake) = harness(with_playing_carts(1));
+    assert!(h.query_by_label("Stop all (1)").is_some());
+    let id = fake.state.load().cartwall.pages[0].carts[0].id;
+    fp_app::ui::controller::Controller::send(fake.as_ref(), Command::StopCart(id));
+    h.run_steps(3);
+    assert!(h.query_by_label("Stop all (1)").is_none(), "no stale count");
+    assert!(h.get_by_label("Stop all").accesskit_node().is_disabled());
+}
+
+#[test]
+fn stop_all_works_with_the_cartwall_collapsed() {
+    let (mut h, fake) = harness(with_playing_carts(2));
+    h.get_by_label("CARTWALL").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Station ID").is_none(), "collapsed");
+    h.get_by_label("Stop all (2)").click();
+    h.run_steps(3);
+    assert!(stop_all_sent(&fake));
+}
+
+#[test]
+fn a_cart_cue_alone_does_not_enable_stop_all() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::CueCart(id)).unwrap();
+    assert!(s.cartwall.cue.is_some() && s.cartwall.playing.is_empty());
+    let (h, _fake) = harness(s);
+    assert!(h.get_by_label("Stop all").accesskit_node().is_disabled());
+}
+
+#[test]
+fn stop_all_sits_at_the_right_end_of_the_bar() {
+    let (h, _fake) = harness(with_playing_carts(2));
+    let stop = h.get_by_label("Stop all (2)").rect();
+    let title = h.get_by_label("CARTWALL").rect();
+    assert!(stop.left() > title.right(), "after the collapse control");
+    assert!(stop.right() > 1000.0 - 60.0, "at the right end: {stop:?}");
+}
+
+#[test]
+fn stop_all_stays_at_the_right_end_in_a_narrow_window() {
+    let mut s = with_playing_carts(2);
+    for n in 0..8 {
+        apply(
+            &mut s,
+            Command::CreateCartPage {
+                name: format!("A rather long page name {n}"),
+            },
+        )
+        .unwrap();
+    }
+    let (mut h, _fake) = support::harness_sized(s, egui::vec2(420.0, 480.0), |ui| ui);
+    h.run_steps(3);
+    let stop = h.get_by_label("Stop all (2)").rect();
+    assert!(stop.right() <= 420.0 + 0.5, "inside the window: {stop:?}");
+    assert!(stop.right() > 420.0 - 60.0, "at the right end: {stop:?}");
+    assert!(stop.width() > 40.0, "not squeezed: {stop:?}");
+    assert!(h.query_by_label("CARTWALL").is_some(), "title kept");
+    assert!(h.query_by_label("Carts 1").is_some(), "a page tab kept");
 }

@@ -8,6 +8,7 @@ pub mod controller;
 pub mod exit_guard;
 pub mod files;
 pub mod format;
+pub mod glyphs;
 pub mod icons;
 mod notice;
 mod player;

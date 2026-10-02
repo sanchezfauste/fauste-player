@@ -28,7 +28,7 @@ runs, against the code that the earlier plans left. Each plan reaches
 | 1 | Window and lifecycle | O6, O14, O20 | `feat/window-lifecycle` | done |
 | 2 | Settings window | O2, O3, O4, O5 | `feat/settings-window` | done |
 | 3 | Meter scale | O11, O13 | `fix/meter-scale` | done |
-| 4 | Cartwall stop | O18, O19 | `feat/cartwall-stop-all` | outline |
+| 4 | Cartwall stop | O18, O19 | `feat/cartwall-stop-all` | done |
 | 5 | Cue markers off | O15 | `feat/cue-markers-off` | outline |
 | 6 | Player and CUE | O8, O10, O12, O17 | `feat/cue-window` | outline |
 | 7 | Track tags | O23 | `feat/track-tags` | outline |
