@@ -416,7 +416,7 @@ pub(crate) fn track_table(
                                                 }
                                             });
                                         }
-                                        ui.add(
+                                        let title = ui.add(
                                             egui::Label::new(
                                                 RichText::new(&track.title)
                                                     .font(row_font.clone())
@@ -425,6 +425,13 @@ pub(crate) fn track_table(
                                             .selectable(false)
                                             .truncate(),
                                         );
+                                        // The same reason as the icon's, where the eye is
+                                        // (and the `#` column may be hidden).
+                                        if status == RowStatus::Unavailable
+                                            && let Some(tip) = scene.file_tip(entry.track)
+                                        {
+                                            title.on_hover_text(tip);
+                                        }
                                     });
                                 });
                             }

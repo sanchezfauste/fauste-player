@@ -817,6 +817,70 @@ fn hovering_an_unavailable_row_says_why() {
     );
 }
 
+/// The reason shows over the title too, not only over the icon in the first
+/// column (that column can be hidden, and the title is where the eye is).
+#[test]
+fn hovering_the_title_of_an_unavailable_row_says_why() {
+    let mut s = state(1, 3);
+    let playlist = s.playlists.first_id().unwrap();
+    let track = s.playlists.get(playlist).unwrap().entries[1].track;
+    fp_model::apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: fp_model::FileState::Missing,
+        },
+    )
+    .unwrap();
+    let (mut h, _fake) = harness(s);
+    h.get_by_label("Song 2").hover();
+    h.run_steps(40);
+    assert!(
+        h.query_by_label_contains("File not found: /music/Song 2.mp3")
+            .is_some(),
+        "the tooltip gives the reason and the path"
+    );
+}
+
+#[test]
+fn the_title_says_why_even_without_the_number_column() {
+    let mut s = state(1, 3);
+    s.config.ui.table_columns = vec![
+        fp_model::TableColumn::Title,
+        fp_model::TableColumn::Duration,
+    ];
+    let playlist = s.playlists.first_id().unwrap();
+    let track = s.playlists.get(playlist).unwrap().entries[1].track;
+    fp_model::apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: fp_model::FileState::Unreadable,
+        },
+    )
+    .unwrap();
+    let (mut h, _fake) = harness(s);
+    assert!(
+        h.query_by_label_contains(egui_phosphor::regular::WARNING)
+            .is_none()
+    );
+    h.get_by_label("Song 2").hover();
+    h.run_steps(40);
+    assert!(
+        h.query_by_label_contains("Cannot read the file: /music/Song 2.mp3")
+            .is_some()
+    );
+}
+
+#[test]
+fn hovering_the_title_of_a_playable_row_gives_no_file_reason() {
+    let (mut h, _fake) = harness(state(1, 3));
+    h.get_by_label("Song 2").hover();
+    h.run_steps(40);
+    assert!(h.query_by_label_contains("File not found").is_none());
+    assert!(h.query_by_label_contains("Cannot read the file").is_none());
+}
+
 #[test]
 fn a_missing_file_and_an_unreadable_one_have_their_own_icons() {
     use egui_phosphor::regular::{FILE_X, WARNING};
