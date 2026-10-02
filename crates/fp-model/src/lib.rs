@@ -5,6 +5,7 @@
 pub mod availability;
 mod cart_rules;
 pub mod cartwall;
+pub mod columns;
 pub mod command;
 pub mod config;
 mod entry_notice;
@@ -30,6 +31,9 @@ pub use availability::{Availability, availability, command_available};
 pub use cartwall::{
     Cart, CartEdit, CartFileChange, CartKind, CartPage, CartPageImport, Cartwall, CartwallSession,
     PlayingCart,
+};
+pub use columns::{
+    TableColumn, column_rows, default_columns, move_column, normalize_columns, with_column_shown,
 };
 pub use command::{
     CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
