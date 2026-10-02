@@ -557,3 +557,115 @@ fn a_queued_track_loaded_on_a_player_moves_ahead() {
         r.analyses.load(Ordering::SeqCst)
     );
 }
+
+/// Gives `path` a title, a genre and a comment, as a tagging tool would.
+fn tag_file(path: &Path) {
+    use lofty::prelude::*;
+    let mut file = lofty::read_from_path(path).unwrap();
+    let ty = file.primary_tag_type();
+    file.insert_tag(lofty::tag::Tag::new(ty));
+    let tag = file.primary_tag_mut().unwrap();
+    tag.set_title("Tagged".into());
+    tag.set_genre("Jazz".into());
+    tag.set_comment("Take two".into());
+    file.save_to_path(path, lofty::config::WriteOptions::default())
+        .unwrap();
+}
+
+fn only_track(r: &Rig) -> fp_model::Track {
+    r.handle.model.load().library.iter().next().unwrap().clone()
+}
+
+#[test]
+fn the_tag_pass_fills_the_tags_of_analysed_tracks_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 1);
+    tag_file(&a);
+    let mut r = rig(&[a], dir);
+    r.run_until("the tags", |r| only_track(r).tags_read);
+    let t = only_track(&r);
+    assert_eq!(
+        (t.title.as_str(), t.genre.as_str(), t.comment.as_str()),
+        ("Tagged", "Jazz", "Take two")
+    );
+    assert!(t.analyzed);
+    let version = r.handle.telemetry.load().model_version;
+    let until = r.now + Duration::from_millis(500);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(
+        r.handle.telemetry.load().model_version,
+        version,
+        "no further ApplyTags once the tags are read"
+    );
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1, "no second analysis");
+}
+
+#[test]
+fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let junk = dir.path().join("Band - Junk.wav");
+    std::fs::write(&junk, b"this is not audio").unwrap();
+    // Analysed already (so no analysis runs), with its tags still unread.
+    let mut r = rig_with(&[junk], dir, Duration::ZERO, |state| {
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.format = Some(fp_model::AudioFormat {
+                sample_rate: 44_100,
+                bits: Some(16),
+                channels: 2,
+            });
+            track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+        }
+    });
+    r.run_until("the pass to answer", |r| only_track(r).tags_read);
+    let t = only_track(&r);
+    assert_eq!((t.title.as_str(), t.artist.as_str()), ("Junk", "Band"));
+    let version = r.handle.telemetry.load().model_version;
+    let until = r.now + Duration::from_millis(500);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(r.handle.telemetry.load().model_version, version);
+}
+
+#[test]
+fn a_missing_track_is_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = rig_with(
+        &[PathBuf::from("/definitely/missing.flac")],
+        dir,
+        Duration::ZERO,
+        |state| {
+            for track in state.library.iter_mut() {
+                track.analyzed = true;
+                track.file_state = FileState::Missing;
+            }
+        },
+    );
+    let until = r.now + Duration::from_millis(500);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert!(!only_track(&r).tags_read);
+}
+
+#[test]
+fn a_new_analysis_result_brings_the_tag_pass_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 1);
+    tag_file(&a);
+    let mut r = rig(std::slice::from_ref(&a), dir);
+    r.run_until("the tags", |r| only_track(r).tags_read);
+    // The operator edits the genre with another tool, then asks for a new
+    // analysis: the file's new tags must reach the library too.
+    {
+        use lofty::prelude::*;
+        let mut file = lofty::read_from_path(&a).unwrap();
+        file.primary_tag_mut().unwrap().set_genre("Blues".into());
+        file.save_to_path(&a, lofty::config::WriteOptions::default())
+            .unwrap();
+    }
+    let track = only_track(&r).id;
+    r.handle.send(Command::ApplyAnalysis {
+        track,
+        analysis: Box::new(fp_model::TrackAnalysis::default()),
+    });
+    r.run_until("the genre read again", |r| only_track(r).genre == "Blues");
+    assert!(only_track(&r).tags_read);
+}

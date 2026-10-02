@@ -57,6 +57,7 @@ fp-app = { path = ".", features = ["test-hooks"] }
 egui_kittest.workspace = true
 tempfile.workspace = true
 hound.workspace = true
+lofty.workspace = true
 
 [lints]
 workspace = true

@@ -17,6 +17,8 @@ use fp_engine::conductor::ConductorHandle;
 use fp_model::{AnalysisSettings, AppState, Command, FileState, PlayerId, TrackId, Transport};
 use fp_store::Store;
 
+use crate::tags::{TagJob, TagOutcome, TagWorker};
+
 /// How often the services thread wakes up when running on its own.
 const PERIOD: Duration = Duration::from_millis(50);
 
@@ -190,6 +192,11 @@ pub struct Services {
     last_recheck: Option<Instant>,
     /// Looks for them; `None` if its thread could not start.
     probe: Option<Probe>,
+    /// Reads the tags of tracks that wait for the tag-only pass (feedback 2
+    /// spec O23); `None` if its thread could not start.
+    tag_worker: Option<TagWorker>,
+    /// Tracks sent to it and not answered yet.
+    tags_in_flight: HashSet<TrackId>,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -226,6 +233,12 @@ impl Services {
             settings: None,
             last_recheck: None,
             probe: Probe::spawn(),
+            tag_worker: TagWorker::spawn(Box::new(|| {}))
+                .map_err(|e| {
+                    tracing::error!(error = %e, "cannot start the tag worker; tags stay unread");
+                })
+                .ok(),
+            tags_in_flight: HashSet::new(),
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -303,6 +316,7 @@ impl Services {
         self.follow_settings(state);
         self.recheck_missing(state, now);
         self.submit_new(state);
+        self.tag_pass(state);
         let wanted = Self::wanted(state);
         let results: Vec<AnalysisResult> = self.analyzer.results().try_iter().collect();
         for result in results {
@@ -444,6 +458,45 @@ impl Services {
             .filter_map(|e| state.playlists.entry(e))
             .map(|e| e.track)
             .collect()
+    }
+
+    /// The tag-only pass: tracks analysed but not read since (new ones, ones
+    /// of an older library, re-analysed ones) get their tags read on the tag
+    /// worker. A read that cannot parse the file still answers, with the
+    /// file-name title and empty fields, so a track is never asked twice for
+    /// the same analysis.
+    fn tag_pass(&mut self, state: &AppState) {
+        let Some(worker) = &self.tag_worker else {
+            return;
+        };
+        self.tags_in_flight
+            .retain(|id| state.library.get(*id).is_some());
+        for track in state.library.iter() {
+            if track.needs_tag_read() && self.tags_in_flight.insert(track.id) {
+                let job = TagJob::Read {
+                    track: track.id,
+                    path: track.path.clone(),
+                    limits: state.config.limits.clone(),
+                };
+                if !worker.submit(job) {
+                    tracing::error!("the tag worker stopped; tags stay unread");
+                    self.tag_worker = None;
+                    return;
+                }
+            }
+        }
+        let outcomes: Vec<TagOutcome> = worker.results().try_iter().collect();
+        for outcome in outcomes {
+            if let TagOutcome::Read { track, tags } = outcome {
+                // Answered either way. If the command is refused the track
+                // still needs its read, so the next round asks again.
+                self.tags_in_flight.remove(&track);
+                self.conductor.send(Command::ApplyTags {
+                    track,
+                    tags: Box::new(tags),
+                });
+            }
+        }
     }
 
     fn submit_new(&mut self, state: &AppState) {
