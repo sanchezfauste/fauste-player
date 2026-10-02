@@ -1138,3 +1138,84 @@ fn a_picture_that_can_be_shown_has_no_such_note() {
     open_ready(&mut h);
     assert!(h.query_by_label_contains("cannot be shown").is_none());
 }
+
+// ---------------------------------------------------------------------------
+// The editor's session: nothing from an earlier one reaches a later one.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug)]
+struct Dropped(PathBuf);
+
+impl egui::DroppedFile for Dropped {
+    fn path(&self) -> &Path {
+        &self.0
+    }
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
+}
+
+#[test]
+fn a_stale_image_choice_never_reaches_a_later_editor() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav_with_pictures(dir.path(), &[(PictureType::CoverFront, red())]);
+    let image = write_file(dir.path(), "new.png", &blue());
+    let (entered_tx, entered_rx) = crossbeam_channel::bounded::<()>(1);
+    let (release_tx, release_rx) = crossbeam_channel::bounded::<()>(1);
+    let (mut h, _fake) = harness_with_picker(
+        state_at(&path),
+        fp_app::services::MediaCache::default(),
+        move || {
+            let _ = entered_tx.send(());
+            let _ = release_rx.recv();
+            Some(image.clone())
+        },
+    );
+    open_ready(&mut h);
+    click(&mut h, "Change…");
+    entered_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    // Cancel works while the dialog is open; the same track is opened again.
+    click(&mut h, "Cancel");
+    assert!(h.query_by_label("Edit tags").is_none());
+    open_ready(&mut h);
+    assert!(button_enabled(&h, "Change…"), "a new session is not busy");
+    // The first session's answer arrives now.
+    release_tx.send(()).unwrap();
+    for _ in 0..40 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        h.query_by_label("New cover, written when you save.")
+            .is_none(),
+        "the old choice staged nothing"
+    );
+    assert!(h.query_by_label("Front cover.").is_some());
+    assert!(!save_enabled(&h));
+    assert!(button_enabled(&h, "Change…"), "and freed nothing it held");
+}
+
+#[test]
+fn files_dropped_under_the_editor_are_discarded() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = tagged_wav(dir.path(), "a.wav");
+    let file = write_file(dir.path(), "new.wav", b"x");
+    let (mut h, fake) = harness(state_at(&path));
+    open_ready(&mut h);
+    fake.take_sent();
+    h.input_mut()
+        .dropped_files
+        .push(std::sync::Arc::new(Dropped(file)));
+    for _ in 0..40 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        fake.take_sent()
+            .iter()
+            .all(|c| !matches!(c, Command::InsertPaths { .. })),
+        "nothing is inserted under the modal"
+    );
+}

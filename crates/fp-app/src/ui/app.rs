@@ -212,12 +212,18 @@ pub struct AppUi {
     tag_worker: Option<TagWorker>,
     /// The image the operator chose for a cover (or `None`: the dialog was
     /// closed), from the dialog's helper thread.
-    cover_picks_tx: Sender<(TrackId, Option<PathBuf>)>,
-    cover_picks_rx: Receiver<(TrackId, Option<PathBuf>)>,
+    cover_picks_tx: Sender<CoverPick>,
+    cover_picks_rx: Receiver<CoverPick>,
+    /// Counts the openings of the tag editor.
+    tag_sessions: u64,
     /// Stands in for the native image dialog in tests.
     #[cfg(feature = "test-hooks")]
     cover_picker: Option<CoverPicker>,
 }
+
+/// The answer of the image dialog: the track, the editor session that opened
+/// it, and the chosen file (`None` if the dialog was closed).
+type CoverPick = (TrackId, u64, Option<PathBuf>);
 
 /// Chooses an image file; runs on the dialog's helper thread.
 type CoverPicker = Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>;
@@ -262,6 +268,7 @@ impl AppUi {
             tag_worker: None,
             cover_picks_tx,
             cover_picks_rx,
+            tag_sessions: 0,
             #[cfg(feature = "test-hooks")]
             cover_picker: None,
         }
@@ -644,7 +651,12 @@ impl AppUi {
                                 Some(picker) => picker(),
                                 None => pick_cover_image(filter, folder),
                             };
-                            if start_cover_dialog(&self.cover_picks_tx, &ctx, editor.track, pick) {
+                            if start_cover_dialog(
+                                &self.cover_picks_tx,
+                                &ctx,
+                                (editor.track, editor.session),
+                                pick,
+                            ) {
                                 editor.picking_cover();
                             }
                         }
@@ -690,7 +702,8 @@ impl AppUi {
                 }
             }
         }
-        if take_drops {
+        // Files dropped under the tag editor are discarded, like shortcuts.
+        if take_drops && self.view.tag_editor.is_none() {
             self.file_drops(&ctx, &state);
         }
         let busy = state
@@ -716,8 +729,9 @@ impl AppUi {
             limits: state.config.limits.clone(),
             thumb_px: state.config.analysis.cover_thumb_px,
         };
+        self.tag_sessions += 1;
         if start_tag_job(&mut self.tag_worker, ctx, job) {
-            self.view.tag_editor = Some(tag_editor::TagEditor::reading(track));
+            self.view.tag_editor = Some(tag_editor::TagEditor::reading(track, self.tag_sessions));
         } else {
             tracing::error!("the tag worker is not running");
             self.view.notice = Some((
@@ -747,9 +761,13 @@ impl AppUi {
                 TagOutcome::SheetWritten { track, result } => {
                     self.tag_saved(state, time, track, result);
                 }
-                TagOutcome::CoverLoaded { track, result } => {
+                TagOutcome::CoverLoaded {
+                    track,
+                    session,
+                    result,
+                } => {
                     if let Some(editor) = &mut self.view.tag_editor
-                        && editor.track == track
+                        && (editor.track, editor.session) == (track, session)
                     {
                         editor.cover_loaded(result);
                     }
@@ -764,9 +782,14 @@ impl AppUi {
     /// O23: hands the image the operator chose to the tag worker, which
     /// checks and decodes it; a closed dialog frees the Change button.
     fn cover_picks(&mut self, ctx: &egui::Context, state: &AppState) {
-        let picks: Vec<(TrackId, Option<PathBuf>)> = self.cover_picks_rx.try_iter().collect();
-        for (track, path) in picks {
-            let Some(editor) = self.view.tag_editor.as_mut().filter(|e| e.track == track) else {
+        let picks: Vec<CoverPick> = self.cover_picks_rx.try_iter().collect();
+        for (track, session, path) in picks {
+            let Some(editor) = self
+                .view
+                .tag_editor
+                .as_mut()
+                .filter(|e| (e.track, e.session) == (track, session))
+            else {
                 continue;
             };
             let Some(path) = path else {
@@ -775,6 +798,7 @@ impl AppUi {
             };
             let job = TagJob::LoadCover {
                 track,
+                session,
                 path,
                 limits: state.config.limits.clone(),
                 thumb_px: state.config.analysis.cover_thumb_px,
@@ -1199,16 +1223,16 @@ fn start_tag_job(worker: &mut Option<TagWorker>, ctx: &egui::Context, job: TagJo
 /// Opens the image dialog on a helper thread and sends the chosen path (or
 /// `None`) back. `false` if the thread could not start.
 fn start_cover_dialog(
-    tx: &Sender<(TrackId, Option<PathBuf>)>,
+    tx: &Sender<CoverPick>,
     ctx: &egui::Context,
-    track: TrackId,
+    (track, session): (TrackId, u64),
     pick: impl FnOnce() -> Option<PathBuf> + Send + 'static,
 ) -> bool {
     let (tx, ctx) = (tx.clone(), ctx.clone());
     let spawned = std::thread::Builder::new()
         .name("fp-cover-dialog".to_owned())
         .spawn(move || {
-            let _ = tx.send((track, pick()));
+            let _ = tx.send((track, session, pick()));
             ctx.request_repaint();
         });
     if let Err(e) = &spawned {

@@ -44,6 +44,8 @@ pub enum TagJob {
     /// limits.
     LoadCover {
         track: TrackId,
+        /// The editor session that asked, returned with the answer.
+        session: u64,
         path: PathBuf,
         limits: Limits,
         thumb_px: u32,
@@ -90,6 +92,8 @@ pub enum TagOutcome {
     /// The answer to `LoadCover`.
     CoverLoaded {
         track: TrackId,
+        /// The session of the `LoadCover` job.
+        session: u64,
         result: Result<CoverArt, CoverError>,
     },
     Read {
@@ -137,11 +141,13 @@ fn run(job: TagJob) -> TagOutcome {
         }
         TagJob::LoadCover {
             track,
+            session,
             path,
             limits,
             thumb_px,
         } => TagOutcome::CoverLoaded {
             track,
+            session,
             result: load_cover_file(&path, &limits, thumb_px),
         },
         TagJob::Read {
@@ -208,6 +214,10 @@ impl TagJob {
 /// A panic inside a job is a failed job, not a dead worker.
 fn run_contained(job: TagJob) -> TagOutcome {
     let (track, kind) = (job.track(), job.kind());
+    let session = match &job {
+        TagJob::LoadCover { session, .. } => *session,
+        _ => 0,
+    };
     catch_unwind(AssertUnwindSafe(|| run(job))).unwrap_or_else(|_| {
         tracing::error!(?track, "a tag job panicked");
         let failed = || TagWriteError::Other("the tag code failed".to_owned());
@@ -219,6 +229,7 @@ fn run_contained(job: TagJob) -> TagOutcome {
             Kind::ReadSheet => TagOutcome::SheetRead { track, sheet: None },
             Kind::LoadCover => TagOutcome::CoverLoaded {
                 track,
+                session,
                 result: Err(CoverError::Unreadable("the image code failed".to_owned())),
             },
             Kind::Write => TagOutcome::Written {
@@ -549,6 +560,7 @@ mod tests {
     fn load_job(track: u64, path: &std::path::Path, limits: Limits) -> TagJob {
         TagJob::LoadCover {
             track: TrackId(track),
+            session: 7,
             path: path.to_path_buf(),
             limits,
             thumb_px: 16,
@@ -565,9 +577,10 @@ mod tests {
         match next_outcome(&worker) {
             TagOutcome::CoverLoaded {
                 track,
+                session,
                 result: Ok(cover),
             } => {
-                assert_eq!(track, TrackId(5));
+                assert_eq!((track, session), (TrackId(5), 7));
                 assert!(cover.is_front());
                 assert_eq!(cover.data(), png(40).as_slice());
                 assert!(cover.thumb_png().is_some());
@@ -591,6 +604,7 @@ mod tests {
             next_outcome(&worker),
             TagOutcome::CoverLoaded {
                 track: TrackId(5),
+                session: 7,
                 result: Err(CoverError::TooLarge)
             }
         );

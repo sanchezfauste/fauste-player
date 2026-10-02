@@ -114,6 +114,9 @@ enum Phase {
 
 pub(crate) struct TagEditor {
     pub track: TrackId,
+    /// Which opening of the editor this is: an answer to a request of an
+    /// earlier opening (an image choice) is dropped.
+    pub session: u64,
     /// A save is running on the tag worker.
     pub saving: bool,
     /// Why the last save failed, shown in the modal.
@@ -133,9 +136,10 @@ pub(crate) struct TagEditor {
 
 impl TagEditor {
     /// An editor waiting for the sheet of `track`.
-    pub fn reading(track: TrackId) -> Self {
+    pub fn reading(track: TrackId, session: u64) -> Self {
         Self {
             track,
+            session,
             saving: false,
             error: None,
             added: BTreeSet::new(),
@@ -736,7 +740,7 @@ mod tests {
     }
 
     fn ready() -> TagEditor {
-        let mut e = TagEditor::reading(TrackId(1));
+        let mut e = TagEditor::reading(TrackId(1), 1);
         e.arrived(Some(sheet()));
         e
     }
@@ -752,13 +756,13 @@ mod tests {
 
     #[test]
     fn the_sheet_is_taken_once_while_reading() {
-        let mut e = TagEditor::reading(TrackId(1));
+        let mut e = TagEditor::reading(TrackId(1), 1);
         assert!(e.form().is_none());
         e.arrived(Some(sheet()));
         assert!(e.form().is_some());
         e.arrived(None);
         assert!(e.form().is_some(), "a late answer changes nothing");
-        let mut e = TagEditor::reading(TrackId(1));
+        let mut e = TagEditor::reading(TrackId(1), 1);
         e.arrived(None);
         assert!(matches!(e.phase, Phase::Unreadable));
     }
@@ -849,7 +853,7 @@ mod tests {
     fn a_cut_field_is_never_copied_back_into_the_draft() {
         let mut long = sheet();
         long.set_text(TagField::Comment, &"c".repeat(40), false);
-        let mut e = TagEditor::reading(TrackId(1));
+        let mut e = TagEditor::reading(TrackId(1), 1);
         e.arrived(Some(long.clamped(10, 5)));
         let Phase::Ready(form) = &e.phase else {
             panic!("not ready");
@@ -874,7 +878,7 @@ mod tests {
     fn ready_with_cover(cover: Option<CoverArt>) -> TagEditor {
         let mut sheet = sheet().with_cover_support(true);
         sheet.set_cover(cover);
-        let mut e = TagEditor::reading(TrackId(1));
+        let mut e = TagEditor::reading(TrackId(1), 1);
         e.arrived(Some(sheet));
         e
     }
@@ -955,7 +959,7 @@ mod tests {
 
     #[test]
     fn a_cover_change_in_a_format_without_pictures_cannot_be_saved() {
-        let mut e = TagEditor::reading(TrackId(1));
+        let mut e = TagEditor::reading(TrackId(1), 1);
         e.arrived(Some(sheet()));
         e.cover_loaded(Ok(art(2, true)));
         assert!(e.cover_changed());
