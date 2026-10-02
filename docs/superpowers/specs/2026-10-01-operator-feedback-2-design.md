@@ -1,7 +1,7 @@
 # Operator Feedback 2 — Design Spec
 
 - **Date:** 2026-10-01
-- **Status:** Approved. Plans 1 to 8 are built; each plan's section ends with its "As built" notes.
+- **Status:** Approved. Plans 1 to 9 are built; each plan's section ends with its "As built" notes.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§2 threads,
   §3 rules, §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md)
   (M4 display), the [cartwall and settings spec](2026-09-26-phase2-cartwall-settings-design.md)
@@ -460,6 +460,17 @@ The audit of every earlier plan found these items still open.
   1. In Xvfb, play a four-hour file in the app.
   2. Seek to 3:59:00 through the remote API.
   3. Record the result in the ledger.
+- **As built.**
+  - M1: `number()` in `ui/settings/remote.rs` no longer calls `update_while_editing(false)`, so the typed value reaches `RemoteState::numbers` and `remote::flush` applies it when another section opens (clamped to the range, as Enter would); Esc cancels.
+  - M4: `Services::cart_tracks`; a cart's track that is analysed, readable and has no format is analysed at once even after "Later". A cart track with a format but an older analysis version still waits.
+  - M5: `Bridge::analysis` analyses a track the cache has no current entry for, on the request's blocking thread, one at a time (`Bridge::on_demand`), and caches it. A track that is not analysed is still `404 not_analyzed`; an undecodable file is `404 not_found`.
+  - M6: `services::OutdatedCount` counts once per model snapshot; Settings gets it through `SettingsDeps::outdated`.
+  - M7: `ALIGNMENT_LINE_THICKNESS`; `fp_remote::{Timing, spawn_with}` and a `bind_log` test that waits for four published status snapshots instead of sleeping 5.5 s.
+  - M2 of the remote plan (Matroska Opus seek to 0 drops the pre-skip by timestamp, ±24 samples, 0.5 ms) stays a recorded ruling; nothing changed.
+  - Missing-file M2: the reason tooltip is also on the title label of an unavailable row.
+  - Docs: `players.md` says which meters have a peak hold (checked against `MeterBallistics::settings()`).
+  - Thread priority: `fp_decode::priority` over `thread-priority` 3.1.1 (MIT; `cargo deny check` passed with no change to `deny.toml`). Decode workers ask for `AboveNormal` (value 60: nice −5, above normal on Windows; 37 on macOS, since the crate checks the value against SCHED_OTHER's 15..=47 range there), the analysis pool for `Low` (nice 19, lowest). A refusal (the usual answer to a raise for an ordinary Linux user) is one `warn` per run. Persistence stays on the services thread; main spec §2.2 says so now. `threading-and-realtime.md` is aligned.
+  - Long-file check: a four-hour mono 44.1 kHz WAV (1.27 GB) played in the application under Xvfb, silently (fader at 0, no sound server, no usable ALSA device, so the timeline ran on the virtual clock); the seek to 3:59:00 through `POST /players/{id}/seek` was accepted in 10 ms and the position read 14340.99, 14341.99 and 14343.01 s one, two and three seconds later; seeking back to 100 s and to 14399.5 s worked and the player stopped at the end; no errors in the log. The compressed (MP3) variant was not repeated. No defect found.
 
 ## 11. Plan 10 — Audio path
 

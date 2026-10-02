@@ -85,6 +85,9 @@ language the interface was built with.
 `normalize_columns` on every frame, so a list set without `Config::validate`
 still has Title and Duration). Each cell is a `match` on `TableColumn` in
 `track_table`; the text of the plain columns is `view::cell_text`.
+A row whose file is missing or unreadable gives the reason and the path
+(`Scene::file_tip`) on its icon in the `#` column and on its title, so the
+reason shows without the `#` column too.
 
 **Widths.** `ColumnWidths.fractions` is a map from column to fraction (the
 old four-number array is converted when the session loads). `table_layout::column_px`
@@ -297,6 +300,13 @@ shares one grid. The footer spans the window width and holds the restart notice
 and **Restart now** while `fp_model::restart_pending` is not empty. A transient
 notice (`SettingsDeps::notice`) briefly takes the place of the restart text;
 **Restart now** stays.
+
+Settings → Remote keeps what is being typed (`RemoteState::drafts` for text,
+`RemoteState::numbers` for the drag values, which do not wait for Enter), so
+opening another section applies it through `remote::flush`. The count of
+outdated tracks (Settings → Analysis, and the start-up notice) comes from
+`AppUi`'s `services::OutdatedCount`: the library is scanned once per model
+snapshot, not on every frame (`SettingsDeps::outdated`).
 
 ## Panic isolation
 

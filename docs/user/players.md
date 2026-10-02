@@ -39,7 +39,10 @@ playlist tabs, transport, volume and outputs.
   - K-System meters show two sections: the solid bar is the average (RMS)
     level and the dimmer part above it reaches the peak. Their colours are
     the K-System's: green below 0, amber from 0 to +4, red above.
-  - The highest level stays lit for a moment as a line (the peak hold).
+  - Digital peak, K-System and custom meters keep the highest level lit for a
+    moment as a line (the peak hold; its length is **Peak hold** in
+    [Settings → Meters](settings.md#meters), and 0 turns it off). EBU PPM,
+    DIN PPM and VU meters have no hold.
   - The number above is the highest level since the entry started, in
     dBFS, red in the danger zone. It stays after a stop and starts again
     when an entry plays (the next one or the same again), or when you

@@ -91,9 +91,13 @@ The file path is never exposed.
 | `GET /events` | The event stream (see [Events](#events-sse)) |
 
 The cover and peaks come from the interface's media cache, or else from the
-analysis cache on disk. Neither ever starts an analysis. A track not
-analysed yet answers `404 not_analyzed`. An analysed track without a cover,
-or whose cache entry is gone, answers `404 not_found`.
+analysis cache on disk. A track not analysed yet answers `404 not_analyzed`
+and is never analysed for a request. A track the model calls analysed but
+whose cache has no entry of the current analysis version (one an earlier
+version analysed that no player shows) is analysed when asked, once at a
+time, and the result is cached; the model keeps what it had until the
+operator asks for the new analysis. An analysed track without a cover, or
+whose file cannot be decoded, answers `404 not_found`.
 
 ### Operating
 
@@ -349,7 +353,9 @@ configuration (see [Persistence and configuration](persistence.md)):
 - `fp-app::remote::Bridge` implements `RemoteControl` over the
   `ConductorHandle` (snapshot, telemetry, non-blocking `send`), the media
   cache and the analysis cache. Covers and peaks are read in
-  `spawn_blocking`.
+  `spawn_blocking`; a cache miss analyses the file there, one at a time
+  (`Bridge::on_demand`). `spawn_with` and `Timing` shorten the poll and bind
+  retry intervals for tests.
 - Tests: the pure modules directly; the router through
   `tower::ServiceExt::oneshot` with the recording `FakeControl`; the server
   on free loopback ports; SSE through `oneshot` and over TCP; OSC with UDP

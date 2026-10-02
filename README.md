@@ -268,8 +268,9 @@ In short:
 - the conductor applies them through the **pure model reducer** and turns
   the resulting actions into **sample-accurate commands** for one real-time
   mixer per output device;
-- per-player worker threads decode and resample into lock-free rings;
-- analysis and saving run in the background;
+- per-player worker threads decode and resample into lock-free rings, above
+  normal priority but never real time;
+- analysis runs on a low-priority pool, and saving on its own thread;
 - the UI reads immutable snapshots and never waits for the audio path.
 
 Details are in the [technical documentation](docs/technical/README.md).

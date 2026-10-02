@@ -86,7 +86,7 @@ Row colours:
 | Red **P2** (or another number) in the number column | On air on that player |
 | **Green**, with an arrow | This player's next track |
 | Dimmed | Already played on this player |
-| File with a cross / warning icon | File missing / unreadable (it is skipped); hover it for the reason and the path. A missing file is looked for again every 30 s (`tuning.missing_recheck_ms`). |
+| File with a cross / warning icon | File missing / unreadable (it is skipped); hover the icon or the title for the reason and the path. A missing file is looked for again every 30 s (`tuning.missing_recheck_ms`). |
 | Reload arrows at the right of the title | Analysed by an earlier version; it still plays with that analysis. **Settings → Analysis → Analyse outdated tracks** brings it up to date (tracks on a player are updated anyway) |
 | Violet | Selected |
 
