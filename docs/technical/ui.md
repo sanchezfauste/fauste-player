@@ -149,7 +149,8 @@ both.
 **Fields.** A field cut when read (`TagSheet::is_cut`) is shown read-only with
 a note and is never copied back from its box into the draft. An existing
 cover with no thumbnail shows "This cover cannot be shown; it is kept as it
-is", and **Remove** is off unless the cover shown is a front cover.
+is", and **Remove** is off unless the cover shown is a front cover and the
+format can store pictures.
 
 ## Waveform view
 

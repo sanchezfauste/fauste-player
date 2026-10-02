@@ -65,7 +65,7 @@ Row colours:
 | Play now | Start this track at once (mixing if the player is on air) |
 | Set as next | Same as double-click. While a CUE is running it moves to the new next |
 | Pre-listen on CUE | Play it on the CUE output (it opens the CUE window) |
-| Edit tags… | Open the tag editor for this track. **Save** writes the changes into the audio file; **Cancel** (or Esc) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |
+| Edit tags… | Open the tag editor for this track. **Save** writes the changes into the audio file; **Cancel** (or Esc, when no save is running) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |
 | Add tracks below… | Pick files to insert after this track |
 | Duplicate | Insert an unplayed copy below (with its repeat and stop-after marks) |
 | Repeat this track | Tick to play it again and again, without a gap, until you press Play (next), Previous, Stop or Fade stop, or turn on Stop after. Pause keeps it repeating. A repeat icon shows at the right of the title |
