@@ -6,7 +6,10 @@ use fp_analysis::WavePeak;
 use fp_app::services::TrackMedia;
 use fp_app::ui::theme;
 use fp_app::ui::view::MarkerFractions;
-use fp_app::ui::widgets::{WaveColumn, WaveInput, WaveMemo, memo_columns, wave_columns, waveform};
+use fp_app::ui::widgets::{
+    CueEdgeLook, WaveColumn, WaveInput, WaveMemo, cue_edge_look, memo_columns, wave_columns,
+    waveform,
+};
 
 const FULL: f32 = i16::MAX as f32;
 
@@ -317,4 +320,47 @@ mod view {
         let part = wave_columns_in(&peaks, 0.01, 2.0, 3.0, 30);
         assert_eq!(&full[20..50], &part[..]);
     }
+}
+
+#[test]
+fn ignored_cue_marks_are_dimmed_and_do_not_shade_the_file() {
+    assert_eq!(
+        cue_edge_look(false),
+        CueEdgeLook {
+            shade_trimmed: true,
+            line_alpha: 1.0
+        }
+    );
+    let ignored = cue_edge_look(true);
+    assert!(!ignored.shade_trimmed, "the head and tail will play");
+    assert_eq!(ignored.line_alpha, theme::CUE_EDGE_IGNORED_ALPHA);
+    assert!(ignored.line_alpha > 0.0 && ignored.line_alpha < 1.0);
+}
+
+#[test]
+fn a_waveform_with_ignored_marks_draws_without_panicking() {
+    let track = media(0.5);
+    let mut harness = egui_kittest::Harness::new_ui(move |ui| {
+        let input = WaveInput {
+            id: egui::Id::new(("wave", 2)),
+            media: Some(&track),
+            total: Some(1.0),
+            markers: MarkerFractions {
+                cue_in: Some(0.1),
+                cue_out: Some(0.9),
+                ignored: true,
+                ..MarkerFractions::default()
+            },
+            colors: theme::wave_colors("sand"),
+            mix_active: false,
+            mix_label: "MIX",
+            accessible_label: "Waveform",
+            view: None,
+            entry: None,
+            shield: None,
+            seekable: true,
+        };
+        waveform(ui, 40.0, &input);
+    });
+    harness.run();
 }

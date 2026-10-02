@@ -35,6 +35,9 @@ pub struct MarkerFractions {
     pub outro_start: Option<f32>,
     pub segue_start: Option<f32>,
     pub cue_out: Option<f32>,
+    /// Players ignore cue-in and cue-out: the marks are drawn dimmed and
+    /// the head and tail are not shaded.
+    pub ignored: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -131,10 +134,9 @@ pub fn player_view(
     let Some(track) = current else {
         return Some(view);
     };
-    let pos = position
-        .filter(|v| v.is_finite())
-        .unwrap_or_else(|| track.cue_in_secs());
-    let cue_out = track.cue_out_secs();
+    let range = track.play_range(state.config.players.use_cue_markers);
+    let pos = position.filter(|v| v.is_finite()).unwrap_or(range.cue_in);
+    let cue_out = range.cue_out;
     let total = (track.duration_secs > 0.0).then_some(track.duration_secs);
     view.title = Some(track.title.clone());
     view.artist = Some(track.artist.clone()).filter(|a| !a.is_empty());
@@ -166,6 +168,7 @@ pub fn player_view(
             outro_start: fraction(track.outro_start_secs(), total),
             segue_start: fraction(track.segue_start_secs(), total),
             cue_out: fraction(track.markers.cue_out.map(|m| m.secs), total),
+            ignored: !state.config.players.use_cue_markers,
         };
     }
     Some(view)
@@ -232,6 +235,7 @@ pub fn playlist_times(
     playlist: PlaylistId,
     positions: &[(PlayerId, f64)],
 ) -> PlaylistTimes {
+    let use_markers = state.config.players.use_cue_markers;
     let mut total = 0.0;
     let mut elapsed = 0.0;
     for e in state
@@ -243,7 +247,8 @@ pub fn playlist_times(
         let Some(track) = state.library.get(e.track) else {
             continue;
         };
-        let len = track.play_length_secs();
+        let range = track.play_range(use_markers);
+        let len = range.length();
         total += len;
         // This player's own progress only: players are independent.
         let on_air = state
@@ -254,8 +259,8 @@ pub fn playlist_times(
             let pos = positions
                 .iter()
                 .find(|(id, _)| *id == p.id)
-                .map_or(track.cue_in_secs(), |(_, s)| *s);
-            elapsed += (pos - track.cue_in_secs()).clamp(0.0, len);
+                .map_or(range.cue_in, |(_, s)| *s);
+            elapsed += (pos - range.cue_in).clamp(0.0, len);
         } else if e.is_played_by(player) {
             elapsed += len;
         }

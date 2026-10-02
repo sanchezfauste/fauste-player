@@ -121,6 +121,30 @@ mod tests {
     use super::config_from_value;
 
     #[test]
+    fn a_missing_or_bad_use_cue_markers_loads_as_on() {
+        let old: serde_json::Value =
+            serde_json::from_str(r#"{"players":{"fade_ms":2000}}"#).unwrap();
+        let mut warnings = Vec::new();
+        let c = config_from_value(&old, &mut warnings);
+        assert!(c.players.use_cue_markers);
+        assert!(warnings.is_empty(), "{warnings:?}");
+
+        let bad: serde_json::Value =
+            serde_json::from_str(r#"{"players":{"fade_ms":2000,"use_cue_markers":"yes"}}"#)
+                .unwrap();
+        let mut warnings = Vec::new();
+        let c = config_from_value(&bad, &mut warnings);
+        assert!(c.players.use_cue_markers);
+        assert_eq!(c.players.fade_ms, 2000, "the other fields are kept");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+
+        let off: serde_json::Value =
+            serde_json::from_str(r#"{"players":{"use_cue_markers":false}}"#).unwrap();
+        let c = config_from_value(&off, &mut Vec::new());
+        assert!(!c.players.use_cue_markers);
+    }
+
+    #[test]
     fn a_bad_remote_port_keeps_the_other_remote_fields() {
         let user: serde_json::Value =
             serde_json::from_str(r#"{"remote":{"http":{"enabled":true,"port":"x"}}}"#).unwrap();

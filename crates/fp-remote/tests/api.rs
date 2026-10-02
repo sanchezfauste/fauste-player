@@ -244,3 +244,27 @@ fn a_desired_value_planned_twice_from_one_snapshot_stays_set() {
     assert!(applied.playlists.entry(e).unwrap().repeat);
     assert_eq!(applied.cartwall.cue, Some(c));
 }
+
+#[test]
+fn seek_bounds_follow_the_play_range() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    let entry = s.player(p).unwrap().current.unwrap();
+    let track = s.playlists.entry(entry).unwrap().track;
+    fp_model::apply(
+        &mut s,
+        Command::SetMarker {
+            track,
+            kind: fp_model::MarkerKind::CueOut,
+            secs: Some(100.0),
+        },
+    )
+    .unwrap();
+    assert_eq!(plan(&s, O::Seek(p, 150.0)).unwrap_err().status(), 400);
+    s.config.players.use_cue_markers = false;
+    assert_eq!(
+        plan(&s, O::Seek(p, 150.0)).unwrap(),
+        vec![Command::Seek(p, 150.0)]
+    );
+}

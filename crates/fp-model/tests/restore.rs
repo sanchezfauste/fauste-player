@@ -15,6 +15,7 @@ fn altered() -> Config {
     c.players.count = 6;
     c.players.fade_ms = 3000;
     c.players.auto_segue = false;
+    c.players.use_cue_markers = false;
     c.players.history_len = 10;
     c.ui.language = Some("es-ES".into());
     c.ui.wave_color = "sand".into();
@@ -88,4 +89,12 @@ fn the_command_keeps_the_player_count() {
     assert_eq!(s.config.ui.language.as_deref(), Some("es-ES"));
     assert_eq!(s.players.len(), 2);
     assert_eq!(s.config.players.count, 2);
+}
+
+#[test]
+fn players_restores_the_cue_markers_switch() {
+    let mut c = altered();
+    assert!(!c.players.use_cue_markers);
+    restore_defaults(&mut c, SettingsSection::Players);
+    assert!(c.players.use_cue_markers);
 }

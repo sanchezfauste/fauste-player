@@ -1254,6 +1254,17 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
             }
         },
     );
+    let mut cue_markers = config.players.use_cue_markers;
+    row(
+        ui,
+        &t.tr("settings-use-cue-markers"),
+        Some(&t.tr("settings-hint-use-cue-markers")),
+        |ui| {
+            if toggle(ui, &mut cue_markers, &t.tr("settings-use-cue-markers")) {
+                update(scene, |c| c.players.use_cue_markers = cue_markers);
+            }
+        },
+    );
     let mut warning = config.players.end_warning_secs;
     let label = t.tr("settings-end-warning");
     row(ui, &label, Some(&t.tr("settings-hint-end-warning")), |ui| {
@@ -1640,7 +1651,10 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 .entries
                 .iter()
                 .filter_map(|e| scene.state.library.get(e.track))
-                .map(|t| t.play_length_secs())
+                .map(|t| {
+                    t.play_range(scene.state.config.players.use_cue_markers)
+                        .length()
+                })
                 .sum();
             (p.id, p.name.clone(), p.entries.len(), total)
         })

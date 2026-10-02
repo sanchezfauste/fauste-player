@@ -120,6 +120,7 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 | `default_mode` | `Continuous` | `Single`, `Continuous` |
 | `fade_ms` | 1000 | 50 … 10000 |
 | `auto_segue` | true | |
+| `use_cue_markers` | true | Players honour cue-in and cue-out; off plays 0 to the end of the file. No range; a wrong type loads as the default |
 | `end_warning_secs` | 10 | 0 … 120 |
 | `history_len` | 50 | 0 … 1000 (entries Previous can go back; not in Settings) |
 

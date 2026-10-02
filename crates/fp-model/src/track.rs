@@ -179,6 +179,29 @@ pub struct Track {
     pub analysis_version: u32,
 }
 
+/// Where a player plays a track: from `cue_in` to `cue_out`. See
+/// `Track::play_range`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlayRange {
+    pub cue_in: f64,
+    /// The cue-out, or the duration; 0 while the duration is unknown.
+    pub cue_out: f64,
+    end_known: bool,
+}
+
+impl PlayRange {
+    /// The end when it is actually known: a marker, or a duration from
+    /// analysis. `None` while the duration is unknown.
+    pub fn known_end(&self) -> Option<f64> {
+        self.end_known.then_some(self.cue_out)
+    }
+
+    /// Audible length between the start and the end; never negative.
+    pub fn length(&self) -> f64 {
+        (self.cue_out - self.cue_in).max(0.0)
+    }
+}
+
 impl Track {
     /// A not-yet-analysed track; the title is the file stem until tags are read.
     pub fn new(id: TrackId, path: PathBuf) -> Self {
@@ -235,6 +258,25 @@ impl Track {
     /// Audible length between cue-in and cue-out.
     pub fn play_length_secs(&self) -> f64 {
         (self.cue_out_secs() - self.cue_in_secs()).max(0.0)
+    }
+
+    /// The range a player plays (feedback 2 spec O15). With `use_markers`
+    /// it is cue-in to cue-out; without, the whole file. The markers are
+    /// never changed. Carts do not use this: they always follow their markers.
+    pub fn play_range(&self, use_markers: bool) -> PlayRange {
+        if use_markers {
+            PlayRange {
+                cue_in: self.cue_in_secs(),
+                cue_out: self.cue_out_secs(),
+                end_known: self.known_cue_out_secs().is_some(),
+            }
+        } else {
+            PlayRange {
+                cue_in: 0.0,
+                cue_out: self.duration_secs.max(0.0),
+                end_known: self.duration_secs > 0.0,
+            }
+        }
     }
 }
 

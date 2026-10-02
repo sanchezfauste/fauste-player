@@ -98,7 +98,10 @@ red.
   continuous mode. It is dimmed in single mode.
 - The whole file is drawn. The silent start and end that playback skips (before
   cue-in and after cue-out) are drawn darker, with a thin line where playback
-  starts and ends.
+  starts and ends. With **Use cue-in and cue-out** off (Settings → Players)
+  nothing is darker and the two lines are dimmed: playback runs from the start
+  to the end of the file, and the cue-in and cue-out in this guide mean those
+  two ends.
 - Hover to see the time under the pointer. **Click to jump** there (while
   playing or paused; a stopped player always starts at the cue-in).
 - **Press and drag** to look for a spot: a line shows the time, and the jump

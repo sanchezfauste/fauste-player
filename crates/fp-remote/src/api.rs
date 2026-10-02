@@ -170,7 +170,8 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
                 .filter(|_| pl.transport != Transport::Stopped)
                 .and_then(|e| state.track_for_entry(e))
                 .ok_or_else(|| ApiError::Unavailable("nothing is playing".to_owned()))?;
-            let (from, to) = (track.cue_in_secs(), track.cue_out_secs());
+            let range = track.play_range(state.config.players.use_cue_markers);
+            let (from, to) = (range.cue_in, range.cue_out);
             if !(secs >= from && secs <= to) {
                 return Err(ApiError::BadRequest(format!(
                     "secs must be within {from}..={to}"

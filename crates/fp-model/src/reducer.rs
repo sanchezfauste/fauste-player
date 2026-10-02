@@ -608,7 +608,8 @@ pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan
     }
     let current = player.current?;
     let track = state.track_for_entry(current)?;
-    let end = track.known_cue_out_secs().unwrap_or(SOURCE_END);
+    let range = track.play_range(state.config.players.use_cue_markers);
+    let end = range.known_end().unwrap_or(SOURCE_END);
     // R27: an entry marked "stop after" stops the player, in any mode.
     if state.playlists.entry(current).is_some_and(|e| e.stop_after) {
         return Some(TransitionPlan::StopAt { at_secs: end });
@@ -629,7 +630,7 @@ pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan
     // automatic one may be stale against a manual cue-out).
     let segue = track
         .segue_start_secs()
-        .filter(|s| *s >= track.cue_in_secs() && *s < end);
+        .filter(|s| *s >= range.cue_in && *s < end);
     match segue {
         Some(segue) if state.config.players.auto_segue && end.is_finite() => {
             Some(TransitionPlan::StartNextAt {
@@ -704,12 +705,16 @@ fn set_marker(
     kind: MarkerKind,
     secs: Option<f64>,
 ) -> Result<(), ModelError> {
+    let use_markers = state.config.players.use_cue_markers;
     let t = state
         .library
         .get(track)
         .ok_or(ModelError::UnknownTrack(track))?;
+    // Cue points are validated against the kept markers; intro, outro and
+    // MIX against the effective play range.
     let cue_in = t.cue_in_secs();
     let cue_out = t.known_cue_out_secs();
+    let range = t.play_range(use_markers);
     let duration = (t.duration_secs > 0.0).then_some(t.duration_secs);
     let value = match secs {
         None => None,
@@ -733,7 +738,9 @@ fn set_marker(
                 }
                 v
             }
-            _ => v.max(cue_in).min(cue_out.unwrap_or(f64::INFINITY)),
+            _ => v
+                .max(range.cue_in)
+                .min(range.known_end().unwrap_or(f64::INFINITY)),
         }),
     };
     if let Some(t) = state.library.get_mut(track) {

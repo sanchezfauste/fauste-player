@@ -221,6 +221,21 @@
     ignored.
   - Settings > Players gets a toggle "Use cue-in and cue-out", next to
     "Automatic mix at the MIX point".
+- **As built.**
+  - `Track::play_range(use_markers) -> PlayRange` is the effective-range
+    function. There was none before: each consumer read the cue methods
+    directly. Now `request_from_cue_in`, `request_at`, `plan_for`, the session
+    restore, `set_marker` (MIX, intro, outro), `player_view`,
+    `playlist_times`, the remote player DTO and the remote seek bounds use it.
+    Carts keep the marker-based methods.
+  - Cue-in and cue-out edits are validated against the kept markers even
+    while they are ignored; intro, outro and MIX against the effective range.
+  - The player's CUE follows the range. Toggling the setting re-preloads and
+    re-plans; it never restarts a track on air.
+  - The waveform does not shade the head and tail while the marks are
+    ignored; the lines are drawn at `CUE_EDGE_IGNORED_ALPHA` (0.35).
+  - The messages are `settings-use-cue-markers` and
+    `settings-hint-use-cue-markers`.
 
 ## 7. Plan 6 — Player and CUE
 

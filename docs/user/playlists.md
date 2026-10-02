@@ -20,7 +20,7 @@ last playlist, and a playlist with a track on air, cannot be deleted.
 | `#` | Position, zero-padded; an icon replaces it for the current and next tracks |
 | Title | From the tags, or the file name (`Artist - Title.mp3` is split) |
 | Artist | From the tags; "Unknown artist" when there is none |
-| Dur. | Playing length, from cue-in to cue-out |
+| Dur. | Playing length, from cue-in to cue-out (the whole file with **Use cue-in and cue-out** off) |
 
 The columns fill the table and keep their proportions when the window is
 resized; Title gets the most room. Drag the header separators to change the

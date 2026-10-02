@@ -58,6 +58,7 @@ audio engine that the interface can never block.
   their own Main and Cue outputs. Pages can be imported and exported.
 - **Marker editing on the waveform:** cue in and out, intro, outro and MIX,
   set from a menu or with Alt-drag. An `INTRO` tag can also set the intro.
+  A setting makes players ignore cue-in and cue-out and play whole files.
 - **Remappable keyboard shortcuts** for players and carts.
 - **MIDI control surfaces:** every player's transport buttons and volume
   fader can be learned onto a MIDI controller, with soft takeover for

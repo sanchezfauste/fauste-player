@@ -310,3 +310,77 @@ mod columns {
         assert!(tiny.iter().all(|w| *w >= 0.0 && w.is_finite()), "{tiny:?}");
     }
 }
+
+fn mark(s: &mut AppState, track: fp_model::TrackId, kind: MarkerKind, secs: f64) {
+    apply(
+        s,
+        Command::SetMarker {
+            track,
+            kind,
+            secs: Some(secs),
+        },
+    )
+    .unwrap();
+}
+
+fn use_markers(s: &mut AppState, on: bool) {
+    let mut config = s.config.clone();
+    config.players.use_cue_markers = on;
+    apply(s, Command::UpdateConfig(Box::new(config))).unwrap();
+}
+
+#[test]
+fn the_countdown_and_the_outro_follow_the_play_range() {
+    let (mut s, e, p) = state(2);
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    mark(&mut s, t, MarkerKind::CueOut, 190.0);
+    s.library
+        .get_mut(t)
+        .unwrap()
+        .markers
+        .set_auto(MarkerKind::OutroStart, Some(170.0));
+    apply(&mut s, Command::Play(p)).unwrap();
+    let v = player_view(&s, p, Some(185.0), 0.0).unwrap();
+    assert_eq!((v.remaining, v.outro), (5.0, Some(5.0)));
+    use_markers(&mut s, false);
+    let v = player_view(&s, p, Some(185.0), 0.0).unwrap();
+    assert_eq!((v.remaining, v.outro), (15.0, Some(15.0)));
+    assert!(!v.end_warning, "15 s is outside the default 10 s warning");
+}
+
+#[test]
+fn a_waiting_player_shows_the_start_of_the_range_as_elapsed() {
+    let (mut s, e, p) = state(2);
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    mark(&mut s, t, MarkerKind::CueIn, 12.0);
+    assert_eq!(player_view(&s, p, None, 0.0).unwrap().elapsed, 12.0);
+    use_markers(&mut s, false);
+    assert_eq!(player_view(&s, p, None, 0.0).unwrap().elapsed, 0.0);
+}
+
+#[test]
+fn playlist_times_follow_the_play_range() {
+    let (mut s, e, p) = state(3);
+    for entry in &e {
+        let t = s.playlists.entry(*entry).unwrap().track;
+        mark(&mut s, t, MarkerKind::CueIn, 10.0);
+        mark(&mut s, t, MarkerKind::CueOut, 190.0);
+    }
+    let playlist = s.playlists.first_id().unwrap();
+    assert_eq!(playlist_times(&s, p, playlist, &[]).total, 540.0);
+    use_markers(&mut s, false);
+    assert_eq!(playlist_times(&s, p, playlist, &[]).total, 600.0);
+}
+
+#[test]
+fn the_view_says_when_the_cue_marks_are_ignored() {
+    let (mut s, e, p) = state(2);
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    mark(&mut s, t, MarkerKind::CueIn, 12.0);
+    let on = player_view(&s, p, None, 0.0).unwrap().markers;
+    assert!(!on.ignored);
+    use_markers(&mut s, false);
+    let off = player_view(&s, p, None, 0.0).unwrap().markers;
+    assert!(off.ignored);
+    assert_eq!(off.cue_in, on.cue_in, "the marks are kept, only dimmed");
+}

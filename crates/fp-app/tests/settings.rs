@@ -461,3 +461,31 @@ fn a_configured_null_backend_shows_as_no_output() {
     let h = outputs_with_null(Some("null"));
     assert!(h.query_by_value("No output (silent)").is_some());
 }
+
+#[test]
+fn the_cue_markers_toggle_updates_the_config() {
+    let (mut h, fake) = harness(state(1, 1));
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Players").click();
+    h.run_steps(2);
+    assert!(fake.state.load().config.players.use_cue_markers);
+    h.get_by_role_and_label(Role::CheckBox, "Use cue-in and cue-out")
+        .click();
+    h.run_steps(2);
+    let sent: Vec<bool> = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::UpdateConfig(config) => Some(config.players.use_cue_markers),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sent.last(), Some(&false));
+    assert!(!fake.state.load().config.players.use_cue_markers);
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Automatic mix at the MIX point")
+            .is_some(),
+        "next to the automatic mix switch"
+    );
+}
