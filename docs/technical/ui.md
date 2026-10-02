@@ -95,13 +95,16 @@ Align::TOP)` once the playlist is shown. A grace of 0 never follows.
 `ui/wave_view.rs::WaveView { start_secs, span_secs }` is the one mapping
 between seconds and pixels: drawing (`wave_columns_in` reduces only the
 visible stretch, memoised per start, span and width), marker lines and
-handles, the hover time, drag-to-seek and the context menu all use it.
+handles, the hover time, click-to-seek, drag-to-pan and the context menu all use it.
 `ViewState::wave_zoom` keeps a `WaveZoom` per zoomed player (view, the entry
 it belongs to, when it was last moved); no entry means the full view. The
 wheel is read from the frame's `MouseWheel` events while the waveform is
 hovered, and the frame's scroll delta is then cleared so no scroll area
-moves too. A drag to seek lives in egui temp data (`SeekDrag`) keyed on the
-waveform id.
+moves too. A click seeks; a drag never seeks: `widgets::waveform` reports
+its sideways movement (`WaveOutput::pan_dx`) and the player pans a zoomed
+view by it (a drag without zoom does nothing). A held pan drag is flagged in
+egui temp data keyed on the waveform id (`pan_dragging`), so the view does
+not follow the playhead meanwhile.
 
 ## Nothing blocks the UI thread
 

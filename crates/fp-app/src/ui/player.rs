@@ -818,7 +818,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
     let wave_id = egui::Id::new(("waveform", id));
     // While zoomed, follow the playhead once the operator's last move is
     // older than the grace (feedback spec F17), but never under a held drag.
-    let dragging = widgets::seek_dragging(ui, wave_id)
+    let dragging = widgets::pan_dragging(ui, wave_id)
         || view_state.marker_drag.is_some_and(|(p, _, _)| p == id);
     if let (Some(z), Some(total), Some(f)) = (zoom.as_mut(), total, pv.markers.position) {
         let grace = scene.state.config.ui.follow_current_grace_secs;
@@ -863,11 +863,11 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         mix_label: &mix_label,
         accessible_label: &label,
         view,
-        entry: current,
         shield: full_view_button,
         seekable: pv.status != PlayerStatus::Stopped,
     };
-    let (response, seek) = widgets::waveform(ui, WAVE_HEIGHT, &input);
+    let output = widgets::waveform(ui, WAVE_HEIGHT, &input);
+    let (response, seek, pan_dx) = (output.response, output.seek, output.pan_dx);
     if let Some(secs) = seek {
         scene.ctl.send(Command::Seek(id, secs));
     }
@@ -932,6 +932,13 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
                 .input_mut(|i| i.smooth_scroll_delta = egui::Vec2::ZERO);
             ui.ctx().request_repaint();
         }
+    }
+    // Dragging pans a zoomed view; without zoom a drag does nothing (O10).
+    if pan_dx != 0.0
+        && let (Some(z), Some(total)) = (zoom.as_mut(), total)
+    {
+        z.view = z.view.pan(pan_dx, rect.shrink(1.0), total);
+        z.moved_at = scene.time;
     }
     let painter = ui.painter_at(rect);
     let mut badge_right = rect.right() - 4.0;

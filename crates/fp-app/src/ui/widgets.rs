@@ -1074,30 +1074,35 @@ pub struct WaveInput<'a> {
     pub accessible_label: &'a str,
     /// The stretch shown; `None` is the whole track.
     pub view: Option<WaveView>,
-    /// The entry shown: a drag seeks only into the entry it started on.
-    pub entry: Option<fp_model::EntryId>,
     /// An area drawn over the waveform (a button) where no seek starts.
     pub shield: Option<Rect>,
-    /// Clicks and drags seek. A stopped player's next track always starts
-    /// at its cue-in, so its waveform only shows times.
+    /// Clicks seek. A stopped player's next track always starts at its
+    /// cue-in, so its waveform only shows times.
     pub seekable: bool,
 }
 
-/// A drag on the waveform that seeks where it is released (feedback spec
-/// F2); Esc cancels it.
-#[derive(Clone, Copy)]
-struct SeekDrag {
-    cancelled: bool,
-    entry: Option<fp_model::EntryId>,
+/// What the waveform reports for a frame (feedback 2 spec O10).
+pub struct WaveOutput {
+    pub response: Response,
+    /// A click (a press and release within egui's drag threshold): the
+    /// time under it. A drag never seeks.
+    pub seek: Option<f64>,
+    /// How far, in pixels, a primary drag that started on the waveform
+    /// moved sideways this frame (positive: to the right). The caller pans
+    /// a zoomed view by it; Alt-drag (marker editing) and a drag that
+    /// starts under the shield (a button over the waveform) report 0.
+    pub pan_dx: f32,
 }
 
-/// Whether a seek drag is held on the waveform `id`.
-pub fn seek_dragging(ui: &Ui, id: egui::Id) -> bool {
-    ui.data(|d| d.get_temp::<SeekDrag>(id.with("seek-drag")).is_some())
+/// Whether a pan drag is held on the waveform `id` (the zoomed view then
+/// does not follow the playhead).
+pub fn pan_dragging(ui: &Ui, id: egui::Id) -> bool {
+    ui.data(|d| d.get_temp::<bool>(id.with("pan-drag")).is_some())
 }
 
-/// Draws the waveform; returns the seek target (seconds) on click.
-pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, Option<f64>) {
+/// Draws the waveform; reports a click's seek target and a drag's sideways
+/// movement.
+pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
     let size = vec2(ui.available_width(), height);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
     let owned = input.accessible_label.to_owned();
@@ -1123,20 +1128,14 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         0.0,
         theme::NEUTRAL_800,
     );
-    // A drag belongs to the entry it started on, and ends with its button:
-    // one left over from another entry, or whose release this waveform
-    // never saw, is dropped before it could seek.
-    let drag_id = input.id.with("seek-drag");
-    let pointer_down = ui.input(|i| i.pointer.primary_down());
-    if ui
-        .data(|d| d.get_temp::<SeekDrag>(drag_id))
-        .is_some_and(|d| d.entry != input.entry || (!pointer_down && !response.drag_stopped()))
-    {
-        ui.data_mut(|d| d.remove::<SeekDrag>(drag_id));
-    }
+    let pan_id = input.id.with("pan-drag");
     let Some(total) = input.total.filter(|t| *t > 0.0) else {
-        ui.data_mut(|d| d.remove::<SeekDrag>(drag_id));
-        return (response, None);
+        ui.data_mut(|d| d.remove_temp::<bool>(pan_id));
+        return WaveOutput {
+            response,
+            seek: None,
+            pan_dx: 0.0,
+        };
     };
     let view = input.view.unwrap_or_else(|| WaveView::full(total));
     // Markers are fractions of the track; the view maps their times.
@@ -1272,35 +1271,30 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         0.0,
         theme::TEXT,
     );
-    // Alt (Option) is for marker editing: it never seeks.
+    // Alt (Option) is for marker editing: it never seeks or pans.
     let alt = ui.input(|i| i.modifiers.alt);
     let shielded = |p: Pos2| input.shield.is_some_and(|r| r.contains(p));
     let origin = ui.input(|i| i.pointer.press_origin());
-    if input.seekable
-        && response.drag_started_by(egui::PointerButton::Primary)
-        && !alt
-        && !origin.is_some_and(shielded)
-    {
-        ui.data_mut(|d| {
-            d.insert_temp(
-                drag_id,
-                SeekDrag {
-                    cancelled: false,
-                    entry: input.entry,
-                },
-            );
-        });
-    }
-    let mut drag = ui.data(|d| d.get_temp::<SeekDrag>(drag_id));
-    if let Some(d) = drag.as_mut()
-        && ui.input(|i| i.key_pressed(egui::Key::Escape))
-    {
-        d.cancelled = true;
-        ui.data_mut(|data| data.insert_temp(drag_id, *d));
-    }
-    let pointer = ui.ctx().pointer_latest_pos();
+    let panning =
+        response.dragged_by(egui::PointerButton::Primary) && !alt && !origin.is_some_and(shielded);
+    ui.data_mut(|d| {
+        if panning {
+            d.insert_temp(pan_id, true);
+        } else {
+            d.remove_temp::<bool>(pan_id);
+        }
+    });
+    let pan_dx = if panning {
+        response.drag_delta().x
+    } else {
+        0.0
+    };
     let mut seek = None;
-    let preview = |x: f32| {
+    // The hover line shows the time under the pointer; a drag pans instead.
+    if !response.dragged()
+        && let Some(p) = response.hover_pos().filter(|p| !shielded(*p))
+    {
+        let x = p.x;
         painter.rect_filled(
             Rect::from_min_size(pos2(x, inner.top()), vec2(1.0, inner.height())),
             0.0,
@@ -1313,34 +1307,15 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> (Response, O
         let bg = Rect::from_min_size(pos2(lx, inner.top() + 13.0), vec2(tw, 14.0));
         painter.rect_filled(bg, 0.0, theme::NEUTRAL_800);
         painter.galley(pos2(lx + 4.0, bg.top() + 1.0), galley, theme::TEXT);
-    };
-    match drag {
-        Some(d) => {
-            let inside = pointer.filter(|p| rect.contains(*p));
-            if !d.cancelled
-                && let Some(p) = inside
-            {
-                preview(p.x.clamp(inner.left(), inner.right()));
-            }
-            if response.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
-                if !d.cancelled
-                    && let Some(p) = inside
-                {
-                    seek = Some(view.secs_at(p.x, inner));
-                }
-                ui.data_mut(|data| data.remove::<SeekDrag>(drag_id));
-            }
-        }
-        None => {
-            if let Some(p) = response.hover_pos().filter(|p| !shielded(*p)) {
-                preview(p.x);
-                if input.seekable && response.clicked() && !alt {
-                    seek = Some(view.secs_at(p.x, inner));
-                }
-            }
+        if input.seekable && response.clicked() && !alt {
+            seek = Some(view.secs_at(p.x, inner));
         }
     }
-    (response, seek)
+    WaveOutput {
+        response,
+        seek,
+        pan_dx,
+    }
 }
 
 /// How dark the trimmed head and tail of the waveform are drawn.
