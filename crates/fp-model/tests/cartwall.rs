@@ -627,3 +627,17 @@ fn c11_a_cart_edit_with_a_new_file_stops_it_first() {
     assert!(stopped(&out).is_empty());
     assert_eq!(s.cartwall.pages[0].carts[1].track, None);
 }
+
+#[test]
+fn carts_keep_their_markers_when_players_ignore_them() {
+    let mut state = fixture(1);
+    let c = load(&mut state, 0, 10.0);
+    let mut config = state.config.clone();
+    config.players.use_cue_markers = false;
+    apply(&mut state, Command::UpdateConfig(Box::new(config))).unwrap();
+    let actions = apply(&mut state, Command::FireCart(c)).unwrap();
+    let requests = started(&actions);
+    let request = requests.first().unwrap();
+    assert_eq!(request.from_secs, 0.5, "the cart cue-in is kept");
+    assert_eq!(request.until_secs, 9.5, "the cart cue-out is kept");
+}

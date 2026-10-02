@@ -78,14 +78,16 @@ impl AppState {
         self.request_from_cue_in(entry)
     }
 
-    /// A request that starts the entry at its cue-in point.
+    /// A request that starts the entry at the start of its play range: its
+    /// cue-in, or 0 when players ignore cue markers.
     pub fn request_from_cue_in(&self, entry: EntryId) -> Option<SourceRequest> {
         let track = self.track_for_entry(entry)?;
+        let range = track.play_range(self.config.players.use_cue_markers);
         Some(SourceRequest {
             entry,
             track: track.id,
             path: track.path.clone(),
-            from_secs: track.cue_in_secs(),
+            from_secs: range.cue_in,
             format: track.format,
         })
     }
@@ -102,7 +104,7 @@ impl AppState {
             };
             secs.clamp(0.0, end)
         } else {
-            track.cue_in_secs()
+            track.play_range(self.config.players.use_cue_markers).cue_in
         };
         Some(SourceRequest {
             entry,
