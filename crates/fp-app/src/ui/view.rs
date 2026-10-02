@@ -109,8 +109,8 @@ pub struct CueWindowView {
     pub paused: bool,
     /// The position as a fraction of the file, for the waveform.
     pub position: Option<f32>,
-    /// "Load as next" has something to do: the cued entry is not the
-    /// current one and not already the explicit next.
+    /// "Load as next" has something to do: the cued entry is not
+    /// already the explicit next (the entry on air can be, O37).
     pub can_load_next: bool,
 }
 
@@ -143,8 +143,7 @@ pub fn cue_window_view(
         remaining: total.map_or(0.0, |t| (t - elapsed).max(0.0)),
         paused: cue.paused,
         position: fraction(Some(elapsed), total.unwrap_or(0.0)),
-        can_load_next: p.current != Some(cue.entry)
-            && !(p.next == Some(cue.entry) && p.next_explicit),
+        can_load_next: !(p.next == Some(cue.entry) && p.next_explicit),
     })
 }
 

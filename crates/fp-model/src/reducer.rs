@@ -547,6 +547,13 @@ fn source_failed(
     {
         t.file_state = FileState::Unreadable;
     }
+    // A self-next (O37) on a file that cannot be read: the entry after it is
+    // the next, or `advance` would go into the entry that just failed.
+    for i in 0..state.players.len() {
+        if state.players[i].current == Some(entry) && state.players[i].next == Some(entry) {
+            replace_self_next(state, i, entry);
+        }
+    }
     if let Ok(i) = state.player_index(player)
         && state.players[i].current == Some(entry)
     {
@@ -605,7 +612,19 @@ fn preload_failed(
     if let Ok(i) = state.player_index(player) {
         // The failed preload is gone.
         state.players[i].preloaded = None;
+        // A self-next (O37) on a file that cannot be read again: the entry
+        // after it is the next.
+        if state.players[i].next == Some(entry) {
+            replace_self_next(state, i, entry);
+        }
     }
+}
+
+/// The player's next is its own current `entry`, which cannot be played: the
+/// next playable entry after it takes its place, by default rules.
+fn replace_self_next(state: &mut AppState, i: usize, entry: EntryId) {
+    state.players[i].next = state.playlists.next_playable_after(entry, &state.library);
+    state.players[i].next_explicit = false;
 }
 
 /// The two playable entries that follow `entry` in its playlist, so a
@@ -1109,11 +1128,17 @@ fn repeating(state: &AppState, player: &PlayerState) -> bool {
 /// The entry to preload: the current one while it repeats, else the next
 /// (with a self-next, O37, that is the current entry too).
 fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
-    if repeating(state, player) {
+    let target = if repeating(state, player) {
         player.current
     } else {
         player.next
-    }
+    };
+    // Never prepare an entry whose file cannot be played.
+    target.filter(|e| {
+        state
+            .track_for_entry(*e)
+            .is_none_or(|t| t.file_state.is_playable())
+    })
 }
 
 /// Derives the engine work implied by the state: preload whatever is next.

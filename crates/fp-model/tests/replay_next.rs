@@ -255,3 +255,138 @@ fn o37_a_fade_stop_wins() {
     apply(&mut s, Command::FadeStop(p)).unwrap();
     assert_eq!(plan(&s, p), None);
 }
+
+fn break_file(s: &mut AppState, e: EntryId) {
+    let t = s.track_for_entry(e).unwrap().id;
+    s.library.get_mut(t).unwrap().file_state = fp_model::FileState::Unreadable;
+}
+
+fn starts_of(out: &[EngineAction], e: EntryId) -> bool {
+    out.iter().any(|x| match x {
+        EngineAction::StartCurrent { request, .. } => request.entry == e,
+        EngineAction::Preload {
+            request: Some(request),
+            ..
+        } => request.entry == e,
+        _ => false,
+    })
+}
+
+#[test]
+fn a_self_next_whose_preload_fails_is_replaced_by_the_following_entry() {
+    let (mut s, p, [a, b, _]) = replaying();
+    let out = on_event(
+        &mut s,
+        EngineEvent::PreloadFailed {
+            player: p,
+            entry: a,
+        },
+    );
+    let player = s.player(p).unwrap();
+    assert_eq!((player.next, player.next_explicit), (Some(b), false));
+    assert_eq!(player.current, Some(a), "the pass on air is not touched");
+    assert!(!starts_of(&out, a), "{out:?}");
+    let again = on_event(
+        &mut s,
+        EngineEvent::PreloadFailed {
+            player: p,
+            entry: a,
+        },
+    );
+    assert!(!starts_of(&again, a), "{again:?}");
+}
+
+#[test]
+fn a_self_next_on_a_failing_source_continues_with_the_following_entry() {
+    let (mut s, p, [a, b, c]) = replaying();
+    let out = on_event(
+        &mut s,
+        EngineEvent::SourceFailed {
+            player: p,
+            entry: a,
+        },
+    );
+    let player = s.player(p).unwrap();
+    assert_eq!(player.current, Some(b), "Continuous goes on: {out:?}");
+    assert_eq!(player.next, Some(c));
+    assert!(!starts_of(&out, a), "{out:?}");
+    assert_eq!(player.history, vec![a], "only the entry left, once");
+}
+
+#[test]
+fn a_self_next_on_a_failing_last_source_stops_the_player() {
+    let (mut s, p, [a, b, c]) = three();
+    apply(&mut s, Command::Play(p)).unwrap();
+    started(&mut s, p, b);
+    started(&mut s, p, c);
+    apply(&mut s, Command::SetNext(p, c)).unwrap();
+    let out = on_event(
+        &mut s,
+        EngineEvent::SourceFailed {
+            player: p,
+            entry: c,
+        },
+    );
+    let player = s.player(p).unwrap();
+    assert_eq!(player.transport, Transport::Stopped, "{out:?}");
+    assert!(!starts_of(&out, c), "{out:?}");
+    let _ = (a, b);
+}
+
+#[test]
+fn plan_for_stops_at_the_end_for_a_self_next_on_an_unplayable_file() {
+    let (mut s, p, [a, _, _]) = replaying();
+    break_file(&mut s, a);
+    assert_eq!(plan(&s, p), Some(TransitionPlan::StopAt { at_secs: 180.0 }));
+}
+
+#[test]
+fn moving_the_entry_keeps_the_self_next_and_the_following_entry_follows_the_new_position() {
+    let (mut s, p, [a, _, _]) = replaying();
+    let playlist = s.playlists.first_id().unwrap();
+    apply(
+        &mut s,
+        Command::MoveEntry {
+            entry: a,
+            to: playlist,
+            index: 3,
+        },
+    )
+    .unwrap();
+    assert_eq!(s.player(p).unwrap().next, Some(a));
+    started(&mut s, p, a);
+    assert_eq!(
+        s.player(p).unwrap().next,
+        None,
+        "nothing follows the last position"
+    );
+}
+
+#[test]
+fn removing_the_entry_after_the_current_one_does_not_touch_a_self_next() {
+    let (mut s, p, [a, b, c]) = replaying();
+    apply(&mut s, Command::RemoveEntry(b)).unwrap();
+    assert_eq!(s.player(p).unwrap().next, Some(a));
+    started(&mut s, p, a);
+    assert_eq!(s.player(p).unwrap().next, Some(c));
+}
+
+#[test]
+fn previous_overrides_a_self_next() {
+    let (mut s, p, [a, b, _]) = three();
+    apply(&mut s, Command::Play(p)).unwrap();
+    started(&mut s, p, b);
+    apply(&mut s, Command::SetNext(p, b)).unwrap();
+    apply(&mut s, Command::Previous(p)).unwrap();
+    let player = s.player(p).unwrap();
+    assert_eq!((player.current, player.next), (Some(a), Some(b)));
+}
+
+#[test]
+fn stop_keeps_the_self_next_so_play_starts_the_entry_again() {
+    let (mut s, p, [a, _, _]) = replaying();
+    apply(&mut s, Command::Stop(p)).unwrap();
+    assert_eq!(s.player(p).unwrap().next, Some(a));
+    let out = apply(&mut s, Command::Play(p)).unwrap();
+    assert!(starts_of(&out, a), "{out:?}");
+}

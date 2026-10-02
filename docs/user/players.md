@@ -136,8 +136,9 @@ The window shows:
   whole files);
 - **Pause** / **Resume**, **Stop** and **Load as next**. **Load as next**
   makes the cued track the player's next, as a double-click would, and keeps
-  the CUE playing. It is dimmed when the track already is the next, or is the
-  current track.
+  the CUE playing. It is dimmed when the track already is the next. If the
+  cued track is the one on air, it plays once more when the current pass
+  ends.
 
 A jump on a paused CUE keeps it paused. The close button of the window, or
 **Stop**, stops the CUE.

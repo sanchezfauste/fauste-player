@@ -430,8 +430,13 @@ fn load_as_next_is_offered_only_when_it_changes_something() {
     apply(&mut s, Command::Play(p)).unwrap();
     apply(&mut s, Command::CueEntry(p, e[0])).unwrap();
     assert!(
+        cue_window_view(&s, p, None).unwrap().can_load_next,
+        "the entry on air can be loaded as next (O37)"
+    );
+    apply(&mut s, Command::CueToNext(p)).unwrap();
+    assert!(
         !cue_window_view(&s, p, None).unwrap().can_load_next,
-        "the current entry cannot be the next"
+        "already explicit"
     );
 }
 

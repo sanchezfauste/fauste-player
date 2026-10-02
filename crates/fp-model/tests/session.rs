@@ -302,3 +302,19 @@ fn a_position_restored_at_the_end_comes_back_at_the_cue_in() {
         );
     }
 }
+
+#[test]
+fn a_restored_self_next_is_kept_and_the_player_stays_paused() {
+    let mut state = fixture(3);
+    let (e, p) = (entries(&state), p0(&state));
+    apply(&mut state, Command::Play(p)).unwrap();
+    apply(&mut state, Command::SetNext(p, e[0])).unwrap();
+    let sessions = state.sessions(|_| 10.0);
+    let (restored, _) = AppState::restore(parts(&state), &sessions, "Main");
+    let player = restored.player(p).unwrap();
+    assert_eq!(
+        (player.current, player.next, player.next_explicit),
+        (Some(e[0]), Some(e[0]), true)
+    );
+    assert_eq!(player.transport, Transport::Paused);
+}
