@@ -434,7 +434,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - played/unplayed colours, intro/outro shading, dashed amber MIX marker, playhead;
     - drawn continuously, one column per pixel, as audio editors draw it: the peak envelope in the colour dimmed, and the RMS level of the same span as a solid body inside it. On a loud master the peaks fill the height but the body still shows the track's dynamics. Both are linear in amplitude and symmetric about the centre line; a column's peak is the largest of its buckets, its RMS the root of their mean square;
     - the trimmed head and tail (before `cue_in`, after `cue_out`) dimmed, with 1 px lines at the cue points;
-    - hover time tooltip, click to seek; press-and-drag previews and seeks on release inside (outside or Esc cancels; Alt-drag edits markers);
+    - hover time tooltip, click to seek; press-and-drag previews and seeks on release inside (outside or Esc cancels; Alt-drag edits markers) (operator feedback 2, O10, replaced this: a click seeks and a drag pans a zoomed view, with no preview);
     - wheel zoom around the pointer down to one bucket per pixel, Shift or sideways wheel pans, a "Full view" button while zoomed; the view follows the playhead unless moved within `ui.follow_current_grace_secs`, and resets on a new entry (feedback spec §3.3);
     - intro and outro badges per §3 (rules 18 and 19).
   - `elapsed / total` on a row under the waveform, right-aligned.

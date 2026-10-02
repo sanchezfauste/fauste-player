@@ -21,7 +21,8 @@
 | `ui/shell.rs` | Panic isolation around each frame, and the close check in `Shell::logic` |
 | `ui/exit_guard.rs` | The "Audio is on air" modal: the `ExitIntent`, the list of what is sounding, and the stop commands |
 | `ui/view.rs`, `ui/format.rs` | Pure view model: what to show, how to format it (unit-tested) |
-| `ui/widgets.rs`, `ui/glyphs.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, segmented control, tabular times, meter, fader, waveform), drawn icons, the Nocturne theme. `ui/glyphs.rs` maps each transport action (`TransportAction`: play, next, pause, stop, fade stop, stop after, restart, previous, cue) to a Phosphor glyph or a drawn icon; the player, the cartwall and the playlist menu draw their transport icons only through it (`tests/glyphs.rs` guards that), and the CUE window will too. The meter's geometry is the pure `meter_layout` (labels, lines, bars, readouts), unit-tested |
+| `ui/cue_window.rs` | One non-modal `egui::Window` per running CUE, drawn from the pure `view::cue_window_view`; icons through `ui/glyphs.rs` |
+| `ui/widgets.rs`, `ui/glyphs.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, segmented control, tabular times, meter, fader, waveform), drawn icons, the Nocturne theme. `ui/glyphs.rs` maps each transport action (`TransportAction`: play, next, pause, stop, fade stop, stop after, restart, previous, cue) to a Phosphor glyph or a drawn icon; the player, the cartwall and the playlist menu draw their transport icons only through it (`tests/glyphs.rs` guards that), and the CUE window too. The meter's geometry is the pure `meter_layout` (labels, lines, bars, readouts), unit-tested |
 | `ui/about.rs` | The About window: version, copyright, bundled notices, and the third-party notices file (located at start-up, opened on a helper thread) |
 | `ui/controller.rs` | The `Controller` trait between the UI and the rest |
 | `ui/files.rs` | Accepted audio extensions and folder expansion |
@@ -95,13 +96,37 @@ Align::TOP)` once the playlist is shown. A grace of 0 never follows.
 `ui/wave_view.rs::WaveView { start_secs, span_secs }` is the one mapping
 between seconds and pixels: drawing (`wave_columns_in` reduces only the
 visible stretch, memoised per start, span and width), marker lines and
-handles, the hover time, drag-to-seek and the context menu all use it.
+handles, the hover time, click-to-seek, drag-to-pan and the context menu all use it.
 `ViewState::wave_zoom` keeps a `WaveZoom` per zoomed player (view, the entry
 it belongs to, when it was last moved); no entry means the full view. The
 wheel is read from the frame's `MouseWheel` events while the waveform is
 hovered, and the frame's scroll delta is then cleared so no scroll area
-moves too. A drag to seek lives in egui temp data (`SeekDrag`) keyed on the
-waveform id.
+moves too. `widgets::waveform` reports a click's seek target and a drag's
+sideways movement (`WaveOutput { response, seek, pan_dx }`); egui's click rule
+is the drag threshold, so only `Response::clicked()` seeks and a drag never
+does. The player pans a zoomed view with `WaveView::pan` (a drag without zoom
+does nothing). A held pan drag is flagged in egui temp data keyed on the
+waveform id; `widgets::pan_dragging` reads it so the view does not follow the
+playhead meanwhile. Alt-drag (markers) and a drag that starts under the
+shield report no pan.
+
+## CUE window
+
+`ui/cue_window.rs` draws one window per player with a running CUE, from
+`view::cue_window_view` (title, artist, elapsed, remaining, `paused`, the
+position fraction and `can_load_next`). Its waveform, seek range and
+remaining time run to the end of the file, because a CUE plays the whole
+file. It only sends commands: `SeekCue` (a click on the waveform),
+`SetCuePaused`, `CueToNext` (Load as next) and `SetCue(player, false)` (Stop
+and the close button). The model rules behind it: `seek_cue` leaves `paused`
+alone (a seek on a paused CUE stays paused), `set_cue_paused` only emits on a
+change, `cue_entry` clears `paused` (a moved CUE restarts unpaused from the
+entry's cue-in), and `follow_cue` runs on `SetNext` (a double-click on a row)
+to move a running CUE to a playable new next; `CueToNext` only sets the next,
+since the CUE is already on that entry. A single click on a
+table row does the same through `view::cue_follow_target`, which gives the
+clicked entry when the player has a CUE on another entry and the file can be
+played; the table then sends `CueEntry`. A right-click only selects.
 
 ## Nothing blocks the UI thread
 

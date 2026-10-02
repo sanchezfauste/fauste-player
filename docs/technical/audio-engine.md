@@ -189,8 +189,13 @@ cannot hang the conductor.
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs }`) to the mixer as exact frames once it is within `schedule_lead_ms` |
 | `FadeOutAndStop`, `StopNow`, `Pause`, `Resume`, `Seek`, `SetVolume` | ramps and commands on the current source |
 | `StartCue`, `StopCue` | a separate source on the player's Cue route |
+| `SeekCue` | replace the CUE source by one at the target (the CUE plays whole files); it starts idle when the CUE is held, so a held CUE stays held |
+| `SetCuePaused` | `BusCommand::Pause`/`Resume` with the pause ramp for an audible source; a source that has not started yet is held idle and started on release. `PlayerRuntime::cue_paused` remembers the state and a new CUE clears it |
 | `AddPlayer`, `RemovePlayer` | create or retire a worker and its bookkeeping |
 | `LoadPaused` | restore a session: load the source at a position, paused |
+
+The CUE position is `PlayerTelemetry::cue_position_secs`; a held CUE reports a
+constant one. A held CUE is released when it is replaced or stopped.
 
 The effective play range is `Track::play_range(use_markers)` in `fp-model`
 (`players.use_cue_markers`; off gives 0 to the end of the file, or the source

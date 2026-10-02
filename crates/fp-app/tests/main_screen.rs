@@ -14,6 +14,7 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::i18n::I18n;
 use fp_app::services::MediaCache;
 use fp_app::ui::app::AppUi;
+use fp_app::ui::controller::Controller;
 use fp_app::ui::files::audio_paths;
 use fp_model::Command;
 use support::{Fake, harness, state};
@@ -857,4 +858,86 @@ fn a_track_an_earlier_version_analysed_shows_the_reload_flag() {
             .count(),
         1
     );
+}
+
+#[test]
+fn clicking_a_row_moves_a_running_cue_to_it() {
+    let (mut h, fake) = harness(state(1, 3));
+    let p = fake.player(0);
+    let e = fake.entries();
+    fake.send(Command::ToggleCue(p));
+    fake.take_sent();
+    h.run_steps(2);
+    h.get_by_label("Song 3").click();
+    h.run_steps(2);
+    assert!(sent(&fake).contains(&Command::CueEntry(p, e[2])));
+}
+
+#[test]
+fn clicking_the_cued_row_a_missing_file_or_without_a_cue_sends_nothing() {
+    let (mut h, fake) = harness(state(1, 3));
+    let p = fake.player(0);
+    let e = fake.entries();
+    // No CUE: a click only selects.
+    h.get_by_label("Song 2").click();
+    h.run_steps(2);
+    assert!(
+        !sent(&fake)
+            .iter()
+            .any(|c| matches!(c, Command::CueEntry(..)))
+    );
+    // The cued row (the next, Song 1): nothing to move.
+    fake.send(Command::ToggleCue(p));
+    fake.take_sent();
+    h.run_steps(2);
+    // The player column and the CUE window show the title too: the table
+    // row is the match lowest on the screen.
+    let row = h
+        .get_all_by_label("Song 1")
+        .max_by(|a, b| a.rect().min.y.total_cmp(&b.rect().min.y))
+        .unwrap();
+    row.click();
+    h.run_steps(2);
+    assert!(
+        !sent(&fake)
+            .iter()
+            .any(|c| matches!(c, Command::CueEntry(..)))
+    );
+    // A missing file.
+    let track = fake.state.load().playlists.entry(e[2]).unwrap().track;
+    fake.send(Command::SetFileState {
+        track,
+        state: fp_model::FileState::Missing,
+    });
+    fake.take_sent();
+    h.run_steps(2);
+    h.get_by_label("Song 3").click();
+    h.run_steps(2);
+    assert!(
+        !sent(&fake)
+            .iter()
+            .any(|c| matches!(c, Command::CueEntry(..)))
+    );
+}
+
+#[test]
+fn a_double_click_moves_the_cue_once() {
+    let (mut h, fake) = harness(state(1, 3));
+    let p = fake.player(0);
+    let e = fake.entries();
+    fake.send(Command::ToggleCue(p));
+    fake.take_sent();
+    h.run_steps(2);
+    h.get_by_label("Song 3").click();
+    h.step();
+    h.get_by_label("Song 3").click();
+    h.run_steps(2);
+    let commands = sent(&fake);
+    assert!(commands.contains(&Command::SetNext(p, e[2])));
+    let moves = commands
+        .iter()
+        .filter(|c| matches!(c, Command::CueEntry(..)))
+        .count();
+    assert_eq!(moves, 1, "{commands:?}");
+    assert_eq!(fake.state.load().players[0].cue.unwrap().entry, e[2]);
 }

@@ -42,6 +42,16 @@ pub enum Command {
     SetCue(PlayerId, bool),
     SetStopAfterCurrent(PlayerId, bool),
     CueEntry(PlayerId, EntryId),
+    /// Feedback 2 spec O12: moves the running CUE to `secs` of its entry
+    /// (clamped to the file). A broken value, or no CUE, does nothing.
+    SeekCue(PlayerId, f64),
+    /// Spec O12: holds or releases the running CUE. Idempotent; without a
+    /// CUE it does nothing.
+    SetCuePaused(PlayerId, bool),
+    /// Spec O12 ("Load as next"): the cued entry becomes the player's
+    /// explicit next and the CUE keeps running. Without a CUE it does
+    /// nothing.
+    CueToNext(PlayerId),
     SetVolume(PlayerId, f32),
     Seek(PlayerId, f64),
     ShowPlaylist(PlayerId, PlaylistId),
@@ -279,6 +289,16 @@ pub enum EngineAction {
     },
     StopCue {
         player: PlayerId,
+    },
+    /// Replace the CUE source by one at `secs`; it stays held if the CUE is.
+    SeekCue {
+        player: PlayerId,
+        secs: f64,
+    },
+    /// Hold or release the CUE source.
+    SetCuePaused {
+        player: PlayerId,
+        paused: bool,
     },
     SetVolume {
         player: PlayerId,

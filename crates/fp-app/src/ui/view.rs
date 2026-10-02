@@ -63,6 +63,8 @@ pub struct PlayerView {
     pub markers: MarkerFractions,
     pub mode: PlayMode,
     pub stop_after_current: bool,
+    /// The current entry repeats or stops after itself (spec O8).
+    pub entry_notice: Option<fp_model::EntryNotice>,
     pub fading: bool,
     pub cueing: bool,
     /// The current source reaches its device unchanged (the BP badge).
@@ -88,6 +90,71 @@ fn line(title: &str, artist: &str) -> String {
 pub fn shown_entry(state: &AppState, player: PlayerId) -> Option<EntryId> {
     let p = state.player(player).ok()?;
     p.current.or(p.next)
+}
+
+/// What a CUE window shows (feedback 2 spec O12). A CUE plays the whole
+/// file, so its times run to the end of the file, not to the cue-out.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CueWindowView {
+    pub player: PlayerId,
+    pub entry: EntryId,
+    pub title: String,
+    pub artist: Option<String>,
+    pub elapsed: f64,
+    /// File length, when known.
+    pub total: Option<f64>,
+    /// Seconds to the end of the file; 0 while the length is unknown.
+    pub remaining: f64,
+    pub paused: bool,
+    /// The position as a fraction of the file, for the waveform.
+    pub position: Option<f32>,
+    /// "Load as next" has something to do: the cued entry is not the
+    /// current one and not already the explicit next.
+    pub can_load_next: bool,
+}
+
+/// The CUE window of `player`, or `None` while it has no CUE. `position`
+/// is the engine's CUE position; without one (or a broken one) the CUE
+/// shows the start of its play range, where it begins.
+pub fn cue_window_view(
+    state: &AppState,
+    player: PlayerId,
+    position: Option<f64>,
+) -> Option<CueWindowView> {
+    let p = state.player(player).ok()?;
+    let cue = p.cue?;
+    let track = state.track_for_entry(cue.entry)?;
+    let total = (track.duration_secs > 0.0).then_some(track.duration_secs);
+    let start = track
+        .play_range(state.config.players.use_cue_markers)
+        .cue_in;
+    let mut elapsed = position.filter(|v| v.is_finite()).unwrap_or(start).max(0.0);
+    if let Some(total) = total {
+        elapsed = elapsed.min(total);
+    }
+    Some(CueWindowView {
+        player,
+        entry: cue.entry,
+        title: track.title.clone(),
+        artist: Some(track.artist.clone()).filter(|a| !a.is_empty()),
+        elapsed,
+        total,
+        remaining: total.map_or(0.0, |t| (t - elapsed).max(0.0)),
+        paused: cue.paused,
+        position: fraction(Some(elapsed), total.unwrap_or(0.0)),
+        can_load_next: p.current != Some(cue.entry)
+            && !(p.next == Some(cue.entry) && p.next_explicit),
+    })
+}
+
+/// Feedback 2 spec O17: while `player`'s CUE runs, a single click on a row
+/// moves it to that entry. `Some(entry)` when the CUE is on another entry
+/// and `clicked` can be played; `None` for no CUE, the entry already cued,
+/// or a file that is missing or unreadable. Selection is UI state, so this
+/// decision is here and the move itself is the model's `CueEntry`.
+pub fn cue_follow_target(state: &AppState, player: PlayerId, clicked: EntryId) -> Option<EntryId> {
+    let cue = state.player(player).ok()?.cue?;
+    (cue.entry != clicked && state.playable_request(clicked).is_some()).then_some(clicked)
 }
 
 /// Everything a player column shows. `position` comes from the engine;
@@ -127,6 +194,7 @@ pub fn player_view(
         markers: MarkerFractions::default(),
         mode: p.mode,
         stop_after_current: p.stop_after_current,
+        entry_notice: fp_model::entry_notice(state, player),
         fading: p.fading,
         cueing: p.cue.is_some(),
         bit_perfect: false,

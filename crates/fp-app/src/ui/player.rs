@@ -153,11 +153,17 @@ fn small_caps(text: &str, color: Color32) -> RichText {
 }
 
 fn outlined(ui: &mut Ui, text: &str, border: Color32, color: Color32) {
+    outlined_with_tip(ui, text, None, border, color);
+}
+
+/// As `outlined`, with a sentence that is the badge's tooltip and
+/// accessible name.
+fn outlined_with_tip(ui: &mut Ui, text: &str, tip: Option<&str>, border: Color32, color: Color32) {
     let galley = ui
         .painter()
         .layout_no_wrap(text.to_uppercase(), font(10.0), color);
     let size = vec2(galley.size().x + 12.0, 18.0);
-    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
     ui.painter()
         .rect_stroke(rect, 0.0, Stroke::new(1.0, border), StrokeKind::Inside);
     ui.painter().galley(
@@ -165,6 +171,13 @@ fn outlined(ui: &mut Ui, text: &str, border: Color32, color: Color32) {
         galley,
         color,
     );
+    if let Some(tip) = tip {
+        let owned = tip.to_owned();
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, owned.clone())
+        });
+        response.on_hover_text(tip);
+    }
 }
 
 fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &PlayerView) {
@@ -205,6 +218,19 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                 outlined(
                     ui,
                     &t.tr("badge-stop-after"),
+                    theme::AMBER,
+                    theme::AMBER_TEXT,
+                );
+            }
+            if let Some(notice) = pv.entry_notice {
+                let (text, tip) = match notice {
+                    fp_model::EntryNotice::Repeats => ("badge-entry-repeat", "tip-entry-repeat"),
+                    fp_model::EntryNotice::StopsAfter => ("badge-entry-stop", "tip-entry-stop"),
+                };
+                outlined_with_tip(
+                    ui,
+                    &t.tr(text),
+                    Some(&t.tr(tip)),
                     theme::AMBER,
                     theme::AMBER_TEXT,
                 );
@@ -792,7 +818,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
     let wave_id = egui::Id::new(("waveform", id));
     // While zoomed, follow the playhead once the operator's last move is
     // older than the grace (feedback spec F17), but never under a held drag.
-    let dragging = widgets::seek_dragging(ui, wave_id)
+    let dragging = widgets::pan_dragging(ui, wave_id)
         || view_state.marker_drag.is_some_and(|(p, _, _)| p == id);
     if let (Some(z), Some(total), Some(f)) = (zoom.as_mut(), total, pv.markers.position) {
         let grace = scene.state.config.ui.follow_current_grace_secs;
@@ -837,11 +863,11 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         mix_label: &mix_label,
         accessible_label: &label,
         view,
-        entry: current,
         shield: full_view_button,
         seekable: pv.status != PlayerStatus::Stopped,
     };
-    let (response, seek) = widgets::waveform(ui, WAVE_HEIGHT, &input);
+    let output = widgets::waveform(ui, WAVE_HEIGHT, &input);
+    let (response, seek, pan_dx) = (output.response, output.seek, output.pan_dx);
     if let Some(secs) = seek {
         scene.ctl.send(Command::Seek(id, secs));
     }
@@ -906,6 +932,13 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
                 .input_mut(|i| i.smooth_scroll_delta = egui::Vec2::ZERO);
             ui.ctx().request_repaint();
         }
+    }
+    // Dragging pans a zoomed view; without zoom a drag does nothing (O10).
+    if pan_dx != 0.0
+        && let (Some(z), Some(total)) = (zoom.as_mut(), total)
+    {
+        z.view = z.view.pan(pan_dx, rect.shrink(1.0), total);
+        z.moved_at = scene.time;
     }
     let painter = ui.painter_at(rect);
     let mut badge_right = rect.right() - 4.0;

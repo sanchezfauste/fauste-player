@@ -117,6 +117,9 @@ struct Playing {
     failed: bool,
     /// A pre-listen source (never paused with the player).
     cue: bool,
+    /// A CUE source held by the CUE window's Pause: the mixer never
+    /// evaluates a stop on a paused slot, so it is released directly.
+    held: bool,
 }
 
 /// Why a source could not be created. None of these is a problem with the
@@ -148,6 +151,9 @@ struct PlayerRuntime {
     /// Sources fading out or stopping (crossfades, overlaps, seeks, stops).
     outgoing: Vec<Playing>,
     cue_src: Option<Playing>,
+    /// The CUE source is held (the CUE window's Pause). Cleared by a new
+    /// or stopped CUE.
+    cue_paused: bool,
     plan: Plan,
     paused: bool,
     /// Emit `FadeCompleted` once `outgoing` is empty.
@@ -280,7 +286,15 @@ impl Engine {
                     .iter()
                     .filter(|p| !p.shared.is_ready() && !p.shared.is_failed())
                     .count();
-                waiting + preload
+                // A held CUE source (Idle) still being filled, like a preload.
+                let held_cue = rt
+                    .cue_src
+                    .iter()
+                    .filter(|p| {
+                        p.start == StartState::Idle && !p.shared.is_ready() && !p.shared.is_failed()
+                    })
+                    .count();
+                waiting + preload + held_cue
             })
             .sum::<usize>()
             + self.unsettled_carts()
@@ -822,6 +836,9 @@ impl Engine {
             }
             EngineAction::StartCue { player, request } => self.start_cue(player, &request),
             EngineAction::StopCue { player } => {
+                if let Some(rt) = self.players.get_mut(&player) {
+                    rt.cue_paused = false;
+                }
                 if let Some(cue) = self
                     .players
                     .get_mut(&player)
@@ -830,6 +847,8 @@ impl Engine {
                     self.stop_quick_and_release(player, cue);
                 }
             }
+            EngineAction::SeekCue { player, secs } => self.seek_cue(player, secs),
+            EngineAction::SetCuePaused { player, paused } => self.set_cue_paused(player, paused),
             EngineAction::LoadPaused { player, request } => {
                 if let Ok(p) = self.new_source(player, false, &request) {
                     let old = self.players.get_mut(&player).and_then(|rt| {
@@ -876,6 +895,7 @@ impl Engine {
                 current: None,
                 outgoing: Vec::new(),
                 cue_src: None,
+                cue_paused: false,
                 plan: Plan::None,
                 paused: false,
                 notify_fade: false,
@@ -964,6 +984,7 @@ impl Engine {
             report_end: false,
             failed: false,
             cue,
+            held: false,
         })
     }
 
@@ -1001,7 +1022,7 @@ impl Engine {
     fn fade_out(&mut self, player: PlayerId, p: Playing, ms: f64, curve: Curve) -> bool {
         let frames = self.frames_on(&p.bus, ms);
         let paused = !p.cue && self.players.get(&player).is_some_and(|rt| rt.paused);
-        if p.start != StartState::Started || paused {
+        if p.start != StartState::Started || paused || p.held {
             self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
             self.release(p);
             return false;
@@ -1398,6 +1419,9 @@ impl Engine {
     }
 
     fn start_cue(&mut self, player: PlayerId, request: &SourceRequest) {
+        if let Some(rt) = self.players.get_mut(&player) {
+            rt.cue_paused = false;
+        }
         if let Some(old) = self
             .players
             .get_mut(&player)
@@ -1426,6 +1450,71 @@ impl Engine {
                 entry: request.entry,
             }),
         }
+    }
+
+    /// Replaces the CUE source by one at `secs` (spec O12). A held CUE stays
+    /// held: the new source waits idle until it is released. Without a CUE
+    /// source nothing happens.
+    fn seek_cue(&mut self, player: PlayerId, secs: f64) {
+        let Some(mut request) = self
+            .players
+            .get(&player)
+            .and_then(|rt| rt.cue_src.as_ref())
+            .map(|c| c.request.clone())
+        else {
+            return;
+        };
+        request.from_secs = secs;
+        let Ok(mut next) = self.new_source(player, true, &request) else {
+            return;
+        };
+        let Some(rt) = self.players.get_mut(&player) else {
+            return;
+        };
+        next.start = if rt.cue_paused {
+            StartState::Idle
+        } else {
+            StartState::WhenReady { fade_in: false }
+        };
+        if let Some(old) = rt.cue_src.replace(next) {
+            self.stop_quick_and_release(player, old);
+        }
+    }
+
+    /// Holds or releases the CUE source (spec O12). A source that has not
+    /// started yet is held back idle; one that is audible ramps down with
+    /// the pause ramp. Without a CUE source only the flag changes.
+    fn set_cue_paused(&mut self, player: PlayerId, paused: bool) {
+        let Some(rt) = self.players.get_mut(&player) else {
+            return;
+        };
+        rt.cue_paused = paused;
+        let Some(cue) = rt.cue_src.as_mut() else {
+            return;
+        };
+        cue.held = paused;
+        let (bus, slot) = (cue.bus.clone(), cue.slot);
+        let send = match (paused, cue.start) {
+            (true, StartState::WhenReady { .. }) => {
+                cue.start = StartState::Idle;
+                None
+            }
+            (false, StartState::Idle) => {
+                cue.start = StartState::WhenReady { fade_in: false };
+                None
+            }
+            (pause, _) => Some(pause),
+        };
+        let Some(pause) = send else {
+            return;
+        };
+        let ramp_frames = self.ramp_frames(&bus);
+        let command = if pause {
+            BusCommand::Pause { slot, ramp_frames }
+        } else {
+            BusCommand::Resume { slot, ramp_frames }
+        };
+        self.send(&bus, command);
     }
 }
 

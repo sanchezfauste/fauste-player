@@ -22,6 +22,7 @@ use fp_model::{
 use super::about::{self, NoticeOpener};
 use super::cartwall;
 use super::controller::Controller;
+use super::cue_window;
 use super::exit_guard::{self, ExitIntent};
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::notice;
@@ -488,6 +489,8 @@ impl AppUi {
             .map_or(0, |f| f.load(std::sync::atomic::Ordering::Acquire));
         status_bar(&mut status_ui, &scene, &self.view, &self.platform, faults);
         ui.allocate_rect(full, Sense::hover());
+        // The CUE windows float over the screen; the dialogs below stay on top.
+        cue_window::show_all(&ctx, &scene);
         // Once, at start-up: tracks an earlier version analysed wait for
         // the operator (they cost the processor for a while to redo).
         if !self.outdated_checked {

@@ -270,6 +270,11 @@
     from its cue-in. This is a model rule on `SetNext`.
   - selecting a row with a single click in that player's table moves the CUE
     to that entry. Selection is UI state, so the UI sends `CueEntry`.
+- **As built.**
+  - O8: `fp_model::entry_notice(state, player) -> Option<EntryNotice>` (`Repeats`, `StopsAfter`) decides; the header draws an outlined amber badge (`badge-entry-repeat`, `badge-entry-stop`) whose tooltip and accessible name are the spec's sentences. None while stopped, during a fade stop, or while stop after current is set; the entry's stop-after wins over its repeat; an unreadable file does not repeat.
+  - O10: `widgets::waveform` returns `WaveOutput { response, seek, pan_dx }`. Only `Response::clicked()` seeks. A primary drag that does not start with Alt or under the Full view button pans a zoomed view and does nothing otherwise. The hover time stays; the drag preview and Esc-cancel are gone.
+  - O12: `CueState { entry, paused }`; `Command::{SeekCue, SetCuePaused, CueToNext}`; `EngineAction::{SeekCue, SetCuePaused}`. A CUE plays whole files, so the window's waveform and times cover the whole file. A moved CUE starts unpaused. `CueToNext` uses `set_next` (it becomes explicit; the current entry is refused). The window is `ui/cue_window.rs`, one per running CUE, with its own close button that stops the CUE. The remote API and MIDI do not expose pause or seek of the CUE.
+  - O17: `SetNext` calls `follow_cue`: the CUE moves to a playable new next from its cue-in unless it is already there. The table sends `CueEntry` on a primary click through `view::cue_follow_target` (not for the cued row, a missing or unreadable file, or a player without a CUE).
 
 ## 8. Plan 7 — Track tags
 

@@ -178,7 +178,6 @@ fn a_player_that_unloads_lets_go_of_its_waveform() {
             mix_label: "MIX",
             accessible_label: "Waveform",
             view: None,
-            entry: None,
             shield: None,
             seekable: true,
         };
@@ -356,7 +355,6 @@ fn a_waveform_with_ignored_marks_draws_without_panicking() {
             mix_label: "MIX",
             accessible_label: "Waveform",
             view: None,
-            entry: None,
             shield: None,
             seekable: true,
         };

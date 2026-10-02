@@ -5,6 +5,7 @@ pub mod app;
 pub mod cart_view;
 mod cartwall;
 pub mod controller;
+mod cue_window;
 pub mod exit_guard;
 pub mod files;
 pub mod format;

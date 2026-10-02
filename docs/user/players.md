@@ -11,6 +11,7 @@ playlist tabs, transport, volume and outputs.
 | Status dot and label | **On air** (red), **Paused** (amber), **Stopped** (grey) |
 | **Mixing** / **Fading** badge | A crossfade into the next track, or a fade stop, is running |
 | **Stop after** badge | The player stops when the current track ends |
+| **Repeat** / **Stop after track** badge | The current track repeats, or stops the player when it ends, because of its own mark in the playlist menu. Hover for the full sentence. The player's own **Stop after** button wins: while it is on, only its badge shows |
 | **BP** | Lit while the current track reaches its Main device unchanged (see [Bit-perfect output](bit-perfect.md)) |
 | **SINGLE** \| **CONT** | Play mode (see below): one joined control, the lit half is the active mode |
 | **CUE** | Pre-listen the next track on the CUE output |
@@ -103,10 +104,11 @@ red.
   to the end of the file, and the cue-in and cue-out in this guide mean those
   two ends.
 - Hover to see the time under the pointer. **Click to jump** there (while
-  playing or paused; a stopped player always starts at the cue-in).
-- **Press and drag** to look for a spot: a line shows the time, and the jump
-  happens when you release the button over the waveform. Release outside it,
-  or press `Esc`, to cancel.
+  playing or paused; a stopped player always starts at the cue-in). A click is
+  a press and release without moving the pointer more than a few pixels.
+- **Press and drag** moves the zoomed view along the track, like grabbing it.
+  A drag never jumps, and without zoom it does nothing. Alt-drag still edits
+  markers.
 - **Mouse wheel** over the waveform: zoom in and out around the pointer, down
   to the finest detail the analysis has. **Shift+wheel** (or a sideways wheel)
   moves along the track. While zoomed, the view follows the playing position,
@@ -116,7 +118,28 @@ red.
 
 ## CUE (pre-listen)
 
-**CUE** plays the next track on the player's CUE output, for example
-headphones, without touching the on-air output. The context menu of any
-track also has **Pre-listen on CUE**. See [Settings](settings.md) to choose
+Pressing **CUE** (or **Pre-listen on CUE** in a track's menu) plays the track
+on the player's CUE output, for example headphones, without touching the
+on-air output, and opens a small **CUE window** for that player. Several
+windows can be open, one per player. See [Settings](settings.md) to choose
 the CUE device.
+
+The window shows:
+
+- the title and artist;
+- the waveform of the whole file with the CUE position; click it to jump
+  there;
+- the elapsed time and the time remaining to the end of the file (a CUE plays
+  whole files);
+- **Pause** / **Resume**, **Stop** and **Load as next**. **Load as next**
+  makes the cued track the player's next, as a double-click would, and keeps
+  the CUE playing. It is dimmed when the track already is the next, or is the
+  current track.
+
+A jump on a paused CUE keeps it paused. The close button of the window, or
+**Stop**, stops the CUE.
+
+While a CUE runs, setting a next (double-click) or a single click on a row
+moves the CUE to that track, from its cue-in; if it was paused, it plays
+again. A track whose file is missing or unreadable leaves the CUE where it
+is.
