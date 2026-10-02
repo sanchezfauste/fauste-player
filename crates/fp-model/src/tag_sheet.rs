@@ -317,6 +317,9 @@ pub struct TagSheet {
     storable: BTreeSet<TagField>,
     cover: Option<CoverArt>,
     cover_storable: bool,
+    /// Fields whose text or values were cut when the sheet was clamped: the
+    /// sheet holds only part of what the file has, so they are never written.
+    cut: BTreeSet<TagField>,
     /// Tags the sheet does not show (other standard keys, custom keys,
     /// pictures). They are kept as they are.
     pub other_kept: usize,
@@ -337,6 +340,7 @@ impl TagSheet {
             storable: storable.into_iter().collect(),
             cover: None,
             cover_storable: false,
+            cut: BTreeSet::new(),
             other_kept,
             other_kept_more,
         }
@@ -397,6 +401,12 @@ impl TagSheet {
     /// The file has a value for `field`.
     pub fn has(&self, field: TagField) -> bool {
         self.values.contains_key(&field)
+    }
+
+    /// The field was cut to the limits when read (`clamped`): the file holds
+    /// more than the sheet shows, so the editor cannot change it safely.
+    pub fn is_cut(&self, field: TagField) -> bool {
+        self.cut.contains(&field)
     }
 
     /// The values as one text, one per line: what a text box holds.
@@ -463,26 +473,48 @@ impl TagSheet {
     /// window.
     #[must_use]
     pub fn clamped(self, max_chars: usize, max_values: usize) -> Self {
+        let Self {
+            values,
+            storable,
+            cover,
+            cover_storable,
+            cut: mut cut_fields,
+            other_kept,
+            other_kept_more,
+        } = self;
         let mut out = Self {
             values: BTreeMap::new(),
-            ..self.clone()
+            storable,
+            cover,
+            cover_storable,
+            cut: BTreeSet::new(),
+            other_kept,
+            other_kept_more,
         };
-        for (field, lines) in self.values {
+        for (field, lines) in values {
             let keep = if field.kind() == TagFieldKind::Pair {
                 lines.len()
             } else {
                 max_values
             };
-            let lines = lines
+            let total = lines.len();
+            let mut changed = total > keep;
+            let lines: Vec<String> = lines
                 .into_iter()
                 .take(keep)
                 .map(|mut line| {
+                    let before = line.len();
                     cut(&mut line, max_chars);
+                    changed |= line.len() != before;
                     line
                 })
                 .collect();
+            if changed {
+                cut_fields.insert(field);
+            }
             out.set_values(field, lines);
         }
+        out.cut = cut_fields;
         out
     }
 }
@@ -501,7 +533,15 @@ pub fn cover_blocked(before: &TagSheet, after: &TagSheet) -> bool {
 /// The cover was changed and the file does not hold it as written after the
 /// save (`read_back`).
 pub fn cover_unstored(before: &TagSheet, after: &TagSheet, read_back: &TagSheet) -> bool {
-    cover_changed(before, after) && after.cover != read_back.cover
+    if !cover_changed(before, after) {
+        return false;
+    }
+    match (&after.cover, &read_back.cover) {
+        // A removal: a picture shown for lack of a front cover is only the
+        // display fallback, not a cover that survived.
+        (None, Some(shown)) => shown.is_front(),
+        (a, b) => a != b,
+    }
 }
 
 /// The fields whose values differ between two sheets, in editor order.
@@ -512,32 +552,51 @@ pub fn changed_fields(before: &TagSheet, after: &TagSheet) -> Vec<TagField> {
         .collect()
 }
 
-/// The changed fields (`after` against `before`) whose value is not valid:
-/// a date that is not ISO 8601, a number, total or BPM that is not a whole
-/// number, a total without a number, several lines in a one-value field of
-/// those kinds, or a field the file's format cannot store. A value the file
-/// already held and the operator did not touch is never reported: it is kept
-/// as it is.
+/// Why a changed field cannot be written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldProblem {
+    /// The value is not valid for the field (date, number, BPM, ...).
+    InvalidValue,
+    /// The file's format cannot store the field.
+    NotStorable,
+    /// The sheet holds only part of this field (`TagSheet::is_cut`), so a
+    /// change would lose the rest.
+    TooLongToEdit,
+}
+
+/// What is wrong with the change of `field` (`after` against `before`), if
+/// anything. An unchanged field has no problem: a value the file already
+/// held and the operator did not touch is kept as it is.
+pub fn field_problem(before: &TagSheet, after: &TagSheet, field: TagField) -> Option<FieldProblem> {
+    if before.values(field) == after.values(field) {
+        return None;
+    }
+    if before.is_cut(field) {
+        return Some(FieldProblem::TooLongToEdit);
+    }
+    if !after.can_store(field) {
+        return Some(FieldProblem::NotStorable);
+    }
+    let values = after.values(field);
+    let valid = match field.kind() {
+        TagFieldKind::Text | TagFieldKind::LongText => true,
+        TagFieldKind::Date => values.len() <= 1 && values.iter().all(|v| parse_tag_date(v).is_ok()),
+        TagFieldKind::Whole => values.len() <= 1 && values.iter().all(|v| is_whole(v)),
+        TagFieldKind::Pair => {
+            let (number, total) = after.pair(field);
+            is_whole(&number) && is_whole(&total) && (total.is_empty() || !number.is_empty())
+        }
+    };
+    (!valid).then_some(FieldProblem::InvalidValue)
+}
+
+/// The changed fields (`after` against `before`) that cannot be written
+/// (`field_problem`): an invalid value, a field the format cannot store, or a
+/// field that was cut when read.
 pub fn invalid_fields(before: &TagSheet, after: &TagSheet) -> Vec<TagField> {
-    changed_fields(before, after)
+    TagField::ALL
         .into_iter()
-        .filter(|f| {
-            let values = after.values(*f);
-            let valid = match f.kind() {
-                TagFieldKind::Text | TagFieldKind::LongText => true,
-                TagFieldKind::Date => {
-                    values.len() <= 1 && values.iter().all(|v| parse_tag_date(v).is_ok())
-                }
-                TagFieldKind::Whole => values.len() <= 1 && values.iter().all(|v| is_whole(v)),
-                TagFieldKind::Pair => {
-                    let (number, total) = after.pair(*f);
-                    is_whole(&number)
-                        && is_whole(&total)
-                        && (total.is_empty() || !number.is_empty())
-                }
-            };
-            !valid || !after.can_store(*f)
-        })
+        .filter(|f| field_problem(before, after, *f).is_some())
         .collect()
 }
 

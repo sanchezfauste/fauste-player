@@ -4,7 +4,8 @@
 use std::collections::BTreeSet;
 
 use fp_model::{
-    Config, TagField, TagFieldKind, TagSheet, changed_fields, invalid_fields, unstored_fields,
+    Config, FieldProblem, TagField, TagFieldKind, TagSheet, changed_fields, field_problem,
+    invalid_fields, unstored_fields,
 };
 
 fn all_storable() -> TagSheet {
@@ -329,4 +330,38 @@ fn the_value_cap_is_a_validated_config_field() {
     c.limits.max_tag_values = 5_000;
     c.validate();
     assert_eq!(c.limits.max_tag_values, 1000);
+}
+
+#[test]
+fn a_field_cut_when_read_is_marked_and_never_written() {
+    let mut s = all_storable();
+    s.set_text(TagField::Comment, &"x".repeat(100), false);
+    s.set_values(TagField::Artist, lines(&["a", "b", "c"]));
+    s.set_text(TagField::Title, "short", false);
+    let before = s.clamped(10, 2);
+    assert!(before.is_cut(TagField::Comment));
+    assert!(before.is_cut(TagField::Artist));
+    assert!(!before.is_cut(TagField::Title));
+
+    let mut after = before.clone();
+    after.set_text(TagField::Comment, "new comment", false);
+    assert_eq!(
+        invalid_fields(&before, &after),
+        [TagField::Comment],
+        "a cut field cannot be changed"
+    );
+    assert_eq!(
+        field_problem(&before, &after, TagField::Comment),
+        Some(FieldProblem::TooLongToEdit)
+    );
+    let mut after = before.clone();
+    after.set_text(TagField::Title, "other", false);
+    assert!(invalid_fields(&before, &after).is_empty());
+    assert_eq!(field_problem(&before, &after, TagField::Title), None);
+    let mut after = before.clone();
+    after.set_text(TagField::Date, "2019-13", false);
+    assert_eq!(
+        field_problem(&before, &after, TagField::Date),
+        Some(FieldProblem::InvalidValue)
+    );
 }

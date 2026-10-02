@@ -55,8 +55,8 @@ pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, playe
 pub use state::AppState;
 pub use tag_edit::{TagEditBlock, tag_edit_block};
 pub use tag_sheet::{
-    CoverArt, TagField, TagFieldKind, TagSheet, changed_fields, cover_blocked, cover_changed,
-    cover_unstored, invalid_fields, unstored_fields,
+    CoverArt, FieldProblem, TagField, TagFieldKind, TagSheet, changed_fields, cover_blocked,
+    cover_changed, cover_unstored, field_problem, invalid_fields, unstored_fields,
 };
 pub use track::{
     AudioFormat, FileState, InvalidDate, Library, Marker, MarkerKind, MarkerSource, Markers,

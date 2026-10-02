@@ -107,3 +107,18 @@ fn the_cover_survives_clamping_and_cloning_cheaply() {
     assert_eq!(clamped.cover().unwrap().thumb_png(), Some(&[1u8][..]));
     assert!(clamped.can_store_cover());
 }
+
+#[test]
+fn a_removed_front_cover_is_unstored_only_if_a_front_cover_is_still_there() {
+    // The file has a back cover only: after Remove (nothing staged) the
+    // file shows that back cover again, which is not a failure to remove.
+    let front = sheet(Some(art(1, true)));
+    let mut after = front.clone();
+    after.remove_front_cover(&front);
+    let back_only = sheet(Some(art(5, false)));
+    assert!(!cover_unstored(&front, &after, &back_only));
+    // A front cover still in the file after the removal is unstored.
+    assert!(cover_unstored(&front, &after, &front));
+    // No picture at all is the expected result.
+    assert!(!cover_unstored(&front, &after, &sheet(None)));
+}

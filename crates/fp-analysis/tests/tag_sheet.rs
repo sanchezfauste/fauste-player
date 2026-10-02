@@ -670,3 +670,30 @@ fn a_save_keeps_the_order_of_the_values_it_did_not_change() {
         );
     }
 }
+
+#[test]
+fn a_comment_cut_when_read_is_marked_and_survives_an_unrelated_edit() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = mp3(dir.path(), "x.mp3");
+    let long = "y".repeat(500);
+    edit(&path, |s| s.set_text(TagField::Comment, &long, false));
+    let small = Limits {
+        max_tag_chars: 64,
+        ..limits()
+    };
+    let before = read_tag_sheet(&path, &small).unwrap();
+    assert!(before.is_cut(TagField::Comment));
+    assert!(!before.is_cut(TagField::Title));
+    let mut after = before.clone();
+    after.set_text(TagField::Genre, "Pop", true);
+    write_tag_sheet(&path, &before, &after, &small).unwrap();
+    assert_eq!(sheet(&path).values(TagField::Comment), [long.as_str()]);
+    // Changing the cut field itself is refused and the file is untouched.
+    let mut after = before.clone();
+    after.set_text(TagField::Comment, "short", false);
+    assert_eq!(
+        write_tag_sheet(&path, &before, &after, &small),
+        Err(TagWriteError::InvalidField(TagField::Comment))
+    );
+    assert_eq!(sheet(&path).values(TagField::Comment), [long.as_str()]);
+}
