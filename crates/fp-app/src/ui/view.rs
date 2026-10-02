@@ -131,10 +131,9 @@ pub fn player_view(
     let Some(track) = current else {
         return Some(view);
     };
-    let pos = position
-        .filter(|v| v.is_finite())
-        .unwrap_or_else(|| track.cue_in_secs());
-    let cue_out = track.cue_out_secs();
+    let range = track.play_range(state.config.players.use_cue_markers);
+    let pos = position.filter(|v| v.is_finite()).unwrap_or(range.cue_in);
+    let cue_out = range.cue_out;
     let total = (track.duration_secs > 0.0).then_some(track.duration_secs);
     view.title = Some(track.title.clone());
     view.artist = Some(track.artist.clone()).filter(|a| !a.is_empty());
@@ -232,6 +231,7 @@ pub fn playlist_times(
     playlist: PlaylistId,
     positions: &[(PlayerId, f64)],
 ) -> PlaylistTimes {
+    let use_markers = state.config.players.use_cue_markers;
     let mut total = 0.0;
     let mut elapsed = 0.0;
     for e in state
@@ -243,7 +243,8 @@ pub fn playlist_times(
         let Some(track) = state.library.get(e.track) else {
             continue;
         };
-        let len = track.play_length_secs();
+        let range = track.play_range(use_markers);
+        let len = range.length();
         total += len;
         // This player's own progress only: players are independent.
         let on_air = state
@@ -254,8 +255,8 @@ pub fn playlist_times(
             let pos = positions
                 .iter()
                 .find(|(id, _)| *id == p.id)
-                .map_or(track.cue_in_secs(), |(_, s)| *s);
-            elapsed += (pos - track.cue_in_secs()).clamp(0.0, len);
+                .map_or(range.cue_in, |(_, s)| *s);
+            elapsed += (pos - range.cue_in).clamp(0.0, len);
         } else if e.is_played_by(player) {
             elapsed += len;
         }

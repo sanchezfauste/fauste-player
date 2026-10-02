@@ -321,7 +321,11 @@ pub(crate) fn track_table(
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         ui.add_space(10.0);
                         let d = if track.duration_secs > 0.0 {
-                            format::clock(track.play_length_secs())
+                            format::clock(
+                                track
+                                    .play_range(scene.state.config.players.use_cue_markers)
+                                    .length(),
+                            )
                         } else {
                             String::new()
                         };

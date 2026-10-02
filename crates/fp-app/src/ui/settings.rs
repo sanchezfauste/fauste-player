@@ -1640,7 +1640,10 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 .entries
                 .iter()
                 .filter_map(|e| scene.state.library.get(e.track))
-                .map(|t| t.play_length_secs())
+                .map(|t| {
+                    t.play_range(scene.state.config.players.use_cue_markers)
+                        .length()
+                })
                 .sum();
             (p.id, p.name.clone(), p.entries.len(), total)
         })

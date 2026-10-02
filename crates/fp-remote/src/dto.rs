@@ -255,12 +255,13 @@ pub fn cartwall(model: &AppState, playback: &Playback) -> CartwallDto {
 }
 
 fn player_dto(model: &AppState, playback: &Playback, index: usize, p: &PlayerState) -> PlayerDto {
+    let use_markers = model.config.players.use_cue_markers;
     let current = p.current.and_then(|e| model.track_for_entry(e));
     let elapsed = current.map(|t| {
         playback
             .player_position(p.id)
             .filter(|v| v.is_finite())
-            .unwrap_or_else(|| t.cue_in_secs())
+            .unwrap_or_else(|| t.play_range(use_markers).cue_in)
     });
     PlayerDto {
         id: p.id,
@@ -277,7 +278,7 @@ fn player_dto(model: &AppState, playback: &Playback, index: usize, p: &PlayerSta
         elapsed_secs: elapsed,
         remaining_secs: current
             .zip(elapsed)
-            .map(|(t, e)| (t.cue_out_secs() - e).max(0.0)),
+            .map(|(t, e)| (t.play_range(use_markers).cue_out - e).max(0.0)),
     }
 }
 

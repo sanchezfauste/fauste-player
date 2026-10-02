@@ -164,3 +164,38 @@ fn a_waveform_reduces_to_at_most_n_buckets() {
     assert_eq!(w.reduced(10), w, "short enough already");
     assert_eq!(w.reduced(0), w, "0 means no reduction");
 }
+
+fn cut_the_current_track_at(s: &mut fp_model::AppState, p: PlayerId, secs: f64) {
+    let entry = s.player(p).unwrap().current.unwrap();
+    let track = s.playlists.entry(entry).unwrap().track;
+    fp_model::apply(
+        s,
+        Command::SetMarker {
+            track,
+            kind: MarkerKind::CueOut,
+            secs: Some(secs),
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_player_reports_its_remaining_time_to_the_play_range() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    cut_the_current_track_at(&mut s, p, 100.0);
+    let playback = Playback {
+        players: vec![(p, 30.0)],
+        ..Default::default()
+    };
+    assert_eq!(
+        dto::player(&s, &playback, p).unwrap().remaining_secs,
+        Some(70.0)
+    );
+    s.config.players.use_cue_markers = false;
+    assert_eq!(
+        dto::player(&s, &playback, p).unwrap().remaining_secs,
+        Some(150.0)
+    );
+}
