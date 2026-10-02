@@ -7,9 +7,9 @@ mod support;
 use std::io::Write;
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use fp_remote::{ServerError, ServerStatus, spawn};
+use fp_remote::{ServerError, ServerStatus, Timing, spawn_with};
 use support::{FakeControl, demo_state};
 
 #[derive(Clone, Default)]
@@ -40,13 +40,30 @@ fn a_busy_port_is_logged_once_across_retries() {
         s.config.remote.http.enabled = true;
         s.config.remote.http.port = port;
     });
-    let handle = spawn(fake.clone()).unwrap();
-    // The bind is retried every 2 s: let it try three times.
-    std::thread::sleep(Duration::from_millis(5_500));
-    assert!(matches!(
-        handle.status().http,
-        ServerStatus::Error(ServerError::Bind(_))
-    ));
+    let timing = Timing {
+        config_poll: Duration::from_millis(5),
+        bind_retry: Duration::from_millis(10),
+    };
+    let handle = spawn_with(fake.clone(), timing).unwrap();
+    // Every round publishes the status again as a new snapshot, so the
+    // number of distinct snapshots with the bind error is the number of
+    // times the port was tried. Wait for four of them (no fixed sleep).
+    let cell = handle.status_cell();
+    let mut seen = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while seen.len() < 4 {
+        assert!(
+            Instant::now() < deadline,
+            "only {} attempts seen",
+            seen.len()
+        );
+        let status = cell.load_full();
+        let failed = matches!(status.http, ServerStatus::Error(ServerError::Bind(_)));
+        if failed && !seen.iter().any(|s| Arc::ptr_eq(s, &status)) {
+            seen.push(status);
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
     drop(handle);
     let text = String::from_utf8(lines.0.lock().unwrap().clone()).unwrap();
     assert_eq!(

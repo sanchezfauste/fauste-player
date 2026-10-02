@@ -15,4 +15,6 @@ pub mod repeat_log;
 pub mod server;
 pub mod throttle;
 
-pub use server::{RemoteHandle, RemoteStatus, ServerError, ServerStatus, spawn};
+pub use server::{
+    RemoteHandle, RemoteStatus, ServerError, ServerStatus, Timing, spawn, spawn_with,
+};

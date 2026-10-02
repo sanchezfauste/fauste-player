@@ -82,14 +82,42 @@ impl Drop for RemoteHandle {
     }
 }
 
+/// How often the remote thread looks at things. The defaults are the ones
+/// the application runs with; tests shorten them to see several rounds
+/// without waiting seconds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Timing {
+    /// How often the configuration in the snapshot is looked at.
+    pub config_poll: Duration,
+    /// How often a server whose address could not be bound tries again.
+    pub bind_retry: Duration,
+}
+
+impl Default for Timing {
+    fn default() -> Self {
+        Self {
+            config_poll: CONFIG_POLL,
+            bind_retry: BIND_RETRY,
+        }
+    }
+}
+
 /// Starts the remote thread. It listens only once `config.remote` asks for it.
 pub fn spawn(control: Arc<dyn RemoteControl>) -> std::io::Result<RemoteHandle> {
+    spawn_with(control, Timing::default())
+}
+
+/// As [`spawn`], with the thread's own timing.
+pub fn spawn_with(
+    control: Arc<dyn RemoteControl>,
+    timing: Timing,
+) -> std::io::Result<RemoteHandle> {
     let status = Arc::new(ArcSwap::from_pointee(RemoteStatus::default()));
     let (stop, stopped) = watch::channel(false);
     let shared = status.clone();
     let thread = std::thread::Builder::new()
         .name("fp-remote".to_owned())
-        .spawn(move || run(control, shared, stopped))?;
+        .spawn(move || run(control, shared, stopped, timing))?;
     Ok(RemoteHandle {
         status,
         stop,
@@ -101,12 +129,13 @@ fn run(
     control: Arc<dyn RemoteControl>,
     status: Arc<ArcSwap<RemoteStatus>>,
     stop: watch::Receiver<bool>,
+    timing: Timing,
 ) {
     match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     {
-        Ok(rt) => rt.block_on(supervise(control, status, stop)),
+        Ok(rt) => rt.block_on(supervise(control, status, stop, timing)),
         Err(e) => {
             tracing::error!(error = %e, "remote control could not start");
             let failed = ServerStatus::Error(ServerError::Runtime(e.to_string()));
@@ -148,6 +177,7 @@ async fn supervise(
     control: Arc<dyn RemoteControl>,
     status: Arc<ArcSwap<RemoteStatus>>,
     mut stop: watch::Receiver<bool>,
+    timing: Timing,
 ) {
     let (events, _) = broadcast::channel::<Arc<Envelope>>(EVENT_BUFFER);
     let publisher = tokio::spawn(publish(control.clone(), events.clone()));
@@ -162,7 +192,7 @@ async fn supervise(
     loop {
         let remote = control.model().config.remote.clone();
         // A port that was busy may have been freed: try it again.
-        if tried.elapsed() >= BIND_RETRY {
+        if tried.elapsed() >= timing.bind_retry {
             tried = tokio::time::Instant::now();
             if matches!(current.http, ServerStatus::Error(ServerError::Bind(_))) {
                 applied = None;
@@ -193,7 +223,7 @@ async fn supervise(
         }
         tokio::select! {
             _ = stop.changed() => break,
-            () = tokio::time::sleep(CONFIG_POLL) => {}
+            () = tokio::time::sleep(timing.config_poll) => {}
         }
     }
     for server in [running.take(), osc.take()].into_iter().flatten() {
