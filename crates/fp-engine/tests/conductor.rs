@@ -683,3 +683,139 @@ fn next_pressed_just_after_a_repeat_boundary_keeps_the_model_on_the_next_track()
     );
     assert_eq!(player.history, vec![e[0]]);
 }
+
+#[test]
+fn the_entry_on_air_set_as_next_plays_once_more_gaplessly_and_then_moves_on() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let e = entries(conductor.state());
+    let p = conductor.state().players[0].id;
+    assert!(handle.send(Command::Play(p)));
+    settle(&mut conductor, now);
+    assert!(handle.send(Command::SetNext(p, e[0])));
+    let mut heard: Vec<f32> = Vec::new();
+    for _ in 0..299 {
+        conductor.tick(now);
+        heard.extend(device.render(BLOCK).unwrap().chunks(2).map(|f| f[0]));
+        now += Duration::from_millis(10);
+        std::thread::yield_now();
+    }
+    // Pass 1 and pass 2 of track 1 are back to back, then track 2 follows,
+    // and track 1 never returns.
+    let first = heard.iter().position(|v| *v == 100_000.0).unwrap();
+    let len = TRACK_FRAMES as usize;
+    assert_eq!(
+        heard[first + len],
+        100_000.0,
+        "the second pass starts on the boundary"
+    );
+    let after = first + 2 * len;
+    assert!(
+        heard
+            .get(after + 100)
+            .is_some_and(|v| (*v as u64) / 100_000 == 2),
+        "then track 2"
+    );
+    // Track 2 plays on up to its closing de-click ramp, whose scaled samples
+    // can fall under 200_000.
+    assert!(
+        !heard[after..after + len - 480]
+            .iter()
+            .any(|v| (*v as u64) / 100_000 == 1),
+        "it acted once"
+    );
+    let model = handle.model.load();
+    let player = model.player(p).unwrap();
+    assert_eq!(player.current, Some(e[1]));
+    assert!(model.playlists.entry(e[0]).unwrap().is_played_by(p));
+    // One record for the replay, one when the entry is left for track 2.
+    assert_eq!(player.history, vec![e[0], e[0]]);
+}
+
+#[test]
+fn in_single_mode_the_self_next_stops_the_player_and_play_starts_the_entry_again() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let e = entries(conductor.state());
+    let p = conductor.state().players[0].id;
+    assert!(handle.send(Command::SetMode(p, PlayMode::Single)));
+    assert!(handle.send(Command::Play(p)));
+    settle(&mut conductor, now);
+    assert!(handle.send(Command::SetNext(p, e[0])));
+    for _ in 0..250 {
+        conductor.tick(now);
+        device.render(BLOCK).unwrap();
+        now += Duration::from_millis(10);
+        std::thread::yield_now();
+    }
+    let player = handle.model.load().player(p).unwrap().clone();
+    assert_eq!(
+        (player.transport, player.next),
+        (Transport::Stopped, Some(e[0]))
+    );
+    assert!(handle.send(Command::Play(p)));
+    settle(&mut conductor, now);
+    assert_eq!(handle.model.load().player(p).unwrap().current, Some(e[0]));
+}
+
+#[test]
+fn in_single_mode_stop_after_current_ends_a_repeat_at_the_end_of_the_pass() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let e = entries(conductor.state());
+    let p = conductor.state().players[0].id;
+    assert!(handle.send(Command::SetMode(p, PlayMode::Single)));
+    assert!(handle.send(Command::ToggleEntryRepeat(e[0])));
+    assert!(handle.send(Command::Play(p)));
+    settle(&mut conductor, now);
+    assert!(handle.send(Command::ToggleStopAfterCurrent(p)));
+    for _ in 0..250 {
+        conductor.tick(now);
+        device.render(BLOCK).unwrap();
+        now += Duration::from_millis(10);
+        std::thread::yield_now();
+    }
+    let player = handle.model.load().player(p).unwrap().clone();
+    assert_eq!(player.transport, Transport::Stopped);
+    assert!(!player.stop_after_current);
+}
+
+#[test]
+fn play_just_after_a_replay_boundary_keeps_the_model_consistent() {
+    // Same shape as the repeat variant, with a self-next: the Play that
+    // arrives in the tick of the restart wins, and the entry is not recorded
+    // twice.
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let e = entries(conductor.state());
+    let p = conductor.state().players[0].id;
+    assert!(handle.send(Command::Play(p)));
+    settle(&mut conductor, now);
+    assert!(handle.send(Command::SetNext(p, e[0])));
+    let mut heard = 0usize;
+    while heard + BLOCK < TRACK_FRAMES as usize - BLOCK {
+        conductor.tick(now);
+        device.render(BLOCK).unwrap();
+        heard += BLOCK;
+        now += Duration::from_millis(10);
+        std::thread::yield_now();
+    }
+    conductor.tick(now);
+    for _ in 0..3 {
+        device.render(BLOCK).unwrap();
+    }
+    assert!(handle.send(Command::Play(p)));
+    now += Duration::from_millis(30);
+    for _ in 0..20 {
+        conductor.tick(now);
+        device.render(BLOCK).unwrap();
+        now += Duration::from_millis(10);
+        std::thread::yield_now();
+    }
+    let model = handle.model.load();
+    let player = model.player(p).unwrap();
+    assert!(
+        matches!(player.current, Some(c) if c == e[0] || c == e[1]),
+        "{player:?}"
+    );
+    assert!(
+        player.history.iter().filter(|h| **h == e[0]).count() <= 1,
+        "{player:?}"
+    );
+}
