@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `Track` carries year, genre, album artist, composer and comment, read from the file's tags in a cheap tag-only pass (O23); hovering a table row shows a tooltip with the track's tags, format and path; the row menu opens an "Edit tags…" modal that writes the tags into the file safely, on a helper thread.
+**Goal:** `Track` carries the recording date, genre, album artist, composer and comment, read from the file's tags in a cheap tag-only pass (O23); hovering a table row shows a tooltip with the track's tags, format and path; the row menu opens an "Edit tags…" modal that writes the tags into the file safely, on a helper thread.
 
 **Architecture:**
 - **Model first.** `Track` gains five tag fields and `tags_read`; `TrackTags` is the one value type for what the UI shows, what the editor edits and what the file reader returns. `Command::ApplyTags` stores it. Whether a track may be edited is a pure function, `fp_model::tag_edit_block`. The cap on tag text is a `Config` field, `limits.max_tag_chars`.
@@ -11,7 +11,7 @@
 
 **Tech Stack:** Rust, lofty 0.25.4 (existing dependency), egui/eframe 0.36.2, egui_kittest 0.36.2, `hound` (dev-dependency) for generated WAV files. No new dependency, so `cargo deny check` needs no new entry (Task 2 still runs it).
 
-**Spec:** `docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md` §8 (item O23). Roadmap: `docs/superpowers/plans/2026-10-01-operator-feedback-2-roadmap.md` (plan 7, branch `feat/track-tags`). Plan 8 (track table: O7, O9, O16, O22, O24) builds its Year and Genre columns on the fields this plan adds.
+**Spec:** `docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md` §8 (item O23). Roadmap: `docs/superpowers/plans/2026-10-01-operator-feedback-2-roadmap.md` (plan 7, branch `feat/track-tags`). Plan 8 (track table: O7, O9, O16, O22, O24) builds its Date and Genre columns on the fields this plan adds.
 
 ## Decisions taken
 
@@ -25,21 +25,21 @@ The spec leaves these open. Each is the most conservative reading.
 - **Re-checked at Save.** The block is evaluated again when Save is pressed and the modal shows the reason instead of saving. A track that goes on air after the write started is safe on Linux and macOS (the rename keeps the open file intact); on Windows the rename fails and the error is reported.
 - **The tag-only pass.** Every `ApplyAnalysis` sets `tags_read` to false, so a track just analysed, a track of an older library (the field defaults to false) and a re-analysed track all get one cheap tag read afterwards. No analysis version bump, so the cache and the "analysed by an earlier version" notice are untouched. Failed reads still mark the track read (the reader degrades to the file-name title and empty fields), so nothing loops.
 - **Text cap.** Tag text read from files and typed in the editor is trimmed and cut to `limits.max_tag_chars` characters (default 2000, range 64..=100000): a hostile 16 MiB comment must not enter the library file.
-- **Year.** `Option<u32>`; the editor accepts empty or a whole number from 1 to 9999.
-- **Tooltip content follows the spec** (title, artist, album, year, genre, duration, format, path; a missing field is left out). Album artist, composer and comment are in the editor and the model only. The codec is the upper-cased file extension (the model records no codec), the sample rate is in kHz and the bit depth only when known.
+- **Date.** The recording date, `Option<String>` holding canonical ISO 8601 text (`YYYY[-MM[-DD[THH[:MM[:SS]]]]]`, partial allowed), as the standards store it: ID3v2.4 `TDRC`, Vorbis `DATE`, MP4 `©day`, APE `Year`. `fp_model::parse_tag_date` validates it (empty is none; year 1..=9999, month 1..=12, day 1..=31, hour 0..=23, minute and second 0..=59). Reading maps lofty's `Timestamp` through its `Display`; writing parses the text back into a `Timestamp`. A date is never reduced to a year: an unrelated edit leaves a full date as it was. The editor accepts empty or a valid date.
+- **Tooltip content follows the spec** (title, artist, album, date, genre, duration, format, path; a missing field is left out). Album artist, composer and comment are in the editor and the model only. The codec is the upper-cased file extension (the model records no codec), the sample rate is in kHz and the bit depth only when known.
 - **Failure keeps the modal open.** On a failed save the modal stays open with the operator's text and the notice area reports the reason; on success it closes.
 - **Not exposed remotely.** The remote API, MIDI and the session file are unchanged; the library file simply gains the new fields.
 
 ## Global Constraints
 
 - All code, identifiers, comments, docs and commit messages are in English. Never mention other products.
-- Spec O23 model: "`Track` gains `year`, `genre`, `album_artist`, `composer` and `comment`, read by `fp-analysis` with lofty. Loading is lenient. Tracks from earlier versions show the new fields empty until their tags are read again. That is a tag-only pass, not a full re-analysis."
-- Spec O23 tooltip: "Hovering a table row, after the usual tooltip delay, shows the title, artist, album, year, genre, duration, format (codec, sample rate, bit depth) and path. A missing field is left out."
-- Spec O23 editor: "The row context menu gains "Edit tags…". It opens a modal with title, artist, album, album artist, year, genre, composer and comment, for one track. **Save** writes the tags into the file on a helper thread, never on the UI thread: 1. copy the file to a temporary file in the same folder; 2. write the tags to the copy; 3. fsync it; 4. rename it over the original. On success, the library takes the new tags; markers and analysis are kept. On any error, the original file is untouched and the notice area reports it. The menu item is disabled, with the reason as a tooltip, when: the track is current or cued in any player; it is on a playing cart; its format has no writable tags in lofty; the file is missing."
+- Spec O23 model: "`Track` gains `date`, `genre`, `album_artist`, `composer` and `comment`, read by `fp-analysis` with lofty. Loading is lenient. Tracks from earlier versions show the new fields empty until their tags are read again. That is a tag-only pass, not a full re-analysis."
+- Spec O23 tooltip: "Hovering a table row, after the usual tooltip delay, shows the title, artist, album, date (as stored), genre, duration, format (codec, sample rate, bit depth) and path. A missing field is left out."
+- Spec O23 editor: "The row context menu gains "Edit tags…". It opens a modal with title, artist, album, album artist, date, genre, composer and comment, for one track. The field is labelled \"Date\"; a date that is not ISO 8601 blocks **Save** and the field is marked. **Save** writes the tags into the file on a helper thread, never on the UI thread: 1. copy the file to a temporary file in the same folder; 2. write the tags to the copy; 3. fsync it; 4. rename it over the original. On success, the library takes the new tags; markers and analysis are kept. On any error, the original file is untouched and the notice area reports it. The menu item is disabled, with the reason as a tooltip, when: the track is current or cued in any player; it is on a playing cart; its format has no writable tags in lofty; the file is missing."
 - CLAUDE.md rule 4: anything an operator might change is a `Config` field with a documented default, a range in `Config::validate` and lenient loading (Task 1: `limits.max_tag_chars`).
 - CLAUDE.md rule 6: no `unwrap`, `expect` or `panic` outside tests; `fp-analysis` denies `clippy::indexing_slicing` (use `get`).
 - CLAUDE.md rules 8 and 9: the UI never blocks (tag reading and writing run on worker threads; the UI only checks the extension) and untrusted tags, covers and files degrade to "not available" with a log line. A panic inside tag code is caught and reported as a failed job.
-- Behaviour lives in `fp-model` as pure functions (`apply_tags`, `tag_edit_block`, `needs_tag_read`, `TrackTags::clamped`, `parse_year`); the UI only displays and sends commands.
+- Behaviour lives in `fp-model` as pure functions (`apply_tags`, `tag_edit_block`, `needs_tag_read`, `TrackTags::clamped`, `parse_tag_date`); the UI only displays and sends commands.
 - Nothing goes on air by itself: this plan starts no audio.
 - UI strings are Fluent messages in `crates/fp-app/locales/en-US/main.ftl` (source) and `es-ES/main.ftl`, always both (`tests/i18n.rs::both_locales_define_the_same_keys` checks it).
 - Test files are generated in `tempfile` directories (WAV through `hound`, tagged through lofty); no network, no encoders, no real music.
@@ -59,7 +59,7 @@ Failure modes the spec implies and its tests do not name; each has a test in the
 
 ## File Structure
 
-- Modify `crates/fp-model/src/track.rs` (`TrackTags`, `InvalidYear`, `parse_year`, new `Track` fields, `Track::tags`, `apply_tags`, `needs_tag_read`), `config.rs` (`Limits::max_tag_chars`), `command.rs` (`Command::ApplyTags`), `reducer.rs` (the arm), `lib.rs` (exports).
+- Modify `crates/fp-model/src/track.rs` (`TrackTags`, `InvalidDate`, `parse_tag_date`, new `Track` fields, `Track::tags`, `apply_tags`, `needs_tag_read`), `config.rs` (`Limits::max_tag_chars`), `command.rs` (`Command::ApplyTags`), `reducer.rs` (the arm), `lib.rs` (exports).
 - Create `crates/fp-model/src/tag_edit.rs`: `TagEditBlock`, `tag_edit_block`.
 - Create `crates/fp-model/tests/track_tags.rs`.
 - Modify `crates/fp-analysis/src/metadata.rs` (`Tags` gains five fields), `lib.rs`; create `crates/fp-analysis/src/tags.rs` (`read_track_tags`, `can_write_tags`, `write_tags`, `TagWriteError`); create `crates/fp-analysis/tests/tags.rs`.
@@ -86,9 +86,9 @@ Failure modes the spec implies and its tests do not name; each has a test in the
 **Interfaces:**
 - Consumes: `AppState::{library, players, playlists, cartwall}`, `Cartwall::{playing, cart}`, `PlayerState::{current, cue}`, `Playlists::entry`.
 - Produces (plan 8 and Tasks 2-5 rely on these exact names):
-  - `pub struct TrackTags { pub title: String, pub artist: String, pub album: String, pub album_artist: String, pub year: Option<u32>, pub genre: String, pub composer: String, pub comment: String }` (`Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize`), with `fn clamped(self, max_chars: usize) -> TrackTags`.
-  - `pub struct InvalidYear;` and `pub fn parse_year(text: &str) -> Result<Option<u32>, InvalidYear>`.
-  - `Track` fields `pub year: Option<u32>`, `pub genre: String`, `pub album_artist: String`, `pub composer: String`, `pub comment: String`, `pub tags_read: bool` (all `#[serde(default)]`); methods `Track::tags(&self) -> TrackTags`, `Track::apply_tags(&mut self, tags: &TrackTags)`, `Track::needs_tag_read(&self) -> bool`.
+  - `pub struct TrackTags { pub title: String, pub artist: String, pub album: String, pub album_artist: String, pub date: Option<String>, pub genre: String, pub composer: String, pub comment: String }` (`Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize`), with `fn clamped(self, max_chars: usize) -> TrackTags`.
+  - `pub struct InvalidDate;` and `pub fn parse_tag_date(text: &str) -> Result<Option<String>, InvalidDate>` (pure; trims; empty is `Ok(None)`; otherwise exactly `YYYY[-MM[-DD[THH[:MM[:SS]]]]]` with ASCII digits and the ranges above, returning the trimmed text).
+  - `Track` fields `pub date: Option<String>`, `pub genre: String`, `pub album_artist: String`, `pub composer: String`, `pub comment: String`, `pub tags_read: bool` (all `#[serde(default)]`); methods `Track::tags(&self) -> TrackTags`, `Track::apply_tags(&mut self, tags: &TrackTags)`, `Track::needs_tag_read(&self) -> bool`.
   - `Command::ApplyTags { track: TrackId, tags: Box<TrackTags> }`.
   - `Limits::max_tag_chars: usize` (default 2000).
   - `pub enum TagEditBlock { FileUnavailable, UnsupportedFormat, TagsNotRead, OnAir, Cued, OnCart }` and `pub fn tag_edit_block(state: &AppState, track: TrackId, format_writable: bool) -> Option<TagEditBlock>`.
@@ -108,7 +108,7 @@ use std::path::PathBuf;
 use common::{entries, fixture, p0};
 use fp_model::{
     AppState, CartEdit, CartKind, Command, Config, FileState, TagEditBlock, Track, TrackAnalysis,
-    TrackId, TrackTags, apply, parse_year, tag_edit_block,
+    TrackId, TrackTags, apply, parse_tag_date, tag_edit_block,
 };
 
 fn track_of(state: &AppState, n: usize) -> TrackId {
@@ -121,7 +121,7 @@ fn tags() -> TrackTags {
         artist: "Real Artist".into(),
         album: "An Album".into(),
         album_artist: "Various".into(),
-        year: Some(1999),
+        date: Some("1999-03-07".into()),
         genre: "Pop".into(),
         composer: "A. Composer".into(),
         comment: "A note".into(),
@@ -161,7 +161,7 @@ fn apply_tags_stores_every_field_and_marks_the_tags_read() {
     assert_eq!(track.tags(), tags());
     assert!(track.tags_read);
     assert_eq!(track.title, "Real Title");
-    assert_eq!(track.year, Some(1999));
+    assert_eq!(track.date.as_deref(), Some("1999-03-07"));
 }
 
 #[test]
@@ -170,7 +170,7 @@ fn apply_tags_can_clear_a_field_but_never_the_title() {
     let cleared = TrackTags {
         title: String::new(),
         album: String::new(),
-        year: None,
+        date: None,
         ..tags()
     };
     apply(
@@ -183,7 +183,7 @@ fn apply_tags_can_clear_a_field_but_never_the_title() {
     .unwrap();
     let track = s.library.get(t).unwrap();
     assert_eq!(track.album, "");
-    assert_eq!(track.year, None);
+    assert_eq!(track.date, None);
     assert_eq!(track.title, "Real Title", "an empty title keeps the old one");
 }
 
@@ -245,7 +245,7 @@ fn an_old_library_entry_loads_with_empty_tags() {
     let json = r#"{"id":7,"path":"/m/a.flac","title":"A","artist":"B","album":"C",
         "duration_secs":10.0,"kind":"Music","file_state":"Ok","markers":{},"analyzed":true}"#;
     let track: Track = serde_json::from_str(json).unwrap();
-    assert_eq!(track.year, None);
+    assert_eq!(track.date, None);
     assert_eq!(track.genre, "");
     assert!(!track.tags_read);
     assert!(track.needs_tag_read());
@@ -265,12 +265,71 @@ fn tag_text_is_trimmed_and_cut() {
 }
 
 #[test]
-fn years_are_whole_numbers_from_1_to_9999() {
-    assert_eq!(parse_year(""), Ok(None));
-    assert_eq!(parse_year("  1984 "), Ok(Some(1984)));
-    for bad in ["0", "10000", "-3", "19x4", "1984.5", "٣٣"] {
-        assert!(parse_year(bad).is_err(), "{bad}");
+fn a_tag_date_is_iso_8601_and_may_be_partial() {
+    assert_eq!(parse_tag_date(""), Ok(None));
+    assert_eq!(parse_tag_date("   "), Ok(None));
+    for ok in [
+        "1984",
+        "0001",
+        "9999",
+        "2019-05",
+        "2019-05-14",
+        "2019-05-14T08",
+        "2019-05-14T08:30",
+        "2019-05-14T23:59:59",
+        "2019-12-31T00:00:00",
+    ] {
+        assert_eq!(parse_tag_date(ok), Ok(Some(ok.to_owned())), "{ok}");
     }
+    assert_eq!(
+        parse_tag_date("  2019-05-14 "),
+        Ok(Some("2019-05-14".to_owned())),
+        "trimmed"
+    );
+}
+
+#[test]
+fn anything_but_an_iso_8601_date_is_refused() {
+    for bad in [
+        "0",
+        "0000",
+        "19",
+        "10000",
+        "-3",
+        "19x4",
+        "1984.5",
+        "٣٣٣٣",
+        "2019-5",
+        "2019-00",
+        "2019-13",
+        "2019-05-00",
+        "2019-05-32",
+        "2019/05/14",
+        "abc",
+        "2019-05-14T",
+        "2019-05-14T25",
+        "2019-05-14T08:60",
+        "2019-05-14T08:30:60",
+        "2019-05-14 08:30",
+        "2019-05-14T8",
+        "2019-05-14T08:30:00:00",
+        "2019-05-14T08:30:00Z",
+        "2019-",
+    ] {
+        assert!(parse_tag_date(bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn a_date_round_trips_through_apply_tags() {
+    let mut track = Track::new(TrackId(1), PathBuf::from("a.mp3"));
+    track.apply_tags(&TrackTags {
+        date: Some("2019-05-14".into()),
+        ..TrackTags::default()
+    });
+    assert_eq!(track.tags().date.as_deref(), Some("2019-05-14"));
+    track.apply_tags(&TrackTags::default());
+    assert_eq!(track.tags().date, None);
 }
 
 #[test]
@@ -407,7 +466,7 @@ fn tag_edit_block_refuses_a_track_on_a_playing_cart() {
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-model --test track_tags`
-Expected: FAIL to compile (`TrackTags`, `tag_edit_block`, `Command::ApplyTags`, `parse_year` not found). `serde_json` is already a dev-dependency of `fp-model` (check `crates/fp-model/Cargo.toml`; add `serde_json.workspace = true` under `[dev-dependencies]` if it is missing).
+Expected: FAIL to compile (`TrackTags`, `tag_edit_block`, `Command::ApplyTags`, `parse_tag_date` not found). `serde_json` is already a dev-dependency of `fp-model` (check `crates/fp-model/Cargo.toml`; add `serde_json.workspace = true` under `[dev-dependencies]` if it is missing).
 
 - [ ] **Step 3: Implement**
 
@@ -422,7 +481,7 @@ pub struct TrackTags {
     pub artist: String,
     pub album: String,
     pub album_artist: String,
-    pub year: Option<u32>,
+    pub date: Option<String>,
     pub genre: String,
     pub composer: String,
     pub comment: String,
@@ -455,26 +514,57 @@ impl TrackTags {
         ] {
             cut(text, max_chars);
         }
+        if let Some(date) = &mut self.date {
+            cut(date, max_chars);
+        }
         self
     }
 }
 
-/// The year field holds something that is not a year.
+/// The date field holds something that is not an ISO 8601 date.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InvalidYear;
+pub struct InvalidDate;
 
-/// Empty is no year; otherwise a whole number from 1 to 9999.
-pub fn parse_year(text: &str) -> Result<Option<u32>, InvalidYear> {
+/// Reads `digits` ASCII digits from the front of `text` as a number in
+/// `range`, and returns it with the rest of the text.
+fn field(text: &str, digits: usize, range: std::ops::RangeInclusive<u32>) -> Option<(u32, &str)> {
+    let (head, rest) = (text.get(..digits)?, text.get(digits..)?);
+    if !head.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let value = head.parse::<u32>().ok()?;
+    range.contains(&value).then_some((value, rest))
+}
+
+/// The recording date as the standards store it (ID3v2.4 `TDRC`, Vorbis
+/// `DATE`, MP4 `©day`, APE `Year`): an ISO 8601 timestamp that may be
+/// partial, `YYYY[-MM[-DD[THH[:MM[:SS]]]]]`. Empty is no date. The text
+/// comes back trimmed; the day is not checked against the month.
+pub fn parse_tag_date(text: &str) -> Result<Option<String>, InvalidDate> {
     let text = text.trim();
     if text.is_empty() {
         return Ok(None);
     }
-    if !text.chars().all(|c| c.is_ascii_digit()) {
-        return Err(InvalidYear);
+    // (separator, digits, range) of each field after the year.
+    const FIELDS: [(char, usize, std::ops::RangeInclusive<u32>); 5] = [
+        ('-', 2, 1..=12),
+        ('-', 2, 1..=31),
+        ('T', 2, 0..=23),
+        (':', 2, 0..=59),
+        (':', 2, 0..=59),
+    ];
+    let (_, mut rest) = field(text, 4, 1..=9999).ok_or(InvalidDate)?;
+    for (separator, digits, range) in FIELDS {
+        let Some(after) = rest.strip_prefix(separator) else {
+            break;
+        };
+        let (_, next) = field(after, digits, range).ok_or(InvalidDate)?;
+        rest = next;
     }
-    match text.parse::<u32>() {
-        Ok(year @ 1..=9999) => Ok(Some(year)),
-        _ => Err(InvalidYear),
+    if rest.is_empty() {
+        Ok(Some(text.to_owned()))
+    } else {
+        Err(InvalidDate)
     }
 }
 ```
@@ -485,7 +575,7 @@ In `Track` add, after `analysis_version`:
     /// Tags beyond title, artist and album (feedback 2 spec O23). Libraries
     /// saved earlier have none until the tag-only pass reads them.
     #[serde(default)]
-    pub year: Option<u32>,
+    pub date: Option<String>,
     #[serde(default)]
     pub genre: String,
     #[serde(default)]
@@ -500,7 +590,7 @@ In `Track` add, after `analysis_version`:
     pub tags_read: bool,
 ```
 
-In `Track::new` add `year: None, genre: String::new(), album_artist: String::new(), composer: String::new(), comment: String::new(), tags_read: false,`. In the `impl Track` block add:
+In `Track::new` add `date: None, genre: String::new(), album_artist: String::new(), composer: String::new(), comment: String::new(), tags_read: false,`. In the `impl Track` block add:
 
 ```rust
     /// The tags as shown and edited.
@@ -510,7 +600,7 @@ In `Track::new` add `year: None, genre: String::new(), album_artist: String::new
             artist: self.artist.clone(),
             album: self.album.clone(),
             album_artist: self.album_artist.clone(),
-            year: self.year,
+            date: self.date.clone(),
             genre: self.genre.clone(),
             composer: self.composer.clone(),
             comment: self.comment.clone(),
@@ -527,7 +617,7 @@ In `Track::new` add `year: None, genre: String::new(), album_artist: String::new
         self.artist.clone_from(&tags.artist);
         self.album.clone_from(&tags.album);
         self.album_artist.clone_from(&tags.album_artist);
-        self.year = tags.year;
+        self.date.clone_from(&tags.date);
         self.genre.clone_from(&tags.genre);
         self.composer.clone_from(&tags.composer);
         self.comment.clone_from(&tags.comment);
@@ -655,7 +745,7 @@ pub fn tag_edit_block(
 }
 ```
 
-`lib.rs`: add `mod tag_edit;`, `pub use tag_edit::{TagEditBlock, tag_edit_block};` and extend the `track` re-export with `InvalidYear, TrackTags, parse_year`.
+`lib.rs`: add `mod tag_edit;`, `pub use tag_edit::{TagEditBlock, tag_edit_block};` and extend the `track` re-export with `InvalidDate, TrackTags, parse_tag_date`.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -683,11 +773,11 @@ git commit -m "feat(model): track tag fields, ApplyTags and the tag edit rule"
 **Interfaces:**
 - Consumes: `fp_model::{TrackTags, Limits}`, `metadata::{read_tags, title_from_file_name}`.
 - Produces:
-  - `Tags` gains `year: Option<u32>`, `genre`, `album_artist`, `composer`, `comment: Option<String>` (all `None` when absent).
+  - `Tags` gains `date: Option<String>` (kept only if `fp_model::parse_tag_date` accepts it, else `None` with a debug log line), `genre`, `album_artist`, `composer`, `comment: Option<String>` (all `None` when absent).
   - `fp_analysis::tags::read_track_tags(path: &Path, limits: &Limits) -> TrackTags`: never fails; the title falls back to the file name (and the artist to the file name's `Artist - `), text is cut to `limits.max_tag_chars`.
   - `fp_analysis::tags::can_write_tags(path: &Path) -> bool`: from the extension only, no I/O.
   - `fp_analysis::tags::write_tags(path: &Path, before: &TrackTags, after: &TrackTags, limits: &Limits) -> Result<(), TagWriteError>`.
-  - `#[derive(Debug, Clone, PartialEq, Eq)] pub enum TagWriteError { Unsupported, NotFound, Denied, Other(String) }` with `Display`.
+  - `#[derive(Debug, Clone, PartialEq, Eq)] pub enum TagWriteError { Unsupported, NotFound, Denied, InvalidDate, Other(String) }` with `Display`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -739,7 +829,7 @@ fn full() -> TrackTags {
         artist: "The Artist".into(),
         album: "An Album".into(),
         album_artist: "Various Artists".into(),
-        year: Some(1999),
+        date: Some("1999-03-07".into()),
         genre: "Pop".into(),
         composer: "A. Composer".into(),
         comment: "A note".into(),
@@ -776,7 +866,7 @@ fn an_untagged_file_reads_as_its_file_name() {
     let t = untagged_tags(&path);
     assert_eq!(t.title, "Carretera norte");
     assert_eq!(t.artist, "Marta Oliva");
-    assert_eq!((t.year, t.genre.as_str(), t.comment.as_str()), (None, "", ""));
+    assert_eq!((t.date, t.genre.as_str(), t.comment.as_str()), (None, "", ""));
 }
 
 #[test]
@@ -815,7 +905,7 @@ fn a_cleared_field_removes_the_tag() {
     let tagged = read_track_tags(&path, &limits());
     let cleared = TrackTags {
         album: String::new(),
-        year: None,
+        date: None,
         composer: String::new(),
         album_artist: String::new(),
         ..tagged.clone()
@@ -980,6 +1070,87 @@ fn what_is_written_is_cut_to_the_limit() {
     write_tags(&path, &untagged_tags(&path), &after, &small).unwrap();
     assert_eq!(read_track_tags(&path, &small).comment, "y".repeat(10));
 }
+
+fn tagged_by_date(path: &Path, date: &str) -> TrackTags {
+    let before = untagged_tags(path);
+    let after = TrackTags {
+        date: Some(date.into()),
+        ..before.clone()
+    };
+    write_tags(path, &before, &after, &limits()).unwrap();
+    read_track_tags(path, &limits())
+}
+
+#[test]
+fn a_full_date_is_written_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    assert_eq!(
+        tagged_by_date(&path, "2019-05-14").date.as_deref(),
+        Some("2019-05-14")
+    );
+}
+
+#[test]
+fn a_bare_year_is_written_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    assert_eq!(tagged_by_date(&path, "2019").date.as_deref(), Some("2019"));
+}
+
+#[test]
+fn a_date_with_a_time_is_written_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    assert_eq!(
+        tagged_by_date(&path, "2019-05-14T08:30").date.as_deref(),
+        Some("2019-05-14T08:30")
+    );
+}
+
+#[test]
+fn an_unrelated_edit_leaves_a_full_date_untouched() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    let tagged = tagged_by_date(&path, "2019-05-14");
+    let after = TrackTags {
+        artist: "Someone".into(),
+        ..tagged.clone()
+    };
+    write_tags(&path, &tagged, &after, &limits()).unwrap();
+    let read = read_track_tags(&path, &limits());
+    assert_eq!(read.date.as_deref(), Some("2019-05-14"));
+    assert_eq!(read.artist, "Someone");
+}
+
+#[test]
+fn clearing_the_date_removes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    let tagged = tagged_by_date(&path, "2019-05-14");
+    let after = TrackTags {
+        date: None,
+        ..tagged.clone()
+    };
+    write_tags(&path, &tagged, &after, &limits()).unwrap();
+    assert_eq!(read_track_tags(&path, &limits()).date, None);
+}
+
+#[test]
+fn an_invalid_date_is_refused_and_the_file_is_untouched() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "x.wav");
+    let original = std::fs::read(&path).unwrap();
+    let before = untagged_tags(&path);
+    let after = TrackTags {
+        date: Some("last spring".into()),
+        ..before.clone()
+    };
+    let result = write_tags(&path, &before, &after, &limits());
+    assert_eq!(result, Err(TagWriteError::InvalidDate));
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert_eq!(names(dir.path()), ["x.wav"]);
+}
 ```
 
 `image` is already a dev-usable dependency of `fp-analysis` (normal dependency); `lofty` too.
@@ -994,11 +1165,28 @@ Expected: FAIL to compile (`fp_analysis::tags` not found).
 `metadata.rs`: add to `Tags`
 
 ```rust
-    pub year: Option<u32>,
+    /// The recording date, ISO 8601 text as `fp_model::parse_tag_date` accepts.
+    pub date: Option<String>,
     pub genre: Option<String>,
     pub album_artist: Option<String>,
     pub composer: Option<String>,
     pub comment: Option<String>,
+```
+
+and, above `read_tags`, the helper (lofty's `Timestamp` prints as ISO 8601):
+
+```rust
+/// The recording date of `tag` as ISO 8601 text, if it is a valid one.
+fn tag_date(tag: &lofty::tag::Tag) -> Option<String> {
+    let text = tag.date()?.to_string();
+    match fp_model::parse_tag_date(&text) {
+        Ok(date) => date,
+        Err(_) => {
+            tracing::debug!("ignoring a tag date that is not ISO 8601: {text:?}");
+            None
+        }
+    }
+}
 ```
 
 and in `read_tags`, where `Tags { title: ..., cover }` is built:
@@ -1008,7 +1196,7 @@ and in `read_tags`, where `Tags { title: ..., cover }` is built:
         title: non_empty(tag.title()),
         artist: non_empty(tag.artist()),
         album: non_empty(tag.album()),
-        year: tag.year().filter(|y| (1..=9999).contains(y)),
+        date: tag_date(tag),
         genre: non_empty(tag.genre()),
         album_artist: non_empty(tag.get_string(lofty::tag::ItemKey::AlbumArtist).map(Into::into)),
         composer: non_empty(tag.get_string(lofty::tag::ItemKey::Composer).map(Into::into)),
@@ -1050,6 +1238,8 @@ pub enum TagWriteError {
     NotFound,
     /// No permission to write there.
     Denied,
+    /// The date is not an ISO 8601 date (`fp_model::parse_tag_date`).
+    InvalidDate,
     /// Anything else, with the system's or lofty's own description.
     Other(String),
 }
@@ -1060,6 +1250,7 @@ impl std::fmt::Display for TagWriteError {
             Self::Unsupported => f.write_str("this format has no writable tags"),
             Self::NotFound => f.write_str("the file was not found"),
             Self::Denied => f.write_str("permission denied"),
+            Self::InvalidDate => f.write_str("the date is not an ISO 8601 date"),
             Self::Other(detail) => f.write_str(detail),
         }
     }
@@ -1091,7 +1282,7 @@ pub fn read_track_tags(path: &Path, limits: &Limits) -> TrackTags {
         artist: tags.artist.or(file_artist).unwrap_or_default(),
         album: tags.album.unwrap_or_default(),
         album_artist: tags.album_artist.unwrap_or_default(),
-        year: tags.year,
+        date: tags.date,
         genre: tags.genre.unwrap_or_default(),
         composer: tags.composer.unwrap_or_default(),
         comment: tags.comment.unwrap_or_default(),
@@ -1177,7 +1368,7 @@ fn rewrite(
             .first_tag_mut()
             .ok_or_else(|| lofty_error("the file has no tag to edit"))?,
     };
-    change_tag(tag, before, after);
+    change_tag(tag, before, after)?;
     file.save_to_path(temp, WriteOptions::default())
         .map_err(lofty_error)?;
     std::fs::OpenOptions::new()
@@ -1188,7 +1379,7 @@ fn rewrite(
     Ok(())
 }
 
-fn change_tag(tag: &mut Tag, before: &TrackTags, after: &TrackTags) {
+fn change_tag(tag: &mut Tag, before: &TrackTags, after: &TrackTags) -> Result<(), TagWriteError> {
     fn text(
         tag: &mut Tag,
         old: &str,
@@ -1222,16 +1413,22 @@ fn change_tag(tag: &mut Tag, before: &TrackTags, after: &TrackTags) {
     text(tag, &before.comment, &after.comment, |t, v| t.set_comment(v), |t| t.remove_comment());
     item(tag, ItemKey::AlbumArtist, &before.album_artist, &after.album_artist);
     item(tag, ItemKey::Composer, &before.composer, &after.composer);
-    if before.year != after.year {
-        match after.year {
-            Some(year) => tag.set_year(year),
-            None => tag.remove_year(),
+    if before.date != after.date {
+        match &after.date {
+            Some(text) => {
+                let timestamp = text
+                    .parse::<Timestamp>()
+                    .map_err(|_| TagWriteError::InvalidDate)?;
+                tag.set_date(timestamp);
+            }
+            None => tag.remove_date(),
         }
     }
+    Ok(())
 }
 ```
 
-Notes for the implementer: (1) `file.primary_tag_mut()` then `file.first_tag_mut()` in the `match` can hit a borrow-checker limit; if it does, compute `let use_primary = file.primary_tag().is_some();` first and branch on it. (2) If `TaggedFileExt` / `AudioFile` imports are reported unused or missing, follow the compiler: the tests in `crates/fp-analysis/tests/metadata.rs` show the working `lofty::prelude::*` calls. (3) `tag.set_year`/`remove_year` are `Accessor` methods; if `remove_*` differ in this lofty version, check `~/.cargo/registry/src/*/lofty-0.25.4/src/tag/accessor.rs`. (4) A panic from `lofty::read_from_path` is caught; the `FileType` import is used by `can_write_tags`.
+Notes for the implementer: (1) `file.primary_tag_mut()` then `file.first_tag_mut()` in the `match` can hit a borrow-checker limit; if it does, compute `let use_primary = file.primary_tag().is_some();` first and branch on it. (2) If `TaggedFileExt` / `AudioFile` imports are reported unused or missing, follow the compiler: the tests in `crates/fp-analysis/tests/metadata.rs` show the working `lofty::prelude::*` calls. (3) `tag.set_date`/`remove_date`/`date` are `Accessor` methods taking and giving `lofty::tag::items::Timestamp` (see `src/tag/items/timestamp.rs`: `FromStr` parses ISO 8601, `Display` writes it); if `remove_*` differ in this lofty version, check `~/.cargo/registry/src/*/lofty-0.25.4/src/tag/accessor.rs`. (4) A panic from `lofty::read_from_path` is caught; the `FileType` import is used by `can_write_tags`.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -1626,9 +1823,9 @@ git commit -m "feat(app): a tag worker and the tag-only pass for tracks with unr
 **Interfaces:**
 - Consumes: `fp_model::Track` (tag fields from Task 1, `format: Option<AudioFormat>`, `duration_secs`, `path`).
 - Produces:
-  - `pub enum TipField { Title, Artist, Album, Year, Genre, Duration, Format, Path }` (`Debug, Clone, Copy, PartialEq, Eq`).
+  - `pub enum TipField { Title, Artist, Album, Date, Genre, Duration, Format, Path }` (`Debug, Clone, Copy, PartialEq, Eq`).
   - `pub fn track_tooltip(track: &Track) -> Vec<(TipField, String)>`: only the fields the track has, in that order. Duration as `format::clock`, format as `FLAC · 44.1 kHz · 16 bit` (codec from the upper-cased extension, rate in kHz with at most one decimal, bit depth only when known; any part that is unknown is left out; no line when nothing is known), path as `track.path.display()`.
-  - Locale keys `tip-field-title`, `tip-field-artist`, `tip-field-album`, `tip-field-year`, `tip-field-genre`, `tip-field-duration`, `tip-field-format`, `tip-field-path`, and `tip-format-rate` (`{ $value } kHz`), `tip-format-bits` (`{ $bits } bit`). Plan 8's Year and Genre column headers can reuse the first labels.
+  - Locale keys `tip-field-title`, `tip-field-artist`, `tip-field-album`, `tip-field-date`, `tip-field-genre`, `tip-field-duration`, `tip-field-format`, `tip-field-path`, and `tip-format-rate` (`{ $value } kHz`), `tip-format-bits` (`{ $bits } bit`). Plan 8's Date and Genre column headers can reuse the first labels.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1640,7 +1837,7 @@ fn tip_track() -> Track {
     t.title = "Song".into();
     t.artist = "Artist".into();
     t.album = "Album".into();
-    t.year = Some(1999);
+    t.date = Some("1999-03-07".into());
     t.genre = "Pop".into();
     t.duration_secs = 200.0;
     t.format = Some(AudioFormat {
@@ -1661,7 +1858,7 @@ fn the_tooltip_lists_what_the_track_has_in_order() {
             TipField::Title,
             TipField::Artist,
             TipField::Album,
-            TipField::Year,
+            TipField::Date,
             TipField::Genre,
             TipField::Duration,
             TipField::Format,
@@ -1669,7 +1866,7 @@ fn the_tooltip_lists_what_the_track_has_in_order() {
         ]
     );
     let value = |f| tip.iter().find(|(g, _)| *g == f).unwrap().1.clone();
-    assert_eq!(value(TipField::Year), "1999");
+    assert_eq!(value(TipField::Date), "1999-03-07");
     assert_eq!(value(TipField::Duration), "03:20");
     assert_eq!(value(TipField::Format), "FLAC · 44.1 kHz · 16 bit");
     assert_eq!(value(TipField::Path), "/m/Artist - Song.flac");
@@ -1679,7 +1876,7 @@ fn the_tooltip_lists_what_the_track_has_in_order() {
 fn a_missing_field_is_left_out() {
     let mut t = tip_track();
     t.album.clear();
-    t.year = None;
+    t.date = None;
     t.genre.clear();
     t.duration_secs = 0.0;
     t.format = None;
@@ -1733,7 +1930,7 @@ fn tagged_state(path: Option<&Path>) -> AppState {
     t.title = "Song 1".into();
     t.artist = "The Artist".into();
     t.album = "An Album".into();
-    t.year = Some(1999);
+    t.date = Some("1999-03-07".into());
     t.genre = "Pop".into();
     t.duration_secs = 200.0;
     t.analyzed = true;
@@ -1798,7 +1995,7 @@ pub enum TipField {
     Title,
     Artist,
     Album,
-    Year,
+    Date,
     Genre,
     Duration,
     Format,
@@ -1818,8 +2015,8 @@ pub fn track_tooltip(track: &Track) -> Vec<(TipField, String)> {
     text(TipField::Artist, &track.artist);
     text(TipField::Album, &track.album);
     text(
-        TipField::Year,
-        &track.year.map(|y| y.to_string()).unwrap_or_default(),
+        TipField::Date,
+        track.date.as_deref().unwrap_or_default(),
     );
     text(TipField::Genre, &track.genre);
     if track.duration_secs.is_finite() && track.duration_secs > 0.0 {
@@ -1880,7 +2077,7 @@ fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
                     view::TipField::Title => "tip-field-title",
                     view::TipField::Artist => "tip-field-artist",
                     view::TipField::Album => "tip-field-album",
-                    view::TipField::Year => "tip-field-year",
+                    view::TipField::Date => "tip-field-date",
                     view::TipField::Genre => "tip-field-genre",
                     view::TipField::Duration => "tip-field-duration",
                     view::TipField::Format => "tip-field-format",
@@ -1909,14 +2106,14 @@ Locale additions, `en-US/main.ftl` (after `tip-on-air-elsewhere`):
 tip-field-title = Title
 tip-field-artist = Artist
 tip-field-album = Album
-tip-field-year = Year
+tip-field-date = Date
 tip-field-genre = Genre
 tip-field-duration = Duration
 tip-field-format = Format
 tip-field-path = Path
 ```
 
-`es-ES/main.ftl`: `Título`, `Artista`, `Álbum`, `Año`, `Género`, `Duración`, `Formato`, `Ruta`.
+`es-ES/main.ftl`: `Título`, `Artista`, `Álbum`, `Fecha`, `Género`, `Duración`, `Formato`, `Ruta`.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -1945,12 +2142,12 @@ git commit -m "feat(ui): a tooltip with the tags, format and path on each table 
 - Test: Modify `crates/fp-app/tests/track_tags_ui.rs`, `crates/fp-app/tests/view.rs`
 
 **Interfaces:**
-- Consumes: `fp_model::{tag_edit_block, TagEditBlock, TrackTags, parse_year, Command::ApplyTags}`, `fp_analysis::tags::{can_write_tags, TagWriteError}`, `crate::tags::{TagWorker, TagJob, TagOutcome}`.
+- Consumes: `fp_model::{tag_edit_block, TagEditBlock, TrackTags, parse_tag_date, Command::ApplyTags}`, `fp_analysis::tags::{can_write_tags, TagWriteError}`, `crate::tags::{TagWorker, TagJob, TagOutcome}`.
 - Produces:
   - `view::tag_edit_availability(state: &AppState, track: TrackId) -> Option<TagEditBlock>`: `tag_edit_block(state, track, can_write_tags(&path))`, with the extension check on the track's path (no I/O).
-  - `pub(crate) struct TagEditor` (in `tag_editor.rs`) with `TagEditor::open(track: &Track) -> TagEditor` (the draft starts as `track.tags()` and `year_text` as the year), `track: TrackId`, `draft: TrackTags`, `original: TrackTags`, `year_text: String`, `saving: bool`; `fn changed(&self) -> bool`; `pub(crate) fn show(ctx, scene, editor: &mut TagEditor, block: Option<TagEditBlock>) -> EditorAnswer` with `pub(crate) enum EditorAnswer { Open, Cancel, Save }`.
+  - `pub(crate) struct TagEditor` (in `tag_editor.rs`) with `TagEditor::open(track: &Track) -> TagEditor` (the draft starts as `track.tags()` and `date_text` as the date text), `track: TrackId`, `draft: TrackTags`, `original: TrackTags`, `date_text: String`, `saving: bool`; `fn changed(&self) -> bool`; `pub(crate) fn show(ctx, scene, editor: &mut TagEditor, block: Option<TagEditBlock>) -> EditorAnswer` with `pub(crate) enum EditorAnswer { Open, Cancel, Save }`.
   - `ViewState::tag_editor: Option<TagEditor>`; `AppUi` owns `tag_worker: Option<TagWorker>` (spawned at the first save, with `ctx.request_repaint` as its repaint callback).
-  - Locale keys: `menu-edit-tags`, `menu-edit-tags-file`, `-format`, `-unread`, `-on-air`, `-cued`, `-cart` (the disabled reasons), `tags-editor-title`, `tags-field-album-artist`, `tags-field-composer`, `tags-field-comment` (the others reuse the `tip-field-*` labels), `tags-year-invalid`, `tags-save`, `tags-cancel`, `tags-saving`, `tags-saved`, `tags-save-failed`, `tags-error-unsupported`, `tags-error-not-found`, `tags-error-denied`, `tags-error-other`.
+  - Locale keys: `menu-edit-tags`, `menu-edit-tags-file`, `-format`, `-unread`, `-on-air`, `-cued`, `-cart` (the disabled reasons), `tags-editor-title`, `tags-field-album-artist`, `tags-field-composer`, `tags-field-comment` (the others reuse the `tip-field-*` labels), `tags-date-invalid`, `tags-save`, `tags-cancel`, `tags-saving`, `tags-saved`, `tags-save-failed`, `tags-error-unsupported`, `tags-error-not-found`, `tags-error-denied`, `tags-error-invalid-date`, `tags-error-other`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2030,7 +2227,7 @@ fn the_menu_item_opens_an_editor_with_the_current_tags() {
     assert!(h.query_by_label("Edit tags").is_some(), "the modal title");
     assert_eq!(field(&h, "Title"), "Song 1");
     assert_eq!(field(&h, "Artist"), "The Artist");
-    assert_eq!(field(&h, "Year"), "1999");
+    assert_eq!(field(&h, "Date"), "1999-03-07");
     assert_eq!(field(&h, "Genre"), "Pop");
 }
 
@@ -2102,7 +2299,7 @@ fn saving_writes_the_file_and_the_library_takes_the_tags() {
     let file = lofty::read_from_path(&path).unwrap();
     assert_eq!(file.primary_tag().unwrap().genre().as_deref(), Some("Jazz"));
     let track = fake.state.load().library.iter().next().unwrap().clone();
-    assert_eq!(track.year, None, "the file has no year: the read-back wins");
+    assert_eq!(track.date, None, "the file has no date: the read-back wins");
     assert!(track.tags_read);
     assert_eq!(track.duration_secs, 200.0, "analysis data is kept");
     assert!(h.query_by_label("Edit tags").is_none(), "the modal closed");
@@ -2125,7 +2322,7 @@ fn a_failed_save_keeps_the_modal_and_says_why() {
 }
 
 #[test]
-fn save_needs_a_change_and_a_valid_year() {
+fn save_needs_a_change_and_a_valid_date() {
     let dir = tempfile::tempdir().unwrap();
     let (mut h, _fake) = harness(tagged_state(Some(&wav(dir.path(), "a.wav"))));
     open_editor(&mut h);
@@ -2135,13 +2332,13 @@ fn save_needs_a_change_and_a_valid_year() {
             .is_disabled(),
         "nothing changed"
     );
-    type_into(&mut h, "Year", "19x4");
+    type_into(&mut h, "Date", "2019-13");
     assert!(
         h.get_by_role_and_label(Role::Button, "Save")
             .accesskit_node()
             .is_disabled()
     );
-    assert!(h.query_by_label_contains("whole number from 1 to 9999").is_some());
+    assert!(h.query_by_label_contains("Use YYYY, YYYY-MM or YYYY-MM-DD").is_some());
 }
 
 #[test]
@@ -2239,7 +2436,7 @@ pub fn tag_edit_availability(
 //! It only edits a draft; saving is the application's job (`AppUi`).
 
 use egui::{RichText, vec2};
-use fp_model::{TagEditBlock, Track, TrackId, TrackTags, parse_year};
+use fp_model::{TagEditBlock, Track, TrackId, TrackTags, parse_tag_date};
 
 use super::app::Scene;
 use super::theme;
@@ -2257,7 +2454,7 @@ pub(crate) struct TagEditor {
     pub track: TrackId,
     pub original: TrackTags,
     pub draft: TrackTags,
-    pub year_text: String,
+    pub date_text: String,
     /// A save is running on the tag worker.
     pub saving: bool,
 }
@@ -2267,20 +2464,20 @@ impl TagEditor {
         let tags = track.tags();
         Self {
             track: track.id,
-            year_text: tags.year.map(|y| y.to_string()).unwrap_or_default(),
+            date_text: tags.date.clone().unwrap_or_default(),
             original: tags.clone(),
             draft: tags,
             saving: false,
         }
     }
 
-    /// The draft as the operator typed it: trimmed, the year parsed.
-    /// `None` while the year text is not a year.
+    /// The draft as the operator typed it: trimmed, the date parsed.
+    /// `None` while the date text is not an ISO 8601 date.
     pub fn parsed(&self, max_chars: usize) -> Option<TrackTags> {
-        let year = parse_year(&self.year_text).ok()?;
+        let date = parse_tag_date(&self.date_text).ok()?;
         Some(
             TrackTags {
-                year,
+                date,
                 ..self.draft.clone()
             }
             .clamped(max_chars),
@@ -2396,7 +2593,7 @@ pub(crate) fn show(
                         row(ui, &t.tr("tip-field-artist"), &mut d.artist, max, false);
                         row(ui, &t.tr("tip-field-album"), &mut d.album, max, false);
                         row(ui, &t.tr("tags-field-album-artist"), &mut d.album_artist, max, false);
-                        row(ui, &t.tr("tip-field-year"), &mut editor.year_text, 4, false);
+                        row(ui, &t.tr("tip-field-date"), &mut editor.date_text, 19, false);
                         row(ui, &t.tr("tip-field-genre"), &mut d.genre, max, false);
                         row(ui, &t.tr("tags-field-composer"), &mut d.composer, max, false);
                         row(ui, &t.tr("tags-field-comment"), &mut d.comment, max, true);
@@ -2409,8 +2606,8 @@ pub(crate) fn show(
                         .selectable(false),
                 );
             };
-            if parse_year(&editor.year_text).is_err() {
-                warn(ui, t.tr("tags-year-invalid"));
+            if parse_tag_date(&editor.date_text).is_err() {
+                warn(ui, t.tr("tags-date-invalid"));
             }
             if let Some(reason) = block {
                 warn(ui, t.tr(block_key(reason)));
@@ -2545,7 +2742,7 @@ declare `let mut edit_tags: Option<fp_model::TrackId> = None;` next to `let mut 
         }
 ```
 
-with `state_title(state, track) -> String` returning the track's title or empty and `tag_error_text(i18n, &TagWriteError) -> String` mapping `Unsupported`/`NotFound`/`Denied` to `tags-error-unsupported`/`-not-found`/`-denied` and `Other(detail)` to `tags-error-other` with `{ $detail }`.
+with `state_title(state, track) -> String` returning the track's title or empty and `tag_error_text(i18n, &TagWriteError) -> String` mapping `Unsupported`/`NotFound`/`Denied`/`InvalidDate` to `tags-error-unsupported`/`-not-found`/`-denied`/`-invalid-date` and `Other(detail)` to `tags-error-other` with `{ $detail }`.
 
 2. Where the other dialogs are drawn (after `cue_window::show_all`, inside the branch that draws About and the outdated notice so Settings and the close guard stay above it; draw it when `!self.view.settings_open`, before the exit guard):
 
@@ -2622,7 +2819,7 @@ tags-editor-title = Edit tags
 tags-field-album-artist = Album artist
 tags-field-composer = Composer
 tags-field-comment = Comment
-tags-year-invalid = The year must be a whole number from 1 to 9999.
+tags-date-invalid = Use YYYY, YYYY-MM or YYYY-MM-DD (optionally with a time).
 tags-save = Save
 tags-cancel = Cancel
 tags-saving = Saving…
@@ -2631,11 +2828,12 @@ tags-save-failed = The tags of “{ $title }” were not saved: { $error }
 tags-error-unsupported = this format has no writable tags
 tags-error-not-found = the file was not found
 tags-error-denied = no permission to write the file or its folder
+tags-error-invalid-date = the date is not a valid ISO 8601 date
 tags-error-other = { $detail }
 tags-error-worker = The tag editor is not available.
 ```
 
-and the matching `es-ES/main.ftl` (`menu-edit-tags = Editar etiquetas…`, `menu-edit-tags-file = El archivo no existe o no se puede leer`, `menu-edit-tags-format = Este formato no admite escribir etiquetas`, `menu-edit-tags-unread = Aún no se han leído las etiquetas`, `menu-edit-tags-on-air = No se pueden editar las etiquetas de una pista que está sonando`, `menu-edit-tags-cued = No se pueden editar las etiquetas de una pista en CUE`, `menu-edit-tags-cart = No se pueden editar las etiquetas de una pista en un cart que suena`, `tags-editor-title = Editar etiquetas`, `tags-field-album-artist = Artista del álbum`, `tags-field-composer = Compositor`, `tags-field-comment = Comentario`, `tags-year-invalid = El año debe ser un número entero de 1 a 9999.`, `tags-save = Guardar`, `tags-cancel = Cancelar`, `tags-saving = Guardando…`, `tags-saved = Etiquetas guardadas: { $title }`, `tags-save-failed = No se guardaron las etiquetas de «{ $title }»: { $error }`, `tags-error-unsupported = este formato no admite escribir etiquetas`, `tags-error-not-found = no se encontró el archivo`, `tags-error-denied = sin permiso para escribir el archivo o su carpeta`, `tags-error-other = { $detail }`, `tags-error-worker = El editor de etiquetas no está disponible.`). The modal's text-field labels reuse `tip-field-title`, `-artist`, `-album`, `-year`, `-genre`.
+and the matching `es-ES/main.ftl` (`menu-edit-tags = Editar etiquetas…`, `menu-edit-tags-file = El archivo no existe o no se puede leer`, `menu-edit-tags-format = Este formato no admite escribir etiquetas`, `menu-edit-tags-unread = Aún no se han leído las etiquetas`, `menu-edit-tags-on-air = No se pueden editar las etiquetas de una pista que está sonando`, `menu-edit-tags-cued = No se pueden editar las etiquetas de una pista en CUE`, `menu-edit-tags-cart = No se pueden editar las etiquetas de una pista en un cart que suena`, `tags-editor-title = Editar etiquetas`, `tags-field-album-artist = Artista del álbum`, `tags-field-composer = Compositor`, `tags-field-comment = Comentario`, `tags-date-invalid = Usa AAAA, AAAA-MM o AAAA-MM-DD (opcionalmente con hora).`, `tags-save = Guardar`, `tags-cancel = Cancelar`, `tags-saving = Guardando…`, `tags-saved = Etiquetas guardadas: { $title }`, `tags-save-failed = No se guardaron las etiquetas de «{ $title }»: { $error }`, `tags-error-unsupported = este formato no admite escribir etiquetas`, `tags-error-not-found = no se encontró el archivo`, `tags-error-denied = sin permiso para escribir el archivo o su carpeta`, `tags-error-invalid-date = la fecha no es una fecha ISO 8601 válida`, `tags-error-other = { $detail }`, `tags-error-worker = El editor de etiquetas no está disponible.`). The modal's text-field labels reuse `tip-field-title`, `-artist`, `-album`, `-date`, `-genre`.
 
 The test strings in the tests above ("Save", "Cancel", the reasons, "Edit tags", "were not saved") must match these messages; keep them in step if a wording changes.
 
@@ -2671,15 +2869,15 @@ git commit -m "feat(ui): edit a track's tags from the row menu, saved off the UI
 - [ ] **Step 1: Update the user guide**
 
 `docs/user/playlists.md`:
-- Before "## Mouse" add a short **Track tooltip** paragraph: hover a row for a moment to see its title, artist, album, year, genre, length, format (type, sample rate, bit depth when known) and file path; fields the file does not have are left out.
-- In the context menu table add, after "Pre-listen on CUE": `| Edit tags… | Open the tag editor: title, artist, album, album artist, year, genre, composer and comment of this track. **Save** writes them into the audio file; **Cancel** (or Esc) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |`.
-- Add a paragraph **Editing tags** after the table: how a save works (the file is copied next to the original, the copy gets the tags, is synced and replaces the original, so a failure leaves the file as it was and the reason shows in the status bar; the editor stays open to retry), that only the fields you changed are written, that clearing a field removes that tag, that covers and other tags stay, that a format that cannot store a field shows it empty afterwards, and that the new tags show in the table at once while markers and the waveform are kept. Mention that tracks of an earlier version get their year, genre and other tags filled in quietly in the background after an update (no full analysis).
+- Before "## Mouse" add a short **Track tooltip** paragraph: hover a row for a moment to see its title, artist, album, date, genre, length, format (type, sample rate, bit depth when known) and file path; fields the file does not have are left out.
+- In the context menu table add, after "Pre-listen on CUE": `| Edit tags… | Open the tag editor: title, artist, album, album artist, date, genre, composer and comment of this track. The date is the recording date in ISO 8601 form (`2019`, `2019-05` or `2019-05-14`, optionally with a time); a date written another way blocks **Save**. **Save** writes them into the audio file; **Cancel** (or Esc) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |`.
+- Add a paragraph **Editing tags** after the table: how a save works (the file is copied next to the original, the copy gets the tags, is synced and replaces the original, so a failure leaves the file as it was and the reason shows in the status bar; the editor stays open to retry), that only the fields you changed are written, that clearing a field removes that tag, that covers and other tags stay, that a format that cannot store a field shows it empty afterwards, and that the new tags show in the table at once while markers and the waveform are kept. Mention that tracks of an earlier version get their date, genre and other tags filled in quietly in the background after an update (no full analysis).
 
 - [ ] **Step 2: Update the technical docs**
 
-`docs/technical/analysis.md`: in "Tags and covers (`metadata.rs`)" add that `Tags` now carries year, genre, album artist, composer and comment; add a section **Track tags (`tags.rs`)** covering `read_track_tags` (file-name fallbacks, cut to `limits.max_tag_chars`), `can_write_tags` (extension only, from lofty's `FileType::tag_support`), and `write_tags` (the four steps, only changed fields, the tag edited is the primary one or else the first, canonical path, covers kept because the file is parsed with them or the write fails, error mapping to `TagWriteError`, the temp file name `name.fptag-<pid>.ext` removed on error). In "How the app uses it" describe the tag-only pass: `Track::needs_tag_read`, `Services::tag_pass`, the `fp-tags` worker (`fp-app/src/tags.rs`), that every `ApplyAnalysis` resets `tags_read`, and that no analysis version bump or cache change is involved.
+`docs/technical/analysis.md`: in "Tags and covers (`metadata.rs`)" add that `Tags` now carries the recording date (ISO 8601 text, as the standards store it: ID3v2.4 `TDRC`, Vorbis `DATE`, MP4 `©day`, APE `Year`), genre, album artist, composer and comment; add a section **Track tags (`tags.rs`)** covering `read_track_tags` (file-name fallbacks, cut to `limits.max_tag_chars`), `can_write_tags` (extension only, from lofty's `FileType::tag_support`), and `write_tags` (the four steps, only changed fields, the tag edited is the primary one or else the first, canonical path, covers kept because the file is parsed with them or the write fails, error mapping to `TagWriteError`, the temp file name `name.fptag-<pid>.ext` removed on error). In "How the app uses it" describe the tag-only pass: `Track::needs_tag_read`, `Services::tag_pass`, the `fp-tags` worker (`fp-app/src/tags.rs`), that every `ApplyAnalysis` resets `tags_read`, and that no analysis version bump or cache change is involved.
 
-`docs/technical/persistence.md`: add `max_tag_chars` (2000; range 64 … 100000) to the `limits` table, and in the library section list the new `Track` fields (`year`, `genre`, `album_artist`, `composer`, `comment`, `tags_read`), all optional on load.
+`docs/technical/persistence.md`: add `max_tag_chars` (2000; range 64 … 100000) to the `limits` table, and in the library section list the new `Track` fields (`date`, `genre`, `album_artist`, `composer`, `comment`, `tags_read`), all optional on load.
 
 `docs/technical/ui.md`: add rows for `ui/tag_editor.rs` (the modal and its draft) and for the worker in `fp-app/src/tags.rs`; in the table section describe the row tooltip (`view::track_tooltip`, `on_hover_ui`, the usual delay) and the menu item (`view::tag_edit_availability`, the reason tooltip, the save through `AppUi::start_tag_save`, the outcome drained at the start of each frame, the re-check at Save).
 
@@ -2689,13 +2887,13 @@ Spec §8 (after the editor bullets), mark the plan done and add:
 
 ```markdown
 - **As built.**
-  - Model: `TrackTags` is the one value type for read, edit and show; `Track` gains `year: Option<u32>`, `genre`, `album_artist`, `composer`, `comment` and `tags_read`; `Command::ApplyTags` stores tags (an empty field clears, except the title); `fp_model::tag_edit_block(state, track, format_writable)` gives the reason an edit is refused (`FileUnavailable`, `UnsupportedFormat`, `TagsNotRead`, `OnAir`, `Cued`, `OnCart`) and judges the file, not the entry. `limits.max_tag_chars` (2000, 64..=100000) cuts tag text.
+  - Model: `TrackTags` is the one value type for read, edit and show; `Track` gains `date: Option<String>` (ISO 8601 text, validated by `parse_tag_date`), `genre`, `album_artist`, `composer`, `comment` and `tags_read`; `Command::ApplyTags` stores tags (an empty field clears, except the title); `fp_model::tag_edit_block(state, track, format_writable)` gives the reason an edit is refused (`FileUnavailable`, `UnsupportedFormat`, `TagsNotRead`, `OnAir`, `Cued`, `OnCart`) and judges the file, not the entry. `limits.max_tag_chars` (2000, 64..=100000) cuts tag text.
   - Tag-only pass: every `ApplyAnalysis` clears `tags_read`; `Services::tag_pass` sends analysed, readable tracks with unread tags to the `fp-tags` worker; no analysis version bump.
-  - Tooltip: `view::track_tooltip` (title, artist, album, year, genre, duration, format, path); the codec is the upper-cased extension.
+  - Tooltip: `view::track_tooltip` (title, artist, album, date, genre, duration, format, path); the codec is the upper-cased extension.
   - Editor: `fp_analysis::tags::write_tags(path, before, after, limits)` writes only the changed fields into a synced copy that replaces the original; the result is read back from the file and applied. On failure the modal stays open and the notice area gives the reason.
 ```
 
-Roadmap: set row 7's status to `done`. README: add to the features list `- **Tag editor and track tooltip**: hover a track for its tags, format and path; edit title, artist, album, year, genre and more, written safely into the file.`
+Roadmap: set row 7's status to `done`. README: add to the features list `- **Tag editor and track tooltip**: hover a track for its tags, format and path; edit title, artist, album, date, genre and more, written safely into the file.`
 
 - [ ] **Step 4: Check the docs**
 
@@ -2714,7 +2912,7 @@ git commit -m "docs: describe the track tooltip and the tag editor"
 ## Self-Review
 
 **Spec coverage.**
-- Model (`year`, `genre`, `album_artist`, `composer`, `comment`; lenient loading; tag-only pass): Task 1 (fields, `serde(default)`, `an_old_library_entry_loads_with_empty_tags`) and Task 3 (the pass, no full analysis); reading with lofty in Task 2.
+- Model (`date`, `genre`, `album_artist`, `composer`, `comment`; lenient loading; tag-only pass): Task 1 (fields, `serde(default)`, `an_old_library_entry_loads_with_empty_tags`) and Task 3 (the pass, no full analysis); reading with lofty in Task 2.
 - Tooltip (delay, listed fields, missing left out): Task 4, including `the_tooltip_waits_for_the_usual_delay`.
 - Editor: menu item and eight-field modal (Task 5); Save on a helper thread with copy, write, fsync, rename (Task 2 `write_tags`, Task 3 worker, Task 5 `start_tag_save`); library takes the new tags and markers and analysis are kept (Task 5 `saving_writes_the_file_and_the_library_takes_the_tags` asserts `duration_secs` stays); on any error the original is untouched and the notice reports it (Task 2 failure tests, Task 5 `a_failed_save_keeps_the_modal_and_says_why`); the four disabled cases with the reason as a tooltip (Task 1 rule, Task 5 `the_menu_item_is_disabled_with_the_reason`).
 - Docs, spec "As built", roadmap row 7, README: Task 6. Both locales inside Tasks 4 and 5. `Config` field with default, range and lenient loading: Task 1.

@@ -279,18 +279,23 @@
 ## 8. Plan 7 — Track tags
 
 - **Model.**
-  - `Track` gains `year`, `genre`, `album_artist`, `composer` and `comment`,
-    read by `fp-analysis` with lofty.
+  - `Track` gains `date`, `genre`, `album_artist`, `composer` and `comment`,
+    read by `fp-analysis` with lofty. The `date` is the recording date, kept
+    as the standard ISO 8601 text (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`, with an
+    optional time; ID3v2.4 `TDRC`, Vorbis `DATE`, MP4 `©day`, APE `Year`).
+    It is never reduced to a year, so a full date in a file survives an edit
+    of another field.
   - Loading is lenient. Tracks from earlier versions show the new fields empty
     until their tags are read again. That is a tag-only pass, not a full
     re-analysis.
 - **Tooltip.** Hovering a table row, after the usual tooltip delay, shows the
-  title, artist, album, year, genre, duration, format (codec, sample rate, bit
-  depth) and path. A missing field is left out.
+  title, artist, album, date (as stored), genre, duration, format (codec,
+  sample rate, bit depth) and path. A missing field is left out.
 - **Editor.**
   - The row context menu gains "Edit tags…". It opens a modal with title,
-    artist, album, album artist, year, genre, composer and comment, for one
-    track.
+    artist, album, album artist, date, genre, composer and comment, for one
+    track. The field is labelled "Date"; a date that is not ISO 8601 blocks
+    **Save** and the field is marked.
   - **Save** writes the tags into the file on a helper thread, never on the UI
     thread:
     1. copy the file to a temporary file in the same folder;
@@ -327,7 +332,7 @@
     leniently: unknown columns are dropped, and missing required columns are
     added back.
   - Required columns: Title and Duration. Optional columns: `#`, Artist,
-    Album, Year, Genre, Intro, File name.
+    Album, Date, Genre, Intro, File name.
   - All columns, required or not, can be reordered:
     - by dragging a header in the table;
     - in Settings > Playlists, with a checkbox list and up and down buttons.
