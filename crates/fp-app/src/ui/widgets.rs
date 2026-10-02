@@ -550,7 +550,7 @@ pub fn vu(
         );
         painter.text(
             pos2(l.labels_right, m.label_y),
-            Align2::RIGHT_CENTER,
+            Align2([egui::Align::RIGHT, m.label_align]),
             &m.label,
             FontId::monospace(LABEL_FONT_SIZE),
             theme::NEUTRAL_400,
@@ -601,10 +601,27 @@ const ALIGNMENT_NOTCH: f32 = 3.0;
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeterLine {
     pub y: f32,
+    /// Where the label is anchored vertically: the line's `y`.
     pub label_y: f32,
+    /// How the label hangs from `label_y`: centred on it, or its top
+    /// (`Min`) or bottom (`Max`) edge on it where the rect's edge is too
+    /// close for a centred label.
+    pub label_align: egui::Align,
     /// Empty for an alignment level the scale does not name.
     pub label: String,
     pub alignment: bool,
+}
+
+impl MeterLine {
+    /// The vertical centre of the label's row.
+    pub fn label_centre(&self) -> f32 {
+        let half = LABEL_ROW / 2.0;
+        match self.label_align {
+            egui::Align::Min => self.label_y + half,
+            egui::Align::Center => self.label_y,
+            egui::Align::Max => self.label_y - half,
+        }
+    }
 }
 
 /// Where the meter draws each of its parts (feedback spec §3.2).
@@ -662,20 +679,26 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     let bars_right = bars_left + 2.0 * BAR_WIDTH + BAR_GAP;
     let height = bottom - top;
     let y_of = |db: f32| bottom - meter_position(db, c) * height;
-    // The label is centred on its line but kept inside the bars' span.
-    let label_y = |y: f32| {
-        let half = LABEL_ROW / 2.0;
-        y.clamp(top + half, (bottom - half).max(top + half))
-    };
     let line = |db: f32, alignment: bool| {
         let width = if alignment { ALIGNMENT_LINE_WIDTH } else { 1.0 };
         let y = y_of(db).clamp(
             top + width / 2.0,
             (bottom - width / 2.0).max(top + width / 2.0),
         );
+        // Centred on the line, unless that would cross the rect's edge:
+        // then the label hangs from or rests on the line, inside the rect.
+        let half = LABEL_ROW / 2.0;
+        let label_align = if y - half < rect.top() {
+            egui::Align::Min
+        } else if y + half > rect.bottom() {
+            egui::Align::Max
+        } else {
+            egui::Align::Center
+        };
         MeterLine {
             y,
-            label_y: label_y(y),
+            label_y: y,
+            label_align,
             label: mark_label(db, c),
             alignment,
         }
@@ -695,7 +718,7 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     let crowds = |kept: &MeterLine, candidate: &MeterLine| {
         !kept.label.is_empty()
             && !candidate.label.is_empty()
-            && (kept.label_y - candidate.label_y).abs() < LABEL_ROW
+            && (kept.label_centre() - candidate.label_centre()).abs() < LABEL_ROW
     };
     // Both ends of the scale first, so its range is always labelled.
     let ends = [marks.last().copied(), marks.first().copied()];
@@ -739,7 +762,7 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     };
     let alignment_notches = [notch(bars_left), notch(bars_right - ALIGNMENT_NOTCH)];
     lines.push(alignment);
-    lines.sort_by(|a, b| a.label_y.total_cmp(&b.label_y));
+    lines.sort_by(|a, b| a.label_centre().total_cmp(&b.label_centre()));
     MeterLayout {
         labels_right: rect.left() + LABEL_COLUMN,
         bars,

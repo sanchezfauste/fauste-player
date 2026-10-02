@@ -216,7 +216,7 @@ fn labels_never_overlap_and_the_alignment_line_stays() {
                     .lines
                     .iter()
                     .filter(|m| !m.label.is_empty())
-                    .map(|m| m.label_y)
+                    .map(|m| m.label_centre())
                     .collect();
                 for pair in ys.windows(2) {
                     assert!(
@@ -232,6 +232,45 @@ fn labels_never_overlap_and_the_alignment_line_stays() {
             }
         }
     }
+}
+
+#[test]
+fn end_labels_stay_inside_the_rect_on_their_line() {
+    for ballistics in ALL_METERS {
+        for height in [64.0, 136.0, 300.0] {
+            for loudness in [false, true] {
+                let c = meter(ballistics);
+                let rect = column(height);
+                let l = meter_layout(rect, &c, loudness);
+                for m in l.lines.iter().filter(|m| !m.label.is_empty()) {
+                    let centre = m.label_centre();
+                    assert!(
+                        centre - LABEL_ROW / 2.0 >= rect.top() - 0.01
+                            && centre + LABEL_ROW / 2.0 <= rect.bottom() + 0.01,
+                        "{ballistics:?} {height} {loudness}: {} outside the rect",
+                        m.label
+                    );
+                    // Never shifted off its line: the line is within the
+                    // label's own height.
+                    assert!(
+                        (centre - m.y).abs() <= LABEL_ROW / 2.0 + 0.01,
+                        "{ballistics:?} {height}: {} is off its line",
+                        m.label
+                    );
+                    assert_eq!(m.label_y, m.y, "the anchor is the line");
+                }
+            }
+        }
+    }
+    // Without the loudness line the bars end at the rect's bottom, so the
+    // bottom label rests on its line instead of being centred over it.
+    let c = meter(MeterBallistics::DigitalPeak);
+    let l = meter_layout(column(136.0), &c, false);
+    let bottom = l.lines.iter().find(|m| m.label == "-60").unwrap();
+    assert_eq!(bottom.label_align, egui::Align::Max);
+    // With room above and below, a label is centred on its line.
+    let middle = l.lines.iter().find(|m| m.label == "-30").unwrap();
+    assert_eq!(middle.label_align, egui::Align::Center);
 }
 
 #[test]
@@ -255,14 +294,15 @@ fn labels_stay_between_the_readouts() {
             loudness,
         );
         let bars = l.bars[0];
+        let rect = column(136.0);
         for m in &l.lines {
             assert!(
-                m.label_y - LABEL_ROW / 2.0 >= bars.top() - 0.01,
+                m.label_centre() - LABEL_ROW / 2.0 >= rect.top() - 0.01,
                 "{}",
                 m.label
             );
             assert!(
-                m.label_y + LABEL_ROW / 2.0 <= bars.bottom() + 0.01,
+                m.label_centre() + LABEL_ROW / 2.0 <= rect.bottom() + 0.01,
                 "{}",
                 m.label
             );
@@ -585,7 +625,7 @@ fn a_meter_too_short_to_draw_lays_out_without_panicking() {
                 let l = meter_layout(column(height), &meter(ballistics), loudness);
                 for m in &l.lines {
                     assert!(
-                        m.y.is_finite() && m.label_y.is_finite(),
+                        m.y.is_finite() && m.label_centre().is_finite(),
                         "{ballistics:?} {height}"
                     );
                 }
