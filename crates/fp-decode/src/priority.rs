@@ -13,8 +13,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use thread_priority::{ThreadPriority, ThreadPriorityValue, set_current_thread_priority};
 
 /// Above normal on the crate's 0–99 scale (normal is about 50): nice −5 on
-/// Linux, "above normal" on Windows, and a step above the default on macOS.
+/// Linux and "above normal" on Windows.
+#[cfg(not(target_os = "macos"))]
 const ABOVE_NORMAL: u8 = 60;
+
+/// On macOS the crate checks the value against the range of the normal
+/// scheduling policy (15..=47, the default being 31), so 60 would always be
+/// refused. 37 is above the default and inside the range; raising within
+/// that policy needs no privilege.
+#[cfg(target_os = "macos")]
+const ABOVE_NORMAL: u8 = 37;
 
 /// What a thread asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,5 +128,16 @@ mod tests {
         } else {
             assert_eq!(after, before);
         }
+    }
+
+    /// Raising within the normal policy needs no privilege on macOS, so the
+    /// request must be accepted there.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn above_normal_is_accepted_on_macos() {
+        let accepted = std::thread::spawn(|| set_current(Priority::AboveNormal, "test"))
+            .join()
+            .unwrap();
+        assert!(accepted);
     }
 }
