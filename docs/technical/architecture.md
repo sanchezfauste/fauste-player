@@ -57,6 +57,36 @@ or `panic` outside tests.
    through `arc-swap`, plus a `Telemetry` snapshot (positions, peaks, bus
    health, model version). The UI and the services thread read them.
 
+## Restart
+
+**Restart now** sets the `restart_flag` that `AppUi` shares with `main`, and
+closes the window (through the exit guard when something is on air). `run`
+returns `Exit::Restart { handoff, language }`, where `handoff` is
+`tuning.restart_handoff_ms` and `language` is the configured UI language (for
+the failure dialog), after the normal shutdown: the remote server and
+the MIDI service (`MidiService::shutdown`) stop, so nothing else can send
+commands, the services thread makes the final save, and `run` releases the
+last `Arc<ConductorHandle>`, which stops the conductor and the engine and
+closes the output streams (a warning is logged if another holder remains).
+`main` then drops the instance lock and calls `restart::relaunch`, so
+the new process can take the lock (it also retries the lock briefly). The new
+process is started with no arguments: playlists given at the first start were
+imported and saved already. It keeps `FAUSTE_HOME`, and starts silent like any
+start.
+
+- **AppImage:** when the executable runs from `$APPDIR`, `$APPIMAGE` is
+  started (a mounted copy goes away with the process). Variables that belong
+  to another application are ignored.
+- **Flatpak:** the new process is started with `flatpak-spawn` (with
+  `--env=FAUSTE_HOME=…` when set), and the old one waits until the new one
+  holds the instance lock, at most the handoff time, because the sandbox ends
+  with it. A hand-off that times out is a failed restart: the operator sees
+  the `restart-failed` message.
+- Otherwise the executable is started directly.
+
+These two relaunch paths (AppImage, Flatpak) are not exercised in CI and need
+a manual check.
+
 ## Design principles
 
 - **Behaviour lives in a pure reducer.** Every rule in spec §3 is a

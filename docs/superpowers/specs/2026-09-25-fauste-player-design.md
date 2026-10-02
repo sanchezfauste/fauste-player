@@ -106,7 +106,7 @@ In priority order:
 |---|---|---|---|
 | `players`, `analysis`, `outputs`, `ui` | operator | player count, `fade_ms`, auto-segue, trim threshold and margin, segue drop, routes, wave colour | Settings UI |
 | `limits` | resource guards | `max_players` (16), `max_cover_bytes`, `max_state_file_bytes`, `backup_count` | config file only |
-| `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `reconnect_interval_ms`, `gain_smoothing_ms`, `save_debounce_ms`, `missing_recheck_ms` | config file only (an "advanced" section) |
+| `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `reconnect_interval_ms`, `gain_smoothing_ms`, `save_debounce_ms`, `missing_recheck_ms`, `restart_handoff_ms` | config file only (an "advanced" section) |
 
 - Every group is a typed struct with `Default` values documented in code. They are validated on load: out-of-range values are clamped to the valid range with a logged warning, never rejected with a crash.
 - Engine capacities (mixer slots, scratch buffers) are **derived** from the configuration at the moment a mixer is built (§4.3), never fixed constants.
@@ -466,6 +466,8 @@ A modal window, closed with `Esc` or "Close", with these sections:
 - **Players:** player count, default mode, `fade_ms`, auto-segue on/off, `end_warning_secs` (`history_len` is set in `config.json`).
 - **Analysis:** every `AnalysisSettings` field (trim threshold and margin, segue drop and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action. Manual markers are kept.
 - **Playlists:** music folder, and create/rename/delete playlists. The last playlist cannot be deleted, nor a playlist containing a current entry.
+
+Settings has one fixed size (900 × 640, clamped to the window) and its section body scrolls. The Players, Meters, Analysis and Shortcuts sections have **Restore defaults** (with confirmation; Players keeps the player count and the language). Settings that only a restart applies (audio system, sample rate, buffer size, routes, bit-perfect, limits, tuning) show a notice and **Restart now** in the footer, and a "Restart pending" pill in the top bar; the restart goes through the on-air guard when something is on air.
 
 The Cartwall and Shortcuts sections, plus M3U import/export and the language selector, come in Phase 2. In Phase 1 the language follows the OS locale.
 

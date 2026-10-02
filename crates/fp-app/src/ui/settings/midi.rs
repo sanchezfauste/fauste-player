@@ -9,7 +9,7 @@ use fp_model::{MidiAction, MidiTrigger, ShortcutAction};
 use super::super::app::Scene;
 use super::super::theme;
 use super::super::widgets::font;
-use super::{SettingsState, button, heading, update};
+use super::{SettingsState, button, row, update};
 
 /// The actions a player offers to MIDI, with their names.
 fn actions(n: u16) -> [(MidiAction, &'static str); 8] {
@@ -65,7 +65,6 @@ pub(super) fn section(
     midi: Option<&MidiHandle>,
 ) {
     let t = scene.i18n;
-    heading(ui, &t.tr("settings-tab-midi"));
     let Some(midi) = midi else {
         text(ui, t.tr("midi-unavailable"), theme::NEUTRAL_400);
         return;
@@ -118,36 +117,36 @@ pub(super) fn section(
             theme::TEXT,
         );
         for (action, key) in actions(n) {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
-                ui.allocate_ui(vec2(120.0, 24.0), |ui| {
-                    text(ui, t.tr(key), theme::NEUTRAL_300);
-                });
-                let bound = config
-                    .binding(action)
-                    .map(|b| format!("{} · {}", b.device, trigger_text(scene, b.trigger)))
-                    .unwrap_or_else(|| t.tr("midi-unbound"));
-                ui.allocate_ui(vec2(260.0, 24.0), |ui| {
-                    text(ui, bound, theme::NEUTRAL_400);
-                });
-                let learning = st.midi_learning == Some(action);
-                let label = if learning {
-                    t.tr("midi-learning")
-                } else {
-                    t.tr("midi-learn")
-                };
-                if button(ui, &label) {
-                    if learning {
-                        st.midi_learning = None;
-                        let _ = midi.requests.send(MidiRequest::CancelLearn);
-                    } else {
-                        st.midi_learning = Some(action);
-                        let _ = midi.requests.send(MidiRequest::Learn(action));
+            row(ui, &t.tr(key), None, |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
+                    // Right to left: Clear, Learn, then the binding fills.
+                    if config.binding(action).is_some() && button(ui, &t.tr("midi-clear")) {
+                        update(scene, |c| c.midi.unbind(action));
                     }
-                }
-                if config.binding(action).is_some() && button(ui, &t.tr("midi-clear")) {
-                    update(scene, |c| c.midi.unbind(action));
-                }
+                    let learning = st.midi_learning == Some(action);
+                    let label = if learning {
+                        t.tr("midi-learning")
+                    } else {
+                        t.tr("midi-learn")
+                    };
+                    if button(ui, &label) {
+                        if learning {
+                            st.midi_learning = None;
+                            let _ = midi.requests.send(MidiRequest::CancelLearn);
+                        } else {
+                            st.midi_learning = Some(action);
+                            let _ = midi.requests.send(MidiRequest::Learn(action));
+                        }
+                    }
+                    let bound = config
+                        .binding(action)
+                        .map(|b| format!("{} · {}", b.device, trigger_text(scene, b.trigger)))
+                        .unwrap_or_else(|| t.tr("midi-unbound"));
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        text(ui, bound, theme::NEUTRAL_400);
+                    });
+                });
             });
         }
     }

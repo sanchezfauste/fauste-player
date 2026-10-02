@@ -8,7 +8,7 @@ use fp_model::{Command, KeyChord, ShortcutAction};
 use super::super::app::Scene;
 use super::super::theme;
 use super::super::widgets::{self, TileStyle, font};
-use super::{SettingsState, heading};
+use super::SettingsState;
 
 #[derive(Default)]
 pub(crate) struct KeysState {
@@ -134,7 +134,6 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let k = &mut st.keys;
     let shortcuts = &scene.state.config.shortcuts;
-    heading(ui, &t.tr("settings-tab-shortcuts"));
     if let Some(action) = k.capture
         && let Some(chord) = pressed_chord(ui)
     {
@@ -199,9 +198,6 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         ui.add_space(8.0);
     }
     ui.horizontal(|ui| {
-        if small(ui, &t.tr("shortcut-reset"), icon::ARROW_COUNTER_CLOCKWISE) {
-            scene.ctl.send(Command::ResetShortcuts);
-        }
         ui.add(
             egui::Label::new(
                 RichText::new(t.tr("shortcut-help"))

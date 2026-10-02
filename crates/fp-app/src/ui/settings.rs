@@ -12,6 +12,7 @@ use egui_phosphor::regular as icon;
 use fp_backends::{AudioBackend, Availability, DeviceInfo};
 use fp_model::{
     Command, Config, OutputDevice, PlayMode, PlayerId, PlayerRoutes, PlaylistId, Route,
+    SettingsSection,
 };
 
 use super::app::Scene;
@@ -33,6 +34,20 @@ const MAIN_TONE_HZ: f32 = 1000.0;
 const CUE_TONE_HZ: f32 = 440.0;
 const SAMPLE_RATES: [u32; 6] = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000];
 const BUFFER_SIZES: [u32; 7] = [64, 128, 256, 512, 1024, 2048, 4096];
+
+/// The Settings window has one size whatever the section (feedback 2 spec
+/// O3); the section body scrolls inside it.
+const WINDOW_SIZE: egui::Vec2 = vec2(900.0, 640.0);
+/// Room kept around the window inside the main window.
+const SCREEN_MARGIN: egui::Vec2 = vec2(48.0, 82.0);
+const MIN_WINDOW_SIZE: egui::Vec2 = vec2(320.0, 300.0);
+
+/// `WINDOW_SIZE`, shrunk to fit `screen`.
+pub(crate) fn window_size(screen: egui::Vec2) -> egui::Vec2 {
+    (screen - SCREEN_MARGIN)
+        .min(WINDOW_SIZE)
+        .max(MIN_WINDOW_SIZE)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum Section {
@@ -64,6 +79,8 @@ pub(crate) struct SettingsState {
     /// The MIDI action waiting for a control (MIDI learn).
     pub(super) midi_learning: Option<fp_model::MidiAction>,
     pub(super) remote: remote::RemoteState,
+    /// The section whose "Restore defaults" waits for an answer.
+    pub(super) confirm_restore: Option<SettingsSection>,
     backends: Option<Vec<BackendChoice>>,
     loading: Option<Receiver<Vec<BackendChoice>>>,
     names: HashMap<PlaylistId, String>,
@@ -76,7 +93,7 @@ impl SettingsState {
     /// True while Settings waits for a key to bind (Esc then cancels the
     /// capture, not the dialog).
     pub fn capturing(&self) -> bool {
-        self.keys.capturing() || self.midi_learning.is_some()
+        self.keys.capturing() || self.midi_learning.is_some() || self.confirm_restore.is_some()
     }
 
     /// Opens the Cartwall section on one cart (`Edit…` on a cart button).
@@ -159,15 +176,25 @@ pub(crate) struct SettingsDeps<'a> {
     pub notice: Option<String>,
     pub midi: Option<&'a fp_control::service::MidiHandle>,
     pub remote: Option<fp_remote::RemoteStatus>,
+    /// A start-up setting changed: the footer offers Restart now.
+    pub restart_pending: bool,
 }
 
-/// Draws the modal; returns `false` once it should close.
+/// What the modal asks of the application after a frame.
+pub(crate) struct Outcome {
+    /// `false` once the modal should close.
+    pub open: bool,
+    /// The operator pressed Restart now.
+    pub restart: bool,
+}
+
+/// Draws the modal for one frame.
 pub(crate) fn show(
     ctx: &egui::Context,
     scene: &Scene<'_>,
     st: &mut SettingsState,
     deps: &SettingsDeps<'_>,
-) -> bool {
+) -> Outcome {
     let capturing = st.capturing();
     st.poll();
     if let Some(rx) = &st.folder
@@ -180,11 +207,8 @@ pub(crate) fn show(
     }
     let t = scene.i18n;
     let mut open = true;
-    let screen = ctx.content_rect();
-    let size = vec2(
-        (screen.width() - 48.0).clamp(320.0, 980.0),
-        (screen.height() - 82.0).clamp(300.0, 680.0),
-    );
+    let mut restart = false;
+    let size = window_size(ctx.content_rect().size());
     let modal = egui::Modal::new(egui::Id::new("settings"))
         .frame(egui::Frame::new().fill(theme::SURFACE))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
@@ -228,11 +252,17 @@ pub(crate) fn show(
                     ui.painter().rect_filled(line, 0.0, theme::NEUTRAL_800);
                     ui.vertical(|ui| {
                         ui.set_min_size(vec2(ui.available_width(), body_height));
-                        egui::ScrollArea::vertical()
+                        section_header(ui, scene, st);
+                        egui::ScrollArea::both()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 egui::Frame::new()
-                                    .inner_margin(egui::Margin::symmetric(24, 20))
+                                    .inner_margin(egui::Margin {
+                                        left: 24,
+                                        right: 24,
+                                        top: 0,
+                                        bottom: 20,
+                                    })
                                     .show(ui, |ui| {
                                         ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
                                         match st.section {
@@ -289,11 +319,38 @@ pub(crate) fn show(
                     {
                         open = false;
                     }
+                    if deps.restart_pending {
+                        let label = t.tr("settings-restart-now");
+                        let width = ui
+                            .painter()
+                            .layout_no_wrap(label.clone(), font_medium(13.0), theme::TEXT)
+                            .size()
+                            .x
+                            + 28.0;
+                        let style = TileStyle {
+                            border: theme::AMBER,
+                            ..TileStyle::plain()
+                        };
+                        if widgets::tile(ui, vec2(width, 30.0), &label, true, style, |p, r, c| {
+                            p.text(
+                                r.center(),
+                                egui::Align2::CENTER_CENTER,
+                                &label,
+                                font_medium(13.0),
+                                c,
+                            );
+                        })
+                        .clicked()
+                        {
+                            restart = true;
+                        }
+                    }
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                         ui.add_space(16.0);
-                        let (text, color) = match &deps.notice {
-                            Some(n) => (n.clone(), theme::AMBER),
-                            None => (t.tr("settings-applies-now"), theme::NEUTRAL_500),
+                        let (text, color) = match (&deps.notice, deps.restart_pending) {
+                            (Some(n), _) => (n.clone(), theme::AMBER),
+                            (None, true) => (t.tr("settings-restart-pending"), theme::AMBER),
+                            (None, false) => (t.tr("settings-applies-now"), theme::NEUTRAL_500),
                         };
                         ui.add(
                             egui::Label::new(RichText::new(text).font(font(11.0)).color(color))
@@ -304,10 +361,15 @@ pub(crate) fn show(
                 },
             );
         });
+    // A typed address or token is saved before the window closes.
+    if restart {
+        remote::flush(scene, &mut st.remote);
+    }
+    confirm_restore(ctx, scene, st);
     if modal.should_close() && !capturing {
         open = false;
     }
-    open
+    Outcome { open, restart }
 }
 
 fn separator(ui: &mut Ui, width: f32) {
@@ -321,25 +383,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
         ui.painter()
             .rect_filled(ui.max_rect(), 0.0, theme::NEUTRAL_900);
         ui.add_space(8.0);
-        for (section, glyph, key) in [
-            (Section::Outputs, icon::SPEAKER_HIGH, "settings-tab-outputs"),
-            (
-                Section::Players,
-                icon::SLIDERS_HORIZONTAL,
-                "settings-tab-players",
-            ),
-            (Section::Meters, icon::GAUGE, "settings-tab-meters"),
-            (Section::Analysis, icon::WAVEFORM, "settings-tab-analysis"),
-            (Section::Playlists, icon::PLAYLIST, "settings-tab-playlists"),
-            (
-                Section::Cartwall,
-                icon::SQUARES_FOUR,
-                "settings-tab-cartwall",
-            ),
-            (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
-            (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
-            (Section::Remote, icon::BROADCAST, "settings-tab-remote"),
-        ] {
+        for (section, glyph, key) in SECTIONS {
             let on = st.section == section;
             let label = t.tr(key);
             let style = TileStyle {
@@ -404,48 +448,195 @@ fn button(ui: &mut Ui, text: &str) -> bool {
     .clicked()
 }
 
-fn heading(ui: &mut Ui, text: &str) {
-    ui.add(
-        egui::Label::new(
-            RichText::new(text)
-                .font(font_medium(20.0))
-                .color(theme::TEXT),
-        )
-        .selectable(false),
-    );
-    ui.add_space(8.0);
+/// Every section: its nav glyph and its title.
+const SECTIONS: [(Section, &str, &str); 9] = [
+    (Section::Outputs, icon::SPEAKER_HIGH, "settings-tab-outputs"),
+    (
+        Section::Players,
+        icon::SLIDERS_HORIZONTAL,
+        "settings-tab-players",
+    ),
+    (Section::Meters, icon::GAUGE, "settings-tab-meters"),
+    (Section::Analysis, icon::WAVEFORM, "settings-tab-analysis"),
+    (Section::Playlists, icon::PLAYLIST, "settings-tab-playlists"),
+    (
+        Section::Cartwall,
+        icon::SQUARES_FOUR,
+        "settings-tab-cartwall",
+    ),
+    (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
+    (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
+    (Section::Remote, icon::BROADCAST, "settings-tab-remote"),
+];
+
+const SECTION_HEADER_HEIGHT: f32 = 56.0;
+
+/// The model section a Settings section restores; `None` where the spec
+/// gives no button (hardware, security, show data).
+fn restorable(section: Section) -> Option<SettingsSection> {
+    match section {
+        Section::Players => Some(SettingsSection::Players),
+        Section::Meters => Some(SettingsSection::Meters),
+        Section::Analysis => Some(SettingsSection::Analysis),
+        Section::Shortcuts => Some(SettingsSection::Shortcuts),
+        Section::Outputs
+        | Section::Playlists
+        | Section::Cartwall
+        | Section::Midi
+        | Section::Remote => None,
+    }
 }
 
-/// A settings row: label (and hint) on the left, the control on the right.
-fn row(ui: &mut Ui, label: &str, hint: Option<&str>, control: impl FnOnce(&mut Ui)) {
-    ui.horizontal(|ui| {
-        ui.set_min_height(44.0);
-        ui.allocate_ui_with_layout(vec2(220.0, 40.0), Layout::top_down(Align::Min), |ui| {
-            ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
-            ui.add_space(4.0);
+/// The section's title, and "Restore defaults" on the right where the
+/// section has one. It stays put while the body scrolls.
+fn section_header(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+    let t = scene.i18n;
+    let key = SECTIONS
+        .iter()
+        .find(|(s, _, _)| *s == st.section)
+        .map_or("settings-title", |(_, _, key)| *key);
+    let width = ui.available_width();
+    ui.allocate_ui_with_layout(
+        vec2(width, SECTION_HEADER_HEIGHT),
+        Layout::left_to_right(Align::Center),
+        |ui| {
+            ui.set_width(width);
+            ui.add_space(24.0);
             ui.add(
-                egui::Label::new(RichText::new(label).font(font(13.0)).color(theme::TEXT))
-                    .selectable(false),
+                egui::Label::new(
+                    RichText::new(t.tr(key))
+                        .font(font_medium(20.0))
+                        .color(theme::TEXT),
+                )
+                .selectable(false),
             );
-            if let Some(hint) = hint {
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(hint)
-                            .font(font(11.0))
-                            .color(theme::NEUTRAL_500),
-                    )
-                    .selectable(false)
-                    .wrap(),
-                );
+            if let Some(section) = restorable(st.section) {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.add_space(24.0);
+                    if button(ui, &t.tr("settings-restore")) {
+                        st.confirm_restore = Some(section);
+                    }
+                });
             }
+        },
+    );
+}
+
+/// Asks before restoring; drawn over Settings.
+fn confirm_restore(ctx: &egui::Context, scene: &Scene<'_>, st: &mut SettingsState) {
+    let Some(section) = st.confirm_restore else {
+        return;
+    };
+    let t = scene.i18n;
+    let mut answer = None;
+    let modal = egui::Modal::new(egui::Id::new("settings-restore"))
+        .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
+        .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.5))
+        .show(ctx, |ui| {
+            ui.set_width(360.0);
+            ui.spacing_mut().item_spacing = vec2(8.0, 12.0);
+            ui.add(
+                egui::Label::new(
+                    RichText::new(t.tr("settings-restore-question"))
+                        .font(font(13.0))
+                        .color(theme::TEXT),
+                )
+                .selectable(false)
+                .wrap(),
+            );
+            ui.horizontal(|ui| {
+                if button(ui, &t.tr("settings-restore-cancel")) {
+                    answer = Some(false);
+                }
+                if button(ui, &t.tr("settings-restore-confirm")) {
+                    answer = Some(true);
+                }
+            });
         });
-        ui.add_space(16.0);
-        control(ui);
-    });
+    // Esc or a click on the backdrop is "cancel".
+    if answer.is_none() && modal.should_close() {
+        answer = Some(false);
+    }
+    match answer {
+        Some(true) => {
+            scene.ctl.send(Command::RestoreDefaults(section));
+            st.confirm_restore = None;
+        }
+        Some(false) => st.confirm_restore = None,
+        None => {}
+    }
+}
+
+/// The label column of every Settings row (feedback 2 spec O3).
+pub(super) const LABEL_WIDTH: f32 = 180.0;
+
+/// A settings row: the label (and hint) in a fixed column on the left, the
+/// control filling the rest. `control` gets the label's id, for
+/// `labelled_by`.
+pub(super) fn labelled_row<R>(
+    ui: &mut Ui,
+    label: &str,
+    hint: Option<&str>,
+    control: impl FnOnce(&mut Ui, egui::Id) -> R,
+) -> R {
+    let out = ui
+        .horizontal(|ui| {
+            ui.set_min_height(44.0);
+            let label_id = ui
+                .allocate_ui_with_layout(
+                    vec2(LABEL_WIDTH, 40.0),
+                    Layout::top_down(Align::Min),
+                    |ui| {
+                        // The column keeps its width whatever the label's.
+                        ui.set_width(LABEL_WIDTH);
+                        ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
+                        ui.add_space(4.0);
+                        let id = ui
+                            .add(
+                                egui::Label::new(
+                                    RichText::new(label).font(font(13.0)).color(theme::TEXT),
+                                )
+                                .selectable(false),
+                            )
+                            .id;
+                        if let Some(hint) = hint {
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(hint)
+                                        .font(font(11.0))
+                                        .color(theme::NEUTRAL_500),
+                                )
+                                .selectable(false)
+                                .wrap(),
+                            );
+                        }
+                        id
+                    },
+                )
+                .inner;
+            ui.add_space(16.0);
+            let rest = ui.available_width();
+            ui.allocate_ui_with_layout(
+                vec2(rest, 40.0),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ui.set_width(rest);
+                    control(ui, label_id)
+                },
+            )
+            .inner
+        })
+        .inner;
     let width = ui.available_width();
     let (r, _) = ui.allocate_exact_size(vec2(width, 1.0), Sense::hover());
     ui.painter()
         .rect_filled(r, 0.0, theme::TEXT.gamma_multiply(0.06));
+    out
+}
+
+/// `labelled_row` for controls that name themselves.
+pub(super) fn row(ui: &mut Ui, label: &str, hint: Option<&str>, control: impl FnOnce(&mut Ui)) {
+    labelled_row(ui, label, hint, |ui, _| control(ui));
 }
 
 /// A slider whose accessible name is `label` (the row shows the same text).
@@ -464,20 +655,29 @@ fn slider<T: egui::emath::Numeric>(
     response.changed()
 }
 
+/// The audio systems the list offers. `null` (silence) is for tests and
+/// headless use: it shows only when the configuration names it
+/// (feedback 2 spec O5).
+fn listed_backends<'a>(
+    all: &'a [BackendChoice],
+    configured: Option<&str>,
+) -> Vec<&'a BackendChoice> {
+    all.iter()
+        .filter(|b| b.id != "null" || configured == Some("null"))
+        .collect()
+}
+
+fn backend_name(t: &crate::i18n::I18n, id: &str) -> String {
+    if id == "null" {
+        t.tr("settings-backend-null")
+    } else {
+        fp_backends::display_name(id).to_owned()
+    }
+}
+
 fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let config = &scene.state.config;
-    heading(ui, &t.tr("settings-tab-outputs"));
-    ui.add(
-        egui::Label::new(
-            RichText::new(format!("{}  {}", icon::INFO, t.tr("settings-restart-note")))
-                .font(font(12.0))
-                .color(theme::AMBER),
-        )
-        .selectable(false)
-        .wrap(),
-    );
-    ui.add_space(8.0);
     let Some(backends) = st.backends.clone() else {
         ui.add(
             egui::Label::new(
@@ -493,7 +693,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     row(ui, &t.tr("settings-backend"), None, |ui| {
         let shown = current
             .as_deref()
-            .map(|id| fp_backends::display_name(id).to_owned())
+            .map(|id| backend_name(t, id))
             .unwrap_or_else(|| t.tr("settings-default-backend"));
         egui::ComboBox::from_id_salt("backend")
             .selected_text(shown)
@@ -505,13 +705,13 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 {
                     update(scene, |c| c.outputs.backend = None);
                 }
-                for b in &backends {
+                for b in listed_backends(&backends, current.as_deref()) {
                     let text = match &b.unavailable {
                         Some(_) => t.tr_args(
                             "settings-backend-unavailable",
-                            &[("name", fp_backends::display_name(&b.id).to_owned().into())],
+                            &[("name", backend_name(t, &b.id).into())],
                         ),
-                        None => fp_backends::display_name(&b.id).to_owned(),
+                        None => backend_name(t, &b.id),
                     };
                     let response = ui.add_enabled(
                         b.unavailable.is_none(),
@@ -787,6 +987,10 @@ fn set_route(config: &mut Config, owner: Owner, bus: Bus, route: Option<Route>) 
     }
 }
 
+/// Width of the channel-pair slot, kept empty when a bus has no device, so
+/// that the test buttons line up (feedback 2 spec O3).
+const CHANNELS_WIDTH: f32 = 96.0;
+
 fn route_picker(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -797,6 +1001,17 @@ fn route_picker(
     devices: &[DeviceInfo],
 ) {
     let t = scene.i18n;
+    // Both test buttons get the wider label's width: one column each.
+    let test_width = [t.tr("settings-test-main"), t.tr("settings-test-cue")]
+        .into_iter()
+        .map(|l| {
+            ui.painter()
+                .layout_no_wrap(l, font(12.0), theme::TEXT)
+                .size()
+                .x
+        })
+        .fold(0.0, f32::max)
+        + 36.0;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
         let bus_label = match bus {
@@ -816,120 +1031,161 @@ fn route_picker(
             )
             .selectable(false),
         );
-        let none_text = match bus {
-            Bus::Main => t.tr("settings-default-device"),
-            Bus::Cue => t.tr("settings-none"),
-        };
-        let device = route.as_ref().map(|r| r.device.clone());
-        let labels = fp_backends::device_labels(devices);
-        let shown = device
-            .as_ref()
-            .map(|d| {
-                devices
-                    .iter()
-                    .zip(&labels)
-                    .find(|(x, _)| &x.id.0 == d)
-                    .map_or_else(|| d.clone(), |(_, label)| label.clone())
-            })
-            .unwrap_or_else(|| none_text.clone());
-        egui::ComboBox::from_id_salt(("device", owner, bus == Bus::Main))
-            .selected_text(shown)
-            .width(260.0)
-            .show_ui(ui, |ui| {
-                if ui.selectable_label(device.is_none(), &none_text).clicked() {
-                    update(scene, |c| set_route(c, owner, bus, None));
-                }
-                for (d, label) in devices.iter().zip(&labels) {
-                    let on = device.as_deref() == Some(d.id.0.as_str());
-                    if ui.selectable_label(on, label).clicked()
-                        && let Some(backend) = backend
-                    {
-                        let r = Route {
-                            backend: backend.to_owned(),
-                            device: d.id.0.clone(),
-                            first_channel: 0,
-                        };
-                        update(scene, |c| set_route(c, owner, bus, Some(r)));
-                    }
-                }
-            });
-        if let Some(r) = &route {
-            let channels = devices
-                .iter()
-                .find(|d| d.id.0 == r.device)
-                .map_or(2, |d| d.channels.max(2));
-            let pair = |first: u16| {
-                t.tr_args(
-                    "settings-channels",
-                    &[
-                        ("first", (first + 1).into()),
-                        ("second", (first + 2).into()),
-                    ],
-                )
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            // Right to left: the test button, the channel pair, the device.
+            let (label, freq) = match bus {
+                Bus::Main => (t.tr("settings-test-main"), MAIN_TONE_HZ),
+                Bus::Cue => (t.tr("settings-test-cue"), CUE_TONE_HZ),
             };
-            egui::ComboBox::from_id_salt(("channels", owner, bus == Bus::Main))
-                .selected_text(pair(r.first_channel))
-                .show_ui(ui, |ui| {
-                    for first in (0..channels.saturating_sub(1)).step_by(2) {
-                        if ui
-                            .selectable_label(first == r.first_channel, pair(first))
-                            .clicked()
-                        {
-                            let mut changed = r.clone();
-                            changed.first_channel = first;
-                            update(scene, |c| set_route(c, owner, bus, Some(changed)));
-                        }
+            // Main without a route plays on the default output; Cue needs one.
+            let target = route.clone().or_else(|| {
+                (bus == Bus::Main).then(|| Route {
+                    backend: backend.unwrap_or_default().to_owned(),
+                    device: String::new(),
+                    first_channel: 0,
+                })
+            });
+            if widgets::tile(
+                ui,
+                vec2(test_width, 26.0),
+                &label,
+                target.is_some(),
+                TileStyle::plain(),
+                |p, r, c| {
+                    p.text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        format!("{} {label}", icon::WAVEFORM),
+                        font(12.0),
+                        c,
+                    );
+                },
+            )
+            .clicked()
+                && let Some(target) = target
+            {
+                scene.ctl.test_tone(target, freq);
+            }
+            ui.allocate_ui_with_layout(
+                vec2(CHANNELS_WIDTH, 26.0),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ui.set_width(CHANNELS_WIDTH);
+                    if let Some(r) = &route {
+                        channel_pair(ui, scene, owner, bus, r, devices);
                     }
-                });
-        }
-        let (label, freq) = match bus {
-            Bus::Main => (t.tr("settings-test-main"), MAIN_TONE_HZ),
-            Bus::Cue => (t.tr("settings-test-cue"), CUE_TONE_HZ),
-        };
-        // Main without a route plays on the default output; Cue needs one.
-        let target = route.clone().or_else(|| {
-            (bus == Bus::Main).then(|| Route {
-                backend: backend.unwrap_or_default().to_owned(),
-                device: String::new(),
-                first_channel: 0,
-            })
+                },
+            );
+            let none_text = match bus {
+                Bus::Main => t.tr("settings-default-device"),
+                Bus::Cue => t.tr("settings-none"),
+            };
+            device_box(
+                ui,
+                scene,
+                owner,
+                bus,
+                route.as_ref(),
+                backend,
+                devices,
+                &none_text,
+            );
         });
-        let width = ui
-            .painter()
-            .layout_no_wrap(label.clone(), font(12.0), theme::TEXT)
-            .size()
-            .x
-            + 36.0;
-        let enabled = target.is_some();
-        if widgets::tile(
-            ui,
-            vec2(width, 26.0),
-            &label,
-            enabled,
-            TileStyle::plain(),
-            |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    format!("{} {label}", icon::WAVEFORM),
-                    font(12.0),
-                    c,
-                );
-            },
-        )
-        .clicked()
-            && let Some(target) = target
-        {
-            scene.ctl.test_tone(target, freq);
-        }
     });
     ui.add_space(4.0);
+}
+
+fn channel_pair(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    owner: Owner,
+    bus: Bus,
+    r: &Route,
+    devices: &[DeviceInfo],
+) {
+    let t = scene.i18n;
+    let channels = devices
+        .iter()
+        .find(|d| d.id.0 == r.device)
+        .map_or(2, |d| d.channels.max(2));
+    let pair = |first: u16| {
+        t.tr_args(
+            "settings-channels",
+            &[
+                ("first", (first + 1).into()),
+                ("second", (first + 2).into()),
+            ],
+        )
+    };
+    egui::ComboBox::from_id_salt(("channels", owner, bus == Bus::Main))
+        .selected_text(pair(r.first_channel))
+        .width(CHANNELS_WIDTH - 8.0)
+        .truncate()
+        .show_ui(ui, |ui| {
+            for first in (0..channels.saturating_sub(1)).step_by(2) {
+                if ui
+                    .selectable_label(first == r.first_channel, pair(first))
+                    .clicked()
+                {
+                    let mut changed = r.clone();
+                    changed.first_channel = first;
+                    update(scene, |c| set_route(c, owner, bus, Some(changed)));
+                }
+            }
+        });
+}
+
+// The picker's parts, split for layout only.
+#[allow(clippy::too_many_arguments)]
+fn device_box(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    owner: Owner,
+    bus: Bus,
+    route: Option<&Route>,
+    backend: Option<&str>,
+    devices: &[DeviceInfo],
+    none_text: &str,
+) {
+    let device = route.map(|r| r.device.clone());
+    let labels = fp_backends::device_labels(devices);
+    let shown = device
+        .as_ref()
+        .map(|d| {
+            devices
+                .iter()
+                .zip(&labels)
+                .find(|(x, _)| &x.id.0 == d)
+                .map_or_else(|| d.clone(), |(_, label)| label.clone())
+        })
+        .unwrap_or_else(|| none_text.to_owned());
+    egui::ComboBox::from_id_salt(("device", owner, bus == Bus::Main))
+        .selected_text(shown)
+        .width(ui.available_width())
+        .truncate()
+        .show_ui(ui, |ui| {
+            if ui.selectable_label(device.is_none(), none_text).clicked() {
+                update(scene, |c| set_route(c, owner, bus, None));
+            }
+            for (d, label) in devices.iter().zip(&labels) {
+                let on = device.as_deref() == Some(d.id.0.as_str());
+                if ui.selectable_label(on, label).clicked()
+                    && let Some(backend) = backend
+                {
+                    let r = Route {
+                        backend: backend.to_owned(),
+                        device: d.id.0.clone(),
+                        first_channel: 0,
+                    };
+                    update(scene, |c| set_route(c, owner, bus, Some(r)));
+                }
+            }
+        });
 }
 
 fn players(ui: &mut Ui, scene: &Scene<'_>) {
     let t = scene.i18n;
     let config = &scene.state.config;
-    heading(ui, &t.tr("settings-tab-players"));
     let max = config.limits.max_players;
     let mut count = scene.state.players.len();
     let label = t.tr("settings-player-count");
@@ -1090,7 +1346,6 @@ fn toggle(ui: &mut Ui, on: &mut bool, label: &str) -> bool {
 fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
     let t = scene.i18n;
     let a = scene.state.config.analysis.clone();
-    heading(ui, &t.tr("settings-tab-analysis"));
     type Field = (
         &'static str,
         f64,
@@ -1243,7 +1498,6 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
 
 fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
-    heading(ui, &t.tr("settings-tab-playlists"));
     let dir = scene
         .state
         .config
@@ -1502,5 +1756,39 @@ fn pick_folder(scene: &Scene<'_>) -> Option<Receiver<Option<PathBuf>>> {
             tracing::error!(error = %e, "could not open the folder dialog");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_window_has_one_size_clamped_to_the_screen() {
+        assert_eq!(window_size(vec2(1600.0, 940.0)), WINDOW_SIZE);
+        assert_eq!(window_size(vec2(700.0, 500.0)), vec2(652.0, 418.0));
+        assert_eq!(window_size(vec2(100.0, 100.0)), MIN_WINDOW_SIZE);
+    }
+
+    fn choice(id: &str) -> BackendChoice {
+        BackendChoice {
+            id: id.to_owned(),
+            unavailable: None,
+            devices: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn null_is_listed_only_when_configured() {
+        let all = [choice("alsa"), choice("null")];
+        let ids = |configured| -> Vec<String> {
+            listed_backends(&all, configured)
+                .into_iter()
+                .map(|b| b.id.clone())
+                .collect()
+        };
+        assert_eq!(ids(None), vec!["alsa"]);
+        assert_eq!(ids(Some("alsa")), vec!["alsa"]);
+        assert_eq!(ids(Some("null")), vec!["alsa", "null"]);
     }
 }

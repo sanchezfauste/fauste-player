@@ -5,14 +5,14 @@
 
 use std::collections::HashMap;
 
-use egui::{RichText, Ui, vec2};
+use egui::{RichText, Ui};
 use fp_model::HttpRemoteConfig;
 use fp_remote::{RemoteStatus, ServerError, ServerStatus};
 
 use super::super::app::Scene;
 use super::super::theme;
 use super::super::widgets::font;
-use super::{button, heading, update};
+use super::{button, labelled_row, update};
 
 #[derive(Default)]
 pub(crate) struct RemoteState {
@@ -29,12 +29,14 @@ fn text(ui: &mut Ui, s: impl Into<String>, color: egui::Color32) -> egui::Respon
 
 /// A text field over a configuration value. Returns the new text when the
 /// field loses focus with a change.
+#[allow(clippy::too_many_arguments)]
 fn field(
     ui: &mut Ui,
     st: &mut RemoteState,
     key: &'static str,
     label: egui::Id,
     current: &str,
+    width: f32,
     multiline: bool,
     password: bool,
 ) -> Option<String> {
@@ -44,7 +46,7 @@ fn field(
     } else {
         egui::TextEdit::singleline(draft).password(password)
     };
-    let response = ui.add(edit.desired_width(320.0)).labelled_by(label);
+    let response = ui.add(edit.desired_width(width)).labelled_by(label);
     if response.has_focus() {
         return None;
     }
@@ -201,7 +203,6 @@ pub(super) fn section(
 ) {
     let t = scene.i18n;
     let st = &mut st.remote;
-    heading(ui, &t.tr("settings-tab-remote"));
     let Some(status) = status else {
         let _ = text(ui, t.tr("remote-unavailable"), theme::NEUTRAL_400);
         return;
@@ -216,12 +217,22 @@ pub(super) fn section(
     }
     let (line, color) = status_line(scene, &status.http);
     let _ = text(ui, line, color);
-    ui.horizontal(|ui| {
-        let label = text(ui, t.tr("remote-bind"), theme::NEUTRAL_300).id;
-        if let Some(v) = field(ui, st, "http.bind", label, &config.http.bind, false, false) {
+    labelled_row(ui, &t.tr("remote-bind"), None, |ui, label| {
+        let w = ui.available_width();
+        if let Some(v) = field(
+            ui,
+            st,
+            "http.bind",
+            label,
+            &config.http.bind,
+            w,
+            false,
+            false,
+        ) {
             update(scene, |c| commit(c, "http.bind", &v));
         }
-        let label = text(ui, t.tr("remote-port"), theme::NEUTRAL_300).id;
+    });
+    labelled_row(ui, &t.tr("remote-port"), None, |ui, label| {
         let port = number(
             ui,
             st,
@@ -235,54 +246,53 @@ pub(super) fn section(
             update(scene, |c| commit_number(c, "http.port", port));
         }
     });
-    ui.horizontal(|ui| {
-        let label = text(ui, t.tr("remote-token"), theme::NEUTRAL_300).id;
-        let masked = !st.show_token;
-        if let Some(v) = field(
-            ui,
-            st,
-            "http.token",
-            label,
-            &config.http.token,
-            false,
-            masked,
-        ) {
-            update(scene, |c| commit(c, "http.token", &v));
-        }
-        let label = if st.show_token {
-            t.tr("remote-token-hide")
-        } else {
-            t.tr("remote-token-show")
-        };
-        if button(ui, &label) {
-            st.show_token = !st.show_token;
-        }
-        if button(ui, &t.tr("remote-token-copy")) {
-            ui.ctx().copy_text(config.http.token.clone());
-        }
-        if button(ui, &t.tr("remote-token-generate"))
-            && let Some(token) = crate::remote::new_token()
-        {
-            st.drafts.remove("http.token");
-            update(scene, |c| c.remote.http.token = token);
-        }
+    labelled_row(ui, &t.tr("remote-token"), None, |ui, label| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // Right to left: Generate, Copy, Show, then the field fills.
+            if button(ui, &t.tr("remote-token-generate"))
+                && let Some(token) = crate::remote::new_token()
+            {
+                st.drafts.remove("http.token");
+                update(scene, |c| c.remote.http.token = token);
+            }
+            if button(ui, &t.tr("remote-token-copy")) {
+                ui.ctx().copy_text(config.http.token.clone());
+            }
+            let shown = if st.show_token {
+                t.tr("remote-token-hide")
+            } else {
+                t.tr("remote-token-show")
+            };
+            if button(ui, &shown) {
+                st.show_token = !st.show_token;
+            }
+            let masked = !st.show_token;
+            let w = ui.available_width();
+            if let Some(v) = field(
+                ui,
+                st,
+                "http.token",
+                label,
+                &config.http.token,
+                w,
+                false,
+                masked,
+            ) {
+                update(scene, |c| commit(c, "http.token", &v));
+            }
+        });
     });
     let local = config.http.bind_addr().is_some_and(|ip| ip.is_loopback());
     if !local && config.http.token.is_empty() {
         let _ = text(ui, t.tr("remote-token-needed"), theme::AMBER);
     }
-    let label = text(ui, t.tr("remote-origins"), theme::NEUTRAL_300).id;
-    if let Some(v) = field(
-        ui,
-        st,
-        "http.origins",
-        label,
-        &config.http.cors_origins.join("\n"),
-        true,
-        false,
-    ) {
-        update(scene, |c| commit(c, "http.origins", &v));
-    }
+    labelled_row(ui, &t.tr("remote-origins"), None, |ui, label| {
+        let w = ui.available_width();
+        let current = config.http.cors_origins.join("\n");
+        if let Some(v) = field(ui, st, "http.origins", label, &current, w, true, false) {
+            update(scene, |c| commit(c, "http.origins", &v));
+        }
+    });
 
     ui.add_space(16.0);
     // OSC
@@ -293,12 +303,13 @@ pub(super) fn section(
     }
     let (line, color) = status_line(scene, &status.osc);
     let _ = text(ui, line, color);
-    ui.horizontal(|ui| {
-        let label = text(ui, t.tr("remote-bind"), theme::NEUTRAL_300).id;
-        if let Some(v) = field(ui, st, "osc.bind", label, &config.osc.bind, false, false) {
+    labelled_row(ui, &t.tr("remote-bind"), None, |ui, label| {
+        let w = ui.available_width();
+        if let Some(v) = field(ui, st, "osc.bind", label, &config.osc.bind, w, false, false) {
             update(scene, |c| commit(c, "osc.bind", &v));
         }
-        let label = text(ui, t.tr("remote-port"), theme::NEUTRAL_300).id;
+    });
+    labelled_row(ui, &t.tr("remote-port"), None, |ui, label| {
         let port = number(
             ui,
             st,
@@ -312,23 +323,16 @@ pub(super) fn section(
             update(scene, |c| commit_number(c, "osc.port", port));
         }
     });
-    let label = text(ui, t.tr("remote-sources"), theme::NEUTRAL_300).id;
-    if let Some(v) = field(
-        ui,
-        st,
-        "osc.sources",
-        label,
-        &config.osc.allowed_sources.join("\n"),
-        true,
-        false,
-    ) {
-        update(scene, |c| commit(c, "osc.sources", &v));
-    }
+    labelled_row(ui, &t.tr("remote-sources"), None, |ui, label| {
+        let w = ui.available_width();
+        let current = config.osc.allowed_sources.join("\n");
+        if let Some(v) = field(ui, st, "osc.sources", label, &current, w, true, false) {
+            update(scene, |c| commit(c, "osc.sources", &v));
+        }
+    });
 
     ui.add_space(16.0);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
-        let label = text(ui, t.tr("remote-position-interval"), theme::NEUTRAL_300).id;
+    labelled_row(ui, &t.tr("remote-position-interval"), None, |ui, label| {
         let every = config.events.position_interval_ms;
         if let Some(ms) = number(ui, st, "events.position", label, every, 50..=5000, " ms") {
             update(scene, |c| commit_number(c, "events.position", ms));

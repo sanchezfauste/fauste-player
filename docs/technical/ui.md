@@ -150,6 +150,23 @@ mode (the banner after a UI panic) the close is not guarded, because the dialog
 cannot be drawn. `ExitIntent` names why the guard opened, so other exits can
 reuse it.
 
+`ExitIntent::Restart` opens the same modal for **Restart now** while something
+is on air (its own text: "Stop and restart"). With nothing on air,
+`begin_restart` sets the restart flag, marks the close as confirmed and sends
+the viewport close command. See "Restart" in `architecture.md`.
+
+## Settings window
+
+`settings::window_size` gives the one size of the window: 900 × 640, clamped to
+the main window minus a margin (never below 320 × 300). It does not change when
+a section is selected. The section header (title and **Restore defaults**) is
+fixed; the body below it sits in `ScrollArea::both`. Rows use
+`labelled_row`, with a label column of `LABEL_WIDTH` (180 px), so every section
+shares one grid. The footer spans the window width and holds the restart notice
+and **Restart now** while `fp_model::restart_pending` is not empty. A transient
+notice (`SettingsDeps::notice`) briefly takes the place of the restart text;
+**Restart now** stays.
+
 ## Panic isolation
 
 `Shell::ui` runs `AppUi::ui` inside `catch_unwind`. After a panic it draws only

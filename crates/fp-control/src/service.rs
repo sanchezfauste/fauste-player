@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
@@ -273,24 +275,70 @@ impl MidiCore {
     }
 }
 
+/// The running service, owned by whoever started it. Shutting it down (or
+/// dropping it) stops its thread and waits for it, which closes the ports
+/// and releases the [`MidiControl`] (on a restart, the conductor).
+pub struct MidiService {
+    handle: MidiHandle,
+    stop: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl MidiService {
+    /// The interface's side; it outlives the service harmlessly.
+    pub fn handle(&self) -> MidiHandle {
+        self.handle.clone()
+    }
+
+    /// Stops the thread and waits for it to end.
+    pub fn shutdown(mut self) {
+        self.stop_and_join();
+    }
+
+    fn stop_and_join(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(thread) = self.thread.take()
+            && thread.join().is_err()
+        {
+            tracing::error!("the MIDI thread panicked");
+        }
+    }
+}
+
+impl Drop for MidiService {
+    fn drop(&mut self) {
+        self.stop_and_join();
+    }
+}
+
+/// How long the thread waits for input between passes, and so at most how
+/// long a shutdown waits for it.
+const IDLE: Duration = Duration::from_millis(20);
+
 /// Starts the service on its own thread, named `fp-midi`.
 pub fn spawn(
     ports: Box<dyn MidiPorts>,
     control: Arc<dyn MidiControl>,
-) -> std::io::Result<MidiHandle> {
+) -> std::io::Result<MidiService> {
     let (mut core, handle) = MidiCore::new(ports, control);
-    std::thread::Builder::new()
+    let stop = Arc::new(AtomicBool::new(false));
+    let flag = stop.clone();
+    let thread = std::thread::Builder::new()
         .name("fp-midi".to_owned())
         .spawn(move || {
-            loop {
+            while !flag.load(Ordering::Acquire) {
                 let step = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     core.step(Instant::now());
                 }));
                 if step.is_err() {
                     tracing::error!("the MIDI service recovered from a panic");
                 }
-                core.wait(Duration::from_millis(20));
+                core.wait(IDLE);
             }
         })?;
-    Ok(handle)
+    Ok(MidiService {
+        handle,
+        stop,
+        thread: Some(thread),
+    })
 }

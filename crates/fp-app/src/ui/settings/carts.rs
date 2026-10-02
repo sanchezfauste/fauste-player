@@ -14,7 +14,7 @@ use super::super::cartwall::page_name;
 use super::super::files::AUDIO_EXTENSIONS;
 use super::super::theme;
 use super::super::widgets::{self, TileStyle, font};
-use super::{SettingsState, heading, row, toggle};
+use super::{SettingsState, labelled_row, row, toggle};
 
 #[derive(Default)]
 pub(crate) struct CartsState {
@@ -91,18 +91,10 @@ fn button(ui: &mut Ui, label: &str, glyph: &str, enabled: bool) -> bool {
 /// A labelled single-line text field; the label names the field for
 /// accessibility (and tests).
 fn text_row(ui: &mut Ui, label: &str, text: &mut String) -> egui::Response {
-    ui.horizontal(|ui| {
-        ui.set_min_height(40.0);
-        let label = ui.add_sized(
-            vec2(220.0, 20.0),
-            egui::Label::new(RichText::new(label).font(font(13.0)).color(theme::TEXT))
-                .selectable(false),
-        );
-        ui.add_space(16.0);
-        ui.add(egui::TextEdit::singleline(text).desired_width(240.0))
-            .labelled_by(label.id)
+    labelled_row(ui, label, None, |ui, label_id| {
+        ui.add(egui::TextEdit::singleline(text).desired_width(ui.available_width()))
+            .labelled_by(label_id)
     })
-    .inner
 }
 
 fn poll(scene: &Scene<'_>, c: &mut CartsState) {
@@ -162,7 +154,6 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let c = &mut st.carts;
     poll(scene, c);
-    heading(ui, &t.tr("settings-tab-cartwall"));
     let wall = &scene.state.cartwall;
     let page = c
         .page

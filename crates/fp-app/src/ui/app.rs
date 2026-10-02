@@ -4,6 +4,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender};
@@ -14,8 +15,8 @@ use fp_backends::AudioBackend;
 use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
 use fp_model::{
-    AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, ShortcutAction,
-    TrackId, Transport,
+    AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, RestartReason,
+    ShortcutAction, TrackId, Transport,
 };
 
 use super::about::{self, NoticeOpener};
@@ -74,6 +75,8 @@ pub(crate) struct ViewState {
     pub exit_guard: Option<ExitIntent>,
     /// The operator confirmed the close: let the window go.
     pub close_confirmed: bool,
+    /// Restart now was pressed (Settings footer or the top-bar pill).
+    pub restart_requested: bool,
     /// The notice about tracks an earlier version analysed is open.
     pub outdated_open: bool,
     /// Where each player's waveform menu was opened, in seconds.
@@ -191,12 +194,18 @@ pub struct AppUi {
     midi: Option<fp_control::service::MidiHandle>,
     /// The remote servers' state (Settings > Remote), when they started.
     remote_status: Option<Arc<arc_swap::ArcSwap<fp_remote::RemoteStatus>>>,
+    /// The configuration the engine was built with (feedback 2 spec O4).
+    started: fp_model::Config,
+    /// Set once a restart is confirmed; `main` reads it after the window
+    /// closes.
+    restart: Arc<AtomicBool>,
 }
 
 impl AppUi {
     pub fn new(ctl: Arc<dyn Controller>, i18n: I18n, media: MediaCache) -> Self {
         let (picks_tx, picks_rx) = crossbeam_channel::unbounded();
         let (files_tx, files_rx) = crossbeam_channel::unbounded();
+        let started = ctl.model().config.clone();
         Self {
             ctl,
             i18n,
@@ -226,7 +235,22 @@ impl AppUi {
             opener: about::system_opener(),
             midi: None,
             remote_status: None,
+            started,
+            restart: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// The configuration the audio engine was built with; a change to a
+    /// start-up setting after it shows "Restart pending".
+    pub fn with_started_config(mut self, config: fp_model::Config) -> Self {
+        self.started = config;
+        self
+    }
+
+    /// True once the operator confirmed a restart: `main` starts the
+    /// application again after its normal shutdown.
+    pub fn restart_flag(&self) -> Arc<AtomicBool> {
+        self.restart.clone()
     }
 
     /// The services thread's fault counter, shown as a status-bar alert.
@@ -399,6 +423,7 @@ impl AppUi {
             }
         }
         self.keyboard(&ctx, &state);
+        let pending = fp_model::restart_pending(&self.started, &state.config);
         let scene = Scene {
             ctl: self.ctl.as_ref(),
             i18n: &self.i18n,
@@ -426,7 +451,7 @@ impl AppUi {
                 .max_rect(top)
                 .layout(Layout::left_to_right(Align::Center)),
         );
-        top_bar(&mut top_ui, &scene, &mut self.view);
+        top_bar(&mut top_ui, &scene, &mut self.view, &pending);
         // The cartwall strip takes the bottom of the middle area.
         let inner = middle.shrink(8.0);
         let cart_height = cartwall::height(&scene).min(inner.height() * 0.6);
@@ -492,8 +517,11 @@ impl AppUi {
                     .map(|(text, _)| text.clone()),
                 midi: self.midi.as_ref(),
                 remote: self.remote_status.as_ref().map(|s| (**s.load()).clone()),
+                restart_pending: !pending.is_empty(),
             };
-            self.view.settings_open = settings::show(&ctx, &scene, &mut self.settings, &deps);
+            let outcome = settings::show(&ctx, &scene, &mut self.settings, &deps);
+            self.view.settings_open = outcome.open;
+            self.view.restart_requested |= outcome.restart;
         } else {
             self.settings_shown = false;
             // Closing Settings ends MIDI learn: the next press on a surface
@@ -526,6 +554,14 @@ impl AppUi {
                 take_drops = true;
             }
         }
+        // O4: Restart now asks the close guard first when audio is on air.
+        if std::mem::take(&mut self.view.restart_requested) {
+            if fp_model::on_air(&state).is_empty() {
+                begin_restart(&self.restart, &mut self.view, &ctx);
+            } else {
+                self.view.exit_guard = Some(ExitIntent::Restart);
+            }
+        }
         // The guard takes precedence over Settings and About: drawn last, it
         // is the top modal.
         if let Some(intent) = self.view.exit_guard {
@@ -544,6 +580,9 @@ impl AppUi {
                             ExitIntent::Close => {
                                 self.view.close_confirmed = true;
                                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            ExitIntent::Restart => {
+                                begin_restart(&self.restart, &mut self.view, &ctx);
                             }
                         }
                     }
@@ -917,7 +956,27 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
     }
 }
 
-fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+/// Closes the window for a restart. The close guard lets it through: what
+/// was on air has been stopped, or nothing was.
+fn begin_restart(restart: &AtomicBool, view: &mut ViewState, ctx: &egui::Context) {
+    restart.store(true, Ordering::Release);
+    view.close_confirmed = true;
+    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+}
+
+fn restart_reason_key(reason: RestartReason) -> &'static str {
+    match reason {
+        RestartReason::AudioSystem => "restart-reason-audio-system",
+        RestartReason::SampleRate => "restart-reason-sample-rate",
+        RestartReason::BufferSize => "restart-reason-buffer-size",
+        RestartReason::Routes => "restart-reason-routes",
+        RestartReason::BitPerfect => "restart-reason-bit-perfect",
+        RestartReason::Limits => "restart-reason-limits",
+        RestartReason::Tuning => "restart-reason-tuning",
+    }
+}
+
+fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, pending: &[RestartReason]) {
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
     ui.painter().rect_filled(
@@ -1026,6 +1085,42 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         .clicked()
         {
             view_state.about_open = true;
+        }
+        if !pending.is_empty() {
+            let i18n = scene.i18n;
+            let label = i18n.tr("top-restart-pending");
+            let reasons = pending
+                .iter()
+                .map(|r| i18n.tr(restart_reason_key(*r)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let tip = i18n.tr_args("tip-restart-pending", &[("reasons", reasons.into())]);
+            let width = ui
+                .painter()
+                .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
+                .size()
+                .x
+                + 34.0;
+            let style = TileStyle {
+                border: theme::AMBER,
+                content: theme::AMBER,
+                hover_fill: theme::NEUTRAL_800,
+                ..TileStyle::plain()
+            };
+            if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    format!("{} {label}", egui_phosphor::regular::ARROWS_CLOCKWISE),
+                    font(12.0),
+                    c,
+                );
+            })
+            .on_hover_text(tip)
+            .clicked()
+            {
+                view_state.restart_requested = true;
+            }
         }
     });
 }
