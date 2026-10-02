@@ -52,7 +52,7 @@ enum Exit {
 }
 
 fn main() -> ExitCode {
-    let playlists = match cli::parse(std::env::args_os().skip(1)) {
+    let (playlists, ignored) = match cli::parse(std::env::args_os().skip(1)) {
         Ok(cli::Invocation::Version) => {
             cli::emit(
                 cli::Stream::Out,
@@ -65,12 +65,11 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
         Ok(cli::Invocation::Run { playlists, ignored }) => {
-            for path in ignored {
+            for path in &ignored {
                 // An ignored argument is not worth a message box.
                 eprintln!("fauste-player: not a playlist, ignored: {}", path.display());
-                tracing::warn!(path = %path.display(), "not a playlist, ignored");
             }
-            playlists
+            (playlists, ignored)
         }
         Err(e) => {
             cli::emit(cli::Stream::Err, &format!("fauste-player: {e}\n"));
@@ -107,6 +106,11 @@ fn main() -> ExitCode {
         fp_model::Limits::default().max_crash_reports,
     );
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting");
+    // Logged once logging is up, so that a GUI build without a console
+    // keeps the warning too.
+    for path in &ignored {
+        tracing::warn!(path = %path.display(), "not a playlist, ignored");
+    }
     let data_dir = paths.data_dir.clone();
     let result = run(paths, playlists);
     drop(lock);
