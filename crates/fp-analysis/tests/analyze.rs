@@ -187,6 +187,7 @@ fn the_analysis_records_the_rate_and_bits() {
             sample_rate: RATE,
             bits: Some(16),
             channels: 1,
+            dsd_rate: None,
         })
     );
 }

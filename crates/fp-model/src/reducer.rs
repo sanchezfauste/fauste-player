@@ -8,6 +8,7 @@ use crate::command::{
     Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
 };
 use crate::config::Config;
+use crate::dsd::DsdOnAir;
 use crate::error::ModelError;
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
 use crate::player::{CueState, PlayMode, PlayerState, Transport};
@@ -112,6 +113,10 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             }
             let volume = volume.clamp(0.0, 1.0);
             state.players[i].volume = volume;
+            #[allow(clippy::float_cmp)] // only exactly unity keeps DSD unchanged
+            if volume != 1.0 && state.players[i].dsd.take().is_some() {
+                out.push(EngineAction::LeaveDsd { player: id });
+            }
             out.push(EngineAction::SetVolume { player: id, volume });
         }
         Command::Seek(id, secs) => {
@@ -316,7 +321,30 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             if let Ok(i) = state.player_index(player)
                 && state.players[i].current == Some(entry)
             {
-                stop_player(state, i);
+                let held = dsd_holds(&state.players[i]);
+                match held.then(|| dsd_hold_continue(state, i)).flatten() {
+                    Some(request) => out.push(EngineAction::StartCurrent { player, request }),
+                    None => stop_player(state, i),
+                }
+            }
+        }
+        EngineEvent::DsdStarted {
+            player,
+            entry,
+            hold_others,
+        } => {
+            if let Ok(i) = state.player_index(player)
+                && state.players[i].current == Some(entry)
+                && state.players[i].transport != Transport::Stopped
+            {
+                state.players[i].dsd = Some(DsdOnAir { entry, hold_others });
+            }
+        }
+        EngineEvent::DsdEnded { player, entry } => {
+            if let Ok(i) = state.player_index(player)
+                && state.players[i].dsd.is_some_and(|d| d.entry == entry)
+            {
+                state.players[i].dsd = None;
             }
         }
         EngineEvent::TransitionStarted { player, entry } => {
@@ -410,14 +438,9 @@ fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Resu
             if state.players[i].fading {
                 return Ok(());
             }
-            let fade_ms = state.config.players.fade_ms;
+            let held = dsd_holds(&state.players[i]);
             if let Some(request) = advance(state, i) {
-                state.players[i].fading = true;
-                out.push(EngineAction::Crossfade {
-                    player: id,
-                    request,
-                    fade_ms,
-                });
+                start_or_crossfade(state, i, held, request, out);
             }
         }
     }
@@ -446,19 +469,14 @@ fn previous(
             break entry;
         }
     };
-    let fade_ms = state.config.players.fade_ms;
+    let held = dsd_holds(&state.players[i]);
     if let Some(request) = advance_to(state, i, target, false) {
-        let player = &mut state.players[i];
-        player.fading = true;
         if let Some(left) = left {
+            let player = &mut state.players[i];
             player.next = Some(left);
             player.next_explicit = true;
         }
-        out.push(EngineAction::Crossfade {
-            player: id,
-            request,
-            fade_ms,
-        });
+        start_or_crossfade(state, i, held, request, out);
     }
     Ok(())
 }
@@ -501,6 +519,10 @@ fn fade_stop(
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
+    if state.players[i].dsd.is_some() && state.players[i].transport != Transport::Stopped {
+        // O25: a DSD stream cannot be faded; it stops at once.
+        return stop(state, id, out);
+    }
     let fade_ms = state.config.players.fade_ms;
     let player = &mut state.players[i];
     // Allowed during a crossfade or segue overlap too: the engine fades every
@@ -663,9 +685,79 @@ fn successors_of(state: &AppState, entry: EntryId) -> Successors {
     Successors(first, second)
 }
 
+/// Rules 9–11 (see `ordinary_plan`), then O25: a DSD stream that holds its
+/// output is never overlapped; it plays to its end and the next entry
+/// starts from `ReachedEnd` (`dsd_hold_continue`).
+pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan> {
+    let plan = ordinary_plan(state, player)?;
+    if dsd_holds(player) && matches!(plan, TransitionPlan::StartNextAt { .. }) {
+        let end = current_end(state, player)?;
+        return Some(TransitionPlan::StopAt { at_secs: end });
+    }
+    Some(plan)
+}
+
+/// The end of the play range of `player`'s current entry.
+fn current_end(state: &AppState, player: &PlayerState) -> Option<f64> {
+    let track = state.track_for_entry(player.current?)?;
+    let range = track.play_range(state.config.players.use_cue_markers);
+    Some(range.known_end().unwrap_or(SOURCE_END))
+}
+
+/// The player's DSD stream holds its output (`DsdMix::HoldOthers`).
+pub(crate) fn dsd_holds(player: &PlayerState) -> bool {
+    player
+        .dsd
+        .is_some_and(|d| d.hold_others && player.current == Some(d.entry))
+}
+
+/// O25 HoldOthers: at the end of a held DSD track, what the ordinary plan
+/// would have started at its end, started now with no overlap. `None` when
+/// the ordinary plan stops the player.
+fn dsd_hold_continue(state: &mut AppState, i: usize) -> Option<SourceRequest> {
+    let plan = ordinary_plan(state, &state.players[i])?;
+    if !matches!(plan, TransitionPlan::StartNextAt { .. }) {
+        return None;
+    }
+    state.players[i].dsd = None;
+    let current = state.players[i].current?;
+    if repeating(state, &state.players[i]) {
+        // R26: another pass of the same entry, not a new play.
+        let request = state.request_from_cue_in(current)?;
+        let p = &mut state.players[i];
+        p.preloaded = None;
+        p.scheduled = None;
+        return Some(request);
+    }
+    let next = state.players[i].next?;
+    advance_to(state, i, next, true)
+}
+
+/// Play-while-playing starts: a crossfade, or (O25 HoldOthers, `held`) a
+/// hard start that ends the DSD stream.
+fn start_or_crossfade(
+    state: &mut AppState,
+    i: usize,
+    held: bool,
+    request: SourceRequest,
+    out: &mut Vec<EngineAction>,
+) {
+    let player = state.players[i].id;
+    if held {
+        out.push(EngineAction::StartCurrent { player, request });
+        return;
+    }
+    out.push(EngineAction::Crossfade {
+        player,
+        request,
+        fade_ms: state.config.players.fade_ms,
+    });
+    state.players[i].fading = true;
+}
+
 /// Rules 9–11: what the engine must do when the current track ends. Returns
 /// `None` while a fade stop is running: the engine stops and reports the end.
-pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan> {
+fn ordinary_plan(state: &AppState, player: &PlayerState) -> Option<TransitionPlan> {
     if player.transport == Transport::Stopped || player.fade_stop_pending {
         return None;
     }
@@ -1058,6 +1150,7 @@ pub(crate) fn advance_to(
     // The preloaded source is now the current one, and the old plan no longer applies.
     player.preloaded = None;
     player.scheduled = None;
+    player.dsd = None;
     Some(request)
 }
 
@@ -1080,6 +1173,7 @@ pub(crate) fn stop_player(state: &mut AppState, i: usize) {
     player.fading = false;
     player.fade_stop_pending = false;
     player.stop_after_current = false;
+    player.dsd = None;
 }
 
 /// After playlist edits: a player with a current entry and a derived next

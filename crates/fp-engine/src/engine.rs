@@ -870,6 +870,8 @@ impl Engine {
                 }
             }
             EngineAction::Seek { player, secs } => self.seek(player, secs),
+            // Task 9 (feedback 2 plan 10)
+            EngineAction::LeaveDsd { .. } => {}
             EngineAction::SetVolume { player, volume } => {
                 if let Some(rt) = self.players.get(&player) {
                     rt.volume.store(volume);

@@ -46,7 +46,10 @@ pub use config::{
     LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig,
     PlayerRoutes, PlayersConfig, Route, Tuning, UiConfig,
 };
-pub use dsd::{DEFAULT_DSD_SILENCE_MS, DsdDevice, DsdMix, DsdOutput};
+pub use dsd::{
+    BpBadge, DEFAULT_DSD_SILENCE_MS, DSD_WORD_BITS, DsdDevice, DsdFacts, DsdFallback, DsdMix,
+    DsdOnAir, DsdOutput, DsdStreamMode, DsdTarget, bp_badge, dsd_decision, dsd_holds_others,
+};
 pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
 pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};

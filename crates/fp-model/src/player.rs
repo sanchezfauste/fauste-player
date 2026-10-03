@@ -132,6 +132,9 @@ pub struct PlayerState {
     pub(crate) scheduled: Option<TransitionPlan>,
     /// A fade stop is running: no transition may start.
     pub(crate) fade_stop_pending: bool,
+    /// The DSD stream the engine reported for the entry on air (spec O25);
+    /// runtime only, never saved.
+    pub dsd: Option<crate::dsd::DsdOnAir>,
 }
 
 impl PlayerState {
@@ -158,6 +161,7 @@ impl PlayerState {
             preloaded: None,
             scheduled: None,
             fade_stop_pending: false,
+            dsd: None,
         }
     }
 }

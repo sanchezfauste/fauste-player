@@ -155,6 +155,10 @@ pub struct AudioFormat {
     /// Channels in the file; 0 when unknown. More than two are downmixed.
     #[serde(default)]
     pub channels: u32,
+    /// The DSD rate of a DSD file (2 822 400 for DSD64); `None` for PCM.
+    /// `sample_rate` is then the rate of its PCM conversion (DSD rate ÷ 32).
+    #[serde(default)]
+    pub dsd_rate: Option<u32>,
 }
 
 /// The text tags of a file as the player shows and edits them (feedback 2

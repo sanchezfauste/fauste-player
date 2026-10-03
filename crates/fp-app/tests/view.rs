@@ -480,6 +480,7 @@ fn tip_track() -> Track {
         sample_rate: 44_100,
         bits: Some(16),
         channels: 2,
+        dsd_rate: None,
     });
     t
 }
@@ -536,6 +537,7 @@ fn the_format_line_leaves_out_what_is_unknown() {
         sample_rate: 48_000,
         bits: None,
         channels: 2,
+        dsd_rate: None,
     });
     let line = track_tooltip(&t)
         .into_iter()
