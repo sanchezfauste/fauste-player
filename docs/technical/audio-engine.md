@@ -41,8 +41,11 @@ block it:
    when `eof` is set and the frames still buffered are at most the frames left
    to the stop frame plus 2 (`END_TOLERANCE_FRAMES`, for a frame of error in
    the analysed duration and resampling rounding), so the level stays
-   constant. The player volume is smoothed over
-   `tuning.gain_smoothing_ms`;
+   constant. A failed source (decoder error) plays out its buffer; when what
+   is left is at most `declick_ms` the mixer ramps it to zero over exactly
+   those frames, so the end is not a step. A paused slot that has a stop
+   frame (a stop while paused) finishes at that frame. The player volume is
+   smoothed over `tuning.gain_smoothing_ms`;
 3. counts underruns (silence is output for missing samples);
 4. emits `Started`, `Finished` and `Failed` events and updates `BusShared`
    (heartbeat, frames rendered, peaks). A `render_seq` seqlock lets readers
@@ -197,7 +200,7 @@ cannot hang the conductor.
 | `StartCurrent` | start the preloaded source, or open one, once ready |
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs }`) to the mixer as exact frames once it is within `schedule_lead_ms` |
-| `FadeOutAndStop`, `StopNow`, `Pause`, `Resume`, `Seek`, `SetVolume` | ramps and commands on the current source |
+| `FadeOutAndStop`, `StopNow`, `Pause`, `Resume`, `Seek`, `SetVolume` | ramps and commands on the current source. A stop or seek ramps out a source whose start was sent (`Requested`) or whose pause ramp may still run (`pause_ramp_ends`, plus a block of margin); a source that is silent (never started, held, or paused with the ramp over) is released at once |
 | `StartCue`, `StopCue` | a separate source on the player's Cue route |
 | `SeekCue` | replace the CUE source by one at the target (the CUE plays whole files); it starts idle when the CUE is held, so a held CUE stays held |
 | `SetCuePaused` | `BusCommand::Pause`/`Resume` with the pause ramp for an audible source; a source that has not started yet is held idle and started on release. `PlayerRuntime::cue_paused` remembers the state and a new CUE clears it |
@@ -262,10 +265,11 @@ added.
   of a pre-listen that is no longer the current one).
 - **Exact ends and loops:** each load carries `until_secs` (the cue-out) and
   `looped`. The worker cuts the frames past the end, so a cart finishes
-  exactly at its cue-out. A looped cart reopens at its cue-in and keeps
-  filling the same ring, so the loop point has no gap.
-- **Stopping:** a started cart gets a de-click ramp; one that never started is
-  released at once. Neither is reported as ended.
+  exactly at its cue-out, and fades the last `declick_ms` before it to zero
+  (`LoadOptions::fade_out_frames`) so the cut is not a step. A looped cart reopens at its cue-in and keeps
+  filling the same ring, so the loop point has no gap (no fade).
+- **Stopping:** a started cart, or one whose start was sent (`Requested`), gets
+  a de-click ramp; one that never started is released at once. Neither is reported as ended.
 - **Events:** mixer `Finished` becomes `CartEnded` (or `CartCueEnded`). A
   worker failure becomes `CartFailed` once any buffered audio has played.
 - **Mixer capacity:** it counts the carts on air, plus room for more.
