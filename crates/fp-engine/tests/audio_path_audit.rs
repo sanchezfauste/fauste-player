@@ -1021,6 +1021,7 @@ fn the_renderer_the_device_calls_and_the_sample_writer_never_allocate() {
     let mut renderer = MixerRenderer {
         mixer: Arc::new(std::sync::Mutex::new(m)),
         shared,
+        dop: None,
     };
     // Built off the real-time thread, applied on it.
     let grow = BusCommand::Grow(SlotStorage::with_capacity(4));

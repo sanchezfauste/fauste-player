@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use fp_backends::dsd::{DopEncoder, DsdStream};
 use fp_backends::{
     AudioBackend, BackendError, DeviceId, OutputStream, StreamConfig, StreamErrorSink,
 };
@@ -171,6 +172,7 @@ impl Bus {
         let renderer = Box::new(MixerRenderer {
             mixer: self.mixer.clone(),
             shared: self.handle.shared.clone(),
+            dop: (self.config.dsd == Some(DsdStream::Dop)).then(DopEncoder::new),
         });
         let errors: Arc<dyn StreamErrorSink> = self.handle.shared.clone();
         let mut opened =
@@ -189,6 +191,7 @@ impl Bus {
             let renderer = Box::new(MixerRenderer {
                 mixer: self.mixer.clone(),
                 shared: self.handle.shared.clone(),
+                dop: (self.config.dsd == Some(DsdStream::Dop)).then(DopEncoder::new),
             });
             let shared = StreamConfig {
                 exclusive: false,

@@ -8,6 +8,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 use fp_backends::{Renderer, StreamErrorKind, StreamErrorSink};
 
+use fp_backends::dsd::{DopEncoder, silence_sample};
+
 use crate::atomic::AtomicF32;
 use crate::kweight::KWeighting;
 use crate::ramp::{Curve, Ramp};
@@ -58,6 +60,25 @@ pub enum BusCommand {
     Detach { slot: usize },
     /// Replaces the slot storage with a larger one (built off the RT thread).
     Grow(SlotStorage),
+    /// Turns the bus's DSD mode on or off. It takes effect at the start of
+    /// the first block whose first frame is at or after `at_frame` (block
+    /// granularity keeps every block wholly DSD or wholly PCM, which the DoP
+    /// stage needs). In DSD mode the block is pre-filled with the DSD idle
+    /// word and a started DSD slot copies its words into its channel pair:
+    /// no gain of any kind touches them (no fade, pending ramp, start ramp,
+    /// failed-source ramp, pause ramp or volume smoothing). `Pause` holds at
+    /// once, `Resume` continues at once, `StopAt` cuts on its frame, and an
+    /// underrun or failure leaves the idle fill. The slot's PCM ring is
+    /// metered at unity gain. Every other slot is consumed silently (the
+    /// switching window and the HoldOthers mute). A fade that falls due in
+    /// DSD mode settles at its target at once, so none fires with a jump
+    /// when the mode ends; a ramp in progress is frozen where it was.
+    DsdMode { on: bool, at_frame: u64 },
+    /// No slot consumes, starts or stops in blocks that start before
+    /// `until_frame`: a `Start` or `StopAt` frame inside the hold takes
+    /// effect at the first block after it. The fill still applies. The
+    /// latest command wins, so a `HoldAll` at the current frame ends a hold.
+    HoldAll { until_frame: u64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,6 +142,8 @@ pub struct BusShared {
     pub leaked: AtomicU64,
     /// Blocks in which a source's channel pair did not fit the stream.
     pub misrouted: AtomicU64,
+    /// The block just rendered was in DSD mode (set before it is filled).
+    pub dsd_on: AtomicBool,
     pub peak_l: AtomicF32,
     pub peak_r: AtomicF32,
     /// The stream's rate, set by the bus on every open (K-weighting).
@@ -290,6 +313,11 @@ pub struct Mixer {
     smoothing_base: Option<(u32, u32)>,
     /// The de-click length at the same base rate as `smoothing_base`.
     declick_base: u32,
+    /// DSD mode (see `BusCommand::DsdMode`) and its pending switch.
+    dsd_on: bool,
+    pending_dsd: Option<(u64, bool)>,
+    /// Blocks starting before this frame are held (`BusCommand::HoldAll`).
+    hold_until: u64,
 }
 
 impl Mixer {
@@ -312,6 +340,9 @@ impl Mixer {
             volume_step,
             smoothing_base: None,
             declick_base: config.declick_frames,
+            dsd_on: false,
+            pending_dsd: None,
+            hold_until: 0,
         };
         (
             mixer,
@@ -477,6 +508,8 @@ impl Mixer {
                     });
                 }
             }
+            BusCommand::DsdMode { on, at_frame } => self.pending_dsd = Some((at_frame, on)),
+            BusCommand::HoldAll { until_frame } => self.hold_until = until_frame,
             BusCommand::Grow(mut storage) => {
                 if storage.len() >= self.slots.len() {
                     for (new, old) in storage.0.iter_mut().zip(self.slots.0.iter_mut()) {
@@ -508,7 +541,6 @@ impl Mixer {
     /// Mixes one block into `out` (interleaved, `channels` per frame).
     pub fn render(&mut self, out: &mut [f32], channels: usize) {
         self.shared.render_seq.fetch_add(1, Ordering::AcqRel);
-        out.fill(0.0);
         let channels = channels.max(1);
         let frames = out.len() / channels;
         let now = self.shared.frames_rendered.load(Ordering::Relaxed);
@@ -524,6 +556,16 @@ impl Mixer {
                 Err(_) => break,
             }
         }
+        if let Some((at, on)) = self.pending_dsd
+            && at <= now
+        {
+            self.dsd_on = on;
+            self.pending_dsd = None;
+        }
+        let dsd_on = self.dsd_on;
+        self.shared.dsd_on.store(dsd_on, Ordering::Release);
+        out.fill(if dsd_on { silence_sample() } else { 0.0 });
+        let held = now < self.hold_until;
 
         let mut peak_l = 0.0f32;
         let mut peak_r = 0.0f32;
@@ -533,7 +575,14 @@ impl Mixer {
             let Some(Some(slot)) = self.slots.0.get_mut(index) else {
                 continue;
             };
-            if slot.started && !slot.finished && slot.first_channel + 1 >= channels {
+            if held {
+                slot.block_unity = false;
+                slot.block_audible = false;
+                continue;
+            }
+            // In DSD mode a non-DSD slot is consumed silently: not misrouted.
+            let muted = dsd_on && !slot.source.is_dsd();
+            if !muted && slot.started && !slot.finished && slot.first_channel + 1 >= channels {
                 self.shared.misrouted.fetch_add(1, Ordering::Relaxed);
             }
             let mut events: [Option<BusEvent>; 2] = [None, None];
@@ -548,6 +597,7 @@ impl Mixer {
                 &mut events,
                 meter,
                 self.config.declick_frames,
+                dsd_on,
             );
             peak_l = peak_l.max(l);
             peak_r = peak_r.max(r);
@@ -555,7 +605,7 @@ impl Mixer {
                 self.emit(event);
             }
         }
-        mark_unaltered(&self.slots);
+        mark_unaltered(&self.slots, dsd_on);
         self.shared.peak_l.fetch_max(peak_l);
         self.shared.peak_r.fetch_max(peak_r);
         self.shared
@@ -624,9 +674,9 @@ impl MeterMode {
 }
 
 /// Marks each slot's source unaltered when it played at unity and no other
-/// slot wrote into an overlapping channel pair. Compares slots pairwise: no
+/// slot wrote into an overlapping channel pair; never in DSD mode. Compares slots pairwise: no
 /// allocation, and the slot count is small.
-fn mark_unaltered(slots: &SlotStorage) {
+fn mark_unaltered(slots: &SlotStorage, dsd_on: bool) {
     for (i, slot) in slots.0.iter().enumerate() {
         let Some(slot) = slot else { continue };
         let alone = !slots.0.iter().enumerate().any(|(j, other)| {
@@ -638,7 +688,7 @@ fn mark_unaltered(slots: &SlotStorage) {
         slot.source
             .shared
             .unaltered
-            .store(slot.block_unity && alone, Ordering::Release);
+            .store(!dsd_on && slot.block_unity && alone, Ordering::Release);
     }
 }
 
@@ -655,7 +705,57 @@ fn ends_by_stop(slot: &Slot, abs: u64) -> bool {
         && slot.source.buffered_frames() as u64 <= stop.saturating_sub(abs) + END_TOLERANCE_FRAMES
 }
 
+/// One block's measurement of a slot, added to the source's accumulators
+/// once per block.
+#[derive(Default)]
+struct Measure {
+    peak_l: f32,
+    peak_r: f32,
+    /// Sample peaks, for the unaltered-source check (not the meter's mode).
+    audible_l: f32,
+    audible_r: f32,
+    sum_l: f64,
+    sum_r: f64,
+    k_l: f64,
+    k_r: f64,
+    abs_l: f64,
+    abs_r: f64,
+    frames: u64,
+}
+
+/// Meters one frame (`l`, `r`, after any gain): sample or true peak, the
+/// programme integrator, sums and K-weighting.
+#[inline]
+fn measure(slot: &mut Slot, meter: MeterMode, l: f32, r: f32, m: &mut Measure) {
+    m.audible_l = m.audible_l.max(l.abs());
+    m.audible_r = m.audible_r.max(r.abs());
+    let [tp_l, tp_r] = &mut slot.true_peak;
+    let (mut level_l, mut level_r) = if meter.true_peak {
+        (tp_l.push(l), tp_r.push(r))
+    } else {
+        (l.abs(), r.abs())
+    };
+    if meter.programme {
+        let [env_l, env_r] = &mut slot.ppm;
+        level_l = meter.integrate(env_l, level_l);
+        level_r = meter.integrate(env_r, level_r);
+    }
+    m.peak_l = m.peak_l.max(level_l);
+    m.peak_r = m.peak_r.max(level_r);
+    let [kw_l, kw_r] = &mut slot.k_weighting;
+    let (wl, wr) = (kw_l.process(f64::from(l)), kw_r.process(f64::from(r)));
+    m.sum_l += f64::from(l) * f64::from(l);
+    m.sum_r += f64::from(r) * f64::from(r);
+    m.abs_l += f64::from(l.abs());
+    m.abs_r += f64::from(r.abs());
+    m.k_l += wl * wl;
+    m.k_r += wr * wr;
+    m.frames += 1;
+}
+
 /// Renders one slot into `out`. Returns the (left, right) peaks it produced.
+/// With `dsd_on`, a DSD slot copies its words (no gain of any kind) and any
+/// other slot is consumed without writing.
 #[allow(clippy::too_many_arguments)]
 fn render_slot(
     slot: &mut Slot,
@@ -668,6 +768,7 @@ fn render_slot(
     events: &mut [Option<BusEvent>; 2],
     meter: MeterMode,
     declick_frames: u32,
+    dsd_on: bool,
 ) -> (f32, f32) {
     if slot.ppm_charge != meter.charge {
         slot.ppm_charge = meter.charge;
@@ -699,6 +800,17 @@ fn render_slot(
             _ => return (0.0, 0.0),
         }
     }
+    // The words of a DSD slot in DSD mode: copied, never scaled.
+    let words = dsd_on && slot.source.is_dsd();
+    // Another slot in DSD mode: consumed, metered, not written.
+    let muted = dsd_on && !words;
+    if words && slot.pausing {
+        // Pause holds at once; the pause gain rests at silence for a later
+        // PCM resume to ramp up from.
+        slot.pausing = false;
+        slot.paused = true;
+        slot.pause = Ramp::hold(0.0);
+    }
     // A stop on a paused slot (the player was stopped while paused, and the
     // pause ramp ran out first): nothing is audible, end it at the stop frame.
     if slot.paused
@@ -711,17 +823,13 @@ fn render_slot(
     let target_volume = slot.volume.load().clamp(0.0, 1.0);
     // A pair that does not fit the stream is consumed silently (never written
     // into another channel or frame); the caller counts it.
-    let fits = slot.first_channel + 1 < channels;
+    let fits = slot.first_channel + 1 < channels && !muted;
     let mut chunk = [0.0f32; CHUNK_FRAMES * SOURCE_CHANNELS];
-    let (mut peak_l, mut peak_r) = (0.0f32, 0.0f32);
+    let mut word_chunk = [0.0f32; CHUNK_FRAMES * SOURCE_CHANNELS];
     let mut unity = true;
     let mut rendered = false;
-    // Sample peaks, for the unaltered-source check (not the meter's mode).
-    let (mut audible_l, mut audible_r) = (0.0f32, 0.0f32);
     // Meter measurement, added to the source's accumulators once per block.
-    let (mut sum_l, mut sum_r, mut k_l, mut k_r) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-    let (mut abs_l, mut abs_r) = (0.0f64, 0.0f64);
-    let mut measured = 0u64;
+    let mut m = Measure::default();
     let declick = u64::from(declick_frames);
     while f < frames && !slot.paused {
         let abs = block_start + f as u64;
@@ -733,7 +841,12 @@ fn render_slot(
             && abs >= at
         {
             if !(kind == FadeKind::Cut && ends_by_stop(slot, abs)) {
-                slot.fade.retarget(to, len, curve);
+                if words {
+                    // No gain in DSD mode: settle where the fade would end.
+                    slot.fade = Ramp::hold(to);
+                } else {
+                    slot.fade.retarget(to, len, curve);
+                }
             }
             slot.pending_fade = None;
         }
@@ -750,8 +863,9 @@ fn render_slot(
         }
         // A failed source stops pushing: when what is buffered fits the
         // de-click length, ramp it to zero over exactly those frames, so its
-        // end is not a step. `n` stops where the ramp must begin.
-        if declick > 0 && !slot.fail_ramped && slot.source.shared.is_failed() {
+        // end is not a step. `n` stops where the ramp must begin. Words get
+        // no ramp: a failed DSD source just ends, and silence follows.
+        if !words && declick > 0 && !slot.fail_ramped && slot.source.shared.is_failed() {
             let left = slot.source.buffered_frames() as u64;
             if left <= declick {
                 slot.fade.retarget(
@@ -770,7 +884,14 @@ fn render_slot(
         // Read "no more audio will come" *before* popping: a producer that
         // pushes its last samples and then sets eof cannot lose them.
         let ended = slot.source.shared.is_eof() || slot.source.shared.is_failed();
-        let got = slot.source.pop_frames(buf);
+        let got = if words {
+            match word_chunk.get_mut(..n * SOURCE_CHANNELS) {
+                Some(w) => slot.source.pop_pair(buf, w),
+                None => break,
+            }
+        } else {
+            slot.source.pop_frames(buf)
+        };
         for (k, &[l, r]) in buf
             .as_chunks::<SOURCE_CHANNELS>()
             .0
@@ -778,46 +899,40 @@ fn render_slot(
             .take(got)
             .enumerate()
         {
-            if slot.volume_now < target_volume {
-                slot.volume_now = (slot.volume_now + volume_step).min(target_volume);
-            } else if slot.volume_now > target_volume {
-                slot.volume_now = (slot.volume_now - volume_step).max(target_volume);
-            }
-            let g = slot.fade.next_gain() * slot.pause.next_gain() * slot.volume_now;
-            unity &= g == 1.0;
-            rendered = true;
-            let (l, r) = (l * g, r * g);
-            audible_l = audible_l.max(l.abs());
-            audible_r = audible_r.max(r.abs());
-            let [tp_l, tp_r] = &mut slot.true_peak;
-            let (mut level_l, mut level_r) = if meter.true_peak {
-                (tp_l.push(l), tp_r.push(r))
+            let (l, r) = if words {
+                // The PCM conversion is metered at unity.
+                (l, r)
             } else {
-                (l.abs(), r.abs())
+                if slot.volume_now < target_volume {
+                    slot.volume_now = (slot.volume_now + volume_step).min(target_volume);
+                } else if slot.volume_now > target_volume {
+                    slot.volume_now = (slot.volume_now - volume_step).max(target_volume);
+                }
+                let g = slot.fade.next_gain() * slot.pause.next_gain() * slot.volume_now;
+                unity &= g == 1.0;
+                (l * g, r * g)
             };
-            if meter.programme {
-                let [env_l, env_r] = &mut slot.ppm;
-                level_l = meter.integrate(env_l, level_l);
-                level_r = meter.integrate(env_r, level_r);
-            }
-            peak_l = peak_l.max(level_l);
-            peak_r = peak_r.max(level_r);
-            let [kw_l, kw_r] = &mut slot.k_weighting;
-            let (wl, wr) = (kw_l.process(f64::from(l)), kw_r.process(f64::from(r)));
-            sum_l += f64::from(l) * f64::from(l);
-            sum_r += f64::from(r) * f64::from(r);
-            abs_l += f64::from(l.abs());
-            abs_r += f64::from(r.abs());
-            k_l += wl * wl;
-            k_r += wr * wr;
-            measured += 1;
+            rendered = true;
+            measure(slot, meter, l, r, &mut m);
             if fits {
                 let base = (f + k) * channels + slot.first_channel;
+                let (wl, wr) = if words {
+                    let at = k * SOURCE_CHANNELS;
+                    (word_chunk.get(at).copied(), word_chunk.get(at + 1).copied())
+                } else {
+                    (None, None)
+                };
                 if let Some(o) = out.get_mut(base) {
-                    *o += l;
+                    match wl {
+                        Some(w) => *o = w,
+                        None => *o += l,
+                    }
                 }
                 if let Some(o) = out.get_mut(base + 1) {
-                    *o += r;
+                    match wr {
+                        Some(w) => *o = w,
+                        None => *o += r,
+                    }
                 }
             }
         }
@@ -842,21 +957,21 @@ fn render_slot(
             f += got;
         }
     }
-    slot.source.shared.peak_l.fetch_max(peak_l);
-    slot.source.shared.peak_r.fetch_max(peak_r);
-    if measured > 0 {
+    slot.source.shared.peak_l.fetch_max(m.peak_l);
+    slot.source.shared.peak_r.fetch_max(m.peak_r);
+    if m.frames > 0 {
         let shared = &slot.source.shared;
-        shared.sum_sq_l.fetch_add(sum_l);
-        shared.sum_sq_r.fetch_add(sum_r);
-        shared.sum_abs_l.fetch_add(abs_l);
-        shared.sum_abs_r.fetch_add(abs_r);
-        shared.k_sum_l.fetch_add(k_l);
-        shared.k_sum_r.fetch_add(k_r);
-        shared.measured_frames.fetch_add(measured, Ordering::AcqRel);
+        shared.sum_sq_l.fetch_add(m.sum_l);
+        shared.sum_sq_r.fetch_add(m.sum_r);
+        shared.sum_abs_l.fetch_add(m.abs_l);
+        shared.sum_abs_r.fetch_add(m.abs_r);
+        shared.k_sum_l.fetch_add(m.k_l);
+        shared.k_sum_r.fetch_add(m.k_r);
+        shared.measured_frames.fetch_add(m.frames, Ordering::AcqRel);
     }
     slot.block_unity = unity && rendered;
-    slot.block_audible = audible_l > 0.0 || audible_r > 0.0;
-    (peak_l, peak_r)
+    slot.block_audible = m.audible_l > 0.0 || m.audible_r > 0.0;
+    (m.peak_l, m.peak_r)
 }
 
 fn finish(slot: &mut Slot, index: usize, frame: u64, events: &mut [Option<BusEvent>; 2]) {
@@ -872,6 +987,9 @@ fn finish(slot: &mut Slot, index: usize, frame: u64, events: &mut [Option<BusEve
 pub struct MixerRenderer {
     pub mixer: Arc<std::sync::Mutex<Mixer>>,
     pub shared: Arc<BusShared>,
+    /// The DoP encoder of a DoP stream; `None` on a PCM or native DSD bus
+    /// (a native stream's backend packs the words itself).
+    pub dop: Option<DopEncoder>,
 }
 
 impl Renderer for MixerRenderer {
@@ -882,9 +1000,21 @@ impl Renderer for MixerRenderer {
                 poisoned.into_inner().render(out, channels)
             }
             Err(std::sync::TryLockError::WouldBlock) => {
-                out.fill(0.0);
+                // The idle fill of the mode the bus is in, so a DoP stream
+                // stays valid.
+                let fill = if self.shared.dsd_on.load(Ordering::Acquire) {
+                    silence_sample()
+                } else {
+                    0.0
+                };
+                out.fill(fill);
                 self.shared.lock_misses.fetch_add(1, Ordering::Relaxed);
             }
+        }
+        if self.shared.dsd_on.load(Ordering::Acquire)
+            && let Some(dop) = self.dop.as_mut()
+        {
+            dop.encode_in_place(out, channels);
         }
     }
 }
