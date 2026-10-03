@@ -278,6 +278,13 @@ mod tests {
         assert_eq!(a, [1.0, -1.0, 2.0, -2.0]);
         assert_eq!(b, [10.0, -10.0, 20.0, -20.0]);
         assert_eq!(p.shared.frames_pushed.load(Ordering::Acquire), 3);
+        // The rest comes out still in step, and then both rings are empty.
+        assert_eq!(c.buffered_frames(), 1);
+        assert_eq!(c.pop_pair(&mut a, &mut b), 1);
+        assert_eq!(a[..2], [3.0, -3.0]);
+        assert_eq!(b[..2], [30.0, -30.0]);
+        assert_eq!(c.buffered_frames(), 0);
+        assert_eq!(c.pop_pair(&mut a, &mut b), 0);
     }
 
     #[test]
