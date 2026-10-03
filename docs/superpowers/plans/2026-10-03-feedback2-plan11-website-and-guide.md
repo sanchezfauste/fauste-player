@@ -272,7 +272,8 @@ Recorded from the ledger; the spec's section 12 "As built" has the same notes in
 - Ruling: the site URL is `https://sanchezfauste.com/fauste-player/` (the account's custom domain) — the Pages API reports it — one URL edit if wrong.
 - Ruling: release-please calls `pages.yml` through `workflow_call`, instead of `on: release` — a release made with `GITHUB_TOKEN` starts no other workflow — none.
 - Ruling: links from the guide into `docs/technical/` are absolute GitHub URLs — they work on GitHub and in the book — they point at `master`.
-- Fix after review: pull request checks get a concurrency group of their own; `build.sh` refuses dangerous output folders.
+- Fix after review: pull request checks get a concurrency group of their own.
+- Fix after the final review: `build.sh` failed on a missing output folder (every CI run); it now replaces only `target/…` or `_site` inside the repository, and outside it a missing, empty or marked folder. `check-links.sh` fails when it finds no page.
 - Tasks 4–5: the songs are tagged FLAC files with covers (WAV showed "cannot store" notes and no covers); `build.sh` copies `docs/images` recursively; the media lives in `target/screenshots` (the /tmp quota) behind the `SHOTS_MEDIA` link, so no home path shows.
 - Ruling: the Settings crops are kept at the window's fixed size; the rows cut at the bottom are the section's own scroll edge.
 - Parked: a transient `gh` failure in CI deploys a site without download links; JSON of an unexpected shape stops the build; iOS preselects the macOS tab; a dead placeholder check in `check-links.sh`; no checksum on the mdBook download; a check-then-use race in `free_display`.

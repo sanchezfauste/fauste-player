@@ -14,18 +14,34 @@ out=${1:-$root/target/site}
 
 mdbook=$("$root/scripts/site/mdbook.sh")
 
-# The output folder is replaced: never the repository or a parent of it.
-case $(cd "$(dirname "$out")" 2>/dev/null && pwd)/$(basename "$out") in
-  / | "$root" | "$root"/. | "$root"/.. | "$root"/docs | "$root"/site)
-    echo "build.sh: refusing to replace $out" >&2
+# The output folder is replaced. Inside the repository only target/... and
+# _site may be; outside it, only a missing or empty folder, or one this
+# script built before (it holds the marker file).
+marker=.fauste-site
+parent=$(cd "$(dirname "$out")" 2>/dev/null && pwd) || {
+    echo "build.sh: the parent of $out does not exist" >&2; exit 1; }
+abs=${parent%/}/$(basename "$out")
+case $abs in
+  "$root"/target/?* | "$root"/_site) ;;
+  "$root" | "$root"/*)
+    echo "build.sh: refusing to replace $out (inside the repository, use target/... or _site)" >&2
     exit 1 ;;
+  *)
+    case $root/ in
+      "$abs"/*) echo "build.sh: refusing to replace $out (a parent of the repository)" >&2; exit 1 ;;
+    esac
+    if [ -d "$abs" ] && [ ! -f "$abs/$marker" ] && [ -n "$(ls -A "$abs")" ]; then
+        echo "build.sh: refusing to replace $out (not empty and not built by this script)" >&2
+        exit 1
+    fi ;;
 esac
-case $root/ in
-  "$(cd "$out" 2>/dev/null && pwd)"/*) echo "build.sh: refusing to replace $out" >&2; exit 1 ;;
+case $abs in
+  */. | */..) echo "build.sh: refusing to replace $out" >&2; exit 1 ;;
 esac
-rm -rf "$out"
-mkdir -p "$out"
-out=$(cd "$out" && pwd)
+rm -rf "$abs"
+mkdir -p "$abs"
+out=$abs
+: > "$out/$marker"
 
 "$mdbook" build "$root/docs" -d "$out/guide"
 mkdir -p "$out/images"

@@ -167,6 +167,9 @@ print(s.getsockname()[1])"
 # shots. Every route names the null backend, so no sound card is opened.
 write_home() {
     # Only a folder this script made (or an empty one) is ever replaced.
+    if [[ -e $home && ! -d $home ]]; then
+        die "$home is not a folder; refusing to replace it"
+    fi
     if [[ -d $home && -n $(ls -A "$home") && ! -e $home/.screenshots-home ]]; then
         die "$home is not a scratch folder made by this script; refusing to replace it"
     fi

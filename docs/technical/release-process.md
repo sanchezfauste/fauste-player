@@ -100,7 +100,9 @@ Actions**.
 ## Rebuilding the assets of a release
 
 Run **Actions → release-build → Run workflow** with the tag (for example
-`v0.2.0`). The assets are uploaded again with `--clobber`.
+`v0.2.0`). The assets are uploaded again with `--clobber`. The website's
+download links do not change by themselves: run **Actions → pages → Run
+workflow** afterwards if the asset names changed.
 
 ## Building an archive locally
 

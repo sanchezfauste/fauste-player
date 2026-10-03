@@ -71,6 +71,9 @@ for page, parser in pages.items():
                 print(f"{rel}: missing anchor {ref}")
                 bad += 1
 
+if not pages:
+    print("no HTML pages found; build the site first")
+    sys.exit(1)
 if bad:
     print(f"{bad} dead link(s)")
     sys.exit(1)
