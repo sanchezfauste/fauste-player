@@ -907,3 +907,264 @@ fn after_a_seek_the_pcm_conversion_stays_aligned_with_the_words() {
     let from_seek = lag_from(0.5);
     assert_eq!(from_start, from_seek, "no extra offset after a seek");
 }
+
+// ---- Fix round 1 ----
+
+/// `count` frames from `from` carry the indexed WAV from its first frame
+/// (`support::indexed_wav`): the next source's head was not lost.
+fn assert_head(raw: &[[f32; 2]], from: usize, count: usize) {
+    for k in 0..count {
+        assert_eq!(
+            support::index_of(raw[from + k][0]),
+            k as i64,
+            "frame {k} of the next source (at {from})"
+        );
+    }
+}
+
+fn wav_request(r: &Rig, n: u64) -> SourceRequest {
+    let wav = indexed_wav(
+        r.dir.path(),
+        &format!("w{n}.wav"),
+        WORD_RATE,
+        2,
+        WORD_RATE as usize * 2,
+    );
+    request(n, wav, pcm16(WORD_RATE))
+}
+
+#[test]
+fn a_device_back_without_exclusive_access_plays_pcm() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::HoldOthers, SampleFormat::I24);
+    let (left, right) = pattern();
+    let path = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, request(1, path, dsd64()));
+    r.run_dop(BLOCK * 8);
+    assert!(r.engine.telemetry(P).dsd);
+    r.dac.unplug();
+    r.clock += Duration::from_millis(50);
+    r.engine.tick(r.clock);
+    r.dac.set_exclusive_capable(false);
+    r.dac.replug();
+    r.clock += Duration::from_secs(10);
+    let events = r.engine.tick(r.clock);
+    r.seen.extend(events);
+    let config = r.dac.config().expect("the device is never left closed");
+    assert_eq!(config.dsd, None);
+    let raw = r.run_raw(BLOCK * 8);
+    assert!(not_dop(&raw), "PCM");
+    assert!(
+        raw.iter().any(|f| f[0] != 0.0),
+        "the track goes on converted"
+    );
+    assert!(!r.engine.telemetry(P).dsd);
+    assert!(r.events().contains(&EngineEvent::DsdEnded {
+        player: P,
+        entry: EntryId(1)
+    }));
+}
+
+#[test]
+fn a_device_back_with_a_narrow_format_plays_pcm() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let path = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, request(1, path, dsd64()));
+    r.run_dop(BLOCK * 8);
+    r.dac.unplug();
+    r.clock += Duration::from_millis(50);
+    r.engine.tick(r.clock);
+    // Another device behind the same name: 16 bits, and a backend that
+    // opens DoP on it anyway.
+    r.dac.set_sample_format(SampleFormat::I16);
+    r.dac.set_dop_any_format(true);
+    r.dac.replug();
+    r.clock += Duration::from_secs(10);
+    let events = r.engine.tick(r.clock);
+    r.seen.extend(events);
+    assert_eq!(r.dac.config().unwrap().dsd, None, "reopened as PCM");
+    let raw = r.run_raw(BLOCK * 8);
+    assert!(raw.iter().all(|f| !idle_dop(*f)), "never a DoP frame");
+    assert!(!r.engine.telemetry(P).dsd);
+    assert!(r.events().contains(&EngineEvent::DsdEnded {
+        player: P,
+        entry: EntryId(1)
+    }));
+}
+
+#[test]
+fn a_dsd_start_inside_a_pending_switch_plays_converted() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let a = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, request(1, a.clone(), dsd64()));
+    r.act(EngineAction::Pause { player: P });
+    r.run_raw(WORD_RATE as usize / 10);
+    // Q's start switches the bus to PCM after the silence…
+    let q = wav_request(&r, 3);
+    r.start(Q, q);
+    // …and before it applies, everything stops and a DSD track starts.
+    r.act(EngineAction::StopNow { player: Q });
+    r.act(EngineAction::StopNow { player: P });
+    r.start(P, request(2, a, dsd64()));
+    let raw = r.run_raw(WORD_RATE as usize / 4);
+    let tail = &raw[raw.len() - BLOCK..];
+    assert!(not_dop(tail), "the bus is PCM");
+    assert!(!r.engine.telemetry(P).dsd, "and the engine says so");
+    assert!(!r.events().contains(&EngineEvent::DsdStarted {
+        player: P,
+        entry: EntryId(2),
+        hold_others: false
+    }));
+}
+
+#[test]
+fn a_scheduled_transition_waits_for_the_switch_and_keeps_the_next_head() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let a = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, request(1, a, dsd64()));
+    let next = wav_request(&r, 2);
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(next),
+    });
+    r.settle();
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: 0.3,
+            fade_current_until_secs: None,
+        }),
+    });
+    let raw = r.run_raw(WORD_RATE as usize * 6 / 10);
+    let frames_dop: Vec<Option<Frame>> = raw.iter().map(|f| as_frame(*f)).collect();
+    let first = frames_dop
+        .iter()
+        .position(|f| f.is_some_and(|f| !f.idle()))
+        .unwrap();
+    let data = frames_dop[first..]
+        .iter()
+        .take_while(|f| f.is_some_and(|f| !f.idle() && matches!(f.marker, 0x05 | 0xFA)))
+        .count();
+    let cue = (0.3 * f64::from(WORD_RATE)) as usize;
+    assert!(
+        data <= cue && data + BLOCK >= cue,
+        "the current plays to its transition: {data} of {cue}"
+    );
+    let pcm_at = end_of_idle(&raw, first + data);
+    assert!(pcm_at - (first + data) >= SILENCE_FRAMES);
+    assert_head(&raw, pcm_at, 200);
+    assert!(!r.engine.telemetry(P).dsd);
+}
+
+#[test]
+fn a_dsd_track_ending_into_its_next_keeps_the_next_head() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let len = DSD64 as usize / 8 / 10;
+    let a = dsf_file(r.dir.path(), "short.dsf", &left[..len], &right[..len]);
+    r.start(P, request(1, a, dsd64()));
+    let next = wav_request(&r, 2);
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(next),
+    });
+    r.settle();
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: fp_model::SOURCE_END,
+            fade_current_until_secs: None,
+        }),
+    });
+    let raw = r.run_raw(WORD_RATE as usize / 2);
+    let dop: Vec<Frame> = raw
+        .iter()
+        .map_while(|f| as_frame(*f).filter(|f| matches!(f.marker, 0x05 | 0xFA)))
+        .collect();
+    let first = first_data(&dop);
+    let words = assert_words(&dop, first, &left, &right, 0);
+    assert_eq!(words, len / 2);
+    let pcm_at = end_of_idle(&raw, first + words);
+    assert!(pcm_at - (first + words) >= SILENCE_FRAMES);
+    assert_head(&raw, pcm_at, 200);
+}
+
+#[test]
+fn a_pcm_start_during_the_dsd_silence_keeps_its_head() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let len = DSD64 as usize / 8 / 10;
+    let a = dsf_file(r.dir.path(), "short.dsf", &left[..len], &right[..len]);
+    r.start(P, request(1, a, dsd64()));
+    let mut raw = Vec::new();
+    while r.engine.telemetry(P).position_secs.is_some() {
+        raw.extend(r.run_raw(BLOCK));
+        assert!(raw.len() < WORD_RATE as usize, "the track ends");
+    }
+    // In the silence after the end: Q starts.
+    let q = wav_request(&r, 3);
+    r.start(Q, q);
+    raw.extend(r.run_raw(WORD_RATE as usize / 4));
+    let dop: Vec<Frame> = raw
+        .iter()
+        .map_while(|f| as_frame(*f).filter(|f| matches!(f.marker, 0x05 | 0xFA)))
+        .collect();
+    let first = first_data(&dop);
+    let words = assert_words(&dop, first, &left, &right, 0);
+    let pcm_at = end_of_idle(&raw, first + words);
+    assert!(pcm_at - (first + words) >= SILENCE_FRAMES);
+    assert_head(&raw, pcm_at, 200);
+}
+
+#[test]
+fn a_cart_over_a_dsd_stream_switches_it_to_pcm() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let a = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, request(1, a, dsd64()));
+    r.act(EngineAction::Pause { player: P });
+    r.run_raw(BLOCK * 8);
+    let jingle = indexed_wav(r.dir.path(), "jingle.wav", WORD_RATE, 2, WORD_RATE as usize);
+    r.act(EngineAction::StartCart(fp_model::CartRequest {
+        cart: fp_model::CartId(1),
+        track: TrackId(9),
+        path: jingle,
+        from_secs: 0.0,
+        until_secs: f64::INFINITY,
+        looped: false,
+        format: pcm16(WORD_RATE),
+    }));
+    r.settle();
+    let raw = r.run_raw(WORD_RATE as usize / 4);
+    let pcm_at = end_of_idle(&raw, 0);
+    assert!(pcm_at >= SILENCE_FRAMES);
+    assert_head(&raw, pcm_at, 200);
+    assert!(!r.engine.telemetry(P).dsd);
+}
+
+#[test]
+fn a_test_tone_over_a_dsd_stream_switches_it_to_pcm() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let a = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, request(1, a, dsd64()));
+    r.act(EngineAction::Pause { player: P });
+    r.run_raw(BLOCK * 8);
+    let route = Route {
+        backend: "offline".into(),
+        device: "dac".into(),
+        first_channel: 0,
+    };
+    r.engine
+        .play_test_tone(&route, 1_000.0, 0.5, -20.0, r.clock);
+    let raw = r.run_raw(WORD_RATE as usize / 4);
+    let pcm_at = end_of_idle(&raw, 0);
+    assert!(pcm_at >= SILENCE_FRAMES);
+    assert!(
+        raw[pcm_at..].iter().any(|f| f[0].abs() > 0.01),
+        "the tone is heard"
+    );
+    assert!(!r.engine.telemetry(P).dsd);
+}

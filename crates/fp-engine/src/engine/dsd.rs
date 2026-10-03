@@ -9,7 +9,6 @@
 //! without a pop. All of this runs on the conductor thread.
 
 use super::*;
-use fp_backends::SampleFormat;
 use fp_backends::dsd::DsdStream;
 use fp_model::{DsdFacts, DsdFallback, DsdMix, DsdOutput, DsdStreamMode, dsd_decision};
 
@@ -22,8 +21,10 @@ pub(super) enum DsdState {
     /// the bus goes back to PCM (unless a DSD start at the same word rate
     /// takes the stream over first).
     Tail { until: u64 },
-    /// A native DSD stream switching to PCM: the mixer holds, and the
-    /// device is reopened as PCM at this bus frame.
+    /// Switching to PCM at this bus frame: the DSD silence (and, for
+    /// native DSD, the hold until the device is reopened as PCM). The bus
+    /// is not idle meanwhile, so no DSD start can slip in before the
+    /// switch applies.
     Switching { until: u64 },
 }
 
@@ -207,14 +208,7 @@ impl Engine {
         }
         // Checked here, whatever the backend checked: DoP needs every bit of
         // a 24-bit word, and native DSD a stream the backend packs as DSD.
-        let fits = match stream {
-            DsdStream::Dop => matches!(
-                b.sample_format(),
-                Some(SampleFormat::I24 | SampleFormat::I32)
-            ),
-            DsdStream::Native => b.stream_dsd() == Some(DsdStream::Native),
-        };
-        if !fits {
+        if !b.dsd_fits(stream) {
             b.refuse_dsd(word_rate, stream);
             if let Err(error) = b.reopen_with(previous, now) {
                 tracing::warn!(?bus, %error, "cannot reopen the PCM stream");
@@ -366,9 +360,9 @@ impl Engine {
             return at_frame;
         };
         let (player, entry, stream) = (d.player, d.entry, d.stream);
+        d.state = DsdState::Switching { until: pcm_at };
         match stream {
             DsdStream::Dop => {
-                self.dsd_buses.remove(bus);
                 self.send(
                     bus,
                     BusCommand::HoldAll {
@@ -385,7 +379,6 @@ impl Engine {
                 );
             }
             DsdStream::Native => {
-                d.state = DsdState::Switching { until: pcm_at };
                 self.send(
                     bus,
                     BusCommand::HoldAll {
@@ -407,10 +400,10 @@ impl Engine {
         let Some(d) = self.dsd_buses.get_mut(bus) else {
             return at_frame;
         };
-        let (player, entry) = (d.player, d.entry);
-        match d.stream {
+        let (player, entry, stream) = (d.player, d.entry, d.stream);
+        d.state = DsdState::Switching { until: pcm_at };
+        match stream {
             DsdStream::Dop => {
-                self.dsd_buses.remove(bus);
                 // Only a block straddling the switch is held, so that a
                 // start on it lands where the bus is PCM.
                 self.send(
@@ -429,7 +422,6 @@ impl Engine {
                 );
             }
             DsdStream::Native => {
-                d.state = DsdState::Switching { until: pcm_at };
                 self.send(
                     bus,
                     BusCommand::HoldAll {
@@ -441,6 +433,34 @@ impl Engine {
         }
         self.events.push(EngineEvent::DsdEnded { player, entry });
         pcm_at
+    }
+
+    /// The device of `bus` came back from a loss as PCM (it could no longer
+    /// carry the DSD stream): the DSD track goes on from its PCM conversion.
+    pub(super) fn dsd_stream_lost(&mut self, bus: &BusKey) {
+        let Some(d) = self.dsd_buses.remove(bus) else {
+            return;
+        };
+        tracing::warn!(?bus, player = ?d.player, "DSD lost with the device; going on as PCM");
+        match d.state {
+            DsdState::Switching { .. } => {
+                // `DsdEnded` was reported; end a native switch's hold.
+                let now_frame = self.now_frame(bus);
+                self.send(
+                    bus,
+                    BusCommand::HoldAll {
+                        from_frame: 0,
+                        until_frame: now_frame,
+                    },
+                );
+            }
+            DsdState::Playing { .. } | DsdState::Tail { .. } => {
+                self.events.push(EngineEvent::DsdEnded {
+                    player: d.player,
+                    entry: d.entry,
+                });
+            }
+        }
     }
 
     /// Called from `tick`: DSD streams whose silence is over go back to
@@ -465,6 +485,8 @@ impl Engine {
             };
             let now_frame = self.now_frame(&bus);
             match d.stream {
+                // A DoP switch queued its `DsdMode` off already.
+                DsdStream::Dop if switching => {}
                 DsdStream::Dop => self.send(
                     &bus,
                     BusCommand::DsdMode {

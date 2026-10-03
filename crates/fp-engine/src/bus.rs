@@ -119,6 +119,9 @@ pub struct Bus {
     /// DSD streams (word rate, kind) this device refused, forgotten with
     /// `refused_rates` (feedback 2 spec O25).
     refused_dsd: std::collections::HashSet<(u32, DsdStream)>,
+    /// The device came back from a loss unable to carry the DSD stream it
+    /// had, and was reopened as PCM (read once by `take_dsd_lost`).
+    dsd_lost: bool,
 }
 
 impl Bus {
@@ -155,6 +158,7 @@ impl Bus {
             exclusive_granted: false,
             refused_rates: std::collections::HashSet::new(),
             refused_dsd: std::collections::HashSet::new(),
+            dsd_lost: false,
         };
         if !bus.try_open(now, true) {
             // The stand-in renders the mixer without DoP encoding or native
@@ -267,6 +271,61 @@ impl Bus {
     /// renders until the next open; the caller reopens at once.
     pub fn close_stream(&mut self) {
         self.stream = None;
+    }
+
+    /// Whether the open stream can carry `stream` unchanged: exclusive
+    /// access, and a 24- or 32-bit integer format for DoP (whatever the
+    /// backend accepted) or a stream the backend packs as native DSD.
+    pub fn dsd_fits(&self, stream: DsdStream) -> bool {
+        self.exclusive_granted()
+            && match stream {
+                DsdStream::Dop => matches!(
+                    self.sample_format(),
+                    Some(fp_backends::SampleFormat::I24 | fp_backends::SampleFormat::I32)
+                ),
+                DsdStream::Native => self.stream_dsd() == Some(DsdStream::Native),
+            }
+    }
+
+    /// Whether the device came back from a loss as PCM instead of the DSD
+    /// stream it carried (see `reconnect`); cleared by the call.
+    pub fn take_dsd_lost(&mut self) -> bool {
+        std::mem::take(&mut self.dsd_lost)
+    }
+
+    /// The watchdog's reopen with the stored configuration. A DSD stream
+    /// comes back only with exclusive access and a stream that fits it
+    /// (`dsd_fits`); otherwise the present device is reopened as PCM at the
+    /// same rate (never left closed), the mixer leaves DSD mode before the
+    /// first block, and `dsd_lost` tells the engine.
+    fn reconnect(&mut self, now: Instant) -> bool {
+        let Some(dsd) = self.config.dsd else {
+            return self.try_open(now, true);
+        };
+        if self.try_open(now, false) {
+            if self.dsd_fits(dsd) {
+                return true;
+            }
+            self.stream = None;
+        }
+        // Out of DSD mode before any block reaches a PCM stream.
+        self.send(BusCommand::DsdMode {
+            on: false,
+            at_frame: 0,
+        });
+        self.config.dsd = None;
+        if self.try_open(now, true) {
+            tracing::warn!(bus = ?self.key, ?dsd, "the device came back unable to carry DSD; playing PCM");
+            self.dsd_lost = true;
+            return true;
+        }
+        // Not there at all: try the DSD stream again next time.
+        self.config.dsd = Some(dsd);
+        self.send(BusCommand::DsdMode {
+            on: true,
+            at_frame: 0,
+        });
+        false
     }
 
     /// Remembers that the device cannot carry `stream` at `word_rate` (the
@@ -394,7 +453,7 @@ impl Bus {
             }
             BusHealth::Lost => {
                 if now.saturating_duration_since(self.last_retry) >= self.timing.reconnect_interval
-                    && self.try_open(now, true)
+                    && self.reconnect(now)
                 {
                     // The stand-in keeps the timeline moving while the device
                     // opens (which can take a while); it stops once the device

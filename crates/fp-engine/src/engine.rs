@@ -1748,13 +1748,17 @@ impl Engine {
         self.handle_failures();
         let keys: Vec<BusKey> = self.buses.keys().cloned().collect();
         for key in keys {
-            let events = match self.buses.get_mut(&key) {
+            let (events, dsd_lost) = match self.buses.get_mut(&key) {
                 Some(bus) => {
                     bus.supervise(now);
-                    bus.poll()
+                    let lost = bus.take_dsd_lost();
+                    (bus.poll(), lost)
                 }
-                None => Vec::new(),
+                None => (Vec::new(), false),
             };
+            if dsd_lost {
+                self.dsd_stream_lost(&key);
+            }
             for event in events {
                 self.handle_bus_event(&key, event);
             }
