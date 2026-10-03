@@ -143,7 +143,9 @@ Pressing **CUE** (or **Pre-listen on CUE** in a track's menu) plays the track
 on the player's CUE output, for example headphones, without touching the
 on-air output, and opens a small **CUE window** for that player. Several
 windows can be open, one per player. See [Settings](settings.md) to choose
-the CUE device.
+the CUE device. A player needs a Cue output that is not its Main output:
+without one, **CUE** and **Pre-listen on CUE** are dimmed, and hovering them
+says so.
 
 ![The CUE window of player 4, pre-listening its next track](../images/guide/cue-window.png)
 

@@ -59,9 +59,13 @@ Changes in this section wait for a restart: see
 | DSD (per bit-perfect device) | **Convert to PCM** (the default), **DoP** or, on Linux, **Native DSD**. Only the modes the device can take are offered. With DoP or native DSD, a DSD track reaches the device unchanged when nothing else plays on it and the player's volume is 100 %. See [DSD](bit-perfect.md#dsd). |
 | When another source needs a DSD output | **Continue the DSD track as PCM** (the default), or **Keep DSD and mute the other sources**. See [DSD](bit-perfect.md#dsd). |
 
-A Cue output never falls back to the output Main uses. A Cue that names a
-device on an audio system this computer does not have, or the same output as
-Main, means "no cue".
+A Cue output never falls back to the output Main uses, so that pre-listening
+never goes on air. A Cue that names a device on an audio system this
+computer does not have, or the same output (device and channels) as Main,
+means "no cue". When a Cue output is the same as its Main output, a warning
+under it says so. A player with no Cue output, or with its Cue on its Main
+output, has its **CUE** button dimmed; hovering it tells you to choose a Cue
+output here. The same goes for the cartwall's **Pre-listen on CUE**.
 
 If a device disappears while playing, the players keep their timelines, and
 the device is reopened when it comes back (see

@@ -394,21 +394,35 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                 {
                     menu_on.context_menu(|ui| {
                         ui.set_min_width(200.0);
-                        let item = |ui: &mut Ui, glyph: &str, key: &str| {
+                        let item_enabled = |ui: &mut Ui, glyph: &str, key: &str, on: bool| {
                             let text = t.tr(key);
-                            let r = ui.button(format!("{glyph}  {text}"));
+                            let r =
+                                ui.add_enabled(on, egui::Button::new(format!("{glyph}  {text}")));
                             r.widget_info(|| {
                                 egui::WidgetInfo::labeled(
                                     egui::WidgetType::Button,
-                                    true,
+                                    on,
                                     text.clone(),
                                 )
                             });
                             r
                         };
+                        let item = |ui: &mut Ui, glyph: &str, key: &str| {
+                            item_enabled(ui, glyph, key, true)
+                        };
+                        // A pre-listen needs a cartwall Cue output apart
+                        // from Main (spec §4.6); a running one can stop.
+                        let can_cue =
+                            fp_model::command_available(scene.state, &Command::CueCart(cart.id));
                         if !empty
-                            && item(ui, glyphs::glyph_text(TransportAction::Cue), "menu-cue")
-                                .clicked()
+                            && item_enabled(
+                                ui,
+                                glyphs::glyph_text(TransportAction::Cue),
+                                "menu-cue",
+                                can_cue,
+                            )
+                            .on_disabled_hover_text(t.tr("tip-cart-cue-no-output"))
+                            .clicked()
                         {
                             scene.ctl.send(Command::CueCart(cart.id));
                             ui.close();

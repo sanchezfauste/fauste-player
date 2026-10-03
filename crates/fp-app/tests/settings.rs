@@ -306,6 +306,19 @@ fn outputs_with(
     egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
     Arc<support::Fake>,
 ) {
+    outputs_routed(bit_perfect, "speakers", None)
+}
+
+/// The Audio outputs tab with player 1's Main on `dac` and its Cue on
+/// `cue`, and the cartwall's `(main, cue)` devices when given.
+fn outputs_routed(
+    bit_perfect: Vec<fp_model::OutputDevice>,
+    cue: &str,
+    cartwall: Option<(&str, &str)>,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
     let backend = OfflineBackend::new();
     backend.add_device("dac", 2).set_exclusive_capable(true);
     backend.add_device("speakers", 2);
@@ -320,8 +333,14 @@ fn outputs_with(
     s.config.outputs.routes = vec![PlayerRoutes {
         player: s.players[0].id,
         main: Some(route("dac")),
-        cue: Some(route("speakers")),
+        cue: Some(route(cue)),
     }];
+    if let Some((main, cue)) = cartwall {
+        s.config.outputs.cartwall = fp_model::CartwallRoutes {
+            main: Some(route(main)),
+            cue: Some(route(cue)),
+        };
+    }
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
     let (mut h, fake) = harness_with_backends(s, backends);
     h.get_by_label("Settings").click();
@@ -539,4 +558,19 @@ fn the_dsd_mix_choice_updates_the_config() {
     h.run_steps(2);
     let c = fake.state.load().config.clone();
     assert_eq!(c.outputs.dsd_mix, fp_model::DsdMix::HoldOthers);
+}
+
+const CUE_EQUALS_MAIN: &str = "The Cue output is the same as the Main output";
+
+#[test]
+fn a_cue_output_equal_to_main_is_warned_about() {
+    let count = |cue, cartwall| {
+        let (h, _fake) = outputs_routed(Vec::new(), cue, cartwall);
+        h.query_all_by_label_contains(CUE_EQUALS_MAIN).count()
+    };
+    assert_eq!(count("speakers", None), 0, "separate outputs");
+    assert_eq!(count("dac", None), 1, "a player's Cue on its Main");
+    assert_eq!(count("speakers", Some(("dac", "dac"))), 1, "the cartwall's");
+    assert_eq!(count("dac", Some(("dac", "dac"))), 2, "both");
+    assert_eq!(count("speakers", Some(("dac", "speakers"))), 0);
 }

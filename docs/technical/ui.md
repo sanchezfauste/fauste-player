@@ -48,7 +48,10 @@ Each frame, `AppUi::ui`:
    whose command `fp_model::command_available` rejects (R28) is dropped;
 4. draws the screen and sends `Command`s through `ctl.send`. Transport
    buttons take `enabled` from `fp_model::availability`, so unavailable ones
-   are dimmed and inert;
+   are dimmed and inert. A CUE dimmed for want of a Cue output apart from
+   Main (`OutputsConfig::player_has_cue`) takes `tip-cue-no-output` as its
+   tooltip, and the row and cart menus' *Pre-listen on CUE* items say the
+   same when disabled;
 5. requests a repaint: continuously while anything plays, fades or cues,
    otherwise every 100 ms for the clock.
 

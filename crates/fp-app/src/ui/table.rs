@@ -771,12 +771,14 @@ fn context_menu(
         scene.ctl.send(Command::SetNext(player, entry));
         ui.close();
     }
+    let can_cue = scene.state.config.outputs.player_has_cue(player);
     if labelled(
         ui,
         glyphs::glyph_text(TransportAction::Cue),
         "menu-cue",
-        true,
+        can_cue,
     )
+    .on_disabled_hover_text(t.tr("tip-cue-no-output"))
     .clicked()
     {
         scene.ctl.send(Command::CueEntry(player, entry));
