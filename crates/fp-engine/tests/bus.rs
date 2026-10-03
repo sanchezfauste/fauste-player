@@ -177,3 +177,37 @@ fn a_failed_reconnection_keeps_the_virtual_clock_running() {
     std::thread::sleep(Duration::from_millis(100));
     assert!(bus.now_frame() > before, "the timeline keeps moving");
 }
+
+#[test]
+fn a_native_dsd_stream_sends_dsd_silence_before_dsd_mode_reaches_the_mixer() {
+    use fp_backends::dsd::{DsdStream, silence_sample};
+    let backend = OfflineBackend::new();
+    let device = backend.add_device("dac", 2);
+    device.set_exclusive_capable(true);
+    device.set_native_dsd(true);
+    let key = BusKey {
+        backend: "offline".into(),
+        device: "dac".into(),
+    };
+    let native = StreamConfig {
+        sample_rate: 176_400,
+        exclusive: true,
+        dsd: Some(DsdStream::Native),
+        ..CONFIG
+    };
+    let _bus = Bus::open(
+        key,
+        Arc::new(backend),
+        native,
+        4,
+        MIXER,
+        TIMING,
+        Instant::now(),
+    );
+    // No `DsdMode` was sent: the mixer is still in PCM mode.
+    let first = device.render(480).unwrap();
+    assert!(
+        first.iter().all(|s| *s == silence_sample()),
+        "the first native period is DSD silence, not packed zeros"
+    );
+}

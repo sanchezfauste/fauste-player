@@ -1058,6 +1058,10 @@ pub struct MixerRenderer {
     /// The DoP encoder of a DoP stream; `None` on a PCM or native DSD bus
     /// (a native stream's backend packs the words itself).
     pub dop: Option<DopEncoder>,
+    /// A native DSD stream: every block the mixer renders out of DSD mode
+    /// (before `DsdMode` on reaches it) goes out as the DSD idle word, so
+    /// that the stream never carries packed PCM.
+    pub native: bool,
 }
 
 impl Renderer for MixerRenderer {
@@ -1079,9 +1083,13 @@ impl Renderer for MixerRenderer {
                 self.shared.lock_misses.fetch_add(1, Ordering::Relaxed);
             }
         }
-        if self.shared.dsd_on.load(Ordering::Acquire)
-            && let Some(dop) = self.dop.as_mut()
-        {
+        // The mode of the block just rendered: it changes only at a block's
+        // start.
+        let dsd_on = self.shared.dsd_on.load(Ordering::Acquire);
+        if self.native && !dsd_on {
+            out.fill(silence_sample());
+        }
+        if dsd_on && let Some(dop) = self.dop.as_mut() {
             dop.encode_in_place(out, channels);
         }
     }

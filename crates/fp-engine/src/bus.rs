@@ -175,6 +175,7 @@ impl Bus {
             mixer: self.mixer.clone(),
             shared: self.handle.shared.clone(),
             dop: (self.config.dsd == Some(DsdStream::Dop)).then(DopEncoder::new),
+            native: self.config.dsd == Some(DsdStream::Native),
         })
     }
 

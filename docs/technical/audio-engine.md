@@ -226,7 +226,11 @@ plus the mixer's DSD mode.
 - **The DoP stage.** `MixerRenderer` (the device-side renderer) runs a
   `DopEncoder` over the block after the mixer, only in DoP streams, keeping
   the marker alternation across blocks; native streams pack the words in the
-  backend.
+  backend. On a native stream, `MixerRenderer` turns every block the mixer
+  renders out of DSD mode into the DSD silence word: the stream starts before
+  `DsdMode` on reaches the mixer, and its first periods must not carry packed
+  PCM (`0.0` packs as `0x00` bytes, which the converter would play as a DC
+  step).
 - **The decision.** `try_start_dsd` runs in `start_current` and `resume` (a
   track loaded paused), the two places that open the source on air. It builds
   `DsdFacts` (the device's mode, the track's format, the player's volume, and

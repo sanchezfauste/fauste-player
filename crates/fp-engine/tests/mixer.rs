@@ -494,6 +494,7 @@ fn the_renderer_outputs_silence_instead_of_waiting_for_a_held_lock() {
         mixer: mixer.clone(),
         shared: h.shared.clone(),
         dop: None,
+        native: false,
     };
     let _guard = mixer.lock().unwrap();
     let mut out = vec![1.0; 8];

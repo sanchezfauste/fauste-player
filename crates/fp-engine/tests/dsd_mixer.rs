@@ -247,6 +247,7 @@ fn the_renderer_encodes_dop_only_while_the_bus_is_in_dsd_mode() {
         mixer: mixer.clone(),
         shared: shared.clone(),
         dop: Some(DopEncoder::new()),
+        native: false,
     };
     send(
         &mut h,
