@@ -464,7 +464,7 @@ fn build<T>(
     io: Io,
 ) -> Result<cpal::Stream, cpal::Error>
 where
-    T: cpal::SizedSample + cpal::FromSample<f32> + Send + 'static,
+    T: OutputSample + Send + 'static,
 {
     let Io {
         mut handoff,
@@ -505,15 +505,54 @@ fn choose_sample_format(formats: &[cpal::SampleFormat]) -> Option<cpal::SampleFo
     .find(|f| formats.contains(f))
 }
 
+/// A device sample format and its conversion from the mixer's f32.
+///
+/// Integer formats use one convention: a float in [-1, 1) maps to the
+/// integer of `n` bits by `x * 2^(n-1)`, rounded to the nearest step (half
+/// away from zero) and clamped to `[-2^(n-1), 2^(n-1) - 1]`. So integer PCM
+/// that entered as `v / 2^(n-1)` comes out as exactly `v`, +1.0 and above
+/// clip to the positive maximum, -1.0 is the negative minimum and NaN is 0.
+/// Float formats take the sample as it is. Real-time safe: no allocation,
+/// no branches that can panic.
+trait OutputSample: cpal::SizedSample {
+    fn from_f32(s: f32) -> Self;
+}
+
+impl OutputSample for f32 {
+    fn from_f32(s: f32) -> Self {
+        s
+    }
+}
+
+impl OutputSample for i16 {
+    fn from_f32(s: f32) -> Self {
+        // `as` saturates and maps NaN to 0.
+        (s * 32_768.0).round() as i16
+    }
+}
+
+impl OutputSample for i32 {
+    fn from_f32(s: f32) -> Self {
+        (s * 2_147_483_648.0).round() as i32
+    }
+}
+
+impl OutputSample for cpal::I24 {
+    fn from_f32(s: f32) -> Self {
+        let v = ((s * 8_388_608.0).round() as i32).clamp(-(1 << 23), (1 << 23) - 1);
+        cpal::I24::new(v).unwrap_or(<cpal::I24 as cpal::Sample>::EQUILIBRIUM)
+    }
+}
+
 /// Renders `out` through `scratch` in whole-frame pieces and converts each
-/// sample to the device format (saturating). Real-time safe: no allocation.
+/// sample to the device format (`OutputSample`: clipping, rounding). Real-time safe: no allocation.
 fn render_converted<T>(
     renderer: &mut dyn Renderer,
     out: &mut [T],
     channels: usize,
     scratch: &mut [f32],
 ) where
-    T: cpal::SizedSample + cpal::FromSample<f32>,
+    T: OutputSample,
 {
     let channels = channels.max(1);
     let step = (scratch.len() / channels).max(1) * channels;
@@ -524,7 +563,7 @@ fn render_converted<T>(
         };
         renderer.render(buf, channels);
         for (o, s) in chunk.iter_mut().zip(buf.iter()) {
-            *o = T::from_sample(*s);
+            *o = T::from_f32(*s);
         }
     }
 }
@@ -544,8 +583,8 @@ fn device_detail(d: &cpal::DeviceDescription) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        HostCache, choose_buffer_frames, choose_sample_format, device_detail, exclusive_capable,
-        render_converted,
+        HostCache, OutputSample, choose_buffer_frames, choose_sample_format, device_detail,
+        exclusive_capable, render_converted,
     };
     use crate::Renderer;
     use cpal::DeviceDescriptionBuilder;
@@ -581,6 +620,35 @@ mod tests {
                 self.1 += 1;
             }
         }
+    }
+
+    // A7: cpal's own conversions wrap at 24 bits and truncate at 16.
+    #[test]
+    fn a7_the_24_bit_conversion_clips_instead_of_wrapping() {
+        for (s, want) in [
+            (1.0f32, (1 << 23) - 1),
+            (1.5, (1 << 23) - 1),
+            (-1.0, -(1 << 23)),
+            (-1.5, -(1 << 23)),
+            (f32::INFINITY, (1 << 23) - 1),
+            (f32::NAN, 0),
+        ] {
+            assert_eq!(cpal::I24::from_f32(s).inner(), want, "{s}");
+        }
+    }
+
+    #[test]
+    fn a7_the_16_bit_conversion_rounds_to_the_nearest_step() {
+        for (s, nearest) in [(100.75f32, 101i16), (-100.75, -101), (0.6, 1), (-0.4, 0)] {
+            assert_eq!(i16::from_f32(s / 32_768.0), nearest, "{s} steps");
+        }
+        assert_eq!(i16::from_f32(1.0), i16::MAX);
+        assert_eq!(i16::from_f32(-1.0), i16::MIN);
+        assert_eq!(i16::from_f32(f32::NAN), 0);
+        assert_eq!(i32::from_f32(1.5), i32::MAX);
+        assert_eq!(i32::from_f32(-1.5), i32::MIN);
+        assert_eq!(i32::from_f32(f32::NAN), 0);
+        assert_eq!(f32::from_f32(1.5), 1.5);
     }
 
     #[test]

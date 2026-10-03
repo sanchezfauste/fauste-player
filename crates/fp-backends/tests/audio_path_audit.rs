@@ -9,36 +9,12 @@
 use cpal::Sample;
 
 const I24_MAX: i32 = (1 << 23) - 1;
-const I24_MIN: i32 = -(1 << 23);
 
-// A7: fails until the fix task. cpal's `I24::from_sample(f32)` is
-// `I24::new_unchecked((s * 2^23) as i32)`: nothing clamps it to 24 bits, so
-// full scale and above leave the 24-bit range and wrap to the opposite
-// sign on the device (the low 24 bits are what an S24 device plays).
-#[test]
-#[ignore = "A7: fails until the fix task"]
-fn a7_the_24_bit_conversion_clips_instead_of_wrapping() {
-    for s in [1.0f32, 1.5, -1.5] {
-        let v = cpal::I24::from_sample(s).inner();
-        assert!(
-            (I24_MIN..=I24_MAX).contains(&v),
-            "{s} becomes {v} (low 24 bits read as {})",
-            (v << 8) >> 8
-        );
-    }
-}
-
-// A7: fails until the fix task. cpal's `i16::from_sample(f32)` truncates
-// toward zero instead of rounding: an error of up to one step, biased
-// toward zero (twice the error of rounding).
-#[test]
-#[ignore = "A7: fails until the fix task"]
-fn a7_the_16_bit_conversion_rounds_to_the_nearest_step() {
-    for (s, nearest) in [(100.75f32, 101i16), (-100.75, -101), (0.6, 1)] {
-        let v = i16::from_sample(s / 32_768.0);
-        assert_eq!(v, nearest, "{s} steps");
-    }
-}
+// A7 (cpal's `I24` conversion wraps at full scale and `i16` truncates) is
+// fixed by `OutputSample` in `src/cpal_backend.rs`; its probes
+// `a7_the_24_bit_conversion_clips_instead_of_wrapping` and
+// `a7_the_16_bit_conversion_rounds_to_the_nearest_step` live there, next
+// to the private conversion. The tests below document what cpal itself does.
 
 #[test]
 fn integer_conversions_saturate_and_silence_nan_except_24_bit() {
