@@ -662,9 +662,204 @@ fn native_dsd_reopens_as_pcm_after_the_end() {
     r.run_raw(WORD_RATE as usize / 2);
     let config = r.dac.config().unwrap();
     assert_eq!(config.dsd, None, "reopened as PCM");
-    assert_eq!(config.sample_rate, WORD_RATE, "at the same rate");
+    // Idle: back to the rate it had before the DSD.
+    assert_eq!(config.sample_rate, CONFIGURED_RATE, "the rate before DSD");
     let raw = r.run_raw(BLOCK * 2);
     assert!(raw.iter().all(|f| *f == [0.0, 0.0]), "PCM silence");
+    assert!(r.events().contains(&EngineEvent::DsdEnded {
+        player: P,
+        entry: EntryId(1)
+    }));
+}
+
+const DSD128: u32 = DSD64 * 2;
+/// The word rate of DSD128 (352.8 kHz): above the PCM rates of
+/// `max_pcm_rig`'s converter.
+const WORD_RATE_128: u32 = DSD128 / 16;
+/// The highest PCM rate of `max_pcm_rig`'s converter.
+const MAX_PCM: u32 = 192_000;
+/// The rate the bus runs before any DSD (the configured rate).
+const CONFIGURED_RATE: u32 = 48_000;
+
+fn dsd128() -> Option<AudioFormat> {
+    Some(AudioFormat {
+        sample_rate: DSD128 / 32,
+        bits: None,
+        channels: 2,
+        dsd_rate: Some(DSD128),
+    })
+}
+
+/// A converter that takes native DSD128 but no PCM above 192 kHz, as many do.
+fn max_pcm_rig() -> Rig {
+    rig_with(
+        DsdOutput::Native,
+        DsdMix::ConvertToPcm,
+        SampleFormat::I24,
+        |dac| {
+            dac.set_native_dsd(true);
+            dac.set_max_pcm_rate(MAX_PCM);
+        },
+    )
+}
+
+/// A one-second DSD128 file of `pattern()`, cut to `len` bytes a channel.
+fn dsd128_file(r: &Rig, name: &str, len: usize) -> PathBuf {
+    let (left, right) = pattern();
+    let len = len.min(left.len());
+    support::dsf_file_at(r.dir.path(), name, DSD128, &left[..len], &right[..len])
+}
+
+#[test]
+fn native_dsd_ends_on_a_pcm_rate_the_device_takes() {
+    let mut r = max_pcm_rig();
+    let path = dsd128_file(&r, "short.dsf", DSD128 as usize / 8 / 10);
+    r.start(P, request(1, path, dsd128()));
+    assert_eq!(r.dac.config().unwrap().dsd, Some(DsdStream::Native));
+    assert_eq!(r.rate(), WORD_RATE_128);
+    r.run_raw(WORD_RATE_128 as usize / 2);
+    let config = r.dac.config().expect("the device is never left closed");
+    assert_eq!(config.dsd, None, "reopened as PCM");
+    assert_eq!(config.sample_rate, CONFIGURED_RATE, "the rate before DSD");
+    assert!(r.events().contains(&EngineEvent::DsdEnded {
+        player: P,
+        entry: EntryId(1)
+    }));
+    // The next track plays.
+    let wav = indexed_wav(r.dir.path(), "q.wav", 44_100, 2, 44_100 * 2);
+    r.start(Q, request(2, wav, pcm16(44_100)));
+    let raw = r.run_raw(BLOCK * 8);
+    assert!(raw.iter().any(|f| f[0] != 0.0), "PCM plays after the DSD");
+}
+
+#[test]
+fn a_native_switch_on_a_refused_word_rate_goes_on_at_a_rate_the_device_takes() {
+    let mut r = max_pcm_rig();
+    let path = dsd128_file(&r, "a.dsf", usize::MAX);
+    r.start(P, request(1, path, dsd128()));
+    r.run_raw(WORD_RATE_128 as usize / 10);
+    assert!(r.engine.telemetry(P).dsd);
+    r.act(EngineAction::LeaveDsd { player: P });
+    // The DSD silence, then the reopen as PCM.
+    r.run_raw(WORD_RATE_128 as usize / 20);
+    let config = r.dac.config().expect("the device is never left closed");
+    assert_eq!(config.dsd, None, "reopened as PCM");
+    assert!(config.sample_rate <= MAX_PCM, "{}", config.sample_rate);
+    let p_before = r.engine.telemetry(P).position_secs.unwrap();
+    assert!(
+        (0.08..0.2).contains(&p_before),
+        "P held where it was: {p_before}"
+    );
+    r.settle();
+    let rendered = r.rate() as usize / 4;
+    let raw = r.run_raw(rendered);
+    assert!(
+        raw.iter().any(|f| f[0].abs() > 1e-3),
+        "P goes on as PCM, audible"
+    );
+    let p_after = r.engine.telemetry(P).position_secs.unwrap();
+    let played = rendered.div_ceil(BLOCK) * BLOCK;
+    let expected = p_before + played as f64 / f64::from(r.rate());
+    assert!(
+        (p_after - expected).abs() < 0.05,
+        "{p_before} -> {p_after}, expected about {expected}"
+    );
+    assert!(!r.engine.telemetry(P).dsd);
+}
+
+/// The first non-zero frame after the last native DSD silence frame.
+fn first_after_dsd(raw: &[[f32; 2]]) -> Option<usize> {
+    let pcm = raw
+        .iter()
+        .rposition(|f| *f == [silence_sample(), silence_sample()])
+        .map_or(0, |i| i + 1);
+    raw[pcm..].iter().position(|f| f[0] != 0.0).map(|k| pcm + k)
+}
+
+#[test]
+fn a_start_over_native_dsd_on_a_refused_word_rate_plays_at_a_rate_the_device_takes() {
+    let mut r = max_pcm_rig();
+    let path = dsd128_file(&r, "a.dsf", usize::MAX);
+    r.start(P, request(1, path, dsd128()));
+    r.act(EngineAction::Pause { player: P });
+    r.run_raw(BLOCK * 8);
+    assert!(r.engine.telemetry(P).dsd);
+    // Q starts: ConvertToPcm switches the bus to PCM. Q's source was
+    // opened at the word rate, which the device refuses as PCM.
+    let wav = indexed_wav(r.dir.path(), "q.wav", CONFIGURED_RATE, 2, 48_000 * 3);
+    r.start(Q, request(2, wav, pcm16(CONFIGURED_RATE)));
+    let mut raw = r.run_raw(WORD_RATE_128 as usize / 20);
+    let config = r.dac.config().expect("the device is never left closed");
+    assert_eq!(config.dsd, None, "reopened as PCM");
+    assert_eq!(config.sample_rate, CONFIGURED_RATE);
+    r.settle();
+    raw.extend(r.run_raw(CONFIGURED_RATE as usize / 4));
+    // Q from its start, at the file's own pace (P is paused).
+    let first = first_after_dsd(&raw).expect("Q plays");
+    assert_head(&raw, first - 1, 200);
+    let q = r.engine.telemetry(Q).position_secs.unwrap();
+    assert!((0.2..0.4).contains(&q), "Q from its start: {q}");
+    assert!(!r.engine.telemetry(P).dsd);
+}
+
+#[test]
+fn a_cart_over_native_dsd_on_a_refused_word_rate_plays_from_its_start() {
+    let mut r = max_pcm_rig();
+    let path = dsd128_file(&r, "a.dsf", usize::MAX);
+    r.start(P, request(1, path, dsd128()));
+    r.act(EngineAction::Pause { player: P });
+    r.run_raw(BLOCK * 8);
+    // Opened at the word rate; it plays at the rate the device takes.
+    let jingle = indexed_wav(r.dir.path(), "jingle.wav", CONFIGURED_RATE, 2, 48_000);
+    r.act(EngineAction::StartCart(fp_model::CartRequest {
+        cart: fp_model::CartId(1),
+        track: TrackId(9),
+        path: jingle,
+        from_secs: 0.0,
+        until_secs: f64::INFINITY,
+        looped: false,
+        format: pcm16(CONFIGURED_RATE),
+    }));
+    r.settle();
+    let mut raw = r.run_raw(WORD_RATE_128 as usize / 20);
+    let config = r.dac.config().expect("the device is never left closed");
+    assert_eq!(config.dsd, None, "reopened as PCM");
+    assert_eq!(config.sample_rate, CONFIGURED_RATE);
+    r.settle();
+    raw.extend(r.run_raw(CONFIGURED_RATE as usize / 4));
+    // Frame 0 of the jingle is 0.0: its head starts one before the first
+    // non-zero frame, and goes on at the file's own pace.
+    let first = first_after_dsd(&raw).expect("the cart plays");
+    assert_head(&raw, first - 1, 200);
+    assert!(!r.engine.telemetry(P).dsd);
+}
+
+#[test]
+fn a_device_back_without_native_dsd_or_its_word_rate_plays_pcm() {
+    let mut r = max_pcm_rig();
+    let path = dsd128_file(&r, "a.dsf", usize::MAX);
+    r.start(P, request(1, path, dsd128()));
+    r.run_raw(BLOCK * 8);
+    assert!(r.engine.telemetry(P).dsd);
+    r.dac.unplug();
+    r.clock += Duration::from_millis(50);
+    r.engine.tick(r.clock);
+    // Back without native DSD: nor DSD, nor the word rate as PCM.
+    r.dac.set_native_dsd(false);
+    r.dac.replug();
+    r.clock += Duration::from_secs(10);
+    let events = r.engine.tick(r.clock);
+    r.seen.extend(events);
+    let config = r.dac.config().expect("the device is never left closed");
+    assert_eq!(config.dsd, None);
+    assert!(config.sample_rate <= MAX_PCM, "{}", config.sample_rate);
+    r.settle();
+    let raw = r.run_raw(BLOCK * 16);
+    assert!(
+        raw.iter().any(|f| f[0].abs() > 1e-3),
+        "the track goes on converted"
+    );
+    assert!(!r.engine.telemetry(P).dsd);
     assert!(r.events().contains(&EngineEvent::DsdEnded {
         player: P,
         entry: EntryId(1)

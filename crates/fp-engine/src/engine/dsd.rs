@@ -37,6 +37,9 @@ pub(super) struct DsdBus {
     state: DsdState,
     /// `DsdStarted` was reported for this stream.
     announced: bool,
+    /// The PCM configuration the bus had before the DSD stream: a device
+    /// that takes native DSD at a word rate need not take that rate as PCM.
+    pcm: StreamConfig,
 }
 
 impl Engine {
@@ -120,10 +123,17 @@ impl Engine {
             DsdStreamMode::Dop => DsdStream::Dop,
             DsdStreamMode::Native => DsdStream::Native,
         };
-        if !reuse && let Err(fallback) = self.open_dsd_stream(bus, stream, target.word_rate) {
-            log_fallback(bus, fallback);
-            return None;
-        }
+        let kept = self.dsd_buses.get(bus).filter(|_| reuse).map(|d| d.pcm);
+        let pcm = match kept {
+            Some(pcm) => pcm,
+            None => match self.open_dsd_stream(bus, stream, target.word_rate) {
+                Ok(pcm) => pcm,
+                Err(fallback) => {
+                    log_fallback(bus, fallback);
+                    return None;
+                }
+            },
+        };
         let now_frame = self.now_frame(bus);
         if !reuse {
             self.send(
@@ -161,6 +171,7 @@ impl Engine {
                 until: now_frame + silence,
             },
             announced: false,
+            pcm,
         };
         match opened {
             Ok(mut source) => {
@@ -184,14 +195,15 @@ impl Engine {
     }
 
     /// Reopens `bus` as a `stream` at `word_rate` and checks the stream can
-    /// carry it. On a refusal the bus is back as it was (the device remembers
-    /// the refusal).
+    /// carry it; returns the PCM configuration the bus had, to go back to.
+    /// On a refusal the bus is back as it was (the device remembers the
+    /// refusal).
     fn open_dsd_stream(
         &mut self,
         bus: &BusKey,
         stream: DsdStream,
         word_rate: u32,
-    ) -> Result<(), DsdFallback> {
+    ) -> Result<StreamConfig, DsdFallback> {
         let now = self.now;
         let Some(b) = self.buses.get_mut(bus) else {
             return Err(DsdFallback::StreamRefused);
@@ -218,10 +230,17 @@ impl Engine {
                 DsdStream::Native => DsdFallback::StreamRefused,
             });
         }
+        // A bus that carried DoP before keeps that configuration while it
+        // plays PCM: the same rate, as PCM.
+        let pcm = StreamConfig {
+            dsd: None,
+            ..previous
+        };
+        b.set_pcm_fallback(pcm);
         if previous.sample_rate != word_rate {
             self.reopen_waiting(bus);
         }
-        Ok(())
+        Ok(pcm)
     }
 
     /// Why the device refused a DSD stream at `word_rate`: the rate, when
@@ -465,7 +484,8 @@ impl Engine {
 
     /// Called from `tick`: DSD streams whose silence is over go back to
     /// PCM (a DoP stream simply leaves DSD mode; a native one is reopened as
-    /// PCM at the same rate), and native switches reach their reopen.
+    /// PCM, see `reopen_native_as_pcm`), and native switches reach their
+    /// reopen.
     pub(super) fn end_dsd_streams(&mut self) {
         let due: Vec<(BusKey, bool)> = self
             .dsd_buses
@@ -494,7 +514,7 @@ impl Engine {
                         at_frame: now_frame,
                     },
                 ),
-                DsdStream::Native => self.reopen_native_as_pcm(&bus, now_frame),
+                DsdStream::Native => self.reopen_native_as_pcm(&bus, now_frame, d.pcm),
             }
             if !switching {
                 self.events.push(EngineEvent::DsdEnded {
@@ -505,10 +525,20 @@ impl Engine {
         }
     }
 
-    /// Reopens a native DSD bus as PCM at the same rate. The stream closes
-    /// first, so no PCM block ever reaches the DSD stream; the mixer leaves
-    /// DSD mode and its hold on the new stream's first block.
-    fn reopen_native_as_pcm(&mut self, bus: &BusKey, now_frame: u64) {
+    /// Reopens a native DSD bus as PCM at a rate the device takes. The
+    /// stream closes first, so no PCM block ever reaches the DSD stream; the
+    /// mixer leaves DSD mode and its hold on the new stream's first block.
+    ///
+    /// A device that takes native DSD at a word rate need not take that
+    /// rate as PCM (DSD512 never: 1.4112 MHz). An idle bus goes back to the
+    /// PCM configuration it had before the DSD (`pcm`); a bus with sources
+    /// on it tries the word rate first, so their timelines stay as they
+    /// are. Then the configured rate. When the rate changes, the sources on
+    /// the bus are opened again at the new rate (`follow_forced_rate`). If
+    /// nothing opens, the bus is `Lost` and the watchdog retries, falling
+    /// back to `pcm` (`Bus::set_pcm_fallback`): never an impossible rate
+    /// forever.
+    fn reopen_native_as_pcm(&mut self, bus: &BusKey, now_frame: u64, pcm: StreamConfig) {
         let now = self.now;
         if let Some(b) = self.buses.get_mut(bus) {
             b.close_stream();
@@ -527,15 +557,40 @@ impl Engine {
                 until_frame: now_frame,
             },
         );
-        if let Some(b) = self.buses.get_mut(bus) {
-            let config = StreamConfig {
-                dsd: None,
-                ..b.config()
-            };
-            if let Err(error) = b.reopen_with(config, now) {
-                tracing::warn!(?bus, %error, "cannot reopen the native DSD device as PCM");
+        let sounding = self.bus_sounding(bus);
+        let configured = StreamConfig {
+            sample_rate: self.settings.sample_rate,
+            ..pcm
+        };
+        let Some(b) = self.buses.get_mut(bus) else {
+            return;
+        };
+        let word_rate = b.sample_rate();
+        let word = StreamConfig {
+            dsd: None,
+            ..b.config()
+        };
+        let candidates = if sounding {
+            [Some(word), Some(pcm), Some(configured)]
+        } else {
+            [Some(pcm), Some(configured), None]
+        };
+        let mut reopened = false;
+        for config in candidates.into_iter().flatten() {
+            match b.reopen_with(config, now) {
+                Ok(()) => {
+                    reopened = true;
+                    break;
+                }
+                Err(error) => {
+                    tracing::warn!(?bus, rate = config.sample_rate, %error, "cannot reopen the native DSD device as PCM at this rate");
+                }
             }
         }
+        if !reopened {
+            tracing::warn!(?bus, "cannot reopen the native DSD device as PCM; retrying");
+        }
+        self.follow_forced_rate(bus, word_rate);
     }
 }
 

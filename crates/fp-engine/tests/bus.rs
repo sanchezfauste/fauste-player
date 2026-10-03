@@ -211,3 +211,29 @@ fn a_native_dsd_stream_sends_dsd_silence_before_dsd_mode_reaches_the_mixer() {
         "the first native period is DSD silence, not packed zeros"
     );
 }
+
+#[test]
+fn the_watchdog_falls_back_to_the_pcm_rate_before_dsd_instead_of_retrying_forever() {
+    let backend = OfflineBackend::new();
+    let device = backend.add_device("dac", 2);
+    device.set_max_pcm_rate(192_000);
+    let key = BusKey {
+        backend: "offline".into(),
+        device: "dac".into(),
+    };
+    // Left at a word rate the device does not take as PCM.
+    let word_rate = StreamConfig {
+        sample_rate: 352_800,
+        ..CONFIG
+    };
+    let t0 = Instant::now();
+    let mut bus = Bus::open(key, Arc::new(backend), word_rate, 4, MIXER, TIMING, t0);
+    assert_eq!(bus.health(), BusHealth::Lost);
+    bus.set_pcm_fallback(CONFIG);
+    bus.supervise(t0 + Duration::from_secs(3));
+    assert_eq!(bus.health(), BusHealth::Ok);
+    assert_eq!(device.config().unwrap().sample_rate, 48_000);
+    assert_eq!(bus.sample_rate(), 48_000);
+    assert_eq!(bus.take_rate_change(), Some(352_800));
+    assert_eq!(bus.take_rate_change(), None);
+}

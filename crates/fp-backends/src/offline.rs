@@ -32,6 +32,9 @@ struct DeviceState {
     /// Opens DoP whatever the sample format, as a backend that does not
     /// check it would.
     dop_any_format: bool,
+    /// PCM (and DoP) streams above this rate are refused; native DSD is
+    /// not limited by it.
+    max_pcm_rate: Option<u32>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -111,6 +114,13 @@ impl OfflineDevice {
     /// 32 bits), so the engine's own check can be tested.
     pub fn set_dop_any_format(&self, any: bool) {
         lock(&self.state).dop_any_format = any;
+    }
+
+    /// Refuses PCM and DoP streams above `rate`, while native DSD still
+    /// opens at any word rate: a converter that takes native DSD at a rate
+    /// need not take that rate as PCM.
+    pub fn set_max_pcm_rate(&self, rate: u32) {
+        lock(&self.state).max_pcm_rate = Some(rate);
     }
 
     /// How many times a stream was opened, or tried to be, on this device.
@@ -286,6 +296,16 @@ impl AudioBackend for OfflineBackend {
                     ));
                 }
             }
+        }
+        if config.dsd != Some(DsdStream::Native)
+            && state
+                .max_pcm_rate
+                .is_some_and(|max| config.sample_rate > max)
+        {
+            return Err(BackendError::Unsupported(format!(
+                "{} Hz is above the device's PCM rates",
+                config.sample_rate
+            )));
         }
         if state.refused_rates.contains(&config.sample_rate) {
             return Err(BackendError::Unsupported(format!(

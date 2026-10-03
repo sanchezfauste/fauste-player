@@ -130,7 +130,9 @@ the bus logs it when it falls back to shared.
   exclusive-capable: `set_sample_format` sets the device's format (DoP needs
   `I24` or `I32` on it), `set_native_dsd` lets it carry native DSD, and
   `set_dop_any_format` (tests) drops the format check so the engine's own
-  check can be tested apart.
+  check can be tested apart. `set_max_pcm_rate` (tests) refuses PCM and DoP
+  streams above a rate while native DSD still opens at any word rate, like
+  a converter that takes DSD128 natively but no PCM above 192 kHz.
 
 ## Implemented
 

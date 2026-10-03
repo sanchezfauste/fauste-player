@@ -711,6 +711,123 @@ impl Engine {
         }
     }
 
+    /// `bus` had to change rate under sources opened for `old_rate`: after
+    /// native DSD, the device did not take the word rate back as PCM. Every
+    /// player and cart source on it is opened again at its position at the
+    /// new rate, as a seek does (a source that was playing starts again as
+    /// soon as it is ready, a waiting or paused one stays waiting); sources
+    /// fading out and test tones are cut. Nothing happens when the rate is
+    /// the same.
+    fn follow_forced_rate(&mut self, bus: &BusKey, old_rate: u32) {
+        let new_rate = self.rate_of(bus);
+        if new_rate == old_rate {
+            return;
+        }
+        tracing::warn!(
+            ?bus,
+            old_rate,
+            new_rate,
+            "the device changed rate; reopening its sources"
+        );
+        let old = f64::from(old_rate.max(1));
+        let position = |p: &Playing| p.start_secs + p.shared.frames_played() as f64 / old;
+        let ids: Vec<PlayerId> = self.players.keys().copied().collect();
+        for player in ids {
+            let on_bus = |p: &Playing| &p.bus == bus;
+            let touches = self.players.get(&player).is_some_and(|rt| {
+                rt.current
+                    .iter()
+                    .chain(rt.preload.iter())
+                    .chain(rt.cue_src.iter())
+                    .chain(rt.outgoing.iter())
+                    .any(on_bus)
+            });
+            if !touches {
+                continue;
+            }
+            self.undispatch(player);
+            let Some(rt) = self.players.get_mut(&player) else {
+                continue;
+            };
+            let (gone, kept): (Vec<Playing>, Vec<Playing>) = std::mem::take(&mut rt.outgoing)
+                .into_iter()
+                .partition(on_bus);
+            rt.outgoing = kept;
+            for p in gone {
+                self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
+                self.release(p);
+            }
+            for role in [Role::Current, Role::Preload, Role::Cue] {
+                let Some(rt) = self.players.get_mut(&player) else {
+                    break;
+                };
+                let (paused, field) = match role {
+                    Role::Current => (rt.paused, &mut rt.current),
+                    Role::Preload => (true, &mut rt.preload),
+                    _ => (rt.cue_paused, &mut rt.cue_src),
+                };
+                let Some(old_source) = field.take_if(|p| on_bus(p)) else {
+                    continue;
+                };
+                let waiting = old_source.start == StartState::Idle;
+                let mut request = old_source.request.clone();
+                if !waiting {
+                    request.from_secs = position(&old_source);
+                    self.send(
+                        &old_source.bus,
+                        BusCommand::Cancel {
+                            slot: old_source.slot,
+                        },
+                    );
+                }
+                let cue = old_source.cue;
+                self.release(old_source);
+                match self.new_source(player, cue, &request) {
+                    Ok(mut fresh) => {
+                        fresh.start = if waiting || paused {
+                            StartState::Idle
+                        } else {
+                            // A de-click only where it starts mid-file.
+                            StartState::WhenReady {
+                                fade_in: !cue && request.from_secs > 0.0,
+                            }
+                        };
+                        if let Some(rt) = self.players.get_mut(&player) {
+                            match role {
+                                Role::Current => rt.current = Some(fresh),
+                                Role::Preload => rt.preload = Some(fresh),
+                                _ => rt.cue_src = Some(fresh),
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // An engine limitation, not a bad file.
+                        tracing::error!(?player, error = ?e, "cannot reopen a source at the new rate");
+                        match role {
+                            Role::Current => self.events.push(EngineEvent::ReachedEnd {
+                                player,
+                                entry: request.entry,
+                            }),
+                            Role::Cue => self.events.push(EngineEvent::CueEnded {
+                                player,
+                                entry: request.entry,
+                            }),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        self.follow_forced_rate_carts(bus, old_rate);
+        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.tones)
+            .into_iter()
+            .partition(|(b, _)| b == bus);
+        self.tones = kept;
+        for (bus, slot) in gone {
+            self.send(&bus, BusCommand::Detach { slot });
+        }
+    }
+
     fn find_backend(&self, id: &str) -> Option<Arc<dyn AudioBackend>> {
         self.backends.iter().find(|b| b.id().0 == id).cloned()
     }
@@ -1748,16 +1865,20 @@ impl Engine {
         self.handle_failures();
         let keys: Vec<BusKey> = self.buses.keys().cloned().collect();
         for key in keys {
-            let (events, dsd_lost) = match self.buses.get_mut(&key) {
+            let (events, dsd_lost, rate_change) = match self.buses.get_mut(&key) {
                 Some(bus) => {
                     bus.supervise(now);
                     let lost = bus.take_dsd_lost();
-                    (bus.poll(), lost)
+                    let rate_change = bus.take_rate_change();
+                    (bus.poll(), lost, rate_change)
                 }
-                None => (Vec::new(), false),
+                None => (Vec::new(), false, None),
             };
             if dsd_lost {
                 self.dsd_stream_lost(&key);
+            }
+            if let Some(old_rate) = rate_change {
+                self.follow_forced_rate(&key, old_rate);
             }
             for event in events {
                 self.handle_bus_event(&key, event);

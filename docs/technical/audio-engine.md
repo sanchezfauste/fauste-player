@@ -256,8 +256,18 @@ plus the mixer's DSD mode.
   rate takes the stream over with no extra silence (the converter is still
   locked); `DsdEnded` is reported for the old entry. At the end of a tail
   (`end_dsd_streams`, from `tick`) a DoP bus leaves DSD mode and a native bus
-  is reopened as PCM at the same rate (its stream closes first, so no PCM
-  block reaches it). A PCM start over a tail or a switch waits until it ends
+  is reopened as PCM (`reopen_native_as_pcm`; its stream closes first, so no
+  PCM block reaches it). A device that takes native DSD at a word rate need
+  not take that rate as PCM (DSD512 never: 1.4112 MHz), so the rate is
+  chosen: an idle bus goes back to the PCM configuration it had before the
+  DSD (`DsdBus::pcm`, kept by `open_dsd_stream`); a bus with sources on it
+  (a native switch) tries the word rate first, so their timelines stay,
+  then the PCM configuration before the DSD, then `outputs.sample_rate`. When
+  the rate changes under sources, `follow_forced_rate` opens every player
+  and cart source on the bus again at its position at the new rate, as a
+  seek does (a looped cart from its cue-in); sources fading out and test
+  tones are cut. If nothing opens, the bus is `Lost` and the watchdog falls
+  back as below. A PCM start over a tail or a switch waits until it ends
   (`before_start_on`).
 - **The two mix policies** (`outputs.dsd_mix`), applied by `before_start_on`
   to any start on a bus carrying DSD (the starts loop, `current_finished`,
@@ -294,8 +304,13 @@ plus the mixer's DSD mode.
   configuration comes back only with exclusive access and a stream that fits
   (`dsd_fits`); otherwise the present device is reopened as PCM at the same
   rate, `dsd_lost` is set, and `dsd_stream_lost` drops the record and reports
-  `DsdEnded`: the DSD track goes on from its PCM ring. If the PCM open fails
-  too, the DSD configuration is restored for the next retry.
+  `DsdEnded`: the DSD track goes on from its PCM ring. A PCM rate that does
+  not open, there or on a PCM bus, falls back to the PCM configuration the
+  bus had before the DSD (`Bus::set_pcm_fallback`, forgotten once the bus
+  changes PCM rate by itself); `Bus::take_rate_change` then tells `tick`,
+  which runs `follow_forced_rate`. So no retry is ever stuck on a rate the
+  device cannot take. If no PCM open works either, the DSD configuration is
+  restored for the next retry.
 - **Tests:** `tests/dsd_mixer.rs` (the mixer's modes, under `assert_no_alloc`)
   and `tests/dsd_output.rs` (the engine on Offline devices, byte for byte);
   `tests/dsd_real_music.rs` is opt-in (see [Testing](testing.md)).

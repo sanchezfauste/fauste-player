@@ -29,6 +29,8 @@ pub(super) struct CartSource {
     start: StartState,
     /// The worker failed: report `CartFailed` when the buffered audio ends.
     failed: bool,
+    /// What it was opened from, to open it again (`follow_forced_rate`).
+    request: CartRequest,
 }
 
 pub(super) struct CartwallRuntime {
@@ -185,7 +187,59 @@ impl Engine {
             shared,
             start: StartState::WhenReady { fade_in: false },
             failed: false,
+            request: request.clone(),
         })
+    }
+
+    /// The cart part of `follow_forced_rate`: each cart on `bus` is opened
+    /// again at its position at the new rate (a looped one from its cue-in,
+    /// since its loop restarts where it is opened); one stopping is cut.
+    pub(super) fn follow_forced_rate_carts(&mut self, bus: &BusKey, old_rate: u32) {
+        let Some(c) = self.cartwall.as_mut() else {
+            return;
+        };
+        let on_bus = |s: &CartSource| &s.bus == bus;
+        let (stopping, kept): (Vec<CartSource>, Vec<CartSource>) = std::mem::take(&mut c.stopping)
+            .into_iter()
+            .partition(on_bus);
+        c.stopping = kept;
+        let (playing, kept): (Vec<CartSource>, Vec<CartSource>) =
+            std::mem::take(&mut c.playing).into_iter().partition(on_bus);
+        c.playing = kept;
+        let cue = c.cue_src.take_if(|s| on_bus(s));
+        for source in stopping {
+            self.send(&source.bus, BusCommand::Cancel { slot: source.slot });
+            self.release_cart(&source);
+        }
+        let old = f64::from(old_rate.max(1));
+        let again = playing
+            .into_iter()
+            .map(|s| (s, false))
+            .chain(cue.into_iter().map(|s| (s, true)));
+        for (source, is_cue) in again {
+            let mut request = source.request.clone();
+            if !source.looped {
+                request.from_secs = source.from_secs + source.shared.frames_played() as f64 / old;
+            }
+            self.send(&source.bus, BusCommand::Cancel { slot: source.slot });
+            self.release_cart(&source);
+            match self.cart_source(&request, is_cue) {
+                Ok(fresh) => {
+                    if let Some(c) = self.cartwall.as_mut() {
+                        if is_cue {
+                            c.cue_src = Some(fresh);
+                        } else {
+                            c.playing.push(fresh);
+                        }
+                    }
+                }
+                Err(_) => self.events.push(if is_cue {
+                    EngineEvent::CartCueEnded { cart: request.cart }
+                } else {
+                    EngineEvent::CartEnded { cart: request.cart }
+                }),
+            }
+        }
     }
 
     pub(super) fn start_cart(&mut self, request: &CartRequest, now: Instant) {

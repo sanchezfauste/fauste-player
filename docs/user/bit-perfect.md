@@ -85,6 +85,14 @@ starts:
   DSD256) and a 24- or 32-bit format. Native DSD needs a device that takes
   the DSD format at that rate.
 
+When native DSD ends, the device goes back to PCM at the rate it had before
+the DSD track, because many converters take native DSD at rates they cannot
+play as PCM (no converter plays PCM at the rate DSD512 runs at). A track
+that goes on as PCM keeps the DSD stream's rate when the device takes it
+as PCM, and otherwise continues at the earlier rate from where it was,
+like everything else playing on that device. The device is never left
+silent.
+
 Otherwise the track is converted to PCM and the log says why (for example
 "something else plays on the device" or "the device refused 705600 Hz").
 Pre-listen and carts are always converted.

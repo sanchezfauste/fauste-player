@@ -160,6 +160,11 @@ pub const DSD64: u32 = 2_822_400;
 /// A stereo DSF file at DSD64 whose channels hold `left` and `right`
 /// (bytes most significant bit first in time, as the engine carries them).
 pub fn dsf_file(dir: &Path, name: &str, left: &[u8], right: &[u8]) -> PathBuf {
+    dsf_file_at(dir, name, DSD64, left, right)
+}
+
+/// Like `dsf_file`, at the DSD rate `rate`.
+pub fn dsf_file_at(dir: &Path, name: &str, rate: u32, left: &[u8], right: &[u8]) -> PathBuf {
     const BLOCK: usize = 4096;
     let len = left.len().min(right.len());
     let blocks = len.div_ceil(BLOCK);
@@ -190,7 +195,7 @@ pub fn dsf_file(dir: &Path, name: &str, left: &[u8], right: &[u8]) -> PathBuf {
     f.extend(0u32.to_le_bytes()); // DSD raw
     f.extend(2u32.to_le_bytes()); // stereo
     f.extend(2u32.to_le_bytes()); // channels
-    f.extend(DSD64.to_le_bytes());
+    f.extend(rate.to_le_bytes());
     f.extend(1u32.to_le_bytes()); // LSB first
     f.extend((len as u64 * 8).to_le_bytes()); // samples per channel
     f.extend((BLOCK as u32).to_le_bytes());

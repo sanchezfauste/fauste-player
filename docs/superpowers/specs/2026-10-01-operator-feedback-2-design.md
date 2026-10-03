@@ -572,6 +572,8 @@ The audit of every earlier plan found these items still open.
     - The mixer's pending DSD mode switches are a fixed ordered queue of four (overflow drops the oldest and counts a dropped event), instead of a single slot where the last wins.
     - After a device loss, DSD resumes only on an exclusive device that passes the I24/I32 check; otherwise the bus reopens as PCM and the DSD stream ends. A bus with a pending switch to PCM counts as busy for the DSD decision. A reconnect restores DSD mode only if it was on, and a reconnect that cannot open the device reports it lost.
     - Native ALSA opens non-blocking and waits with a timeout, instead of the plan's blocking open, so a busy device cannot hold the output thread.
+    - Final review C1: the end of a native DSD stream reopens the device as PCM at a rate it takes. An idle bus goes back to the PCM configuration it had before the DSD; a bus with sources tries the word rate first, then that configuration, then `outputs.sample_rate`, and when the rate changes every player and cart source on it is opened again at its position at the new rate (a looped cart from its cue-in; fades out and test tones are cut). The watchdog falls back to the same configuration instead of retrying a refused rate forever.
+    - Final review I1: the renderer of a native stream turns any block rendered out of DSD mode into DSD silence, so a native start never sends packed zeros before `DsdMode` on reaches the mixer.
     - A fix in the decoder: a DSF header with an absurd channel count no longer tries a huge allocation.
     - Restart notice: DSD settings reuse the existing `RestartReason::DsdOutput` path.
 
