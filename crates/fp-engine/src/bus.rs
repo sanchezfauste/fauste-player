@@ -302,6 +302,9 @@ impl Bus {
         let Some(dsd) = self.config.dsd else {
             return self.try_open(now, true);
         };
+        // A DoP stream whose DSD has ended keeps its configuration while the
+        // mixer is PCM: only a mixer in DSD mode is put back in it below.
+        let was_on = self.handle.shared.dsd_on.load(Ordering::Acquire);
         if self.try_open(now, false) {
             if self.dsd_fits(dsd) {
                 return true;
@@ -319,12 +322,16 @@ impl Bus {
             self.dsd_lost = true;
             return true;
         }
-        // Not there at all: try the DSD stream again next time.
+        // Not there at all: try the DSD stream again next time. A stream
+        // opened above and dropped as unfit leaves no stream: lost.
+        self.health = BusHealth::Lost;
         self.config.dsd = Some(dsd);
-        self.send(BusCommand::DsdMode {
-            on: true,
-            at_frame: 0,
-        });
+        if was_on {
+            self.send(BusCommand::DsdMode {
+                on: true,
+                at_frame: 0,
+            });
+        }
         false
     }
 

@@ -1168,3 +1168,35 @@ fn a_test_tone_over_a_dsd_stream_switches_it_to_pcm() {
     );
     assert!(!r.engine.telemetry(P).dsd);
 }
+
+#[test]
+fn a_device_lost_after_a_dop_stream_ended_comes_back_playing_pcm() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let len = DSD64 as usize / 8 / 10;
+    let a = dsf_file(r.dir.path(), "short.dsf", &left[..len], &right[..len]);
+    r.start(P, request(1, a, dsd64()));
+    r.run_raw(WORD_RATE as usize / 2);
+    assert!(r.events().contains(&EngineEvent::DsdEnded {
+        player: P,
+        entry: EntryId(1)
+    }));
+    // The stream still has its DoP configuration; the mixer is PCM.
+    r.dac.unplug();
+    for _ in 0..4 {
+        r.clock += Duration::from_secs(10);
+        r.engine.tick(r.clock);
+    }
+    r.dac.replug();
+    r.clock += Duration::from_secs(10);
+    r.engine.tick(r.clock);
+    assert!(r.dac.config().is_some());
+    let q = wav_request(&r, 3);
+    r.start(Q, q);
+    let raw = r.run_raw(BLOCK * 8);
+    assert!(
+        raw.iter().all(|f| !idle_dop(*f)),
+        "PCM plays, not DoP silence"
+    );
+    assert!(raw.iter().any(|f| f[0] != 0.0), "Q is heard");
+}
