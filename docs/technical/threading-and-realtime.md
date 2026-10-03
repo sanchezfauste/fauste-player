@@ -70,8 +70,9 @@ The mixer (`fp-engine/src/mixer.rs`) runs on the device callback. It must not:
   carries the number that came in and the total), and the UI shows underruns
   (per player) and xruns (per device) in the status bar for 5 s after the last
   increase. `StreamErrorKind::Other` (an error cpal reports that fits no class)
-  is its own counter, `stream_errors`, and is logged with cpal's message; it
-  is not an xrun. Indexing uses `get` (enforced by
+  is its own counter, `stream_errors`, logged by the conductor like the rest
+  (cpal's error callback can run on the real-time thread, so the backend only
+  counts); it is not an xrun. Indexing uses `get` (enforced by
   `clippy::indexing_slicing`), and there is no `unwrap`.
 
 Tests enforce this: `assert_no_alloc` wraps `Mixer::render` and fails on any

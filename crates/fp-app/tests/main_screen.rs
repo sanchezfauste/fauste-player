@@ -462,6 +462,17 @@ fn an_underrun_shows_an_alert_that_fades() {
 }
 
 #[test]
+fn a_device_first_seen_with_xruns_raises_the_alert() {
+    let (mut h, fake) = harness(state(1, 1));
+    publish_dropouts(&fake, 0, 5);
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("Main out: audio device dropouts (5)")
+            .is_some()
+    );
+}
+
+#[test]
 fn an_xrun_shows_an_alert_naming_the_device() {
     let (mut h, fake) = harness(state(1, 1));
     publish_dropouts(&fake, 0, 0);

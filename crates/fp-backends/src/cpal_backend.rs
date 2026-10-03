@@ -137,15 +137,12 @@ fn backend_error(e: impl std::fmt::Display) -> BackendError {
     BackendError::Backend(e.to_string())
 }
 
-/// Passes a cpal stream error on, classified. cpal calls this from its own
-/// thread, not from the audio callback. An error that fits no class is logged
-/// here with cpal's message, since the sink only counts it.
+/// Passes a cpal stream error on, classified. On some hosts (ALSA, WASAPI)
+/// cpal calls this on the real-time audio thread, so it only classifies and
+/// counts: no logging, formatting or allocation. The conductor logs the
+/// counts (an error that fits no class is `StreamErrorKind::Other`).
 fn report_stream_error(errors: &dyn StreamErrorSink, err: &cpal::Error) {
-    let kind = classify(err.kind());
-    if kind == StreamErrorKind::Other {
-        tracing::warn!(error = %err, "unclassified audio stream error");
-    }
-    errors.report(kind);
+    errors.report(classify(err.kind()));
 }
 
 fn classify(kind: cpal::ErrorKind) -> StreamErrorKind {
@@ -621,8 +618,29 @@ mod tests {
         assert_eq!(device_detail(&same), None);
     }
 
-    // A8: an unknown error is `Other`, which the bus logs and does not count
-    // as an xrun.
+    /// Records what a sink was told.
+    #[derive(Default)]
+    struct Told(std::sync::Mutex<Vec<StreamErrorKind>>);
+
+    impl crate::StreamErrorSink for Told {
+        fn report(&self, kind: StreamErrorKind) {
+            self.0.lock().unwrap().push(kind);
+        }
+    }
+
+    // A8: an unknown error reaches the sink as `Other` (the bus counts it
+    // apart from xruns and the conductor logs it).
+    #[test]
+    fn an_unclassified_error_is_counted_through_the_sink_as_other() {
+        let told = Told::default();
+        super::report_stream_error(&told, &cpal::Error::new(cpal::ErrorKind::BackendError));
+        super::report_stream_error(&told, &cpal::Error::new(cpal::ErrorKind::Xrun));
+        assert_eq!(
+            *told.0.lock().unwrap(),
+            vec![StreamErrorKind::Other, StreamErrorKind::Xrun]
+        );
+    }
+
     #[test]
     fn only_xrun_is_an_xrun_and_unknown_errors_are_other() {
         assert_eq!(classify(cpal::ErrorKind::Xrun), StreamErrorKind::Xrun);

@@ -157,7 +157,7 @@ enum DropoutSource {
     /// Source underruns on a player (decoding did not keep up).
     Player(PlayerId),
     /// Xruns reported by an output device.
-    Device(String),
+    Device(fp_engine::bus::BusKey),
 }
 
 /// The count last seen for each place that can drop out, and until when its
@@ -166,24 +166,30 @@ enum DropoutSource {
 struct Dropouts(HashMap<DropoutSource, (u64, f64)>);
 
 impl Dropouts {
-    /// Notes this frame's counts. A place seen for the first time sets the
-    /// baseline: only increases seen from then on raise an alert. A count
-    /// that fell is a new source on the player, which starts again at zero.
+    /// Notes this frame's counts. Counters start at zero, so a place seen
+    /// for the first time with a count above zero has dropped out since the
+    /// last frame we saw (a bus opened mid-session): that raises an alert.
+    /// A count that fell is a new source on the player, which starts again at zero.
     fn observe(&mut self, telemetry: &Telemetry, time: f64) {
         let counts = telemetry
             .players
             .iter()
             .map(|(id, t)| (DropoutSource::Player(*id), t.underruns))
-            .chain(telemetry.buses.iter().map(|b| {
-                (
-                    DropoutSource::Device(b.key.device.clone()),
-                    b.counters.xruns,
-                )
-            }));
+            .chain(
+                telemetry
+                    .buses
+                    .iter()
+                    .map(|b| (DropoutSource::Device(b.key.clone()), b.counters.xruns)),
+            );
         for (source, count) in counts {
             match self.0.entry(source) {
                 std::collections::hash_map::Entry::Vacant(v) => {
-                    v.insert((count, f64::NEG_INFINITY));
+                    let until = if count > 0 {
+                        time + NOTICE_SECS
+                    } else {
+                        f64::NEG_INFINITY
+                    };
+                    v.insert((count, until));
                 }
                 std::collections::hash_map::Entry::Occupied(mut o) => {
                     let (seen, until) = o.get_mut();
@@ -218,7 +224,7 @@ impl Dropouts {
                 DropoutSource::Device(device) => Some(t.tr_args(
                     "alert-xruns",
                     &[
-                        ("device", device.clone().into()),
+                        ("device", device.device.clone().into()),
                         ("count", (*count).into()),
                     ],
                 )),

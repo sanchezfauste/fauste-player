@@ -17,65 +17,83 @@ use fp_model::{
 };
 
 use crate::bus::BusKey;
-use crate::engine::{BusStatus, CartTelemetry, Engine, PlayerTelemetry};
+use crate::engine::{BusCounters, BusStatus, CartTelemetry, Engine, PlayerTelemetry};
 use crate::meter::MeterState;
 pub use crate::reporting::REPORT_WINDOW;
 use crate::reporting::{Increase, Watch};
 
-/// A counter of the real-time side that the conductor watches (audit A8).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Counted {
-    Xruns(BusKey),
-    StreamErrors(BusKey),
-    LockMisses(BusKey),
-    Leaked(BusKey),
-    DroppedEvents(BusKey),
-    Misrouted(BusKey),
-    Underruns(PlayerId),
+/// The counters of one bus that the conductor watches (audit A8).
+#[derive(Debug, Clone, Copy)]
+enum BusCounter {
+    Xruns,
+    StreamErrors,
+    LockMisses,
+    Leaked,
+    DroppedEvents,
+    Misrouted,
 }
 
-fn log_increase(counted: &Counted, Increase { new, total }: Increase) {
-    match counted {
-        Counted::Xruns(bus) => {
-            tracing::warn!(
-                ?bus,
-                new,
-                total,
-                "output xruns: the device missed a deadline"
-            );
+const BUS_COUNTERS: [BusCounter; 6] = [
+    BusCounter::Xruns,
+    BusCounter::StreamErrors,
+    BusCounter::LockMisses,
+    BusCounter::Leaked,
+    BusCounter::DroppedEvents,
+    BusCounter::Misrouted,
+];
+
+impl BusCounter {
+    fn value(self, c: &BusCounters) -> u64 {
+        match self {
+            Self::Xruns => c.xruns,
+            Self::StreamErrors => c.stream_errors,
+            Self::LockMisses => c.lock_misses,
+            Self::Leaked => c.leaked,
+            Self::DroppedEvents => c.dropped_events,
+            Self::Misrouted => c.misrouted,
         }
-        Counted::StreamErrors(bus) => {
-            tracing::warn!(?bus, new, total, "stream error reported by the backend");
-        }
-        Counted::LockMisses(bus) => {
-            tracing::warn!(
-                ?bus,
-                new,
-                total,
-                "blocks output as silence: the mixer was busy"
-            );
-        }
-        Counted::Leaked(bus) => {
-            tracing::error!(?bus, new, total, "items leaked by the real-time thread");
-        }
-        Counted::DroppedEvents(bus) => {
-            tracing::warn!(?bus, new, total, "events dropped by the real-time thread");
-        }
-        Counted::Misrouted(bus) => {
-            tracing::warn!(
-                ?bus,
-                new,
-                total,
-                "blocks misrouted: the channels did not fit the stream"
-            );
-        }
-        Counted::Underruns(player) => {
-            tracing::warn!(
-                ?player,
-                new,
-                total,
-                "source underruns: decoding did not keep up"
-            );
+    }
+
+    fn log(self, bus: &BusKey, Increase { new, total }: Increase) {
+        match self {
+            Self::Xruns => {
+                tracing::warn!(
+                    ?bus,
+                    new,
+                    total,
+                    "output xruns: the device missed a deadline"
+                );
+            }
+            Self::StreamErrors => {
+                tracing::warn!(
+                    ?bus,
+                    new,
+                    total,
+                    "unclassified stream errors reported by the backend"
+                );
+            }
+            Self::LockMisses => {
+                tracing::warn!(
+                    ?bus,
+                    new,
+                    total,
+                    "blocks output as silence: the mixer was busy"
+                );
+            }
+            Self::Leaked => {
+                tracing::error!(?bus, new, total, "items leaked by the real-time thread");
+            }
+            Self::DroppedEvents => {
+                tracing::warn!(?bus, new, total, "events dropped by the real-time thread");
+            }
+            Self::Misrouted => {
+                tracing::warn!(
+                    ?bus,
+                    new,
+                    total,
+                    "blocks misrouted: the channels did not fit the stream"
+                );
+            }
         }
     }
 }
@@ -129,7 +147,8 @@ pub struct Conductor {
     /// restarts the maximum, even of the same entry.
     started: Vec<PlayerId>,
     /// The counters of the real-time side, for the log (audit A8).
-    watches: HashMap<Counted, Watch>,
+    bus_watches: HashMap<BusKey, [Watch; 6]>,
+    underrun_watches: HashMap<PlayerId, Watch>,
 }
 
 /// The UI's side of the conductor.
@@ -238,7 +257,8 @@ impl Conductor {
             metered_at: None,
             metered_entries: HashMap::new(),
             started: Vec::new(),
-            watches: HashMap::new(),
+            bus_watches: HashMap::new(),
+            underrun_watches: HashMap::new(),
         };
         let handle = ConductorHandle {
             commands: tx,
@@ -388,34 +408,28 @@ impl Conductor {
         players: &[(PlayerId, PlayerTelemetry)],
         now: Instant,
     ) {
-        let mut readings: Vec<(Counted, u64)> = Vec::new();
+        self.bus_watches
+            .retain(|key, _| buses.iter().any(|b| b.key == *key));
         for b in buses {
-            let c = b.counters;
-            let key = || b.key.clone();
-            readings.extend([
-                (Counted::Xruns(key()), c.xruns),
-                (Counted::StreamErrors(key()), c.stream_errors),
-                (Counted::LockMisses(key()), c.lock_misses),
-                (Counted::Leaked(key()), c.leaked),
-                (Counted::DroppedEvents(key()), c.dropped_events),
-                (Counted::Misrouted(key()), c.misrouted),
-            ]);
+            if !self.bus_watches.contains_key(&b.key) {
+                self.bus_watches
+                    .insert(b.key.clone(), std::array::from_fn(|_| Watch::default()));
+            }
+            let Some(watches) = self.bus_watches.get_mut(&b.key) else {
+                continue;
+            };
+            for (counter, watch) in BUS_COUNTERS.iter().zip(watches.iter_mut()) {
+                if let Some(increase) = watch.observe(counter.value(&b.counters), now) {
+                    counter.log(&b.key, increase);
+                }
+            }
         }
-        readings.extend(
-            players
-                .iter()
-                .map(|(id, t)| (Counted::Underruns(*id), t.underruns)),
-        );
-        self.watches
-            .retain(|counted, _| readings.iter().any(|(c, _)| c == counted));
-        for (counted, value) in readings {
-            let increase = self
-                .watches
-                .entry(counted.clone())
-                .or_default()
-                .observe(value, now);
-            if let Some(increase) = increase {
-                log_increase(&counted, increase);
+        self.underrun_watches
+            .retain(|id, _| players.iter().any(|(p, _)| p == id));
+        for (id, t) in players {
+            let watch = self.underrun_watches.entry(*id).or_default();
+            if let Some(Increase { new, total }) = watch.observe(t.underruns, now) {
+                tracing::warn!(player = ?id, new, total, "source underruns: decoding did not keep up");
             }
         }
     }
