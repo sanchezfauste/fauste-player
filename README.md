@@ -10,6 +10,8 @@ by side, each with its own playlists, transport and outputs, with
 sample-accurate overlapping mixes, a separate pre-listen (CUE) output, and an
 audio engine that the interface can never block.
 
+**[Website](https://sanchezfauste.com/fauste-player/)** · **[User guide](https://sanchezfauste.com/fauste-player/guide/)**
+
 ![Main screen](docs/images/main-screen.png)
 
 ## Contents
@@ -335,7 +337,8 @@ See [Release process](docs/technical/release-process.md).
 
 ## Documentation
 
-- [User guide](docs/user/README.md)
+- [Website](https://sanchezfauste.com/fauste-player/) and the [user guide online](https://sanchezfauste.com/fauste-player/guide/)
+- [User guide](docs/user/README.md) (the source of the online guide)
 - [Technical documentation](docs/technical/README.md)
 - [Design spec](docs/superpowers/specs/2026-09-25-fauste-player-design.md) and [implementation plans](docs/superpowers/plans)
 - [Changelog](CHANGELOG.md)

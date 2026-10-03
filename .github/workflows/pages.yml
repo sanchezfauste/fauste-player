@@ -1,0 +1,69 @@
+name: pages
+
+# Builds the website (the landing page in site/ and the user guide in
+# docs/user as an mdBook) and deploys it to GitHub Pages. The landing page's
+# download links are filled from the latest release.
+#   - push to master touching the site or the guide: build and deploy;
+#   - pull requests touching them: build and check links only;
+#   - release-please calls this workflow after its release build, because
+#     releases created with GITHUB_TOKEN trigger no other workflow, so the
+#     links point at the new release;
+#   - workflow_dispatch: a manual rebuild.
+# One-time setup: Settings → Pages → Source: GitHub Actions.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - docs/user/**
+      - docs/images/**
+      - docs/book.toml
+      - site/**
+      - scripts/site/**
+      - .github/workflows/pages.yml
+  pull_request:
+    paths:
+      - docs/user/**
+      - docs/images/**
+      - docs/book.toml
+      - site/**
+      - scripts/site/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the site
+        run: scripts/site/build.sh _site
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Check links
+        run: scripts/site/check-links.sh _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -82,6 +82,21 @@ Releases created with `GITHUB_TOKEN` do not trigger other workflows, so the
 build runs as a job of the release-please workflow, not on a
 `release: published` event.
 
+## The website
+
+`pages.yml` builds the website, the landing page in `site/` plus the user
+guide (`docs/user`, an mdBook), and deploys it to GitHub Pages at
+<https://sanchezfauste.com/fauste-player/>, the guide under `/guide/`. Its
+download links are filled from the latest release by
+`scripts/site/build.sh`, so the site is rebuilt on every release: the
+release-please workflow calls `pages.yml` in a `site` job after
+`binaries`. It also runs when `master` changes the guide, the site or the
+scripts, and by hand. Pull requests touching those paths build the site and
+run `scripts/site/check-links.sh` without deploying.
+
+One-time step for the maintainer: **Settings → Pages → Source: GitHub
+Actions**.
+
 ## Rebuilding the assets of a release
 
 Run **Actions → release-build → Run workflow** with the tag (for example

@@ -61,6 +61,8 @@ FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music di
 scripts/package-release.sh <target>           # release archive for one target
 scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows: windows.sh, macOS: macos.sh)
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
+scripts/site/build.sh [out]                   # website: landing page + mdBook guide (default target/site; needs gh or FAUSTE_RELEASE_JSON for the download links)
+scripts/site/check-links.sh <out>             # dead links in the built site
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test real_music -- --ignored   # real-music corpus (local only)
 cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
@@ -165,7 +167,8 @@ hand: release-please writes it from the commits.
 | `docs/user`, `docs/technical` | User and technical documentation. Keep them in sync with behaviour. |
 | `vendor/opus-decoder` | A patched copy of `opus-decoder` (a real FFT), used through `[patch.crates-io]`; excluded from the workspace. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
-| `.github/workflows` | CI, release-please, release builds and packages, commit checks |
+| `site/`, `scripts/site/` | The landing page and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
+| `.github/workflows` | CI, release-please, release builds and packages, GitHub Pages, commit checks |
 
 ## Design source
 

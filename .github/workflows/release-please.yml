@@ -44,3 +44,13 @@ jobs:
     secrets: inherit
     permissions:
       contents: write
+
+  # The site's download links follow the latest release, so rebuild it once
+  # the assets are attached.
+  site:
+    needs: binaries
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
