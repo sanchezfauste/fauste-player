@@ -157,6 +157,7 @@ fn a_source_with_until_ends_exactly_there() {
         until_secs: Some(frames_secs(130)),
         looped: false,
         rate: None,
+        fade_out_frames: 0,
     };
     w.load_with(
         SourceKey(1),
@@ -181,6 +182,7 @@ fn a_looped_source_repeats_without_gaps() {
         until_secs: Some(frames_secs(70)),
         looped: true,
         rate: None,
+        fade_out_frames: 0,
     };
     w.load_with(
         SourceKey(1),
@@ -203,6 +205,7 @@ fn a_looped_source_without_until_loops_at_the_end_of_the_file() {
         until_secs: None,
         looped: true,
         rate: None,
+        fade_out_frames: 0,
     };
     w.load_with(SourceKey(1), PathBuf::from("x"), 0.0, p, options);
     let l = lefts(&mut c, 200);
@@ -219,6 +222,7 @@ fn a_zero_length_loop_ends() {
         until_secs: Some(frames_secs(10)),
         looped: true,
         rate: None,
+        fade_out_frames: 0,
     };
     w.load_with(
         SourceKey(1),
@@ -275,4 +279,56 @@ fn the_ready_threshold_is_the_same_time_at_any_source_rate() {
         });
         assert_eq!(shared.is_ready(), ready, "at {rate} Hz");
     }
+}
+
+#[test]
+fn a_bounded_pass_fades_its_last_frames_to_zero() {
+    let (w, _f) = worker(constant_opener(1_000));
+    let (p, mut c) = source_pair(4_000);
+    let shared = p.shared.clone();
+    let options = LoadOptions {
+        until_secs: Some(frames_secs(100)),
+        looped: false,
+        rate: None,
+        fade_out_frames: 10,
+    };
+    w.load_with(SourceKey(1), PathBuf::from("x"), 0.0, p, options);
+    wait_until("eof", || shared.is_eof());
+    let mut got = Vec::new();
+    drain(&mut c, &mut got);
+    let l: Vec<f32> = got.chunks(2).map(|f| f[0]).collect();
+    assert_eq!(l.len(), 100);
+    assert!(l[..90].iter().all(|v| *v == 1.0));
+    assert!(l[90..].windows(2).all(|w| w[1] < w[0]));
+    assert!((l[99] - 0.1).abs() < 1e-6, "last {}", l[99]);
+}
+
+#[test]
+fn a_looped_pass_is_not_faded() {
+    let (w, _f) = worker(constant_opener(1_000));
+    let (p, mut c) = source_pair(4_000);
+    let options = LoadOptions {
+        until_secs: Some(frames_secs(100)),
+        looped: true,
+        rate: None,
+        fade_out_frames: 10,
+    };
+    w.load_with(SourceKey(1), PathBuf::from("x"), 0.0, p, options);
+    let l = lefts(&mut c, 300);
+    assert!(l.iter().all(|v| *v == 1.0));
+}
+
+fn constant_opener(frames: usize) -> SourceOpener {
+    struct Constant(usize, bool);
+    impl SampleSource for Constant {
+        fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
+            if self.1 {
+                return Ok(false);
+            }
+            self.1 = true;
+            out.extend(std::iter::repeat_n(1.0f32, self.0 * 2));
+            Ok(true)
+        }
+    }
+    Arc::new(move |_, _, _| Ok(Box::new(Constant(frames, false))))
 }

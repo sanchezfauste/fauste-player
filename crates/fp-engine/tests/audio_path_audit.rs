@@ -559,7 +559,6 @@ fn a2_a_planned_stop_at_the_end_of_the_file_keeps_the_level_to_the_end() {
 // (`LoadOptions::until_secs`), and the mixer ends the drained source at
 // full level.
 #[test]
-#[ignore = "A3: fails until the fix task"]
 fn a3_a_cart_ends_at_its_cue_out_without_a_step() {
     let backend = OfflineBackend::new();
     let card = backend.add_device("card", 2);
@@ -610,7 +609,6 @@ fn a3_a_cart_ends_at_its_cue_out_without_a_step() {
 // the buffered audio plays out (as spec §4.5 asks) and the source is
 // reported failed once, but its end is cut at full level.
 #[test]
-#[ignore = "A4: fails until the fix task"]
 fn a4_a_source_that_fails_mid_file_ends_without_a_step() {
     let mut r = rig(dc_opener(48_000));
     let start = r.play("fail", 0.0);
@@ -628,7 +626,6 @@ fn a4_a_source_that_fails_mid_file_ends_without_a_step() {
 // A5: fails until the fix task. A source released while it may still be
 // audible is detached at once: a stop while the pause ramp runs.
 #[test]
-#[ignore = "A5: fails until the fix task"]
 fn a5_a_stop_during_the_pause_ramp_does_not_step() {
     let mut r = rig(dc_opener(480_000));
     let start = r.play("dc", 0.0);
@@ -643,7 +640,6 @@ fn a5_a_stop_during_the_pause_ramp_does_not_step() {
 // A5: fails until the fix task. The same with a start the mixer already
 // executed but whose `Started` event the engine has not polled yet.
 #[test]
-#[ignore = "A5: fails until the fix task"]
 fn a5_a_stop_right_after_the_start_does_not_step() {
     let mut r = rig(dc_opener(480_000));
     r.act(EngineAction::StartCurrent {
@@ -825,6 +821,7 @@ fn meter_mixer(slots: usize) -> (Mixer, fp_engine::mixer::MixerHandle) {
         slots,
         MixerConfig {
             volume_smoothing_frames: 1,
+            declick_frames: 0,
             max_commands_per_block: 64,
         },
     );

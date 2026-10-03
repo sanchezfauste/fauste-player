@@ -156,6 +156,10 @@ struct PlayerRuntime {
     cue_paused: bool,
     plan: Plan,
     paused: bool,
+    /// Bus frame at which the last pause ramp ends (on the main bus; the
+    /// player's sources are all on it). Before it, a paused source may still
+    /// be audible.
+    pause_ramp_ends: u64,
     /// Emit `FadeCompleted` once `outgoing` is empty.
     notify_fade: bool,
 }
@@ -764,6 +768,7 @@ impl Engine {
             };
             let mixer = MixerConfig {
                 volume_smoothing_frames: self.settings.frames(t.gain_smoothing_ms).max(1) as u32,
+                declick_frames: self.settings.frames(t.declick_ms) as u32,
                 max_commands_per_block: t.max_commands_per_block,
             };
             let timing = BusTiming {
@@ -898,6 +903,7 @@ impl Engine {
                 cue_paused: false,
                 plan: Plan::None,
                 paused: false,
+                pause_ramp_ends: 0,
                 notify_fade: false,
             },
         );
@@ -1017,19 +1023,40 @@ impl Engine {
 
     /// Fades a playing source out over `frames` from now and stops it; it is
     /// released when the mixer reports it finished. A source that is not
-    /// audible (never started, or paused) is released at once. Returns
-    /// whether the source was queued to fade (and will finish later).
+    /// audible (never started, held, or paused with its pause ramp over) is
+    /// released at once. One whose start was sent (`Requested`: the mixer may
+    /// have started it already) or whose pause ramp may still run is ramped
+    /// like a started one. Returns whether the source was queued to fade (and
+    /// will finish later).
     fn fade_out(&mut self, player: PlayerId, p: Playing, ms: f64, curve: Curve) -> bool {
         let frames = self.frames_on(&p.bus, ms);
-        let paused = !p.cue && self.players.get(&player).is_some_and(|rt| rt.paused);
-        if p.start != StartState::Started || paused || p.held {
+        let now = self.now_frame(&p.bus);
+        // One block of margin: the engine's frame lags the mixer's.
+        let margin = u64::from(self.settings.buffer_frames);
+        let silent_paused = !p.cue
+            && self
+                .players
+                .get(&player)
+                .is_some_and(|rt| rt.paused && now >= rt.pause_ramp_ends.saturating_add(margin));
+        let audible = matches!(p.start, StartState::Started | StartState::Requested);
+        if !audible || silent_paused || p.held {
             self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
             self.release(p);
             return false;
         }
-        let now = self.now_frame(&p.bus);
         let len = u32::try_from(frames).unwrap_or(u32::MAX);
         self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
+        if p.start == StartState::Requested {
+            // `Cancel` drops a start the mixer has not executed yet; keep it,
+            // so the source starts, fades and finishes like any other.
+            self.send(
+                &p.bus,
+                BusCommand::Start {
+                    slot: p.slot,
+                    at_frame: now,
+                },
+            );
+        }
         self.send(
             &p.bus,
             BusCommand::Ramp {
@@ -1310,13 +1337,21 @@ impl Engine {
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
+        let already_paused = rt.paused;
         rt.paused = true;
+        let main = rt.main.0.clone();
         let targets: Vec<(BusKey, usize)> = rt
             .current
             .iter()
             .chain(rt.outgoing.iter())
             .map(|p| (p.bus.clone(), p.slot))
             .collect();
+        if !already_paused {
+            let ends = self.now_frame(&main) + u64::from(self.ramp_frames(&main));
+            if let Some(rt) = self.players.get_mut(&player) {
+                rt.pause_ramp_ends = ends;
+            }
+        }
         for (bus, slot) in targets {
             let ramp = self.ramp_frames(&bus);
             self.send(

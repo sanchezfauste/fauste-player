@@ -163,6 +163,7 @@ impl Engine {
             until_secs: Some(request.until_secs).filter(|u| u.is_finite()),
             looped: request.looped,
             rate: Some(self.rate_of(&bus_key)),
+            fade_out_frames: self.frames_on(&bus_key, self.settings.tuning.declick_ms),
         };
         if let Some(c) = self.cartwall.as_ref() {
             c.worker.load_with(

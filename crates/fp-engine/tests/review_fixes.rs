@@ -302,9 +302,17 @@ fn a_failing_current_source_plays_its_buffer_before_reporting() {
     r.settle();
     r.run(30);
     let heard = r.channel(0);
+    // The buffer plays to its end, the last de-click length ramped to zero
+    // (A4): the last buffered frame is heard, attenuated.
     assert!(
-        heard.contains(&109_599.0),
-        "the last buffered frame must be heard"
+        heard.contains(&100_000.0),
+        "the buffered audio must be heard"
+    );
+    let last = heard.iter().rposition(|v| *v != 0.0).unwrap();
+    assert!(
+        heard[last] > 0.0 && heard[last] < 109_599.0 && heard[last] > 100.0,
+        "the last buffered frame must be heard, ramped: {}",
+        heard[last]
     );
     assert!(r.events.contains(&EngineEvent::SourceFailed {
         player: P,

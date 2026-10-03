@@ -23,6 +23,7 @@ const CONFIG: StreamConfig = StreamConfig {
 };
 const MIXER: MixerConfig = MixerConfig {
     volume_smoothing_frames: 1,
+    declick_frames: 0,
     max_commands_per_block: 64,
 };
 const TIMING: BusTiming = BusTiming {

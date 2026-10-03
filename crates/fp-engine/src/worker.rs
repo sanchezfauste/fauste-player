@@ -116,6 +116,11 @@ pub struct LoadOptions {
     /// The rate to produce, that of the bus the source plays on; `None` is
     /// the rate the worker was spawned with.
     pub rate: Option<u32>,
+    /// Frames (at the produced rate) before `until_secs` over which a
+    /// pass that ends there, and does not loop, fades linearly to zero, so
+    /// the cut is not a step. 0 is no fade. A looped source keeps its
+    /// splice.
+    pub fade_out_frames: u64,
 }
 
 pub enum WorkerCommand {
@@ -149,6 +154,8 @@ struct Job {
     /// Frames per pass when bounded by `until`.
     limit_frames: Option<u64>,
     looped: bool,
+    /// Frames of the de-click fade before `limit_frames` (see `LoadOptions`).
+    fade_frames: u64,
     /// Frames taken from the source in the current pass.
     pass_frames: u64,
     /// Output rate of this source.
@@ -287,6 +294,11 @@ fn run(
                         done: false,
                         limit_frames,
                         looped: options.looped,
+                        fade_frames: if options.looped {
+                            0
+                        } else {
+                            options.fade_out_frames
+                        },
                         pass_frames: 0,
                         rate,
                     });
@@ -318,6 +330,27 @@ fn run(
                     key: job.key,
                     error,
                 });
+            }
+        }
+    }
+}
+
+/// Fades the frames of `job.pending` that lie in the last `fade_frames`
+/// before `limit` linearly to zero (the pass ends at `limit`).
+fn fade_to_limit(job: &mut Job, limit: u64) {
+    let fade = job.fade_frames;
+    let first = job.pass_frames;
+    if fade == 0
+        || first.saturating_add((job.pending.len() / 2) as u64) <= limit.saturating_sub(fade)
+    {
+        return;
+    }
+    for (i, pair) in job.pending.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+        let left = limit.saturating_sub(first + i as u64);
+        if left < fade {
+            let gain = left as f32 / fade as f32;
+            for sample in pair {
+                *sample *= gain;
             }
         }
     }
@@ -359,6 +392,7 @@ fn step(job: &mut Job, opener: &SourceOpener, ready_frames: usize) -> Result<(),
                 job.pending
                     .truncate(usize::try_from(room).unwrap_or(usize::MAX) * 2);
             }
+            fade_to_limit(job, limit);
         }
         job.pass_frames += (job.pending.len() / 2) as u64;
         if job.pending.is_empty() && (at_limit || !more) {

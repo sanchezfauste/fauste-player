@@ -209,6 +209,9 @@ impl StreamErrorSink for BusShared {
 pub struct MixerConfig {
     /// Frames over which a volume change is smoothed.
     pub volume_smoothing_frames: u32,
+    /// The de-click length: a failed source whose buffer holds no more than
+    /// this many frames ramps to zero over what is left. 0 is no ramp.
+    pub declick_frames: u32,
     /// Maximum commands applied per block.
     pub max_commands_per_block: usize,
 }
@@ -241,6 +244,8 @@ pub struct Slot {
     pause: Ramp,
     pausing: bool,
     paused: bool,
+    /// The failed-source ramp to silence was started (once per source).
+    fail_ramped: bool,
     finished: bool,
     /// This block: every frame rendered at gain exactly 1.0.
     block_unity: bool,
@@ -365,6 +370,7 @@ impl Mixer {
                         pause: Ramp::hold(1.0),
                         pausing: false,
                         paused: false,
+                        fail_ramped: false,
                         finished: false,
                         block_unity: false,
                         block_audible: false,
@@ -531,6 +537,7 @@ impl Mixer {
                 volume_step,
                 &mut events,
                 meter,
+                self.config.declick_frames,
             );
             peak_l = peak_l.max(l);
             peak_r = peak_r.max(r);
@@ -650,6 +657,7 @@ fn render_slot(
     volume_step: f32,
     events: &mut [Option<BusEvent>; 2],
     meter: MeterMode,
+    declick_frames: u32,
 ) -> (f32, f32) {
     if slot.ppm_charge != meter.charge {
         slot.ppm_charge = meter.charge;
@@ -681,6 +689,15 @@ fn render_slot(
             _ => return (0.0, 0.0),
         }
     }
+    // A stop on a paused slot (the player was stopped while paused, and the
+    // pause ramp ran out first): nothing is audible, end it at the stop frame.
+    if slot.paused
+        && let Some(stop) = slot.stop_at
+        && stop < block_end
+    {
+        finish(slot, index, stop.max(block_start), events);
+        return (0.0, 0.0);
+    }
     let target_volume = slot.volume.load().clamp(0.0, 1.0);
     // A pair that does not fit the stream is consumed silently (never written
     // into another channel or frame); the caller counts it.
@@ -695,6 +712,7 @@ fn render_slot(
     let (mut sum_l, mut sum_r, mut k_l, mut k_r) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
     let (mut abs_l, mut abs_r) = (0.0f64, 0.0f64);
     let mut measured = 0u64;
+    let declick = u64::from(declick_frames);
     while f < frames && !slot.paused {
         let abs = block_start + f as u64;
         if slot.stop_at.is_some_and(|stop| abs >= stop) {
@@ -719,6 +737,22 @@ fn render_slot(
         }
         if slot.pausing {
             n = n.min((slot.pause.remaining() as usize).max(1));
+        }
+        // A failed source stops pushing: when what is buffered fits the
+        // de-click length, ramp it to zero over exactly those frames, so its
+        // end is not a step. `n` stops where the ramp must begin.
+        if declick > 0 && !slot.fail_ramped && slot.source.shared.is_failed() {
+            let left = slot.source.buffered_frames() as u64;
+            if left <= declick {
+                slot.fade.retarget(
+                    0.0,
+                    u32::try_from(left.max(1)).unwrap_or(u32::MAX),
+                    Curve::Linear,
+                );
+                slot.fail_ramped = true;
+            } else {
+                n = n.min(usize::try_from(left - declick).unwrap_or(usize::MAX));
+            }
         }
         let Some(buf) = chunk.get_mut(..n * SOURCE_CHANNELS) else {
             break;
@@ -900,6 +934,7 @@ mod tests {
     fn volume_smoothing_keeps_its_duration_when_the_rate_changes() {
         let config = super::MixerConfig {
             volume_smoothing_frames: 480, // 10 ms at 48 kHz
+            declick_frames: 0,
             max_commands_per_block: 8,
         };
         let (mut mixer, _handle) = super::Mixer::new(1, config);
@@ -912,6 +947,7 @@ mod tests {
         // Back and forth between unrelated rates: no drift.
         let config = super::MixerConfig {
             volume_smoothing_frames: 500,
+            declick_frames: 0,
             max_commands_per_block: 8,
         };
         let (mut mixer, _handle) = super::Mixer::new(1, config);

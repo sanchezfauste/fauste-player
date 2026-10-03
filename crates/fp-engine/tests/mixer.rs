@@ -24,6 +24,7 @@ static ALLOCATOR: AllocDisabler = AllocDisabler;
 
 const CONFIG: MixerConfig = MixerConfig {
     volume_smoothing_frames: 1,
+    declick_frames: 0,
     max_commands_per_block: 64,
 };
 
@@ -381,6 +382,7 @@ fn pause_fades_out_holds_the_position_and_resume_continues_from_it() {
 fn volume_changes_are_smoothed() {
     let config = MixerConfig {
         volume_smoothing_frames: 4,
+        declick_frames: 0,
         max_commands_per_block: 64,
     };
     let (mut m, mut h) = Mixer::new(2, config);
@@ -473,6 +475,7 @@ fn a_full_retired_queue_never_frees_memory_on_the_rt_thread() {
 fn a_command_flood_is_spread_over_several_blocks() {
     let config = MixerConfig {
         volume_smoothing_frames: 1,
+        declick_frames: 0,
         max_commands_per_block: 4,
     };
     let (mut m, mut h) = Mixer::new(2, config);
@@ -674,4 +677,104 @@ fn the_din_ppm_has_a_5_ms_integration_time() {
 fn a_digital_peak_meter_shows_even_the_shortest_burst() {
     let r = burst_reading_db(fp_model::MeterBallistics::DigitalPeak, 0.5);
     assert!(r.abs() < 0.1, "{r}");
+}
+
+fn constant_source(frames: usize) -> (SourceProducer, fp_engine::source::SourceConsumer) {
+    let (mut p, c) = source_pair(frames.max(1));
+    assert_eq!(p.push(&vec![1.0f32; frames * 2]), frames * 2);
+    (p, c)
+}
+
+#[test]
+fn a_failed_source_ramps_to_zero_over_its_last_declick_frames() {
+    let config = MixerConfig {
+        declick_frames: 8,
+        ..CONFIG
+    };
+    let (mut m, mut h) = Mixer::new(2, config);
+    let (p, c) = constant_source(20);
+    p.shared.failed.store(true, Ordering::Release);
+    attach(&mut h, 0, c, 0);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    let l = left(&render(&mut m, 24, 2));
+    assert!(l[..12].iter().all(|v| *v == 1.0), "{l:?}");
+    let ramp = &l[12..20];
+    assert!(ramp.windows(2).all(|w| w[1] < w[0]), "{ramp:?}");
+    assert!(ramp[7] > 0.0 && ramp[7] <= 0.126, "{ramp:?}");
+    assert!(l[20..].iter().all(|v| *v == 0.0));
+    assert_eq!(
+        events(&mut h).last(),
+        Some(&BusEvent::Finished { slot: 0, frame: 20 })
+    );
+}
+
+#[test]
+fn a_failed_source_shorter_than_the_declick_ramps_over_what_remains() {
+    let config = MixerConfig {
+        declick_frames: 8,
+        ..CONFIG
+    };
+    let (mut m, mut h) = Mixer::new(2, config);
+    let (p, c) = constant_source(4);
+    p.shared.failed.store(true, Ordering::Release);
+    attach(&mut h, 0, c, 0);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    let l = left(&render(&mut m, 8, 2));
+    assert_eq!(l[0], 1.0);
+    assert!(
+        l[1] < l[0] && l[2] < l[1] && l[3] < l[2] && l[3] > 0.0,
+        "{l:?}"
+    );
+}
+
+#[test]
+fn a_stop_on_a_paused_slot_finishes_it() {
+    let (mut m, mut h) = mixer(2);
+    let (_p, c) = constant_source(64);
+    attach(&mut h, 0, c, 0);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::Pause {
+            slot: 0,
+            ramp_frames: 4,
+        },
+    );
+    render(&mut m, 8, 2);
+    assert!(
+        events(&mut h)
+            .iter()
+            .all(|e| !matches!(e, BusEvent::Finished { .. }))
+    );
+    send(
+        &mut h,
+        BusCommand::StopAt {
+            slot: 0,
+            at_frame: 10,
+        },
+    );
+    let out = render(&mut m, 8, 2);
+    assert!(out.iter().all(|s| *s == 0.0));
+    assert_eq!(
+        events(&mut h),
+        vec![BusEvent::Finished { slot: 0, frame: 10 }]
+    );
 }
