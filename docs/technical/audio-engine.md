@@ -266,7 +266,8 @@ plus the mixer's DSD mode.
   the rate changes under sources, `follow_forced_rate` opens every player
   and cart source on the bus again at its position at the new rate, as a
   seek does (a looped cart from its cue-in); sources fading out and test
-  tones are cut. If nothing opens, the bus is `Lost` and the watchdog falls
+  tones are cut, a cut fade sending what its end would (`ReachedEnd` for a
+  fade stop, `FadeCompleted` for the last one of a crossfade). If nothing opens, the bus is `Lost` and the watchdog falls
   back as below. A PCM start over a tail or a switch waits until it ends
   (`before_start_on`).
 - **The two mix policies** (`outputs.dsd_mix`), applied by `before_start_on`

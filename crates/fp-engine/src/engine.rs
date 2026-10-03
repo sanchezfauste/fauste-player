@@ -753,9 +753,23 @@ impl Engine {
                 .into_iter()
                 .partition(on_bus);
             rt.outgoing = kept;
-            for p in gone {
+            // Cut fades end as a finished fade does (`Finished` on an
+            // outgoing source): `ReachedEnd` for a fade stop, and
+            // `FadeCompleted` once the last one of a crossfade is gone.
+            let last = gone.len();
+            for (k, p) in gone.into_iter().enumerate() {
+                let report = p.report_end.then_some(p.entry);
+                let done = k + 1 == last
+                    && self.players.get_mut(&player).is_some_and(|rt| {
+                        rt.outgoing.is_empty() && std::mem::take(&mut rt.notify_fade)
+                    });
                 self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
                 self.release(p);
+                if let Some(entry) = report {
+                    self.events.push(EngineEvent::ReachedEnd { player, entry });
+                } else if done {
+                    self.events.push(EngineEvent::FadeCompleted { player });
+                }
             }
             for role in [Role::Current, Role::Preload, Role::Cue] {
                 let Some(rt) = self.players.get_mut(&player) else {

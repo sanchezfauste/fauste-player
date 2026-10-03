@@ -90,8 +90,10 @@ the DSD track, because many converters take native DSD at rates they cannot
 play as PCM (no converter plays PCM at the rate DSD512 runs at). A track
 that goes on as PCM keeps the DSD stream's rate when the device takes it
 as PCM, and otherwise continues at the earlier rate from where it was,
-like everything else playing on that device. The device is never left
-silent.
+like everything else playing on that device; a fade in progress there
+ends at once. The device never stays on a rate it refuses: if no rate opens
+(for example, the device was unplugged at that moment), the output is lost
+until the automatic retry reopens it at the earlier rate.
 
 Otherwise the track is converted to PCM and the log says why (for example
 "something else plays on the device" or "the device refused 705600 Hz").

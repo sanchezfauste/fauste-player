@@ -834,6 +834,56 @@ fn a_cart_over_native_dsd_on_a_refused_word_rate_plays_from_its_start() {
     assert!(!r.engine.telemetry(P).dsd);
 }
 
+/// P plays native DSD128 on `max_pcm_rig`, then is switched to PCM: the
+/// bus holds for the DSD silence, before the reopen at another rate.
+fn switching_native_rig() -> Rig {
+    let mut r = max_pcm_rig();
+    let path = dsd128_file(&r, "a.dsf", usize::MAX);
+    r.start(P, request(1, path, dsd128()));
+    r.run_raw(WORD_RATE_128 as usize / 10);
+    assert!(r.engine.telemetry(P).dsd);
+    r.act(EngineAction::LeaveDsd { player: P });
+    r.events();
+    r
+}
+
+#[test]
+fn a_fade_stop_cut_by_a_forced_rate_change_still_reaches_its_end() {
+    let mut r = switching_native_rig();
+    r.act(EngineAction::FadeOutAndStop {
+        player: P,
+        fade_ms: 2_000,
+    });
+    r.run_raw(WORD_RATE_128 as usize / 20);
+    assert_eq!(r.rate(), CONFIGURED_RATE, "reopened at another rate");
+    assert!(
+        r.events().contains(&EngineEvent::ReachedEnd {
+            player: P,
+            entry: EntryId(1)
+        }),
+        "the model stops the player"
+    );
+}
+
+#[test]
+fn a_crossfade_cut_by_a_forced_rate_change_still_completes() {
+    let mut r = switching_native_rig();
+    let wav = indexed_wav(r.dir.path(), "b.wav", CONFIGURED_RATE, 2, 48_000 * 3);
+    r.act(EngineAction::Crossfade {
+        player: P,
+        request: request(2, wav, pcm16(CONFIGURED_RATE)),
+        fade_ms: 2_000,
+    });
+    r.settle();
+    r.run_raw(WORD_RATE_128 as usize / 20);
+    assert_eq!(r.rate(), CONFIGURED_RATE, "reopened at another rate");
+    assert!(
+        r.events()
+            .contains(&EngineEvent::FadeCompleted { player: P }),
+        "the model leaves the crossfade"
+    );
+}
+
 #[test]
 fn a_device_back_without_native_dsd_or_its_word_rate_plays_pcm() {
     let mut r = max_pcm_rig();
