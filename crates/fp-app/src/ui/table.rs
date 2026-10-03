@@ -504,9 +504,9 @@ pub(crate) fn track_table(
                 response.clone().on_hover_ui(|ui| {
                     track_tip(ui, scene, track);
                 });
-                // O37: a double-click on the playing row does nothing; the menu
-                // item is the deliberate way to set it as next.
-                if response.double_clicked() && status != RowStatus::Current {
+                // A double-click sets the row as next, the playing one included
+                // (it then plays once more, rule 27a).
+                if response.double_clicked() {
                     scene.ctl.send(Command::SetNext(player, entry.id));
                 }
                 if response.drag_started() {

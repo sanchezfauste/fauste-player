@@ -143,7 +143,7 @@ A player has:
 ### 3.2 Rules
 
 1. **Entry colours.** In each player's table, that player's current entry is shown red and its next green; an entry on air on another player is marked with that player's number ("P2"), not highlighted. Entries that player has played are dimmed. "Played" is kept per entry and per player, and persists.
-2. **Double-click** on an entry sets `next` to that entry. A double-click on the player's own current entry does nothing (so a stray click never schedules a replay); Set as next from the context menu, the CUE window's Load as next and the remote API accept it (feedback spec O37): it plays once more (rule 27a). It is allowed while `stop_after_current` is on, and it does **not** clear that flag.
+2. **Double-click** on an entry sets `next` to that entry. This includes the player's own current entry (feedback spec O37, and the maintainer's later decision that a double-click acts on it too): it plays once more (rule 27a). Set as next from the context menu, the CUE window's Set as next and the remote API accept it as well. It is allowed while `stop_after_current` is on, and it does **not** clear that flag.
 3. **Play while Stopped.** If `next` exists, it becomes `current` and starts; `next` becomes the entry after it. If there is no `next`, nothing happens.
 4. **Play while Paused** resumes.
 5. **Play while Playing.** If `next` exists and no fade is running:
