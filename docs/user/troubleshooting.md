@@ -42,11 +42,12 @@
 ### DSD
 
 - **A DSD track plays converted although the device is set to DoP or native
-  DSD.** The log says why ("DSD converted to PCM" and the reason). The usual
-  causes are the player's volume not at 100 %, something else playing on the
-  device, a track that has not been analysed yet, more than two channels, or
-  a device that refuses the rate (DoP needs the DSD rate divided by 16, for
-  example 176.4 kHz for DSD64) or has no 24- or 32-bit format.
+  DSD.** The log says why ("DSD converted to PCM" and the reason) for these
+  causes: the player's volume not at 100 %, something else playing on the
+  device, more than two channels, or a device that refuses the rate (DoP needs
+  the DSD rate divided by 16, for example 176.4 kHz for DSD64) or has no 24-
+  or 32-bit format. A track that has not been analysed yet converts silently,
+  with no log line: analyse it (Settings → Analysis) and play it again.
 - **Only the first track of a DSD album goes out as DSD.** That is the
   default mixing setting: the tracks the player starts by itself play
   converted. Choose **Keep DSD and mute the other sources** in Settings →

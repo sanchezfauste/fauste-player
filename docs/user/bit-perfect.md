@@ -102,14 +102,16 @@ While DSD goes out unchanged:
 
 **Silence at the edges.** Every start, end and switch to PCM sends DSD
 silence first (200 ms by default), so that the converter locks without a
-click. A track therefore starts that much later, and a switch to PCM leaves a
+click. The exception is a DSD track that continues a stream of the same kind
+and DSD rate whose silence is still running: the converter is still locked, so
+it starts with no extra silence. A track therefore starts that much later, and a switch to PCM leaves a
 gap of that length. It is `outputs.dsd_silence_ms` in the configuration file
 (0 to 2000).
 
 **When another source needs the device.** **When another source needs a DSD
-output** in Settings → Audio outputs chooses what happens when the player
-moves its fader, or when another player, a cart or a test tone starts on
-the same device:
+output** in Settings → Audio outputs chooses what happens when another
+player, a cart or a test tone starts on the same device (moving the player's
+own fader is the exception: it always switches the track to PCM):
 - **Continue the DSD track as PCM** (the default). The stream switches to PCM
   after the DSD silence, and the track goes on, converted, from where it was.
   The same happens to the track that follows by itself (see below).
@@ -142,10 +144,10 @@ its Main device unchanged. All of these must hold:
 - the device is bit-perfect and open with exclusive access;
 - the device runs at the track's sample rate;
 - the track is lossless integer PCM (WAV, AIFF, FLAC, ALAC, WavPack or
-  Monkey's Audio), mono or stereo, and at most 24-bit. DSD is converted, so
-  it never lights BP; when it goes out unchanged (see [DSD](#dsd)) the badge
-  reads **DSD** instead, and the device format holds its sample size (a 24-bit file on a
-  16-bit device is not bit-perfect);
+  Monkey's Audio), mono or stereo, and at most 24-bit, and the device
+  format holds its sample size (a 24-bit file on a 16-bit device is not
+  bit-perfect). DSD is converted, so it never lights BP; when it goes out
+  unchanged (see [DSD](#dsd)) the badge reads **DSD** instead;
 - the track has been analysed, since that is how its rate and sample size
   are known. Tracks an earlier version analysed get their format once
   analysed again (the start-up notice, or Settings → Analysis), or as soon
