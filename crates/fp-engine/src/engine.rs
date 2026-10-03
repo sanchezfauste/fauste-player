@@ -110,6 +110,8 @@ struct Playing {
     start_secs: f64,
     shared: Arc<SourceShared>,
     start: StartState,
+    /// The bus frame a `Requested` start was sent for (0: at once).
+    start_frame: u64,
     /// Report `ReachedEnd` when this source finishes (fade stop).
     report_end: bool,
     /// The worker failed after this source started: let the buffered audio
@@ -987,6 +989,7 @@ impl Engine {
             start_secs: request.from_secs,
             shared,
             start: StartState::Idle,
+            start_frame: 0,
             report_end: false,
             failed: false,
             cue,
@@ -1038,7 +1041,13 @@ impl Engine {
                 .players
                 .get(&player)
                 .is_some_and(|rt| rt.paused && now >= rt.pause_ramp_ends.saturating_add(margin));
-        let audible = matches!(p.start, StartState::Started | StartState::Requested);
+        // A start scheduled for a frame still ahead has not been on air:
+        // dropping it is silent, starting it early would be a burst.
+        let audible = match p.start {
+            StartState::Started => true,
+            StartState::Requested => p.start_frame <= now,
+            _ => false,
+        };
         if !audible || silent_paused || p.held {
             self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
             self.release(p);
@@ -1049,6 +1058,7 @@ impl Engine {
         if p.start == StartState::Requested {
             // `Cancel` drops a start the mixer has not executed yet; keep it,
             // so the source starts, fades and finishes like any other.
+            // (A start scheduled for a future frame was released above.)
             self.send(
                 &p.bus,
                 BusCommand::Start {
@@ -1793,6 +1803,7 @@ impl Engine {
                         at,
                     );
                     if let Some(p) = rt.preload.as_mut() {
+                        p.start_frame = at;
                         p.start = if ready {
                             StartState::Requested
                         } else {
@@ -1825,6 +1836,7 @@ impl Engine {
                 && !(p.shared.is_failed() && p.shared.is_drained())
             {
                 p.start = StartState::Requested;
+                p.start_frame = earliest;
                 // A start inside the audio ramps in; the file's first frame is hard.
                 starts.push((
                     p.bus.clone(),
@@ -1969,6 +1981,7 @@ impl Engine {
                 // A next that is not buffered yet starts as soon as it is,
                 // instead of on the frame as silence counted as underruns.
                 let ready = p.shared.is_ready();
+                p.start_frame = at_frame;
                 p.start = if ready {
                     StartState::Requested
                 } else {

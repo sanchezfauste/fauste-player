@@ -283,6 +283,8 @@ pub struct Mixer {
     volume_step: f32,
     /// The volume smoothing as configured, and the rate it was sized for.
     smoothing_base: Option<(u32, u32)>,
+    /// The de-click length at the same base rate as `smoothing_base`.
+    declick_base: u32,
 }
 
 impl Mixer {
@@ -304,6 +306,7 @@ impl Mixer {
             config,
             volume_step,
             smoothing_base: None,
+            declick_base: config.declick_frames,
         };
         (
             mixer,
@@ -493,6 +496,8 @@ impl Mixer {
         let frames = u64::from(base_frames) * u64::from(to_rate) / u64::from(base_rate);
         self.config.volume_smoothing_frames = u32::try_from(frames.max(1)).unwrap_or(u32::MAX);
         self.volume_step = 1.0 / self.config.volume_smoothing_frames as f32;
+        let declick = u64::from(self.declick_base) * u64::from(to_rate) / u64::from(base_rate);
+        self.config.declick_frames = u32::try_from(declick).unwrap_or(u32::MAX);
     }
 
     /// Mixes one block into `out` (interleaved, `channels` per frame).
@@ -956,5 +961,24 @@ mod tests {
             mixer.follow_rate(44_100, 48_000);
         }
         assert_eq!(mixer.config.volume_smoothing_frames, 500);
+    }
+
+    #[test]
+    fn declick_keeps_its_duration_when_the_rate_changes() {
+        let config = super::MixerConfig {
+            volume_smoothing_frames: 480,
+            declick_frames: 240, // 5 ms at 48 kHz
+            max_commands_per_block: 8,
+        };
+        let (mut mixer, _handle) = super::Mixer::new(1, config);
+        mixer.follow_rate(48_000, 96_000);
+        assert_eq!(mixer.config.declick_frames, 480);
+        for _ in 0..3 {
+            mixer.follow_rate(96_000, 44_100);
+            mixer.follow_rate(44_100, 48_000);
+        }
+        assert_eq!(mixer.config.declick_frames, 240);
+        mixer.follow_rate(48_000, 44_100);
+        assert_eq!(mixer.config.declick_frames, 220);
     }
 }
