@@ -538,6 +538,23 @@ fn a2_a_hard_cut_inside_the_file_still_ramps_the_outgoing_source_out() {
     );
 }
 
+// A2 (stop arm): a planned stop at the file's own end keeps the level to the
+// last frame too; a stop inside the file still ramps (the test above).
+#[test]
+fn a2_a_planned_stop_at_the_end_of_the_file_keeps_the_level_to_the_end() {
+    let mut r = rig(dc_opener(48_000)); // 1 s long
+    let start = r.play("dc", 0.0);
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StopAt { at_secs: 1.0 }),
+    });
+    r.run(110);
+    let end = start + 48_000;
+    let tail = &r.heard[end - 480..end];
+    let lowest = tail.iter().copied().fold(f32::MAX, f32::min);
+    assert!(lowest > LEVEL * 0.99, "lowest {lowest} before the end");
+}
+
 // A3: fails until the fix task. A cart's cue-out is cut by the worker
 // (`LoadOptions::until_secs`), and the mixer ends the drained source at
 // full level.

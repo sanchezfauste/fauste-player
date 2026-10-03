@@ -288,6 +288,55 @@ fn a_cut_ramp_is_skipped_when_the_stream_ends_at_the_stop_frame() {
 }
 
 #[test]
+fn a_cut_ramp_tolerates_a_file_running_two_frames_past_the_stop_frame() {
+    // The analysed end can be a frame or two short of the real one.
+    assert_eq!(cut_ramp_out(11, true), vec![1.0; 10]);
+    assert_eq!(cut_ramp_out(12, true), vec![1.0; 10]);
+    // Three frames past the stop frame is a cut inside the audio.
+    assert_eq!(cut_ramp_out(13, true)[9], 0.25);
+}
+
+/// Like `cut_ramp_out`, but the ramp command arrives after its frame (6).
+fn late_cut_ramp_out(buffered: usize) -> Vec<f32> {
+    let (mut m, mut h) = mixer(2);
+    let (mut p, c) = source_pair(32);
+    p.push(&vec![1.0; buffered * 2]);
+    p.shared.eof.store(true, Ordering::Release);
+    attach(&mut h, 0, c, 0);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    let mut out = left(&render(&mut m, 6, 2));
+    send(
+        &mut h,
+        BusCommand::StopAt {
+            slot: 0,
+            at_frame: 10,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::RampOutBeforeCut {
+            slot: 0,
+            frames: 4,
+            at_frame: 3,
+        },
+    );
+    out.extend(left(&render(&mut m, 4, 2)));
+    out
+}
+
+#[test]
+fn a_late_cut_ramp_applies_at_once_unless_the_stream_ends_at_the_stop_frame() {
+    assert_eq!(late_cut_ramp_out(16)[6..], [1.0, 0.75, 0.5, 0.25]);
+    assert_eq!(late_cut_ramp_out(10)[6..], [1.0; 4]);
+}
+
+#[test]
 fn pause_fades_out_holds_the_position_and_resume_continues_from_it() {
     let (mut m, mut h) = mixer(2);
     let (p, c) = counting_source(32, false);

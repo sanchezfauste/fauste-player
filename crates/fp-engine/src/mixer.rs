@@ -213,6 +213,21 @@ pub struct MixerConfig {
     pub max_commands_per_block: usize,
 }
 
+/// Why a fade is pending.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FadeKind {
+    Plain,
+    /// A `RampOutBeforeCut`: skipped when the source ends by its stop frame.
+    Cut,
+}
+
+/// Frames a source's end of stream may lie past its stop frame and still
+/// count as ending there. The stop frame comes from the analysed duration,
+/// which can be a frame short of the real audio, and a resampled source can
+/// gain another frame to rounding. Cutting this few frames at full level is
+/// inaudible.
+const END_TOLERANCE_FRAMES: u64 = 2;
+
 pub struct Slot {
     source: SourceConsumer,
     volume: Arc<AtomicF32>,
@@ -221,9 +236,7 @@ pub struct Slot {
     start_at: Option<u64>,
     started: bool,
     fade: Ramp,
-    pending_fade: Option<(u64, f32, u32, Curve)>,
-    /// The pending fade is a `RampOutBeforeCut`.
-    pending_fade_is_cut: bool,
+    pending_fade: Option<(u64, f32, u32, Curve, FadeKind)>,
     stop_at: Option<u64>,
     pause: Ramp,
     pausing: bool,
@@ -348,7 +361,6 @@ impl Mixer {
                         started: false,
                         fade: Ramp::hold(1.0),
                         pending_fade: None,
-                        pending_fade_is_cut: false,
                         stop_at: None,
                         pause: Ramp::hold(1.0),
                         pausing: false,
@@ -390,8 +402,7 @@ impl Mixer {
                         s.fade.retarget(to, frames, curve);
                         s.pending_fade = None;
                     } else {
-                        s.pending_fade = Some((at_frame, to, frames, curve));
-                        s.pending_fade_is_cut = false;
+                        s.pending_fade = Some((at_frame, to, frames, curve, FadeKind::Plain));
                     }
                 }
             }
@@ -407,8 +418,8 @@ impl Mixer {
                         }
                         s.pending_fade = None;
                     } else {
-                        s.pending_fade = Some((at_frame, 0.0, frames, Curve::Linear));
-                        s.pending_fade_is_cut = true;
+                        s.pending_fade =
+                            Some((at_frame, 0.0, frames, Curve::Linear, FadeKind::Cut));
                     }
                 }
             }
@@ -615,14 +626,16 @@ fn mark_unaltered(slots: &SlotStorage) {
 }
 
 /// True when the slot's source ends (end of stream, everything pushed is
-/// already in the ring) at or before its stop frame, seen from frame `abs`.
+/// already in the ring) at or before its stop frame, seen from frame `abs`,
+/// give or take `END_TOLERANCE_FRAMES`.
 /// Real-time safe: two atomic loads and a ring-occupancy read.
 fn ends_by_stop(slot: &Slot, abs: u64) -> bool {
     let Some(stop) = slot.stop_at else {
         return false;
     };
     // Read eof before the ring: the producer pushes, then sets eof.
-    slot.source.shared.is_eof() && slot.source.buffered_frames() as u64 <= stop.saturating_sub(abs)
+    slot.source.shared.is_eof()
+        && slot.source.buffered_frames() as u64 <= stop.saturating_sub(abs) + END_TOLERANCE_FRAMES
 }
 
 /// Renders one slot into `out`. Returns the (left, right) peaks it produced.
@@ -688,10 +701,10 @@ fn render_slot(
             finish(slot, index, abs, events);
             break;
         }
-        if let Some((at, to, len, curve)) = slot.pending_fade
+        if let Some((at, to, len, curve, kind)) = slot.pending_fade
             && abs >= at
         {
-            if !(slot.pending_fade_is_cut && ends_by_stop(slot, abs)) {
+            if !(kind == FadeKind::Cut && ends_by_stop(slot, abs)) {
                 slot.fade.retarget(to, len, curve);
             }
             slot.pending_fade = None;
