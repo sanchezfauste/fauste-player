@@ -216,7 +216,13 @@ fn hold_all_freezes_every_slot_and_defers_starts_to_the_next_block() {
         },
     );
     render(&mut m, 4); // words 1..=4
-    send(&mut h, BusCommand::HoldAll { until_frame: 8 });
+    send(
+        &mut h,
+        BusCommand::HoldAll {
+            from_frame: 0,
+            until_frame: 8,
+        },
+    );
     send(
         &mut h,
         BusCommand::DsdMode {
@@ -623,7 +629,13 @@ fn a_block_straddling_the_hold_end_is_still_held() {
             at_frame: 0,
         },
     );
-    send(&mut h, BusCommand::HoldAll { until_frame: 6 });
+    send(
+        &mut h,
+        BusCommand::HoldAll {
+            from_frame: 0,
+            until_frame: 6,
+        },
+    );
     render(&mut m, 4); // frames 0..4, held
     render(&mut m, 4); // frames 4..8 start before 6: held
     assert_eq!(p.shared.frames_played(), 0);
@@ -717,7 +729,13 @@ fn the_rest_of_the_renderer_paths_never_allocate() {
             at_frame: 0,
         },
     );
-    send(&mut h, BusCommand::HoldAll { until_frame: 8 });
+    send(
+        &mut h,
+        BusCommand::HoldAll {
+            from_frame: 0,
+            until_frame: 8,
+        },
+    );
     render(&mut m, 8);
     render(&mut m, 8);
     send(
@@ -728,4 +746,84 @@ fn the_rest_of_the_renderer_paths_never_allocate() {
         },
     );
     render(&mut m, 8);
+}
+
+#[test]
+fn a_hold_from_a_later_frame_holds_only_the_blocks_it_overlaps() {
+    let (mut m, mut h) = Mixer::new(4, CONFIG);
+    let (p, c, v) = dsd_source(64, 1.0);
+    attach(&mut h, 0, c, v);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::HoldAll {
+            from_frame: 6,
+            until_frame: 10,
+        },
+    );
+    render(&mut m, 4); // frames 0..4: before the hold
+    assert_eq!(p.shared.frames_played(), 4);
+    render(&mut m, 4); // frames 4..8 reach into it: held
+    render(&mut m, 4); // frames 8..12 start inside it: held
+    assert_eq!(p.shared.frames_played(), 4);
+    render(&mut m, 4);
+    assert_eq!(p.shared.frames_played(), 8);
+}
+
+#[test]
+fn an_empty_hold_holds_only_the_block_straddling_its_frame() {
+    let (mut m, mut h) = Mixer::new(4, CONFIG);
+    let (p, c, v) = dsd_source(64, 1.0);
+    attach(&mut h, 0, c, v);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 6,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::HoldAll {
+            from_frame: 6,
+            until_frame: 6,
+        },
+    );
+    let (q, c, v) = dsd_source(64, 1.0);
+    attach(&mut h, 1, c, v);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 1,
+            at_frame: 0,
+        },
+    );
+    render(&mut m, 4); // frames 0..4: not held
+    assert_eq!(q.shared.frames_played(), 4);
+    events(&mut h);
+    render(&mut m, 4); // frames 4..8 straddle 6: held, the start waits
+    assert!(events(&mut h).is_empty());
+    assert_eq!(q.shared.frames_played(), 4);
+    render(&mut m, 4); // frames 8..12: the start lands on the block
+    assert_eq!(
+        events(&mut h),
+        vec![BusEvent::Started { slot: 0, frame: 8 }]
+    );
+    assert_eq!(p.shared.frames_played(), 4);
+    // A block that begins exactly on the frame is not held.
+    send(
+        &mut h,
+        BusCommand::HoldAll {
+            from_frame: 12,
+            until_frame: 12,
+        },
+    );
+    render(&mut m, 4);
+    assert_eq!(p.shared.frames_played(), 8);
 }

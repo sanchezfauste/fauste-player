@@ -79,11 +79,15 @@ pub enum BusCommand {
     /// ramp already running when the mode begins is frozen where it was and
     /// continues from that level. Neither steps the PCM gain at the switch.
     DsdMode { on: bool, at_frame: u64 },
-    /// No slot consumes, starts or stops in blocks that start before
-    /// `until_frame`: a `Start` or `StopAt` frame inside the hold takes
-    /// effect at the first block after it. The fill still applies. The
-    /// latest command wins, so a `HoldAll` at the current frame ends a hold.
-    HoldAll { until_frame: u64 },
+    /// No slot consumes, starts or stops in a block that overlaps
+    /// `[from_frame, until_frame)`: one that ends after `from_frame` and
+    /// starts before `until_frame`. A `Start` or `StopAt` frame inside the
+    /// hold takes effect at the first block after it. The fill still
+    /// applies. With `from_frame == until_frame` only a block straddling
+    /// that frame is held (so a start on it lands on the block boundary
+    /// where a mode switch at the same frame applies). The latest command
+    /// wins, so a `HoldAll` ending at the current frame ends a hold.
+    HoldAll { from_frame: u64, until_frame: u64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -322,7 +326,9 @@ pub struct Mixer {
     dsd_on: bool,
     /// Pending switches `(at_frame, on)`, ordered by frame, oldest first.
     pending_dsd: [Option<(u64, bool)>; PENDING_DSD],
-    /// Blocks starting before this frame are held (`BusCommand::HoldAll`).
+    /// Blocks overlapping `[hold_from, hold_until)` are held
+    /// (`BusCommand::HoldAll`).
+    hold_from: u64,
     hold_until: u64,
 }
 
@@ -348,6 +354,7 @@ impl Mixer {
             declick_base: config.declick_frames,
             dsd_on: false,
             pending_dsd: [None; PENDING_DSD],
+            hold_from: 0,
             hold_until: 0,
         };
         (
@@ -558,7 +565,13 @@ impl Mixer {
                 }
             }
             BusCommand::DsdMode { on, at_frame } => self.queue_dsd(at_frame, on),
-            BusCommand::HoldAll { until_frame } => self.hold_until = until_frame,
+            BusCommand::HoldAll {
+                from_frame,
+                until_frame,
+            } => {
+                self.hold_from = from_frame;
+                self.hold_until = until_frame;
+            }
             BusCommand::Grow(mut storage) => {
                 if storage.len() >= self.slots.len() {
                     for (new, old) in storage.0.iter_mut().zip(self.slots.0.iter_mut()) {
@@ -618,7 +631,7 @@ impl Mixer {
         let dsd_on = self.dsd_on;
         self.shared.dsd_on.store(dsd_on, Ordering::Release);
         out.fill(if dsd_on { silence_sample() } else { 0.0 });
-        let held = now < self.hold_until;
+        let held = now < self.hold_until && now.saturating_add(frames as u64) > self.hold_from;
 
         let mut peak_l = 0.0f32;
         let mut peak_r = 0.0f32;

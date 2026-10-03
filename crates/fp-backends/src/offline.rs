@@ -29,6 +29,9 @@ struct DeviceState {
     /// `None` is F32.
     sample_format: Option<SampleFormat>,
     native_dsd: bool,
+    /// Opens DoP whatever the sample format, as a backend that does not
+    /// check it would.
+    dop_any_format: bool,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -102,6 +105,12 @@ impl OfflineDevice {
     /// Lets streams on this device carry native DSD.
     pub fn set_native_dsd(&self, native: bool) {
         lock(&self.state).native_dsd = native;
+    }
+
+    /// Opens DoP streams whatever the sample format (default: only 24 or
+    /// 32 bits), so the engine's own check can be tested.
+    pub fn set_dop_any_format(&self, any: bool) {
+        lock(&self.state).dop_any_format = any;
     }
 
     /// How many times a stream was opened, or tried to be, on this device.
@@ -263,7 +272,9 @@ impl AudioBackend for OfflineBackend {
                         "DSD needs exclusive access".to_owned(),
                     ));
                 }
-                if dsd == DsdStream::Dop && !matches!(format, SampleFormat::I24 | SampleFormat::I32)
+                if dsd == DsdStream::Dop
+                    && !state.dop_any_format
+                    && !matches!(format, SampleFormat::I24 | SampleFormat::I32)
                 {
                     return Err(BackendError::Unsupported(
                         "DoP needs a 24- or 32-bit integer format".to_owned(),

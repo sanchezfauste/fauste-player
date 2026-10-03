@@ -116,6 +116,9 @@ pub struct Bus {
     /// Rates this device refused, not asked for again until it comes back
     /// from a loss (it may be another device by then).
     refused_rates: std::collections::HashSet<u32>,
+    /// DSD streams (word rate, kind) this device refused, forgotten with
+    /// `refused_rates` (feedback 2 spec O25).
+    refused_dsd: std::collections::HashSet<(u32, DsdStream)>,
 }
 
 impl Bus {
@@ -151,8 +154,11 @@ impl Bus {
             opened_beat: 0,
             exclusive_granted: false,
             refused_rates: std::collections::HashSet::new(),
+            refused_dsd: std::collections::HashSet::new(),
         };
         if !bus.try_open(now, true) {
+            // The stand-in renders the mixer without DoP encoding or native
+            // DSD packing: nothing it renders reaches a converter.
             bus.virtual_clock = VirtualClock::start(bus.mixer.clone(), bus.config);
         }
         bus
@@ -246,44 +252,106 @@ impl Bus {
         self.stream.as_ref().map(|s| s.sample_format())
     }
 
-    /// Reopens the device at `rate`, keeping the mixer, its clock and its
-    /// slots. Only for a bus with nothing attached: every timeline on a bus
-    /// is in its frames (Phase 4 spec B3). If the device refuses the rate,
-    /// the previous one is restored; if that fails too the bus is `Lost`
-    /// and the watchdog takes over. Returns whether `rate` took.
+    /// The configuration the stream is asked to open with (and reopened
+    /// with after a loss).
+    pub fn config(&self) -> StreamConfig {
+        self.config
+    }
+
+    /// How the open stream carries DSD, if a device stream is open.
+    pub fn stream_dsd(&self) -> Option<DsdStream> {
+        self.stream.as_ref().and_then(|s| s.dsd())
+    }
+
+    /// Closes the device stream (the mixer keeps its state) so that nothing
+    /// renders until the next open; the caller reopens at once.
+    pub fn close_stream(&mut self) {
+        self.stream = None;
+    }
+
+    /// Remembers that the device cannot carry `stream` at `word_rate` (the
+    /// engine found the opened stream unfit), until it comes back from a loss.
+    pub fn refuse_dsd(&mut self, word_rate: u32, stream: DsdStream) {
+        self.refused_dsd.insert((word_rate, stream));
+    }
+
+    /// Reopens the device at `rate` as PCM, keeping the mixer, its clock and
+    /// its slots (see `reopen_with`). Returns whether `rate` took.
     pub fn reopen_at(&mut self, rate: u32, now: Instant) -> bool {
-        let previous = self.config.sample_rate;
-        if rate == previous {
+        if rate == self.config.sample_rate {
             return true;
         }
-        if self.refused_rates.contains(&rate) {
-            return false;
+        let config = StreamConfig {
+            sample_rate: rate,
+            dsd: None,
+            ..self.config
+        };
+        self.reopen_with(config, now).is_ok()
+    }
+
+    /// Reopens the device with `config`, keeping the mixer, its clock and
+    /// its slots. Only for a bus whose timelines can follow the new rate:
+    /// every timeline on a bus is in its frames (Phase 4 spec B3). If the
+    /// device refuses, the refusal is remembered (a rate, or a DSD stream at
+    /// a rate) and not asked again until the device comes back from a loss,
+    /// and the previous configuration is restored; if that fails too the
+    /// bus is `Lost` and the watchdog takes over. Leaving native DSD never
+    /// restores it (PCM would reach a DSD stream): the bus stays `Lost` with
+    /// the PCM configuration instead.
+    pub fn reopen_with(&mut self, config: StreamConfig, now: Instant) -> Result<(), String> {
+        let previous = self.config;
+        if config == previous && self.stream.is_some() {
+            return Ok(());
+        }
+        let refused = match config.dsd {
+            Some(dsd) => self.refused_dsd.contains(&(config.sample_rate, dsd)),
+            None => self.refused_rates.contains(&config.sample_rate),
+        };
+        if refused {
+            return Err(format!(
+                "{} Hz {:?} was refused before",
+                config.sample_rate, config.dsd
+            ));
         }
         self.stream = None;
         self.virtual_clock = None;
-        self.config.sample_rate = rate;
-        self.follow_rate(previous, rate);
+        self.config = config;
+        self.follow_rate(previous.sample_rate, config.sample_rate);
         // On an exclusive stream, a refusal is of the rate: keep exclusive
         // access at the previous rate. A device that is shared anyway may
-        // change rate shared.
-        let shared_fallback = !self.exclusive_granted;
+        // change rate shared. DSD never falls back to shared access.
+        let shared_fallback = !self.exclusive_granted && config.dsd.is_none();
         if self.try_open(now, shared_fallback) {
-            tracing::info!(bus = ?self.key, rate, "stream rate follows the file");
-            return true;
+            tracing::info!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, "stream reopened");
+            return Ok(());
         }
-        tracing::warn!(bus = ?self.key, rate, error = ?self.last_error, "rate refused; keeping the previous one");
-        self.refused_rates.insert(rate);
-        self.config.sample_rate = previous;
-        self.follow_rate(rate, previous);
-        if !self.try_open(now, true) {
+        let error = self.last_error.clone().unwrap_or_default();
+        tracing::warn!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, %error, "stream refused; keeping the previous one");
+        match config.dsd {
+            Some(dsd) => {
+                self.refused_dsd.insert((config.sample_rate, dsd));
+            }
+            None => {
+                self.refused_rates.insert(config.sample_rate);
+            }
+        }
+        let leaving_native = previous.dsd == Some(DsdStream::Native) && config.dsd.is_none();
+        if !leaving_native {
+            self.config = previous;
+            self.follow_rate(config.sample_rate, previous.sample_rate);
+        }
+        if leaving_native || !self.try_open(now, true) {
             self.health = BusHealth::Lost;
             self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
         }
-        false
+        Err(error)
     }
 
     /// Keeps the mixer's frame-based durations at their length in time.
     fn follow_rate(&self, from_rate: u32, to_rate: u32) {
+        if from_rate == to_rate {
+            return;
+        }
         self.mixer
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -335,6 +403,7 @@ impl Bus {
                     tracing::info!(bus = ?self.key, "output device back");
                     self.virtual_clock = None;
                     self.refused_rates.clear();
+                    self.refused_dsd.clear();
                 }
             }
         }

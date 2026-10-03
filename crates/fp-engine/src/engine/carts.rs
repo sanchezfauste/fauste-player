@@ -402,7 +402,10 @@ impl Engine {
         }
         for (bus, slot, fade_in) in starts {
             let now = self.now_frame(&bus);
-            self.send_start(&bus, slot, now, fade_in);
+            // A bus carrying DSD switches to PCM first, or mutes the cart
+            // (feedback 2 spec O25).
+            let at = self.before_start_on(&bus, now);
+            self.send_start(&bus, slot, at, fade_in);
         }
     }
 
