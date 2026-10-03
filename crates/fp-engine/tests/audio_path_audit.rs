@@ -691,7 +691,6 @@ fn play_file(path: &Path, blocks: usize) -> (Vec<f32>, Engine) {
 // pass the decoder, the mixer and the backend conversion unchanged: a
 // float device (the format cpal prefers) receives them.
 #[test]
-#[ignore = "A6: fails until the fix task"]
 fn a6_non_finite_samples_never_reach_the_device() {
     let dir = tempfile::tempdir().unwrap();
     let mut samples = vec![0.25f32; 9_600];

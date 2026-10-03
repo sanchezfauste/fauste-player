@@ -106,6 +106,10 @@ enum Backend {
 /// Decodes one file, whatever its format.
 pub struct FileDecoder {
     backend: Backend,
+    /// The file, for the log line.
+    path: String,
+    /// Set once non-finite samples were logged for this file.
+    logged_non_finite: bool,
 }
 
 impl FileDecoder {
@@ -141,7 +145,11 @@ impl FileDecoder {
             }
             Kind::Symphonia => Backend::Symphonia(Box::new(SymphoniaDecoder::open(path)?)),
         };
-        Ok(Self { backend })
+        Ok(Self {
+            backend,
+            path: path.display().to_string(),
+            logged_non_finite: false,
+        })
     }
 
     pub fn sample_rate(&self) -> u32 {
@@ -196,14 +204,39 @@ impl FileDecoder {
 
     /// Appends the next decoded block as interleaved stereo. Returns `false`
     /// at the end of the stream.
+    ///
+    /// NaN and infinite samples (a float file with bad data) are replaced
+    /// by silence, and the first of a file is logged.
     pub fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
-        match &mut self.backend {
+        let start = out.len();
+        let more = match &mut self.backend {
             Backend::Symphonia(d) => d.next_block(out),
             Backend::WavPack(d) => d.next_block(out),
             Backend::Ape(d) => d.next_block(out),
             Backend::Dsd(d) => d.next_block(out),
+        }?;
+        if let Some(fresh) = out.get_mut(start..)
+            && silence_non_finite(fresh)
+            && !self.logged_non_finite
+        {
+            self.logged_non_finite = true;
+            tracing::warn!(
+                file = %self.path,
+                "non-finite samples in the file were replaced by silence"
+            );
         }
+        Ok(more)
     }
+}
+
+/// Replaces NaN and infinite samples by 0. Returns whether any was found.
+fn silence_non_finite(samples: &mut [f32]) -> bool {
+    let mut found = false;
+    for s in samples.iter_mut().filter(|s| !s.is_finite()) {
+        *s = 0.0;
+        found = true;
+    }
+    found
 }
 
 /// Stereo from any channel count. Order follows the WAV/SMPTE convention
@@ -235,7 +268,15 @@ pub(crate) fn downmix(frame: &[f32]) -> (f32, f32) {
 
 #[cfg(test)]
 mod tests {
-    use super::downmix;
+    use super::{downmix, silence_non_finite};
+
+    #[test]
+    fn non_finite_samples_become_silence_and_are_reported() {
+        let mut s = [0.5, f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -0.25];
+        assert!(silence_non_finite(&mut s));
+        assert_eq!(s, [0.5, 0.0, 0.0, 0.0, -0.25]);
+        assert!(!silence_non_finite(&mut s));
+    }
 
     #[test]
     fn downmix_duplicates_mono_and_folds_centre_into_both_sides() {
