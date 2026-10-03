@@ -661,10 +661,7 @@ fn slider<T: egui::emath::Numeric>(
 /// The audio systems the list offers: the real systems in their order, then
 /// `null` as "No output (silent)" (feedback 2 spec O27, which reverses the
 /// hiding part of O5).
-fn listed_backends<'a>(
-    all: &'a [BackendChoice],
-    _configured: Option<&str>,
-) -> Vec<&'a BackendChoice> {
+fn listed_backends(all: &[BackendChoice]) -> Vec<&BackendChoice> {
     all.iter()
         .filter(|b| b.id != "null")
         .chain(all.iter().filter(|b| b.id == "null"))
@@ -709,7 +706,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 {
                     update(scene, |c| c.outputs.backend = None);
                 }
-                for b in listed_backends(&backends, current.as_deref()) {
+                for b in listed_backends(&backends) {
                     let text = match &b.unavailable {
                         Some(_) => t.tr_args(
                             "settings-backend-unavailable",
@@ -1802,14 +1799,10 @@ mod tests {
     #[test]
     fn null_is_always_listed_after_the_real_systems() {
         let all = [choice("null"), choice("alsa"), choice("jack")];
-        let ids = |configured| -> Vec<String> {
-            listed_backends(&all, configured)
-                .into_iter()
-                .map(|b| b.id.clone())
-                .collect()
-        };
-        assert_eq!(ids(None), vec!["alsa", "jack", "null"]);
-        assert_eq!(ids(Some("alsa")), vec!["alsa", "jack", "null"]);
-        assert_eq!(ids(Some("null")), vec!["alsa", "jack", "null"]);
+        let ids: Vec<&str> = listed_backends(&all)
+            .into_iter()
+            .map(|b| b.id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["alsa", "jack", "null"]);
     }
 }
