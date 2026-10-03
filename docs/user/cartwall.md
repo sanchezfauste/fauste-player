@@ -4,6 +4,8 @@ The cartwall is the strip of buttons under the players. Each button, a
 **cart**, plays one sound instantly: jingles, effects, spots. Carts play on
 their own outputs, independently of the players.
 
+![The cartwall with one cart playing](../images/guide/cartwall.png)
+
 ## Using it
 
 - **Click a cart** to fire it. **Click it again** to stop it.

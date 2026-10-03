@@ -45,6 +45,8 @@ start it from your applications menu.
 Changes in this section wait for a restart: see
 [Restart pending](#restart-pending).
 
+![Settings, Audio outputs: the audio system, sample rate, buffer size and each player's Main and Cue outputs (here the silent system)](../images/guide/settings-outputs.png)
+
 | Setting | Meaning |
 |---|---|
 | Audio system | The last choice, **No output (silent)**, plays nothing: timelines run at real-time pace with no sound card (for a machine without one, or to rehearse). Linux: PipeWire (in builds that include it), PulseAudio, JACK or ALSA. Windows: WASAPI, ASIO (in builds that include it) or JACK. macOS: Core Audio or JACK. Systems missing on this computer, or with no output device (a JACK server that is not running), are shown as unavailable. "System default" uses the first available one in that order. |
@@ -67,6 +69,8 @@ the device is reopened when it comes back (see
 
 ## Players
 
+![Settings, Players](../images/guide/settings-players.png)
+
 | Setting | Default | Meaning |
 |---|---|---|
 | Language | System | Interface language |
@@ -78,6 +82,8 @@ the device is reopened when it comes back (see
 | End-of-track warning | 10 s | When the countdown starts blinking red |
 
 ## Meters
+
+![Settings, Meters, with the digital peak meter chosen](../images/guide/settings-meters.png)
 
 Changes apply at once. Settings shows only what the chosen meter type
 uses: the EBU, DIN and VU meters have the scale, red zone and behaviour
@@ -120,6 +126,8 @@ channels:
 
 ## Analysis
 
+![Settings, Analysis: the thresholds of the automatic markers](../images/guide/settings-analysis.png)
+
 The thresholds described in [Markers and mixing](markers-and-mixing.md).
 **Re-analyse all tracks** runs the analysis again for the whole library;
 manual markers are kept.
@@ -135,6 +143,8 @@ missing are not counted until the file is back.
 
 ## Playlists
 
+![Settings, Playlists: the music folder, the playlists and the table columns](../images/guide/settings-playlists.png)
+
 - **Music folder:** where the file dialogs start.
 - **New playlist**, **rename** (edit the name and press Enter; Esc cancels)
   and **delete** (trash icon).
@@ -149,19 +159,27 @@ missing are not counted until the file is back.
 
 ## Cartwall
 
+![Settings, Cartwall: the pages, the grid and the editor of the selected cart](../images/guide/settings-cartwall.png)
+
 Pages, grid size, the cart editor, and cart page import and export. See
 [Cartwall](cartwall.md).
 
 ## Keyboard shortcuts
 
+![Settings, Keyboard shortcuts](../images/guide/settings-shortcuts.png)
+
 See [Keyboard](keyboard.md).
 
 ## MIDI
+
+![Settings, MIDI, with MIDI control off](../images/guide/settings-midi.png)
 
 Turn MIDI control surfaces on, see the input ports, and learn a control
 for each player action. See [MIDI control surfaces](midi.md).
 
 ## Remote
+
+![Settings, Remote, with the HTTP API listening on this computer](../images/guide/settings-remote.png)
 
 Remote control over the network, for web pages, phone apps, automation and
 control surfaces. See [Remote control](remote-control.md).

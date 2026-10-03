@@ -29,7 +29,7 @@ out=$(cd "$out" && pwd)
 
 "$mdbook" build "$root/docs" -d "$out/guide"
 mkdir -p "$out/images"
-cp "$root"/docs/images/* "$out/images/"
+cp -R "$root"/docs/images/. "$out/images/"
 
 cp "$root"/site/* "$out/"
 cp "$root/packaging/icons/fauste-player.svg" "$out/favicon.svg"

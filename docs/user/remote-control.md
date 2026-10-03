@@ -7,6 +7,8 @@ station's automation or a control surface can use them. It is
 
 ## Turning it on
 
+![Settings, Remote: the HTTP API on and listening on this computer, and OSC off](../images/guide/settings-remote.png)
+
 Open **Settings → Remote** and tick **Allow remote control over HTTP**
 (or **Allow OSC control**). The line under each switch says whether the
 server is listening, and where, or why it did not start. Changes apply at

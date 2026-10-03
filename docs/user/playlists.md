@@ -21,6 +21,8 @@ last playlist, and a playlist with a track on air, cannot be deleted.
 
 ## The track table
 
+![A playlist: played tracks dimmed, the track on air in red, the next track in green, and the footer with the time left](../images/guide/playlist.png)
+
 | Column | Content |
 |---|---|
 | `#` | Position, zero-padded; an icon replaces it for the current and next tracks |
@@ -104,6 +106,8 @@ Row colours:
   track (not the one on air).
 - **Right-click** opens the context menu:
 
+![The context menu of a track](../images/guide/track-menu.png)
+
 | Item | Action |
 |---|---|
 | Play now | Start this track at once (mixing if the player is on air) |
@@ -121,6 +125,8 @@ Row colours:
 
 **Edit tags…** opens a window for one track. While it is open no keyboard
 shortcut acts, and files dropped on the application window are ignored.
+
+![The tag editor of a FLAC file, with its cover, title, artist, album, date and genre](../images/guide/tag-editor.png)
 
 - **What you see.** The editor reads the file when it opens (it shows
   "Reading tags…" meanwhile). Always shown: title, artist, album, album

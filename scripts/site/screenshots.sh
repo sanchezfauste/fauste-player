@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Takes the screenshots of the README from a scripted
+# Takes the screenshots of the README and the user guide from a scripted
 # scene, in English, in a virtual X server (Linux):
 #
 #   scripts/site/screenshots.sh [--only main] [--hold]
@@ -45,6 +45,7 @@ mkdir -p "$work"
 work=$(cd "$work" && pwd)
 home=${SHOTS_HOME:-$work/home}
 images=$root/docs/images
+guide=$images/guide
 log() { echo "screenshots.sh: $*" >&2; }
 die() { log "$*"; exit 1; }
 
@@ -259,6 +260,51 @@ shoot_main() {
     capture "$images/main-screen.png"
 }
 
+# The guide's screenshots (spec O28), each cropped to its subject. The
+# positions are those of the default 1920x1080 layout with four players.
+shoot_guide() {
+    local p4 n section
+    # From the scene, while the cart still plays.
+    capture "$guide/player.png" 472x262+7+41
+    capture "$guide/playlist.png" 472x614+7+309
+    capture "$guide/cartwall.png" 1920x124+0+932
+
+    # The CUE window of player 4 (stopped: it pre-listens its next track).
+    p4=$(api GET /players | json "d[3]['id']")
+    api PUT "/players/$p4/cue" '{"on": true}' >/dev/null
+    park
+    sleep 1.5
+    capture "$guide/cue-window.png" 406x222+164+204
+    api PUT "/players/$p4/cue" '{"on": false}' >/dev/null
+    sleep 0.5
+
+    # A track's menu, then its tag editor (player 4, row 2).
+    right_click 1560 406
+    capture "$guide/track-menu.png" 470x306+1442+396
+    click 1620 515
+    park
+    sleep 1
+    capture "$guide/tag-editor.png" 600x648+660+216
+    key Escape
+
+    # Settings, one capture per section (the list on the left).
+    click 1800 17
+    n=0
+    for section in outputs players meters analysis playlists cartwall shortcuts midi remote; do
+        click 600 $((291 + n * 36))
+        park
+        capture "$guide/settings-$section.png" 900x640+510+220
+        n=$((n + 1))
+    done
+    key Escape
+
+    # About (the info button left of Settings).
+    click 1736 17
+    park
+    capture "$guide/about.png" 600x315+660+383
+    key Escape
+}
+
 # ---------------------------------------------------------------- main
 
 log "building"
@@ -275,5 +321,7 @@ if $hold; then
     exit 0
 fi
 shoot_main
+[[ $only == main ]] && exit 0
+shoot_guide
 check_silent
 log "done"

@@ -20,6 +20,8 @@
 
 ## Changing shortcuts
 
+![Settings, Keyboard shortcuts: each action with its key](../images/guide/settings-shortcuts.png)
+
 In **Settings → Keyboard shortcuts**, click an action and press the key (with
 Ctrl, Alt, Shift or Cmd if you like). If another action already uses that
 key, its name is shown. Choose **Assign** to move the key, or **Cancel**.
