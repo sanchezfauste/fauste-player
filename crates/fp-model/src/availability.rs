@@ -41,12 +41,15 @@ pub fn availability(state: &AppState, player: PlayerId) -> Availability {
         previous: playing && !p.fading && has_previous,
         stop_after_current: p.mode == PlayMode::Continuous
             || crate::reducer::repeat_entry(state, p),
-        cue: p.next.is_some() || p.cue.is_some(),
+        // A running CUE can always be stopped; a new one needs a Cue output
+        // that is not the Main output (spec §4.6).
+        cue: (p.next.is_some() && state.config.outputs.player_has_cue(player)) || p.cue.is_some(),
     }
 }
 
-/// False for a transport command that `availability` marks unavailable;
-/// true for every other command.
+/// False for a transport command that `availability` marks unavailable,
+/// and for a CUE of an entry or a cart pre-listen that has no Cue output
+/// apart from Main (spec §4.6); true for every other command.
 pub fn command_available(state: &AppState, command: &Command) -> bool {
     let a = |id: &PlayerId| availability(state, *id);
     match command {
@@ -58,6 +61,11 @@ pub fn command_available(state: &AppState, command: &Command) -> bool {
         Command::Previous(id) => a(id).previous,
         Command::ToggleStopAfterCurrent(id) => a(id).stop_after_current,
         Command::ToggleCue(id) => a(id).cue,
+        Command::CueEntry(id, _) => state.config.outputs.player_has_cue(*id),
+        // A running cart pre-listen can always be stopped.
+        Command::CueCart(cart) => {
+            state.cartwall.cue == Some(*cart) || state.config.outputs.cartwall_has_cue()
+        }
         _ => true,
     }
 }

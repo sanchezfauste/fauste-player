@@ -14,6 +14,7 @@ fn state() -> AppState {
     let mut config = Config::default();
     config.players.count = 2;
     let mut s = AppState::new(config, "Main");
+    give_cue_routes(&mut s);
     let playlist = s.playlists.first_id().unwrap();
     let paths = (1..=3)
         .map(|n| PathBuf::from(format!("/m/{n}.mp3")))
@@ -274,4 +275,24 @@ fn a_control_already_up_when_first_heard_does_not_fire() {
     assert!(r.on_message("APC", cc_value(20, 127), &s).is_none());
     assert!(r.on_message("APC", cc_value(20, 0), &s).is_none());
     assert!(r.on_message("APC", cc_value(20, 127), &s).is_some());
+}
+
+/// A Cue output (headphones) for every player and the cartwall, with Main on
+/// the default output: a CUE needs a Cue output apart from Main (spec §4.6).
+fn give_cue_routes(state: &mut AppState) {
+    let phones = fp_model::Route {
+        backend: "null".to_owned(),
+        device: "phones".to_owned(),
+        first_channel: 0,
+    };
+    state.config.outputs.routes = state
+        .players
+        .iter()
+        .map(|p| fp_model::PlayerRoutes {
+            player: p.id,
+            main: None,
+            cue: Some(phones.clone()),
+        })
+        .collect();
+    state.config.outputs.cartwall.cue = Some(phones);
 }

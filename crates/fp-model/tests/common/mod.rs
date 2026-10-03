@@ -2,12 +2,14 @@
 
 use std::path::PathBuf;
 
-use fp_model::{AppState, Command, Config, EntryId, PlayerId, apply};
+use fp_model::{AppState, Command, Config, EntryId, PlayerId, PlayerRoutes, Route, apply};
 
 /// Default config (4 players), one playlist named "Main" with `tracks`
-/// entries of 180 s each. Every player shows that playlist.
+/// entries of 180 s each. Every player shows that playlist. Every player
+/// and the cartwall have a Cue output apart from Main (see `with_cue_routes`).
 pub fn fixture(tracks: usize) -> AppState {
     let mut state = AppState::new(Config::default(), "Main");
+    with_cue_routes(&mut state);
     let playlist = state.playlists.first_id().unwrap();
     let paths = (0..tracks)
         .map(|i| PathBuf::from(format!("/music/track{i}.flac")))
@@ -55,4 +57,24 @@ pub fn roundtrip(state: &AppState) -> AppState {
         ids: state.ids.clone(),
     };
     AppState::restore(parts, &state.sessions(|_| 10.0), "Main").0
+}
+
+/// A Cue route on headphones for every player and the cartwall, with Main
+/// on the default output: a CUE needs a Cue output (spec §4.6).
+pub fn with_cue_routes(state: &mut AppState) {
+    let phones = Route {
+        backend: "null".to_owned(),
+        device: "phones".to_owned(),
+        first_channel: 0,
+    };
+    state.config.outputs.routes = state
+        .players
+        .iter()
+        .map(|p| PlayerRoutes {
+            player: p.id,
+            main: None,
+            cue: Some(phones.clone()),
+        })
+        .collect();
+    state.config.outputs.cartwall.cue = Some(phones);
 }

@@ -161,7 +161,7 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
         O::CueEntry(p, e) => {
             player(p)?;
             entry(e)?;
-            Ok(vec![Command::CueEntry(p, e)])
+            available(state, Command::CueEntry(p, e))
         }
         O::Seek(p, secs) => {
             let pl = player(p)?;

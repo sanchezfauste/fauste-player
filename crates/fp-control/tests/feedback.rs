@@ -11,6 +11,7 @@ use fp_model::{
 
 fn state() -> AppState {
     let mut s = AppState::new(Config::default(), "Main");
+    give_cue_routes(&mut s);
     let playlist = s.playlists.first_id().unwrap();
     let paths = (1..=3)
         .map(|n| PathBuf::from(format!("/m/{n}.mp3")))
@@ -132,4 +133,24 @@ fn feedback_goes_to_the_override_port_or_nowhere_when_off() {
     assert!(desired(&c, &s, true).iter().all(|l| l.output == "APC out"));
     c.feedback = false;
     assert!(desired(&c, &s, true).is_empty());
+}
+
+/// A Cue output (headphones) for every player and the cartwall, with Main on
+/// the default output: a CUE needs a Cue output apart from Main (spec §4.6).
+fn give_cue_routes(state: &mut AppState) {
+    let phones = fp_model::Route {
+        backend: "null".to_owned(),
+        device: "phones".to_owned(),
+        first_channel: 0,
+    };
+    state.config.outputs.routes = state
+        .players
+        .iter()
+        .map(|p| fp_model::PlayerRoutes {
+            player: p.id,
+            main: None,
+            cue: Some(phones.clone()),
+        })
+        .collect();
+    state.config.outputs.cartwall.cue = Some(phones);
 }

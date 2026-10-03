@@ -330,7 +330,7 @@ plus the mixer's DSD mode.
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs }`) to the mixer as exact frames once it is within `schedule_lead_ms` |
 | `FadeOutAndStop`, `StopNow`, `Pause`, `Resume`, `Seek`, `SetVolume` | ramps and commands on the current source. A stop or seek ramps out a source whose start was sent (`Requested`) or whose pause ramp may still run (`pause_ramp_ends`, plus a block of margin); a source that is silent (never started, held, or paused with the ramp over) is released at once |
-| `StartCue`, `StopCue` | a separate source on the player's Cue route |
+| `StartCue`, `StopCue` | a separate source on the player's Cue route. The model sends `StartCue` only for a player whose Cue route is set and differs from Main (`OutputsConfig::player_has_cue`); a Cue route the engine cannot use (`cue_target`: a missing backend, or equal to the resolved Main) ends the CUE at once with `CueEnded` |
 | `SeekCue` | replace the CUE source by one at the target (the CUE plays whole files); it starts idle when the CUE is held, so a held CUE stays held |
 | `SetCuePaused` | `BusCommand::Pause`/`Resume` with the pause ramp for an audible source; a source that has not started yet is held idle and started on release. `PlayerRuntime::cue_paused` remembers the state and a new CUE clears it |
 | `AddPlayer`, `RemovePlayer` | create or retire a worker and its bookkeeping |
@@ -393,8 +393,10 @@ added.
 
 - A dedicated worker (`fp-cartwall`) decodes them.
 - **Routes:** they play on the cartwall routes (`config.outputs.cartwall`).
-  Main falls back to the default output. Without a Cue route, a cart
-  pre-listen ends at once (`CartCueEnded { cart }`; the model ignores the end
+  Main falls back to the default output. The model starts no cart
+  pre-listen without a Cue route apart from Main
+  (`OutputsConfig::cartwall_has_cue`); one the engine still cannot route (a
+  missing backend, or the default output Main resolves to) ends at once (`CartCueEnded { cart }`; the model ignores the end
   of a pre-listen that is no longer the current one).
 - **Exact ends and loops:** each load carries `until_secs` (the cue-out) and
   `looped`. The worker cuts the frames past the end, so a cart finishes

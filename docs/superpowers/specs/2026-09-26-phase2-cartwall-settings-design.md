@@ -85,7 +85,9 @@ so analysis, file state and cue-in/cue-out apply to them unchanged.
 - **C8. Editing.** Changing a playing cart's file, or deleting its page,
   stops it first. The last page cannot be deleted (`ModelError::LastCartPage`).
 - **C9. Cue.** Pre-listening a cart plays it on the cartwall Cue route. Only
-  one cart pre-listens at a time, and it never reaches Main.
+  one cart pre-listens at a time, and it never reaches Main: without a
+  cartwall Cue route apart from its Main route (main spec §4.6) a new
+  pre-listen starts nothing, and a running one can still be stopped.
 - **C10. Stop all.** `StopAllCarts` stops every playing cart, and the cue.
 - **C11. Atomic edits.** `EditCartPage` (name and grid) and `EditCart` (a
   cart's fields and its file: keep, another library track, or none) check

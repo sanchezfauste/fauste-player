@@ -369,6 +369,34 @@ impl Default for OutputsConfig {
 }
 
 impl OutputsConfig {
+    /// The routes configured for `player`, if any.
+    pub fn player_routes(&self, player: PlayerId) -> Option<&PlayerRoutes> {
+        self.routes.iter().find(|r| r.player == player)
+    }
+
+    /// Whether `player` has a Cue output a CUE can be heard on (see
+    /// [`cue_is_usable`]).
+    pub fn player_has_cue(&self, player: PlayerId) -> bool {
+        self.player_routes(player)
+            .is_some_and(|r| cue_is_usable(r.main.as_ref(), r.cue.as_ref()))
+    }
+
+    /// Whether `player`'s Cue route is the same as its Main route.
+    pub fn player_cue_equals_main(&self, player: PlayerId) -> bool {
+        self.player_routes(player)
+            .is_some_and(|r| cue_equals_main(r.main.as_ref(), r.cue.as_ref()))
+    }
+
+    /// Whether the cartwall has a Cue output a cart pre-listen can be heard on.
+    pub fn cartwall_has_cue(&self) -> bool {
+        cue_is_usable(self.cartwall.main.as_ref(), self.cartwall.cue.as_ref())
+    }
+
+    /// Whether the cartwall's Cue route is the same as its Main route.
+    pub fn cartwall_cue_equals_main(&self) -> bool {
+        cue_equals_main(self.cartwall.main.as_ref(), self.cartwall.cue.as_ref())
+    }
+
     /// The DSD mode of a device: its configured mode when it is bit-perfect,
     /// `Pcm` otherwise.
     pub fn dsd_output_for(&self, backend: &str, device: &str) -> crate::dsd::DsdOutput {
@@ -384,6 +412,24 @@ impl OutputsConfig {
             .find(|d| d.backend == backend && d.device == device)
             .map_or(crate::dsd::DsdOutput::Pcm, |d| d.mode)
     }
+}
+
+/// Whether a Cue route can be heard (spec §4.6): there is one, and it is not
+/// the Main route (same backend, device and first channel). The engine never
+/// sends a pre-listen to the Main output, since that would put it on air.
+///
+/// Only what the configuration says is decided here. A missing Main route
+/// goes to the default output, and a route to a backend this machine does
+/// not have is dropped; both are only known to the running engine, so a Cue
+/// route next to a missing Main route counts as usable.
+pub fn cue_is_usable(main: Option<&Route>, cue: Option<&Route>) -> bool {
+    cue.is_some_and(|cue| main != Some(cue))
+}
+
+/// Whether a Cue route is configured and is the same as the Main route: the
+/// case [`cue_is_usable`] refuses that the operator can fix in Settings.
+pub fn cue_equals_main(main: Option<&Route>, cue: Option<&Route>) -> bool {
+    cue.is_some() && main == cue
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

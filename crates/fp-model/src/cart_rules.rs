@@ -105,7 +105,8 @@ pub(crate) fn cue(
         .ok_or(ModelError::UnknownCart(id))?;
     let was = state.cartwall.cue;
     stop_cue(state, out);
-    if was == Some(id) {
+    // Spec §4.6: a pre-listen needs a cartwall Cue output apart from Main.
+    if was == Some(id) || !state.config.outputs.cartwall_has_cue() {
         return Ok(());
     }
     if let Some(request) = request(state, &cart, false) {
