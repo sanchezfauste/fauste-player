@@ -1360,7 +1360,6 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
         ModelError::LastPlaylist => i18n.tr("error-last-playlist"),
         ModelError::PlaylistOnAir(_) => i18n.tr("error-playlist-on-air"),
         ModelError::EntryOnAir(_) => i18n.tr("error-entry-on-air"),
-        ModelError::NextIsCurrent => i18n.tr("error-next-is-current"),
         ModelError::StopAfterInSingle => i18n.tr("error-stop-after-single"),
         ModelError::PlayerCountOutOfRange { max, .. } => {
             i18n.tr_args("error-player-count", &[("max", (*max).into())])

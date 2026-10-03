@@ -212,6 +212,36 @@ async fn bodies_are_read_and_checked() {
 }
 
 #[tokio::test]
+async fn the_entry_on_air_can_be_next_and_stop_after_is_refused_in_single_mode() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    let current = s.players[0].current.unwrap();
+    let fake = FakeControl::new(s.clone());
+    let (status, out, _) = call(
+        ctx(&fake),
+        "PUT",
+        &format!("/api/v1/players/{}/next", p.0),
+        Some(json!({"entry": current.0})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{out}");
+    assert_eq!(fake.take_sent(), vec![Command::SetNext(p, current)]);
+
+    fp_model::apply(&mut s, Command::SetMode(p, fp_model::PlayMode::Single)).unwrap();
+    let fake = FakeControl::new(s);
+    let (status, _, _) = call(
+        ctx(&fake),
+        "PUT",
+        &format!("/api/v1/players/{}/stop-after-current", p.0),
+        Some(json!({"on": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(fake.take_sent().is_empty());
+}
+
+#[tokio::test]
 async fn broken_bodies_are_400s() {
     let s = demo_state();
     let p = s.players[0].id.0;

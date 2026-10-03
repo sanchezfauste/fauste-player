@@ -69,7 +69,7 @@ A client can:
 - read the players, playlists, tracks (with cover and waveform) and the
   cartwall;
 - play, pause, stop, fade, restart and go back;
-- choose the next entry, pre-listen, and seek;
+- choose the next entry (the entry on air too: it plays once more), pre-listen, and seek;
 - set volumes, modes, stop-after-current, and the repeat and stop-after
   marks of an entry;
 - fire, stop and pre-listen carts, and change the cart page shown;

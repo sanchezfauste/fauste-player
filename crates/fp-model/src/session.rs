@@ -239,9 +239,10 @@ fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     };
     // A current entry must still resolve to a track, or it could never be resumed.
     let current = s.current.filter(|e| state.track_for_entry(*e).is_some());
-    let kept_next = s
-        .next
-        .filter(|e| state.playlists.entry(*e).is_some() && Some(*e) != current);
+    // An explicit next may be the current entry (O37: it plays once more).
+    let kept_next = s.next.filter(|e| {
+        state.playlists.entry(*e).is_some() && (Some(*e) != current || s.next_explicit)
+    });
     let next_explicit = s.next_explicit && kept_next.is_some();
     let next = kept_next
         .or_else(|| current.and_then(|c| state.playlists.next_playable_after(c, &state.library)));
@@ -259,7 +260,8 @@ fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     } else {
         Transport::Stopped
     };
-    player.stop_after_current = s.mode == PlayMode::Continuous && s.stop_after_current;
+    player.stop_after_current = s.stop_after_current
+        && (s.mode == PlayMode::Continuous || crate::reducer::repeat_entry(state, &player));
     player.volume = volume;
     player.columns = s.columns.clone().normalized();
     // Only entries that still exist, and no more than the configured depth.

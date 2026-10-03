@@ -183,7 +183,7 @@ cannot hang the conductor.
 
 | Action | Effect |
 |---|---|
-| `Preload` | ask the worker for a source of the next entry at its cue-in; attach it idle. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut) |
+| `Preload` | ask the worker for a source of the next entry at its cue-in; attach it idle. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut). The same pair serves O37: a self-next (the entry on air set as next) is preloaded and restarted in the same way, once; the model tells the pass apart from a repeat pass in `on_event` |
 | `StartCurrent` | start the preloaded source, or open one, once ready |
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs }`) to the mixer as exact frames once it is within `schedule_lead_ms` |
@@ -228,7 +228,7 @@ even when it is the same entry (a repeat). When a command such as Next
 arrives in the tick where the mixer has just started a scheduled transition
 into something else (a repeating entry's next pass), `start_current`
 replaces that start at once and drops its `TransitionStarted`, so the model
-stays on the entry it chose.
+stays on the entry it chose. A self-next replay (O37) runs through this same path.
 
 **Routing:** `route_target` maps a configured route to a bus and a channel
 pair. A route to a backend this machine does not have falls back to the

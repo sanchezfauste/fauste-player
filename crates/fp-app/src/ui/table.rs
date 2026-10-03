@@ -367,6 +367,20 @@ pub(crate) fn track_table(
                                 {
                                     number.on_hover_text(tip);
                                 }
+                                // O37: the entry on air is also the next one.
+                                if status == RowStatus::Current
+                                    && view::row_is_next(scene.state, player, entry.id)
+                                {
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(icon::ARROW_BEND_DOWN_RIGHT)
+                                                .font(egui::FontId::proportional(12.0))
+                                                .color(theme::NEUTRAL_100),
+                                        )
+                                        .selectable(false),
+                                    )
+                                    .on_hover_text(scene.i18n.tr("tip-next-again"));
+                                }
                             }
                             TableColumn::Title => {
                                 ui.add_space(8.0);
@@ -490,6 +504,8 @@ pub(crate) fn track_table(
                 response.clone().on_hover_ui(|ui| {
                     track_tip(ui, scene, track);
                 });
+                // O37: a double-click on the playing row does nothing; the menu
+                // item is the deliberate way to set it as next.
                 if response.double_clicked() && status != RowStatus::Current {
                     scene.ctl.send(Command::SetNext(player, entry.id));
                 }
@@ -710,6 +726,11 @@ fn context_menu(
         .state
         .player(player)
         .is_ok_and(|p| p.current == Some(entry));
+    // O37: the entry on air can be set as next, unless it already is.
+    let self_next = scene
+        .state
+        .player(player)
+        .is_ok_and(|p| p.next == Some(entry) && p.next_explicit);
     let on_air = scene.state.is_on_air(entry);
     // The item's text is its accessible label; tests find it by the plain text.
     let labelled = |ui: &mut Ui, glyph: &str, key: &str, enabled: bool| {
@@ -743,7 +764,7 @@ fn context_menu(
         ui,
         icon::ARROW_BEND_DOWN_RIGHT,
         "menu-set-next",
-        !own_current,
+        !(own_current && self_next),
     )
     .clicked()
     {

@@ -3,7 +3,7 @@ mod support;
 
 use fp_model::volume::gain_from_fader;
 use fp_model::{CartId, Command, EntryId, PlayMode, PlayerId, PlaylistId};
-use fp_remote::api::{ApiError, Operation as O, plan};
+use fp_remote::api::{ApiError, Edit, Operation as O, plan, plan_edit};
 use support::demo_state;
 
 #[test]
@@ -82,6 +82,33 @@ fn stop_after_current_in_single_mode_is_a_conflict() {
 }
 
 #[test]
+fn setting_the_entry_on_air_as_next_is_accepted() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    let current = s.players[0].current.unwrap();
+    assert_eq!(
+        plan(&s, O::SetNext(p, current)).unwrap(),
+        vec![Command::SetNext(p, current)]
+    );
+}
+
+#[test]
+fn stop_after_current_in_single_mode_is_accepted_while_the_entry_repeats() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::SetMode(p, PlayMode::Single)).unwrap();
+    let first = s.playlists.iter().next().unwrap().entries[0].id;
+    fp_model::apply(&mut s, Command::ToggleEntryRepeat(first)).unwrap();
+    fp_model::apply(&mut s, Command::SetNext(p, first)).unwrap();
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(
+        plan(&s, O::SetStopAfterCurrent(p, true)).unwrap(),
+        vec![Command::SetStopAfterCurrent(p, true)]
+    );
+}
+
+#[test]
 fn the_fader_maps_through_the_ui_curve_and_must_be_in_range() {
     let s = demo_state();
     let p = s.players[0].id;
@@ -137,9 +164,9 @@ fn the_dry_run_turns_a_model_refusal_into_a_conflict() {
     let p = s.players[0].id;
     fp_model::apply(&mut s, Command::Play(p)).unwrap();
     let current = s.players[0].current.unwrap();
-    let e = plan(&s, O::SetNext(p, current)).unwrap_err();
+    let e = plan_edit(&s, Edit::RemoveEntry(current)).unwrap_err();
     assert_eq!(e.status(), 409);
-    assert!(e.message().contains("current"), "{}", e.message());
+    assert!(e.message().contains("on air"), "{}", e.message());
 }
 
 #[test]

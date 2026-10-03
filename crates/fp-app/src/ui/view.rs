@@ -109,8 +109,8 @@ pub struct CueWindowView {
     pub paused: bool,
     /// The position as a fraction of the file, for the waveform.
     pub position: Option<f32>,
-    /// "Load as next" has something to do: the cued entry is not the
-    /// current one and not already the explicit next.
+    /// "Load as next" has something to do: the cued entry is not
+    /// already the explicit next (the entry on air can be, O37).
     pub can_load_next: bool,
 }
 
@@ -143,8 +143,7 @@ pub fn cue_window_view(
         remaining: total.map_or(0.0, |t| (t - elapsed).max(0.0)),
         paused: cue.paused,
         position: fraction(Some(elapsed), total.unwrap_or(0.0)),
-        can_load_next: p.current != Some(cue.entry)
-            && !(p.next == Some(cue.entry) && p.next_explicit),
+        can_load_next: !(p.next == Some(cue.entry) && p.next_explicit),
     })
 }
 
@@ -260,6 +259,12 @@ pub fn file_icon(track: &Track) -> &'static str {
         FileState::Missing => egui_phosphor::regular::FILE_X,
         FileState::Ok | FileState::Unreadable => egui_phosphor::regular::WARNING,
     }
+}
+
+/// O37: the row of `entry` is the player's next, whatever else it is: the
+/// entry on air can be its own next (it plays once more).
+pub fn row_is_next(state: &AppState, player: PlayerId, entry: EntryId) -> bool {
+    state.player(player).is_ok_and(|p| p.next == Some(entry))
 }
 
 /// How a track-table row is drawn (spec §3 rule 1). Takes the row's entry

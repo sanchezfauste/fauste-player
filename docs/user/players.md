@@ -60,11 +60,11 @@ playlist tabs, transport, volume and outputs.
 
 | Button | Action |
 |---|---|
-| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)). Paused: resume. |
+| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)). Paused: resume. With the track on air as next, Play restarts that track with the usual fade. |
 | **Stop** | Stop at once (with a short de-click ramp) |
 | **Fade stop** | Fade out and stop |
 | **Pause** | Pause or resume; blinks amber while paused |
-| **Stop after** (a play triangle then a square) | Stop when the current track ends (continuous mode only), once. To stop after a track every time it plays, or to repeat a track, use its menu in the playlist (see [Playlists](playlists.md)) |
+| **Stop after** (a play triangle then a square) | Stop when the current track ends, once. In SINGLE mode it is available only while the current track repeats: it ends the repeat when the pass that is playing ends. To stop after a track every time it plays, or to repeat a track, use its menu in the playlist (see [Playlists](playlists.md)) |
 | **Previous** (a bar and two triangles) | While on air: fade back into the track this player played before, as Next does. Press again to keep going back. The track you left becomes the next one. |
 | **Restart** (a bar and one triangle) | Back to the start of the current track (its cue-in). A paused player stays paused. |
 
@@ -79,7 +79,8 @@ during a fade. A player remembers the last 50 tracks it played
   and overlaps the end of the current one. See
   [Markers and mixing](markers-and-mixing.md).
 - **SINGLE:** every track stops at its end. *Stop after* is not available in
-  this mode, because every track already stops.
+  this mode, because every track already stops, except while the current
+  track repeats: then it ends the repeat when the pass that is playing ends.
 
 ## Countdown
 
@@ -135,9 +136,9 @@ The window shows:
 - the elapsed time and the time remaining to the end of the file (a CUE plays
   whole files);
 - **Pause** / **Resume**, **Stop** and **Load as next**. **Load as next**
-  makes the cued track the player's next, as a double-click would, and keeps
-  the CUE playing. It is dimmed when the track already is the next, or is the
-  current track.
+  makes the cued track the player's next and keeps the CUE playing. It is dimmed when the track already is the next. If the
+  cued track is the one on air, it plays once more when the current pass
+  ends.
 
 A jump on a paused CUE keeps it paused. The close button of the window, or
 **Stop**, stops the CUE.

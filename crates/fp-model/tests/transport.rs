@@ -14,16 +14,14 @@ fn inserting_into_an_empty_playlist_marks_the_first_entry_as_next() {
 }
 
 #[test]
-fn rule2_double_click_sets_next_but_never_the_current_entry() {
+fn rule2_set_next_also_accepts_the_current_entry() {
     let mut state = fixture(3);
     let (e, p) = (entries(&state), p0(&state));
     apply(&mut state, Command::SetNext(p, e[2])).unwrap();
     assert_eq!(state.player(p).unwrap().next, Some(e[2]));
     apply(&mut state, Command::Play(p)).unwrap();
-    assert_eq!(
-        apply(&mut state, Command::SetNext(p, e[2])),
-        Err(ModelError::NextIsCurrent)
-    );
+    assert!(apply(&mut state, Command::SetNext(p, e[2])).is_ok());
+    assert_eq!(state.player(p).unwrap().next, Some(e[2]));
 }
 
 #[test]

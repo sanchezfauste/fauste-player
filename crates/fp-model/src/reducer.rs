@@ -68,18 +68,20 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         }
         Command::SetMode(id, mode) => {
             let i = state.player_index(id)?;
-            let player = &mut state.players[i];
-            player.mode = mode;
-            if mode == PlayMode::Single {
-                player.stop_after_current = false;
+            state.players[i].mode = mode;
+            // O38: in Single mode the flag only makes sense while the current
+            // entry repeats.
+            if mode == PlayMode::Single && !repeat_entry(state, &state.players[i]) {
+                state.players[i].stop_after_current = false;
             }
         }
         Command::ToggleStopAfterCurrent(id) => {
             let i = state.player_index(id)?;
-            let player = &mut state.players[i];
-            if player.mode == PlayMode::Single {
+            if state.players[i].mode == PlayMode::Single && !repeat_entry(state, &state.players[i])
+            {
                 return Err(ModelError::StopAfterInSingle);
             }
+            let player = &mut state.players[i];
             player.stop_after_current = !player.stop_after_current;
         }
         Command::ToggleCue(id) => toggle_cue(state, id, &mut out)?,
@@ -153,6 +155,20 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         } => {
             if let Some(t) = state.library.get_mut(track) {
                 t.file_state = file_state;
+                // A self-next (O37) whose file can no longer be opened gives
+                // way to the entry after it: the player goes on at cue-out
+                // instead of stopping there.
+                if !file_state.is_playable() {
+                    for i in 0..state.players.len() {
+                        let p = &state.players[i];
+                        if let Some(entry) = p.current
+                            && p.next == Some(entry)
+                            && state.track_for_entry(entry).is_some_and(|t| t.id == track)
+                        {
+                            replace_self_next(state, i, entry);
+                        }
+                    }
+                }
                 refresh_next(state);
             }
         }
@@ -305,15 +321,28 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
         }
         EngineEvent::TransitionStarted { player, entry } => {
             // The engine started the entry that is already current: a
-            // repeating entry's next pass (R26), perhaps committed just before
-            // a command changed the model. It stays current; the engine used
-            // up its preload and plan, so `reconcile` sends new ones, and the
-            // audio is playing whatever the model asked meanwhile (a pause
-            // that arrived after the restart does not stop it).
+            // repeating entry's next pass (R26) or the replay of an entry set
+            // as its own next (O37), perhaps committed just before a command
+            // changed the model. The engine used up its preload and plan, so
+            // `reconcile` sends new ones, and the audio is playing whatever
+            // the model asked meanwhile (a pause that arrived after the
+            // restart does not stop it).
             if let Ok(i) = state.player_index(player)
                 && state.players[i].current == Some(entry)
                 && state.players[i].transport != Transport::Stopped
             {
+                // A repeat pass keeps the entry as it is. Otherwise a
+                // self-next is the replay: an ordinary play of the same
+                // entry (played mark, history, next derived from the playlist).
+                let replay =
+                    !repeating(state, &state.players[i]) && state.players[i].next == Some(entry);
+                if replay && advance_to(state, i, entry, true).is_none() {
+                    // The file cannot be read any more: the pass already
+                    // started plays out; the next is the entry after it.
+                    let following = state.playlists.next_playable_after(entry, &state.library);
+                    state.players[i].next = following;
+                    state.players[i].next_explicit = false;
+                }
                 let p = &mut state.players[i];
                 p.preloaded = None;
                 p.scheduled = None;
@@ -487,13 +516,11 @@ fn fade_stop(
     Ok(())
 }
 
+/// O37: the entry on air is accepted; it plays once more.
 fn set_next(state: &mut AppState, id: PlayerId, entry: EntryId) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
     if state.playlists.entry(entry).is_none() {
         return Err(ModelError::UnknownEntry(entry));
-    }
-    if state.players[i].current == Some(entry) {
-        return Err(ModelError::NextIsCurrent);
     }
     state.players[i].next = Some(entry);
     state.players[i].next_explicit = true;
@@ -535,6 +562,13 @@ fn source_failed(
         .and_then(|track| state.library.get_mut(track))
     {
         t.file_state = FileState::Unreadable;
+    }
+    // A self-next (O37) on a file that cannot be read: the entry after it is
+    // the next, or `advance` would go into the entry that just failed.
+    for i in 0..state.players.len() {
+        if state.players[i].current == Some(entry) && state.players[i].next == Some(entry) {
+            replace_self_next(state, i, entry);
+        }
     }
     if let Ok(i) = state.player_index(player)
         && state.players[i].current == Some(entry)
@@ -594,7 +628,19 @@ fn preload_failed(
     if let Ok(i) = state.player_index(player) {
         // The failed preload is gone.
         state.players[i].preloaded = None;
+        // A self-next (O37) on a file that cannot be read again: the entry
+        // after it is the next.
+        if state.players[i].next == Some(entry) {
+            replace_self_next(state, i, entry);
+        }
     }
+}
+
+/// The player's next is its own current `entry`, which cannot be played: the
+/// next playable entry after it takes its place, by default rules.
+fn replace_self_next(state: &mut AppState, i: usize, entry: EntryId) {
+    state.players[i].next = state.playlists.next_playable_after(entry, &state.library);
+    state.players[i].next_explicit = false;
 }
 
 /// The two playable entries that follow `entry` in its playlist, so a
@@ -642,6 +688,20 @@ pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan
     }
     if player.mode == PlayMode::Single || player.stop_after_current || player.next.is_none() {
         return Some(TransitionPlan::StopAt { at_secs: end });
+    }
+    // O37: the entry on air was set as next. It plays once more from its
+    // cue-in, as a hard transition into itself (like a repeat, so no segue:
+    // it would overlap the file with itself). A file that can no longer be
+    // opened plays its pass out and stops.
+    if player.next == Some(current) {
+        return Some(if track.file_state.is_playable() {
+            TransitionPlan::StartNextAt {
+                at_secs: end,
+                fade_current_until_secs: None,
+            }
+        } else {
+            TransitionPlan::StopAt { at_secs: end }
+        });
     }
     // A segue only makes sense strictly inside the effective cue range (an
     // automatic one may be stale against a manual cue-out).
@@ -1064,12 +1124,11 @@ pub(crate) fn fill_empty_next(state: &mut AppState) {
     }
 }
 
-/// R26: the player's current entry repeats (and R27, stop-after-current or
-/// a fade stop do not end it first).
-fn repeating(state: &AppState, player: &PlayerState) -> bool {
+/// R26 without the stop-after-current test: the current entry would repeat
+/// (O38 uses it to allow stop-after-current in Single mode).
+pub(crate) fn repeat_entry(state: &AppState, player: &PlayerState) -> bool {
     player.transport != Transport::Stopped
         && !player.fade_stop_pending
-        && !player.stop_after_current
         && player
             .current
             .and_then(|c| state.playlists.entry(c))
@@ -1081,7 +1140,14 @@ fn repeating(state: &AppState, player: &PlayerState) -> bool {
             .is_some_and(|t| t.file_state.is_playable())
 }
 
-/// The entry to preload: the current one while it repeats, else the next.
+/// R26: the player's current entry repeats (and R27, stop-after-current or
+/// a fade stop do not end it first).
+fn repeating(state: &AppState, player: &PlayerState) -> bool {
+    !player.stop_after_current && repeat_entry(state, player)
+}
+
+/// The entry to preload: the current one while it repeats, else the next
+/// (with a self-next, O37, that is the current entry too).
 fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
     if repeating(state, player) {
         player.current
@@ -1092,6 +1158,21 @@ fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
 
 /// Derives the engine work implied by the state: preload whatever is next.
 pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    // O38: in Single mode the flag lives only while the current entry
+    // repeats (it may have stopped applying: repeat off, a stop-after mark,
+    // Next into another entry, a file that cannot be read).
+    let stale: Vec<usize> = state
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| {
+            p.mode == PlayMode::Single && p.stop_after_current && !repeat_entry(state, p)
+        })
+        .map(|(i, _)| i)
+        .collect();
+    for i in stale {
+        state.players[i].stop_after_current = false;
+    }
     let preloads: Vec<(usize, Option<SourceRequest>)> = state
         .players
         .iter()

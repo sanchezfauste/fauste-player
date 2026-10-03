@@ -711,7 +711,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 TileStyle::plain()
             };
-            let sa_tip = if pv.mode == PlayMode::Single {
+            let sa_tip = if pv.mode == PlayMode::Single && !available.stop_after_current {
                 t.tr("tip-stop-after-single")
             } else {
                 t.tr("tip-stop-after")
