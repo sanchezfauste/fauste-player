@@ -123,8 +123,9 @@ the bus logs it when it falls back to shared.
     at least 20 ms), so the stop flag is seen and dropping the stream joins
     the thread within one wait. Partial writes continue and `EAGAIN` retries.
   - *Errors:* `EPIPE` is an xrun (counted, the PCM is prepared again and the
-    period is written again), a suspend is resumed, `EINTR` is ignored; anything
-    else is `DeviceLost`.
+    write goes on with the bytes not yet written; what the device accepted
+    before the xrun was dropped by `prepare`, not written again), a suspend
+    is resumed, `EINTR` is ignored; anything else is `DeviceLost`.
   - Other systems refuse native DSD (`check_dsd` in cpal).
 - Null refuses DSD (and exclusive). Offline takes DSD on devices marked
   exclusive-capable: `set_sample_format` sets the device's format (DoP needs

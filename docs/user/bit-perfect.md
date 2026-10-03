@@ -126,9 +126,10 @@ own fader is the exception: it always switches the track to PCM):
 - **Keep DSD and mute the other sources.** Nothing interrupts the DSD stream.
   Other sources routed to the device are muted until the DSD track ends, and
   the player shows an **Others muted** badge meanwhile. The player's own next
-  track does not overlap: it starts when the DSD track ends, after the DSD
-  silence, with no crossfade or segue. Moving the fader still switches the
-  track to PCM.
+  track does not overlap: it starts when the DSD track ends, with no
+  crossfade or segue. A PCM track waits for the DSD silence; a DSD track of
+  the same kind and DSD rate continues the stream without it. Moving the
+  fader still switches the track to PCM.
 
 **An album does not stay DSD under the default setting.** With *Continue the
 DSD track as PCM*, only a DSD track that starts on an idle device goes out as
