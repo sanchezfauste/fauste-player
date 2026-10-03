@@ -56,6 +56,20 @@ The switch is disabled when the device cannot give exclusive access.
   - nothing else plays on the same outputs (another player, a cart, a test
     tone).
 
+## DSD
+
+Under each bit-perfect device, Settings → Audio outputs has a **DSD** choice:
+**Convert to PCM** (the default), **DoP** (DSD over PCM, for most DSD-capable
+converters) and, on Linux only, **Native DSD** for hardware devices whose
+driver reports a DSD format. With DoP or native DSD, a stereo DSD track reaches
+the device unchanged while nothing else plays on it and the player's volume is
+100 %; the header badge then reads **DSD** instead of **BP**. Moving the
+fader, a fade or another source continues the track as PCM, unless **When
+another source needs a DSD output** is set to **Keep DSD and mute the other
+sources**: the player's next track then waits for the end of the DSD track and
+the **Others muted** badge shows meanwhile. Changing these settings needs a
+restart, like the other output settings.
+
 ## The BP badge
 
 The **BP** badge in the player header lights while the current track reaches
