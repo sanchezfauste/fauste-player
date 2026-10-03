@@ -200,7 +200,9 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   free display, checks in the log that the null backend is in use before
   anything plays, builds the scene through the remote API and captures
   with ImageMagick. Needs `xvfb`, `xdotool`, ImageMagick, `ffmpeg`,
-  `python3` and `curl`; the songs are kept in `target/screenshots`.
+  `python3` and `curl`; the songs are kept in `target/screenshots` and
+  reached through the link `/tmp/fauste-demo` (`SHOTS_MEDIA`), so no
+  screenshot shows a home path.
   `--hold` keeps the app running for a look (`DISPLAY=:<n> import -window
   <id> shot.png`). The crops follow the default 1920×1080 layout: after a
   layout change, check every PNG and adjust the positions in the script.

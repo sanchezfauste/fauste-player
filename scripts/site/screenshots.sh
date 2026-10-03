@@ -18,7 +18,9 @@
 # it sends any play command, and stops otherwise.
 #
 # Needs Xvfb, xdotool, xwininfo, ImageMagick (import, convert), ffmpeg,
-# python3 and curl. The work folder is SHOTS_WORK (default:
+# python3 and curl. The app reaches the songs through SHOTS_MEDIA (default
+# /tmp/fauste-demo, a link to the work folder), so no screenshot shows a
+# home path. The work folder is SHOTS_WORK (default:
 # target/screenshots); the songs are kept there between runs. The scratch
 # FAUSTE_HOME is SHOTS_HOME (default: home/ in the work folder), and it is
 # replaced on every run.
@@ -44,6 +46,10 @@ work=${SHOTS_WORK:-$root/target/screenshots}
 mkdir -p "$work"
 work=$(cd "$work" && pwd)
 home=${SHOTS_HOME:-$work/home}
+# The app shows the paths of the files (Settings > Cartwall, tooltips), so
+# the songs are reached through a short neutral link that never names a
+# home folder: SHOTS_MEDIA (default /tmp/fauste-demo) -> the work folder.
+media=${SHOTS_MEDIA:-/tmp/fauste-demo}
 images=$root/docs/images
 guide=$images/guide
 log() { echo "screenshots.sh: $*" >&2; }
@@ -55,8 +61,10 @@ display=
 port=
 win=
 
+linked=false
 cleanup() {
     set +e
+    if $linked; then rm -f "$media"; fi
     if [[ -n $app_pid ]]; then kill "$app_pid" 2>/dev/null; wait "$app_pid" 2>/dev/null; fi
     if [[ -n $xvfb_pid ]]; then kill "$xvfb_pid" 2>/dev/null; wait "$xvfb_pid" 2>/dev/null; fi
 }
@@ -64,6 +72,19 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM
 
 # ---------------------------------------------------------------- helpers
+
+# Points the neutral media link at the work folder, refusing a path under a
+# home folder or one that is something other than our link.
+link_media() {
+    case $media in
+        "$HOME"/* | /home/* | /Users/* | /root/*) die "SHOTS_MEDIA must not be under a home folder: $media" ;;
+    esac
+    if [[ -e $media || -L $media ]]; then
+        [[ -L $media ]] || die "$media exists and is not a link; set SHOTS_MEDIA"
+    fi
+    ln -sfn "$work" "$media"
+    linked=true
+}
 
 # api <method> <path> [json]: a request to the remote API; prints the body
 # and fails on an HTTP error.
@@ -120,6 +141,7 @@ park() { x xdotool mousemove --window "$win" 1910 1075; sleep 0.3; }
 # the window directly is a synthetic event, which the app ignores).
 key() { x xdotool windowfocus "$win" 2>/dev/null; x xdotool key "$@" 2>/dev/null; sleep 0.6; }
 
+# Racy if another Xvfb takes the same display meanwhile; fine for a dev script.
 free_display() {
     local n
     for n in $(seq 77 140); do
@@ -151,7 +173,7 @@ write_home() {
     rm -rf "$home"
     mkdir -p "$home"
     touch "$home/.screenshots-home"
-    FAUSTE_HOME=$home "$root/target/release/examples/demo_session" "$work/music" "$work/carts" >&2
+    FAUSTE_HOME=$home "$root/target/release/examples/demo_session" "$media/music" "$media/carts" >&2
     python3 - "$home" "$port" <<'EOF'
 import json, sys
 home, port = sys.argv[1], int(sys.argv[2])
@@ -310,6 +332,7 @@ shoot_guide() {
 log "building"
 (cd "$root" && cargo build --release -q -p fp-app --bins --example demo_session)
 "$root/scripts/site/tones.sh" "$work/music" "$work/carts" >&2
+link_media
 port=$(free_port)
 write_home
 start_app

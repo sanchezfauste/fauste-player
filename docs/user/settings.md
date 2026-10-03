@@ -69,7 +69,7 @@ the device is reopened when it comes back (see
 
 ## Players
 
-![Settings, Players](../images/guide/settings-players.png)
+![Settings, Players: number of players, default mode, fade time, automatic mix, cue-in and cue-out, end-of-track warning and language](../images/guide/settings-players.png)
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -166,7 +166,7 @@ Pages, grid size, the cart editor, and cart page import and export. See
 
 ## Keyboard shortcuts
 
-![Settings, Keyboard shortcuts](../images/guide/settings-shortcuts.png)
+![Settings, Keyboard shortcuts: each player action with its key, and Unbind beside the bound ones](../images/guide/settings-shortcuts.png)
 
 See [Keyboard](keyboard.md).
 
