@@ -35,8 +35,10 @@ on:
 permissions:
   contents: read
 
+# Deploys queue one after another; pull request checks run on their own so
+# that they never replace a queued deploy.
 concurrency:
-  group: pages
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages' }}
   cancel-in-progress: false
 
 jobs:

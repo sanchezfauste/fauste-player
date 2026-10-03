@@ -14,6 +14,15 @@ out=${1:-$root/target/site}
 
 mdbook=$("$root/scripts/site/mdbook.sh")
 
+# The output folder is replaced: never the repository or a parent of it.
+case $(cd "$(dirname "$out")" 2>/dev/null && pwd)/$(basename "$out") in
+  / | "$root" | "$root"/. | "$root"/.. | "$root"/docs | "$root"/site)
+    echo "build.sh: refusing to replace $out" >&2
+    exit 1 ;;
+esac
+case $root/ in
+  "$(cd "$out" 2>/dev/null && pwd)"/*) echo "build.sh: refusing to replace $out" >&2; exit 1 ;;
+esac
 rm -rf "$out"
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
