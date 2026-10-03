@@ -309,6 +309,21 @@ impl AudioBackend for CpalBackend {
     }
 }
 
+/// Refuses the DSD streams this backend cannot carry: native DSD, and DSD
+/// over a shared stream, where the system mixer would alter the words.
+fn check_dsd(config: &StreamConfig) -> Result<(), BackendError> {
+    match config.dsd {
+        None => Ok(()),
+        Some(DsdStream::Native) => Err(BackendError::Unsupported(
+            "native DSD is not available on this system".to_owned(),
+        )),
+        Some(DsdStream::Dop) if !config.exclusive => Err(BackendError::Unsupported(
+            "DSD needs exclusive access".to_owned(),
+        )),
+        Some(DsdStream::Dop) => Ok(()),
+    }
+}
+
 impl CpalBackend {
     fn open_on_host(
         &self,
@@ -321,11 +336,7 @@ impl CpalBackend {
             inner: errors,
             lost: Arc::clone(self.host.lost()),
         });
-        if config.dsd == Some(DsdStream::Native) {
-            return Err(BackendError::Unsupported(
-                "native DSD is not available on this system".to_owned(),
-            ));
-        }
+        check_dsd(&config)?;
         if config.exclusive && !exclusive_capable(&self.id().0, &device.0) {
             return Err(BackendError::Unsupported(
                 "exclusive access is not available on this device".to_owned(),
@@ -615,7 +626,7 @@ fn device_detail(d: &cpal::DeviceDescription) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        HostCache, OutputSample, choose_buffer_frames, choose_dop_sample_format,
+        HostCache, OutputSample, check_dsd, choose_buffer_frames, choose_dop_sample_format,
         choose_sample_format, classify, device_detail, exclusive_capable, render_converted,
     };
     use crate::{Renderer, StreamErrorKind};
@@ -741,6 +752,23 @@ mod tests {
         render_converted(&mut Samples(samples, 0), &mut out, 1, &mut scratch);
         let expected: Vec<i32> = values.iter().map(|v| v << 8).collect();
         assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn a_dsd_stream_needs_exclusive_access_and_never_goes_native() {
+        use crate::StreamConfig;
+        use crate::dsd::DsdStream;
+        let config = |dsd, exclusive| StreamConfig {
+            sample_rate: 176_400,
+            buffer_frames: 512,
+            channels: 2,
+            exclusive,
+            dsd,
+        };
+        assert!(check_dsd(&config(Some(DsdStream::Dop), false)).is_err());
+        assert!(check_dsd(&config(Some(DsdStream::Dop), true)).is_ok());
+        assert!(check_dsd(&config(Some(DsdStream::Native), true)).is_err());
+        assert!(check_dsd(&config(None, false)).is_ok());
     }
 
     #[test]
