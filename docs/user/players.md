@@ -136,8 +136,7 @@ The window shows:
 - the elapsed time and the time remaining to the end of the file (a CUE plays
   whole files);
 - **Pause** / **Resume**, **Stop** and **Load as next**. **Load as next**
-  makes the cued track the player's next, as a double-click would, and keeps
-  the CUE playing. It is dimmed when the track already is the next. If the
+  makes the cued track the player's next and keeps the CUE playing. It is dimmed when the track already is the next. If the
   cued track is the one on air, it plays once more when the current pass
   ends.
 

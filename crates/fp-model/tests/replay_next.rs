@@ -334,7 +334,26 @@ fn a_self_next_on_a_failing_last_source_stops_the_player() {
 }
 
 #[test]
+fn a_self_next_whose_file_goes_missing_on_air_gives_way_to_the_following_entry() {
+    let (mut s, p, [a, b, _]) = replaying();
+    let track = s.track_for_entry(a).unwrap().id;
+    let out = apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: fp_model::FileState::Missing,
+        },
+    )
+    .unwrap();
+    let player = s.player(p).unwrap();
+    assert_eq!((player.next, player.next_explicit), (Some(b), false));
+    assert_eq!(preload(&out, p), Some(Some(b)), "{out:?}");
+    assert_eq!(plan(&s, p), Some(HARD_END), "no dead air at cue-out");
+}
+
+#[test]
 fn plan_for_stops_at_the_end_for_a_self_next_on_an_unplayable_file() {
+    // Only reachable if the file state changed behind the reducer's back.
     let (mut s, p, [a, _, _]) = replaying();
     break_file(&mut s, a);
     assert_eq!(plan(&s, p), Some(TransitionPlan::StopAt { at_secs: 180.0 }));

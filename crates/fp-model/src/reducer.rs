@@ -155,6 +155,20 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         } => {
             if let Some(t) = state.library.get_mut(track) {
                 t.file_state = file_state;
+                // A self-next (O37) whose file can no longer be opened gives
+                // way to the entry after it: the player goes on at cue-out
+                // instead of stopping there.
+                if !file_state.is_playable() {
+                    for i in 0..state.players.len() {
+                        let p = &state.players[i];
+                        if let Some(entry) = p.current
+                            && p.next == Some(entry)
+                            && state.track_for_entry(entry).is_some_and(|t| t.id == track)
+                        {
+                            replace_self_next(state, i, entry);
+                        }
+                    }
+                }
                 refresh_next(state);
             }
         }
