@@ -164,6 +164,7 @@ impl Engine {
             looped: request.looped,
             rate: Some(self.rate_of(&bus_key)),
             fade_out_frames: self.frames_on(&bus_key, self.settings.tuning.declick_ms),
+            dsd: false,
         };
         if let Some(c) = self.cartwall.as_ref() {
             c.worker.load_with(

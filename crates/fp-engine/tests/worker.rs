@@ -11,9 +11,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use fp_engine::source::{SourceConsumer, source_pair};
+use fp_backends::dsd::sample_to_word;
+use fp_engine::source::{SourceConsumer, source_pair, source_pair_dsd};
 use fp_engine::worker::{
     LoadOptions, PlayerWorker, SampleSource, SourceKey, SourceOpener, WorkerFailure,
+    dsd_file_opener, file_opener,
 };
 use support::{Exploding, counting_opener};
 
@@ -154,6 +156,7 @@ fn a_source_with_until_ends_exactly_there() {
     let (p, mut c) = source_pair(4_000);
     let shared = p.shared.clone();
     let options = LoadOptions {
+        dsd: false,
         until_secs: Some(frames_secs(130)),
         looped: false,
         rate: None,
@@ -179,6 +182,7 @@ fn a_looped_source_repeats_without_gaps() {
     let (p, mut c) = source_pair(4_000);
     let shared = p.shared.clone();
     let options = LoadOptions {
+        dsd: false,
         until_secs: Some(frames_secs(70)),
         looped: true,
         rate: None,
@@ -202,6 +206,7 @@ fn a_looped_source_without_until_loops_at_the_end_of_the_file() {
     let (w, _f) = worker(counting_opener(50));
     let (p, mut c) = source_pair(4_000);
     let options = LoadOptions {
+        dsd: false,
         until_secs: None,
         looped: true,
         rate: None,
@@ -219,6 +224,7 @@ fn a_zero_length_loop_ends() {
     let (p, mut c) = source_pair(4_000);
     let shared = p.shared.clone();
     let options = LoadOptions {
+        dsd: false,
         until_secs: Some(frames_secs(10)),
         looped: true,
         rate: None,
@@ -287,6 +293,7 @@ fn a_bounded_pass_fades_its_last_frames_to_zero() {
     let (p, mut c) = source_pair(4_000);
     let shared = p.shared.clone();
     let options = LoadOptions {
+        dsd: false,
         until_secs: Some(frames_secs(100)),
         looped: false,
         rate: None,
@@ -308,6 +315,7 @@ fn a_looped_pass_is_not_faded() {
     let (w, _f) = worker(constant_opener(1_000));
     let (p, mut c) = source_pair(4_000);
     let options = LoadOptions {
+        dsd: false,
         until_secs: Some(frames_secs(100)),
         looped: true,
         rate: None,
@@ -331,4 +339,128 @@ fn constant_opener(frames: usize) -> SourceOpener {
         }
     }
     Arc::new(move |_, _, _| Ok(Box::new(Constant(frames, false))))
+}
+
+fn dsd_bytes(n: usize) -> (Vec<u8>, Vec<u8>) {
+    let left: Vec<u8> = (0..n as u32).map(|i| (i % 251) as u8).collect();
+    let right: Vec<u8> = left.iter().map(|b| !b).collect();
+    (left, right)
+}
+
+fn dsd_worker() -> (PlayerWorker, crossbeam_channel::Receiver<WorkerFailure>) {
+    let (tx, rx) = crossbeam_channel::unbounded();
+    (
+        PlayerWorker::spawn_with_dsd("t", file_opener(), dsd_file_opener(), 176_400, 1_000, tx)
+            .unwrap(),
+        rx,
+    )
+}
+
+#[test]
+fn a_dsd_load_fills_the_word_ring_with_the_files_bytes_and_the_pcm_ring_in_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, right) = dsd_bytes(20_000);
+    let path = support::dsf_file(dir.path(), "a.dsf", &left, &right);
+    let (worker, _failures) = dsd_worker();
+    let (producer, mut consumer) = source_pair_dsd(20_000);
+    let shared = producer.shared.clone();
+    worker.load_with(
+        SourceKey(1),
+        path,
+        0.0,
+        producer,
+        LoadOptions {
+            dsd: true,
+            rate: Some(176_400),
+            ..LoadOptions::default()
+        },
+    );
+    wait_until("eof", || shared.is_eof());
+    let (mut pcm, mut dsd) = (vec![0.0; 40_000], vec![0.0; 40_000]);
+    let frames = consumer.pop_pair(&mut pcm, &mut dsd);
+    assert_eq!(frames, 10_000, "one word frame per two bytes");
+    for (k, frame) in dsd.chunks(2).take(frames).enumerate() {
+        assert_eq!(
+            sample_to_word(frame[0]),
+            [left[2 * k], left[2 * k + 1]],
+            "frame {k}"
+        );
+        assert_eq!(
+            sample_to_word(frame[1]),
+            [right[2 * k], right[2 * k + 1]],
+            "frame {k}"
+        );
+    }
+    assert!(
+        pcm.iter()
+            .take(frames * 2)
+            .all(|s| s.is_finite() && s.abs() <= 1.5)
+    );
+}
+
+#[test]
+fn a_dsd_pass_bounded_by_until_keeps_its_words_untouched_and_fades_only_pcm() {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, right) = dsd_bytes(40_000);
+    let path = support::dsf_file(dir.path(), "b.dsf", &left, &right);
+    let (worker, _failures) = dsd_worker();
+    let (producer, mut consumer) = source_pair_dsd(40_000);
+    let shared = producer.shared.clone();
+    // 0.05 s at 176.4 kHz is 8820 frames; fade the last 2000.
+    worker.load_with(
+        SourceKey(1),
+        path,
+        0.0,
+        producer,
+        LoadOptions {
+            dsd: true,
+            rate: Some(176_400),
+            until_secs: Some(0.05),
+            fade_out_frames: 2_000,
+            ..LoadOptions::default()
+        },
+    );
+    wait_until("eof", || shared.is_eof());
+    let (mut pcm, mut dsd) = (vec![0.0; 40_000], vec![0.0; 40_000]);
+    let frames = consumer.pop_pair(&mut pcm, &mut dsd);
+    assert_eq!(frames, 8_820);
+    for (k, frame) in dsd.chunks(2).take(frames).enumerate() {
+        assert_eq!(
+            sample_to_word(frame[0]),
+            [left[2 * k], left[2 * k + 1]],
+            "frame {k}"
+        );
+        assert_eq!(
+            sample_to_word(frame[1]),
+            [right[2 * k], right[2 * k + 1]],
+            "frame {k}"
+        );
+    }
+    assert!(
+        pcm[(frames - 1) * 2].abs() < 0.01,
+        "the PCM ring fades to zero"
+    );
+}
+
+#[test]
+fn a_looped_dsd_load_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, right) = dsd_bytes(8_192);
+    let path = support::dsf_file(dir.path(), "c.dsf", &left, &right);
+    let (worker, failures) = dsd_worker();
+    let (producer, _consumer) = source_pair_dsd(1_000);
+    worker.load_with(
+        SourceKey(1),
+        path,
+        0.0,
+        producer,
+        LoadOptions {
+            dsd: true,
+            looped: true,
+            rate: Some(176_400),
+            ..LoadOptions::default()
+        },
+    );
+    let failure = failures.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(failure.key, SourceKey(1));
 }

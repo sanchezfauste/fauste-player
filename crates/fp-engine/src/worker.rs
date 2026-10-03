@@ -16,6 +16,7 @@ use fp_decode::priority::Priority;
 use crate::decode::FileDecoder;
 use crate::resample::{StreamResampler, aligned_preroll};
 use crate::source::SourceProducer;
+use fp_backends::dsd::{DSD_SILENCE, silence_sample, word_to_sample};
 
 /// Produces interleaved stereo at the bus rate.
 pub trait SampleSource: Send {
@@ -102,6 +103,128 @@ impl SampleSource for FileSource {
     }
 }
 
+/// Produces the two streams of a DSD source in step.
+pub trait DsdSampleSource: Send {
+    /// Appends equal numbers of stereo frames of PCM (at the word rate) and
+    /// of DSD words; `false` at the end.
+    fn next_pair(&mut self, pcm: &mut Vec<f32>, dsd: &mut Vec<f32>) -> Result<bool, String>;
+}
+
+/// Opens a `DsdSampleSource` for `path`, positioned at `from_secs`, for a
+/// word rate (the DSD rate over 16).
+pub type DsdOpener =
+    Arc<dyn Fn(&Path, f64, u32) -> Result<Box<dyn DsdSampleSource>, String> + Send + Sync>;
+
+/// Samples (not frames) each queue of a `DsdFileSource` is refilled to.
+const DSD_QUEUE_MIN: usize = 8_192;
+
+/// A DSD file for output without conversion: its raw words, and its PCM
+/// conversion at the same rate for the meters and for a switch to PCM.
+struct DsdFileSource {
+    pcm: Box<dyn SampleSource>,
+    raw: fp_decode::DsdRawReader,
+    /// Bytes read per channel and not yet made into words.
+    bytes: Vec<Vec<u8>>,
+    pcm_queue: Vec<f32>,
+    word_queue: Vec<f32>,
+    pcm_done: bool,
+    raw_done: bool,
+}
+
+/// Opener for DSD files: `(path, from_secs, word_rate)`.
+pub fn dsd_file_opener() -> DsdOpener {
+    Arc::new(|path, from_secs, word_rate| {
+        let mut raw = fp_decode::DsdRawReader::open(path)?;
+        if !(1..=2).contains(&raw.channels()) {
+            return Err("only mono or stereo DSD goes out unchanged".to_owned());
+        }
+        if raw.dsd_rate() / 16 != word_rate {
+            return Err(format!("word rate {word_rate} does not match the file"));
+        }
+        raw.seek(from_secs)?;
+        let pcm = file_opener()(path, from_secs, word_rate)?;
+        Ok(Box::new(DsdFileSource {
+            pcm,
+            bytes: vec![Vec::new(); raw.channels()],
+            raw,
+            pcm_queue: Vec::new(),
+            word_queue: Vec::new(),
+            pcm_done: false,
+            raw_done: false,
+        }))
+    })
+}
+
+impl DsdFileSource {
+    /// Reads more bytes and turns every complete pair into a word frame.
+    fn refill_words(&mut self) -> Result<(), String> {
+        if !self.raw.next_bytes(&mut self.bytes)? {
+            self.raw_done = true;
+        }
+        let have = self.bytes.iter().map(Vec::len).min().unwrap_or(0);
+        // At the end an odd trailing byte is padded with the idle byte.
+        let take = if self.raw_done {
+            have.div_ceil(2)
+        } else {
+            have / 2
+        };
+        for k in 0..take {
+            let mut words = [0.0f32; 2];
+            for (c, word) in words.iter_mut().enumerate() {
+                // Mono is duplicated to both channels.
+                let channel = self.bytes.get(c).or_else(|| self.bytes.first());
+                let byte = |i: usize| {
+                    channel
+                        .and_then(|b| b.get(2 * k + i))
+                        .copied()
+                        .unwrap_or(DSD_SILENCE)
+                };
+                *word = word_to_sample(byte(0), byte(1));
+            }
+            self.word_queue.extend_from_slice(&words);
+        }
+        for channel in &mut self.bytes {
+            let used = (take * 2).min(channel.len());
+            channel.drain(..used);
+        }
+        if self.raw_done {
+            for channel in &mut self.bytes {
+                channel.clear();
+            }
+        }
+        Ok(())
+    }
+}
+
+impl DsdSampleSource for DsdFileSource {
+    fn next_pair(&mut self, pcm: &mut Vec<f32>, dsd: &mut Vec<f32>) -> Result<bool, String> {
+        while !self.raw_done && self.word_queue.len() < DSD_QUEUE_MIN {
+            self.refill_words()?;
+        }
+        while !self.pcm_done && self.pcm_queue.len() < DSD_QUEUE_MIN {
+            if !self.pcm.next_block(&mut self.pcm_queue)? {
+                self.pcm_done = true;
+            }
+        }
+        // Keep the two equal: pad the side that ended first.
+        if self.raw_done && self.word_queue.len() < self.pcm_queue.len() {
+            self.word_queue
+                .resize(self.pcm_queue.len(), silence_sample());
+        }
+        if self.pcm_done && self.pcm_queue.len() < self.word_queue.len() {
+            self.pcm_queue.resize(self.word_queue.len(), 0.0);
+        }
+        let n = self.pcm_queue.len().min(self.word_queue.len());
+        let n = n - n % 2;
+        if n == 0 {
+            return Ok(false);
+        }
+        pcm.extend(self.pcm_queue.drain(..n));
+        dsd.extend(self.word_queue.drain(..n));
+        Ok(true)
+    }
+}
+
 /// Identifies a source within its worker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SourceKey(pub u64);
@@ -121,6 +244,9 @@ pub struct LoadOptions {
     /// the cut is not a step. 0 is no fade. A looped source keeps its
     /// splice.
     pub fade_out_frames: u64,
+    /// Open the file as a DSD source (raw words beside the PCM conversion).
+    /// `looped` is refused for it. Its fade only touches the PCM ring.
+    pub dsd: bool,
 }
 
 pub enum WorkerCommand {
@@ -143,13 +269,21 @@ pub struct WorkerFailure {
     pub error: String,
 }
 
+enum JobSource {
+    Pcm(Box<dyn SampleSource>),
+    Dsd(Box<dyn DsdSampleSource>),
+}
+
 struct Job {
     key: SourceKey,
     path: PathBuf,
     from_secs: f64,
     producer: SourceProducer,
-    source: Option<Box<dyn SampleSource>>,
+    source: Option<JobSource>,
     pending: Vec<f32>,
+    /// DSD words matching `pending` frame for frame (empty for PCM).
+    pending_dsd: Vec<f32>,
+    dsd: bool,
     done: bool,
     /// Frames per pass when bounded by `until`.
     limit_frames: Option<u64>,
@@ -178,10 +312,29 @@ impl PlayerWorker {
         ready_frames: usize,
         failures: Sender<WorkerFailure>,
     ) -> std::io::Result<Self> {
+        Self::spawn_with_dsd(
+            name,
+            opener,
+            dsd_file_opener(),
+            bus_rate,
+            ready_frames,
+            failures,
+        )
+    }
+
+    /// Like `spawn`, with the opener of DSD sources given (tests).
+    pub fn spawn_with_dsd(
+        name: &str,
+        opener: SourceOpener,
+        dsd_opener: DsdOpener,
+        bus_rate: u32,
+        ready_frames: usize,
+        failures: Sender<WorkerFailure>,
+    ) -> std::io::Result<Self> {
         let (tx, rx) = crossbeam_channel::unbounded();
         let thread = std::thread::Builder::new()
             .name(name.to_owned())
-            .spawn(move || run(&rx, &opener, bus_rate, ready_frames, &failures))?;
+            .spawn(move || run(&rx, &opener, &dsd_opener, bus_rate, ready_frames, &failures))?;
         Ok(Self {
             commands: tx,
             thread: Some(thread),
@@ -242,6 +395,7 @@ impl Drop for PlayerWorker {
 fn run(
     commands: &Receiver<WorkerCommand>,
     opener: &SourceOpener,
+    dsd_opener: &DsdOpener,
     bus_rate: u32,
     ready_frames: usize,
     failures: &Sender<WorkerFailure>,
@@ -291,6 +445,8 @@ fn run(
                         producer,
                         source: None,
                         pending: Vec::new(),
+                        pending_dsd: Vec::new(),
+                        dsd: options.dsd,
                         done: false,
                         limit_frames,
                         looped: options.looped,
@@ -316,7 +472,7 @@ fn run(
         {
             // The threshold is a time: scale it to the rate the source plays at.
             let ready = scaled_frames(ready_frames, job.rate, bus_rate);
-            let outcome = catch_unwind(AssertUnwindSafe(|| step(job, opener, ready)));
+            let outcome = catch_unwind(AssertUnwindSafe(|| step(job, opener, dsd_opener, ready)));
             let error = match outcome {
                 Ok(Ok(())) => None,
                 Ok(Err(e)) => Some(e),
@@ -370,18 +526,33 @@ fn scaled_frames(frames: usize, to_rate: u32, from_rate: u32) -> usize {
 }
 
 /// Opens the job if needed and moves at most one decoded block into its ring.
-fn step(job: &mut Job, opener: &SourceOpener, ready_frames: usize) -> Result<(), String> {
+fn step(
+    job: &mut Job,
+    opener: &SourceOpener,
+    dsd_opener: &DsdOpener,
+    ready_frames: usize,
+) -> Result<(), String> {
     if job.limit_frames == Some(0) {
         return finish(job);
     }
     if job.source.is_none() {
-        job.source = Some(opener(&job.path, job.from_secs, job.rate)?);
+        job.source = Some(if job.dsd {
+            if job.looped {
+                return Err("a DSD source cannot loop".to_owned());
+            }
+            JobSource::Dsd(dsd_opener(&job.path, job.from_secs, job.rate)?)
+        } else {
+            JobSource::Pcm(opener(&job.path, job.from_secs, job.rate)?)
+        });
     }
     if job.pending.is_empty() {
         let at_limit = job.limit_frames.is_some_and(|l| job.pass_frames >= l);
         let more = !at_limit
             && match job.source.as_mut() {
-                Some(source) => source.next_block(&mut job.pending)?,
+                Some(JobSource::Pcm(source)) => source.next_block(&mut job.pending)?,
+                Some(JobSource::Dsd(source)) => {
+                    source.next_pair(&mut job.pending, &mut job.pending_dsd)?
+                }
                 None => false,
             };
         if let Some(limit) = job.limit_frames {
@@ -389,9 +560,11 @@ fn step(job: &mut Job, opener: &SourceOpener, ready_frames: usize) -> Result<(),
             let room = limit.saturating_sub(job.pass_frames);
             let frames = (job.pending.len() / 2) as u64;
             if frames > room {
-                job.pending
-                    .truncate(usize::try_from(room).unwrap_or(usize::MAX) * 2);
+                let keep = usize::try_from(room).unwrap_or(usize::MAX) * 2;
+                job.pending.truncate(keep);
+                job.pending_dsd.truncate(keep);
             }
+            // Only PCM is faded: a gain on DSD words would corrupt them.
             fade_to_limit(job, limit);
         }
         job.pass_frames += (job.pending.len() / 2) as u64;
@@ -402,14 +575,20 @@ fn step(job: &mut Job, opener: &SourceOpener, ready_frames: usize) -> Result<(),
                     .shared
                     .loop_frames
                     .store(job.pass_frames, Ordering::Release);
-                job.source = Some(opener(&job.path, job.from_secs, job.rate)?);
+                job.source = Some(JobSource::Pcm(opener(&job.path, job.from_secs, job.rate)?));
                 job.pass_frames = 0;
                 return Ok(());
             }
             return finish(job);
         }
     }
-    let pushed = job.producer.push(&job.pending);
+    let pushed = if job.dsd {
+        let frames = job.producer.push_pair(&job.pending, &job.pending_dsd);
+        job.pending_dsd.drain(..frames * 2);
+        frames * 2
+    } else {
+        job.producer.push(&job.pending)
+    };
     job.pending.drain(..pushed);
     if job.producer.buffered_frames() >= ready_frames || job.producer.free_frames() == 0 {
         job.producer.shared.ready.store(true, Ordering::Release);
