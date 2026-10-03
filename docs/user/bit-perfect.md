@@ -208,4 +208,4 @@ have not been tried on a real converter by the project. To check one:
    silence. It must pass, and the converter should lock to DSD64.
 5. With DSD files in `test-music/`, `cargo test --release -p fp-engine --test dsd_real_music -- --ignored`
    plays them through the engine on a simulated device and compares the
-   words with the file's bytes (see [Testing](../technical/testing.md)).
+   words with the file's bytes (see [Testing](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/testing.md)).

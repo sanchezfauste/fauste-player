@@ -1,7 +1,7 @@
 # Operator Feedback 2 — Design Spec
 
 - **Date:** 2026-10-01
-- **Status:** Approved. Plans 1 to 10, 12 and 13 are built; each plan's section ends with its "As built" notes.
+- **Status:** Approved. All thirteen plans are built; each plan's section ends with its "As built" notes.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§2 threads,
   §3 rules, §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md)
   (M4 display), the [cartwall and settings spec](2026-09-26-phase2-cartwall-settings-design.md)
@@ -623,6 +623,12 @@ The audit of every earlier plan found these items still open.
   website URL is set as the repository homepage (`gh repo edit
   --description … --homepage …`) once the site is live. README and the
   site link each other.
+- **As built.**
+  - **Guide.** `docs/book.toml` builds `docs/user/` with mdBook v0.5.4, pinned and downloaded into `target/tools/` by `scripts/site/mdbook.sh`. `scripts/site/build.sh [out]` (default `target/site`) puts the landing page at the root and the guide under `guide/`, copies `docs/images/` recursively, and replaces its output folder only when that is safe: inside the repository only `target/…` or `_site`; outside it, a missing or empty folder, or one it built before (it leaves a `.fauste-site` marker); never a parent of the repository. `scripts/site/check-links.sh` checks every internal link and fails when it finds no page. Links from the guide into `docs/technical/` are absolute GitHub URLs, so they work both on GitHub and in the book.
+  - **Downloads.** `build.sh` reads the latest release from `gh release view`, or from `FAUSTE_RELEASE_JSON` when that is set. A file the release does not have shows as "—" in its table cell (today only the aarch64 Flatpak); each tab's "All files and checksums" link leads to the releases page.
+  - **Workflow.** A release made by release-please uses `GITHUB_TOKEN`, so it starts no other workflow. `release-please.yml` therefore calls `pages.yml` through `workflow_call` once its build job is done. Pull requests run `pages.yml` as a build-only check, in a concurrency group of their own so that they never queue behind a deploy or cancel one. The site lives at `https://sanchezfauste.com/fauste-player/`, the account's custom domain. Pages already used "GitHub Actions" as its source, so the maintainer step was already done.
+  - **Screenshots.** `scripts/site/screenshots.sh [--only main] [--hold]` builds the release binary and `demo_session`. `scripts/site/tones.sh` generates FLAC songs (pink noise and a sine, each with its own envelope, with tags and a cover) and WAV carts. The script runs the app in Xvfb with a scratch `FAUSTE_HOME` in which every output is on the `null` backend, and it refuses to play anything until the log confirms that backend. It builds the scene through the remote API and crops with ImageMagick. The media is reached through a link, `SHOTS_MEDIA` (default `/tmp/fauste-demo`), so that no home path shows in an image. The guide has 16 images in `docs/images/guide/`. The remote API has no screen of its own, so Settings → Remote stands in for it. Bit-perfect gets no image, because the null backend has no exclusive device.
+  - **O30.** The description and homepage are set with `gh repo edit` once the first deploy is live; this is a step after the merge, not part of the branch.
 
 ## 13. Plan 12 — Window and layout
 

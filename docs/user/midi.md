@@ -7,6 +7,8 @@ lights show what each player is doing.
 
 ## Turning it on
 
+![Settings, MIDI: the switch to turn MIDI on, and the list of actions with a Learn button each](../images/guide/settings-midi.png)
+
 Open **Settings → MIDI** and tick **Use MIDI control surfaces**. The list
 under **Input ports** shows every MIDI input the computer has and whether it
 is connected. Only the controllers you have bound are opened (some systems

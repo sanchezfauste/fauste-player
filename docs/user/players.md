@@ -3,6 +3,8 @@
 Each column is one player. Players are independent: each has its own
 playlist tabs, transport, volume and outputs.
 
+![Player 1 on air: its header, cover, title, next track, transport, countdown, meter, fader and waveform](../images/guide/player.png)
+
 ## Header
 
 | Element | Meaning |
@@ -142,6 +144,8 @@ on the player's CUE output, for example headphones, without touching the
 on-air output, and opens a small **CUE window** for that player. Several
 windows can be open, one per player. See [Settings](settings.md) to choose
 the CUE device.
+
+![The CUE window of player 4, pre-listening its next track](../images/guide/cue-window.png)
 
 The window shows:
 

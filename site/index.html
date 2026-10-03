@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fauste Player — radio playout for Linux, Windows and macOS</title>
+<meta name="description" content="Fauste Player is a desktop radio playout application written in Rust: independent players, sample-accurate mixes, CUE pre-listen, a cartwall, bit-perfect and DSD output, MIDI and remote control.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><img src="favicon.svg" alt="" width="28" height="28"> Fauste Player</a>
+  <nav aria-label="Main">
+    <a href="#download">Download</a>
+    <a href="guide/">User guide</a>
+    <a href="https://github.com/sanchezfauste/fauste-player">Source</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Fauste Player</h1>
+    <p class="pitch">Radio playout for Linux, Windows and macOS. Independent players,
+      sample-accurate overlapping mixes, a separate pre-listen output, and an audio
+      engine the interface can never block.</p>
+    <p class="cta">
+      <a class="button" href="#download">Download <span data-version></span></a>
+      <a class="button secondary" href="guide/">Read the user guide</a>
+    </p>
+    <img class="shot" src="images/main-screen.png" width="1920" height="1080"
+         alt="The Fauste Player main screen: four players with waveforms and playlists, and the cartwall.">
+  </section>
+
+  <section aria-labelledby="features">
+    <h2 id="features">What it does</h2>
+    <ul class="features">
+      <li><h3>Independent players</h3>
+        <p>Four by default, any number configurable. Each has its own playlists,
+        transport, countdown, meter and outputs.</p></li>
+      <li><h3>Sample-accurate mixing</h3>
+        <p>In continuous mode the next track starts exactly at the MIX point and
+        overlaps the fading end of the current one. Markers are found automatically
+        and editable on the waveform.</p></li>
+      <li><h3>CUE pre-listen</h3>
+        <p>Listen to any track on a separate device or channel pair before it goes
+        on air, and load it as the next one.</p></li>
+      <li><h3>Cartwall</h3>
+        <p>Pages of instant carts for jingles, effects and spots, with loops,
+        exclusive carts and their own Main and Cue outputs.</p></li>
+      <li><h3>Bit-perfect and DSD</h3>
+        <p>Exclusive access follows each file's sample rate; DSD tracks reach the
+        converter unchanged as DoP or native DSD.</p></li>
+      <li><h3>MIDI and remote control</h3>
+        <p>Learn players onto a MIDI controller, or operate everything over the
+        network with an HTTP/JSON API, live events and OSC.</p></li>
+      <li><h3>Built to survive</h3>
+        <p>A lost device reconnects by itself, saves are atomic with backups, and
+        after a crash nothing goes on air on its own.</p></li>
+      <li><h3>English and Spanish</h3>
+        <p>The interface follows the operating system language, or the one you
+        choose in Settings.</p></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="download" class="downloads">
+    <h2 id="download">Download <span class="version" data-version></span></h2>
+    <p>Pick the package for your system. Every file has a <code>.sha256</code> next to
+    it on the release page.</p>
+
+    <div id="tabs">
+      <section id="dl-windows" data-os="windows" aria-labelledby="h-windows">
+        <h3 id="h-windows">Windows</h3>
+        <p>Windows 10 and 11, x86-64.</p>
+        <ul class="files">
+          <li data-row><a data-asset="\.msi$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Installer (.msi)</a></li>
+          <li data-row><a data-asset="-pc-windows-msvc\.zip$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Portable archive (.zip)</a></li>
+        </ul>
+        <p><a href="https://github.com/sanchezfauste/fauste-player/releases/latest">All files and checksums</a></p>
+      </section>
+
+      <section id="dl-macos" data-os="macos" aria-labelledby="h-macos">
+        <h3 id="h-macos">macOS</h3>
+        <p>Intel and Apple silicon.</p>
+        <ul class="files">
+          <li data-row><a data-asset="macos-universal\.dmg$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Universal disk image (.dmg)</a></li>
+          <li data-row><a data-asset="x86_64-apple-darwin\.tar\.gz$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Intel archive (.tar.gz)</a></li>
+          <li data-row><a data-asset="aarch64-apple-darwin\.tar\.gz$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Apple silicon archive (.tar.gz)</a></li>
+        </ul>
+        <p><a href="https://github.com/sanchezfauste/fauste-player/releases/latest">All files and checksums</a></p>
+      </section>
+
+      <section id="dl-linux" data-os="linux" aria-labelledby="h-linux">
+        <h3 id="h-linux">Linux</h3>
+        <p>Debian and Ubuntu (.deb), Fedora and openSUSE (.rpm), or any distribution.</p>
+        <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Architecture</th><th scope="col">.deb</th><th scope="col">.rpm</th><th scope="col">AppImage</th><th scope="col">Flatpak</th><th scope="col">.tar.gz</th></tr>
+          </thead>
+          <tbody>
+            <tr data-row>
+              <th scope="row">x86_64</th>
+              <td><a data-asset="_amd64\.deb$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">.deb</a></td>
+              <td><a data-asset="\.x86_64\.rpm$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">.rpm</a></td>
+              <td><a data-asset="-x86_64\.AppImage$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">AppImage</a></td>
+              <td><a data-asset="-x86_64\.flatpak$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Flatpak</a></td>
+              <td><a data-asset="-x86_64-unknown-linux-gnu\.tar\.gz$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">.tar.gz</a></td>
+            </tr>
+            <tr data-row>
+              <th scope="row">aarch64</th>
+              <td><a data-asset="_arm64\.deb$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">.deb</a></td>
+              <td><a data-asset="\.aarch64\.rpm$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">.rpm</a></td>
+              <td><a data-asset="-aarch64\.AppImage$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">AppImage</a></td>
+              <td><a data-asset="-aarch64\.flatpak$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Flatpak</a></td>
+              <td><a data-asset="-aarch64-unknown-linux-gnu\.tar\.gz$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">.tar.gz</a></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        <p><a href="https://github.com/sanchezfauste/fauste-player/releases/latest">All files and checksums</a></p>
+      </section>
+    </div>
+
+    <p>Installing, updating and the first start of unsigned builds are covered in
+    <a href="guide/getting-started.html">Getting started</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <p><a href="guide/">User guide</a> ·
+  <a href="https://github.com/sanchezfauste/fauste-player">Repository</a> ·
+  <a href="https://github.com/sanchezfauste/fauste-player/releases">Releases</a></p>
+</footer>
+<script src="download.js"></script>
+</body>
+</html>

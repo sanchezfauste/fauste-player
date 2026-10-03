@@ -87,6 +87,8 @@ with release packages). Close it with **Close** or `Esc`. `fauste-player --help`
 the options. Playlist files given as arguments are imported as new
 playlists.
 
+![The About window: version, copyright and the licences of the bundled components](../images/guide/about.png)
+
 On Windows the release program opens no console window: `--version`,
 `--help` and start-up errors appear in a message box instead.
 

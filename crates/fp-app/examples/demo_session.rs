@@ -1,8 +1,9 @@
 //! Writes a demo state under `FAUSTE_HOME`: four players and three
 //! playlists filled with the audio files of a folder, with the first
-//! players paused mid-track some way into their playlist.
+//! players paused mid-track some way into their playlist. The carts come
+//! from the shortest files, or from a second folder when one is given.
 //!
-//! `FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music folder>`
+//! `FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music folder> [cart folder]`
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -22,7 +23,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let (Some(paths), Some(folder)) = (bootstrap::paths(), std::env::args().nth(1)) else {
-        eprintln!("usage: FAUSTE_HOME=<dir> demo_session <music folder>");
+        eprintln!("usage: FAUSTE_HOME=<dir> demo_session <music folder> [cart folder]");
         return ExitCode::FAILURE;
     };
     let files = audio_paths(&[PathBuf::from(folder)]);
@@ -77,8 +78,12 @@ fn main() -> ExitCode {
             let _ = fp_model::apply(&mut state, Command::Play(*player));
         }
     }
-    // Some carts on the first page, from the shortest files.
-    let mut short = files.clone();
+    // Some carts on the first page, from the cart folder or else from the
+    // shortest files.
+    let mut short = match std::env::args().nth(2) {
+        Some(carts) => audio_paths(&[PathBuf::from(carts)]),
+        None => files.clone(),
+    };
     short.sort_by_key(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(u64::MAX));
     let page = state.cartwall.pages[0].id;
     let _ = fp_model::apply(

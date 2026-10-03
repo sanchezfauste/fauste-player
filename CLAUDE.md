@@ -57,10 +57,13 @@ cargo test --workspace                        # ~1 min; no audio device or displ
 cargo test -p <crate> --test <file> <name>    # focused run
 cargo deny check                              # after dependency changes
 cargo run -p fp-app                           # run the app (FAUSTE_HOME=<dir> for a scratch state)
-FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music dir>
+FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music dir> [cart dir]
 scripts/package-release.sh <target>           # release archive for one target
 scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows: windows.sh, macOS: macos.sh)
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
+scripts/site/build.sh [out]                   # website: landing page + mdBook guide (default target/site; needs gh or FAUSTE_RELEASE_JSON for the download links)
+scripts/site/check-links.sh <out>             # dead links in the built site
+scripts/site/screenshots.sh [--only main]     # README and guide screenshots from a scripted scene (Xvfb; see Testing notes)
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test real_music -- --ignored   # real-music corpus (local only)
 cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
@@ -165,7 +168,8 @@ hand: release-please writes it from the commits.
 | `docs/user`, `docs/technical` | User and technical documentation. Keep them in sync with behaviour. |
 | `vendor/opus-decoder` | A patched copy of `opus-decoder` (a real FFT), used through `[patch.crates-io]`; excluded from the workspace. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
-| `.github/workflows` | CI, release-please, release builds and packages, commit checks |
+| `site/`, `scripts/site/` | The landing page and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
+| `.github/workflows` | CI, release-please, release builds and packages, GitHub Pages, commit checks |
 
 ## Design source
 
@@ -186,27 +190,22 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
 - UI tests use `egui_kittest`, with `Harness::builder().with_step_dt(0.02)`
   (double clicks) and the recording `Fake` controller in
   `crates/fp-app/tests/support`.
-- Screenshots for a visual check (Linux): run the app in a virtual X
-  server, so nothing asks for permissions and the desktop is untouched
-  (`xvfb`, `xdotool` and ImageMagick's `import` must be installed):
-  1. `Xvfb :77 -screen 0 1920x1080x24 -nolisten tcp &`;
-  2. `env -u WAYLAND_DISPLAY DISPLAY=:77 FAUSTE_HOME=<dir> target/release/fauste-player &`
-     (the window opens at its default 1600×940);
-  3. drive it with the remote API (enable `remote.http` inside `"config"`
-     in the scratch `config.json`, then `curl`; see
-     `docs/user/remote-control.md`) or with
-     `DISPLAY=:77 xdotool mousemove --window <id> <x> <y> click 1`;
-  4. find the window with `DISPLAY=:77 xwininfo -root -tree | grep "Fauste Player"`
-     (the title carries the version) and capture it with `DISPLAY=:77 import -window <id> shot.png`.
-
-  The README image (`docs/images/main-screen.png`) is 1920×1080, in English:
-  set `"ui": {"language": "en-US"}` inside `"config"`, resize the window
-  with `DISPLAY=:77 xdotool windowmove <id> 0 0 windowsize <id> 1920 1080`,
-  and build the scene with `examples/demo_session` (players some way into
-  their playlists) plus the API: Play on players 1 and 2, a seek to
-  mid-track, and one cart fired. Generated tones longer than 3 minutes,
-  named like music, stand in for real files (`ffmpeg` pink noise and a
-  sine, amplitude-modulated, through a limiter).
+- Screenshots (Linux): `scripts/site/screenshots.sh` takes the README
+  image and every guide screenshot (`--only main` for the README image
+  alone). It builds the release binary and `examples/demo_session`,
+  generates stand-in songs and carts with `scripts/site/tones.sh` (pink
+  noise and a sine, each with its own envelope, tagged and with a cover),
+  writes a scratch `FAUSTE_HOME` (`SHOTS_HOME`; English, the remote API on,
+  every output on the silent `null` backend), runs the app in Xvfb on a
+  free display, checks in the log that the null backend is in use before
+  anything plays, builds the scene through the remote API and captures
+  with ImageMagick. Needs `xvfb`, `xdotool`, ImageMagick, `ffmpeg`,
+  `python3` and `curl`; the songs are kept in `target/screenshots` and
+  reached through the link `/tmp/fauste-demo` (`SHOTS_MEDIA`), so no
+  screenshot shows a home path.
+  `--hold` keeps the app running for a look (`DISPLAY=:<n> import -window
+  <id> shot.png`). The crops follow the default 1920×1080 layout: after a
+  layout change, check every PNG and adjust the positions in the script.
 
   On a GNOME Wayland desktop, `xdotool` clicks into XWayland windows need
   the "remote interaction" permission every session; Xvfb avoids that.
