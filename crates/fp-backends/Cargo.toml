@@ -28,6 +28,11 @@ workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 cpal = { workspace = true, features = ["realtime-dbus"] }
+# Native DSD output (feedback 2 plan 10): ALSA's DSD formats are not
+# reachable through cpal. The priority crate is the one cpal's
+# `realtime-dbus` already builds (same version and features).
+alsa = "0.11"
+audio_thread_priority = "0.35.1"
 
 # Exclusive modes (Phase 4 plan 2), through safe APIs only.
 [target.'cfg(windows)'.dependencies]

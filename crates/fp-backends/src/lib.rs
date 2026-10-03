@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+#[cfg(target_os = "linux")]
+mod alsa_dsd;
 #[cfg(target_os = "macos")]
 mod coreaudio_hog;
 mod cpal_backend;

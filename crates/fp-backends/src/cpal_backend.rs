@@ -16,6 +16,9 @@ use crate::{
 pub struct CpalBackend {
     host_id: cpal::HostId,
     host: HostCache<cpal::Host>,
+    /// The native DSD format each ALSA `hw:` device took when last probed.
+    #[cfg(target_os = "linux")]
+    native_probe: Mutex<std::collections::HashMap<String, crate::dsd::NativeDsdFormat>>,
 }
 
 /// A host created on first use and kept: some systems (PulseAudio, JACK)
@@ -191,6 +194,8 @@ impl CpalBackend {
         Self {
             host_id,
             host: HostCache::default(),
+            #[cfg(target_os = "linux")]
+            native_probe: Mutex::default(),
         }
     }
 
@@ -271,6 +276,7 @@ impl AudioBackend for CpalBackend {
             sample_rates.dedup();
             let channels = self.channels(&device, channels);
             let exclusive = exclusive_capable(&self.id().0, &id.to_string());
+            let native_dsd = self.native_dsd_capable(&id.to_string());
             list.push(DeviceInfo {
                 id: DeviceId(id.to_string()),
                 name,
@@ -280,7 +286,7 @@ impl AudioBackend for CpalBackend {
                 buffer_frames,
                 exclusive_capable: exclusive,
                 rate_switching: exclusive,
-                native_dsd: false,
+                native_dsd,
             });
         }
         Ok(list)
@@ -324,6 +330,66 @@ fn check_dsd(config: &StreamConfig) -> Result<(), BackendError> {
     }
 }
 
+#[cfg(target_os = "linux")]
+impl CpalBackend {
+    /// Whether an ALSA `hw:` device takes a DSD format. A device that cannot
+    /// be probed (busy, including by our own stream) keeps its last result.
+    fn native_dsd_capable(&self, device_id: &str) -> bool {
+        if self.host_id != cpal::HostId::Alsa {
+            return false;
+        }
+        let Some(name) = crate::alsa_dsd::pcm_name(device_id) else {
+            return false;
+        };
+        let mut cache = self
+            .native_probe
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        match crate::alsa_dsd::probe(name) {
+            Ok(Some(format)) => {
+                cache.insert(device_id.to_owned(), format);
+                true
+            }
+            Ok(None) => {
+                cache.remove(device_id);
+                false
+            }
+            Err(_) => cache.contains_key(device_id),
+        }
+    }
+
+    fn open_native(
+        &self,
+        device: &DeviceId,
+        config: StreamConfig,
+        renderer: Box<dyn Renderer>,
+        errors: Arc<dyn StreamErrorSink>,
+    ) -> Result<Box<dyn OutputStream>, BackendError> {
+        let name = match crate::alsa_dsd::pcm_name(&device.0) {
+            Some(name) if self.host_id == cpal::HostId::Alsa && config.exclusive => name,
+            _ => {
+                return Err(BackendError::Unsupported(
+                    "native DSD is not available on this device".to_owned(),
+                ));
+            }
+        };
+        let cached = self
+            .native_probe
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&device.0)
+            .copied();
+        crate::alsa_dsd::open(device, name, cached, config, renderer, errors)
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+impl CpalBackend {
+    fn native_dsd_capable(&self, _device_id: &str) -> bool {
+        false
+    }
+}
+
 impl CpalBackend {
     fn open_on_host(
         &self,
@@ -336,6 +402,14 @@ impl CpalBackend {
             inner: errors,
             lost: Arc::clone(self.host.lost()),
         });
+        if config.dsd == Some(DsdStream::Native) {
+            #[cfg(target_os = "linux")]
+            return self.open_native(device, config, renderer, errors);
+            #[cfg(not(target_os = "linux"))]
+            return Err(BackendError::Unsupported(
+                "native DSD is not available on this system".to_owned(),
+            ));
+        }
         check_dsd(&config)?;
         if config.exclusive && !exclusive_capable(&self.id().0, &device.0) {
             return Err(BackendError::Unsupported(
