@@ -64,7 +64,7 @@
 
 ## "Output lost" alert
 
-The status bar shows **Output lost: <device>** when a device stops responding.
+The status bar shows **Output lost: &lt;device&gt;** when a device stops responding.
 The players keep counting and mixing on an internal clock, so the automation
 does not stall. The device is retried every 2 seconds and takes over again
 when it returns. Reconnect the cable or power the interface back on.
@@ -86,7 +86,7 @@ Analysis → Re-analyse all tracks**.
 The status bar warns for 5 seconds after each dropout the application
 detects: **P1: audio dropouts (3)** when a player's decoding did not keep up
 with the disk (the count is for the track now playing), and
-**<device>: audio device dropouts (2)** when the output device missed a
+**&lt;device&gt;: audio device dropouts (2)** when the output device missed a
 deadline (an xrun). The log records each one too, at most one line every 10
 seconds per kind, with how many happened. Not every audio system reports
 xruns (PulseAudio does not; Windows exclusive mode does not).

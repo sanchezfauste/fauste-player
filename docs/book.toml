@@ -1,0 +1,10 @@
+# The user guide (docs/user) as a book; built by scripts/site/build.sh, which
+# passes the output directory (mdbook build -d).
+[book]
+title = "Fauste Player — User guide"
+language = "en"
+src = "user"
+
+[output.html]
+git-repository-url = "https://github.com/sanchezfauste/fauste-player"
+edit-url-template = "https://github.com/sanchezfauste/fauste-player/edit/master/docs/user/{path}"

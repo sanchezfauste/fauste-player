@@ -83,7 +83,7 @@ loaded yet cannot be added remotely: they live on this computer, so add
 them here first.
 
 A button that is greyed out on screen is refused remotely too. The full
-reference is in [the technical documentation](../technical/remote-api.md).
+reference is in [the technical documentation](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Try it from a terminal:
 
@@ -135,7 +135,7 @@ subscribe. This is one more reason to keep OSC on a trusted network.
 
 `oscsend` and `oscdump` come with liblo (`liblo-tools` on Debian and
 Ubuntu). The full list of addresses is in
-[the technical documentation](../technical/remote-api.md#osc).
+[the technical documentation](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md#osc).
 
 ## All settings
 
