@@ -78,6 +78,12 @@ panic = "deny"
 # Panics must unwind so that panic isolation (spec §8.5, §4.5) works.
 [profile.dev]
 panic = "unwind"
+# File and line in backtraces, without full debug info: every test binary
+# carries its own copy, and full info made each one about half a gigabyte.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
 
 [profile.release]
 panic = "unwind"
