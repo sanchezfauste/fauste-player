@@ -447,13 +447,15 @@ fn outputs_with_null(
 }
 
 #[test]
-fn the_null_backend_is_not_offered() {
+fn the_null_backend_is_offered_as_no_output() {
     let mut h = outputs_with_null(Some("offline"));
     h.get_by_value("Offline").click();
     h.run_steps(2);
-    assert!(h.query_by_label("System default").is_some());
-    assert!(h.query_by_label("Null").is_none());
-    assert!(h.query_by_label("No output (silent)").is_none());
+    assert!(h.query_by_label("No output (silent)").is_some());
+    assert!(
+        h.query_by_label("Null").is_none(),
+        "never by its internal name"
+    );
 }
 
 #[test]
@@ -488,4 +490,53 @@ fn the_cue_markers_toggle_updates_the_config() {
             .is_some(),
         "next to the automatic mix switch"
     );
+}
+
+fn dac() -> fp_model::OutputDevice {
+    fp_model::OutputDevice {
+        backend: "offline".into(),
+        device: "dac".into(),
+    }
+}
+
+#[test]
+fn a_bit_perfect_device_offers_its_dsd_modes_and_the_choice_updates_the_config() {
+    let (mut h, fake) = outputs_with(vec![dac()]);
+    h.get_by_value("Convert to PCM").scroll_to_me();
+    h.run_steps(5);
+    h.get_by_value("Convert to PCM").click();
+    h.run_steps(2);
+    assert!(h.query_by_label("DoP").is_some());
+    assert!(
+        h.query_by_label("Native DSD").is_none(),
+        "the device reports no DSD format"
+    );
+    h.get_by_label("DoP").click();
+    h.run_steps(2);
+    let c = fake.state.load().config.clone();
+    assert_eq!(
+        c.outputs.dsd_output_for("offline", "dac"),
+        fp_model::DsdOutput::Dop
+    );
+}
+
+#[test]
+fn a_device_that_is_not_bit_perfect_has_no_dsd_row() {
+    let (h, _) = outputs();
+    assert!(h.query_by_label("DSD: dac").is_none());
+}
+
+#[test]
+fn the_dsd_mix_choice_updates_the_config() {
+    let (mut h, fake) = outputs_with(vec![dac()]);
+    h.get_by_value("Continue the DSD track as PCM")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_value("Continue the DSD track as PCM").click();
+    h.run_steps(2);
+    h.get_by_label("Keep DSD and mute the other sources")
+        .click();
+    h.run_steps(2);
+    let c = fake.state.load().config.clone();
+    assert_eq!(c.outputs.dsd_mix, fp_model::DsdMix::HoldOthers);
 }

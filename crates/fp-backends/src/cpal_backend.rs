@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
+use crate::dsd::DsdStream;
 use crate::hosts::host_availability;
 use crate::{
     AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream,
@@ -15,6 +16,9 @@ use crate::{
 pub struct CpalBackend {
     host_id: cpal::HostId,
     host: HostCache<cpal::Host>,
+    /// The native DSD format each ALSA `hw:` device took when last probed.
+    #[cfg(target_os = "linux")]
+    native_probe: Mutex<std::collections::HashMap<String, crate::dsd::NativeDsdFormat>>,
 }
 
 /// A host created on first use and kept: some systems (PulseAudio, JACK)
@@ -101,6 +105,10 @@ impl OutputStream for CpalStream {
     fn sample_format(&self) -> SampleFormat {
         self.format
     }
+
+    fn dsd(&self) -> Option<DsdStream> {
+        self.config.dsd
+    }
 }
 
 /// The buffer size a stream runs with: the fixed size it was given, or with
@@ -135,6 +143,14 @@ fn exclusive_capable(host: &str, device: &str) -> bool {
 
 fn backend_error(e: impl std::fmt::Display) -> BackendError {
     BackendError::Backend(e.to_string())
+}
+
+/// Passes a cpal stream error on, classified. On some hosts (ALSA, WASAPI)
+/// cpal calls this on the real-time audio thread, so it only classifies and
+/// counts: no logging, formatting or allocation. The conductor logs the
+/// counts (an error that fits no class is `StreamErrorKind::Other`).
+fn report_stream_error(errors: &dyn StreamErrorSink, err: &cpal::Error) {
+    errors.report(classify(err.kind()));
 }
 
 fn classify(kind: cpal::ErrorKind) -> StreamErrorKind {
@@ -178,6 +194,8 @@ impl CpalBackend {
         Self {
             host_id,
             host: HostCache::default(),
+            #[cfg(target_os = "linux")]
+            native_probe: Mutex::default(),
         }
     }
 
@@ -258,6 +276,7 @@ impl AudioBackend for CpalBackend {
             sample_rates.dedup();
             let channels = self.channels(&device, channels);
             let exclusive = exclusive_capable(&self.id().0, &id.to_string());
+            let native_dsd = self.native_dsd_capable(&id.to_string());
             list.push(DeviceInfo {
                 id: DeviceId(id.to_string()),
                 name,
@@ -267,6 +286,7 @@ impl AudioBackend for CpalBackend {
                 buffer_frames,
                 exclusive_capable: exclusive,
                 rate_switching: exclusive,
+                native_dsd,
             });
         }
         Ok(list)
@@ -295,6 +315,81 @@ impl AudioBackend for CpalBackend {
     }
 }
 
+/// Refuses the DSD streams this backend cannot carry: native DSD, and DSD
+/// over a shared stream, where the system mixer would alter the words.
+fn check_dsd(config: &StreamConfig) -> Result<(), BackendError> {
+    match config.dsd {
+        None => Ok(()),
+        Some(DsdStream::Native) => Err(BackendError::Unsupported(
+            "native DSD is not available on this system".to_owned(),
+        )),
+        Some(DsdStream::Dop) if !config.exclusive => Err(BackendError::Unsupported(
+            "DSD needs exclusive access".to_owned(),
+        )),
+        Some(DsdStream::Dop) => Ok(()),
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl CpalBackend {
+    /// Whether an ALSA `hw:` device takes a DSD format. A device that cannot
+    /// be probed (busy, including by our own stream) keeps its last result.
+    fn native_dsd_capable(&self, device_id: &str) -> bool {
+        if self.host_id != cpal::HostId::Alsa {
+            return false;
+        }
+        let Some(name) = crate::alsa_dsd::pcm_name(device_id) else {
+            return false;
+        };
+        let mut cache = self
+            .native_probe
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        match crate::alsa_dsd::probe(name) {
+            Ok(Some(format)) => {
+                cache.insert(device_id.to_owned(), format);
+                true
+            }
+            Ok(None) => {
+                cache.remove(device_id);
+                false
+            }
+            Err(_) => cache.contains_key(device_id),
+        }
+    }
+
+    fn open_native(
+        &self,
+        device: &DeviceId,
+        config: StreamConfig,
+        renderer: Box<dyn Renderer>,
+        errors: Arc<dyn StreamErrorSink>,
+    ) -> Result<Box<dyn OutputStream>, BackendError> {
+        let name = match crate::alsa_dsd::pcm_name(&device.0) {
+            Some(name) if self.host_id == cpal::HostId::Alsa && config.exclusive => name,
+            _ => {
+                return Err(BackendError::Unsupported(
+                    "native DSD is not available on this device".to_owned(),
+                ));
+            }
+        };
+        let cached = self
+            .native_probe
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&device.0)
+            .copied();
+        crate::alsa_dsd::open(device, name, cached, config, renderer, errors)
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+impl CpalBackend {
+    fn native_dsd_capable(&self, _device_id: &str) -> bool {
+        false
+    }
+}
+
 impl CpalBackend {
     fn open_on_host(
         &self,
@@ -307,6 +402,15 @@ impl CpalBackend {
             inner: errors,
             lost: Arc::clone(self.host.lost()),
         });
+        if config.dsd == Some(DsdStream::Native) {
+            #[cfg(target_os = "linux")]
+            return self.open_native(device, config, renderer, errors);
+            #[cfg(not(target_os = "linux"))]
+            return Err(BackendError::Unsupported(
+                "native DSD is not available on this system".to_owned(),
+            ));
+        }
+        check_dsd(&config)?;
         if config.exclusive && !exclusive_capable(&self.id().0, &device.0) {
             return Err(BackendError::Unsupported(
                 "exclusive access is not available on this device".to_owned(),
@@ -353,7 +457,13 @@ impl CpalBackend {
             .unwrap_or_default();
         let formats: Vec<cpal::SampleFormat> = matching.iter().map(|c| c.sample_format()).collect();
         // Devices that report nothing usable are still tried with f32.
-        let format = choose_sample_format(&formats).unwrap_or(cpal::SampleFormat::F32);
+        let format = if config.dsd == Some(DsdStream::Dop) {
+            choose_dop_sample_format(&formats).ok_or_else(|| {
+                BackendError::Unsupported("DoP needs a 24- or 32-bit integer format".to_owned())
+            })?
+        } else {
+            choose_sample_format(&formats).unwrap_or(cpal::SampleFormat::F32)
+        };
         let ranges: Vec<(u32, u32)> = matching
             .iter()
             .filter(|c| c.sample_format() == format)
@@ -464,7 +574,7 @@ fn build<T>(
     io: Io,
 ) -> Result<cpal::Stream, cpal::Error>
 where
-    T: cpal::SizedSample + cpal::FromSample<f32> + Send + 'static,
+    T: OutputSample + Send + 'static,
 {
     let Io {
         mut handoff,
@@ -488,9 +598,16 @@ where
                 None => out.fill(T::EQUILIBRIUM),
             }
         },
-        move |err: cpal::Error| errors.report(classify(err.kind())),
+        move |err: cpal::Error| report_stream_error(errors.as_ref(), &err),
         None,
     )
+}
+
+/// DoP needs every bit of a 24-bit word: only 24- or 32-bit integer.
+fn choose_dop_sample_format(formats: &[cpal::SampleFormat]) -> Option<cpal::SampleFormat> {
+    [cpal::SampleFormat::I32, cpal::SampleFormat::I24]
+        .into_iter()
+        .find(|f| formats.contains(f))
 }
 
 /// Prefers float output, then the widest integer format the device takes.
@@ -505,15 +622,54 @@ fn choose_sample_format(formats: &[cpal::SampleFormat]) -> Option<cpal::SampleFo
     .find(|f| formats.contains(f))
 }
 
+/// A device sample format and its conversion from the mixer's f32.
+///
+/// Integer formats use one convention: a float in [-1, 1) maps to the
+/// integer of `n` bits by `x * 2^(n-1)`, rounded to the nearest step (half
+/// away from zero) and clamped to `[-2^(n-1), 2^(n-1) - 1]`. So integer PCM
+/// that entered as `v / 2^(n-1)` comes out as exactly `v`, +1.0 and above
+/// clip to the positive maximum, -1.0 is the negative minimum and NaN is 0.
+/// Float formats take the sample as it is. Real-time safe: no allocation,
+/// no branches that can panic.
+trait OutputSample: cpal::SizedSample {
+    fn from_f32(s: f32) -> Self;
+}
+
+impl OutputSample for f32 {
+    fn from_f32(s: f32) -> Self {
+        s
+    }
+}
+
+impl OutputSample for i16 {
+    fn from_f32(s: f32) -> Self {
+        // `as` saturates and maps NaN to 0.
+        (s * 32_768.0).round() as i16
+    }
+}
+
+impl OutputSample for i32 {
+    fn from_f32(s: f32) -> Self {
+        (s * 2_147_483_648.0).round() as i32
+    }
+}
+
+impl OutputSample for cpal::I24 {
+    fn from_f32(s: f32) -> Self {
+        let v = ((s * 8_388_608.0).round() as i32).clamp(-(1 << 23), (1 << 23) - 1);
+        cpal::I24::new(v).unwrap_or(<cpal::I24 as cpal::Sample>::EQUILIBRIUM)
+    }
+}
+
 /// Renders `out` through `scratch` in whole-frame pieces and converts each
-/// sample to the device format (saturating). Real-time safe: no allocation.
+/// sample to the device format (`OutputSample`: clipping, rounding). Real-time safe: no allocation.
 fn render_converted<T>(
     renderer: &mut dyn Renderer,
     out: &mut [T],
     channels: usize,
     scratch: &mut [f32],
 ) where
-    T: cpal::SizedSample + cpal::FromSample<f32>,
+    T: OutputSample,
 {
     let channels = channels.max(1);
     let step = (scratch.len() / channels).max(1) * channels;
@@ -524,7 +680,7 @@ fn render_converted<T>(
         };
         renderer.render(buf, channels);
         for (o, s) in chunk.iter_mut().zip(buf.iter()) {
-            *o = T::from_sample(*s);
+            *o = T::from_f32(*s);
         }
     }
 }
@@ -544,10 +700,10 @@ fn device_detail(d: &cpal::DeviceDescription) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        HostCache, choose_buffer_frames, choose_sample_format, device_detail, exclusive_capable,
-        render_converted,
+        HostCache, OutputSample, check_dsd, choose_buffer_frames, choose_dop_sample_format,
+        choose_sample_format, classify, device_detail, exclusive_capable, render_converted,
     };
-    use crate::Renderer;
+    use crate::{Renderer, StreamErrorKind};
     use cpal::DeviceDescriptionBuilder;
 
     #[test]
@@ -571,6 +727,42 @@ mod tests {
         assert_eq!(device_detail(&same), None);
     }
 
+    /// Records what a sink was told.
+    #[derive(Default)]
+    struct Told(std::sync::Mutex<Vec<StreamErrorKind>>);
+
+    impl crate::StreamErrorSink for Told {
+        fn report(&self, kind: StreamErrorKind) {
+            self.0.lock().unwrap().push(kind);
+        }
+    }
+
+    // A8: an unknown error reaches the sink as `Other` (the bus counts it
+    // apart from xruns and the conductor logs it).
+    #[test]
+    fn an_unclassified_error_is_counted_through_the_sink_as_other() {
+        let told = Told::default();
+        super::report_stream_error(&told, &cpal::Error::new(cpal::ErrorKind::BackendError));
+        super::report_stream_error(&told, &cpal::Error::new(cpal::ErrorKind::Xrun));
+        assert_eq!(
+            *told.0.lock().unwrap(),
+            vec![StreamErrorKind::Other, StreamErrorKind::Xrun]
+        );
+    }
+
+    #[test]
+    fn only_xrun_is_an_xrun_and_unknown_errors_are_other() {
+        assert_eq!(classify(cpal::ErrorKind::Xrun), StreamErrorKind::Xrun);
+        for kind in [
+            cpal::ErrorKind::BackendError,
+            cpal::ErrorKind::DeviceBusy,
+            cpal::ErrorKind::ResourceExhausted,
+            cpal::ErrorKind::Other,
+        ] {
+            assert_eq!(classify(kind), StreamErrorKind::Other, "{kind}");
+        }
+    }
+
     /// Plays back fixed samples.
     struct Samples(Vec<f32>, usize);
 
@@ -581,6 +773,35 @@ mod tests {
                 self.1 += 1;
             }
         }
+    }
+
+    // A7: cpal's own conversions wrap at 24 bits and truncate at 16.
+    #[test]
+    fn a7_the_24_bit_conversion_clips_instead_of_wrapping() {
+        for (s, want) in [
+            (1.0f32, (1 << 23) - 1),
+            (1.5, (1 << 23) - 1),
+            (-1.0, -(1 << 23)),
+            (-1.5, -(1 << 23)),
+            (f32::INFINITY, (1 << 23) - 1),
+            (f32::NAN, 0),
+        ] {
+            assert_eq!(cpal::I24::from_f32(s).inner(), want, "{s}");
+        }
+    }
+
+    #[test]
+    fn a7_the_16_bit_conversion_rounds_to_the_nearest_step() {
+        for (s, nearest) in [(100.75f32, 101i16), (-100.75, -101), (0.6, 1), (-0.4, 0)] {
+            assert_eq!(i16::from_f32(s / 32_768.0), nearest, "{s} steps");
+        }
+        assert_eq!(i16::from_f32(1.0), i16::MAX);
+        assert_eq!(i16::from_f32(-1.0), i16::MIN);
+        assert_eq!(i16::from_f32(f32::NAN), 0);
+        assert_eq!(i32::from_f32(1.5), i32::MAX);
+        assert_eq!(i32::from_f32(-1.5), i32::MIN);
+        assert_eq!(i32::from_f32(f32::NAN), 0);
+        assert_eq!(f32::from_f32(1.5), 1.5);
     }
 
     #[test]
@@ -605,6 +826,52 @@ mod tests {
         render_converted(&mut Samples(samples, 0), &mut out, 1, &mut scratch);
         let expected: Vec<i32> = values.iter().map(|v| v << 8).collect();
         assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn a_dsd_stream_needs_exclusive_access_and_never_goes_native() {
+        use crate::StreamConfig;
+        use crate::dsd::DsdStream;
+        let config = |dsd, exclusive| StreamConfig {
+            sample_rate: 176_400,
+            buffer_frames: 512,
+            channels: 2,
+            exclusive,
+            dsd,
+        };
+        assert!(check_dsd(&config(Some(DsdStream::Dop), false)).is_err());
+        assert!(check_dsd(&config(Some(DsdStream::Dop), true)).is_ok());
+        assert!(check_dsd(&config(Some(DsdStream::Native), true)).is_err());
+        assert!(check_dsd(&config(None, false)).is_ok());
+    }
+
+    #[test]
+    fn dop_uses_only_24_or_32_bit_integer_formats() {
+        use cpal::SampleFormat::{F32, I16, I24, I32};
+        assert_eq!(choose_dop_sample_format(&[F32, I32, I16]), Some(I32));
+        assert_eq!(choose_dop_sample_format(&[F32, I24]), Some(I24));
+        assert_eq!(choose_dop_sample_format(&[F32, I16]), None);
+    }
+
+    #[test]
+    fn dop_samples_convert_to_the_exact_integer_words() {
+        use crate::dsd::{DOP_MARKERS, DSD_SILENCE, dop_sample, word_to_sample};
+        let words = [
+            (0x00, 0x00),
+            (0xFF, 0xFF),
+            (DSD_SILENCE, DSD_SILENCE),
+            (0x80, 0x00),
+            (0x7F, 0xFF),
+        ];
+        for marker in DOP_MARKERS {
+            for (a, b) in words {
+                let s = dop_sample(marker, word_to_sample(a, b));
+                let word = (i32::from(marker) << 16) | (i32::from(a) << 8) | i32::from(b);
+                let signed = (word << 8) >> 8;
+                assert_eq!(<cpal::I24 as OutputSample>::from_f32(s).inner(), signed);
+                assert_eq!(<i32 as OutputSample>::from_f32(s), signed << 8);
+            }
+        }
     }
 
     #[test]

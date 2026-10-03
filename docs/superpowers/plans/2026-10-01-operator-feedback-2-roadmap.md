@@ -34,7 +34,7 @@ runs, against the code that the earlier plans left. Each plan reaches
 | 7 | Track tags | O23 | `feat/track-tags` | done |
 | 8 | Track table | O7, O9, O16, O22, O24 | `feat/table-columns` | done |
 | 9 | Audit follow-ups | O21 | `fix/audit-follow-ups` | done |
-| 10 | Audio path | O25, O26, O27, O34 | `feat/audio-path` | outline |
+| 10 | Audio path | O25, O26, O27, O34 | `feat/audio-path` | done |
 | 11 | Website and guide | O1, O28, O29, O30 | `docs/website` | outline |
 | 12 | Window and layout | O31, O32, O33, O35, O36 | `fix/window-layout` | done |
 | 13 | Player rules | O37, O38 | `feat/player-rules` | done |
@@ -48,8 +48,12 @@ runs, against the code that the earlier plans left. Each plan reaches
 - **Plan 6** draws the CUE window's icons through plan 4's `ui/glyphs.rs`.
 - **Plan 8** builds the new columns on plan 7's tag fields.
 - **Plan 10** starts with the audio-path audit (O26); its findings may add
-  tasks before the DSD work (O25).
+  tasks before the DSD work (O25). Built: the audit fixed A1 to A8, O34 stayed as
+  it is (documented), and DSD output is checked on simulated devices and one
+  real DSD file; DoP on a real converter and native DSD on a real device are
+  still manual checks.
 - **Plan 12** (window and layout) runs after plan 9 and before plan 10.
 - **Plan 13** (player rules) runs after plan 12 and before plan 10. Its rules
   are reducer changes in `fp-model`, one test per rule.
 - **Plan 11** runs last, so that it publishes the final docs.
+- **Unplanned (from the plan 10 audit, A10):** dither on integer outputs narrower than the source (a 16-bit device gets rounded samples, about −96 dBFS of error). Too large for plan 10; no plan number yet.

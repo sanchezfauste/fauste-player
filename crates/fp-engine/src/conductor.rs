@@ -16,8 +16,87 @@ use fp_model::{
     apply, on_event,
 };
 
-use crate::engine::{BusStatus, CartTelemetry, Engine, PlayerTelemetry};
+use crate::bus::BusKey;
+use crate::engine::{BusCounters, BusStatus, CartTelemetry, Engine, PlayerTelemetry};
 use crate::meter::MeterState;
+pub use crate::reporting::REPORT_WINDOW;
+use crate::reporting::{Increase, Watch};
+
+/// The counters of one bus that the conductor watches (audit A8).
+#[derive(Debug, Clone, Copy)]
+enum BusCounter {
+    Xruns,
+    StreamErrors,
+    LockMisses,
+    Leaked,
+    DroppedEvents,
+    Misrouted,
+}
+
+const BUS_COUNTERS: [BusCounter; 6] = [
+    BusCounter::Xruns,
+    BusCounter::StreamErrors,
+    BusCounter::LockMisses,
+    BusCounter::Leaked,
+    BusCounter::DroppedEvents,
+    BusCounter::Misrouted,
+];
+
+impl BusCounter {
+    fn value(self, c: &BusCounters) -> u64 {
+        match self {
+            Self::Xruns => c.xruns,
+            Self::StreamErrors => c.stream_errors,
+            Self::LockMisses => c.lock_misses,
+            Self::Leaked => c.leaked,
+            Self::DroppedEvents => c.dropped_events,
+            Self::Misrouted => c.misrouted,
+        }
+    }
+
+    fn log(self, bus: &BusKey, Increase { new, total }: Increase) {
+        match self {
+            Self::Xruns => {
+                tracing::warn!(
+                    ?bus,
+                    new,
+                    total,
+                    "output xruns: the device missed a deadline"
+                );
+            }
+            Self::StreamErrors => {
+                tracing::warn!(
+                    ?bus,
+                    new,
+                    total,
+                    "unclassified stream errors reported by the backend"
+                );
+            }
+            Self::LockMisses => {
+                tracing::warn!(
+                    ?bus,
+                    new,
+                    total,
+                    "blocks output as silence: the mixer was busy"
+                );
+            }
+            Self::Leaked => {
+                tracing::error!(?bus, new, total, "items leaked by the real-time thread");
+            }
+            Self::DroppedEvents => {
+                tracing::warn!(?bus, new, total, "events dropped by the real-time thread");
+            }
+            Self::Misrouted => {
+                tracing::warn!(
+                    ?bus,
+                    new,
+                    total,
+                    "blocks misrouted: the channels did not fit the stream"
+                );
+            }
+        }
+    }
+}
 
 /// Live values for the UI, refreshed every tick.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -67,6 +146,9 @@ pub struct Conductor {
     /// Players that started an entry since the last metering: each start
     /// restarts the maximum, even of the same entry.
     started: Vec<PlayerId>,
+    /// The counters of the real-time side, for the log (audit A8).
+    bus_watches: HashMap<BusKey, [Watch; 6]>,
+    underrun_watches: HashMap<PlayerId, Watch>,
 }
 
 /// The UI's side of the conductor.
@@ -175,6 +257,8 @@ impl Conductor {
             metered_at: None,
             metered_entries: HashMap::new(),
             started: Vec::new(),
+            bus_watches: HashMap::new(),
+            underrun_watches: HashMap::new(),
         };
         let handle = ConductorHandle {
             commands: tx,
@@ -289,7 +373,7 @@ impl Conductor {
                 meter.reset_max();
             }
         }
-        let players = ids
+        let players: Vec<(PlayerId, PlayerTelemetry)> = ids
             .into_iter()
             .map(|id| {
                 let mut t = self.engine.telemetry(id);
@@ -302,16 +386,52 @@ impl Conductor {
                 (id, t)
             })
             .collect();
+        let buses = self.engine.bus_status();
+        self.report_counters(&buses, &players, now);
         let (carts, cart_cue) = self.engine.cart_telemetry();
         self.telemetry.store(Arc::new(Telemetry {
             carts,
             cart_cue,
             players,
-            buses: self.engine.bus_status(),
+            buses,
             model_version: self.version,
             dropped_commands: self.engine.dropped_commands(),
             slot_exhaustions: self.engine.slot_exhaustions(),
         }));
+    }
+
+    /// Logs the counters that grew since the last tick, at most once per
+    /// window each (audit A8).
+    fn report_counters(
+        &mut self,
+        buses: &[BusStatus],
+        players: &[(PlayerId, PlayerTelemetry)],
+        now: Instant,
+    ) {
+        self.bus_watches
+            .retain(|key, _| buses.iter().any(|b| b.key == *key));
+        for b in buses {
+            if !self.bus_watches.contains_key(&b.key) {
+                self.bus_watches
+                    .insert(b.key.clone(), std::array::from_fn(|_| Watch::default()));
+            }
+            let Some(watches) = self.bus_watches.get_mut(&b.key) else {
+                continue;
+            };
+            for (counter, watch) in BUS_COUNTERS.iter().zip(watches.iter_mut()) {
+                if let Some(increase) = watch.observe(counter.value(&b.counters), now) {
+                    counter.log(&b.key, increase);
+                }
+            }
+        }
+        self.underrun_watches
+            .retain(|id, _| players.iter().any(|(p, _)| p == id));
+        for (id, t) in players {
+            let watch = self.underrun_watches.entry(*id).or_default();
+            if let Some(Increase { new, total }) = watch.observe(t.underruns, now) {
+                tracing::warn!(player = ?id, new, total, "source underruns: decoding did not keep up");
+            }
+        }
     }
 
     /// Runs the conductor on its own thread, ticking every `period`.

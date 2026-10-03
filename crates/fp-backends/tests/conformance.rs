@@ -40,6 +40,7 @@ const CONFIG: StreamConfig = StreamConfig {
     buffer_frames: 512,
     channels: 2,
     exclusive: false,
+    dsd: None,
 };
 
 /// Waits until `ok`, pumping `drive` (for backends rendered on demand).
@@ -145,4 +146,52 @@ fn every_available_system_conforms() {
     }
     eprintln!("conformance passed for: {checked:?}");
     assert!(!checked.is_empty());
+}
+
+/// DSD silence, word after word.
+#[cfg(target_os = "linux")]
+struct DsdSilence;
+
+#[cfg(target_os = "linux")]
+impl Renderer for DsdSilence {
+    fn render(&mut self, out: &mut [f32], _channels: usize) {
+        out.fill(fp_backends::dsd::silence_sample());
+    }
+}
+
+/// The maintainer's on-device check of native DSD (Linux, ALSA): set
+/// `FAUSTE_NATIVE_DSD_DEVICE` to a cpal ALSA id (`alsa:hw:CARD=...,DEV=0`)
+/// of a DAC that takes DSD. Plays one second of DSD silence at DSD64.
+#[test]
+#[ignore = "needs a DSD-capable ALSA device named by FAUSTE_NATIVE_DSD_DEVICE"]
+fn native_dsd_on_a_real_device() {
+    #[cfg(target_os = "linux")]
+    {
+        let Ok(id) = std::env::var("FAUSTE_NATIVE_DSD_DEVICE") else {
+            eprintln!("skipping: FAUSTE_NATIVE_DSD_DEVICE is not set");
+            return;
+        };
+        let backend = fp_backends::CpalBackend::for_host(cpal::HostId::Alsa);
+        let config = StreamConfig {
+            // DSD64: 2 822 400 bits per second per channel = 176 400 words.
+            sample_rate: 176_400,
+            buffer_frames: 1024,
+            channels: 2,
+            exclusive: true,
+            dsd: Some(fp_backends::dsd::DsdStream::Native),
+        };
+        let stream = backend
+            .open_output(
+                &fp_backends::DeviceId(id),
+                config,
+                Box::new(DsdSilence),
+                Arc::new(Ignore),
+            )
+            .unwrap();
+        assert_eq!(stream.dsd(), Some(fp_backends::dsd::DsdStream::Native));
+        std::thread::sleep(Duration::from_secs(1));
+        drop(stream);
+    }
+    #[cfg(not(target_os = "linux"))]
+    eprintln!("skipping: native DSD through ALSA is Linux only");
 }

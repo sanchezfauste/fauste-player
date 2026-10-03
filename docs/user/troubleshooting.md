@@ -39,6 +39,29 @@
     audio library does not support. Use that card through `plughw:` (not
     bit-perfect) instead.
 
+### DSD
+
+- **A DSD track plays converted although the device is set to DoP or native
+  DSD.** The log says why ("DSD converted to PCM" and the reason) for these
+  causes: the player's volume not at 100 %, something else playing on the
+  device, more than two channels, or a device that refuses the rate (DoP needs
+  the DSD rate divided by 16, for example 176.4 kHz for DSD64) or has no 24-
+  or 32-bit format. A track that has not been analysed yet converts silently,
+  with no log line: analyse it (Settings → Analysis) and play it again.
+- **Only the first track of a DSD album goes out as DSD.** That is the
+  default mixing setting: the tracks the player starts by itself play
+  converted. Choose **Keep DSD and mute the other sources** in Settings →
+  Audio outputs to keep them DSD. See [DSD](bit-perfect.md#dsd).
+- **The header shows DSD but the converter plays noise or does not lock.**
+  The converter does not recognise DoP (or the native format). Set the device
+  back to **Convert to PCM**.
+- **A click when a DSD track starts, stops or leaves DSD.** The converter
+  needs more DSD silence: raise `outputs.dsd_silence_ms` (200 by default) in
+  the configuration file.
+- **Other players or carts are silent on the device.** A DSD track is playing
+  with **Keep DSD and mute the other sources**; the **Others muted** badge
+  shows. They sound again when the track ends.
+
 ## "Output lost" alert
 
 The status bar shows **Output lost: <device>** when a device stops responding.
@@ -59,6 +82,15 @@ file that cannot be decoded is checked again only with **Settings →
 Analysis → Re-analyse all tracks**.
 
 ## Audio dropouts
+
+The status bar warns for 5 seconds after each dropout the application
+detects: **P1: audio dropouts (3)** when a player's decoding did not keep up
+with the disk (the count is for the track now playing), and
+**<device>: audio device dropouts (2)** when the output device missed a
+deadline (an xrun). The log records each one too, at most one line every 10
+seconds per kind, with how many happened. Not every audio system reports
+xruns (PulseAudio does not; Windows exclusive mode does not).
+
 
 - Increase the **buffer size** in Settings (and press **Restart now**).
 - On Linux, allow real-time scheduling. The application asks the system for

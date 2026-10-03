@@ -332,6 +332,7 @@ fn outdated_rig(files: &[PathBuf], dir: tempfile::TempDir, older: fn(&mut fp_mod
                 sample_rate: 44_100,
                 bits: Some(16),
                 channels: 2,
+                dsd_rate: None,
             });
             older(track);
         }
@@ -473,6 +474,7 @@ fn a_cart_track_that_has_its_format_is_left_alone() {
                 sample_rate: 48_000,
                 bits: Some(16),
                 channels: 1,
+                dsd_rate: None,
             });
             track.analysis_version = 0;
         }
@@ -735,6 +737,7 @@ fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
                 sample_rate: 44_100,
                 bits: Some(16),
                 channels: 2,
+                dsd_rate: None,
             });
             track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
         }
@@ -804,6 +807,7 @@ fn a_stale_snapshot_does_not_read_a_track_twice() {
                 sample_rate: 44_100,
                 bits: Some(16),
                 channels: 2,
+                dsd_rate: None,
             });
             track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
         }

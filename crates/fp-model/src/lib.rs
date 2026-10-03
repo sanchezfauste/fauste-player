@@ -8,6 +8,7 @@ pub mod cartwall;
 pub mod columns;
 pub mod command;
 pub mod config;
+pub mod dsd;
 mod entry_notice;
 pub mod error;
 pub mod ids;
@@ -44,6 +45,10 @@ pub use config::{
     AnalysisSettings, CartwallConfig, CartwallRoutes, Config, ConfigWarning, Limits,
     LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig,
     PlayerRoutes, PlayersConfig, Route, Tuning, UiConfig,
+};
+pub use dsd::{
+    BpBadge, DEFAULT_DSD_SILENCE_MS, DSD_WORD_BITS, DsdDevice, DsdFacts, DsdFallback, DsdMix,
+    DsdOnAir, DsdOutput, DsdStreamMode, DsdTarget, bp_badge, dsd_decision, dsd_holds_others,
 };
 pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;

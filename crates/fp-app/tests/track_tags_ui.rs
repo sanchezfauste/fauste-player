@@ -43,6 +43,7 @@ fn tagged_state() -> AppState {
         sample_rate: 44_100,
         bits: Some(16),
         channels: 2,
+        dsd_rate: None,
     });
     s
 }

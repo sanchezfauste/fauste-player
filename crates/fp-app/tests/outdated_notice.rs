@@ -24,6 +24,7 @@ fn library(tracks: usize, outdated: usize) -> fp_model::AppState {
             sample_rate: 44_100,
             bits: Some(16),
             channels: 2,
+            dsd_rate: None,
         });
         t.analysis_version = if n < outdated {
             0

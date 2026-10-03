@@ -11,6 +11,7 @@ the implementation differs from the spec or defers part of it.
 | [Threading and real time](threading-and-realtime.md) | Every thread, its priority, what it may do, how threads talk |
 | [Audio engine](audio-engine.md) | Sources, mixer, buses, scheduling, worker threads, the conductor, device loss |
 | [Backends](backends.md) | The backend trait, the implemented backends, the roadmap |
+| [Audio path audit](audio-path-audit.md) | The file-to-device audit of feedback 2 (O26): findings A1–A22 with their evidence, and readings above 0 dBFS (O34) |
 | [Decoding](decoding.md) | Formats, the backends behind `FileDecoder`, DSD to PCM, seeking |
 | [Analysis](analysis.md) | Tags, covers, peaks, markers, the cache and the analysis pool |
 | [Persistence and configuration](persistence.md) | Files, atomic writes, backups, migrations, every configuration field |

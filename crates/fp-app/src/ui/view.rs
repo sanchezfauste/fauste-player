@@ -70,6 +70,10 @@ pub struct PlayerView {
     pub cueing: bool,
     /// The current source reaches its device unchanged (the BP badge).
     pub bit_perfect: bool,
+    /// The current source goes out as DSD, unchanged (the DSD badge).
+    pub dsd: bool,
+    /// DSD holds the other sources off its output: they are muted.
+    pub dsd_holds_others: bool,
 }
 
 fn fraction(value: Option<f64>, total: f64) -> Option<f32> {
@@ -198,6 +202,8 @@ pub fn player_view(
         fading: p.fading,
         cueing: p.cue.is_some(),
         bit_perfect: false,
+        dsd: false,
+        dsd_holds_others: fp_model::dsd_holds_others(state, player),
     };
     let Some(track) = current else {
         return Some(view);

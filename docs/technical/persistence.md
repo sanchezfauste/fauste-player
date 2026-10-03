@@ -153,6 +153,9 @@ any field this version does not have.
 | `routes[]` | empty | `{ player, main: Route?, cue: Route? }`, where `Route` is `{ backend, device, first_channel }` |
 | `cartwall` | none | `{ main: Route?, cue: Route? }` for the cartwall |
 | `bit_perfect[]` | empty | `{ backend, device }` of devices played bit-perfect (exclusive access, rate follows the files) |
+| `dsd_output[]` | empty | `{ backend, device, mode }` with `mode` `Pcm`, `Dop` or `Native`: what a bit-perfect device receives from a DSD track. A device not listed here, or not in `bit_perfect`, converts DSD to PCM. A device listed twice keeps its first mode (warning) |
+| `dsd_mix` | `ConvertToPcm` | `ConvertToPcm` or `HoldOthers`: what happens when another source needs an output carrying DSD |
+| `dsd_silence_ms` | 200 | DSD silence at a DSD stream's start, end and switch to PCM; 0 to 2000 (clamped, with a warning) |
 
 ### `meter` (Settings → Meters; applied at once)
 

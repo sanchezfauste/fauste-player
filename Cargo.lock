@@ -1745,6 +1745,7 @@ dependencies = [
 name = "fp-backends"
 version = "0.4.0"
 dependencies = [
+ "alsa",
  "audio_thread_priority",
  "coreaudio-rs",
  "cpal",

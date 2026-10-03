@@ -11,8 +11,8 @@ use egui::{Align, Color32, Layout, RichText, Sense, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_backends::{AudioBackend, Availability, DeviceInfo};
 use fp_model::{
-    Command, Config, OutputDevice, PlayMode, PlayerId, PlayerRoutes, PlaylistId, Route,
-    SettingsSection,
+    Command, Config, DsdDevice, DsdMix, DsdOutput, OutputDevice, PlayMode, PlayerId, PlayerRoutes,
+    PlaylistId, Route, SettingsSection,
 };
 
 use super::app::Scene;
@@ -658,15 +658,13 @@ fn slider<T: egui::emath::Numeric>(
     response.changed()
 }
 
-/// The audio systems the list offers. `null` (silence) is for tests and
-/// headless use: it shows only when the configuration names it
-/// (feedback 2 spec O5).
-fn listed_backends<'a>(
-    all: &'a [BackendChoice],
-    configured: Option<&str>,
-) -> Vec<&'a BackendChoice> {
+/// The audio systems the list offers: the real systems in their order, then
+/// `null` as "No output (silent)" (feedback 2 spec O27, which reverses the
+/// hiding part of O5).
+fn listed_backends(all: &[BackendChoice]) -> Vec<&BackendChoice> {
     all.iter()
-        .filter(|b| b.id != "null" || configured == Some("null"))
+        .filter(|b| b.id != "null")
+        .chain(all.iter().filter(|b| b.id == "null"))
         .collect()
 }
 
@@ -708,7 +706,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 {
                     update(scene, |c| c.outputs.backend = None);
                 }
-                for b in listed_backends(&backends, current.as_deref()) {
+                for b in listed_backends(&backends) {
                     let text = match &b.unavailable {
                         Some(_) => t.tr_args(
                             "settings-backend-unavailable",
@@ -942,7 +940,104 @@ fn bit_perfect(
                 });
             }
         });
+        if !listed.contains(device) {
+            continue;
+        }
+        let current = scene
+            .state
+            .config
+            .outputs
+            .dsd_output_for(&device.backend, &device.device);
+        let label = t.tr_args("settings-dsd-mode", &[("device", name.into())]);
+        row(ui, &label, None, |ui| {
+            egui::ComboBox::from_id_salt(("dsd-mode", &device.backend, &device.device))
+                .selected_text(dsd_mode_label(t, current))
+                .show_ui(ui, |ui| {
+                    for mode in offered_dsd_modes(info, std::env::consts::OS, current) {
+                        if ui
+                            .selectable_label(mode == current, dsd_mode_label(t, mode))
+                            .clicked()
+                        {
+                            let device = device.clone();
+                            update(scene, move |c| {
+                                c.outputs.dsd_output.retain(|d| {
+                                    (d.backend.as_str(), d.device.as_str())
+                                        != (device.backend.as_str(), device.device.as_str())
+                                });
+                                if mode != DsdOutput::Pcm {
+                                    c.outputs.dsd_output.push(DsdDevice {
+                                        backend: device.backend,
+                                        device: device.device,
+                                        mode,
+                                    });
+                                }
+                            });
+                        }
+                    }
+                });
+        });
     }
+    ui.add_space(4.0);
+    ui.add(
+        egui::Label::new(
+            RichText::new(t.tr("settings-dsd-hint"))
+                .font(font(12.0))
+                .color(theme::NEUTRAL_400),
+        )
+        .selectable(false)
+        .wrap(),
+    );
+    let mix = scene.state.config.outputs.dsd_mix;
+    let mix_label = |m: DsdMix| {
+        t.tr(match m {
+            DsdMix::ConvertToPcm => "settings-dsd-mix-convert",
+            DsdMix::HoldOthers => "settings-dsd-mix-hold",
+        })
+    };
+    row(ui, &t.tr("settings-dsd-mix"), None, |ui| {
+        egui::ComboBox::from_id_salt("dsd-mix")
+            .selected_text(mix_label(mix))
+            .show_ui(ui, |ui| {
+                for choice in [DsdMix::ConvertToPcm, DsdMix::HoldOthers] {
+                    if ui
+                        .selectable_label(choice == mix, mix_label(choice))
+                        .clicked()
+                    {
+                        update(scene, |c| c.outputs.dsd_mix = choice);
+                    }
+                }
+            });
+    });
+}
+
+/// The DSD modes a bit-perfect device can be given: PCM always, DoP when the
+/// device can be opened exclusively, native DSD on Linux when it reports a
+/// DSD format; the configured mode stays listed so it can be changed back.
+fn offered_dsd_modes(info: Option<&DeviceInfo>, os: &str, configured: DsdOutput) -> Vec<DsdOutput> {
+    let mut modes = vec![DsdOutput::Pcm];
+    if info.is_some_and(|d| d.exclusive_capable) {
+        modes.push(DsdOutput::Dop);
+    }
+    if os == "linux" && info.is_some_and(|d| d.native_dsd) {
+        modes.push(DsdOutput::Native);
+    }
+    if !modes.contains(&configured) {
+        modes.push(configured);
+        modes.sort_by_key(|m| match m {
+            DsdOutput::Pcm => 0,
+            DsdOutput::Dop => 1,
+            DsdOutput::Native => 2,
+        });
+    }
+    modes
+}
+
+fn dsd_mode_label(t: &crate::i18n::I18n, mode: DsdOutput) -> String {
+    t.tr(match mode {
+        DsdOutput::Pcm => "settings-dsd-pcm",
+        DsdOutput::Dop => "settings-dsd-dop",
+        DsdOutput::Native => "settings-dsd-native",
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1783,6 +1878,51 @@ fn pick_folder(scene: &Scene<'_>) -> Option<Receiver<Option<PathBuf>>> {
 mod tests {
     use super::*;
 
+    fn info(exclusive: bool, native: bool) -> DeviceInfo {
+        DeviceInfo {
+            id: fp_backends::DeviceId("hw:0".into()),
+            name: "DAC".into(),
+            detail: None,
+            channels: 2,
+            sample_rates: vec![(44_100, 768_000)],
+            buffer_frames: None,
+            exclusive_capable: exclusive,
+            rate_switching: exclusive,
+            native_dsd: native,
+        }
+    }
+
+    #[test]
+    fn only_the_modes_the_device_can_take_are_offered() {
+        use fp_model::DsdOutput::{Dop, Native, Pcm};
+        assert_eq!(
+            offered_dsd_modes(Some(&info(true, true)), "linux", Pcm),
+            vec![Pcm, Dop, Native]
+        );
+        assert_eq!(
+            offered_dsd_modes(Some(&info(true, true)), "windows", Pcm),
+            vec![Pcm, Dop]
+        );
+        assert_eq!(
+            offered_dsd_modes(Some(&info(true, false)), "linux", Pcm),
+            vec![Pcm, Dop]
+        );
+        assert_eq!(
+            offered_dsd_modes(Some(&info(false, false)), "linux", Pcm),
+            vec![Pcm]
+        );
+        assert_eq!(
+            offered_dsd_modes(None, "linux", Pcm),
+            vec![Pcm],
+            "unplugged"
+        );
+        assert_eq!(
+            offered_dsd_modes(None, "linux", Native),
+            vec![Pcm, Native],
+            "a configured mode stays visible so it can be changed back"
+        );
+    }
+
     #[test]
     fn the_window_has_one_size_clamped_to_the_screen() {
         assert_eq!(window_size(vec2(1600.0, 940.0)), WINDOW_SIZE);
@@ -1799,16 +1939,12 @@ mod tests {
     }
 
     #[test]
-    fn null_is_listed_only_when_configured() {
-        let all = [choice("alsa"), choice("null")];
-        let ids = |configured| -> Vec<String> {
-            listed_backends(&all, configured)
-                .into_iter()
-                .map(|b| b.id.clone())
-                .collect()
-        };
-        assert_eq!(ids(None), vec!["alsa"]);
-        assert_eq!(ids(Some("alsa")), vec!["alsa"]);
-        assert_eq!(ids(Some("null")), vec!["alsa", "null"]);
+    fn null_is_always_listed_after_the_real_systems() {
+        let all = [choice("null"), choice("alsa"), choice("jack")];
+        let ids: Vec<&str> = listed_backends(&all)
+            .into_iter()
+            .map(|b| b.id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["alsa", "jack", "null"]);
     }
 }

@@ -61,6 +61,7 @@ FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music di
 scripts/package-release.sh <target>           # release archive for one target
 scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows: windows.sh, macOS: macos.sh)
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
+scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test real_music -- --ignored   # real-music corpus (local only)
 cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
 ```

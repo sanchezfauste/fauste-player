@@ -13,6 +13,7 @@ pub mod kweight;
 pub mod meter;
 pub mod mixer;
 pub mod ramp;
+pub mod reporting;
 pub mod resample;
 pub mod source;
 pub mod truepeak;

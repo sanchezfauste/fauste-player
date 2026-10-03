@@ -40,6 +40,10 @@ impl OutputStream for ExclusiveStream {
     fn sample_format(&self) -> SampleFormat {
         self.format
     }
+
+    fn dsd(&self) -> Option<crate::dsd::DsdStream> {
+        self.config.dsd
+    }
 }
 
 impl Drop for ExclusiveStream {

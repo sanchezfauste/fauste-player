@@ -215,6 +215,16 @@ pub enum EngineEvent {
     /// The pre-listen of `cart` reached its end (or could not start).
     /// Ignored unless `cart` is still the one pre-listened.
     CartCueEnded { cart: CartId },
+    /// `entry` reaches its Main device as DSD, unchanged (spec O25).
+    /// `hold_others` is the mix policy in force (`DsdMix::HoldOthers`).
+    /// Ignored unless `entry` is the player's current.
+    DsdStarted {
+        player: PlayerId,
+        entry: EntryId,
+        hold_others: bool,
+    },
+    /// The DSD stream of `entry` ended or was switched to PCM.
+    DsdEnded { player: PlayerId, entry: EntryId },
 }
 
 /// Everything the engine needs to open and position one source.
@@ -312,6 +322,11 @@ pub enum EngineAction {
     SetVolume {
         player: PlayerId,
         volume: f32,
+    },
+    /// Switch the player's DSD stream to PCM now (spec O25: the fader left
+    /// unity).
+    LeaveDsd {
+        player: PlayerId,
     },
     Seek {
         player: PlayerId,

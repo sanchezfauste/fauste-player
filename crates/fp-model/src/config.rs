@@ -330,6 +330,17 @@ pub struct OutputsConfig {
     /// follows the files (Phase 4 spec B1, B3).
     #[serde(default)]
     pub bit_perfect: Vec<OutputDevice>,
+    /// DSD mode per device (feedback 2 spec O25). Only devices also listed
+    /// in `bit_perfect` use it; every other device converts DSD to PCM.
+    #[serde(default)]
+    pub dsd_output: Vec<crate::dsd::DsdDevice>,
+    /// What happens when another source needs an output carrying DSD.
+    #[serde(default)]
+    pub dsd_mix: crate::dsd::DsdMix,
+    /// DSD silence (0x69) sent at a DSD stream's start, at its end and on
+    /// every switch to PCM, so that the converter locks without a pop
+    /// (milliseconds, 0–2000).
+    pub dsd_silence_ms: f64,
 }
 
 /// The cartwall's outputs. Main falls back to the default output; without
@@ -350,7 +361,28 @@ impl Default for OutputsConfig {
             routes: Vec::new(),
             cartwall: CartwallRoutes::default(),
             bit_perfect: Vec::new(),
+            dsd_output: Vec::new(),
+            dsd_mix: crate::dsd::DsdMix::default(),
+            dsd_silence_ms: crate::dsd::DEFAULT_DSD_SILENCE_MS,
         }
+    }
+}
+
+impl OutputsConfig {
+    /// The DSD mode of a device: its configured mode when it is bit-perfect,
+    /// `Pcm` otherwise.
+    pub fn dsd_output_for(&self, backend: &str, device: &str) -> crate::dsd::DsdOutput {
+        let bit_perfect = self
+            .bit_perfect
+            .iter()
+            .any(|d| d.backend == backend && d.device == device);
+        if !bit_perfect {
+            return crate::dsd::DsdOutput::Pcm;
+        }
+        self.dsd_output
+            .iter()
+            .find(|d| d.backend == backend && d.device == device)
+            .map_or(crate::dsd::DsdOutput::Pcm, |d| d.mode)
     }
 }
 
@@ -702,6 +734,27 @@ impl Config {
             "outputs.buffer_frames",
             &mut w,
         );
+        clamp_to(
+            &mut o.dsd_silence_ms,
+            0.0,
+            2000.0,
+            "outputs.dsd_silence_ms",
+            &mut w,
+        );
+        let mut seen: Vec<(String, String)> = Vec::new();
+        let before = o.dsd_output.len();
+        o.dsd_output.retain(|d| {
+            let key = (d.backend.clone(), d.device.clone());
+            let first = !seen.contains(&key);
+            seen.push(key);
+            first
+        });
+        if o.dsd_output.len() != before {
+            w.push(ConfigWarning {
+                field: "outputs.dsd_output",
+                message: "a device was listed more than once; keeping its first mode".to_owned(),
+            });
+        }
 
         let t = &mut self.tuning;
         clamp_to(&mut t.declick_ms, 0.5, 50.0, "tuning.declick_ms", &mut w);

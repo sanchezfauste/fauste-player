@@ -117,3 +117,22 @@ fn systems_are_listed_in_the_preferred_order() {
         preferred_backend(&listed, std::env::consts::OS)
     );
 }
+
+#[test]
+fn null_is_chosen_only_when_nothing_else_is_available() {
+    let all = [("null", true), ("alsa", true)];
+    assert_eq!(preferred_backend(&all, "linux"), Some("alsa"));
+    assert_eq!(
+        preferred_backend(&all, "plan9"),
+        Some("alsa"),
+        "unknown OS too"
+    );
+    assert_eq!(
+        choose_default_backend(Some("null"), &all, "linux"),
+        Some("null")
+    );
+    assert_eq!(
+        preferred_backend(&[("null", true), ("alsa", false)], "linux"),
+        Some("null")
+    );
+}

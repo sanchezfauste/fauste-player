@@ -8,9 +8,12 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+#[cfg(target_os = "linux")]
+mod alsa_dsd;
 #[cfg(target_os = "macos")]
 mod coreaudio_hog;
 mod cpal_backend;
+pub mod dsd;
 pub mod exclusive;
 mod hosts;
 mod null;
@@ -53,6 +56,8 @@ pub struct DeviceInfo {
     pub buffer_frames: Option<(u32, u32)>,
     pub exclusive_capable: bool,
     pub rate_switching: bool,
+    /// The device takes raw DSD (Linux, ALSA hw: devices reporting a DSD format).
+    pub native_dsd: bool,
 }
 
 /// The labels an output picker shows for `devices`, in order: the name (the
@@ -100,6 +105,8 @@ pub struct StreamConfig {
     /// Sole, unconverted access to the device (Phase 4 spec B4). A backend
     /// that cannot give it for this device refuses with `Unsupported`.
     pub exclusive: bool,
+    /// DSD carried by this stream (feedback 2 spec O25); `None` for PCM.
+    pub dsd: Option<dsd::DsdStream>,
 }
 
 /// The sample format a stream really runs in.
@@ -158,6 +165,10 @@ pub trait OutputStream: Send {
     fn config(&self) -> StreamConfig;
     /// The sample format the device runs in.
     fn sample_format(&self) -> SampleFormat;
+    /// How the stream carries DSD, `None` for PCM.
+    fn dsd(&self) -> Option<dsd::DsdStream> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

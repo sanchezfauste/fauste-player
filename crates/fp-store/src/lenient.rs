@@ -192,4 +192,21 @@ mod tests {
         assert_eq!(list, fp_model::default_columns());
         assert_eq!(warnings.len(), 1, "{warnings:?}");
     }
+
+    #[test]
+    fn bad_dsd_values_fall_back_one_by_one() {
+        let user: serde_json::Value = serde_json::from_str(
+            r#"{"outputs":{"dsd_mix":"Sometimes","dsd_silence_ms":"long","sample_rate":44100,
+                "dsd_output":[{"backend":"alsa","device":"hw:0","mode":"Dop"},
+                              {"backend":"alsa","device":"hw:1","mode":"Laser"}]}}"#,
+        )
+        .unwrap();
+        let mut warnings = Vec::new();
+        let c = config_from_value(&user, &mut warnings);
+        assert_eq!(c.outputs.dsd_mix, fp_model::DsdMix::ConvertToPcm);
+        assert_eq!(c.outputs.dsd_silence_ms, 200.0);
+        assert_eq!(c.outputs.sample_rate, 44_100, "the other fields are kept");
+        assert_eq!(c.outputs.dsd_output.len(), 1, "the valid element is kept");
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
+    }
 }

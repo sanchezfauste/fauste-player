@@ -23,7 +23,29 @@ use crate::source::{SourceShared, source_pair};
 use crate::worker::{PlayerWorker, SourceKey, SourceOpener, WorkerFailure};
 
 mod carts;
+mod dsd;
 pub use carts::{CartTelemetry, CartwallTelemetry};
+
+/// DSD output (feedback 2 spec O25), derived from the model `Config`.
+#[derive(Debug, Clone)]
+pub struct DsdSettings {
+    /// The DSD mode of each bit-perfect device that does not convert to
+    /// PCM; any other device converts.
+    pub modes: HashMap<BusKey, fp_model::DsdOutput>,
+    pub mix: fp_model::DsdMix,
+    /// DSD silence at a DSD stream's start, end and switch to PCM.
+    pub silence_ms: f64,
+}
+
+impl Default for DsdSettings {
+    fn default() -> Self {
+        Self {
+            modes: HashMap::new(),
+            mix: fp_model::DsdMix::default(),
+            silence_ms: fp_model::DEFAULT_DSD_SILENCE_MS,
+        }
+    }
+}
 
 /// Stream settings and tuning, derived from the model `Config`.
 #[derive(Debug, Clone)]
@@ -38,6 +60,7 @@ pub struct EngineSettings {
     pub default_backend: Option<String>,
     /// Devices played bit-perfect (Phase 4 spec B1).
     pub bit_perfect: std::collections::HashSet<BusKey>,
+    pub dsd: DsdSettings,
 }
 
 impl EngineSettings {
@@ -59,6 +82,25 @@ impl EngineSettings {
                     device: d.device.clone(),
                 })
                 .collect(),
+            dsd: DsdSettings {
+                // Only bit-perfect devices keep a DSD mode.
+                modes: config
+                    .outputs
+                    .dsd_output
+                    .iter()
+                    .map(|d| {
+                        let mode = config.outputs.dsd_output_for(&d.backend, &d.device);
+                        let key = BusKey {
+                            backend: d.backend.clone(),
+                            device: d.device.clone(),
+                        };
+                        (key, mode)
+                    })
+                    .filter(|(_, mode)| *mode != fp_model::DsdOutput::Pcm)
+                    .collect(),
+                mix: config.outputs.dsd_mix,
+                silence_ms: config.outputs.dsd_silence_ms,
+            },
         }
     }
 
@@ -79,6 +121,40 @@ pub struct PlayerTelemetry {
     /// The current source reaches its Main device unchanged: the BP badge
     /// (Phase 4 spec B5).
     pub bit_perfect: bool,
+    /// The current source goes out as DSD, unchanged (feedback 2 spec O25).
+    pub dsd: bool,
+}
+
+/// The events a bus's real-time side counts (audit A8), read by the
+/// conductor between ticks. Every field only grows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BusCounters {
+    /// Buffer under/overruns the backend reported.
+    pub xruns: u64,
+    /// Stream errors the backend could not classify.
+    pub stream_errors: u64,
+    /// Blocks output as silence because the mixer was busy.
+    pub lock_misses: u64,
+    /// Items leaked rather than freed on the real-time thread.
+    pub leaked: u64,
+    /// Events the real-time side could not hand to the conductor.
+    pub dropped_events: u64,
+    /// Blocks in which a source's channel pair did not fit the stream.
+    pub misrouted: u64,
+}
+
+impl BusCounters {
+    fn read(shared: &crate::mixer::BusShared) -> Self {
+        use std::sync::atomic::Ordering::Relaxed;
+        Self {
+            xruns: shared.xruns.load(Relaxed),
+            stream_errors: shared.stream_errors.load(Relaxed),
+            lock_misses: shared.lock_misses.load(Relaxed),
+            leaked: shared.leaked.load(Relaxed),
+            dropped_events: shared.dropped_events.load(Relaxed),
+            misrouted: shared.misrouted.load(Relaxed),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +162,7 @@ pub struct BusStatus {
     pub key: BusKey,
     pub health: BusHealth,
     pub error: Option<String>,
+    pub counters: BusCounters,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,6 +187,11 @@ struct Playing {
     start_secs: f64,
     shared: Arc<SourceShared>,
     start: StartState,
+    /// The bus frame a `Requested` start was sent for (0: at once).
+    start_frame: u64,
+    /// The earliest bus frame the source may start at (the DSD silence
+    /// before a DSD stream; 0: no limit).
+    not_before: u64,
     /// Report `ReachedEnd` when this source finishes (fade stop).
     report_end: bool,
     /// The worker failed after this source started: let the buffered audio
@@ -156,6 +238,10 @@ struct PlayerRuntime {
     cue_paused: bool,
     plan: Plan,
     paused: bool,
+    /// Bus frame at which the last pause ramp ends (on the main bus; the
+    /// player's sources are all on it). Before it, a paused source may still
+    /// be audible.
+    pause_ramp_ends: u64,
     /// Emit `FadeCompleted` once `outgoing` is empty.
     notify_fade: bool,
 }
@@ -189,6 +275,8 @@ pub struct Engine {
     true_peak: bool,
     /// Programme-meter integrator (ms, ms, dB/s) for new buses.
     integration: (f32, f32, f32),
+    /// Buses carrying (or just done carrying) DSD unchanged.
+    dsd_buses: HashMap<BusKey, dsd::DsdBus>,
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -259,6 +347,7 @@ impl Engine {
             now: Instant::now(),
             true_peak: false,
             integration: (0.0, 0.0, 0.0),
+            dsd_buses: HashMap::new(),
         }
     }
 
@@ -359,6 +448,10 @@ impl Engine {
             .store(true, std::sync::atomic::Ordering::Release);
         let volume = Arc::new(AtomicF32::new(1.0));
         let at = bus.now_frame();
+        let at = self.before_start_on(&key, at);
+        let Some(bus) = self.buses.get_mut(&key) else {
+            return;
+        };
         if bus.send(BusCommand::Attach {
             slot,
             source: consumer,
@@ -402,6 +495,7 @@ impl Engine {
                 key: b.key().clone(),
                 health: b.health(),
                 error: b.last_error().map(str::to_owned),
+                counters: BusCounters::read(b.shared()),
             })
             .collect()
     }
@@ -425,6 +519,7 @@ impl Engine {
             return false;
         }
         !p.cue
+            && !self.is_dsd_direct(p)
             && p.start == StartState::Started
             && self.settings.bit_perfect.contains(&p.bus)
             && bus.exclusive_granted()
@@ -516,6 +611,7 @@ impl Engine {
                     .load(std::sync::atomic::Ordering::Relaxed)
             }),
             bit_perfect: rt.current.as_ref().is_some_and(|p| self.is_bit_perfect(p)),
+            dsd: rt.current.as_ref().is_some_and(|p| self.is_dsd_direct(p)),
         }
     }
 
@@ -541,7 +637,9 @@ impl Engine {
     /// the sources waiting on it are reopened at the new rate. A sounding
     /// bus, or an unknown format, keeps the rate: the source is resampled.
     fn prepare_start(&mut self, bus: &BusKey, format: Option<fp_model::AudioFormat>) {
-        if !self.settings.bit_perfect.contains(bus) {
+        // A bus still carrying DSD (its tail, or a switch) keeps its stream:
+        // the start waits for the PCM stream (see `before_start_on`).
+        if !self.settings.bit_perfect.contains(bus) || self.dsd_buses.contains_key(bus) {
             return;
         }
         let Some(rate) = format.map(|f| f.sample_rate).filter(|r| *r > 0) else {
@@ -610,6 +708,137 @@ impl Engine {
                     }
                 }
             }
+        }
+    }
+
+    /// `bus` had to change rate under sources opened for `old_rate`: after
+    /// native DSD, the device did not take the word rate back as PCM. Every
+    /// player and cart source on it is opened again at its position at the
+    /// new rate, as a seek does (a source that was playing starts again as
+    /// soon as it is ready, a waiting or paused one stays waiting); sources
+    /// fading out and test tones are cut. Nothing happens when the rate is
+    /// the same.
+    fn follow_forced_rate(&mut self, bus: &BusKey, old_rate: u32) {
+        let new_rate = self.rate_of(bus);
+        if new_rate == old_rate {
+            return;
+        }
+        tracing::warn!(
+            ?bus,
+            old_rate,
+            new_rate,
+            "the device changed rate; reopening its sources"
+        );
+        let old = f64::from(old_rate.max(1));
+        let position = |p: &Playing| p.start_secs + p.shared.frames_played() as f64 / old;
+        let ids: Vec<PlayerId> = self.players.keys().copied().collect();
+        for player in ids {
+            let on_bus = |p: &Playing| &p.bus == bus;
+            let touches = self.players.get(&player).is_some_and(|rt| {
+                rt.current
+                    .iter()
+                    .chain(rt.preload.iter())
+                    .chain(rt.cue_src.iter())
+                    .chain(rt.outgoing.iter())
+                    .any(on_bus)
+            });
+            if !touches {
+                continue;
+            }
+            self.undispatch(player);
+            let Some(rt) = self.players.get_mut(&player) else {
+                continue;
+            };
+            let (gone, kept): (Vec<Playing>, Vec<Playing>) = std::mem::take(&mut rt.outgoing)
+                .into_iter()
+                .partition(on_bus);
+            rt.outgoing = kept;
+            // Cut fades end as a finished fade does (`Finished` on an
+            // outgoing source): `ReachedEnd` for a fade stop, and
+            // `FadeCompleted` once the last one of a crossfade is gone.
+            let last = gone.len();
+            for (k, p) in gone.into_iter().enumerate() {
+                let report = p.report_end.then_some(p.entry);
+                let done = k + 1 == last
+                    && self.players.get_mut(&player).is_some_and(|rt| {
+                        rt.outgoing.is_empty() && std::mem::take(&mut rt.notify_fade)
+                    });
+                self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
+                self.release(p);
+                if let Some(entry) = report {
+                    self.events.push(EngineEvent::ReachedEnd { player, entry });
+                } else if done {
+                    self.events.push(EngineEvent::FadeCompleted { player });
+                }
+            }
+            for role in [Role::Current, Role::Preload, Role::Cue] {
+                let Some(rt) = self.players.get_mut(&player) else {
+                    break;
+                };
+                let (paused, field) = match role {
+                    Role::Current => (rt.paused, &mut rt.current),
+                    Role::Preload => (true, &mut rt.preload),
+                    _ => (rt.cue_paused, &mut rt.cue_src),
+                };
+                let Some(old_source) = field.take_if(|p| on_bus(p)) else {
+                    continue;
+                };
+                let waiting = old_source.start == StartState::Idle;
+                let mut request = old_source.request.clone();
+                if !waiting {
+                    request.from_secs = position(&old_source);
+                    self.send(
+                        &old_source.bus,
+                        BusCommand::Cancel {
+                            slot: old_source.slot,
+                        },
+                    );
+                }
+                let cue = old_source.cue;
+                self.release(old_source);
+                match self.new_source(player, cue, &request) {
+                    Ok(mut fresh) => {
+                        fresh.start = if waiting || paused {
+                            StartState::Idle
+                        } else {
+                            // A de-click only where it starts mid-file.
+                            StartState::WhenReady {
+                                fade_in: !cue && request.from_secs > 0.0,
+                            }
+                        };
+                        if let Some(rt) = self.players.get_mut(&player) {
+                            match role {
+                                Role::Current => rt.current = Some(fresh),
+                                Role::Preload => rt.preload = Some(fresh),
+                                _ => rt.cue_src = Some(fresh),
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // An engine limitation, not a bad file.
+                        tracing::error!(?player, error = ?e, "cannot reopen a source at the new rate");
+                        match role {
+                            Role::Current => self.events.push(EngineEvent::ReachedEnd {
+                                player,
+                                entry: request.entry,
+                            }),
+                            Role::Cue => self.events.push(EngineEvent::CueEnded {
+                                player,
+                                entry: request.entry,
+                            }),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        self.follow_forced_rate_carts(bus, old_rate);
+        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.tones)
+            .into_iter()
+            .partition(|(b, _)| b == bus);
+        self.tones = kept;
+        for (bus, slot) in gone {
+            self.send(&bus, BusCommand::Detach { slot });
         }
     }
 
@@ -761,9 +990,11 @@ impl Engine {
                 buffer_frames: self.settings.buffer_frames,
                 channels,
                 exclusive: self.settings.bit_perfect.contains(key),
+                dsd: None,
             };
             let mixer = MixerConfig {
                 volume_smoothing_frames: self.settings.frames(t.gain_smoothing_ms).max(1) as u32,
+                declick_frames: self.settings.frames(t.declick_ms) as u32,
                 max_commands_per_block: t.max_commands_per_block,
             };
             let timing = BusTiming {
@@ -829,6 +1060,7 @@ impl Engine {
                 }
             }
             EngineAction::Seek { player, secs } => self.seek(player, secs),
+            EngineAction::LeaveDsd { player } => self.leave_dsd(player),
             EngineAction::SetVolume { player, volume } => {
                 if let Some(rt) = self.players.get(&player) {
                     rt.volume.store(volume);
@@ -898,6 +1130,7 @@ impl Engine {
                 cue_paused: false,
                 plan: Plan::None,
                 paused: false,
+                pause_ramp_ends: 0,
                 notify_fade: false,
             },
         );
@@ -920,6 +1153,7 @@ impl Engine {
             for p in all {
                 self.detach(&p);
                 self.owners.remove(&p.key);
+                self.dsd_source_gone(&p);
             }
         }
     }
@@ -931,6 +1165,18 @@ impl Engine {
         player: PlayerId,
         cue: bool,
         request: &SourceRequest,
+    ) -> Result<Playing, AttachError> {
+        self.open_source(player, cue, request, false)
+    }
+
+    /// Like `new_source`; with `dsd`, a DSD source (raw words beside the
+    /// PCM conversion) at the bus rate, which must be the word rate.
+    fn open_source(
+        &mut self,
+        player: PlayerId,
+        cue: bool,
+        request: &SourceRequest,
+        dsd: bool,
     ) -> Result<Playing, AttachError> {
         let rt = self.players.get(&player).ok_or(AttachError::NoPlayer)?;
         let (bus_key, channel) = if cue {
@@ -953,7 +1199,11 @@ impl Engine {
             tracing::error!(?player, bus = ?bus_key, "no free mixer slot");
             return Err(AttachError::NoSlot);
         };
-        let (producer, consumer) = source_pair(ring);
+        let (producer, consumer) = if dsd {
+            crate::source::source_pair_dsd(ring)
+        } else {
+            source_pair(ring)
+        };
         let shared = consumer.shared.clone();
         if !bus.send(BusCommand::Attach {
             slot,
@@ -968,8 +1218,18 @@ impl Engine {
         let key = SourceKey(self.next_key);
         let rate = self.rate_of(&bus_key);
         if let Some(rt) = self.players.get(&player) {
-            rt.worker
-                .load_at(key, request.path.clone(), request.from_secs, producer, rate);
+            let options = crate::worker::LoadOptions {
+                rate: Some(rate),
+                dsd,
+                ..crate::worker::LoadOptions::default()
+            };
+            rt.worker.load_with(
+                key,
+                request.path.clone(),
+                request.from_secs,
+                producer,
+                options,
+            );
         }
         self.owners.insert(key, player);
         Ok(Playing {
@@ -981,6 +1241,8 @@ impl Engine {
             start_secs: request.from_secs,
             shared,
             start: StartState::Idle,
+            start_frame: 0,
+            not_before: 0,
             report_end: false,
             failed: false,
             cue,
@@ -1013,23 +1275,59 @@ impl Engine {
     fn release(&mut self, p: Playing) {
         self.detach(&p);
         self.owners.remove(&p.key);
+        self.dsd_source_gone(&p);
     }
 
     /// Fades a playing source out over `frames` from now and stops it; it is
     /// released when the mixer reports it finished. A source that is not
-    /// audible (never started, or paused) is released at once. Returns
-    /// whether the source was queued to fade (and will finish later).
+    /// audible (never started, held, or paused with its pause ramp over) is
+    /// released at once. One whose start was sent (`Requested`: the mixer may
+    /// have started it already) or whose pause ramp may still run is ramped
+    /// like a started one. Returns whether the source was queued to fade (and
+    /// will finish later).
     fn fade_out(&mut self, player: PlayerId, p: Playing, ms: f64, curve: Curve) -> bool {
-        let frames = self.frames_on(&p.bus, ms);
-        let paused = !p.cue && self.players.get(&player).is_some_and(|rt| rt.paused);
-        if p.start != StartState::Started || paused || p.held {
+        if self.is_dsd_direct(&p) {
+            // A DSD stream cannot be faded or de-clicked: it is cut, and the
+            // DSD silence follows (feedback 2 spec O25).
             self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
             self.release(p);
             return false;
         }
+        let frames = self.frames_on(&p.bus, ms);
         let now = self.now_frame(&p.bus);
+        // One block of margin: the engine's frame lags the mixer's.
+        let margin = u64::from(self.settings.buffer_frames);
+        let silent_paused = !p.cue
+            && self
+                .players
+                .get(&player)
+                .is_some_and(|rt| rt.paused && now >= rt.pause_ramp_ends.saturating_add(margin));
+        // A start scheduled for a frame still ahead has not been on air:
+        // dropping it is silent, starting it early would be a burst.
+        let audible = match p.start {
+            StartState::Started => true,
+            StartState::Requested => p.start_frame <= now,
+            _ => false,
+        };
+        if !audible || silent_paused || p.held {
+            self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
+            self.release(p);
+            return false;
+        }
         let len = u32::try_from(frames).unwrap_or(u32::MAX);
         self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
+        if p.start == StartState::Requested {
+            // `Cancel` drops a start the mixer has not executed yet; keep it,
+            // so the source starts, fades and finishes like any other.
+            // (A start scheduled for a future frame was released above.)
+            self.send(
+                &p.bus,
+                BusCommand::Start {
+                    slot: p.slot,
+                    at_frame: now,
+                },
+            );
+        }
         self.send(
             &p.bus,
             BusCommand::Ramp {
@@ -1227,10 +1525,24 @@ impl Engine {
                 }
             }
         }
-        if let Some(main) = self.players.get(&player).map(|rt| rt.main.0.clone()) {
-            self.prepare_start(&main, request.format);
-        }
-        let mut next = match self.take_or_open(player, request) {
+        // A DSD stream on air is cut first: it cannot be faded, and the new
+        // start may reuse its stream (feedback 2 spec O25).
+        self.cut_dsd_current(player);
+        let main = self.players.get(&player).map(|rt| rt.main.0.clone());
+        let direct = match &main {
+            Some(main) => self.try_start_dsd(player, main, request),
+            None => None,
+        };
+        let opened = match direct {
+            Some(p) => Ok(p),
+            None => {
+                if let Some(main) = &main {
+                    self.prepare_start(main, request.format);
+                }
+                self.take_or_open(player, request)
+            }
+        };
+        let mut next = match opened {
             Ok(next) => next,
             Err(e) => {
                 // An engine limitation, not a bad file: end the entry cleanly.
@@ -1310,15 +1622,23 @@ impl Engine {
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
+        let already_paused = rt.paused;
         rt.paused = true;
+        let main = rt.main.0.clone();
         let targets: Vec<(BusKey, usize)> = rt
             .current
             .iter()
             .chain(rt.outgoing.iter())
             .map(|p| (p.bus.clone(), p.slot))
             .collect();
+        if !already_paused {
+            let ends = self.now_frame(&main) + u64::from(self.ramp_frames(&main));
+            if let Some(rt) = self.players.get_mut(&player) {
+                rt.pause_ramp_ends = ends;
+            }
+        }
         for (bus, slot) in targets {
-            let ramp = self.ramp_frames(&bus);
+            let ramp = self.pause_ramp_of(&bus, slot);
             self.send(
                 &bus,
                 BusCommand::Pause {
@@ -1330,16 +1650,37 @@ impl Engine {
     }
 
     fn resume(&mut self, player: PlayerId) {
-        // A track loaded paused (after a restart) starts now: its rate may
-        // be followed like any other start.
+        // A track loaded paused (after a restart) starts now: it may go out
+        // as DSD, or its rate may be followed, like any other start. One
+        // that already is a DSD stream's source (sought while paused) just
+        // starts.
         let waiting = self
             .players
             .get(&player)
             .and_then(|rt| rt.current.as_ref())
-            .filter(|c| c.start == StartState::Idle)
-            .map(|c| (c.bus.clone(), c.request.format));
-        if let Some((bus, format)) = waiting {
-            self.prepare_start(&bus, format);
+            .filter(|c| c.start == StartState::Idle && !self.is_dsd_direct(c))
+            .map(|c| (c.bus.clone(), c.request.clone()));
+        if let Some((bus, request)) = waiting {
+            let old = self
+                .players
+                .get_mut(&player)
+                .and_then(|rt| rt.current.take());
+            match self.try_start_dsd(player, &bus, &request) {
+                Some(direct) => {
+                    if let Some(old) = old {
+                        self.release(old);
+                    }
+                    if let Some(rt) = self.players.get_mut(&player) {
+                        rt.current = Some(direct);
+                    }
+                }
+                None => {
+                    if let Some(rt) = self.players.get_mut(&player) {
+                        rt.current = old;
+                    }
+                    self.prepare_start(&bus, request.format);
+                }
+            }
         }
         let Some(rt) = self.players.get_mut(&player) else {
             return;
@@ -1358,7 +1699,7 @@ impl Engine {
             }
         }
         for (bus, slot) in targets {
-            let ramp = self.ramp_frames(&bus);
+            let ramp = self.pause_ramp_of(&bus, slot);
             self.send(
                 &bus,
                 BusCommand::Resume {
@@ -1393,16 +1734,18 @@ impl Engine {
 
     fn seek(&mut self, player: PlayerId, secs: f64) {
         self.undispatch(player);
-        let Some(mut request) = self
+        let Some((mut request, direct)) = self
             .players
             .get(&player)
             .and_then(|rt| rt.current.as_ref())
-            .map(|c| c.request.clone())
+            .map(|c| (c.request.clone(), self.is_dsd_direct(c)))
         else {
             return;
         };
         request.from_secs = secs;
-        let Ok(mut next) = self.new_source(player, false, &request) else {
+        // A DSD stream's source is replaced by another DSD source on the
+        // same stream, which stays in DSD mode (feedback 2 spec O25).
+        let Ok(mut next) = self.open_source(player, false, &request, direct) else {
             return;
         };
         let Some(rt) = self.players.get_mut(&player) else {
@@ -1413,8 +1756,17 @@ impl Engine {
         } else {
             StartState::WhenReady { fade_in: true }
         };
-        if let Some(old) = rt.current.replace(next) {
-            self.stop_quick_and_release(player, old);
+        let (bus, slot) = (next.bus.clone(), next.slot);
+        let old = rt.current.replace(next);
+        if let Some(old) = old {
+            if direct {
+                self.dsd_source_moved(&bus, old.slot, slot);
+                // Cut: the DSD source cannot be de-clicked.
+                self.send(&old.bus, BusCommand::Cancel { slot: old.slot });
+                self.release(old);
+            } else {
+                self.stop_quick_and_release(player, old);
+            }
         }
     }
 
@@ -1527,17 +1879,26 @@ impl Engine {
         self.handle_failures();
         let keys: Vec<BusKey> = self.buses.keys().cloned().collect();
         for key in keys {
-            let events = match self.buses.get_mut(&key) {
+            let (events, dsd_lost, rate_change) = match self.buses.get_mut(&key) {
                 Some(bus) => {
                     bus.supervise(now);
-                    bus.poll()
+                    let lost = bus.take_dsd_lost();
+                    let rate_change = bus.take_rate_change();
+                    (bus.poll(), lost, rate_change)
                 }
-                None => Vec::new(),
+                None => (Vec::new(), false, None),
             };
+            if dsd_lost {
+                self.dsd_stream_lost(&key);
+            }
+            if let Some(old_rate) = rate_change {
+                self.follow_forced_rate(&key, old_rate);
+            }
             for event in events {
                 self.handle_bus_event(&key, event);
             }
         }
+        self.end_dsd_streams();
         self.start_ready_sources();
         self.dispatch_plans();
         std::mem::take(&mut self.events)
@@ -1637,6 +1998,7 @@ impl Engine {
                         if let Some(c) = rt.current.as_mut() {
                             c.start = StartState::Started;
                         }
+                        self.dsd_slot_started(bus, slot);
                     }
                     Role::Cue => {
                         if let Some(c) = rt.cue_src.as_mut() {
@@ -1731,17 +2093,24 @@ impl Engine {
                 .get(&player)
                 .and_then(|rt| rt.preload.as_ref())
                 .filter(|p| p.start != StartState::Started)
-                .map(|p| (p.bus.clone(), p.slot, p.shared.is_ready())),
+                .map(|p| {
+                    // A `Requested` start was sent with its ramp already; the
+                    // mixer ignores a second `Start` of a started slot, so a
+                    // second ramp would only step the gain.
+                    let ramp = p.start_secs > 0.0 && p.start != StartState::Requested;
+                    (p.bus.clone(), p.slot, p.shared.is_ready(), ramp)
+                }),
             _ => None,
         };
         match next {
             // End of stream before (or instead of) the scheduled transition:
             // start the next right now, or as soon as it is buffered;
             // `promote` runs on its `Started` event.
-            Some((bus, slot, ready)) => {
+            Some((bus, slot, ready, inside)) => {
                 let at = self.now_frame(&bus);
+                let at = self.before_start_on(&bus, at);
                 if ready {
-                    self.send(&bus, BusCommand::Start { slot, at_frame: at });
+                    self.send_start(&bus, slot, at, inside);
                 }
                 if let Some(rt) = self.players.get_mut(&player) {
                     rt.plan = Plan::Dispatched(
@@ -1752,6 +2121,7 @@ impl Engine {
                         at,
                     );
                     if let Some(p) = rt.preload.as_mut() {
+                        p.start_frame = at;
                         p.start = if ready {
                             StartState::Requested
                         } else {
@@ -1783,8 +2153,16 @@ impl Engine {
                 // it waits for its failure to be handled instead.
                 && !(p.shared.is_failed() && p.shared.is_drained())
             {
+                let earliest = earliest.max(p.not_before);
                 p.start = StartState::Requested;
-                starts.push((p.bus.clone(), p.slot, fade_in, earliest));
+                p.start_frame = earliest;
+                // A start inside the audio ramps in; the file's first frame is hard.
+                starts.push((
+                    p.bus.clone(),
+                    p.slot,
+                    fade_in || p.start_secs > 0.0,
+                    earliest,
+                ));
             }
         }
         self.start_ready_carts();
@@ -1820,39 +2198,68 @@ impl Engine {
         }
         for (bus, slot, fade_in, earliest) in starts {
             let now = self.now_frame(&bus).max(earliest);
-            let declick = u32::try_from(self.frames_on(&bus, self.settings.tuning.declick_ms))
-                .unwrap_or(u32::MAX);
-            if fade_in {
-                self.send(
-                    &bus,
-                    BusCommand::Ramp {
-                        slot,
-                        to: 0.0,
-                        frames: 0,
-                        curve: Curve::Linear,
-                        at_frame: 0,
-                    },
-                );
+            if self.dsd_slot(&bus, slot) {
+                // A DSD stream starts hard: no gain touches its words.
+                self.send_start(&bus, slot, now, false);
+                continue;
             }
+            let at = self.before_start_on(&bus, now);
+            if at != now
+                && let Some((player, role)) = self.find(&bus, slot)
+                && let Some(p) = self.playing_mut(player, role)
+            {
+                p.start_frame = at;
+            }
+            self.send_start(&bus, slot, at, fade_in);
+        }
+    }
+
+    /// The source of `player` in `role`.
+    fn playing_mut(&mut self, player: PlayerId, role: Role) -> Option<&mut Playing> {
+        let rt = self.players.get_mut(&player)?;
+        match role {
+            Role::Preload => rt.preload.as_mut(),
+            Role::Current => rt.current.as_mut(),
+            Role::Cue => rt.cue_src.as_mut(),
+            Role::Outgoing(i) => rt.outgoing.get_mut(i),
+        }
+    }
+
+    /// Sends the `Start` of `slot` at frame `now`, with a de-click ramp in
+    /// from silence when `fade_in`.
+    pub(super) fn send_start(&mut self, bus: &BusKey, slot: usize, now: u64, fade_in: bool) {
+        let declick =
+            u32::try_from(self.frames_on(bus, self.settings.tuning.declick_ms)).unwrap_or(u32::MAX);
+        if fade_in {
             self.send(
-                &bus,
-                BusCommand::Start {
+                bus,
+                BusCommand::Ramp {
                     slot,
+                    to: 0.0,
+                    frames: 0,
+                    curve: Curve::Linear,
+                    at_frame: 0,
+                },
+            );
+        }
+        self.send(
+            bus,
+            BusCommand::Start {
+                slot,
+                at_frame: now,
+            },
+        );
+        if fade_in {
+            self.send(
+                bus,
+                BusCommand::Ramp {
+                    slot,
+                    to: 1.0,
+                    frames: declick,
+                    curve: Curve::Linear,
                     at_frame: now,
                 },
             );
-            if fade_in {
-                self.send(
-                    &bus,
-                    BusCommand::Ramp {
-                        slot,
-                        to: 1.0,
-                        frames: declick,
-                        curve: Curve::Linear,
-                        at_frame: now,
-                    },
-                );
-            }
         }
     }
 
@@ -1897,6 +2304,20 @@ impl Engine {
     }
 
     fn dispatch(&mut self, player: PlayerId, plan: TransitionPlan, at_frame: u64, declick: u64) {
+        // A next that needs a bus carrying DSD may have to wait for the
+        // switch to PCM: the whole transition moves with it.
+        let next_bus = match plan {
+            TransitionPlan::StartNextAt { .. } => self
+                .players
+                .get(&player)
+                .and_then(|rt| rt.preload.as_ref())
+                .map(|p| p.bus.clone()),
+            TransitionPlan::StopAt { .. } => None,
+        };
+        let at_frame = match next_bus {
+            Some(bus) => self.before_start_on(&bus, at_frame),
+            None => at_frame,
+        };
         let rate = self
             .players
             .get(&player)
@@ -1916,12 +2337,13 @@ impl Engine {
                 // A next that is not buffered yet starts as soon as it is,
                 // instead of on the frame as silence counted as underruns.
                 let ready = p.shared.is_ready();
+                p.start_frame = at_frame;
                 p.start = if ready {
                     StartState::Requested
                 } else {
                     StartState::WhenReady { fade_in: false }
                 };
-                (p.bus.clone(), p.slot, ready)
+                (p.bus.clone(), p.slot, ready, p.start_secs > 0.0)
             }),
             TransitionPlan::StopAt { .. } => None,
         };
@@ -1932,10 +2354,10 @@ impl Engine {
                     at_secs,
                     fade_current_until_secs,
                 },
-                Some((bus, slot, ready)),
+                Some((bus, slot, ready, inside)),
             ) => {
                 if ready {
-                    self.send(&bus, BusCommand::Start { slot, at_frame });
+                    self.send_start(&bus, slot, at_frame, inside);
                 }
                 match fade_current_until_secs {
                     Some(until) => {
@@ -1960,17 +2382,8 @@ impl Engine {
                         );
                     }
                     None => {
-                        let fade_at = at_frame.saturating_sub(declick);
-                        self.send(
-                            &cur_bus,
-                            BusCommand::Ramp {
-                                slot: cur_slot,
-                                to: 0.0,
-                                frames: declick32,
-                                curve: Curve::Linear,
-                                at_frame: fade_at,
-                            },
-                        );
+                        // The stop goes first: the ramp checks it to tell a cut inside
+                        // the file from the file's own end (a gapless join).
                         self.send(
                             &cur_bus,
                             BusCommand::StopAt {
@@ -1978,27 +2391,34 @@ impl Engine {
                                 at_frame,
                             },
                         );
+                        self.send(
+                            &cur_bus,
+                            BusCommand::RampOutBeforeCut {
+                                slot: cur_slot,
+                                frames: declick32,
+                                at_frame: at_frame.saturating_sub(declick),
+                            },
+                        );
                     }
                 }
             }
             // A stop, or a start with nothing preloaded: end the current track there.
             _ => {
-                let fade_at = at_frame.saturating_sub(declick);
-                self.send(
-                    &cur_bus,
-                    BusCommand::Ramp {
-                        slot: cur_slot,
-                        to: 0.0,
-                        frames: declick32,
-                        curve: Curve::Linear,
-                        at_frame: fade_at,
-                    },
-                );
+                // The stop goes first: the ramp checks it to tell a cut inside
+                // the file from the file's own end (a gapless join).
                 self.send(
                     &cur_bus,
                     BusCommand::StopAt {
                         slot: cur_slot,
                         at_frame,
+                    },
+                );
+                self.send(
+                    &cur_bus,
+                    BusCommand::RampOutBeforeCut {
+                        slot: cur_slot,
+                        frames: declick32,
+                        at_frame: at_frame.saturating_sub(declick),
                     },
                 );
             }

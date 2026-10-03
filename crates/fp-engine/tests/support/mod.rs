@@ -154,3 +154,56 @@ pub fn gated_opener(frames: u64, gate: Arc<std::sync::atomic::AtomicBool>) -> So
         }
     })
 }
+
+pub const DSD64: u32 = 2_822_400;
+
+/// A stereo DSF file at DSD64 whose channels hold `left` and `right`
+/// (bytes most significant bit first in time, as the engine carries them).
+pub fn dsf_file(dir: &Path, name: &str, left: &[u8], right: &[u8]) -> PathBuf {
+    dsf_file_at(dir, name, DSD64, left, right)
+}
+
+/// Like `dsf_file`, at the DSD rate `rate`.
+pub fn dsf_file_at(dir: &Path, name: &str, rate: u32, left: &[u8], right: &[u8]) -> PathBuf {
+    const BLOCK: usize = 4096;
+    let len = left.len().min(right.len());
+    let blocks = len.div_ceil(BLOCK);
+    let mut data = Vec::new();
+    for g in 0..blocks {
+        for ch in [left, right] {
+            let mut block = vec![0x69u8.reverse_bits(); BLOCK];
+            for (i, byte) in ch
+                .iter()
+                .skip(g * BLOCK)
+                .take(BLOCK.min(len - g * BLOCK))
+                .enumerate()
+            {
+                block[i] = byte.reverse_bits();
+            }
+            data.extend(block);
+        }
+    }
+    let mut f = Vec::new();
+    let total = 28 + 52 + 12 + data.len() as u64;
+    f.extend(b"DSD ");
+    f.extend(28u64.to_le_bytes());
+    f.extend(total.to_le_bytes());
+    f.extend(0u64.to_le_bytes());
+    f.extend(b"fmt ");
+    f.extend(52u64.to_le_bytes());
+    f.extend(1u32.to_le_bytes()); // version
+    f.extend(0u32.to_le_bytes()); // DSD raw
+    f.extend(2u32.to_le_bytes()); // stereo
+    f.extend(2u32.to_le_bytes()); // channels
+    f.extend(rate.to_le_bytes());
+    f.extend(1u32.to_le_bytes()); // LSB first
+    f.extend((len as u64 * 8).to_le_bytes()); // samples per channel
+    f.extend((BLOCK as u32).to_le_bytes());
+    f.extend(0u32.to_le_bytes());
+    f.extend(b"data");
+    f.extend((12 + data.len() as u64).to_le_bytes());
+    f.extend(data);
+    let path = dir.join(name);
+    std::fs::write(&path, f).unwrap();
+    path
+}

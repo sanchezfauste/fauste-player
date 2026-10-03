@@ -1,7 +1,7 @@
 # Operator Feedback 2 — Design Spec
 
 - **Date:** 2026-10-01
-- **Status:** Approved. Plans 1 to 9, 12 and 13 are built; each plan's section ends with its "As built" notes.
+- **Status:** Approved. Plans 1 to 10, 12 and 13 are built; each plan's section ends with its "As built" notes.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§2 threads,
   §3 rules, §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md)
   (M4 display), the [cartwall and settings spec](2026-09-26-phase2-cartwall-settings-design.md)
@@ -159,7 +159,7 @@
 - **O5 Null backend.** The `null` backend is left out of the audio system
   list, unless it is the one configured. It is then shown as "No output
   (silent)". It stays available in the configuration file for tests and
-  headless use.
+  headless use. (O27 reverses the hiding: it is always listed, last.)
 
 ## 4. Plan 3 — Meter scale
 
@@ -537,6 +537,45 @@ The audit of every earlier plan found these items still open.
   system list, after the real systems, as "No output (silent)". It discards
   audio at real-time pace. This reverses the hiding part of O5; the name O5
   chose stays.
+- **As built.**
+  - **O26 Audit.** [`docs/technical/audio-path-audit.md`](../../technical/audio-path-audit.md) covers the whole path, with executable probes in `crates/fp-engine/tests/audio_path_audit.rs` and `crates/fp-backends/tests/audio_path_audit.rs` and a findings table (A1 to A22). Defects fixed test-first in this plan:
+    - **A1** a source that starts inside the audio (cue-in, position, crossfade or segue target, CUE, cart) ramps in over `declick_ms`; a start at the first frame of the file stays hard.
+    - **A2** no de-click dip at a gapless join: the outgoing source is not ramped out when the transition frame is its end of stream (mixer command `RampOutBeforeCut`, decided at ramp time).
+    - **A3** a cart's cue-out ramps to zero over the last `declick_ms` of the pass.
+    - **A4** a source that fails mid-file ramps to zero over its last buffered frames (`MixerConfig::declick_frames`, which follows the device rate).
+    - **A5** a stop or seek right after a start, or during the pause ramp, ramps out instead of detaching the source.
+    - **A6** non-finite samples from a file become silence in the decoder, with one log line per file.
+    - **A7** the integer conversion clamps to full scale, maps NaN to 0 and rounds (cpal's own 24-bit conversion wrapped on overs).
+    - **A8** xruns, source underruns and stream errors are counted and logged at most once per 10 s window from the conductor (never from the cpal error callback), and shown as status-bar alerts (`alert-underruns`, an xrun alert per device).
+  - **Too large, moved to the roadmap.** **A10** (TPDF dither on integer outputs narrower than the source). The remaining rows (A11 to A22) need no change.
+  - **O34 Readings above 0 dBFS.** The audit's section 7 explains the readings. The maintainer chose option (c), **no change**: no over indicator and no limiter. It is documented in the player guide (`docs/user/players.md`, "Readings above 0 dBFS") and audit row A9.
+  - **O27 No output.** The `null` backend is always listed, last, as "No output (silent)"; `preferred_backend` ranks it last; `main.rs` honours a configured `null` and uses it for real.
+  - **O25 DSD output.**
+    - **Settings** live in `outputs`, not `audio` (a deviation from the list above): `outputs.dsd_output` (a `DsdDevice` entry per device, used only for devices also in `bit_perfect`), `outputs.dsd_mix` and `outputs.dsd_silence_ms` (default 200 ms, range 0 to 2000). They apply at the next restart (`RestartReason::DsdOutput`). An entry stays when its device leaves the bit-perfect list, so re-adding the device restores its mode.
+    - **Rules** are pure functions in `fp-model` (`crates/fp-model/src/dsd.rs`): the decision takes `DsdFacts` (mode, format, volume, device idle) and gives a `DsdTarget` or the reason the track is converted. Multichannel DSD never goes direct; DoP needs a 24- or 32-bit integer format; a failed native open falls back to PCM. `EngineEvent::DsdStarted` and `DsdEnded` set `PlayerState::dsd`; the badge (`BpBadge`) reads DSD while it is on.
+    - **Word stream.** `DsdRawReader` (`fp-decode`) reads DSF and DFF as raw 16-bit words; a DSD source carries a word ring beside its PCM ring (the PCM conversion feeds the meters and the fallback). The analysis records the file's DSD rate (`ANALYSIS_VERSION` 7).
+    - **DoP and native.** The mixer has a DSD mode in which it copies words and applies no gain: no ramp touches them. The renderer encodes DoP with the alternating 0x05/0xFA markers. Native DSD goes through ALSA on Linux (`hw:` devices that report a DSD format), opened non-blocking with a wait timeout. cpal refuses a DSD stream without exclusive access.
+    - **Silence.** DSD silence (0x69) goes out for `dsd_silence_ms` at the start, at the end and on every switch to PCM; a DSD track that continues a stream of the same kind and rate while its silence runs starts with no extra gap.
+    - **The two policies.** `ConvertToPcm` (default): the track goes on as PCM from where it was. `HoldOthers`: nothing interrupts the stream, other sources are muted on it with a notice, and the next track starts when the DSD track ends. Under `ConvertToPcm` an album is DSD only for its first track after the device was idle; the user guide says so.
+    - **`LeaveDsd`.** A volume below 100 % takes the player off DSD (`EngineAction::LeaveDsd`); the engine does not start DSD while the volume is already below unity. A fade stop of a DSD track stops it at once.
+    - **Tests.** Simulated devices (the Offline backend) in `crates/fp-engine/tests/dsd_output.rs`, and an `#[ignore]`d end-to-end test on a real DSD file, `crates/fp-engine/tests/dsd_real_music.rs`, which checks DoP and native output byte for byte on a DSD64 file.
+    - **Outstanding manual checks** (maintainer, real hardware): DoP on a real converter; native DSD with `FAUSTE_NATIVE_DSD_DEVICE` and `native_dsd_on_a_real_device` (see `docs/user/bit-perfect.md`).
+  - **Deviations from the plan** (the ledger's rulings):
+    - A1 ramps only starts at `from_secs > 0`; a file whose first sample is non-zero still starts hard.
+    - Tasks 1.1 to 1.6 were added for A1 to A8 (A3, A4 and A5 grouped into one); A10 went to the roadmap.
+    - A2 was also applied to a stop without a next source at the end of a file, and its tolerance at a join is two frames buffered past the stop frame (the plan counted one; resampling rounds).
+    - A8: reporting counts only on the device threads and logs from the conductor; `fp-backends` has no logging.
+    - O27: the unused `configured` parameter of the backend list was dropped.
+    - The model's `start_or_crossfade` takes a `held` argument, because the DSD hold is read before `advance_to` clears `dsd`.
+    - A fade stop on a DSD player delegates to `stop`.
+    - `BusCommand::HoldAll` carries a `from_frame`; a PCM start during a DSD tail starts at the tail's end after one block of hold; a dispatch shifts the whole transition by the switch delay.
+    - The mixer's pending DSD mode switches are a fixed ordered queue of four (overflow drops the oldest and counts a dropped event), instead of a single slot where the last wins.
+    - After a device loss, DSD resumes only on an exclusive device that passes the I24/I32 check; otherwise the bus reopens as PCM and the DSD stream ends. A bus with a pending switch to PCM counts as busy for the DSD decision. A reconnect restores DSD mode only if it was on, and a reconnect that cannot open the device reports it lost.
+    - Native ALSA opens non-blocking and waits with a timeout, instead of the plan's blocking open, so a busy device cannot hold the output thread.
+    - Final review C1: the end of a native DSD stream reopens the device as PCM at a rate it takes. An idle bus goes back to the PCM configuration it had before the DSD; a bus with sources tries the word rate first, then that configuration, then `outputs.sample_rate`, and when the rate changes every player and cart source on it is opened again at its position at the new rate (a looped cart from its cue-in; fades out and test tones are cut). The watchdog falls back to the same configuration instead of retrying a refused rate forever.
+    - Final review I1: the renderer of a native stream turns any block rendered out of DSD mode into DSD silence, so a native start never sends packed zeros before `DsdMode` on reaches the mixer.
+    - A fix in the decoder: a DSF header with an absurd channel count no longer tries a huge allocation.
+    - Restart notice: DSD settings reuse the existing `RestartReason::DsdOutput` path.
 
 ## 12. Plan 11 — Website and guide
 

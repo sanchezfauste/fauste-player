@@ -8,11 +8,16 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 use fp_backends::{Renderer, StreamErrorKind, StreamErrorSink};
 
+use fp_backends::dsd::{DopEncoder, silence_sample};
+
 use crate::atomic::AtomicF32;
 use crate::kweight::KWeighting;
 use crate::ramp::{Curve, Ramp};
 use crate::source::{SOURCE_CHANNELS, SourceConsumer};
 use crate::truepeak::TruePeak;
+
+/// Switches the mixer keeps pending (no allocation on the render thread).
+const PENDING_DSD: usize = 4;
 
 /// Frames processed per inner step; bounds the stack scratch buffer.
 const CHUNK_FRAMES: usize = 256;
@@ -37,6 +42,15 @@ pub enum BusCommand {
         curve: Curve,
         at_frame: u64,
     },
+    /// A linear de-click ramp to silence from `at_frame` for a cut at the
+    /// slot's stop frame, skipped when the source's own end of stream falls
+    /// at or before that stop frame (a gapless join: the audio already ends
+    /// there, so the ramp would only dip the level). Send `StopAt` too.
+    RampOutBeforeCut {
+        slot: usize,
+        frames: u32,
+        at_frame: u64,
+    },
     /// Stops at `at_frame` and reports `Finished`.
     StopAt { slot: usize, at_frame: u64 },
     /// Fades out over `ramp_frames`, then holds the position.
@@ -49,6 +63,31 @@ pub enum BusCommand {
     Detach { slot: usize },
     /// Replaces the slot storage with a larger one (built off the RT thread).
     Grow(SlotStorage),
+    /// Turns the bus's DSD mode on or off. It takes effect at the start of
+    /// the first block whose first frame is at or after `at_frame` (block
+    /// granularity keeps every block wholly DSD or wholly PCM, which the DoP
+    /// stage needs). In DSD mode the block is pre-filled with the DSD idle
+    /// word and a started DSD slot copies its words into its channel pair:
+    /// no gain of any kind touches them (no fade, pending ramp, start ramp,
+    /// failed-source ramp, pause ramp or volume smoothing). `Pause` holds at
+    /// once, `Resume` continues at once, `StopAt` cuts on its frame, and an
+    /// underrun or failure leaves the idle fill. The slot's PCM ring is
+    /// metered at unity gain. Every other slot is consumed silently (the
+    /// switching window and the HoldOthers mute). A fade that falls due in
+    /// DSD mode settles at its target at once, so none fires with a jump
+    /// when the mode ends, whether it was scheduled or issued in DSD mode; a
+    /// ramp already running when the mode begins is frozen where it was and
+    /// continues from that level. Neither steps the PCM gain at the switch.
+    DsdMode { on: bool, at_frame: u64 },
+    /// No slot consumes, starts or stops in a block that overlaps
+    /// `[from_frame, until_frame)`: one that ends after `from_frame` and
+    /// starts before `until_frame`. A `Start` or `StopAt` frame inside the
+    /// hold takes effect at the first block after it. The fill still
+    /// applies. With `from_frame == until_frame` only a block straddling
+    /// that frame is held (so a start on it lands on the block boundary
+    /// where a mode switch at the same frame applies). The latest command
+    /// wins, so a `HoldAll` ending at the current frame ends a hold.
+    HoldAll { from_frame: u64, until_frame: u64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +142,8 @@ pub struct BusShared {
     pub lost: AtomicBool,
     pub realtime_denied: AtomicBool,
     pub xruns: AtomicU64,
+    /// Stream errors the backend could not classify (not xruns).
+    pub stream_errors: AtomicU64,
     pub dropped_events: AtomicU64,
     pub lock_misses: AtomicU64,
     /// Items that could not be handed back and were leaked instead of being
@@ -110,6 +151,8 @@ pub struct BusShared {
     pub leaked: AtomicU64,
     /// Blocks in which a source's channel pair did not fit the stream.
     pub misrouted: AtomicU64,
+    /// The block just rendered was in DSD mode (set before it is filled).
+    pub dsd_on: AtomicBool,
     pub peak_l: AtomicF32,
     pub peak_r: AtomicF32,
     /// The stream's rate, set by the bus on every open (K-weighting).
@@ -189,8 +232,11 @@ impl StreamErrorSink for BusShared {
         match kind {
             StreamErrorKind::DeviceLost => self.lost.store(true, Ordering::Release),
             StreamErrorKind::RealtimeDenied => self.realtime_denied.store(true, Ordering::Release),
-            StreamErrorKind::Xrun | StreamErrorKind::Other => {
+            StreamErrorKind::Xrun => {
                 self.xruns.fetch_add(1, Ordering::Relaxed);
+            }
+            StreamErrorKind::Other => {
+                self.stream_errors.fetch_add(1, Ordering::Relaxed);
             }
         }
     }
@@ -200,9 +246,27 @@ impl StreamErrorSink for BusShared {
 pub struct MixerConfig {
     /// Frames over which a volume change is smoothed.
     pub volume_smoothing_frames: u32,
+    /// The de-click length: a failed source whose buffer holds no more than
+    /// this many frames ramps to zero over what is left. 0 is no ramp.
+    pub declick_frames: u32,
     /// Maximum commands applied per block.
     pub max_commands_per_block: usize,
 }
+
+/// Why a fade is pending.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FadeKind {
+    Plain,
+    /// A `RampOutBeforeCut`: skipped when the source ends by its stop frame.
+    Cut,
+}
+
+/// Frames a source's end of stream may lie past its stop frame and still
+/// count as ending there. The stop frame comes from the analysed duration,
+/// which can be a frame short of the real audio, and a resampled source can
+/// gain another frame to rounding. Cutting this few frames at full level is
+/// inaudible.
+const END_TOLERANCE_FRAMES: u64 = 2;
 
 pub struct Slot {
     source: SourceConsumer,
@@ -212,11 +276,13 @@ pub struct Slot {
     start_at: Option<u64>,
     started: bool,
     fade: Ramp,
-    pending_fade: Option<(u64, f32, u32, Curve)>,
+    pending_fade: Option<(u64, f32, u32, Curve, FadeKind)>,
     stop_at: Option<u64>,
     pause: Ramp,
     pausing: bool,
     paused: bool,
+    /// The failed-source ramp to silence was started (once per source).
+    fail_ramped: bool,
     finished: bool,
     /// This block: every frame rendered at gain exactly 1.0.
     block_unity: bool,
@@ -254,6 +320,16 @@ pub struct Mixer {
     volume_step: f32,
     /// The volume smoothing as configured, and the rate it was sized for.
     smoothing_base: Option<(u32, u32)>,
+    /// The de-click length at the same base rate as `smoothing_base`.
+    declick_base: u32,
+    /// DSD mode (see `BusCommand::DsdMode`) and its pending switch.
+    dsd_on: bool,
+    /// Pending switches `(at_frame, on)`, ordered by frame, oldest first.
+    pending_dsd: [Option<(u64, bool)>; PENDING_DSD],
+    /// Blocks overlapping `[hold_from, hold_until)` are held
+    /// (`BusCommand::HoldAll`).
+    hold_from: u64,
+    hold_until: u64,
 }
 
 impl Mixer {
@@ -275,6 +351,11 @@ impl Mixer {
             config,
             volume_step,
             smoothing_base: None,
+            declick_base: config.declick_frames,
+            dsd_on: false,
+            pending_dsd: [None; PENDING_DSD],
+            hold_from: 0,
+            hold_until: 0,
         };
         (
             mixer,
@@ -311,6 +392,39 @@ impl Mixer {
         }
     }
 
+    /// Queues a switch in frame order (after equal frames). A full queue
+    /// drops its oldest entry and counts it in `dropped_events`.
+    fn queue_dsd(&mut self, at_frame: u64, on: bool) {
+        if self.pending_dsd.iter().all(Option::is_some) {
+            self.pending_dsd.rotate_left(1);
+            if let Some(last) = self.pending_dsd.last_mut() {
+                *last = None;
+            }
+            self.shared.dropped_events.fetch_add(1, Ordering::Relaxed);
+        }
+        if let Some(free) = self.pending_dsd.iter().position(Option::is_none) {
+            if let Some(cell) = self.pending_dsd.get_mut(free) {
+                *cell = Some((at_frame, on));
+            }
+            // Bubble the new entry back past any later frame.
+            let mut i = free;
+            while i > 0 {
+                let (a, b) = (
+                    self.pending_dsd.get(i - 1).copied().flatten(),
+                    self.pending_dsd.get(i).copied().flatten(),
+                );
+                if let (Some((fa, _)), Some((fb, _))) = (a, b)
+                    && fa > fb
+                {
+                    self.pending_dsd.swap(i - 1, i);
+                    i -= 1;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
     fn slot_mut(&mut self, slot: usize) -> Option<&mut Slot> {
         self.slots.0.get_mut(slot).and_then(Option::as_mut)
     }
@@ -341,6 +455,7 @@ impl Mixer {
                         pause: Ramp::hold(1.0),
                         pausing: false,
                         paused: false,
+                        fail_ramped: false,
                         finished: false,
                         block_unity: false,
                         block_audible: false,
@@ -373,12 +488,39 @@ impl Mixer {
                 curve,
                 at_frame,
             } => {
+                let dsd_on = self.dsd_on;
                 if let Some(s) = self.slot_mut(slot) {
                     if at_frame <= now {
-                        s.fade.retarget(to, frames, curve);
+                        if dsd_on && s.source.is_dsd() {
+                            s.fade = Ramp::hold(to);
+                        } else {
+                            s.fade.retarget(to, frames, curve);
+                        }
                         s.pending_fade = None;
                     } else {
-                        s.pending_fade = Some((at_frame, to, frames, curve));
+                        s.pending_fade = Some((at_frame, to, frames, curve, FadeKind::Plain));
+                    }
+                }
+            }
+            BusCommand::RampOutBeforeCut {
+                slot,
+                frames,
+                at_frame,
+            } => {
+                let dsd_on = self.dsd_on;
+                if let Some(s) = self.slot_mut(slot) {
+                    if at_frame <= now {
+                        if !ends_by_stop(s, now) {
+                            if dsd_on && s.source.is_dsd() {
+                                s.fade = Ramp::hold(0.0);
+                            } else {
+                                s.fade.retarget(0.0, frames, Curve::Linear);
+                            }
+                        }
+                        s.pending_fade = None;
+                    } else {
+                        s.pending_fade =
+                            Some((at_frame, 0.0, frames, Curve::Linear, FadeKind::Cut));
                     }
                 }
             }
@@ -422,6 +564,14 @@ impl Mixer {
                     });
                 }
             }
+            BusCommand::DsdMode { on, at_frame } => self.queue_dsd(at_frame, on),
+            BusCommand::HoldAll {
+                from_frame,
+                until_frame,
+            } => {
+                self.hold_from = from_frame;
+                self.hold_until = until_frame;
+            }
             BusCommand::Grow(mut storage) => {
                 if storage.len() >= self.slots.len() {
                     for (new, old) in storage.0.iter_mut().zip(self.slots.0.iter_mut()) {
@@ -446,12 +596,13 @@ impl Mixer {
         let frames = u64::from(base_frames) * u64::from(to_rate) / u64::from(base_rate);
         self.config.volume_smoothing_frames = u32::try_from(frames.max(1)).unwrap_or(u32::MAX);
         self.volume_step = 1.0 / self.config.volume_smoothing_frames as f32;
+        let declick = u64::from(self.declick_base) * u64::from(to_rate) / u64::from(base_rate);
+        self.config.declick_frames = u32::try_from(declick).unwrap_or(u32::MAX);
     }
 
     /// Mixes one block into `out` (interleaved, `channels` per frame).
     pub fn render(&mut self, out: &mut [f32], channels: usize) {
         self.shared.render_seq.fetch_add(1, Ordering::AcqRel);
-        out.fill(0.0);
         let channels = channels.max(1);
         let frames = out.len() / channels;
         let now = self.shared.frames_rendered.load(Ordering::Relaxed);
@@ -467,6 +618,20 @@ impl Mixer {
                 Err(_) => break,
             }
         }
+        // Every due switch applies in order; the last decides this block.
+        while let Some(Some((at, on))) = self.pending_dsd.first().copied()
+            && at <= now
+        {
+            self.dsd_on = on;
+            self.pending_dsd.rotate_left(1);
+            if let Some(last) = self.pending_dsd.last_mut() {
+                *last = None;
+            }
+        }
+        let dsd_on = self.dsd_on;
+        self.shared.dsd_on.store(dsd_on, Ordering::Release);
+        out.fill(if dsd_on { silence_sample() } else { 0.0 });
+        let held = now < self.hold_until && now.saturating_add(frames as u64) > self.hold_from;
 
         let mut peak_l = 0.0f32;
         let mut peak_r = 0.0f32;
@@ -476,7 +641,14 @@ impl Mixer {
             let Some(Some(slot)) = self.slots.0.get_mut(index) else {
                 continue;
             };
-            if slot.started && !slot.finished && slot.first_channel + 1 >= channels {
+            if held {
+                slot.block_unity = false;
+                slot.block_audible = false;
+                continue;
+            }
+            // In DSD mode a non-DSD slot is consumed silently: not misrouted.
+            let muted = dsd_on && !slot.source.is_dsd();
+            if !muted && slot.started && !slot.finished && slot.first_channel + 1 >= channels {
                 self.shared.misrouted.fetch_add(1, Ordering::Relaxed);
             }
             let mut events: [Option<BusEvent>; 2] = [None, None];
@@ -490,6 +662,8 @@ impl Mixer {
                 volume_step,
                 &mut events,
                 meter,
+                self.config.declick_frames,
+                dsd_on,
             );
             peak_l = peak_l.max(l);
             peak_r = peak_r.max(r);
@@ -497,7 +671,7 @@ impl Mixer {
                 self.emit(event);
             }
         }
-        mark_unaltered(&self.slots);
+        mark_unaltered(&self.slots, dsd_on);
         self.shared.peak_l.fetch_max(peak_l);
         self.shared.peak_r.fetch_max(peak_r);
         self.shared
@@ -566,9 +740,9 @@ impl MeterMode {
 }
 
 /// Marks each slot's source unaltered when it played at unity and no other
-/// slot wrote into an overlapping channel pair. Compares slots pairwise: no
+/// slot wrote into an overlapping channel pair; never in DSD mode. Compares slots pairwise: no
 /// allocation, and the slot count is small.
-fn mark_unaltered(slots: &SlotStorage) {
+fn mark_unaltered(slots: &SlotStorage, dsd_on: bool) {
     for (i, slot) in slots.0.iter().enumerate() {
         let Some(slot) = slot else { continue };
         let alone = !slots.0.iter().enumerate().any(|(j, other)| {
@@ -580,11 +754,74 @@ fn mark_unaltered(slots: &SlotStorage) {
         slot.source
             .shared
             .unaltered
-            .store(slot.block_unity && alone, Ordering::Release);
+            .store(!dsd_on && slot.block_unity && alone, Ordering::Release);
     }
 }
 
+/// True when the slot's source ends (end of stream, everything pushed is
+/// already in the ring) at or before its stop frame, seen from frame `abs`,
+/// give or take `END_TOLERANCE_FRAMES`.
+/// Real-time safe: two atomic loads and a ring-occupancy read.
+fn ends_by_stop(slot: &Slot, abs: u64) -> bool {
+    let Some(stop) = slot.stop_at else {
+        return false;
+    };
+    // Read eof before the ring: the producer pushes, then sets eof.
+    slot.source.shared.is_eof()
+        && slot.source.buffered_frames() as u64 <= stop.saturating_sub(abs) + END_TOLERANCE_FRAMES
+}
+
+/// One block's measurement of a slot, added to the source's accumulators
+/// once per block.
+#[derive(Default)]
+struct Measure {
+    peak_l: f32,
+    peak_r: f32,
+    /// Sample peaks, for the unaltered-source check (not the meter's mode).
+    audible_l: f32,
+    audible_r: f32,
+    sum_l: f64,
+    sum_r: f64,
+    k_l: f64,
+    k_r: f64,
+    abs_l: f64,
+    abs_r: f64,
+    frames: u64,
+}
+
+/// Meters one frame (`l`, `r`, after any gain): sample or true peak, the
+/// programme integrator, sums and K-weighting.
+#[inline]
+fn measure(slot: &mut Slot, meter: MeterMode, l: f32, r: f32, m: &mut Measure) {
+    m.audible_l = m.audible_l.max(l.abs());
+    m.audible_r = m.audible_r.max(r.abs());
+    let [tp_l, tp_r] = &mut slot.true_peak;
+    let (mut level_l, mut level_r) = if meter.true_peak {
+        (tp_l.push(l), tp_r.push(r))
+    } else {
+        (l.abs(), r.abs())
+    };
+    if meter.programme {
+        let [env_l, env_r] = &mut slot.ppm;
+        level_l = meter.integrate(env_l, level_l);
+        level_r = meter.integrate(env_r, level_r);
+    }
+    m.peak_l = m.peak_l.max(level_l);
+    m.peak_r = m.peak_r.max(level_r);
+    let [kw_l, kw_r] = &mut slot.k_weighting;
+    let (wl, wr) = (kw_l.process(f64::from(l)), kw_r.process(f64::from(r)));
+    m.sum_l += f64::from(l) * f64::from(l);
+    m.sum_r += f64::from(r) * f64::from(r);
+    m.abs_l += f64::from(l.abs());
+    m.abs_r += f64::from(r.abs());
+    m.k_l += wl * wl;
+    m.k_r += wr * wr;
+    m.frames += 1;
+}
+
 /// Renders one slot into `out`. Returns the (left, right) peaks it produced.
+/// With `dsd_on`, a DSD slot copies its words (no gain of any kind) and any
+/// other slot is consumed without writing.
 #[allow(clippy::too_many_arguments)]
 fn render_slot(
     slot: &mut Slot,
@@ -596,6 +833,8 @@ fn render_slot(
     volume_step: f32,
     events: &mut [Option<BusEvent>; 2],
     meter: MeterMode,
+    declick_frames: u32,
+    dsd_on: bool,
 ) -> (f32, f32) {
     if slot.ppm_charge != meter.charge {
         slot.ppm_charge = meter.charge;
@@ -627,30 +866,54 @@ fn render_slot(
             _ => return (0.0, 0.0),
         }
     }
+    // The words of a DSD slot in DSD mode: copied, never scaled.
+    let words = dsd_on && slot.source.is_dsd();
+    // Another slot in DSD mode: consumed, metered, not written.
+    let muted = dsd_on && !words;
+    if words && slot.pausing {
+        // Pause holds at once; the pause gain rests at silence for a later
+        // PCM resume to ramp up from.
+        slot.pausing = false;
+        slot.paused = true;
+        slot.pause = Ramp::hold(0.0);
+    }
+    // A stop on a paused slot (the player was stopped while paused, and the
+    // pause ramp ran out first): nothing is audible, end it at the stop frame.
+    if slot.paused
+        && let Some(stop) = slot.stop_at
+        && stop < block_end
+    {
+        finish(slot, index, stop.max(block_start), events);
+        return (0.0, 0.0);
+    }
     let target_volume = slot.volume.load().clamp(0.0, 1.0);
     // A pair that does not fit the stream is consumed silently (never written
     // into another channel or frame); the caller counts it.
-    let fits = slot.first_channel + 1 < channels;
+    let fits = slot.first_channel + 1 < channels && !muted;
     let mut chunk = [0.0f32; CHUNK_FRAMES * SOURCE_CHANNELS];
-    let (mut peak_l, mut peak_r) = (0.0f32, 0.0f32);
+    let mut word_chunk = [0.0f32; CHUNK_FRAMES * SOURCE_CHANNELS];
     let mut unity = true;
     let mut rendered = false;
-    // Sample peaks, for the unaltered-source check (not the meter's mode).
-    let (mut audible_l, mut audible_r) = (0.0f32, 0.0f32);
     // Meter measurement, added to the source's accumulators once per block.
-    let (mut sum_l, mut sum_r, mut k_l, mut k_r) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-    let (mut abs_l, mut abs_r) = (0.0f64, 0.0f64);
-    let mut measured = 0u64;
+    let mut m = Measure::default();
+    let declick = u64::from(declick_frames);
     while f < frames && !slot.paused {
         let abs = block_start + f as u64;
         if slot.stop_at.is_some_and(|stop| abs >= stop) {
             finish(slot, index, abs, events);
             break;
         }
-        if let Some((at, to, len, curve)) = slot.pending_fade
+        if let Some((at, to, len, curve, kind)) = slot.pending_fade
             && abs >= at
         {
-            slot.fade.retarget(to, len, curve);
+            if !(kind == FadeKind::Cut && ends_by_stop(slot, abs)) {
+                if words {
+                    // No gain in DSD mode: settle where the fade would end.
+                    slot.fade = Ramp::hold(to);
+                } else {
+                    slot.fade.retarget(to, len, curve);
+                }
+            }
             slot.pending_fade = None;
         }
         // Process up to the next scheduled boundary so every change lands on its exact frame.
@@ -664,13 +927,37 @@ fn render_slot(
         if slot.pausing {
             n = n.min((slot.pause.remaining() as usize).max(1));
         }
+        // A failed source stops pushing: when what is buffered fits the
+        // de-click length, ramp it to zero over exactly those frames, so its
+        // end is not a step. `n` stops where the ramp must begin. Words get
+        // no ramp: a failed DSD source just ends, and silence follows.
+        if !words && declick > 0 && !slot.fail_ramped && slot.source.shared.is_failed() {
+            let left = slot.source.buffered_frames() as u64;
+            if left <= declick {
+                slot.fade.retarget(
+                    0.0,
+                    u32::try_from(left.max(1)).unwrap_or(u32::MAX),
+                    Curve::Linear,
+                );
+                slot.fail_ramped = true;
+            } else {
+                n = n.min(usize::try_from(left - declick).unwrap_or(usize::MAX));
+            }
+        }
         let Some(buf) = chunk.get_mut(..n * SOURCE_CHANNELS) else {
             break;
         };
         // Read "no more audio will come" *before* popping: a producer that
         // pushes its last samples and then sets eof cannot lose them.
         let ended = slot.source.shared.is_eof() || slot.source.shared.is_failed();
-        let got = slot.source.pop_frames(buf);
+        let got = if words {
+            match word_chunk.get_mut(..n * SOURCE_CHANNELS) {
+                Some(w) => slot.source.pop_pair(buf, w),
+                None => break,
+            }
+        } else {
+            slot.source.pop_frames(buf)
+        };
         for (k, &[l, r]) in buf
             .as_chunks::<SOURCE_CHANNELS>()
             .0
@@ -678,46 +965,42 @@ fn render_slot(
             .take(got)
             .enumerate()
         {
-            if slot.volume_now < target_volume {
-                slot.volume_now = (slot.volume_now + volume_step).min(target_volume);
-            } else if slot.volume_now > target_volume {
-                slot.volume_now = (slot.volume_now - volume_step).max(target_volume);
-            }
-            let g = slot.fade.next_gain() * slot.pause.next_gain() * slot.volume_now;
-            unity &= g == 1.0;
-            rendered = true;
-            let (l, r) = (l * g, r * g);
-            audible_l = audible_l.max(l.abs());
-            audible_r = audible_r.max(r.abs());
-            let [tp_l, tp_r] = &mut slot.true_peak;
-            let (mut level_l, mut level_r) = if meter.true_peak {
-                (tp_l.push(l), tp_r.push(r))
+            let (l, r) = if words {
+                // The PCM conversion is metered at unity.
+                (l, r)
             } else {
-                (l.abs(), r.abs())
+                if slot.volume_now < target_volume {
+                    slot.volume_now = (slot.volume_now + volume_step).min(target_volume);
+                } else if slot.volume_now > target_volume {
+                    slot.volume_now = (slot.volume_now - volume_step).max(target_volume);
+                }
+                let g = slot.fade.next_gain() * slot.pause.next_gain() * slot.volume_now;
+                unity &= g == 1.0;
+                (l * g, r * g)
             };
-            if meter.programme {
-                let [env_l, env_r] = &mut slot.ppm;
-                level_l = meter.integrate(env_l, level_l);
-                level_r = meter.integrate(env_r, level_r);
-            }
-            peak_l = peak_l.max(level_l);
-            peak_r = peak_r.max(level_r);
-            let [kw_l, kw_r] = &mut slot.k_weighting;
-            let (wl, wr) = (kw_l.process(f64::from(l)), kw_r.process(f64::from(r)));
-            sum_l += f64::from(l) * f64::from(l);
-            sum_r += f64::from(r) * f64::from(r);
-            abs_l += f64::from(l.abs());
-            abs_r += f64::from(r.abs());
-            k_l += wl * wl;
-            k_r += wr * wr;
-            measured += 1;
+            rendered = true;
+            measure(slot, meter, l, r, &mut m);
             if fits {
                 let base = (f + k) * channels + slot.first_channel;
+                let (wl, wr) = if words {
+                    let at = k * SOURCE_CHANNELS;
+                    (word_chunk.get(at).copied(), word_chunk.get(at + 1).copied())
+                } else {
+                    (None, None)
+                };
                 if let Some(o) = out.get_mut(base) {
-                    *o += l;
+                    match (words, wl) {
+                        (false, _) => *o += l,
+                        (true, Some(w)) => *o = w,
+                        (true, None) => {}
+                    }
                 }
                 if let Some(o) = out.get_mut(base + 1) {
-                    *o += r;
+                    match (words, wr) {
+                        (false, _) => *o += r,
+                        (true, Some(w)) => *o = w,
+                        (true, None) => {}
+                    }
                 }
             }
         }
@@ -742,21 +1025,21 @@ fn render_slot(
             f += got;
         }
     }
-    slot.source.shared.peak_l.fetch_max(peak_l);
-    slot.source.shared.peak_r.fetch_max(peak_r);
-    if measured > 0 {
+    slot.source.shared.peak_l.fetch_max(m.peak_l);
+    slot.source.shared.peak_r.fetch_max(m.peak_r);
+    if m.frames > 0 {
         let shared = &slot.source.shared;
-        shared.sum_sq_l.fetch_add(sum_l);
-        shared.sum_sq_r.fetch_add(sum_r);
-        shared.sum_abs_l.fetch_add(abs_l);
-        shared.sum_abs_r.fetch_add(abs_r);
-        shared.k_sum_l.fetch_add(k_l);
-        shared.k_sum_r.fetch_add(k_r);
-        shared.measured_frames.fetch_add(measured, Ordering::AcqRel);
+        shared.sum_sq_l.fetch_add(m.sum_l);
+        shared.sum_sq_r.fetch_add(m.sum_r);
+        shared.sum_abs_l.fetch_add(m.abs_l);
+        shared.sum_abs_r.fetch_add(m.abs_r);
+        shared.k_sum_l.fetch_add(m.k_l);
+        shared.k_sum_r.fetch_add(m.k_r);
+        shared.measured_frames.fetch_add(m.frames, Ordering::AcqRel);
     }
     slot.block_unity = unity && rendered;
-    slot.block_audible = audible_l > 0.0 || audible_r > 0.0;
-    (peak_l, peak_r)
+    slot.block_audible = m.audible_l > 0.0 || m.audible_r > 0.0;
+    (m.peak_l, m.peak_r)
 }
 
 fn finish(slot: &mut Slot, index: usize, frame: u64, events: &mut [Option<BusEvent>; 2]) {
@@ -772,6 +1055,34 @@ fn finish(slot: &mut Slot, index: usize, frame: u64, events: &mut [Option<BusEve
 pub struct MixerRenderer {
     pub mixer: Arc<std::sync::Mutex<Mixer>>,
     pub shared: Arc<BusShared>,
+    /// The DoP encoder of a DoP stream; `None` on a PCM or native DSD bus
+    /// (a native stream's backend packs the words itself).
+    pub dop: Option<DopEncoder>,
+    /// A native DSD stream: every block the mixer renders out of DSD mode
+    /// (before `DsdMode` on reaches it) goes out as the DSD idle word, so
+    /// that the stream never carries packed PCM.
+    pub native: bool,
+}
+
+impl MixerRenderer {
+    /// A renderer for `mixer`, built off the real-time thread. It locks the
+    /// mutex once here: on some platforms (macOS) the standard mutex
+    /// allocates its system lock on first use, which must not happen in the
+    /// device callback.
+    pub fn new(
+        mixer: Arc<std::sync::Mutex<Mixer>>,
+        shared: Arc<BusShared>,
+        dop: Option<DopEncoder>,
+        native: bool,
+    ) -> Self {
+        drop(mixer.try_lock());
+        Self {
+            mixer,
+            shared,
+            dop,
+            native,
+        }
+    }
 }
 
 impl Renderer for MixerRenderer {
@@ -782,9 +1093,25 @@ impl Renderer for MixerRenderer {
                 poisoned.into_inner().render(out, channels)
             }
             Err(std::sync::TryLockError::WouldBlock) => {
-                out.fill(0.0);
+                // The idle fill of the mode the bus is in, so a DoP stream
+                // stays valid.
+                let fill = if self.shared.dsd_on.load(Ordering::Acquire) {
+                    silence_sample()
+                } else {
+                    0.0
+                };
+                out.fill(fill);
                 self.shared.lock_misses.fetch_add(1, Ordering::Relaxed);
             }
+        }
+        // The mode of the block just rendered: it changes only at a block's
+        // start.
+        let dsd_on = self.shared.dsd_on.load(Ordering::Acquire);
+        if self.native && !dsd_on {
+            out.fill(silence_sample());
+        }
+        if dsd_on && let Some(dop) = self.dop.as_mut() {
+            dop.encode_in_place(out, channels);
         }
     }
 }
@@ -844,6 +1171,7 @@ mod tests {
     fn volume_smoothing_keeps_its_duration_when_the_rate_changes() {
         let config = super::MixerConfig {
             volume_smoothing_frames: 480, // 10 ms at 48 kHz
+            declick_frames: 0,
             max_commands_per_block: 8,
         };
         let (mut mixer, _handle) = super::Mixer::new(1, config);
@@ -856,6 +1184,7 @@ mod tests {
         // Back and forth between unrelated rates: no drift.
         let config = super::MixerConfig {
             volume_smoothing_frames: 500,
+            declick_frames: 0,
             max_commands_per_block: 8,
         };
         let (mut mixer, _handle) = super::Mixer::new(1, config);
@@ -864,5 +1193,24 @@ mod tests {
             mixer.follow_rate(44_100, 48_000);
         }
         assert_eq!(mixer.config.volume_smoothing_frames, 500);
+    }
+
+    #[test]
+    fn declick_keeps_its_duration_when_the_rate_changes() {
+        let config = super::MixerConfig {
+            volume_smoothing_frames: 480,
+            declick_frames: 240, // 5 ms at 48 kHz
+            max_commands_per_block: 8,
+        };
+        let (mut mixer, _handle) = super::Mixer::new(1, config);
+        mixer.follow_rate(48_000, 96_000);
+        assert_eq!(mixer.config.declick_frames, 480);
+        for _ in 0..3 {
+            mixer.follow_rate(96_000, 44_100);
+            mixer.follow_rate(44_100, 48_000);
+        }
+        assert_eq!(mixer.config.declick_frames, 240);
+        mixer.follow_rate(48_000, 44_100);
+        assert_eq!(mixer.config.declick_frames, 220);
     }
 }

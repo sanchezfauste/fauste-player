@@ -87,6 +87,54 @@ the bus logs it when it falls back to shared.
 - Null refuses `exclusive`, so a bus on it plays shared and never claims to
   be bit-perfect.
 
+**DSD (feedback 2, O25):**
+- `StreamConfig::dsd: Option<DsdStream>` asks for a stream that carries DSD
+  (`Dop` or `Native`; `None` is PCM). The stream's rate is then the **word
+  rate**: the DSD rate divided by 16, so 176 400 Hz for DSD64 (a word is two
+  DSD bytes per channel, carried as one `f32` sample, exactly). A DSD stream
+  needs `exclusive`; without it every backend refuses with `Unsupported`.
+  `OutputStream::dsd()` says what the stream really carries.
+- `DeviceInfo::native_dsd` says which devices take raw DSD (Linux ALSA `hw:`
+  devices that accept a DSD format; `false` everywhere else).
+- **DoP rule:** DoP needs every bit of a 24-bit word, so the stream must be
+  24- or 32-bit integer (`choose_dop_sample_format` in cpal: `I32`, then
+  `I24`; never float or `I16`). The mixer's `DopEncoder` puts the
+  alternating `0x05`/`0xFA` marker above each word. `dop_sample` is exact in
+  `f32`, and the integer conversion of a 24-bit device keeps it so. The
+  engine checks the format again after the open (`Bus::dsd_fits`), whatever
+  the backend accepted.
+- **Native DSD through ALSA** (`alsa_dsd.rs`, Linux): cpal cannot open a PCM
+  in a DSD format, so this is the one place that uses the `alsa` crate
+  directly (its safe API; `unsafe_code` stays forbidden).
+  - *Probe:* `probe` opens the PCM non-blocking and tests the DSD formats
+    with `hw_params` only, in `NATIVE_PREFERENCE` order (`DSD_U32_BE`,
+    `DSD_U32_LE`, `DSD_U16_BE`, `DSD_U16_LE`, `DSD_U8`). A busy device
+    (including our own open stream) fails at once and is never disturbed.
+    `enumerate_devices` uses it for `native_dsd`.
+  - *Cache:* the cpal backend keeps the format each device took in
+    `native_probe`; `open` reuses it.
+  - *Rate:* the device runs at `word_rate × 2 / bytes per channel of the
+    format`, for example 88 200 Hz for DSD64 in `DSD_U32_*`. The device must
+    give exactly that rate, else the open is refused.
+  - *Thread:* `fp-alsa-dsd` opens the PCM (non-blocking, and it stays so),
+    sets the parameters, reports the outcome to `open` (5 s timeout), then
+    renders one period of words and packs it (`pack_native`) into preallocated
+    buffers. Before each write it waits for room with a timeout (four periods,
+    at least 20 ms), so the stop flag is seen and dropping the stream joins
+    the thread within one wait. Partial writes continue and `EAGAIN` retries.
+  - *Errors:* `EPIPE` is an xrun (counted, the PCM is prepared again and the
+    write goes on with the bytes not yet written; what the device accepted
+    before the xrun was dropped by `prepare`, not written again), a suspend
+    is resumed, `EINTR` is ignored; anything else is `DeviceLost`.
+  - Other systems refuse native DSD (`check_dsd` in cpal).
+- Null refuses DSD (and exclusive). Offline takes DSD on devices marked
+  exclusive-capable: `set_sample_format` sets the device's format (DoP needs
+  `I24` or `I32` on it), `set_native_dsd` lets it carry native DSD, and
+  `set_dop_any_format` (tests) drops the format check so the engine's own
+  check can be tested apart. `set_max_pcm_rate` (tests) refuses PCM and DoP
+  streams above a rate while native DSD still opens at any word rate, like
+  a converter that takes DSD128 natively but no PCM above 192 kHz.
+
 ## Implemented
 
 | Backend | Id | Platforms | Build |
@@ -94,6 +142,8 @@ the bus logs it when it falls back to shared.
 | `CpalBackend` (one per cpal host) | `alsa`, `pulseaudio`, `pipewire`, `jack`, `wasapi`, `asio`, `coreaudio` | per OS | see below |
 | `NullBackend` | `null` | all | Discards audio at real-time pace; keeps timelines running with no sound card |
 | `OfflineBackend` | `offline` | tests | Devices rendered on demand on the caller's thread, for sample-exact tests |
+
+The Settings list shows `null` last, as "No output (silent)"; `preferred_backend` ranks it after every other system, so it is the default only when nothing else is available.
 
 `system_backends()` returns one `CpalBackend::for_host` for every host
 compiled into the build (`cpal::ALL_HOSTS`), in the OS preference order.
@@ -116,7 +166,8 @@ Nothing connects to a system until it is first used.
   chosen as F32, then I32, then I16 and converted through a preallocated
   buffer; the requested buffer size is tried first, then the device default.
   Real-time priority comes through cpal's `audio_thread_priority` (rtkit
-  over D-Bus on Linux).
+  over D-Bus on Linux). A DoP stream chooses its format with
+  `choose_dop_sample_format` instead.
 - **Default backend:** `choose_default_backend` keeps the configured
   backend when it is available, otherwise `preferred_backend` picks the
   first available one in the OS order (Linux: PipeWire, PulseAudio, JACK,

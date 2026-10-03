@@ -58,6 +58,7 @@ pub(crate) fn column(
         return;
     };
     pv.bit_perfect = telemetry.bit_perfect;
+    pv.dsd = telemetry.dsd;
     let rect = ui.available_rect_before_wrap();
     ui.painter().rect_filled(rect, 0.0, theme::COLUMN_BG);
     ui.painter().rect_stroke(
@@ -264,6 +265,15 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                     theme::AMBER_TEXT,
                 );
             }
+            if pv.dsd_holds_others {
+                outlined_with_tip(
+                    ui,
+                    &t.tr("badge-dsd-hold"),
+                    Some(&t.tr("tip-dsd-hold")),
+                    theme::AMBER,
+                    theme::AMBER_TEXT,
+                );
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
                 let cue_style = if pv.cueing {
@@ -325,15 +335,18 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                 {
                     scene.ctl.send(Command::SetMode(id, mode));
                 }
-                let bp = t.tr("badge-bp");
-                let (tip, content) = if pv.bit_perfect {
-                    (t.tr("tip-bp-on"), theme::ACCENT)
-                } else {
-                    (t.tr("tip-bp-off"), theme::NEUTRAL_600)
+                let (bp, tip, content) = match fp_model::bp_badge(pv.bit_perfect, pv.dsd) {
+                    fp_model::BpBadge::Off => {
+                        (t.tr("badge-bp"), t.tr("tip-bp-off"), theme::NEUTRAL_600)
+                    }
+                    fp_model::BpBadge::Pcm => (t.tr("badge-bp"), t.tr("tip-bp-on"), theme::ACCENT),
+                    fp_model::BpBadge::Dsd => {
+                        (t.tr("badge-dsd"), t.tr("tip-dsd-on"), theme::ACCENT)
+                    }
                 };
                 widgets::tile(
                     ui,
-                    vec2(24.0, 20.0),
+                    vec2(28.0, 20.0),
                     &tip,
                     false,
                     TileStyle {
@@ -475,7 +488,11 @@ fn meter_column(
         Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),
         None => t.tr("volume-silent"),
     };
-    let tip = t.tr_args("tip-volume", &[("db", db.into())]);
+    let tip = if telemetry.dsd {
+        t.tr("tip-volume-dsd")
+    } else {
+        t.tr_args("tip-volume", &[("db", db.into())])
+    };
     if let Some(pos) = widgets::fader(ui, height, view::fader_from_gain(volume), &tip) {
         scene
             .ctl

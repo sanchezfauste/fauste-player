@@ -37,7 +37,13 @@ fn preference(os: &str) -> &'static [&'static str] {
 /// (`std::env::consts::OS`). Unknown systems come after the known ones.
 pub fn preferred_backend<'a>(backends: &[(&'a str, bool)], os: &str) -> Option<&'a str> {
     let order = preference(os);
-    let rank = |id: &str| order.iter().position(|p| *p == id).unwrap_or(order.len());
+    let rank = |id: &str| {
+        if id == "null" {
+            order.len() + 1
+        } else {
+            order.iter().position(|p| *p == id).unwrap_or(order.len())
+        }
+    };
     backends
         .iter()
         .filter(|(_, available)| *available)
