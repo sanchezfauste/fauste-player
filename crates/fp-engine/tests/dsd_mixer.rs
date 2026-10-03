@@ -425,7 +425,7 @@ fn a_ramp_pending_across_a_mode_switch_does_not_fire_with_a_jump() {
 }
 
 #[test]
-fn a_ramp_in_progress_when_dsd_mode_ends_continues_from_its_level() {
+fn a_ramp_in_progress_is_frozen_in_dsd_mode_and_continues_from_its_level() {
     let (mut m, mut h) = Mixer::new(4, CONFIG);
     let (_p, c, v) = dsd_source(64, 1.0);
     attach(&mut h, 0, c, v);
@@ -446,6 +446,8 @@ fn a_ramp_in_progress_when_dsd_mode_ends_continues_from_its_level() {
             at_frame: 0,
         },
     );
+    let a = render(&mut m, 4); // PCM: gains 1, 7/8, 6/8, 5/8
+    assert_eq!(a[6], 0.25 * 0.625);
     send(
         &mut h,
         BusCommand::DsdMode {
@@ -453,6 +455,9 @@ fn a_ramp_in_progress_when_dsd_mode_ends_continues_from_its_level() {
             at_frame: 4,
         },
     );
+    let dsd = render(&mut m, 4);
+    assert!(m.shared().dsd_on.load(Ordering::Acquire));
+    assert_eq!(dsd[0], word_to_sample(0, 5), "words untouched");
     send(
         &mut h,
         BusCommand::DsdMode {
@@ -460,11 +465,170 @@ fn a_ramp_in_progress_when_dsd_mode_ends_continues_from_its_level() {
             at_frame: 8,
         },
     );
-    let a = render(&mut m, 4); // PCM, ramp half-way: 0.25 * (1 - 3/8) at the end
-    render(&mut m, 4); // DSD
     let b = render(&mut m, 4);
-    let last = a[6].abs();
-    assert!(b[0] <= last + 1e-6, "no jump up: {} then {}", last, b[0]);
+    assert!(!m.shared().dsd_on.load(Ordering::Acquire));
+    assert_eq!(
+        b[0],
+        0.25 * 0.5,
+        "continues from where it froze: gain 4/8, no step"
+    );
+}
+
+#[test]
+fn a_ramp_issued_in_dsd_mode_settles_like_a_scheduled_one() {
+    let (mut m, mut h) = Mixer::new(4, CONFIG);
+    let (_p, c, v) = dsd_source(64, 1.0);
+    attach(&mut h, 0, c, v);
+    send(
+        &mut h,
+        BusCommand::DsdMode {
+            on: true,
+            at_frame: 0,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    render(&mut m, 4);
+    send(
+        &mut h,
+        BusCommand::Ramp {
+            slot: 0,
+            to: 0.5,
+            frames: 8,
+            curve: Curve::Linear,
+            at_frame: 0,
+        },
+    );
+    render(&mut m, 4);
+    send(
+        &mut h,
+        BusCommand::DsdMode {
+            on: false,
+            at_frame: 8,
+        },
+    );
+    let out = render(&mut m, 2);
+    assert_eq!(
+        out[0],
+        0.25 * 0.5,
+        "already at the target, not ramping from 1"
+    );
+}
+
+#[test]
+fn two_switches_queued_together_both_happen_in_order() {
+    let (mut m, mut h) = Mixer::new(4, CONFIG);
+    let (_p, c, v) = dsd_source(64, 1.0);
+    attach(&mut h, 0, c, v);
+    send(
+        &mut h,
+        BusCommand::DsdMode {
+            on: true,
+            at_frame: 0,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    render(&mut m, 4);
+    // Off at 4 and on at 8, queued in one drain.
+    send(
+        &mut h,
+        BusCommand::DsdMode {
+            on: false,
+            at_frame: 4,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::DsdMode {
+            on: true,
+            at_frame: 8,
+        },
+    );
+    let pcm = render(&mut m, 4);
+    assert!(
+        !m.shared().dsd_on.load(Ordering::Acquire),
+        "PCM between the switches"
+    );
+    assert_eq!(pcm[0], 0.25);
+    let dsd = render(&mut m, 4);
+    assert!(m.shared().dsd_on.load(Ordering::Acquire));
+    assert_eq!(dsd[0], word_to_sample(0, 9));
+}
+
+#[test]
+fn a_full_switch_queue_drops_the_oldest_and_counts_it() {
+    let (mut m, mut h) = Mixer::new(1, CONFIG);
+    for i in 0..5u64 {
+        send(
+            &mut h,
+            BusCommand::DsdMode {
+                on: i % 2 == 0,
+                at_frame: 100 + i,
+            },
+        );
+    }
+    render(&mut m, 2);
+    assert_eq!(h.shared.dropped_events.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn a_switch_inside_a_block_lands_at_the_next_block_start() {
+    let (mut m, mut h) = Mixer::new(4, CONFIG);
+    let (_p, c, v) = dsd_source(64, 1.0);
+    attach(&mut h, 0, c, v);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::DsdMode {
+            on: true,
+            at_frame: 2,
+        },
+    );
+    let first = render(&mut m, 4); // frames 0..4 contain frame 2
+    assert!(
+        !m.shared().dsd_on.load(Ordering::Acquire),
+        "the block stays PCM"
+    );
+    assert_eq!(first[0], 0.25);
+    render(&mut m, 4);
+    assert!(m.shared().dsd_on.load(Ordering::Acquire));
+}
+
+#[test]
+fn a_block_straddling_the_hold_end_is_still_held() {
+    let (mut m, mut h) = Mixer::new(4, CONFIG);
+    let (p, c, v) = dsd_source(64, 1.0);
+    attach(&mut h, 0, c, v);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    send(&mut h, BusCommand::HoldAll { until_frame: 6 });
+    render(&mut m, 4); // frames 0..4, held
+    render(&mut m, 4); // frames 4..8 start before 6: held
+    assert_eq!(p.shared.frames_played(), 0);
+    render(&mut m, 4);
+    assert_eq!(p.shared.frames_played(), 4);
 }
 
 #[test]

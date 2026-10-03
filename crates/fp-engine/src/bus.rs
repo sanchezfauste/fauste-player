@@ -158,6 +158,16 @@ impl Bus {
         bus
     }
 
+    /// A fresh renderer for a stream opening: a DoP stream gets its own
+    /// encoder, so the marker alternation starts over with the stream.
+    fn renderer(&self) -> Box<MixerRenderer> {
+        Box::new(MixerRenderer {
+            mixer: self.mixer.clone(),
+            shared: self.handle.shared.clone(),
+            dop: (self.config.dsd == Some(DsdStream::Dop)).then(DopEncoder::new),
+        })
+    }
+
     /// Opens the stream. With `shared_fallback`, a device that refuses
     /// exclusive access opens shared; a rate change passes `false`, since
     /// there the refusal is of the rate, not of exclusive access.
@@ -169,11 +179,7 @@ impl Bus {
             .shared
             .sample_rate
             .store(self.config.sample_rate, Ordering::Release);
-        let renderer = Box::new(MixerRenderer {
-            mixer: self.mixer.clone(),
-            shared: self.handle.shared.clone(),
-            dop: (self.config.dsd == Some(DsdStream::Dop)).then(DopEncoder::new),
-        });
+        let renderer = self.renderer();
         let errors: Arc<dyn StreamErrorSink> = self.handle.shared.clone();
         let mut opened =
             self.backend
@@ -188,11 +194,7 @@ impl Bus {
             if let Err(e) = &opened {
                 tracing::warn!(bus = ?self.key, error = %e, "exclusive access refused; opening shared");
             }
-            let renderer = Box::new(MixerRenderer {
-                mixer: self.mixer.clone(),
-                shared: self.handle.shared.clone(),
-                dop: (self.config.dsd == Some(DsdStream::Dop)).then(DopEncoder::new),
-            });
+            let renderer = self.renderer();
             let shared = StreamConfig {
                 exclusive: false,
                 ..self.config

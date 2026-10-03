@@ -16,6 +16,9 @@ use crate::ramp::{Curve, Ramp};
 use crate::source::{SOURCE_CHANNELS, SourceConsumer};
 use crate::truepeak::TruePeak;
 
+/// Switches the mixer keeps pending (no allocation on the render thread).
+const PENDING_DSD: usize = 4;
+
 /// Frames processed per inner step; bounds the stack scratch buffer.
 const CHUNK_FRAMES: usize = 256;
 
@@ -72,7 +75,9 @@ pub enum BusCommand {
     /// metered at unity gain. Every other slot is consumed silently (the
     /// switching window and the HoldOthers mute). A fade that falls due in
     /// DSD mode settles at its target at once, so none fires with a jump
-    /// when the mode ends; a ramp in progress is frozen where it was.
+    /// when the mode ends, whether it was scheduled or issued in DSD mode; a
+    /// ramp already running when the mode begins is frozen where it was and
+    /// continues from that level. Neither steps the PCM gain at the switch.
     DsdMode { on: bool, at_frame: u64 },
     /// No slot consumes, starts or stops in blocks that start before
     /// `until_frame`: a `Start` or `StopAt` frame inside the hold takes
@@ -315,7 +320,8 @@ pub struct Mixer {
     declick_base: u32,
     /// DSD mode (see `BusCommand::DsdMode`) and its pending switch.
     dsd_on: bool,
-    pending_dsd: Option<(u64, bool)>,
+    /// Pending switches `(at_frame, on)`, ordered by frame, oldest first.
+    pending_dsd: [Option<(u64, bool)>; PENDING_DSD],
     /// Blocks starting before this frame are held (`BusCommand::HoldAll`).
     hold_until: u64,
 }
@@ -341,7 +347,7 @@ impl Mixer {
             smoothing_base: None,
             declick_base: config.declick_frames,
             dsd_on: false,
-            pending_dsd: None,
+            pending_dsd: [None; PENDING_DSD],
             hold_until: 0,
         };
         (
@@ -376,6 +382,39 @@ impl Mixer {
         }
         if let Err(rtrb::PushError::Full(item)) = self.retired.push(item) {
             self.backlog = Some(item);
+        }
+    }
+
+    /// Queues a switch in frame order (after equal frames). A full queue
+    /// drops its oldest entry and counts it in `dropped_events`.
+    fn queue_dsd(&mut self, at_frame: u64, on: bool) {
+        if self.pending_dsd.iter().all(Option::is_some) {
+            self.pending_dsd.rotate_left(1);
+            if let Some(last) = self.pending_dsd.last_mut() {
+                *last = None;
+            }
+            self.shared.dropped_events.fetch_add(1, Ordering::Relaxed);
+        }
+        if let Some(free) = self.pending_dsd.iter().position(Option::is_none) {
+            if let Some(cell) = self.pending_dsd.get_mut(free) {
+                *cell = Some((at_frame, on));
+            }
+            // Bubble the new entry back past any later frame.
+            let mut i = free;
+            while i > 0 {
+                let (a, b) = (
+                    self.pending_dsd.get(i - 1).copied().flatten(),
+                    self.pending_dsd.get(i).copied().flatten(),
+                );
+                if let (Some((fa, _)), Some((fb, _))) = (a, b)
+                    && fa > fb
+                {
+                    self.pending_dsd.swap(i - 1, i);
+                    i -= 1;
+                } else {
+                    break;
+                }
+            }
         }
     }
 
@@ -442,9 +481,14 @@ impl Mixer {
                 curve,
                 at_frame,
             } => {
+                let dsd_on = self.dsd_on;
                 if let Some(s) = self.slot_mut(slot) {
                     if at_frame <= now {
-                        s.fade.retarget(to, frames, curve);
+                        if dsd_on && s.source.is_dsd() {
+                            s.fade = Ramp::hold(to);
+                        } else {
+                            s.fade.retarget(to, frames, curve);
+                        }
                         s.pending_fade = None;
                     } else {
                         s.pending_fade = Some((at_frame, to, frames, curve, FadeKind::Plain));
@@ -456,10 +500,15 @@ impl Mixer {
                 frames,
                 at_frame,
             } => {
+                let dsd_on = self.dsd_on;
                 if let Some(s) = self.slot_mut(slot) {
                     if at_frame <= now {
                         if !ends_by_stop(s, now) {
-                            s.fade.retarget(0.0, frames, Curve::Linear);
+                            if dsd_on && s.source.is_dsd() {
+                                s.fade = Ramp::hold(0.0);
+                            } else {
+                                s.fade.retarget(0.0, frames, Curve::Linear);
+                            }
                         }
                         s.pending_fade = None;
                     } else {
@@ -508,7 +557,7 @@ impl Mixer {
                     });
                 }
             }
-            BusCommand::DsdMode { on, at_frame } => self.pending_dsd = Some((at_frame, on)),
+            BusCommand::DsdMode { on, at_frame } => self.queue_dsd(at_frame, on),
             BusCommand::HoldAll { until_frame } => self.hold_until = until_frame,
             BusCommand::Grow(mut storage) => {
                 if storage.len() >= self.slots.len() {
@@ -556,11 +605,15 @@ impl Mixer {
                 Err(_) => break,
             }
         }
-        if let Some((at, on)) = self.pending_dsd
+        // Every due switch applies in order; the last decides this block.
+        while let Some(Some((at, on))) = self.pending_dsd.first().copied()
             && at <= now
         {
             self.dsd_on = on;
-            self.pending_dsd = None;
+            self.pending_dsd.rotate_left(1);
+            if let Some(last) = self.pending_dsd.last_mut() {
+                *last = None;
+            }
         }
         let dsd_on = self.dsd_on;
         self.shared.dsd_on.store(dsd_on, Ordering::Release);
@@ -923,15 +976,17 @@ fn render_slot(
                     (None, None)
                 };
                 if let Some(o) = out.get_mut(base) {
-                    match wl {
-                        Some(w) => *o = w,
-                        None => *o += l,
+                    match (words, wl) {
+                        (false, _) => *o += l,
+                        (true, Some(w)) => *o = w,
+                        (true, None) => {}
                     }
                 }
                 if let Some(o) = out.get_mut(base + 1) {
-                    match wr {
-                        Some(w) => *o = w,
-                        None => *o += r,
+                    match (words, wr) {
+                        (false, _) => *o += r,
+                        (true, Some(w)) => *o = w,
+                        (true, None) => {}
                     }
                 }
             }
