@@ -130,6 +130,11 @@ impl SourceProducer {
 }
 
 impl SourceConsumer {
+    /// Frames waiting in the ring.
+    pub fn buffered_frames(&self) -> usize {
+        self.ring.slots() / SOURCE_CHANNELS
+    }
+
     /// Pops up to `dst.len() / 2` frames into `dst`; returns frames popped.
     /// Never allocates or blocks (real-time safe).
     pub fn pop_frames(&mut self, dst: &mut [f32]) -> usize {

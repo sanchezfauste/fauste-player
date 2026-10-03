@@ -28,13 +28,17 @@ block it:
 
 1. drains up to `tuning.max_commands_per_block` commands: `Attach`, `Start
    { at_frame }`, `Ramp { to, frames, curve, at_frame }`, `StopAt`, `Pause`,
-   `Resume`, `Cancel`, `Detach`, `Grow`;
+   `RampOutBeforeCut`, `Resume`, `Cancel`, `Detach`, `Grow`;
 2. mixes every active slot into its route's channel pair. Gain ramps are
    per-sample. Fades use an equal-power curve (`ramp.rs`), and de-click and
    pause ramps are linear. A source that starts inside the audio (`from_secs > 0`:
    a cue-in, a position, the next source of a transition, a CUE, a cart) ramps in
    over `tuning.declick_ms`; one that starts at the file's first frame stays
-   hard. The player volume is smoothed over
+   hard. A hard cut fades the outgoing source out over `declick_ms`
+   (`RampOutBeforeCut`, sent after its `StopAt`), except when the source's end
+   of stream falls at or before the stop frame (a gapless join): the audio
+   already ends there, so the mixer skips the ramp and the level stays
+   constant. The player volume is smoothed over
    `tuning.gain_smoothing_ms`;
 3. counts underruns (silence is output for missing samples);
 4. emits `Started`, `Finished` and `Failed` events and updates `BusShared`

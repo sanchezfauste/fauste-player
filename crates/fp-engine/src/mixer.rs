@@ -37,6 +37,15 @@ pub enum BusCommand {
         curve: Curve,
         at_frame: u64,
     },
+    /// A linear de-click ramp to silence from `at_frame` for a cut at the
+    /// slot's stop frame, skipped when the source's own end of stream falls
+    /// at or before that stop frame (a gapless join: the audio already ends
+    /// there, so the ramp would only dip the level). Send `StopAt` too.
+    RampOutBeforeCut {
+        slot: usize,
+        frames: u32,
+        at_frame: u64,
+    },
     /// Stops at `at_frame` and reports `Finished`.
     StopAt { slot: usize, at_frame: u64 },
     /// Fades out over `ramp_frames`, then holds the position.
@@ -213,6 +222,8 @@ pub struct Slot {
     started: bool,
     fade: Ramp,
     pending_fade: Option<(u64, f32, u32, Curve)>,
+    /// The pending fade is a `RampOutBeforeCut`.
+    pending_fade_is_cut: bool,
     stop_at: Option<u64>,
     pause: Ramp,
     pausing: bool,
@@ -337,6 +348,7 @@ impl Mixer {
                         started: false,
                         fade: Ramp::hold(1.0),
                         pending_fade: None,
+                        pending_fade_is_cut: false,
                         stop_at: None,
                         pause: Ramp::hold(1.0),
                         pausing: false,
@@ -379,6 +391,24 @@ impl Mixer {
                         s.pending_fade = None;
                     } else {
                         s.pending_fade = Some((at_frame, to, frames, curve));
+                        s.pending_fade_is_cut = false;
+                    }
+                }
+            }
+            BusCommand::RampOutBeforeCut {
+                slot,
+                frames,
+                at_frame,
+            } => {
+                if let Some(s) = self.slot_mut(slot) {
+                    if at_frame <= now {
+                        if !ends_by_stop(s, now) {
+                            s.fade.retarget(0.0, frames, Curve::Linear);
+                        }
+                        s.pending_fade = None;
+                    } else {
+                        s.pending_fade = Some((at_frame, 0.0, frames, Curve::Linear));
+                        s.pending_fade_is_cut = true;
                     }
                 }
             }
@@ -584,6 +614,17 @@ fn mark_unaltered(slots: &SlotStorage) {
     }
 }
 
+/// True when the slot's source ends (end of stream, everything pushed is
+/// already in the ring) at or before its stop frame, seen from frame `abs`.
+/// Real-time safe: two atomic loads and a ring-occupancy read.
+fn ends_by_stop(slot: &Slot, abs: u64) -> bool {
+    let Some(stop) = slot.stop_at else {
+        return false;
+    };
+    // Read eof before the ring: the producer pushes, then sets eof.
+    slot.source.shared.is_eof() && slot.source.buffered_frames() as u64 <= stop.saturating_sub(abs)
+}
+
 /// Renders one slot into `out`. Returns the (left, right) peaks it produced.
 #[allow(clippy::too_many_arguments)]
 fn render_slot(
@@ -650,7 +691,9 @@ fn render_slot(
         if let Some((at, to, len, curve)) = slot.pending_fade
             && abs >= at
         {
-            slot.fade.retarget(to, len, curve);
+            if !(slot.pending_fade_is_cut && ends_by_stop(slot, abs)) {
+                slot.fade.retarget(to, len, curve);
+            }
             slot.pending_fade = None;
         }
         // Process up to the next scheduled boundary so every change lands on its exact frame.

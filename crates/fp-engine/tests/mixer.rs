@@ -229,6 +229,64 @@ fn a_ramp_scheduled_at_a_frame_starts_exactly_there() {
     assert_eq!(left(&out), vec![1.0, 1.0, 1.0, 0.75, 0.5, 0.25, 0.0, 0.0]);
 }
 
+/// 10 frames of 1.0 stopped at frame 10 with a 4-frame cut ramp from frame 6.
+fn cut_ramp_out(buffered: usize, eof: bool) -> Vec<f32> {
+    let (mut m, mut h) = mixer(2);
+    let (mut p, c) = source_pair(32);
+    p.push(&vec![1.0; buffered * 2]);
+    if eof {
+        p.shared.eof.store(true, Ordering::Release);
+    }
+    attach(&mut h, 0, c, 0);
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::StopAt {
+            slot: 0,
+            at_frame: 10,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::RampOutBeforeCut {
+            slot: 0,
+            frames: 4,
+            at_frame: 6,
+        },
+    );
+    left(&render(&mut m, 10, 2))
+}
+
+#[test]
+fn a_cut_ramp_fades_a_source_that_goes_on_past_the_stop_frame() {
+    // More audio than the stop frame, with and without eof: a cut.
+    for eof in [false, true] {
+        assert_eq!(
+            cut_ramp_out(16, eof),
+            vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.75, 0.5, 0.25],
+            "eof {eof}"
+        );
+    }
+    // The end of stream is not known yet: still a cut.
+    assert_eq!(cut_ramp_out(10, false)[9], 0.25);
+}
+
+#[test]
+fn a_cut_ramp_is_skipped_when_the_stream_ends_at_the_stop_frame() {
+    assert_eq!(cut_ramp_out(10, true), vec![1.0; 10]);
+    // A one-frame-short end of stream (analysed length error) is still its end.
+    assert_eq!(
+        cut_ramp_out(9, true),
+        vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0]
+    );
+}
+
 #[test]
 fn pause_fades_out_holds_the_position_and_resume_continues_from_it() {
     let (mut m, mut h) = mixer(2);

@@ -455,11 +455,10 @@ fn a1_a_cart_inside_the_file_ramps_in_and_one_at_the_start_does_not() {
     }
 }
 
-// A2: fails until the fix task. A hard transition at the very end of the
+// A2: a hard transition at the very end of the
 // current file (a gapless join) fades the current out for `declick_ms`
 // before the next starts at full level: a dip to silence, then a step.
 #[test]
-#[ignore = "A2: fails until the fix task"]
 fn a2_a_gapless_join_at_the_end_of_the_file_keeps_the_level() {
     let mut r = rig(dc_opener(48_000)); // every file is 1 s long
     r.act(EngineAction::StartCurrent {
@@ -496,6 +495,46 @@ fn a2_a_gapless_join_at_the_end_of_the_file_keeps_the_level() {
         "lowest {lowest}, step {step} at {} (join at {})",
         start + at,
         start + 48_000
+    );
+}
+
+// A2 (guard): a hard transition inside the file still fades the current out
+// for `declick_ms` before it is cut, so the cut itself has no step.
+#[test]
+fn a2_a_hard_cut_inside_the_file_still_ramps_the_outgoing_source_out() {
+    let mut r = rig(dc_opener(96_000)); // every file is 2 s long
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request("a", 1, 0.0),
+    });
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(request("b", 2, 0.0)),
+    });
+    r.settle();
+    r.run(2);
+    let start = r.heard.iter().position(|v| *v != 0.0).unwrap();
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: 1.0,
+            fade_current_until_secs: None,
+        }),
+    });
+    r.run(110);
+    assert!(
+        r.events.contains(&EngineEvent::TransitionStarted {
+            player: P,
+            entry: EntryId(2)
+        }),
+        "the next started"
+    );
+    let cut = start + 48_000;
+    let before = &r.heard[cut - 480..cut];
+    let lowest = before.iter().copied().fold(f32::MAX, f32::min);
+    assert!(
+        lowest < LEVEL * 0.05,
+        "the outgoing source ramps to silence before the cut (lowest {lowest})"
     );
 }
 

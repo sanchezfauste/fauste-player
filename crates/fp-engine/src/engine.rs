@@ -1978,17 +1978,8 @@ impl Engine {
                         );
                     }
                     None => {
-                        let fade_at = at_frame.saturating_sub(declick);
-                        self.send(
-                            &cur_bus,
-                            BusCommand::Ramp {
-                                slot: cur_slot,
-                                to: 0.0,
-                                frames: declick32,
-                                curve: Curve::Linear,
-                                at_frame: fade_at,
-                            },
-                        );
+                        // The stop goes first: the ramp checks it to tell a cut inside
+                        // the file from the file's own end (a gapless join).
                         self.send(
                             &cur_bus,
                             BusCommand::StopAt {
@@ -1996,27 +1987,34 @@ impl Engine {
                                 at_frame,
                             },
                         );
+                        self.send(
+                            &cur_bus,
+                            BusCommand::RampOutBeforeCut {
+                                slot: cur_slot,
+                                frames: declick32,
+                                at_frame: at_frame.saturating_sub(declick),
+                            },
+                        );
                     }
                 }
             }
             // A stop, or a start with nothing preloaded: end the current track there.
             _ => {
-                let fade_at = at_frame.saturating_sub(declick);
-                self.send(
-                    &cur_bus,
-                    BusCommand::Ramp {
-                        slot: cur_slot,
-                        to: 0.0,
-                        frames: declick32,
-                        curve: Curve::Linear,
-                        at_frame: fade_at,
-                    },
-                );
+                // The stop goes first: the ramp checks it to tell a cut inside
+                // the file from the file's own end (a gapless join).
                 self.send(
                     &cur_bus,
                     BusCommand::StopAt {
                         slot: cur_slot,
                         at_frame,
+                    },
+                );
+                self.send(
+                    &cur_bus,
+                    BusCommand::RampOutBeforeCut {
+                        slot: cur_slot,
+                        frames: declick32,
+                        at_frame: at_frame.saturating_sub(declick),
                     },
                 );
             }
