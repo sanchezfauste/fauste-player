@@ -209,6 +209,46 @@ This plan does not guess the audit's results. After Task 1 is reviewed:
 
 Tasks that may grow because of the audit: Task 8 (mixer) and Task 9 (engine) if the audit changes ramps, starts or stops; Task 12 (docs) for the O34 text.
 
+### Inserted after the audit (coordinator, 2026-10-03)
+
+The audit (`docs/technical/audio-path-audit.md`, commit 68657a9) confirmed A1–A8. The maintainer chose **(c) no change** for O34 (A9): no `Task 1.O34`; Task 12 puts the §7 explanation into the user guide's meters page. A10 (dither) is "too large" and goes to the roadmap notes. Each task below starts from the audit's probe for its finding in `crates/fp-engine/tests/audio_path_audit.rs` or `crates/fp-backends/tests/audio_path_audit.rs`: remove its `#[ignore]`, watch it fail, fix, and keep every other test green. The audit section named in each task gives the evidence (file:line) and the proposed action, which is binding unless the code proves it wrong (then say so in the report). Each task updates the audit's findings row (verdict "fixed in <commit>") and any doc the fix makes true or false.
+
+#### Task 1.1: fix A1 — a start inside the audio ramps in
+
+- **Files:** `crates/fp-engine/src/mixer.rs` (start of a slot; `Ramp`), `crates/fp-engine/src/engine.rs` (start paths: Play, crossfade, segue, hard transition, CUE), `crates/fp-engine/src/engine/carts.rs` if carts start elsewhere; test `crates/fp-engine/tests/audio_path_audit.rs` `a1_a_start_inside_the_file_ramps_in`, plus one test per start kind not covered by the probe (CUE, cart, the next source of a segue started at a cue-in > 0).
+- **Rule (audit §3.2, row A1):** every source that starts at `from_secs > 0` ramps in over `declick_ms` (the existing config value); a start at the first frame of the file stays hard (the file's own start and gapless joins). Existing segue/transition tests that start at 0 stay unchanged. Real-time safe: the ramp is state in the slot, no allocation (keep the `assert_no_alloc` coverage).
+- **Commit:** `fix(engine): ramp in a source that starts inside the audio (A1)`.
+
+#### Task 1.2: fix A2 — a gapless join keeps the level
+
+- **Files:** `crates/fp-engine/src/mixer.rs` and/or `crates/fp-engine/src/engine.rs` (hard transition), `crates/fp-engine/src/worker.rs` (eof and pushed-frame count if the mixer needs it); test `a2_a_gapless_join_at_the_end_of_the_file_keeps_the_level`, plus a test that a hard cut inside the file still ramps out.
+- **Rule (audit §1.2, row A2):** no de-click ramp on the outgoing source when the transition frame is its end of stream (the worker has set `eof` and the frame is at or past the last pushed frame, tolerating a one-frame error in the analysed duration); keep the ramp for cuts inside the file. Builds on Task 1.1: a gapless join's incoming source starts at frame 0, so it stays hard.
+- **Commit:** `fix(engine): no de-click dip at a gapless join (A2)`.
+
+#### Task 1.3: fix A3, A4, A5 — sources end without a step
+
+- **Files:** `crates/fp-engine/src/worker.rs` (cart pass ending at `until_secs`), `crates/fp-engine/src/sources.rs` / `LoadOptions` (frame count), `crates/fp-engine/src/mixer.rs` (failed source ramp, stop on a pausing slot), `crates/fp-engine/src/engine.rs` and `engine/carts.rs` (`fade_out` treats `Requested` like `Started`); tests `a3_a_cart_ends_at_its_cue_out_without_a_step`, `a4_a_source_that_fails_mid_file_ends_without_a_step`, `a5_a_stop_during_the_pause_ramp_does_not_step`, `a5_a_stop_right_after_the_start_does_not_step`.
+- **Rules (audit rows A3–A5):** A3 — the worker fades the last `declick_ms` before `until_secs` linearly to zero on a pass that ends there and does not loop (looped carts keep their splice, A15). A4 — when a source is failed and its ring holds no more than the de-click length, the mixer ramps it to zero over the frames that remain (real-time safe); a truncated file ends as a normal end (A16, not covered). A5 — `fade_out` treats `Requested` like `Started`, and a stop on a slot whose pause ramp may still run is a ramped stop, not a detach.
+- **Commit:** `fix(engine): end carts, failed sources and early stops without a step (A3, A4, A5)`.
+
+#### Task 1.4: fix A6 — non-finite samples never reach the device
+
+- **Files:** `crates/fp-decode/src/lib.rs` (`FileDecoder` output, off the real-time thread); test `a6_non_finite_samples_never_reach_the_device` plus a focused fp-decode test (a float WAV with NaN and ±inf decodes to 0 there, and the log line appears once per file).
+- **Rule (audit §1.1, row A6):** `FileDecoder` replaces NaN and ±inf by 0 and logs once per file (CLAUDE.md rule 9). The loudness reading of such a file recovers (the K-weighting no longer sees NaN).
+- **Commit:** `fix(decode): replace non-finite samples with silence (A6)`.
+
+#### Task 1.5: fix A7 — cpal integer conversion clips and rounds
+
+- **Files:** `crates/fp-backends/src/cpal_backend.rs` (`render_converted`); tests `a7_the_24_bit_conversion_clips_instead_of_wrapping`, `a7_the_16_bit_conversion_rounds_to_the_nearest_step`.
+- **Rule (audit §4.1, row A7):** convert with our own function: clamp to full scale, NaN to 0, round to the nearest step; exact integer PCM stays exact (existing exactness and bit-perfect tests unchanged). Real-time safe (no allocation; `fp-backends` denies `indexing_slicing`).
+- **Commit:** `fix(backends): clip and round the integer conversion (A7)`.
+
+#### Task 1.6: fix A8 — xruns and underruns are reported
+
+- **Files:** `crates/fp-engine/src/conductor.rs` (counter increases → rate-limited log lines, off the real-time thread), the telemetry the UI reads, `crates/fp-app/src/ui/app.rs` status bar (`alert-underruns` per player — the key exists in both locales — and an xrun alert per device; add its message in both locales), `crates/fp-backends` stream error mapping (`StreamErrorKind::Other` logged, not counted as an xrun), `docs/technical/threading-and-realtime.md:65-67` made true; tests: conductor test that an increase logs once per window, kittest that the alerts show, a backends test for the `Other` mapping.
+- **Rule (audit §5.2, row A8):** every counted event (xrun, underrun, lock miss, leak, dropped event, misrouted block) is logged when it increases, rate-limited; underruns and xruns are shown to the operator. Rate limit window is a `Config` field only if an operator would change it; otherwise a documented constant in the conductor (state which in the report).
+- **Commit:** `fix(engine): report xruns and underruns (A8)`.
+
 ---
 
 ### Task 2: O27 — "No output (silent)" listed after the real systems

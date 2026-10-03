@@ -53,3 +53,4 @@ runs, against the code that the earlier plans left. Each plan reaches
 - **Plan 13** (player rules) runs after plan 12 and before plan 10. Its rules
   are reducer changes in `fp-model`, one test per rule.
 - **Plan 11** runs last, so that it publishes the final docs.
+- **Unplanned (from the plan 10 audit, A10):** dither on integer outputs narrower than the source (a 16-bit device gets rounded samples, about −96 dBFS of error). Too large for plan 10; no plan number yet.
