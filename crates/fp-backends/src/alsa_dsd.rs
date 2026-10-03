@@ -11,7 +11,7 @@ use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use alsa::pcm::{Access, Format, HwParams, PCM};
+use alsa::pcm::{Access, Format, Frames, HwParams, PCM};
 use alsa::{Direction, ValueOr};
 
 use crate::dsd::{DsdStream, NativeDsdFormat, choose_native_format, pack_native};
@@ -27,12 +27,19 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 const PERIODS_PER_BUFFER: u32 = 4;
 /// `EPIPE`: an underrun.
 const EPIPE: i32 = 32;
+/// `EAGAIN`: a non-blocking write found no room.
+const EAGAIN: i32 = 11;
+/// The shortest wait for room in the device buffer.
+const MIN_WAIT_MS: u32 = 20;
+/// A wait lasts this many device periods (and at least `MIN_WAIT_MS`).
+const WAIT_PERIODS: u64 = 4;
 
 /// The ALSA PCM name of a cpal ALSA device id (`alsa:hw:CARD=D,DEV=0` →
 /// `hw:CARD=D,DEV=0`); `None` for anything but `hw:`.
 pub(crate) fn pcm_name(device_id: &str) -> Option<&str> {
     let inner = device_id.strip_prefix("alsa:").unwrap_or(device_id);
-    inner.starts_with("hw:").then_some(inner)
+    // A NUL cannot be in a PCM name (and would make the alsa crate panic).
+    (inner.starts_with("hw:") && !inner.contains('\0')).then_some(inner)
 }
 
 pub(crate) fn alsa_format(format: NativeDsdFormat) -> Format {
@@ -61,6 +68,15 @@ pub(crate) fn probe(pcm_name: &str) -> Result<Option<NativeDsdFormat>, String> {
     Ok(choose_native_format(|f| {
         hwp.test_format(alsa_format(f)).is_ok()
     }))
+}
+
+/// How long to wait for room in the device buffer before looking at the
+/// stop flag again: a few periods, never less than `MIN_WAIT_MS`. This
+/// bounds how long dropping the stream can take.
+pub(crate) fn wait_timeout_ms(device_period: usize, device_rate: u32) -> u32 {
+    let ms =
+        (device_period as u64).saturating_mul(WAIT_PERIODS * 1000) / u64::from(device_rate.max(1));
+    u32::try_from(ms).unwrap_or(u32::MAX).max(MIN_WAIT_MS)
 }
 
 fn unsupported(e: impl std::fmt::Display) -> BackendError {
@@ -110,7 +126,9 @@ fn open_pcm(
     config: StreamConfig,
     cached: Option<NativeDsdFormat>,
 ) -> Result<Opened, BackendError> {
-    let pcm = PCM::new(name, Direction::Playback, false).map_err(|e| {
+    // Non-blocking, and kept so: a busy device fails at once instead of
+    // parking this thread in the kernel, and writes wait with a timeout.
+    let pcm = PCM::new(name, Direction::Playback, true).map_err(|e| {
         BackendError::Unsupported(format!("cannot open {name} (is it in use?): {e}"))
     })?;
     let (format, device_rate, device_period) = {
@@ -136,9 +154,12 @@ fn open_pcm(
         // word frames.
         let near = (u64::from(config.buffer_frames.max(1)) * 2 / format.bytes() as u64).max(1);
         let period = hwp
-            .set_period_size_near(i64::try_from(near).unwrap_or(i64::MAX), ValueOr::Nearest)
+            .set_period_size_near(
+                Frames::try_from(near).unwrap_or(Frames::MAX),
+                ValueOr::Nearest,
+            )
             .map_err(unsupported)?;
-        hwp.set_buffer_size_near(period.saturating_mul(i64::from(PERIODS_PER_BUFFER)))
+        hwp.set_buffer_size_near(period.saturating_mul(Frames::from(PERIODS_PER_BUFFER)))
             .map_err(unsupported)?;
         pcm.hw_params(&hwp).map_err(unsupported)?;
         (format, rate, usize::try_from(period).unwrap_or(1).max(1))
@@ -167,27 +188,48 @@ fn run(
     // Bytes in one device frame.
     let frame_bytes = channels * opened.format.bytes();
     let io = opened.pcm.io_bytes();
+    let wait_ms = wait_timeout_ms(opened.device_period, opened.device_rate);
+    // An error the loop recovers from (and counts); `false` ends the stream.
+    let recovered = |e: alsa::Error| {
+        match e.errno() {
+            EAGAIN => return true,
+            EPIPE => errors.report(StreamErrorKind::Xrun),
+            _ => {}
+        }
+        // EPIPE is prepared again, a suspend is resumed, EINTR is ignored.
+        if opened.pcm.try_recover(e, true).is_ok() {
+            true
+        } else {
+            errors.report(StreamErrorKind::DeviceLost);
+            false
+        }
+    };
     while !stop.load(Ordering::Acquire) {
         renderer.render(&mut words, channels);
         let total = pack_native(opened.format, &words, channels, &mut bytes);
         let mut done = 0;
         while done < total && !stop.load(Ordering::Acquire) {
+            // Wait for room, so the stop flag is seen within a few periods
+            // even when the device stops consuming.
+            match opened.pcm.wait(Some(wait_ms)) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(e) => {
+                    if recovered(e) {
+                        continue;
+                    }
+                    return;
+                }
+            }
             let Some(rest) = bytes.get(done..total) else {
                 break;
             };
             match io.writei(rest) {
                 Ok(frames) => done += frames * frame_bytes,
-                Err(e) if e.errno() == EPIPE => {
-                    errors.report(StreamErrorKind::Xrun);
-                    if opened.pcm.prepare().is_err() {
-                        errors.report(StreamErrorKind::DeviceLost);
-                        return;
+                Err(e) => {
+                    if recovered(e) {
+                        continue;
                     }
-                    // The period is dropped; the next one starts afresh.
-                    break;
-                }
-                Err(_) => {
-                    errors.report(StreamErrorKind::DeviceLost);
                     return;
                 }
             }
@@ -266,6 +308,19 @@ mod tests {
         assert_eq!(pcm_name("hw:CARD=D,DEV=0"), Some("hw:CARD=D,DEV=0"));
         assert_eq!(pcm_name("alsa:plughw:CARD=D,DEV=0"), None);
         assert_eq!(pcm_name("alsa:default"), None);
+    }
+
+    #[test]
+    fn a_name_with_a_nul_is_refused() {
+        assert_eq!(pcm_name("alsa:hw:CARD=D\0,DEV=0"), None);
+    }
+
+    #[test]
+    fn a_wait_lasts_a_few_periods_but_not_less_than_the_floor() {
+        // 1024 frames at 88 200 Hz: 4 periods = 46 ms.
+        assert_eq!(wait_timeout_ms(1024, 88_200), 46);
+        assert_eq!(wait_timeout_ms(64, 176_400), MIN_WAIT_MS);
+        assert_eq!(wait_timeout_ms(1024, 0), 4_096_000);
     }
 
     #[test]
