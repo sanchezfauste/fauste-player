@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
+use crate::dsd::DsdStream;
 use crate::hosts::host_availability;
 use crate::{
     AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream,
@@ -100,6 +101,10 @@ impl OutputStream for CpalStream {
 
     fn sample_format(&self) -> SampleFormat {
         self.format
+    }
+
+    fn dsd(&self) -> Option<DsdStream> {
+        self.config.dsd
     }
 }
 
@@ -275,6 +280,7 @@ impl AudioBackend for CpalBackend {
                 buffer_frames,
                 exclusive_capable: exclusive,
                 rate_switching: exclusive,
+                native_dsd: false,
             });
         }
         Ok(list)
@@ -315,6 +321,11 @@ impl CpalBackend {
             inner: errors,
             lost: Arc::clone(self.host.lost()),
         });
+        if config.dsd == Some(DsdStream::Native) {
+            return Err(BackendError::Unsupported(
+                "native DSD is not available on this system".to_owned(),
+            ));
+        }
         if config.exclusive && !exclusive_capable(&self.id().0, &device.0) {
             return Err(BackendError::Unsupported(
                 "exclusive access is not available on this device".to_owned(),
@@ -361,7 +372,13 @@ impl CpalBackend {
             .unwrap_or_default();
         let formats: Vec<cpal::SampleFormat> = matching.iter().map(|c| c.sample_format()).collect();
         // Devices that report nothing usable are still tried with f32.
-        let format = choose_sample_format(&formats).unwrap_or(cpal::SampleFormat::F32);
+        let format = if config.dsd == Some(DsdStream::Dop) {
+            choose_dop_sample_format(&formats).ok_or_else(|| {
+                BackendError::Unsupported("DoP needs a 24- or 32-bit integer format".to_owned())
+            })?
+        } else {
+            choose_sample_format(&formats).unwrap_or(cpal::SampleFormat::F32)
+        };
         let ranges: Vec<(u32, u32)> = matching
             .iter()
             .filter(|c| c.sample_format() == format)
@@ -501,6 +518,13 @@ where
     )
 }
 
+/// DoP needs every bit of a 24-bit word: only 24- or 32-bit integer.
+fn choose_dop_sample_format(formats: &[cpal::SampleFormat]) -> Option<cpal::SampleFormat> {
+    [cpal::SampleFormat::I32, cpal::SampleFormat::I24]
+        .into_iter()
+        .find(|f| formats.contains(f))
+}
+
 /// Prefers float output, then the widest integer format the device takes.
 fn choose_sample_format(formats: &[cpal::SampleFormat]) -> Option<cpal::SampleFormat> {
     [
@@ -591,8 +615,8 @@ fn device_detail(d: &cpal::DeviceDescription) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        HostCache, OutputSample, choose_buffer_frames, choose_sample_format, classify,
-        device_detail, exclusive_capable, render_converted,
+        HostCache, OutputSample, choose_buffer_frames, choose_dop_sample_format,
+        choose_sample_format, classify, device_detail, exclusive_capable, render_converted,
     };
     use crate::{Renderer, StreamErrorKind};
     use cpal::DeviceDescriptionBuilder;
@@ -717,6 +741,35 @@ mod tests {
         render_converted(&mut Samples(samples, 0), &mut out, 1, &mut scratch);
         let expected: Vec<i32> = values.iter().map(|v| v << 8).collect();
         assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn dop_uses_only_24_or_32_bit_integer_formats() {
+        use cpal::SampleFormat::{F32, I16, I24, I32};
+        assert_eq!(choose_dop_sample_format(&[F32, I32, I16]), Some(I32));
+        assert_eq!(choose_dop_sample_format(&[F32, I24]), Some(I24));
+        assert_eq!(choose_dop_sample_format(&[F32, I16]), None);
+    }
+
+    #[test]
+    fn dop_samples_convert_to_the_exact_integer_words() {
+        use crate::dsd::{DOP_MARKERS, DSD_SILENCE, dop_sample, word_to_sample};
+        let words = [
+            (0x00, 0x00),
+            (0xFF, 0xFF),
+            (DSD_SILENCE, DSD_SILENCE),
+            (0x80, 0x00),
+            (0x7F, 0xFF),
+        ];
+        for marker in DOP_MARKERS {
+            for (a, b) in words {
+                let s = dop_sample(marker, word_to_sample(a, b));
+                let word = (i32::from(marker) << 16) | (i32::from(a) << 8) | i32::from(b);
+                let signed = (word << 8) >> 8;
+                assert_eq!(<cpal::I24 as OutputSample>::from_f32(s).inner(), signed);
+                assert_eq!(<i32 as OutputSample>::from_f32(s), signed << 8);
+            }
+        }
     }
 
     #[test]

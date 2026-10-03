@@ -4,9 +4,10 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use fp_backends::dsd::DsdStream;
 use fp_backends::{
-    AudioBackend, BackendError, DeviceId, DeviceInfo, NullBackend, OfflineBackend, Renderer,
-    SampleFormat, StreamConfig, StreamErrorKind, StreamErrorSink, device_labels,
+    AudioBackend, BackendError, DeviceId, DeviceInfo, NullBackend, OfflineBackend, OutputStream,
+    Renderer, SampleFormat, StreamConfig, StreamErrorKind, StreamErrorSink, device_labels,
 };
 
 /// Writes an increasing counter into every sample and counts frames.
@@ -44,6 +45,7 @@ const STEREO: StreamConfig = StreamConfig {
     buffer_frames: 256,
     channels: 2,
     exclusive: false,
+    dsd: None,
 };
 
 fn counter() -> (Box<Counter>, Arc<AtomicU64>) {
@@ -255,6 +257,7 @@ fn null_refuses_exclusive_access() {
 
 fn device(id: &str, name: &str, detail: Option<&str>) -> DeviceInfo {
     DeviceInfo {
+        native_dsd: false,
         id: DeviceId(id.to_owned()),
         name: name.to_owned(),
         detail: detail.map(str::to_owned),
@@ -325,4 +328,81 @@ fn a_device_with_no_name_is_labelled_by_its_id() {
         device_labels(&list),
         vec!["alsa:hw:CARD=X".to_owned(), "b — Line out".to_owned()]
     );
+}
+
+fn open(
+    backend: &dyn AudioBackend,
+    device: &fp_backends::OfflineDevice,
+    config: StreamConfig,
+) -> Result<Box<dyn OutputStream>, BackendError> {
+    backend.open_output(
+        &device.id(),
+        config,
+        counter().0,
+        Arc::new(Errors::default()),
+    )
+}
+
+fn open_null(config: StreamConfig) -> Result<Box<dyn OutputStream>, BackendError> {
+    let backend = NullBackend;
+    let device = backend.default_device().unwrap();
+    backend.open_output(&device, config, counter().0, Arc::new(Errors::default()))
+}
+
+#[test]
+fn offline_dop_needs_exclusive_access_and_a_24_bit_integer_format() {
+    let backend = OfflineBackend::new();
+    let dac = backend.add_device("dac", 2);
+    dac.set_exclusive_capable(true);
+    let config = StreamConfig {
+        sample_rate: 176_400,
+        buffer_frames: 512,
+        channels: 2,
+        exclusive: true,
+        dsd: Some(DsdStream::Dop),
+    };
+    assert!(
+        matches!(
+            open(&backend, &dac, config),
+            Err(BackendError::Unsupported(_))
+        ),
+        "F32 device"
+    );
+    dac.set_sample_format(SampleFormat::I24);
+    let stream = open(&backend, &dac, config).unwrap();
+    assert_eq!(stream.sample_format(), SampleFormat::I24);
+    assert_eq!(stream.dsd(), Some(DsdStream::Dop));
+}
+
+#[test]
+fn offline_native_dsd_needs_the_capability() {
+    let backend = OfflineBackend::new();
+    let dac = backend.add_device("dac", 2);
+    dac.set_exclusive_capable(true);
+    let config = StreamConfig {
+        sample_rate: 176_400,
+        buffer_frames: 512,
+        channels: 2,
+        exclusive: true,
+        dsd: Some(DsdStream::Native),
+    };
+    assert!(open(&backend, &dac, config).is_err());
+    dac.set_native_dsd(true);
+    assert!(backend.enumerate_devices().unwrap()[0].native_dsd);
+    assert_eq!(
+        open(&backend, &dac, config).unwrap().dsd(),
+        Some(DsdStream::Native)
+    );
+}
+
+#[test]
+fn null_refuses_any_dsd_stream() {
+    let config = StreamConfig {
+        sample_rate: 176_400,
+        buffer_frames: 512,
+        channels: 2,
+        exclusive: false,
+        dsd: Some(DsdStream::Dop),
+    };
+    assert!(open_null(config).is_err());
 }

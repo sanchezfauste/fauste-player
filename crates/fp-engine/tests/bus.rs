@@ -20,6 +20,7 @@ const CONFIG: StreamConfig = StreamConfig {
     buffer_frames: 480,
     channels: 2,
     exclusive: false,
+    dsd: None,
 };
 const MIXER: MixerConfig = MixerConfig {
     volume_smoothing_frames: 1,

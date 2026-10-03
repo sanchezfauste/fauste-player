@@ -801,6 +801,7 @@ impl Engine {
                 buffer_frames: self.settings.buffer_frames,
                 channels,
                 exclusive: self.settings.bit_perfect.contains(key),
+                dsd: None,
             };
             let mixer = MixerConfig {
                 volume_smoothing_frames: self.settings.frames(t.gain_smoothing_ms).max(1) as u32,

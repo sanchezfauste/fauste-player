@@ -40,6 +40,7 @@ const CONFIG: StreamConfig = StreamConfig {
     buffer_frames: 512,
     channels: 2,
     exclusive: false,
+    dsd: None,
 };
 
 /// Waits until `ok`, pumping `drive` (for backends rendered on demand).

@@ -33,6 +33,7 @@ const STEREO: StreamConfig = StreamConfig {
     buffer_frames: 256,
     channels: 2,
     exclusive: false,
+    dsd: None,
 };
 
 #[test]

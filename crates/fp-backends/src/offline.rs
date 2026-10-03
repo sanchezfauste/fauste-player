@@ -5,6 +5,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use crate::dsd::DsdStream;
 use crate::{
     AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream,
     Renderer, SampleFormat, StreamConfig, StreamErrorKind, StreamErrorSink,
@@ -25,6 +26,9 @@ struct DeviceState {
     exclusive_capable: bool,
     refused_rates: HashSet<u32>,
     open_attempts: u64,
+    /// `None` is F32.
+    sample_format: Option<SampleFormat>,
+    native_dsd: bool,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -90,6 +94,16 @@ impl OfflineDevice {
         lock(&self.state).exclusive_capable = capable;
     }
 
+    /// The sample format streams on this device run in (default `F32`).
+    pub fn set_sample_format(&self, format: SampleFormat) {
+        lock(&self.state).sample_format = Some(format);
+    }
+
+    /// Lets streams on this device carry native DSD.
+    pub fn set_native_dsd(&self, native: bool) {
+        lock(&self.state).native_dsd = native;
+    }
+
     /// How many times a stream was opened, or tried to be, on this device.
     pub fn open_attempts(&self) -> u64 {
         lock(&self.state).open_attempts
@@ -109,6 +123,7 @@ impl OfflineDevice {
 struct OfflineStream {
     generation: u64,
     config: StreamConfig,
+    format: SampleFormat,
     state: Arc<Mutex<DeviceState>>,
 }
 
@@ -118,7 +133,11 @@ impl OutputStream for OfflineStream {
     }
 
     fn sample_format(&self) -> SampleFormat {
-        SampleFormat::F32
+        self.format
+    }
+
+    fn dsd(&self) -> Option<DsdStream> {
+        self.config.dsd
     }
 }
 
@@ -180,7 +199,10 @@ impl AudioBackend for OfflineBackend {
             .values()
             .filter(|d| lock(&d.state).plugged)
             .map(|d| {
-                let exclusive_capable = lock(&d.state).exclusive_capable;
+                let (exclusive_capable, native_dsd) = {
+                    let state = lock(&d.state);
+                    (state.exclusive_capable, state.native_dsd)
+                };
                 DeviceInfo {
                     id: d.id.clone(),
                     name: d.id.0.clone(),
@@ -190,6 +212,7 @@ impl AudioBackend for OfflineBackend {
                     buffer_frames: Some((16, 16_384)),
                     exclusive_capable,
                     rate_switching: exclusive_capable,
+                    native_dsd,
                 }
             })
             .collect();
@@ -231,6 +254,28 @@ impl AudioBackend for OfflineBackend {
                 "exclusive access is not available on this device".to_owned(),
             ));
         }
+        let format = state.sample_format.unwrap_or(SampleFormat::F32);
+        match config.dsd {
+            None => {}
+            Some(dsd) => {
+                if !config.exclusive {
+                    return Err(BackendError::Unsupported(
+                        "DSD needs exclusive access".to_owned(),
+                    ));
+                }
+                if dsd == DsdStream::Dop && !matches!(format, SampleFormat::I24 | SampleFormat::I32)
+                {
+                    return Err(BackendError::Unsupported(
+                        "DoP needs a 24- or 32-bit integer format".to_owned(),
+                    ));
+                }
+                if dsd == DsdStream::Native && !state.native_dsd {
+                    return Err(BackendError::Unsupported(
+                        "native DSD is not available on this device".to_owned(),
+                    ));
+                }
+            }
+        }
         if state.refused_rates.contains(&config.sample_rate) {
             return Err(BackendError::Unsupported(format!(
                 "{} Hz is not supported",
@@ -248,6 +293,7 @@ impl AudioBackend for OfflineBackend {
         Ok(Box::new(OfflineStream {
             generation,
             config,
+            format,
             state: dev.state.clone(),
         }))
     }

@@ -60,6 +60,7 @@ impl AudioBackend for NullBackend {
             buffer_frames: Some((16, 16_384)),
             exclusive_capable: false,
             rate_switching: false,
+            native_dsd: false,
         }])
     }
 
@@ -79,6 +80,11 @@ impl AudioBackend for NullBackend {
         }
         if config.sample_rate == 0 || config.buffer_frames == 0 || config.channels == 0 {
             return Err(BackendError::Unsupported(format!("{config:?}")));
+        }
+        if config.dsd.is_some() {
+            return Err(BackendError::Unsupported(
+                "the null output carries no DSD".to_owned(),
+            ));
         }
         if config.exclusive {
             // Nothing reaches a device here: never claim bit-perfect output.
