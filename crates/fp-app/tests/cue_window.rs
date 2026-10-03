@@ -21,7 +21,7 @@ use support::{Fake, harness, state};
 const PAUSE: &str = "Pause CUE";
 const RESUME: &str = "Resume CUE";
 const STOP: &str = "Stop CUE";
-const LOAD_NEXT: &str = "Load as next";
+const LOAD_NEXT: &str = "Set as next";
 const CLOSE: &str = "Close and stop CUE";
 const WAVE: &str = "CUE waveform: click to seek";
 
@@ -199,4 +199,28 @@ fn a_cue_that_ends_by_itself_closes_its_window() {
     fake.state.store(Arc::new(s));
     h.run_steps(2);
     assert!(h.query_by_label(STOP).is_none());
+}
+
+#[test]
+fn the_set_as_next_button_is_wide_enough_for_its_icon_and_text() {
+    let (h, _) = cueing(1);
+    let rect = h.get_by_label(LOAD_NEXT).rect();
+    let text = format!(
+        "{}  {LOAD_NEXT}",
+        egui_phosphor::regular::ARROW_BEND_DOWN_RIGHT
+    );
+    let needed = h.ctx.fonts_mut(|f| {
+        f.layout_no_wrap(
+            text,
+            fp_app::ui::widgets::font_semibold(11.0),
+            egui::Color32::WHITE,
+        )
+        .size()
+        .x
+    });
+    assert!(
+        rect.width() >= needed + 16.0,
+        "button {} px, text {needed} px",
+        rect.width()
+    );
 }

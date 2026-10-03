@@ -223,7 +223,7 @@ shield report no pan.
 position fraction and `can_load_next`). Its waveform, seek range and
 remaining time run to the end of the file, because a CUE plays the whole
 file. It only sends commands: `SeekCue` (a click on the waveform),
-`SetCuePaused`, `CueToNext` (Load as next) and `SetCue(player, false)` (Stop
+`SetCuePaused`, `CueToNext` (Set as next) and `SetCue(player, false)` (Stop
 and the close button). The model rules behind it: `seek_cue` leaves `paused`
 alone (a seek on a paused CUE stays paused), `set_cue_paused` only emits on a
 change, `cue_entry` clears `paused` (a moved CUE restarts unpaused from the

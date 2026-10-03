@@ -113,7 +113,7 @@ pub struct CueWindowView {
     pub paused: bool,
     /// The position as a fraction of the file, for the waveform.
     pub position: Option<f32>,
-    /// "Load as next" has something to do: the cued entry is not
+    /// "Set as next" has something to do: the cued entry is not
     /// already the explicit next (the entry on air can be, O37).
     pub can_load_next: bool,
 }

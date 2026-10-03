@@ -43,7 +43,6 @@ cue-window-title = CUE · P{ $n }
 cue-window-pause = Pausar CUE
 cue-window-resume = Reanudar CUE
 cue-window-stop = Parar CUE
-cue-window-load-next = Cargar como siguiente
 cue-window-close = Cerrar y parar CUE
 tip-cue-waveform = Forma de onda del CUE: clic para saltar
 tip-volume = Volumen: { $db }

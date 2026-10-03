@@ -43,7 +43,6 @@ cue-window-title = CUE · P{ $n }
 cue-window-pause = Pause CUE
 cue-window-resume = Resume CUE
 cue-window-stop = Stop CUE
-cue-window-load-next = Load as next
 cue-window-close = Close and stop CUE
 tip-cue-waveform = CUE waveform: click to seek
 tip-volume = Volume: { $db }
