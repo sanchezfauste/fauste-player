@@ -2918,6 +2918,25 @@ git add docs README.md
 git commit -m "docs: plan 10 as built, audio path"
 ```
 
+### Deviations as built
+
+Recorded from the ledger; the spec's section 11 "As built" has the same list in context.
+
+- Ruling: O34 = (c) no change, documented — the maintainer's choice — none.
+- Ruling: Tasks 1.1 to 1.6 added for A1 to A8, A3 to A5 grouped; A10 to the roadmap — the audit's probes confirmed them — a larger review surface for 1.3.
+- Ruling: A1 ramps only starts at `from_secs > 0` — the audit's proposal — a rare click on a file whose first sample is non-zero.
+- Ruling: A2 also covers a stop without a next source at a file's end, with a tolerance of two frames past the stop frame — same dip, and resampling rounds — a tiny click if the last two frames are loud.
+- Ruling: A8 counts on the device threads and logs from the conductor; `fp-backends` does not log — CLAUDE.md rule 5.
+- Task 2: the unused `configured` parameter of the backend list was dropped.
+- Task 4: `start_or_crossfade` takes `held`, because the hold was read after `advance_to` cleared `dsd`; a fade stop on DSD delegates to `stop`.
+- Task 8: the pending DSD mode switches are a fixed ordered queue of four (overflow drops the oldest and counts a dropped event), instead of one slot where the last wins.
+- Task 9: `HoldAll` gains `from_frame`; a PCM start during a DSD tail starts at the tail's end after one block of hold; a dispatch shifts the whole transition by the switch delay; the Offline backend gains a `set_dop_any_format` knob.
+- Ruling: after a device loss DSD continues only on an exclusive device that passes the I24/I32 check, else PCM; a bus with a pending switch to PCM is busy; a reconnect restores DSD mode only if it was on, and reports the device lost when it cannot open it.
+- Task 10: ALSA opens non-blocking and waits with a timeout, instead of a blocking open — a busy device must not hold the output thread.
+- Task 6: a DSF header with an absurd channel count is rejected (it used to abort on a huge allocation).
+- Extra: a real-file end-to-end test (`crates/fp-engine/tests/dsd_real_music.rs`, `#[ignore]`d), byte-exact DoP and native on a DSD64 file.
+- Outstanding: DoP on a real converter; native DSD on a real device (`FAUSTE_NATIVE_DSD_DEVICE`, `native_dsd_on_a_real_device`).
+
 ---
 
 ## Self-review notes (for the coordinator)

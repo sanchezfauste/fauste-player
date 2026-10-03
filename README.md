@@ -330,6 +330,7 @@ See [Release process](docs/technical/release-process.md).
 | 2. Cartwall and full Settings | Cart pages, remappable shortcuts, language selector, M3U/M3U8/PLS import and export, manual marker editing | done |
 | 3. Native backends | PipeWire, PulseAudio, JACK, ASIO | done |
 | 4. Bit-perfect | Output at the file's rate and format with no processing, BP badge; ALSA `hw:`, WASAPI exclusive mode, Core Audio hog mode | done (Windows and macOS need an on-device loopback check) |
+| 6. Audio path | Audio path audit and its fixes (no clicks at starts, joins and cue-outs; clipped integer conversion; xrun reporting), DSD output as DoP or native DSD on bit-perfect devices, "No output (silent)" device | done (DoP and native DSD need a check on real hardware) |
 | 5. Packaging | deb, rpm, Flatpak, AppImage, MSI, universal dmg; signing and notarisation when certificates are configured | done |
 
 ## Documentation
