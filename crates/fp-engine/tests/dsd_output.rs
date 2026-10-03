@@ -239,6 +239,20 @@ impl Rig {
         out
     }
 
+    /// Renders block by block until the device has been reopened as PCM, at
+    /// most `frames` frames. A source reopened by that change is created in
+    /// the last tick and not yet attached, whatever the decode worker's pace.
+    fn run_until_pcm(&mut self, frames: usize) -> Vec<[f32; 2]> {
+        let mut out = Vec::new();
+        for _ in 0..frames.div_ceil(BLOCK) {
+            out.extend(self.run_raw(BLOCK));
+            if self.dac.config().is_some_and(|c| c.dsd.is_none()) {
+                break;
+            }
+        }
+        out
+    }
+
     /// Renders `frames` frames and returns them decoded as DoP 24-bit words.
     fn run_dop(&mut self, frames: usize) -> Vec<Frame> {
         let raw = self.run_raw(frames);
@@ -741,7 +755,7 @@ fn a_native_switch_on_a_refused_word_rate_goes_on_at_a_rate_the_device_takes() {
     assert!(r.engine.telemetry(P).dsd);
     r.act(EngineAction::LeaveDsd { player: P });
     // The DSD silence, then the reopen as PCM.
-    r.run_raw(WORD_RATE_128 as usize / 20);
+    r.run_until_pcm(WORD_RATE_128 as usize / 20);
     let config = r.dac.config().expect("the device is never left closed");
     assert_eq!(config.dsd, None, "reopened as PCM");
     assert!(config.sample_rate <= MAX_PCM, "{}", config.sample_rate);
@@ -788,7 +802,7 @@ fn a_start_over_native_dsd_on_a_refused_word_rate_plays_at_a_rate_the_device_tak
     // opened at the word rate, which the device refuses as PCM.
     let wav = indexed_wav(r.dir.path(), "q.wav", CONFIGURED_RATE, 2, 48_000 * 3);
     r.start(Q, request(2, wav, pcm16(CONFIGURED_RATE)));
-    let mut raw = r.run_raw(WORD_RATE_128 as usize / 20);
+    let mut raw = r.run_until_pcm(WORD_RATE_128 as usize / 20);
     let config = r.dac.config().expect("the device is never left closed");
     assert_eq!(config.dsd, None, "reopened as PCM");
     assert_eq!(config.sample_rate, CONFIGURED_RATE);
@@ -821,7 +835,7 @@ fn a_cart_over_native_dsd_on_a_refused_word_rate_plays_from_its_start() {
         format: pcm16(CONFIGURED_RATE),
     }));
     r.settle();
-    let mut raw = r.run_raw(WORD_RATE_128 as usize / 20);
+    let mut raw = r.run_until_pcm(WORD_RATE_128 as usize / 20);
     let config = r.dac.config().expect("the device is never left closed");
     assert_eq!(config.dsd, None, "reopened as PCM");
     assert_eq!(config.sample_rate, CONFIGURED_RATE);
