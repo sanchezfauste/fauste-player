@@ -233,6 +233,10 @@ struct PlayerRuntime {
     /// Sources fading out or stopping (crossfades, overlaps, seeks, stops).
     outgoing: Vec<Playing>,
     cue_src: Option<Playing>,
+    /// CUE sources ramping down (a CUE sought, replaced or stopped). They
+    /// are kept apart from `outgoing`: a pre-listen is never on air, so it
+    /// is not metered, paused, faded or awaited as part of the player.
+    cue_outgoing: Vec<Playing>,
     /// The CUE source is held (the CUE window's Pause). Cleared by a new
     /// or stopped CUE.
     cue_paused: bool,
@@ -286,6 +290,7 @@ enum Role {
     Current,
     Outgoing(usize),
     Cue,
+    CueOutgoing(usize),
 }
 
 fn store_integration(shared: &crate::mixer::BusShared, (tau1, tau2, fall): (f32, f32, f32)) {
@@ -474,6 +479,7 @@ impl Engine {
                     + rt.current.iter().count()
                     + rt.cue_src.iter().count()
                     + rt.outgoing.len()
+                    + rt.cue_outgoing.len()
             })
             .sum()
     }
@@ -537,9 +543,9 @@ impl Engine {
         let Some(rt) = self.players.get(&player) else {
             return input;
         };
-        // The pre-listen is not on air: its measurement is taken and dropped
-        // so it does not pile up.
-        for p in rt.cue_src.iter() {
+        // The pre-listen is not on air: its measurement (and that of a CUE
+        // source ramping down) is taken and dropped so it does not pile up.
+        for p in rt.cue_src.iter().chain(rt.cue_outgoing.iter()) {
             take_measurement(&p.shared);
         }
         for p in rt.current.iter().chain(rt.outgoing.iter()) {
@@ -627,6 +633,7 @@ impl Engine {
                 .chain(rt.preload.iter())
                 .chain(rt.cue_src.iter())
                 .chain(rt.outgoing.iter())
+                .chain(rt.cue_outgoing.iter())
                 .any(|p| &p.bus == bus && sounding(p.start))
         });
         players || self.carts_sounding(bus) || self.tones.iter().any(|(b, _)| b == bus)
@@ -740,6 +747,7 @@ impl Engine {
                     .chain(rt.preload.iter())
                     .chain(rt.cue_src.iter())
                     .chain(rt.outgoing.iter())
+                    .chain(rt.cue_outgoing.iter())
                     .any(on_bus)
             });
             if !touches {
@@ -753,6 +761,16 @@ impl Engine {
                 .into_iter()
                 .partition(on_bus);
             rt.outgoing = kept;
+            let (cue_gone, cue_kept): (Vec<Playing>, Vec<Playing>) =
+                std::mem::take(&mut rt.cue_outgoing)
+                    .into_iter()
+                    .partition(on_bus);
+            rt.cue_outgoing = cue_kept;
+            // A CUE source ramping down is cut silently: nothing waits for it.
+            for p in cue_gone {
+                self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
+                self.release(p);
+            }
             // Cut fades end as a finished fade does (`Finished` on an
             // outgoing source): `ReachedEnd` for a fade stop, and
             // `FadeCompleted` once the last one of a crossfade is gone.
@@ -1127,6 +1145,7 @@ impl Engine {
                 current: None,
                 outgoing: Vec::new(),
                 cue_src: None,
+                cue_outgoing: Vec::new(),
                 cue_paused: false,
                 plan: Plan::None,
                 paused: false,
@@ -1149,6 +1168,7 @@ impl Engine {
                 .chain(rt.current.take())
                 .chain(rt.cue_src.take())
                 .chain(rt.outgoing.drain(..))
+                .chain(rt.cue_outgoing.drain(..))
                 .collect();
             for p in all {
                 self.detach(&p);
@@ -1347,7 +1367,11 @@ impl Engine {
         );
         match self.players.get_mut(&player) {
             Some(rt) => {
-                rt.outgoing.push(p);
+                if p.cue {
+                    rt.cue_outgoing.push(p);
+                } else {
+                    rt.outgoing.push(p);
+                }
                 true
             }
             None => {
@@ -1964,11 +1988,13 @@ impl Engine {
                 Some((*id, Role::Preload))
             } else if rt.cue_src.as_ref().is_some_and(is) {
                 Some((*id, Role::Cue))
+            } else if let Some(i) = rt.outgoing.iter().position(is) {
+                Some((*id, Role::Outgoing(i)))
             } else {
-                rt.outgoing
+                rt.cue_outgoing
                     .iter()
                     .position(is)
-                    .map(|i| (*id, Role::Outgoing(i)))
+                    .map(|i| (*id, Role::CueOutgoing(i)))
             }
         })
     }
@@ -2010,6 +2036,11 @@ impl Engine {
                             o.start = StartState::Started;
                         }
                     }
+                    Role::CueOutgoing(i) => {
+                        if let Some(o) = rt.cue_outgoing.get_mut(i) {
+                            o.start = StartState::Started;
+                        }
+                    }
                 }
             }
             BusEvent::Finished { slot, .. } => {
@@ -2035,6 +2066,18 @@ impl Engine {
                             } else if done {
                                 self.events.push(EngineEvent::FadeCompleted { player });
                             }
+                        }
+                    }
+                    Role::CueOutgoing(i) => {
+                        // Its ramp ended: released like an outgoing source,
+                        // with nothing to report (the CUE already moved on).
+                        if let Some(p) = self
+                            .players
+                            .get_mut(&player)
+                            .filter(|rt| i < rt.cue_outgoing.len())
+                            .map(|rt| rt.cue_outgoing.remove(i))
+                        {
+                            self.release(p);
                         }
                     }
                     Role::Cue => {
@@ -2222,6 +2265,7 @@ impl Engine {
             Role::Current => rt.current.as_mut(),
             Role::Cue => rt.cue_src.as_mut(),
             Role::Outgoing(i) => rt.outgoing.get_mut(i),
+            Role::CueOutgoing(i) => rt.cue_outgoing.get_mut(i),
         }
     }
 
@@ -2448,12 +2492,13 @@ impl Engine {
             )
         };
         format!(
-            "paused {} plan {:?} cur [{}] pre [{}] outgoing {} cap {}",
+            "paused {} plan {:?} cur [{}] pre [{}] outgoing {} cue outgoing {} cap {}",
             rt.paused,
             rt.plan,
             rt.current.as_ref().map(d).unwrap_or_default(),
             rt.preload.as_ref().map(d).unwrap_or_default(),
             rt.outgoing.len(),
+            rt.cue_outgoing.len(),
             self.buses.values().map(|b| b.capacity()).sum::<usize>()
         )
     }

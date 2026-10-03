@@ -1095,3 +1095,73 @@ fn stopping_a_held_cue_releases_it() {
     r.run_hearing_cue(20);
     assert_eq!(r.engine.used_slots(), 0, "no leaked slot");
 }
+
+/// Renders one block on both devices without ticking: a source the mixer
+/// finishes in that block is still attached when the meter is read.
+fn render_without_tick(r: &mut Rig) {
+    let _ = r.main.render(BLOCK).unwrap();
+    let _ = r.cue.render(BLOCK).unwrap();
+}
+
+/// A running CUE on a stopped player, the meter input taken so far
+/// dropped; `act` then replaces or stops the CUE source.
+fn cue_tail_on_the_players_meter(act: EngineAction) -> (Rig, fp_engine::meter::MeterInput) {
+    let mut r = rig(480_000, true);
+    start_cue(&mut r, 0.0);
+    let heard = r.run_hearing_cue(4);
+    assert!(heard.iter().any(|v| *v != 0.0), "the CUE has signal");
+    r.engine.take_meter_input(P);
+    r.act(act);
+    r.settle();
+    render_without_tick(&mut r);
+    let input = r.engine.take_meter_input(P);
+    r.run_hearing_cue(20);
+    (r, input)
+}
+
+fn assert_off_air(r: &Rig, input: &fp_engine::meter::MeterInput) {
+    assert_eq!(input.peak, [0.0, 0.0], "the CUE tail is not on air");
+    assert_eq!(input.frames, 0, "the CUE tail is not on air");
+    assert!(
+        !r.events.iter().any(|e| matches!(
+            e,
+            EngineEvent::FadeCompleted { .. } | EngineEvent::ReachedEnd { .. }
+        )),
+        "the player reports no fade: {:?}",
+        r.events
+    );
+}
+
+#[test]
+fn seeking_the_cue_never_reaches_the_players_meter() {
+    let (r, input) = cue_tail_on_the_players_meter(EngineAction::SeekCue {
+        player: P,
+        secs: 3.0,
+    });
+    assert_off_air(&r, &input);
+}
+
+#[test]
+fn replacing_the_cue_never_reaches_the_players_meter() {
+    let (r, input) = cue_tail_on_the_players_meter(EngineAction::StartCue {
+        player: P,
+        request: request(4, 0.0),
+    });
+    assert_off_air(&r, &input);
+}
+
+#[test]
+fn stopping_the_cue_never_reaches_the_players_meter() {
+    let (r, input) = cue_tail_on_the_players_meter(EngineAction::StopCue { player: P });
+    assert_off_air(&r, &input);
+}
+
+#[test]
+fn a_sought_cue_releases_the_old_source_once_its_fade_ends() {
+    let (r, _) = cue_tail_on_the_players_meter(EngineAction::SeekCue {
+        player: P,
+        secs: 3.0,
+    });
+    assert_eq!(r.engine.attached_sources(), 1, "only the new CUE source");
+    assert_eq!(r.engine.used_slots(), 1, "no leaked slot");
+}

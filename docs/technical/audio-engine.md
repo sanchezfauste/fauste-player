@@ -80,7 +80,10 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   - All of it accumulates in `SourceShared` atomics.
 - **The conductor meters.**
   - Every tick, `Engine::take_meter_input` takes a player's measurement
-    (current plus fading sources; the pre-listen's is dropped). The sums are
+    (current plus fading sources; the pre-listen's is dropped, and so is
+    that of a CUE source ramping down after a CUE seek, replacement or
+    stop, which `PlayerRuntime::cue_outgoing` keeps apart from the
+    player's fading sources). The sums are
     taken one by one, inside `BusShared::whole_blocks`: a block rendered
     meanwhile is taken whole in the same reading, never split across ticks.
   - `meter::MeterState` applies the fall of each preset: 20 dB / 1.7 s,
@@ -334,7 +337,11 @@ plus the mixer's DSD mode.
 | `LoadPaused` | restore a session: load the source at a position, paused |
 
 The CUE position is `PlayerTelemetry::cue_position_secs`; a held CUE reports a
-constant one. A held CUE is released when it is replaced or stopped.
+constant one. A held CUE is released when it is replaced or stopped. An
+audible CUE source that is sought, replaced or stopped gets the de-click ramp
+in `PlayerRuntime::cue_outgoing`, never in the player's `outgoing`: it is not
+on air, so it is not metered, paused, faded or awaited with the player, and it
+is released when the mixer reports it finished.
 
 The effective play range is `Track::play_range(use_markers)` in `fp-model`
 (`players.use_cue_markers`; off gives 0 to the end of the file, or the source
