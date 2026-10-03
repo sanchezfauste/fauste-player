@@ -1,0 +1,73 @@
+/* Nocturne tokens, from crates/fp-app/src/ui/theme.rs */
+:root {
+  --bg: #161826;
+  --column: #1b1d2b;
+  --surface: #232532;
+  --text: #e9e9ed;
+  --muted: #9397ab;
+  --line: #3f424d;
+  --accent: #9184d9;
+  --accent-400: #b5abfc;
+  --accent-900: #2c284a;
+  --on-air: #ff645f;
+  --on-air-row: #b02a2d;
+  --play: #3fc168;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 1rem/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--accent-400); }
+a:hover { color: #fff; }
+:focus-visible { outline: 3px solid var(--accent-400); outline-offset: 2px; border-radius: 4px; }
+code { background: var(--surface); padding: 0.1em 0.35em; border-radius: 4px; }
+
+.top, main, footer { width: 100%; max-width: 72rem; margin: 0 auto; padding-left: 1rem; padding-right: 1rem; }
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-top: 1rem; padding-bottom: 1rem; }
+.brand { display: inline-flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.15rem; color: var(--text); text-decoration: none; }
+.top nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
+.top nav a { color: var(--muted); text-decoration: none; }
+.top nav a:hover { color: var(--text); }
+
+.hero { text-align: center; padding: 2rem 0 1rem; }
+h1 { font-size: clamp(2rem, 6vw, 3.25rem); line-height: 1.15; margin: 0 0 0.75rem; }
+.pitch { max-width: 40rem; margin: 0 auto 1.5rem; color: var(--muted); font-size: 1.125rem; }
+.cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; margin: 0 0 2rem; }
+.button { display: inline-block; padding: 0.65rem 1.25rem; border-radius: 8px; background: var(--accent); color: #12121c; font-weight: 600; text-decoration: none; }
+.button:hover { background: var(--accent-400); color: #12121c; }
+.button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.button.secondary:hover { background: var(--surface); color: var(--text); }
+.shot { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); }
+
+h2 { font-size: 1.6rem; margin: 3rem 0 1rem; }
+.features { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.features li { background: var(--column); border: 1px solid var(--surface); border-radius: 10px; padding: 1rem 1.25rem; }
+.features h3 { margin: 0 0 0.35rem; font-size: 1.05rem; color: var(--accent-400); }
+.features p { margin: 0; color: var(--muted); }
+
+.version { color: var(--muted); font-weight: 400; font-size: 0.75em; }
+.tablist { display: flex; flex-wrap: wrap; gap: 0.25rem; border-bottom: 1px solid var(--line); margin-bottom: 1rem; }
+.tablist [role="tab"] { font: inherit; color: var(--muted); background: transparent; border: 0; border-bottom: 3px solid transparent; padding: 0.6rem 1.1rem; cursor: pointer; }
+.tablist [role="tab"]:hover { color: var(--text); }
+.tablist [role="tab"][aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+#tabs > section { background: var(--column); border: 1px solid var(--surface); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+#tabs > section[hidden] { display: none; }
+#tabs h3 { margin: 0 0 0.25rem; }
+.files { padding-left: 1.25rem; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--surface); white-space: nowrap; }
+thead th { color: var(--muted); font-weight: 600; }
+
+footer { padding-top: 2rem; padding-bottom: 3rem; color: var(--muted); text-align: center; }
+
+@media (max-width: 480px) {
+  .button { width: 100%; text-align: center; }
+  .tablist [role="tab"] { padding: 0.6rem 0.8rem; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
