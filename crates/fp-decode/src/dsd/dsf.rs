@@ -35,7 +35,12 @@ pub(super) fn layout(file: &mut File) -> Result<Layout, String> {
         return Err(bad());
     }
     let data_size = le_u64(&h, 84).ok_or_else(bad)?;
-    if block == 0 || block > MAX_BLOCK || !(bits == 1 || bits == 8) || channels == 0 {
+    if block == 0
+        || block > MAX_BLOCK
+        || !(bits == 1 || bits == 8)
+        || channels == 0
+        || channels as usize > super::MAX_CHANNELS
+    {
         return Err(bad());
     }
     let channels_u64 = u64::from(channels);

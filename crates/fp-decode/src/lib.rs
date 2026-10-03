@@ -17,6 +17,7 @@ mod wavpack;
 
 use ape::ApeFileDecoder;
 use dsd::DsdDecoder;
+pub use dsd::DsdRawReader;
 use symph::SymphoniaDecoder;
 use wavpack::WavPackDecoder;
 
@@ -169,6 +170,14 @@ impl FileDecoder {
             Backend::WavPack(d) => d.bits_per_sample(),
             Backend::Ape(d) => d.bits_per_sample(),
             Backend::Dsd(_) => None,
+        }
+    }
+
+    /// The DSD sample rate of a DSD file; `None` for every other format.
+    pub fn dsd_rate(&self) -> Option<u32> {
+        match &self.backend {
+            Backend::Dsd(d) => Some(d.dsd_rate()),
+            _ => None,
         }
     }
 

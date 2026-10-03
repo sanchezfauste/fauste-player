@@ -550,3 +550,110 @@ fn tiny_dsf_blocks_decode_like_the_usual_ones() {
     let from = (0.1 * 88_200.0f64).round() as usize * 2;
     assert!(out == usual[from..], "a seek among tiny blocks");
 }
+
+// ------------------------------------------------------------------ raw bytes
+
+fn ramp_bytes(len: usize, seed: u8) -> Vec<u8> {
+    (0..len)
+        .map(|i| (i as u8).wrapping_mul(7).wrapping_add(seed))
+        .collect()
+}
+
+fn read_raw(path: &Path, from_secs: f64) -> Vec<Vec<u8>> {
+    let mut r = fp_decode::DsdRawReader::open(path).unwrap();
+    r.seek(from_secs).unwrap();
+    let mut out = vec![Vec::new(); r.channels()];
+    while r.next_bytes(&mut out).unwrap() {}
+    out
+}
+
+#[test]
+fn raw_bytes_of_dsf_and_dff_are_the_written_bytes_msb_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let (l, r) = (ramp_bytes(10_000, 1), ramp_bytes(10_000, 100));
+    let channels = vec![l.clone(), r.clone()];
+    for path in [
+        write(dir.path(), "a.dsf", &dsf(&channels, 10_000 * 8)),
+        write(dir.path(), "a.dff", &dff(&channels, b"DSD ")),
+    ] {
+        let got = read_raw(&path, 0.0);
+        assert_eq!(got, channels, "{}", path.display());
+        let reader = fp_decode::DsdRawReader::open(&path).unwrap();
+        assert_eq!(reader.dsd_rate(), DSD64);
+        assert_eq!(reader.len_bytes(), 10_000);
+    }
+}
+
+#[test]
+fn a_raw_seek_lands_on_an_even_byte() {
+    let dir = tempfile::tempdir().unwrap();
+    let l = ramp_bytes(20_000, 3);
+    let path = write(
+        dir.path(),
+        "a.dsf",
+        &dsf(&[l.clone(), l.clone()], 20_000 * 8),
+    );
+    // 0.01 s at DSD64 is byte 3528; a tiny offset rounds down to it.
+    let got = read_raw(&path, 0.010_000_3);
+    assert_eq!(got[0], l[3528..].to_vec());
+    let got = read_raw(&path, 0.010_000_3 + 1.0 / f64::from(DSD64) * 8.0); // byte 3529 -> 3528
+    assert_eq!(got[0], l[3528..].to_vec());
+    assert!(read_raw(&path, 99.0)[0].is_empty(), "past the end");
+}
+
+#[test]
+fn a_truncated_dsf_ends_early_without_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let l = ramp_bytes(BLOCK * 3, 5);
+    let mut bytes = dsf(&[l.clone(), l.clone()], (BLOCK * 3 * 8) as u64);
+    bytes.truncate(bytes.len() - BLOCK * 2 - 100);
+    let path = write(dir.path(), "cut.dsf", &bytes);
+    let got = read_raw(&path, 0.0);
+    assert!(got[0].len() < l.len());
+    assert_eq!(got[0], l[..got[0].len()].to_vec(), "what is there is exact");
+}
+
+#[test]
+fn a_raw_reader_refuses_malformed_headers() {
+    let dir = tempfile::tempdir().unwrap();
+    let pair = stereo_pair();
+    // Zero block size, zero channels, huge channel count, huge data size.
+    for (name, offset, bytes) in [
+        ("block0.dsf", 72, 0u32.to_le_bytes().to_vec()),
+        ("ch0.dsf", 52, 0u32.to_le_bytes().to_vec()),
+        ("chhuge.dsf", 52, u32::MAX.to_le_bytes().to_vec()),
+    ] {
+        let mut f = dsf(&pair, 1000);
+        f[offset..offset + bytes.len()].copy_from_slice(&bytes);
+        let path = write(dir.path(), name, &f);
+        assert!(fp_decode::DsdRawReader::open(&path).is_err(), "{name}");
+    }
+    let mut f = dsf(&pair, 1000);
+    f[84..92].copy_from_slice(&u64::MAX.to_le_bytes());
+    let path = write(dir.path(), "bigdata.dsf", &f);
+    // The size is clamped to the file: opens, reads what is there.
+    let got = read_raw(&path, 0.0);
+    assert!(got[0].len() <= 1000_usize.div_ceil(8));
+    // Cut inside the header, and not a DSD file at all.
+    let whole = dsf(&pair, 1000);
+    let path = write(dir.path(), "cut.dsf", &whole[..60]);
+    assert!(fp_decode::DsdRawReader::open(&path).is_err());
+    let path = write(dir.path(), "x.dsf", b"RIFFxxxxWAVE");
+    assert!(fp_decode::DsdRawReader::open(&path).is_err());
+    // Wrong number of outputs.
+    let path = write(dir.path(), "ok.dsf", &dsf(&pair, 1000));
+    let mut r = fp_decode::DsdRawReader::open(&path).unwrap();
+    assert!(r.next_bytes(&mut [Vec::new()]).is_err());
+}
+
+#[test]
+fn the_decoder_reports_the_dsd_rate_and_pcm_files_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(dir.path(), "a.dsf", &dsf(&[ramp_bytes(4096, 0)], 4096 * 8));
+    assert_eq!(
+        fp_decode::FileDecoder::open(&path).unwrap().dsd_rate(),
+        Some(DSD64)
+    );
+    let ogg = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lossy/tone.ogg");
+    assert_eq!(fp_decode::FileDecoder::open(&ogg).unwrap().dsd_rate(), None);
+}

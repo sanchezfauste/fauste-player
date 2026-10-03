@@ -9,10 +9,13 @@
 mod convert;
 mod dff;
 mod dsf;
+mod raw;
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
+
+pub use raw::DsdRawReader;
 
 use convert::{BYTES_PER_FRAME, DECIMATION, IDLE, WINDOW_BYTES};
 
@@ -110,89 +113,50 @@ fn be_u64(b: &[u8], at: usize) -> Option<u64> {
     b.get(at..at + 8)?.try_into().ok().map(u64::from_be_bytes)
 }
 
-pub(crate) struct DsdDecoder {
+/// Reads a DSD file's audio, chunk by chunk, into per-channel bytes (most
+/// significant bit first).
+pub(crate) struct ChunkReader {
     file: File,
+    layout: Layout,
+    /// The next byte (per channel) to read from the file.
+    read_pos: u64,
+    raw: Vec<u8>,
+}
+
+pub(crate) struct DsdDecoder {
+    reader: ChunkReader,
     layout: Layout,
     /// Per channel, the bytes read so far from byte `base`.
     bytes: Vec<Vec<u8>>,
     base: u64,
-    /// The next byte (per channel) to read from the file.
-    read_pos: u64,
     /// The next output frame.
     next: u64,
-    raw: Vec<u8>,
     frame: Vec<f32>,
 }
 
-impl DsdDecoder {
-    pub(crate) fn open_dsf(path: &Path) -> Result<Self, String> {
-        let mut file = File::open(path).map_err(|e| e.to_string())?;
-        let layout = dsf::layout(&mut file)?;
-        Self::new(file, layout)
-    }
+/// Opens `path` (a DSF or DSDIFF file, by its signature) for reading.
+pub(crate) fn open_reader(path: &Path, dff: bool) -> Result<ChunkReader, String> {
+    let mut file = File::open(path).map_err(|e| e.to_string())?;
+    let layout = if dff {
+        dff::layout(&mut file)?
+    } else {
+        dsf::layout(&mut file)?
+    };
+    layout.validate()?;
+    Ok(ChunkReader {
+        file,
+        layout,
+        read_pos: 0,
+        raw: Vec::new(),
+    })
+}
 
-    pub(crate) fn open_dff(path: &Path) -> Result<Self, String> {
-        let mut file = File::open(path).map_err(|e| e.to_string())?;
-        let layout = dff::layout(&mut file)?;
-        Self::new(file, layout)
-    }
-
-    fn new(file: File, layout: Layout) -> Result<Self, String> {
-        layout.validate()?;
-        Ok(Self {
-            file,
-            bytes: vec![Vec::new(); layout.channels],
-            base: 0,
-            read_pos: 0,
-            next: 0,
-            raw: Vec::new(),
-            frame: vec![
-                0.0;
-                if layout.channels > 2 {
-                    SLOTS
-                } else {
-                    layout.channels
-                }
-            ],
-            layout,
-        })
-    }
-
-    pub(crate) fn sample_rate(&self) -> u32 {
-        self.layout.rate / DECIMATION as u32
-    }
-
-    pub(crate) fn channels(&self) -> usize {
-        self.layout.channels
-    }
-
-    pub(crate) fn frames_hint(&self) -> Option<u64> {
-        Some(self.layout.frames())
-    }
-
-    pub(crate) fn seek(&mut self, secs: f64) -> Result<(), String> {
-        let target = (secs.max(0.0) * f64::from(self.sample_rate())).round();
-        // Saturating float-to-int conversion; clamped to the end.
-        let target = (target as u64).min(self.layout.frames());
-        let window_start = (target * BYTES_PER_FRAME).saturating_sub(WINDOW_BYTES / 2);
-        let start = match self.layout.block {
-            Some(block) => window_start - window_start % block,
-            None => window_start,
-        };
-        self.next = target;
-        self.base = start;
-        self.read_pos = start;
-        for ch in &mut self.bytes {
-            ch.clear();
-        }
-        Ok(())
-    }
-
+impl ChunkReader {
     /// Reads the next chunk of every channel. `false` at the end of the audio.
     /// DSF blocks are read several at a time (about `CHUNK_BYTES` per
     /// channel), so a file with tiny blocks costs no more reads than one
     /// with the usual 4096-byte blocks.
-    fn read_chunk(&mut self) -> Result<bool, String> {
+    pub(crate) fn read_chunk(&mut self, out: &mut [Vec<u8>]) -> Result<bool, String> {
         let layout = &self.layout;
         if self.read_pos >= layout.bytes {
             return Ok(false);
@@ -226,7 +190,7 @@ impl DsdDecoder {
                 .raw
                 .get(g * per_group * layout.channels..(g + 1) * per_group * layout.channels)
                 .unwrap_or_default();
-            for (c, out) in self.bytes.iter_mut().enumerate() {
+            for (c, out) in out.iter_mut().enumerate() {
                 let bytes: &mut dyn Iterator<Item = &u8> = match layout.block {
                     // DSF: one block per channel, one after the other.
                     Some(_) => &mut group
@@ -246,6 +210,79 @@ impl DsdDecoder {
         }
         self.read_pos += read;
         Ok(true)
+    }
+
+    /// The first byte a read can start at for `byte`: DSF reads whole block
+    /// groups, so the start of `byte`'s block.
+    pub(crate) fn aligned(&self, byte: u64) -> u64 {
+        match self.layout.block {
+            Some(block) => byte - byte % block.max(1),
+            None => byte,
+        }
+    }
+
+    pub(crate) fn set_read_pos(&mut self, at: u64) {
+        self.read_pos = at;
+    }
+}
+
+impl DsdDecoder {
+    pub(crate) fn open_dsf(path: &Path) -> Result<Self, String> {
+        Self::new(open_reader(path, false)?)
+    }
+
+    pub(crate) fn open_dff(path: &Path) -> Result<Self, String> {
+        Self::new(open_reader(path, true)?)
+    }
+
+    fn new(reader: ChunkReader) -> Result<Self, String> {
+        let layout = reader.layout.clone();
+        Ok(Self {
+            reader,
+            bytes: vec![Vec::new(); layout.channels],
+            base: 0,
+            next: 0,
+            frame: vec![
+                0.0;
+                if layout.channels > 2 {
+                    SLOTS
+                } else {
+                    layout.channels
+                }
+            ],
+            layout,
+        })
+    }
+
+    pub(crate) fn sample_rate(&self) -> u32 {
+        self.layout.rate / DECIMATION as u32
+    }
+
+    pub(crate) fn channels(&self) -> usize {
+        self.layout.channels
+    }
+
+    pub(crate) fn dsd_rate(&self) -> u32 {
+        self.layout.rate
+    }
+
+    pub(crate) fn frames_hint(&self) -> Option<u64> {
+        Some(self.layout.frames())
+    }
+
+    pub(crate) fn seek(&mut self, secs: f64) -> Result<(), String> {
+        let target = (secs.max(0.0) * f64::from(self.sample_rate())).round();
+        // Saturating float-to-int conversion; clamped to the end.
+        let target = (target as u64).min(self.layout.frames());
+        let window_start = (target * BYTES_PER_FRAME).saturating_sub(WINDOW_BYTES / 2);
+        let start = self.reader.aligned(window_start);
+        self.next = target;
+        self.base = start;
+        self.reader.set_read_pos(start);
+        for ch in &mut self.bytes {
+            ch.clear();
+        }
+        Ok(())
     }
 
     /// The whole window of channel `c` starting at byte `start`, when it lies
@@ -274,8 +311,8 @@ impl DsdDecoder {
             if self.next >= frames {
                 return Ok(false);
             }
-            let more = self.read_chunk()?;
-            let available = self.read_pos.min(self.layout.bytes);
+            let more = self.reader.read_chunk(&mut self.bytes)?;
+            let available = self.reader.read_pos.min(self.layout.bytes);
             let mut produced = false;
             while self.next < frames {
                 let start = (self.next * BYTES_PER_FRAME) as i64 - (WINDOW_BYTES / 2) as i64;

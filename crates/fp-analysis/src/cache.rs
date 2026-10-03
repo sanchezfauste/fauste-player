@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 use crate::analyze::Analysis;
 
 /// Bump when the analysis algorithm or output format changes.
-pub const ANALYSIS_VERSION: u32 = 6;
+/// 7: `AudioFormat::dsd_rate` (feedback 2 O25).
+pub const ANALYSIS_VERSION: u32 = 7;
 
 #[derive(Serialize, Deserialize)]
 struct CachedAnalysis {

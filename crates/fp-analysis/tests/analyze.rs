@@ -228,3 +228,44 @@ fn entries_of_older_analysis_versions_are_pruned() {
         "the current entry stays"
     );
 }
+
+/// A minimal stereo DSF at DSD64: `bytes` DSD bytes per channel.
+fn dsf_file(dir: &Path, bytes: usize) -> PathBuf {
+    const BLOCK: usize = 4096;
+    let groups = bytes.div_ceil(BLOCK);
+    let data = groups * BLOCK * 2;
+    let mut f = Vec::new();
+    f.extend_from_slice(b"DSD ");
+    f.extend_from_slice(&28u64.to_le_bytes());
+    f.extend_from_slice(&((92 + data) as u64).to_le_bytes());
+    f.extend_from_slice(&0u64.to_le_bytes());
+    f.extend_from_slice(b"fmt ");
+    f.extend_from_slice(&52u64.to_le_bytes());
+    for v in [1u32, 0, 2, 2, 2_822_400, 1] {
+        f.extend_from_slice(&v.to_le_bytes());
+    }
+    f.extend_from_slice(&((bytes * 8) as u64).to_le_bytes());
+    f.extend_from_slice(&(BLOCK as u32).to_le_bytes());
+    f.extend_from_slice(&0u32.to_le_bytes());
+    f.extend_from_slice(b"data");
+    f.extend_from_slice(&((12 + data) as u64).to_le_bytes());
+    // The DSD idle pattern (silence).
+    f.extend(std::iter::repeat_n(0x69u8, data));
+    let path = dir.join("a.dsf");
+    std::fs::write(&path, f).unwrap();
+    path
+}
+
+#[test]
+fn a_dsf_records_its_dsd_rate_and_a_wav_does_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let dsf = dsf_file(dir.path(), 2_822_400 / 8);
+    let a = analyze_file(&dsf, &settings(), &Limits::default()).unwrap();
+    let format = a.analysis.format.unwrap();
+    assert_eq!(format.dsd_rate, Some(2_822_400));
+    assert_eq!(format.sample_rate, 88_200);
+
+    let wav = fixture(dir.path(), "a.wav", 2);
+    let a = analyze_file(&wav, &settings(), &Limits::default()).unwrap();
+    assert_eq!(a.analysis.format.unwrap().dsd_rate, None);
+}
