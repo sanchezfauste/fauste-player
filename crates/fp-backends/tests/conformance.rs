@@ -149,8 +149,10 @@ fn every_available_system_conforms() {
 }
 
 /// DSD silence, word after word.
+#[cfg(target_os = "linux")]
 struct DsdSilence;
 
+#[cfg(target_os = "linux")]
 impl Renderer for DsdSilence {
     fn render(&mut self, out: &mut [f32], _channels: usize) {
         out.fill(fp_backends::dsd::silence_sample());
