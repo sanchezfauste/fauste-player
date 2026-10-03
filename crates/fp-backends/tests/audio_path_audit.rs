@@ -1,10 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! Probes for the audio path audit (feedback 2, O26):
-//! `docs/technical/audio-path-audit.md` §4.1. The shared-mode cpal path
-//! converts each sample with `T::from_sample` (`render_converted` in
-//! `src/cpal_backend.rs`), which is the conversion probed here. A probe
-//! that shows a confirmed defect is `#[ignore]`d with the finding's id until
-//! its fix task removes the attribute.
+//! `docs/technical/audio-path-audit.md` §4.1. They record what cpal's own
+//! `T::from_sample` does. The shared-mode path no longer uses it: since A7,
+//! `render_converted` in `src/cpal_backend.rs` converts with the private
+//! `OutputSample`, whose tests live next to it.
 
 use cpal::Sample;
 
@@ -17,7 +16,7 @@ const I24_MAX: i32 = (1 << 23) - 1;
 // to the private conversion. The tests below document what cpal itself does.
 
 #[test]
-fn integer_conversions_saturate_and_silence_nan_except_24_bit() {
+fn cpal_conversions_saturate_and_silence_nan_except_24_bit() {
     assert_eq!(i16::from_sample(1.5f32), i16::MAX);
     assert_eq!(i16::from_sample(-1.5f32), i16::MIN);
     assert_eq!(i16::from_sample(f32::NAN), 0);

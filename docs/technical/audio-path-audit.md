@@ -308,7 +308,7 @@ Evidence: exact for in-range integer PCM (`cpal_backend.rs` tests
 `conversion_to_i32_is_exact_for_24_bit_pcm`,
 `conversion_to_i24_is_exact_for_24_bit_pcm`); probes in
 `crates/fp-backends/tests/audio_path_audit.rs`:
-`integer_conversions_saturate_and_silence_nan_except_24_bit` (passes),
+`cpal_conversions_saturate_and_silence_nan_except_24_bit` (passes; cpal's own conversion, no longer used),
 `a7_the_24_bit_conversion_clips_instead_of_wrapping` (+1.0 becomes 8 388 608,
 read as −8 388 608) and `a7_the_16_bit_conversion_rounds_to_the_nearest_step`
 (100.75 steps become 100) both failed before the fix (they now live in
