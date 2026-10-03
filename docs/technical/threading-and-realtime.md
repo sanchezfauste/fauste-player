@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | Device callback, one per open output | set by the backend | real-time (rtkit/SCHED_FIFO on Linux, MMCSS on Windows, time-constraint on macOS, through cpal's `audio_thread_priority`) | nothing: it borrows the bus `Mixer` through `try_lock` | **never** |
 | Null output, one per open Null device | `fp-null-output` | normal | paces the mixer of a Null bus in real time | sleeps between blocks |
+| Native DSD output, one per open native stream (Linux) | `fp-alsa-dsd` | real-time (`audio_thread_priority`) | an ALSA PCM in a DSD format, and the bus renderer | waits for room in the device buffer with a timeout (at least 20 ms), never in the render |
 | Virtual clock, one per lost bus | `fp-virtual-clock` | normal | renders the same mixer at real-time pace while the device is lost | sleeps between blocks |
 | Decode worker, one per player, and one for the cartwall | `fp-player-<id>`, `fp-cartwall` | above normal, not real time (`fp_decode::priority`) | producer halves of the player's sources; decoders and resamplers | file I/O |
 | Conductor | `fp-conductor` | normal | `AppState`, the `Engine` and all bus bookkeeping | no: it polls with a tick of `tuning.conductor_tick_ms` (5 ms) |
@@ -74,6 +75,13 @@ The mixer (`fp-engine/src/mixer.rs`) runs on the device callback. It must not:
   (cpal's error callback can run on the real-time thread, so the backend only
   counts); it is not an xrun. Indexing uses `get` (enforced by
   `clippy::indexing_slicing`), and there is no `unwrap`.
+
+DSD adds no exception. In DSD mode the mixer copies words and fills with the
+DSD silence word, the DoP encoder (`DopEncoder::encode_in_place`) works in
+place on the block, and the native packing (`pack_native`) writes into a
+buffer the `fp-alsa-dsd` thread allocated before its loop. None allocates,
+locks or logs; DSD sources and switches arrive through `BusCommand`, and
+sources leave through `Retired` as usual.
 
 Tests enforce this: `assert_no_alloc` wraps `Mixer::render` and fails on any
 allocation or free.

@@ -86,6 +86,11 @@ audio engine that the interface can never block.
   following each file's sample rate while idle; at 100 % volume with no fade
   or overlap the samples reach it unchanged, and a BP badge says so (ALSA
   `hw:` devices, WASAPI exclusive mode, Core Audio hog mode).
+- **DSD output:** on a bit-perfect device, a DSD track can reach the converter
+  unchanged, as DoP (every system) or as native DSD (Linux, ALSA `hw:`
+  devices whose driver reports a DSD format), with a DSD badge. DoP and native
+  DSD are checked on simulated devices only; a check on a real converter is
+  still to do.
 - **Routing per player:** Main and Cue outputs on any device and channel
   pair. Multichannel interfaces carry several players at once.
 - **Resilient:**
@@ -119,7 +124,7 @@ With nothing configured, the first available system is used, in this order:
 Systems that are missing on a machine show as unavailable in Settings; the
 application still starts.
 
-Formats: WAV, AIFF, CAF, FLAC, MP3 (and MP1/MP2), AAC/M4A, ALAC, Ogg Vorbis, Opus, WavPack, Monkey's Audio (APE), DSD (DSF and DFF) and Matroska audio (MKA). DSD is converted to PCM. Whole programme recordings play like songs: a 4-hour file is analysed in under a minute, with memory that does not grow with its length, and seeks at once.
+Formats: WAV, AIFF, CAF, FLAC, MP3 (and MP1/MP2), AAC/M4A, ALAC, Ogg Vorbis, Opus, WavPack, Monkey's Audio (APE), DSD (DSF and DFF) and Matroska audio (MKA). DSD plays converted to PCM, or unchanged on bit-perfect devices as DoP or native DSD. Whole programme recordings play like songs: a 4-hour file is analysed in under a minute, with memory that does not grow with its length, and seeks at once.
 
 ## Install
 

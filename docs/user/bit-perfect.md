@@ -58,17 +58,81 @@ The switch is disabled when the device cannot give exclusive access.
 
 ## DSD
 
-Under each bit-perfect device, Settings → Audio outputs has a **DSD** choice:
-**Convert to PCM** (the default), **DoP** (DSD over PCM, for most DSD-capable
-converters) and, on Linux only, **Native DSD** for hardware devices whose
-driver reports a DSD format. With DoP or native DSD, a stereo DSD track reaches
-the device unchanged while nothing else plays on it and the player's volume is
-100 %; the header badge then reads **DSD** instead of **BP**. Moving the
-fader, a fade or another source continues the track as PCM, unless **When
-another source needs a DSD output** is set to **Keep DSD and mute the other
-sources**: the player's next track then waits for the end of the DSD track and
-the **Others muted** badge shows meanwhile. Changing these settings needs a
-restart, like the other output settings.
+A DSD file normally plays converted to PCM, like any other file. A
+bit-perfect device can instead receive the DSD stream unchanged.
+
+**The three modes.** Under each bit-perfect device, Settings → Audio outputs
+has a **DSD** choice, next to the device's bit-perfect switch:
+- **Convert to PCM** (the default): DSD is converted, as on any other device.
+- **DoP** (DSD over PCM): the DSD bits travel inside 24-bit PCM samples, which
+  most DSD-capable converters recognise. It works on every system.
+- **Native DSD** (Linux only): raw DSD, for ALSA `hw:` devices whose driver
+  reports a DSD sample format.
+
+Only the modes the device can take are offered. Changing a mode, the mixing
+setting or the DSD silence needs a restart, like the other output settings.
+
+**When DSD goes out unchanged.** All of these must hold when the track
+starts:
+- the device is bit-perfect, with exclusive access, and its mode is DoP or
+  native DSD;
+- the track is DSD (DSF or DFF), mono or stereo, and has been analysed (that
+  is how its DSD rate is known);
+- the player's volume is at 100 %;
+- nothing else plays on the device (another player, a cart, a test tone);
+- the device accepts the stream. DoP needs a device rate of the DSD rate
+  divided by 16 (176.4 kHz for DSD64, 352.8 kHz for DSD128, 705.6 kHz for
+  DSD256) and a 24- or 32-bit format. Native DSD needs a device that takes
+  the DSD format at that rate.
+
+Otherwise the track is converted to PCM and the log says why (for example
+"something else plays on the device" or "the device refused 705600 Hz").
+Pre-listen and carts are always converted.
+
+While DSD goes out unchanged:
+- the header badge reads **DSD** instead of **BP**;
+- the meters show the level of the PCM conversion of the same track, so they
+  work as usual;
+- the volume must stay at 100 %: the fader's tooltip says so. Moving it
+  switches the track to PCM (see below);
+- Stop and a fade stop stop the track at once, with no fade, since a DSD
+  stream cannot be faded. Pressing Play on another track while it plays cuts
+  it the same way instead of crossfading;
+- pause and resume also act at once, without a ramp.
+
+**Silence at the edges.** Every start, end and switch to PCM sends DSD
+silence first (200 ms by default), so that the converter locks without a
+click. A track therefore starts that much later, and a switch to PCM leaves a
+gap of that length. It is `outputs.dsd_silence_ms` in the configuration file
+(0 to 2000).
+
+**When another source needs the device.** **When another source needs a DSD
+output** in Settings → Audio outputs chooses what happens when the player
+moves its fader, or when another player, a cart or a test tone starts on
+the same device:
+- **Continue the DSD track as PCM** (the default). The stream switches to PCM
+  after the DSD silence, and the track goes on, converted, from where it was.
+  The same happens to the track that follows by itself (see below).
+- **Keep DSD and mute the other sources.** Nothing interrupts the DSD stream.
+  Other sources routed to the device are muted until the DSD track ends, and
+  the player shows an **Others muted** badge meanwhile. The player's own next
+  track does not overlap: it starts when the DSD track ends, after the DSD
+  silence, with no crossfade or segue. Moving the fader still switches the
+  track to PCM.
+
+**An album does not stay DSD under the default setting.** With *Continue the
+DSD track as PCM*, only a DSD track that starts on an idle device goes out as
+DSD. The tracks the player starts by itself afterwards (at the end of a
+track, a segue or a crossfade) start from a preload, which is always PCM, so
+the device switches to PCM and they play converted. A track you start
+yourself (Play, double click) goes out as DSD again when the device is idle
+or the previous DSD stream is still in its silence at the same DSD rate. To
+keep a whole DSD album as DSD, choose *Keep DSD and mute the other sources*.
+Then each track of the player goes out as DSD, and the next one starts when
+the previous one ends.
+
+If the device is lost while DSD plays and comes back unable to carry it (for
+example without exclusive access), the track goes on as PCM.
 
 ## The BP badge
 
@@ -78,8 +142,9 @@ its Main device unchanged. All of these must hold:
 - the device is bit-perfect and open with exclusive access;
 - the device runs at the track's sample rate;
 - the track is lossless integer PCM (WAV, AIFF, FLAC, ALAC, WavPack or
-  Monkey's Audio; DSD is converted, so it never is), mono or stereo, and at most
-  24-bit, and the device format holds its sample size (a 24-bit file on a
+  Monkey's Audio), mono or stereo, and at most 24-bit. DSD is converted, so
+  it never lights BP; when it goes out unchanged (see [DSD](#dsd)) the badge
+  reads **DSD** instead, and the device format holds its sample size (a 24-bit file on a
   16-bit device is not bit-perfect);
 - the track has been analysed, since that is how its rate and sample size
   are known. Tracks an earlier version analysed get their format once
@@ -108,3 +173,26 @@ To verify a chain end to end:
 
 The project's automated tests check the same property inside the
 application, on a simulated device.
+
+### DSD on a real converter
+
+The automated tests check DSD on simulated devices only. DoP and native DSD
+have not been tried on a real converter by the project. To check one:
+1. Set the device to **DoP** (or **Native DSD** on Linux), restart, and play
+   a DSD file at 100 % with nothing else playing. The header must show
+   **DSD**, and the converter's own display should show the DSD rate (for
+   example DSD64) instead of a PCM rate. A converter that shows a PCM rate
+   or plays noise does not recognise the stream: go back to **Convert to
+   PCM**.
+2. Listen for a click or a burst of noise at the start, at Stop, at the end
+   of the track and when moving the fader. A click means the converter needs
+   a longer `outputs.dsd_silence_ms`.
+3. Start a cart or another player on the same device, once with each mixing
+   setting, and check the behaviour described above.
+4. On Linux, to check native DSD without the application, run
+   `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0 cargo test -p fp-backends --test conformance -- --ignored native_dsd_on_a_real_device`.
+   It opens the device in native DSD at DSD64 and plays one second of DSD
+   silence. It must pass, and the converter should lock to DSD64.
+5. With DSD files in `test-music/`, `cargo test --release -p fp-engine --test dsd_real_music -- --ignored`
+   plays them through the engine on a simulated device and compares the
+   words with the file's bytes (see [Testing](../technical/testing.md)).

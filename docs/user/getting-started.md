@@ -119,7 +119,8 @@ plays until you press Play: this is also true after a restart or a crash.
 
 Supported formats: WAV, AIFF, CAF, FLAC, MP3 (and MP1/MP2), AAC/M4A, ALAC, Ogg Vorbis, Opus, WavPack, Monkey's Audio (APE), DSD (DSF and DFF) and Matroska audio (MKA).
 DSD files play converted to PCM at their rate divided by 32 (88.2 kHz for
-DSD64). Opus always plays at 48 kHz. WavPack files must be lossless and mono
+DSD64), or unchanged as DoP or native DSD on a bit-perfect device set to do
+so (see [Bit-perfect output](bit-perfect.md#dsd)). Opus always plays at 48 kHz. WavPack files must be lossless and mono
 or stereo; hybrid and multichannel WavPack show as unreadable, as do
 DST-compressed DFF files.
 

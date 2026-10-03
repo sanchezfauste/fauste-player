@@ -39,6 +39,28 @@
     audio library does not support. Use that card through `plughw:` (not
     bit-perfect) instead.
 
+### DSD
+
+- **A DSD track plays converted although the device is set to DoP or native
+  DSD.** The log says why ("DSD converted to PCM" and the reason). The usual
+  causes are the player's volume not at 100 %, something else playing on the
+  device, a track that has not been analysed yet, more than two channels, or
+  a device that refuses the rate (DoP needs the DSD rate divided by 16, for
+  example 176.4 kHz for DSD64) or has no 24- or 32-bit format.
+- **Only the first track of a DSD album goes out as DSD.** That is the
+  default mixing setting: the tracks the player starts by itself play
+  converted. Choose **Keep DSD and mute the other sources** in Settings →
+  Audio outputs to keep them DSD. See [DSD](bit-perfect.md#dsd).
+- **The header shows DSD but the converter plays noise or does not lock.**
+  The converter does not recognise DoP (or the native format). Set the device
+  back to **Convert to PCM**.
+- **A click when a DSD track starts, stops or leaves DSD.** The converter
+  needs more DSD silence: raise `outputs.dsd_silence_ms` (200 by default) in
+  the configuration file.
+- **Other players or carts are silent on the device.** A DSD track is playing
+  with **Keep DSD and mute the other sources**; the **Others muted** badge
+  shows. They sound again when the track ends.
+
 ## "Output lost" alert
 
 The status bar shows **Output lost: <device>** when a device stops responding.

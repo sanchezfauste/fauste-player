@@ -190,6 +190,112 @@ cannot hang the conductor.
   an Offline device. It covers the rate changes and refusals, and a
   bit-exact comparison of every rendered sample with the file.
 
+### DSD buses
+
+A bit-perfect bus whose device has a DSD mode (`outputs.dsd_output`: `Dop` or
+`Native`) can carry a DSD track unchanged (O25). The code is
+`engine/dsd.rs` (the decision and the bookkeeping, on the conductor thread),
+plus the mixer's DSD mode.
+
+- **The word stream.** DSD travels as 16-bit words (two bytes per channel, the
+  first byte first in time), one word per `f32` sample, at the word rate
+  (DSD rate ÷ 16), which is also the bus rate. `source_pair_dsd` makes a
+  source with two rings of the same length: the words, and the PCM conversion
+  of the same file, resampled to the bus rate like any source. They fill and
+  drain in lockstep
+  (`push_pair`, `pop_pair`), so a seek or an underrun cannot misalign them.
+  Each ring holds `tuning.prebuffer_secs` at the word rate, about 14 MB per
+  DSD64 source and 56 MB per DSD256 source. The worker reads the raw bytes
+  with `DsdRawReader` (`dsd_file_opener`) and converts the same file to PCM
+  with `file_opener`.
+- **The mixer's DSD mode** (`BusCommand::DsdMode { on, at_frame }`, up to four
+  pending switches ordered by frame). In DSD mode:
+  - a DSD source's words are copied to the output as they are (no gain, no
+    ramp, no resampling); a fade, ramp or volume that falls due settles at
+    its target without being applied, and a ramp in progress freezes and
+    resumes when the mode ends;
+  - every other slot is consumed without being written (muted);
+  - the idle fill is the DSD silence word (`0x69 0x69`) instead of `0.0`, also
+    when the device lock is missed;
+  - the meters read the PCM ring at unity gain;
+  - `mark_unaltered` is false, so BP is not lit.
+  `BusCommand::HoldAll { from_frame, until_frame }` holds every slot (no
+  consume, start or stop) for the blocks overlapping the range; with equal
+  frames only the block straddling it. It lines a PCM start up with a mode
+  switch, and holds the mixer while a native stream is reopened as PCM.
+- **The DoP stage.** `MixerRenderer` (the device-side renderer) runs a
+  `DopEncoder` over the block after the mixer, only in DoP streams, keeping
+  the marker alternation across blocks; native streams pack the words in the
+  backend.
+- **The decision.** `try_start_dsd` runs in `start_current` and `resume` (a
+  track loaded paused), the two places that open the source on air. It builds
+  `DsdFacts` (the device's mode, the track's format, the player's volume, and
+  whether the device is idle) and asks `fp_model::dsd_decision`, which
+  returns a `DsdTarget` or a `DsdFallback`: `ModeIsPcm`, `NotDsd`,
+  `Multichannel`, `VolumeNotUnity`, `DeviceBusy`, `RateRefused`,
+  `FormatTooNarrow` or `StreamRefused`. Every fallback but the first two is
+  logged ("DSD converted to PCM"). A track that falls back plays through the
+  PCM path. A preload is never turned into a DSD source (it is PCM); a DSD
+  start releases a PCM preload of the same entry.
+  - `open_dsd_stream` reopens the bus at the word rate with `dsd` set
+    (`Bus::reopen_with`, exclusive only) and checks `Bus::dsd_fits`. A refusal
+    restores the previous configuration and is remembered per
+    `(word rate, kind)` (`refused_dsd`, cleared when the device comes back).
+    The refusal is classified as `RateRefused` when the device's listed rates
+    lack the word rate, else `StreamRefused`; `FormatTooNarrow` is the
+    engine's own DoP format check.
+  - Pre-listen and carts never go out as DSD.
+- **Silence and tails** (`DsdState`, per bus: `Playing`, `Tail`,
+  `Switching`). The DSD silence (`outputs.dsd_silence_ms`) goes out before a
+  DSD source starts (`Playing::not_before`), after it ends (`Tail`) and across
+  a switch to PCM. A DSD start on a bus in `Tail` at the same kind and word
+  rate takes the stream over with no extra silence (the converter is still
+  locked); `DsdEnded` is reported for the old entry. At the end of a tail
+  (`end_dsd_streams`, from `tick`) a DoP bus leaves DSD mode and a native bus
+  is reopened as PCM at the same rate (its stream closes first, so no PCM
+  block reaches it). A PCM start over a tail or a switch waits until it ends
+  (`before_start_on`).
+- **The two mix policies** (`outputs.dsd_mix`), applied by `before_start_on`
+  to any start on a bus carrying DSD (the starts loop, `current_finished`,
+  `dispatch`, carts, test tones):
+  - `ConvertToPcm`: `switch_to_pcm` holds the bus for the DSD silence, then
+    leaves DSD mode, and the DSD source goes on from its PCM ring where it
+    held. `dispatch` moves the whole transition (the next start, the
+    current's stop or fade, the `Dispatched` frame) by that delay. The
+    player's own next track comes from a PCM preload, so it always plays
+    converted: only the first DSD track after an idle device, or one the
+    operator starts (a new start goes through the decision again, and takes a
+    tail over), goes out as DSD.
+  - `HoldOthers`: nothing interrupts the stream, and the other sources are
+    muted by the mixer's DSD mode. The model does not plan an overlapping
+    start for a held player (`dsd_holds`: a crossfade becomes a hard start,
+    and `StartNextAt` is replaced by a start from `ReachedEnd`, in
+    `dsd_hold_continue`), so each track starts after the previous one's tail.
+- **Leaving DSD.** The model sends `EngineAction::LeaveDsd` when the volume
+  leaves exactly 1.0 (`SetVolume`); `leave_dsd` is `switch_to_pcm`. A fade
+  stop of a DSD player is a `Stop` in the reducer (`fade_stop`), and
+  `Engine::fade_out` cuts a DSD source with a `Cancel` and a release (no
+  fade, no de-click), which also serves `Stop`, `StopNow`, a crossfade out
+  of it and a seek (the new source takes its place). Pause and resume use no
+  ramp.
+- **Telemetry and events.** `PlayerTelemetry::dsd` is true while the current
+  source is the `Playing` slot of a DSD bus, and `is_bit_perfect` is false then.
+  `EngineEvent::DsdStarted { player, entry, hold_others }` is sent when the
+  mixer starts the source (after a re-check of the volume, which switches to
+  PCM instead if it left unity meanwhile), and `DsdEnded` when the stream
+  ends, switches to PCM or is taken over. The model keeps it in
+  `PlayerState::dsd`; `bp_badge` and `dsd_holds_others` drive the badge and the
+  notice.
+- **Device loss.** The watchdog reconnects through `Bus::reconnect`. A DSD
+  configuration comes back only with exclusive access and a stream that fits
+  (`dsd_fits`); otherwise the present device is reopened as PCM at the same
+  rate, `dsd_lost` is set, and `dsd_stream_lost` drops the record and reports
+  `DsdEnded`: the DSD track goes on from its PCM ring. If the PCM open fails
+  too, the DSD configuration is restored for the next retry.
+- **Tests:** `tests/dsd_mixer.rs` (the mixer's modes, under `assert_no_alloc`)
+  and `tests/dsd_output.rs` (the engine on Offline devices, byte for byte);
+  `tests/dsd_real_music.rs` is opt-in (see [Testing](testing.md)).
+
 ## Engine
 
 `Engine` (`engine.rs`) executes model `EngineAction`s:

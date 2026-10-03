@@ -54,6 +54,8 @@ Changes in this section wait for a restart: see
 | Test Main / Test Cue | Plays a short tone (1 kHz on Main, 440 Hz on Cue, 1.5 s, −18 dBFS) on the chosen output, so you can check the wiring before going on air |
 | Cartwall | The cartwall's Main and Cue outputs. Main defaults to the system output. Without a Cue there is no cart pre-listen. |
 | Bit-perfect devices | One switch per device chosen above. A bit-perfect device is opened with exclusive access and follows each file's sample rate while nothing plays on it. The switch is disabled where the device cannot give exclusive access. See [Bit-perfect output](bit-perfect.md). |
+| DSD (per bit-perfect device) | **Convert to PCM** (the default), **DoP** or, on Linux, **Native DSD**. Only the modes the device can take are offered. With DoP or native DSD, a DSD track reaches the device unchanged when nothing else plays on it and the player's volume is 100 %. See [DSD](bit-perfect.md#dsd). |
+| When another source needs a DSD output | **Continue the DSD track as PCM** (the default), or **Keep DSD and mute the other sources**. See [DSD](bit-perfect.md#dsd). |
 
 A Cue output never falls back to the output Main uses. A Cue that names a
 device on an audio system this computer does not have, or the same output as

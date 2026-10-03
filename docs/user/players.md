@@ -12,7 +12,7 @@ playlist tabs, transport, volume and outputs.
 | **Mixing** / **Fading** badge | A crossfade into the next track, or a fade stop, is running |
 | **Stop after** badge | The player stops when the current track ends |
 | **Repeat** / **Stop after track** badge | The current track repeats, or stops the player when it ends, because of its own mark in the playlist menu. Hover for the full sentence. The player's own **Stop after** button wins: while it is on, only its badge shows |
-| **BP** | Lit while the current track reaches its Main device unchanged (see [Bit-perfect output](bit-perfect.md)) |
+| **BP** / **DSD** | **BP** is lit while the current track reaches its Main device unchanged. **DSD** replaces it while a DSD track goes out as DSD, unchanged (see [Bit-perfect output](bit-perfect.md)). **Others muted** shows beside it when that DSD stream keeps other sources off the output |
 | **SINGLE** \| **CONT** | Play mode (see below): one joined control, the lit half is the active mode |
 | **CUE** | Pre-listen the next track on the CUE output |
 
@@ -51,6 +51,21 @@ playlist tabs, transport, volume and outputs.
     ±1 LU of the target (−23 LUFS).
   - The meter type and every level can be changed in
     [Settings → Meters](settings.md#meters).
+  - **Readings above 0 dBFS.** The meter shows what the player puts out, and
+    that can exceed full scale. The bar stops at the top of the scale, so
+    the same red shows 0 dBFS and anything above it; only the number above
+    tells how far, with its sign (for example `+3.5`).
+    - A file can carry levels above full scale itself (a float file, or a
+      lossy file whose decoded peaks exceed it).
+    - Converting the rate can create peaks between the samples: a signal
+      that touches 0 dBFS reads about +3 dBFS after 44.1 → 48 kHz. The
+      true-peak option reads those peaks too.
+    - The meter reads each player alone, not the sum on the device: two
+      players on one output can add up above full scale without either
+      meter showing it.
+    - Nothing in the player adds gain above 100 %. An integer device clips
+      at full scale; a float device receives the level as it is and the
+      sound system or driver clips it.
 - **Volume fader** (right of the meter, as tall as it): drag it or use the mouse wheel, one step per notch. The
   tooltip shows the level in dB; the top is 0 dB and the bottom is silence.
 - **Title, artist** and the **next** line, with a green square. While CUE is

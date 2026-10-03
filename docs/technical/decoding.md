@@ -91,6 +91,20 @@ it yields exactly the samples of a decode from the start. DSF blocks are read
 several at a time (about 4096 bytes per channel), so a file with tiny blocks
 costs no more reads than the usual one.
 
+`FileDecoder::dsd_rate()` gives the DSD rate of a DSD file (`None` for every
+other format); analysis stores it in `AudioFormat::dsd_rate`, and
+`AudioFormat::sample_rate` stays the rate of the PCM conversion.
+
+**Raw bytes for DSD output** (O25). `DsdRawReader` (`dsd/raw.rs`) reads a DSF
+or uncompressed DSDIFF file as per-channel DSD bytes, most significant bit
+first in time whatever the container (`next_bytes`), with `dsd_rate`,
+`channels`, `len_bytes` and `seek`. A seek lands on round(secs × rate ÷ 8)
+bytes, rounded down to an even byte (one 16-bit word). It shares the
+`ChunkReader` (header layout and block reading, the same code as the
+converting decoder) with `DsdDecoder`, so both read a file identically.
+The engine reads the same file twice, raw for the output and converted for the
+meters and for the switch to PCM (`dsd_file_opener`).
+
 ## WavPack
 
 `wavpack.rs` indexes the block headers when it opens the file, and decodes one
