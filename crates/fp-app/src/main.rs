@@ -166,7 +166,6 @@ fn run(
         .collect();
     let listed: Vec<(&str, bool)> = availability
         .iter()
-        .filter(|(id, _)| id != "null")
         .map(|(id, ok)| (id.as_str(), *ok))
         .collect();
     let mut settings = EngineSettings::from_config(&config);

@@ -159,7 +159,7 @@
 - **O5 Null backend.** The `null` backend is left out of the audio system
   list, unless it is the one configured. It is then shown as "No output
   (silent)". It stays available in the configuration file for tests and
-  headless use.
+  headless use. (O27 reverses the hiding: it is always listed, last.)
 
 ## 4. Plan 3 — Meter scale
 

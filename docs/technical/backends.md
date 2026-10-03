@@ -95,6 +95,8 @@ the bus logs it when it falls back to shared.
 | `NullBackend` | `null` | all | Discards audio at real-time pace; keeps timelines running with no sound card |
 | `OfflineBackend` | `offline` | tests | Devices rendered on demand on the caller's thread, for sample-exact tests |
 
+The Settings list shows `null` last, as "No output (silent)"; `preferred_backend` ranks it after every other system, so it is the default only when nothing else is available.
+
 `system_backends()` returns one `CpalBackend::for_host` for every host
 compiled into the build (`cpal::ALL_HOSTS`), in the OS preference order.
 Nothing connects to a system until it is first used.

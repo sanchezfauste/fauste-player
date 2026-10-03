@@ -658,15 +658,16 @@ fn slider<T: egui::emath::Numeric>(
     response.changed()
 }
 
-/// The audio systems the list offers. `null` (silence) is for tests and
-/// headless use: it shows only when the configuration names it
-/// (feedback 2 spec O5).
+/// The audio systems the list offers: the real systems in their order, then
+/// `null` as "No output (silent)" (feedback 2 spec O27, which reverses the
+/// hiding part of O5).
 fn listed_backends<'a>(
     all: &'a [BackendChoice],
-    configured: Option<&str>,
+    _configured: Option<&str>,
 ) -> Vec<&'a BackendChoice> {
     all.iter()
-        .filter(|b| b.id != "null" || configured == Some("null"))
+        .filter(|b| b.id != "null")
+        .chain(all.iter().filter(|b| b.id == "null"))
         .collect()
 }
 
@@ -1799,16 +1800,16 @@ mod tests {
     }
 
     #[test]
-    fn null_is_listed_only_when_configured() {
-        let all = [choice("alsa"), choice("null")];
+    fn null_is_always_listed_after_the_real_systems() {
+        let all = [choice("null"), choice("alsa"), choice("jack")];
         let ids = |configured| -> Vec<String> {
             listed_backends(&all, configured)
                 .into_iter()
                 .map(|b| b.id.clone())
                 .collect()
         };
-        assert_eq!(ids(None), vec!["alsa"]);
-        assert_eq!(ids(Some("alsa")), vec!["alsa"]);
-        assert_eq!(ids(Some("null")), vec!["alsa", "null"]);
+        assert_eq!(ids(None), vec!["alsa", "jack", "null"]);
+        assert_eq!(ids(Some("alsa")), vec!["alsa", "jack", "null"]);
+        assert_eq!(ids(Some("null")), vec!["alsa", "jack", "null"]);
     }
 }

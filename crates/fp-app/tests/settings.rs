@@ -447,13 +447,15 @@ fn outputs_with_null(
 }
 
 #[test]
-fn the_null_backend_is_not_offered() {
+fn the_null_backend_is_offered_as_no_output() {
     let mut h = outputs_with_null(Some("offline"));
     h.get_by_value("Offline").click();
     h.run_steps(2);
-    assert!(h.query_by_label("System default").is_some());
-    assert!(h.query_by_label("Null").is_none());
-    assert!(h.query_by_label("No output (silent)").is_none());
+    assert!(h.query_by_label("No output (silent)").is_some());
+    assert!(
+        h.query_by_label("Null").is_none(),
+        "never by its internal name"
+    );
 }
 
 #[test]
