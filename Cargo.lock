@@ -1752,6 +1752,7 @@ dependencies = [
  "objc2-core-audio-types",
  "rtrb",
  "thiserror 2.0.21",
+ "tracing",
  "wasapi",
 ]
 

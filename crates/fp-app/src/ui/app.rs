@@ -147,6 +147,84 @@ pub(crate) struct ViewState {
     /// O35).
     pub tab_scroll: HashMap<PlayerId, TabScroll>,
     notice: Option<(String, f64)>,
+    /// Dropouts the engine counted, as the status bar alerts show them.
+    dropouts: Dropouts,
+}
+
+/// Where a dropout was counted.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+enum DropoutSource {
+    /// Source underruns on a player (decoding did not keep up).
+    Player(PlayerId),
+    /// Xruns reported by an output device.
+    Device(String),
+}
+
+/// The count last seen for each place that can drop out, and until when its
+/// alert shows: `NOTICE_SECS` after the last increase (audit A8).
+#[derive(Default)]
+struct Dropouts(HashMap<DropoutSource, (u64, f64)>);
+
+impl Dropouts {
+    /// Notes this frame's counts. A place seen for the first time sets the
+    /// baseline: only increases seen from then on raise an alert. A count
+    /// that fell is a new source on the player, which starts again at zero.
+    fn observe(&mut self, telemetry: &Telemetry, time: f64) {
+        let counts = telemetry
+            .players
+            .iter()
+            .map(|(id, t)| (DropoutSource::Player(*id), t.underruns))
+            .chain(telemetry.buses.iter().map(|b| {
+                (
+                    DropoutSource::Device(b.key.device.clone()),
+                    b.counters.xruns,
+                )
+            }));
+        for (source, count) in counts {
+            match self.0.entry(source) {
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert((count, f64::NEG_INFINITY));
+                }
+                std::collections::hash_map::Entry::Occupied(mut o) => {
+                    let (seen, until) = o.get_mut();
+                    if count > *seen || (count < *seen && count > 0) {
+                        *until = time + NOTICE_SECS;
+                    }
+                    *seen = count;
+                }
+            }
+        }
+    }
+
+    /// The alerts to show at `time`, players first, in a fixed order.
+    fn alerts(&self, time: f64, players: &[PlayerId], t: &I18n) -> Vec<String> {
+        let mut active: Vec<_> = self
+            .0
+            .iter()
+            .filter(|(_, (_, until))| *until > time)
+            .collect();
+        active.sort_by(|a, b| a.0.cmp(b.0));
+        active
+            .into_iter()
+            .filter_map(|(source, (count, _))| match source {
+                DropoutSource::Player(id) => {
+                    let n = players.iter().position(|p| p == id)? + 1;
+                    let player = t.tr_args("player-label", &[("n", n.into())]);
+                    Some(t.tr_args(
+                        "alert-underruns",
+                        &[("player", player.into()), ("count", (*count).into())],
+                    ))
+                }
+                DropoutSource::Device(device) => Some(t.tr_args(
+                    "alert-xruns",
+                    &[
+                        ("device", device.clone().into()),
+                        ("count", (*count).into()),
+                    ],
+                )),
+            })
+            .collect()
+    }
 }
 
 /// What a frame draws from, shared by the parts of the screen.
@@ -479,6 +557,7 @@ impl AppUi {
         let telemetry = self.ctl.telemetry();
         let time = ctx.input(|i| i.time);
         self.view.rows_built = 0;
+        self.view.dropouts.observe(&telemetry, time);
         self.view.file_drop = None;
         if !egui::DragAndDrop::has_any_payload(&ctx) {
             self.view.drop = None;
@@ -1587,6 +1666,8 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, platform: 
             )
         })
         .collect();
+    let ids: Vec<PlayerId> = scene.state.players.iter().map(|p| p.id).collect();
+    alerts.extend(view_state.dropouts.alerts(scene.time, &ids, t));
     if faults > 0 {
         alerts.push(t.tr_args("alert-services-fault", &[("count", faults.into())]));
     }

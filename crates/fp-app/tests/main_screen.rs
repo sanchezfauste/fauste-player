@@ -412,6 +412,70 @@ fn the_bp_badge_follows_telemetry() {
     assert!(h.query_by_label("Bit-perfect: on").is_some());
 }
 
+/// Publishes a telemetry with `underruns` on the first player and `xruns` on
+/// one bus.
+fn publish_dropouts(fake: &Fake, underruns: u64, xruns: u64) {
+    fake.telemetry
+        .store(std::sync::Arc::new(fp_engine::conductor::Telemetry {
+            players: vec![(
+                fake.player(0),
+                fp_engine::engine::PlayerTelemetry {
+                    underruns,
+                    ..Default::default()
+                },
+            )],
+            buses: vec![fp_engine::engine::BusStatus {
+                key: fp_engine::bus::BusKey {
+                    backend: "offline".into(),
+                    device: "Main out".into(),
+                },
+                health: fp_engine::bus::BusHealth::Ok,
+                error: None,
+                counters: fp_engine::engine::BusCounters {
+                    xruns,
+                    ..Default::default()
+                },
+            }],
+            ..Default::default()
+        }));
+}
+
+#[test]
+fn an_underrun_shows_an_alert_that_fades() {
+    let (mut h, fake) = harness(state(1, 1));
+    publish_dropouts(&fake, 0, 0);
+    h.run_steps(2);
+    assert!(h.query_by_label_contains("audio dropouts").is_none());
+    publish_dropouts(&fake, 3, 0);
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("P1: audio dropouts (3)").is_some(),
+        "the alert names the player and the count"
+    );
+    // The count stays the same: the alert fades after the notice time.
+    h.run_steps(300);
+    assert!(h.query_by_label_contains("audio dropouts").is_none());
+    // A new increase brings it back.
+    publish_dropouts(&fake, 4, 0);
+    h.run_steps(2);
+    assert!(h.query_by_label("P1: audio dropouts (4)").is_some());
+}
+
+#[test]
+fn an_xrun_shows_an_alert_naming_the_device() {
+    let (mut h, fake) = harness(state(1, 1));
+    publish_dropouts(&fake, 0, 0);
+    h.run_steps(2);
+    publish_dropouts(&fake, 0, 2);
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("Main out: audio device dropouts (2)")
+            .is_some()
+    );
+    h.run_steps(300);
+    assert!(h.query_by_label_contains("dropouts").is_none());
+}
+
 #[test]
 fn a_shortcut_key_does_not_also_press_the_focused_button() {
     let mut s = state(1, 1);

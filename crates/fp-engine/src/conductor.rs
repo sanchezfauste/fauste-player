@@ -16,8 +16,69 @@ use fp_model::{
     apply, on_event,
 };
 
+use crate::bus::BusKey;
 use crate::engine::{BusStatus, CartTelemetry, Engine, PlayerTelemetry};
 use crate::meter::MeterState;
+pub use crate::reporting::REPORT_WINDOW;
+use crate::reporting::{Increase, Watch};
+
+/// A counter of the real-time side that the conductor watches (audit A8).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Counted {
+    Xruns(BusKey),
+    StreamErrors(BusKey),
+    LockMisses(BusKey),
+    Leaked(BusKey),
+    DroppedEvents(BusKey),
+    Misrouted(BusKey),
+    Underruns(PlayerId),
+}
+
+fn log_increase(counted: &Counted, Increase { new, total }: Increase) {
+    match counted {
+        Counted::Xruns(bus) => {
+            tracing::warn!(
+                ?bus,
+                new,
+                total,
+                "output xruns: the device missed a deadline"
+            );
+        }
+        Counted::StreamErrors(bus) => {
+            tracing::warn!(?bus, new, total, "stream error reported by the backend");
+        }
+        Counted::LockMisses(bus) => {
+            tracing::warn!(
+                ?bus,
+                new,
+                total,
+                "blocks output as silence: the mixer was busy"
+            );
+        }
+        Counted::Leaked(bus) => {
+            tracing::error!(?bus, new, total, "items leaked by the real-time thread");
+        }
+        Counted::DroppedEvents(bus) => {
+            tracing::warn!(?bus, new, total, "events dropped by the real-time thread");
+        }
+        Counted::Misrouted(bus) => {
+            tracing::warn!(
+                ?bus,
+                new,
+                total,
+                "blocks misrouted: the channels did not fit the stream"
+            );
+        }
+        Counted::Underruns(player) => {
+            tracing::warn!(
+                ?player,
+                new,
+                total,
+                "source underruns: decoding did not keep up"
+            );
+        }
+    }
+}
 
 /// Live values for the UI, refreshed every tick.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -67,6 +128,8 @@ pub struct Conductor {
     /// Players that started an entry since the last metering: each start
     /// restarts the maximum, even of the same entry.
     started: Vec<PlayerId>,
+    /// The counters of the real-time side, for the log (audit A8).
+    watches: HashMap<Counted, Watch>,
 }
 
 /// The UI's side of the conductor.
@@ -175,6 +238,7 @@ impl Conductor {
             metered_at: None,
             metered_entries: HashMap::new(),
             started: Vec::new(),
+            watches: HashMap::new(),
         };
         let handle = ConductorHandle {
             commands: tx,
@@ -289,7 +353,7 @@ impl Conductor {
                 meter.reset_max();
             }
         }
-        let players = ids
+        let players: Vec<(PlayerId, PlayerTelemetry)> = ids
             .into_iter()
             .map(|id| {
                 let mut t = self.engine.telemetry(id);
@@ -302,16 +366,58 @@ impl Conductor {
                 (id, t)
             })
             .collect();
+        let buses = self.engine.bus_status();
+        self.report_counters(&buses, &players, now);
         let (carts, cart_cue) = self.engine.cart_telemetry();
         self.telemetry.store(Arc::new(Telemetry {
             carts,
             cart_cue,
             players,
-            buses: self.engine.bus_status(),
+            buses,
             model_version: self.version,
             dropped_commands: self.engine.dropped_commands(),
             slot_exhaustions: self.engine.slot_exhaustions(),
         }));
+    }
+
+    /// Logs the counters that grew since the last tick, at most once per
+    /// window each (audit A8).
+    fn report_counters(
+        &mut self,
+        buses: &[BusStatus],
+        players: &[(PlayerId, PlayerTelemetry)],
+        now: Instant,
+    ) {
+        let mut readings: Vec<(Counted, u64)> = Vec::new();
+        for b in buses {
+            let c = b.counters;
+            let key = || b.key.clone();
+            readings.extend([
+                (Counted::Xruns(key()), c.xruns),
+                (Counted::StreamErrors(key()), c.stream_errors),
+                (Counted::LockMisses(key()), c.lock_misses),
+                (Counted::Leaked(key()), c.leaked),
+                (Counted::DroppedEvents(key()), c.dropped_events),
+                (Counted::Misrouted(key()), c.misrouted),
+            ]);
+        }
+        readings.extend(
+            players
+                .iter()
+                .map(|(id, t)| (Counted::Underruns(*id), t.underruns)),
+        );
+        self.watches
+            .retain(|counted, _| readings.iter().any(|(c, _)| c == counted));
+        for (counted, value) in readings {
+            let increase = self
+                .watches
+                .entry(counted.clone())
+                .or_default()
+                .observe(value, now);
+            if let Some(increase) = increase {
+                log_increase(&counted, increase);
+            }
+        }
     }
 
     /// Runs the conductor on its own thread, ticking every `period`.

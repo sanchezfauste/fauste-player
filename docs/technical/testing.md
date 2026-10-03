@@ -13,6 +13,7 @@ laptop and needs no sound card and no display.
 | Engine | `fp-engine/tests/engine.rs`, `review_fixes.rs` | The `Offline` backend renders on demand; tests drive time and check exact frames, events and slot bookkeeping (`used_slots`, `unsettled_sources`) |
 | Buses | `fp-engine/tests/bus.rs` | Watchdog, virtual clock takeover, reconnect (Offline devices can be unplugged and replugged) |
 | Audio path audit | `fp-engine/tests/audio_path_audit.rs`, `fp-backends/tests/audio_path_audit.rs` | Probes behind `docs/technical/audio-path-audit.md`: steps in level on constant sources, resampler passband and aliasing, overs, conversion; a probe of a confirmed defect is `#[ignore]`d with its finding id until the fix |
+| Reporting | `fp-engine/tests/reporting.rs`, unit tests in `fp-engine/src/reporting.rs` | The conductor logs each counter increase once per window (log lines captured per test thread); an unclassified stream error is not an xrun; the status bar alerts are in `fp-app/tests/main_screen.rs` |
 | Conductor | `fp-engine/tests/conductor.rs` | End to end through the model; a stress test runs 8 players with random commands over 10 simulated minutes and several seeds, checking invariants |
 | Soak | `fp-engine/tests/conductor.rs` (`#[ignore]`) | 6 simulated hours: `cargo test --release -p fp-engine --test conductor -- --ignored six_simulated_hours` |
 | Analysis | `fp-analysis/tests`, unit tests in `signal.rs` and `cache.rs` | Markers on generated signals, tags and covers (including hostile inputs), the cache, the pool (cancellation, duplicates, panics) |

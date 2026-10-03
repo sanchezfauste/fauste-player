@@ -81,11 +81,44 @@ pub struct PlayerTelemetry {
     pub bit_perfect: bool,
 }
 
+/// The events a bus's real-time side counts (audit A8), read by the
+/// conductor between ticks. Every field only grows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BusCounters {
+    /// Buffer under/overruns the backend reported.
+    pub xruns: u64,
+    /// Stream errors the backend could not classify.
+    pub stream_errors: u64,
+    /// Blocks output as silence because the mixer was busy.
+    pub lock_misses: u64,
+    /// Items leaked rather than freed on the real-time thread.
+    pub leaked: u64,
+    /// Events the real-time side could not hand to the conductor.
+    pub dropped_events: u64,
+    /// Blocks in which a source's channel pair did not fit the stream.
+    pub misrouted: u64,
+}
+
+impl BusCounters {
+    fn read(shared: &crate::mixer::BusShared) -> Self {
+        use std::sync::atomic::Ordering::Relaxed;
+        Self {
+            xruns: shared.xruns.load(Relaxed),
+            stream_errors: shared.stream_errors.load(Relaxed),
+            lock_misses: shared.lock_misses.load(Relaxed),
+            leaked: shared.leaked.load(Relaxed),
+            dropped_events: shared.dropped_events.load(Relaxed),
+            misrouted: shared.misrouted.load(Relaxed),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BusStatus {
     pub key: BusKey,
     pub health: BusHealth,
     pub error: Option<String>,
+    pub counters: BusCounters,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -408,6 +441,7 @@ impl Engine {
                 key: b.key().clone(),
                 health: b.health(),
                 error: b.last_error().map(str::to_owned),
+                counters: BusCounters::read(b.shared()),
             })
             .collect()
     }

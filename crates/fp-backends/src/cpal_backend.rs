@@ -137,6 +137,17 @@ fn backend_error(e: impl std::fmt::Display) -> BackendError {
     BackendError::Backend(e.to_string())
 }
 
+/// Passes a cpal stream error on, classified. cpal calls this from its own
+/// thread, not from the audio callback. An error that fits no class is logged
+/// here with cpal's message, since the sink only counts it.
+fn report_stream_error(errors: &dyn StreamErrorSink, err: &cpal::Error) {
+    let kind = classify(err.kind());
+    if kind == StreamErrorKind::Other {
+        tracing::warn!(error = %err, "unclassified audio stream error");
+    }
+    errors.report(kind);
+}
+
 fn classify(kind: cpal::ErrorKind) -> StreamErrorKind {
     match kind {
         cpal::ErrorKind::DeviceNotAvailable
@@ -488,7 +499,7 @@ where
                 None => out.fill(T::EQUILIBRIUM),
             }
         },
-        move |err: cpal::Error| errors.report(classify(err.kind())),
+        move |err: cpal::Error| report_stream_error(errors.as_ref(), &err),
         None,
     )
 }
@@ -583,10 +594,10 @@ fn device_detail(d: &cpal::DeviceDescription) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        HostCache, OutputSample, choose_buffer_frames, choose_sample_format, device_detail,
-        exclusive_capable, render_converted,
+        HostCache, OutputSample, choose_buffer_frames, choose_sample_format, classify,
+        device_detail, exclusive_capable, render_converted,
     };
-    use crate::Renderer;
+    use crate::{Renderer, StreamErrorKind};
     use cpal::DeviceDescriptionBuilder;
 
     #[test]
@@ -608,6 +619,21 @@ mod tests {
             .address("Speakers")
             .build();
         assert_eq!(device_detail(&same), None);
+    }
+
+    // A8: an unknown error is `Other`, which the bus logs and does not count
+    // as an xrun.
+    #[test]
+    fn only_xrun_is_an_xrun_and_unknown_errors_are_other() {
+        assert_eq!(classify(cpal::ErrorKind::Xrun), StreamErrorKind::Xrun);
+        for kind in [
+            cpal::ErrorKind::BackendError,
+            cpal::ErrorKind::DeviceBusy,
+            cpal::ErrorKind::ResourceExhausted,
+            cpal::ErrorKind::Other,
+        ] {
+            assert_eq!(classify(kind), StreamErrorKind::Other, "{kind}");
+        }
     }
 
     /// Plays back fixed samples.

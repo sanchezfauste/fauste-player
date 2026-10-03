@@ -112,6 +112,8 @@ pub struct BusShared {
     pub lost: AtomicBool,
     pub realtime_denied: AtomicBool,
     pub xruns: AtomicU64,
+    /// Stream errors the backend could not classify (not xruns).
+    pub stream_errors: AtomicU64,
     pub dropped_events: AtomicU64,
     pub lock_misses: AtomicU64,
     /// Items that could not be handed back and were leaked instead of being
@@ -198,8 +200,11 @@ impl StreamErrorSink for BusShared {
         match kind {
             StreamErrorKind::DeviceLost => self.lost.store(true, Ordering::Release),
             StreamErrorKind::RealtimeDenied => self.realtime_denied.store(true, Ordering::Release),
-            StreamErrorKind::Xrun | StreamErrorKind::Other => {
+            StreamErrorKind::Xrun => {
                 self.xruns.fetch_add(1, Ordering::Relaxed);
+            }
+            StreamErrorKind::Other => {
+                self.stream_errors.fetch_add(1, Ordering::Relaxed);
             }
         }
     }

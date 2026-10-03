@@ -83,6 +83,7 @@ legend-intro = Intro
 legend-mix = Mezcla
 alert-device-lost = Salida perdida: { $device } (la programación sigue su curso)
 alert-underruns = { $player }: cortes de audio ({ $count })
+alert-xruns = { $device }: cortes del dispositivo de audio ({ $count })
 unknown-artist = Artista desconocido
 default-playlist-name = Playlist 1
 settings-title = Configuración

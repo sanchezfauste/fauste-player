@@ -83,6 +83,7 @@ legend-intro = Intro
 legend-mix = Mix
 alert-device-lost = Output lost: { $device } (the timeline keeps running)
 alert-underruns = { $player }: audio dropouts ({ $count })
+alert-xruns = { $device }: audio device dropouts ({ $count })
 unknown-artist = Unknown artist
 default-playlist-name = Playlist 1
 settings-title = Settings

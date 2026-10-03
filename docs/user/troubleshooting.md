@@ -60,6 +60,15 @@ Analysis → Re-analyse all tracks**.
 
 ## Audio dropouts
 
+The status bar warns for 5 seconds after each dropout the application
+detects: **P1: audio dropouts (3)** when a player's decoding did not keep up
+with the disk (the count is for the track now playing), and
+**<device>: audio device dropouts (2)** when the output device missed a
+deadline (an xrun). The log records each one too, at most one line every 10
+seconds per kind, with how many happened. Not every audio system reports
+xruns (PulseAudio does not; Windows exclusive mode does not).
+
+
 - Increase the **buffer size** in Settings (and press **Restart now**).
 - On Linux, allow real-time scheduling. The application asks the system for
   it through rtkit (D-Bus). Membership of the `audio` group with an `rtprio`

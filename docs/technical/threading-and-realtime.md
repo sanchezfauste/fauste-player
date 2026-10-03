@@ -62,9 +62,16 @@ The mixer (`fp-engine/src/mixer.rs`) runs on the device callback. It must not:
   callback only calls `try_lock`. On contention, which only happens while the
   virtual clock hands the mixer back, it outputs silence for one block and
   increments `lock_misses`.
-- **log, do I/O or panic.** Counters (`xruns`, `underruns`, `leaked`,
-  `misrouted`, `lock_misses`) are atomics that the conductor turns into log
-  lines and UI alerts. Indexing uses `get` (enforced by
+- **log, do I/O or panic.** Counters (`xruns`, `stream_errors`, `underruns`,
+  `leaked`, `dropped_events`, `misrouted`, `lock_misses`) are atomics that the
+  conductor reads once per tick (`BusStatus::counters`,
+  `PlayerTelemetry::underruns`). It logs each increase, at most once per
+  counter every `REPORT_WINDOW` (10 s, a constant in `reporting.rs`; the line
+  carries the number that came in and the total), and the UI shows underruns
+  (per player) and xruns (per device) in the status bar for 5 s after the last
+  increase. `StreamErrorKind::Other` (an error cpal reports that fits no class)
+  is its own counter, `stream_errors`, and is logged with cpal's message; it
+  is not an xrun. Indexing uses `get` (enforced by
   `clippy::indexing_slicing`), and there is no `unwrap`.
 
 Tests enforce this: `assert_no_alloc` wraps `Mixer::render` and fails on any

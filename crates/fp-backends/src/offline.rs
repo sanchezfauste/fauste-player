@@ -69,6 +69,18 @@ impl OfflineDevice {
         }
     }
 
+    /// Reports `kind` to the open stream's error sink, as a backend's own
+    /// thread would. `false` when no stream is open.
+    pub fn report_error(&self, kind: StreamErrorKind) -> bool {
+        match lock(&self.state).open.as_ref() {
+            Some(open) => {
+                open.errors.report(kind);
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn replug(&self) {
         lock(&self.state).plugged = true;
     }
