@@ -1731,17 +1731,23 @@ impl Engine {
                 .get(&player)
                 .and_then(|rt| rt.preload.as_ref())
                 .filter(|p| p.start != StartState::Started)
-                .map(|p| (p.bus.clone(), p.slot, p.shared.is_ready())),
+                .map(|p| {
+                    // A `Requested` start was sent with its ramp already; the
+                    // mixer ignores a second `Start` of a started slot, so a
+                    // second ramp would only step the gain.
+                    let ramp = p.start_secs > 0.0 && p.start != StartState::Requested;
+                    (p.bus.clone(), p.slot, p.shared.is_ready(), ramp)
+                }),
             _ => None,
         };
         match next {
             // End of stream before (or instead of) the scheduled transition:
             // start the next right now, or as soon as it is buffered;
             // `promote` runs on its `Started` event.
-            Some((bus, slot, ready)) => {
+            Some((bus, slot, ready, inside)) => {
                 let at = self.now_frame(&bus);
                 if ready {
-                    self.send(&bus, BusCommand::Start { slot, at_frame: at });
+                    self.send_start(&bus, slot, at, inside);
                 }
                 if let Some(rt) = self.players.get_mut(&player) {
                     rt.plan = Plan::Dispatched(
@@ -1784,7 +1790,13 @@ impl Engine {
                 && !(p.shared.is_failed() && p.shared.is_drained())
             {
                 p.start = StartState::Requested;
-                starts.push((p.bus.clone(), p.slot, fade_in, earliest));
+                // A start inside the audio ramps in; the file's first frame is hard.
+                starts.push((
+                    p.bus.clone(),
+                    p.slot,
+                    fade_in || p.start_secs > 0.0,
+                    earliest,
+                ));
             }
         }
         self.start_ready_carts();
@@ -1820,39 +1832,45 @@ impl Engine {
         }
         for (bus, slot, fade_in, earliest) in starts {
             let now = self.now_frame(&bus).max(earliest);
-            let declick = u32::try_from(self.frames_on(&bus, self.settings.tuning.declick_ms))
-                .unwrap_or(u32::MAX);
-            if fade_in {
-                self.send(
-                    &bus,
-                    BusCommand::Ramp {
-                        slot,
-                        to: 0.0,
-                        frames: 0,
-                        curve: Curve::Linear,
-                        at_frame: 0,
-                    },
-                );
-            }
+            self.send_start(&bus, slot, now, fade_in);
+        }
+    }
+
+    /// Sends the `Start` of `slot` at frame `now`, with a de-click ramp in
+    /// from silence when `fade_in`.
+    pub(super) fn send_start(&mut self, bus: &BusKey, slot: usize, now: u64, fade_in: bool) {
+        let declick =
+            u32::try_from(self.frames_on(bus, self.settings.tuning.declick_ms)).unwrap_or(u32::MAX);
+        if fade_in {
             self.send(
-                &bus,
-                BusCommand::Start {
+                bus,
+                BusCommand::Ramp {
                     slot,
+                    to: 0.0,
+                    frames: 0,
+                    curve: Curve::Linear,
+                    at_frame: 0,
+                },
+            );
+        }
+        self.send(
+            bus,
+            BusCommand::Start {
+                slot,
+                at_frame: now,
+            },
+        );
+        if fade_in {
+            self.send(
+                bus,
+                BusCommand::Ramp {
+                    slot,
+                    to: 1.0,
+                    frames: declick,
+                    curve: Curve::Linear,
                     at_frame: now,
                 },
             );
-            if fade_in {
-                self.send(
-                    &bus,
-                    BusCommand::Ramp {
-                        slot,
-                        to: 1.0,
-                        frames: declick,
-                        curve: Curve::Linear,
-                        at_frame: now,
-                    },
-                );
-            }
         }
     }
 
@@ -1921,7 +1939,7 @@ impl Engine {
                 } else {
                     StartState::WhenReady { fade_in: false }
                 };
-                (p.bus.clone(), p.slot, ready)
+                (p.bus.clone(), p.slot, ready, p.start_secs > 0.0)
             }),
             TransitionPlan::StopAt { .. } => None,
         };
@@ -1932,10 +1950,10 @@ impl Engine {
                     at_secs,
                     fade_current_until_secs,
                 },
-                Some((bus, slot, ready)),
+                Some((bus, slot, ready, inside)),
             ) => {
                 if ready {
-                    self.send(&bus, BusCommand::Start { slot, at_frame });
+                    self.send_start(&bus, slot, at_frame, inside);
                 }
                 match fade_current_until_secs {
                     Some(until) => {

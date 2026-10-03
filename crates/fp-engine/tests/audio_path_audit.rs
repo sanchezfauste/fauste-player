@@ -306,7 +306,6 @@ fn a_fade_stop_and_a_planned_stop_ramp_down() {
 // A1: fails until the fix task. A start inside the audio (a cue-in or a
 // position past the first frame) begins at full level, with no ramp.
 #[test]
-#[ignore = "A1: fails until the fix task"]
 fn a1_a_start_inside_the_file_ramps_in() {
     let mut r = rig(dc_opener(480_000));
     let start = r.play("dc", 1.0);
@@ -317,6 +316,143 @@ fn a1_a_start_inside_the_file_ramps_in() {
         .collect();
     let (at, step) = max_step(&heard);
     assert!(step < STEP_LIMIT, "step {step} at {at} (start at {start})");
+}
+
+// A1: the new source of a hard transition (and of a segue or crossfade: they
+// start through the same path) that starts at a cue-in past the first frame
+// ramps in; the old one ramps out, so the sum never steps.
+#[test]
+fn a1_the_next_source_at_a_cue_in_ramps_in() {
+    let mut r = rig(dc_opener(480_000));
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request("a", 1, 0.0),
+    });
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(request("b", 2, 2.0)),
+    });
+    r.settle();
+    r.run(2);
+    let start = r.heard.iter().position(|v| *v != 0.0).unwrap();
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: 0.5,
+            fade_current_until_secs: None,
+        }),
+    });
+    r.run(60);
+    assert!(
+        r.events.contains(&EngineEvent::TransitionStarted {
+            player: P,
+            entry: EntryId(2)
+        }),
+        "the next started"
+    );
+    let (at, step) = r.step_after(start);
+    assert!(step < STEP_LIMIT, "step {step} at {at}");
+}
+
+// A1: a CUE that starts inside the file ramps in.
+#[test]
+fn a1_a_cue_inside_the_file_ramps_in() {
+    let backend = OfflineBackend::new();
+    let main = backend.add_device("main", 2);
+    let cue = backend.add_device("cue", 2);
+    let mut config = config();
+    let route = |device: &str| Route {
+        backend: "offline".into(),
+        device: device.into(),
+        first_channel: 0,
+    };
+    config.outputs.routes = vec![PlayerRoutes {
+        player: P,
+        main: Some(route("main")),
+        cue: Some(route("cue")),
+    }];
+    let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
+    let mut engine = Engine::new(
+        backends,
+        EngineSettings::from_config(&config),
+        dc_opener(480_000),
+    );
+    let mut clock = Instant::now();
+    engine.execute(EngineAction::AddPlayer { player: P }, clock);
+    engine.execute(
+        EngineAction::StartCue {
+            player: P,
+            request: request("cue", 3, 1.0),
+        },
+        clock,
+    );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while engine.unsettled_sources() > 0 && Instant::now() < deadline {
+        engine.tick(clock);
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let _ = &main;
+    let mut heard = vec![0.0];
+    for _ in 0..3 {
+        heard.extend(cue.render(BLOCK).unwrap().chunks(2).map(|f| f[0]));
+        clock += Duration::from_secs_f64(BLOCK as f64 / RATE);
+        engine.tick(clock);
+    }
+    assert!(heard.iter().any(|v| *v != 0.0), "the cue was heard");
+    let (at, step) = max_step(&heard);
+    assert!(step < STEP_LIMIT, "step {step} at {at}");
+}
+
+// A1: a cart that starts at a cue-in past the first frame ramps in; one
+// that starts at the first frame stays hard.
+#[test]
+fn a1_a_cart_inside_the_file_ramps_in_and_one_at_the_start_does_not() {
+    for (from_secs, ramps) in [(0.5, true), (0.0, false)] {
+        let backend = OfflineBackend::new();
+        let card = backend.add_device("card", 2);
+        let mut config = config();
+        config.outputs.cartwall.main = Some(Route {
+            backend: "offline".into(),
+            device: "card".into(),
+            first_channel: 0,
+        });
+        let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
+        let mut engine = Engine::new(
+            backends,
+            EngineSettings::from_config(&config),
+            dc_opener(480_000),
+        );
+        let mut clock = Instant::now();
+        engine.execute(
+            EngineAction::StartCart(CartRequest {
+                cart: CartId(1),
+                track: TrackId(1),
+                path: PathBuf::from("cart"),
+                from_secs,
+                until_secs: 5.0,
+                looped: false,
+                format: None,
+            }),
+            clock,
+        );
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while engine.unsettled_sources() > 0 && Instant::now() < deadline {
+            engine.tick(clock);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let mut heard = vec![0.0];
+        for _ in 0..3 {
+            heard.extend(card.render(BLOCK).unwrap().chunks(2).map(|f| f[0]));
+            clock += Duration::from_secs_f64(BLOCK as f64 / RATE);
+            engine.tick(clock);
+        }
+        let (at, step) = max_step(&heard);
+        assert_eq!(
+            step < STEP_LIMIT,
+            ramps,
+            "from {from_secs}: step {step} at {at}"
+        );
+    }
 }
 
 // A2: fails until the fix task. A hard transition at the very end of the

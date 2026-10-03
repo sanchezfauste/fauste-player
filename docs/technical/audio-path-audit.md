@@ -255,16 +255,16 @@ Ramps available: `declick_ms` 5 ms linear, `pause_ramp_ms` 10 ms linear,
 
 | Path | What applies | Evidence | Step? |
 |---|---|---|---|
-| Play (`StartCurrent`), CUE start, cart start | nothing: `WhenReady { fade_in: false }` (`engine.rs:1251`, `engine.rs:1442`, `engine/carts.rs:184`) | probe `a1_a_start_inside_the_file_ramps_in` | **yes** when the start is inside audio (A1) |
+| Play (`StartCurrent`), CUE start, cart start | `declick_ms` ramp in when `from_secs > 0`, hard at the file's first frame (`Engine::send_start`, A1 fixed) | probes `a1_a_start_inside_the_file_ramps_in`, `a1_a_cue_inside_the_file_ramps_in`, `a1_a_cart_inside_the_file_ramps_in_and_one_at_the_start_does_not` | no |
 | Stop now | `declick_ms` linear to 0, then stop (`engine.rs:1372-1392`, `engine.rs:1022-1060`) | probe `a_stop_ramps_down_without_a_step` | no |
 | Pause / resume | `pause_ramp_ms` linear (`engine.rs:1304-1370`, `mixer.rs:390-404`) | probe `pause_and_resume_ramp_without_a_step`; `tests/mixer.rs` `pause_fades_out_holds_the_position_and_resume_continues_from_it` | no |
 | Resume of a track loaded paused | `declick_ms` ramp in (`engine.rs:1354-1356`) | `tests/engine.rs` `load_paused_waits_for_resume_and_starts_at_the_saved_position` | no |
 | Seek | old: `declick_ms` out; new: `declick_ms` in (`engine.rs:1394-1419`) | probe `a_seek_ramps_the_old_source_out_and_the_new_one_in` | no |
 | Fade stop | equal-power over the fade (`engine.rs:1278-1297`) | probe `a_fade_stop_and_a_planned_stop_ramp_down` | no |
 | Planned stop at a cue-out | `declick_ms` ending on the frame (`engine.rs:1985-2004`) | same probe; `tests/engine.rs` `a_planned_stop_ends_on_the_exact_frame_and_reports_the_entry` | no |
-| Crossfade | old: equal-power out (`engine.rs:1259`); new: starts at full level | `tests/engine.rs` `a_crossfade_starts_the_next_now_and_reports_when_the_old_one_is_gone` | new source: A1 |
-| Segue | old: equal-power from the segue to the cue-out (`engine.rs:1941-1960`); new: full level on the frame | `tests/engine.rs` `a_segue_starts_the_next_on_the_exact_frame_and_overlaps_the_fade` | new source: A1 |
-| Hard transition | old: `declick_ms` ending on the frame; new: full level (`engine.rs:1962-1981`) | probe `a2_a_gapless_join_at_the_end_of_the_file_keeps_the_level` | **yes**: A2 at a file end, A1 inside a file |
+| Crossfade | old: equal-power out (`engine.rs:1259`); new: `declick_ms` ramp in when it starts inside the file (A1 fixed) | `tests/engine.rs` `a_crossfade_starts_the_next_now_and_reports_when_the_old_one_is_gone` | no |
+| Segue | old: equal-power from the segue to the cue-out (`engine.rs:1941-1960`); new: on the frame, `declick_ms` ramp in when it starts inside the file (A1 fixed) | `tests/engine.rs` `a_segue_starts_the_next_on_the_exact_frame_and_overlaps_the_fade`; probe `a1_the_next_source_at_a_cue_in_ramps_in` | no |
+| Hard transition | old: `declick_ms` ending on the frame; new: full level at the first frame, ramp in inside the file (`engine.rs:1962-1981`) | probe `a2_a_gapless_join_at_the_end_of_the_file_keeps_the_level` | **yes**: A2 at a file end |
 | Fader move | per-sample slew over `gain_smoothing_ms` (`mixer.rs:681-685`) | probe `a_fader_move_is_smoothed`; `tests/mixer.rs` `volume_changes_are_smoothed` | no |
 | Cart stop | `declick_ms` (`engine/carts.rs:261-291`) | `tests/cartwall.rs` | no |
 | Cart cue-out | stream truncated by the worker, no ramp (`worker.rs:354-362`) | probe `a3_a_cart_ends_at_its_cue_out_without_a_step` | **yes** (A3) |

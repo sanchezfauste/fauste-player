@@ -395,18 +395,12 @@ impl Engine {
                 && !(s.shared.is_failed() && s.shared.is_drained())
             {
                 s.start = StartState::Requested;
-                starts.push((s.bus.clone(), s.slot));
+                starts.push((s.bus.clone(), s.slot, s.from_secs > 0.0));
             }
         }
-        for (bus, slot) in starts {
+        for (bus, slot, fade_in) in starts {
             let now = self.now_frame(&bus);
-            self.send(
-                &bus,
-                BusCommand::Start {
-                    slot,
-                    at_frame: now,
-                },
-            );
+            self.send_start(&bus, slot, now, fade_in);
         }
     }
 
