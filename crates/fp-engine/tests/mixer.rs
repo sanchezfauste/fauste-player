@@ -490,12 +490,7 @@ fn a_command_flood_is_spread_over_several_blocks() {
 fn the_renderer_outputs_silence_instead_of_waiting_for_a_held_lock() {
     let (m, h) = mixer(1);
     let mixer = Arc::new(Mutex::new(m));
-    let mut renderer = MixerRenderer {
-        mixer: mixer.clone(),
-        shared: h.shared.clone(),
-        dop: None,
-        native: false,
-    };
+    let mut renderer = MixerRenderer::new(mixer.clone(), h.shared.clone(), None, false);
     let _guard = mixer.lock().unwrap();
     let mut out = vec![1.0; 8];
     renderer.render(&mut out, 2);

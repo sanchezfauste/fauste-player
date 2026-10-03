@@ -181,12 +181,12 @@ impl Bus {
     /// A fresh renderer for a stream opening: a DoP stream gets its own
     /// encoder, so the marker alternation starts over with the stream.
     fn renderer(&self) -> Box<MixerRenderer> {
-        Box::new(MixerRenderer {
-            mixer: self.mixer.clone(),
-            shared: self.handle.shared.clone(),
-            dop: (self.config.dsd == Some(DsdStream::Dop)).then(DopEncoder::new),
-            native: self.config.dsd == Some(DsdStream::Native),
-        })
+        Box::new(MixerRenderer::new(
+            self.mixer.clone(),
+            self.handle.shared.clone(),
+            (self.config.dsd == Some(DsdStream::Dop)).then(DopEncoder::new),
+            self.config.dsd == Some(DsdStream::Native),
+        ))
     }
 
     /// Opens the stream. With `shared_fallback`, a device that refuses

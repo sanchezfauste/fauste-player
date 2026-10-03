@@ -1018,12 +1018,7 @@ fn the_renderer_the_device_calls_and_the_sample_writer_never_allocate() {
     shared.true_peak.store(true, Ordering::Release);
     shared.ppm_tau1_ms.store(5.0);
     shared.fall_db_per_sec.store(20.0);
-    let mut renderer = MixerRenderer {
-        mixer: Arc::new(std::sync::Mutex::new(m)),
-        shared,
-        dop: None,
-        native: false,
-    };
+    let mut renderer = MixerRenderer::new(Arc::new(std::sync::Mutex::new(m)), shared, None, false);
     // Built off the real-time thread, applied on it.
     let grow = BusCommand::Grow(SlotStorage::with_capacity(4));
     assert!(h.commands.push(grow).is_ok());

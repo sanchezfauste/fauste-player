@@ -243,12 +243,12 @@ fn the_renderer_encodes_dop_only_while_the_bus_is_in_dsd_mode() {
     let (m, mut h) = Mixer::new(4, CONFIG);
     let shared = m.shared().clone();
     let mixer = Arc::new(Mutex::new(m));
-    let mut r = MixerRenderer {
-        mixer: mixer.clone(),
-        shared: shared.clone(),
-        dop: Some(DopEncoder::new()),
-        native: false,
-    };
+    let mut r = MixerRenderer::new(
+        mixer.clone(),
+        shared.clone(),
+        Some(DopEncoder::new()),
+        false,
+    );
     send(
         &mut h,
         BusCommand::DsdMode {

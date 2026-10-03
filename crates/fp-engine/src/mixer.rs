@@ -1064,6 +1064,27 @@ pub struct MixerRenderer {
     pub native: bool,
 }
 
+impl MixerRenderer {
+    /// A renderer for `mixer`, built off the real-time thread. It locks the
+    /// mutex once here: on some platforms (macOS) the standard mutex
+    /// allocates its system lock on first use, which must not happen in the
+    /// device callback.
+    pub fn new(
+        mixer: Arc<std::sync::Mutex<Mixer>>,
+        shared: Arc<BusShared>,
+        dop: Option<DopEncoder>,
+        native: bool,
+    ) -> Self {
+        drop(mixer.try_lock());
+        Self {
+            mixer,
+            shared,
+            dop,
+            native,
+        }
+    }
+}
+
 impl Renderer for MixerRenderer {
     fn render(&mut self, out: &mut [f32], channels: usize) {
         match self.mixer.try_lock() {
