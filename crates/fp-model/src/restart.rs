@@ -17,6 +17,8 @@ pub enum RestartReason {
     /// A player's or the cartwall's Main or Cue output.
     Routes,
     BitPerfect,
+    /// A device's DSD mode, the DSD mix or the DSD silence time.
+    DsdOutput,
     Limits,
     Tuning,
 }
@@ -53,6 +55,16 @@ pub fn restart_pending(started: &Config, current: &Config) -> Vec<RestartReason>
     let set = |o: &OutputsConfig| o.bit_perfect.iter().cloned().collect::<HashSet<_>>();
     if set(a) != set(b) {
         reasons.push(RestartReason::BitPerfect);
+    }
+    let dsd = |o: &OutputsConfig| {
+        (
+            o.dsd_output.iter().cloned().collect::<HashSet<_>>(),
+            o.dsd_mix,
+            o.dsd_silence_ms.to_bits(),
+        )
+    };
+    if dsd(a) != dsd(b) {
+        reasons.push(RestartReason::DsdOutput);
     }
     if started.limits != current.limits {
         reasons.push(RestartReason::Limits);

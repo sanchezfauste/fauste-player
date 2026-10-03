@@ -105,6 +105,7 @@ restart-reason-sample-rate = frecuencia de muestreo
 restart-reason-buffer-size = tamaño del búfer
 restart-reason-routes = salidas
 restart-reason-bit-perfect = dispositivos bit-perfect
+restart-reason-dsd = salida DSD
 restart-reason-limits = límites
 restart-reason-tuning = ajustes del motor
 settings-main = Main

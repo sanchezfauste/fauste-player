@@ -1480,6 +1480,7 @@ fn restart_reason_key(reason: RestartReason) -> &'static str {
         RestartReason::BufferSize => "restart-reason-buffer-size",
         RestartReason::Routes => "restart-reason-routes",
         RestartReason::BitPerfect => "restart-reason-bit-perfect",
+        RestartReason::DsdOutput => "restart-reason-dsd",
         RestartReason::Limits => "restart-reason-limits",
         RestartReason::Tuning => "restart-reason-tuning",
     }

@@ -151,3 +151,26 @@ fn several_changes_are_listed_once_each_in_order() {
         ]
     );
 }
+
+#[test]
+fn dsd_settings_apply_at_restart() {
+    let started = Config::default();
+    for change in [
+        |c: &mut Config| c.outputs.dsd_mix = fp_model::DsdMix::HoldOthers,
+        |c: &mut Config| c.outputs.dsd_silence_ms = 500.0,
+        |c: &mut Config| {
+            c.outputs.dsd_output.push(fp_model::DsdDevice {
+                backend: "alsa".into(),
+                device: "hw:0".into(),
+                mode: fp_model::DsdOutput::Dop,
+            })
+        },
+    ] {
+        let mut current = started.clone();
+        change(&mut current);
+        assert_eq!(
+            restart_pending(&started, &current),
+            vec![RestartReason::DsdOutput]
+        );
+    }
+}

@@ -105,6 +105,7 @@ restart-reason-sample-rate = sample rate
 restart-reason-buffer-size = buffer size
 restart-reason-routes = outputs
 restart-reason-bit-perfect = bit-perfect devices
+restart-reason-dsd = DSD output
 restart-reason-limits = limits
 restart-reason-tuning = engine tuning
 settings-main = Main
