@@ -1,8 +1,12 @@
 //! A `Bus` is one open output device and its mixer (spec §4.6–4.7). If the
-//! device fails — an error from the backend, or no heartbeat for
+//! device fails — an error from the backend, or no block asked for within
 //! `watchdog_timeout` — a virtual-clock thread keeps rendering the same mixer
 //! at real-time pace, so player timelines never stall; the device is retried
-//! every `reconnect_interval` and takes the mixer back when it returns.
+//! every `reconnect_interval` and takes the mixer back once the reopened
+//! stream asks for its first block. Until then the stream plays silence
+//! and the bus stays `Lost`: a stream that opens but never starts (its
+//! card held by another output) is closed after `startup_grace` and
+//! retried, reported once.
 //!
 //! Every method takes the current `Instant` explicitly so tests can drive time.
 
@@ -106,6 +110,7 @@ pub struct Bus {
     stream: Option<Box<dyn OutputStream>>,
     virtual_clock: Option<VirtualClock>,
     health: BusHealth,
+    /// The device's block count (`BusShared::device_blocks`) last seen.
     last_heartbeat: u64,
     last_beat_at: Instant,
     last_retry: Instant,
@@ -113,8 +118,10 @@ pub struct Bus {
     used: Vec<bool>,
     /// Last error from the backend, for the UI.
     last_error: Option<String>,
-    /// Heartbeat value when the current stream was opened.
+    /// The device's block count when the current stream was opened.
     opened_beat: u64,
+    /// A reopened stream that never started was reported in this loss.
+    unstarted_reported: bool,
     /// Whether the open stream got the exclusive access it asked for.
     exclusive_granted: bool,
     /// Rates this device refused, not asked for again until it comes back
@@ -167,6 +174,7 @@ impl Bus {
             used: vec![false; slots],
             last_error: None,
             opened_beat: 0,
+            unstarted_reported: false,
             exclusive_granted: false,
             refused_rates: std::collections::HashSet::new(),
             refused_dsd: std::collections::HashSet::new(),
@@ -196,9 +204,19 @@ impl Bus {
     /// Opens the stream. With `shared_fallback`, a device that refuses
     /// exclusive access opens shared; a rate change passes `false`, since
     /// there the refusal is of the rate, not of exclusive access.
+    ///
+    /// While the virtual clock runs (a reopen after a loss) the new stream
+    /// starts in standby and the bus stays `Lost`: `supervise` hands the
+    /// mixer over at the stream's first block.
     fn try_open(&mut self, now: Instant, shared_fallback: bool) -> Result<(), BackendError> {
         self.last_retry = now;
         self.handle.shared.lost.store(false, Ordering::Release);
+        // Never two renderers of one mixer: the device waits for the
+        // virtual clock to stop.
+        self.handle
+            .shared
+            .standby
+            .store(self.virtual_clock.is_some(), Ordering::Release);
         // Sources attached from now on measure at this rate (K-weighting).
         self.handle
             .shared
@@ -234,8 +252,10 @@ impl Bus {
         match opened {
             Ok(stream) => {
                 self.stream = Some(stream);
-                self.health = BusHealth::Ok;
-                self.last_heartbeat = self.handle.shared.heartbeat();
+                if self.virtual_clock.is_none() {
+                    self.health = BusHealth::Ok;
+                }
+                self.last_heartbeat = self.handle.shared.device_blocks();
                 self.opened_beat = self.last_heartbeat;
                 self.last_beat_at = now;
                 self.last_error = None;
@@ -318,7 +338,9 @@ impl Bus {
     /// access, and a 24- or 32-bit integer format for DoP (whatever the
     /// backend accepted) or a stream the backend packs as native DSD.
     pub fn dsd_fits(&self, stream: DsdStream) -> bool {
-        self.exclusive_granted()
+        // Asked of a stream just reopened too, before its first block.
+        self.stream.is_some()
+            && self.exclusive_granted
             && match stream {
                 DsdStream::Dop => matches!(
                     self.sample_format(),
@@ -527,7 +549,7 @@ impl Bus {
 
     /// Watchdog and reconnection. Call regularly from the conductor.
     pub fn supervise(&mut self, now: Instant) {
-        let beat = self.handle.shared.heartbeat();
+        let beat = self.handle.shared.device_blocks();
         if beat != self.last_heartbeat {
             self.last_heartbeat = beat;
             self.last_beat_at = now;
@@ -536,34 +558,59 @@ impl Bus {
             BusHealth::Ok => {
                 // Until a newly opened stream delivers its first block it gets a
                 // longer grace (Bluetooth and bridged devices can be slow to start).
-                let timeout = if beat == self.opened_beat {
-                    self.timing.startup_grace
-                } else {
+                let started = beat != self.opened_beat;
+                let timeout = if started {
                     self.timing.watchdog_timeout
+                } else {
+                    self.timing.startup_grace
                 };
                 let silent = now.saturating_duration_since(self.last_beat_at) > timeout;
                 if self.handle.shared.lost.load(Ordering::Acquire) || silent {
-                    tracing::warn!(bus = ?self.key, silent, "output device lost; switching to the virtual clock");
+                    tracing::warn!(bus = ?self.key, silent, started, "output device lost; switching to the virtual clock");
                     self.stream = None;
                     self.health = BusHealth::Lost;
                     self.last_retry = now;
+                    self.unstarted_reported = false;
                     self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
                 }
             }
+            BusHealth::Lost if self.stream.is_some() => self.await_first_block(beat, now),
             BusHealth::Lost => {
                 if now.saturating_duration_since(self.last_retry) >= self.timing.reconnect_interval
                     && self.reconnect(now)
                 {
-                    // The stand-in keeps the timeline moving while the device
-                    // opens (which can take a while); it stops once the device
-                    // renders. Both may render one block meanwhile: the
-                    // timeline runs at most one period fast, once.
-                    tracing::info!(bus = ?self.key, "output device back");
-                    self.virtual_clock = None;
-                    self.refused_rates.clear();
-                    self.refused_dsd.clear();
+                    tracing::debug!(bus = ?self.key, "output device reopened; waiting for its first block");
                 }
             }
+        }
+    }
+
+    /// A stream reopened after a loss, in standby while the virtual clock
+    /// renders: its first block hands the mixer over (the clock stops
+    /// before the stream leaves standby, so the two never render together).
+    /// One that asks for nothing within `startup_grace`, or fails, is
+    /// closed and retried after `reconnect_interval`; the first such stream
+    /// of a loss is reported.
+    fn await_first_block(&mut self, beat: u64, now: Instant) {
+        if beat != self.opened_beat {
+            self.virtual_clock = None;
+            self.handle.shared.standby.store(false, Ordering::Release);
+            self.health = BusHealth::Ok;
+            self.last_beat_at = now;
+            tracing::info!(bus = ?self.key, "output device back");
+            self.refused_rates.clear();
+            self.refused_dsd.clear();
+            return;
+        }
+        let failed = self.handle.shared.lost.load(Ordering::Acquire);
+        if !failed && now.saturating_duration_since(self.last_retry) <= self.timing.startup_grace {
+            return;
+        }
+        self.stream = None;
+        self.last_retry = now;
+        if !failed && !self.unstarted_reported {
+            self.unstarted_reported = true;
+            tracing::warn!(bus = ?self.key, "output device opened but never started; is another output holding the same card (a direct hw: output)? Retrying quietly");
         }
     }
 

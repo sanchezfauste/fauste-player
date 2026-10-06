@@ -119,6 +119,13 @@ fn a_returning_device_takes_the_mixer_back_without_losing_time() {
         "retries wait for the reconnect interval"
     );
     bus.supervise(t0 + Duration::from_secs(3));
+    assert_eq!(
+        bus.health(),
+        BusHealth::Lost,
+        "reopened, but not back before its first block"
+    );
+    device.render(480).unwrap();
+    bus.supervise(t0 + Duration::from_millis(3_010));
     assert_eq!(bus.health(), BusHealth::Ok);
     let at_handover = bus.now_frame();
     assert!(at_handover > 0);
@@ -233,6 +240,8 @@ fn the_watchdog_falls_back_to_the_pcm_rate_before_dsd_instead_of_retrying_foreve
     assert_eq!(bus.health(), BusHealth::Lost);
     bus.set_pcm_fallback(CONFIG);
     bus.supervise(t0 + Duration::from_secs(3));
+    device.render(480).unwrap();
+    bus.supervise(t0 + Duration::from_millis(3_010));
     assert_eq!(bus.health(), BusHealth::Ok);
     assert_eq!(device.config().unwrap().sample_rate, 48_000);
     assert_eq!(bus.sample_rate(), 48_000);
@@ -281,4 +290,129 @@ fn a_rate_the_device_refuses_is_still_remembered() {
     assert_eq!(bus.sample_rate(), 48_000);
     assert!(!bus.reopen_at(44_100, t0));
     assert_eq!(device.open_attempts() - before, tried);
+}
+
+#[derive(Clone, Default)]
+struct Lines(Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Lines {
+    fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(b);
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Lines {
+    fn count(&self, needle: &str) -> usize {
+        String::from_utf8_lossy(&self.0.lock().unwrap())
+            .lines()
+            .filter(|l| l.contains(needle))
+            .count()
+    }
+}
+
+/// Runs `f` with this thread's log lines captured.
+fn capture<T>(f: impl FnOnce() -> T) -> (T, Lines) {
+    let lines = Lines::default();
+    let writer = lines.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(move || writer.clone())
+        .with_ansi(false)
+        .finish();
+    let out = tracing::subscriber::with_default(subscriber, f);
+    (out, lines)
+}
+
+/// A bus whose device was lost at `t0` and is plugged in again.
+fn lost_and_replugged() -> (OfflineBackend, OfflineDevice, Bus, Instant) {
+    let (b, device, mut bus, t0) = setup(true);
+    device.unplug();
+    bus.supervise(t0);
+    assert_eq!(bus.health(), BusHealth::Lost);
+    device.replug();
+    (b, device, bus, t0)
+}
+
+#[test]
+fn a_reopened_device_is_back_only_once_it_renders_its_first_block() {
+    let (_b, device, mut bus, t0) = lost_and_replugged();
+    let reopen = t0 + Duration::from_secs(3);
+    bus.supervise(reopen);
+    assert!(device.is_open(), "the watchdog reopened the device");
+    assert_eq!(
+        bus.health(),
+        BusHealth::Lost,
+        "an open stream that has not asked for audio yet is not back"
+    );
+    bus.supervise(reopen + Duration::from_secs(1));
+    assert_eq!(bus.health(), BusHealth::Lost);
+    device.render(480).unwrap();
+    bus.supervise(reopen + Duration::from_millis(1010));
+    assert_eq!(
+        bus.health(),
+        BusHealth::Ok,
+        "its first block brings it back"
+    );
+}
+
+#[test]
+fn a_device_still_waiting_for_its_first_block_leaves_the_mixer_to_the_virtual_clock() {
+    let (_b, device, mut bus, t0) = lost_and_replugged();
+    bus.supervise(t0 + Duration::from_secs(3));
+    let frames = bus.now_frame();
+    // One second of audio asked for at once: rendering it would move the
+    // timeline by 48 000 frames, far more than the virtual clock renders
+    // in the moment this takes.
+    let out = device.render(48_000).unwrap();
+    assert!(out.iter().all(|s| *s == 0.0), "the stream plays silence");
+    let advanced = bus.now_frame() - frames;
+    assert!(
+        advanced < 48_000,
+        "the device rendered the mixer ({advanced} frames) while the virtual clock owns it"
+    );
+}
+
+#[test]
+fn a_reopened_device_that_never_starts_stays_lost_and_is_retried() {
+    let (_b, device, mut bus, t0) = lost_and_replugged();
+    let reopen = t0 + Duration::from_secs(3);
+    bus.supervise(reopen);
+    assert!(device.is_open());
+    let attempts = device.open_attempts();
+    // No block within the startup grace: closed, still lost.
+    bus.supervise(reopen + Duration::from_millis(5_100));
+    assert_eq!(bus.health(), BusHealth::Lost);
+    assert!(!device.is_open(), "a stream that never starts is closed");
+    // Retried after the reconnect interval, still not back.
+    bus.supervise(reopen + Duration::from_millis(7_200));
+    assert!(device.is_open());
+    assert_eq!(device.open_attempts(), attempts + 1);
+    assert_eq!(bus.health(), BusHealth::Lost);
+    // It starts at last.
+    device.render(480).unwrap();
+    bus.supervise(reopen + Duration::from_millis(7_210));
+    assert_eq!(bus.health(), BusHealth::Ok);
+}
+
+#[test]
+fn a_device_that_keeps_opening_without_starting_is_reported_once() {
+    let (_b, device, mut bus, t0) = lost_and_replugged();
+    let ((), lines) = capture(|| {
+        // Ten cycles: open, five seconds without a block, closed, retried.
+        let mut now = t0;
+        for _ in 0..10 {
+            now += Duration::from_secs(2);
+            bus.supervise(now);
+            assert!(device.is_open());
+            now += Duration::from_millis(5_100);
+            bus.supervise(now);
+            assert_eq!(bus.health(), BusHealth::Lost);
+        }
+    });
+    assert_eq!(lines.count("opened but never started"), 1);
+    assert_eq!(lines.count("output device back"), 0);
+    assert_eq!(lines.count("output device lost"), 0);
 }

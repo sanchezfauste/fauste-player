@@ -136,14 +136,24 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
 
 A `Bus` (`bus.rs`) is one open device, keyed by `(backend, device)`, with one
 mixer shared by every route to that device. It has a watchdog. A backend
-error, or no heartbeat for `tuning.watchdog_timeout_ms` (500 ms; startup grace
-`tuning.watchdog_startup_grace_ms`, 5 s), marks it **Lost**. A virtual-clock
-thread then renders the same mixer into a discard buffer at real-time pace,
-so countdowns, segues and chaining continue. The device is reopened every
-`tuning.reconnect_interval_ms` (2 s) and takes the mixer back when it opens.
-The virtual clock keeps the timeline moving while the device opens, and
-stops once it has: both may render one block meanwhile, so the timeline can
-run one period fast, once per reconnection. A
+error, or no block asked for by the device for `tuning.watchdog_timeout_ms`
+(500 ms; startup grace `tuning.watchdog_startup_grace_ms`, 5 s), marks it
+**Lost**. The watchdog counts `BusShared::device_blocks`, which
+`MixerRenderer` bumps on every device callback (rendered or not) and the
+virtual clock never moves. A virtual-clock thread then renders the same
+mixer into a discard buffer at real-time pace, so countdowns, segues and
+chaining continue. The device is reopened every
+`tuning.reconnect_interval_ms` (2 s). A reopened stream starts in standby
+(`BusShared::standby`): its callback plays idle fill (DSD silence in DSD
+mode, so DoP stays valid) without touching the mixer, and the bus stays
+`Lost`. At its first block `Bus::supervise` stops (joins) the virtual clock
+and only then clears `standby`, so the two never render the mixer
+together. A reopened stream with no block within the startup grace, or one
+that fails, is closed and retried, still `Lost`; the first one of a loss
+logs "opened but never started" once. That is what a sound-server output
+does when its card is held by another output through a direct `hw:` device:
+the server cannot open the card, so its sink never runs. The first open of a
+bus and a rate change reopen (no virtual clock running) render at once. A
 reader that waits for a block to finish (`BusShared::consistent`,
 `whole_blocks`) gives up after 50 ms, so a render thread gone mid-block
 cannot hang the conductor.

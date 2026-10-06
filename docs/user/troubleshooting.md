@@ -79,6 +79,19 @@ The players keep counting and mixing on an internal clock, so the automation
 does not stall. The device is retried every 2 seconds and takes over again
 when it returns. Reconnect the cable or power the interface back on.
 
+### "Output lost" that never clears, with a direct `hw:` output
+
+A sound card used through a direct ALSA `hw:` output (for example a
+bit-perfect output) is held by Fauste Player alone: the sound server
+(PipeWire or PulseAudio) cannot use it at the same time. If another output
+goes through the sound server's default device and that default device is
+the same card, that output never starts and stays **Output lost**. The log
+says "output device opened but never started" once.
+
+Use one path per card: route every output of that card through the same
+`hw:` device (with different channels if needed), or choose another card
+as the sound server's default output in your system's sound settings.
+
 ## A track shows a warning icon or a file with a cross
 
 The file is missing (moved, deleted, unmounted: a file with a cross) or

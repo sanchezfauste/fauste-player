@@ -108,7 +108,7 @@ A priority change the system refuses is logged once and ignored: the thread keep
 |---|---|---|---|
 | `players`, `analysis`, `outputs`, `ui` | operator | player count, `fade_ms`, auto-segue, trim threshold and margin, segue drop, routes, wave colour | Settings UI |
 | `limits` | resource guards | `max_players` (16), `max_cover_bytes`, `max_state_file_bytes`, `backup_count` | config file only |
-| `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `reconnect_interval_ms`, `device_busy_retries`, `device_busy_retry_ms`, `gain_smoothing_ms`, `save_debounce_ms`, `missing_recheck_ms`, `restart_handoff_ms` | config file only (an "advanced" section) |
+| `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `watchdog_startup_grace_ms`, `reconnect_interval_ms`, `device_busy_retries`, `device_busy_retry_ms`, `gain_smoothing_ms`, `save_debounce_ms`, `missing_recheck_ms`, `restart_handoff_ms` | config file only (an "advanced" section) |
 
 - Every group is a typed struct with `Default` values documented in code. They are validated on load: out-of-range values are clamped to the valid range with a logged warning, never rejected with a crash.
 - Engine capacities (mixer slots, scratch buffers) are **derived** from the configuration at the moment a mixer is built (§4.3), never fixed constants.
@@ -282,9 +282,10 @@ A multichannel device is opened **once**. All routes to it share one stream and 
 
 ### 4.7 Device loss and the virtual clock
 
-- A backend stream error, or a missing heartbeat for `tuning.watchdog_timeout_ms` (default 500 ms, watchdog in the conductor), marks the bus `Lost`.
+- A backend stream error, or no block asked for by the device for `tuning.watchdog_timeout_ms` (default 500 ms, watchdog in the conductor; `tuning.watchdog_startup_grace_ms`, default 5 s, before a new stream's first block), marks the bus `Lost`. The watchdog counts the device's callbacks (`BusShared::device_blocks`), which the virtual clock never moves.
 - The mixer lives in `Arc<Mutex<Mixer>>`. The RT callback only `try_lock`s it (§2.3). On loss, a **virtual-clock thread** takes over: it calls the same `Mixer::render` into a discard buffer at real-time pace. Player timelines (countdowns, segue points, chaining) therefore keep progressing, and the automation never stalls.
-- The conductor retries opening the device every `tuning.reconnect_interval_ms` (default 2000 ms). On success the new RT stream takes the mixer back, the sources continue from their current positions, and the bus returns to `Ok`.
+- The conductor retries opening the device every `tuning.reconnect_interval_ms` (default 2000 ms). A stream that opens is not yet "back": it starts in standby, playing silence without touching the mixer, while the virtual clock keeps rendering and the bus stays `Lost`. Only its **first block** brings the device back: the conductor stops the virtual clock, then lets the stream render the mixer, so the two never render together. The sources continue from their current positions and the bus returns to `Ok`.
+- A reopened stream that asks for no block within `tuning.watchdog_startup_grace_ms` (or fails) is closed and retried after the reconnect interval, and the bus stays `Lost` throughout, so the UI does not flicker between lost and back. The first such stream of a loss is logged once ("opened but never started"); later ones are not. The usual cause is a sound-server output whose card is held by another output of the app through a direct `hw:` device.
 - The UI shows a red alert on affected players and in the status bar while a bus is `Lost`.
 
 ### 4.8 Sample rate
