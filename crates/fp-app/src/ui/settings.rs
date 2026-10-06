@@ -847,7 +847,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
 }
 
 /// Spec §4.6: a Cue route equal to Main is refused by the engine (a
-/// pre-listen must never go on air), so the CUE stays silent; say so where
+/// pre-listen must never go on air), so the CUE is not available; say so where
 /// the route is chosen.
 fn cue_equals_main_note(ui: &mut Ui, scene: &Scene<'_>) {
     ui.add(

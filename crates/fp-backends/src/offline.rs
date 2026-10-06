@@ -135,8 +135,9 @@ impl OfflineDevice {
         lock(&self.state).refused_rates.insert(rate);
     }
 
-    /// Makes the next `opens` opens on this device fail with `Busy`, as a
-    /// device another application (or the sound server) holds would.
+    /// Makes the next `opens` opens on this device that it would accept
+    /// fail with `Busy`, as a device another application (or the sound
+    /// server) holds would. Refused configurations do not count.
     pub fn set_busy(&self, opens: u64) {
         lock(&self.state).busy_opens = opens;
     }
@@ -276,12 +277,6 @@ impl AudioBackend for OfflineBackend {
         if !state.plugged {
             return Err(BackendError::DeviceNotFound(device.clone()));
         }
-        if state.busy_opens > 0 {
-            state.busy_opens -= 1;
-            return Err(BackendError::Busy(
-                "the device is in use by another application".to_owned(),
-            ));
-        }
         if config.exclusive && !state.exclusive_capable {
             return Err(BackendError::Unsupported(
                 "exclusive access is not available on this device".to_owned(),
@@ -326,6 +321,14 @@ impl AudioBackend for OfflineBackend {
                 "{} Hz is not supported",
                 config.sample_rate
             )));
+        }
+        // After the refusals: a configuration the device refuses is refused
+        // whoever holds it, and a test can make only a later open busy.
+        if state.busy_opens > 0 {
+            state.busy_opens -= 1;
+            return Err(BackendError::Busy(
+                "the device is in use by another application".to_owned(),
+            ));
         }
         state.generation += 1;
         let generation = state.generation;

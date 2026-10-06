@@ -49,6 +49,25 @@ pub struct BusTiming {
     pub busy_retry_interval: Duration,
 }
 
+/// The busy retries one top-level reopen may still spend, each after
+/// `BusTiming::busy_retry_interval`: the open at the new configuration and
+/// the restore of the previous one share it, and so do the reopens an
+/// engine operation chains. So the conductor waits at most
+/// `busy_retries × busy_retry_interval` per operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BusyBudget {
+    retries: u32,
+}
+
+impl BusyBudget {
+    /// No retries: a busy open fails at once.
+    pub const NONE: BusyBudget = BusyBudget { retries: 0 };
+
+    pub fn retries(&self) -> u32 {
+        self.retries
+    }
+}
+
 struct VirtualClock {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -185,7 +204,7 @@ impl Bus {
         if bus.try_open(now, true).is_err() {
             // The stand-in renders the mixer without DoP encoding or native
             // DSD packing: nothing it renders reaches a converter.
-            bus.virtual_clock = VirtualClock::start(bus.mixer.clone(), bus.config);
+            bus.start_virtual_clock();
         }
         bus
     }
@@ -268,27 +287,36 @@ impl Bus {
         }
     }
 
-    /// `try_open`, tried again up to `busy_retries` times, `busy_retry_interval`
-    /// apart, while the device answers busy: closing a stream to change its
-    /// rate leaves a gap in which another client (a sound server probing the
-    /// device) can take it for a moment. Blocks the caller for at most the
-    /// retries times the interval, on top of the opens themselves.
+    /// `try_open`, tried again while the device answers busy and `budget`
+    /// has retries left, `busy_retry_interval` apart: closing a stream to
+    /// change its rate leaves a gap in which another client (a sound server
+    /// probing the device) can take it for a moment. Each retry spends one
+    /// from `budget`, so one operation blocks the caller for at most
+    /// `busy_retries × busy_retry_interval`, on top of the opens themselves.
     fn open_retrying_busy(
         &mut self,
         now: Instant,
         shared_fallback: bool,
+        budget: &mut BusyBudget,
     ) -> Result<(), BackendError> {
+        let started = Instant::now();
         let mut result = self.try_open(now, shared_fallback);
-        for _ in 0..self.timing.busy_retries {
-            if !matches!(result, Err(BackendError::Busy(_))) {
-                break;
-            }
+        while matches!(result, Err(BackendError::Busy(_))) && budget.retries > 0 {
+            budget.retries -= 1;
             if !self.timing.busy_retry_interval.is_zero() {
                 std::thread::sleep(self.timing.busy_retry_interval);
             }
-            result = self.try_open(now, shared_fallback);
+            // The caller's `now`, moved on by the time spent waiting.
+            result = self.try_open(now + started.elapsed(), shared_fallback);
         }
         result
+    }
+
+    /// Starts the virtual clock for a bus that has just lost its stream: a
+    /// new loss, whose first stream that never starts is reported again.
+    fn start_virtual_clock(&mut self) {
+        self.unstarted_reported = false;
+        self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
     }
 
     pub fn key(&self) -> &BusKey {
@@ -445,7 +473,7 @@ impl Bus {
 
     /// Reopens the device at `rate` as PCM, keeping the mixer, its clock and
     /// its slots (see `reopen_with`). Returns whether `rate` took.
-    pub fn reopen_at(&mut self, rate: u32, now: Instant) -> bool {
+    pub fn reopen_at(&mut self, rate: u32, now: Instant, budget: &mut BusyBudget) -> bool {
         if rate == self.config.sample_rate {
             return true;
         }
@@ -454,7 +482,7 @@ impl Bus {
             dsd: None,
             ..self.config
         };
-        self.reopen_with(config, now).is_ok()
+        self.reopen_with(config, now, budget).is_ok()
     }
 
     /// Reopens the device with `config`, keeping the mixer, its clock and
@@ -468,7 +496,12 @@ impl Bus {
     /// bus is `Lost` and the watchdog takes over. Leaving native DSD never
     /// restores it (PCM would reach a DSD stream): the bus stays `Lost` with
     /// the PCM configuration instead.
-    pub fn reopen_with(&mut self, config: StreamConfig, now: Instant) -> Result<(), String> {
+    pub fn reopen_with(
+        &mut self,
+        config: StreamConfig,
+        now: Instant,
+        budget: &mut BusyBudget,
+    ) -> Result<(), String> {
         let previous = self.config;
         if config == previous && self.stream.is_some() {
             return Ok(());
@@ -491,7 +524,7 @@ impl Bus {
         // access at the previous rate. A device that is shared anyway may
         // change rate shared. DSD never falls back to shared access.
         let shared_fallback = !self.exclusive_granted && config.dsd.is_none();
-        let opened = self.open_retrying_busy(now, shared_fallback);
+        let opened = self.open_retrying_busy(now, shared_fallback, budget);
         if opened.is_ok() {
             tracing::info!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, "stream reopened");
             if previous.dsd.is_none() && config.dsd.is_none() {
@@ -520,9 +553,9 @@ impl Bus {
             self.config = previous;
             self.follow_rate(config.sample_rate, previous.sample_rate);
         }
-        if leaving_native || self.open_retrying_busy(now, true).is_err() {
+        if leaving_native || self.open_retrying_busy(now, true, budget).is_err() {
             self.health = BusHealth::Lost;
-            self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
+            self.start_virtual_clock();
         }
         Err(error)
     }
@@ -570,8 +603,7 @@ impl Bus {
                     self.stream = None;
                     self.health = BusHealth::Lost;
                     self.last_retry = now;
-                    self.unstarted_reported = false;
-                    self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
+                    self.start_virtual_clock();
                 }
             }
             BusHealth::Lost if self.stream.is_some() => self.await_first_block(beat, now),
@@ -611,6 +643,19 @@ impl Bus {
         if !failed && !self.unstarted_reported {
             self.unstarted_reported = true;
             tracing::warn!(bus = ?self.key, "output device opened but never started; is another output holding the same card (a direct hw: output)? Retrying quietly");
+        }
+    }
+
+    /// The busy budget of one reopen operation: `busy_retries` on an idle
+    /// bus; none on a sounding one, whose timeline would stall while the
+    /// conductor waits (its stream is closed and no virtual clock runs).
+    pub fn busy_budget(&self, idle: bool) -> BusyBudget {
+        if idle {
+            BusyBudget {
+                retries: self.timing.busy_retries,
+            }
+        } else {
+            BusyBudget::NONE
         }
     }
 

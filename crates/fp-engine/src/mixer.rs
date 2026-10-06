@@ -1099,18 +1099,16 @@ impl MixerRenderer {
 impl Renderer for MixerRenderer {
     fn render(&mut self, out: &mut [f32], channels: usize) {
         self.shared.device_blocks.fetch_add(1, Ordering::Release);
-        // The idle fill of the mode the bus is in, so a DoP stream stays
-        // valid.
-        let idle = |shared: &BusShared, out: &mut [f32]| {
-            let fill = if shared.dsd_on.load(Ordering::Acquire) {
-                silence_sample()
-            } else {
-                0.0
-            };
-            out.fill(fill);
-        };
+        // The idle fill of this stream's own mode: the DSD idle word on a
+        // native stream, and on a DoP stream while the bus is in DSD mode
+        // (encoded below, so the stream stays valid); PCM silence otherwise.
+        // A PCM stream opened while the bus still says DSD (a reconnect
+        // out of DSD) never gets the DSD word as PCM.
+        let dsd_idle =
+            self.native || (self.dop.is_some() && self.shared.dsd_on.load(Ordering::Acquire));
+        let idle = |out: &mut [f32]| out.fill(if dsd_idle { silence_sample() } else { 0.0 });
         if self.shared.standby.load(Ordering::Acquire) {
-            idle(&self.shared, out);
+            idle(out);
         } else {
             match self.mixer.try_lock() {
                 Ok(mut mixer) => mixer.render(out, channels),
@@ -1118,7 +1116,7 @@ impl Renderer for MixerRenderer {
                     poisoned.into_inner().render(out, channels)
                 }
                 Err(std::sync::TryLockError::WouldBlock) => {
-                    idle(&self.shared, out);
+                    idle(out);
                     self.shared.lock_misses.fetch_add(1, Ordering::Relaxed);
                 }
             }

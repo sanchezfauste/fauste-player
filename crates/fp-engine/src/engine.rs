@@ -658,7 +658,9 @@ impl Engine {
         let now = self.now;
         let changed = self.buses.get_mut(bus).is_some_and(|b| {
             let before = b.sample_rate();
-            b.reopen_at(rate, now);
+            // Nothing sounds here (checked above): the conductor may wait.
+            let mut budget = b.busy_budget(true);
+            b.reopen_at(rate, now, &mut budget);
             b.sample_rate() != before
         });
         if changed {

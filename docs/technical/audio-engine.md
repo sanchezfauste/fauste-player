@@ -193,12 +193,20 @@ cannot hang the conductor.
   `EAGAIN`, WASAPI's device in use; native DSD's own ALSA open; macOS hog mode
   held by another process). On Linux the sound server can grab a `hw:` device
   in the gap between closing the stream and opening it at the new rate.
-  `Bus::reopen_with` tries a busy open again (`open_retrying_busy`) up to
-  `tuning.device_busy_retries` times, `tuning.device_busy_retry_ms` apart,
-  sleeping on the conductor thread: the reopen already blocks it for the
-  device open, it happens only on an idle bus before a start, and the
-  defaults (3 × 20 ms) stay well inside `schedule_lead_ms`. The restore of
-  the previous configuration retries the same way. A device still busy
+  `Bus::reopen_with` tries a busy open again (`open_retrying_busy`),
+  `tuning.device_busy_retry_ms` apart, sleeping on the conductor thread,
+  while its `BusyBudget` has retries left. The caller takes one budget per
+  operation (`Bus::busy_budget`) and passes it to every reopen of that
+  operation: the open at the new configuration, the restore of the previous
+  one, and the reopens the engine chains (`open_dsd_stream` and its way
+  back; the candidates of `reopen_native_as_pcm`). So one operation waits at
+  most `device_busy_retries × device_busy_retry_ms`: 60 ms by default, 200 ms
+  at the maximum. That wait delays every output's planned events by as much,
+  so keep it below `schedule_lead_ms`. Only an idle bus gets retries
+  (`prepare_start`, `open_dsd_stream`); a sounding bus gets none
+  (`BusyBudget::NONE`), since its stream is closed and no virtual clock
+  runs during the wait, so its timeline would stall. Each try passes the
+  caller's `now` moved on by the time spent waiting. A device still busy
   restores the previous configuration with a warning and is not added to
   `refused_rates` or `refused_dsd`, so the next start asks again.
 - While anything on the bus sounds, the rate never changes, since every

@@ -254,7 +254,7 @@ fn a_rate_change_retries_a_device_that_was_busy_for_a_moment() {
     let (_b, device, mut bus, t0) = setup(true);
     let before = device.open_attempts();
     device.set_busy(1);
-    assert!(bus.reopen_at(44_100, t0));
+    assert!(bus.reopen_at(44_100, t0, &mut bus.busy_budget(true)));
     assert_eq!(bus.sample_rate(), 44_100);
     assert_eq!(bus.health(), BusHealth::Ok);
     assert_eq!(device.config().unwrap().sample_rate, 44_100);
@@ -267,13 +267,13 @@ fn a_device_busy_beyond_the_retries_keeps_the_rate_without_refusing_it() {
     let before = device.open_attempts();
     // Busy for the first try and both retries; free again for the restore.
     device.set_busy(3);
-    assert!(!bus.reopen_at(44_100, t0));
+    assert!(!bus.reopen_at(44_100, t0, &mut bus.busy_budget(true)));
     assert_eq!(device.open_attempts() - before, 4);
     assert_eq!(bus.sample_rate(), 48_000);
     assert_eq!(bus.health(), BusHealth::Ok);
     assert_eq!(device.config().unwrap().sample_rate, 48_000);
     // Busy is not a refusal of the rate: the next start asks again.
-    assert!(bus.reopen_at(44_100, t0));
+    assert!(bus.reopen_at(44_100, t0, &mut bus.busy_budget(true)));
     assert_eq!(bus.sample_rate(), 44_100);
     assert_eq!(device.config().unwrap().sample_rate, 44_100);
 }
@@ -283,12 +283,12 @@ fn a_rate_the_device_refuses_is_still_remembered() {
     let (_b, device, mut bus, t0) = setup(true);
     device.refuse_rate(44_100);
     let before = device.open_attempts();
-    assert!(!bus.reopen_at(44_100, t0));
+    assert!(!bus.reopen_at(44_100, t0, &mut bus.busy_budget(true)));
     let tried = device.open_attempts() - before;
     // One try at the rate (no retries: it is not busy), one restore.
     assert_eq!(tried, 2);
     assert_eq!(bus.sample_rate(), 48_000);
-    assert!(!bus.reopen_at(44_100, t0));
+    assert!(!bus.reopen_at(44_100, t0, &mut bus.busy_budget(true)));
     assert_eq!(device.open_attempts() - before, tried);
 }
 
@@ -415,4 +415,75 @@ fn a_device_that_keeps_opening_without_starting_is_reported_once() {
     assert_eq!(lines.count("opened but never started"), 1);
     assert_eq!(lines.count("output device back"), 0);
     assert_eq!(lines.count("output device lost"), 0);
+}
+
+#[test]
+fn a_busy_restore_after_a_refused_rate_is_retried() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.refuse_rate(44_100);
+    // The refusal does not spend the busy opens: the restore meets them.
+    device.set_busy(1);
+    let before = device.open_attempts();
+    let mut budget = bus.busy_budget(true);
+    assert!(!bus.reopen_at(44_100, t0, &mut budget));
+    // The rate, the busy restore, its retry.
+    assert_eq!(device.open_attempts() - before, 3);
+    assert_eq!(bus.health(), BusHealth::Ok);
+    assert_eq!(device.config().unwrap().sample_rate, 48_000);
+}
+
+#[test]
+fn one_reopen_spends_one_busy_budget_for_the_rate_and_the_restore() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.set_busy(100);
+    let before = device.open_attempts();
+    let mut budget = bus.busy_budget(true);
+    assert!(!bus.reopen_at(44_100, t0, &mut budget));
+    // The rate, its two retries (TIMING.busy_retries), the restore once.
+    assert_eq!(device.open_attempts() - before, 4);
+    assert_eq!(bus.health(), BusHealth::Lost);
+}
+
+#[test]
+fn a_sounding_bus_never_waits_for_a_busy_device() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.set_busy(1);
+    let before = device.open_attempts();
+    let mut budget = bus.busy_budget(false);
+    assert!(!bus.reopen_at(44_100, t0, &mut budget));
+    // The rate once, the restore once: no retries.
+    assert_eq!(device.open_attempts() - before, 2);
+    assert_eq!(bus.health(), BusHealth::Ok);
+    assert_eq!(bus.sample_rate(), 48_000);
+    // Not refused: asked again.
+    assert!(bus.reopen_at(44_100, t0, &mut bus.busy_budget(false)));
+}
+
+#[test]
+fn a_device_that_never_starts_is_reported_again_after_a_failed_reopen() {
+    let (_b, device, mut bus, t0) = lost_and_replugged();
+    let ((), lines) = capture(|| {
+        let mut now = t0 + Duration::from_secs(3);
+        bus.supervise(now);
+        now += Duration::from_millis(5_100);
+        bus.supervise(now);
+        // It starts at last.
+        now += Duration::from_secs(2);
+        bus.supervise(now);
+        device.render(480).unwrap();
+        now += Duration::from_millis(10);
+        bus.supervise(now);
+        assert_eq!(bus.health(), BusHealth::Ok);
+        // A rate change on a device gone again: lost, on the virtual clock.
+        device.unplug();
+        assert!(!bus.reopen_at(44_100, now, &mut bus.busy_budget(true)));
+        assert_eq!(bus.health(), BusHealth::Lost);
+        device.replug();
+        now += Duration::from_secs(3);
+        bus.supervise(now);
+        assert!(device.is_open());
+        now += Duration::from_millis(5_100);
+        bus.supervise(now);
+    });
+    assert_eq!(lines.count("opened but never started"), 2);
 }

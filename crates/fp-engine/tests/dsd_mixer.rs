@@ -828,3 +828,39 @@ fn an_empty_hold_holds_only_the_block_straddling_its_frame() {
     render(&mut m, 4);
     assert_eq!(p.shared.frames_played(), 8);
 }
+
+#[test]
+fn a_pcm_stream_in_standby_plays_pcm_silence_even_if_the_bus_was_in_dsd_mode() {
+    let (mixer, handle) = Mixer::new(2, CONFIG);
+    // A DSD -> PCM reconnect: the mixer has not left DSD mode yet when the
+    // PCM stream opens in standby.
+    handle.shared.dsd_on.store(true, Ordering::Release);
+    handle.shared.standby.store(true, Ordering::Release);
+    let mut pcm = MixerRenderer::new(
+        Arc::new(Mutex::new(mixer)),
+        handle.shared.clone(),
+        None,
+        false,
+    );
+    let mut out = vec![1.0f32; 64];
+    pcm.render(&mut out, 2);
+    assert!(
+        out.iter().all(|s| *s == 0.0),
+        "PCM silence, not the DSD idle word"
+    );
+}
+
+#[test]
+fn a_native_stream_in_standby_plays_the_dsd_idle_word() {
+    let (mixer, handle) = Mixer::new(2, CONFIG);
+    handle.shared.standby.store(true, Ordering::Release);
+    let mut native = MixerRenderer::new(
+        Arc::new(Mutex::new(mixer)),
+        handle.shared.clone(),
+        None,
+        true,
+    );
+    let mut out = vec![0.0f32; 64];
+    native.render(&mut out, 2);
+    assert!(out.iter().all(|s| *s == silence_sample()));
+}

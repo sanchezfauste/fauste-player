@@ -521,7 +521,11 @@ pub struct Tuning {
     /// When a rate change finds the device busy (another application or the
     /// sound server took it while the stream was closed), how many more
     /// times it is tried, `device_busy_retry_ms` apart, before the bus
-    /// keeps its rate. The conductor waits meanwhile: at most the product.
+    /// keeps its rate. One budget covers the whole operation (the new rate,
+    /// the way back, chained reopens), and the conductor waits meanwhile:
+    /// at most the product per operation (60 ms by default, 200 ms at the
+    /// maximum), which delays every output's planned events by as much.
+    /// Only an idle bus waits; a sounding one tries each open once.
     pub device_busy_retries: u32,
     pub device_busy_retry_ms: f64,
     pub gain_smoothing_ms: f64,
@@ -885,14 +889,14 @@ impl Config {
         clamp_to(
             &mut t.device_busy_retries,
             0,
-            10,
+            5,
             "tuning.device_busy_retries",
             &mut w,
         );
         clamp_to(
             &mut t.device_busy_retry_ms,
             0.0,
-            100.0,
+            40.0,
             "tuning.device_busy_retry_ms",
             &mut w,
         );
@@ -1149,8 +1153,8 @@ mod tests {
         c.tuning.device_busy_retries = 1_000;
         c.tuning.device_busy_retry_ms = 1e6;
         let warnings = c.validate();
-        assert_eq!(c.tuning.device_busy_retries, 10);
-        assert_eq!(c.tuning.device_busy_retry_ms, 100.0);
+        assert_eq!(c.tuning.device_busy_retries, 5);
+        assert_eq!(c.tuning.device_busy_retry_ms, 40.0);
         for field in ["tuning.device_busy_retries", "tuning.device_busy_retry_ms"] {
             assert!(warnings.iter().any(|w| w.field == field), "{field}");
         }
