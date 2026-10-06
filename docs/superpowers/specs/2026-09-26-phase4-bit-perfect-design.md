@@ -39,7 +39,7 @@
 
 Rules for a bit-perfect bus:
 
-1. **Rate:** each bus has its own rate. A normal bus runs at `outputs.sample_rate`. A bit-perfect bus starts at `outputs.sample_rate` and changes only as below.
+1. **Rate:** each bus has its own rate. A normal bus runs at its device's rate override, or `outputs.sample_rate` (operator feedback 4, Q12). A bit-perfect bus starts at that same rate and changes only as below.
 2. **The rate is decided when a source starts, not when it is attached.** A source *starts* when:
    - a track is played (`StartCurrent`);
    - a track loaded paused is resumed for the first time;
@@ -82,7 +82,7 @@ The badge in the player header uses it. It was inactive since Phase 1.
 
 ## B6. Settings
 
-- **Settings → Audio outputs** lists the devices the routes use, each with a **Bit-perfect** checkbox.
+- **Settings → Audio outputs**, in its Advanced view (operator feedback 4, Q12), lists the devices the routes use, each with a **Bit-perfect** checkbox, its own rate and buffer, and its DSD mode.
   - The checkbox is disabled, with the reason in a tooltip ("This device is shared by a sound server"), when the device is not exclusive-capable.
   - Changes apply after a restart, like every output change.
 - The cue devices can be bit-perfect as well, but the badge follows Main only.

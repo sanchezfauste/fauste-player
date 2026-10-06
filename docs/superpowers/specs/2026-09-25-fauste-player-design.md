@@ -138,13 +138,15 @@ A player has:
 - `mode ∈ {Single, Continuous}`.
 - `stop_after_current: bool`.
 - `cue: Option<CueState>`.
+- `pending_start: Option<(EntryId, f64)>`: where Play starts the `next` entry from Stopped, when the operator chose it (rule 3a).
 - `volume` (linear 0.0–1.0, **default 1.0**; values outside are clamped, and a NaN is ignored so it never silences what is on air).
 
 ### 3.2 Rules
 
 1. **Entry colours.** In each player's table, that player's current entry is shown red and its next green; an entry on air on another player is marked with that player's number ("P2"), not highlighted. Entries that player has played are dimmed. "Played" is kept per entry and per player, and persists.
 2. **Double-click** on an entry sets `next` to that entry. This includes the player's own current entry (feedback spec O37, and the maintainer's later decision that a double-click acts on it too): it plays once more (rule 27a). Set as next from the context menu, the CUE window's Set as next and the remote API accept it as well. It is allowed while `stop_after_current` is on, and it does **not** clear that flag.
-3. **Play while Stopped.** If `next` exists, it becomes `current` and starts; `next` becomes the entry after it. If there is no `next`, nothing happens.
+3. **Play while Stopped.** If `next` exists, it becomes `current` and starts, at its cue-in or at its pending start (rule 3a); `next` becomes the entry after it. If there is no `next`, nothing happens.
+3a. **Pending start** (operator feedback 4, Q8): a seek while Stopped, with a `next` entry, stores `pending_start = (next, secs)`, clamped to the entry's play range, and sends nothing to the engine; with no `next` it does nothing. Play while Stopped starts that entry there instead of at its cue-in, once. The pending start is cleared when `next` changes, when its entry is removed or moved, on Stop, when it is used, and by every other start. Restart, the automatic advance, the segue and Previous keep the cue-in. The preload of the next entry starts at the pending start. Nothing goes on air by itself.
 4. **Play while Paused** resumes.
 5. **Play while Playing.** If `next` exists and no fade is running:
    - the current source fades out over `fade_ms` (default 1000 ms, configurable);
@@ -379,8 +381,8 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
   - a corrupt cache entry is discarded and recomputed;
   - entries of older analysis versions are removed by the analysis pool, off the start-up path;
   - tracks an earlier version analysed (an older `analysis_version`, or no format) keep that analysis until the operator asks: at start a notice gives their number with **Analyse now** and **Later**, and Settings → Analysis offers the same. Only tracks on screen, which need their waveform, are analysed at once, ahead of any analysis queued for the library (the pool has an urgent queue). Re-analysing a library costs the processor for a while on an on-air machine.
-- **Missing files come back by themselves.** A track whose file was not found (`Missing`: a drive not mounted yet, a share offline) is looked for again every `tuning.missing_recheck_ms` (default 30 s): a probe thread looks for it (each folder once, from the root down, so a drive that is not mounted costs one look), and only the files found go to the analysis pool, which answers from the cache. Neither the services thread nor the pool waits on a share that is offline, and one look runs at a time. When the file is found the track is playable again, with its markers. A file still missing changes nothing in the model (no autosave). `Unreadable` files are not retried by themselves (that would decode them every time): *Re-analyse all* checks them again.
-- **Playability before analysis.** A track can be played before its analysis finishes. Until then it has no waveform or segue start, and `cue_in = 0`, `cue_out = duration`. If analysis finishes while the track is current or next, its markers apply to scheduling that has not happened yet.
+- **Missing files come back by themselves.** A track whose file was not found (`Missing`: a drive not mounted yet, a share offline) is looked for again every `tuning.missing_recheck_ms` (default 30 s): a probe thread looks for it (each folder once, from the root down, so a drive that is not mounted costs one look), and only the files found go to the analysis pool, which answers from the cache. Neither the services thread nor the pool waits on a share that is offline, and one look runs at a time. When the file is found the track is playable again, with its markers. A file still missing changes nothing in the model (no autosave). `Unreadable` files are not decoded again by themselves: on the same timer the probe compares their size and modification time with those seen at the failure, and a change sends the file to the analysis pool again. The row menu's **Re-analyse** and *Re-analyse all* check them at once (operator feedback 4, Q10).
+- **Playability before analysis.** A track can be played before its analysis finishes. Until then it has no waveform or segue start, and `cue_in = 0`, `cue_out = duration`, where the duration is read from the file's header off the UI thread when the container gives it (operator feedback 4, Q1); without it, the total is unknown and the track cannot be seeked. If analysis finishes while the track is current or next, its markers apply to scheduling that has not happened yet.
 
 Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opus, Matroska/WebM audio, WavPack, Monkey's Audio and DSD (DSF, DSDIFF). The extensions and decoders are in the [audio formats spec](2026-09-27-audio-formats-design.md) F1 (Phase 1 had symphonia's formats only).
 
@@ -430,8 +432,8 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
 
 - **Player column**, one per configured player (min width 380 px; any number of players is laid out in a horizontally scrollable row):
   - **Header:** `P1`…`Pn`, state dot and label ("On air", "Stopped", "Paused"), fade and stop-after badges, BP badge (inactive until Phase 4), SINGLE|CONT segmented control (one border, the active mode filled), CUE button.
-  - **Info row:** 64 px cover (placeholder vinyl icon if none), title, artist, and the next line with the green square (plus cue time in blue when cueing). With no current entry (stopped), the cover, title, artist, countdown and waveform show the `next` entry, the one Play starts, at its cue-in (`view::shown_entry`); a position the engine still reports is ignored; the waveform shows times but does not seek, a zoom on it does not follow the pinned position, and the intro badge does not blink. The next line keeps naming it.
-  - **Meter column** at the right, spanning the info row and the transport: labelled dB scale, stereo meter with reference lines and peak hold (meters spec M4), vertical volume fader (drag + wheel, dB tooltip).
+  - **Info row:** 64 px cover (placeholder vinyl icon if none), title, artist, and the next line with the green square (plus cue time in blue when cueing). With no current entry (stopped), the cover, title, artist, countdown and waveform show the `next` entry, the one Play starts, at its cue-in (`view::shown_entry`); a position the engine still reports is ignored; a click on the waveform sets where Play starts (rule 3a) and the playhead and countdown show it, a zoom on it does not follow the pinned position, and the intro badge does not blink. The next line keeps naming it.
+  - **Meter column** at the right, spanning the info row and the transport: stereo meter between two labelled rulers, with peak hold and nothing drawn over the bars (meters spec M4, operator feedback 4, Q11), vertical volume fader (drag + wheel, dB tooltip).
   - **Transport:**
     - Play/NEXT button spanning 2 rows;
     - a 3×2 grid, 6 px gaps, all equal size: Previous, Stop, Pause on top; Restart, Fade stop, Stop-after-current below. Buttons whose action is unavailable (rule 26) are dimmed and inert, the Play button and the header's CUE included;
@@ -442,7 +444,8 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - the trimmed head and tail (before `cue_in`, after `cue_out`) dimmed, with 1 px lines at the cue points;
     - hover time tooltip, click to seek; press-and-drag previews and seeks on release inside (outside or Esc cancels; Alt-drag edits markers) (operator feedback 2, O10, replaced this: a click seeks and a drag pans a zoomed view, with no preview);
     - wheel zoom around the pointer down to one bucket per pixel, Shift or sideways wheel pans, a "Full view" button while zoomed; the view follows the playhead unless moved within `ui.follow_current_grace_secs`, and resets on a new entry (feedback spec §3.3);
-    - intro and outro badges per §3 (rules 18 and 19).
+    - intro and outro badges per §3 (rules 18 and 19);
+    - the CUE window uses the same waveform panel (operator feedback 4, Q7).
   - `elapsed / total` on a row under the waveform, right-aligned.
   - **Playlist tabs:** reordering and dropping entries on a tab appends them.
   - **Track table:**
@@ -450,12 +453,12 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - follows the current entry: when it changes and the table and tabs were not used within `ui.follow_current_grace_secs` (0 = never), the tab of its playlist is shown and its row scrolled to the top; a drag or open row menu makes it wait (feedback spec F18);
     - virtualised rows;
     - `#` zero-padded to the digit count of the playlist length (3 digits for ≥ 100 entries);
-    - this player's current row red with a speaker icon, its next row green with an arrow icon, entries on air on another player marked "P<n>", rows this player has played dimmed, missing rows with a file-with-a-cross icon and unreadable rows with a warning icon, whose tooltip gives the reason and the file path (the cartwall's carts show the same icons and tooltip); tracks an earlier analysis version analysed show reload arrows at the right of the title, with a tooltip pointing to Settings → Analysis; entries marked to repeat or to stop after show a repeat icon or the stop-after icon at the right of the title, in the row's text colour, and the row menu has checkable "Repeat this track" and "Stop after this track".
+    - this player's current row red with a speaker icon, its next row green with an arrow icon, entries on air on another player marked "P<n>", rows this player has played dimmed, missing rows with a file-with-a-cross icon and unreadable rows with a warning icon; the row's track info popup starts with the reason, in amber (operator feedback 4, Q9; the cartwall's carts show the same icons and tooltip); tracks an earlier analysis version analysed show reload arrows at the right of the title, with a tooltip pointing to Settings → Analysis; tracks not analysed yet show a muted hourglass there, with the tooltip "Analysis pending" (operator feedback 4, Q2); entries marked to repeat or to stop after show a repeat icon or the stop-after icon at the right of the title, in the row's text colour, and the row menu has checkable "Repeat this track" and "Stop after this track".
   - **Footer:** "+ Add" (native file dialog via `rfd`, defaulting to the music folder), entry count, playlist times (§3, rule 20).
 - **Interactions:**
   - single click selects, double click sets next;
-  - context menu: Play now, Set as next, Pre-listen on CUE, Add tracks below…, Duplicate, Move to ▸, Remove from playlist;
-  - drag & drop within a list, to another player's list and onto tabs, with a violet drop indicator line;
+  - context menu: Play now, Set as next, Pre-listen on CUE, Re-analyse (operator feedback 4, Q10), Add tracks below…, Duplicate, Move to ▸, Remove from playlist;
+  - drag & drop within a list, to another player's list and onto tabs, with a violet drop indicator line at the row boundary under the pointer, drawn only in the table under the pointer (operator feedback 4, Q4);
   - OS file drops onto a list insert at the drop position.
 - **Status bar:** shortcut hints, legend (On air, Next, Intro, Segue), backend/OS label, bus alerts.
 - **Cartwall:** Phase 2 (hidden in Phase 1).
@@ -466,7 +469,7 @@ A modal window, closed with `Esc` or "Close", with these sections:
 
 - **Audio outputs:**
   - backend (Phase 1: the single real backend of the OS, plus Null);
-  - sample rate and buffer size, with the computed latency;
+  - sample rate and buffer size, with the computed latency; a Basic | Advanced selector, where Advanced adds a rate and buffer per device, bit-perfect, the DSD mode and the DSD settings (operator feedback 4, Q12);
   - per player, Main and Cue device and channel pair;
   - "Test Main" / "Test Cue" buttons that play a test tone (defaults: 1 kHz / 440 Hz, 1.5 s, −18 dBFS) through the real engine route.
 - **Players:** player count, default mode, `fade_ms`, auto-segue on/off, `end_warning_secs` (`history_len` is set in `config.json`).
