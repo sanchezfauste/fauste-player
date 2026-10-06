@@ -1019,6 +1019,10 @@ impl Engine {
                 watchdog_timeout: Duration::from_secs_f64(t.watchdog_timeout_ms / 1000.0),
                 reconnect_interval: Duration::from_secs_f64(t.reconnect_interval_ms / 1000.0),
                 startup_grace: Duration::from_secs_f64(t.watchdog_startup_grace_ms / 1000.0),
+                busy_retries: t.device_busy_retries,
+                busy_retry_interval: Duration::from_secs_f64(
+                    t.device_busy_retry_ms.max(0.0) / 1000.0,
+                ),
             };
             let bus = Bus::open(key.clone(), backend, config, 8, mixer, timing, now);
             bus.shared()

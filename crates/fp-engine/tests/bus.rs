@@ -31,6 +31,8 @@ const TIMING: BusTiming = BusTiming {
     watchdog_timeout: Duration::from_millis(500),
     reconnect_interval: Duration::from_secs(2),
     startup_grace: Duration::from_secs(5),
+    busy_retries: 2,
+    busy_retry_interval: Duration::ZERO,
 };
 
 fn setup(plugged: bool) -> (OfflineBackend, OfflineDevice, Bus, Instant) {
@@ -236,4 +238,47 @@ fn the_watchdog_falls_back_to_the_pcm_rate_before_dsd_instead_of_retrying_foreve
     assert_eq!(bus.sample_rate(), 48_000);
     assert_eq!(bus.take_rate_change(), Some(352_800));
     assert_eq!(bus.take_rate_change(), None);
+}
+
+#[test]
+fn a_rate_change_retries_a_device_that_was_busy_for_a_moment() {
+    let (_b, device, mut bus, t0) = setup(true);
+    let before = device.open_attempts();
+    device.set_busy(1);
+    assert!(bus.reopen_at(44_100, t0));
+    assert_eq!(bus.sample_rate(), 44_100);
+    assert_eq!(bus.health(), BusHealth::Ok);
+    assert_eq!(device.config().unwrap().sample_rate, 44_100);
+    assert_eq!(device.open_attempts() - before, 2);
+}
+
+#[test]
+fn a_device_busy_beyond_the_retries_keeps_the_rate_without_refusing_it() {
+    let (_b, device, mut bus, t0) = setup(true);
+    let before = device.open_attempts();
+    // Busy for the first try and both retries; free again for the restore.
+    device.set_busy(3);
+    assert!(!bus.reopen_at(44_100, t0));
+    assert_eq!(device.open_attempts() - before, 4);
+    assert_eq!(bus.sample_rate(), 48_000);
+    assert_eq!(bus.health(), BusHealth::Ok);
+    assert_eq!(device.config().unwrap().sample_rate, 48_000);
+    // Busy is not a refusal of the rate: the next start asks again.
+    assert!(bus.reopen_at(44_100, t0));
+    assert_eq!(bus.sample_rate(), 44_100);
+    assert_eq!(device.config().unwrap().sample_rate, 44_100);
+}
+
+#[test]
+fn a_rate_the_device_refuses_is_still_remembered() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.refuse_rate(44_100);
+    let before = device.open_attempts();
+    assert!(!bus.reopen_at(44_100, t0));
+    let tried = device.open_attempts() - before;
+    // One try at the rate (no retries: it is not busy), one restore.
+    assert_eq!(tried, 2);
+    assert_eq!(bus.sample_rate(), 48_000);
+    assert!(!bus.reopen_at(44_100, t0));
+    assert_eq!(device.open_attempts() - before, tried);
 }

@@ -406,3 +406,22 @@ fn null_refuses_any_dsd_stream() {
     };
     assert!(open_null(config).is_err());
 }
+
+#[test]
+fn offline_devices_can_be_busy_for_a_number_of_opens() {
+    let backend = OfflineBackend::new();
+    let device = backend.add_device("card", 2);
+    device.set_busy(2);
+    let open = || {
+        backend.open_output(
+            &device.id(),
+            STEREO,
+            counter().0,
+            Arc::new(Errors::default()),
+        )
+    };
+    assert!(matches!(open(), Err(BackendError::Busy(_))));
+    assert!(matches!(open(), Err(BackendError::Busy(_))));
+    assert!(open().is_ok());
+    assert_eq!(device.open_attempts(), 3);
+}

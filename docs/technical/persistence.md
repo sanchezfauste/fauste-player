@@ -265,6 +265,8 @@ See [Remote control API](remote-api.md).
 | `watchdog_timeout_ms` | 500 | missing heartbeat that marks a bus lost |
 | `watchdog_startup_grace_ms` | 5000 | grace after opening a device |
 | `reconnect_interval_ms` | 2000 | device retry period |
+| `device_busy_retries` | 3 | how many more times a rate change tries a device that answered busy (0–10) |
+| `device_busy_retry_ms` | 20 | wait before each of those tries; the conductor waits meanwhile (0–100) |
 | `gain_smoothing_ms` | 20 | volume smoothing |
 | `save_debounce_ms` | 1000 | autosave delay |
 | `missing_recheck_ms` | 30000 | how often files not found are looked for again |

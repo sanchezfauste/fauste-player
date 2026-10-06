@@ -156,7 +156,7 @@ cannot hang the conductor.
   points and test tones (`Engine::rate_of`, `frames_on`). Workers open each
   source at the rate the engine passes in `LoadOptions::rate`.
 - **Bit-perfect buses** are named in `outputs.bit_perfect` and opened with
-  `StreamConfig::exclusive`. If exclusive access is refused (`Unsupported`),
+  `StreamConfig::exclusive`. If exclusive access is refused (`Unsupported` or `Busy`),
   the bus reopens shared and `exclusive_granted` stays false.
 - **The rate follows the file.** When a source starts on a bit-perfect bus
   (`prepare_start`), the bus is reopened at the file's rate
@@ -178,6 +178,19 @@ cannot hang the conductor.
   the rate, not of exclusive access); a bus already shared may change rate
   shared. A double failure leaves the bus `Lost`, for the watchdog. The mixer's
   volume smoothing keeps its duration at the new rate (`Mixer::follow_rate`).
+- **A busy device is not a refusal.** Backends report a device another client
+  holds as `BackendError::Busy` (cpal's `DeviceBusy`: ALSA's `EBUSY` or
+  `EAGAIN`, WASAPI's device in use; native DSD's own ALSA open; macOS hog mode
+  held by another process). On Linux the sound server can grab a `hw:` device
+  in the gap between closing the stream and opening it at the new rate.
+  `Bus::reopen_with` tries a busy open again (`open_retrying_busy`) up to
+  `tuning.device_busy_retries` times, `tuning.device_busy_retry_ms` apart,
+  sleeping on the conductor thread: the reopen already blocks it for the
+  device open, it happens only on an idle bus before a start, and the
+  defaults (3 × 20 ms) stay well inside `schedule_lead_ms`. The restore of
+  the previous configuration retries the same way. A device still busy
+  restores the previous configuration with a warning and is not added to
+  `refused_rates` or `refused_dsd`, so the next start asks again.
 - While anything on the bus sounds, the rate never changes, since every
   timeline on the bus is in its frames. Preloads never decide the rate.
 - **`PlayerTelemetry::bit_perfect`** is set when all of these hold:

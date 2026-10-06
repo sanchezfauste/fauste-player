@@ -518,6 +518,12 @@ pub struct Tuning {
     /// Watchdog timeout before a newly opened stream delivers its first block.
     pub watchdog_startup_grace_ms: f64,
     pub reconnect_interval_ms: f64,
+    /// When a rate change finds the device busy (another application or the
+    /// sound server took it while the stream was closed), how many more
+    /// times it is tried, `device_busy_retry_ms` apart, before the bus
+    /// keeps its rate. The conductor waits meanwhile: at most the product.
+    pub device_busy_retries: u32,
+    pub device_busy_retry_ms: f64,
     pub gain_smoothing_ms: f64,
     pub save_debounce_ms: f64,
     /// How often files not found (a drive not mounted yet) are looked for
@@ -543,6 +549,8 @@ impl Default for Tuning {
             watchdog_timeout_ms: 500.0,
             watchdog_startup_grace_ms: 5000.0,
             reconnect_interval_ms: 2000.0,
+            device_busy_retries: 3,
+            device_busy_retry_ms: 20.0,
             gain_smoothing_ms: 20.0,
             save_debounce_ms: 1000.0,
             missing_recheck_ms: 30_000.0,
@@ -875,6 +883,20 @@ impl Config {
             &mut w,
         );
         clamp_to(
+            &mut t.device_busy_retries,
+            0,
+            10,
+            "tuning.device_busy_retries",
+            &mut w,
+        );
+        clamp_to(
+            &mut t.device_busy_retry_ms,
+            0.0,
+            100.0,
+            "tuning.device_busy_retry_ms",
+            &mut w,
+        );
+        clamp_to(
             &mut t.gain_smoothing_ms,
             1.0,
             500.0,
@@ -1116,6 +1138,25 @@ mod tests {
                     .any(|w| w.field == "tuning.restart_handoff_ms")
             );
         }
+    }
+
+    #[test]
+    fn the_device_busy_retries_have_their_defaults_and_ranges() {
+        let c: Config = serde_json::from_str(r#"{"tuning":{}}"#).unwrap();
+        assert_eq!(c.tuning.device_busy_retries, 3);
+        assert_eq!(c.tuning.device_busy_retry_ms, 20.0);
+        let mut c = Config::default();
+        c.tuning.device_busy_retries = 1_000;
+        c.tuning.device_busy_retry_ms = 1e6;
+        let warnings = c.validate();
+        assert_eq!(c.tuning.device_busy_retries, 10);
+        assert_eq!(c.tuning.device_busy_retry_ms, 100.0);
+        for field in ["tuning.device_busy_retries", "tuning.device_busy_retry_ms"] {
+            assert!(warnings.iter().any(|w| w.field == field), "{field}");
+        }
+        c.tuning.device_busy_retry_ms = -5.0;
+        c.validate();
+        assert_eq!(c.tuning.device_busy_retry_ms, 0.0);
     }
 
     #[test]

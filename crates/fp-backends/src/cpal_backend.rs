@@ -548,6 +548,11 @@ impl CpalBackend {
                     cpal::ErrorKind::UnsupportedConfig => {
                         last = BackendError::Unsupported(e.to_string())
                     }
+                    // Held by another client for now (ALSA's EBUSY or
+                    // EAGAIN, WASAPI's device in use): not a refusal.
+                    cpal::ErrorKind::DeviceBusy => {
+                        return Err(BackendError::Busy(e.to_string()));
+                    }
                     _ => return Err(backend_error(e)),
                 },
             }

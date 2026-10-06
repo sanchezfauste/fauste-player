@@ -25,6 +25,16 @@
   analysed, and a device running at the file's rate.
 - **A short silence before a track.** The bit-perfect device reopened at the
   track's sample rate. Keep the library at one rate to avoid it.
+- **A track plays resampled, and the log says the device is busy (Linux).**
+  To change rate, the application closes the device and opens it again. In
+  that moment the sound server (PipeWire) can take the card. The application
+  tries again a few times; if the card is still busy, the track plays at the
+  device's current rate, and the next track asks for its rate again. To give
+  the application the card to itself, open the system's sound settings and
+  set that card's profile to **Off** (or **Pro Audio**), so the sound server
+  leaves its `hw:` device alone. The number of tries and the wait between
+  them are `tuning.device_busy_retries` and `tuning.device_busy_retry_ms` in
+  the configuration file.
 - **The device plays, but the BP badge stays off (Windows or macOS).**
   Exclusive access was refused, and the device plays shared.
   - Windows: another program may hold the device exclusively, or exclusive

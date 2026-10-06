@@ -26,6 +26,8 @@ struct DeviceState {
     exclusive_capable: bool,
     refused_rates: HashSet<u32>,
     open_attempts: u64,
+    /// Opens still to fail with `Busy`.
+    busy_opens: u64,
     /// `None` is F32.
     sample_format: Option<SampleFormat>,
     native_dsd: bool,
@@ -131,6 +133,12 @@ impl OfflineDevice {
     /// Makes opens at `rate` fail with `Unsupported`.
     pub fn refuse_rate(&self, rate: u32) {
         lock(&self.state).refused_rates.insert(rate);
+    }
+
+    /// Makes the next `opens` opens on this device fail with `Busy`, as a
+    /// device another application (or the sound server) holds would.
+    pub fn set_busy(&self, opens: u64) {
+        lock(&self.state).busy_opens = opens;
     }
 
     /// The configuration of the open stream, if any.
@@ -267,6 +275,12 @@ impl AudioBackend for OfflineBackend {
         state.open_attempts += 1;
         if !state.plugged {
             return Err(BackendError::DeviceNotFound(device.clone()));
+        }
+        if state.busy_opens > 0 {
+            state.busy_opens -= 1;
+            return Err(BackendError::Busy(
+                "the device is in use by another application".to_owned(),
+            ));
         }
         if config.exclusive && !state.exclusive_capable {
             return Err(BackendError::Unsupported(

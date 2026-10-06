@@ -108,7 +108,7 @@ A priority change the system refuses is logged once and ignored: the thread keep
 |---|---|---|---|
 | `players`, `analysis`, `outputs`, `ui` | operator | player count, `fade_ms`, auto-segue, trim threshold and margin, segue drop, routes, wave colour | Settings UI |
 | `limits` | resource guards | `max_players` (16), `max_cover_bytes`, `max_state_file_bytes`, `backup_count` | config file only |
-| `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `reconnect_interval_ms`, `gain_smoothing_ms`, `save_debounce_ms`, `missing_recheck_ms`, `restart_handoff_ms` | config file only (an "advanced" section) |
+| `tuning` | engine internals | `declick_ms`, `pause_ramp_ms`, `prebuffer_secs`, `ready_threshold_ms`, `mixer_headroom`, `max_commands_per_block`, `schedule_lead_ms`, `conductor_tick_ms`, `watchdog_timeout_ms`, `reconnect_interval_ms`, `device_busy_retries`, `device_busy_retry_ms`, `gain_smoothing_ms`, `save_debounce_ms`, `missing_recheck_ms`, `restart_handoff_ms` | config file only (an "advanced" section) |
 
 - Every group is a typed struct with `Default` values documented in code. They are validated on load: out-of-range values are clamped to the valid range with a logged warning, never rejected with a crash.
 - Engine capacities (mixer slots, scratch buffers) are **derived** from the configuration at the moment a mixer is built (§4.3), never fixed constants.

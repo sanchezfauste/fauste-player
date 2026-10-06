@@ -179,6 +179,10 @@ pub enum BackendError {
     DeviceNotFound(DeviceId),
     #[error("unsupported configuration: {0}")]
     Unsupported(String),
+    /// The device is held by someone else for now (another application, or
+    /// the sound server): the same configuration may open a moment later.
+    #[error("device busy: {0}")]
+    Busy(String),
     #[error("backend error: {0}")]
     Backend(String),
 }
