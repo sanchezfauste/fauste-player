@@ -353,3 +353,22 @@ fn analysis_fields_this_version_dropped_are_ignored_with_a_warning() {
         );
     }
 }
+
+#[test]
+fn a_saved_pending_start_that_does_not_parse_is_dropped_with_a_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    saved_with_a_played_entry(&s);
+    let path = s.paths().session_file();
+    let mut doc: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    doc["players"][0]["pending_start"] = serde_json::json!("garbage");
+    fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+
+    let loaded = s.load("Main");
+    assert!(loaded.state.players[0].pending_start.is_none());
+    assert!(
+        loaded.warnings.iter().any(|w| w.contains("pending start")),
+        "{:?}",
+        loaded.warnings
+    );
+}

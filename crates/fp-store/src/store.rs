@@ -42,6 +42,38 @@ fn parse_doc<T: DeserializeOwned>(
     serde_json::from_value(value).map_err(|e| ParseError::Corrupt(e.to_string()))
 }
 
+/// Parses `session.json`. A saved pending start that does not parse loads
+/// as none (the model decides how); each one dropped is reported.
+fn parse_session(bytes: &[u8]) -> Result<(SessionDoc, Vec<String>), ParseError> {
+    let value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
+    let value = upgrade(value, SESSION_SCHEMA, SESSION_MIGRATIONS)?;
+    let raw: Vec<bool> = value
+        .get("players")
+        .and_then(serde_json::Value::as_array)
+        .map(|players| {
+            players
+                .iter()
+                .map(|p| p.get("pending_start").is_some_and(|v| !v.is_null()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let doc: SessionDoc =
+        serde_json::from_value(value).map_err(|e| ParseError::Corrupt(e.to_string()))?;
+    let notes = raw
+        .iter()
+        .zip(&doc.players)
+        .filter(|(had, p)| **had && p.pending_start.is_none())
+        .map(|(_, p)| {
+            format!(
+                "session: the saved pending start of player {:?} is not valid; ignored",
+                p.id
+            )
+        })
+        .collect();
+    Ok((doc, notes))
+}
+
 fn parse_config(bytes: &[u8]) -> Result<(fp_model::Config, Vec<String>), ParseError> {
     let value: serde_json::Value =
         serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
@@ -132,14 +164,21 @@ impl Store {
             PLAYLISTS_MIGRATIONS,
         );
         warnings.extend(lists.warnings);
-        let session: Loaded<SessionDoc> = load_doc(
+        let session: Loaded<(SessionDoc, Vec<String>)> = load_with_fallback(
             &self.paths.session_file(),
             limits.backup_count,
             limits.max_state_file_bytes,
-            SESSION_SCHEMA,
-            SESSION_MIGRATIONS,
+            parse_session,
         );
         warnings.extend(session.warnings);
+        let session = Loaded {
+            value: session.value.map(|(doc, notes)| {
+                warnings.extend(notes);
+                doc
+            }),
+            source: session.source,
+            warnings: Vec::new(),
+        };
         let carts: Loaded<CartsDoc> = load_doc(
             &self.paths.carts_file(),
             limits.backup_count,
