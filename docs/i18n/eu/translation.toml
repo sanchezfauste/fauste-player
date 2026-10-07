@@ -1,0 +1,15 @@
+# Basque translation of the user guide, generated with AI from the English
+# guide in docs/user. Regenerated before each release; see
+# docs/technical/release-process.md.
+language = "eu"
+name = "Euskara"
+title = "Fauste Player — Erabiltzailearen gida"
+label = "Hizkuntza"
+# The commit of master whose docs/user this translation was made from, and
+# its `git describe --tags`.
+source-commit = "69320878e299f7829975d5b1a845f1a8c96794bb"
+source-version = "v0.5.0-120-g6932087"
+# The notice on every page; {version} and {commit} are replaced with the
+# fields above, and english-link links to the same page in English.
+notice = "Orri hau AArekin itzuli da ingelesezko gidatik abiatuta ({version}, {commit} commita), eta akatsak izan ditzake. Desberdintasunik badago, ingelesezko bertsioa da baliozkoa."
+english-link = "Irakurri jatorrizkoa ingelesez"
