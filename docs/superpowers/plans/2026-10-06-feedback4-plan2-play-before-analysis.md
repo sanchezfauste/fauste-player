@@ -2435,7 +2435,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 - Consumes: `PlayerState::pending_start` (Task 7) and `Command::Seek` on a stopped player (Task 7).
 - Produces: `PlayerView::elapsed`, `remaining` and `markers.position` for a stopped player with a pending start.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/fp-app/tests/view.rs`:
 
@@ -2502,7 +2502,7 @@ fn a_click_on_a_stopped_players_waveform_sets_where_play_starts() {
 }
 ```
 
-- [ ] **Step 2: Run them to make sure they fail**
+- [x] **Step 2: Run them to make sure they fail**
 
 Run: `cargo test -p fp-app --test view q8_6` and `cargo test -p fp-app --test waveform_ui a_click_on_a_stopped`
 
@@ -2510,7 +2510,7 @@ Expected: FAIL.
 - `view`: elapsed is 0.0 (the cue-in), not 50.0.
 - `waveform_ui`: no `Seek` is sent, because the waveform is not seekable while stopped.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `crates/fp-app/src/ui/view.rs`, in `player_view`, replace:
 
@@ -2549,13 +2549,13 @@ Leave the follow condition (`pv.status != PlayerStatus::Stopped`) as it is: Q8.6
 
 If `PlayerStatus` is no longer used in `player.rs` after this change, remove it from the imports (clippy reports it).
 
-- [ ] **Step 4: Run the tests to make sure they pass**
+- [x] **Step 4: Run the tests to make sure they pass**
 
 Run: `cargo test -p fp-app --test view`, then `cargo test -p fp-app --test waveform_ui`, then `cargo test -p fp-app --test markers_ui`, then `cargo test -p fp-app --test waveform_view`
 
 Expected: PASS.
 
-- [ ] **Step 5: Docs**
+- [x] **Step 5: Docs**
 
 `docs/user/players.md`:
 - In the Info row "Title and artist" bullet, change "ready at the cue-in." to "ready at the cue-in, or where you clicked its waveform."
@@ -2581,7 +2581,7 @@ Every waveform is seekable. On a stopped player the click sends
 zoom of a stopped player still does not follow it.
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \

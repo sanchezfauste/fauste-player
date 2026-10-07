@@ -99,10 +99,11 @@ fn a_plain_click_still_seeks_at_once() {
     assert!((s[0] - 90.0).abs() < 1.5, "{s:?}");
 }
 
-/// A stopped player shows its next track, which always starts at its
-/// cue-in: its waveform shows times but does not seek.
+/// A stopped player shows its next track. A click on its waveform sets
+/// where Play starts it (rule 3a, operator feedback 4 Q8); a drag never
+/// seeks.
 #[test]
-fn a_stopped_players_waveform_does_not_seek() {
+fn a_click_on_a_stopped_players_waveform_sets_where_play_starts() {
     let mut s = playing();
     let p = s.players[0].id;
     apply(&mut s, Command::Stop(p)).unwrap();
@@ -122,16 +123,19 @@ fn a_stopped_players_waveform_does_not_seek() {
     .unwrap();
     let (mut h, fake) = harness(s);
     let w = wave(&h);
+    click(&mut h, pos2(x_of(w, 90.0), w.center().y));
+    let sent = seeks(&fake);
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert!((sent[0] - 90.0).abs() < 1.5, "{sent:?}");
+    let model = fake.state.load();
+    let (entry, secs) = model.players[0].pending_start.unwrap();
+    assert_eq!(Some(entry), model.players[0].next);
+    assert!((secs - 90.0).abs() < 1.5, "{secs}");
     let at = pos2(w.center().x, w.center().y);
-    h.event(Event::PointerMoved(at));
-    h.run_steps(1);
-    press(&mut h, at, true);
-    press(&mut h, at, false);
-    h.run_steps(2);
     drag_to(&mut h, at, pos2(at.x + 60.0, at.y));
     press(&mut h, pos2(at.x + 60.0, at.y), false);
     h.run_steps(2);
-    assert!(seeks(&fake).is_empty());
+    assert!(seeks(&fake).is_empty(), "a drag never seeks");
 }
 
 fn wheel(h: &mut Harness<'_, AppUi>, at: Pos2, dx: f32, dy: f32, modifiers: Modifiers) {

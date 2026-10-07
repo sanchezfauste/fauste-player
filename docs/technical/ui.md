@@ -215,7 +215,10 @@ hovered, and the frame's scroll delta is then cleared so no scroll area
 moves too. `widgets::waveform` reports a click's seek target and a drag's
 sideways movement (`WaveOutput { response, seek, pan_dx }`); egui's click rule
 is the drag threshold, so only `Response::clicked()` seeks and a drag never
-does. The player pans a zoomed view with `WaveView::pan` (a drag without zoom
+does. Every waveform is seekable. On a stopped player the click sends
+`Command::Seek`, which the model turns into the pending start (rule 3a), and
+`view::player_view` shows that start as the stopped player's position; the
+zoom of a stopped player still does not follow it. The player pans a zoomed view with `WaveView::pan` (a drag without zoom
 does nothing). A held pan drag is flagged in egui temp data keyed on the
 waveform id; `widgets::pan_dragging` reads it so the view does not follow the
 playhead meanwhile. Alt-drag (markers) and a drag that starts under the

@@ -23,7 +23,7 @@ playlist tabs, transport, volume and outputs.
 - **Cover** of the track on air, or a vinyl placeholder.
 - **Title and artist** of the track on air. A stopped player shows the
   track Play will start (its next), with its cover, its length and its
-  waveform, ready at the cue-in.
+  waveform, ready at the cue-in, or where you clicked its waveform.
 - A track played or loaded before its analysis has finished already has its
   length when its file's header gives it: the countdown, `elapsed / total`
   and click to jump work at once, over a flat line until the waveform is
@@ -129,9 +129,14 @@ red.
   nothing is darker and the two lines are dimmed: playback runs from the start
   to the end of the file, and the cue-in and cue-out in this guide mean those
   two ends.
-- Hover to see the time under the pointer. **Click to jump** there (while
-  playing or paused; a stopped player always starts at the cue-in). A click is
-  a press and release without moving the pointer more than a few pixels.
+- Hover to see the time under the pointer. **Click to jump** there. On a
+  stopped player a click chooses where **Play** starts the next track: the
+  playhead and the countdown move there, and nothing plays until you press
+  Play. Choosing another next track, moving or removing it, or Stop goes back
+  to the cue-in; so does any other way of starting a track, and Restart,
+  Previous and the automatic advance always use the cue-in. A click after the
+  end (in the darker tail) keeps the cue-in. A click is a press and release
+  without moving the pointer more than a few pixels.
 - **Press and drag** moves the zoomed view along the track, like grabbing it.
   A drag never jumps, and without zoom it does nothing. Alt-drag still edits
   markers.

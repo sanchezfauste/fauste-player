@@ -749,3 +749,21 @@ fn the_time_row_shows_a_dash_for_an_unknown_total() {
     assert_eq!(time_text(30.0, Some(f64::NAN), "—"), "00:30 / —");
     assert_eq!(time_text(30.0, Some(120.0), "—"), "00:30 / 02:00");
 }
+
+/// Rule 3a (operator feedback 4, Q8.6): a stopped player shows its pending
+/// start as its position: the playhead and the countdown.
+#[test]
+fn q8_6_a_stopped_player_shows_its_pending_start() {
+    let (mut s, e, p) = state(3);
+    apply(&mut s, Command::Seek(p, 50.0)).unwrap();
+    let v = player_view(&s, p, Some(150.0), 0.0).unwrap();
+    assert_eq!(v.status, PlayerStatus::Stopped);
+    assert_eq!((v.elapsed, v.remaining), (50.0, 150.0));
+    assert_eq!(v.markers.position, Some(0.25));
+    apply(&mut s, Command::SetNext(p, e[1])).unwrap();
+    assert_eq!(
+        player_view(&s, p, None, 0.0).unwrap().elapsed,
+        0.0,
+        "a new next starts at its cue-in"
+    );
+}

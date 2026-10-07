@@ -865,8 +865,9 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
             && scene.time - z.moved_at >= grace
             && pv.status != PlayerStatus::Stopped
         {
-            // A stopped player's position is pinned at the cue-in: following
-            // it would undo a zoom made to prepare the next track.
+            // A stopped player's position is pinned (its cue-in or its pending
+            // start, rule 3a): following it would undo a zoom made to prepare
+            // the next track.
             z.view = z.view.follow(f64::from(f) * total, total);
         }
     }
@@ -901,7 +902,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         accessible_label: &label,
         view,
         shield: full_view_button,
-        seekable: pv.status != PlayerStatus::Stopped,
+        seekable: true,
     };
     let output = widgets::waveform(ui, WAVE_HEIGHT, &input);
     let (response, seek, pan_dx) = (output.response, output.seek, output.pan_dx);
