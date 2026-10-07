@@ -504,7 +504,7 @@ fn tip_track() -> Track {
 
 #[test]
 fn the_tooltip_lists_what_the_track_has_in_order() {
-    let tip = track_tooltip(&tip_track());
+    let tip = track_tooltip(&tip_track(), None);
     let fields: Vec<TipField> = tip.iter().map(|(f, _)| *f).collect();
     assert_eq!(
         fields,
@@ -534,7 +534,7 @@ fn a_missing_field_is_left_out() {
     t.genre.clear();
     t.duration_secs = 0.0;
     t.format = None;
-    let fields: Vec<TipField> = track_tooltip(&t).iter().map(|(f, _)| *f).collect();
+    let fields: Vec<TipField> = track_tooltip(&t, None).iter().map(|(f, _)| *f).collect();
     // The file extension still names the codec, so the format line stays.
     assert_eq!(
         fields,
@@ -556,7 +556,7 @@ fn the_format_line_leaves_out_what_is_unknown() {
         channels: 2,
         dsd_rate: None,
     });
-    let line = track_tooltip(&t)
+    let line = track_tooltip(&t, None)
         .into_iter()
         .find(|(f, _)| *f == TipField::Format)
         .unwrap()
@@ -568,7 +568,7 @@ fn the_format_line_leaves_out_what_is_unknown() {
     t.path = PathBuf::from("/m/no extension");
     t.format = None;
     assert!(
-        track_tooltip(&t)
+        track_tooltip(&t, None)
             .iter()
             .all(|(f, _)| *f != TipField::Format)
     );
@@ -692,4 +692,19 @@ fn q2_3_an_analysed_track_is_not_pending_and_an_outdated_one_keeps_its_own_flag(
     t.analysis_version = 0;
     assert!(fp_app::services::outdated(&t));
     assert!(!analysis_pending(&t));
+}
+
+#[test]
+fn q9_1_the_reason_is_the_first_line_of_the_tooltip() {
+    let reason = "Cannot read the file: /m/Artist - Song.flac";
+    let tip = track_tooltip(&tip_track(), Some(reason));
+    assert_eq!(tip[0], (TipField::Problem, reason.to_owned()));
+    assert_eq!(tip[1].0, TipField::Title);
+    assert_eq!(tip.len(), 9, "the other fields follow as before");
+}
+
+#[test]
+fn q9_1_a_blank_reason_is_left_out() {
+    let tip = track_tooltip(&tip_track(), Some(""));
+    assert_eq!(tip[0].0, TipField::Title);
 }

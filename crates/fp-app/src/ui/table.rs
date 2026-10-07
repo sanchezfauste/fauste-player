@@ -16,6 +16,9 @@ use super::widgets::{self, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
 const ROW_HEIGHT: f32 = 28.0;
+/// Width of the track info popup: fixed, so egui's sizing pass gives the
+/// final size and the popup is never shown elsewhere first (Q9.3).
+const TIP_WIDTH: f32 = 380.0;
 /// How long a released column edge keeps its widths while the model catches
 /// up with the command that stores them.
 const HOLD_SECS: f64 = 0.5;
@@ -354,7 +357,7 @@ pub(crate) fn track_table(
                                 } else {
                                     egui::FontFamily::Proportional
                                 };
-                                let number = ui.add(
+                                ui.add(
                                     egui::Label::new(
                                         RichText::new(label)
                                             .font(egui::FontId::new(12.0, family))
@@ -362,11 +365,6 @@ pub(crate) fn track_table(
                                     )
                                     .selectable(false),
                                 );
-                                if status == RowStatus::Unavailable
-                                    && let Some(tip) = scene.file_tip(entry.track)
-                                {
-                                    number.on_hover_text(tip);
-                                }
                                 // O37: the entry on air is also the next one.
                                 if status == RowStatus::Current
                                     && view::row_is_next(scene.state, player, entry.id)
@@ -442,7 +440,7 @@ pub(crate) fn track_table(
                                                 }
                                             });
                                         }
-                                        let title = ui.add(
+                                        ui.add(
                                             egui::Label::new(
                                                 RichText::new(&track.title)
                                                     .font(row_font.clone())
@@ -451,13 +449,6 @@ pub(crate) fn track_table(
                                             .selectable(false)
                                             .truncate(),
                                         );
-                                        // The same reason as the icon's, where the eye is
-                                        // (and the `#` column may be hidden).
-                                        if status == RowStatus::Unavailable
-                                            && let Some(tip) = scene.file_tip(entry.track)
-                                        {
-                                            title.on_hover_text(tip);
-                                        }
                                     });
                                 });
                             }
@@ -881,35 +872,74 @@ fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
     response.on_hover_text(label);
 }
 
-/// The row tooltip: label and value per line, at most as wide as the window.
+/// The row tooltip: the reason the file cannot be played, when there is one,
+/// then label and value per line. Fixed width, never wider than the window.
 fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
     let t = scene.i18n;
-    ui.set_max_width(420.0);
-    egui::Grid::new("track-tip")
-        .num_columns(2)
-        .spacing(vec2(10.0, 3.0))
-        .show(ui, |ui| {
-            for (field, value) in view::track_tooltip(track) {
-                let key = match field {
-                    view::TipField::Title => "tip-field-title",
-                    view::TipField::Artist => "tip-field-artist",
-                    view::TipField::Album => "tip-field-album",
-                    view::TipField::Date => "tip-field-date",
-                    view::TipField::Genre => "tip-field-genre",
-                    view::TipField::Duration => "tip-field-duration",
-                    view::TipField::Format => "tip-field-format",
-                    view::TipField::Path => "tip-field-path",
-                };
-                ui.label(
+    ui.set_width(TIP_WIDTH.min((ui.ctx().content_rect().width() - 16.0).max(120.0)));
+    let lines = view::track_tooltip(track, scene.file_tip(track.id).as_deref());
+    let mut rest = lines.as_slice();
+    if let Some(((view::TipField::Problem, reason), tail)) = rest.split_first() {
+        ui.add(
+            egui::Label::new(
+                RichText::new(format!("{}  {reason}", view::file_icon(track)))
+                    .font(font(12.0))
+                    .color(theme::AMBER),
+            )
+            .wrap(),
+        );
+        ui.add_space(4.0);
+        rest = tail;
+    }
+    // No `Grid`: it learns its column widths from the previous frame, so the
+    // popup would be laid out three times and move on each (Q9.3). The label
+    // column is measured here instead, so one pass gives the final layout.
+    let keys: Vec<(&'static str, &String)> = rest
+        .iter()
+        .filter_map(|(field, value)| {
+            let key = match field {
+                view::TipField::Problem => return None,
+                view::TipField::Title => "tip-field-title",
+                view::TipField::Artist => "tip-field-artist",
+                view::TipField::Album => "tip-field-album",
+                view::TipField::Date => "tip-field-date",
+                view::TipField::Genre => "tip-field-genre",
+                view::TipField::Duration => "tip-field-duration",
+                view::TipField::Format => "tip-field-format",
+                view::TipField::Path => "tip-field-path",
+            };
+            Some((key, value))
+        })
+        .collect();
+    let key_font = font(11.0);
+    let key_width = keys
+        .iter()
+        .map(|(key, _)| {
+            ui.painter()
+                .layout_no_wrap(t.tr(key), key_font.clone(), theme::NEUTRAL_400)
+                .size()
+                .x
+        })
+        .fold(0.0_f32, f32::max);
+    for (key, value) in keys {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
+            ui.add_sized(
+                vec2(key_width, 14.0),
+                egui::Label::new(
                     RichText::new(t.tr(key))
-                        .font(font(11.0))
+                        .font(key_font.clone())
                         .color(theme::NEUTRAL_400),
-                );
-                ui.add(
-                    egui::Label::new(RichText::new(value).font(font(12.0)).color(theme::TEXT))
-                        .wrap(),
-                );
-                ui.end_row();
-            }
+                ),
+            );
+            ui.add(
+                egui::Label::new(
+                    RichText::new(value.as_str())
+                        .font(font(12.0))
+                        .color(theme::TEXT),
+                )
+                .wrap(),
+            );
         });
+    }
 }

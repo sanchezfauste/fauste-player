@@ -425,6 +425,8 @@ pub fn cell_text(track: &Track, column: TableColumn, use_markers: bool) -> Strin
 /// A line of the row tooltip (feedback 2 spec O23).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TipField {
+    /// The reason the file cannot be played (Q9.1).
+    Problem,
     Title,
     Artist,
     Album,
@@ -435,10 +437,15 @@ pub enum TipField {
     Path,
 }
 
-/// What the row tooltip shows for `track`: the fields it has, in this
-/// order. Album artist, composer and comment are left to the editor.
-pub fn track_tooltip(track: &Track) -> Vec<(TipField, String)> {
+/// What the row tooltip shows for `track`: the reason the file cannot be
+/// played first (`problem`, when there is one and it is not blank), then the
+/// fields it has, in this order. Album artist, composer and comment are left
+/// to the editor.
+pub fn track_tooltip(track: &Track, problem: Option<&str>) -> Vec<(TipField, String)> {
     let mut lines = Vec::new();
+    if let Some(reason) = problem.filter(|r| !r.trim().is_empty()) {
+        lines.push((TipField::Problem, reason.to_owned()));
+    }
     let mut text = |field, value: &str| {
         if !value.is_empty() {
             lines.push((field, value.to_owned()));

@@ -431,7 +431,7 @@ Suggested executor: `sonnet`.
 - Consumes: `Scene::file_tip(TrackId) -> Option<String>` (`app.rs` L253), `view::file_icon`.
 - Produces: `view::TipField::Problem` (first variant after the existing ones is not required; it is the first line returned), `pub fn view::track_tooltip(track: &Track, problem: Option<&str>) -> Vec<(TipField, String)>`, `const TIP_WIDTH: f32` in `table.rs`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `tests/view.rs`: change the two existing calls `track_tooltip(&tip_track())` and `track_tooltip(&t)` to pass `None` as the second argument, and append:
 
@@ -554,7 +554,7 @@ fn the_popup_stays_inside_a_narrow_window() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test view q9_`
 Expected: FAIL to compile (`TipField::Problem`, second argument).
@@ -562,7 +562,7 @@ Expected: FAIL to compile (`TipField::Problem`, second argument).
 Run (after fixing compilation in Step 3 with the table still unchanged, to see the real failures): `cargo test -p fp-app --test table_tooltip`
 Expected: `q9_1_the_popup_starts_with_the_reason_above_the_fields` FAILS (no reason line in the popup, or the reason is a separate tooltip). If `q9_3` already passes before the fix (egui hides the sizing pass), keep it as a guard and say so in the commit body.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `view.rs`: add `Problem` as the first variant of `TipField`, and
 
@@ -620,12 +620,12 @@ fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
 
 Remove the file-error tooltips: in the number cell replace `let number = ui.add(...);` followed by the `if status == RowStatus::Unavailable && let Some(tip) = scene.file_tip(entry.track) { number.on_hover_text(tip); }` block by the bare `ui.add(...);`; in the Title cell do the same for `let title = ui.add(...)` and its `title.on_hover_text(tip)` block (and the comment above it). Keep the `tip-on-air-elsewhere` and `tip-next-again` tooltips (see Rulings).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test view`, `cargo test -p fp-app --test table_tooltip`, `cargo test -p fp-app --test main_screen hovering`, `cargo test -p fp-app --test cartwall_ui hovering_an_unavailable_cart_says_why`
 Expected: PASS. The existing `hovering_*` tests of `main_screen.rs` must still pass unchanged: they hover the icon or the title and look for the reason, now served by the popup.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cargo fmt --all
