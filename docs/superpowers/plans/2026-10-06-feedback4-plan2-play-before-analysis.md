@@ -1675,7 +1675,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
     - `pub(crate) fn start_request(state: &AppState, pending: Option<(EntryId, f64)>, request: SourceRequest) -> SourceRequest`;
     - `pub(crate) fn preload_request(state: &AppState, player: &PlayerState, entry: EntryId) -> Option<SourceRequest>`.
 
-- [ ] **Step 1: Write the failing model tests**
+- [x] **Step 1: Write the failing model tests**
 
 `crates/fp-model/tests/pending_start.rs`:
 
@@ -1988,7 +1988,7 @@ fn a_pending_start_is_clamped_again_when_the_analysis_moves_the_cue_in() {
 
 If `TrackAnalysis` has no `Default` derive in this branch, build it the way `crates/fp-model/tests/analysis.rs` does.
 
-- [ ] **Step 2: Write the engine test (it pins existing behaviour)**
+- [x] **Step 2: Write the engine test (it pins existing behaviour)**
 
 Append to `crates/fp-engine/tests/engine.rs`:
 
@@ -2033,7 +2033,7 @@ fn play_from_a_pending_start_uses_the_preload_made_there() {
 
 The second pass (start at 2.0 against a preload at 1.0) is the control: it opens a second source, which proves that the counter sees a fresh open.
 
-- [ ] **Step 3: Run them to make sure the model tests fail**
+- [x] **Step 3: Run them to make sure the model tests fail**
 
 Run: `cargo test -p fp-model --test pending_start`
 
@@ -2043,7 +2043,7 @@ Run: `cargo test -p fp-engine --test engine play_from_a_pending_start_uses_the_p
 
 Expected: PASS. This is a characterisation test (see the rulings). If it fails, stop: the engine does not reuse the preload as `take_or_open` suggests, and Q8.7 needs an engine change. Record that in the ledger before you go on.
 
-- [ ] **Step 4: Implement the module**
+- [x] **Step 4: Implement the module**
 
 `crates/fp-model/src/pending_start.rs`:
 
@@ -2133,7 +2133,7 @@ pub(crate) fn preload_request(
 
 The preload and the start build their request with the same call, `state.request_at(entry, secs)` on the same stored `secs`. So their `from_secs` are equal, and the engine's `take_or_open` reuses the preload.
 
-- [ ] **Step 5: Wire it into the state and the reducer**
+- [x] **Step 5: Wire it into the state and the reducer**
 
 `crates/fp-model/src/player.rs`: add the field to `PlayerState` after `history`:
 
@@ -2227,13 +2227,13 @@ In the `preloads` map, replace `preload_target(state, p).and_then(|e| state.requ
                     .and_then(|e| crate::pending_start::preload_request(state, p, e)),
 ```
 
-- [ ] **Step 6: Run the tests to make sure they pass**
+- [x] **Step 6: Run the tests to make sure they pass**
 
 Run: `cargo test -p fp-model --test pending_start`, then `cargo test -p fp-model`, then `cargo test -p fp-engine --test engine`
 
 Expected: PASS. `crates/fp-model/tests/session.rs` does not compile until Task 8 adds `pending_start` to `PlayerSession`. That is fine: it only constructs `PlayerSession`, not `PlayerState`. If it does fail here, the cause is something else; investigate.
 
-- [ ] **Step 7: Docs**
+- [x] **Step 7: Docs**
 
 In `docs/technical/audio-engine.md`, in the `Preload` row of the action table, after "ask the worker for a source of the next entry at its cue-in;", add:
 
@@ -2241,7 +2241,7 @@ In `docs/technical/audio-engine.md`, in the `Preload` row of the action table, a
 at its pending start instead while the player is stopped and the operator chose one (rule 3a, operator feedback 4 Q8.7); `StartCurrent` then asks for the same entry and start, so `take_or_open` uses that preload and Play starts without a gap;
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \

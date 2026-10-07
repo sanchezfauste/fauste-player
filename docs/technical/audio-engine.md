@@ -356,7 +356,7 @@ plus the mixer's DSD mode.
 
 | Action | Effect |
 |---|---|
-| `Preload` | ask the worker for a source of the next entry at its cue-in; attach it idle. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut). The same pair serves O37: a self-next (the entry on air set as next) is preloaded and restarted in the same way, once; the model tells the pass apart from a repeat pass in `on_event` |
+| `Preload` | ask the worker for a source of the next entry at its cue-in, or at its pending start instead while the player is stopped and the operator chose one (rule 3a, operator feedback 4 Q8.7); `StartCurrent` then asks for the same entry and start, so `take_or_open` uses that preload and Play starts without a gap; attach it idle. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut). The same pair serves O37: a self-next (the entry on air set as next) is preloaded and restarted in the same way, once; the model tells the pass apart from a repeat pass in `on_event` |
 | `StartCurrent` | start the preloaded source, or open one, once ready |
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs }`) to the mixer as exact frames once it is within `schedule_lead_ms` |
