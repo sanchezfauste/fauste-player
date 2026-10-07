@@ -582,13 +582,20 @@ pub(crate) fn track_table(
             view_state.drop = None;
         }
     }
-    // OS file drops follow the same rules (Q4.6).
-    if let Some(index) = target {
-        view_state.file_drop = Some(DropTarget {
-            player,
-            playlist,
-            index,
-        });
+    // OS file drops follow the same rules (Q4.6): over the table but not
+    // on a target, the files are not inserted anywhere.
+    match target {
+        Some(index) => {
+            view_state.file_drop = Some(DropTarget {
+                player,
+                playlist,
+                index,
+            });
+        }
+        None if pointer.is_some_and(|p| area.contains(p)) => {
+            view_state.file_drop_refused = true;
+        }
+        None => {}
     }
     resize_handles(ui, view_state, player, &columns, &px, area);
     if let Some((from, slot)) = column_move {

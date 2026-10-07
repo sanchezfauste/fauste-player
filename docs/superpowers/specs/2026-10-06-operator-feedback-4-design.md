@@ -119,7 +119,10 @@
   - **Q4.5** The bar is drawn at the boundary's y in the body even when the
     rows next to it are not painted this frame; a boundary outside the
     visible body draws nothing.
-  - **Q4.6** OS file drops follow the same rules (`ViewState.file_drop`).
+  - **Q4.6** OS file drops follow the same rules (`ViewState.file_drop`):
+    a pointer over a table but on no target inserts nothing. Only a drop
+    whose position the system does not report, or that lies outside every
+    table, goes to the end of the list shown.
 - **Implementation notes.** A pure `table_layout::drop_index(body: Rect,
   scroll_y: f32, row_height: f32, len: usize, pointer: Pos2) ->
   Option<usize>`; `DropTarget` gains `player: PlayerId`. The bar is painted

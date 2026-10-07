@@ -201,8 +201,9 @@ shortcut acts, and files dropped on the application window are ignored.
 - Drag it onto another player's list to move it there.
 - Drag it onto a tab to append it to that playlist.
 - Drop files or folders from the file manager onto a list to insert them at
-  the drop position. If the system does not report the position, they go to
-  the end of the list shown.
+  the drop position. Over the header, a column edge, the scroll bar or a
+  window that covers the list nothing is inserted. If the system does not
+  report the position, they go to the end of the list shown.
 
 ## Footer
 

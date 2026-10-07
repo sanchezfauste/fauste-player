@@ -101,6 +101,10 @@ pub(crate) struct ViewState {
     pub active_player: Option<PlayerId>,
     pub drop: Option<DropTarget>,
     pub file_drop: Option<DropTarget>,
+    /// The pointer is over a track table but not on a drop target (its
+    /// header, a column edge, the scroll bar, or a window over it): files
+    /// dropped there are not inserted anywhere (Q4.6).
+    pub file_drop_refused: bool,
     /// The pixel widths of each player's table columns in the last frame,
     /// in the order of `ui.table_columns`.
     pub widths: HashMap<PlayerId, Vec<f32>>,
@@ -577,6 +581,7 @@ impl AppUi {
         self.view.rows_built = 0;
         self.view.dropouts.observe(&telemetry, time);
         self.view.file_drop = None;
+        self.view.file_drop_refused = false;
         if !egui::DragAndDrop::has_any_payload(&ctx) {
             self.view.drop = None;
         }
@@ -1299,6 +1304,10 @@ impl AppUi {
             self.import_playlist(list);
         }
         if dropped.is_empty() {
+            return;
+        }
+        // Over a table but not on a target: nothing is inserted (Q4.6).
+        if self.view.file_drop.is_none() && self.view.file_drop_refused {
             return;
         }
         // Pointer positions are not reported during an OS drag on every
