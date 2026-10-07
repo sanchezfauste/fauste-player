@@ -228,9 +228,12 @@ The services thread submits tracks when either:
   `Unreadable` files are not decoded again by themselves (operator
   feedback 4, Q10). The same probe thread `stat`s them (it never opens
   them) and answers with what it saw; `Services::stamps` records each file's
-  size and modification time (`Seen`) at the failure, and the first look at a
-  newly unreadable file is not waited for the timer, so the recorded stat is
-  close to the failure. A changed size or time clears the failure and queues
+  size and modification time (`Seen`). For a failed analysis it is the stat
+  the worker took just before decoding (`AnalysisResult::stamp`), so a file
+  that changed while it was analysed (a copy that completed) is analysed
+  again at the next look. For a playback failure, or when that stat failed,
+  the first look at the newly unreadable file is not waited for the timer
+  and its stat is recorded. A changed size or time clears the failure and queues
   an analysis; an unchanged file does nothing (no analysis, no save); a
   file that is gone becomes `Missing`; any other `stat` error is ignored. A
   change seen while the track is already being analysed is dropped and

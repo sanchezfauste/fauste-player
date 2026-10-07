@@ -67,6 +67,20 @@ fn rig_with(
     delay: Duration,
     prepare: impl FnOnce(&mut fp_model::AppState),
 ) -> Rig {
+    rig_hooked(files, dir, delay, prepare, Arc::new(|_| {}))
+}
+
+/// Runs after each analysis, on the worker, before its result is sent.
+type AfterAnalysis = Arc<dyn Fn(&Path) + Send + Sync>;
+
+/// As `rig_with`, with `after` called after each analysis.
+fn rig_hooked(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    delay: Duration,
+    prepare: impl FnOnce(&mut fp_model::AppState),
+    after: AfterAnalysis,
+) -> Rig {
     let paths = AppPaths::under(dir.path());
     let store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
@@ -105,7 +119,9 @@ fn rig_with(
             }
             std::thread::sleep(Duration::from_millis(2));
         }
-        analyze_file_cancellable(path, settings, limits, cancelled)
+        let outcome = analyze_file_cancellable(path, settings, limits, cancelled);
+        after(path);
+        outcome
     });
     let analyzer =
         Analyzer::with_analyze_fn(1, Default::default(), Default::default(), None, counting)
@@ -921,6 +937,41 @@ fn a_file_that_fails_again_is_looked_at_with_its_new_stat() {
     quiet_for(&mut r, 3_500);
     assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "no third analysis");
     assert!(all_in(&r, FileState::Unreadable));
+}
+
+/// Q10.1: the stat recorded is the one of the file the analysis read, not
+/// the one at the first look. A copy that completes while the analysis runs
+/// is analysed again.
+#[test]
+fn a_file_that_changes_while_its_analysis_fails_is_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let staging = tempfile::tempdir().unwrap();
+    let complete = wav(staging.path(), "bad.wav", 1);
+    let once = std::sync::Mutex::new(Some(complete));
+    // After the first analysis failed, before its result is known: the
+    // copy completes.
+    let after: AfterAnalysis = Arc::new(move |path| {
+        if let Some(complete) = once.lock().unwrap().take() {
+            std::fs::rename(complete, path).unwrap();
+        }
+    });
+    let mut r = rig_hooked(
+        std::slice::from_ref(&bad),
+        dir,
+        Duration::ZERO,
+        |s| s.config.tuning.missing_recheck_ms = 1_000.0,
+        after,
+    );
+    r.run_until("playable again", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.file_state == FileState::Ok && t.analyzed)
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
 }
 
 /// Q10.3: it follows the missing-file recheck from then on.

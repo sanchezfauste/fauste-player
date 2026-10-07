@@ -329,6 +329,11 @@ pub struct Services {
     /// model (from the analysis or from playback): a change of size or
     /// modification time sends it to the analysis again.
     stamps: HashMap<TrackId, Seen>,
+    /// The size and modification time an analysis that failed saw, kept
+    /// until a snapshot shows the track unreadable and then recorded in
+    /// `stamps`: a file that changed after it was read (a copy that
+    /// completed) is analysed again.
+    failed_at: HashMap<TrackId, Stamp>,
     /// Tracks the operator asked to analyse at once (the row menu's
     /// Re-analyse): they go ahead of the library.
     urgent: HashSet<TrackId>,
@@ -385,6 +390,7 @@ impl Services {
             failed: HashSet::new(),
             forced: HashSet::new(),
             stamps: HashMap::new(),
+            failed_at: HashMap::new(),
             urgent: HashSet::new(),
             analyse_outdated: false,
             retried: HashSet::new(),
@@ -563,6 +569,7 @@ impl Services {
         self.failed.clear();
         self.retried.clear();
         self.stamps.clear();
+        self.failed_at.clear();
         self.forced = state.library.iter().map(|t| t.id).collect();
     }
 
@@ -579,6 +586,7 @@ impl Services {
         self.failed.remove(&id);
         self.retried.remove(&id);
         self.stamps.remove(&id);
+        self.failed_at.remove(&id);
         self.forced.insert(id);
         self.urgent.insert(id);
     }
@@ -588,8 +596,9 @@ impl Services {
     /// (operator feedback 4, Q10). A missing file found goes to the analysis
     /// pool, which answers from the cache when it was analysed before. An
     /// unreadable file is only `stat`ed, never opened: its size and
-    /// modification time are recorded when the failure is first seen, and a
-    /// change of either clears the failure and analyses it again; one that
+    /// modification time are the ones the failed analysis read (or, for a
+    /// playback failure, the first look's), and a change of either clears
+    /// the failure and analyses it again; one that
     /// disappeared becomes missing. Neither this thread nor the pool waits
     /// on a share that is offline, so autosave and real analyses go on.
     fn recheck_missing(&mut self, state: &AppState, now: Instant) {
@@ -657,7 +666,16 @@ impl Services {
             .iter()
             .filter(|t| t.file_state == FileState::Unreadable)
         {
-            self.stamps.entry(t.id).or_insert(Seen::New);
+            // What the failed analysis read, when it could `stat` the file;
+            // otherwise (and for a playback failure) a first look.
+            match self.failed_at.remove(&t.id) {
+                Some(stamp) => {
+                    self.stamps.insert(t.id, Seen::At(stamp));
+                }
+                None => {
+                    self.stamps.entry(t.id).or_insert(Seen::New);
+                }
+            }
         }
         let interval =
             Duration::from_secs_f64(state.config.tuning.missing_recheck_ms.max(0.0) / 1000.0);
@@ -668,8 +686,9 @@ impl Services {
                 false
             }
         };
-        // A new failure is looked at once, without waiting for the timer, so
-        // that the recorded stat is the one of the failure.
+        // A failure without the analysis's stat (a playback failure, or a
+        // `stat` that failed) is looked at once, without waiting for the
+        // timer, so that the recorded stat is close to the failure.
         let first_look = self
             .stamps
             .iter()
@@ -797,6 +816,7 @@ impl Services {
         self.forced.retain(|id| known.contains(id));
         self.retried.retain(|id| known.contains(id));
         self.stamps.retain(|id, _| known.contains(id));
+        self.failed_at.retain(|id, _| known.contains(id));
         self.urgent.retain(|id| known.contains(id));
         self.seen_analyzed.retain(|id| known.contains(id));
         for track in state.library.iter() {
@@ -863,6 +883,7 @@ impl Services {
         }
         self.in_flight.remove(&result.track);
         self.done.insert(result.track);
+        self.failed_at.remove(&result.track);
         let command = match result.outcome {
             Ok(analysis) => {
                 self.failed.remove(&result.track);
@@ -892,6 +913,9 @@ impl Services {
             }
             Err(AnalysisError::Unreadable(reason)) => {
                 self.failed.insert(result.track);
+                if let Some(stamp) = result.stamp {
+                    self.failed_at.insert(result.track, stamp);
+                }
                 tracing::warn!(path = %result.path.display(), %reason, "unreadable file");
                 Command::SetFileState {
                     track: result.track,
