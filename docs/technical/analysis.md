@@ -260,3 +260,10 @@ date, genre and other tags without a re-analysis. The editor's own jobs
 Results go to the model as `ApplyAnalysis` or `SetFileState`. Peaks and covers
 are kept in the `MediaCache` only for shown tracks. The disk cache brings
 them back cheaply when a track is shown again.
+
+Before its analysis a track has no length. `Command::SetDuration` stores
+the length its file's header declares while the track is not analysed
+(operator feedback 4, Q1.2): a finite, positive value only, ignored once
+the track is analysed. The analysis replaces it when it finds a length.
+With it the track has a countdown, a position and click-to-seek, and its
+play range is `0..duration` (Q1.5).

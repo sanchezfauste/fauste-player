@@ -932,7 +932,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
   - `Command::SetDuration { track: TrackId, secs: f64 }`;
   - `pub fn Track::needs_header_duration(&self) -> bool`, which is `!analyzed`, no positive length, and a playable file.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/fp-model/tests/header_duration.rs`:
 
@@ -1106,13 +1106,13 @@ fn a_track_needs_a_header_read_only_while_it_has_no_length_and_no_analysis() {
 
 If `Library` does not implement `PartialEq` (check with `grep -n "derive" crates/fp-model/src/track.rs | head`), compare `s.library.iter().map(|t| t.duration_secs).collect::<Vec<_>>()` instead in `q1_2_an_unknown_track_is_ignored`.
 
-- [ ] **Step 2: Run them to make sure they fail**
+- [x] **Step 2: Run them to make sure they fail**
 
 Run: `cargo test -p fp-model --test header_duration`
 
 Expected: a compile error, because there is no variant `SetDuration` and no method `needs_header_duration`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `crates/fp-model/src/command.rs`, after `ApplyTags { … },`:
 
@@ -1155,13 +1155,13 @@ Expected: a compile error, because there is no variant `SetDuration` and no meth
 
 The `!(… > 0.0)` form also treats a NaN length as "no length". If clippy flags `neg_cmp_op_on_partial_ord`, write `self.duration_secs.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater)` instead.
 
-- [ ] **Step 4: Run the tests to make sure they pass**
+- [x] **Step 4: Run the tests to make sure they pass**
 
 Run: `cargo test -p fp-model --test header_duration`, then `cargo test -p fp-model`
 
 Expected: PASS.
 
-- [ ] **Step 5: Docs**
+- [x] **Step 5: Docs**
 
 In `docs/technical/analysis.md`, at the end of §"How the app uses it (`fp-app/src/services.rs`)", add:
 
@@ -1174,7 +1174,7 @@ With it the track has a countdown, a position and click-to-seek, and its
 play range is `0..duration` (Q1.5).
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \

@@ -154,6 +154,16 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
                 t.apply_tags(&tags);
             }
         }
+        Command::SetDuration { track, secs } => {
+            // Q1.2: the header's length stands in until the analysis.
+            if secs.is_finite()
+                && secs > 0.0
+                && let Some(t) = state.library.get_mut(track)
+                && !t.analyzed
+            {
+                t.duration_secs = secs;
+            }
+        }
         Command::SetFileState {
             track,
             state: file_state,
