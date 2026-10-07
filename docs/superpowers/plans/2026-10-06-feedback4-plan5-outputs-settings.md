@@ -1012,7 +1012,7 @@ fi
   - `EngineSettings::device_streams: HashMap<BusKey, DeviceStream>`;
   - `EngineSettings::rate_for(&self, key: &BusKey) -> u32` and `buffer_for(&self, key: &BusKey) -> u32`.
 
-- [ ] **Step 1: Write the failing engine tests**
+- [x] **Step 1: Write the failing engine tests**
 
 `crates/fp-engine/tests/device_overrides.rs` (new file):
 
@@ -1239,7 +1239,7 @@ fn native_dsd_ends_on_the_devices_own_rate() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-engine --test device_overrides`
 Expected: FAIL. `a_device_opens_at_its_own_rate_and_buffer` panics with ``left: (48000, 512)`, `right: (96000, 256)``, and `a_bit_perfect_device_starts_at_its_own_rate_and_still_follows_the_file` panics with `left: 48000`, `right: 96000`.
@@ -1247,7 +1247,7 @@ Expected: FAIL. `a_device_opens_at_its_own_rate_and_buffer` panics with ``left: 
 Run: `cargo test -p fp-engine --test dsd_output native_dsd_ends_on_the_devices_own_rate`
 Expected: FAIL with ``left: 48000`, `right: 96000`` ("it opens at its own rate").
 
-- [ ] **Step 3: Carry the overrides in `EngineSettings`**
+- [x] **Step 3: Carry the overrides in `EngineSettings`**
 
 In `crates/fp-engine/src/engine.rs`, add before `pub struct EngineSettings`:
 
@@ -1309,7 +1309,7 @@ In `impl EngineSettings`, after `from_config`, add:
     }
 ```
 
-- [ ] **Step 4: Open each bus with its own values**
+- [x] **Step 4: Open each bus with its own values**
 
 In `ensure_bus` (L981), replace the `StreamConfig` and `MixerConfig` literals with:
 
@@ -1357,12 +1357,12 @@ In `crates/fp-engine/src/engine/dsd.rs`:
 - in `dsd_source_gone` (L291–294), replace `+ u64::from(self.settings.buffer_frames)` with `+ u64::from(self.buffer_of(&p.bus))`;
 - at L561–564, replace `sample_rate: self.settings.sample_rate,` with `sample_rate: self.settings.rate_for(bus),`, and update its doc line in `docs/technical/audio-engine.md` in Task 6.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-engine --test device_overrides && cargo test -p fp-engine --test dsd_output && cargo test -p fp-engine --test bit_perfect`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/fp-engine/src/engine.rs crates/fp-engine/src/engine/dsd.rs \

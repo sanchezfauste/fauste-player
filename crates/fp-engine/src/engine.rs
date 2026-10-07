@@ -47,6 +47,14 @@ impl Default for DsdSettings {
     }
 }
 
+/// A device's own stream settings (operator feedback 4, Q12.5); `None`
+/// uses the global value.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DeviceStream {
+    pub sample_rate: Option<u32>,
+    pub buffer_frames: Option<u32>,
+}
+
 /// Stream settings and tuning, derived from the model `Config`.
 #[derive(Debug, Clone)]
 pub struct EngineSettings {
@@ -60,6 +68,8 @@ pub struct EngineSettings {
     pub default_backend: Option<String>,
     /// Devices played bit-perfect (Phase 4 spec B1).
     pub bit_perfect: std::collections::HashSet<BusKey>,
+    /// Devices with their own rate or buffer (operator feedback 4, Q12.5).
+    pub device_streams: HashMap<BusKey, DeviceStream>,
     pub dsd: DsdSettings,
 }
 
@@ -82,6 +92,22 @@ impl EngineSettings {
                     device: d.device.clone(),
                 })
                 .collect(),
+            device_streams: config
+                .outputs
+                .device_overrides
+                .iter()
+                .map(|o| {
+                    let key = BusKey {
+                        backend: o.device.backend.clone(),
+                        device: o.device.device.clone(),
+                    };
+                    let stream = DeviceStream {
+                        sample_rate: o.sample_rate,
+                        buffer_frames: o.buffer_frames,
+                    };
+                    (key, stream)
+                })
+                .collect(),
             dsd: DsdSettings {
                 // Only bit-perfect devices keep a DSD mode.
                 modes: config
@@ -102,6 +128,22 @@ impl EngineSettings {
                 silence_ms: config.outputs.dsd_silence_ms,
             },
         }
+    }
+
+    /// The rate `key` opens at: its own, else `sample_rate`.
+    pub fn rate_for(&self, key: &BusKey) -> u32 {
+        self.device_streams
+            .get(key)
+            .and_then(|d| d.sample_rate)
+            .unwrap_or(self.sample_rate)
+    }
+
+    /// The buffer `key` opens with: its own, else `buffer_frames`.
+    pub fn buffer_for(&self, key: &BusKey) -> u32 {
+        self.device_streams
+            .get(key)
+            .and_then(|d| d.buffer_frames)
+            .unwrap_or(self.buffer_frames)
     }
 
     fn frames(&self, ms: f64) -> u64 {
@@ -867,12 +909,21 @@ impl Engine {
     }
 
     /// The rate `bus` runs at. Every source on a bus shares it, and it only
-    /// changes while nothing is attached (Phase 4 spec B3).
+    /// changes while nothing is attached (Phase 4 spec B3). A bus not open
+    /// yet runs at its device's own rate, else the global one.
     fn rate_of(&self, bus: &BusKey) -> u32 {
         self.buses
             .get(bus)
-            .map_or(self.settings.sample_rate, Bus::sample_rate)
+            .map_or_else(|| self.settings.rate_for(bus), Bus::sample_rate)
             .max(1)
+    }
+
+    /// The block size `bus` asks its device for.
+    fn buffer_of(&self, bus: &BusKey) -> u32 {
+        self.buses.get(bus).map_or_else(
+            || self.settings.buffer_for(bus),
+            |b| b.config().buffer_frames,
+        )
     }
 
     /// `ms` milliseconds in frames of `bus`.
@@ -1005,16 +1056,18 @@ impl Engine {
                 .unwrap_or_else(|| Arc::new(NullBackend));
             let channels = self.channels_for(key);
             let t = &self.settings.tuning;
+            let rate = self.settings.rate_for(key);
             let config = StreamConfig {
-                sample_rate: self.settings.sample_rate,
-                buffer_frames: self.settings.buffer_frames,
+                sample_rate: rate,
+                buffer_frames: self.settings.buffer_for(key),
                 channels,
                 exclusive: self.settings.bit_perfect.contains(key),
                 dsd: None,
             };
+            // Lengths in this bus's frames.
             let mixer = MixerConfig {
-                volume_smoothing_frames: self.settings.frames(t.gain_smoothing_ms).max(1) as u32,
-                declick_frames: self.settings.frames(t.declick_ms) as u32,
+                volume_smoothing_frames: frames_at(rate, t.gain_smoothing_ms).max(1) as u32,
+                declick_frames: frames_at(rate, t.declick_ms) as u32,
                 max_commands_per_block: t.max_commands_per_block,
             };
             let timing = BusTiming {
@@ -1322,7 +1375,7 @@ impl Engine {
         let frames = self.frames_on(&p.bus, ms);
         let now = self.now_frame(&p.bus);
         // One block of margin: the engine's frame lags the mixer's.
-        let margin = u64::from(self.settings.buffer_frames);
+        let margin = u64::from(self.buffer_of(&p.bus));
         let silent_paused = !p.cue
             && self
                 .players
