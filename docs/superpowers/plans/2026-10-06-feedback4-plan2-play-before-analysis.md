@@ -140,7 +140,7 @@ These are the failure modes the spec implies but does not test, most likely firs
 - Consumes: `support::{Fake, harness_sized, state}` (`crates/fp-app/tests/support/mod.rs`), `Controller::send`, `Command::{ToggleCue, ShowPlaylist, CreatePlaylistFromPaths}`, `fp_model::{PlayerRoutes, Route}`.
 - Produces: the test functions `q6_1_a_click_on_a_row_moves_the_cue_with_its_window_open`, `q6_2_a_double_click_on_a_row_moves_the_cue_with_its_window_open` and `q6_3_the_cue_follows_in_every_layout_tab_and_state`, plus the helper `run(Case) -> Outcome`. Task 2 adds its probe cases to this file.
 
-- [ ] **Step 1: Write the test file**
+- [x] **Step 1: Write the test file**
 
 `crates/fp-app/tests/cue_follow_ui.rs`:
 
@@ -440,7 +440,7 @@ fn q6_3_the_cue_follows_in_every_layout_tab_and_state() {
 }
 ```
 
-- [ ] **Step 2: Run it and record what fails**
+- [x] **Step 2: Run it and record what fails**
 
 Run: `cargo test -p fp-app --test cue_follow_ui -- --nocapture`
 
@@ -471,7 +471,7 @@ Nothing is committed in this task, because the suite is red. Task 2 commits this
 - Consumes: Task 1's `run`, `Case`, `press`, `row`, `cue_window` and `visible_point`.
 - Produces: a green `cue_follow_ui.rs`. No new public API is expected.
 
-- [ ] **Step 1: Load the skill and gather evidence (Phase 1)**
+- [x] **Step 1: Load the skill and gather evidence (Phase 1)**
 
 Invoke `superpowers:systematic-debugging`. Do not change product code until Phase 3 names one cause.
 
@@ -481,7 +481,7 @@ Group Task 1's failing cases by dimension (layout, player, start, paused, tab, g
 
 Record the output in the ledger, and remove the `eprintln!` before you commit.
 
-- [ ] **Step 2: Add the probe cases (Phase 2)**
+- [x] **Step 2: Add the probe cases (Phase 2)**
 
 Append these tests to `cue_follow_ui.rs`. Each one pins one hypothesis, and keeping them as regression tests is fine.
 
