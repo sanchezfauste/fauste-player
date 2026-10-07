@@ -12,6 +12,7 @@
 | `services.rs` | The services thread (analysis and autosave; see [Persistence](persistence.md) and [Analysis](analysis.md)) |
 | `ui/app.rs` | `AppUi`: the main screen, keyboard, notices, OS drops, file-dialog results. The window title (`cli::window_title`, the name and the version) and icon (`cli::window_icon`) are set on the `ViewportBuilder` in `main.rs` (`run`) and drawn by the native title bar; the top bar has no brand block |
 | `ui/player.rs` | One player column: header, info row, transport, waveform, tabs, footer |
+| `ui/wave_panel.rs` | The waveform panel the player column and the CUE window share (operator feedback 4, Q7): `show(ui, scene, view_state, &WavePanelInput)` draws `widgets::waveform` with the zoom, the follow after the grace, wheel and drag pan, the Full view button, the intro and outro badges and marker editing, keyed by `WaveKey`; it returns `WavePanelOutput { seek }`, which the player sends as `Seek` and the CUE window as `SeekCue` |
 | `ui/table.rs` | The track table: virtualised rows, drag and drop, context menu, the configured columns, the header (drag to reorder, menu) and the live column resize. The drag's drop index comes from the geometry in `table_layout`, never from the widget under the pointer; `DropTarget` is keyed by player, playlist and index, so only the table under the pointer draws the violet bar. A pointer counts only when the table's own layer is the top one there (`Context::layer_id_at`, the background layer when no area is there), so a floating window over the table (the CUE window) hides the rows under it. OS file drops use the same target (`ViewState.file_drop`); a pointer over the table but on no target sets `file_drop_refused`, and `AppUi::file_drops` then inserts nothing, so the end-of-list fallback is only for a drop whose position the system did not report or that is outside every table. `ScrollArea` ignores the wheel while a widget is dragged, so the list does not scroll during a row drag (no edge auto-scroll). The row popup (`TIP_WIDTH`, wrapped, kept inside the window) is the only hover information on a row and its first line is the file error (`view::track_tooltip` takes the reason, `TipField::Problem`); the muted hourglass (`flag-analysis-pending`) is drawn when `view::analysis_pending`; the row menu's Re-analyse sends `ServiceRequest::ReanalyseTrack` through `Scene::request` (dropped without services or with a full queue) |
 | `ui/view.rs` (`row_is_next`) | O37: `player.next == Some(entry)` whatever the row's `RowStatus`, so the playing row also draws the next arrow when it is its own next; the double-click stays a no-op on it and the context menu's Set as next is enabled there |
 | `ui/tab_strip.rs` | The pure layout of the playlist tabs (O35): `layout` (tab width, overflow, view width), `clamp_offset`, `reveal`, `step`; unit-tested. `tabs` in `player.rs` draws them clipped to the view, with arrows and the wheel; the scroll lives in `ViewState::tab_scroll` per player, and the shown tab is revealed again only when the key (shown playlist, tab count, view width) changes, so the operator's scrolling is not undone every frame |
@@ -26,7 +27,7 @@
 | `ui/shell.rs` | Panic isolation around each frame, and the close check in `Shell::logic` |
 | `ui/exit_guard.rs` | The "Audio is on air" modal: the `ExitIntent`, the list of what is sounding, and the stop commands |
 | `ui/view.rs`, `ui/format.rs` | Pure view model: what to show, how to format it (unit-tested) |
-| `ui/cue_window.rs` | One non-modal `egui::Window` per running CUE, drawn from the pure `view::cue_window_view`; icons through `ui/glyphs.rs` |
+| `ui/cue_window.rs` | One non-modal `egui::Window` per running CUE, drawn from the pure `view::cue_window_view`; its waveform is `wave_panel` with `WaveKey::Cue`; icons through `ui/glyphs.rs` |
 | `ui/widgets.rs`, `ui/glyphs.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, segmented control, tabular times, meter, fader, waveform), drawn icons, the Nocturne theme. `ui/glyphs.rs` maps each transport action (`TransportAction`: play, next, pause, stop, fade stop, stop after, restart, previous, cue) to a Phosphor glyph or a drawn icon; the player, the cartwall and the playlist menu draw their transport icons only through it (`tests/glyphs.rs` guards that), and the CUE window too. The meter's geometry is the pure `meter_layout` (labels, lines, bars, readouts), unit-tested |
 | `ui/about.rs` | The About window: version, copyright, bundled notices, and the third-party notices file (located at start-up, opened on a helper thread) |
 | `ui/tag_editor.rs` | The tag editor modal (O23): `TagEditor` with its phases (`Reading`, `Unreadable`, `Ready` with a `Form` holding the sheet as read and the draft), the field boxes, the cover area and the pure checks it shares with `fp-model` |
@@ -73,18 +74,20 @@ language the interface was built with.
 
 ## Marker editing
 
-`player.rs::edit_markers` handles marker editing on the waveform:
+`wave_panel.rs::edit_markers` handles marker editing on the waveform:
 
 - the context menu remembers the time where it was opened
-  (`ViewState::wave_menu`) and sends `SetMarker` or `ResetMarkers`;
+  (`ViewState::wave_menu`, keyed by `WaveKey` (`Player(id)` or `Cue(id)`), so a player and its CUE window keep their own menu point and drag) and sends `SetMarker` or `ResetMarkers`;
 - with Alt held, handles are drawn on the markers. A drag picks the marker
-  nearest to the press origin (`ViewState::marker_drag`) and sends a single
+  nearest to the press origin (`ViewState::marker_drag`, keyed by `WaveKey` too) and sends a single
   `SetMarker` on release. A waveform click never seeks while Alt is held.
 - when `MarkerFractions::ignored` is set (`!players.use_cue_markers`),
   `widgets::cue_edge_look` turns off the head and tail shading and the
   cue-in and cue-out lines are drawn at `theme::CUE_EDGE_IGNORED_ALPHA`.
   Alt-drag editing is unchanged. The countdowns, the duration column and the
   playlist totals use `Track::play_range`.
+- Both waveforms place the markers with the pure `view::marker_fractions`;
+  the CUE passes `ignored = true`, since a CUE plays the whole file.
 
 ## Track table layout, columns and follow
 
@@ -208,8 +211,10 @@ format can store pictures.
 between seconds and pixels: drawing (`wave_columns_in` reduces only the
 visible stretch, memoised per start, span and width), marker lines and
 handles, the hover time, click-to-seek, drag-to-pan and the context menu all use it.
-`ViewState::wave_zoom` keeps a `WaveZoom` per zoomed player (view, the entry
-it belongs to, when it was last moved); no entry means the full view. The
+`ViewState::wave_zoom` (`WaveZooms`) keeps a `WaveZoom` per zoomed waveform,
+keyed by `WaveKey` (view, the entry it belongs to, when it was last moved);
+`WaveZooms::get` returns it only for the entry it was made on, so no entry
+means the full view. The
 wheel is read from the frame's `MouseWheel` events while the waveform is
 hovered, and the frame's scroll delta is then cleared so no scroll area
 moves too. `widgets::waveform` reports a click's seek target and a drag's
@@ -222,13 +227,21 @@ zoom of a stopped player still does not follow it. The player pans a zoomed view
 does nothing). A held pan drag is flagged in egui temp data keyed on the
 waveform id; `widgets::pan_dragging` reads it so the view does not follow the
 playhead meanwhile. Alt-drag (markers) and a drag that starts under the
-shield report no pan.
+shield report no pan. The wheel rules are pure: `wave_view::wheel_notches`
+converts lines, points and pages to notches and `WaveView::wheel` zooms or
+pans by them. Each `WaveKey` has its own egui id (`WaveKey::id`), so the
+memoised columns and the pan-drag flag of a player and its CUE never mix.
 
 ## CUE window
 
 `ui/cue_window.rs` draws one window per player with a running CUE, from
 `view::cue_window_view` (title, artist, elapsed, remaining, `paused`, the
-position fraction and `can_load_next`). Its waveform, seek range and
+position fraction and `can_load_next`). Its waveform is the shared panel
+(`WaveKey::Cue(player)`): `cue_window_view` gives it `markers`
+(`marker_fractions` on the whole file, cue edges dimmed), `intro` (never
+blinking), `outro` (to the end of the file) and `mix_active` (the player's
+mode). `show_all` receives `&mut ViewState`; for a player without a CUE,
+`forget` drops its CUE key's zoom, menu point and marker drag. Its waveform, seek range and
 remaining time run to the end of the file, because a CUE plays the whole
 file. It only sends commands: `SeekCue` (a click on the waveform),
 `SetCuePaused`, `CueToNext` (Set as next) and `SetCue(player, false)` (Stop

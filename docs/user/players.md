@@ -165,8 +165,14 @@ says so.
 The window shows:
 
 - the title and artist;
-- the waveform of the whole file with the CUE position; click it to jump
-  there;
+- the waveform of the whole file with the CUE position. It works like the
+  player's: click to jump there, zoom with the wheel, drag to move along,
+  **Full view**, the intro and outro countdowns, and the intro, outro and MIX
+  markers, which you edit here as on the player (see
+  [Markers and mixing](markers-and-mixing.md)). A CUE plays the whole file,
+  so nothing is drawn darker, the cue-in and cue-out are dimmed lines, and
+  the outro counts down to the end of the file. Its zoom is its own: the
+  player's waveform does not move, and a new CUE shows the whole file;
 - the elapsed time and the time remaining to the end of the file (a CUE plays
   whole files);
 - **Pause** / **Resume**, **Stop** and **Set as next**. **Set as next**

@@ -55,7 +55,7 @@ audio engine that the interface can never block.
   point and the outro. It also reads tags and cover art, and draws the
   waveform. Markers set by hand are never overwritten.
 - **CUE pre-listen** on a separate device or channel pair, with a window per
-  CUE to seek, pause, stop and load the track as next.
+  CUE to seek, zoom, edit markers, pause, stop and load the track as next.
 - **Cartwall:** pages of instant carts (jingles, effects, spots), each with a
   configurable grid. Carts overlap by default; they can loop gaplessly or stop
   the others, and a **Stop all** button stops every playing cart. They have

@@ -1556,7 +1556,6 @@ fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Cu
         total: v.total,
         markers: v.markers,
         mix_active: v.mix_active,
-        seekable: true,
         // A CUE's zoom follows its position, as a playing player's does.
         follow: true,
         badges: WaveBadges {
@@ -1621,12 +1620,12 @@ fi
 - Consumes: the names of Tasks 1–5 (`wave_panel.rs`, `WavePanelInput`, `WaveKey`, `WaveZooms`, `marker_fractions`, `cue_window::forget`).
 - Produces: nothing for code.
 
-- [ ] **Step 1: Check the spec lines Q7 changes are in place**
+- [x] **Step 1: Check the spec lines Q7 changes are in place**
 
 Run: `grep -n "same panel as the player's" docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md; grep -n "the CUE window uses the same waveform panel" docs/superpowers/specs/2026-09-25-fauste-player-design.md`
 Expected: one line each (the spec author applied them with the spec). If either is missing, apply the text from §4 "Spec lines that change" of the feedback 4 spec verbatim.
 
-- [ ] **Step 2: User guide**
+- [x] **Step 2: User guide**
 
 `README.md:57-58`:
 
@@ -1655,7 +1654,7 @@ On a player's waveform, or on the waveform of its CUE window (the same
 menu and handles; a change shows in both at once):
 ```
 
-- [ ] **Step 3: Technical docs (`docs/technical/ui.md`)**
+- [x] **Step 3: Technical docs (`docs/technical/ui.md`)**
 
 - Module table: after the `ui/player.rs` row add
 
@@ -1668,7 +1667,7 @@ menu and handles; a change shows in both at once):
 - "Waveform view": "`ViewState::wave_zoom` keeps a `WaveZoom` per zoomed player" becomes "`ViewState::wave_zoom` (`WaveZooms`) keeps a `WaveZoom` per zoomed waveform, keyed by `WaveKey`; `WaveZooms::get` returns it only for the entry it was made on". Add: "The wheel rules are pure: `wave_view::wheel_notches` converts lines, points and pages to notches and `WaveView::wheel` zooms or pans by them. Each `WaveKey` has its own egui id (`WaveKey::id`), so the memoised columns and the pan-drag flag of a player and its CUE never mix."
 - "CUE window": after the first sentence add: "Its waveform is the shared panel (`WaveKey::Cue(player)`): `cue_window_view` gives it `markers` (`marker_fractions` on the whole file, cue edges dimmed), `intro` (never blinking), `outro` (to the end of the file) and `mix_active` (the player's mode). `show_all` receives `&mut ViewState`; for a player without a CUE, `forget` drops its CUE key's zoom, menu point and marker drag."
 
-- [ ] **Step 4: Spec "As built"**
+- [x] **Step 4: Spec "As built"**
 
 At the end of §4 Q7 in `docs/superpowers/specs/2026-10-06-operator-feedback-4-design.md`, add:
 
@@ -1682,12 +1681,12 @@ At the end of §4 Q7 in `docs/superpowers/specs/2026-10-06-operator-feedback-4-d
   closed CUE window forgets its zoom, menu point and marker drag.
 ```
 
-- [ ] **Step 5: The guide image**
+- [x] **Step 5: The guide image**
 
 Run: `scripts/site/screenshots.sh`
 Expected: `docs/images/guide/cue-window.png` is rewritten; open it and check that the window has the same size (the crop `406x222+164+204` in the script) and that its waveform shows the scene's markers. If the window grew, adjust the crop in `scripts/site/screenshots.sh` and run again. If Xvfb, xdotool, ImageMagick or ffmpeg is missing here, leave the image and record `Ruling: cue-window.png not re-taken — <tool> missing — the guide image lacks the markers until the next screenshot run` in the ledger and the PR description.
 
-- [ ] **Step 6: Build the site's links and commit**
+- [x] **Step 6: Build the site's links and commit**
 
 Run: `scripts/site/build.sh /tmp/fp-site && scripts/site/check-links.sh /tmp/fp-site` (needs `gh` or `FAUSTE_RELEASE_JSON`; if neither is available, skip and say so in the PR).
 Expected: no dead link.
@@ -1714,7 +1713,7 @@ fi
 
 | Rule | Task |
 |---|---|
-| Q7.1 `wave_panel.rs`, input struct with key, entry, track, media, total, markers (with the position), `mix_active`, `seekable`, `follow`, badges, `editable_markers`, height; output `{ seek }` | 3 |
+| Q7.1 `wave_panel.rs`, input struct with key, entry, track, media, total, markers (with the position), `mix_active`, `follow`, badges, `editable_markers`, height (`seekable` dropped in Task 5: every waveform seeks); output `{ seek }` | 3 |
 | Q7.2 `wave_zoom` and `marker_drag` keyed by `WaveKey` (and `wave_menu`, ruling) | 2; kittest `the_player_and_its_cue_zoom_independently` (5) |
 | Q7.3 thin callers; the CUE window receives `&mut ViewState` | 3 (player), 5 (CUE) |
 | Q7.4 CUE: markers, menu, Alt-drag, zoom, pan, Full view | 4, 5 (`the_cue_waveform_menu_sets_the_intro_here`, `alt_dragging_the_intro_on_the_cue_waveform_moves_it`, `the_wheel_zooms_…`, `the_cue_full_view_button_…`); pan is the panel's code under `waveform_ui.rs` |
