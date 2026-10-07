@@ -130,7 +130,8 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   custom scales only, the layout then labels each segment between two
   adjacent labels more densely (`add_intermediate_labels`): every dBFS
   multiple of the finest step of a 1/2/5 dB ladder that is not finer than
-  `minor_step_db` and keeps every label of the segment 10 px
+  `minor_step_db`, splits the segment evenly (both of its labels are
+  multiples of the step, `on_step`) and keeps every label of the segment 10 px
   (`LABEL_ROW`) apart, or none; a level that is the alignment level labels
   the alignment line. Those labels get major ticks. The label columns are
   as wide as the scale's widest label (`widgets::label_column`, so the

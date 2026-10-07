@@ -569,23 +569,79 @@ fn intermediate_labels_never_crowd_at_any_height() {
 }
 
 #[test]
+fn intermediate_labels_split_each_segment_evenly() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::Custom] {
+        for (floor, reference) in [
+            (-60.0, -18.0),
+            (-96.0, -18.0),
+            (-48.0, -20.0),
+            (-47.0, -20.0),
+            (-20.0, -9.0),
+        ] {
+            for height in (24..=900).step_by(7) {
+                let c = MeterConfig {
+                    ballistics,
+                    floor_db: floor,
+                    reference_dbfs: reference,
+                    ..MeterConfig::default()
+                };
+                let marks = scale_marks(&c);
+                let l = meter_layout(column_for(&c, height as f32), &c, false);
+                let mut dbs: Vec<f32> = l
+                    .lines
+                    .iter()
+                    .filter(|m| !m.label.is_empty())
+                    .map(|m| m.db)
+                    .collect();
+                dbs.sort_by(f32::total_cmp);
+                // Between two labelled marks of the scale, the labels added
+                // are all one step apart, ends included.
+                let mut segment: Vec<f32> = Vec::new();
+                for db in dbs {
+                    segment.push(db);
+                    let is_mark = marks.iter().any(|m| near(*m, db));
+                    if is_mark && segment.len() > 1 {
+                        let gaps: Vec<f32> = segment.windows(2).map(|p| p[1] - p[0]).collect();
+                        assert!(
+                            gaps.iter().all(|g| near(*g, gaps[0])),
+                            "{ballistics:?} floor {floor} {height}px: {segment:?}"
+                        );
+                    }
+                    if is_mark {
+                        segment = vec![db];
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn intermediate_labels_follow_a_custom_floor() {
-    let c = MeterConfig {
+    let custom = |floor_db| MeterConfig {
         ballistics: MeterBallistics::Custom,
-        floor_db: -48.0,
+        floor_db,
         reference_dbfs: -20.0,
         ..MeterConfig::default()
     };
+    let c = custom(-48.0);
     let labels = shown_labels(&meter_layout(column_for(&c, 900.0), &c, false));
-    for want in ["-48", "-45", "-40", "-20", "-1", "0"] {
+    for want in ["-48", "-40", "-20", "-1", "0"] {
         assert!(labels.contains(&want.to_owned()), "{want} in {labels:?}");
     }
-    // Below -20 dBFS the scale's spacing is 5 dB: no finer labels.
-    for unwanted in ["-47", "-46", "-44", "-42"] {
+    // Below -20 dBFS the scale's spacing is 5 dB: no finer labels; and -45
+    // would split -48..-40 unevenly.
+    for unwanted in ["-47", "-46", "-45", "-44", "-42"] {
         assert!(
             !labels.contains(&unwanted.to_owned()),
             "{unwanted} in {labels:?}"
         );
+    }
+    // A floor on a round mark gets the 5 dB labels between the 10 dB marks.
+    let c = custom(-70.0);
+    let labels = shown_labels(&meter_layout(column_for(&c, 900.0), &c, false));
+    for want in ["-70", "-55", "-45"] {
+        assert!(labels.contains(&want.to_owned()), "{want} in {labels:?}");
     }
 }
 

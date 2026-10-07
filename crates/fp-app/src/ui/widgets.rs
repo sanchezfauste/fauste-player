@@ -1129,7 +1129,8 @@ const LABEL_STEP_LADDER: [f32; 3] = [1.0, 2.0, 5.0];
 /// Labels the digital scale more densely where the meter is tall enough:
 /// between each two adjacent labels, every multiple (dBFS) of the finest
 /// step of [`LABEL_STEP_LADDER`] that is not finer than the scale's spacing
-/// ([`minor_step_db`]) and keeps every label of the segment [`LABEL_ROW`]
+/// ([`minor_step_db`]), splits the segment evenly (both labels are
+/// multiples of it) and keeps every label of the segment [`LABEL_ROW`]
 /// apart, or none. An intermediate level that is the alignment level labels
 /// the alignment line. The standardized scales keep their own labels.
 fn add_intermediate_labels(
@@ -1163,6 +1164,9 @@ fn add_intermediate_labels(
         let chosen = LABEL_STEP_LADDER
             .iter()
             .filter(|step| **step >= finest - SAME_MARK_DB)
+            // Only a step that splits the segment evenly: on a 5 dB segment
+            // a 2 dB step would leave −5, −4, −2, 0.
+            .filter(|step| on_step(low, **step, c) && on_step(high, **step, c))
             .map(|step| {
                 step_multiples(low, high, *step, c)
                     .into_iter()
@@ -1181,6 +1185,13 @@ fn add_intermediate_labels(
             lines.push(new);
         }
     }
+}
+
+/// Whether `db` dBFS is a multiple of `step` dB in the scale's own units
+/// (counted from [`scale_zero`]).
+fn on_step(db: f32, step: f32, c: &MeterConfig) -> bool {
+    let k = (db - scale_zero(c)) / step;
+    (k - k.round()).abs() * step < SAME_MARK_DB
 }
 
 /// The alignment level the meter marks, in dBFS: the K-System's 0, or
