@@ -160,10 +160,18 @@ fn visible_point(row: Rect, window: Option<Rect>) -> Option<Pos2> {
 /// and the gesture on a row. Without it, egui counts the second click of
 /// a double-click as a third click (its triple-click check spans 0.6 s
 /// and compares the position with the last click only), and the
-/// double-click is not seen.
+/// double-click is not seen. The clock jumps in one frame (frames in
+/// between change nothing here), then runs on at the harness's step.
 fn settle(h: &mut Harness<'_, AppUi>) {
-    h.run_steps(35);
+    let now = h.ctx.input(|i| i.time);
+    h.input_mut().time = Some(now + SETTLE_SECS);
+    h.step();
+    h.input_mut().time = None;
+    h.step();
 }
+
+/// More than twice egui's double-click delay.
+const SETTLE_SECS: f64 = 0.7;
 
 fn run(case: Case) -> Outcome {
     let (s, other) = setup(case.players);
