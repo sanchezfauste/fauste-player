@@ -168,16 +168,16 @@ Its value is seconds (`12.5`) or `m:ss(.f)`. The model's
 ## Cache (`cache.rs`)
 
 There is one postcard file per track in `<cache>/analysis/`. The key is an
-FNV-1a hash of the canonical path, size, mtime, `ANALYSIS_VERSION` (bumped when
-the analysis output changes: 4 added the format, 8 measures VBR MPEG
-streams without a length frame to their end; the services thread analyses again, once, every track
-that is analysed but has no format), the
-analysis settings and the cover limits. The key is taken *before* analysing,
-and the result is only stored if the file did not change meanwhile. Writes
-use unique temporary files. Corrupt entries are ignored and recomputed.
-File names are `v<ANALYSIS_VERSION>-<hash>.bin`. Before its first job, one
-pool worker sweeps entries of any other version (they can never match a key
-again) and leftover temporary files (`AnalysisCache::sweep`), so start-up
+FNV-1a hash of the canonical path, size, mtime, `ANALYSIS_VERSION`, the
+analysis settings and the cover limits. `ANALYSIS_VERSION` is bumped when the
+analysis output changes. Version 4 added the format: the services thread
+analyses again, once, every track that is analysed but has no format. Version 8
+measures VBR MPEG streams without a length frame to their end. The key is taken
+*before* analysing, and the result is only stored if the file did not change
+meanwhile. Writes use unique temporary files. Corrupt entries are ignored and
+recomputed. File names are `v<ANALYSIS_VERSION>-<hash>.bin`. Before its first
+job, one pool worker sweeps entries of any other version (they can never match
+a key again) and leftover temporary files (`AnalysisCache::sweep`), so start-up
 never waits on the cache directory.
 
 ## Pool (`analyzer.rs`)
