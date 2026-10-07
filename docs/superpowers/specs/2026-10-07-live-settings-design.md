@@ -413,15 +413,11 @@ nothing sleeps.
 - Multichannel layouts, and the bit-perfect rate change at transitions.
 - Any remote or MIDI control of settings (§10).
 
-## 14. Open questions
+## 14. Maintainer answers (2026-10-07)
 
-- **Q1** L6 reads D3 for routes as "wait for the holder, not the whole
-  device": moving an idle P2 off a device where P1 plays interrupts
-  nobody. If the maintainer wants a route change to wait for both devices
-  to be idle, L6 changes to L5's causes for the old and the new device.
-- **Q2** Removing the relaunch (§9.4) leaves no manual "restart the
-  application" action. Keep one (for example in About) as a fallback?
-- **Q3** Should `GET /state` (and SSE) expose the pending items read-only,
-  so a remote screen can show "Settings pending"?
-- **Q4** A held (paused) CUE counts as busy (L1), like the player-count
-  guard does today. Confirm, or treat a held CUE like a paused player.
+- **Q1** Confirmed: a route change waits for its holder (the player or the
+  cartwall it moves), not for the whole device (L6).
+- **Q2** Confirmed: the relaunch is removed and no manual restart action is
+  kept (§9.4); `restart_handoff_ms` goes with it.
+- **Q3** Confirmed: the remote API does not expose pending items (§10).
+- **Q4** Confirmed: a held (paused) CUE counts as busy (L1).
