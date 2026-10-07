@@ -32,8 +32,8 @@ All code, identifiers, comments, specs and plans are in **English**.
 
 End-user UI strings are **English** by default and fully translatable:
 
-- Every visible string lives in Fluent (`.ftl`) resources: `locales/en-US/` (source of truth) and `locales/es-ES/` (shipped translation).
-- The language follows the OS locale (`sys-locale`) when a translation exists, can be overridden in Settings, and falls back per key to `en-US`.
+- Every visible string lives in Fluent (`.ftl`) resources: `locales/en-US/` (source of truth), `locales/es-ES/` (hand-written translation) and one folder per AI-generated translation, all listed in the locale registry (`i18n::LOCALES`).
+- The language follows the OS locale (`sys-locale`) when a translation exists (same tag, else same language), can be overridden in Settings, and falls back per key to `en-US`. While an AI-generated translation is in use, About says it may contain errors.
 - A test fails if any locale is missing a key that `en-US` defines, or uses an unknown one.
 - Numbers, times and plurals go through Fluent, not string concatenation.
 
@@ -528,7 +528,7 @@ The engine and conductor are unaffected. `panic = "unwind"` is required in all p
 - **Soak (manual/CI optional):** 1 real-time hour on `Null`.
 - **`fp-store`:** round-trip, migration, corrupt-file fallback, and atomic-write crash simulation (a truncated temp file must not replace a good file).
 - **`fp-analysis`:** markers on generated fixtures (sine with silent head/tail, fade-out tails of known dB slope).
-- **i18n:** every `es-ES` key exists in `en-US` and vice versa; no unknown Fluent variables.
+- **i18n:** every registered locale has exactly the `en-US` keys, each with the same variables; every locale file is registered.
 - **Config:** defaults validate; out-of-range values clamp with a warning; derived mixer capacity grows with player count.
 - **UI:** snapshot-level logic tests (view-model functions: formatting, row colouring, footer maths). Rendering is checked manually.
 - **CI:** GitHub Actions on `ubuntu-latest`, `windows-latest` and `macos-latest`, running `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test` and `cargo deny check`.

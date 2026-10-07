@@ -64,7 +64,7 @@ col-intro = Intro
 col-file_name = Archivo
 footer-add = Añadir
 footer-count = { $count ->
-    [one] 1 pista
+    [one] { $count } pista
    *[other] { $count } pistas
 }
 menu-play-now = Reproducir ahora
@@ -140,7 +140,7 @@ settings-min-duration = Duración mínima para marcadores de mezcla y outro
 settings-reanalyse = Volver a analizar todas las pistas
 outdated-title = Algunas pistas necesitan un nuevo análisis
 outdated-body = { $count ->
-    [one] Una pista se analizó con una versión anterior de Fauste Player. Analizarla de nuevo actualiza sus marcadores y su forma de onda.
+    [one] { $count } pista se analizó con una versión anterior de Fauste Player. Analizarla de nuevo actualiza sus marcadores y su forma de onda.
    *[other] { $count } pistas se analizaron con una versión anterior de Fauste Player. Analizarlas de nuevo actualiza sus marcadores y sus formas de onda.
 } Usa el procesador durante un rato; la reproducción no se ve afectada. También puedes hacerlo más tarde en Configuración > Análisis.
 outdated-now = Analizar ahora
@@ -286,11 +286,11 @@ shortcut-unbind = Quitar
 shortcut-press-key = Pulsa una tecla…
 shortcut-help = Haz clic en una acción y pulsa la tecla. Supr, Retroceso y Esc no se pueden cambiar.
 playlist-imported = «{ $name }» importada: { $count ->
-    [one] 1 pista.
+    [one] { $count } pista.
    *[other] { $count } pistas.
 }
 playlist-streams-skipped = { $streams ->
-    [one] 1 stream omitido (no compatible).
+    [one] { $streams } stream omitido (no compatible).
    *[other] { $streams } streams omitidos (no compatibles).
 }
 playlist-import-failed = No se pudo importar «{ $name }»: { $error }
@@ -373,6 +373,7 @@ file-unreadable-reason = No se puede leer el archivo
 tip-about = Acerca de Fauste Player
 about-version = Versión { $version }
 about-copyright = Copyright © Marc Sánchez Fauste. Todos los derechos reservados.
+about-machine-translation = Las traducciones a otros idiomas distintos del inglés y el español se han generado con IA y pueden contener errores.
 about-bundled = Este programa incluye los siguientes componentes bajo sus propias licencias:
 about-inter = Fuente Inter — SIL Open Font License 1.1
 about-phosphor = Phosphor Icons — Licencia MIT
@@ -465,11 +466,11 @@ tags-cut = Demasiado largo para editarlo aquí; se conserva tal cual en el archi
 tags-date-invalid = Usa AAAA, AAAA-MM o AAAA-MM-DD (opcionalmente con hora).
 tags-number-invalid = Usa números enteros; un total necesita un número.
 tags-others-kept = { $count ->
-    [one] Se conserva 1 etiqueta más tal como está.
+    [one] Se conserva { $count } etiqueta más tal como está.
    *[other] Se conservan { $count } etiquetas más tal como están.
 }
 tags-others-kept-more = { $count ->
-    [one] Se conserva 1 etiqueta más tal como está, y otras que no se cuentan.
+    [one] Se conserva { $count } etiqueta más tal como está, y otras que no se cuentan.
    *[other] Se conservan { $count } etiquetas más tal como están, y otras que no se cuentan.
 }
 tags-others-kept-uncounted = Se conservan otras etiquetas tal como están.

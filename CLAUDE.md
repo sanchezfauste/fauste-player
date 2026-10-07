@@ -14,8 +14,9 @@ Windows, macOS). Read [`README.md`](README.md) for the overview and
    - All code, identifiers, comments, docs, specs, plans and commit messages
      are in **English**.
    - Answer the maintainer in the language they write in (usually Spanish).
-   - UI strings are Fluent messages in `crates/fp-app/locales/en-US/main.ftl`
-     (the source) and `es-ES/main.ftl`, always both.
+   - UI strings are Fluent messages; `crates/fp-app/locales/en-US/main.ftl`
+     is the source. Every new or changed string goes into every locale file
+     (en-US and es-ES written by hand, the others AI-translated).
 2. **Confidentiality.** Never mention other playout or radio-automation
    products (commercial or open source) anywhere: code, comments, docs,
    specs, plans, commit messages, issues, PRs. Describe behaviour in its own
@@ -133,7 +134,9 @@ A change is not done until everything that describes it says the same:
 - the spec in `docs/superpowers/specs/` when behaviour changes, and the plan;
 - this file (and `AGENTS.md` if the pointer changes) when the workflow,
   commands or layout change;
-- UI strings in both locales.
+- UI strings in every locale file (en-US and es-ES by hand, the rest
+  AI-translated); a new locale is one `locales/<tag>/main.ftl` plus one
+  entry in `i18n::LOCALES` (see `docs/technical/ui.md`).
 
 The PR template has a checklist for it. `CHANGELOG.md` is never edited by
 hand: release-please writes it from the commits.

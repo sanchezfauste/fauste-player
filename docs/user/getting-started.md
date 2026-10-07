@@ -83,7 +83,8 @@ one computer), give each its own folder with `FAUSTE_HOME`.
 the name and the version, and the **About** button (an info icon, left of
 **Settings**) opens **About**, with the copyright and the
 licence notices (**Third-party licences** opens the notices file installed
-with release packages). Close it with **Close** or `Esc`. `fauste-player --help` lists
+with release packages). In a language translated with AI, About also says
+that the translation may contain errors. Close it with **Close** or `Esc`. `fauste-player --help` lists
 the options. Playlist files given as arguments are imported as new
 playlists.
 

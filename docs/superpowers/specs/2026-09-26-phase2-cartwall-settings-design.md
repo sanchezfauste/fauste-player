@@ -158,8 +158,11 @@ refused if it would drop carts that have a file (`ModelError::CartsWouldBeLost`)
 
 ## P2.6 Language selector
 
-**Settings → Players → Language:** System, English, Español. It is stored in
-`config.ui.language`, and the interface switches on the next frame.
+**Settings → Players → Language:** a drop-down list: System, then every
+registered locale in its own name (English first, then by name). It is stored in
+`config.ui.language`, and the interface switches on the next frame. The
+configured tag is negotiated first, then the OS locale, then en-US; a tag that
+matches no locale shows as System.
 
 ## P2.7 Playlist files (`fp-store::playlist_io`)
 

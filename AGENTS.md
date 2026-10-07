@@ -5,8 +5,8 @@ The canonical guide for AI agents working on this repository is
 repeats the essentials for agents that do not follow links.
 
 - English for all code, comments, docs, specs, plans and commits; answer the
-  maintainer in their language. UI strings go through Fluent in both
-  `en-US` and `es-ES`.
+  maintainer in their language. UI strings go through Fluent; `en-US` is
+  the source and every string goes into every locale file.
 - Never mention other playout or radio-automation products anywhere.
 - Use established names; do not invent terms.
 - No `unsafe`. No `unwrap`, `expect` or `panic` outside tests. No hardcoded

@@ -1249,47 +1249,36 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
             update(scene, |c| c.players.end_warning_secs = warning);
         }
     });
-    let current = config.ui.language.clone();
-    row(ui, &t.tr("settings-language-title"), None, |ui| {
-        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-        // Language names are shown in their own language.
-        for (tag, text) in [
-            (None, t.tr("settings-language-system")),
-            (Some("en-US"), "English".to_owned()),
-            (Some("es-ES"), "Español".to_owned()),
-        ] {
-            let on = current.as_deref() == tag;
-            let style = TileStyle {
-                fill: if on {
-                    theme::NEUTRAL_700
-                } else {
-                    Color32::TRANSPARENT
-                },
-                content: if on { theme::TEXT } else { theme::NEUTRAL_400 },
-                ..TileStyle::plain()
-            };
-            let width = ui
-                .painter()
-                .layout_no_wrap(text.clone(), font(12.0), theme::TEXT)
-                .size()
-                .x
-                + 28.0;
-            if widgets::tile(ui, vec2(width, 30.0), &text, true, style, |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    &text,
-                    font(12.0),
-                    c,
-                );
+    let configured = config.ui.language.clone();
+    // A tag no locale is registered for behaves as "System" and shows so.
+    let current = configured
+        .as_deref()
+        .and_then(crate::i18n::locale)
+        .map(|l| l.tag);
+    labelled_row(ui, &t.tr("settings-language-title"), None, |ui, label| {
+        // "System", then every language in its own name, in registry order.
+        let system = t.tr("settings-language-system");
+        let mut choices = vec![(None, system.as_str())];
+        choices.extend(crate::i18n::LOCALES.iter().map(|l| (Some(l.tag), l.name)));
+        let shown = choices
+            .iter()
+            .find(|(tag, _)| current == *tag)
+            .map_or(system.as_str(), |(_, n)| *n)
+            .to_owned();
+        egui::ComboBox::from_id_salt("language")
+            .selected_text(shown)
+            .width(ui.available_width().min(260.0))
+            .show_ui(ui, |ui| {
+                for (tag, name) in &choices {
+                    let on = current == *tag;
+                    if ui.selectable_label(on, *name).clicked() && configured.as_deref() != *tag {
+                        let tag = tag.map(str::to_owned);
+                        update(scene, |c| c.ui.language = tag);
+                    }
+                }
             })
-            .clicked()
-                && !on
-            {
-                let tag = tag.map(str::to_owned);
-                update(scene, |c| c.ui.language = tag);
-            }
-        }
+            .response
+            .labelled_by(label);
     });
 }
 

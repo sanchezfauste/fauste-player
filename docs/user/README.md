@@ -23,5 +23,9 @@ by themselves.
 | [Data and backups](data-and-backups.md) | Where files live, autosave, crash recovery, portable mode |
 | [Troubleshooting](troubleshooting.md) | No sound, device lost, files marked unavailable, logs |
 
-The interface is available in English and Spanish. It follows the language of
-the operating system unless you choose one in Settings.
+The interface is available in English, Spanish, Catalan, Dutch, French,
+Galician, German, Italian, Basque, Polish and Portuguese. It follows the
+language of the operating system unless you choose one in Settings. English and
+Spanish are written by hand; the other nine were generated with AI and may
+contain errors. If you speak one of them, corrections are welcome as issues or
+pull requests.

@@ -110,8 +110,11 @@ audio engine that the interface can never block.
   thousands of entries, with drag and drop within and across players and
   onto tabs, drops from the file manager, a context menu and keyboard
   shortcuts.
-- **English and Spanish** interface (Fluent). It follows the OS language or
-  the language chosen in Settings.
+- **Eleven-language** interface (Fluent): English, Spanish, Catalan, Dutch,
+  French, Galician, German, Italian, Basque, Polish and Portuguese. It follows
+  the OS language or the language chosen in Settings. English and Spanish are
+  written by hand; the other nine are AI-generated and may contain errors.
+  Corrections from native speakers are welcome as issues or pull requests.
 
 ## Platform support
 
@@ -261,7 +264,7 @@ git config core.hooksPath .githooks                    # enable the Conventional
 - **TDD:** write the failing test first. UI interactions are tested
   headlessly with `egui_kittest`.
 - **English** for all code, identifiers, comments, commits and docs. Every
-  UI string goes through Fluent, in both `en-US` and `es-ES`.
+  UI string goes through Fluent, in `en-US` and in every other locale file.
 
 ## How it is built
 

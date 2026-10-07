@@ -1716,6 +1716,7 @@ dependencies = [
  "egui_extras",
  "egui_kittest",
  "fluent-bundle",
+ "fluent-syntax",
  "fp-analysis",
  "fp-app",
  "fp-backends",
@@ -1737,6 +1738,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "ttf-parser",
  "unic-langid",
  "winit",
 ]

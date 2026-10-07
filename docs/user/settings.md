@@ -177,7 +177,19 @@ missing are not counted until the file is back.
   off), up and down arrows for the shown ones, and **Default columns**. See
   [Playlists](playlists.md).
 
-**Language:** System, English or Español. The interface switches at once.
+**Language:** a drop-down list: **System** (follow the operating system),
+then every language the interface is available in, each in its own name
+(English first, then alphabetically: for example Español). The interface
+switches at once. A system language with no translation of its own uses the
+closest one (Canadian French uses French, Brazilian Portuguese uses
+Portuguese), and English otherwise. A language in the settings file that
+the interface does not have shows as **System** and follows the operating
+system.
+
+English and Spanish are written by hand. The other translations were
+generated with AI and may contain errors; when one of them is in use,
+**About** says so. Corrections from native speakers are welcome as issues
+or pull requests.
 
 ## Cartwall
 

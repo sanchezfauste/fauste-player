@@ -137,3 +137,44 @@ fn the_meter_ticks_are_pinned() {
     assert_eq!(theme::METER_TICK_MINOR_ALPHA, 0.60);
     assert_eq!(theme::METER_ALIGNMENT_TICK, Color32::WHITE);
 }
+
+/// The characters each Inter weight lacks, among `text`. Each weight is
+/// checked alone (its own character map), without the fallback fonts, so
+/// a label never mixes typefaces.
+fn missing_from_inter(text: &str) -> Vec<(String, char)> {
+    let fonts = theme::fonts();
+    let chars: std::collections::BTreeSet<char> =
+        text.chars().filter(|c| !c.is_control()).collect();
+    let mut missing = Vec::new();
+    for w in ["inter-400", theme::MEDIUM, theme::SEMIBOLD] {
+        let face = ttf_parser::Face::parse(&fonts.font_data[w].font, 0).unwrap();
+        for &c in &chars {
+            if face.glyph_index(c).is_none() {
+                missing.push((w.to_owned(), c));
+            }
+        }
+    }
+    missing
+}
+
+#[test]
+fn inter_covers_the_letters_of_every_planned_language() {
+    // Polish, Catalan, Portuguese, German, French, Spanish, Basque,
+    // Galician, Italian and Dutch, upper and lower case, and punctuation.
+    let letters = "ąćęłńóśźż ĄĆĘŁŃÓŚŹŻ l·l L·L ŀ Ŀ çàèéíïòóúü ÇÀÈÉÍÏÒÓÚÜ ãõâêô ÃÕÂÊÔ \
+                   ßäöü ÄÖÜẞ œæâêîôûëÿ ŒÆÂÊÎÔÛËŸ «» ‹› ‘’‚ “”„ … – — ñÑ ¿¡ ìù ĳĲ ª º €";
+    assert_eq!(missing_from_inter(letters), Vec::new());
+}
+
+#[test]
+fn inter_covers_every_character_of_every_locale_file() {
+    for l in fp_app::i18n::LOCALES {
+        // Comments are never shown.
+        let shown: String = l
+            .source
+            .lines()
+            .filter(|line| !line.trim_start().starts_with('#'))
+            .collect();
+        assert_eq!(missing_from_inter(&shown), Vec::new(), "{}", l.tag);
+    }
+}
