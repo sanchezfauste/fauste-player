@@ -456,7 +456,7 @@ impl Bus {
         self.config = fallback;
         self.follow_rate(previous.sample_rate, fallback.sample_rate);
         if self.try_open(now, true).is_ok() {
-            tracing::warn!(bus = ?self.key, from = previous.sample_rate, to = fallback.sample_rate, "the device did not take its rate back; playing at the rate before DSD");
+            tracing::warn!(bus = ?self.key, from = previous.sample_rate, to = fallback.sample_rate, "the device did not take its rate; playing at the fallback rate");
             self.rate_change = Some(previous.sample_rate);
             return true;
         }

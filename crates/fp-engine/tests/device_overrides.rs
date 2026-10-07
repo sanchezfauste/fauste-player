@@ -196,3 +196,19 @@ fn an_override_does_not_apply_to_the_default_output_when_no_route_names_it() {
     let dac = r.dac.config().unwrap();
     assert_eq!((dac.sample_rate, dac.buffer_frames), (48_000, 512));
 }
+
+#[test]
+fn a_device_whose_own_rate_does_not_open_falls_back_to_the_global_rate() {
+    let mut r = rig_with(
+        |d| d.refuse_rate(96_000),
+        |c| c.outputs.set_device_rate(&dev("dac"), Some(96_000)),
+    );
+    assert!(r.dac.config().is_none(), "96 kHz is refused");
+    // The watchdog retries after the reconnect interval.
+    for _ in 0..200 {
+        r.clock += Duration::from_millis(100);
+        r.engine.tick(r.clock);
+    }
+    let dac = r.dac.config().expect("reopened");
+    assert_eq!(dac.sample_rate, 48_000);
+}

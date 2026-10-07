@@ -1087,7 +1087,17 @@ impl Engine {
                     t.device_busy_retry_ms.max(0.0) / 1000.0,
                 ),
             };
-            let bus = Bus::open(key.clone(), backend, config, 8, mixer, timing, now);
+            let mut bus = Bus::open(key.clone(), backend, config, 8, mixer, timing, now);
+            if rate != self.settings.sample_rate {
+                // A device's own rate it no longer takes (another DAC, a
+                // changed driver) must not leave it silent for good: the
+                // watchdog falls back to the global values.
+                bus.set_pcm_fallback(StreamConfig {
+                    sample_rate: self.settings.sample_rate,
+                    buffer_frames: self.settings.buffer_frames,
+                    ..config
+                });
+            }
             bus.shared()
                 .true_peak
                 .store(self.true_peak, std::sync::atomic::Ordering::Release);
