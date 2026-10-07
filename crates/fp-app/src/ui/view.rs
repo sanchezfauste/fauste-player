@@ -271,6 +271,13 @@ pub fn file_icon(track: &Track) -> &'static str {
     }
 }
 
+/// Q2: the track waits for its analysis and its file can be played, so the
+/// table says why it has no waveform yet. A missing or unreadable file has
+/// its own icon; an analysed one (outdated or not) has nothing pending.
+pub fn analysis_pending(track: &Track) -> bool {
+    !track.analyzed && track.file_state.is_playable()
+}
+
 /// O37: the row of `entry` is the player's next, whatever else it is: the
 /// entry on air can be its own next (it plays once more).
 pub fn row_is_next(state: &AppState, player: PlayerId, entry: EntryId) -> bool {

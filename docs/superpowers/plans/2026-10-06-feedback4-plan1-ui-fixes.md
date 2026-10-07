@@ -282,7 +282,7 @@ Suggested executor: `sonnet`.
 - Consumes: `Track::{analyzed, file_state}`, `FileState::is_playable`, `services::outdated`, the table's `flag(ui, label, paint)` helper (`table.rs` L859), `widgets::glyph`.
 - Produces: `pub fn view::analysis_pending(track: &Track) -> bool`; Fluent key `flag-analysis-pending`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `tests/view.rs` add `analysis_pending` to the `fp_app::ui::view::{...}` import list and, if missing, `FileState` to the `fp_model` imports. Append:
 
@@ -371,12 +371,12 @@ fn an_outdated_track_never_shows_the_hourglass() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test view q2_`
 Expected: FAIL to compile (`analysis_pending` not found).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `view.rs`:
 
@@ -401,12 +401,12 @@ if view::analysis_pending(track) {
 
 Locales, after `flag-outdated`: en-US `flag-analysis-pending = Analysis pending`; es-ES `flag-analysis-pending = Análisis pendiente`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test view q2_`, `cargo test -p fp-app --test table_icons`, `cargo test -p fp-app --test i18n`
 Expected: PASS. If an older test now sees "Analysis pending" labels it did not expect, fix the older test's query (rows built with `state(..)` are unanalysed on purpose).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cargo fmt --all

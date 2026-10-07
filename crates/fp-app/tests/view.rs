@@ -11,9 +11,10 @@ use std::path::PathBuf;
 
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
-    PlayerStatus, RowStatus, TipField, cue_follow_target, cue_window_view, fader_from_gain,
-    file_icon, file_problem, gain_from_fader, player_view, playlist_times, row_is_next, row_status,
-    shown_entry, start_scroll_target, tag_edit_availability, track_tooltip, volume_db,
+    PlayerStatus, RowStatus, TipField, analysis_pending, cue_follow_target, cue_window_view,
+    fader_from_gain, file_icon, file_problem, gain_from_fader, player_view, playlist_times,
+    row_is_next, row_status, shown_entry, start_scroll_target, tag_edit_availability,
+    track_tooltip, volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayerId, Track, apply,
@@ -661,4 +662,34 @@ fn give_cue_routes(state: &mut AppState) {
         })
         .collect();
     state.config.outputs.cartwall.cue = Some(phones);
+}
+
+fn pending_track() -> Track {
+    Track::new(fp_model::TrackId(7), PathBuf::from("/m/New.flac"))
+}
+
+#[test]
+fn q2_1_an_unanalysed_playable_track_is_pending() {
+    assert!(analysis_pending(&pending_track()));
+}
+
+#[test]
+fn q2_2_a_missing_or_unreadable_file_is_not_pending() {
+    for state in [FileState::Missing, FileState::Unreadable] {
+        let mut t = pending_track();
+        t.file_state = state;
+        assert!(!analysis_pending(&t), "{state:?}");
+    }
+}
+
+#[test]
+fn q2_3_an_analysed_track_is_not_pending_and_an_outdated_one_keeps_its_own_flag() {
+    let mut t = pending_track();
+    t.analyzed = true;
+    assert!(!analysis_pending(&t));
+    // Analysed by an earlier version: no format and version 0.
+    t.format = None;
+    t.analysis_version = 0;
+    assert!(fp_app::services::outdated(&t));
+    assert!(!analysis_pending(&t));
 }

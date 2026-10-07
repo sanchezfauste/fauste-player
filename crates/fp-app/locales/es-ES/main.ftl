@@ -77,6 +77,7 @@ menu-stop-after = Parar después de esta pista
 flag-repeat = Se repite
 flag-stop-after = Para al acabar
 flag-outdated = Analizada por una versión anterior: Configuración → Análisis → Analizar las pistas desactualizadas
+flag-analysis-pending = Análisis pendiente
 menu-move-to = Mover a
 menu-remove = Quitar de la playlist
 menu-remove-on-air = No se puede quitar una pista que está sonando

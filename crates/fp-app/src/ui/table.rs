@@ -405,6 +405,18 @@ pub(crate) fn track_table(
                                             );
                                         });
                                     }
+                                    if view::analysis_pending(track) {
+                                        flag(ui, &t.tr("flag-analysis-pending"), |p, r| {
+                                            widgets::glyph(
+                                                p,
+                                                r,
+                                                icon::HOURGLASS,
+                                                13.0,
+                                                theme::NEUTRAL_400,
+                                                false,
+                                            );
+                                        });
+                                    }
                                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                                         ui.spacing_mut().item_spacing.x = 4.0;
                                         if entry.repeat {

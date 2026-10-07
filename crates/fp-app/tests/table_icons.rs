@@ -13,7 +13,8 @@ use egui::Rect;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::app::AppUi;
-use fp_model::{AppState, Command, EntryId};
+use fp_app::ui::controller::Controller;
+use fp_model::{AppState, Command, EntryId, TrackAnalysis};
 use support::{harness, harness_sized, state};
 
 fn entries(s: &AppState) -> Vec<EntryId> {
@@ -123,5 +124,54 @@ fn the_outdated_flag_stays_after_the_title() {
     assert!(
         outdated.left() >= title.right() - 0.5,
         "{outdated:?} {title:?}"
+    );
+}
+
+fn pending_flags(h: &Harness<'_, AppUi>) -> usize {
+    h.query_all_by_label("Analysis pending").count()
+}
+
+#[test]
+fn every_row_waiting_for_its_analysis_shows_the_hourglass_flag() {
+    let (h, _) = harness(state(1, 3));
+    assert_eq!(pending_flags(&h), 3);
+}
+
+#[test]
+fn the_flag_disappears_when_the_analysis_arrives() {
+    let (mut h, fake) = harness(state(1, 3));
+    let track = fake.state.load().playlists.iter().next().unwrap().entries[1].track;
+    fake.send(Command::ApplyAnalysis {
+        track,
+        analysis: Box::new(TrackAnalysis::default()),
+    });
+    h.run_steps(2);
+    assert_eq!(pending_flags(&h), 2);
+}
+
+#[test]
+fn a_pending_flag_goes_when_the_file_turns_unreadable() {
+    let (mut h, fake) = harness(state(1, 3));
+    let track = fake.state.load().playlists.iter().next().unwrap().entries[0].track;
+    fake.send(Command::SetFileState {
+        track,
+        state: fp_model::FileState::Unreadable,
+    });
+    h.run_steps(2);
+    assert_eq!(pending_flags(&h), 2, "the unreadable row has its own icon");
+}
+
+#[test]
+fn an_outdated_track_never_shows_the_hourglass() {
+    let mut s = state(1, 1);
+    let track = s.playlists.entry(entries(&s)[0]).unwrap().track;
+    let t = s.library.get_mut(track).unwrap();
+    t.analyzed = true;
+    t.analysis_version = 0;
+    let (h, _) = harness(s);
+    assert_eq!(pending_flags(&h), 0);
+    assert!(
+        h.query_by_label_contains("Analysed by an earlier version")
+            .is_some()
     );
 }

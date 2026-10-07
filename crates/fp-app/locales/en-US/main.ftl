@@ -77,6 +77,7 @@ menu-stop-after = Stop after this track
 flag-repeat = Repeats
 flag-stop-after = Stops after
 flag-outdated = Analysed by an earlier version: Settings → Analysis → Analyse outdated tracks
+flag-analysis-pending = Analysis pending
 menu-move-to = Move to
 menu-remove = Remove from playlist
 menu-remove-on-air = A track that is on air cannot be removed
