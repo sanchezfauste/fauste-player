@@ -1125,7 +1125,7 @@ Suggested executor: `opus` (a protocol between two threads and a state machine w
   - `Services::stamps: HashMap<TrackId, Seen>` (one entry per track whose file is `Unreadable` in the model), `Services::urgent: HashSet<TrackId>`.
   - Test hook `#[cfg(feature = "test-hooks")] pub fn looked_at(&self) -> usize`: the number of unreadable tracks whose first look has been answered.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Inline unit tests, at the end of `services.rs`:
 
@@ -1280,7 +1280,7 @@ fn reanalyse_track_brings_back_a_track_that_playback_marked_unreadable() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --lib services::tests`
 Expected: FAIL to compile (`look`, `Seen`, `Look` not found).
@@ -1288,7 +1288,7 @@ Expected: FAIL to compile (`look`, `Seen`, `Look` not found).
 Run: `cargo test -p fp-app --test services an_unreadable_file`
 Expected: FAIL to compile (`looked_at`, `ReanalyseTrack`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `services.rs`, add `use std::path::Path;` and `use std::time::SystemTime;` (merge with the existing imports), then:
 
@@ -1511,12 +1511,12 @@ pub fn looked_at(&self) -> usize {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --lib services::tests`, then `cargo test -p fp-app --test services` (each new test, and the older `a_missing_file_*` ones, which exercise the reworked loop).
 Expected: PASS. If the garbage `.wav` is not reported as `Unreadable` (for example it is read as an empty file), change `garbage` to bytes that still fail the decoder and re-run `run_until("unreadable and stamped")` first: every test begins with it.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cargo fmt --all

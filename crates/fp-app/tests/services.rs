@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -829,4 +829,149 @@ fn a_stale_snapshot_does_not_read_a_track_twice() {
         version + 1,
         "exactly one ApplyTags"
     );
+}
+
+/// A file with an audio extension that cannot be decoded.
+fn garbage(dir: &Path, name: &str) -> PathBuf {
+    let path = dir.join(name);
+    std::fs::write(&path, b"not audio at all").unwrap();
+    path
+}
+
+fn all_in(r: &Rig, state: FileState) -> bool {
+    r.handle
+        .model
+        .load()
+        .library
+        .iter()
+        .all(|t| t.file_state == state)
+}
+
+/// The track is unreadable and its first look has been answered, so its
+/// size and modification time are recorded.
+fn unreadable_and_stamped(r: &Rig) -> bool {
+    all_in(r, FileState::Unreadable) && r.services.looked_at() == 1
+}
+
+fn quiet_for(r: &mut Rig, ms: u64) {
+    let until = r.now + Duration::from_millis(ms);
+    r.run_until("a quiet period", |r| r.now >= until);
+}
+
+/// Q10.2: neither the size nor the modification time changed, so nothing
+/// happens: no analysis, no save.
+#[test]
+fn an_unreadable_file_that_did_not_change_is_not_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut r = recheck_rig(&[bad], dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    let analyses = r.analyses.load(Ordering::SeqCst);
+    let version = r.handle.telemetry.load().model_version;
+    quiet_for(&mut r, 3_500);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), analyses);
+    assert_eq!(
+        r.handle.telemetry.load().model_version,
+        version,
+        "nothing is saved"
+    );
+}
+
+/// Q10.2 and Q10.5: a fixed file comes back playable by itself.
+#[test]
+fn an_unreadable_file_that_changed_size_is_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let staging = tempfile::tempdir().unwrap();
+    let mut r = recheck_rig(std::slice::from_ref(&bad), dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    // Written elsewhere, then moved: never seen half-written.
+    std::fs::rename(wav(staging.path(), "bad.wav", 1), &bad).unwrap();
+    r.run_until("playable again", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.file_state == FileState::Ok && t.analyzed)
+    });
+    assert_eq!(
+        r.analyses.load(Ordering::SeqCst),
+        2,
+        "one failure and one success"
+    );
+}
+
+/// The same size with a new modification time is a change too, and a file
+/// that fails again is looked at with its new stat: no loop.
+#[test]
+fn a_file_that_fails_again_is_looked_at_with_its_new_stat() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut r = recheck_rig(std::slice::from_ref(&bad), dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    let file = std::fs::OpenOptions::new().write(true).open(&bad).unwrap();
+    file.set_modified(SystemTime::now() + Duration::from_secs(60))
+        .unwrap();
+    drop(file);
+    r.run_until("a second analysis", |r| {
+        r.analyses.load(Ordering::SeqCst) == 2
+    });
+    r.run_until("stamped again", unreadable_and_stamped);
+    quiet_for(&mut r, 3_500);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "no third analysis");
+    assert!(all_in(&r, FileState::Unreadable));
+}
+
+/// Q10.3: it follows the missing-file recheck from then on.
+#[test]
+fn an_unreadable_file_that_disappeared_becomes_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut r = recheck_rig(std::slice::from_ref(&bad), dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    std::fs::remove_file(&bad).unwrap();
+    r.run_until("missing", |r| all_in(r, FileState::Missing));
+}
+
+/// Q10.4: the row menu's Re-analyse does not wait for a change.
+#[test]
+fn reanalyse_track_analyses_a_failed_file_at_once_whatever_its_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut r = recheck_rig(&[bad], dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    let track = r.handle.model.load().library.iter().next().unwrap().id;
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(track))
+        .unwrap();
+    r.run_until("a second analysis", |r| {
+        r.analyses.load(Ordering::SeqCst) == 2
+    });
+}
+
+/// Q10.1 and Q10.4: a track that playback marked unreadable is looked at
+/// too, and Re-analyse makes it playable again.
+#[test]
+fn reanalyse_track_brings_back_a_track_that_playback_marked_unreadable() {
+    let dir = tempfile::tempdir().unwrap();
+    let good = wav(dir.path(), "good.wav", 1);
+    let mut r = recheck_rig(&[good], dir);
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    let track = r.handle.model.load().library.iter().next().unwrap().id;
+    // What a playback failure does (the reducer's `SourceFailed`).
+    assert!(r.handle.send(Command::SetFileState {
+        track,
+        state: FileState::Unreadable
+    }));
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(track))
+        .unwrap();
+    r.run_until("playable again", |r| all_in(r, FileState::Ok));
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
 }
