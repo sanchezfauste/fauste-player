@@ -119,6 +119,28 @@ fn live_widths(
     }
 }
 
+/// Whether a click on `row` sets it as next; `repeated` is a double or a
+/// triple click to egui. egui counts a double-click that comes less than
+/// 0.6 s after a click elsewhere as a triple click, so both count, but a
+/// real triple click (a double-click, then one more click) sets the row
+/// once: `sent` remembers the row set in the current burst of clicks, and
+/// a single click or a click on another row starts a new one.
+fn set_next_on_click(
+    sent: &mut Option<(PlayerId, EntryId)>,
+    row: (PlayerId, EntryId),
+    repeated: bool,
+) -> bool {
+    if !repeated {
+        *sent = None;
+        return false;
+    }
+    if *sent == Some(row) {
+        return false;
+    }
+    *sent = Some(row);
+    true
+}
+
 pub(crate) fn track_table(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -489,7 +511,13 @@ pub(crate) fn track_table(
                 });
                 // A double-click sets the row as next, the playing one included
                 // (it then plays once more, rule 27a).
-                if response.double_clicked() {
+                if response.clicked()
+                    && set_next_on_click(
+                        &mut view_state.set_next_sent,
+                        (player, entry.id),
+                        response.double_clicked() || response.triple_clicked(),
+                    )
+                {
                     scene.ctl.send(Command::SetNext(player, entry.id));
                 }
                 if response.drag_started() {

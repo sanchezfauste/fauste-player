@@ -111,6 +111,9 @@ pub(crate) struct ViewState {
     /// The column edge being dragged (feedback 2 spec O16).
     pub(crate) live_resize: Option<super::table::LiveResize>,
     pub rows_built: usize,
+    /// The row a double-click set as next in the current burst of clicks
+    /// (see `table::set_next_on_click`).
+    pub(crate) set_next_sent: Option<(PlayerId, EntryId)>,
     pub settings_open: bool,
     pub about_open: bool,
     /// The close guard is asking the operator (feedback 2 spec O6).
