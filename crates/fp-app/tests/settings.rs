@@ -425,6 +425,9 @@ fn a_shared_device_cannot_be_bit_perfect() {
     assert!(bit_perfect_devices(&fake).is_empty());
     // The same click on a capable device does take (the switch was reached).
     h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
         .click();
     h.run_steps(2);
     assert_eq!(bit_perfect_devices(&fake), vec!["dac".to_owned()]);
@@ -544,9 +547,10 @@ fn the_cue_markers_toggle_updates_the_config() {
 #[test]
 fn a_bit_perfect_device_offers_its_dsd_modes_and_the_choice_updates_the_config() {
     let (mut h, fake) = outputs_with(vec![dac()]);
-    h.get_by_value("Convert to PCM").scroll_to_me();
+    h.get_by_role_and_label(Role::ComboBox, "DSD: dac")
+        .scroll_to_me();
     h.run_steps(5);
-    h.get_by_value("Convert to PCM").click();
+    h.get_by_role_and_label(Role::ComboBox, "DSD: dac").click();
     h.run_steps(2);
     assert!(h.query_by_label("DoP").is_some());
     assert!(
@@ -562,10 +566,78 @@ fn a_bit_perfect_device_offers_its_dsd_modes_and_the_choice_updates_the_config()
     );
 }
 
+fn rate_choices(fake: &support::Fake) -> Vec<Vec<fp_model::DeviceOverride>> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::UpdateConfig(config) => Some(config.outputs.device_overrides),
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
-fn a_device_that_is_not_bit_perfect_has_no_dsd_row() {
-    let (h, _) = outputs();
-    assert!(h.query_by_label("DSD: dac").is_none());
+fn a_device_can_be_given_its_own_rate_and_back_the_global_one() {
+    let (mut h, fake) = outputs_with(Vec::new());
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(
+        h.query_all_by_value("Global (48000 Hz)").count() >= 2,
+        "dac and speakers both use the global rate"
+    );
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .click();
+    h.run_steps(2);
+    h.get_by_label("96000 Hz").click();
+    h.run_steps(2);
+    let c = fake.state.load().config.clone();
+    assert_eq!(c.outputs.rate_for("offline", "dac"), 96_000);
+    assert_eq!(c.outputs.rate_for("offline", "speakers"), 48_000);
+    assert_eq!(
+        c.outputs.sample_rate, 48_000,
+        "the global rate is untouched"
+    );
+    assert_eq!(rate_choices(&fake).len(), 1, "one UpdateConfig");
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .click();
+    h.run_steps(2);
+    h.get_by_label("Global (48000 Hz)").click();
+    h.run_steps(2);
+    assert!(fake.state.load().config.outputs.device_overrides.is_empty());
+}
+
+#[test]
+fn a_device_can_be_given_its_own_buffer() {
+    let (mut h, fake) = outputs_with(Vec::new());
+    h.get_by_role_and_label(Role::ComboBox, "Buffer size: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::ComboBox, "Buffer size: dac")
+        .click();
+    h.run_steps(2);
+    h.get_by_label("1024").click();
+    h.run_steps(2);
+    let c = fake.state.load().config.clone();
+    assert_eq!(c.outputs.buffer_for("offline", "dac"), 1024);
+    assert_eq!(c.outputs.buffer_for("offline", "speakers"), 512);
+    assert!(
+        h.query_by_label_contains("21.3 ms").is_some(),
+        "1024 frames at 48 kHz"
+    );
+}
+
+#[test]
+fn the_dsd_silence_slider_updates_the_config() {
+    let (mut h, fake) = outputs_with(Vec::new());
+    h.get_by_role_and_label(Role::Slider, "DSD silence")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::Slider, "DSD silence").focus();
+    h.run_steps(1);
+    h.key_press(Key::ArrowRight);
+    h.run_steps(2);
+    assert_eq!(fake.state.load().config.outputs.dsd_silence_ms, 210.0);
 }
 
 #[test]

@@ -8,9 +8,13 @@
 
 mod support;
 
+use std::sync::Arc;
+
+use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
-use fp_model::{DsdOnAir, Transport};
-use support::{Fake, harness, state};
+use fp_backends::{AudioBackend, OfflineBackend};
+use fp_model::{DsdOnAir, OutputDevice, OutputsView, PlayerRoutes, Route, Transport};
+use support::{Fake, harness, harness_with_backends, state};
 
 fn publish(fake: &Fake, bit_perfect: bool, dsd: bool) {
     fake.telemetry
@@ -78,5 +82,79 @@ fn others_muted_shows_while_dsd_holds_the_output() {
     assert!(
         h.query_by_label_contains("other sources routed to it are muted")
             .is_some()
+    );
+}
+
+/// Player 1 plays on `dac` (exclusive-capable, no DSD format); Settings is
+/// open on Audio outputs, Advanced.
+fn advanced_outputs(bit_perfect: bool) -> egui_kittest::Harness<'static, fp_app::ui::app::AppUi> {
+    let backend = OfflineBackend::new();
+    backend.add_device("dac", 2).set_exclusive_capable(true);
+    let mut s = state(1, 1);
+    s.config.ui.outputs_view = OutputsView::Advanced;
+    s.config.outputs.backend = Some("offline".into());
+    s.config.outputs.routes = vec![PlayerRoutes {
+        player: s.players[0].id,
+        main: Some(Route {
+            backend: "offline".into(),
+            device: "dac".into(),
+            first_channel: 0,
+        }),
+        cue: None,
+    }];
+    if bit_perfect {
+        s.config.outputs.bit_perfect = vec![OutputDevice {
+            backend: "offline".into(),
+            device: "dac".into(),
+        }];
+    }
+    let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
+    let (mut h, _) = harness_with_backends(s, backends);
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Audio outputs")
+        .click();
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_role_and_label(Role::ComboBox, "DSD: dac")
+            .is_some()
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    h
+}
+
+#[test]
+fn a_device_that_is_not_bit_perfect_shows_its_dsd_row_and_why() {
+    let h = advanced_outputs(false);
+    assert!(
+        h.query_by_role_and_label(Role::ComboBox, "DSD: dac")
+            .is_some()
+    );
+    assert!(
+        h.query_by_label("DoP and native DSD need this device to be bit-perfect.")
+            .is_some()
+    );
+    assert!(
+        h.query_all_by_label("By default, DSD is converted to PCM.")
+            .next()
+            .is_some()
+    );
+}
+
+#[test]
+fn a_bit_perfect_device_without_native_dsd_says_why() {
+    let h = advanced_outputs(true);
+    let why = if cfg!(target_os = "linux") {
+        "This device does not take native DSD: its driver reports no DSD format."
+    } else {
+        "Native DSD needs Linux."
+    };
+    assert!(h.query_by_label(why).is_some(), "{why}");
+    assert!(
+        h.query_by_label("DoP and native DSD need this device to be bit-perfect.")
+            .is_none()
     );
 }

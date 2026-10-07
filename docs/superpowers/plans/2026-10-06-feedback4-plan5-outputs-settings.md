@@ -1763,7 +1763,7 @@ fi
 
   Once for all devices, there is a "DSD silence" slider.
 
-- [ ] **Step 1: Write the failing kittests**
+- [x] **Step 1: Write the failing kittests**
 
 In `crates/fp-app/tests/settings.rs`:
 - delete `a_device_that_is_not_bit_perfect_has_no_dsd_row`;
@@ -1945,12 +1945,12 @@ fn a_bit_perfect_device_without_native_dsd_says_why() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test settings own_ && cargo test -p fp-app --test dsd_ui why`
 Expected: FAIL. `a_device_can_be_given_its_own_rate_and_back_the_global_one` panics with "Did not find a node with role ComboBox and label 'Sample rate: dac'"; the `dsd_ui` tests time out the wait and fail their first assertion.
 
-- [ ] **Step 3: Add the strings**
+- [x] **Step 3: Add the strings**
 
 In `crates/fp-app/locales/en-US/main.ftl`, after `settings-dsd-mode = DSD: { $device }`, add:
 
@@ -1984,7 +1984,7 @@ settings-dsd-silence = Silencio DSD
 settings-dsd-silence-hint = Se envía antes de que empiece un flujo DSD, al acabar y al pasar a PCM, para que el convertidor se enganche sin chasquido.
 ```
 
-- [ ] **Step 4: Draw the rows**
+- [x] **Step 4: Draw the rows**
 
 In `crates/fp-app/src/ui/settings/devices.rs`:
 - change the imports to
@@ -2191,12 +2191,12 @@ fn set_dsd_mode(scene: &Scene<'_>, device: &OutputDevice, mode: DsdOutput) {
 
 The slider range is the validated range of `outputs.dsd_silence_ms` (0–2000, `Config::validate`). If `Response::labelled_by` is `#[must_use]`, the `let _ =` keeps clippy quiet. If it is not, clippy accepts the binding as well.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test settings && cargo test -p fp-app --test dsd_ui && cargo test -p fp-app --test i18n`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/fp-app/src/ui/settings/devices.rs crates/fp-app/locales/en-US/main.ftl \
