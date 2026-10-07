@@ -778,6 +778,30 @@ Task 7, the check on real hardware, is not done.
   timelines are in the same rate. As before, there is no on-screen notice.
   Tests: `fp-engine/tests/device_overrides.rs`, with
   `OfflineDevice::refuse_buffer`.
+  cpal never refuses a buffer size: a fixed size outside the device's
+  reported range was skipped and the device opened with its default buffer,
+  so the fallback never ran. A bus with its own buffer now asks for it
+  exactly (`StreamConfig::exact_buffer`): cpal then tries only that fixed
+  size, and refuses it with `Unsupported` when the device reports ranges
+  that leave it out. The fallback (global rate and buffer) is not exact, so
+  the global path keeps its behaviour (outside the range, the device's
+  default). `Engine::buffer_of` uses the buffer the stream runs with
+  (`Bus::buffer_frames`), not the one asked for. The Offline backend models
+  cpal: with a reported range, a size outside it opens with the device's
+  default (`set_default_buffer`) unless asked for exactly.
+  - Ruling: the strictness is a field of the request
+    (`StreamConfig::exact_buffer`), not a reopen after the engine compares
+    buffers — cpal reports the requested size until the first callback, so
+    a mismatch is not known at open, and a refusal reuses the existing
+    `pcm_fallback` path — cost if wrong: one more field every backend sees.
+  - Ruling: a DSD stream is never exact, as before — refusing a DSD stream
+    for its buffer would lose the DSD — cost if wrong: DoP may run at the
+    device's default buffer.
+  - Ruling: a rate the bus follows (bit-perfect) keeps its own buffer
+    exactly; a device that takes the rate only with another buffer refuses
+    the rate (the engine resamples), an edge case since devices report the
+    same buffer range at every rate — cost if wrong: a resampled file on
+    such a device.
 
 ---
 

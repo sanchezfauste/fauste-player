@@ -264,3 +264,19 @@ fn a_source_plays_on_after_the_buffer_fallback() {
     let t = r.engine.telemetry(P).position_secs.expect("playing");
     assert!((t - 1.0).abs() < 0.05, "{t}");
 }
+
+#[test]
+fn an_own_buffer_the_device_does_not_report_falls_back_to_the_global_one_not_the_default() {
+    // As cpal does: a size outside the reported range would open with the
+    // device's default buffer, unless asked for exactly.
+    let mut r = rig_with(
+        |d| {
+            d.set_reported_buffers((512, 4096));
+            d.set_default_buffer(2048);
+        },
+        |c| c.outputs.set_device_buffer(&dev("dac"), Some(256)),
+    );
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened");
+    assert_eq!((dac.buffer_frames, dac.exact_buffer), (512, false));
+}

@@ -34,6 +34,7 @@ const STEREO: StreamConfig = StreamConfig {
     channels: 2,
     exclusive: false,
     dsd: None,
+    exact_buffer: false,
 };
 
 #[test]

@@ -924,12 +924,12 @@ impl Engine {
             .max(1)
     }
 
-    /// The block size `bus` asks its device for.
+    /// The block size `bus` runs with (`Bus::buffer_frames`), else the one
+    /// it will ask its device for.
     fn buffer_of(&self, bus: &BusKey) -> u32 {
-        self.buses.get(bus).map_or_else(
-            || self.settings.buffer_for(bus),
-            |b| b.config().buffer_frames,
-        )
+        self.buses
+            .get(bus)
+            .map_or_else(|| self.settings.buffer_for(bus), Bus::buffer_frames)
     }
 
     /// `ms` milliseconds in frames of `bus`.
@@ -1070,6 +1070,9 @@ impl Engine {
                 channels,
                 exclusive: self.settings.bit_perfect.contains(key),
                 dsd: None,
+                // A device's own buffer it does not take falls back to the
+                // global one (`pcm_fallback`), not to the device's default.
+                exact_buffer: buffer != self.settings.buffer_frames,
             };
             // Lengths in this bus's frames.
             let mixer = MixerConfig {
@@ -1094,6 +1097,7 @@ impl Engine {
                 bus.set_pcm_fallback(StreamConfig {
                     sample_rate: self.settings.sample_rate,
                     buffer_frames: self.settings.buffer_frames,
+                    exact_buffer: false,
                     ..config
                 });
             }

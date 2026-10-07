@@ -107,6 +107,12 @@ pub struct StreamConfig {
     pub exclusive: bool,
     /// DSD carried by this stream (feedback 2 spec O25); `None` for PCM.
     pub dsd: Option<dsd::DsdStream>,
+    /// Open with `buffer_frames` or refuse with `Unsupported`, rather than
+    /// let the device choose its own buffer when it does not take that
+    /// size (operator feedback 4, Q12: a device's own buffer falls back to
+    /// the global one, not to the device's default). A backend whose
+    /// driver only rounds the size (an aligned period) still opens.
+    pub exact_buffer: bool,
 }
 
 /// The sample format a stream really runs in.

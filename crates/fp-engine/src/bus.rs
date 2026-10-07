@@ -353,6 +353,14 @@ impl Bus {
         self.config
     }
 
+    /// The buffer the open stream runs with (a device may choose its own
+    /// when it does not take the one asked for), else the one asked for.
+    pub fn buffer_frames(&self) -> u32 {
+        self.stream
+            .as_ref()
+            .map_or(self.config.buffer_frames, |s| s.config().buffer_frames)
+    }
+
     /// How the open stream carries DSD, if a device stream is open.
     pub fn stream_dsd(&self) -> Option<DsdStream> {
         self.stream.as_ref().and_then(|s| s.dsd())

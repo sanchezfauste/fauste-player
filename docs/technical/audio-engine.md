@@ -182,7 +182,11 @@ cannot hang the conductor.
   (warn log). A rate change opens the sources on it again
   (`follow_forced_rate`); a buffer change alone leaves them as they are. The mixer's smoothing and declick
   lengths are in that rate's frames, and the one-block margins use the bus's
-  own buffer (`Engine::buffer_of`). Every
+  own buffer as the stream runs it (`Engine::buffer_of`, `Bus::buffer_frames`:
+  a device may choose its own when it does not take the one asked for). A
+  bus opens with its own buffer exactly (`StreamConfig::exact_buffer`), so a
+  device that does not take it falls back to the global buffer, not to its
+  default; the global buffer and DSD streams are not asked for exactly. Every
   seconds↔frames conversion for a source uses the rate of that source's bus:
   fades, declicks, pause ramps, planned transitions, positions, cart loop
   points and test tones (`Engine::rate_of`, `frames_on`). Workers open each
