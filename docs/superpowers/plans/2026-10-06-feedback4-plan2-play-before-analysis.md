@@ -1496,7 +1496,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 - Consumes: `Command::SetDuration` (Task 4).
 - Produces: `pub fn fp_app::ui::view::time_text(elapsed: f64, total: Option<f64>, unknown: &str) -> String`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/fp-app/tests/view.rs`:
 
@@ -1573,7 +1573,7 @@ fn q1_4_without_a_length_the_wave_box_does_not_seek_and_the_total_is_a_dash() {
 }
 ```
 
-- [ ] **Step 2: Run them to make sure they fail**
+- [x] **Step 2: Run them to make sure they fail**
 
 Run: `cargo test -p fp-app --test view q1_` and `cargo test -p fp-app --test waveform_ui q1_`
 
@@ -1583,7 +1583,7 @@ Expected:
 
 The two `q1_3` tests may already pass: the view and the widget use `duration_secs`, which Task 4 lets `SetDuration` fill. That is expected, and the tests pin it.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `crates/fp-app/src/ui/view.rs`, after `cue_follow_target`:
 
@@ -1618,13 +1618,13 @@ fn time_row(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
 
 Change its call to `time_row(ui, scene, &pv);`.
 
-- [ ] **Step 4: Run the tests to make sure they pass**
+- [x] **Step 4: Run the tests to make sure they pass**
 
 Run: `cargo test -p fp-app --test view`, then `cargo test -p fp-app --test waveform_ui`, then `cargo test -p fp-app --test main_screen`
 
 Expected: PASS. If a test of `main_screen.rs` looked for "00:00 / 00:00", it now finds "00:00 / —" and must be changed to that text. Find any such test with `grep -rn '00:00 / 00:00' crates/fp-app/tests`.
 
-- [ ] **Step 5: Docs**
+- [x] **Step 5: Docs**
 
 In `docs/user/players.md`, in the Info row, after the "Title and artist" bullet, add:
 
@@ -1636,7 +1636,7 @@ In `docs/user/players.md`, in the Info row, after the "Title and artist" bullet,
   "—" and the waveform cannot be clicked until the analysis ends.
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \

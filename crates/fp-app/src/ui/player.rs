@@ -82,7 +82,7 @@ pub(crate) fn column(
             header(ui, scene, id, index, &pv);
             top_block(ui, scene, covers, id, &pv, &telemetry);
             wave(ui, scene, view_state, id, &pv);
-            time_row(ui, &pv);
+            time_row(ui, scene, &pv);
         });
     scroll_to_next_once(scene, view_state, id);
     follow_current(scene, view_state, id, player.playlist);
@@ -508,17 +508,13 @@ fn meter_column(
 }
 
 /// `elapsed / total` under the waveform, right-aligned, close to it.
-fn time_row(ui: &mut Ui, pv: &PlayerView) {
+fn time_row(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
     ui.add_space(-4.0);
+    let text = view::time_text(pv.elapsed, pv.total, &scene.i18n.tr("placeholder-none"));
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), 14.0),
         Layout::right_to_left(Align::Center),
         |ui| {
-            let text = format!(
-                "{} / {}",
-                format::clock(pv.elapsed),
-                format::clock(pv.total.unwrap_or(0.0))
-            );
             widgets::tabular_label(ui, &text, &font(12.0), theme::NEUTRAL_400);
         },
     );

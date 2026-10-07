@@ -584,3 +584,43 @@ fn a_zero_grace_never_follows_the_playhead() {
     let s = seeks(&fake);
     assert!(s[0] < 60.0, "{s:?}");
 }
+
+/// P1 plays a track with no analysis; `header` is the length its file's
+/// header declared, if any (operator feedback 4, Q1).
+fn playing_before_analysis(header: Option<f64>) -> AppState {
+    let mut s = state(1, 2);
+    let e = s.playlists.iter().next().unwrap().entries[0].clone();
+    if let Some(secs) = header {
+        apply(
+            &mut s,
+            Command::SetDuration {
+                track: e.track,
+                secs,
+            },
+        )
+        .unwrap();
+    }
+    let p = s.players[0].id;
+    apply(&mut s, Command::Play(p)).unwrap();
+    s
+}
+
+#[test]
+fn q1_3_a_click_on_the_wave_box_of_a_track_not_analysed_yet_seeks() {
+    let (mut h, fake) = harness(playing_before_analysis(Some(180.0)));
+    assert!(h.query_by_label("00:00 / 03:00").is_some());
+    let w = wave(&h);
+    click(&mut h, pos2(x_of(w, 90.0), w.center().y));
+    let s = seeks(&fake);
+    assert_eq!(s.len(), 1, "{s:?}");
+    assert!((s[0] - 90.0).abs() < 1.5, "{s:?}");
+}
+
+#[test]
+fn q1_4_without_a_length_the_wave_box_does_not_seek_and_the_total_is_a_dash() {
+    let (mut h, fake) = harness(playing_before_analysis(None));
+    assert!(h.query_by_label("00:00 / —").is_some());
+    let w = wave(&h);
+    click(&mut h, w.center());
+    assert!(seeks(&fake).is_empty());
+}
