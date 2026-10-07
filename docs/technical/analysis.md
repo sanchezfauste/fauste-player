@@ -250,7 +250,11 @@ playable file (`Track::needs_header_duration`) is read once: the file's
 header only (`FileDecoder::duration_hint_secs`), the tracks on a player
 first, at most eight reads waiting at a time. A length goes to the model as
 `Command::SetDuration`; when the conductor's queue is full it is kept and
-sent on a later round, without reading the file again. A file that has none
+sent on a later round, without reading the file again. A length that comes
+back once the track no longer needs one (its analysis landed first, or its
+file was found missing or unreadable) is dropped: the model would ignore it,
+but the command would still make a new model version, a new snapshot and a
+save for nothing. A file that has none
 (or cannot be opened) gets nothing and waits for its analysis. A panic while reading is caught and
 logged.
 

@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use fp_analysis::analyze_file_cancellable;
 use fp_analysis::analyzer::{AnalyzeFn, Analyzer};
-use fp_app::services::{MediaCache, ServiceRequest, Services};
+use fp_app::services::{MediaCache, ServiceRequest, Services, TrackMedia};
 use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
@@ -732,12 +732,13 @@ fn the_tag_pass_fills_the_tags_of_analysed_tracks_once() {
     let version = r.handle.telemetry.load().model_version;
     let until = r.now + Duration::from_millis(500);
     r.run_until("a quiet period", |r| r.now >= until);
+    // First: a second analysis would also bring a second read.
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1, "no second analysis");
     assert_eq!(
         r.handle.telemetry.load().model_version,
         version,
         "no further ApplyTags once the tags are read"
     );
-    assert_eq!(r.analyses.load(Ordering::SeqCst), 1, "no second analysis");
 }
 
 #[test]
@@ -745,7 +746,7 @@ fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
     let dir = tempfile::tempdir().unwrap();
     let junk = dir.path().join("Band - Junk.wav");
     std::fs::write(&junk, b"this is not audio").unwrap();
-    // Analysed already (so no analysis runs), with its tags still unread.
+    // Analysed already, with its tags still unread.
     let mut r = rig_with(&[junk], dir, Duration::ZERO, |state| {
         for track in state.library.iter_mut() {
             track.analyzed = true;
@@ -758,6 +759,18 @@ fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
             track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
         }
     });
+    // It is the next track of a player: without its waveform on hand it
+    // would be analysed for it, and that analysis (which finds the file
+    // unreadable) could land at any time, before or after the tags.
+    let track = only_track(&r).id;
+    r.media.seed(
+        track,
+        TrackMedia {
+            peaks: Vec::new(),
+            peak_bucket_secs: 0.01,
+            cover_png: None,
+        },
+    );
     r.run_until("the pass to answer", |r| only_track(r).tags_read);
     let t = only_track(&r);
     assert_eq!((t.title.as_str(), t.artist.as_str()), ("Junk", "Band"));
@@ -765,6 +778,7 @@ fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
     let until = r.now + Duration::from_millis(500);
     r.run_until("a quiet period", |r| r.now >= until);
     assert_eq!(r.handle.telemetry.load().model_version, version);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "no analysis ran");
 }
 
 #[test]
@@ -1142,6 +1156,52 @@ fn a_file_whose_header_cannot_be_read_gets_no_duration_and_is_asked_once() {
     });
     assert_eq!(only_track(&r).duration_secs, 0.0);
     assert_eq!(r.services.header_reads_sent(), 1);
+}
+
+/// A length that comes back after the analysis has landed is dropped: the
+/// model would ignore it, but the command would still make a new model
+/// version (a new snapshot and a save for nothing).
+#[test]
+fn a_header_length_read_after_the_analysis_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = wav(dir.path(), "a.wav", 2);
+    // The real analysis is held back; the test applies its own.
+    let mut r = rig_slow(&[file], dir, Duration::from_secs(30));
+    // The first round asks for the header, after collecting answers: its
+    // answer can only be taken on a later round.
+    r.services.step(r.now);
+    assert_eq!(r.services.header_reads_sent(), 1);
+    let track = only_track(&r).id;
+    r.handle.send(Command::ApplyAnalysis {
+        track,
+        analysis: Box::new(fp_model::TrackAnalysis {
+            duration_secs: 2.0,
+            ..Default::default()
+        }),
+    });
+    // Its tags too, in the same tick, so the tag pass has nothing to send
+    // meanwhile: the late length is the only command that could come.
+    r.handle.send(Command::ApplyTags {
+        track,
+        tags: Box::default(),
+    });
+    r.conductor.tick(r.now);
+    let t = only_track(&r);
+    assert!(t.analyzed && t.tags_read);
+    let version = r.handle.telemetry.load().model_version;
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while r.services.header_reads_in_flight() > 0 {
+        assert!(Instant::now() < deadline, "timed out waiting for the read");
+        r.services.step(r.now);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    r.conductor.tick(r.now);
+    assert_eq!(
+        r.handle.telemetry.load().model_version,
+        version,
+        "a late length reached the model"
+    );
 }
 
 /// A length read while the conductor's queue is full is kept and sent

@@ -905,7 +905,16 @@ impl Services {
         let answers: Vec<(TrackId, Option<f64>)> = reader.answers().try_iter().collect();
         for (track, secs) in answers {
             self.headers_in_flight = self.headers_in_flight.saturating_sub(1);
+            // A length that comes after the analysis (or after the file was
+            // found missing or unreadable) is dropped: the model would ignore
+            // it, but the command would still make a new model version, so a
+            // new snapshot and a save for nothing.
+            let needed = state
+                .library
+                .get(track)
+                .is_some_and(|t| t.needs_header_duration());
             if let Some(secs) = secs
+                && needed
                 && !self.conductor.send(Command::SetDuration { track, secs })
             {
                 // The queue is full: keep the length for a later round.
