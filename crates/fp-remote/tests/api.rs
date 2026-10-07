@@ -379,3 +379,31 @@ fn a_cue_without_a_cue_output_apart_from_main_is_a_conflict() {
     assert_eq!(plan(&s, O::SetCue(p, false)).unwrap(), vec![]);
     assert_eq!(plan(&s, O::SetCartCue(c, false)).unwrap(), vec![]);
 }
+
+/// The reducer raises a stopped player's seek before the cue-in to the
+/// cue-in (`pending_start_at`), as the local wave does; the API does too,
+/// with the same command, instead of answering 400.
+#[test]
+fn seek_on_a_stopped_player_before_the_cue_in_goes_to_the_cue_in() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    let next = s.player(p).unwrap().next.unwrap();
+    let track = s.playlists.entry(next).unwrap().track;
+    fp_model::apply(
+        &mut s,
+        Command::SetMarker {
+            track,
+            kind: fp_model::MarkerKind::CueIn,
+            secs: Some(20.0),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        plan(&s, O::Seek(p, 5.0)).unwrap(),
+        vec![Command::Seek(p, 5.0)]
+    );
+    let mut applied = s.clone();
+    fp_model::apply(&mut applied, Command::Seek(p, 5.0)).unwrap();
+    assert_eq!(applied.player(p).unwrap().pending_start, Some((next, 20.0)));
+    assert_eq!(plan(&s, O::Seek(p, f64::NAN)).unwrap_err().status(), 400);
+}
