@@ -3,7 +3,8 @@
 
 use egui::{Rect, pos2, vec2};
 use fp_app::ui::table_layout::{
-    boundary_y, column_min, column_px, drop_index, fit, fractions_of, on_column_edge, resize_px,
+    DRAG_SCROLL_EDGE, DRAG_SCROLL_MAX_SPEED, boundary_y, column_min, column_px, drag_scroll_speed,
+    drop_index, fit, fractions_of, on_column_edge, resize_px,
 };
 use fp_model::TableColumn::{Album, Artist, Date, Duration, FileName, Genre, Intro, Number, Title};
 use fp_model::{ColumnWidths, TableColumn, default_columns};
@@ -371,4 +372,62 @@ fn the_interior_column_edges_are_grab_zones_and_the_last_edge_is_not() {
         "the last column's right edge"
     );
     assert!(!on_column_edge(&[], 100.0, 4.0, 100.0));
+}
+
+fn tall_body() -> Rect {
+    Rect::from_min_size(pos2(0.0, 100.0), vec2(400.0, 400.0))
+}
+
+#[test]
+fn drag_scroll_is_still_away_from_the_edges() {
+    let body = tall_body();
+    assert_eq!(drag_scroll_speed(body, pos2(50.0, 300.0)), 0.0);
+    assert_eq!(
+        drag_scroll_speed(body, pos2(50.0, 100.0 + DRAG_SCROLL_EDGE + 1.0)),
+        0.0
+    );
+    assert_eq!(
+        drag_scroll_speed(body, pos2(50.0, 500.0 - DRAG_SCROLL_EDGE - 1.0)),
+        0.0
+    );
+}
+
+#[test]
+fn drag_scroll_ramps_up_towards_each_edge() {
+    let body = tall_body();
+    let half = DRAG_SCROLL_EDGE / 2.0;
+    assert!(near(
+        drag_scroll_speed(body, pos2(50.0, 100.0)),
+        -DRAG_SCROLL_MAX_SPEED
+    ));
+    assert!(near(
+        drag_scroll_speed(body, pos2(50.0, 500.0)),
+        DRAG_SCROLL_MAX_SPEED
+    ));
+    assert!(near(
+        drag_scroll_speed(body, pos2(50.0, 100.0 + half)),
+        -DRAG_SCROLL_MAX_SPEED / 2.0
+    ));
+    assert!(near(
+        drag_scroll_speed(body, pos2(50.0, 500.0 - half)),
+        DRAG_SCROLL_MAX_SPEED / 2.0
+    ));
+}
+
+#[test]
+fn drag_scroll_needs_the_pointer_inside_the_body() {
+    let body = tall_body();
+    assert_eq!(drag_scroll_speed(body, pos2(50.0, 99.0)), 0.0);
+    assert_eq!(drag_scroll_speed(body, pos2(50.0, 501.0)), 0.0);
+    assert_eq!(drag_scroll_speed(body, pos2(401.0, 490.0)), 0.0);
+    assert_eq!(drag_scroll_speed(body, pos2(f32::NAN, 490.0)), 0.0);
+}
+
+#[test]
+fn a_short_body_keeps_a_still_middle() {
+    // 60 points high: each edge zone is a third of it at most.
+    let body = Rect::from_min_size(pos2(0.0, 100.0), vec2(400.0, 60.0));
+    assert_eq!(drag_scroll_speed(body, pos2(50.0, 130.0)), 0.0);
+    assert!(drag_scroll_speed(body, pos2(50.0, 105.0)) < 0.0);
+    assert!(drag_scroll_speed(body, pos2(50.0, 155.0)) > 0.0);
 }

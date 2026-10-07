@@ -454,11 +454,219 @@ fn a_tall_digital_meter_labels_its_main_marks() {
     // A very tall meter labels every mark.
     let c = meter(MeterBallistics::DigitalPeak);
     let tall = meter_layout(column_for(&c, 600.0), &c, false);
-    assert_eq!(tall.lines.len(), scale_marks(&c).len() + 1);
+    let tall_labels: Vec<&str> = tall.lines.iter().map(|m| m.label.as_str()).collect();
+    for mark in scale_marks(&c) {
+        let want = mark_label(mark, &c);
+        assert!(
+            tall_labels.contains(&want.as_str()),
+            "{want} in {tall_labels:?}"
+        );
+    }
     // The digital meter's alignment (−18 dBFS) is a heavier, unlabelled
     // line; the scale's round labels stay.
     let alignment = l.lines.iter().find(|m| m.alignment).unwrap();
     assert!(alignment.label.is_empty());
+}
+
+/// The labels a layout shows, top down.
+fn shown_labels(l: &fp_app::ui::widgets::MeterLayout) -> Vec<String> {
+    l.lines
+        .iter()
+        .filter(|m| !m.label.is_empty())
+        .map(|m| m.label.clone())
+        .collect()
+}
+
+/// The labels of the scale's own marks.
+fn mark_labels(c: &MeterConfig) -> Vec<String> {
+    scale_marks(c).iter().map(|m| mark_label(*m, c)).collect()
+}
+
+#[test]
+fn a_tall_digital_meter_labels_every_db_near_the_top() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::Custom] {
+        let c = meter(ballistics);
+        let l = meter_layout(column_for(&c, 600.0), &c, false);
+        let labels = shown_labels(&l);
+        for db in -5..=0 {
+            let want = db.to_string();
+            assert!(
+                labels.contains(&want),
+                "{ballistics:?}: {want} in {labels:?}"
+            );
+        }
+        // Each level is labelled once, the alignment level included.
+        let mut unique = labels.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), labels.len(), "{labels:?}");
+    }
+}
+
+#[test]
+fn a_short_digital_meter_keeps_the_round_labels() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::Custom] {
+        for height in [64.0, 136.0] {
+            for loudness in [false, true] {
+                let c = meter(ballistics);
+                let l = meter_layout(column_for(&c, height), &c, loudness);
+                let marks = mark_labels(&c);
+                for label in shown_labels(&l) {
+                    assert!(
+                        marks.contains(&label),
+                        "{ballistics:?} {height}: {label} is not a scale mark"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn intermediate_labels_never_crowd_at_any_height() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::Custom] {
+        for (floor, reference) in [
+            (-60.0, -18.0),
+            (-96.0, -18.0),
+            (-48.0, -20.0),
+            (-20.0, -9.0),
+        ] {
+            for height in (24..=900).step_by(7) {
+                for loudness in [false, true] {
+                    let c = MeterConfig {
+                        ballistics,
+                        floor_db: floor,
+                        reference_dbfs: reference,
+                        ..MeterConfig::default()
+                    };
+                    let l = meter_layout(column_for(&c, height as f32), &c, loudness);
+                    let ys: Vec<f32> = l
+                        .lines
+                        .iter()
+                        .filter(|m| !m.label.is_empty())
+                        .map(|m| m.label_centre())
+                        .collect();
+                    for pair in ys.windows(2) {
+                        assert!(
+                            pair[1] - pair[0] >= LABEL_ROW - 0.01,
+                            "{ballistics:?} floor {floor} {height}px {loudness}: {ys:?}"
+                        );
+                    }
+                    // Every label is a whole dB with a major tick.
+                    for m in l.lines.iter().filter(|m| !m.label.is_empty()) {
+                        assert!(
+                            l.ticks
+                                .iter()
+                                .any(|t| near(t.y, m.y) && t.kind != TickKind::Minor),
+                            "{ballistics:?} {height}: no major tick for {}",
+                            m.label
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn intermediate_labels_split_each_segment_evenly() {
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::Custom] {
+        for (floor, reference) in [
+            (-60.0, -18.0),
+            (-96.0, -18.0),
+            (-48.0, -20.0),
+            (-47.0, -20.0),
+            (-20.0, -9.0),
+        ] {
+            for height in (24..=900).step_by(7) {
+                let c = MeterConfig {
+                    ballistics,
+                    floor_db: floor,
+                    reference_dbfs: reference,
+                    ..MeterConfig::default()
+                };
+                let marks = scale_marks(&c);
+                let l = meter_layout(column_for(&c, height as f32), &c, false);
+                let mut dbs: Vec<f32> = l
+                    .lines
+                    .iter()
+                    .filter(|m| !m.label.is_empty())
+                    .map(|m| m.db)
+                    .collect();
+                dbs.sort_by(f32::total_cmp);
+                // Between two labelled marks of the scale, the labels added
+                // are all one step apart, ends included.
+                let mut segment: Vec<f32> = Vec::new();
+                for db in dbs {
+                    segment.push(db);
+                    let is_mark = marks.iter().any(|m| near(*m, db));
+                    if is_mark && segment.len() > 1 {
+                        let gaps: Vec<f32> = segment.windows(2).map(|p| p[1] - p[0]).collect();
+                        assert!(
+                            gaps.iter().all(|g| near(*g, gaps[0])),
+                            "{ballistics:?} floor {floor} {height}px: {segment:?}"
+                        );
+                    }
+                    if is_mark {
+                        segment = vec![db];
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn intermediate_labels_follow_a_custom_floor() {
+    let custom = |floor_db| MeterConfig {
+        ballistics: MeterBallistics::Custom,
+        floor_db,
+        reference_dbfs: -20.0,
+        ..MeterConfig::default()
+    };
+    let c = custom(-48.0);
+    let labels = shown_labels(&meter_layout(column_for(&c, 900.0), &c, false));
+    for want in ["-48", "-40", "-20", "-1", "0"] {
+        assert!(labels.contains(&want.to_owned()), "{want} in {labels:?}");
+    }
+    // Below -20 dBFS the scale's spacing is 5 dB: no finer labels; and -45
+    // would split -48..-40 unevenly.
+    for unwanted in ["-47", "-46", "-45", "-44", "-42"] {
+        assert!(
+            !labels.contains(&unwanted.to_owned()),
+            "{unwanted} in {labels:?}"
+        );
+    }
+    // A floor on a round mark gets the 5 dB labels between the 10 dB marks.
+    let c = custom(-70.0);
+    let labels = shown_labels(&meter_layout(column_for(&c, 900.0), &c, false));
+    for want in ["-70", "-55", "-45"] {
+        assert!(labels.contains(&want.to_owned()), "{want} in {labels:?}");
+    }
+}
+
+#[test]
+fn standard_scales_keep_their_own_labels_at_every_height() {
+    for ballistics in [
+        MeterBallistics::EbuPpm,
+        MeterBallistics::DinPpm,
+        MeterBallistics::Vu,
+        MeterBallistics::K20,
+        MeterBallistics::K14,
+        MeterBallistics::K12,
+    ] {
+        let c = meter(ballistics);
+        let marks = mark_labels(&c);
+        for height in [64.0, 136.0, 300.0, 600.0, 900.0] {
+            let labels = shown_labels(&meter_layout(column_for(&c, height), &c, false));
+            for label in &labels {
+                assert!(marks.contains(label), "{ballistics:?} {height}: {label}");
+            }
+            if height >= 600.0 {
+                assert_eq!(labels.len(), marks.len(), "{ballistics:?}: {labels:?}");
+            }
+        }
+    }
 }
 
 #[test]
@@ -1211,10 +1419,12 @@ fn minor_ticks_rule_each_segment_evenly() {
 fn a_tall_meter_rules_every_step_of_its_scale() {
     for c in ruled_scales() {
         let l = meter_layout(column_for(&c, 1500.0), &c, false);
+        // A step is ruled by a minor tick, or on the digital scale by a
+        // major one where it is labelled.
         let mut minors: Vec<f32> = l
             .ticks
             .iter()
-            .filter(|t| t.kind == TickKind::Minor && !is_mark(&c, t.db))
+            .filter(|t| t.kind != TickKind::Alignment && !is_mark(&c, t.db))
             .map(|t| t.db)
             .collect();
         minors.sort_by(f32::total_cmp);

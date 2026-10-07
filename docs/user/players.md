@@ -42,8 +42,13 @@ playlist tabs, transport, volume and outputs.
     work like those of a measuring ruler: evenly spaced on round values,
     every 1 dB on the EBU meter and every 5 dB below −20 on the digital one
     when the meter is tall enough, and every 2, 2.5, 5 or 10 dB (or none)
-    where it is too short for them. The alignment level (−18 dBFS on the
-    digital meter) is a thicker white tick on both rulers. Nothing is drawn
+    where it is too short for them. On the digital (and custom) meter, a
+    tall meter labels more values: every 1 dB from −20 to 0, and every
+    5 dB between the 10 dB marks below −20 (−45, −55), always evenly
+    spaced and only where they fit without the labels touching; the
+    other meter types keep the labels their standard gives. The alignment
+    level (−18 dBFS on the digital meter) is a thicker white tick on both
+    rulers. Nothing is drawn
     over the bars or between them, so what you see in the bars is only the
     level, the peak hold and the colours.
   - The bar is green, yellow from the warning level (−9 dBFS), and red

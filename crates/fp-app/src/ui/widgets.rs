@@ -863,12 +863,18 @@ pub struct MeterLine {
 impl MeterLine {
     /// The vertical centre of the label's row.
     pub fn label_centre(&self) -> f32 {
-        let half = LABEL_ROW / 2.0;
-        match self.label_align {
-            egui::Align::Min => self.label_y + half,
-            egui::Align::Center => self.label_y,
-            egui::Align::Max => self.label_y - half,
-        }
+        label_centre_of(self.label_y, self.label_align)
+    }
+}
+
+/// The vertical centre of a label row anchored at `label_y` and hanging
+/// from it as `align` says (see [`MeterLine::label_align`]).
+fn label_centre_of(label_y: f32, align: egui::Align) -> f32 {
+    let half = LABEL_ROW / 2.0;
+    match align {
+        egui::Align::Min => label_y + half,
+        egui::Align::Center => label_y,
+        egui::Align::Max => label_y - half,
     }
 }
 
@@ -1012,7 +1018,9 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     ];
     let height = bottom - top;
     let y_of = |db: f32| bottom - meter_position(db, c) * height;
-    let line = |db: f32, alignment: bool| {
+    // Where a mark's line and label go: the line's y and how the label
+    // hangs from it.
+    let place = |db: f32, alignment: bool| {
         let width = if alignment {
             ALIGNMENT_LINE_THICKNESS
         } else {
@@ -1032,6 +1040,10 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         } else {
             egui::Align::Center
         };
+        (y, label_align)
+    };
+    let line = |db: f32, alignment: bool| {
+        let (y, label_align) = place(db, alignment);
         MeterLine {
             db,
             y,
@@ -1103,6 +1115,12 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         }
     }
     lines.push(alignment);
+    if matches!(
+        c.ballistics,
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom
+    ) {
+        add_intermediate_labels(&mut lines, c, &place, &line);
+    }
     lines.sort_by(|a, b| a.label_centre().total_cmp(&b.label_centre()));
     let ticks = ruler_ticks(&lines, &marks, c, top, bottom);
     MeterLayout {
@@ -1114,6 +1132,79 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         rulers,
         ticks,
     }
+}
+
+/// The steps (dB) the digital scale's intermediate labels may take, finest
+/// first (see [`add_intermediate_labels`]).
+const LABEL_STEP_LADDER: [f32; 3] = [1.0, 2.0, 5.0];
+
+/// Labels the digital scale more densely where the meter is tall enough:
+/// between each two adjacent labels, every multiple (dBFS) of the finest
+/// step of [`LABEL_STEP_LADDER`] that is not finer than the scale's spacing
+/// ([`minor_step_db`]), splits the segment evenly (both labels are
+/// multiples of it) and keeps every label of the segment [`LABEL_ROW`]
+/// apart, or none. An intermediate level that is the alignment level labels
+/// the alignment line. The standardized scales keep their own labels.
+/// The candidate steps are tested on where their labels would go
+/// (`place`); only the chosen one becomes lines (`line`).
+fn add_intermediate_labels(
+    lines: &mut Vec<MeterLine>,
+    c: &MeterConfig,
+    place: &impl Fn(f32, bool) -> (f32, egui::Align),
+    line: &impl Fn(f32, bool) -> MeterLine,
+) {
+    let mut labelled: Vec<(f32, f32)> = lines
+        .iter()
+        .filter(|m| !m.label.is_empty())
+        .map(|m| (m.db, m.label_centre()))
+        .collect();
+    labelled.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let alignment = alignment_dbfs(c);
+    let mut added = Vec::new();
+    for pair in labelled.windows(2) {
+        let (Some(&(low, low_centre)), Some(&(high, high_centre))) = (pair.first(), pair.get(1))
+        else {
+            continue;
+        };
+        let finest = minor_step_db(c, low);
+        let fits = |levels: &[f32]| {
+            let centres = std::iter::once(low_centre)
+                .chain(levels.iter().map(|db| {
+                    let (y, align) = place(*db, false);
+                    label_centre_of(y, align)
+                }))
+                .chain(std::iter::once(high_centre));
+            centres
+                .clone()
+                .zip(centres.skip(1))
+                .all(|(a, b)| a - b >= LABEL_ROW - 0.01)
+        };
+        let chosen = LABEL_STEP_LADDER
+            .iter()
+            .filter(|step| **step >= finest - SAME_MARK_DB)
+            // Only a step that splits the segment evenly: on a 5 dB segment
+            // a 2 dB step would leave −5, −4, −2, 0.
+            .filter(|step| on_step(low, **step, c) && on_step(high, **step, c))
+            .map(|step| step_multiples(low, high, *step, c))
+            .find(|levels| !levels.is_empty() && fits(levels));
+        added.extend(chosen.into_iter().flatten().map(|db| line(db, false)));
+    }
+    for new in added {
+        if (new.db - alignment).abs() < SAME_MARK_DB {
+            if let Some(a) = lines.iter_mut().find(|m| m.alignment) {
+                a.label = new.label;
+            }
+        } else {
+            lines.push(new);
+        }
+    }
+}
+
+/// Whether `db` dBFS is a multiple of `step` dB in the scale's own units
+/// (counted from [`scale_zero`]).
+fn on_step(db: f32, step: f32, c: &MeterConfig) -> bool {
+    let k = (db - scale_zero(c)) / step;
+    (k - k.round()).abs() * step < SAME_MARK_DB
 }
 
 /// The alignment level the meter marks, in dBFS: the K-System's 0, or

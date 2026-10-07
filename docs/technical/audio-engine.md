@@ -126,7 +126,14 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   segment between two ticks of the scale's marks is ruled at the finest
   step of a 0.5/1/2/2.5/5/10 dB ladder that is not finer than the scale's
   own spacing (`widgets::minor_marks`) and keeps the ticks 3 px apart, on
-  the multiples of that step in the scale's units. The label columns are
+  the multiples of that step in the scale's units. On the digital and
+  custom scales only, the layout then labels each segment between two
+  adjacent labels more densely (`add_intermediate_labels`): every dBFS
+  multiple of the finest step of a 1/2/5 dB ladder that is not finer than
+  `minor_step_db`, splits the segment evenly (both of its labels are
+  multiples of the step, `on_step`) and keeps every label of the segment 10 px
+  (`LABEL_ROW`) apart, or none; a level that is the alignment level labels
+  the alignment line. Those labels get major ticks. The label columns are
   as wide as the scale's widest label (`widgets::label_column`, so the
   meter's width, `widgets::meter_width`, follows the meter type), with a
   3 px gap to the ticks. Nothing is drawn over the bars or between them.

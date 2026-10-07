@@ -1,7 +1,7 @@
 # Operator Feedback 4 — Design Spec
 
 - **Date:** 2026-10-06
-- **Status:** Plans 1 to 5 implemented (Q6 not reproduced, see plan 2's "As built"), except plan 5's Task 7, the check on real hardware.
+- **Status:** Plans 1 to 5 implemented (Q6 closed without a product change, see plan 2's "As built"), except plan 5's Task 7, the check on real hardware.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§3 rules,
   §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md) (M4 display),
   the [bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md) (B3 rate, B6
@@ -267,6 +267,41 @@
 - **Known limitation (Q4).** The wheel does not scroll the list while a row is
   being dragged: egui 0.36's `ScrollArea` ignores it while a widget is dragged.
   There is no edge auto-scroll either.
+  - **Lifted after plan 5 (as built).** The maintainer asked for scrolling
+    during a drag. While a drag a table accepts is held (a `DragEntry`, or
+    files the system hovers over the window) and the pointer is in a table
+    body, on the table's own layer:
+    - within `table_layout::DRAG_SCROLL_EDGE` (36 points, or a third of a
+      body shorter than 108 points, so its middle never scrolls) of the
+      body's top or bottom, the table scrolls toward that edge at a speed
+      that ramps linearly from 0 at the inner side of the zone to
+      `DRAG_SCROLL_MAX_SPEED` (900 points per second, about 32 rows) at the
+      edge (`drag_scroll_speed`, unit-tested), times the frame's
+      `stable_dt` (at most 0.1 s, `table::MAX_DRAG_SCROLL_DT`), with a
+      repaint requested while it moves; it stops at the list's ends, when
+      the pointer leaves the zone or the drag ends, and not on the frame the
+      button is released, so the entry lands where the line was drawn;
+    - the wheel scrolls the table: egui ignores it while a widget is
+      dragged, so the table applies the wheel itself exactly then and
+      consumes it (no double scroll), as egui's vertical scroll area would
+      read it (`smooth_scroll_delta.y`, or `x + y` with the style's
+      `always_scroll_the_only_direction`); on the frame an entry is dropped
+      egui no longer counts it as dragged while the rest of a wheel notch is
+      still pending, so the table consumes that rest without applying it and
+      the entry lands where the line was drawn;
+    - files from the system scroll the table only once the pointer has moved
+      since they began hovering (`ViewState.files_pointed`): no pointer
+      events come with them on some platforms, and a position left in an
+      edge zone before the files arrived would scroll to the end;
+    - the last frame's geometry (`TableScroll`) counts only if the last
+      pass or the one before left it (`Context::cumulative_pass_nr`), so a
+      table drawn again after a pause does not scroll from an old layout;
+    - the drop index and the violet line come from the new offset, so they
+      follow the pointer as the rows move; a header (`DragColumn`) drag
+      scrolls nothing. Every player table, in every tab and layout, does it.
+    Both values are UI metrics (named constants, not `Config` fields).
+    Tests: `fp-app/tests/table_drag_scroll_ui.rs` and the
+    `drag_scroll_*` cases of `fp-app/tests/table_layout.rs`.
 
 Rulings made while implementing:
 
@@ -422,6 +457,7 @@ Rulings made while implementing:
 
 - **Q6.** Not reproduced. `cue_follow_ui.rs::q6_1_a_click_on_a_row_moves_the_cue_with_its_window_open`, `q6_2_a_double_click_on_a_row_moves_the_cue_with_its_window_open` and `q6_3_the_cue_follows_in_every_layout_tab_and_state` (a matrix of layouts, tabs, windows and gestures, with real pointer events) pass on the product as it was, so no product code changed and the tests pin the behaviour. The maintainer's exact steps are pending (players, window size, how the CUE was started, whether the CUE window covered the row, click or double-click, the file's state, the Cue route, and whether only the window title changed).
   - After plan 2 the maintainer gave the steps: two players, the CUE started with the player's own CUE button (it sends `ToggleCue`, which cues the player's next entry from its cue-in), then a click or a double-click on another row of that player's table. Still not reproduced. `q6_4_after_the_players_cue_button_a_row_moves_the_cue_in_two_players` clicks the CUE button itself with real pointer events, at 1000×700 and 1920×1080, on either player, with a click or a double-click, with and without resting on the row long enough for its tooltip; every case moves the CUE (a mutation that disables `cue_follow_target` makes its click cases fail). The release build, run in Xvfb on the null backend through `scripts/site/screenshots.sh --hold` and driven with `xdotool` clicks, also moved the CUE on a stopped player and on one on air, for a click and a double-click. One case does not move it, by design (feedback 2, O17 says "in that player's table"): a click or double-click in another player's table that shows the same playlist. Two new players both show the first playlist, so this is a candidate for the report; it is left for the maintainer.
+  - **Closed by the maintainer.** A click or double-click in another player's table, even one that shows the same playlist, does not move this player's CUE, and that is the intended behaviour (feedback 2, O17: "in that player's table"). Q6 is closed with no product change; the Q6 tests stay as regression tests.
 - **Q1.**
   - `FileDecoder::duration_hint_secs` and `duration_from_frames` (`fp-decode`) give the length the file stores, and never an estimate, which can be short on VBR. An allowlist of symphonia readers (`symph.rs::stored_length`) is trusted: FLAC, WAV, AIFF, CAF, MP4/M4A and Ogg; MP1/2/3 only when the first Layer III frame after any ID3v2 tag has `Xing`/`Info` after its side information or `VBRI` 32 bytes after its header (checked when the file is opened). Without one, the stream is probed so that symphonia makes no estimate at all: its MPEG reader would otherwise take the estimate as the end of the stream, decode nothing past it and refuse seeks past it, cutting a VBR track short in playback and in the analysis (`ANALYSIS_VERSION` 8). Raw AAC (ADTS), Matroska/WebM and any other reader get no hint; WavPack, Monkey's Audio and DSD use their own headers.
   - `fp-app/src/header.rs` (`HeaderReader`, the `fp-header-reader` thread) and `Services::header_pass` read the headers, with eight reads in flight (`HEADER_READS_IN_FLIGHT`) and tracks on a player first.
@@ -440,6 +476,7 @@ Rulings made while implementing:
 - Q6: the matrix lets 0.7 s pass (`settle`) before each gesture. Without it egui reads a double-click as a triple click after a click elsewhere within 0.6 s, a test-time artefact unrelated to the CUE. Cost if wrong: hides a real fast-operator case.
 - Q6 [ASK]: not reproduced; no product change shipped. Cost if wrong: Q6 stays open until the maintainer's steps arrive.
 - Q6 [ASK], after the maintainer's steps: still not reproduced, so only the regression test is committed. Whether a click in another player's table that shows the same playlist should move this player's CUE is a design question for the maintainer. Cost if wrong: Q6 stays open.
+  - Answered: no. Only a click in the player's own table moves its CUE; another player's table, even on the same playlist, does not (feedback 2, O17). Q6 is closed.
 - Q6 side finding [ASK]: a double-click less than 0.6 s after a click elsewhere is a triple click to egui, so `SetNext` is not sent (the CUE still follows via the single click). Left as is; treating `triple_clicked()` like `double_clicked()` would send `SetNext` twice on a real triple click.
   - Answered after plan 5 (as built): the maintainer wants a triple click on a playlist row to act like a double-click. `table.rs` sends `SetNext` for a click egui counts as a double or a triple click, once per burst of clicks: `set_next_on_click` remembers the row it set (`ViewState.set_next_sent`), a single click or a click on another row starts a new burst, so a real triple click (double, then triple to egui) sends it once. The track table is the only place in the interface where a double-click is an action (no other widget checks `double_clicked`), so nothing else changes. Tests: `fp-app/tests/row_double_click.rs` (a click on one row, then within 0.6 s a double-click on another, sets that row as next; a real triple click and a plain double-click each send one `SetNext`). The `settle` in the Q6 matrix stays: it tests the gestures apart, as before. A unit test in `table.rs` pins `set_next_on_click` (once per burst, a new row in the same burst, a reset on a single click).
   - Ruling (accepted): egui counts a click as a triple when it lands within 6 px of the previous click and the click before that was within 0.6 s, so a slow second click right after a quick earlier click can set a row as next — two clicks on one row in quick succession are close to a double-click — cost if wrong: an occasional unintended `SetNext`, undone by setting another row.

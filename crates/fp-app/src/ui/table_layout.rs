@@ -244,3 +244,36 @@ pub fn on_column_edge(px: &[f32], left: f32, grab: f32, x: f32) -> bool {
         (x - edge).abs() <= grab
     })
 }
+
+/// How far from the top or bottom edge of a table body a dragged entry
+/// makes the table scroll by itself (operator feedback 4), in points. A UI
+/// metric: a body shorter than three of these keeps a third of its height
+/// for each zone, so that its middle never scrolls.
+pub const DRAG_SCROLL_EDGE: f32 = 36.0;
+
+/// How fast a table scrolls by itself with the pointer on its edge, in
+/// points per second (about 32 rows of 28 points).
+pub const DRAG_SCROLL_MAX_SPEED: f32 = 900.0;
+
+/// The speed a table body scrolls at while an entry is dragged with the
+/// pointer at `pointer`, in points per second: negative up, positive down,
+/// zero outside the edge zones or outside `body`. It ramps up linearly from
+/// the inner side of a zone to [`DRAG_SCROLL_MAX_SPEED`] at the edge.
+pub fn drag_scroll_speed(body: Rect, pointer: Pos2) -> f32 {
+    if !body.contains(pointer) || !body.is_finite() {
+        return 0.0;
+    }
+    let zone = DRAG_SCROLL_EDGE.min(body.height() / 3.0);
+    if zone.is_nan() || zone <= 0.0 {
+        return 0.0;
+    }
+    let ramp = |distance: f32| ((zone - distance) / zone).clamp(0.0, 1.0) * DRAG_SCROLL_MAX_SPEED;
+    let (up, down) = (pointer.y - body.top(), body.bottom() - pointer.y);
+    if up < zone {
+        -ramp(up)
+    } else if down < zone {
+        ramp(down)
+    } else {
+        0.0
+    }
+}
