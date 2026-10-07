@@ -42,6 +42,12 @@ const ENGLISH: Locale = Locale {
 pub const LOCALES: &[Locale] = &[
     ENGLISH,
     Locale {
+        tag: "ca-ES",
+        name: "Català",
+        translation: Translation::Machine,
+        source: include_str!("../locales/ca-ES/main.ftl"),
+    },
+    Locale {
         tag: "es-ES",
         name: "Español",
         translation: Translation::Manual,
