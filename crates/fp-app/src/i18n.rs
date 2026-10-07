@@ -59,6 +59,12 @@ pub const LOCALES: &[Locale] = &[
         translation: Translation::Manual,
         source: include_str!("../locales/es-ES/main.ftl"),
     },
+    Locale {
+        tag: "eu-ES",
+        name: "Euskara",
+        translation: Translation::Machine,
+        source: include_str!("../locales/eu-ES/main.ftl"),
+    },
 ];
 
 /// A registered locale by its exact tag.
