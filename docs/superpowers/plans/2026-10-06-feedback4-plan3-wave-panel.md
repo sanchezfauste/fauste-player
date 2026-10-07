@@ -1047,7 +1047,7 @@ fi
 - Consumes: `marker_fractions`, `intro_left`, `outro_left`, `tenths` (Task 1); the test helpers `all_marked`, `near`, `mark`, `use_markers` in `tests/view.rs` (Task 1 and existing).
 - Produces: `CueWindowView::{markers: MarkerFractions, intro: Option<f64>, outro: Option<f64>, mix_active: bool}`; `position` stays.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `crates/fp-app/tests/view.rs`, add `PlayMode` to the `use fp_model::{…}` list, then append after `load_as_next_is_offered_only_when_it_changes_something`:
 
@@ -1122,12 +1122,12 @@ fn a_marker_set_once_shows_in_the_player_and_in_its_cue() {
 
 (`a_cue_window_of_unknown_length_has_no_markers_or_outro` sets the outro while the length is known, since `SetMarker` places intro, outro and MIX inside the play range, then forgets the length.)
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test view cue_window`
 Expected: does not compile — "no field `markers` on type `CueWindowView`" (and `intro`, `outro`, `mix_active`).
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `crates/fp-app/src/ui/view.rs`, add to `struct CueWindowView` after `position`:
 
@@ -1156,12 +1156,12 @@ and in `cue_window_view`, add to the `CueWindowView { … }` literal after `posi
 
 Update the doc comment of `CueWindowView` (`:100-101`) to: "What a CUE window shows (feedback 2 spec O12; operator feedback 4, Q7). A CUE plays the whole file, so its times, markers and badges run to the end of the file, not to the cue-out."
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test view`
 Expected: PASS (the existing `cue_window_view` tests unchanged).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \

@@ -17,7 +17,8 @@ use fp_app::ui::view::{
     shown_entry, start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
 };
 use fp_model::{
-    AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayerId, Track, apply,
+    AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayMode, PlayerId,
+    Track, apply,
 };
 
 fn state(tracks: usize) -> (AppState, Vec<EntryId>, PlayerId) {
@@ -518,6 +519,73 @@ fn load_as_next_is_offered_only_when_it_changes_something() {
         !cue_window_view(&s, p, None).unwrap().can_load_next,
         "already explicit"
     );
+}
+
+#[test]
+fn the_cue_window_places_the_markers_against_the_whole_file_without_shading() {
+    let (mut s, e, p) = state(2);
+    let t = all_marked(&mut s, e[0]);
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let v = cue_window_view(&s, p, Some(50.0)).unwrap();
+    let track = s.library.get(t).unwrap();
+    assert_eq!(v.markers, marker_fractions(track, 200.0, 50.0, true));
+    assert!(v.markers.ignored, "a CUE plays the whole file (Q7.5)");
+    assert_eq!(v.markers.position, v.position);
+    use_markers(&mut s, false);
+    assert!(cue_window_view(&s, p, Some(50.0)).unwrap().markers.ignored);
+}
+
+#[test]
+fn the_cue_window_badges_count_to_the_intro_and_to_the_end_of_the_file() {
+    let (mut s, e, p) = state(2);
+    all_marked(&mut s, e[0]);
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let v = cue_window_view(&s, p, Some(18.76)).unwrap();
+    assert_eq!((v.intro, v.outro), (Some(11.2), None));
+    let v = cue_window_view(&s, p, Some(160.0)).unwrap();
+    assert_eq!(
+        (v.intro, v.outro),
+        (None, Some(40.0)),
+        "to the end of the file, not to the cue-out at 190 s"
+    );
+}
+
+#[test]
+fn a_cue_window_of_unknown_length_has_no_markers_or_outro() {
+    let (mut s, e, p) = state(2);
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    mark(&mut s, t, MarkerKind::OutroStart, 5.0);
+    s.library.get_mut(t).unwrap().duration_secs = 0.0;
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let v = cue_window_view(&s, p, Some(10.0)).unwrap();
+    assert_eq!(v.markers.outro_start, None);
+    assert_eq!(v.outro, None);
+}
+
+#[test]
+fn the_cue_windows_mix_marker_follows_the_players_mode() {
+    let (mut s, _, p) = state(2);
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    assert!(
+        cue_window_view(&s, p, None).unwrap().mix_active,
+        "Continuous is the default mode"
+    );
+    apply(&mut s, Command::SetMode(p, PlayMode::Single)).unwrap();
+    assert!(!cue_window_view(&s, p, None).unwrap().mix_active);
+}
+
+/// Q7.6: both waveforms draw from the same track, so a marker set once
+/// shows in both on the next frame.
+#[test]
+fn a_marker_set_once_shows_in_the_player_and_in_its_cue() {
+    let (mut s, e, p) = state(2);
+    // A stopped player shows its next entry, the one its CUE plays.
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    mark(&mut s, t, MarkerKind::IntroEnd, 40.0);
+    let player = player_view(&s, p, None, 0.0).unwrap().markers.intro_end;
+    let cue = cue_window_view(&s, p, None).unwrap().markers.intro_end;
+    assert!(near(player, 0.2) && near(cue, 0.2), "{player:?} {cue:?}");
 }
 
 #[test]

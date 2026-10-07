@@ -142,8 +142,9 @@ pub fn shown_entry(state: &AppState, player: PlayerId) -> Option<EntryId> {
     p.current.or(p.next)
 }
 
-/// What a CUE window shows (feedback 2 spec O12). A CUE plays the whole
-/// file, so its times run to the end of the file, not to the cue-out.
+/// What a CUE window shows (feedback 2 spec O12; operator feedback 4, Q7).
+/// A CUE plays the whole file, so its times, markers and badges run to the
+/// end of the file, not to the cue-out.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CueWindowView {
     pub player: PlayerId,
@@ -158,6 +159,17 @@ pub struct CueWindowView {
     pub paused: bool,
     /// The position as a fraction of the file, for the waveform.
     pub position: Option<f32>,
+    /// The markers and the position on the whole file. Cue-in and cue-out
+    /// are dimmed marks without shading: a CUE plays the whole file
+    /// (operator feedback 4, Q7.5).
+    pub markers: MarkerFractions,
+    /// Seconds left of a marked intro (spec §3 rule 18); it never blinks,
+    /// since a CUE is not on air.
+    pub intro: Option<f64>,
+    /// Seconds from the outro to the end of the file (Q7.5).
+    pub outro: Option<f64>,
+    /// The MIX marker looks as on the player: solid in Continuous mode.
+    pub mix_active: bool,
     /// "Set as next" has something to do: the cued entry is not
     /// already the explicit next (the entry on air can be, O37).
     pub can_load_next: bool,
@@ -192,6 +204,10 @@ pub fn cue_window_view(
         remaining: total.map_or(0.0, |t| (t - elapsed).max(0.0)),
         paused: cue.paused,
         position: fraction(Some(elapsed), total.unwrap_or(0.0)),
+        markers: marker_fractions(track, total.unwrap_or(0.0), elapsed, true),
+        intro: intro_left(track, elapsed).map(tenths),
+        outro: total.and_then(|end| outro_left(track, elapsed, end)),
+        mix_active: p.mode == PlayMode::Continuous,
         can_load_next: !(p.next == Some(cue.entry) && p.next_explicit),
     })
 }
