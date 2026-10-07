@@ -105,7 +105,7 @@ pub fn fuzz_documents(bytes: &[u8]) {
     let mut config = parse_config(bytes).map(|(c, _)| c).unwrap_or_default();
     let _ = config.validate();
     let lists: Option<PlaylistsDoc> = parse_doc(bytes, PLAYLISTS_SCHEMA, PLAYLISTS_MIGRATIONS).ok();
-    let session: Option<SessionDoc> = parse_doc(bytes, SESSION_SCHEMA, SESSION_MIGRATIONS).ok();
+    let session: Option<SessionDoc> = parse_session(bytes).ok().map(|(d, _)| d);
     let carts: Option<CartsDoc> = parse_doc(bytes, CARTS_SCHEMA, CARTS_MIGRATIONS).ok();
     let (library, playlists, ids) = lists
         .map(|d| (d.library, d.playlists, d.ids))
