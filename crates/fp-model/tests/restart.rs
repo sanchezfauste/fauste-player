@@ -174,3 +174,39 @@ fn dsd_settings_apply_at_restart() {
         );
     }
 }
+
+#[test]
+fn a_devices_own_rate_or_buffer_waits_for_a_restart() {
+    let dac = OutputDevice {
+        backend: "alsa".into(),
+        device: "dac".into(),
+    };
+    let started = Config::default();
+    let mut c = started.clone();
+    c.outputs.set_device_rate(&dac, Some(96_000));
+    assert_eq!(
+        restart_pending(&started, &c),
+        vec![RestartReason::SampleRate]
+    );
+    let mut c = started.clone();
+    c.outputs.set_device_buffer(&dac, Some(1024));
+    assert_eq!(
+        restart_pending(&started, &c),
+        vec![RestartReason::BufferSize]
+    );
+}
+
+#[test]
+fn reordered_overrides_and_the_outputs_view_need_no_restart() {
+    let dev = |name: &str| OutputDevice {
+        backend: "alsa".into(),
+        device: name.into(),
+    };
+    let mut started = Config::default();
+    started.outputs.set_device_rate(&dev("dac"), Some(96_000));
+    started.outputs.set_device_buffer(&dev("phones"), Some(256));
+    let mut c = started.clone();
+    c.outputs.device_overrides.reverse();
+    c.ui.outputs_view = fp_model::OutputsView::Advanced;
+    assert!(restart_pending(&started, &c).is_empty());
+}

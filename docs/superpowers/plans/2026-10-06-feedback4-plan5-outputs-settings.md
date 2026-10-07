@@ -118,7 +118,7 @@ These conditions are implied by the spec but no spec test covers them. Each line
   - `OutputsConfig::set_device_rate(&mut self, device: &OutputDevice, rate: Option<u32>)` and `set_device_buffer(&mut self, device: &OutputDevice, frames: Option<u32>)`.
   - `OutputsConfig::routed_devices(&self) -> Vec<OutputDevice>` and `advanced_in_use(&self) -> bool`.
 
-- [ ] **Step 1: Write the failing model tests**
+- [x] **Step 1: Write the failing model tests**
 
 `crates/fp-model/tests/device_overrides.rs` (new file):
 
@@ -356,7 +356,7 @@ fn reordered_overrides_and_the_outputs_view_need_no_restart() {
 }
 ```
 
-- [ ] **Step 2: Write the failing lenient-loading test**
+- [x] **Step 2: Write the failing lenient-loading test**
 
 In `crates/fp-store/src/lenient.rs`, add inside `mod tests`, after `bad_dsd_values_fall_back_one_by_one`:
 
@@ -383,7 +383,7 @@ In `crates/fp-store/src/lenient.rs`, add inside `mod tests`, after `bad_dsd_valu
     }
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-model --test device_overrides`
 Expected: FAIL to compile with "unresolved imports `fp_model::DeviceOverride`, `fp_model::OutputsView`".
@@ -394,7 +394,7 @@ Expected: FAIL to compile with "no method named `set_device_rate` found for stru
 Run: `cargo test -p fp-store --lib device_overrides_and_the_outputs_view_load_leniently`
 Expected: FAIL to compile with "could not find `OutputsView` in `fp_model`".
 
-- [ ] **Step 4: Add the types and the fields**
+- [x] **Step 4: Add the types and the fields**
 
 In `crates/fp-model/src/config.rs`, add these right after `pub struct PlayerRoutes` (after L317):
 
@@ -448,7 +448,7 @@ In `UiConfig`, after `table_columns`, add:
 
 In `impl Default for UiConfig`, add `outputs_view: OutputsView::Basic,`.
 
-- [ ] **Step 5: Add the helpers**
+- [x] **Step 5: Add the helpers**
 
 In `impl OutputsConfig` (after `dsd_output_for`), add:
 
@@ -538,7 +538,7 @@ In `impl OutputsConfig` (after `dsd_output_for`), add:
     }
 ```
 
-- [ ] **Step 6: Validate the overrides**
+- [x] **Step 6: Validate the overrides**
 
 In `Config::validate`, change the two global clamps (L723–736) to use the constants:
 
@@ -610,7 +610,7 @@ After the `dsd_output` duplicate check (after L757, before `let t = &mut self.tu
             .retain(|d| d.sample_rate.is_some() || d.buffer_frames.is_some());
 ```
 
-- [ ] **Step 7: The overrides in `restart_pending`**
+- [x] **Step 7: The overrides in `restart_pending`**
 
 In `crates/fp-model/src/restart.rs`:
 - change the import to `use crate::config::{Config, DeviceOverride, OutputsConfig, Route};`;
@@ -655,7 +655,7 @@ Replace the two checks at L46–51 with:
     }
 ```
 
-- [ ] **Step 8: Re-export**
+- [x] **Step 8: Re-export**
 
 In `crates/fp-model/src/lib.rs`, replace the `pub use config::{…}` block (L44–47) with:
 
@@ -670,12 +670,12 @@ pub use config::{
 
 (`cargo fmt` fixes the order if rustfmt sorts it differently.)
 
-- [ ] **Step 9: Run the tests to verify they pass**
+- [x] **Step 9: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-model --test device_overrides && cargo test -p fp-model --test restart && cargo test -p fp-store --lib lenient && cargo test -p fp-model --lib config`
 Expected: PASS, including the existing `defaults_are_valid` and the restart tests.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add crates/fp-model/src/config.rs crates/fp-model/src/restart.rs crates/fp-model/src/lib.rs \

@@ -5,14 +5,16 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use crate::config::{Config, OutputsConfig, Route};
+use crate::config::{Config, DeviceOverride, OutputsConfig, Route};
 use crate::ids::PlayerId;
 
 /// Why a restart is needed, in the order the notice lists them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RestartReason {
     AudioSystem,
+    /// The global sample rate, or a device's own (operator feedback 4, Q12.6).
     SampleRate,
+    /// The global buffer size, or a device's own.
     BufferSize,
     /// A player's or the cartwall's Main or Cue output.
     Routes,
@@ -35,6 +37,21 @@ fn player_routes(outputs: &OutputsConfig) -> BTreeMap<PlayerId, Pair<'_>> {
         .collect()
 }
 
+/// One setting's per-device values, by device, without devices that use
+/// the global value; the order of the entries does not matter.
+fn own_values(
+    outputs: &OutputsConfig,
+    value: fn(&DeviceOverride) -> Option<u32>,
+) -> BTreeMap<(&str, &str), u32> {
+    outputs
+        .device_overrides
+        .iter()
+        .filter_map(|o| {
+            value(o).map(|v| ((o.device.backend.as_str(), o.device.device.as_str()), v))
+        })
+        .collect()
+}
+
 /// What changed between the configuration the application started with
 /// and the current one that only a restart applies.
 pub fn restart_pending(started: &Config, current: &Config) -> Vec<RestartReason> {
@@ -43,10 +60,14 @@ pub fn restart_pending(started: &Config, current: &Config) -> Vec<RestartReason>
     if a.backend != b.backend {
         reasons.push(RestartReason::AudioSystem);
     }
-    if a.sample_rate != b.sample_rate {
+    if a.sample_rate != b.sample_rate
+        || own_values(a, |o| o.sample_rate) != own_values(b, |o| o.sample_rate)
+    {
         reasons.push(RestartReason::SampleRate);
     }
-    if a.buffer_frames != b.buffer_frames {
+    if a.buffer_frames != b.buffer_frames
+        || own_values(a, |o| o.buffer_frames) != own_values(b, |o| o.buffer_frames)
+    {
         reasons.push(RestartReason::BufferSize);
     }
     if player_routes(a) != player_routes(b) || a.cartwall != b.cartwall {

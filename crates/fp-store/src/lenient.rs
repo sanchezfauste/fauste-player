@@ -209,4 +209,29 @@ mod tests {
         assert_eq!(c.outputs.dsd_output.len(), 1, "the valid element is kept");
         assert_eq!(warnings.len(), 3, "{warnings:?}");
     }
+
+    #[test]
+    fn device_overrides_and_the_outputs_view_load_leniently() {
+        let user: serde_json::Value = serde_json::from_str(
+            r#"{"ui":{"outputs_view":"Expert"},
+                "outputs":{"device_overrides":[
+                    {"device":{"backend":"alsa","device":"hw:0"},"sample_rate":96000},
+                    {"device":{"backend":"alsa","device":"hw:1"},"sample_rate":"fast"},
+                    {"device":{"backend":"alsa","device":"hw:2"},"buffer_frames":1024}]}}"#,
+        )
+        .unwrap();
+        let mut warnings = Vec::new();
+        let mut c = config_from_value(&user, &mut warnings);
+        assert_eq!(c.ui.outputs_view, fp_model::OutputsView::Basic);
+        assert_eq!(
+            c.outputs.device_overrides.len(),
+            2,
+            "the valid elements are kept"
+        );
+        assert_eq!(c.outputs.rate_for("alsa", "hw:0"), 96_000);
+        assert_eq!(c.outputs.buffer_for("alsa", "hw:0"), 512);
+        assert_eq!(c.outputs.buffer_for("alsa", "hw:2"), 1024);
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(c.validate().is_empty());
+    }
 }

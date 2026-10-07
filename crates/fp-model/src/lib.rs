@@ -43,9 +43,10 @@ pub use command::{
     CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
 };
 pub use config::{
-    AnalysisSettings, CartwallConfig, CartwallRoutes, Config, ConfigWarning, Limits,
-    LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig,
-    PlayerRoutes, PlayersConfig, Route, Tuning, UiConfig,
+    AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,
+    DeviceOverride, Limits, LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings,
+    OutputDevice, OutputsConfig, OutputsView, PlayerRoutes, PlayersConfig, Route,
+    SAMPLE_RATE_RANGE, Tuning, UiConfig,
 };
 pub use dsd::{
     BpBadge, DEFAULT_DSD_SILENCE_MS, DSD_WORD_BITS, DsdDevice, DsdFacts, DsdFallback, DsdMix,

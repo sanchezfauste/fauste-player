@@ -315,6 +315,33 @@ pub struct PlayerRoutes {
     pub cue: Option<Route>,
 }
 
+/// Valid `outputs.sample_rate`, also for a device's own rate (Hz).
+pub const SAMPLE_RATE_RANGE: std::ops::RangeInclusive<u32> = 8_000..=768_000;
+/// Valid `outputs.buffer_frames`, also for a device's own buffer (frames).
+pub const BUFFER_FRAMES_RANGE: std::ops::RangeInclusive<u32> = 16..=16_384;
+
+/// One device's own stream settings (operator feedback 4, Q12.4); `None`
+/// uses the global `outputs.sample_rate` or `outputs.buffer_frames`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceOverride {
+    pub device: OutputDevice,
+    #[serde(default)]
+    pub sample_rate: Option<u32>,
+    #[serde(default)]
+    pub buffer_frames: Option<u32>,
+}
+
+/// What Settings → Audio outputs shows (operator feedback 4, Q12.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum OutputsView {
+    /// The audio system, the sample rate, the buffer size and the routes.
+    #[default]
+    Basic,
+    /// Also each routed device's own rate and buffer, bit-perfect switch and
+    /// DSD mode, and the DSD settings.
+    Advanced,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OutputsConfig {
@@ -341,6 +368,11 @@ pub struct OutputsConfig {
     /// every switch to PCM, so that the converter locks without a pop
     /// (milliseconds, 0–2000).
     pub dsd_silence_ms: f64,
+    /// Devices with their own rate or buffer (operator feedback 4, Q12.4),
+    /// keyed by backend and device like `bit_perfect`. Empty by default:
+    /// every device uses `sample_rate` and `buffer_frames`.
+    #[serde(default)]
+    pub device_overrides: Vec<DeviceOverride>,
 }
 
 /// The cartwall's outputs. Main falls back to the default output; without
@@ -364,6 +396,7 @@ impl Default for OutputsConfig {
             dsd_output: Vec::new(),
             dsd_mix: crate::dsd::DsdMix::default(),
             dsd_silence_ms: crate::dsd::DEFAULT_DSD_SILENCE_MS,
+            device_overrides: Vec::new(),
         }
     }
 }
@@ -412,6 +445,100 @@ impl OutputsConfig {
             .find(|d| d.backend == backend && d.device == device)
             .map_or(crate::dsd::DsdOutput::Pcm, |d| d.mode)
     }
+
+    /// `device`'s own rate and buffer, if it has any.
+    pub fn device_override(&self, device: &OutputDevice) -> Option<&DeviceOverride> {
+        self.device_overrides.iter().find(|o| &o.device == device)
+    }
+
+    fn own(&self, backend: &str, device: &str) -> Option<&DeviceOverride> {
+        self.device_overrides
+            .iter()
+            .find(|o| o.device.backend == backend && o.device.device == device)
+    }
+
+    /// The rate a device opens at: its own, else `sample_rate`.
+    pub fn rate_for(&self, backend: &str, device: &str) -> u32 {
+        self.own(backend, device)
+            .and_then(|o| o.sample_rate)
+            .unwrap_or(self.sample_rate)
+    }
+
+    /// The buffer a device opens with: its own, else `buffer_frames`.
+    pub fn buffer_for(&self, backend: &str, device: &str) -> u32 {
+        self.own(backend, device)
+            .and_then(|o| o.buffer_frames)
+            .unwrap_or(self.buffer_frames)
+    }
+
+    /// Sets (`Some`) or clears (`None`) `device`'s own rate. A value equal
+    /// to the global one is kept as the device's own.
+    pub fn set_device_rate(&mut self, device: &OutputDevice, rate: Option<u32>) {
+        self.edit_override(device, |o| o.sample_rate = rate);
+    }
+
+    /// Sets (`Some`) or clears (`None`) `device`'s own buffer.
+    pub fn set_device_buffer(&mut self, device: &OutputDevice, frames: Option<u32>) {
+        self.edit_override(device, |o| o.buffer_frames = frames);
+    }
+
+    /// Edits `device`'s entry, adding it when missing, and removes every
+    /// entry left with neither a rate nor a buffer.
+    fn edit_override(&mut self, device: &OutputDevice, edit: impl FnOnce(&mut DeviceOverride)) {
+        if let Some(o) = self
+            .device_overrides
+            .iter_mut()
+            .find(|o| &o.device == device)
+        {
+            edit(o);
+        } else {
+            let mut o = DeviceOverride {
+                device: device.clone(),
+                sample_rate: None,
+                buffer_frames: None,
+            };
+            edit(&mut o);
+            self.device_overrides.push(o);
+        }
+        self.device_overrides
+            .retain(|o| o.sample_rate.is_some() || o.buffer_frames.is_some());
+    }
+
+    /// The devices routes name explicitly (players, then the cartwall), each
+    /// once, in route order: the devices Settings gives their own rows.
+    pub fn routed_devices(&self) -> Vec<OutputDevice> {
+        let mut devices: Vec<OutputDevice> = Vec::new();
+        let routes = self
+            .routes
+            .iter()
+            .flat_map(|r| r.main.iter().chain(r.cue.iter()))
+            .chain(self.cartwall.main.iter())
+            .chain(self.cartwall.cue.iter());
+        for route in routes {
+            let device = OutputDevice {
+                backend: route.backend.clone(),
+                device: route.device.clone(),
+            };
+            if !devices.contains(&device) {
+                devices.push(device);
+            }
+        }
+        devices
+    }
+
+    /// Whether the Advanced view holds anything that applies (operator
+    /// feedback 4, Q12): a routed device that is bit-perfect or has its own
+    /// rate or buffer, or a DSD setting away from its default. The Basic
+    /// view says so, since it hides those settings.
+    pub fn advanced_in_use(&self) -> bool {
+        let defaults = Self::default();
+        self.dsd_mix != defaults.dsd_mix
+            || self.dsd_silence_ms.to_bits() != defaults.dsd_silence_ms.to_bits()
+            || self
+                .routed_devices()
+                .iter()
+                .any(|d| self.bit_perfect.contains(d) || self.device_override(d).is_some())
+    }
 }
 
 /// Whether a Cue route can be heard (spec §4.6): there is one, and it is not
@@ -447,6 +574,10 @@ pub struct UiConfig {
     /// The columns of the track tables, in order; one list for every player
     /// and playlist (feedback 2 spec O24). Title and Duration are required.
     pub table_columns: Vec<TableColumn>,
+    /// Basic or Advanced view of Settings → Audio outputs (operator
+    /// feedback 4, Q12.1; `Basic` by default). It only hides rows; it
+    /// changes no output.
+    pub outputs_view: OutputsView,
 }
 
 impl Default for UiConfig {
@@ -457,6 +588,7 @@ impl Default for UiConfig {
             language: None,
             follow_current_grace_secs: 10.0,
             table_columns: default_columns(),
+            outputs_view: OutputsView::Basic,
         }
     }
 }
@@ -597,6 +729,58 @@ pub(crate) fn clamp_to<T: PartialOrd + Copy + fmt::Display>(
         field,
         message: format!("{original} is outside {min}..={max}; using {}", *value),
     });
+}
+
+/// Keeps each device's first entry, drops an own rate or buffer outside the
+/// global ranges (the device then uses the global value, operator feedback
+/// 4, Q12.4), and removes entries left with nothing.
+fn validate_device_overrides(overrides: &mut Vec<DeviceOverride>, w: &mut Vec<ConfigWarning>) {
+    const FIELD: &str = "outputs.device_overrides";
+    let mut seen: Vec<OutputDevice> = Vec::new();
+    let before = overrides.len();
+    overrides.retain(|d| {
+        let first = !seen.contains(&d.device);
+        seen.push(d.device.clone());
+        first
+    });
+    if overrides.len() != before {
+        w.push(ConfigWarning {
+            field: FIELD,
+            message: "a device was listed more than once; keeping its first values".to_owned(),
+        });
+    }
+    for d in overrides.iter_mut() {
+        if let Some(rate) = d.sample_rate
+            && !SAMPLE_RATE_RANGE.contains(&rate)
+        {
+            w.push(ConfigWarning {
+                field: FIELD,
+                message: format!(
+                    "{rate} Hz for {} is outside {}..={}; using outputs.sample_rate",
+                    d.device.device,
+                    SAMPLE_RATE_RANGE.start(),
+                    SAMPLE_RATE_RANGE.end()
+                ),
+            });
+            d.sample_rate = None;
+        }
+        if let Some(frames) = d.buffer_frames
+            && !BUFFER_FRAMES_RANGE.contains(&frames)
+        {
+            w.push(ConfigWarning {
+                field: FIELD,
+                message: format!(
+                    "{frames} frames for {} is outside {}..={}; using outputs.buffer_frames",
+                    d.device.device,
+                    BUFFER_FRAMES_RANGE.start(),
+                    BUFFER_FRAMES_RANGE.end()
+                ),
+            });
+            d.buffer_frames = None;
+        }
+    }
+    // An entry with nothing left means nothing.
+    overrides.retain(|d| d.sample_rate.is_some() || d.buffer_frames.is_some());
 }
 
 impl Config {
@@ -780,15 +964,15 @@ impl Config {
         let o = &mut self.outputs;
         clamp_to(
             &mut o.sample_rate,
-            8_000,
-            768_000,
+            *SAMPLE_RATE_RANGE.start(),
+            *SAMPLE_RATE_RANGE.end(),
             "outputs.sample_rate",
             &mut w,
         );
         clamp_to(
             &mut o.buffer_frames,
-            16,
-            16_384,
+            *BUFFER_FRAMES_RANGE.start(),
+            *BUFFER_FRAMES_RANGE.end(),
             "outputs.buffer_frames",
             &mut w,
         );
@@ -813,6 +997,7 @@ impl Config {
                 message: "a device was listed more than once; keeping its first mode".to_owned(),
             });
         }
+        validate_device_overrides(&mut o.device_overrides, &mut w);
 
         let t = &mut self.tuning;
         clamp_to(&mut t.declick_ms, 0.5, 50.0, "tuning.declick_ms", &mut w);
