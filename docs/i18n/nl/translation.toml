@@ -1,0 +1,15 @@
+# Dutch translation of the user guide, generated with AI from the English
+# guide in docs/user. Regenerated before each release; see
+# docs/technical/release-process.md.
+language = "nl"
+name = "Nederlands"
+title = "Fauste Player — Gebruikershandleiding"
+label = "Taal"
+# The commit of master whose docs/user this translation was made from, and
+# its `git describe --tags`.
+source-commit = "69320878e299f7829975d5b1a845f1a8c96794bb"
+source-version = "v0.5.0-120-g6932087"
+# The notice on every page; {version} and {commit} are replaced with the
+# fields above, and english-link links to the same page in English.
+notice = "Deze pagina is met AI vertaald uit de Engelse handleiding ({version}, commit {commit}) en kan fouten bevatten. Bij verschillen geldt de Engelse versie."
+english-link = "Lees het origineel in het Engels"

@@ -1,0 +1,15 @@
+# Polish translation of the user guide, generated with AI from the English
+# guide in docs/user. Regenerated before each release; see
+# docs/technical/release-process.md.
+language = "pl"
+name = "Polski"
+title = "Fauste Player — Podręcznik użytkownika"
+label = "Język"
+# The commit of master whose docs/user this translation was made from, and
+# its `git describe --tags`.
+source-commit = "69320878e299f7829975d5b1a845f1a8c96794bb"
+source-version = "v0.5.0-120-g6932087"
+# The notice on every page; {version} and {commit} are replaced with the
+# fields above, and english-link links to the same page in English.
+notice = "Ta strona została przetłumaczona za pomocą AI z angielskiego podręcznika ({version}, commit {commit}) i może zawierać błędy. W razie różnic obowiązuje wersja angielska."
+english-link = "Przeczytaj oryginał po angielsku"

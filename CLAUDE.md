@@ -64,6 +64,8 @@ scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
 scripts/site/build.sh [out]                   # website: landing page + mdBook guide (default target/site; needs gh or FAUSTE_RELEASE_JSON for the download links)
 scripts/site/check-links.sh <out>             # dead links in the built site
+scripts/site/check-translations.sh [out]      # translated guides (docs/i18n) mirror docs/user and carry the AI notice
+python3 scripts/site/guide.py changed [lang]  # English guide pages changed since each translation
 scripts/site/screenshots.sh [--only main]     # README and guide screenshots from a scripted scene (Xvfb; see Testing notes)
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test real_music -- --ignored   # real-music corpus (local only)
@@ -129,8 +131,11 @@ reviewed PRs.
 A change is not done until everything that describes it says the same:
 
 - `README.md` (features, platform table, install, roadmap);
-- the user guide in `docs/user/` and the technical docs in
-  `docs/technical/`;
+- the user guide in `docs/user/` (English only: the translations in
+  `docs/i18n/` are regenerated with AI before each release, never in a
+  feature PR; the one exception is a PR that moves, renames or deletes an
+  image in `docs/images`, which also updates the image links in
+  `docs/i18n/`) and the technical docs in `docs/technical/`;
 - the spec in `docs/superpowers/specs/` when behaviour changes, and the plan;
 - this file (and `AGENTS.md` if the pointer changes) when the workflow,
   commands or layout change;
@@ -169,6 +174,7 @@ hand: release-please writes it from the commits.
 | `docs/superpowers/specs` | The binding design spec |
 | `docs/superpowers/plans` | Implementation plans (one per step of a phase) |
 | `docs/user`, `docs/technical` | User and technical documentation. Keep them in sync with behaviour. |
+| `docs/i18n/<lang>`, `docs/book-assets` | The guide's AI translations (regenerated before each release, never in feature PRs; see `docs/technical/release-process.md`) and the language menu and notice script |
 | `vendor/opus-decoder` | A patched copy of `opus-decoder` (a real FFT), used through `[patch.crates-io]`; excluded from the workspace. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
 | `site/`, `scripts/site/` | The landing page and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |

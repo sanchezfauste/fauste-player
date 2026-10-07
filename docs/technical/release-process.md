@@ -85,14 +85,102 @@ build runs as a job of the release-please workflow, not on a
 ## The website
 
 `pages.yml` builds the website, the landing page in `site/` plus the user
-guide (`docs/user`, an mdBook), and deploys it to GitHub Pages at
-<https://sanchezfauste.com/fauste-player/>, the guide under `/guide/`. Its
+guide (`docs/user`, an mdBook, and its translations in `docs/i18n`), and
+deploys it to GitHub Pages at <https://sanchezfauste.com/fauste-player/>,
+the guide under `/guide/` and each translation under `/guide/<lang>/`. Its
 download links are filled from the latest release by
 `scripts/site/build.sh`, so the site is rebuilt on every release: the
 release-please workflow calls `pages.yml` in a `site` job after
 `binaries`. It also runs when `master` changes the guide, the site or the
 scripts, and by hand. Pull requests touching those paths build the site and
-run `scripts/site/check-links.sh` without deploying.
+run `scripts/site/check-links.sh` and `scripts/site/check-translations.sh`
+without deploying.
+
+### The guide in other languages
+
+The English guide in `docs/user` is the only source: pull requests change
+English only. The translations are generated with AI and regenerated before
+each release, never edited by hand in between. The one mechanical exception:
+a pull request that moves, renames or deletes an image in `docs/images` also
+updates the image links in `docs/i18n`, so the translated guides keep
+building.
+
+- **Languages:** the folders of `docs/i18n`: `es`, `ca`, `de`, `eu`, `fr`,
+  `gl`, `it`, `nl`, `pl` and `pt` (European Portuguese), the languages of
+  the interface. `docs/i18n/<lang>/` mirrors `docs/user`: the same file
+  names, the same `SUMMARY.md` entries (targets, order and nesting), the
+  English heading ids (`{#id}` after each translated heading), and
+  image links one level deeper (`../../images/…`), since the screenshots are
+  shared.
+- **Metadata:** `docs/i18n/<lang>/translation.toml` holds the language tag,
+  its name in the language menu, the book title, the menu label,
+  `source-commit` (the full hash of the `master` commit whose `docs/user`
+  was translated) and `source-version` (its `git describe --tags`), and the
+  notice text (`{version}` and `{commit}` placeholders) with the label of
+  the link to the English page.
+- **The notice:** every translated page says, in its language, that it was
+  translated with AI from the English guide, may contain errors, names the
+  version and commit, and links to the same page in English.
+  `docs/book-assets/language-menu.js` adds it at the top of each page; the
+  start page (`README.md`) also has it in its source, as
+  `<div class="ai-notice" role="note">…</div>` linking to `../index.html`,
+  so it shows without JavaScript. That link targets the built site (the
+  English start page next to the translation's folder); on GitHub's file view
+  it is dead.
+- **The language menu:** the same script adds a globe button to the top bar
+  of every book, English included. It links to the same page in each
+  language, or to that language's start page when the page does not exist
+  there yet (an English page added after the last regeneration).
+- **The build:** `scripts/site/build.sh` calls `scripts/site/guide.py build`,
+  which copies `docs/` to a staging folder, writes
+  `book-assets/languages.js` (the languages, each one's pages, the notice)
+  for each book, and runs mdBook with `src`, `language` and `title`
+  overridden (`MDBOOK_BOOK__…` variables). `docs/book-assets/languages.js` in
+  the source tree is an English-only stub, so a plain `mdbook build docs`
+  or `mdbook serve docs` works (without the menu); the script overwrites it
+  in the staging copy. The edit link of a translated
+  page points at `docs/i18n/<lang>/`.
+- **The check:** `scripts/site/check-translations.sh [<site>]` fails when a
+  translation's files or `SUMMARY.md` entries differ from `docs/user` at its
+  `source-commit` (not at `HEAD`, so English-only pull requests stay
+  green), when the metadata is incomplete or `source-commit` is not an
+  ancestor of `HEAD`, when the start page lacks the notice with the right
+  version and commit, or, given a built site, when a translated page is not
+  marked with its language or lacks the menu and notice script. It needs the
+  git history (`pages.yml` checks out with `fetch-depth: 0`).
+
+### Regenerating the translations before a release
+
+Do it on a `docs/…` branch from an up-to-date `master`, before merging the
+release PR, so the release ships a current guide in every language.
+
+1. List what changed since each translation:
+   `python3 scripts/site/guide.py changed [<lang>…]` prints the English pages
+   added, modified or deleted since its `source-commit`
+   (`git diff --name-status <source-commit> HEAD -- docs/user`).
+2. For each language, translate the changed pages with AI from `docs/user`
+   at the branch's base commit (`git merge-base HEAD origin/master`):
+   - keep code, keys, file paths, commands and links unchanged; image links
+     become `../../images/…`;
+   - use, for every interface label, the exact text of the app's locale file
+     (`crates/fp-app/locales/<locale>/main.ftl`), so the guide matches the
+     screen;
+   - translate headings, and give every heading below the title the id of
+     its English heading (`## Ajustes {#settings}`), so links to anchors stay
+     unchanged and the language menu keeps the anchor;
+   - copy new pages and `SUMMARY.md` entries, delete removed ones.
+3. Set `source-commit` to that base commit (a `master` commit, so rebasing
+   the branch does not invalidate it) and `source-version` to
+   `git describe --tags <source-commit>`, and update the version and commit
+   in the notice of `README.md`.
+4. Build and check:
+   `scripts/site/build.sh target/site && scripts/site/check-links.sh target/site && scripts/site/check-translations.sh target/site`.
+5. Commit as `docs(user): regenerate the <language> guide` (one commit per
+   language or one for all) and open the pull request.
+
+To add a language, create `docs/i18n/<lang>/` with a `translation.toml`
+(copy one and translate its strings) and a full translation made as in
+step 2, then add the language to the list above.
 
 One-time step for the maintainer: **Settings → Pages → Source: GitHub
 Actions**.

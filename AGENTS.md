@@ -18,6 +18,8 @@ repeats the essentials for agents that do not follow links.
   `cargo test --workspace`.
 - Conventional Commits and SemVer; release-please owns versions and the
   changelog.
-- Keep `docs/user` and `docs/technical` in sync with behaviour.
+- Keep `docs/user` and `docs/technical` in sync with behaviour. Change the
+  guide in English only; its translations in `docs/i18n` are regenerated
+  before each release.
 
 If this file and `CLAUDE.md` ever disagree, `CLAUDE.md` wins; fix this file.

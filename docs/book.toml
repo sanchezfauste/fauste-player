@@ -1,5 +1,8 @@
-# The user guide (docs/user) as a book; built by scripts/site/build.sh, which
-# passes the output directory (mdbook build -d).
+# The user guide as a book: the English source in docs/user, and each
+# translation in docs/i18n/<lang>. Built only by scripts/site/build.sh (through
+# scripts/site/guide.py), which builds from a staging copy of docs/, writes the
+# generated book-assets/languages.js (over the English-only stub), passes the output directory
+# (mdbook build -d) and, for a translation, overrides src, language and title.
 [book]
 title = "Fauste Player — User guide"
 language = "en"
@@ -7,4 +10,7 @@ src = "user"
 
 [output.html]
 git-repository-url = "https://github.com/sanchezfauste/fauste-player"
-edit-url-template = "https://github.com/sanchezfauste/fauste-player/edit/master/docs/user/{path}"
+# {path} is relative to docs/ (user/... or i18n/<lang>/...).
+edit-url-template = "https://github.com/sanchezfauste/fauste-player/edit/master/docs/{path}"
+additional-js = ["book-assets/languages.js", "book-assets/language-menu.js"]
+additional-css = ["book-assets/language-menu.css"]

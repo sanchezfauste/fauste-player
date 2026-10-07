@@ -1,12 +1,13 @@
 #!/bin/sh
 # Builds the website into <out-dir> (default target/site): the landing page
 # (site/) with its download links filled from the latest release, the user
-# guide under guide/ and the screenshots under images/.
+# guide under guide/ (each translation under guide/<lang>/) and the
+# screenshots under images/.
 #
 # The release comes from `gh release view --json tagName,url,assets`, or from
 # the JSON file named by FAUSTE_RELEASE_JSON (tests, offline builds). Without
 # a release the page is still built, and its download links point at the
-# releases page.
+# releases page. The guide is built by scripts/site/guide.py (Python 3.11+).
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -43,7 +44,8 @@ mkdir -p "$abs"
 out=$abs
 : > "$out/$marker"
 
-"$mdbook" build "$root/docs" -d "$out/guide"
+# The guide: English in guide/, each translation of docs/i18n in guide/<lang>/.
+python3 "$root/scripts/site/guide.py" build "$mdbook" "$out/guide"
 mkdir -p "$out/images"
 cp -R "$root"/docs/images/. "$out/images/"
 
