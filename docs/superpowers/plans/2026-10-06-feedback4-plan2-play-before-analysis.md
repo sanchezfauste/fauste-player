@@ -2270,7 +2270,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 - Consumes: `PlayerState::pending_start` and `pending_start::settle` (through `reconcile`, which `restore` already calls), both from Task 7.
 - Produces: `pub pending_start: Option<(EntryId, f64)>` on `PlayerSession`, which defaults to `None` and loads leniently.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/fp-model/tests/pending_start.rs` (add `PlayerSession` and `RestoreParts` to the `use fp_model::{…}` line):
 
@@ -2339,13 +2339,13 @@ fn a_broken_pending_start_in_the_session_file_loads_as_none() {
 }
 ```
 
-- [ ] **Step 2: Run them to make sure they fail**
+- [x] **Step 2: Run them to make sure they fail**
 
 Run: `cargo test -p fp-model --test pending_start q8_8` and `cargo test -p fp-model --test pending_start a_broken_pending_start`
 
 Expected: a compile error, because there is no field `pending_start` on `PlayerSession`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `crates/fp-model/src/session.rs`: add to `PlayerSession`, after `history`:
 
@@ -2393,13 +2393,13 @@ In `crates/fp-model/tests/session.rs`, add `pending_start: None,` after `history
 
 Check that no other file builds a `PlayerSession` literal: `grep -rn "PlayerSession {" crates --include=*.rs`. Add the field wherever the grep finds one.
 
-- [ ] **Step 4: Run the tests to make sure they pass**
+- [x] **Step 4: Run the tests to make sure they pass**
 
 Run: `cargo test -p fp-model --test pending_start`, then `cargo test -p fp-model`, then `cargo test -p fp-store`
 
 Expected: PASS. `fp-store` loads `session.json` through this type.
 
-- [ ] **Step 5: Docs**
+- [x] **Step 5: Docs**
 
 In `docs/technical/persistence.md`, in the `data/session.json` row, after the `history: …` part of the `players[]` list, add:
 
@@ -2407,7 +2407,7 @@ In `docs/technical/persistence.md`, in the `data/session.json` row, after the `h
 , pending_start: `[entry, secs]`, where Play starts the next entry of a stopped player (rule 3a); kept only while that entry is still the next, loaded leniently (anything that does not parse is none)
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \

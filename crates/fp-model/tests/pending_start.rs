@@ -11,8 +11,8 @@ mod common;
 
 use common::{entries, fixture, p0};
 use fp_model::{
-    AppState, Command, EngineAction, EngineEvent, EntryId, MarkerKind, PlayerId, TrackAnalysis,
-    Transport, apply, on_event,
+    AppState, Command, EngineAction, EngineEvent, EntryId, MarkerKind, PlayerId, PlayerSession,
+    RestoreParts, TrackAnalysis, Transport, apply, on_event,
 };
 
 fn set_cue_in(s: &mut AppState, entry: EntryId, secs: f64) {
@@ -311,4 +311,68 @@ fn a_pending_start_is_clamped_again_when_the_analysis_moves_the_cue_in() {
     .unwrap();
     assert_eq!(pending(&s, p), Some((e[0], 4.0)));
     assert_eq!(preloads(&actions, p), vec![(e[0], 4.0)]);
+}
+
+fn restore(state: &AppState, sessions: &[PlayerSession]) -> (AppState, Vec<EngineAction>) {
+    let parts = RestoreParts {
+        config: state.config.clone(),
+        library: state.library.clone(),
+        playlists: state.playlists.clone(),
+        cart_pages: state.cartwall.pages.clone(),
+        cartwall_session: state.cartwall.session(),
+        ids: state.ids.clone(),
+    };
+    AppState::restore(parts, sessions, "Main")
+}
+
+#[test]
+fn q8_8_the_session_keeps_a_pending_start_while_its_entry_is_still_next() {
+    let mut s = fixture(3);
+    let (e, p) = (entries(&s), p0(&s));
+    apply(&mut s, Command::Seek(p, 30.0)).unwrap();
+    let (restored, actions) = restore(&s, &s.sessions(|_| 0.0));
+    assert_eq!(pending(&restored, p), Some((e[0], 30.0)));
+    assert_eq!(restored.player(p).unwrap().transport, Transport::Stopped);
+    assert_eq!(preloads(&actions, p), vec![(e[0], 30.0)]);
+    assert!(
+        actions.iter().all(|a| !matches!(
+            a,
+            EngineAction::StartCurrent { .. } | EngineAction::LoadPaused { .. }
+        )),
+        "nothing goes on air by itself: {actions:?}"
+    );
+}
+
+#[test]
+fn q8_8_a_pending_start_whose_entry_is_no_longer_next_is_dropped_on_restore() {
+    let mut s = fixture(3);
+    let (e, p) = (entries(&s), p0(&s));
+    apply(&mut s, Command::Seek(p, 30.0)).unwrap();
+    let mut sessions = s.sessions(|_| 0.0);
+    sessions[0].next = Some(e[1]);
+    sessions[0].next_explicit = true;
+    let (restored, _) = restore(&s, &sessions);
+    assert_eq!(pending(&restored, p), None);
+}
+
+#[test]
+fn a_broken_pending_start_in_the_session_file_loads_as_none() {
+    for value in [
+        serde_json::json!("garbage"),
+        serde_json::json!([1, null]),
+        serde_json::json!({"entry": 1}),
+    ] {
+        let json = serde_json::json!({
+            "id": 1,
+            "playlist": 1,
+            "next": 5,
+            "pending_start": value,
+        });
+        let session: PlayerSession = serde_json::from_value(json).unwrap();
+        assert_eq!(session.pending_start, None, "{value}");
+        assert_eq!(session.next, Some(EntryId(5)), "the rest still loads");
+    }
+    let old: PlayerSession =
+        serde_json::from_value(serde_json::json!({"id": 1, "playlist": 1})).unwrap();
+    assert_eq!(old.pending_start, None, "files written before Q8");
 }

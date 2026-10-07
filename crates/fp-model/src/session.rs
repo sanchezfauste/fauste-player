@@ -35,6 +35,10 @@ pub struct PlayerSession {
     /// Entries the player left, oldest first (R25).
     #[serde(default, deserialize_with = "lenient_history")]
     pub history: Vec<EntryId>,
+    /// Rule 3a (operator feedback 4, Q8.8): where Play starts the next,
+    /// kept only while that entry is still the next.
+    #[serde(default, deserialize_with = "lenient_pending_start")]
+    pub pending_start: Option<(EntryId, f64)>,
 }
 
 /// Column widths that do not parse load as the default layout.
@@ -62,6 +66,23 @@ fn lenient_history<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<EntryId
     Ok(match Lenient::deserialize(d)? {
         Lenient::Entries(entries) => entries,
         Lenient::Other(_) => Vec::new(),
+    })
+}
+
+/// A pending start that does not parse loads as none: it only changes
+/// where Play starts.
+fn lenient_pending_start<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<(EntryId, f64)>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Lenient {
+        Valid(Option<(EntryId, f64)>),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Lenient::deserialize(d)? {
+        Lenient::Valid(v) => v.filter(|(_, secs)| secs.is_finite()),
+        Lenient::Other(_) => None,
     })
 }
 
@@ -101,6 +122,7 @@ impl AppState {
                 volume: p.volume,
                 columns: p.columns.clone(),
                 history: p.history.clone(),
+                pending_start: p.pending_start,
             })
             .collect()
     }
@@ -255,6 +277,11 @@ fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     player.current = current;
     player.next = next;
     player.next_explicit = next_explicit;
+    // Q8.8: only on a stopped player, for its next; `reconcile` clamps it
+    // to the play range (`pending_start::settle`).
+    player.pending_start = s
+        .pending_start
+        .filter(|(e, secs)| current.is_none() && Some(*e) == next && secs.is_finite());
     player.transport = if current.is_some() {
         Transport::Paused
     } else {

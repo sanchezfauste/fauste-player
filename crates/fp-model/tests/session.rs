@@ -60,6 +60,7 @@ fn dangling_session_references_are_dropped() {
         volume: 7.0,
         columns: Default::default(),
         history: Vec::new(),
+        pending_start: None,
     };
     let (restored, actions) = AppState::restore(parts(&state), &[session], "Main");
     let player = &restored.players[0];
@@ -105,6 +106,7 @@ fn restoring_with_no_playlists_creates_a_default_one_and_moves_ids_forward() {
         volume: 0.5,
         columns: Default::default(),
         history: Vec::new(),
+        pending_start: None,
     };
     let (mut restored, _) = AppState::restore(parts, &[duplicate.clone(), duplicate], "Main");
     assert_eq!(restored.playlists.len(), 1);
