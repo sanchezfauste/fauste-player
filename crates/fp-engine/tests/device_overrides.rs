@@ -212,3 +212,55 @@ fn a_device_whose_own_rate_does_not_open_falls_back_to_the_global_rate() {
     let dac = r.dac.config().expect("reopened");
     assert_eq!(dac.sample_rate, 48_000);
 }
+
+/// Lets the watchdog retry for 20 s of ticks.
+fn let_the_watchdog_retry(r: &mut Rig) {
+    for _ in 0..200 {
+        r.clock += Duration::from_millis(100);
+        r.engine.tick(r.clock);
+    }
+}
+
+#[test]
+fn a_device_whose_own_buffer_does_not_open_falls_back_to_the_global_buffer() {
+    let mut r = rig_with(
+        |d| d.refuse_buffer(256),
+        |c| c.outputs.set_device_buffer(&dev("dac"), Some(256)),
+    );
+    assert!(r.dac.config().is_none(), "256 frames are refused");
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened");
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (48_000, 512));
+}
+
+#[test]
+fn a_device_whose_own_rate_and_buffer_do_not_open_falls_back_to_both_globals() {
+    let mut r = rig_with(
+        |d| {
+            d.refuse_rate(96_000);
+            d.refuse_buffer(256);
+        },
+        |c| {
+            c.outputs.set_device_rate(&dev("dac"), Some(96_000));
+            c.outputs.set_device_buffer(&dev("dac"), Some(256));
+        },
+    );
+    assert!(r.dac.config().is_none());
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened");
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (48_000, 512));
+}
+
+#[test]
+fn a_source_plays_on_after_the_buffer_fallback() {
+    let mut r = rig_with(
+        |d| d.refuse_buffer(256),
+        |c| c.outputs.set_device_buffer(&dev("dac"), Some(256)),
+    );
+    let_the_watchdog_retry(&mut r);
+    let path = indexed_wav(r.dir.path(), "a.wav", 48_000, 2, 48_000 * 4);
+    r.start(request(path, pcm16(48_000)));
+    r.run(48_000);
+    let t = r.engine.telemetry(P).position_secs.expect("playing");
+    assert!((t - 1.0).abs() < 0.05, "{t}");
+}

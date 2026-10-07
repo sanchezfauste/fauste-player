@@ -25,6 +25,7 @@ struct DeviceState {
     open: Option<Open>,
     exclusive_capable: bool,
     refused_rates: HashSet<u32>,
+    refused_buffers: HashSet<u32>,
     open_attempts: u64,
     /// Opens still to fail with `Busy`.
     busy_opens: u64,
@@ -147,6 +148,11 @@ impl OfflineDevice {
     /// Makes opens at `rate` fail with `Unsupported`.
     pub fn refuse_rate(&self, rate: u32) {
         lock(&self.state).refused_rates.insert(rate);
+    }
+
+    /// Makes opens with a buffer of `frames` fail with `Unsupported`.
+    pub fn refuse_buffer(&self, frames: u32) {
+        lock(&self.state).refused_buffers.insert(frames);
     }
 
     /// Makes the next `opens` opens on this device that it would accept
@@ -339,6 +345,12 @@ impl AudioBackend for OfflineBackend {
             return Err(BackendError::Unsupported(format!(
                 "{} Hz is not supported",
                 config.sample_rate
+            )));
+        }
+        if state.refused_buffers.contains(&config.buffer_frames) {
+            return Err(BackendError::Unsupported(format!(
+                "a buffer of {} frames is not supported",
+                config.buffer_frames
             )));
         }
         // After the refusals: a configuration the device refuses is refused

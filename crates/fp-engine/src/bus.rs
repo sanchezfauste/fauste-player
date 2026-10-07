@@ -152,10 +152,12 @@ pub struct Bus {
     /// The device came back from a loss unable to carry the DSD stream it
     /// had, and was reopened as PCM (read once by `take_dsd_lost`).
     dsd_lost: bool,
-    /// The PCM configuration the device ran before it carried DSD: the
-    /// watchdog falls back to it when the stored rate does not open (a
+    /// The PCM configuration the watchdog falls back to when the stored
+    /// one does not open: the one the device ran before it carried DSD (a
     /// device that takes native DSD at a word rate need not take that rate
-    /// as PCM). Forgotten once the bus changes PCM rate by itself.
+    /// as PCM), or the global rate and buffer for a device with its own
+    /// (operator feedback 4, Q12). Forgotten once the bus changes PCM rate
+    /// by itself.
     pcm_fallback: Option<StreamConfig>,
     /// The watchdog reopened the device at `pcm_fallback`: the rate the
     /// bus ran before (read once by `take_rate_change`).
@@ -441,23 +443,28 @@ impl Bus {
         false
     }
 
-    /// After the stored PCM rate did not open: opens the device at
-    /// `pcm_fallback` when that is another rate, keeping the mixer's
-    /// durations in time; `rate_change` tells the engine, which opens the
-    /// sources again at the new rate. Otherwise the configuration stays.
+    /// After the stored PCM configuration did not open: opens the device
+    /// with `pcm_fallback` when that has another rate or buffer, keeping
+    /// the mixer's durations in time; on a rate change `rate_change` tells
+    /// the engine, which opens the sources again at the new rate (a buffer
+    /// change alone leaves them as they are). Otherwise the configuration
+    /// stays.
     fn open_pcm_fallback(&mut self, now: Instant) -> bool {
-        let Some(fallback) = self
-            .pcm_fallback
-            .filter(|f| f.sample_rate != self.config.sample_rate)
-        else {
+        let Some(fallback) = self.pcm_fallback.filter(|f| {
+            f.sample_rate != self.config.sample_rate || f.buffer_frames != self.config.buffer_frames
+        }) else {
             return false;
         };
         let previous = self.config;
         self.config = fallback;
         self.follow_rate(previous.sample_rate, fallback.sample_rate);
         if self.try_open(now, true).is_ok() {
-            tracing::warn!(bus = ?self.key, from = previous.sample_rate, to = fallback.sample_rate, "the device did not take its rate; playing at the fallback rate");
-            self.rate_change = Some(previous.sample_rate);
+            if previous.sample_rate == fallback.sample_rate {
+                tracing::warn!(bus = ?self.key, from = previous.buffer_frames, to = fallback.buffer_frames, "the device did not take its buffer size; playing with the fallback buffer");
+            } else {
+                tracing::warn!(bus = ?self.key, from = previous.sample_rate, to = fallback.sample_rate, buffer = fallback.buffer_frames, "the device did not take its rate; playing at the fallback rate");
+                self.rate_change = Some(previous.sample_rate);
+            }
             return true;
         }
         self.config = previous;

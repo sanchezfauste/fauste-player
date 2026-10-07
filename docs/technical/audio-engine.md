@@ -176,10 +176,11 @@ cannot hang the conductor.
   only the overrides of devices a route names (`routed_devices`), so the
   system-default output opens at the global values; the model removes
   the overrides, bit-perfect and DSD entries of a device that leaves every
-  route (`forget_unrouted_devices`). A bus with its own
-  rate keeps the global rate and buffer as its `pcm_fallback`: when the
-  own rate does not open, the watchdog reopens the device there (warn
-  log). The mixer's smoothing and declick
+  route (`forget_unrouted_devices`). A bus with its own rate or buffer
+  keeps the global rate and buffer as its `pcm_fallback`: when its own
+  values do not open, the watchdog reopens the device with the global ones
+  (warn log). A rate change opens the sources on it again
+  (`follow_forced_rate`); a buffer change alone leaves them as they are. The mixer's smoothing and declick
   lengths are in that rate's frames, and the one-block margins use the bus's
   own buffer (`Engine::buffer_of`). Every
   seconds↔frames conversion for a source uses the rate of that source's bus:

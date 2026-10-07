@@ -90,7 +90,8 @@ none.
 
   Only safe APIs are used, and `forbid(unsafe_code)` holds.
 - Offline devices can be marked capable (`set_exclusive_capable`) or made to
-  refuse a rate (`refuse_rate`), for tests.
+  refuse a rate (`refuse_rate`) or a buffer size (`refuse_buffer`), for
+  tests.
 - Null refuses `exclusive`, so a bus on it plays shared and never claims to
   be bit-perfect.
 

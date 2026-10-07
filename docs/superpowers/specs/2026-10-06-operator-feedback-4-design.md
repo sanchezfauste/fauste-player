@@ -697,7 +697,8 @@ In short:
   longer stays in the configuration.)
 - a saved own rate or buffer the device no longer reports stays listed with
   a note, and a bus whose own rate does not open falls back to the global
-  rate and buffer through `pcm_fallback`;
+  rate and buffer through `pcm_fallback` (and, after plan 5, so does a
+  bus whose own buffer does not open; see below);
 - `advanced_in_use` counts the DSD mix and silence only with a routed device;
 - the Advanced rows list the devices that routes name (`routed_devices`);
   a player on the system default output gets no rows;
@@ -751,6 +752,18 @@ Task 7, the check on real hardware, is not done.
     DSD mode) — the configuration did change, and
     both need the same restart — cost if wrong: a filter in
     `restart_pending`.
+- **A refused own buffer falls back to the global buffer**, like a refused
+  own rate. `ensure_bus` gives a bus the global rate and buffer as its
+  `pcm_fallback` when its device has its own rate or its own buffer (before,
+  only its own rate), and `Bus::open_pcm_fallback` uses it when it differs
+  in the rate or in the buffer. When the device does not take its own
+  values, the watchdog reopens it with the global ones: the global buffer
+  alone when only the buffer was its own, both when both were. The log is
+  the same warn line as the rate fallback's (one for the buffer, which says
+  so); a buffer change alone does not open the sources again, since their
+  timelines are in the same rate. As before, there is no on-screen notice.
+  Tests: `fp-engine/tests/device_overrides.rs`, with
+  `OfflineDevice::refuse_buffer`.
 
 ---
 
