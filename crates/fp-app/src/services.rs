@@ -461,6 +461,12 @@ impl Services {
         self.stamps.values().filter(|s| **s != Seen::New).count()
     }
 
+    /// How many tracks wait with a Re-analyse urgent mark.
+    #[cfg(feature = "test-hooks")]
+    pub fn urgent_marks(&self) -> usize {
+        self.urgent.len()
+    }
+
     /// How many times an unreadable file was reported gone to the model.
     #[cfg(feature = "test-hooks")]
     pub fn gone_reports(&self) -> usize {
@@ -584,6 +590,7 @@ impl Services {
         self.retried.clear();
         self.stamps.clear();
         self.failed_at.clear();
+        self.urgent.clear();
         self.forced = state.library.iter().map(|t| t.id).collect();
     }
 
@@ -890,7 +897,9 @@ impl Services {
             if analyse || show {
                 self.forced.remove(&id);
                 self.in_flight.insert(id);
-                if wanted.contains(&id) || self.urgent.remove(&id) {
+                // The mark is used up whichever way the track goes urgent.
+                let asked = self.urgent.remove(&id);
+                if wanted.contains(&id) || asked {
                     self.analyzer.submit_urgent(id, track.path.clone());
                 } else {
                     self.analyzer.submit(id, track.path.clone());

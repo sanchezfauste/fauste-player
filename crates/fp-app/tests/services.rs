@@ -999,13 +999,86 @@ fn an_unreadable_file_that_disappeared_is_reported_once() {
     assert_eq!(r.services.gone_reports(), 1);
 }
 
-/// Q10.4: the row menu's Re-analyse does not wait for a change.
+/// Q10.4: the row menu's Re-analyse does not wait for a change, forgets the
+/// failure and goes ahead of the library.
 #[test]
 fn reanalyse_track_analyses_a_failed_file_at_once_whatever_its_state() {
     let dir = tempfile::tempdir().unwrap();
     let bad = garbage(dir.path(), "bad.wav");
-    let mut r = recheck_rig(&[bad], dir);
-    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    let mut files = vec![bad.clone()];
+    files.extend((1..=6).map(|n| wav(dir.path(), &format!("{n}.wav"), 1)));
+    // The analyses in the order they end; each good file takes a while, so
+    // the library is still queued when the operator asks.
+    let order = Arc::new(std::sync::Mutex::new(Vec::<PathBuf>::new()));
+    let seen = order.clone();
+    let slow = bad.clone();
+    let after: AfterAnalysis = Arc::new(move |path| {
+        if path != slow {
+            std::thread::sleep(Duration::from_millis(150));
+        }
+        seen.lock().unwrap().push(path.to_path_buf());
+    });
+    let mut r = rig_hooked(
+        &files,
+        dir,
+        Duration::ZERO,
+        |s| {
+            s.config.tuning.missing_recheck_ms = 1_000.0;
+            // The failed file is on no player, so only Re-analyse makes it
+            // urgent.
+            let second = s.playlists.iter().next().unwrap().entries[1].id;
+            let players: Vec<_> = s.players.iter().map(|p| p.id).collect();
+            for p in players {
+                fp_model::apply(s, Command::SetNext(p, second)).unwrap();
+            }
+        },
+        after,
+    );
+    let track = r
+        .handle
+        .model
+        .load()
+        .library
+        .iter()
+        .find(|t| t.path == bad)
+        .unwrap()
+        .id;
+    r.run_until("unreadable and stamped", |r| {
+        r.handle.model.load().library.get(track).unwrap().file_state == FileState::Unreadable
+            && r.services.looked_at() == 1
+    });
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(track))
+        .unwrap();
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    assert_eq!(
+        r.services.looked_at(),
+        0,
+        "the recorded failure is forgotten"
+    );
+    let twice = |order: &[PathBuf]| order.iter().filter(|p| **p == bad).count() == 2;
+    r.run_until("a second analysis", |_| twice(&order.lock().unwrap()));
+    let goods = order.lock().unwrap().iter().filter(|p| **p != bad).count();
+    assert!(goods < 6, "{goods} library files were analysed first");
+    r.run_until("stamped again", |r| r.services.looked_at() == 1);
+}
+
+/// The urgent mark of a Re-analyse is used once, even when the track went
+/// to the urgent queue anyway (it is on a player).
+#[test]
+fn reanalysing_a_track_on_a_player_leaves_no_urgent_mark() {
+    let dir = tempfile::tempdir().unwrap();
+    let good = wav(dir.path(), "good.wav", 1);
+    let mut r = rig_with(&[good], dir, Duration::ZERO, |s| {
+        let p = s.players[0].id;
+        let first = s.playlists.iter().next().unwrap().entries[0].id;
+        fp_model::apply(s, Command::SetNext(p, first)).unwrap();
+    });
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
     let track = r.handle.model.load().library.iter().next().unwrap().id;
     r.services
         .requests()
@@ -1014,6 +1087,7 @@ fn reanalyse_track_analyses_a_failed_file_at_once_whatever_its_state() {
     r.run_until("a second analysis", |r| {
         r.analyses.load(Ordering::SeqCst) == 2
     });
+    assert_eq!(r.services.urgent_marks(), 0);
 }
 
 /// Q10.1 and Q10.4: a track that playback marked unreadable is looked at
