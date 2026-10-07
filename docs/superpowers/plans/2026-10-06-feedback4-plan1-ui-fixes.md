@@ -76,7 +76,7 @@ Suggested executor: `sonnet`.
 - Consumes: `TileStyle`, `theme::{AMBER_BG, AMBER_TEXT, AMBER_DIM}`, `Scene::time` (seconds since start).
 - Produces: `pub fn widgets::blink(time: f64) -> bool` (true for the first half of each second), `pub fn widgets::paused_style(blink: bool) -> TileStyle`, `pub fn view::animating(state: &AppState) -> bool` (a player is playing, fading or has a CUE, paused or not).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `crates/fp-app/tests/blink.rs`:
 
@@ -178,7 +178,7 @@ fn a_paused_cue_keeps_the_interface_repainting() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test blink`
 Expected: FAIL to compile (`blink` and `paused_style` not found).
@@ -186,7 +186,7 @@ Expected: FAIL to compile (`blink` and `paused_style` not found).
 Run: `cargo test -p fp-app --test cue_window a_paused_cue`
 Expected: FAIL to compile (`animating` not found).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `widgets.rs`, after `impl TileStyle`:
 
@@ -252,12 +252,12 @@ pub fn animating(state: &AppState) -> bool {
 
 In `app.rs`, replace the `let busy = state.players.iter().any(...)` block (L863–866) with `let busy = view::animating(&state);` (add `view` to the `super::` imports if it is not in scope).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test blink`, `cargo test -p fp-app --test cue_window`
 Expected: PASS (all, including the ones that were there).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cargo fmt --all

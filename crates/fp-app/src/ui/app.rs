@@ -16,7 +16,7 @@ use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
 use fp_model::{
     AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, RestartReason,
-    ShortcutAction, TrackId, Transport,
+    ShortcutAction, TrackId,
 };
 
 use super::about::{self, NoticeOpener};
@@ -860,10 +860,7 @@ impl AppUi {
         if take_drops && self.view.tag_editor.is_none() && self.view.confirm_reset.is_none() {
             self.file_drops(&ctx, &state);
         }
-        let busy = state
-            .players
-            .iter()
-            .any(|p| p.transport == Transport::Playing || p.fading || p.cue.is_some());
+        let busy = super::view::animating(&state);
         if busy {
             ctx.request_repaint();
         } else {

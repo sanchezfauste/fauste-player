@@ -10,11 +10,12 @@ mod support;
 
 use std::sync::Arc;
 
-use egui::{Event, Modifiers, PointerButton, pos2};
+use egui::{Color32, Event, Modifiers, PointerButton, pos2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::app::AppUi;
 use fp_app::ui::controller::Controller;
+use fp_app::ui::theme;
 use fp_model::Command;
 use support::{Fake, harness, state};
 
@@ -223,4 +224,65 @@ fn the_set_as_next_button_is_wide_enough_for_its_icon_and_text() {
         "button {} px, text {needed} px",
         rect.width()
     );
+}
+
+/// The fill the tile named `label` is drawn with in the last frame: the
+/// first rectangle painted at its rectangle is its background.
+fn tile_fill(h: &Harness<'_, AppUi>, label: &str) -> Color32 {
+    let rect = h.get_by_label(label).rect();
+    h.output()
+        .shapes
+        .iter()
+        .find_map(|s| match &s.shape {
+            egui::Shape::Rect(r)
+                if r.rect.expand(0.5).contains_rect(rect)
+                    && rect.expand(0.5).contains_rect(r.rect) =>
+            {
+                Some(r.fill)
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no tile drawn at {rect:?}"))
+}
+
+/// The fills `label` takes over 1.2 s of frames (60 steps of 20 ms).
+fn fills_over_a_second(
+    h: &mut Harness<'_, AppUi>,
+    label: &str,
+) -> std::collections::HashSet<Color32> {
+    let mut fills = std::collections::HashSet::new();
+    for _ in 0..60 {
+        h.step();
+        fills.insert(tile_fill(h, label));
+    }
+    fills
+}
+
+#[test]
+fn a_paused_cue_blinks_its_resume_button_amber() {
+    let (mut h, fake) = cueing(1);
+    // Sent to the model directly: a click would leave the pointer on the
+    // tile and its hover fill would hide the blink.
+    fake.send(Command::SetCuePaused(fake.player(0), true));
+    h.run_steps(2);
+    let fills = fills_over_a_second(&mut h, RESUME);
+    assert!(
+        fills.contains(&theme::AMBER_BG) && fills.contains(&Color32::TRANSPARENT),
+        "{fills:?}"
+    );
+}
+
+#[test]
+fn a_running_cue_does_not_blink() {
+    let (mut h, _fake) = cueing(1);
+    let fills = fills_over_a_second(&mut h, PAUSE);
+    assert_eq!(fills.len(), 1, "{fills:?}");
+}
+
+#[test]
+fn a_paused_cue_keeps_the_interface_repainting() {
+    let (_h, fake) = cueing(1);
+    fake.send(Command::SetCuePaused(fake.player(0), true));
+    assert!(fp_app::ui::view::animating(&fake.state.load()));
+    assert!(!fp_app::ui::view::animating(&state(1, 3)));
 }

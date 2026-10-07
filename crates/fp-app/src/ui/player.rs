@@ -641,7 +641,7 @@ impl GridButton {
 
 fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
     let t = scene.i18n;
-    let blink = (scene.time * 2.0).floor() as i64 % 2 == 0;
+    let blink = widgets::blink(scene.time);
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), PLAY_SIZE),
         Layout::left_to_right(Align::Center),
@@ -699,19 +699,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             let small = vec2((PLAY_SIZE - GAP) / 2.0, (PLAY_SIZE - GAP) / 2.0);
             let paused = pv.status == PlayerStatus::Paused;
             let pause_style = if paused {
-                TileStyle {
-                    fill: if blink {
-                        theme::AMBER_BG
-                    } else {
-                        Color32::TRANSPARENT
-                    },
-                    content: if blink {
-                        theme::AMBER_TEXT
-                    } else {
-                        theme::AMBER_DIM
-                    },
-                    ..TileStyle::plain()
-                }
+                widgets::paused_style(blink)
             } else {
                 TileStyle::plain()
             };

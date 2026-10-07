@@ -374,6 +374,16 @@ pub fn volume_db(gain: f32) -> Option<f32> {
     (gain > 0.0 && !gain.is_nan()).then(|| 20.0 * gain.log10())
 }
 
+/// Something on screen moves on its own (a meter, a countdown, a blinking
+/// Pause button): the interface repaints every frame instead of at the idle
+/// rate. A paused CUE still has its `cue`, so its window keeps blinking.
+pub fn animating(state: &AppState) -> bool {
+    state
+        .players
+        .iter()
+        .any(|p| p.transport == Transport::Playing || p.fading || p.cue.is_some())
+}
+
 /// The text a table cell shows for `column` (feedback 2 spec O24). The `#`
 /// column draws its own icon and number, so it has none here. A column the
 /// track has no value for is empty; the times follow the play range
