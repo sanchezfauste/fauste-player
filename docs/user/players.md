@@ -174,7 +174,8 @@ The window shows:
   the outro counts down to the end of the file. Its zoom is its own: the
   player's waveform does not move. While the CUE plays, a zoomed view
   follows its position as the player's does; a paused CUE keeps the view you
-  set, so you can zoom in and place markers;
+  set, so you can zoom in and place markers. A CUE started after its window
+  closed, or on another track, shows the whole file;
 - the elapsed time and the time remaining to the end of the file (a CUE plays
   whole files);
 - **Pause** / **Resume**, **Stop** and **Set as next**. **Set as next**
