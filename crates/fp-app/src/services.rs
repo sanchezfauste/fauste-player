@@ -17,10 +17,15 @@ use fp_engine::conductor::ConductorHandle;
 use fp_model::{AnalysisSettings, AppState, Command, FileState, PlayerId, TrackId, Transport};
 use fp_store::Store;
 
+use crate::header::HeaderReader;
 use crate::tags::{TagJob, TagOutcome, TagWorker};
 
 /// How often the services thread wakes up when running on its own.
 const PERIOD: Duration = Duration::from_millis(50);
+
+/// How many header reads wait on the reader at once: few enough that a
+/// track loaded on a player goes ahead of a large folder just added.
+const HEADER_READS_IN_FLIGHT: usize = 8;
 
 /// The thread that looks for files not found and at unreadable files, off
 /// the services thread: a share that is offline can make each look block
@@ -362,6 +367,13 @@ pub struct Services {
     /// snapshot does not show it yet. Without it a snapshot taken before the
     /// command lands still says "unread" and the track is read twice.
     tags_answered: HashSet<TrackId>,
+    /// Reads the length of tracks not analysed yet (operator feedback 4,
+    /// Q1.1); `None` if its thread could not start.
+    header_reader: Option<HeaderReader>,
+    /// Tracks whose header was asked for (answered or not): once each.
+    headers_asked: HashSet<TrackId>,
+    /// Reads sent and not answered yet.
+    headers_in_flight: usize,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -370,6 +382,8 @@ pub struct Services {
     fail_routes: u32,
     #[cfg(feature = "test-hooks")]
     gone_reports: usize,
+    /// Reads sent since the start (a test hook reads it).
+    header_reads_sent: u64,
     saved_version: u64,
     dirty_since: Option<Instant>,
     last_session_save: Option<Instant>,
@@ -411,6 +425,13 @@ impl Services {
                 .ok(),
             tags_in_flight: HashSet::new(),
             tags_answered: HashSet::new(),
+            header_reader: HeaderReader::spawn()
+                .map_err(|e| {
+                    tracing::error!(error = %e, "cannot start the header reader; lengths wait for the analysis");
+                })
+                .ok(),
+            headers_asked: HashSet::new(),
+            headers_in_flight: 0,
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -418,6 +439,7 @@ impl Services {
             fail_routes: 0,
             #[cfg(feature = "test-hooks")]
             gone_reports: 0,
+            header_reads_sent: 0,
             saved_version: 0,
             dirty_since: None,
             last_session_save: None,
@@ -453,6 +475,13 @@ impl Services {
     #[cfg(feature = "test-hooks")]
     pub fn tag_pass_on(&mut self, state: &AppState) {
         self.tag_pass(state);
+    }
+
+    /// How many header reads were sent. Used to test that a track is
+    /// asked once.
+    #[cfg(feature = "test-hooks")]
+    pub fn header_reads_sent(&self) -> u64 {
+        self.header_reads_sent
     }
 
     /// How many unreadable tracks have had their first look answered.
@@ -516,6 +545,7 @@ impl Services {
         self.follow_settings(state);
         self.recheck_missing(state, now);
         self.submit_new(state);
+        self.header_pass(state);
         self.tag_pass(state);
         let wanted = Self::wanted(state);
         let results: Vec<AnalysisResult> = self.analyzer.results().try_iter().collect();
@@ -839,6 +869,47 @@ impl Services {
                     self.tags_answered.insert(track);
                 }
             }
+        }
+    }
+
+    /// Operator feedback 4, Q1.1: tracks with no length and no analysis get
+    /// the length their file's header declares, read on the header reader,
+    /// the ones on a player first. Each track is asked once per session,
+    /// unless its command could not be queued.
+    fn header_pass(&mut self, state: &AppState) {
+        let Some(reader) = &self.header_reader else {
+            return;
+        };
+        let answers: Vec<(TrackId, Option<f64>)> = reader.answers().try_iter().collect();
+        for (track, secs) in answers {
+            self.headers_in_flight = self.headers_in_flight.saturating_sub(1);
+            if let Some(secs) = secs
+                && !self.conductor.send(Command::SetDuration { track, secs })
+            {
+                // The queue is full: ask again on a later round.
+                self.headers_asked.remove(&track);
+            }
+        }
+        self.headers_asked
+            .retain(|id| state.library.get(*id).is_some());
+        let wanted = Self::wanted(state);
+        let mut todo: Vec<&fp_model::Track> = state
+            .library
+            .iter()
+            .filter(|t| t.needs_header_duration() && !self.headers_asked.contains(&t.id))
+            .collect();
+        // The tracks on a player first; the sort is stable.
+        todo.sort_by_key(|t| !wanted.contains(&t.id));
+        let room = HEADER_READS_IN_FLIGHT.saturating_sub(self.headers_in_flight);
+        for track in todo.into_iter().take(room) {
+            if !reader.submit(track.id, track.path.clone()) {
+                tracing::error!("the header reader stopped; lengths wait for the analysis");
+                self.header_reader = None;
+                return;
+            }
+            self.headers_asked.insert(track.id);
+            self.headers_in_flight += 1;
+            self.header_reads_sent += 1;
         }
     }
 

@@ -243,6 +243,16 @@ The services thread submits tracks when either:
   *Re-analyse all*, so an unchanged file whose analysis is cached comes back
   playable and fails again on the next playback.
 
+The **header reader** (`fp-header-reader`, `fp-app/src/header.rs`, driven
+by `Services::header_pass`) gives a track a length before its analysis
+(operator feedback 4, Q1.1). Each track with no length, no analysis and a
+playable file (`Track::needs_header_duration`) is read once: the file's
+header only (`FileDecoder::duration_hint_secs`), the tracks on a player
+first, at most eight reads waiting at a time. A length goes to the model as
+`Command::SetDuration`; a file that has none (or cannot be opened) gets
+nothing and waits for its analysis. A panic while reading is caught and
+logged.
+
 A **tag-only pass** reads the tags of tracks that were analysed but not read
 since: `Track::needs_tag_read` (analysed, readable, `tags_read` false) selects
 them and `Services::tag_pass` sends a `TagJob::Read` for each to the `fp-tags`

@@ -1208,7 +1208,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
   - `pub struct fp_app::header::HeaderReader` with `spawn() -> std::io::Result<Self>`, `submit(&self, TrackId, PathBuf) -> bool` and `answers(&self) -> &Receiver<(TrackId, Option<f64>)>`;
   - the test hook `#[cfg(feature = "test-hooks")] pub fn Services::header_reads_sent(&self) -> u64`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/fp-app/tests/services.rs`:
 
@@ -1278,13 +1278,13 @@ fn a_track_on_a_player_gets_its_header_duration_ahead_of_the_library() {
 }
 ```
 
-- [ ] **Step 2: Run them to make sure they fail**
+- [x] **Step 2: Run them to make sure they fail**
 
 Run: `cargo test -p fp-app --test services header`
 
 Expected: a compile error, because there is no method `header_reads_sent`.
 
-- [ ] **Step 3: Implement the reader**
+- [x] **Step 3: Implement the reader**
 
 `crates/fp-app/src/header.rs`:
 
@@ -1350,7 +1350,7 @@ impl HeaderReader {
 }
 ```
 
-- [ ] **Step 4: Wire it into `Services`**
+- [x] **Step 4: Wire it into `Services`**
 
 In `crates/fp-app/src/services.rs`:
 - add `use crate::header::HeaderReader;` next to `use crate::tags::…`;
@@ -1449,13 +1449,13 @@ After `tag_pass_on`:
 
 `fp-app` already depends on `fp-decode` (`crates/fp-app/Cargo.toml`), so there is no dependency change.
 
-- [ ] **Step 5: Run the tests to make sure they pass**
+- [x] **Step 5: Run the tests to make sure they pass**
 
 Run: `cargo test -p fp-app --test services`
 
 Expected: PASS, the three new tests and the existing ones.
 
-- [ ] **Step 6: Docs**
+- [x] **Step 6: Docs**
 
 In `docs/technical/analysis.md`, §"How the app uses it", after the paragraph about the probe thread (`fp-file-probe`), add:
 
@@ -1471,7 +1471,7 @@ nothing and waits for its analysis. A panic while reading is caught and
 logged.
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \
