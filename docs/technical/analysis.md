@@ -249,8 +249,9 @@ by `Services::header_pass`) gives a track a length before its analysis
 playable file (`Track::needs_header_duration`) is read once: the file's
 header only (`FileDecoder::duration_hint_secs`), the tracks on a player
 first, at most eight reads waiting at a time. A length goes to the model as
-`Command::SetDuration`; a file that has none (or cannot be opened) gets
-nothing and waits for its analysis. A panic while reading is caught and
+`Command::SetDuration`; when the conductor's queue is full it is kept and
+sent on a later round, without reading the file again. A file that has none
+(or cannot be opened) gets nothing and waits for its analysis. A panic while reading is caught and
 logged.
 
 A **tag-only pass** reads the tags of tracks that were analysed but not read

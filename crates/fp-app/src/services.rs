@@ -374,6 +374,9 @@ pub struct Services {
     headers_asked: HashSet<TrackId>,
     /// Reads sent and not answered yet.
     headers_in_flight: usize,
+    /// Lengths read whose command could not be queued (the conductor's
+    /// queue was full): sent again on a later round, not read again.
+    headers_unsent: HashMap<TrackId, f64>,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -432,6 +435,7 @@ impl Services {
                 .ok(),
             headers_asked: HashSet::new(),
             headers_in_flight: 0,
+            headers_unsent: HashMap::new(),
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -482,6 +486,12 @@ impl Services {
     #[cfg(feature = "test-hooks")]
     pub fn header_reads_sent(&self) -> u64 {
         self.header_reads_sent
+    }
+
+    /// How many header reads were sent and not answered yet.
+    #[cfg(feature = "test-hooks")]
+    pub fn header_reads_in_flight(&self) -> usize {
+        self.headers_in_flight
     }
 
     /// How many unreadable tracks have had their first look answered.
@@ -874,20 +884,32 @@ impl Services {
 
     /// Operator feedback 4, Q1.1: tracks with no length and no analysis get
     /// the length their file's header declares, read on the header reader,
-    /// the ones on a player first. Each track is asked once per session,
-    /// unless its command could not be queued.
+    /// the ones on a player first. Each track is read once per session; a
+    /// length whose command could not be queued is sent on a later round.
     fn header_pass(&mut self, state: &AppState) {
         let Some(reader) = &self.header_reader else {
             return;
         };
+        // Lengths still waiting go first, while their track still needs one.
+        let conductor = &self.conductor;
+        self.headers_unsent.retain(|track, secs| {
+            state
+                .library
+                .get(*track)
+                .is_some_and(|t| t.needs_header_duration())
+                && !conductor.send(Command::SetDuration {
+                    track: *track,
+                    secs: *secs,
+                })
+        });
         let answers: Vec<(TrackId, Option<f64>)> = reader.answers().try_iter().collect();
         for (track, secs) in answers {
             self.headers_in_flight = self.headers_in_flight.saturating_sub(1);
             if let Some(secs) = secs
                 && !self.conductor.send(Command::SetDuration { track, secs })
             {
-                // The queue is full: ask again on a later round.
-                self.headers_asked.remove(&track);
+                // The queue is full: keep the length for a later round.
+                self.headers_unsent.insert(track, secs);
             }
         }
         self.headers_asked

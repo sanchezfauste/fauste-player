@@ -1144,6 +1144,31 @@ fn a_file_whose_header_cannot_be_read_gets_no_duration_and_is_asked_once() {
     assert_eq!(r.services.header_reads_sent(), 1);
 }
 
+/// A length read while the conductor's queue is full is kept and sent
+/// later, not read from the file again.
+#[test]
+fn a_header_length_that_cannot_be_queued_is_sent_later_without_a_second_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = wav(dir.path(), "a.wav", 2);
+    let mut r = rig_slow(&[file], dir, Duration::from_secs(30));
+    let p = r.handle.model.load().players[0].id;
+    while r.handle.send(Command::SetVolume(p, 1.0)) {}
+    // Only the services run: the queue stays full while the answer comes.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while !(r.services.header_reads_sent() >= 1 && r.services.header_reads_in_flight() == 0
+        || r.services.header_reads_sent() > 1)
+    {
+        assert!(Instant::now() < deadline, "timed out waiting for the read");
+        r.services.step(r.now);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(r.services.header_reads_sent(), 1, "read again");
+    r.run_until("the header duration", |r| only_track(r).duration_secs > 0.0);
+    assert!((only_track(&r).duration_secs - 2.0).abs() < 1e-6);
+    assert_eq!(r.services.header_reads_sent(), 1);
+}
+
 /// Tracks on a player get their length ahead of a large library.
 #[test]
 fn a_track_on_a_player_gets_its_header_duration_ahead_of_the_library() {
