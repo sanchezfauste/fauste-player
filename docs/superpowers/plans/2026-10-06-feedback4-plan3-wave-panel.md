@@ -539,7 +539,7 @@ fi
     - `pub(crate) struct WavePanelOutput { pub seek: Option<f64> }`
     - `pub(crate) fn show(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, input: &WavePanelInput<'_>) -> WavePanelOutput`
 
-- [ ] **Step 1: Write the failing tests for the wheel rules**
+- [x] **Step 1: Write the failing tests for the wheel rules**
 
 Append to `crates/fp-app/tests/waveform_view.rs`:
 
@@ -597,12 +597,12 @@ mod wheel {
 }
 ```
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `cargo test -p fp-app --test waveform_view wheel`
 Expected: does not compile — "unresolved imports `fp_app::ui::wave_view::NOTCHES_PER_PAGE`, `PAN_STEP`, `POINTS_PER_NOTCH`, `ZOOM_STEP`, `wheel_notches`".
 
-- [ ] **Step 3: Move the wheel rules into `wave_view.rs`**
+- [x] **Step 3: Move the wheel rules into `wave_view.rs`**
 
 In `crates/fp-app/src/ui/wave_view.rs`, change `use egui::{Rect, pos2};` to `use egui::{MouseWheelUnit, Rect, Vec2, pos2};` and add after `fn min_span`:
 
@@ -661,7 +661,7 @@ and inside `impl WaveView`, after `pan`:
 
 Run: `cargo test -p fp-app --test waveform_view wheel` — expected: PASS.
 
-- [ ] **Step 4: Create `crates/fp-app/src/ui/wave_panel.rs`**
+- [x] **Step 4: Create `crates/fp-app/src/ui/wave_panel.rs`**
 
 The body of `show` is `player.rs::wave` (`:849-1058`) with `PlayerId`/`PlayerView` replaced by the input, and `edit_markers` is `player.rs::edit_markers` (`:1394-1551`) with `pv` replaced by `total` and `markers`. Whatever plan 2 changed inside those two functions moves along unchanged.
 
@@ -955,7 +955,7 @@ fn edit_markers(
 
 In `crates/fp-app/src/ui.rs`, add `mod wave_panel;` between `pub mod view;` and `pub mod wave_view;`.
 
-- [ ] **Step 5: Make the player a thin caller**
+- [x] **Step 5: Make the player a thin caller**
 
 In `crates/fp-app/src/ui/player.rs`:
 
@@ -1007,12 +1007,12 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
 - delete `fn edit_markers` and its doc comment (`:1394-1551`);
 - remove the imports clippy now reports unused (expected: `MarkerKind` from `fp_model`; check `RichText`, `UiBuilder` and `Rect`, which other functions of `player.rs` still use).
 
-- [ ] **Step 6: Run the whole fp-app suite: the guard of the move**
+- [x] **Step 6: Run the whole fp-app suite: the guard of the move**
 
 Run: `cargo test -p fp-app --test waveform_ui && cargo test -p fp-app --test markers_ui && cargo test -p fp-app --test waveform_view && cargo test -p fp-app --test cue_window && cargo test -p fp-app --test glyphs`
 Expected: PASS with no test edited. If any player waveform test fails, the move changed behaviour: compare the moved code with `git show HEAD:crates/fp-app/src/ui/player.rs` line by line before touching a test.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \

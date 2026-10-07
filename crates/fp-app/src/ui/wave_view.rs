@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use egui::{Rect, pos2};
+use egui::{MouseWheelUnit, Rect, Vec2, pos2};
 use fp_model::{EntryId, PlayerId};
 
 /// A player's zoomed waveform: the view, the entry it belongs to (another
@@ -87,6 +87,27 @@ pub fn min_span(bucket_secs: f64, width: f32) -> f64 {
     bucket * f64::from(width.max(1.0))
 }
 
+/// One wheel notch zooms the waveform in to this share of its span.
+pub const ZOOM_STEP: f64 = 0.8;
+/// One sideways notch pans the waveform by this share of its width.
+pub const PAN_STEP: f32 = 0.1;
+/// Smooth-scrolling wheels and trackpads report points: this many make a
+/// notch.
+pub const POINTS_PER_NOTCH: f32 = 50.0;
+/// A wheel that reports pages: one page is this many notches.
+pub const NOTCHES_PER_PAGE: f32 = 3.0;
+
+/// A wheel event in notches: a line is one, points and pages are
+/// converted, so a trackpad zooms in proportion instead of one step per
+/// event.
+pub fn wheel_notches(unit: MouseWheelUnit, delta: Vec2) -> Vec2 {
+    match unit {
+        MouseWheelUnit::Line => delta,
+        MouseWheelUnit::Point => delta / POINTS_PER_NOTCH,
+        MouseWheelUnit::Page => delta * NOTCHES_PER_PAGE,
+    }
+}
+
 impl WaveView {
     /// The whole track.
     pub fn full(total: f64) -> Self {
@@ -156,6 +177,32 @@ impl WaveView {
             self.span_secs,
             total,
         )
+    }
+
+    /// One wheel event of `notches`: Shift or a mostly sideways wheel pans,
+    /// otherwise it zooms around `x`, no closer than `min_span`.
+    pub fn wheel(
+        &self,
+        notches: Vec2,
+        shift: bool,
+        x: f32,
+        rect: Rect,
+        total: f64,
+        min_span: f64,
+    ) -> Self {
+        let sideways = notches.x.abs() > notches.y.abs();
+        if shift || sideways {
+            let step = if sideways { notches.x } else { notches.y };
+            self.pan(step * rect.width() * PAN_STEP, rect, total)
+        } else {
+            self.zoom_at(
+                x,
+                rect,
+                ZOOM_STEP.powf(f64::from(notches.y)),
+                total,
+                min_span,
+            )
+        }
     }
 
     /// Unchanged while `position` is visible; otherwise moved so it sits a

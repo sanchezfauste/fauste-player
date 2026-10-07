@@ -432,3 +432,55 @@ mod keys {
         }
     }
 }
+
+mod wheel {
+    use egui::{MouseWheelUnit, Rect, pos2, vec2};
+    use fp_app::ui::wave_view::{
+        NOTCHES_PER_PAGE, PAN_STEP, POINTS_PER_NOTCH, WaveView, ZOOM_STEP, wheel_notches,
+    };
+
+    fn rect() -> Rect {
+        Rect::from_min_size(pos2(100.0, 10.0), vec2(400.0, 60.0))
+    }
+
+    #[test]
+    fn lines_are_notches_and_points_and_pages_are_converted() {
+        assert_eq!(
+            wheel_notches(MouseWheelUnit::Line, vec2(0.0, 2.0)),
+            vec2(0.0, 2.0)
+        );
+        assert_eq!(
+            wheel_notches(MouseWheelUnit::Point, vec2(0.0, POINTS_PER_NOTCH)),
+            vec2(0.0, 1.0)
+        );
+        assert_eq!(
+            wheel_notches(MouseWheelUnit::Page, vec2(0.0, 1.0)),
+            vec2(0.0, NOTCHES_PER_PAGE)
+        );
+    }
+
+    #[test]
+    fn an_upward_notch_zooms_in_around_the_pointer() {
+        let full = WaveView::full(180.0);
+        let x = rect().center().x;
+        let v = full.wheel(vec2(0.0, 1.0), false, x, rect(), 180.0, 0.0);
+        assert_eq!(v, full.zoom_at(x, rect(), ZOOM_STEP, 180.0, 0.0));
+        assert!((v.span_secs - 144.0).abs() < 1e-9, "{v:?}");
+    }
+
+    #[test]
+    fn shift_or_a_sideways_wheel_pans() {
+        let zoomed = WaveView::full(180.0).zoom_at(300.0, rect(), 0.5, 180.0, 0.0);
+        let by_shift = zoomed.wheel(vec2(0.0, -1.0), true, 300.0, rect(), 180.0, 0.0);
+        assert_eq!(
+            by_shift,
+            zoomed.pan(-rect().width() * PAN_STEP, rect(), 180.0)
+        );
+        let sideways = zoomed.wheel(vec2(1.0, 0.0), false, 300.0, rect(), 180.0, 0.0);
+        assert_eq!(
+            sideways,
+            zoomed.pan(rect().width() * PAN_STEP, rect(), 180.0)
+        );
+        assert_ne!(sideways, zoomed, "the view moved");
+    }
+}
