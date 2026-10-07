@@ -966,3 +966,34 @@ fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::set_next_on_click;
+    use fp_model::{EntryId, PlayerId};
+
+    const A: (PlayerId, EntryId) = (PlayerId(1), EntryId(10));
+    const B: (PlayerId, EntryId) = (PlayerId(1), EntryId(11));
+
+    #[test]
+    fn a_burst_of_clicks_sets_each_row_as_next_once() {
+        let mut sent = None;
+        // (row, a double or triple click to egui, sets the row as next)
+        let clicks = [
+            (A, false, false), // a single click
+            (A, true, true),   // a double-click
+            (A, true, false),  // a triple click: the same burst, once
+            (A, true, false),  // a fourth fast click
+            (B, true, true),   // another row in the same burst
+            (B, false, false), // a single click resets the burst
+            (B, true, true),   // so a new double-click sets it again
+        ];
+        for (k, (row, repeated, sets)) in clicks.into_iter().enumerate() {
+            assert_eq!(
+                set_next_on_click(&mut sent, row, repeated),
+                sets,
+                "click {k}"
+            );
+        }
+    }
+}
