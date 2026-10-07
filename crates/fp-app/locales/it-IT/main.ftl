@@ -64,7 +64,7 @@ col-intro = Intro
 col-file_name = File
 footer-add = Aggiungi
 footer-count = { $count ->
-    [one] 1 brano
+    [one] { $count } brano
    *[other] { $count } brani
 }
 menu-play-now = Riproduci ora
@@ -140,7 +140,7 @@ settings-min-duration = Durata minima per i marker di mix e di outro
 settings-reanalyse = Rianalizza tutti i brani
 outdated-title = Alcuni brani vanno rianalizzati
 outdated-body = { $count ->
-    [one] Un brano è stato analizzato da una versione precedente di Fauste Player. Rianalizzarlo aggiorna i suoi marker e la sua forma d'onda.
+    [one] { $count } brano è stato analizzato da una versione precedente di Fauste Player. Rianalizzarlo aggiorna i suoi marker e la sua forma d'onda.
    *[other] { $count } brani sono stati analizzati da una versione precedente di Fauste Player. Rianalizzarli aggiorna i loro marker e le loro forme d'onda.
 } Impegna il processore per un po'; la riproduzione non ne risente. Puoi farlo anche più tardi in Impostazioni > Analisi.
 outdated-now = Analizza ora
@@ -286,11 +286,11 @@ shortcut-unbind = Rimuovi
 shortcut-press-key = Premi un tasto…
 shortcut-help = Fai clic su un'azione, poi premi il tasto da usare. Canc, Backspace ed Esc non si possono cambiare.
 playlist-imported = «{ $name }» importata: { $count ->
-    [one] 1 brano.
+    [one] { $count } brano.
    *[other] { $count } brani.
 }
 playlist-streams-skipped = { $streams ->
-    [one] 1 stream ignorato (non supportato).
+    [one] { $streams } stream ignorato (non supportato).
    *[other] { $streams } stream ignorati (non supportati).
 }
 playlist-import-failed = Impossibile importare «{ $name }»: { $error }
@@ -466,11 +466,11 @@ tags-cut = Troppo lungo per modificarlo qui; viene mantenuto com'è nel file.
 tags-date-invalid = Usa AAAA, AAAA-MM o AAAA-MM-GG (facoltativamente con un orario).
 tags-number-invalid = Usa numeri interi; un totale richiede un numero.
 tags-others-kept = { $count ->
-    [one] 1 altro tag viene mantenuto com'è.
+    [one] { $count } altro tag viene mantenuto com'è.
    *[other] { $count } altri tag vengono mantenuti come sono.
 }
 tags-others-kept-more = { $count ->
-    [one] 1 altro tag viene mantenuto com'è, e altri non conteggiati.
+    [one] { $count } altro tag viene mantenuto com'è, e altri non conteggiati.
    *[other] { $count } altri tag vengono mantenuti come sono, e altri non conteggiati.
 }
 tags-others-kept-uncounted = Gli altri tag vengono mantenuti come sono.

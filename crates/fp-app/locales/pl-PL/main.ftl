@@ -64,7 +64,7 @@ col-intro = Intro
 col-file_name = Nazwa pliku
 footer-add = Dodaj
 footer-count = { $count ->
-    [one] 1 utwór
+    [one] { $count } utwór
     [few] { $count } utwory
     [many] { $count } utworów
    *[other] { $count } utworu
@@ -142,7 +142,7 @@ settings-min-duration = Minimalna długość dla znaczników miksu i outro
 settings-reanalyse = Analizuj ponownie wszystkie utwory
 outdated-title = Niektóre utwory wymagają nowej analizy
 outdated-body = { $count ->
-    [one] Jeden utwór został przeanalizowany przez wcześniejszą wersję Fauste Player. Ponowna analiza zaktualizuje jego znaczniki i przebieg.
+    [one] { $count } utwór został przeanalizowany przez wcześniejszą wersję Fauste Player. Ponowna analiza zaktualizuje jego znaczniki i przebieg.
     [few] { $count } utwory zostały przeanalizowane przez wcześniejszą wersję Fauste Player. Ponowna analiza zaktualizuje ich znaczniki i przebiegi.
     [many] { $count } utworów zostało przeanalizowanych przez wcześniejszą wersję Fauste Player. Ponowna analiza zaktualizuje ich znaczniki i przebiegi.
    *[other] { $count } utworu zostało przeanalizowane przez wcześniejszą wersję Fauste Player. Ponowna analiza zaktualizuje ich znaczniki i przebiegi.
@@ -290,13 +290,13 @@ shortcut-unbind = Odepnij
 shortcut-press-key = Naciśnij klawisz…
 shortcut-help = Kliknij akcję, a potem naciśnij klawisz, którego chcesz używać. Delete, Backspace i Esc nie można zmienić.
 playlist-imported = Zaimportowano „{ $name }”: { $count ->
-    [one] 1 utwór.
+    [one] { $count } utwór.
     [few] { $count } utwory.
     [many] { $count } utworów.
    *[other] { $count } utworu.
 }
 playlist-streams-skipped = { $streams ->
-    [one] Pominięto 1 strumień (nieobsługiwany).
+    [one] Pominięto { $streams } strumień (nieobsługiwany).
     [few] Pominięto { $streams } strumienie (nieobsługiwane).
     [many] Pominięto { $streams } strumieni (nieobsługiwanych).
    *[other] Pominięto { $streams } strumienia (nieobsługiwane).
@@ -474,13 +474,13 @@ tags-cut = Za długie, by edytować tutaj; pozostaje bez zmian w pliku.
 tags-date-invalid = Użyj RRRR, RRRR-MM lub RRRR-MM-DD (opcjonalnie z godziną).
 tags-number-invalid = Użyj liczb całkowitych; suma wymaga liczby.
 tags-others-kept = { $count ->
-    [one] 1 inny tag pozostaje bez zmian.
+    [one] { $count } inny tag pozostaje bez zmian.
     [few] { $count } inne tagi pozostają bez zmian.
     [many] { $count } innych tagów pozostaje bez zmian.
    *[other] { $count } innego tagu pozostaje bez zmian.
 }
 tags-others-kept-more = { $count ->
-    [one] 1 inny tag pozostaje bez zmian, podobnie jak kolejne, których nie policzono.
+    [one] { $count } inny tag pozostaje bez zmian, podobnie jak kolejne, których nie policzono.
     [few] { $count } inne tagi pozostają bez zmian, podobnie jak kolejne, których nie policzono.
     [many] { $count } innych tagów pozostaje bez zmian, podobnie jak kolejne, których nie policzono.
    *[other] { $count } innego tagu pozostaje bez zmian, podobnie jak kolejne, których nie policzono.

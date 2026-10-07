@@ -64,7 +64,7 @@ fn the_notice_counts_the_tracks_and_analyse_now_asks_for_them() {
 fn later_closes_the_notice_without_asking() {
     let (mut h, rx) = open(library(5, 1));
     assert!(
-        h.query_by_label_contains("One track was analysed by an earlier version")
+        h.query_by_label_contains("1 track was analysed by an earlier version")
             .is_some()
     );
     h.get_by_role_and_label(Role::Button, "Later").click();

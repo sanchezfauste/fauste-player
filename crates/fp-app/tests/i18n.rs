@@ -294,3 +294,75 @@ fn the_stop_all_label_carries_its_count_in_both_languages() {
         "Parar todo (12)"
     );
 }
+
+/// The en-US messages that select on a number, with the variable they
+/// select on.
+fn plural_messages() -> Vec<(String, String)> {
+    let resource = fluent_syntax::parser::parse(english().source).unwrap();
+    let mut out = Vec::new();
+    for entry in &resource.body {
+        if let Entry::Message(m) = entry
+            && let Some(value) = &m.value
+        {
+            for element in &value.elements {
+                if let PatternElement::Placeable {
+                    expression:
+                        Expression::Select {
+                            selector: InlineExpression::VariableReference { id },
+                            ..
+                        },
+                } = element
+                {
+                    out.push((m.id.name.to_owned(), id.name.to_owned()));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Every plural variant shows the count itself: a literal "1" in a `one`
+/// variant is wrong where 0 is also `one` (French), and a word such as
+/// "One" hides the number.
+#[test]
+fn every_plural_variant_shows_the_count_it_was_given() {
+    let plurals = plural_messages();
+    for id in [
+        "footer-count",
+        "playlist-imported",
+        "playlist-streams-skipped",
+        "tags-others-kept",
+        "tags-others-kept-more",
+        "outdated-body",
+    ] {
+        assert!(
+            plurals.iter().any(|(m, _)| m == id),
+            "{id} selects on a number"
+        );
+    }
+    let mut problems = Vec::new();
+    for l in LOCALES {
+        let i18n = I18n::new(Some(l.tag));
+        assert_eq!(i18n.lang(), l.tag);
+        for (id, var) in &plurals {
+            for n in [0u32, 1, 2, 5] {
+                let text = i18n.tr_args(
+                    id,
+                    &[
+                        (var.as_str(), n.into()),
+                        ("name", "list".into()),
+                        ("error", "oops".into()),
+                    ],
+                );
+                let numbers: Vec<&str> = text
+                    .split(|c: char| !c.is_ascii_digit())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if numbers != [n.to_string()] {
+                    problems.push(format!("{} {id} ({n}): {text}", l.tag));
+                }
+            }
+        }
+    }
+    assert!(problems.is_empty(), "{problems:#?}");
+}

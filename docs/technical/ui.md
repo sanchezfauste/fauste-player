@@ -374,6 +374,11 @@ The `test-hooks` feature adds `AppUi::fail_next_frame` and
   locale is in use (`I18n::machine_translated`).
 - Plural categories come from CLDR through `fluent-bundle`
   (`intl_pluralrules`): Polish selects `one`, `few`, `many` and `other`.
+  Every plural variant shows the number through its placeable
+  (`{ $count } track`), never a literal `1` or a word: in French 0 is also
+  `one`, so a literal would show "1 piste" for an empty playlist.
+  `tests/i18n.rs` formats every number-selecting en-US message in every
+  locale with 0, 1, 2 and 5 and checks the output shows exactly that number.
 - `tests/i18n.rs` checks that every file under `locales/` is registered (and
   every entry has its file), that the registry is ordered, that every locale
   parses cleanly and has exactly the en-US message ids, and that every

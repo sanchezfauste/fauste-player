@@ -64,7 +64,7 @@ col-intro = Intro
 col-file_name = File name
 footer-add = Add
 footer-count = { $count ->
-    [one] 1 track
+    [one] { $count } track
    *[other] { $count } tracks
 }
 menu-play-now = Play now
@@ -140,7 +140,7 @@ settings-min-duration = Minimum length for mix and outro markers
 settings-reanalyse = Re-analyse all tracks
 outdated-title = Some tracks need a new analysis
 outdated-body = { $count ->
-    [one] One track was analysed by an earlier version of Fauste Player. Analysing it again updates its markers and waveform.
+    [one] { $count } track was analysed by an earlier version of Fauste Player. Analysing it again updates its markers and waveform.
    *[other] { $count } tracks were analysed by an earlier version of Fauste Player. Analysing them again updates their markers and waveforms.
 } It uses the processor for a while; playback is not affected. You can also do it later in Settings > Analysis.
 outdated-now = Analyse now
@@ -286,11 +286,11 @@ shortcut-unbind = Unbind
 shortcut-press-key = Press a key…
 shortcut-help = Click an action, then press the key to use. Delete, Backspace and Esc cannot be changed.
 playlist-imported = Imported “{ $name }”: { $count ->
-    [one] 1 track.
+    [one] { $count } track.
    *[other] { $count } tracks.
 }
 playlist-streams-skipped = { $streams ->
-    [one] 1 stream skipped (not supported).
+    [one] { $streams } stream skipped (not supported).
    *[other] { $streams } streams skipped (not supported).
 }
 playlist-import-failed = “{ $name }” could not be imported: { $error }
@@ -466,11 +466,11 @@ tags-cut = Too long to edit here; kept as it is in the file.
 tags-date-invalid = Use YYYY, YYYY-MM or YYYY-MM-DD (optionally with a time).
 tags-number-invalid = Use whole numbers; a total needs a number.
 tags-others-kept = { $count ->
-    [one] 1 other tag is kept as it is.
+    [one] { $count } other tag is kept as it is.
    *[other] { $count } other tags are kept as they are.
 }
 tags-others-kept-more = { $count ->
-    [one] 1 other tag is kept as it is, and more that are not counted.
+    [one] { $count } other tag is kept as it is, and more that are not counted.
    *[other] { $count } other tags are kept as they are, and more that are not counted.
 }
 tags-others-kept-uncounted = Other tags are kept as they are.

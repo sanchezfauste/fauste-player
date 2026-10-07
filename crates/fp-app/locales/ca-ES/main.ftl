@@ -64,7 +64,7 @@ col-intro = Intro
 col-file_name = Fitxer
 footer-add = Afegir
 footer-count = { $count ->
-    [one] 1 pista
+    [one] { $count } pista
    *[other] { $count } pistes
 }
 menu-play-now = Reproduir ara
@@ -140,7 +140,7 @@ settings-min-duration = Durada mínima per als marcadors de mescla i outro
 settings-reanalyse = Tornar a analitzar totes les pistes
 outdated-title = Algunes pistes necessiten una nova anàlisi
 outdated-body = { $count ->
-    [one] Una pista es va analitzar amb una versió anterior de Fauste Player. Analitzar-la de nou n'actualitza els marcadors i la forma d'ona.
+    [one] { $count } pista es va analitzar amb una versió anterior de Fauste Player. Analitzar-la de nou n'actualitza els marcadors i la forma d'ona.
    *[other] { $count } pistes es van analitzar amb una versió anterior de Fauste Player. Analitzar-les de nou n'actualitza els marcadors i les formes d'ona.
 } Fa servir el processador una estona; la reproducció no se'n ressent. També ho pots fer més tard a Configuració > Anàlisi.
 outdated-now = Analitzar ara
@@ -286,11 +286,11 @@ shortcut-unbind = Treure
 shortcut-press-key = Prem una tecla…
 shortcut-help = Fes clic en una acció i després prem la tecla. Supr, Retrocés i Esc no es poden canviar.
 playlist-imported = S'ha importat «{ $name }»: { $count ->
-    [one] 1 pista.
+    [one] { $count } pista.
    *[other] { $count } pistes.
 }
 playlist-streams-skipped = { $streams ->
-    [one] 1 stream omès (no compatible).
+    [one] { $streams } stream omès (no compatible).
    *[other] { $streams } streams omesos (no compatibles).
 }
 playlist-import-failed = No s'ha pogut importar «{ $name }»: { $error }
@@ -466,11 +466,11 @@ tags-cut = Massa llarg per editar-lo aquí; es conserva tal com és al fitxer.
 tags-date-invalid = Fes servir AAAA, AAAA-MM o AAAA-MM-DD (opcionalment amb hora).
 tags-number-invalid = Fes servir nombres enters; un total necessita un número.
 tags-others-kept = { $count ->
-    [one] Es conserva 1 etiqueta més tal com és.
+    [one] Es conserva { $count } etiqueta més tal com és.
    *[other] Es conserven { $count } etiquetes més tal com són.
 }
 tags-others-kept-more = { $count ->
-    [one] Es conserva 1 etiqueta més tal com és, i altres que no es compten.
+    [one] Es conserva { $count } etiqueta més tal com és, i altres que no es compten.
    *[other] Es conserven { $count } etiquetes més tal com són, i altres que no es compten.
 }
 tags-others-kept-uncounted = Es conserven altres etiquetes tal com són.

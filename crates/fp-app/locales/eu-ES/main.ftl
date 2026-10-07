@@ -64,7 +64,7 @@ col-intro = Intro
 col-file_name = Fitxategia
 footer-add = Gehitu
 footer-count = { $count ->
-    [one] 1 pista
+    [one] { $count } pista
    *[other] { $count } pista
 }
 menu-play-now = Erreproduzitu orain
@@ -140,7 +140,7 @@ settings-min-duration = Nahasketa- eta outro-markatzaileen gutxieneko iraupena
 settings-reanalyse = Berriro aztertu pista guztiak
 outdated-title = Pista batzuek analisi berria behar dute
 outdated-body = { $count ->
-    [one] Pista bat Fauste Player-en aurreko bertsio batekin aztertu zen. Berriro aztertzeak bere markatzaileak eta uhin-forma eguneratzen ditu.
+    [one] { $count } pista Fauste Player-en aurreko bertsio batekin aztertu zen. Berriro aztertzeak bere markatzaileak eta uhin-forma eguneratzen ditu.
    *[other] { $count } pista Fauste Player-en aurreko bertsio batekin aztertu ziren. Berriro aztertzeak haien markatzaileak eta uhin-formak eguneratzen ditu.
 } Prozesadorea erabiltzen du denbora batez; erreprodukzioari ez dio eragiten. Geroago ere egin dezakezu Ezarpenak > Analisia atalean.
 outdated-now = Aztertu orain
@@ -286,11 +286,11 @@ shortcut-unbind = Kendu
 shortcut-press-key = Sakatu tekla bat…
 shortcut-help = Egin klik ekintza batean eta sakatu erabili nahi duzun tekla. Ezabatu, Atzera-tekla eta Esc ezin dira aldatu.
 playlist-imported = «{ $name }» inportatu da: { $count ->
-    [one] 1 pista.
+    [one] { $count } pista.
    *[other] { $count } pista.
 }
 playlist-streams-skipped = { $streams ->
-    [one] 1 stream saltatu da (ez da onartzen).
+    [one] { $streams } stream saltatu da (ez da onartzen).
    *[other] { $streams } stream saltatu dira (ez dira onartzen).
 }
 playlist-import-failed = Ezin izan da «{ $name }» inportatu: { $error }
@@ -466,11 +466,11 @@ tags-cut = Luzeegia hemen editatzeko; fitxategian dagoen bezala gordetzen da.
 tags-date-invalid = Erabili UUUU, UUUU-HH edo UUUU-HH-EE (aukeran, orduarekin).
 tags-number-invalid = Erabili zenbaki osoak; guztizko batek zenbaki bat behar du.
 tags-others-kept = { $count ->
-    [one] Beste etiketa bat dagoen bezala gordetzen da.
+    [one] Beste { $count } etiketa dagoen bezala gordetzen da.
    *[other] Beste { $count } etiketa dauden bezala gordetzen dira.
 }
 tags-others-kept-more = { $count ->
-    [one] Beste etiketa bat dagoen bezala gordetzen da, baita zenbatzen ez diren beste batzuk ere.
+    [one] Beste { $count } etiketa dagoen bezala gordetzen da, baita zenbatzen ez diren beste batzuk ere.
    *[other] Beste { $count } etiketa dauden bezala gordetzen dira, baita zenbatzen ez diren beste batzuk ere.
 }
 tags-others-kept-uncounted = Beste etiketak dauden bezala gordetzen dira.

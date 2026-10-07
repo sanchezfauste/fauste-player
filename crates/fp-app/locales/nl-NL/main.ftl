@@ -64,7 +64,7 @@ col-intro = Intro
 col-file_name = Bestandsnaam
 footer-add = Toevoegen
 footer-count = { $count ->
-    [one] 1 nummer
+    [one] { $count } nummer
    *[other] { $count } nummers
 }
 menu-play-now = Nu afspelen
@@ -140,7 +140,7 @@ settings-min-duration = Minimale duur voor mix- en outromarkers
 settings-reanalyse = Alle nummers opnieuw analyseren
 outdated-title = Sommige nummers hebben een nieuwe analyse nodig
 outdated-body = { $count ->
-    [one] Eén nummer is geanalyseerd door een eerdere versie van Fauste Player. Opnieuw analyseren werkt de markers en de golfvorm bij.
+    [one] { $count } nummer is geanalyseerd door een eerdere versie van Fauste Player. Opnieuw analyseren werkt de markers en de golfvorm bij.
    *[other] { $count } nummers zijn geanalyseerd door een eerdere versie van Fauste Player. Opnieuw analyseren werkt de markers en golfvormen bij.
 } Dit belast de processor een tijdje; het afspelen merkt er niets van. Je kunt het ook later doen in Instellingen > Analyse.
 outdated-now = Nu analyseren
@@ -286,11 +286,11 @@ shortcut-unbind = Ontkoppelen
 shortcut-press-key = Druk op een toets…
 shortcut-help = Klik op een actie en druk dan op de gewenste toets. Delete, Backspace en Esc kunnen niet worden gewijzigd.
 playlist-imported = “{ $name }” geïmporteerd: { $count ->
-    [one] 1 nummer.
+    [one] { $count } nummer.
    *[other] { $count } nummers.
 }
 playlist-streams-skipped = { $streams ->
-    [one] 1 stream overgeslagen (niet ondersteund).
+    [one] { $streams } stream overgeslagen (niet ondersteund).
    *[other] { $streams } streams overgeslagen (niet ondersteund).
 }
 playlist-import-failed = “{ $name }” kon niet worden geïmporteerd: { $error }
@@ -466,11 +466,11 @@ tags-cut = Te lang om hier te bewerken; blijft zoals het in het bestand staat.
 tags-date-invalid = Gebruik JJJJ, JJJJ-MM of JJJJ-MM-DD (eventueel met een tijd).
 tags-number-invalid = Gebruik hele getallen; een totaal vereist een getal.
 tags-others-kept = { $count ->
-    [one] 1 andere tag blijft zoals hij is.
+    [one] { $count } andere tag blijft zoals hij is.
    *[other] { $count } andere tags blijven zoals ze zijn.
 }
 tags-others-kept-more = { $count ->
-    [one] 1 andere tag blijft zoals hij is, plus nog meer die niet zijn geteld.
+    [one] { $count } andere tag blijft zoals hij is, plus nog meer die niet zijn geteld.
    *[other] { $count } andere tags blijven zoals ze zijn, plus nog meer die niet zijn geteld.
 }
 tags-others-kept-uncounted = Andere tags blijven zoals ze zijn.
