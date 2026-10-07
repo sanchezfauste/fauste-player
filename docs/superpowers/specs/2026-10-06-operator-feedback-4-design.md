@@ -509,7 +509,7 @@ Rulings made while implementing:
   WaveView::wheel}`; `view::{marker_fractions, intro_left, outro_left}`;
   `CueWindowView::{markers, intro, outro, mix_active}`. `ViewState::wave_menu`
   is keyed by `WaveKey` too. The CUE's intro badge never blinks, its MIX
-  marker follows the player's mode, its zoom follows its position, and a
+  marker follows the player's mode, its zoom follows its position while it plays, and a
   closed CUE window forgets its zoom, menu point and marker drag.
   - `seekable` is not in the panel's input: every waveform seeks since plan 2
     (a stopped player's click is rule 3a's pending start), so the switch was

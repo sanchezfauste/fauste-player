@@ -146,8 +146,9 @@ fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Cu
         total: v.total,
         markers: v.markers,
         mix_active: v.mix_active,
-        // A CUE's zoom follows its position, as a playing player's does.
-        follow: true,
+        // A playing CUE's zoom follows its position, as a playing player's
+        // does; a paused CUE keeps the view the operator set to place markers.
+        follow: !v.paused,
         badges: WaveBadges {
             intro: v.intro,
             // The talk-over warning is for audio on air; a CUE is not.

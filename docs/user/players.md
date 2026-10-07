@@ -172,7 +172,9 @@ The window shows:
   [Markers and mixing](markers-and-mixing.md)). A CUE plays the whole file,
   so nothing is drawn darker, the cue-in and cue-out are dimmed lines, and
   the outro counts down to the end of the file. Its zoom is its own: the
-  player's waveform does not move, and a new CUE shows the whole file;
+  player's waveform does not move. While the CUE plays, a zoomed view
+  follows its position as the player's does; a paused CUE keeps the view you
+  set, so you can zoom in and place markers;
 - the elapsed time and the time remaining to the end of the file (a CUE plays
   whole files);
 - **Pause** / **Resume**, **Stop** and **Set as next**. **Set as next**

@@ -649,6 +649,17 @@ fn a_zoomed_cue_follows_its_position_after_the_grace() {
 }
 
 #[test]
+fn a_paused_cue_keeps_the_zoom_the_operator_set() {
+    let (mut h, fake, w) = zoomed_cue(true);
+    cue_at(&fake, 150.0);
+    h.run_steps(5);
+    click(&mut h, pos2(x_of(w, 90.0), w.center().y));
+    let seeks = cue_seeks(&sent(&fake), fake.player(0));
+    assert_eq!(seeks.len(), 1);
+    assert!(seeks[0] < 60.0, "a paused CUE does not follow: {seeks:?}");
+}
+
+#[test]
 fn zooming_one_cue_leaves_the_other_on_the_whole_file() {
     let (mut h, fake) = cueing(2);
     fake.send(Command::ToggleCue(fake.player(1)));
