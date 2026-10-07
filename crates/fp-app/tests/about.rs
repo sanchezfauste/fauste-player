@@ -155,3 +155,42 @@ fn find_notices_returns_an_installed_file() {
         doc.join("THIRD-PARTY.html").canonicalize().unwrap()
     );
 }
+
+/// Opens About in `tag` and says whether it shows the AI-translation notice.
+fn shows_ai_notice(tag: &str) -> bool {
+    let t = fp_app::i18n::I18n::new(Some(tag));
+    let (mut h, fake) = harness(state(1, 1));
+    let mut s = (**fake.state.load()).clone();
+    s.config.ui.language = Some(tag.to_owned());
+    fake.state.store(Arc::new(s));
+    h.run_steps(2);
+    h.get_by_label(&t.tr("tip-about")).click();
+    h.run_steps(2);
+    h.query_by_label(&t.tr("about-machine-translation"))
+        .is_some()
+}
+
+#[test]
+fn the_ai_translation_notice_has_its_text_in_english_and_spanish() {
+    let en = fp_app::i18n::I18n::new(Some("en-US")).tr("about-machine-translation");
+    let es = fp_app::i18n::I18n::new(Some("es-ES")).tr("about-machine-translation");
+    assert!(en.contains("AI"), "{en}");
+    assert!(es.contains("IA"), "{es}");
+}
+
+#[test]
+fn hand_written_languages_show_no_ai_translation_notice() {
+    assert!(!shows_ai_notice("en-US"));
+    assert!(!shows_ai_notice("es-ES"));
+}
+
+#[test]
+fn every_ai_translated_language_shows_the_notice() {
+    // Empty until the first AI-translated locale is registered.
+    for l in fp_app::i18n::LOCALES
+        .iter()
+        .filter(|l| l.translation == fp_app::i18n::Translation::Machine)
+    {
+        assert!(shows_ai_notice(l.tag), "{}", l.tag);
+    }
+}

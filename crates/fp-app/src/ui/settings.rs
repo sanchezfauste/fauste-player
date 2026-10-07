@@ -1250,46 +1250,32 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
         }
     });
     let current = config.ui.language.clone();
-    row(ui, &t.tr("settings-language-title"), None, |ui| {
-        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-        // Language names are shown in their own language.
-        for (tag, text) in [
-            (None, t.tr("settings-language-system")),
-            (Some("en-US"), "English".to_owned()),
-            (Some("es-ES"), "Español".to_owned()),
-        ] {
-            let on = current.as_deref() == tag;
-            let style = TileStyle {
-                fill: if on {
-                    theme::NEUTRAL_700
-                } else {
-                    Color32::TRANSPARENT
-                },
-                content: if on { theme::TEXT } else { theme::NEUTRAL_400 },
-                ..TileStyle::plain()
-            };
-            let width = ui
-                .painter()
-                .layout_no_wrap(text.clone(), font(12.0), theme::TEXT)
-                .size()
-                .x
-                + 28.0;
-            if widgets::tile(ui, vec2(width, 30.0), &text, true, style, |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    &text,
-                    font(12.0),
-                    c,
-                );
+    labelled_row(ui, &t.tr("settings-language-title"), None, |ui, label| {
+        // "System", then every language in its own name, in registry order.
+        let system = t.tr("settings-language-system");
+        let mut choices = vec![(None, system.as_str())];
+        choices.extend(crate::i18n::LOCALES.iter().map(|l| (Some(l.tag), l.name)));
+        let shown = choices
+            .iter()
+            .find(|(tag, _)| current.as_deref() == *tag)
+            .map_or_else(
+                || current.clone().unwrap_or_default(),
+                |(_, n)| (*n).to_owned(),
+            );
+        egui::ComboBox::from_id_salt("language")
+            .selected_text(shown)
+            .width(260.0)
+            .show_ui(ui, |ui| {
+                for (tag, name) in &choices {
+                    let on = current.as_deref() == *tag;
+                    if ui.selectable_label(on, *name).clicked() && !on {
+                        let tag = tag.map(str::to_owned);
+                        update(scene, |c| c.ui.language = tag);
+                    }
+                }
             })
-            .clicked()
-                && !on
-            {
-                let tag = tag.map(str::to_owned);
-                update(scene, |c| c.ui.language = tag);
-            }
-        }
+            .response
+            .labelled_by(label);
     });
 }
 

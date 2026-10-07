@@ -185,7 +185,7 @@ An entry in `bit_perfect`, `dsd_output` or `device_overrides` for a device no ro
 | `table_columns` | `["number", "title", "artist", "duration"]` | an ordered list of `number`, `title`, `artist`, `album`, `date`, `genre`, `duration`, `intro`, `file_name`; unknown names are dropped when the file is read, duplicates keep their first place, and a missing `title` or `duration` is added back (`Config::validate` warns) |
 | `wave_color` | `slate` | `violet`, `amber`, `cyan`, `white`, `orange`, `magenta`, `ice`, `sand`, `slate` |
 | `music_dir` | none | the folder where file dialogs start |
-| `language` | none (OS locale) | BCP-47 tag (`en-US`, `es-ES`) |
+| `language` | none (OS locale) | BCP-47 tag of a registered locale (`en-US`, `es-ES`, …) |
 
 ### `cartwall`
 

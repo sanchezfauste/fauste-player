@@ -8,7 +8,7 @@
 | `bootstrap.rs` | `AppPaths` from `FAUSTE_HOME` or the OS directories |
 | `logging.rs` | tracing to a daily-rotated file (14 kept) via a non-blocking writer; stderr in debug builds; `RUST_LOG` overrides |
 | `crash.rs` | Panic hook writing `crash-<nanos>.txt` (message, location, backtrace, version, OS), then chaining |
-| `i18n.rs` | Fluent bundles (`locales/en-US`, `locales/es-ES`), per-key fallback to `en-US` |
+| `i18n.rs` | The locale registry (`LOCALES`), language negotiation, Fluent bundles with per-key fallback to `en-US` |
 | `services.rs` | The services thread (analysis and autosave; see [Persistence](persistence.md) and [Analysis](analysis.md)) |
 | `ui/app.rs` | `AppUi`: the main screen, keyboard, notices, OS drops, file-dialog results. The window title (`cli::window_title`, the name and the version) and icon (`cli::window_icon`) are set on the `ViewportBuilder` in `main.rs` (`run`) and drawn by the native title bar; the top bar has no brand block |
 | `ui/player.rs` | One player column: header, info row, transport, waveform, tabs, footer |
@@ -271,7 +271,10 @@ the About window opens the file with `open` on the `fp-open-notices` thread.
 
 `ui/theme.rs` holds the Nocturne tokens as sRGB constants. The design's
 `oklch` colours are converted once. Corners are square. Inter (400/500/600,
-OFL) is embedded, and Phosphor icons come from `egui-phosphor`, regular and
+OFL) is embedded, subset to Latin, Latin Extended-A and -B, general
+punctuation, currency signs, arrows and mathematical operators (the static
+TTFs of Inter 4.1 through `fonttools subset` with
+`--unicodes=U+0000-024F,U+0259,U+02B0-036F,U+1E9E,U+2000-206F,U+20A0-20C0,U+2113,U+2122,U+2190-21FF,U+2200-22FF,U+FEFF,U+FFFD --layout-features=*`), and Phosphor icons come from `egui-phosphor`, regular and
 fill. Waveform colours are a named palette (`WAVE_PALETTE`); an unknown name
 falls back to Slate. Inter's digits are proportional, so times are painted
 with `widgets::paint_tabular`/`tabular_label`, which centre every digit in a
@@ -352,9 +355,35 @@ The `test-hooks` feature adds `AppUi::fail_next_frame` and
 
 ## Internationalisation
 
-- Every visible string is a Fluent message in `locales/en-US/main.ftl`
-  (the source) and `locales/es-ES/main.ftl`.
-- `tests/i18n.rs` fails if the two key sets differ.
+- Every visible string is a Fluent message in `locales/en-US/main.ftl` (the
+  source) and in every other `locales/<tag>/main.ftl`. en-US and es-ES are
+  written by hand; the other locales are generated with AI. A new or changed
+  string goes into every locale file in the same change.
+- `i18n::LOCALES` is the registry: one `Locale` per embedded file, with its
+  BCP-47 `tag`, its `name` in its own language (what the Settings drop-down
+  shows), its `translation` (`Manual` or `Machine`) and its `source`
+  (`include_str!`). en-US comes first, the rest are ordered by `name`; the
+  Settings drop-down lists "System" and then the registry in that order.
+- `negotiate` picks the locale for the configured tag or, with none, the OS
+  locale (`sys-locale`): the same tag (case-insensitive, `_` read as `-`,
+  a POSIX `.UTF-8` suffix ignored), else the first locale with the same
+  language subtag (`fr-CA` gives `fr-FR`, `pt-BR` gives `pt-PT`), else
+  en-US. A message missing from a locale falls back to en-US. A file with a
+  syntax error keeps its valid messages and logs a warning.
+- The About window shows `about-machine-translation` only while a `Machine`
+  locale is in use (`I18n::machine_translated`).
+- Plural categories come from CLDR through `fluent-bundle`
+  (`intl_pluralrules`): Polish selects `one`, `few`, `many` and `other`.
+- `tests/i18n.rs` checks that every file under `locales/` is registered (and
+  every entry has its file), that the registry is ordered, that every locale
+  parses cleanly and has exactly the en-US message ids, and that every
+  message uses the same variables (and message and term references) as in
+  en-US, so a misspelt or dropped placeable fails.
+  `tests/theme.rs` checks that each embedded Inter weight has a glyph for
+  every character any locale file shows, and for the letters of the planned
+  European languages.
 - Arguments use `tr_args(key, &[("name", value.into())])`.
-- To add a language, add `locales/<tag>/main.ftl`, register it in `i18n.rs`,
-  and extend the key-set test.
+- To add a language: add `locales/<tag>/main.ftl` with every en-US message
+  translated, and one `Locale` entry in `LOCALES` at its place by name, with
+  `translation: Translation::Machine` unless it is written by hand. Nothing
+  else changes: Settings, negotiation and About follow the registry.

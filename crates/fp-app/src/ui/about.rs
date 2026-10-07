@@ -129,6 +129,15 @@ pub(crate) fn show(
                 theme::NEUTRAL_400,
             );
             text(ui, t.tr("about-copyright"), 12.0, theme::NEUTRAL_300);
+            // Only the AI-translated languages carry the warning.
+            if t.machine_translated() {
+                text(
+                    ui,
+                    t.tr("about-machine-translation"),
+                    12.0,
+                    theme::NEUTRAL_400,
+                );
+            }
             ui.separator();
             text(ui, t.tr("about-bundled"), 12.0, theme::NEUTRAL_300);
             ScrollArea::vertical()

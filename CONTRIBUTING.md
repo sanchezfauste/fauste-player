@@ -35,8 +35,8 @@ has the full rules, which apply to people and agents alike.
 - Nothing on the real-time path allocates, frees, locks, logs or panics.
 - No hardcoded product limits: add a `Config` field with a default and a
   validated range instead.
-- Every user-visible string goes into both `locales/en-US/main.ftl` and
-  `locales/es-ES/main.ftl`.
+- Every user-visible string goes into `locales/en-US/main.ftl` (the source)
+  and every other `locales/<tag>/main.ftl`.
 - Never mention other playout or radio-automation products in code, docs or
   commits.
 - Update `docs/user` and `docs/technical` when behaviour changes.

@@ -56,6 +56,8 @@ test-hooks = []
 [dev-dependencies]
 fp-app = { path = ".", features = ["test-hooks"] }
 egui_kittest.workspace = true
+fluent-syntax.workspace = true
+ttf-parser.workspace = true
 tempfile.workspace = true
 hound.workspace = true
 lofty.workspace = true

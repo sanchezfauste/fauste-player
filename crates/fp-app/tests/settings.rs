@@ -194,7 +194,23 @@ fn binding_a_shortcut_shows_and_resolves_the_conflict() {
 fn choosing_spanish_switches_the_interface() {
     let (mut h, fake) = harness(state(1, 0));
     open_section(&mut h, "Players");
-    h.get_by_role_and_label(Role::Button, "Español").click();
+    h.get_by_role_and_label(Role::ComboBox, "Language")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::ComboBox, "Language").click();
+    h.run_steps(2);
+    // "System" first, then every registered language in its own name.
+    let mut expected = vec!["System".to_owned()];
+    expected.extend(fp_app::i18n::LOCALES.iter().map(|l| l.name.to_owned()));
+    for name in &expected {
+        assert!(h.query_by_label(name).is_some(), "{name} is offered");
+    }
+    let tops: Vec<f32> = expected
+        .iter()
+        .map(|n| h.get_by_label(n).rect().top())
+        .collect();
+    assert!(tops.is_sorted(), "listed in registry order: {tops:?}");
+    h.get_by_label("Español").click();
     h.run_steps(4);
     assert_eq!(
         fake.state.load().config.ui.language.as_deref(),
