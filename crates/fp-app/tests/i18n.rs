@@ -249,6 +249,18 @@ fn plural_rules_work_for_every_target_language() {
     }
 }
 
+/// Polish needs `one`, `few` and `many`: a real message picks each form.
+#[test]
+fn polish_track_counts_use_the_right_plural_form() {
+    let pl = I18n::new(Some("pl-PL"));
+    assert_eq!(pl.lang(), "pl-PL");
+    let count = |n: u32| pl.tr_args("footer-count", &[("count", n.into())]);
+    assert_eq!(
+        [1, 2, 5, 22].map(count),
+        ["1 utwór", "2 utwory", "5 utworów", "22 utwory"]
+    );
+}
+
 #[test]
 fn arguments_are_substituted() {
     let en = I18n::new(Some("en-US"));
