@@ -27,8 +27,9 @@ playlist tabs, transport, volume and outputs.
 - A track played or loaded before its analysis has finished already has its
   length when its file's header gives it: the countdown, `elapsed / total`
   and click to jump work at once, over a flat line until the waveform is
-  ready. When the header does not give it (some MP3 files), the total reads
-  "—" and the waveform cannot be clicked until the analysis ends.
+  ready. When the header does not store it (raw AAC files, MP3 files with
+  no length frame, Matroska and WebM), the total reads "—" and the waveform
+  cannot be clicked until the analysis ends.
 - **Stereo meter** (in the column at the right of the player, next to the
   fader; it spans the info row and the transport): the level the player
   puts out, after its volume.

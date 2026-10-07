@@ -179,3 +179,73 @@ fn an_mpeg_stream_with_an_info_frame_gives_its_length() {
     let expected = 39.0 * 1152.0 / 44_100.0;
     assert!((secs - expected).abs() < 0.05, "{secs} vs {expected}");
 }
+
+/// A raw AAC (ADTS) stream: `big` frames of 400 bytes, then `small` frames
+/// of 40 bytes, each one 1024 samples of 44.1 kHz stereo AAC-LC. Nothing in
+/// the stream stores its length, so a reader can only estimate it.
+fn adts(big: usize, small: usize) -> Vec<u8> {
+    let frame = |len: usize| {
+        let mut f = vec![0u8; len];
+        // Sync, MPEG-4, layer 0, no CRC; AAC-LC, 44.1 kHz (index 4),
+        // 2 channels; the 13-bit frame length; buffer fullness 0x7FF; one
+        // raw data block.
+        f[0] = 0xFF;
+        f[1] = 0xF1;
+        f[2] = (1 << 6) | (4 << 2);
+        f[3] = (2 << 6) | ((len >> 11) & 0x3) as u8;
+        f[4] = ((len >> 3) & 0xFF) as u8;
+        f[5] = (((len & 0x7) << 5) as u8) | 0x1F;
+        f[6] = 0xFC;
+        f
+    };
+    let mut bytes = Vec::new();
+    for _ in 0..big {
+        bytes.extend_from_slice(&frame(400));
+    }
+    for _ in 0..small {
+        bytes.extend_from_slice(&frame(40));
+    }
+    bytes
+}
+
+#[test]
+fn a_raw_aac_stream_has_no_header_duration() {
+    let dir = tempfile::tempdir().unwrap();
+    // 400 frames, but the first quarter is ten times larger than the rest:
+    // a length from sampled frame sizes is far too short.
+    let path = write(dir.path(), "mix.aac", &adts(100, 300));
+    let d = FileDecoder::open(&path).unwrap();
+    assert!(
+        d.frames_hint().is_some_and(|f| f < 400 * 1024),
+        "symphonia's estimate is short: {:?}",
+        d.frames_hint()
+    );
+    assert_eq!(d.duration_hint_secs(), None);
+}
+
+#[test]
+fn a_length_tag_away_from_its_place_in_the_first_frame_is_not_trusted() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut bytes = mp3(40, false);
+    // "Xing" in the first frame's audio data, not after its side
+    // information: not a length frame (symphonia estimates the length).
+    bytes[200..204].copy_from_slice(b"Xing");
+    let path = write(dir.path(), "stray.mp3", &bytes);
+    assert_eq!(FileDecoder::open(&path).unwrap().duration_hint_secs(), None);
+}
+
+#[test]
+fn a_length_frame_after_an_id3_tag_gives_its_length() {
+    let dir = tempfile::tempdir().unwrap();
+    // A 20-byte ID3v2.4 tag of padding, then the stream.
+    let mut bytes = b"ID3\x04\x00\x00\x00\x00\x00\x14".to_vec();
+    bytes.extend_from_slice(&[0u8; 20]);
+    bytes.extend_from_slice(&mp3(40, true));
+    let path = write(dir.path(), "tagged.mp3", &bytes);
+    let secs = FileDecoder::open(&path)
+        .unwrap()
+        .duration_hint_secs()
+        .unwrap();
+    let expected = 39.0 * 1152.0 / 44_100.0;
+    assert!((secs - expected).abs() < 0.05, "{secs} vs {expected}");
+}

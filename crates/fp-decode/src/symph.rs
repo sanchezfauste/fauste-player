@@ -2,12 +2,18 @@
 //! Vorbis and Matroska/WebM.
 
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions, well_known};
 use symphonia::core::errors::{Error, SeekErrorKind};
 use symphonia::core::formats::probe::Hint;
-use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
+use symphonia::core::formats::well_known::{
+    FORMAT_ID_AIFF, FORMAT_ID_CAF, FORMAT_ID_FLAC, FORMAT_ID_ISOMP4, FORMAT_ID_MP1, FORMAT_ID_MP2,
+    FORMAT_ID_MP3, FORMAT_ID_OGG, FORMAT_ID_WAVE,
+};
+use symphonia::core::formats::{
+    FormatId, FormatOptions, FormatReader, SeekMode, SeekTo, TrackType,
+};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Time, TimeBase};
@@ -22,8 +28,10 @@ pub(crate) struct SymphoniaDecoder {
     bits_per_sample: Option<u32>,
     channels: usize,
     frames_hint: Option<u64>,
-    /// False for an MPEG stream whose length is only symphonia's estimate.
-    length_declared: bool,
+    /// The file, read again for an MPEG stream's length frame.
+    path: PathBuf,
+    /// How the container's reader knows `frames_hint`.
+    stored_length: StoredLength,
     scratch: Vec<f32>,
     /// The track's time base, to place each decoded packet in time.
     time_base: Option<TimeBase>,
@@ -100,13 +108,7 @@ impl SymphoniaDecoder {
         } else {
             0
         };
-        let mpeg = [
-            well_known::CODEC_ID_MP1,
-            well_known::CODEC_ID_MP2,
-            well_known::CODEC_ID_MP3,
-        ]
-        .contains(&params.codec);
-        let length_declared = !mpeg || mpeg_length_frame(path);
+        let stored_length = stored_length(format.format_info().format);
         let delay = if is_opus { track.delay.unwrap_or(0) } else { 0 };
         let frames_hint = track.num_frames.map(|n| n.saturating_sub(u64::from(delay)));
         let ts_offset_secs = f64::from(delay) / f64::from(sample_rate.max(1));
@@ -125,7 +127,8 @@ impl SymphoniaDecoder {
             bits_per_sample,
             channels,
             frames_hint,
-            length_declared,
+            path: path.to_path_buf(),
+            stored_length,
             scratch: Vec::new(),
             time_base,
             target_secs: None,
@@ -152,13 +155,21 @@ impl SymphoniaDecoder {
     }
 
     /// Total frames, when the container knows it without decoding.
-    /// Whether `frames_hint` is the container's own figure.
-    pub(crate) fn length_declared(&self) -> bool {
-        self.length_declared
-    }
-
     pub(crate) fn frames_hint(&self) -> Option<u64> {
         self.frames_hint
+    }
+
+    /// `frames_hint` when the file stores it, `None` when it is only the
+    /// reader's estimate or the reader is not known to read a stored count
+    /// (operator feedback 4, Q1). For MPEG audio this reads the file's
+    /// first frame again, so it is called only for a track's length.
+    pub(crate) fn declared_frames(&self) -> Option<u64> {
+        let stored = match self.stored_length {
+            StoredLength::Stored => true,
+            StoredLength::MpegLengthFrame => mpeg_length_frame(&self.path),
+            StoredLength::Unknown => false,
+        };
+        self.frames_hint.filter(|_| stored)
     }
 
     /// Positions the stream so that the next frame produced is at `secs`.
@@ -264,13 +275,18 @@ impl SymphoniaDecoder {
     }
 }
 
-/// How far into an MPEG stream (after any ID3v2 tag) a length frame is
-/// looked for: its first frame, with room for the largest.
+/// How far after any ID3v2 tag the first MPEG frame is looked for, and how
+/// much of it is read: room for junk before the sync and for the tag.
 const MPEG_LENGTH_FRAME_SPAN: usize = 4096;
 
-/// Whether an MPEG audio file starts with a frame that declares the
-/// stream's length (Xing, Info or VBRI). Without one symphonia estimates
-/// the length from the first frames' bitrate.
+/// The size of an MPEG audio frame header.
+const MPEG_HEADER_LEN: usize = 4;
+
+/// Whether an MPEG audio file's first frame declares the stream's length
+/// (a Xing, Info or VBRI frame). Without one symphonia estimates the length
+/// from the first frames' bitrate. The tags are looked for where symphonia
+/// reads them: Xing and Info right after the side information, VBRI 32
+/// bytes after the header.
 fn mpeg_length_frame(path: &Path) -> bool {
     use std::io::{Seek, SeekFrom};
     let Ok(mut file) = File::open(path) else {
@@ -288,8 +304,125 @@ fn mpeg_length_frame(path: &Path) -> bool {
     let Ok(read) = crate::read_up_to(&mut file, &mut span) else {
         return false;
     };
-    span.get(..read)
-        .unwrap_or_default()
-        .windows(4)
-        .any(|w| w == b"Xing" || w == b"Info" || w == b"VBRI")
+    has_length_frame(span.get(..read).unwrap_or_default())
+}
+
+/// Whether the first Layer III frame header in `span` starts a Xing, Info
+/// or VBRI frame.
+fn has_length_frame(span: &[u8]) -> bool {
+    let Some((at, side_info_len)) = (0..span.len())
+        .find_map(|i| layer3_side_info_len(span.get(i..i + MPEG_HEADER_LEN)?).map(|len| (i, len)))
+    else {
+        return false;
+    };
+    let tag_at = |offset: usize| span.get(at + offset..at + offset + 4);
+    matches!(
+        tag_at(MPEG_HEADER_LEN + side_info_len),
+        Some(b"Xing" | b"Info")
+    ) || tag_at(MPEG_HEADER_LEN + 32) == Some(b"VBRI")
+}
+
+/// The side information length of a Layer III frame starting with
+/// `header` (ISO/IEC 11172-3 and 13818-3): 17 or 32 bytes for MPEG-1, 9 or
+/// 17 for MPEG-2 and 2.5, mono or not. `None` when `header` is not the
+/// header of a Layer III frame.
+fn layer3_side_info_len(header: &[u8]) -> Option<usize> {
+    let [0xFF, b1, b2, b3] = *header else {
+        return None;
+    };
+    let version = (b1 >> 3) & 0b11;
+    let layer = (b1 >> 1) & 0b11;
+    let bitrate = b2 >> 4;
+    let rate = (b2 >> 2) & 0b11;
+    // Sync (11 bits), a version that is not reserved, Layer III, a bitrate
+    // index that is neither free nor bad, a sample rate that is not
+    // reserved.
+    if b1 & 0xE0 != 0xE0 || version == 0b01 || layer != 0b01 || bitrate == 0 || bitrate == 0xF {
+        return None;
+    }
+    if rate == 0b11 {
+        return None;
+    }
+    let mono = b3 >> 6 == 0b11;
+    Some(match (version == 0b11, mono) {
+        (true, true) => 17,
+        (true, false) => 32,
+        (false, true) => 9,
+        (false, false) => 17,
+    })
+}
+
+/// How a container's frame count is known (operator feedback 4, Q1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StoredLength {
+    /// The reader takes the count from the file.
+    Stored,
+    /// Only when the stream's first frame is a length frame.
+    MpegLengthFrame,
+    /// An estimate, or no count at all.
+    Unknown,
+}
+
+/// An allowlist: only readers known to read a stored count are trusted.
+/// FLAC (STREAMINFO), WAV and AIFF (the data chunk), CAF, MP4/M4A (the
+/// track's duration) and Ogg (the last page's granule, so Vorbis and Opus)
+/// store it. An MPEG stream stores it in a Xing, Info or VBRI frame;
+/// without one, as for ADTS, symphonia estimates it from a sample of frame
+/// sizes, which on a VBR stream can end a track early.
+fn stored_length(format: FormatId) -> StoredLength {
+    if [
+        FORMAT_ID_FLAC,
+        FORMAT_ID_WAVE,
+        FORMAT_ID_AIFF,
+        FORMAT_ID_CAF,
+        FORMAT_ID_ISOMP4,
+        FORMAT_ID_OGG,
+    ]
+    .contains(&format)
+    {
+        StoredLength::Stored
+    } else if [FORMAT_ID_MP1, FORMAT_ID_MP2, FORMAT_ID_MP3].contains(&format) {
+        StoredLength::MpegLengthFrame
+    } else {
+        StoredLength::Unknown
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use symphonia::core::common::FourCc;
+    use symphonia::core::formats::well_known::*;
+    use symphonia::core::formats::{FORMAT_ID_NULL, FormatId};
+
+    use super::{StoredLength, stored_length};
+
+    #[test]
+    fn only_readers_that_read_a_stored_count_are_trusted() {
+        for f in [
+            FORMAT_ID_FLAC,
+            FORMAT_ID_WAVE,
+            FORMAT_ID_AIFF,
+            FORMAT_ID_CAF,
+            FORMAT_ID_ISOMP4,
+            FORMAT_ID_OGG,
+        ] {
+            assert_eq!(stored_length(f), StoredLength::Stored, "{f:?}");
+        }
+        for f in [FORMAT_ID_MP1, FORMAT_ID_MP2, FORMAT_ID_MP3] {
+            assert_eq!(stored_length(f), StoredLength::MpegLengthFrame, "{f:?}");
+        }
+        // ADTS estimates from sampled frame sizes; the rest, and any
+        // reader added later, are not known to store a count.
+        for f in [
+            FORMAT_ID_ADTS,
+            FORMAT_ID_MKV,
+            FORMAT_ID_AVI,
+            FORMAT_ID_FLV,
+            FORMAT_ID_WAVPACK,
+            FormatId::new(FourCc::new(*b"zzzz")),
+            FORMAT_ID_NULL,
+        ] {
+            assert_eq!(stored_length(f), StoredLength::Unknown, "{f:?}");
+        }
+    }
 }

@@ -212,20 +212,21 @@ impl FileDecoder {
         }
     }
 
-    /// The length the container declares, in seconds, without decoding
-    /// (operator feedback 4, Q1): what a track shows until its analysis.
-    /// `None` when the container does not say, and for an MPEG stream
-    /// whose length symphonia would only estimate (no Xing, Info or VBRI
-    /// frame): on a VBR file that estimate can end a track early.
+    /// The length the file stores, in seconds, without decoding (operator
+    /// feedback 4, Q1): what a track shows until its analysis. `None`
+    /// unless the format is known to store it: an estimate (a raw AAC
+    /// stream, an MPEG stream with no Xing, Info or VBRI frame) can end a
+    /// VBR track early. WavPack sums its block headers, Monkey's Audio and
+    /// DSD read their headers' sample counts. For MPEG audio this reads the
+    /// file's first frame again.
     pub fn duration_hint_secs(&self) -> Option<f64> {
-        let declared = match &self.backend {
-            Backend::Symphonia(d) => d.length_declared(),
-            Backend::WavPack(_) | Backend::Ape(_) | Backend::Dsd(_) => true,
+        let frames = match &self.backend {
+            Backend::Symphonia(d) => d.declared_frames(),
+            Backend::WavPack(d) => d.frames_hint(),
+            Backend::Ape(d) => d.frames_hint(),
+            Backend::Dsd(d) => d.frames_hint(),
         };
-        if !declared {
-            return None;
-        }
-        duration_from_frames(self.frames_hint(), self.sample_rate())
+        duration_from_frames(frames, self.sample_rate())
     }
 
     /// Positions the stream so that the next frame produced is at `secs`.
