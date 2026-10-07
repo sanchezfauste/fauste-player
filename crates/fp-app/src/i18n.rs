@@ -48,6 +48,12 @@ pub const LOCALES: &[Locale] = &[
         source: include_str!("../locales/ca-ES/main.ftl"),
     },
     Locale {
+        tag: "de-DE",
+        name: "Deutsch",
+        translation: Translation::Machine,
+        source: include_str!("../locales/de-DE/main.ftl"),
+    },
+    Locale {
         tag: "es-ES",
         name: "Español",
         translation: Translation::Manual,
