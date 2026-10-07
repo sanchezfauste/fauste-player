@@ -275,7 +275,12 @@ OFL) is embedded, subset to Latin, Latin Extended-A and -B, general
 punctuation, currency signs, arrows and mathematical operators (the static
 TTFs of Inter 4.1 through `fonttools subset` with
 `--unicodes=U+0000-024F,U+0259,U+02B0-036F,U+1E9E,U+2000-206F,U+20A0-20C0,U+2113,U+2122,U+2190-21FF,U+2200-22FF,U+FEFF,U+FFFD --layout-features=*`), and Phosphor icons come from `egui-phosphor`, regular and
-fill. Waveform colours are a named palette (`WAVE_PALETTE`); an unknown name
+fill. The static TTFs come from the Inter 4.1 release archive,
+<https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip>:
+`extras/ttf/Inter-Regular.ttf`, `extras/ttf/Inter-Medium.ttf` and
+`extras/ttf/Inter-SemiBold.ttf` become `assets/fonts/Inter-400.ttf`,
+`Inter-500.ttf` and `Inter-600.ttf`. Their name table says version 4.001
+(`Version 4.001;git-9221beed3`): that is release 4.1, not an older font. Waveform colours are a named palette (`WAVE_PALETTE`); an unknown name
 falls back to Slate. Inter's digits are proportional, so times are painted
 with `widgets::paint_tabular`/`tabular_label`, which centre every digit in a
 cell as wide as the widest one: a countdown keeps its width as it runs. Fonts are installed on the first frame, and drawing starts

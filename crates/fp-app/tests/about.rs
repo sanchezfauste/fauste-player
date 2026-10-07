@@ -186,7 +186,6 @@ fn hand_written_languages_show_no_ai_translation_notice() {
 
 #[test]
 fn every_ai_translated_language_shows_the_notice() {
-    // Empty until the first AI-translated locale is registered.
     for l in fp_app::i18n::LOCALES
         .iter()
         .filter(|l| l.translation == fp_app::i18n::Translation::Machine)
