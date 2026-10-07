@@ -42,8 +42,6 @@ pub(crate) struct WavePanelInput<'a> {
     pub markers: MarkerFractions,
     /// The MIX marker is drawn solid amber (Continuous mode).
     pub mix_active: bool,
-    /// A click seeks.
-    pub seekable: bool,
     /// While zoomed, the view follows the position after the grace.
     pub follow: bool,
     pub badges: WaveBadges,
@@ -124,7 +122,6 @@ pub(crate) fn show(
         accessible_label: &label,
         view,
         shield: full_view_button,
-        seekable: input.seekable,
     };
     let output = widgets::waveform(ui, input.height, &wave_input);
     let (response, seek, pan_dx) = (output.response, output.seek, output.pan_dx);

@@ -1196,7 +1196,7 @@ fi
 
 Plan 1 (Q5) changes `buttons` in the same file and plan 2 (Q6) may add tests to `tests/cue_window.rs`; keep their changes when rebasing.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `crates/fp-app/tests/cue_window.rs`, change the imports to:
 
@@ -1461,12 +1461,12 @@ fn stopping_the_cue_mid_drag_moves_no_marker() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test cue_window`
 Expected: FAIL. The zoom tests find no "Full view" (`the_wheel_zooms_…`: "only the CUE's waveform zoomed" left 0, right 1; `the_cue_full_view_button_…`, `the_player_and_its_cue_zoom_independently` and `a_new_cue_opens_on_the_whole_file` fail the same way), the menu test finds no "Set intro end here", the Alt-drag test sends no `SetMarker`. `a_cue_moved_to_another_entry_shows_it_whole`, `a_cue_without_a_known_length_does_not_zoom` and `stopping_the_cue_mid_drag_moves_no_marker` pass already (nothing zooms or drags yet); they turn into guards once the panel is in, and Step 4 shows the last one failing without `forget`.
 
-- [ ] **Step 3: Make the CUE window a thin caller**
+- [x] **Step 3: Make the CUE window a thin caller**
 
 In `crates/fp-app/src/ui/cue_window.rs`:
 
@@ -1576,14 +1576,14 @@ fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Cu
 
 In `crates/fp-app/src/ui/app.rs:679`: `cue_window::show_all(&ctx, &scene, &mut self.view);` (`scene` borrows other fields of `self`, as `players_row` already shows).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test cue_window && cargo test -p fp-app --test waveform_ui && cargo test -p fp-app --test markers_ui && cargo test -p fp-app --test glyphs`
 Expected: PASS — the new tests, the existing CUE window tests (`clicking_the_waveform_seeks_the_cue`, `a_cue_without_a_known_length_shows_zero_and_cannot_seek`, `two_cues_stack_two_windows`, …) and the player's waveform tests, unchanged.
 
 To confirm `forget` is what makes `stopping_the_cue_mid_drag_moves_no_marker` and `a_new_cue_opens_on_the_whole_file` pass, comment out the `forget(…)` call, run `cargo test -p fp-app --test cue_window a_new_cue stopping_the_cue`, see both fail, and restore it.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \

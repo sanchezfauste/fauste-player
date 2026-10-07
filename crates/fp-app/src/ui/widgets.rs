@@ -1124,9 +1124,6 @@ pub struct WaveInput<'a> {
     pub view: Option<WaveView>,
     /// An area drawn over the waveform (a button) where no seek starts.
     pub shield: Option<Rect>,
-    /// Clicks seek. On a stopped player a click sets where Play starts the
-    /// next track (rule 3a); the CUE window seeks the CUE.
-    pub seekable: bool,
 }
 
 /// What the waveform reports for a frame (feedback 2 spec O10).
@@ -1360,7 +1357,9 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
             &font(10.0),
             theme::TEXT,
         );
-        if input.seekable && response.clicked() && !alt {
+        // A click seeks. On a stopped player it sets where Play starts the
+        // next track (rule 3a); the CUE window seeks the CUE.
+        if response.clicked() && !alt {
             seek = Some(view.secs_at(p.x, inner));
         }
     }

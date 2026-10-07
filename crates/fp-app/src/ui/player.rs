@@ -844,7 +844,6 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         total: pv.total,
         markers: pv.markers,
         mix_active: pv.mode == PlayMode::Continuous,
-        seekable: true,
         // A stopped player's position is pinned (its cue-in or its pending
         // start, rule 3a): following it would undo a zoom made to prepare
         // the next track.
