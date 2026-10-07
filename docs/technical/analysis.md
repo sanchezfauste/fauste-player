@@ -168,8 +168,9 @@ Its value is seconds (`12.5`) or `m:ss(.f)`. The model's
 ## Cache (`cache.rs`)
 
 There is one postcard file per track in `<cache>/analysis/`. The key is an
-FNV-1a hash of the canonical path, size, mtime, `ANALYSIS_VERSION` (4 since
-the format was added; the services thread analyses again, once, every track
+FNV-1a hash of the canonical path, size, mtime, `ANALYSIS_VERSION` (bumped when
+the analysis output changes: 4 added the format, 8 measures VBR MPEG
+streams without a length frame to their end; the services thread analyses again, once, every track
 that is analysed but has no format), the
 analysis settings and the cover limits. The key is taken *before* analysing,
 and the result is only stored if the file did not change meanwhile. Writes

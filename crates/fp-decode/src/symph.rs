@@ -2,7 +2,10 @@
 //! Vorbis and Matroska/WebM.
 
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::io::{Read, Seek, SeekFrom};
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions, well_known};
 use symphonia::core::errors::{Error, SeekErrorKind};
@@ -14,7 +17,7 @@ use symphonia::core::formats::well_known::{
 use symphonia::core::formats::{
     FormatId, FormatOptions, FormatReader, SeekMode, SeekTo, TrackType,
 };
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Time, TimeBase};
 
@@ -28,10 +31,9 @@ pub(crate) struct SymphoniaDecoder {
     bits_per_sample: Option<u32>,
     channels: usize,
     frames_hint: Option<u64>,
-    /// The file, read again for an MPEG stream's length frame.
-    path: PathBuf,
-    /// How the container's reader knows `frames_hint`.
-    stored_length: StoredLength,
+    /// Whether the file stores `frames_hint` (otherwise it is the reader's
+    /// estimate, if any).
+    length_stored: bool,
     scratch: Vec<f32>,
     /// The track's time base, to place each decoded packet in time.
     time_base: Option<TimeBase>,
@@ -65,20 +67,21 @@ const VORBIS_MAX_BLOCK: f64 = 8192.0;
 
 impl SymphoniaDecoder {
     pub(crate) fn open(path: &Path) -> Result<Self, String> {
-        let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let mss = MediaSourceStream::new(Box::new(file), Default::default());
-        let mut hint = Hint::new();
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            hint.with_extension(ext);
-        }
-        let format = symphonia::default::get_probe()
-            .probe(
-                &hint,
-                mss,
-                FormatOptions::default(),
-                MetadataOptions::default(),
-            )
-            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let mut format = probe(path, false)?;
+        let length_stored = match stored_length(format.format_info().format) {
+            StoredLength::Stored => true,
+            StoredLength::MpegLengthFrame if mpeg_length_frame(path) => true,
+            // symphonia's MPEG reader estimates the length of a seekable
+            // stream from its first frames and takes it as the end: past
+            // it, every packet is trimmed to nothing and seeks are out of
+            // range, so a VBR file ends early. Probed as unseekable, it
+            // makes no estimate and reads to the end of the stream.
+            StoredLength::MpegLengthFrame => {
+                format = probe(path, true)?;
+                false
+            }
+            StoredLength::Unknown => false,
+        };
         let track = format
             .default_track(TrackType::Audio)
             .ok_or_else(|| format!("{}: no audio track", path.display()))?;
@@ -108,7 +111,6 @@ impl SymphoniaDecoder {
         } else {
             0
         };
-        let stored_length = stored_length(format.format_info().format);
         let delay = if is_opus { track.delay.unwrap_or(0) } else { 0 };
         let frames_hint = track.num_frames.map(|n| n.saturating_sub(u64::from(delay)));
         let ts_offset_secs = f64::from(delay) / f64::from(sample_rate.max(1));
@@ -127,8 +129,7 @@ impl SymphoniaDecoder {
             bits_per_sample,
             channels,
             frames_hint,
-            path: path.to_path_buf(),
-            stored_length,
+            length_stored,
             scratch: Vec::new(),
             time_base,
             target_secs: None,
@@ -161,15 +162,9 @@ impl SymphoniaDecoder {
 
     /// `frames_hint` when the file stores it, `None` when it is only the
     /// reader's estimate or the reader is not known to read a stored count
-    /// (operator feedback 4, Q1). For MPEG audio this reads the file's
-    /// first frame again, so it is called only for a track's length.
+    /// (operator feedback 4, Q1).
     pub(crate) fn declared_frames(&self) -> Option<u64> {
-        let stored = match self.stored_length {
-            StoredLength::Stored => true,
-            StoredLength::MpegLengthFrame => mpeg_length_frame(&self.path),
-            StoredLength::Unknown => false,
-        };
-        self.frames_hint.filter(|_| stored)
+        self.frames_hint.filter(|_| self.length_stored)
     }
 
     /// Positions the stream so that the next frame produced is at `secs`.
@@ -275,6 +270,64 @@ impl SymphoniaDecoder {
     }
 }
 
+/// Opens `path` and probes its format. With `hide_seeking`, the stream
+/// reports itself unseekable until the probe is done, so a reader makes no
+/// estimate that needs seeking (see `SymphoniaDecoder::open`); seeking works
+/// afterwards.
+fn probe(path: &Path, hide_seeking: bool) -> Result<Box<dyn FormatReader>, String> {
+    let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let seekable = Arc::new(AtomicBool::new(!hide_seeking));
+    let source = ProbeSource {
+        len: file.metadata().ok().map(|m| m.len()),
+        file,
+        seekable: Arc::clone(&seekable),
+    };
+    let mss = MediaSourceStream::new(Box::new(source), Default::default());
+    let mut hint = Hint::new();
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
+    }
+    let format = symphonia::default::get_probe()
+        .probe(
+            &hint,
+            mss,
+            FormatOptions::default(),
+            MetadataOptions::default(),
+        )
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    seekable.store(true, Ordering::Relaxed);
+    Ok(format)
+}
+
+/// A file whose seekability can be hidden while it is probed.
+struct ProbeSource {
+    file: File,
+    len: Option<u64>,
+    seekable: Arc<AtomicBool>,
+}
+
+impl Read for ProbeSource {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.file.read(buf)
+    }
+}
+
+impl Seek for ProbeSource {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.file.seek(pos)
+    }
+}
+
+impl MediaSource for ProbeSource {
+    fn is_seekable(&self) -> bool {
+        self.seekable.load(Ordering::Relaxed)
+    }
+
+    fn byte_len(&self) -> Option<u64> {
+        self.len
+    }
+}
+
 /// How far after any ID3v2 tag the first MPEG frame is looked for, and how
 /// much of it is read: room for junk before the sync and for the tag.
 const MPEG_LENGTH_FRAME_SPAN: usize = 4096;
@@ -288,7 +341,6 @@ const MPEG_HEADER_LEN: usize = 4;
 /// reads them: Xing and Info right after the side information, VBRI 32
 /// bytes after the header.
 fn mpeg_length_frame(path: &Path) -> bool {
-    use std::io::{Seek, SeekFrom};
     let Ok(mut file) = File::open(path) else {
         return false;
     };

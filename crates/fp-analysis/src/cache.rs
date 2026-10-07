@@ -17,7 +17,8 @@ use crate::analyze::Analysis;
 
 /// Bump when the analysis algorithm or output format changes.
 /// 7: `AudioFormat::dsd_rate` (feedback 2 O25).
-pub const ANALYSIS_VERSION: u32 = 7;
+/// 8: VBR MPEG streams without a length frame decode to their end.
+pub const ANALYSIS_VERSION: u32 = 8;
 
 #[derive(Serialize, Deserialize)]
 struct CachedAnalysis {
