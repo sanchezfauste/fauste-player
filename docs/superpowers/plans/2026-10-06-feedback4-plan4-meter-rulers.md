@@ -586,7 +586,7 @@ Mechanical: switch the painter to the new layout, delete the old API and constan
 - Consumes: `MeterLayout::{rulers, ticks, lines, bars}`, `Ruler::tick_rect`, `TickKind` (Task 1).
 - Produces: `pub fn tick_colour(kind: TickKind) -> Color32` in `widgets.rs`; in `theme.rs`: `pub const METER_TICK: Color32 = NEUTRAL_400;`, `pub const METER_TICK_MINOR_ALPHA: f32 = 0.60;`, `pub const METER_ALIGNMENT_TICK: Color32 = Color32::WHITE;`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `crates/fp-app/tests/theme.rs` replace `the_meter_reference_lines_are_visible_over_both_parts_of_the_bar` with:
 
@@ -701,12 +701,12 @@ fn nothing_is_drawn_over_the_bars_or_between_them() {
 
 (`rms_db`, `max_db` and `lufs_momentary` are real `MeterReading` fields; run `grep -n "pub " crates/fp-engine/src/meter.rs | head -30` to confirm the exact names and `LoudnessReadout` variant names, and adjust the two lines that set them.)
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test meter_view nothing_is_drawn 2>&1 | tail -15` and `cargo test -p fp-app --test theme the_meter_ticks 2>&1 | tail -8`
 Expected: compile errors (`tick_colour`, `METER_TICK` not found). After adding only the constants and `tick_colour` (Step 3, first part), `nothing_is_drawn_over_the_bars_or_between_them` FAILS on the digital meter (the reference line across the gap).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `theme.rs`: replace the `METER_LINE_*` block with
 
@@ -756,12 +756,12 @@ In `vu`, replace everything from the comment "The scale: a faint reference line�
 
 Update the doc comment of `vu`: "the scale on a ruler on each side of the bars (labels, a tick for every label, minor ticks, a white alignment tick), a continuous bar per channel … the peak hold, … Nothing is drawn over the bars." Remove "reference lines across both bars". Remove the now-unused `level_y` binding only if the compiler says it is unused (it is still used by `column`).
 
-- [ ] **Step 4: Run all the affected tests**
+- [x] **Step 4: Run all the affected tests**
 
 Run: `cargo test -p fp-app --test meter_view --test theme 2>&1 | tail -15`
 Expected: PASS. Then `grep -rn "reference_segments\|LineShade\|METER_LINE\|alignment_notches\|lines_x\|labels_right" crates docs/technical docs/user` must print nothing except the historical plans and `docs/technical/audio-engine.md` (Task 3).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
