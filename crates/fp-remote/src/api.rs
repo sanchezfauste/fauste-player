@@ -184,8 +184,14 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
             // start before the cue-in is raised to it by the reducer, as
             // for a click on the local wave, so it is accepted.
             if stopped {
-                if !(secs.is_finite() && secs < to) {
-                    return Err(ApiError::BadRequest(format!("secs must be before {to}")));
+                // The reducer's rule (pending_start_at): finite, and before the
+                // end when the end is known.
+                let end = range.known_end();
+                if !(secs.is_finite() && end.is_none_or(|end| secs.max(from) < end)) {
+                    return Err(ApiError::BadRequest(match end {
+                        Some(end) => format!("secs must be before {end}"),
+                        None => "secs must be a finite number".to_owned(),
+                    }));
                 }
             } else if !(secs >= from && secs <= to) {
                 return Err(ApiError::BadRequest(format!(

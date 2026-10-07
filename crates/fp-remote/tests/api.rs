@@ -407,3 +407,56 @@ fn seek_on_a_stopped_player_before_the_cue_in_goes_to_the_cue_in() {
     assert_eq!(applied.player(p).unwrap().pending_start, Some((next, 20.0)));
     assert_eq!(plan(&s, O::Seek(p, f64::NAN)).unwrap_err().status(), 400);
 }
+
+/// A stopped player's seek follows the reducer's rule (`pending_start_at`):
+/// any finite value, raised to the cue-in, and refused only at or after the
+/// end when that end is known.
+#[test]
+fn seek_on_a_stopped_player_follows_the_reducers_rule() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    let next = s.player(p).unwrap().next.unwrap();
+    let track = s.playlists.entry(next).unwrap().track;
+    let end = s
+        .track_for_entry(next)
+        .unwrap()
+        .play_range(s.config.players.use_cue_markers)
+        .cue_out;
+    // Negative: raised to the cue-in by the reducer, so accepted.
+    assert_eq!(
+        plan(&s, O::Seek(p, -1.0)).unwrap(),
+        vec![Command::Seek(p, -1.0)]
+    );
+    // At or after a known end.
+    assert_eq!(plan(&s, O::Seek(p, end)).unwrap_err().status(), 400);
+    assert_eq!(plan(&s, O::Seek(p, end + 5.0)).unwrap_err().status(), 400);
+    // An unknown end (no duration, no cue-out) accepts any finite value.
+    s.library.get_mut(track).unwrap().duration_secs = 0.0;
+    fp_model::apply(
+        &mut s,
+        Command::SetMarker {
+            track,
+            kind: fp_model::MarkerKind::CueOut,
+            secs: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        s.track_for_entry(next)
+            .unwrap()
+            .play_range(s.config.players.use_cue_markers)
+            .known_end(),
+        None
+    );
+    assert_eq!(
+        plan(&s, O::Seek(p, 30.0)).unwrap(),
+        vec![Command::Seek(p, 30.0)]
+    );
+    assert_eq!(
+        plan(&s, O::Seek(p, f64::INFINITY)).unwrap_err().status(),
+        400
+    );
+    let mut applied = s.clone();
+    fp_model::apply(&mut applied, Command::Seek(p, 30.0)).unwrap();
+    assert_eq!(applied.player(p).unwrap().pending_start, Some((next, 30.0)));
+}
