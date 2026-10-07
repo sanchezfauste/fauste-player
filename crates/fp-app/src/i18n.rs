@@ -77,6 +77,12 @@ pub const LOCALES: &[Locale] = &[
         translation: Translation::Machine,
         source: include_str!("../locales/gl-ES/main.ftl"),
     },
+    Locale {
+        tag: "it-IT",
+        name: "Italiano",
+        translation: Translation::Machine,
+        source: include_str!("../locales/it-IT/main.ftl"),
+    },
 ];
 
 /// A registered locale by its exact tag.
