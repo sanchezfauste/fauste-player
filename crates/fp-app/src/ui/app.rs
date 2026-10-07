@@ -59,6 +59,9 @@ pub(crate) struct DragEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DropTarget {
+    /// The player whose table shows the target: only that table draws the
+    /// drop line (operator feedback 4, Q4.3).
+    pub player: PlayerId,
     pub playlist: PlaylistId,
     pub index: usize,
 }
@@ -1299,6 +1302,7 @@ impl AppUi {
                 .or_else(|| state.players.first())?;
             let list = state.playlists.get(player.playlist)?;
             Some(DropTarget {
+                player: player.id,
                 playlist: list.id,
                 index: list.entries.len(),
             })

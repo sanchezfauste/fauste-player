@@ -829,7 +829,7 @@ Suggested executor: `opus` (a rewrite of the drag and drop block with several in
 - Consumes: `table_layout::{drop_index, boundary_y, on_column_edge}` (Task 4), `ScrollAreaOutput::{inner_rect, state.offset}` returned by `TableBuilder::body`, `px` (the column widths of the frame), `ROW_HEIGHT`.
 - Produces: `DropTarget { player: PlayerId, playlist: PlaylistId, index: usize }` (`pub(crate)`); `ViewState::drop` and `ViewState::file_drop` hold it keyed by player and playlist.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `crates/fp-app/tests/table_drop_ui.rs`:
 
@@ -1026,12 +1026,12 @@ fn the_bar_follows_the_pointer_in_a_scrolled_long_list() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test table_drop_ui`
 Expected: `the_bar_is_at_the_boundary_under_the_pointer` or `only_the_table_under_the_pointer_draws_the_bar` FAIL (two bars, or one at the wrong place); `releasing_on_a_column_edge_drops_nothing` and `releasing_over_the_header_drops_nothing` FAIL (the release below or on the handle still moves the entry).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `app.rs`: `DropTarget` gains `pub player: PlayerId`. In `file_drops`'s `fallback` closure add `player: player.id`. Fix any other constructor the compiler reports.
 
@@ -1091,12 +1091,12 @@ if let Some(index) = target {
 
 Remove the now-unused `pointer_in` and any unused imports the compiler reports. `area` is still used by the wheel test, the resize handles and the column-move line.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test table_drop_ui`, `cargo test -p fp-app --test main_screen files_dropped`, `cargo test -p fp-app --test table_header_ui`, `cargo test -p fp-app --test table_columns_ui`, `cargo test -p fp-app --test table_follow`
 Expected: PASS. If `inner_rect` turns out to include the scroll bar (the `outside_the_body` pointer test over the bar fails), subtract `ui.spacing().scroll.allocated_width()` from its right side when the content is taller than the view, and note it in the commit body.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cargo fmt --all

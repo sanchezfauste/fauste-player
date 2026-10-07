@@ -160,12 +160,8 @@ pub(crate) fn track_table(
     let pressed_in_table = ui.rect_contains_pointer(area) && ui.input(|i| i.pointer.primary_down());
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     let mut built = 0;
-    let mut hovered_row: Option<(usize, bool)> = None;
-    let mut pointer_row: Option<(usize, bool)> = None;
     let pointer = ui.ctx().pointer_hover_pos();
-    let mut released: Option<(DragEntry, usize)> = None;
     let entries = &list.entries;
-    let drop = view_state.drop.filter(|d| d.playlist == playlist);
     let selected = view_state.selection.get(&player).copied();
     let mut clicked: Option<EntryId> = None;
     // O17: the entry a running CUE moves to after a primary click.
@@ -212,7 +208,7 @@ pub(crate) fn track_table(
     // O24: a header being dragged over another, and the move it ended in.
     let mut column_slot: Option<usize> = None;
     let mut column_move: Option<(usize, usize)> = None;
-    builder
+    let output = builder
         .header(HEADER_HEIGHT, |mut header| {
             for (index, column) in columns.iter().enumerate() {
                 let (_, response) = header.col(|ui| {
@@ -289,22 +285,6 @@ pub(crate) fn track_table(
                         0.0,
                         theme::TEXT.gamma_multiply(0.06),
                     );
-                    if let Some(d) = drop {
-                        let y = if d.index == i {
-                            Some(full.top())
-                        } else if d.index == entries.len() && i + 1 == entries.len() {
-                            Some(full.bottom() - 2.0)
-                        } else {
-                            None
-                        };
-                        if let Some(y) = y {
-                            ui.painter().rect_filled(
-                                Rect::from_min_size(pos2(full.left(), y), vec2(full.width(), 2.0)),
-                                0.0,
-                                theme::ACCENT,
-                            );
-                        }
-                    }
                 };
                 for column in &columns {
                     row.col(|ui| {
@@ -516,21 +496,6 @@ pub(crate) fn track_table(
                     response.dnd_set_drag_payload(DragEntry { entry: entry.id });
                     dragged = Some(entry.id);
                 }
-                if let Some(p) = pointer.filter(|p| response.rect.contains(*p)) {
-                    pointer_row = Some((i, p.y > response.rect.center().y));
-                }
-                if response.dnd_hover_payload::<DragEntry>().is_some()
-                    && let Some(pos) = response.hover_pos()
-                {
-                    hovered_row = Some((i, pos.y > response.rect.center().y));
-                }
-                if let Some(payload) = response.dnd_release_payload::<DragEntry>() {
-                    let below = response
-                        .interact_pointer_pos()
-                        .or(response.hover_pos())
-                        .is_some_and(|p| p.y > response.rect.center().y);
-                    released = Some((*payload, if below { i + 1 } else { i }));
-                }
                 response.context_menu(|ui| {
                     menu_open = true;
                     clicked = Some(entry.id);
@@ -552,58 +517,67 @@ pub(crate) fn track_table(
     if edit_tags.is_some() {
         view_state.edit_tags = edit_tags;
     }
-    // Drop target for entries dragged inside the app.
-    let pointer_in = ui
-        .ctx()
-        .pointer_hover_pos()
-        .is_some_and(|p| area.contains(p));
+    // Q4: the drop target comes from the pointer and the body's geometry,
+    // never from the widget under it, and belongs to this table alone: it is
+    // keyed by player and playlist.
+    let body_rect = output.inner_rect;
+    let scroll_y = output.state.offset.y;
+    let grab = ui.style().interaction.resize_grab_radius_side;
+    let target = pointer
+        .filter(|p| !table_layout::on_column_edge(&px, area.left(), grab, p.x))
+        .and_then(|p| table_layout::drop_index(body_rect, scroll_y, ROW_HEIGHT, entries.len(), p));
     if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx()) {
-        match hovered_row {
-            Some((i, below)) => {
+        match target {
+            Some(index) => {
                 view_state.drop = Some(DropTarget {
+                    player,
                     playlist,
-                    index: if below { i + 1 } else { i },
+                    index,
                 });
-            }
-            None if pointer_in => {
-                view_state.drop = Some(DropTarget {
-                    playlist,
-                    index: entries.len(),
-                });
-            }
-            None => {
-                if view_state.drop.is_some_and(|d| d.playlist == playlist) {
-                    view_state.drop = None;
+                // Drawn after the body, from the same geometry: at the
+                // boundary even when the rows next to it were not built.
+                if let Some(y) = table_layout::boundary_y(body_rect, scroll_y, ROW_HEIGHT, index) {
+                    let top = if index > 0 && index == entries.len() {
+                        y - 2.0
+                    } else {
+                        y
+                    };
+                    ui.painter().with_clip_rect(body_rect).rect_filled(
+                        Rect::from_min_size(
+                            pos2(body_rect.left(), top),
+                            vec2(body_rect.width(), 2.0),
+                        ),
+                        0.0,
+                        theme::ACCENT,
+                    );
                 }
             }
+            None if view_state
+                .drop
+                .is_some_and(|d| d.player == player && d.playlist == playlist) =>
+            {
+                view_state.drop = None;
+            }
+            None => {}
+        }
+        if ui.input(|i| i.pointer.any_released())
+            && let Some(index) = target
+            && let Some(payload) = egui::DragAndDrop::payload::<DragEntry>(ui.ctx())
+        {
+            scene.ctl.send(Command::MoveEntry {
+                entry: payload.entry,
+                to: playlist,
+                index,
+            });
+            view_state.drop = None;
         }
     }
-    if let Some((payload, index)) = released {
-        scene.ctl.send(Command::MoveEntry {
-            entry: payload.entry,
-            to: playlist,
-            index,
-        });
-        view_state.drop = None;
-    } else if pointer_in
-        && ui.input(|i| i.pointer.any_released())
-        && let Some(payload) = egui::DragAndDrop::payload::<DragEntry>(ui.ctx())
-    {
-        // Released below the last row.
-        scene.ctl.send(Command::MoveEntry {
-            entry: payload.entry,
-            to: playlist,
-            index: entries.len(),
-        });
-        view_state.drop = None;
-    }
-    // OS file drops land at the hovered row, or at the end.
-    if pointer_in {
+    // OS file drops follow the same rules (Q4.6).
+    if let Some(index) = target {
         view_state.file_drop = Some(DropTarget {
+            player,
             playlist,
-            index: pointer_row
-                .map(|(i, below)| if below { i + 1 } else { i })
-                .unwrap_or(entries.len()),
+            index,
         });
     }
     resize_handles(ui, view_state, player, &columns, &px, area);
