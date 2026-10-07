@@ -115,7 +115,7 @@ file is missing, or whose file cannot be decoded, answers `404 not_found`.
 | `PUT /players/{id}/cue` | `{"on": bool}` | Pre-listen the next entry, or stop pre-listening |
 | `PUT /players/{id}/next` | `{"entry": id}` | Choose the next entry. The entry on air is accepted: it plays once more from its cue-in when the current pass ends |
 | `POST /players/{id}/cue-entry` | `{"entry": id}` | Pre-listen an entry |
-| `POST /players/{id}/seek` | `{"secs": f64}` | Seek within the cue range of what is playing |
+| `POST /players/{id}/seek` | `{"secs": f64}` | Seek within the cue range of what is playing; on a stopped player, set where Play starts the next entry (rule 3a), within that entry's cue range. `409` when there is nothing to seek |
 | `PUT /players/{id}/volume` | `{"fader": f32}` | Fader travel 0–1 |
 | `PUT /players/{id}/mode` | `{"mode": "single" \| "continuous"}` | |
 | `PUT /players/{id}/stop-after-current` | `{"on": bool}` | `409` in single mode unless the current entry repeats |

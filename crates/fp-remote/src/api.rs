@@ -165,11 +165,16 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
         }
         O::Seek(p, secs) => {
             let pl = player(p)?;
-            let track = pl
-                .current
-                .filter(|_| pl.transport != Transport::Stopped)
+            // Operator feedback 4, Q8 (rule 3a): a stopped player's seek
+            // sets where Play starts its next.
+            let entry = if pl.transport == Transport::Stopped {
+                pl.next
+            } else {
+                pl.current
+            };
+            let track = entry
                 .and_then(|e| state.track_for_entry(e))
-                .ok_or_else(|| ApiError::Unavailable("nothing is playing".to_owned()))?;
+                .ok_or_else(|| ApiError::Unavailable("nothing to seek".to_owned()))?;
             let range = track.play_range(state.config.players.use_cue_markers);
             let (from, to) = (range.cue_in, range.cue_out);
             if !(secs >= from && secs <= to) {

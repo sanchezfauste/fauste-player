@@ -126,10 +126,9 @@ fn the_fader_maps_through_the_ui_curve_and_must_be_in_range() {
 }
 
 #[test]
-fn seek_needs_a_running_entry_and_a_position_inside_its_cue_range() {
+fn seek_while_playing_stays_inside_the_cue_range_of_what_plays() {
     let mut s = demo_state();
     let p = s.players[0].id;
-    assert_eq!(plan(&s, O::Seek(p, 10.0)).unwrap_err().status(), 409);
     fp_model::apply(&mut s, Command::Play(p)).unwrap();
     assert_eq!(
         plan(&s, O::Seek(p, 10.0)).unwrap(),
@@ -270,6 +269,30 @@ fn a_desired_value_planned_twice_from_one_snapshot_stays_set() {
     assert!(applied.players[0].stop_after_current);
     assert!(applied.playlists.entry(e).unwrap().repeat);
     assert_eq!(applied.cartwall.cue, Some(c));
+}
+
+/// Operator feedback 4, Q8 (rule 3a): a seek on a stopped player sets
+/// where Play starts its next, inside that entry's cue range.
+#[test]
+fn seek_on_a_stopped_player_sets_where_play_starts_its_next() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    assert_eq!(
+        plan(&s, O::Seek(p, 10.0)).unwrap(),
+        vec![Command::Seek(p, 10.0)]
+    );
+    assert_eq!(plan(&s, O::Seek(p, 500.0)).unwrap_err().status(), 400);
+    // With no next there is nothing to seek.
+    let all: Vec<EntryId> = s
+        .playlists
+        .iter()
+        .flat_map(|l| l.entries.iter().map(|e| e.id))
+        .collect();
+    for e in all {
+        fp_model::apply(&mut s, Command::RemoveEntry(e)).unwrap();
+    }
+    assert_eq!(s.player(p).unwrap().next, None);
+    assert_eq!(plan(&s, O::Seek(p, 10.0)).unwrap_err().status(), 409);
 }
 
 #[test]

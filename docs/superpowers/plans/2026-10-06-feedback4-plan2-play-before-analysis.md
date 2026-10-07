@@ -2605,7 +2605,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 - Consumes: `Command::Seek` on a stopped player (Task 7).
 - Produces: `plan(state, Operation::Seek(p, secs))`. It is `Ok(vec![Command::Seek(p, secs)])` for a stopped player with a next when `secs` is within that entry's cue range. It is `409` when there is nothing to seek.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `crates/fp-remote/tests/api.rs`:
 - rename `seek_needs_a_running_entry_and_a_position_inside_its_cue_range` to `seek_while_playing_stays_inside_the_cue_range_of_what_plays`;
@@ -2638,13 +2638,13 @@ fn seek_on_a_stopped_player_sets_where_play_starts_its_next() {
 }
 ```
 
-- [ ] **Step 2: Run them to make sure they fail**
+- [x] **Step 2: Run them to make sure they fail**
 
 Run: `cargo test -p fp-remote --test api seek`
 
 Expected: `seek_on_a_stopped_player_sets_where_play_starts_its_next` FAILS, because the stopped player gets a `409`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `crates/fp-remote/src/api.rs`, replace the head of the `O::Seek` arm, up to `.ok_or_else(…)?;`, with:
 
@@ -2665,13 +2665,13 @@ In `crates/fp-remote/src/api.rs`, replace the head of the `O::Seek` arm, up to `
 
 The cue-range check and `Ok(vec![Command::Seek(p, secs)])` after it stay as they are.
 
-- [ ] **Step 4: Run the tests to make sure they pass**
+- [x] **Step 4: Run the tests to make sure they pass**
 
 Run: `cargo test -p fp-remote`
 
 Expected: PASS. Also check that no OSC or HTTP test still expects a `409` for a stopped player: `grep -rn "Seek\|/seek" crates/fp-remote/tests`.
 
-- [ ] **Step 5: Docs**
+- [x] **Step 5: Docs**
 
 In `docs/technical/remote-api.md`, the seek row becomes:
 
@@ -2679,7 +2679,7 @@ In `docs/technical/remote-api.md`, the seek row becomes:
 | `POST /players/{id}/seek` | `{"secs": f64}` | Seek within the cue range of what is playing; on a stopped player, set where Play starts the next entry (rule 3a), within that entry's cue range. `409` when there is nothing to seek |
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \
