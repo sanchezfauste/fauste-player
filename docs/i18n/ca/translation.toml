@@ -1,0 +1,15 @@
+# Catalan translation of the user guide, generated with AI from the English
+# guide in docs/user. Regenerated before each release; see
+# docs/technical/release-process.md.
+language = "ca"
+name = "Català"
+title = "Fauste Player — Guia de l'usuari"
+label = "Idioma"
+# The commit of master whose docs/user this translation was made from, and
+# its `git describe --tags`.
+source-commit = "69320878e299f7829975d5b1a845f1a8c96794bb"
+source-version = "v0.5.0-120-g6932087"
+# The notice on every page; {version} and {commit} are replaced with the
+# fields above, and english-link links to the same page in English.
+notice = "Aquesta pàgina s'ha traduït amb IA a partir de la guia en anglès ({version}, commit {commit}) i pot contenir errors. En cas de qualsevol diferència, preval la versió en anglès."
+english-link = "Llegeix l'original en anglès"
