@@ -985,6 +985,20 @@ fn an_unreadable_file_that_disappeared_becomes_missing() {
     r.run_until("missing", |r| all_in(r, FileState::Missing));
 }
 
+/// Q10.3: a file found gone is reported once, not again on each look while
+/// the snapshot still says unreadable.
+#[test]
+fn an_unreadable_file_that_disappeared_is_reported_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut r = recheck_rig(std::slice::from_ref(&bad), dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    std::fs::remove_file(&bad).unwrap();
+    r.run_until("missing", |r| all_in(r, FileState::Missing));
+    quiet_for(&mut r, 2_500);
+    assert_eq!(r.services.gone_reports(), 1);
+}
+
 /// Q10.4: the row menu's Re-analyse does not wait for a change.
 #[test]
 fn reanalyse_track_analyses_a_failed_file_at_once_whatever_its_state() {

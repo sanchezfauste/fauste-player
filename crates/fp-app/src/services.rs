@@ -334,6 +334,9 @@ pub struct Services {
     /// `stamps`: a file that changed after it was read (a copy that
     /// completed) is analysed again.
     failed_at: HashMap<TrackId, Stamp>,
+    /// Unreadable tracks reported gone (`Missing` sent) whose snapshot does
+    /// not show it yet: neither looked at nor reported again meanwhile.
+    gone: HashSet<TrackId>,
     /// Tracks the operator asked to analyse at once (the row menu's
     /// Re-analyse): they go ahead of the library.
     urgent: HashSet<TrackId>,
@@ -365,6 +368,8 @@ pub struct Services {
     fail_steps: u32,
     #[cfg(feature = "test-hooks")]
     fail_routes: u32,
+    #[cfg(feature = "test-hooks")]
+    gone_reports: usize,
     saved_version: u64,
     dirty_since: Option<Instant>,
     last_session_save: Option<Instant>,
@@ -391,6 +396,7 @@ impl Services {
             forced: HashSet::new(),
             stamps: HashMap::new(),
             failed_at: HashMap::new(),
+            gone: HashSet::new(),
             urgent: HashSet::new(),
             analyse_outdated: false,
             retried: HashSet::new(),
@@ -410,6 +416,8 @@ impl Services {
             fail_steps: 0,
             #[cfg(feature = "test-hooks")]
             fail_routes: 0,
+            #[cfg(feature = "test-hooks")]
+            gone_reports: 0,
             saved_version: 0,
             dirty_since: None,
             last_session_save: None,
@@ -451,6 +459,12 @@ impl Services {
     #[cfg(feature = "test-hooks")]
     pub fn looked_at(&self) -> usize {
         self.stamps.values().filter(|s| **s != Seen::New).count()
+    }
+
+    /// How many times an unreadable file was reported gone to the model.
+    #[cfg(feature = "test-hooks")]
+    pub fn gone_reports(&self) -> usize {
+        self.gone_reports
     }
 
     /// One round of work. Never blocks on the analyzer. A panic inside is
@@ -639,10 +653,20 @@ impl Services {
                         // Q10.3: it follows the missing-file recheck from
                         // here.
                         self.stamps.remove(&id);
-                        self.conductor.send(Command::SetFileState {
+                        if self.gone.contains(&id) {
+                            continue;
+                        }
+                        #[cfg(feature = "test-hooks")]
+                        {
+                            self.gone_reports += 1;
+                        }
+                        // Not queued: the next look reports it again.
+                        if self.conductor.send(Command::SetFileState {
                             track: id,
                             state: FileState::Missing,
-                        });
+                        }) {
+                            self.gone.insert(id);
+                        }
                     }
                 }
                 Err(crossbeam_channel::TryRecvError::Empty) => break,
@@ -661,10 +685,16 @@ impl Services {
                 .get(*id)
                 .is_some_and(|t| t.file_state == FileState::Unreadable)
         });
+        self.gone.retain(|id| {
+            state
+                .library
+                .get(*id)
+                .is_some_and(|t| t.file_state == FileState::Unreadable)
+        });
         for t in state
             .library
             .iter()
-            .filter(|t| t.file_state == FileState::Unreadable)
+            .filter(|t| t.file_state == FileState::Unreadable && !self.gone.contains(&t.id))
         {
             // What the failed analysis read, when it could `stat` the file;
             // otherwise (and for a playback failure) a first look.

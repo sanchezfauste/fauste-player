@@ -235,7 +235,7 @@ The services thread submits tracks when either:
   the first look at the newly unreadable file is not waited for the timer
   and its stat is recorded. A changed size or time clears the failure and queues
   an analysis; an unchanged file does nothing (no analysis, no save); a
-  file that is gone becomes `Missing`; any other `stat` error is ignored. A
+  file that is gone becomes `Missing` (sent once: until a snapshot shows it, the track is neither looked at nor reported again); any other `stat` error is ignored. A
   change seen while the track is already being analysed is dropped and
   reported again at the next look. `ServiceRequest::ReanalyseTrack` (the row
   menu's **Re-analyse**) clears the failure and queues the track on the
