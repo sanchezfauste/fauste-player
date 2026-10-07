@@ -291,6 +291,13 @@ fn a_typed_cart_name_is_kept_when_another_cart_is_selected() {
     assert_eq!(fake.state.load().cartwall.pages[0].carts[0].name, "Typed");
 }
 
+fn dac() -> fp_model::OutputDevice {
+    fp_model::OutputDevice {
+        backend: "offline".into(),
+        device: "dac".into(),
+    }
+}
+
 /// Player 1 plays on `dac` (exclusive-capable) and pre-listens on
 /// `speakers` (shared); Settings is open on Audio outputs.
 fn outputs() -> (
@@ -306,7 +313,18 @@ fn outputs_with(
     egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
     Arc<support::Fake>,
 ) {
-    outputs_routed(bit_perfect, "speakers", None)
+    outputs_in(fp_model::OutputsView::Advanced, bit_perfect)
+}
+
+/// `outputs_with` in the given view.
+fn outputs_in(
+    view: fp_model::OutputsView,
+    bit_perfect: Vec<fp_model::OutputDevice>,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
+    outputs_view_routed(view, bit_perfect, "speakers", None)
 }
 
 /// The Audio outputs tab with player 1's Main on `dac` and its Cue on
@@ -319,8 +337,36 @@ fn outputs_routed(
     egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
     Arc<support::Fake>,
 ) {
+    outputs_view_routed(fp_model::OutputsView::Advanced, bit_perfect, cue, cartwall)
+}
+
+fn outputs_view_routed(
+    view: fp_model::OutputsView,
+    bit_perfect: Vec<fp_model::OutputDevice>,
+    cue: &str,
+    cartwall: Option<(&str, &str)>,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
+    outputs_built(view, bit_perfect, cue, cartwall, |_, _| {})
+}
+
+/// `outputs_view_routed`, with `tweak` applied to the `dac` test handle and
+/// the state before the app starts.
+fn outputs_built(
+    view: fp_model::OutputsView,
+    bit_perfect: Vec<fp_model::OutputDevice>,
+    cue: &str,
+    cartwall: Option<(&str, &str)>,
+    tweak: impl FnOnce(&fp_backends::OfflineDevice, &mut fp_model::AppState),
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
     let backend = OfflineBackend::new();
-    backend.add_device("dac", 2).set_exclusive_capable(true);
+    let dac_handle = backend.add_device("dac", 2);
+    dac_handle.set_exclusive_capable(true);
     backend.add_device("speakers", 2);
     let mut s = state(1, 1);
     let route = |device: &str| Route {
@@ -328,6 +374,7 @@ fn outputs_routed(
         device: device.into(),
         first_channel: 0,
     };
+    s.config.ui.outputs_view = view;
     s.config.outputs.backend = Some("offline".into());
     s.config.outputs.bit_perfect = bit_perfect;
     s.config.outputs.routes = vec![PlayerRoutes {
@@ -341,22 +388,22 @@ fn outputs_routed(
             cue: Some(route(cue)),
         };
     }
+    tweak(&dac_handle, &mut s);
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
     let (mut h, fake) = harness_with_backends(s, backends);
     h.get_by_label("Settings").click();
     h.run_steps(2);
     h.get_by_role_and_label(Role::Button, "Audio outputs")
         .click();
-    // Devices are listed by a helper thread.
+    // Devices are listed by a helper thread; the routes show once they are.
     for _ in 0..200 {
         h.run_steps(1);
-        if h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
-            .is_some()
-        {
+        if h.query_all_by_label("Test Main").next().is_some() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
+    h.run_steps(2);
     (h, fake)
 }
 
@@ -394,6 +441,9 @@ fn a_shared_device_cannot_be_bit_perfect() {
     h.run_steps(2);
     assert!(bit_perfect_devices(&fake).is_empty());
     // The same click on a capable device does take (the switch was reached).
+    h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+        .scroll_to_me();
+    h.run_steps(5);
     h.get_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
         .click();
     h.run_steps(2);
@@ -511,19 +561,13 @@ fn the_cue_markers_toggle_updates_the_config() {
     );
 }
 
-fn dac() -> fp_model::OutputDevice {
-    fp_model::OutputDevice {
-        backend: "offline".into(),
-        device: "dac".into(),
-    }
-}
-
 #[test]
 fn a_bit_perfect_device_offers_its_dsd_modes_and_the_choice_updates_the_config() {
     let (mut h, fake) = outputs_with(vec![dac()]);
-    h.get_by_value("Convert to PCM").scroll_to_me();
+    h.get_by_role_and_label(Role::ComboBox, "DSD: dac")
+        .scroll_to_me();
     h.run_steps(5);
-    h.get_by_value("Convert to PCM").click();
+    h.get_by_role_and_label(Role::ComboBox, "DSD: dac").click();
     h.run_steps(2);
     assert!(h.query_by_label("DoP").is_some());
     assert!(
@@ -539,10 +583,79 @@ fn a_bit_perfect_device_offers_its_dsd_modes_and_the_choice_updates_the_config()
     );
 }
 
+fn rate_choices(fake: &support::Fake) -> Vec<Vec<fp_model::DeviceOverride>> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::UpdateConfig(config) => Some(config.outputs.device_overrides),
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
-fn a_device_that_is_not_bit_perfect_has_no_dsd_row() {
-    let (h, _) = outputs();
-    assert!(h.query_by_label("DSD: dac").is_none());
+fn a_device_can_be_given_its_own_rate_and_back_the_global_one() {
+    let (mut h, fake) = outputs_with(Vec::new());
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(
+        h.query_all_by_value("Global (48000 Hz)").count() >= 2,
+        "dac and speakers both use the global rate"
+    );
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .click();
+    h.run_steps(2);
+    h.get_by_label("96000 Hz").click();
+    h.run_steps(2);
+    let c = fake.state.load().config.clone();
+    assert_eq!(c.outputs.rate_for("offline", "dac"), 96_000);
+    assert_eq!(c.outputs.rate_for("offline", "speakers"), 48_000);
+    assert_eq!(
+        c.outputs.sample_rate, 48_000,
+        "the global rate is untouched"
+    );
+    assert_eq!(rate_choices(&fake).len(), 1, "one UpdateConfig");
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .click();
+    h.run_steps(2);
+    h.get_by_label("Global (48000 Hz)").click();
+    h.run_steps(2);
+    assert!(fake.state.load().config.outputs.device_overrides.is_empty());
+}
+
+#[test]
+fn a_device_can_be_given_its_own_buffer() {
+    let (mut h, fake) = outputs_with(Vec::new());
+    h.get_by_role_and_label(Role::ComboBox, "Buffer size: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::ComboBox, "Buffer size: dac")
+        .click();
+    h.run_steps(2);
+    h.get_by_label("1024").click();
+    h.run_steps(2);
+    assert_eq!(rate_choices(&fake).len(), 1, "one UpdateConfig");
+    let c = fake.state.load().config.clone();
+    assert_eq!(c.outputs.buffer_for("offline", "dac"), 1024);
+    assert_eq!(c.outputs.buffer_for("offline", "speakers"), 512);
+    assert!(
+        h.query_by_label_contains("21.3 ms").is_some(),
+        "1024 frames at 48 kHz"
+    );
+}
+
+#[test]
+fn the_dsd_silence_slider_updates_the_config() {
+    let (mut h, fake) = outputs_with(Vec::new());
+    h.get_by_role_and_label(Role::Slider, "DSD silence")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::Slider, "DSD silence").focus();
+    h.run_steps(1);
+    h.key_press(Key::ArrowRight);
+    h.run_steps(2);
+    assert_eq!(fake.state.load().config.outputs.dsd_silence_ms, 210.0);
 }
 
 #[test]
@@ -560,6 +673,76 @@ fn the_dsd_mix_choice_updates_the_config() {
     assert_eq!(c.outputs.dsd_mix, fp_model::DsdMix::HoldOthers);
 }
 
+#[test]
+fn the_basic_view_hides_the_device_rows() {
+    let (h, _) = outputs_in(fp_model::OutputsView::Basic, vec![dac()]);
+    assert!(
+        h.query_by_role_and_label(Role::RadioButton, "Basic")
+            .is_some()
+    );
+    assert!(
+        h.query_by_value("48000 Hz").is_some(),
+        "the global rate stays"
+    );
+    assert!(h.query_by_value("512").is_some(), "the global buffer stays");
+    assert!(
+        h.query_all_by_label("Test Main").next().is_some(),
+        "the routes stay"
+    );
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+            .is_none()
+    );
+    assert!(h.query_by_value("Continue the DSD track as PCM").is_none());
+    for combo in ["Sample rate: dac", "Buffer size: dac", "DSD: dac"] {
+        assert!(
+            h.query_by_role_and_label(Role::ComboBox, combo).is_none(),
+            "{combo}"
+        );
+    }
+    assert!(
+        h.query_by_role_and_label(Role::Slider, "DSD silence")
+            .is_none()
+    );
+}
+
+#[test]
+fn switching_views_changes_only_the_view() {
+    let (mut h, fake) = outputs_with(vec![dac()]);
+    let before = fake.state.load().config.clone();
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+            .is_some()
+    );
+    h.get_by_role_and_label(Role::RadioButton, "Basic").click();
+    h.run_steps(2);
+    let basic = fake.state.load().config.clone();
+    assert_eq!(basic.ui.outputs_view, fp_model::OutputsView::Basic);
+    assert_eq!(basic.outputs, before.outputs, "no output setting changes");
+    assert!(fp_model::restart_pending(&before, &basic).is_empty());
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+            .is_none()
+    );
+    h.get_by_role_and_label(Role::RadioButton, "Advanced")
+        .click();
+    h.run_steps(2);
+    assert_eq!(fake.state.load().config, before);
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+            .is_some()
+    );
+}
+
+#[test]
+fn the_basic_view_says_when_advanced_settings_are_in_use() {
+    let note = "Some devices have advanced settings";
+    let (h, _) = outputs_in(fp_model::OutputsView::Basic, Vec::new());
+    assert!(h.query_by_label_contains(note).is_none());
+    let (h, _) = outputs_in(fp_model::OutputsView::Basic, vec![dac()]);
+    assert!(h.query_by_label_contains(note).is_some());
+}
+
 const CUE_EQUALS_MAIN: &str = "The Cue output is the same as the Main output";
 
 #[test]
@@ -573,4 +756,99 @@ fn a_cue_output_equal_to_main_is_warned_about() {
     assert_eq!(count("speakers", Some(("dac", "dac"))), 1, "the cartwall's");
     assert_eq!(count("dac", Some(("dac", "dac"))), 2, "both");
     assert_eq!(count("speakers", Some(("dac", "speakers"))), 0);
+}
+
+/// `dac` reports only 44.1 to 48 kHz and 64 to 1024 frames, and the
+/// configuration still holds 192 kHz and 4096 frames for it.
+fn a_device_that_narrowed() -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
+    outputs_built(
+        fp_model::OutputsView::Advanced,
+        Vec::new(),
+        "speakers",
+        None,
+        |dac_handle, s| {
+            dac_handle.set_reported_rates(vec![(44_100, 48_000)]);
+            dac_handle.set_reported_buffers((64, 1024));
+            s.config.outputs.set_device_rate(&dac(), Some(192_000));
+            s.config.outputs.set_device_buffer(&dac(), Some(4096));
+        },
+    )
+}
+
+#[test]
+fn a_saved_rate_the_device_no_longer_reports_is_kept_and_flagged() {
+    let (mut h, _) = a_device_that_narrowed();
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(
+        h.query_by_label("This device no longer reports 192000 Hz; it may not open.")
+            .is_some()
+    );
+    assert!(
+        h.query_by_label_contains("a buffer of 4096 frames")
+            .is_some()
+    );
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .click();
+    h.run_steps(2);
+    assert!(h.query_by_label("96000 Hz").is_none(), "not reported");
+    assert!(h.query_by_label("48000 Hz").is_some(), "reported");
+    assert!(
+        h.query_by_label("192000 Hz").is_some(),
+        "the saved one stays"
+    );
+}
+
+#[test]
+fn a_reported_rate_raises_no_note() {
+    let (h, _) = outputs_with(Vec::new());
+    assert!(h.query_by_label_contains("no longer reports").is_none());
+}
+
+#[test]
+fn a_dsd_mode_the_device_cannot_take_shows_as_pcm() {
+    let (mut h, fake) = outputs_built(
+        fp_model::OutputsView::Advanced,
+        vec![dac()],
+        "speakers",
+        None,
+        |dac_handle, s| {
+            dac_handle.set_exclusive_capable(false);
+            s.config.outputs.dsd_output = vec![fp_model::DsdDevice {
+                backend: "offline".into(),
+                device: "dac".into(),
+                mode: fp_model::DsdOutput::Dop,
+            }];
+        },
+    );
+    h.get_by_role_and_label(Role::ComboBox, "DSD: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(h.query_by_value("DoP").is_none(), "the engine plays PCM");
+    assert!(
+        h.query_all_by_value("Convert to PCM").count() >= 2,
+        "dac and speakers"
+    );
+    assert!(
+        fake.take_sent().is_empty(),
+        "showing it as PCM rewrites nothing"
+    );
+}
+
+#[test]
+fn an_unplugged_device_says_it_is_not_connected() {
+    let (mut h, _) = outputs_routed(Vec::new(), "gone", None);
+    h.get_by_role_and_label(Role::ComboBox, "DSD: gone")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(
+        h.query_all_by_label_contains("need the device to be plugged in")
+            .count()
+            >= 1
+    );
+    assert!(h.query_by_label_contains("opened exclusively").is_none());
 }

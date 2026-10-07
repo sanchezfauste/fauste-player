@@ -156,6 +156,7 @@ any field this version does not have.
 | `dsd_output[]` | empty | `{ backend, device, mode }` with `mode` `Pcm`, `Dop` or `Native`: what a bit-perfect device receives from a DSD track. A device not listed here, or not in `bit_perfect`, converts DSD to PCM. A device listed twice keeps its first mode (warning) |
 | `dsd_mix` | `ConvertToPcm` | `ConvertToPcm` or `HoldOthers`: what happens when another source needs an output carrying DSD |
 | `dsd_silence_ms` | 200 | DSD silence at a DSD stream's start, end and switch to PCM; 0 to 2000 (clamped, with a warning) |
+| `device_overrides[]` | empty | `{ device: { backend, device }, sample_rate?, buffer_frames? }`: a device's own rate and buffer, used instead of `sample_rate` and `buffer_frames` when it opens (operator feedback 4, Q12). Same ranges as the global fields; an out-of-range value is dropped with a warning and the device uses the global one; a device listed twice keeps its first values (warning); an entry with neither is removed |
 
 ### `meter` (Settings → Meters; applied at once)
 
@@ -177,6 +178,7 @@ any field this version does not have.
 
 | Field | Default | Meaning |
 |---|---|---|
+| `outputs_view` | `Basic` | `Basic` or `Advanced`: what Settings → Audio outputs shows. It changes no output setting |
 | `follow_current_grace_secs` | 10 | 0 … 600 (seconds after the operator uses a zoomed waveform or a playlist table before it follows what plays; 0 never follows) |
 | `table_columns` | `["number", "title", "artist", "duration"]` | an ordered list of `number`, `title`, `artist`, `album`, `date`, `genre`, `duration`, `intro`, `file_name`; unknown names are dropped when the file is read, duplicates keep their first place, and a missing `title` or `duration` is added back (`Config::validate` warns) |
 | `wave_color` | `slate` | `violet`, `amber`, `cyan`, `white`, `orange`, `magenta`, `ice`, `sand`, `slate` |

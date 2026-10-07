@@ -11,14 +11,15 @@ use egui::{Align, Color32, Layout, RichText, Sense, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_backends::{AudioBackend, Availability, DeviceInfo};
 use fp_model::{
-    Command, Config, DsdDevice, DsdMix, DsdOutput, OutputDevice, PlayMode, PlayerId, PlayerRoutes,
-    PlaylistId, Route, SettingsSection,
+    Command, Config, OutputsView, PlayMode, PlayerId, PlayerRoutes, PlaylistId, Route,
+    SettingsSection,
 };
 
 use super::app::Scene;
 
 mod carts;
 mod columns;
+mod devices;
 mod keys;
 mod meters;
 mod midi;
@@ -642,6 +643,58 @@ pub(super) fn row(ui: &mut Ui, label: &str, hint: Option<&str>, control: impl Fn
     labelled_row(ui, label, hint, |ui, _| control(ui));
 }
 
+/// A small upper-case heading over a group of rows.
+pub(super) fn caption(ui: &mut Ui, text: &str) {
+    ui.add(
+        egui::Label::new(
+            RichText::new(text.to_uppercase())
+                .font(font(10.0))
+                .color(theme::NEUTRAL_500),
+        )
+        .selectable(false),
+    );
+}
+
+/// A line of explanation, wrapped to the section's width.
+pub(super) fn note(ui: &mut Ui, text: &str, color: Color32) {
+    ui.add(
+        egui::Label::new(RichText::new(text).font(font(12.0)).color(color))
+            .selectable(false)
+            .wrap(),
+    );
+}
+
+/// Basic | Advanced (operator feedback 4, Q12.1). Only `ui.outputs_view`
+/// changes: the advanced settings are hidden, never reset (Q12.7).
+fn view_selector(ui: &mut Ui, scene: &Scene<'_>, view: OutputsView) {
+    let t = scene.i18n;
+    let basic = t.tr("settings-outputs-basic");
+    let advanced = t.tr("settings-outputs-advanced");
+    let views = [OutputsView::Basic, OutputsView::Advanced];
+    row(ui, &t.tr("settings-outputs-view"), None, |ui| {
+        let selected = usize::from(view == OutputsView::Advanced);
+        if let Some(chosen) = widgets::segmented(
+            ui,
+            egui::Id::new("outputs-view"),
+            &[
+                widgets::Segment {
+                    text: &basic,
+                    label: &basic,
+                },
+                widgets::Segment {
+                    text: &advanced,
+                    label: &advanced,
+                },
+            ],
+            selected,
+        )
+        .and_then(|i| views.get(i).copied())
+        {
+            update(scene, |c| c.ui.outputs_view = chosen);
+        }
+    });
+}
+
 /// A slider whose accessible name is `label` (the row shows the same text).
 fn slider<T: egui::emath::Numeric>(
     ui: &mut Ui,
@@ -690,6 +743,8 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         );
         return;
     };
+    let view = config.ui.outputs_view;
+    view_selector(ui, scene, view);
     let current = config.outputs.backend.clone();
     row(ui, &t.tr("settings-backend"), None, |ui| {
         let shown = current
@@ -762,14 +817,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             });
     });
     ui.add_space(12.0);
-    ui.add(
-        egui::Label::new(
-            RichText::new(t.tr("settings-player-routes").to_uppercase())
-                .font(font(10.0))
-                .color(theme::NEUTRAL_500),
-        )
-        .selectable(false),
-    );
+    caption(ui, &t.tr("settings-player-routes"));
     ui.add_space(4.0);
     let backend_id = current.clone().or_else(|| {
         backends
@@ -817,7 +865,6 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         });
     }
     let cart_routes = config.outputs.cartwall.clone();
-    let chosen = chosen_devices(config);
     row(ui, &t.tr("settings-cartwall-outputs"), None, |ui| {
         ui.vertical(|ui| {
             route_picker(
@@ -843,7 +890,19 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         });
     });
-    bit_perfect(ui, scene, &backends, &chosen);
+    match view {
+        OutputsView::Advanced => devices::section(ui, scene, &backends),
+        OutputsView::Basic => {
+            if config.outputs.advanced_in_use() {
+                ui.add_space(8.0);
+                note(
+                    ui,
+                    &t.tr("settings-outputs-advanced-in-use"),
+                    theme::NEUTRAL_400,
+                );
+            }
+        }
+    }
 }
 
 /// Spec §4.6: a Cue route equal to Main is refused by the engine (a
@@ -858,206 +917,6 @@ fn cue_equals_main_note(ui: &mut Ui, scene: &Scene<'_>) {
         )
         .wrap(),
     );
-}
-
-/// The devices routes name explicitly, each once, in route order.
-fn chosen_devices(config: &Config) -> Vec<OutputDevice> {
-    let mut chosen: Vec<OutputDevice> = Vec::new();
-    let routes = config
-        .outputs
-        .routes
-        .iter()
-        .flat_map(|r| r.main.iter().chain(r.cue.iter()))
-        .chain(config.outputs.cartwall.main.iter())
-        .chain(config.outputs.cartwall.cue.iter());
-    for route in routes {
-        let device = OutputDevice {
-            backend: route.backend.clone(),
-            device: route.device.clone(),
-        };
-        if !chosen.contains(&device) {
-            chosen.push(device);
-        }
-    }
-    chosen
-}
-
-/// Bit-perfect devices (Phase 4 spec B6): one switch per chosen device,
-/// disabled where the device cannot give exclusive access.
-fn bit_perfect(
-    ui: &mut Ui,
-    scene: &Scene<'_>,
-    backends: &[BackendChoice],
-    chosen: &[OutputDevice],
-) {
-    let t = scene.i18n;
-    ui.add_space(12.0);
-    ui.add(
-        egui::Label::new(
-            RichText::new(t.tr("settings-bit-perfect").to_uppercase())
-                .font(font(10.0))
-                .color(theme::NEUTRAL_500),
-        )
-        .selectable(false),
-    );
-    ui.add(
-        egui::Label::new(
-            RichText::new(t.tr("settings-bit-perfect-hint"))
-                .font(font(12.0))
-                .color(theme::NEUTRAL_400),
-        )
-        .selectable(false)
-        .wrap(),
-    );
-    ui.add_space(4.0);
-    if chosen.is_empty() {
-        ui.add(
-            egui::Label::new(
-                RichText::new(t.tr("settings-bit-perfect-none"))
-                    .font(font(12.0))
-                    .color(theme::NEUTRAL_500),
-            )
-            .selectable(false)
-            .wrap(),
-        );
-        return;
-    }
-    let listed = &scene.state.config.outputs.bit_perfect;
-    for device in chosen {
-        let backend_devices = backends
-            .iter()
-            .find(|b| b.id == device.backend)
-            .map(|b| b.devices.as_slice())
-            .unwrap_or_default();
-        let labels = fp_backends::device_labels(backend_devices);
-        let found = backend_devices
-            .iter()
-            .zip(&labels)
-            .find(|(d, _)| d.id.0 == device.device);
-        let info = found.map(|(d, _)| d);
-        let name = found.map_or(device.device.as_str(), |(_, label)| label.as_str());
-        let capable = info.is_some_and(|d| d.exclusive_capable);
-        let mut on = listed.contains(device);
-        // A listed device can always be turned off, even when it is not
-        // plugged in or cannot be exclusive any more.
-        let enabled = capable || on;
-        let label = t.tr_args("settings-bit-perfect-device", &[("device", name.into())]);
-        row(ui, name, None, |ui| {
-            let response = ui
-                .add_enabled_ui(enabled, |ui| toggle(ui, &mut on, &label))
-                .response;
-            if !enabled {
-                response.on_disabled_hover_text(t.tr("bp-not-capable"));
-                return;
-            }
-            if on != listed.contains(device) {
-                let device = device.clone();
-                update(scene, move |c| {
-                    c.outputs.bit_perfect.retain(|d| d != &device);
-                    if on {
-                        c.outputs.bit_perfect.push(device);
-                    }
-                });
-            }
-        });
-        if !listed.contains(device) {
-            continue;
-        }
-        let current = scene
-            .state
-            .config
-            .outputs
-            .dsd_output_for(&device.backend, &device.device);
-        let label = t.tr_args("settings-dsd-mode", &[("device", name.into())]);
-        row(ui, &label, None, |ui| {
-            egui::ComboBox::from_id_salt(("dsd-mode", &device.backend, &device.device))
-                .selected_text(dsd_mode_label(t, current))
-                .show_ui(ui, |ui| {
-                    for mode in offered_dsd_modes(info, std::env::consts::OS, current) {
-                        if ui
-                            .selectable_label(mode == current, dsd_mode_label(t, mode))
-                            .clicked()
-                        {
-                            let device = device.clone();
-                            update(scene, move |c| {
-                                c.outputs.dsd_output.retain(|d| {
-                                    (d.backend.as_str(), d.device.as_str())
-                                        != (device.backend.as_str(), device.device.as_str())
-                                });
-                                if mode != DsdOutput::Pcm {
-                                    c.outputs.dsd_output.push(DsdDevice {
-                                        backend: device.backend,
-                                        device: device.device,
-                                        mode,
-                                    });
-                                }
-                            });
-                        }
-                    }
-                });
-        });
-    }
-    ui.add_space(4.0);
-    ui.add(
-        egui::Label::new(
-            RichText::new(t.tr("settings-dsd-hint"))
-                .font(font(12.0))
-                .color(theme::NEUTRAL_400),
-        )
-        .selectable(false)
-        .wrap(),
-    );
-    let mix = scene.state.config.outputs.dsd_mix;
-    let mix_label = |m: DsdMix| {
-        t.tr(match m {
-            DsdMix::ConvertToPcm => "settings-dsd-mix-convert",
-            DsdMix::HoldOthers => "settings-dsd-mix-hold",
-        })
-    };
-    row(ui, &t.tr("settings-dsd-mix"), None, |ui| {
-        egui::ComboBox::from_id_salt("dsd-mix")
-            .selected_text(mix_label(mix))
-            .show_ui(ui, |ui| {
-                for choice in [DsdMix::ConvertToPcm, DsdMix::HoldOthers] {
-                    if ui
-                        .selectable_label(choice == mix, mix_label(choice))
-                        .clicked()
-                    {
-                        update(scene, |c| c.outputs.dsd_mix = choice);
-                    }
-                }
-            });
-    });
-}
-
-/// The DSD modes a bit-perfect device can be given: PCM always, DoP when the
-/// device can be opened exclusively, native DSD on Linux when it reports a
-/// DSD format; the configured mode stays listed so it can be changed back.
-fn offered_dsd_modes(info: Option<&DeviceInfo>, os: &str, configured: DsdOutput) -> Vec<DsdOutput> {
-    let mut modes = vec![DsdOutput::Pcm];
-    if info.is_some_and(|d| d.exclusive_capable) {
-        modes.push(DsdOutput::Dop);
-    }
-    if os == "linux" && info.is_some_and(|d| d.native_dsd) {
-        modes.push(DsdOutput::Native);
-    }
-    if !modes.contains(&configured) {
-        modes.push(configured);
-        modes.sort_by_key(|m| match m {
-            DsdOutput::Pcm => 0,
-            DsdOutput::Dop => 1,
-            DsdOutput::Native => 2,
-        });
-    }
-    modes
-}
-
-fn dsd_mode_label(t: &crate::i18n::I18n, mode: DsdOutput) -> String {
-    t.tr(match mode {
-        DsdOutput::Pcm => "settings-dsd-pcm",
-        DsdOutput::Dop => "settings-dsd-dop",
-        DsdOutput::Native => "settings-dsd-native",
-    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1897,51 +1756,6 @@ fn pick_folder(scene: &Scene<'_>) -> Option<Receiver<Option<PathBuf>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn info(exclusive: bool, native: bool) -> DeviceInfo {
-        DeviceInfo {
-            id: fp_backends::DeviceId("hw:0".into()),
-            name: "DAC".into(),
-            detail: None,
-            channels: 2,
-            sample_rates: vec![(44_100, 768_000)],
-            buffer_frames: None,
-            exclusive_capable: exclusive,
-            rate_switching: exclusive,
-            native_dsd: native,
-        }
-    }
-
-    #[test]
-    fn only_the_modes_the_device_can_take_are_offered() {
-        use fp_model::DsdOutput::{Dop, Native, Pcm};
-        assert_eq!(
-            offered_dsd_modes(Some(&info(true, true)), "linux", Pcm),
-            vec![Pcm, Dop, Native]
-        );
-        assert_eq!(
-            offered_dsd_modes(Some(&info(true, true)), "windows", Pcm),
-            vec![Pcm, Dop]
-        );
-        assert_eq!(
-            offered_dsd_modes(Some(&info(true, false)), "linux", Pcm),
-            vec![Pcm, Dop]
-        );
-        assert_eq!(
-            offered_dsd_modes(Some(&info(false, false)), "linux", Pcm),
-            vec![Pcm]
-        );
-        assert_eq!(
-            offered_dsd_modes(None, "linux", Pcm),
-            vec![Pcm],
-            "unplugged"
-        );
-        assert_eq!(
-            offered_dsd_modes(None, "linux", Native),
-            vec![Pcm, Native],
-            "a configured mode stays visible so it can be changed back"
-        );
-    }
 
     #[test]
     fn the_window_has_one_size_clamped_to_the_screen() {

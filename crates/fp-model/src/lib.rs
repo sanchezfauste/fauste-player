@@ -8,6 +8,7 @@ pub mod cartwall;
 pub mod columns;
 pub mod command;
 pub mod config;
+pub mod device_offer;
 pub mod dsd;
 mod entry_notice;
 pub mod error;
@@ -43,9 +44,14 @@ pub use command::{
     CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
 };
 pub use config::{
-    AnalysisSettings, CartwallConfig, CartwallRoutes, Config, ConfigWarning, Limits,
-    LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig,
-    PlayerRoutes, PlayersConfig, Route, Tuning, UiConfig,
+    AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,
+    DeviceOverride, Limits, LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings,
+    OutputDevice, OutputsConfig, OutputsView, PlayerRoutes, PlayersConfig, Route,
+    SAMPLE_RATE_RANGE, Tuning, UiConfig,
+};
+pub use device_offer::{
+    DsdCaps, DsdNotOffered, buffer_is_reported, dsd_not_offered, effective_dsd_mode,
+    offered_buffers, offered_dsd_modes, offered_rates, rate_is_reported,
 };
 pub use dsd::{
     BpBadge, DEFAULT_DSD_SILENCE_MS, DSD_WORD_BITS, DsdDevice, DsdFacts, DsdFallback, DsdMix,

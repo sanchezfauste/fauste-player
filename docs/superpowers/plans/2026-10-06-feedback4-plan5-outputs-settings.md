@@ -118,7 +118,7 @@ These conditions are implied by the spec but no spec test covers them. Each line
   - `OutputsConfig::set_device_rate(&mut self, device: &OutputDevice, rate: Option<u32>)` and `set_device_buffer(&mut self, device: &OutputDevice, frames: Option<u32>)`.
   - `OutputsConfig::routed_devices(&self) -> Vec<OutputDevice>` and `advanced_in_use(&self) -> bool`.
 
-- [ ] **Step 1: Write the failing model tests**
+- [x] **Step 1: Write the failing model tests**
 
 `crates/fp-model/tests/device_overrides.rs` (new file):
 
@@ -356,7 +356,7 @@ fn reordered_overrides_and_the_outputs_view_need_no_restart() {
 }
 ```
 
-- [ ] **Step 2: Write the failing lenient-loading test**
+- [x] **Step 2: Write the failing lenient-loading test**
 
 In `crates/fp-store/src/lenient.rs`, add inside `mod tests`, after `bad_dsd_values_fall_back_one_by_one`:
 
@@ -383,7 +383,7 @@ In `crates/fp-store/src/lenient.rs`, add inside `mod tests`, after `bad_dsd_valu
     }
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-model --test device_overrides`
 Expected: FAIL to compile with "unresolved imports `fp_model::DeviceOverride`, `fp_model::OutputsView`".
@@ -394,7 +394,7 @@ Expected: FAIL to compile with "no method named `set_device_rate` found for stru
 Run: `cargo test -p fp-store --lib device_overrides_and_the_outputs_view_load_leniently`
 Expected: FAIL to compile with "could not find `OutputsView` in `fp_model`".
 
-- [ ] **Step 4: Add the types and the fields**
+- [x] **Step 4: Add the types and the fields**
 
 In `crates/fp-model/src/config.rs`, add these right after `pub struct PlayerRoutes` (after L317):
 
@@ -448,7 +448,7 @@ In `UiConfig`, after `table_columns`, add:
 
 In `impl Default for UiConfig`, add `outputs_view: OutputsView::Basic,`.
 
-- [ ] **Step 5: Add the helpers**
+- [x] **Step 5: Add the helpers**
 
 In `impl OutputsConfig` (after `dsd_output_for`), add:
 
@@ -538,7 +538,7 @@ In `impl OutputsConfig` (after `dsd_output_for`), add:
     }
 ```
 
-- [ ] **Step 6: Validate the overrides**
+- [x] **Step 6: Validate the overrides**
 
 In `Config::validate`, change the two global clamps (L723–736) to use the constants:
 
@@ -610,7 +610,7 @@ After the `dsd_output` duplicate check (after L757, before `let t = &mut self.tu
             .retain(|d| d.sample_rate.is_some() || d.buffer_frames.is_some());
 ```
 
-- [ ] **Step 7: The overrides in `restart_pending`**
+- [x] **Step 7: The overrides in `restart_pending`**
 
 In `crates/fp-model/src/restart.rs`:
 - change the import to `use crate::config::{Config, DeviceOverride, OutputsConfig, Route};`;
@@ -655,7 +655,7 @@ Replace the two checks at L46–51 with:
     }
 ```
 
-- [ ] **Step 8: Re-export**
+- [x] **Step 8: Re-export**
 
 In `crates/fp-model/src/lib.rs`, replace the `pub use config::{…}` block (L44–47) with:
 
@@ -670,12 +670,12 @@ pub use config::{
 
 (`cargo fmt` fixes the order if rustfmt sorts it differently.)
 
-- [ ] **Step 9: Run the tests to verify they pass**
+- [x] **Step 9: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-model --test device_overrides && cargo test -p fp-model --test restart && cargo test -p fp-store --lib lenient && cargo test -p fp-model --lib config`
 Expected: PASS, including the existing `defaults_are_valid` and the restart tests.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add crates/fp-model/src/config.rs crates/fp-model/src/restart.rs crates/fp-model/src/lib.rs \
@@ -718,7 +718,7 @@ fi
   - `pub fn offered_rates(reported: &[(u32, u32)], candidates: &[u32], current: Option<u32>) -> Vec<u32>`.
   - `pub fn offered_buffers(reported: Option<(u32, u32)>, candidates: &[u32], current: Option<u32>) -> Vec<u32>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/fp-model/tests/device_offer.rs` (new file):
 
@@ -832,12 +832,12 @@ fn only_the_buffers_the_device_reports_are_offered() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-model --test device_offer`
 Expected: FAIL to compile with "unresolved imports `fp_model::DsdCaps`, …".
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/fp-model/src/device_offer.rs` (new file):
 
@@ -946,7 +946,7 @@ pub use device_offer::{
 };
 ```
 
-- [ ] **Step 4: Use it in the UI and drop the UI copy**
+- [x] **Step 4: Use it in the UI and drop the UI copy**
 
 In `crates/fp-app/src/ui/settings.rs`, inside `bit_perfect()`, replace `for mode in offered_dsd_modes(info, std::env::consts::OS, current) {` (L957) with:
 
@@ -968,12 +968,12 @@ Then:
 
 The test moved to `fp-model` (Step 1).
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-model --test device_offer && cargo test -p fp-app --lib settings && cargo test -p fp-app --test settings dsd`
 Expected: PASS (the existing DSD kittests still pass: the bit-perfect `dac` offers Convert to PCM and DoP).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/fp-model/src/device_offer.rs crates/fp-model/src/lib.rs crates/fp-model/tests/device_offer.rs \
@@ -1012,7 +1012,7 @@ fi
   - `EngineSettings::device_streams: HashMap<BusKey, DeviceStream>`;
   - `EngineSettings::rate_for(&self, key: &BusKey) -> u32` and `buffer_for(&self, key: &BusKey) -> u32`.
 
-- [ ] **Step 1: Write the failing engine tests**
+- [x] **Step 1: Write the failing engine tests**
 
 `crates/fp-engine/tests/device_overrides.rs` (new file):
 
@@ -1239,7 +1239,7 @@ fn native_dsd_ends_on_the_devices_own_rate() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-engine --test device_overrides`
 Expected: FAIL. `a_device_opens_at_its_own_rate_and_buffer` panics with ``left: (48000, 512)`, `right: (96000, 256)``, and `a_bit_perfect_device_starts_at_its_own_rate_and_still_follows_the_file` panics with `left: 48000`, `right: 96000`.
@@ -1247,7 +1247,7 @@ Expected: FAIL. `a_device_opens_at_its_own_rate_and_buffer` panics with ``left: 
 Run: `cargo test -p fp-engine --test dsd_output native_dsd_ends_on_the_devices_own_rate`
 Expected: FAIL with ``left: 48000`, `right: 96000`` ("it opens at its own rate").
 
-- [ ] **Step 3: Carry the overrides in `EngineSettings`**
+- [x] **Step 3: Carry the overrides in `EngineSettings`**
 
 In `crates/fp-engine/src/engine.rs`, add before `pub struct EngineSettings`:
 
@@ -1309,7 +1309,7 @@ In `impl EngineSettings`, after `from_config`, add:
     }
 ```
 
-- [ ] **Step 4: Open each bus with its own values**
+- [x] **Step 4: Open each bus with its own values**
 
 In `ensure_bus` (L981), replace the `StreamConfig` and `MixerConfig` literals with:
 
@@ -1357,12 +1357,12 @@ In `crates/fp-engine/src/engine/dsd.rs`:
 - in `dsd_source_gone` (L291–294), replace `+ u64::from(self.settings.buffer_frames)` with `+ u64::from(self.buffer_of(&p.bus))`;
 - at L561–564, replace `sample_rate: self.settings.sample_rate,` with `sample_rate: self.settings.rate_for(bus),`, and update its doc line in `docs/technical/audio-engine.md` in Task 6.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-engine --test device_overrides && cargo test -p fp-engine --test dsd_output && cargo test -p fp-engine --test bit_perfect`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/fp-engine/src/engine.rs crates/fp-engine/src/engine/dsd.rs \
@@ -1404,7 +1404,7 @@ fi
   - in `settings.rs`, `pub(super) fn caption(ui: &mut Ui, text: &str)` and `pub(super) fn note(ui: &mut Ui, text: &str, color: Color32)`;
   - in the tests, `outputs_in(view: OutputsView, bit_perfect: Vec<OutputDevice>)`.
 
-- [ ] **Step 1: Write the failing kittests**
+- [x] **Step 1: Write the failing kittests**
 
 In `crates/fp-app/tests/settings.rs`, replace `outputs_with` (L303–342) with:
 
@@ -1524,12 +1524,12 @@ fn the_basic_view_says_when_advanced_settings_are_in_use() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test settings view`
 Expected: FAIL to compile with "no field `outputs_view` on type `UiConfig`" only if Task 1 is missing. With Task 1 in place, the three tests fail at run time: `the_basic_view_hides_the_device_rows` with "assertion failed: h.query_by_role_and_label(Role::RadioButton, \"Basic\").is_some()".
 
-- [ ] **Step 3: Add the strings**
+- [x] **Step 3: Add the strings**
 
 In `crates/fp-app/locales/en-US/main.ftl`, replace the two lines `settings-bit-perfect = …` and `settings-bit-perfect-none = …` (L211 and L213) with:
 
@@ -1555,7 +1555,7 @@ settings-devices-none = Elige arriba un dispositivo para un reproductor o la car
 
 `settings-bit-perfect-hint` stays.
 
-- [ ] **Step 4: Add the helpers and the selector**
+- [x] **Step 4: Add the helpers and the selector**
 
 In `crates/fp-app/src/ui/settings.rs`:
 - add `OutputsView` to the `use fp_model::{…}` list;
@@ -1639,7 +1639,7 @@ At the end of `outputs()`, replace `let chosen = chosen_devices(config);` (L817)
 
 Replace the routes caption at L764–772 (`ui.add(egui::Label::new(RichText::new(t.tr("settings-player-routes").to_uppercase()) …))`) with `caption(ui, &t.tr("settings-player-routes"));`.
 
-- [ ] **Step 5: Move the device rows to `devices.rs`**
+- [x] **Step 5: Move the device rows to `devices.rs`**
 
 Create `crates/fp-app/src/ui/settings/devices.rs`:
 
@@ -1714,12 +1714,12 @@ fn dsd_settings(ui: &mut Ui, scene: &Scene<'_>) {
 
 Also move `dsd_mode_label` (old L1035–1041) into `devices.rs` unchanged; nothing else uses it. Delete `chosen_devices` (`OutputsConfig::routed_devices` replaces it) and `bit_perfect()` from `settings.rs`.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test settings && cargo test -p fp-app --test i18n`
 Expected: PASS. That includes the existing bit-perfect and DSD kittests, which now open in Advanced through `outputs_with`, and `both_locales_define_the_same_keys`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add crates/fp-app/src/ui/settings.rs crates/fp-app/src/ui/settings/devices.rs \
@@ -1763,7 +1763,7 @@ fi
 
   Once for all devices, there is a "DSD silence" slider.
 
-- [ ] **Step 1: Write the failing kittests**
+- [x] **Step 1: Write the failing kittests**
 
 In `crates/fp-app/tests/settings.rs`:
 - delete `a_device_that_is_not_bit_perfect_has_no_dsd_row`;
@@ -1945,12 +1945,12 @@ fn a_bit_perfect_device_without_native_dsd_says_why() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test settings own_ && cargo test -p fp-app --test dsd_ui why`
 Expected: FAIL. `a_device_can_be_given_its_own_rate_and_back_the_global_one` panics with "Did not find a node with role ComboBox and label 'Sample rate: dac'"; the `dsd_ui` tests time out the wait and fail their first assertion.
 
-- [ ] **Step 3: Add the strings**
+- [x] **Step 3: Add the strings**
 
 In `crates/fp-app/locales/en-US/main.ftl`, after `settings-dsd-mode = DSD: { $device }`, add:
 
@@ -1984,7 +1984,7 @@ settings-dsd-silence = Silencio DSD
 settings-dsd-silence-hint = Se envía antes de que empiece un flujo DSD, al acabar y al pasar a PCM, para que el convertidor se enganche sin chasquido.
 ```
 
-- [ ] **Step 4: Draw the rows**
+- [x] **Step 4: Draw the rows**
 
 In `crates/fp-app/src/ui/settings/devices.rs`:
 - change the imports to
@@ -2191,12 +2191,12 @@ fn set_dsd_mode(scene: &Scene<'_>, device: &OutputDevice, mode: DsdOutput) {
 
 The slider range is the validated range of `outputs.dsd_silence_ms` (0–2000, `Config::validate`). If `Response::labelled_by` is `#[must_use]`, the `let _ =` keeps clippy quiet. If it is not, clippy accepts the binding as well.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test settings && cargo test -p fp-app --test dsd_ui && cargo test -p fp-app --test i18n`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/fp-app/src/ui/settings/devices.rs crates/fp-app/locales/en-US/main.ftl \
@@ -2233,12 +2233,12 @@ fi
 - Check only: the spec lines Q12 and Q3 change are already in the main spec (L469), the bit-perfect spec (L42, L85) and the feedback 2 spec (L516–518).
 - Locales: none (Tasks 4 and 5 added every string to both).
 
-- [ ] **Step 1: Check the binding specs**
+- [x] **Step 1: Check the binding specs**
 
 Run: `grep -n "Basic | Advanced" docs/superpowers/specs/2026-09-25-fauste-player-design.md; grep -n "rate override\|Advanced view" docs/superpowers/specs/2026-09-26-phase4-bit-perfect-design.md; grep -n "Advanced outputs view" docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md`
 Expected: one match in each file. If one is missing, apply the replacement text the feedback 4 spec gives under Q12 or Q3, "Spec lines that change".
 
-- [ ] **Step 2: User guide, Settings**
+- [x] **Step 2: User guide, Settings**
 
 In `docs/user/settings.md`, Restart pending, replace "system, sample rate, buffer size, the Main and Cue outputs (players and cartwall) and the bit-perfect devices." with "system, sample rate, buffer size (also a device's own), the Main and Cue outputs (players and cartwall), the bit-perfect devices and the DSD settings."
 
@@ -2270,7 +2270,7 @@ hides a setting that is in use, a line says so.
 
 Copy the text of the rows marked "(unchanged row)" from the current table, not the marker.
 
-- [ ] **Step 3: User guide, Bit-perfect and Troubleshooting**
+- [x] **Step 3: User guide, Bit-perfect and Troubleshooting**
 
 In `docs/user/bit-perfect.md`, "Setting a device bit-perfect", step 2 becomes: "2. Choose **Advanced** at the top of the section. Under **Per-device settings**, turn on **Bit-perfect** next to the device." The device then starts at its own sample rate when it has one (Settings), else at the global rate.
 
@@ -2282,7 +2282,7 @@ In "DSD on a real converter", step 2, replace "a longer `outputs.dsd_silence_ms`
 
 In `docs/user/troubleshooting.md`, replace "raise `outputs.dsd_silence_ms` (200 by default) in the configuration file." with "raise **DSD silence** (200 ms by default) in Settings → Audio outputs, Advanced."
 
-- [ ] **Step 4: Technical docs**
+- [x] **Step 4: Technical docs**
 
 In `docs/technical/persistence.md`, `outputs` table, add after `dsd_silence_ms`:
 
@@ -2309,7 +2309,7 @@ device only the rates and buffer sizes its `DeviceInfo` reports
 none.
 ```
 
-- [ ] **Step 5: README and the spec's "As built" note**
+- [x] **Step 5: README and the spec's "As built" note**
 
 In `README.md`, after the "Bit-perfect output" bullet, add:
 
@@ -2334,11 +2334,11 @@ In short:
 - the section heading is "Per-device settings".
 ```
 
-- [ ] **Step 6: Screenshots**
+- [x] **Step 6: Screenshots**
 
 The Outputs page now has the selector, so the guide image changes. On Linux with `xvfb`, `xdotool`, ImageMagick, `ffmpeg`, `python3` and `curl` installed, run `scripts/site/screenshots.sh`. Check `docs/images/guide/settings-outputs.png`: the page must show the Basic view with the selector, and the crop must still fit (CLAUDE.md, Testing notes). If the tools are missing, record that in the ledger as `Ruling: settings-outputs.png not regenerated — tools missing — the guide image lacks the selector until it is`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add README.md docs/user/settings.md docs/user/bit-perfect.md docs/user/troubleshooting.md \

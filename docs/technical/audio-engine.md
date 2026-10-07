@@ -169,7 +169,17 @@ cannot hang the conductor.
 
 ### Rates and bit-perfect buses
 
-- **Each bus has its own rate.** It starts at `outputs.sample_rate`. Every
+- **Each bus has its own rate.** It starts at its device's own rate
+  (`outputs.device_overrides`, `EngineSettings::rate_for`) or
+  `outputs.sample_rate`, and asks for the device's own buffer or
+  `outputs.buffer_frames` (`buffer_for`). `EngineSettings::from_config` keeps
+  only the overrides of devices a route names (`routed_devices`), so the
+  system-default output opens at the global values. A bus with its own
+  rate keeps the global rate and buffer as its `pcm_fallback`: when the
+  own rate does not open, the watchdog reopens the device there (warn
+  log). The mixer's smoothing and declick
+  lengths are in that rate's frames, and the one-block margins use the bus's
+  own buffer (`Engine::buffer_of`). Every
   seconds↔frames conversion for a source uses the rate of that source's bus:
   fades, declicks, pause ramps, planned transitions, positions, cart loop
   points and test tones (`Engine::rate_of`, `frames_on`). Workers open each
@@ -305,13 +315,14 @@ plus the mixer's DSD mode.
   chosen: an idle bus goes back to the PCM configuration it had before the
   DSD (`DsdBus::pcm`, kept by `open_dsd_stream`); a bus with sources on it
   (a native switch) tries the word rate first, so their timelines stay,
-  then the PCM configuration before the DSD, then `outputs.sample_rate`. When
-  the rate changes under sources, `follow_forced_rate` opens every player
-  and cart source on the bus again at its position at the new rate, as a
-  seek does (a looped cart from its cue-in); sources fading out and test
-  tones are cut, a cut fade sending what its end would (`ReachedEnd` for a
-  fade stop, `FadeCompleted` for the last one of a crossfade). If nothing opens, the bus is `Lost` and the watchdog falls
-  back as below. A PCM start over a tail or a switch waits until it ends
+  then the PCM configuration before the DSD, then the device's own rate
+  or `outputs.sample_rate` (`rate_for`). When the rate changes under
+  sources, `follow_forced_rate` opens every player and cart source on the
+  bus again at its position at the new rate, as a seek does (a looped
+  cart from its cue-in); sources fading out and test tones are cut, a cut
+  fade sending what its end would (`ReachedEnd` for a fade stop,
+  `FadeCompleted` for the last one of a crossfade). If nothing opens, the
+  bus is `Lost` and the watchdog falls back as below. A PCM start over a tail or a switch waits until it ends
   (`before_start_on`).
 - **The two mix policies** (`outputs.dsd_mix`), applied by `before_start_on`
   to any start on a bus carrying DSD (the starts loop, `current_finished`,

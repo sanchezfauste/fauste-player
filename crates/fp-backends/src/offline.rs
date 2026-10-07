@@ -37,6 +37,10 @@ struct DeviceState {
     /// PCM (and DoP) streams above this rate are refused; native DSD is
     /// not limited by it.
     max_pcm_rate: Option<u32>,
+    /// Sample-rate ranges the device reports (`None`: all of them).
+    reported_rates: Option<Vec<(u32, u32)>>,
+    /// Buffer-size range the device reports (`None`: a wide one).
+    reported_buffers: Option<(u32, u32)>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -123,6 +127,16 @@ impl OfflineDevice {
     /// need not take that rate as PCM.
     pub fn set_max_pcm_rate(&self, rate: u32) {
         lock(&self.state).max_pcm_rate = Some(rate);
+    }
+
+    /// Makes the device report only these sample-rate ranges.
+    pub fn set_reported_rates(&self, ranges: Vec<(u32, u32)>) {
+        lock(&self.state).reported_rates = Some(ranges);
+    }
+
+    /// Makes the device report this buffer-size range.
+    pub fn set_reported_buffers(&self, range: (u32, u32)) {
+        lock(&self.state).reported_buffers = Some(range);
     }
 
     /// How many times a stream was opened, or tried to be, on this device.
@@ -227,17 +241,22 @@ impl AudioBackend for OfflineBackend {
             .values()
             .filter(|d| lock(&d.state).plugged)
             .map(|d| {
-                let (exclusive_capable, native_dsd) = {
+                let (exclusive_capable, native_dsd, rates, buffers) = {
                     let state = lock(&d.state);
-                    (state.exclusive_capable, state.native_dsd)
+                    (
+                        state.exclusive_capable,
+                        state.native_dsd,
+                        state.reported_rates.clone(),
+                        state.reported_buffers,
+                    )
                 };
                 DeviceInfo {
                     id: d.id.clone(),
                     name: d.id.0.clone(),
                     detail: None,
                     channels: d.channels,
-                    sample_rates: vec![(8_000, 768_000)],
-                    buffer_frames: Some((16, 16_384)),
+                    sample_rates: rates.unwrap_or_else(|| vec![(8_000, 768_000)]),
+                    buffer_frames: Some(buffers.unwrap_or((16, 16_384))),
                     exclusive_capable,
                     rate_switching: exclusive_capable,
                     native_dsd,

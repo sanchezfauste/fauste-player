@@ -1,7 +1,7 @@
 # Operator Feedback 4 — Design Spec
 
 - **Date:** 2026-10-06
-- **Status:** Plans 1 to 4 implemented (Q6 not reproduced, see plan 2's "As built"); plan 5 not implemented.
+- **Status:** Plans 1 to 5 implemented (Q6 not reproduced, see plan 2's "As built"), except plan 5's Task 7, the check on real hardware.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§3 rules,
   §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md) (M4 display),
   the [bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md) (B3 rate, B6
@@ -678,6 +678,52 @@ Rulings made while implementing:
   reason.
 - **Docs and locales.** The reason strings and `settings-dsd-default-pcm` in
   en-US and es-ES; `docs/user/bit-perfect.md`.
+
+**As built (plan 5).** The rulings are in
+`docs/superpowers/plans/2026-10-06-feedback4-plan5-outputs-settings.md`.
+In short:
+- an override change reuses the SampleRate and BufferSize restart reasons
+  (the notice does not say which device changed);
+- the DSD reasons and the offered modes live in `fp_model::device_offer`,
+  with at most one reason, the most fundamental first;
+- an unplugged device has its own reason (`NotConnected`), and a DSD mode
+  the device cannot take shows as PCM without rewriting the configuration
+  (`effective_dsd_mode`);
+- an override reaches the engine only for a device a route names; the
+  system-default output opens at the global values, and a stale override
+  stays in the configuration for when the device is routed again;
+- a saved own rate or buffer the device no longer reports stays listed with
+  a note, and a bus whose own rate does not open falls back to the global
+  rate and buffer through `pcm_fallback`;
+- `advanced_in_use` counts the DSD mix and silence only with a routed device;
+- the Advanced rows list the devices that routes name (`routed_devices`);
+  a player on the system default output gets no rows;
+- a device's own value equal to the global one stays the device's own, and
+  only **Global (...)** removes it;
+- switching views changes `ui.outputs_view` only;
+- the DSD mode box is disabled when PCM is the only mode offered;
+- the engine opens each device at its own rate and buffer, and a
+  bit-perfect device starts at its own rate and still follows each file.
+
+Three choices are pending the maintainer's confirmation (each is easy to
+reverse):
+- **[ASK] Rates and buffers offered.** A device's own rate and buffer list
+  only the values the device reports (all when it reports nothing or is
+  unplugged), and a chosen value always stays listed. A device that
+  under-reports cannot be given a rate it does take, except in
+  `config.json`. Reversing it is a change to `offered_rates` and
+  `offered_buffers`.
+- **[ASK] The Basic hint line.** Basic shows one line when a routed device is
+  bit-perfect or has its own rate or buffer, or when the DSD mix or silence
+  is not the default (`OutputsConfig::advanced_in_use`), so that an upgraded
+  installation does not hide active settings. Reversing it is dropping the
+  line.
+- **[ASK] The heading.** "Bit-perfect devices" became "Per-device settings"
+  (`settings-devices`; `settings-devices-none` replaces
+  `settings-bit-perfect-none`), because the section now holds the rate and
+  buffer too.
+
+Task 7, the check on real hardware, is not done.
 
 ---
 

@@ -53,6 +53,17 @@ fn rig_with(
     format: SampleFormat,
     device: impl FnOnce(&OfflineDevice),
 ) -> Rig {
+    rig_edited(mode, mix, format, device, |_| {})
+}
+
+/// Like `rig_with`; `edit` changes the configuration last.
+fn rig_edited(
+    mode: DsdOutput,
+    mix: DsdMix,
+    format: SampleFormat,
+    device: impl FnOnce(&OfflineDevice),
+    edit: impl FnOnce(&mut Config),
+) -> Rig {
     let backend = OfflineBackend::new();
     let dac = backend.add_device("dac", 2);
     dac.set_exclusive_capable(true);
@@ -85,6 +96,7 @@ fn rig_with(
     config.tuning.gain_smoothing_ms = 0.0;
     config.tuning.prebuffer_secs = 4.0;
     config.tuning.ready_threshold_ms = 1_500.0;
+    edit(&mut config);
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
     let mut engine = Engine::new(
         backends,
@@ -744,6 +756,47 @@ fn native_dsd_ends_on_a_pcm_rate_the_device_takes() {
     r.start(Q, request(2, wav, pcm16(44_100)));
     let raw = r.run_raw(BLOCK * 8);
     assert!(raw.iter().any(|f| f[0] != 0.0), "PCM plays after the DSD");
+}
+
+#[test]
+fn native_dsd_ends_on_the_devices_own_rate() {
+    let mut r = rig_edited(
+        DsdOutput::Native,
+        DsdMix::ConvertToPcm,
+        SampleFormat::I24,
+        |dac| {
+            dac.set_native_dsd(true);
+            dac.set_max_pcm_rate(MAX_PCM);
+        },
+        |c| {
+            c.outputs.set_device_rate(
+                &OutputDevice {
+                    backend: "offline".into(),
+                    device: "dac".into(),
+                },
+                Some(96_000),
+            );
+        },
+    );
+    assert_eq!(r.rate(), 96_000, "it opens at its own rate");
+    // A short 44.1 kHz track moves the bus to 44.1 kHz (B3) and ends; the
+    // device then refuses that rate, so leaving DSD falls back to the
+    // device's own rate.
+    let wav = indexed_wav(r.dir.path(), "a.wav", 44_100, 2, 44_100 / 10);
+    r.start(Q, request(2, wav, pcm16(44_100)));
+    assert_eq!(r.rate(), 44_100);
+    r.run_raw(44_100 / 2);
+    r.dac.refuse_rate(44_100);
+    let path = dsd128_file(&r, "short.dsf", DSD128 as usize / 8 / 10);
+    r.start(P, request(1, path, dsd128()));
+    assert_eq!(r.rate(), WORD_RATE_128);
+    r.run_raw(WORD_RATE_128 as usize / 2);
+    let config = r.dac.config().expect("the device is never left closed");
+    assert_eq!(config.dsd, None, "reopened as PCM");
+    assert_eq!(
+        config.sample_rate, 96_000,
+        "its own rate, not the global one"
+    );
 }
 
 #[test]

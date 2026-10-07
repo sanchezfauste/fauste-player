@@ -293,7 +293,7 @@ impl Engine {
         }
         // One block of margin: the engine's frame lags the mixer's.
         let until = self.now_frame(&p.bus)
-            + u64::from(self.settings.buffer_frames)
+            + u64::from(self.buffer_of(&p.bus))
             + self.silence_frames(&p.bus);
         if let Some(d) = self.dsd_buses.get_mut(&p.bus) {
             d.state = DsdState::Tail { until };
@@ -536,7 +536,8 @@ impl Engine {
     /// rate as PCM (DSD512 never: 1.4112 MHz). An idle bus goes back to the
     /// PCM configuration it had before the DSD (`pcm`); a bus with sources
     /// on it tries the word rate first, so their timelines stay as they
-    /// are. Then the configured rate. When the rate changes, the sources on
+    /// are. Then the configured rate: the device's own, else the global
+    /// one (operator feedback 4, Q12.5). When the rate changes, the sources on
     /// the bus are opened again at the new rate (`follow_forced_rate`). If
     /// nothing opens, the bus is `Lost` and the watchdog retries, falling
     /// back to `pcm` (`Bus::set_pcm_fallback`): never an impossible rate
@@ -562,7 +563,7 @@ impl Engine {
         );
         let sounding = self.bus_sounding(bus);
         let configured = StreamConfig {
-            sample_rate: self.settings.sample_rate,
+            sample_rate: self.settings.rate_for(bus),
             ..pcm
         };
         let Some(b) = self.buses.get_mut(bus) else {
