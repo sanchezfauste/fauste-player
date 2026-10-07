@@ -94,9 +94,9 @@ impl EngineSettings {
                 .collect(),
             // Only devices a route names: Settings shows no row for any
             // other, so the system-default output opens at the global
-            // values. The model already drops the settings of a device
-            // that leaves every route (`forget_unrouted_devices`); the
-            // filter keeps a configuration built any other way the same.
+            // values. The store drops the settings of a device no route
+            // names only on load (`forget_unrouted_devices`), so a device
+            // unrouted since the start still has them here.
             device_streams: config
                 .outputs
                 .routed_devices()

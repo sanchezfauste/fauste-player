@@ -295,27 +295,33 @@ fn without_routes_every_device_setting_goes_and_the_globals_stay() {
     );
 }
 
-#[test]
-fn a_config_update_that_unroutes_a_device_drops_its_settings() {
-    let mut state = AppState::new(with_settings_on(routed()), "Main");
+/// Applies `edit` to a copy of the configuration, as Settings does with
+/// every combo click.
+fn update(state: &mut AppState, edit: impl FnOnce(&mut PlayerRoutes)) {
     let mut config = state.config.clone();
-    // Player 1's Main goes back to the system default output.
     if let Some(r) = config.outputs.routes.first_mut() {
-        r.main = None;
+        edit(r);
     }
-    apply(&mut state, Command::UpdateConfig(Box::new(config))).unwrap();
-    let o = &state.config.outputs;
-    assert!(o.device_override(&dev("dac")).is_none());
-    assert!(!o.bit_perfect.contains(&dev("dac")));
-    assert!(o.dsd_output.iter().all(|d| d.device != "dac"));
-    assert_eq!(o.device_overrides, vec![own("phones", Some(96_000), None)]);
+    apply(state, Command::UpdateConfig(Box::new(config))).unwrap();
+}
 
-    // Routed again, the device starts from the global values.
-    let mut config = state.config.clone();
-    if let Some(r) = config.outputs.routes.first_mut() {
-        r.main = Some(route("dac", 0));
-    }
-    apply(&mut state, Command::UpdateConfig(Box::new(config))).unwrap();
-    assert_eq!(state.config.outputs.effective_rate(&dev("dac")), 48_000);
-    assert!(!state.config.outputs.bit_perfect.contains(&dev("dac")));
+#[test]
+fn a_route_edit_keeps_every_devices_settings_until_the_next_start() {
+    // Settings applies each click at once: swapping Main and Cue unroutes
+    // `dac` for a moment, and going to the system default and back
+    // unroutes it too. Its settings are only forgotten on load.
+    let started = with_settings_on(routed());
+    let mut state = AppState::new(started.clone(), "Main");
+    update(&mut state, |r| r.main = Some(route("phones", 0)));
+    update(&mut state, |r| r.cue = Some(route("dac", 0)));
+    let o = &state.config.outputs;
+    assert_eq!(o.effective_rate(&dev("dac")), 96_000);
+    assert!(o.bit_perfect.contains(&dev("dac")));
+    assert!(o.dsd_output.contains(&dsd("dac")));
+
+    let mut state = AppState::new(started.clone(), "Main");
+    update(&mut state, |r| r.main = None);
+    update(&mut state, |r| r.main = Some(route("dac", 0)));
+    assert_eq!(state.config, started);
+    assert!(fp_model::restart_pending(&started, &state.config).is_empty());
 }

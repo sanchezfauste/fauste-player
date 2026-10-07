@@ -736,10 +736,19 @@ Task 7, the check on real hardware, is not done.
   may never be connected again. `OutputsConfig::forget_unrouted_devices`
   (`fp-model`) removes the `device_overrides`, `bit_perfect` and
   `dsd_output` entries of every device no route names (players' Main and
-  Cue, the cartwall's Main and Cue). The reducer applies it whenever it
-  takes a new configuration (`update_config`), and `fp-store` on load, so a
-  stale entry written by an earlier version goes too. A device routed again
-  starts from the global values. Settings shows the bit-perfect switch and
+  Cue, the cartwall's Main and Cue). Only `fp-store` applies it, on load,
+  so the settings are forgotten the next time the application starts (a
+  stale entry written by an earlier version goes too). Not in the reducer:
+  Settings applies every route click at once, so swapping two devices
+  between players, or going to the system default and back, leaves a
+  device unrouted for a moment, and its settings must survive that; a
+  change of outputs needs a restart anyway. Before pruning, the load drops
+  the routes of players that no longer exist
+  (`OutputsConfig::forget_routes_of_other_players`; a removed player's id
+  is never used again, and its routes would keep its devices routed), but
+  only when the session file loaded, since without it the players' ids are
+  not known. A device routed again after a start starts from the global
+  values. Settings shows the bit-perfect switch and
   the DSD mode only next to a routed device, like the own rate and buffer,
   so they follow the same rule. The removal is silent, like the removal of
   an empty override. The system-default output is untouched: it has no
@@ -748,11 +757,15 @@ Task 7, the check on real hardware, is not done.
     existing pattern removes an empty override silently, and the operator
     caused it by changing the route — cost if wrong: a one-line warning in
     `Store::load`.
-  - Ruling: unrouting a bit-perfect device lists "bit-perfect devices" in
-    the restart notice next to "outputs" (and "DSD output" when it had a
-    DSD mode) — the configuration did change, and
-    both need the same restart — cost if wrong: a filter in
-    `restart_pending`.
+  - Ruling: pruning only on load, not in `update_config` — a route edit
+    in Settings (a swap, the system default and back) must not lose a
+    device's settings, and the restart notice clears when the routes
+    return to the started ones — cost if wrong: a device unrouted during
+    the session keeps its hidden settings until the next start.
+  - Ruling: a removed player's routes are dropped on load only when the
+    session file loaded — without it the restored players get new ids and
+    every route would look stale — cost if wrong: stale routes (and their
+    devices' settings) stay until a start with a session.
 - **A refused own buffer falls back to the global buffer**, like a refused
   own rate. `ensure_bus` gives a bus the global rate and buffer as its
   `pcm_fallback` when its device has its own rate or its own buffer (before,

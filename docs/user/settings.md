@@ -58,8 +58,9 @@ bit-perfect switch and the DSD mode, and then the DSD settings. Switching
 views only shows or hides rows: nothing is changed or reset. When Basic
 hides a setting that is in use, a line says so. When no output uses a
 device any more, its own rate and buffer, its bit-perfect switch and its
-DSD mode are forgotten: if an output uses it again, it starts from the
-global values.
+DSD mode are forgotten the next time the application starts: if an output
+uses it again after that, it starts from the global values. Until then,
+choosing it again (for example after swapping two devices) keeps them.
 
 | Setting | Meaning |
 |---|---|

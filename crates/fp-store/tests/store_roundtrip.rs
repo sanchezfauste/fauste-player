@@ -412,3 +412,74 @@ fn a_devices_own_settings_are_dropped_on_load_when_no_route_names_it() {
     assert!(o.dsd_output.is_empty());
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
 }
+
+/// Player 1 plays on `dac`; the last of four players, removed before the
+/// save, played on `gone`. Both devices have their own rate.
+fn routes_of_a_removed_player(s: &Store) -> (AppState, fp_model::PlayerId) {
+    use fp_model::{OutputDevice, PlayerRoutes, Route};
+    let mut state = AppState::new(Config::default(), "Main");
+    let route = |device: &str| {
+        Some(Route {
+            backend: "alsa".into(),
+            device: device.into(),
+            first_channel: 0,
+        })
+    };
+    let first = state.players[0].id;
+    let removed = state.players[3].id;
+    state.config.outputs.routes = vec![
+        PlayerRoutes {
+            player: first,
+            main: route("dac"),
+            cue: None,
+        },
+        PlayerRoutes {
+            player: removed,
+            main: route("gone"),
+            cue: None,
+        },
+    ];
+    for device in ["dac", "gone"] {
+        let device = OutputDevice {
+            backend: "alsa".into(),
+            device: device.into(),
+        };
+        state.config.outputs.set_device_rate(&device, Some(96_000));
+    }
+    apply(&mut state, Command::SetPlayerCount(3)).unwrap();
+    s.save_config(&state).unwrap();
+    s.save_playlists(&state).unwrap();
+    (state, removed)
+}
+
+#[test]
+fn the_routes_of_a_removed_player_and_their_devices_settings_are_dropped_on_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    let (state, removed) = routes_of_a_removed_player(&s);
+    s.save_session(&state, |_| 0.0).unwrap();
+    let loaded = s.load("Main");
+    let o = &loaded.state.config.outputs;
+    assert!(o.player_routes(removed).is_none());
+    assert!(o.player_routes(state.players[0].id).is_some());
+    let own: Vec<&str> = o
+        .device_overrides
+        .iter()
+        .map(|d| d.device.device.as_str())
+        .collect();
+    assert_eq!(own, ["dac"]);
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+}
+
+#[test]
+fn without_a_session_no_route_is_dropped() {
+    // The players' ids are not known: a route may be for a player whose
+    // session is only missing.
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    let (state, removed) = routes_of_a_removed_player(&s);
+    let loaded = s.load("Main");
+    let o = &loaded.state.config.outputs;
+    assert!(o.player_routes(removed).is_some());
+    assert_eq!(o.device_overrides, state.config.outputs.device_overrides);
+}
