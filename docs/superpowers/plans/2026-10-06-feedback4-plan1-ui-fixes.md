@@ -1644,27 +1644,27 @@ Suggested executor: `sonnet`.
 
 **Interfaces:** none.
 
-- [ ] **Step 1: Verify the spec lines that the design spec already changed**
+- [x] **Step 1: Verify the spec lines that the design spec already changed**
 
 Run: `grep -n "operator feedback 4, Q\(2\|4\|5\|9\|10\)\|feedback 4, Q10" docs/superpowers/specs/2026-09-25-fauste-player-design.md docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md`
 Expected: the lines listed in the Rulings (main spec L381, L453, L457, L458; feedback 2 L283, L319, L462). If one is missing, add it with the sentence given in spec §2 under "Spec lines that change".
 
-- [ ] **Step 2: Write the user guide**
+- [x] **Step 2: Write the user guide**
 
 - `players.md`, CUE window: add "While the CUE is paused, its Pause button (shown as Resume) blinks amber, like the player's."
 - `playlists.md`: in the row table add "Hourglass at the right of the title | The track is waiting for its analysis (hover: *Analysis pending*); it plays anyway, and the hourglass goes when the analysis finishes"; change the file-icon row to "hover the row: the popup starts with the reason, in amber, then the usual fields"; change the **Track tooltip** paragraph to say the popup is the only hover information on a row and starts with the reason for a missing or unreadable file; add **Re-analyse** to the context menu table ("Analyse this track again now, whatever its state. A fixed file that was unreadable is also picked up by itself: see Troubleshooting. Manual markers are kept"); in **Drag and drop** say the violet line is at the row boundary nearest to the pointer, appears only in the list under the pointer, and a drop over the header, the column edges or the scroll bar does nothing.
 - `troubleshooting.md`: replace "A file that cannot be decoded is checked again only with **Settings → Analysis → Re-analyse all tracks**." by: it is checked again by itself on the same timer, by size and modification time (the file is not decoded again unless one of them changed, for example after a copy finishes); to check it at once use **Re-analyse** in its row menu or **Settings → Analysis → Re-analyse all tracks**.
 
-- [ ] **Step 3: Write the technical docs**
+- [x] **Step 3: Write the technical docs**
 
 - `ui.md`: describe `table_layout::{drop_index, boundary_y, on_column_edge}` and that `DropTarget` is keyed by player and playlist; the popup constant `TIP_WIDTH` and that the file error is the popup's first line; `widgets::{blink, paused_style}` shared by the player and the CUE window; `view::{analysis_pending, animating}`; `Scene::request`.
 - `analysis.md`: replace "`Unreadable` files are not retried by themselves." with the Q10 rule: the probe `stat`s (never opens) unreadable files, `Services::stamps` records `Seen`, a change clears the failure and queues an analysis, "not found" becomes `Missing`, the first look is not timer-gated, `ReanalyseTrack` uses the urgent queue.
 
-- [ ] **Step 4: Spec "As built" and status**
+- [x] **Step 4: Spec "As built" and status**
 
 In the design spec set the status line to "Plan 1 implemented (branch `fix/feedback4-ui-fixes`); plans 2 to 5 not written." and add under §2 an "As built (plan 1)" list with one bullet per item and the Rulings of this plan, verbatim (they are the deviations).
 
-- [ ] **Step 5: Self-check and commit**
+- [x] **Step 5: Self-check and commit**
 
 Run `grep -rn -i "unreadable files are not retried\|waits for .Re-analyse all" docs README.md` (expected: no hits left). Then:
 

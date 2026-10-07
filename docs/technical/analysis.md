@@ -225,7 +225,20 @@ The services thread submits tracks when either:
   A drive mounted after the start brings its tracks back by themselves,
   from the cache when they were analysed before. A file still missing
   sends nothing to the model, so nothing is saved every interval.
-  `Unreadable` files are not retried by themselves.
+  `Unreadable` files are not decoded again by themselves (operator
+  feedback 4, Q10). The same probe thread `stat`s them (it never opens
+  them) and answers with what it saw; `Services::stamps` records each file's
+  size and modification time (`Seen`) at the failure, and the first look at a
+  newly unreadable file is not waited for the timer, so the recorded stat is
+  close to the failure. A changed size or time clears the failure and queues
+  an analysis; an unchanged file does nothing (no analysis, no save); a
+  file that is gone becomes `Missing`; any other `stat` error is ignored. A
+  change seen while the track is already being analysed is dropped and
+  reported again at the next look. `ServiceRequest::ReanalyseTrack` (the row
+  menu's **Re-analyse**) clears the failure and queues the track on the
+  urgent queue whatever its state, through the same analyser and cache as
+  *Re-analyse all*, so an unchanged file whose analysis is cached comes back
+  playable and fails again on the next playback.
 
 A **tag-only pass** reads the tags of tracks that were analysed but not read
 since: `Track::needs_tag_read` (analysed, readable, `tags_read` false) selects

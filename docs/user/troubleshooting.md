@@ -95,14 +95,17 @@ as the sound server's default output in your system's sound settings.
 ## A track shows a warning icon or a file with a cross
 
 The file is missing (moved, deleted, unmounted: a file with a cross) or
-cannot be decoded (a warning sign). The players skip it. Hover the icon
+cannot be decoded (a warning sign). The players skip it. Hover the row
 to see which, and the file's path.
 
 A missing file is looked for again every 30 seconds
 (`tuning.missing_recheck_ms` in the configuration file): when the drive
 is mounted or the file is put back, the track becomes playable by itself. A
-file that cannot be decoded is checked again only with **Settings →
-Analysis → Re-analyse all tracks**.
+file that cannot be decoded is checked again by itself on the same timer, by
+size and modification time: it is not decoded again unless one of them
+changed, for example when a copy finishes. To check it at once use
+**Re-analyse** in its row menu, or **Settings → Analysis → Re-analyse all
+tracks** for the whole library.
 
 ## Audio dropouts
 

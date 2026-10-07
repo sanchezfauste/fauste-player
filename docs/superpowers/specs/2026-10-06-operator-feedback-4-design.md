@@ -1,7 +1,7 @@
 # Operator Feedback 4 — Design Spec
 
 - **Date:** 2026-10-06
-- **Status:** Approved in brainstorming; no plan written yet.
+- **Status:** Plan 1 implemented (branch `fix/feedback4-ui-fixes`); plans 2 to 5 not written.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§3 rules,
   §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md) (M4 display),
   the [bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md) (B3 rate, B6
@@ -247,6 +247,40 @@
 - **Docs and locales.** `menu-reanalyse` (and its tooltip if any) in en-US
   and es-ES; `docs/user/playlists.md`, `docs/user/troubleshooting.md`,
   `docs/technical/analysis.md`.
+
+### As built (plan 1)
+
+- **Q5.** `widgets::{blink, paused_style}` are shared by the player and the CUE
+  window; `view::animating` pins the repaint rule (no new rule: a paused CUE
+  still has `cue` set).
+- **Q2.** `view::analysis_pending` and a muted hourglass (`flag-analysis-pending`).
+- **Q9.** `view::track_tooltip` takes the reason; `TIP_WIDTH` fixes the width.
+- **Q4.** `table_layout::{drop_index, boundary_y, on_column_edge}`; `DropTarget`
+  gains the player.
+- **Q10.** The probe thread `stat`s unreadable files; `Services::stamps`;
+  `ServiceRequest::ReanalyseTrack`; the row menu's **Re-analyse**
+  (`menu-reanalyse`).
+- **Known limitation (Q4).** The wheel does not scroll the list while a row is
+  being dragged: egui 0.36's `ScrollArea` ignores it while a widget is dragged.
+  There is no edge auto-scroll either.
+
+Rulings made while implementing:
+
+- Q5.3 needs no new repaint rule: `AppUi::ui` already repaints every frame while `p.cue.is_some()`, and a paused CUE still has `cue` set; it is extracted as `view::animating` so that a test pins it.
+- The main spec lines of §6, §8.3 and the feedback 2 spec lines about Q5/Q9 were already edited with this design spec, so only these notes were added.
+- Q9.4 (carts show the same error line) needs no code: the cartwall already shows `Scene::file_tip` on hover, and `hovering_an_unavailable_cart_says_why` pins it.
+- Q9.1 reuses the existing `file-missing-tip` / `file-unreadable-tip` strings, which end with the path, so the path shows twice (in the reason and in the Path row). Cost if wrong: two new reason-only strings.
+- Q9.2 removes the file-error tooltips of the number and the title only; the `P<n>` mark and the "next again" arrow keep their own tooltips because they explain a glyph, not the file.
+- Q4.1 vs Q4.2: the plan follows Q4.2 for the column resize handles (a grab zone of `resize_grab_radius_side` on each side of an interior edge gives no target) and Q4.1 for everything else. Cost if wrong: the bar blinks off for about 8 points when a drag crosses an edge.
+- `Services.failed` stays a `HashSet<TrackId>` and the stats go in a new `stamps: HashMap<TrackId, Seen>`: playback failures set `Unreadable` in the model without going through `failed`, and putting them in `failed` would change when they are analysed. This replaces the implementation note above (a map).
+- The first look at a newly unreadable file is sent at once and alone, not waited for the timer, so the recorded stat is close to the failure; later looks follow `tuning.missing_recheck_ms`.
+- A `stat` error other than "not found" records `Seen::Unknown` and is otherwise ignored; "not found" sends `SetFileState(Missing)` (Q10.3). Cost if wrong: a permission fix is only noticed through Re-analyse.
+- **Re-analyse** goes through the same analyzer and cache as *Re-analyse all*, so an unchanged file whose analysis is cached comes back playable and fails again on the next playback. Cost if wrong: a cache bypass flag on `submit_urgent`.
+- The kittests read drawn shapes through `Harness::output().shapes` because the fill of a tile and the violet bar are painted shapes, not accessible nodes.
+- The Q9 popup lays out its fields as horizontal rows with a measured label column rather than a `Grid` (the popup moved over two frames after its sizing pass); its test starts at the first frame that paints the label.
+- The drop-geometry tests keep only what is below the table header; the empty-playlist test compares the bar with the header label's centre plus half the header height. No scroll-bar width is subtracted from `inner_rect`: egui's `inner_rect` already excludes the bar.
+- The scrolled long-list test scrolls first, then drags: egui ignores the wheel while a widget is dragged. If the operator expects the wheel (or edge auto-scroll) during a drag, that is new behaviour to add.
+- A `changed` answer for a track already being analysed is dropped and its old stamp kept, so the next timed look reports it changed again and it is analysed once more after the running analysis. Cost if wrong: one extra analysis per such race.
 
 ---
 
