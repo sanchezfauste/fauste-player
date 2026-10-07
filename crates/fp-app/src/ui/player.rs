@@ -416,12 +416,13 @@ fn cover(
 
 /// Width of the meter and fader column, and its gap to the left part.
 const METER_COLUMN_WIDTH: f32 = widgets::METER_WIDTH + 6.0 + widgets::FADER_WIDTH;
-const METER_COLUMN_GAP: f32 = 10.0;
+const METER_COLUMN_GAP: f32 = 6.0;
 /// Vertical gap between the info row and the transport.
 const ROW_GAP: f32 = 8.0;
-/// The countdown shrinks to fit down to this share of its size (38 → 18 px:
-/// an hour-long time in a player at its minimum width).
-const COUNTDOWN_MIN_SCALE: f32 = 18.0 / 38.0;
+/// The countdown shrinks to fit down to this share of its size (38 → 14 px:
+/// a ten-hour time in a player at its minimum width, beside the meter and
+/// its two rulers).
+const COUNTDOWN_MIN_SCALE: f32 = 14.0 / 38.0;
 
 /// The info row and the transport on the left, the meter and fader column
 /// on the right spanning both (feedback spec §3.2).

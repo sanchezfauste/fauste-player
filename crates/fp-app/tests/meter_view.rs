@@ -11,8 +11,9 @@ mod support;
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::widgets::{
-    LineShade, METER_WIDTH, Zone, alignment_dbfs, loudness_line, mark_label, max_readout,
-    meter_layout, meter_position, reference_segments, scale_marks, zone_of,
+    LABEL_COLUMN, LineShade, METER_WIDTH, MeterTick, Side, TickKind, Zone, alignment_dbfs,
+    loudness_line, mark_label, max_readout, meter_layout, meter_position, minor_marks,
+    reference_segments, scale_marks, zone_of,
 };
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::PlayerTelemetry;
@@ -782,4 +783,210 @@ fn reference_segments_are_unlit_at_the_floor_and_lit_at_the_top() {
         assert_eq!(at_top[0].1, LineShade::Lit, "{}", m.label);
         assert_eq!(at_top[2].1, LineShade::Lit, "{}", m.label);
     }
+}
+
+fn has(marks: &[f32], x: f32) -> bool {
+    marks.iter().any(|m| near(*m, x))
+}
+
+fn minors_between(marks: &[f32], low: f32, high: f32) -> usize {
+    marks
+        .iter()
+        .filter(|m| **m > low + 1e-3 && **m < high - 1e-3)
+        .count()
+}
+
+#[test]
+fn the_meter_has_a_ruler_on_each_side_of_the_bars() {
+    let rect = column(136.0);
+    let l = meter_layout(rect, &meter(MeterBallistics::DigitalPeak), false);
+    let [left, right] = l.bars;
+    let [lr, rr] = &l.rulers;
+    assert_eq!((lr.side, rr.side), (Side::Left, Side::Right));
+    assert!(lr.ticks.max <= left.left(), "left ticks end before the bar");
+    assert!(
+        lr.labels_x <= lr.ticks.min,
+        "left labels sit outside the ticks"
+    );
+    assert!(
+        rr.ticks.min >= right.right(),
+        "right ticks start after the bar"
+    );
+    assert!(
+        rr.labels_x >= rr.ticks.max,
+        "right labels sit outside the ticks"
+    );
+    assert_eq!(lr.label_halign, egui::Align::Max);
+    assert_eq!(rr.label_halign, egui::Align::Min);
+    // The label columns fit in the meter's rect.
+    assert!(lr.labels_x - LABEL_COLUMN >= rect.left() - 0.01);
+    assert!(rr.labels_x + LABEL_COLUMN <= rect.right() + 0.01);
+    // The gap between the bars is unchanged and empty.
+    assert!(near(right.left() - left.right(), 2.0));
+    assert_eq!(METER_WIDTH, 78.0);
+}
+
+#[test]
+fn every_labelled_mark_has_a_tick_on_both_rulers() {
+    for ballistics in ALL_METERS {
+        for height in [64.0, 136.0, 300.0] {
+            let l = meter_layout(column(height), &meter(ballistics), false);
+            for m in l.lines.iter().filter(|m| !m.label.is_empty()) {
+                let tick = l
+                    .ticks
+                    .iter()
+                    .find(|t| near(t.y, m.y) && t.kind != TickKind::Minor)
+                    .unwrap_or_else(|| panic!("{ballistics:?} {height}: no tick for {}", m.label));
+                let [lr, rr] = &l.rulers;
+                let (a, b) = (lr.tick_rect(tick), rr.tick_rect(tick));
+                assert!(near(a.center().y, tick.y) && near(b.center().y, tick.y));
+                assert!(near(a.width(), b.width()), "the rulers mirror each other");
+                assert!(near(a.right(), lr.ticks.max), "flush with the bar side");
+                assert!(near(b.left(), rr.ticks.min), "flush with the bar side");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_alignment_tick_is_thicker_and_unique() {
+    for ballistics in ALL_METERS {
+        let c = meter(ballistics);
+        let l = meter_layout(column(136.0), &c, false);
+        let alignment: Vec<&MeterTick> = l
+            .ticks
+            .iter()
+            .filter(|t| t.kind == TickKind::Alignment)
+            .collect();
+        assert_eq!(alignment.len(), 1, "{ballistics:?}");
+        let line = l.lines.iter().find(|m| m.alignment).unwrap();
+        assert!(near(alignment[0].y, line.y), "{ballistics:?}");
+        let [lr, rr] = &l.rulers;
+        let a = lr.tick_rect(alignment[0]);
+        let major = l.ticks.iter().find(|t| t.kind == TickKind::Major).unwrap();
+        let m = lr.tick_rect(major);
+        assert!(a.height() > m.height(), "{ballistics:?}: thicker");
+        assert!(a.width() >= m.width(), "{ballistics:?}");
+        assert!(rr.tick_rect(alignment[0]).height() > m.height());
+        // Never inside a bar.
+        for bar in l.bars {
+            assert!(!a.intersects(bar) && !rr.tick_rect(alignment[0]).intersects(bar));
+        }
+    }
+}
+
+#[test]
+fn minor_ticks_sit_between_the_marks_at_a_spacing_per_scale() {
+    // Digital: 1 dB from -20 up, 5 dB below it (spec Q11.4).
+    let c = meter(MeterBallistics::DigitalPeak);
+    let m = minor_marks(&c);
+    assert!(has(&m, -55.0) && has(&m, -45.0));
+    assert!(has(&m, -19.0) && has(&m, -16.0) && has(&m, -1.0));
+    assert!(!has(&m, -20.0) && !has(&m, -52.0), "never on a mark");
+    assert_eq!(minors_between(&m, -60.0, -20.0), 2);
+    assert_eq!(minors_between(&m, -20.0, 0.0), 16);
+    // EBU: every 1 dB, three between each pair of marks, six gaps.
+    let c = meter(MeterBallistics::EbuPpm);
+    assert_eq!(minor_marks(&c).len(), 18);
+    // DIN: 5 dB below -20 relative to its 0, 1 dB above.
+    let c = meter(MeterBallistics::DinPpm);
+    assert_eq!(minor_marks(&c).len(), 24);
+    // VU: 5 dB below -10, 1 dB to -3, 0.5 dB above.
+    let c = meter(MeterBallistics::Vu);
+    let m = minor_marks(&c);
+    assert_eq!(m.len(), 11);
+    assert!(has(&m, c.reference_dbfs - 2.5) && has(&m, c.reference_dbfs - 15.0));
+    // K-20 (0 at -20 dBFS): 1 dB between -24 and -20 relative to its 0.
+    let c = meter(MeterBallistics::K20);
+    let k = alignment_dbfs(&c);
+    let m = minor_marks(&c);
+    assert_eq!(minors_between(&m, k - 24.0, k - 20.0), 3);
+    assert!(has(&m, k - 55.0));
+}
+
+#[test]
+fn minor_marks_follow_a_custom_floor_and_reference() {
+    let mut c = meter(MeterBallistics::DigitalPeak);
+    c.floor_db = -57.0;
+    let m = minor_marks(&c);
+    assert!(has(&m, -52.0), "5 dB above the odd floor's first segment");
+    assert!(!has(&m, -57.0), "the floor is a mark");
+    let mut c = meter(MeterBallistics::EbuPpm);
+    c.reference_dbfs = -20.0;
+    let m = minor_marks(&c);
+    assert!(has(&m, -20.0 + 1.0) && !has(&m, -20.0), "TEST is a mark");
+    assert_eq!(m.len(), 18);
+}
+
+#[test]
+fn ticks_stay_inside_the_rect_and_apart() {
+    for ballistics in ALL_METERS {
+        for height in [64.0, 136.0, 300.0] {
+            for loudness in [false, true] {
+                let rect = column(height);
+                let l = meter_layout(rect, &meter(ballistics), loudness);
+                let bars = l.bars[0];
+                for (i, t) in l.ticks.iter().enumerate() {
+                    assert!(
+                        t.y >= bars.top() - 0.01 && t.y <= bars.bottom() + 0.01,
+                        "{ballistics:?} {height} {loudness}: {t:?} outside the bars' height"
+                    );
+                    for r in &l.rulers {
+                        assert!(rect.contains_rect(r.tick_rect(t)), "{t:?}");
+                    }
+                    if t.kind == TickKind::Minor {
+                        for (j, o) in l.ticks.iter().enumerate() {
+                            if i != j {
+                                assert!(
+                                    (o.y - t.y).abs() >= 3.0 - 0.01,
+                                    "{ballistics:?} {height} {loudness}: minor {t:?} next to {o:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+                let ys: Vec<f32> = l.ticks.iter().map(|t| t.y).collect();
+                assert!(ys.windows(2).all(|p| p[0] <= p[1]), "sorted by y");
+            }
+        }
+    }
+}
+
+#[test]
+fn crowded_marks_keep_a_minor_tick() {
+    // At 64 px labels are thinned out; every scale mark still has a tick.
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::DinPpm] {
+        let c = meter(ballistics);
+        let l = meter_layout(column(136.0), &c, false);
+        let bars = l.bars[0];
+        for mark in scale_marks(&c) {
+            let y = bars.bottom() - meter_position(mark, &c) * bars.height();
+            assert!(
+                l.ticks.iter().any(|t| (t.y - y).abs() < 1.0),
+                "{ballistics:?}: no tick at {mark}"
+            );
+        }
+    }
+    let c = meter(MeterBallistics::DigitalPeak);
+    let small = meter_layout(column(64.0), &c, false);
+    let labelled = small.lines.iter().filter(|m| !m.label.is_empty()).count();
+    let majors = small
+        .ticks
+        .iter()
+        .filter(|t| t.kind == TickKind::Major)
+        .count();
+    assert!(majors <= labelled, "a major tick only for a label");
+}
+
+#[test]
+fn a_taller_meter_has_more_minor_ticks() {
+    let c = meter(MeterBallistics::DigitalPeak);
+    let count = |h: f32| {
+        meter_layout(column(h), &c, false)
+            .ticks
+            .iter()
+            .filter(|t| t.kind == TickKind::Minor)
+            .count()
+    };
+    assert!(count(300.0) > count(64.0));
 }

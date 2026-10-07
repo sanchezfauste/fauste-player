@@ -669,6 +669,32 @@ fn an_hour_long_countdown_fits_between_the_grid_and_the_meter() {
     assert!(countdown.left() >= grid.right(), "{countdown:?} {grid:?}");
 }
 
+/// The meter with a ruler on each side still fits the player at its
+/// minimum width (operator feedback 4, Q11.7).
+#[test]
+fn the_meter_with_its_rulers_fits_the_minimum_player_width() {
+    let (h, _) =
+        support::harness_sized(quiet_meter(state(1, 3)), egui::vec2(380.0, 700.0), |ui| ui);
+    let meter = h.get_by_label("Level meter").rect();
+    let fader = h
+        .query_all_by_label_contains("Volume")
+        .next()
+        .unwrap()
+        .rect();
+    let grid = h.get_by_label("Stop after the current track").rect();
+    assert_eq!(meter.width(), fp_app::ui::widgets::METER_WIDTH);
+    // The waveform spans the player's content width, inside the column's
+    // padding; the fader must not stick out of it.
+    let wave = h.get_by_label("Waveform: click to seek").rect();
+    assert!(fader.right() <= wave.right() + 0.5, "{fader:?} {wave:?}");
+    assert!(fader.left() >= meter.right(), "{fader:?} {meter:?}");
+    // The left part keeps room for the transport grid.
+    assert!(
+        grid.width() > 0.0 && meter.left() >= grid.right(),
+        "{meter:?} {grid:?}"
+    );
+}
+
 /// The state with the loudness line off, so the meter is named "Level meter".
 fn quiet_meter(mut state: fp_model::AppState) -> fp_model::AppState {
     state.config.meter.loudness = fp_model::LoudnessReadout::Off;
