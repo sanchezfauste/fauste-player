@@ -122,8 +122,8 @@ Falta den fitxategi bat berriro bilatzen da 30 segundotik behin
 (`tuning.missing_recheck_ms` konfigurazio-fitxategian): unitatea
 muntatzen denean edo fitxategia bere lekura itzultzen denean, pista berez
 bihurtzen da erreproduzigarri. Deskodetu ezin den fitxategi bat berez
-egiaztatzen da berriro tenporizadore berarekin, tamainaren eta aldaketa-
-dataren arabera: ez da berriro deskodetzen horietako bat aldatu ez bada,
+egiaztatzen da berriro tenporizadore berarekin, tamainaren eta
+aldaketa-dataren arabera: ez da berriro deskodetzen horietako bat aldatu ez bada,
 adibidez kopia bat amaitzen denean. Berehala egiaztatzeko, erabili
 **Berriro aztertu** bere errenkadaren menuan, edo **Ezarpenak → Analisia →
 Berriro aztertu pista guztiak** liburutegi osorako.

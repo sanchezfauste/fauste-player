@@ -253,8 +253,8 @@ leihoan jaregindako fitxategiei ez zaie jaramonik egiten.
 ## Oina {#footer}
 
 **+ Gehitu** botoiak fitxategi-elkarrizketa bat irekitzen du, Ezarpenetan
-ezarritako musika-karpetan hasita. **Berrezarri** botoiak (ondoko gezi-
-ikonoa) zerrendako pista guztien "jada jota" marka ilundua garbitzen du,
+ezarritako musika-karpetan hasita. **Berrezarri** botoiak (ondoko
+gezi-ikonoa) zerrendako pista guztien "jada jota" marka ilundua garbitzen du,
 erreproduzitzaile guztientzat, "Garbitu zerrenda honetako pista guztien
 erreproduzitutako marka?" galdetu ondoren (**Utzi**, Esc edo kanpoko klik
 batek markak mantentzen dituzte). Airean dagoen pistak bere egoera

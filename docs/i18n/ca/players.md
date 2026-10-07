@@ -167,7 +167,7 @@ vermell.
   l'agafessis. Un arrossegament mai no salta, i sense zoom no fa res.
   Alt+arrossegar continua editant els marcadors.
 - **Roda del ratolí** sobre la forma d'ona: amplia i redueix al voltant del
-  punter, fins al detall més fi que té l'anàlisi. **Maj+roda** (o una roda
+  punter, fins al detall més fi que té l'anàlisi. **Shift+roda** (o una roda
   lateral) es mou al llarg de la pista. Mentre és ampliada, la vista segueix
   la posició de reproducció, excepte durant 10 segons després d'ampliar-la o
   moure-la (`ui.follow_current_grace_secs`; 0 desactiva el seguiment).

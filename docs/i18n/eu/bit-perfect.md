@@ -2,8 +2,8 @@
 
 **Bit perfect** gailu batek fitxategi bakoitzaren laginak fitxategian dauden
 bezala jasotzen ditu: lagintze-maiztasun bera, balio berberak, birlaginketarik,
-bolumen-aldaketarik edo nahasketarik gabe. Erabilgarria da monitorizazio-
-kateetarako eta lotura digitaletarako, non ordenagailuko edozein prozesamendu
+bolumen-aldaketarik edo nahasketarik gabe. Erabilgarria da
+monitorizazio-kateetarako eta lotura digitaletarako, non ordenagailuko edozein prozesamendu
 saihestu behar den.
 
 ## Gailu bat bit perfect bihurtzea {#setting-a-device-bit-perfect}
@@ -31,8 +31,8 @@ duenean.
 - **Windows:** aukeratu gailua **WASAPI** sisteman. Modu esklusiboan
   irekitzen da.
   - Windowsen soinu-ezarpenetan, gailuaren propietate **aurreratuetan**
-    *Allow applications to take exclusive control of this device*
-    (aplikazioei gailu honen kontrol esklusiboa hartzen uztea) aktibatuta
+    *aplikazioei gailu honen kontrol esklusiboa hartzen uztea* (*Allow
+    applications to take exclusive control of this device*) aktibatuta
     egon behar du (lehenespenez aktibatuta dago).
   - Jotzen ari den bitartean, beste programa batek ezin du gailua erabili.
 - **macOS:** aukeratu gailua **Core Audio** sisteman. Hog moduan irekitzen

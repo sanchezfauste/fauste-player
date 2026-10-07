@@ -94,7 +94,7 @@ Fauste Player**, avec le copyright et les mentions de licence (**Licences
 tierces** ouvre le fichier des mentions installé avec les paquets de
 publication). Dans une langue traduite par IA, la fenêtre À propos indique
 aussi que la traduction peut contenir des erreurs. Fermez-la avec **Fermer**
-ou `Échap`. `fauste-player --help` liste les options. Les fichiers de
+ou `Esc`. `fauste-player --help` liste les options. Les fichiers de
 playlist passés en arguments sont importés comme nouvelles playlists.
 
 ![La fenêtre À propos : version, copyright et licences des composants inclus](../../images/guide/about.png)
@@ -115,7 +115,7 @@ et une boîte de dialogue **De l'audio est à l'antenne** liste ce qui sonne :
 les lecteurs en lecture ou en pause (`P1 — titre`) et les cartouches en cours
 de lecture avec leur numéro dans la page (`Cartouche 3 — titre`). Le CUE d'un
 lecteur ou du mur de cartouches ne compte pas. Choisissez **Annuler** (ou
-`Échap`, ou cliquez en dehors de la boîte de dialogue) pour continuer à
+`Esc`, ou cliquez en dehors de la boîte de dialogue) pour continuer à
 jouer, ou **Arrêter et fermer** pour arrêter tous les lecteurs à l'antenne et
 toutes les cartouches, puis quitter. La session est enregistrée comme à
 n'importe quelle autre sortie. Quand rien n'est à l'antenne, la fenêtre se

@@ -85,7 +85,7 @@ as faixas são analisadas de novo automaticamente.
   cue-out. A sobreposição é exata à amostra.
 - **Modo contínuo sem ponto MIX,** ou com a mistura automática desativada: a
   faixa seguinte começa exatamente no cue-out, sem interrupção.
-- **Modo single**, ou **Stop no fim**: o leitor pára no cue-out.
+- **Modo single**, ou **Stop no fim**: o leitor para no cue-out.
 - **Premir Play com uma faixa no ar:** a faixa seguinte começa de imediato e
   a atual desvanece durante a *duração do fade* (1 s por predefinição).
 - **Usar cue-in e cue-out desativado** (Definições → Leitores): cada leitor
@@ -96,7 +96,7 @@ as faixas são analisadas de novo automaticamente.
   interruptor independente. As contagens decrescentes, a coluna de duração,
   os totais das listas nas Definições e os tempos da API remota seguem o
   mesmo intervalo. Os cartuchos usam sempre o seu próprio cue-in e cue-out.
-  Alterar a definição nunca reinicia, procura nem pára uma faixa que está a
+  Alterar a definição nunca reinicia, procura nem para uma faixa que está a
   tocar; a faixa seguinte é preparada de novo.
 
 Uma faixa pode ser tocada antes de a sua análise terminar. Até lá, toca do

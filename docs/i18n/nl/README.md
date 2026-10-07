@@ -32,7 +32,8 @@ en Spaans zijn met de hand geschreven; de andere negen zijn met AI gemaakt en
 kunnen fouten bevatten. Spreek je een van deze talen, dan zijn correcties
 welkom als issue of pull request.
 
-De online handleiding is ook beschikbaar in andere talen, met AI vertaald uit
-deze Engelse handleiding: kies er een met de wereldbolknop in de bovenbalk.
+De handleiding is ook beschikbaar in andere talen, met AI vertaald uit
+deze Engelse handleiding: kies in de [online handleiding](https://sanchezfauste.com/fauste-player/guide/)
+een taal met de wereldbolknop in de bovenbalk.
 Een vertaalde pagina meldt dat bovenaan en verwijst naar de Engelse pagina,
 die leidend is wanneer de twee verschillen.

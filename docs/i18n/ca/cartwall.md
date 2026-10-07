@@ -56,7 +56,7 @@ reproductor quan el fitxer hi és carregat.
 ## Teclat {#keyboard}
 
 Per defecte, **F1**…**F12** disparen els cartutxos 1–12 de la pàgina
-mostrada, i **Ctrl+Espai** atura tots els cartutxos (el mateix que **Aturar-ho
+mostrada, i **Ctrl+Space** atura tots els cartutxos (el mateix que **Aturar-ho
 tot**; també atura un cartutx que estàs preescoltant al CUE, fins i tot quan
 no en sona cap). Vegeu [Teclat](keyboard.md) per canviar-les.
 

@@ -33,7 +33,8 @@ dziewięć wygenerowano za pomocą AI i mogą zawierać błędy. Jeśli znasz kt
 tych języków, poprawki są mile widziane jako zgłoszenia (issues) lub pull
 requesty.
 
-Podręcznik online jest też dostępny w innych językach, przetłumaczony za pomocą
-AI z angielskiego podręcznika: wybierz język przyciskiem z globusem na górnym
-pasku. Przetłumaczona strona informuje o tym u góry i odsyła do strony
+Podręcznik jest też dostępny w innych językach, przetłumaczony za pomocą
+AI z angielskiego podręcznika: w [podręczniku online](https://sanchezfauste.com/fauste-player/guide/)
+wybierz język przyciskiem z globusem na górnym pasku.
+Przetłumaczona strona informuje o tym u góry i odsyła do strony
 angielskiej, która jest wiążąca, gdy obie wersje się różnią.

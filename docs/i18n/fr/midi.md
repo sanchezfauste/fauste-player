@@ -40,7 +40,7 @@ Pour chaque lecteur, il y a une ligne par action : **Lecture / Suivante**,
    `APC mini · Note 36, canal 1`.
 
 Si cette commande était déjà associée à une autre action, elle passe à
-celle-ci. `Échap` ou un nouveau clic sur le bouton annule l'apprentissage.
+celle-ci. `Esc` ou un nouveau clic sur le bouton annule l'apprentissage.
 **Effacer** supprime une association.
 
 ## Comportement des commandes {#how-the-controls-behave}

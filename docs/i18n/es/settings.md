@@ -176,7 +176,7 @@ se cuentan hasta que el archivo vuelve.
 ![Configuración, Playlists: la carpeta de música, las playlists y las columnas de la tabla](../../images/guide/settings-playlists.png)
 
 - **Carpeta de música:** donde empiezan los diálogos de archivos.
-- **Nueva playlist**, **Renombrar** (edita el nombre y pulsa Intro; Esc
+- **Nueva playlist**, **Renombrar** (edita el nombre y pulsa Enter; Esc
   cancela) y **Eliminar** (icono de la papelera).
 - **Importar M3U / PLS…** crea una playlist nueva a partir de un archivo de
   playlist. **M3U**, en cada fila, la exporta como M3U8. Consulta

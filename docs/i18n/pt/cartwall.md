@@ -9,15 +9,15 @@ cartuchos tocam nas suas próprias saídas, independentemente dos leitores.
 ## Utilização {#using-it}
 
 - **Clique num cartucho** para o disparar. **Clique de novo** para o parar.
-- **Parar tudo** (extremo direito da barra) pára todos os cartuchos que
+- **Parar tudo** (extremo direito da barra) para todos os cartuchos que
   estão a tocar, em todas as páginas. A sua etiqueta mostra quantos estão a
   tocar, como em **Parar tudo (2)**; sem nenhum a tocar, fica esbatido e não
   mostra contagem.
 - Enquanto um cartucho toca, a sua borda fica vermelha, uma barra vermelha
   encolhe à medida que toca e o seu tempo conta em decrescente.
 - Os cartuchos **sobrepõem-se** por predefinição: disparar um segundo não
-  pára o primeiro. Um cartucho configurado com **Parar os outros cartuchos ao
-  disparar** pára primeiro todos os outros cartuchos no ar, em qualquer
+  para o primeiro. Um cartucho configurado com **Parar os outros cartuchos ao
+  disparar** para primeiro todos os outros cartuchos no ar, em qualquer
   página.
 - Um cartucho configurado com **Em ciclo** recomeça no seu cue-in quando
   chega ao fim, sem interrupção, até o parar.
@@ -44,7 +44,7 @@ O menu de um cartucho vazio só tem **Editar…**, para escolher o seu ficheiro.
 | Ponto âmbar | Efeito |
 | Ponto cinzento | Spot (publicidade) |
 | ↻ depois do tipo | Em ciclo |
-| ✋ depois do tipo | Pára os outros cartuchos ao disparar |
+| ✋ depois do tipo | Para os outros cartuchos ao disparar |
 | Ficheiro com uma cruz / sinal de aviso | O ficheiro não foi encontrado / não pode ser descodificado; passe o rato sobre o cartucho para ver o motivo e o caminho. Um ficheiro em falta é procurado de novo a cada 30 s (`tuning.missing_recheck_ms`). |
 | «Vazio», esbatido | Sem ficheiro atribuído |
 
@@ -55,8 +55,8 @@ o ficheiro está carregado nele.
 ## Teclado {#keyboard}
 
 Por predefinição, **F1**…**F12** disparam os cartuchos 1–12 da página
-visível e **Ctrl+Space** pára todos os cartuchos (o mesmo que **Parar
-tudo**; também pára um cartucho que esteja a pré-escutar no CUE, mesmo que
+visível e **Ctrl+Space** para todos os cartuchos (o mesmo que **Parar
+tudo**; também para um cartucho que esteja a pré-escutar no CUE, mesmo que
 nenhum cartucho esteja a tocar). Consulte [Teclado](keyboard.md) para os
 alterar.
 

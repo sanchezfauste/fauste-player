@@ -125,7 +125,7 @@ Couleurs des lignes :
 | Lire maintenant | Démarrer cette piste aussitôt (en mixant si le lecteur est à l'antenne) |
 | Définir comme suivante | Comme le double-clic. Sur la piste à l'antenne, elle est rejouée, depuis son début, quand le passage en cours se termine (en mixant comme Répéter, sans interruption), puis le lecteur continue. Il n'agit qu'une fois. Stop à la fin, le mode SINGLE et une marque Arrêt après arrêtent quand même d'abord le lecteur. Pendant qu'un CUE tourne, il passe à la nouvelle suivante |
 | Pré-écouter sur le CUE | La jouer sur la sortie CUE (cela ouvre la fenêtre CUE). Grisé quand le lecteur n'a pas de sortie Cue distincte de sa sortie Main |
-| Modifier les tags… | Ouvrir l'éditeur de tags pour cette piste. **Enregistrer** écrit les modifications dans le fichier audio ; **Annuler** (ou Échap, quand aucun enregistrement n'est en cours) ferme sans écrire. L'élément est grisé, avec la raison au survol, tant que la piste est à l'antenne, sur le CUE ou sur une cartouche en lecture, tant que ses tags n'ont pas été lus, quand le fichier est introuvable, et pour les formats dont les tags ne peuvent pas être écrits (par exemple le DSD) |
+| Modifier les tags… | Ouvrir l'éditeur de tags pour cette piste. **Enregistrer** écrit les modifications dans le fichier audio ; **Annuler** (ou Esc, quand aucun enregistrement n'est en cours) ferme sans écrire. L'élément est grisé, avec la raison au survol, tant que la piste est à l'antenne, sur le CUE ou sur une cartouche en lecture, tant que ses tags n'ont pas été lus, quand le fichier est introuvable, et pour les formats dont les tags ne peuvent pas être écrits (par exemple le DSD) |
 | Réanalyser | Analyser cette piste de nouveau maintenant, quel que soit son état. Un fichier corrigé qui était illisible est aussi repris tout seul (voir [Dépannage](troubleshooting.md)). Les marqueurs manuels sont conservés |
 | Ajouter des pistes en dessous… | Choisir des fichiers à insérer après cette piste |
 | Dupliquer | Insérer une copie non jouée en dessous (avec ses marques de répétition et d'arrêt après) |
@@ -244,7 +244,7 @@ fenêtre de l'application sont ignorés.
 dossier de musique défini dans les Paramètres. **Réinitialiser** (l'icône en
 flèche à côté) efface la marque « déjà jouée » grisée de chaque piste de la
 playlist, pour chaque lecteur, après avoir demandé « Effacer la marque de
-lecture de toutes les pistes de cette playlist ? » (**Annuler**, Échap ou un
+lecture de toutes les pistes de cette playlist ? » (**Annuler**, Esc ou un
 clic en dehors conservent les marques). La piste qui est à l'antenne garde son
 état et est marquée quand le lecteur la quitte. Le bouton est grisé quand il
 n'y a rien à effacer. Le pied de page montre aussi le nombre de pistes, le

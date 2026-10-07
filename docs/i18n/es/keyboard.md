@@ -27,7 +27,7 @@ En el teclado, `Space` es la barra espaciadora, `Delete` la tecla Supr y
 ![Configuración, Atajos de teclado: cada acción con su tecla](../../images/guide/settings-shortcuts.png)
 
 En **Configuración → Atajos de teclado**, haz clic en una acción y pulsa la
-tecla (con Ctrl, Alt, Mayús o Cmd si quieres). Si otra acción ya usa esa
+tecla (con Ctrl, Alt, Shift o Cmd si quieres). Si otra acción ya usa esa
 tecla, se muestra su nombre. Elige **Asignar** para mover la tecla, o
 **Cancelar**. **Quitar** elimina un atajo y **Restaurar valores por
 defecto** (arriba a la derecha de la sección) restablece la tabla de arriba.

@@ -17,7 +17,7 @@ il n'a pas démarré. Les changements s'appliquent aussitôt ; il n'y a pas
 besoin de redémarrer. Un champ de texte (une adresse, le jeton, une liste)
 s'applique quand vous le quittez, ouvrez une autre section ou fermez les
 Paramètres ; une valeur pas encore valide conserve celle en cours d'usage, et
-Échap annule ce que vous avez saisi.
+Esc annule ce que vous avez saisi.
 
 Vous pouvez aussi modifier `config.json` pendant que Fauste Player est fermé
 (voir [Données et sauvegardes](data-and-backups.md) pour son emplacement).

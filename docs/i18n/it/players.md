@@ -169,7 +169,7 @@ in rosso.
   Alt+trascinamento modifica ancora i marker.
 - **Rotella del mouse** sulla forma d'onda: ingrandisce e rimpicciolisce
   attorno al puntatore, fino al massimo dettaglio dell'analisi.
-  **Maiusc+rotella** (o una rotella laterale) si sposta lungo il brano.
+  **Shift+rotella** (o una rotella laterale) si sposta lungo il brano.
   Mentre è ingrandita, la vista segue la posizione di riproduzione, tranne
   per 10 secondi dopo che l'hai ingrandita o spostata
   (`ui.follow_current_grace_secs`; 0 disattiva il seguito). **Vista

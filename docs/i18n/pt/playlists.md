@@ -216,7 +216,7 @@ são ignorados.
   CUE) não larga nada.
 - Enquanto arrasta uma faixa, mantenha o ponteiro perto da borda superior ou
   inferior de uma lista para a deslocar: quanto mais perto da borda, mais
-  depressa vai, e pára nas pontas da lista ou quando se afasta da borda. A
+  depressa vai, e para nas pontas da lista ou quando se afasta da borda. A
   roda do rato também desloca a lista durante o arrastamento. A linha
   violeta continua a seguir o ponteiro à medida que a lista se move. Arrastar
   ficheiros do gestor de ficheiros sobre uma lista desloca-a da mesma forma

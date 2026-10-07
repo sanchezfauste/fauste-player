@@ -1,7 +1,7 @@
 # Paramètres
 
 Ouvrez **Paramètres** dans la barre supérieure. Fermez-les avec **Fermer** ou
-`Échap`. La plupart des changements s'appliquent aussitôt et sont enregistrés
+`Esc`. La plupart des changements s'appliquent aussitôt et sont enregistrés
 automatiquement.
 
 La fenêtre a une seule taille (900 × 640, plus petite sur un petit écran)
@@ -181,8 +181,8 @@ revenu.
 ![Paramètres, Playlists : le dossier de musique, les playlists et les colonnes du tableau](../../images/guide/settings-playlists.png)
 
 - **Dossier de musique :** là où démarrent les boîtes de dialogue de fichier.
-- **Nouvelle playlist**, **renommer** (modifiez le nom et appuyez sur Entrée ;
-  Échap annule) et **supprimer** (icône de corbeille).
+- **Nouvelle playlist**, **renommer** (modifiez le nom et appuyez sur Enter ;
+  Esc annule) et **supprimer** (icône de corbeille).
 - **Importer M3U / PLS…** crée une nouvelle playlist à partir d'un fichier de
   playlist. **M3U** sur chaque ligne l'exporte en M3U8. Voir
   [Playlists](playlists.md).
@@ -248,6 +248,6 @@ téléphone, l'automatisation et les surfaces de contrôle. Voir
   restants sont envoyés pendant que quelque chose joue.
 
 Les champs de texte et les nombres s'appliquent quand vous les quittez, ce qui
-inclut l'ouverture d'une autre section ou la fermeture des Paramètres ; Échap
+inclut l'ouverture d'une autre section ou la fermeture des Paramètres ; Esc
 annule ce que vous étiez en train de saisir. Une valeur invalide est
 corrigée, et le champ montre ce qui a été conservé.

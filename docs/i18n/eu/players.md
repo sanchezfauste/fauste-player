@@ -42,8 +42,8 @@ irteerak ditu.
     da barren alde bakoitzean, neurgailuaren beraren unitateetan etiketatua
     bi aldeetan. Goialdea eta behealdea (neurgailu digitalean, eskalaren
     behealdea) beti markatuta daude; etiketa bakoitzak marra bat du
-    erregela bakoitzean, eta etiketen arteko marra laburragoek neurketa-
-    erregela batekoek bezala funtzionatzen dute: balio borobiletan tarte
+    erregela bakoitzean, eta etiketen arteko marra laburragoek
+    neurketa-erregela batekoek bezala funtzionatzen dute: balio borobiletan tarte
     berdinetan, dB bakoitzean EBU neurgailuan eta 5 dB-tik behin −20tik
     behera digitalean neurgailua behar bezain altua denean, eta 2, 2,5, 5
     edo 10 dB-tik behin (edo bat ere ez) haientzat laburregia den lekuan.

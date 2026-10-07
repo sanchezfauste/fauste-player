@@ -172,7 +172,7 @@ clignote en rouge.
   ne fait rien. Alt + glissement modifie toujours les marqueurs.
 - **Molette de la souris** sur la forme d'onde : zoomer et dézoomer autour du
   pointeur, jusqu'au détail le plus fin dont dispose l'analyse.
-  **Maj+molette** (ou une molette latérale) déplace le long de la piste.
+  **Shift+molette** (ou une molette latérale) déplace le long de la piste.
   Pendant le zoom, la vue suit la position de lecture, sauf pendant 10
   secondes après que vous avez zoomé ou déplacé (`ui.follow_current_grace_secs` ;
   0 désactive le suivi). **Vue complète**, dans le coin supérieur droit,

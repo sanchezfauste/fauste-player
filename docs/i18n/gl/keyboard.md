@@ -27,7 +27,7 @@ No teclado, `Space` é a barra espazadora, `Delete` a tecla Supr e
 ![Configuración, Atallos de teclado: cada acción coa súa tecla](../../images/guide/settings-shortcuts.png)
 
 En **Configuración → Atallos de teclado**, fai clic nunha acción e preme a
-tecla (con Ctrl, Alt, Maiús ou Cmd se queres). Se outra acción xa usa esa
+tecla (con Ctrl, Alt, Shift ou Cmd se queres). Se outra acción xa usa esa
 tecla, móstrase o seu nome. Escolle **Asignar** para mover a tecla, ou
 **Cancelar**. **Quitar** elimina un atallo e **Restaurar os valores
 predeterminados** (arriba á dereita da sección) restablece a táboa de arriba.

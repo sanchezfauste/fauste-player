@@ -62,7 +62,7 @@ um proxy inverso com HTTPS.
 Uma página web servida a partir de outro endereço só pode usar a API se a sua
 origem (por exemplo, `https://studio.example`) estiver listada em
 `cors_origins`. Os pedidos de outras páginas são recusados, mesmo neste
-computador, para que uma página que por acaso tenha aberta não possa
+computador, por isso uma página que por acaso tenha aberta não possa
 controlar o leitor. `"*"` (qualquer origem) só é aceite juntamente com um
 token.
 

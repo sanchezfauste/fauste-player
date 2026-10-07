@@ -178,7 +178,7 @@ torna.
 ![Impostazioni, Playlist: la cartella della musica, le playlist e le colonne della tabella](../../images/guide/settings-playlists.png)
 
 - **Cartella della musica:** da dove partono le finestre di dialogo dei file.
-- **Nuova playlist**, **rinomina** (modifica il nome e premi Invio; Esc
+- **Nuova playlist**, **rinomina** (modifica il nome e premi Enter; Esc
   annulla) ed **elimina** (icona del cestino).
 - **Importa M3U / PLS…** crea una nuova playlist da un file di playlist.
   **M3U** su ogni riga la esporta come M3U8. Vedi [Playlist](playlists.md).

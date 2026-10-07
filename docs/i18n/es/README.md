@@ -32,7 +32,8 @@ español están escritos a mano; los otros nueve se han generado con IA y
 pueden contener errores. Si hablas alguno de ellos, las correcciones son
 bienvenidas como issues o pull requests.
 
-La guía en línea también está disponible en otros idiomas, traducida con IA
-a partir de la guía en inglés: elige uno con el botón del globo de la barra
-superior. Una página traducida lo indica arriba y enlaza con la página en
+La guía también está disponible en otros idiomas, traducida con IA
+a partir de la guía en inglés: en la [guía en línea](https://sanchezfauste.com/fauste-player/guide/),
+elige uno con el botón del globo de la barra superior.
+Una página traducida lo indica arriba y enlaza con la página en
 inglés, que es la de referencia cuando las dos no coinciden.

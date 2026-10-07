@@ -59,7 +59,7 @@ forme d'onde d'un lecteur quand le fichier y est chargé.
 ## Clavier {#keyboard}
 
 Par défaut, **F1**…**F12** lancent les cartouches 1 à 12 de la page affichée,
-et **Ctrl+Espace** arrête toutes les cartouches (comme **Tout arrêter** ; il
+et **Ctrl+Space** arrête toutes les cartouches (comme **Tout arrêter** ; il
 arrête aussi une cartouche que vous pré-écoutez sur le CUE, même si aucune
 cartouche ne joue). Voir [Clavier](keyboard.md) pour les modifier.
 

@@ -12,8 +12,8 @@ próprios separadores de listas, transporte, volume e saídas.
 | `P1` … `Pn` | Número do leitor (a tecla numérica que o faz tocar) |
 | Ponto e etiqueta de estado | **No ar** (vermelho), **Em pausa** (âmbar), **Parado** (cinzento) |
 | Indicador **Mistura** / **Fade** | Está a decorrer uma mistura com a faixa seguinte, ou um stop com fade |
-| Indicador **Stop no fim** | O leitor pára quando a faixa atual termina |
-| Indicador **Repetir** / **Parar após a faixa** | A faixa atual repete-se, ou pára o leitor quando termina, por causa da sua própria marca no menu da lista. Passe o rato por cima para ver a frase completa. O botão **Stop no fim** do próprio leitor prevalece: enquanto está ativo, só aparece o seu indicador |
+| Indicador **Stop no fim** | O leitor para quando a faixa atual termina |
+| Indicador **Repetir** / **Parar após a faixa** | A faixa atual repete-se, ou para o leitor quando termina, por causa da sua própria marca no menu da lista. Passe o rato por cima para ver a frase completa. O botão **Stop no fim** do próprio leitor prevalece: enquanto está ativo, só aparece o seu indicador |
 | **BP** / **DSD** | O **BP** acende-se enquanto a faixa atual chega ao seu dispositivo Main sem alterações. O **DSD** substitui-o enquanto uma faixa DSD sai como DSD, sem alterações (ver [Saída bit-perfect](bit-perfect.md)). **Outras silenciadas** aparece ao lado quando esse fluxo DSD mantém as outras fontes fora da saída |
 | **SINGLE** \| **CONT** | Modo de reprodução (ver abaixo): um controlo único, a metade acesa é o modo ativo |
 | **CUE** | Pré-escutar a faixa seguinte na saída CUE |
@@ -76,7 +76,7 @@ próprios separadores de listas, transporte, volume e saídas.
   - O tipo de medidor e cada nível podem ser alterados em
     [Definições → Medidores](settings.md#meters).
   - **Leituras acima de 0 dBFS.** O medidor mostra o que o leitor emite, e
-    isso pode exceder a escala completa. A barra pára no topo da escala,
+    isso pode exceder a escala completa. A barra para no topo da escala,
     por isso o mesmo vermelho mostra 0 dBFS e qualquer valor acima; só o
     número de cima diz quanto, com o seu sinal (por exemplo, `+3.5`).
     - Um ficheiro pode trazer níveis acima da escala completa (um ficheiro
@@ -118,8 +118,8 @@ faixas que tocou (`players.history_len` em `config.json`, de 0 a 1000).
 
 - **CONT (contínuo):** no ponto MIX, o leitor inicia a faixa seguinte e
   sobrepõe o fim da atual. Ver [Marcadores e mistura](markers-and-mixing.md).
-- **SINGLE:** cada faixa pára no seu fim. O *Stop no fim* não está
-  disponível neste modo, porque cada faixa já pára, exceto enquanto a faixa
+- **SINGLE:** cada faixa para no seu fim. O *Stop no fim* não está
+  disponível neste modo, porque cada faixa já para, exceto enquanto a faixa
   atual se repete: então termina a repetição quando a passagem que está a
   tocar termina.
 
@@ -211,7 +211,7 @@ Enquanto o CUE está em pausa, o seu botão de pausa (que mostra **Retomar o
 CUE**) pisca a âmbar, como o do próprio leitor.
 
 Um salto num CUE em pausa mantém-no em pausa. O botão de fechar da janela,
-ou **Parar o CUE**, pára o CUE.
+ou **Parar o CUE**, para o CUE.
 
 Enquanto um CUE decorre, definir uma seguinte (duplo clique) ou um único
 clique numa linha leva o CUE para essa faixa, a partir do seu cue-in; se

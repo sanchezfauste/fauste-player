@@ -186,8 +186,8 @@ fitxategia itzuli arte.
 - **Musika-karpeta:** fitxategi-elkarrizketak non hasten diren.
 - **Zerrenda berria**, **Aldatu izena** (editatu izena eta sakatu Enter;
   Esc teklak bertan behera uzten du) eta **Ezabatu** (zakarrontzi-ikonoa).
-- **Inportatu M3U / PLS…** botoiak zerrenda berri bat sortzen du zerrenda-
-  fitxategi batetik. Errenkada bakoitzeko **M3U** botoiak M3U8 gisa
+- **Inportatu M3U / PLS…** botoiak zerrenda berri bat sortzen du
+  zerrenda-fitxategi batetik. Errenkada bakoitzeko **M3U** botoiak M3U8 gisa
   esportatzen du. Ikus [Zerrendak](playlists.md).
 - **Taulako zutabeak:** pisten taulek zein zutabe erakusten dituzten eta
   zein ordenatan, erreproduzitzaile guztientzat: kontrol-lauki bat zutabe

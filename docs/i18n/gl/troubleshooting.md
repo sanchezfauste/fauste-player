@@ -85,8 +85,8 @@
 
 A barra de estado mostra **Saída perdida: &lt;dispositivo&gt;** cando un
 dispositivo deixa de responder. Os reprodutores seguen contando e mesturando
-cun reloxo interno, así que a automatización non se detén. O dispositivo
-tenta de novo cada 2 segundos e volve tomar o relevo cando regresa. Volve conectar o
+cun reloxo interno, así que a automatización non se detén. Vólvese tentar o
+dispositivo cada 2 segundos e retoma o relevo cando regresa. Volve conectar o
 cable ou acende de novo a interface.
 
 ### «Saída perdida» que nunca desaparece, cunha saída `hw:` directa {#output-lost-that-never-clears-with-a-direct-hw-output}

@@ -16,7 +16,7 @@ els substitueix.
 ## Editar marcadors {#editing-markers}
 
 A la forma d'ona d'un reproductor, o a la de la seva finestra de CUE (el
-mateix menú i els mateixos nanses; un canvi es veu a tots dos alhora):
+mateix menú i les mateixes nanses; un canvi es veu a tots dos alhora):
 
 - **Clic dret** allà on vulguis un marcador i tria **Posar el cue-in aquí**,
   **Posar el final de la intro aquí**, **Posar l'inici de l'outro aquí**,

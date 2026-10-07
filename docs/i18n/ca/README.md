@@ -33,7 +33,8 @@ castellà estan escrits a mà; els altres nou s'han generat amb IA i poden
 contenir errors. Si parles algun d'aquests idiomes, les correccions són
 benvingudes com a issues o pull requests.
 
-La guia en línia també està disponible en altres idiomes, traduïda amb IA a
-partir de la guia en anglès: tria'n un amb el botó del globus de la barra
-superior. Una pàgina traduïda ho indica a dalt i enllaça amb la pàgina en
+La guia també està disponible en altres idiomes, traduïda amb IA a partir
+de la guia en anglès: a la [guia en línia](https://sanchezfauste.com/fauste-player/guide/),
+tria'n un amb el botó del globus de la barra superior.
+Una pàgina traduïda ho indica a dalt i enllaça amb la pàgina en
 anglès, que és la de referència quan les dues no coincideixen.

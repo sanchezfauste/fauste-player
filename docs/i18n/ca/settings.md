@@ -176,7 +176,7 @@ les quals falta no es compten fins que el fitxer torna.
 ![Configuració, Llistes: la carpeta de música, les llistes i les columnes de la taula](../../images/guide/settings-playlists.png)
 
 - **Carpeta de música:** on comencen els diàlegs de fitxers.
-- **Llista nova**, **canviar el nom** (edita el nom i prem Retorn; Esc
+- **Llista nova**, **canviar el nom** (edita el nom i prem Enter; Esc
   cancel·la) i **eliminar** (icona de paperera).
 - **Importar M3U / PLS…** crea una llista nova a partir d'un fitxer de llista.
   **M3U** a cada fila l'exporta com a M3U8. Vegeu

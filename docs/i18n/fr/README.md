@@ -34,8 +34,9 @@ autres ont été générées par IA et peuvent contenir des erreurs. Si vous
 parlez l'une d'elles, les corrections sont les bienvenues sous forme d'issues
 ou de pull requests.
 
-Le guide en ligne est aussi disponible dans d'autres langues, traduit par IA
-à partir de ce guide en anglais : choisissez-en une avec le bouton en forme
-de globe dans la barre supérieure. Une page traduite l'indique en haut et
+Le guide est aussi disponible dans d'autres langues, traduit par IA
+à partir de ce guide en anglais : dans le [guide en ligne](https://sanchezfauste.com/fauste-player/guide/),
+choisissez-en une avec le bouton en forme de globe dans la barre supérieure.
+Une page traduite l'indique en haut et
 renvoie vers la page en anglais, qui fait référence quand les deux
 diffèrent.

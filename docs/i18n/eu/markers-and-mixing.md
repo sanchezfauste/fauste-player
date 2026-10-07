@@ -47,8 +47,8 @@ ozentasuna leiho laburretan (lehenespenez 50 ms).
 
 - **Cue-in / cue-out:** hasierako eta amaierako ia-isiltasuna bakarrik
   saltatzen da: gailurra *mozketa-atalasera* (lehenespenez −60 dBFS)
-  iristen den guztia gordetzen da, edozein kanaletan, inguruan *mozketa-
-  tarte* batekin (lehenespenez 20 ms). Hasierako itzaltze leunak, isats
+  iristen den guztia gordetzen da, edozein kanaletan, inguruan
+  *mozketa-tarte* batekin (lehenespenez 20 ms). Hasierako itzaltze leunak, isats
   isilak eta soinu laburrak ez dira inoiz mozten.
 - **MIX:** analisiak pista oraindik bere ohiko ozentasunaren azpitik
   *segue-rako maila-jaitsiera* (lehenespenez 15 dB) baino gutxiago dagoen

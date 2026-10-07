@@ -17,7 +17,7 @@
   de uma lista.
 - Um atalho cujo botão está esbatido não faz nada (por exemplo, Stop num
   leitor parado). A única exceção é o atalho de parar todos os cartuchos, que
-  também pára o CUE dos cartuchos.
+  também para o CUE dos cartuchos.
 
 ## Alterar os atalhos {#changing-shortcuts}
 

@@ -91,8 +91,8 @@ ordenagailu bakarrean), eman bakoitzari bere karpeta `FAUSTE_HOME` bidez.
 `fauste-player --version` komandoak bertsioa inprimatzen du. Leihoaren
 titulu-barrak izena eta bertsioa erakusten ditu, eta **Fauste Player-i
 buruz** botoiak (informazio-ikono bat, **Ezarpenak** botoiaren ezkerrean)
-**Fauste Player-i buruz** leihoa irekitzen du, copyrightarekin eta lizentzia-
-oharrekin (**Hirugarrenen lizentziak** botoiak argitalpen-paketeekin
+**Fauste Player-i buruz** leihoa irekitzen du, copyrightarekin eta
+lizentzia-oharrekin (**Hirugarrenen lizentziak** botoiak argitalpen-paketeekin
 instalatzen den oharren fitxategia irekitzen du). AArekin itzulitako
 hizkuntza batean, leiho horrek itzulpenak akatsak izan ditzakeela ere
 adierazten du. Itxi **Itxi** botoiarekin edo `Esc` teklarekin.
@@ -135,8 +135,8 @@ berrabiarazte edo hutsegite baten ondoren ere.
 
 - Egin klik erreproduzitzaile baten beheko **+ Gehitu** botoian eta
   aukeratu fitxategiak, edo
-- arrastatu audio-fitxategiak edo karpetak fitxategi-kudeatzailetik pista-
-  zerrenda batera. Karpetek zuzenean barruan dituzten audio-fitxategiak
+- arrastatu audio-fitxategiak edo karpetak fitxategi-kudeatzailetik
+  pista-zerrenda batera. Karpetek zuzenean barruan dituzten audio-fitxategiak
   gehitzen dituzte, ez azpikarpetetakoak.
 
 Onartutako formatuak: WAV, AIFF, CAF, FLAC, MP3 (eta MP1/MP2), AAC/M4A, ALAC, Ogg Vorbis, Opus, WavPack, Monkey's Audio (APE), DSD (DSF eta DFF) eta Matroska audioa (MKA).

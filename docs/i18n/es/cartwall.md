@@ -56,7 +56,7 @@ player cuando el archivo está cargado allí.
 ## Teclado {#keyboard}
 
 Por defecto **F1**…**F12** disparan los cartuchos 1–12 de la página que se
-ve, y **Ctrl+Espacio** detiene todos los cartuchos (igual que **Parar
+ve, y **Ctrl+Space** detiene todos los cartuchos (igual que **Parar
 todo**; también detiene un cartucho que estés preescuchando en CUE, aunque
 no suene ningún cartucho). Consulta [Teclado](keyboard.md) para cambiarlos.
 

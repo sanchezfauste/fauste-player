@@ -60,6 +60,6 @@ du. **Garbitu** botoiak lotura bat kentzen du.
   piztu egiten dira: Play erreproduzitzailea airean dagoen bitartean,
   Pausatu keinuka pausan dagoen bitartean, CUE aurrez entzuten ari den
   bitartean, eta Gelditu, Itzaltzearekin gelditu, Berrabiarazi eta Aurrekoa
-  eragin dezaketen bitartean. Argiak izen bereko kontrolagailuaren irteera-
-  atakara doaz; beste bat ezar daiteke `config.json` fitxategian
+  eragin dezaketen bitartean. Argiak izen bereko kontrolagailuaren
+  irteera-atakara doaz; beste bat ezar daiteke `config.json` fitxategian
   (`midi.devices`).

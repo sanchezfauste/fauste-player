@@ -33,7 +33,8 @@ geschrieben; die übrigen neun wurden mit KI erstellt und können Fehler
 enthalten. Wenn du eine davon sprichst, sind Korrekturen als Issues oder
 Pull Requests willkommen.
 
-Das Online-Handbuch gibt es auch in weiteren Sprachen, mit KI aus dem
-englischen Handbuch übersetzt: Wähle eine mit dem Globus-Button in der oberen
-Leiste. Eine übersetzte Seite weist oben darauf hin und verlinkt auf die
+Das Handbuch gibt es auch in weiteren Sprachen, mit KI aus dem
+englischen Handbuch übersetzt: Wähle im [Online-Handbuch](https://sanchezfauste.com/fauste-player/guide/)
+eine mit dem Globus-Button in der oberen Leiste.
+Eine übersetzte Seite weist oben darauf hin und verlinkt auf die
 englische Seite, die maßgeblich ist, wenn beide voneinander abweichen.

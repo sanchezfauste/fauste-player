@@ -1,8 +1,8 @@
 # Urruneko kontrola
 
 Fauste Player sarearen bidez irakurri eta erabil daiteke, HTTP API baten
-bidez, zuzeneko eguneratzeekin, eta OSC bidez. Web-orri batek, telefono-
-aplikazio batek, irrati-kate baten automatizazioak edo kontrol-gainazal
+bidez, zuzeneko eguneratzeekin, eta OSC bidez. Web-orri batek,
+telefono-aplikazio batek, irrati-kate baten automatizazioak edo kontrol-gainazal
 batek erabil ditzakete. **Desaktibatuta** dago zuk aktibatu arte, eta
 hasieran ordenagailu honetan bakarrik erantzuten du.
 
@@ -136,8 +136,8 @@ bezala. Kartutxoak erakutsitako orrian zenbakitzen dira.
 
 Egoera erakutsi nahi duen gainazal batek (argiak, izenak, atzerako
 kontaketak) harpidetza egiten du, eta ondoren balio bakoitza behin jasotzen
-du, eta gero aldatzen dena bakarrik. Erreproduzitzaile bat edo kartutxo-
-botoi bat desagertzen denean (erreproduzitzaile gutxiago, orri txikiagoa),
+du, eta gero aldatzen dena bakarrik. Erreproduzitzaile bat edo
+kartutxo-botoi bat desagertzen denean (erreproduzitzaile gutxiago, orri txikiagoa),
 haren helbideek balio huts bat jasotzen dute behin, gainazalak garbi
 ditzan. Minutu baten barruan berriro harpidetu behar du
 (`subscription_ttl_secs`) jasotzen jarraitzeko:

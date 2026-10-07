@@ -39,8 +39,8 @@ aukeratzeko.
   batek orri horretako kartutxo bat jotzen ari dela adierazten du.
 - Egin klik **KARTUTXOAK** aukeran zerrenda tolestu edo berriro zabaltzeko.
 - Leihoa baxua denean, botoiak txikitu egiten dira (gutxieneko altuera
-  bateraino), konfiguratutako errenkada guztiak sar daitezen; kartutxo-
-  panelak botoirik txikienak ere sartzen ez direnean bakarrik korritzen du.
+  bateraino), konfiguratutako errenkada guztiak sar daitezen;
+  kartutxo-panelak botoirik txikienak ere sartzen ez direnean bakarrik korritzen du.
 
 | Botoiaren itxura | Esanahia |
 |---|---|

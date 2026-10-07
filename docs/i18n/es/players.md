@@ -169,7 +169,7 @@ parpadea en rojo.
   como si la agarraras. Arrastrar nunca salta, y sin zoom no hace nada.
   Arrastrar con Alt sigue editando marcadores.
 - **Rueda del ratón** sobre la forma de onda: amplía y reduce alrededor del
-  puntero, hasta el máximo detalle que tiene el análisis. **Mayús+rueda** (o
+  puntero, hasta el máximo detalle que tiene el análisis. **Shift+rueda** (o
   una rueda lateral) se desplaza a lo largo de la pista. Con zoom, la vista
   sigue la posición de reproducción, salvo durante 10 segundos después de
   ampliar o desplazarla (`ui.follow_current_grace_secs`; 0 desactiva el

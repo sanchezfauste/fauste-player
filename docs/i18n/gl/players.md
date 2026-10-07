@@ -165,7 +165,7 @@ vermello.
   agarrases. Un arrastre nunca salta, e sen zoom non fai nada. Alt-arrastrar
   segue editando marcadores.
 - **Roda do rato** sobre a forma de onda: amplía e reduce arredor do punteiro,
-  ata o maior detalle que ten a análise. **Maiús+roda** (ou unha roda lateral)
+  ata o maior detalle que ten a análise. **Shift+roda** (ou unha roda lateral)
   móvese ao longo da pista. Co zoom activo, a vista segue a posición de
   reprodución, salvo durante 10 segundos despois de ampliala ou movela
   (`ui.follow_current_grace_secs`; 0 desactiva o seguimento). **Vista

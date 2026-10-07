@@ -34,7 +34,9 @@ daude; beste bederatziak AArekin sortu dira, eta akatsak izan ditzakete.
 Horietako bat hitz egiten baduzu, zuzenketak ongi etorriak dira, issue edo
 pull request gisa.
 
-Lineako gida beste hizkuntza batzuetan ere badago, ingelesezko gida honetatik
-AArekin itzulita: aukeratu bat goiko barrako globo-botoiarekin. Itzulitako
+Gida beste hizkuntza batzuetan ere badago, ingelesezko gida honetatik
+AArekin itzulita: [lineako gidan](https://sanchezfauste.com/fauste-player/guide/),
+aukeratu bat goiko barrako globo-botoiarekin.
+Itzulitako
 orri batek hala dela adierazten du goialdean, eta ingelesezko orrira
 estekatzen du; bien artean desberdintasunik badago, hori da erreferentzia.

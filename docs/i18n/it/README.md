@@ -32,7 +32,8 @@ Impostazioni. Inglese e spagnolo sono scritti a mano; le altre nove sono
 state generate con l'IA e possono contenere errori. Se parli una di queste
 lingue, le correzioni sono benvenute come issue o pull request.
 
-La guida online è disponibile anche in altre lingue, tradotta con l'IA da
-questa guida in inglese: scegline una con il pulsante a forma di globo nella
-barra superiore. Una pagina tradotta lo dice in alto e rimanda alla pagina
+La guida è disponibile anche in altre lingue, tradotta con l'IA da
+questa guida in inglese: nella [guida online](https://sanchezfauste.com/fauste-player/guide/),
+scegline una con il pulsante a forma di globo nella barra superiore.
+Una pagina tradotta lo dice in alto e rimanda alla pagina
 in inglese, che fa fede quando le due differiscono.

@@ -74,7 +74,7 @@
 - **O cabeçalho mostra DSD mas o conversor toca ruído ou não sincroniza.** O
   conversor não reconhece o DoP (ou o formato nativo). Volte a pôr o
   dispositivo em **Converter para PCM**.
-- **Um estalido quando uma faixa DSD começa, pára ou deixa o DSD.** O
+- **Um estalido quando uma faixa DSD começa, para ou deixa o DSD.** O
   conversor precisa de mais silêncio DSD: aumente o **Silêncio DSD** (200 ms
   por predefinição) em Definições → Saídas de áudio, Avançado.
 - **Outros leitores ou cartuchos estão silenciosos no dispositivo.** Uma
