@@ -52,9 +52,15 @@ fn dev(device: &str) -> OutputDevice {
 /// Player 1 plays on `dac` (exclusive-capable) and pre-listens on `phones`;
 /// `edit` sets the devices' own values.
 fn rig(edit: impl FnOnce(&mut Config)) -> Rig {
+    rig_with(|_| {}, edit)
+}
+
+/// `rig`, with `device` applied to `dac` before the engine opens it.
+fn rig_with(device: impl FnOnce(&OfflineDevice), edit: impl FnOnce(&mut Config)) -> Rig {
     let backend = OfflineBackend::new();
     let dac = backend.add_device("dac", 2);
     dac.set_exclusive_capable(true);
+    device(&dac);
     let phones = backend.add_device("phones", 2);
     let mut config = Config::default();
     config.outputs.backend = Some("offline".into());
@@ -176,4 +182,17 @@ fn a_bit_perfect_device_starts_at_its_own_rate_and_still_follows_the_file() {
     let path = indexed_wav(r.dir.path(), "a.wav", 44_100, 2, 44_100 * 3);
     r.start(request(path, pcm16(44_100)));
     assert_eq!(r.dac.config().unwrap().sample_rate, 44_100);
+}
+
+#[test]
+fn an_override_does_not_apply_to_the_default_output_when_no_route_names_it() {
+    // "dac" is the backend's default device; no route names it, so the
+    // override Settings does not show for it must not apply either.
+    let r = rig(|c| {
+        c.outputs.routes.clear();
+        c.outputs.set_device_rate(&dev("dac"), Some(96_000));
+        c.outputs.set_device_buffer(&dev("dac"), Some(256));
+    });
+    let dac = r.dac.config().unwrap();
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (48_000, 512));
 }

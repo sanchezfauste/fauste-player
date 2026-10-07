@@ -92,22 +92,30 @@ impl EngineSettings {
                     device: d.device.clone(),
                 })
                 .collect(),
-            device_streams: config
-                .outputs
-                .device_overrides
-                .iter()
-                .map(|o| {
-                    let key = BusKey {
-                        backend: o.device.backend.clone(),
-                        device: o.device.device.clone(),
-                    };
-                    let stream = DeviceStream {
-                        sample_rate: o.sample_rate,
-                        buffer_frames: o.buffer_frames,
-                    };
-                    (key, stream)
-                })
-                .collect(),
+            // Only devices a route names: Settings shows no row for any
+            // other, so the system-default output opens at the global
+            // values. A stale override stays in the configuration and
+            // applies again when its device is routed.
+            device_streams: {
+                let routed = config.outputs.routed_devices();
+                config
+                    .outputs
+                    .device_overrides
+                    .iter()
+                    .filter(|o| routed.contains(&o.device))
+                    .map(|o| {
+                        let key = BusKey {
+                            backend: o.device.backend.clone(),
+                            device: o.device.device.clone(),
+                        };
+                        let stream = DeviceStream {
+                            sample_rate: o.sample_rate,
+                            buffer_frames: o.buffer_frames,
+                        };
+                        (key, stream)
+                    })
+                    .collect()
+            },
             dsd: DsdSettings {
                 // Only bit-perfect devices keep a DSD mode.
                 modes: config
