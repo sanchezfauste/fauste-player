@@ -186,7 +186,8 @@ Portuguese), and English otherwise.
 
 English and Spanish are written by hand. The other translations were
 generated with AI and may contain errors; when one of them is in use,
-**About** says so.
+**About** says so. Corrections from native speakers are welcome as issues
+or pull requests.
 
 ## Cartwall
 
