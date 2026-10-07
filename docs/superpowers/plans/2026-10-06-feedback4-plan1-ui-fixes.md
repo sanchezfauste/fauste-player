@@ -653,7 +653,7 @@ Suggested executor: `sonnet`.
   - `pub fn boundary_y(body: Rect, scroll_y: f32, row_height: f32, index: usize) -> Option<f32>`: the y of boundary `index` (the top edge of row `index`) in screen space, `None` when it is outside the visible `body`.
   - `pub fn on_column_edge(px: &[f32], left: f32, grab: f32, x: f32) -> bool`: `x` is within `grab` of an edge between two columns (the right edge of the last column is not one).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add `boundary_y, drop_index, on_column_edge` to the `use fp_app::ui::table_layout::{...}` line and `use egui::{Rect, pos2, vec2};`; append:
 
@@ -745,12 +745,12 @@ fn the_interior_column_edges_are_grab_zones_and_the_last_edge_is_not() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test table_layout the_top_of_the_body`
 Expected: FAIL to compile (`drop_index` not found).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `table_layout.rs`:
 
@@ -799,12 +799,12 @@ pub fn on_column_edge(px: &[f32], left: f32, grab: f32, x: f32) -> bool {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test table_layout`
 Expected: PASS (new and old).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cargo fmt --all

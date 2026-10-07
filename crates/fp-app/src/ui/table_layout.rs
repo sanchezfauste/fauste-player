@@ -2,6 +2,7 @@
 //! pure functions from the stored fractions to pixels, and from a drag of a
 //! column edge to the widths of all the columns, recomputed every frame.
 
+use egui::{Pos2, Rect};
 use fp_model::{ColumnWidths, TableColumn};
 
 /// Width of one digit of the `#` column, and what its icon and padding take.
@@ -201,4 +202,45 @@ pub fn resize_px(start: &[f32], mins: &[f32], edge: usize, new_width: f32) -> Ve
 /// The widths to store for `px`: each column's share of the total.
 pub fn fractions_of(columns: &[TableColumn], px: &[f32]) -> ColumnWidths {
     ColumnWidths::keyed(columns.iter().copied().zip(px.iter().copied()))
+}
+
+/// The row boundary a dragged entry would be dropped at (operator feedback 4,
+/// Q4): the one nearest to the pointer, from `0` (before the first row) to
+/// `len` (after the last). It comes from the pointer and the table's
+/// geometry alone, never from the widget under the pointer. `body` is the
+/// visible part of the table body (without the header and the scroll bar)
+/// and `scroll_y` how far it is scrolled. `None` when the pointer is not
+/// inside `body`.
+pub fn drop_index(
+    body: Rect,
+    scroll_y: f32,
+    row_height: f32,
+    len: usize,
+    pointer: Pos2,
+) -> Option<usize> {
+    if !body.contains(pointer) || !(row_height.is_finite() && row_height > 0.0) {
+        return None;
+    }
+    let y = pointer.y - body.top() + if scroll_y.is_finite() { scroll_y } else { 0.0 };
+    let boundary = (y / row_height).round().max(0.0);
+    Some((boundary as usize).min(len))
+}
+
+/// The screen y of boundary `index` (the top edge of row `index`), when it is
+/// inside the visible `body`; the bar is drawn there even if the rows next
+/// to it were not built this frame.
+pub fn boundary_y(body: Rect, scroll_y: f32, row_height: f32, index: usize) -> Option<f32> {
+    let y = body.top() + index as f32 * row_height - scroll_y;
+    (y.is_finite() && y >= body.top() - 0.5 && y <= body.bottom() + 0.5).then_some(y)
+}
+
+/// `x` is within `grab` points of an edge between two columns of a table
+/// whose left side is at `left` (the column resize grab zones: a drop there
+/// has no target, Q4.2). The right edge of the last column is not one.
+pub fn on_column_edge(px: &[f32], left: f32, grab: f32, x: f32) -> bool {
+    let mut edge = left;
+    px.iter().take(px.len().saturating_sub(1)).any(|w| {
+        edge += w;
+        (x - edge).abs() <= grab
+    })
 }
