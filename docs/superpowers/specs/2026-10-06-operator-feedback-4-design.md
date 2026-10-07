@@ -108,8 +108,9 @@
     `0..=entries.len()`; it never depends on which widget is under the
     pointer.
   - **Q4.2** A target exists only while the pointer is inside the body rect.
-    Over the header, the column-resize handles, the scroll bar or outside the
-    table there is no target, and a release there drops nothing.
+    Over the header, the column-resize handles, the scroll bar, a floating
+    window that covers the table (the CUE window) or outside the table there
+    is no target, and a release there drops nothing.
   - **Q4.3** The target is keyed by `(PlayerId, PlaylistId)`; only the table
     of that player draws the bar. Two players that show the same playlist
     never both draw it.

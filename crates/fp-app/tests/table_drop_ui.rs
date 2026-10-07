@@ -302,3 +302,39 @@ fn releasing_over_the_scroll_bar_drops_nothing() {
     release(&mut h, on_bar);
     assert!(moves(&fake).is_empty());
 }
+
+/// Q4: a floating window over the table (the CUE window) hides the rows
+/// under it: a row released on the window is not moved into the table.
+#[test]
+fn releasing_over_a_window_that_covers_the_table_drops_nothing() {
+    let mut s = state(1, 20);
+    for t in s.library.iter_mut() {
+        t.duration_secs = 180.0;
+    }
+    let (mut h, fake) = harness(s);
+    fp_app::ui::controller::Controller::send(fake.as_ref(), Command::ToggleCue(fake.player(0)));
+    h.run_steps(2);
+    // Moved down by its left margin until it covers the first rows.
+    let wave = h.get_by_label("CUE waveform: click to seek").rect();
+    let grip = pos2(wave.left() - 6.0, wave.center().y);
+    begin_drag(&mut h, grip, pos2(grip.x, grip.y + 120.0));
+    release(&mut h, pos2(grip.x, grip.y + 120.0));
+    let wave = h.get_by_label("CUE waveform: click to seek").rect();
+    let row3 = cell(&h, "Song 3").center();
+    assert!(
+        wave.top() < row3.y && row3.y < wave.bottom() + 60.0,
+        "the window covers row 3: {wave:?} {row3:?}"
+    );
+    // Over row 3, on the window.
+    let to = pos2(wave.center().x, row3.y + 10.0);
+    let below = cells(&h, "Song 5");
+    let from = below
+        .first()
+        .expect("row 5 is shown below the window")
+        .center();
+    begin_drag(&mut h, from, to);
+    assert!(bars(&h).is_empty(), "{:?}", bars(&h));
+    fake.take_sent();
+    release(&mut h, to);
+    assert!(moves(&fake).is_empty());
+}

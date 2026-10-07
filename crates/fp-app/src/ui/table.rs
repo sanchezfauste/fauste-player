@@ -523,7 +523,17 @@ pub(crate) fn track_table(
     let body_rect = output.inner_rect;
     let scroll_y = output.state.offset.y;
     let grab = ui.style().interaction.resize_grab_radius_side;
+    // A floating window over the table (the CUE window) hides the rows
+    // under it: only a pointer on the table's own layer can drop.
+    let layer = ui.layer_id();
+    let on_table_layer = |p: &egui::Pos2| {
+        ui.ctx()
+            .layer_id_at(*p)
+            .unwrap_or_else(egui::LayerId::background)
+            == layer
+    };
     let target = pointer
+        .filter(on_table_layer)
         .filter(|p| !table_layout::on_column_edge(&px, area.left(), grab, p.x))
         .and_then(|p| table_layout::drop_index(body_rect, scroll_y, ROW_HEIGHT, entries.len(), p));
     if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx()) {

@@ -195,8 +195,8 @@ shortcut acts, and files dropped on the application window are ignored.
 
 - Drag a track within the list to reorder it. A violet line shows where it
   will land: it is at the row boundary nearest to the pointer, and only in
-  the list under the pointer. Releasing over the header, a column edge or the
-  scroll bar drops nothing. The mouse wheel does not scroll the list while a
+  the list under the pointer. Releasing over the header, a column edge, the
+  scroll bar or a window that covers the list (the CUE window) drops nothing. The mouse wheel does not scroll the list while a
   row is being dragged: scroll first, then drag.
 - Drag it onto another player's list to move it there.
 - Drag it onto a tab to append it to that playlist.
