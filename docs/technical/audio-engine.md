@@ -120,9 +120,12 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   always labelled (`scale_marks` includes the digital floor; the alignment
   label gives way to an end label), each label is centred on its line or, at
   the rect's edge, rests on or hangs from it (`MeterLine::label_align`), and
-  `widgets::reference_segments` says which pieces of a reference line lie
-  over the lit part of a bar. The line colours and opacities are the
-  `METER_LINE_*` constants in `ui/theme.rs`.
+  the scale is a ruler on each side of the bars (`MeterLayout::rulers`): a
+  major tick for every label, minor ticks from `widgets::minor_marks` (a
+  step per scale, kept 3 px apart) and a thicker white alignment tick
+  (`MeterLayout::ticks`, painted with `widgets::tick_colour`). Nothing is
+  drawn over the bars or between them. The tick colours are the
+  `METER_TICK*` and `METER_ALIGNMENT_TICK` constants in `ui/theme.rs`.
 - **Tests** (`tests/metering.rs`, `tests/mixer.rs`):
   - the BS.1770 coefficients and the 1 kHz gain at every rate;
   - EBU Tech 3341 cases 1, 2, 9, 11, 12 and 14 (loudness) and 15–23

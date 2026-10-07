@@ -792,11 +792,11 @@ fi
 - Check: `README.md` (the feature list and the roadmap mention the meter; no change expected)
 - Locales: no strings change, so `crates/fp-app/locales/en-US/main.ftl` and `es-ES/main.ftl` are not edited (state this in the commit body).
 
-- [ ] **Step 1: Check what is already in the tree**
+- [x] **Step 1: Check what is already in the tree**
 
 Run: `grep -n "rulers on both sides\|thicker white tick\|nothing is drawn over the bars" docs/superpowers/specs/2026-09-27-meters-design.md` (expect hits on lines 99, 110, 111) and `grep -n "Superseded by operator feedback 4" docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md` (expect line ~182). If a hit is missing, add the sentence from the Q11 "Spec lines that change" list of the feedback 4 spec to that file. Then `grep -rn "reference line\|notch" docs/user docs/technical README.md` lists every sentence still describing the old meter.
 
-- [ ] **Step 2: Rewrite the user guide**
+- [x] **Step 2: Rewrite the user guide**
 
 In `docs/user/players.md`, replace the sentence from "The scale is labelled on the left:" to "mark the alignment level (−18 dBFS)." with:
 
@@ -814,13 +814,13 @@ The scale is a ruler on each side of the
 
 Refresh the sentence under the heading image if it lists the meter as "meter" only (no change needed otherwise).
 
-- [ ] **Step 3: Rewrite the technical docs**
+- [x] **Step 3: Rewrite the technical docs**
 
 `docs/technical/ui.md` line 30: replace "The meter's geometry is the pure `meter_layout` (labels, lines, bars, readouts), unit-tested" with "The meter's geometry is the pure `meter_layout` (a `Ruler` per side, the `ticks`, the label lines, the bars and the readouts), unit-tested; nothing is painted over the bars (`tests/meter_view.rs` reads the painted shapes)".
 
 `docs/technical/audio-engine.md`: replace the sentence "…`widgets::reference_segments` says which pieces of a reference line lie over the lit part of a bar. The line colours and opacities are the `METER_LINE_*` constants in `ui/theme.rs`." with "…the scale is a ruler on each side of the bars (`MeterLayout::rulers`): a major tick for every label, minor ticks from `widgets::minor_marks` (a step per scale, kept 3 px apart) and a thicker white alignment tick (`MeterLayout::ticks`, painted with `widgets::tick_colour`). Nothing is drawn over the bars or between them. The tick colours are the `METER_TICK*` and `METER_ALIGNMENT_TICK` constants in `ui/theme.rs`."
 
-- [ ] **Step 4: Spec notes**
+- [x] **Step 4: Spec notes**
 
 In `2026-10-01-operator-feedback-2-design.md`, under the O13 "As built" bullet about `reference_segments`, append: "Removed by operator feedback 4, Q11: `reference_segments`, `LineShade`, the notches and the `METER_LINE_*` constants no longer exist."
 
@@ -835,7 +835,7 @@ In `2026-10-06-operator-feedback-4-design.md`, at the end of §5 (before the `--
 
 (If Task 1 needed a ladder rung, add one bullet naming it, with its measured effect.)
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `grep -rn "reference_segments\|METER_LINE\|alignment_notches" docs/user docs/technical crates` (expect nothing).
 

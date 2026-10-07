@@ -1,7 +1,7 @@
 # Operator Feedback 4 — Design Spec
 
 - **Date:** 2026-10-06
-- **Status:** Plans 1 to 3 implemented (Q6 not reproduced, see plan 2's "As built"); plans 4 and 5 not implemented.
+- **Status:** Plans 1 to 4 implemented (Q6 not reproduced, see plan 2's "As built"); plan 5 not implemented.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§3 rules,
   §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md) (M4 display),
   the [bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md) (B3 rate, B6
@@ -577,6 +577,11 @@ Rulings made while implementing:
 - **Docs and locales.** No strings. `docs/user/players.md` (meters),
   `docs/technical/ui.md`; the guide screenshots are refreshed with
   `scripts/site/screenshots.sh`.
+- **As built (plan 4).**
+  - `meter_layout` returns two `Ruler`s and the `ticks`; `METER_WIDTH` is 78 px (was 52): per side an 18 px label column, a 4 px tick strip and two 1 px gaps. `vu` paints only the bars' own content plus the rulers; `reference_segments`, `LineShade`, the notches and the `METER_LINE_*` constants are gone.
+  - Minor steps: digital and custom 5 dB below −20 dBFS and 1 dB above; EBU 1 dB; DIN 5 dB below −20 relative to its 0, then 1 dB; VU 5 dB below −10, 1 dB to −3, 0.5 dB above; K-System 5 dB below −24, then 1 dB. A scale mark that lost its label is drawn as a minor tick. Minor ticks keep 3 px from every other tick.
+  - Ticks: major `NEUTRAL_400`, minor the same at 60 %, alignment white and 2 px thick (`METER_TICK`, `METER_TICK_MINOR_ALPHA`, `METER_ALIGNMENT_TICK`).
+  - The wider meter did not fit the 380 px player column beside the countdown, so two rungs of the plan's ladder were used: `METER_COLUMN_GAP` (the gap between the transport grid and the meter column, `ui/player.rs`) went from 10 to 6 px, and `COUNTDOWN_MIN_SCALE` from 18/38 to 14/38, so a ten-hour countdown shrinks to 14 px at the minimum width. The scale floor only binds on times that do not fit, so shorter countdowns keep their size. The third rung (a 16 px label column) was not applied: it would not have made a ten-hour countdown fit either, and 18 px keeps the `TEST` label legible.
 
 ---
 
