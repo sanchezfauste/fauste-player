@@ -100,7 +100,10 @@ without deploying.
 
 The English guide in `docs/user` is the only source: pull requests change
 English only. The translations are generated with AI and regenerated before
-each release, never edited by hand in between.
+each release, never edited by hand in between. The one mechanical exception:
+a pull request that moves, renames or deletes an image in `docs/images` also
+updates the image links in `docs/i18n`, so the translated guides keep
+building.
 
 - **Languages:** the folders of `docs/i18n`: `es`, `ca`, `de`, `eu`, `fr`,
   `gl`, `it`, `nl`, `pl` and `pt` (European Portuguese), the languages of
@@ -121,7 +124,9 @@ each release, never edited by hand in between.
   `docs/book-assets/language-menu.js` adds it at the top of each page; the
   start page (`README.md`) also has it in its source, as
   `<div class="ai-notice" role="note">…</div>` linking to `../index.html`,
-  so it shows without JavaScript.
+  so it shows without JavaScript. That link targets the built site (the
+  English start page next to the translation's folder); on GitHub's file view
+  it is dead.
 - **The language menu:** the same script adds a globe button to the top bar
   of every book, English included. It links to the same page in each
   language, or to that language's start page when the page does not exist
@@ -130,7 +135,10 @@ each release, never edited by hand in between.
   which copies `docs/` to a staging folder, writes
   `book-assets/languages.js` (the languages, each one's pages, the notice)
   for each book, and runs mdBook with `src`, `language` and `title`
-  overridden (`MDBOOK_BOOK__…` variables). The edit link of a translated
+  overridden (`MDBOOK_BOOK__…` variables). `docs/book-assets/languages.js` in
+  the source tree is an English-only stub, so a plain `mdbook build docs`
+  or `mdbook serve docs` works (without the menu); the script overwrites it
+  in the staging copy. The edit link of a translated
   page points at `docs/i18n/<lang>/`.
 - **The check:** `scripts/site/check-translations.sh [<site>]` fails when a
   translation's files or `SUMMARY.md` entries differ from `docs/user` at its

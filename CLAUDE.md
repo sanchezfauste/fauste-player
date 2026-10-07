@@ -133,7 +133,9 @@ A change is not done until everything that describes it says the same:
 - `README.md` (features, platform table, install, roadmap);
 - the user guide in `docs/user/` (English only: the translations in
   `docs/i18n/` are regenerated with AI before each release, never in a
-  feature PR) and the technical docs in `docs/technical/`;
+  feature PR; the one exception is a PR that moves, renames or deletes an
+  image in `docs/images`, which also updates the image links in
+  `docs/i18n/`) and the technical docs in `docs/technical/`;
 - the spec in `docs/superpowers/specs/` when behaviour changes, and the plan;
 - this file (and `AGENTS.md` if the pointer changes) when the workflow,
   commands or layout change;
