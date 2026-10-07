@@ -411,6 +411,174 @@ pub fn scale_marks(c: &MeterConfig) -> Vec<f32> {
     }
 }
 
+/// The step (dB) of the minor ticks in the scale segment that starts at
+/// `from` dBFS: coarse in the sparse low part of each scale, fine where the
+/// marks are close (operator feedback 4, Q11.4).
+fn minor_step_db(c: &MeterConfig, from: f32) -> f32 {
+    // Whether `from` lies below `limit` dB relative to the scale's `zero`.
+    let below = |zero: f32, limit: f32| from - zero < limit - SAME_MARK_DB;
+    match c.ballistics {
+        MeterBallistics::EbuPpm => 1.0,
+        MeterBallistics::DinPpm => {
+            if below(c.reference_dbfs + PERMITTED_MAXIMUM_DB, -20.0) {
+                5.0
+            } else {
+                1.0
+            }
+        }
+        MeterBallistics::Vu => {
+            if !below(c.reference_dbfs, -3.0) {
+                0.5
+            } else if !below(c.reference_dbfs, -10.0) {
+                1.0
+            } else {
+                5.0
+            }
+        }
+        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => {
+            if below(alignment_dbfs(c), -24.0) {
+                5.0
+            } else {
+                1.0
+            }
+        }
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => {
+            if below(0.0, -20.0) {
+                5.0
+            } else {
+                1.0
+            }
+        }
+    }
+}
+
+/// The steps (dB, in the scale's own units) a ruler segment's minor ticks
+/// may take, finest first: a segment takes the finest one that is not finer
+/// than its scale's spacing ([`minor_step_db`]) and keeps its ticks
+/// [`MIN_TICK_SPACING`] apart.
+const MINOR_STEP_LADDER: [f32; 6] = [0.5, 1.0, 2.0, 2.5, 5.0, 10.0];
+
+/// The multiples of `step` dB in the scale's own units (counted from
+/// [`scale_zero`]) strictly between `low` and `high` dBFS, ascending.
+fn step_multiples(low: f32, high: f32, step: f32, c: &MeterConfig) -> Vec<f32> {
+    let mut out = Vec::new();
+    if !(low.is_finite() && high.is_finite() && step.is_finite() && step > 0.0) {
+        return out;
+    }
+    let zero = scale_zero(c);
+    // A count, not a running sum, so the levels do not drift.
+    let mut k = ((low - zero) / step).floor();
+    loop {
+        let db = zero + k * step;
+        if db >= high - SAME_MARK_DB {
+            return out;
+        }
+        if db > low + SAME_MARK_DB {
+            out.push(db);
+        }
+        k += 1.0;
+    }
+}
+
+/// The levels (dBFS, ascending) of the finest minor ticks: between each
+/// pair of adjacent scale marks, every multiple of [`minor_step_db`] in the
+/// scale's own units, never on a mark. The layout rules a short meter more
+/// coarsely (see [`ruler_ticks`]).
+pub fn minor_marks(c: &MeterConfig) -> Vec<f32> {
+    let marks = scale_marks(c);
+    marks
+        .windows(2)
+        .filter_map(|pair| Some((*pair.first()?, *pair.get(1)?)))
+        .flat_map(|(a, b)| step_multiples(a, b, minor_step_db(c, a), c))
+        .collect()
+}
+
+/// The ticks of both rulers, sorted by `y`:
+/// - a major tick for every labelled mark, and the alignment tick;
+/// - a minor tick for every scale mark that lost its label, where it stays
+///   [`MIN_TICK_SPACING`] from the ticks above;
+/// - between each two of those, minor ticks as on a measuring ruler: every
+///   multiple of the finest step of [`MINOR_STEP_LADDER`] that keeps them
+///   [`MIN_TICK_SPACING`] apart, or none.
+fn ruler_ticks(
+    lines: &[MeterLine],
+    marks: &[f32],
+    c: &MeterConfig,
+    top: f32,
+    bottom: f32,
+) -> Vec<MeterTick> {
+    let height = bottom - top;
+    let half = TICK_THICKNESS / 2.0;
+    let y_of = |db: f32| bottom - meter_position(db, c) * height;
+    let mut ticks: Vec<MeterTick> = lines
+        .iter()
+        .filter(|m| m.alignment || !m.label.is_empty())
+        .map(|m| MeterTick {
+            db: m.db,
+            y: m.y,
+            kind: if m.alignment {
+                TickKind::Alignment
+            } else {
+                TickKind::Major
+            },
+        })
+        .collect();
+    ticks.sort_by(|a, b| a.y.total_cmp(&b.y));
+    // The scale marks that lost their label, top down as the labels are
+    // kept; `ticks` stays sorted by `y`.
+    for &db in marks.iter().rev() {
+        if (db - alignment_dbfs(c)).abs() < SAME_MARK_DB {
+            continue;
+        }
+        let y = y_of(db).clamp(top + half, (bottom - half).max(top + half));
+        let at = ticks.partition_point(|t| t.y < y);
+        let clear = |i: Option<usize>| {
+            i.and_then(|i| ticks.get(i))
+                .is_none_or(|t: &MeterTick| (t.y - y).abs() >= MIN_TICK_SPACING)
+        };
+        if clear(at.checked_sub(1)) && clear(Some(at)) {
+            ticks.insert(
+                at,
+                MeterTick {
+                    db,
+                    y,
+                    kind: TickKind::Minor,
+                },
+            );
+        }
+    }
+    // Then rule each segment between two of those ticks (bottom up: `y`
+    // falls as the level rises).
+    let mut minors = Vec::new();
+    for pair in ticks.windows(2).rev() {
+        let (Some(high), Some(low)) = (pair.first(), pair.get(1)) else {
+            continue;
+        };
+        let finest = minor_step_db(c, low.db);
+        let fits = |levels: &[f32]| {
+            let ys = std::iter::once(low.y)
+                .chain(levels.iter().map(|db| y_of(*db)))
+                .chain(std::iter::once(high.y));
+            ys.clone()
+                .zip(ys.skip(1))
+                .all(|(a, b)| a - b >= MIN_TICK_SPACING - 0.01)
+        };
+        let ruled = MINOR_STEP_LADDER
+            .iter()
+            .filter(|step| **step >= finest - SAME_MARK_DB)
+            .map(|step| step_multiples(low.db, high.db, *step, c))
+            .find(|levels| fits(levels));
+        minors.extend(ruled.into_iter().flatten().map(|db| MeterTick {
+            db,
+            y: y_of(db),
+            kind: TickKind::Minor,
+        }));
+    }
+    ticks.extend(minors);
+    ticks.sort_by(|a, b| a.y.total_cmp(&b.y));
+    ticks
+}
+
 /// The zone `db` falls in: the configured ones, or the K-System's own
 /// (amber from 0, red above +4).
 pub fn zone_of(db: f32, c: &MeterConfig) -> Zone {
@@ -489,11 +657,12 @@ pub struct MeterLabels {
 /// Height of the maximum readout above the bars.
 const MAX_LINE_HEIGHT: f32 = 11.0;
 
-/// Stereo level meter (meters spec M4, feedback spec §3.2): the scale's
-/// labels on the left, a continuous bar per channel on the scale of the
-/// chosen meter's standard, reference lines across both bars, the peak
-/// hold, the maximum readout above and the loudness line below when it is
-/// on. K-System meters show the average (RMS) as the solid body and the
+/// Stereo level meter (meters spec M4, feedback spec §3.2): the scale on a
+/// ruler on each side of the bars (labels, a tick for every label, minor
+/// ticks, a white alignment tick), a continuous bar per channel on the
+/// scale of the chosen meter's standard, the peak hold, the maximum readout
+/// above and the loudness line below when it is on. Nothing is drawn over
+/// the bars. K-System meters show the average (RMS) as the solid body and the
 /// peak dimmed above it. Returns true when the operator clicked the maximum
 /// to restart it.
 pub fn vu(
@@ -503,7 +672,7 @@ pub fn vu(
     c: &MeterConfig,
     labels: &MeterLabels,
 ) -> bool {
-    let (rect, response) = ui.allocate_exact_size(vec2(METER_WIDTH, height), Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(vec2(meter_width(c), height), Sense::hover());
     let meter_label = labels.meter.clone();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Label, true, meter_label.clone())
@@ -582,23 +751,22 @@ pub fn vu(
             );
         }
     }
-    // The scale: a faint reference line across both bars for every label,
-    // nothing between the channels; the alignment level adds a notch at
-    // the outer edge of each bar, so no bright bar crosses the signal.
-    for m in &l.lines {
-        for (piece, shade) in reference_segments(&l, m.y, level_y) {
-            painter.rect_filled(piece, 0.0, shade.colour());
+    // The rulers, outside the bars: the labels and a tick for every
+    // labelled mark on each side, the minor ticks and the alignment tick.
+    // Nothing is drawn over the bars or between them.
+    for ruler in &l.rulers {
+        for tick in &l.ticks {
+            painter.rect_filled(ruler.tick_rect(tick), 0.0, tick_colour(tick.kind));
         }
-        painter.text(
-            pos2(l.labels_right, m.label_y),
-            Align2([egui::Align::RIGHT, m.label_align]),
-            &m.label,
-            FontId::monospace(LABEL_FONT_SIZE),
-            theme::NEUTRAL_400,
-        );
-    }
-    for notch in l.alignment_notches {
-        painter.rect_filled(notch, 0.0, theme::NEUTRAL_400);
+        for m in l.lines.iter().filter(|m| !m.label.is_empty()) {
+            painter.text(
+                pos2(ruler.labels_x, m.label_y),
+                Align2([ruler.label_halign, m.label_align]),
+                &m.label,
+                FontId::monospace(LABEL_FONT_SIZE),
+                theme::NEUTRAL_400,
+            );
+        }
     }
     if let (Some((text, on_target)), Some(r)) = (line, l.loudness) {
         painter.text(
@@ -619,27 +787,67 @@ pub fn vu(
 /// Size of the scale's labels.
 const LABEL_FONT_SIZE: f32 = 8.0;
 
-/// Width of the meter: the label column, then two bars with a gap.
-const LABEL_COLUMN: f32 = 18.0;
-const LABEL_GAP: f32 = 2.0;
+/// Advance (px) of one character of the labels' font: the monospace font
+/// (Hack, 1233/2048 em) at [`LABEL_FONT_SIZE`].
+const LABEL_ADVANCE: f32 = LABEL_FONT_SIZE * 1233.0 / 2048.0;
+/// Clear gap between a ruler's tick strip and its labels, so a label's
+/// minus never reads as part of a tick. The strip itself is flush with its
+/// bar.
+const LABEL_TICK_GAP: f32 = 3.0;
+/// Width of a ruler's tick strip: the length of a major tick.
+const TICK_STRIP: f32 = 4.0;
+/// Length of a minor tick.
+const MINOR_TICK_LEN: f32 = 2.0;
+/// Thickness of a major or minor tick; the alignment tick is
+/// [`ALIGNMENT_LINE_THICKNESS`] thick.
+const TICK_THICKNESS: f32 = 1.0;
+/// Minor ticks stay at least this far (px) from every other tick (Q11.4).
+const MIN_TICK_SPACING: f32 = 3.0;
 const BAR_WIDTH: f32 = 14.0;
 const BAR_GAP: f32 = 2.0;
-pub const METER_WIDTH: f32 = LABEL_COLUMN + LABEL_GAP + 2.0 * BAR_WIDTH + BAR_GAP;
+
+/// Width of the label column on each side of the bars for the scale
+/// `marks` of `c`: as wide as its widest label (3 characters, 15 px; EBU's
+/// `TEST`, 20 px).
+fn label_column_for(marks: &[f32], c: &MeterConfig) -> f32 {
+    let chars = marks
+        .iter()
+        .map(|m| mark_label(*m, c).chars().count())
+        .max()
+        .unwrap_or(0);
+    (chars as f32 * LABEL_ADVANCE).ceil()
+}
+
+/// Width of one side of the meter with a `label_column` px label column:
+/// the labels, their gap to the ticks and the tick strip.
+fn side_width(label_column: f32) -> f32 {
+    label_column + LABEL_TICK_GAP + TICK_STRIP
+}
+
+/// Width of the label column on each side of meter `c`'s bars.
+pub fn label_column(c: &MeterConfig) -> f32 {
+    label_column_for(&scale_marks(c), c)
+}
+
+/// Width of meter `c`: a ruler on each side of the two bars.
+pub fn meter_width(c: &MeterConfig) -> f32 {
+    2.0 * side_width(label_column(c)) + 2.0 * BAR_WIDTH + BAR_GAP
+}
 /// Height of the loudness line under the bars.
 const LOUDNESS_LINE_HEIGHT: f32 = 12.0;
 /// The closest two labels may be, centre to centre (monospace 9 px).
 const LABEL_ROW: f32 = 10.0;
 /// Two levels closer than this (dB) are the same mark.
 const SAME_MARK_DB: f32 = 0.05;
-/// Thickness of the alignment line and of the notches: the vertical extent
-/// of the horizontal marks (not their length).
+/// Thickness of the alignment line and tick: the vertical extent of the
+/// horizontal marks (not their length).
 const ALIGNMENT_LINE_THICKNESS: f32 = 2.0;
-/// Width of each alignment notch, at the outer edge of its bar.
-const ALIGNMENT_NOTCH: f32 = 3.0;
 
 /// One labelled mark of the meter's scale (see [`meter_layout`]).
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeterLine {
+    /// The mark's level, dBFS.
+    pub db: f32,
     pub y: f32,
     /// Where the label is anchored vertically: the line's `y`.
     pub label_y: f32,
@@ -664,75 +872,100 @@ impl MeterLine {
     }
 }
 
-/// Whether a piece of a reference line lies over the lit part of a bar.
+/// A side of the meter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LineShade {
-    Lit,
-    Unlit,
+pub enum Side {
+    Left,
+    Right,
 }
 
-impl LineShade {
-    /// The colour the piece is painted in (constants in `theme`).
-    pub fn colour(self) -> Color32 {
-        match self {
-            LineShade::Lit => theme::METER_LINE_LIT.gamma_multiply(theme::METER_LINE_LIT_ALPHA),
-            LineShade::Unlit => {
-                theme::METER_LINE_UNLIT.gamma_multiply(theme::METER_LINE_UNLIT_ALPHA)
-            }
-        }
+/// The kind of a ruler tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TickKind {
+    /// Between the labelled marks, shorter and fainter.
+    Minor,
+    /// A labelled mark.
+    Major,
+    /// The alignment level: thicker, white.
+    Alignment,
+}
+
+/// One tick of the rulers, at screen height `y`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeterTick {
+    /// The level the tick marks, dBFS.
+    pub db: f32,
+    pub y: f32,
+    pub kind: TickKind,
+}
+
+/// One ruler: where its labels hang and the strip its ticks are drawn in.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Ruler {
+    pub side: Side,
+    /// Label anchor: the right edge of the label column on the left ruler
+    /// (`label_halign` is `Max`), the left edge on the right ruler (`Min`).
+    pub labels_x: f32,
+    pub label_halign: egui::Align,
+    /// The tick strip, next to the bar.
+    pub ticks: egui::Rangef,
+}
+
+impl Ruler {
+    /// The rectangle `t` is painted in: flush with the bar side of the
+    /// strip, centred on its `y`.
+    pub fn tick_rect(&self, t: &MeterTick) -> Rect {
+        let (len, thickness) = match t.kind {
+            TickKind::Minor => (MINOR_TICK_LEN, TICK_THICKNESS),
+            TickKind::Major => (TICK_STRIP, TICK_THICKNESS),
+            TickKind::Alignment => (TICK_STRIP, ALIGNMENT_LINE_THICKNESS),
+        };
+        let x = match self.side {
+            Side::Left => self.ticks.max - len..=self.ticks.max,
+            Side::Right => self.ticks.min..=self.ticks.min + len,
+        };
+        Rect::from_x_y_ranges(x, t.y - thickness / 2.0..=t.y + thickness / 2.0)
     }
 }
 
-/// The reference line at screen height `y` as three pieces: over the first
-/// bar, over the gap between the bars and over the second bar. A piece over
-/// a bar is lit when that bar's level (`level_y`, screen height of each
-/// channel's level; the peak on K-System meters) is at or above the line;
-/// the gap is never lit.
-pub fn reference_segments(l: &MeterLayout, y: f32, level_y: [f32; 2]) -> [(Rect, LineShade); 3] {
-    let [first, second] = l.bars;
-    let piece = |x: egui::Rangef| Rect::from_x_y_ranges(x, y - 0.5..=y + 0.5);
-    let shade = |ch: usize| {
-        if level_y.get(ch).is_some_and(|ly| *ly <= y) {
-            LineShade::Lit
-        } else {
-            LineShade::Unlit
-        }
-    };
-    [
-        (piece(first.x_range()), shade(0)),
-        (
-            piece(egui::Rangef::new(first.right(), second.left())),
-            LineShade::Unlit,
-        ),
-        (piece(second.x_range()), shade(1)),
-    ]
+/// The colour a ruler tick is painted in (constants in `theme`).
+pub fn tick_colour(kind: TickKind) -> Color32 {
+    match kind {
+        TickKind::Major => theme::METER_TICK,
+        TickKind::Minor => theme::METER_TICK.gamma_multiply(theme::METER_TICK_MINOR_ALPHA),
+        TickKind::Alignment => theme::METER_ALIGNMENT_TICK,
+    }
 }
 
 /// Where the meter draws each of its parts (feedback spec §3.2).
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeterLayout {
-    pub labels_right: f32,
     pub bars: [Rect; 2],
     pub max: Rect,
     pub loudness: Option<Rect>,
-    pub lines_x: egui::Rangef,
     pub lines: Vec<MeterLine>,
-    /// The alignment level: a short notch at the outer edge of each bar.
-    pub alignment_notches: [Rect; 2],
+    /// The rulers, left and right of the bars.
+    pub rulers: [Ruler; 2],
+    /// The ticks both rulers draw, sorted by `y`.
+    pub ticks: Vec<MeterTick>,
+}
+
+/// The level (dBFS) that is 0 in the chosen meter's own units: EBU TEST,
+/// DIN 0, 0 VU, the K-System's 0, and 0 dBFS on the digital meter.
+pub fn scale_zero(c: &MeterConfig) -> f32 {
+    match c.ballistics {
+        MeterBallistics::EbuPpm | MeterBallistics::Vu => c.reference_dbfs,
+        MeterBallistics::DinPpm => c.reference_dbfs + PERMITTED_MAXIMUM_DB,
+        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => alignment_dbfs(c),
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => 0.0,
+    }
 }
 
 /// The label of the scale mark at `db` dBFS, in the chosen meter's own
 /// units: EBU relative to TEST (shown as `TEST`), DIN to its 0, VU to 0 VU,
 /// K-System to its 0, the digital meter in dBFS.
 pub fn mark_label(db: f32, c: &MeterConfig) -> String {
-    let zero = match c.ballistics {
-        MeterBallistics::EbuPpm => c.reference_dbfs,
-        MeterBallistics::DinPpm => c.reference_dbfs + PERMITTED_MAXIMUM_DB,
-        MeterBallistics::Vu => c.reference_dbfs,
-        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => alignment_dbfs(c),
-        MeterBallistics::DigitalPeak | MeterBallistics::Custom => 0.0,
-    };
-    let value = (db - zero).round() as i32;
+    let value = (db - scale_zero(c)).round() as i32;
     if c.ballistics == MeterBallistics::EbuPpm && value == 0 {
         "TEST".to_owned()
     } else if value > 0 {
@@ -743,11 +976,13 @@ pub fn mark_label(db: f32, c: &MeterConfig) -> String {
 }
 
 /// Lays the meter out in `rect`: the maximum readout on top, the loudness
-/// line at the bottom when `loudness`, the labels on the left and the two
-/// bars. Labels are kept top down while they have room; the alignment mark
-/// always keeps its line and label.
+/// line at the bottom when `loudness`, the two bars, and the labels and
+/// ticks of a ruler on each side of them. Labels are kept top down while
+/// they have room; the alignment mark always keeps its line and label.
 pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout {
-    let bars_left = rect.left() + LABEL_COLUMN + LABEL_GAP;
+    let marks = scale_marks(c);
+    let labels = label_column_for(&marks, c);
+    let bars_left = rect.left() + side_width(labels);
     let top = rect.top() + MAX_LINE_HEIGHT;
     let bottom = if loudness {
         rect.bottom() - LOUDNESS_LINE_HEIGHT
@@ -761,6 +996,20 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     };
     let bars = [bar(0.0), bar(1.0)];
     let bars_right = bars_left + 2.0 * BAR_WIDTH + BAR_GAP;
+    let rulers = [
+        Ruler {
+            side: Side::Left,
+            labels_x: rect.left() + labels,
+            label_halign: egui::Align::Max,
+            ticks: egui::Rangef::new(bars_left - TICK_STRIP, bars_left),
+        },
+        Ruler {
+            side: Side::Right,
+            labels_x: bars_right + TICK_STRIP + LABEL_TICK_GAP,
+            label_halign: egui::Align::Min,
+            ticks: egui::Rangef::new(bars_right, bars_right + TICK_STRIP),
+        },
+    ];
     let height = bottom - top;
     let y_of = |db: f32| bottom - meter_position(db, c) * height;
     let line = |db: f32, alignment: bool| {
@@ -784,6 +1033,7 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
             egui::Align::Center
         };
         MeterLine {
+            db,
             y,
             label_y: y,
             label_align,
@@ -791,7 +1041,6 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
             alignment,
         }
     };
-    let marks = scale_marks(c);
     let mut alignment = line(alignment_dbfs(c), true);
     // The alignment level is labelled only where the scale names it (EBU
     // TEST, K 0, 0 VU); elsewhere (the digital meter's −18) the heavier
@@ -853,25 +1102,17 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
             lines.push(candidate);
         }
     }
-    let notch = |x: f32| {
-        Rect::from_x_y_ranges(
-            x..=x + ALIGNMENT_NOTCH,
-            alignment.y - ALIGNMENT_LINE_THICKNESS / 2.0
-                ..=alignment.y + ALIGNMENT_LINE_THICKNESS / 2.0,
-        )
-    };
-    let alignment_notches = [notch(bars_left), notch(bars_right - ALIGNMENT_NOTCH)];
     lines.push(alignment);
     lines.sort_by(|a, b| a.label_centre().total_cmp(&b.label_centre()));
+    let ticks = ruler_ticks(&lines, &marks, c, top, bottom);
     MeterLayout {
-        labels_right: rect.left() + LABEL_COLUMN,
         bars,
         max: Rect::from_x_y_ranges(bars_left..=bars_right, rect.top()..=top),
         loudness: loudness
             .then(|| Rect::from_x_y_ranges(bars_left..=bars_right, bottom..=rect.bottom())),
-        lines_x: egui::Rangef::new(bars_left, bars_right),
         lines,
-        alignment_notches,
+        rulers,
+        ticks,
     }
 }
 

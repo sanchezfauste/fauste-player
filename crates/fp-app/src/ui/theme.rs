@@ -34,12 +34,12 @@ pub const METER_NORMAL: Color32 = Color32::from_rgb(0x7f, 0xb0, 0x8a);
 pub const METER_WARNING: Color32 = Color32::from_rgb(0xd9, 0xb4, 0x5a);
 pub const METER_DANGER: Color32 = Color32::from_rgb(0xd8, 0x64, 0x6a);
 
-/// Meter reference lines (operator feedback 2, O13): light over the unlit
-/// part of a bar, a dark cut (a segment gap) over the lit part.
-pub const METER_LINE_UNLIT: Color32 = NEUTRAL_400;
-pub const METER_LINE_UNLIT_ALPHA: f32 = 0.60;
-pub const METER_LINE_LIT: Color32 = NEUTRAL_900;
-pub const METER_LINE_LIT_ALPHA: f32 = 0.50;
+/// Meter rulers (operator feedback 4, Q11): a major tick for every label,
+/// a fainter minor tick between them, and the alignment level in white,
+/// all outside the bars.
+pub const METER_TICK: Color32 = NEUTRAL_400;
+pub const METER_TICK_MINOR_ALPHA: f32 = 0.60;
+pub const METER_ALIGNMENT_TICK: Color32 = Color32::WHITE;
 
 /// Waveform markers.
 pub const INTRO: Color32 = Color32::from_rgb(0x43, 0xb2, 0xe1);

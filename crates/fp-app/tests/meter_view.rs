@@ -11,8 +11,9 @@ mod support;
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::widgets::{
-    LineShade, METER_WIDTH, Zone, alignment_dbfs, loudness_line, mark_label, max_readout,
-    meter_layout, meter_position, reference_segments, scale_marks, zone_of,
+    MeterTick, Side, TickKind, Zone, alignment_dbfs, label_column, loudness_line, mark_label,
+    max_readout, meter_layout, meter_position, meter_width, minor_marks, scale_marks, scale_zero,
+    tick_colour, zone_of,
 };
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::PlayerTelemetry;
@@ -201,8 +202,14 @@ fn the_maximum_reads_with_one_decimal() {
 /// Label rows are this far apart at least (monospace 9 px text).
 const LABEL_ROW: f32 = 10.0;
 
+/// The rect of a default (digital) meter `height` tall.
 fn column(height: f32) -> egui::Rect {
-    egui::Rect::from_min_size(egui::pos2(100.0, 20.0), egui::vec2(METER_WIDTH, height))
+    column_for(&MeterConfig::default(), height)
+}
+
+/// The rect of meter `c`, `height` tall.
+fn column_for(c: &MeterConfig, height: f32) -> egui::Rect {
+    egui::Rect::from_min_size(egui::pos2(100.0, 20.0), egui::vec2(meter_width(c), height))
 }
 
 #[test]
@@ -211,7 +218,7 @@ fn labels_never_overlap_and_the_alignment_line_stays() {
         for height in [64.0, 136.0] {
             for loudness in [false, true] {
                 let c = meter(ballistics);
-                let l = meter_layout(column(height), &c, loudness);
+                let l = meter_layout(column_for(&c, height), &c, loudness);
                 let ys: Vec<f32> = l
                     .lines
                     .iter()
@@ -240,7 +247,7 @@ fn end_labels_stay_inside_the_rect_on_their_line() {
         for height in [64.0, 136.0, 300.0] {
             for loudness in [false, true] {
                 let c = meter(ballistics);
-                let rect = column(height);
+                let rect = column_for(&c, height);
                 let l = meter_layout(rect, &c, loudness);
                 for m in l.lines.iter().filter(|m| !m.label.is_empty()) {
                     let centre = m.label_centre();
@@ -265,24 +272,12 @@ fn end_labels_stay_inside_the_rect_on_their_line() {
     // Without the loudness line the bars end at the rect's bottom, so the
     // bottom label rests on its line instead of being centred over it.
     let c = meter(MeterBallistics::DigitalPeak);
-    let l = meter_layout(column(136.0), &c, false);
+    let l = meter_layout(column_for(&c, 136.0), &c, false);
     let bottom = l.lines.iter().find(|m| m.label == "-60").unwrap();
     assert_eq!(bottom.label_align, egui::Align::Max);
     // With room above and below, a label is centred on its line.
     let middle = l.lines.iter().find(|m| m.label == "-30").unwrap();
     assert_eq!(middle.label_align, egui::Align::Center);
-}
-
-#[test]
-fn lines_cross_both_bars_and_nothing_sits_between_them() {
-    let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
-    let [left, right] = l.bars;
-    assert!(left.right() < right.left(), "a gap between the channels");
-    assert!(l.lines_x.min <= left.left() && l.lines_x.max >= right.right());
-    assert!(l.labels_right <= left.left());
-    for m in &l.lines {
-        assert!(m.y >= left.top() && m.y <= left.bottom(), "{}", m.y);
-    }
 }
 
 #[test]
@@ -321,7 +316,7 @@ fn both_ends_of_every_scale_are_labelled() {
         for loudness in [false, true] {
             let c = meter(ballistics);
             let marks = scale_marks(&c);
-            let l = meter_layout(column(136.0), &c, loudness);
+            let l = meter_layout(column_for(&c, 136.0), &c, loudness);
             let labels: Vec<&str> = l.lines.iter().map(|m| m.label.as_str()).collect();
             for end in [marks.first().unwrap(), marks.last().unwrap()] {
                 let want = mark_label(*end, &c);
@@ -370,7 +365,7 @@ fn both_ends_stay_labelled_at_every_height() {
                         ..MeterConfig::default()
                     };
                     let marks = scale_marks(&c);
-                    let l = meter_layout(column(height), &c, loudness);
+                    let l = meter_layout(column_for(&c, height), &c, loudness);
                     let labelled: Vec<&str> = l
                         .lines
                         .iter()
@@ -418,7 +413,7 @@ fn an_end_that_is_the_alignment_level_stays_labelled() {
                         ..MeterConfig::default()
                     };
                     let marks = scale_marks(&c);
-                    let l = meter_layout(column(height), &c, loudness);
+                    let l = meter_layout(column_for(&c, height), &c, loudness);
                     let labelled: Vec<&str> = l
                         .lines
                         .iter()
@@ -447,14 +442,18 @@ fn an_end_that_is_the_alignment_level_stays_labelled() {
 
 #[test]
 fn a_tall_digital_meter_labels_its_main_marks() {
-    let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
+    let l = meter_layout(
+        column_for(&meter(MeterBallistics::DigitalPeak), 136.0),
+        &meter(MeterBallistics::DigitalPeak),
+        false,
+    );
     let labels: Vec<&str> = l.lines.iter().map(|m| m.label.as_str()).collect();
     for want in ["0", "-10", "-20", "-30", "-40", "-60"] {
         assert!(labels.contains(&want), "{labels:?}");
     }
     // A very tall meter labels every mark.
     let c = meter(MeterBallistics::DigitalPeak);
-    let tall = meter_layout(column(600.0), &c, false);
+    let tall = meter_layout(column_for(&c, 600.0), &c, false);
     assert_eq!(tall.lines.len(), scale_marks(&c).len() + 1);
     // The digital meter's alignment (−18 dBFS) is a heavier, unlabelled
     // line; the scale's round labels stay.
@@ -475,7 +474,7 @@ fn each_meter_labels_its_own_units() {
     assert_eq!(mark_label(vu.reference_dbfs + 3.0, &vu), "+3");
     let k = meter(MeterBallistics::K14);
     assert_eq!(mark_label(-14.0, &k), "0");
-    let layout = meter_layout(column(136.0), &k, false);
+    let layout = meter_layout(column_for(&k, 136.0), &k, false);
     let alignment = layout.lines.iter().find(|m| m.alignment).unwrap();
     assert_eq!(alignment.label, "0", "K-System names its alignment level");
     assert_eq!(layout.lines.iter().filter(|m| m.label == "0").count(), 1);
@@ -662,7 +661,7 @@ fn the_meter_and_fader_fill_the_height_they_are_given() {
     let meter = h.get_by_label("Level meter").rect();
     let fader = h.get_by_label("Volume").rect();
     assert_eq!(meter.height(), 120.0);
-    assert_eq!(meter.width(), METER_WIDTH);
+    assert_eq!(meter.width(), meter_width(&MeterConfig::default()));
     assert_eq!(fader.height(), 120.0);
     assert!(fader.left() >= meter.right());
 }
@@ -672,7 +671,11 @@ fn a_meter_too_short_to_draw_lays_out_without_panicking() {
     for ballistics in ALL_METERS {
         for height in [0.0, 1.0, 5.0, 12.0, 24.0] {
             for loudness in [false, true] {
-                let l = meter_layout(column(height), &meter(ballistics), loudness);
+                let l = meter_layout(
+                    column_for(&meter(ballistics), height),
+                    &meter(ballistics),
+                    loudness,
+                );
                 for m in &l.lines {
                     assert!(
                         m.y.is_finite() && m.label_centre().is_finite(),
@@ -682,23 +685,6 @@ fn a_meter_too_short_to_draw_lays_out_without_panicking() {
             }
         }
     }
-}
-
-/// The alignment level is two short notches at the outer edges of the
-/// bars, not a bright bar across the signal.
-#[test]
-fn the_alignment_level_is_two_notches_at_the_outer_edges() {
-    let c = MeterConfig::default();
-    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(METER_WIDTH, 120.0));
-    let l = meter_layout(rect, &c, false);
-    let a = l.lines.iter().find(|m| m.alignment).unwrap();
-    let [left, right] = l.alignment_notches;
-    for n in [left, right] {
-        assert!(n.width() <= 3.0 + f32::EPSILON, "{n:?}");
-        assert!((n.center().y - a.y).abs() < 0.5, "{n:?} {}", a.y);
-    }
-    assert!((left.left() - l.bars[0].left()).abs() < 0.5);
-    assert!((right.right() - l.bars[1].right()).abs() < 0.5);
 }
 
 /// Settings > Meters shows only what the chosen type uses (meters spec M3).
@@ -746,40 +732,573 @@ fn each_meter_type_shows_only_its_settings() {
     assert!(shown(&h, "Rise time") && shown(&h, "Scale floor"));
 }
 
+fn has(marks: &[f32], x: f32) -> bool {
+    marks.iter().any(|m| near(*m, x))
+}
+
+fn minors_between(marks: &[f32], low: f32, high: f32) -> usize {
+    marks
+        .iter()
+        .filter(|m| **m > low + 1e-3 && **m < high - 1e-3)
+        .count()
+}
+
 #[test]
-fn a_reference_line_is_cut_dark_over_the_lit_bar_and_light_over_the_rest() {
-    let l = meter_layout(column(136.0), &meter(MeterBallistics::DigitalPeak), false);
-    let y = 100.0;
-    // Left level above the line (lit there), right level below it.
-    let [left, gap, right] = reference_segments(&l, y, [80.0, 120.0]);
-    assert_eq!(left.1, LineShade::Lit);
-    assert_eq!(right.1, LineShade::Unlit);
-    assert_eq!(
-        gap.1,
-        LineShade::Unlit,
-        "the gap between the bars is never lit"
-    );
-    assert_eq!(left.0.x_range(), l.bars[0].x_range());
-    assert_eq!(right.0.x_range(), l.bars[1].x_range());
-    assert!(gap.0.left() >= l.bars[0].right() && gap.0.right() <= l.bars[1].left());
-    for (r, _) in [left, gap, right] {
-        assert!((r.center().y - y).abs() < 1e-3 && (r.height() - 1.0).abs() < 1e-3);
+fn the_meter_has_a_ruler_on_each_side_of_the_bars() {
+    for ballistics in ALL_METERS {
+        let c = meter(ballistics);
+        let rect = column_for(&c, 136.0);
+        let l = meter_layout(rect, &c, false);
+        let [left, right] = l.bars;
+        let [lr, rr] = &l.rulers;
+        assert_eq!((lr.side, rr.side), (Side::Left, Side::Right));
+        // The tick strips are flush with the bars, outside them.
+        assert!(near(lr.ticks.max, left.left()), "{ballistics:?}");
+        assert!(near(rr.ticks.min, right.right()), "{ballistics:?}");
+        // A clear gap between the ticks and the labels, so a label's minus
+        // never reads as part of a tick.
+        assert!(lr.labels_x + LABEL_TICK_GAP <= lr.ticks.min + 0.01);
+        assert!(rr.labels_x >= rr.ticks.max + LABEL_TICK_GAP - 0.01);
+        assert_eq!(lr.label_halign, egui::Align::Max);
+        assert_eq!(rr.label_halign, egui::Align::Min);
+        // The label columns fit in the meter's rect.
+        assert!(near(lr.labels_x - label_column(&c), rect.left()));
+        assert!(near(rr.labels_x + label_column(&c), rect.right()));
+        // The gap between the bars is unchanged and empty.
+        assert!(near(right.left() - left.right(), 2.0));
+    }
+    // Three-character labels on every scale but EBU, whose TEST is four.
+    assert_eq!(meter_width(&meter(MeterBallistics::DigitalPeak)), 74.0);
+    assert_eq!(meter_width(&meter(MeterBallistics::EbuPpm)), 84.0);
+}
+
+/// The clear gap (px) between a ruler's ticks and its labels: wide enough
+/// that a 4 px tick and a label's minus never read as a double dash.
+const LABEL_TICK_GAP: f32 = 3.0;
+
+/// Every label of every scale fits its ruler's label column, measured in
+/// the font it is drawn in (the column is sized from the widest label).
+#[test]
+fn every_label_fits_its_column() {
+    use std::cell::RefCell;
+    for c in ruled_scales() {
+        let widths: RefCell<Vec<(String, f32)>> = RefCell::new(Vec::new());
+        let mut h = egui_kittest::Harness::new_ui(|ui| {
+            *widths.borrow_mut() = scale_marks(&c)
+                .iter()
+                .map(|m| {
+                    let label = mark_label(*m, &c);
+                    let w = ui
+                        .painter()
+                        .layout_no_wrap(
+                            label.clone(),
+                            egui::FontId::monospace(8.0),
+                            egui::Color32::WHITE,
+                        )
+                        .size()
+                        .x;
+                    (label, w)
+                })
+                .collect();
+        });
+        h.run();
+        for (label, w) in widths.borrow().iter() {
+            assert!(
+                *w <= label_column(&c) + 0.01,
+                "{:?}: {label} is {w} px, the column {}",
+                c.ballistics,
+                label_column(&c)
+            );
+        }
     }
 }
 
 #[test]
-fn reference_segments_are_unlit_at_the_floor_and_lit_at_the_top() {
+fn every_labelled_mark_has_a_tick_on_both_rulers() {
+    for ballistics in ALL_METERS {
+        for height in [64.0, 136.0, 300.0] {
+            let l = meter_layout(
+                column_for(&meter(ballistics), height),
+                &meter(ballistics),
+                false,
+            );
+            for m in l.lines.iter().filter(|m| !m.label.is_empty()) {
+                let tick = l
+                    .ticks
+                    .iter()
+                    .find(|t| near(t.y, m.y) && t.kind != TickKind::Minor)
+                    .unwrap_or_else(|| panic!("{ballistics:?} {height}: no tick for {}", m.label));
+                let [lr, rr] = &l.rulers;
+                let (a, b) = (lr.tick_rect(tick), rr.tick_rect(tick));
+                assert!(near(a.center().y, tick.y) && near(b.center().y, tick.y));
+                assert!(near(a.width(), b.width()), "the rulers mirror each other");
+                assert!(near(a.right(), lr.ticks.max), "flush with the bar side");
+                assert!(near(b.left(), rr.ticks.min), "flush with the bar side");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_alignment_tick_is_thicker_and_unique() {
+    for ballistics in ALL_METERS {
+        let c = meter(ballistics);
+        let l = meter_layout(column_for(&c, 136.0), &c, false);
+        let alignment: Vec<&MeterTick> = l
+            .ticks
+            .iter()
+            .filter(|t| t.kind == TickKind::Alignment)
+            .collect();
+        assert_eq!(alignment.len(), 1, "{ballistics:?}");
+        let line = l.lines.iter().find(|m| m.alignment).unwrap();
+        assert!(near(alignment[0].y, line.y), "{ballistics:?}");
+        let [lr, rr] = &l.rulers;
+        let a = lr.tick_rect(alignment[0]);
+        let major = l.ticks.iter().find(|t| t.kind == TickKind::Major).unwrap();
+        let m = lr.tick_rect(major);
+        assert!(a.height() > m.height(), "{ballistics:?}: thicker");
+        assert!(a.width() >= m.width(), "{ballistics:?}");
+        assert!(rr.tick_rect(alignment[0]).height() > m.height());
+        // Never inside a bar (flush with its edge at most).
+        for bar in l.bars.map(|b| b.shrink(0.01)) {
+            assert!(!a.intersects(bar) && !rr.tick_rect(alignment[0]).intersects(bar));
+        }
+    }
+}
+
+#[test]
+fn minor_ticks_sit_between_the_marks_at_a_spacing_per_scale() {
+    // Digital: 1 dB from -20 up, 5 dB below it (spec Q11.4).
     let c = meter(MeterBallistics::DigitalPeak);
-    let l = meter_layout(column(136.0), &c, false);
-    let (top, bottom) = (l.bars[0].top(), l.bars[0].bottom());
-    for m in &l.lines {
-        // Silence: the level sits at the bottom of the bars.
-        let at_floor = reference_segments(&l, m.y, [bottom, bottom]);
-        assert_eq!(at_floor[0].1, LineShade::Unlit, "{}", m.label);
-        assert_eq!(at_floor[2].1, LineShade::Unlit, "{}", m.label);
-        // An over: the level is at (or past) the top.
-        let at_top = reference_segments(&l, m.y, [top, top - 50.0]);
-        assert_eq!(at_top[0].1, LineShade::Lit, "{}", m.label);
-        assert_eq!(at_top[2].1, LineShade::Lit, "{}", m.label);
+    let m = minor_marks(&c);
+    assert!(has(&m, -55.0) && has(&m, -45.0));
+    assert!(has(&m, -19.0) && has(&m, -16.0) && has(&m, -1.0));
+    assert!(!has(&m, -20.0) && !has(&m, -52.0), "never on a mark");
+    assert_eq!(minors_between(&m, -60.0, -20.0), 2);
+    assert_eq!(minors_between(&m, -20.0, 0.0), 16);
+    // EBU: every 1 dB, three between each pair of marks, six gaps.
+    let c = meter(MeterBallistics::EbuPpm);
+    assert_eq!(minor_marks(&c).len(), 18);
+    // DIN: 5 dB below -20 relative to its 0, 1 dB above.
+    let c = meter(MeterBallistics::DinPpm);
+    assert_eq!(minor_marks(&c).len(), 24);
+    // VU: 5 dB below -10, 1 dB to -3, 0.5 dB above.
+    let c = meter(MeterBallistics::Vu);
+    let m = minor_marks(&c);
+    assert_eq!(m.len(), 11);
+    assert!(has(&m, c.reference_dbfs - 2.5) && has(&m, c.reference_dbfs - 15.0));
+    // K-20 (0 at -20 dBFS): 1 dB between -24 and -20 relative to its 0.
+    let c = meter(MeterBallistics::K20);
+    let k = alignment_dbfs(&c);
+    let m = minor_marks(&c);
+    assert_eq!(minors_between(&m, k - 24.0, k - 20.0), 3);
+    assert!(has(&m, k - 55.0));
+}
+
+#[test]
+fn minor_marks_follow_a_custom_floor_and_reference() {
+    let mut c = meter(MeterBallistics::DigitalPeak);
+    c.floor_db = -57.0;
+    let m = minor_marks(&c);
+    assert!(has(&m, -55.0), "on the 5 dB grid, not 5 dB above the floor");
+    assert!(!has(&m, -52.0), "never off the grid");
+    assert!(!has(&m, -57.0), "the floor is a mark");
+    let mut c = meter(MeterBallistics::EbuPpm);
+    c.reference_dbfs = -20.0;
+    let m = minor_marks(&c);
+    assert!(has(&m, -20.0 + 1.0) && !has(&m, -20.0), "TEST is a mark");
+    assert_eq!(m.len(), 18);
+}
+
+#[test]
+fn ticks_stay_inside_the_rect_and_apart() {
+    for ballistics in ALL_METERS {
+        for height in [64.0, 136.0, 300.0] {
+            for loudness in [false, true] {
+                let c = meter(ballistics);
+                let rect = column_for(&c, height);
+                let l = meter_layout(rect, &c, loudness);
+                let bars = l.bars[0];
+                for (i, t) in l.ticks.iter().enumerate() {
+                    assert!(
+                        t.y >= bars.top() - 0.01 && t.y <= bars.bottom() + 0.01,
+                        "{ballistics:?} {height} {loudness}: {t:?} outside the bars' height"
+                    );
+                    for r in &l.rulers {
+                        assert!(rect.contains_rect(r.tick_rect(t)), "{t:?}");
+                    }
+                    if t.kind == TickKind::Minor {
+                        for (j, o) in l.ticks.iter().enumerate() {
+                            if i != j {
+                                assert!(
+                                    (o.y - t.y).abs() >= 3.0 - 0.01,
+                                    "{ballistics:?} {height} {loudness}: minor {t:?} next to {o:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+                let ys: Vec<f32> = l.ticks.iter().map(|t| t.y).collect();
+                assert!(ys.windows(2).all(|p| p[0] <= p[1]), "sorted by y");
+            }
+        }
+    }
+}
+
+#[test]
+fn crowded_marks_keep_a_minor_tick() {
+    // At 136 px some marks lose their label; every scale mark still has a
+    // tick.
+    for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::DinPpm] {
+        let c = meter(ballistics);
+        let l = meter_layout(column_for(&c, 136.0), &c, false);
+        let bars = l.bars[0];
+        for mark in scale_marks(&c) {
+            let y = bars.bottom() - meter_position(mark, &c) * bars.height();
+            assert!(
+                l.ticks.iter().any(|t| (t.y - y).abs() < 1.0),
+                "{ballistics:?}: no tick at {mark}"
+            );
+        }
+    }
+    let c = meter(MeterBallistics::DigitalPeak);
+    let small = meter_layout(column_for(&c, 64.0), &c, false);
+    let labelled = small.lines.iter().filter(|m| !m.label.is_empty()).count();
+    let majors = small
+        .ticks
+        .iter()
+        .filter(|t| t.kind == TickKind::Major)
+        .count();
+    assert!(majors <= labelled, "a major tick only for a label");
+}
+
+#[test]
+fn a_taller_meter_has_more_minor_ticks() {
+    let c = meter(MeterBallistics::DigitalPeak);
+    let count = |h: f32| {
+        meter_layout(column_for(&c, h), &c, false)
+            .ticks
+            .iter()
+            .filter(|t| t.kind == TickKind::Minor)
+            .count()
+    };
+    assert!(count(300.0) > count(64.0));
+}
+
+#[test]
+fn tick_colours_follow_the_kind() {
+    assert_eq!(tick_colour(TickKind::Major), fp_app::ui::theme::METER_TICK);
+    assert_eq!(
+        tick_colour(TickKind::Minor),
+        fp_app::ui::theme::METER_TICK.gamma_multiply(fp_app::ui::theme::METER_TICK_MINOR_ALPHA)
+    );
+    assert_eq!(tick_colour(TickKind::Alignment), egui::Color32::WHITE);
+}
+
+#[test]
+fn the_alignment_tick_is_white_on_both_rulers() {
+    // The digital meter's alignment level (-18 dBFS) has no label: its tick
+    // is still there, and white.
+    let l = meter_layout(
+        column_for(&meter(MeterBallistics::DigitalPeak), 136.0),
+        &meter(MeterBallistics::DigitalPeak),
+        false,
+    );
+    let a = l.lines.iter().find(|m| m.alignment).unwrap();
+    assert!(a.label.is_empty());
+    let tick = l
+        .ticks
+        .iter()
+        .find(|t| t.kind == TickKind::Alignment)
+        .unwrap();
+    assert_eq!(tick_colour(tick.kind), egui::Color32::WHITE);
+    for r in &l.rulers {
+        assert!(near(r.tick_rect(tick).center().y, a.y));
+    }
+}
+
+/// Whether `c` is `base` at some opacity (premultiplied, as
+/// `gamma_multiply` gives it).
+fn is_tint_of(c: egui::Color32, base: egui::Color32) -> bool {
+    if base.a() == 0 {
+        return false;
+    }
+    let tint = base.gamma_multiply(c.a() as f32 / base.a() as f32);
+    c.to_array()
+        .iter()
+        .zip(tint.to_array())
+        .all(|(a, b)| a.abs_diff(b) <= 2)
+}
+
+/// Whether `shape` is part of a bar's own content: a filled rect without a
+/// stroke, in the bar background or a zone colour at any opacity (the
+/// level, the K-System's dimmed peak, the hold).
+fn is_bar_content(shape: &egui::Shape) -> bool {
+    let egui::Shape::Rect(r) = shape else {
+        return false;
+    };
+    let allowed = [
+        fp_app::ui::theme::NEUTRAL_800,
+        fp_app::ui::theme::METER_NORMAL,
+        fp_app::ui::theme::METER_WARNING,
+        fp_app::ui::theme::METER_DANGER,
+    ];
+    r.stroke.is_empty() && allowed.iter().any(|base| is_tint_of(r.fill, *base))
+}
+
+/// Spec Q11.1: of everything `vu` paints, only the bars' own content (the
+/// background, the level, the hold and the zones) touches a bar, and nothing
+/// touches the gap between them.
+#[test]
+fn nothing_is_drawn_over_the_bars_or_between_them() {
+    use std::cell::RefCell;
+    for ballistics in ALL_METERS {
+        for loudness in [false, true] {
+            let c = MeterConfig {
+                loudness: if loudness {
+                    LoudnessReadout::Momentary
+                } else {
+                    LoudnessReadout::Off
+                },
+                ..meter(ballistics)
+            };
+            let seen: RefCell<Vec<egui::Shape>> = RefCell::new(Vec::new());
+            let bars: RefCell<[egui::Rect; 2]> = RefCell::new([egui::Rect::NOTHING; 2]);
+            let mut h = egui_kittest::Harness::new_ui(|ui| {
+                let labels = fp_app::ui::widgets::MeterLabels {
+                    meter: "Level meter".to_owned(),
+                    max: "Maximum".to_owned(),
+                    max_tip: String::new(),
+                };
+                let mut r = reading(-9.0, -3.0);
+                r.rms_db = [-14.0; 2];
+                r.max_db = -3.0;
+                r.momentary_lufs = Some(-23.0);
+                let layer = ui.layer_id();
+                let before = ui
+                    .ctx()
+                    .graphics_mut(|g| g.entry(layer).all_entries().len());
+                fp_app::ui::widgets::vu(ui, 136.0, &r, &c, &labels);
+                let rect = ui.min_rect();
+                let l = meter_layout(
+                    egui::Rect::from_min_size(rect.min, egui::vec2(meter_width(&c), 136.0)),
+                    &c,
+                    loudness,
+                );
+                *bars.borrow_mut() = l.bars;
+                *seen.borrow_mut() = ui.ctx().graphics_mut(|g| {
+                    g.entry(layer)
+                        .all_entries()
+                        .skip(before)
+                        .map(|s| s.shape.clone())
+                        .collect()
+                });
+            });
+            h.run();
+            let [left, right] = *bars.borrow();
+            let gap = egui::Rect::from_x_y_ranges(left.right()..=right.left(), left.y_range());
+            let shapes = seen.borrow();
+            assert!(!shapes.is_empty(), "{ballistics:?}: nothing painted");
+            for shape in shapes.iter() {
+                let s = shape.visual_bounding_rect();
+                assert!(
+                    !(gap.width() > 0.0 && s.width() > 0.0 && s.intersects(gap.shrink(0.01))),
+                    "{ballistics:?} {loudness}: {s:?} touches the gap {gap:?}"
+                );
+                for bar in [left, right] {
+                    if s.intersects(bar.shrink(0.01)) {
+                        assert!(
+                            bar.expand(0.01).contains_rect(s),
+                            "{ballistics:?} {loudness}: {s:?} crosses the edge of {bar:?}"
+                        );
+                        assert!(
+                            is_bar_content(shape),
+                            "{ballistics:?} {loudness}: {shape:?} is drawn over {bar:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The steps a ruler segment's minor ticks may take, in the scale's units.
+const LADDER: [f32; 6] = [0.5, 1.0, 2.0, 2.5, 5.0, 10.0];
+
+/// The multiples of `step` (in the scale's units, counted from `zero`)
+/// strictly between `lo` and `hi` dBFS.
+fn multiples(lo: f32, hi: f32, step: f32, zero: f32) -> Vec<f32> {
+    let mut out = Vec::new();
+    let mut k = ((lo - zero) / step).floor() as i32;
+    loop {
+        let v = zero + k as f32 * step;
+        if v >= hi - 0.01 {
+            return out;
+        }
+        if v > lo + 0.01 {
+            out.push(v);
+        }
+        k += 1;
+    }
+}
+
+fn is_mark(c: &MeterConfig, db: f32) -> bool {
+    (db - alignment_dbfs(c)).abs() < 0.01 || scale_marks(c).iter().any(|m| (m - db).abs() < 0.01)
+}
+
+/// The scales to rule: every meter, plus an odd digital floor and an EBU
+/// alignment level off the whole dB.
+fn ruled_scales() -> Vec<MeterConfig> {
+    let mut configs: Vec<MeterConfig> = ALL_METERS.iter().map(|b| meter(*b)).collect();
+    let mut odd = meter(MeterBallistics::DigitalPeak);
+    odd.floor_db = -57.0;
+    configs.push(odd);
+    let mut ebu = meter(MeterBallistics::EbuPpm);
+    ebu.reference_dbfs = -20.5;
+    configs.push(ebu);
+    configs
+}
+
+/// Spec Q11.4, as on a measuring ruler: between two ticks of the scale's
+/// marks, the minor ticks are every multiple of one step, evenly spaced, or
+/// none at all.
+#[test]
+fn minor_ticks_rule_each_segment_evenly() {
+    for c in ruled_scales() {
+        let zero = scale_zero(&c);
+        let heights = (40..=400)
+            .step_by(3)
+            .map(|h| h as f32)
+            .chain([120.0, 136.0]);
+        for height in heights {
+            for loudness in [false, true] {
+                let l = meter_layout(column_for(&c, height), &c, loudness);
+                let mut ticks = l.ticks.clone();
+                ticks.sort_by(|a, b| a.db.total_cmp(&b.db));
+                let bounds: Vec<f32> = ticks
+                    .iter()
+                    .filter(|t| t.kind != TickKind::Minor || is_mark(&c, t.db))
+                    .map(|t| t.db)
+                    .collect();
+                for pair in bounds.windows(2) {
+                    let (lo, hi) = (pair[0], pair[1]);
+                    let inside: Vec<f32> = ticks
+                        .iter()
+                        .filter(|t| t.db > lo + 0.01 && t.db < hi - 0.01)
+                        .map(|t| t.db)
+                        .collect();
+                    if inside.is_empty() {
+                        continue;
+                    }
+                    let regular = LADDER.iter().any(|s| {
+                        let m = multiples(lo, hi, *s, zero);
+                        m.len() == inside.len()
+                            && m.iter().zip(&inside).all(|(a, b)| (a - b).abs() < 0.01)
+                    });
+                    assert!(
+                        regular,
+                        "{:?} floor {} ref {} at {height} {loudness}: {inside:?} between {lo} and {hi}",
+                        c.ballistics, c.floor_db, c.reference_dbfs
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Where there is room, every step of the scale's own spacing is ruled.
+#[test]
+fn a_tall_meter_rules_every_step_of_its_scale() {
+    for c in ruled_scales() {
+        let l = meter_layout(column_for(&c, 1500.0), &c, false);
+        let mut minors: Vec<f32> = l
+            .ticks
+            .iter()
+            .filter(|t| t.kind == TickKind::Minor && !is_mark(&c, t.db))
+            .map(|t| t.db)
+            .collect();
+        minors.sort_by(f32::total_cmp);
+        let expected: Vec<f32> = minor_marks(&c)
+            .into_iter()
+            .filter(|m| (m - alignment_dbfs(&c)).abs() >= 0.01)
+            .collect();
+        assert_eq!(
+            minors.len(),
+            expected.len(),
+            "{:?}: {minors:?}",
+            c.ballistics
+        );
+        for (a, b) in minors.iter().zip(&expected) {
+            assert!((a - b).abs() < 0.01, "{:?}: {minors:?}", c.ballistics);
+        }
+    }
+}
+
+/// The two cases a review found: the top of the digital scale at a bar
+/// height of about 109 px kept −2 and −7 alone, and at 136 px dropped −1.
+#[test]
+fn the_top_of_the_digital_scale_is_ruled_evenly() {
+    let c = meter(MeterBallistics::DigitalPeak);
+    for height in [120.0, 136.0] {
+        let l = meter_layout(column_for(&c, height), &c, false);
+        for (lo, hi) in [(-10.0, -5.0), (-5.0, 0.0)] {
+            let mut inside: Vec<f32> = l
+                .ticks
+                .iter()
+                .filter(|t| t.db > lo + 0.01 && t.db < hi - 0.01)
+                .map(|t| t.db)
+                .collect();
+            inside.sort_by(f32::total_cmp);
+            let regular = LADDER.iter().any(|s| {
+                let m = multiples(lo, hi, *s, 0.0);
+                m.len() == inside.len() && m.iter().zip(&inside).all(|(a, b)| (a - b).abs() < 0.01)
+            });
+            assert!(regular, "{height}: {inside:?} between {lo} and {hi}");
+        }
+    }
+}
+
+/// Spec Q11.1 on the layout: no tick of any kind, on either ruler, and no
+/// label column touches a bar or the gap between them.
+#[test]
+fn the_rulers_keep_clear_of_the_bars_and_the_gap() {
+    for c in ruled_scales() {
+        for height in [64.0, 136.0, 300.0] {
+            for loudness in [false, true] {
+                let l = meter_layout(column_for(&c, height), &c, loudness);
+                let [left, right] = l.bars;
+                let gap = egui::Rect::from_x_y_ranges(left.right()..=right.left(), left.y_range());
+                let inner = [left, right, gap].map(|r| r.shrink(0.01));
+                let [lr, rr] = &l.rulers;
+                for ruler in [lr, rr] {
+                    for t in &l.ticks {
+                        let r = ruler.tick_rect(t);
+                        assert!(
+                            inner.iter().all(|b| !r.intersects(*b)),
+                            "{:?} {height} {loudness}: {t:?} at {r:?} on the {:?} ruler",
+                            c.ballistics,
+                            ruler.side
+                        );
+                    }
+                }
+                // The labels hang away from the bars, from anchors outside
+                // them.
+                let label_column = label_column(&c);
+                let labels = [
+                    (lr.labels_x - label_column)..=lr.labels_x,
+                    rr.labels_x..=(rr.labels_x + label_column),
+                ];
+                assert_eq!(lr.label_halign, egui::Align::Max);
+                assert_eq!(rr.label_halign, egui::Align::Min);
+                for x in labels {
+                    let column = egui::Rect::from_x_y_ranges(x, left.y_range());
+                    assert!(
+                        inner.iter().all(|b| !column.intersects(*b)),
+                        "{:?} {height} {loudness}: labels at {column:?}",
+                        c.ballistics
+                    );
+                }
+            }
+        }
     }
 }

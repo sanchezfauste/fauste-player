@@ -181,6 +181,8 @@
   - Both values are constants in `ui/theme.rs`. They are tuned with a
     screenshot and pinned by `tests/theme.rs`.
   - Superseded by operator feedback 4, Q11: nothing is drawn over the bars.
+    `reference_segments`, `LineShade`, the notches and the `METER_LINE_*`
+    constants no longer exist.
 - **As built.**
   - The digital scale's floor is a mark of its own (`scale_marks`), so a −55
     floor is labelled `-55`.

@@ -1,7 +1,7 @@
 # Operator Feedback 4 — Design Spec
 
 - **Date:** 2026-10-06
-- **Status:** Plans 1 to 3 implemented (Q6 not reproduced, see plan 2's "As built"); plans 4 and 5 not implemented.
+- **Status:** Plans 1 to 4 implemented (Q6 not reproduced, see plan 2's "As built"); plan 5 not implemented.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§3 rules,
   §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md) (M4 display),
   the [bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md) (B3 rate, B6
@@ -577,6 +577,11 @@ Rulings made while implementing:
 - **Docs and locales.** No strings. `docs/user/players.md` (meters),
   `docs/technical/ui.md`; the guide screenshots are refreshed with
   `scripts/site/screenshots.sh`.
+- **As built (plan 4).**
+  - `meter_layout` returns two `Ruler`s and the `ticks`. Per side: a label column as wide as the scale's widest label (`label_column`: 15 px for three characters, 20 px for EBU's `TEST`, at the monospace font's advance), a 3 px clear gap, so a label's minus never reads as part of a tick, and a 4 px tick strip flush with its bar. `meter_width` is 74 px on every scale but EBU (84 px); it was 52 px with one label column. `vu` paints only the bars' own content plus the rulers; `reference_segments`, `LineShade`, the notches and the `METER_LINE_*` constants are gone.
+  - Minor ticks are ruled like a measuring ruler. A scale mark that lost its label is a minor tick where it stays 3 px from the ticks above. Each segment between two of those ticks (labels, the alignment level, unlabelled marks) takes the finest step of a 0.5, 1, 2, 2.5, 5, 10 dB ladder that is not finer than the scale's own spacing and keeps every tick 3 px apart, and draws every multiple of that step in the scale's units strictly inside the segment, or nothing. The scale's own spacing (`minor_marks`, the finest ticks): digital and custom 5 dB below −20 dBFS and 1 dB above; EBU 1 dB; DIN 5 dB below −20 relative to its 0, then 1 dB; VU 5 dB below −10, 1 dB to −3, 0.5 dB above; K-System 5 dB below −24, then 1 dB. A custom floor of −57 dBFS gets its first minor tick at −55, not at −52.
+  - Ticks: major `NEUTRAL_400`, minor the same at 60 %, alignment white and 2 px thick (`METER_TICK`, `METER_TICK_MINOR_ALPHA`, `METER_ALIGNMENT_TICK`).
+  - The wider meter takes width from the transport row, so the countdown in a narrow player is smaller than before the rulers: measured with a 3:25 time in the harness, its height at windows 380, 420 and 460 px wide is 24, 26 and 39 px (30, 33 and 45 px with one label column). In the default layout (four players in 1920 × 1080) it keeps its full size, 46 px, which a test pins. `METER_COLUMN_GAP` (the gap between the transport grid and the meter column, `ui/player.rs`) went from 10 to 6 px, and `COUNTDOWN_MIN_SCALE` from 18/38 to 13/38, so a ten-hour countdown fits at the minimum width beside the widest meter, EBU's, at 13 px.
 
 ---
 

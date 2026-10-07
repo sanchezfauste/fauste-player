@@ -104,7 +104,7 @@ Pure geometry, with subtle invariants (crowding, spacing, edge clamping) and a c
   - `MeterLayout` gains `pub rulers: [Ruler; 2]` (left, right) and `pub ticks: Vec<MeterTick>` (sorted by `y`). The old fields `labels_right`, `lines_x`, `alignment_notches` stay for this task so `vu` still paints (Task 2 removes them).
   - `pub fn minor_marks(c: &MeterConfig) -> Vec<f32>`: the levels (dBFS, ascending) of the minor ticks, never on a scale mark.
 
-- [ ] **Step 1: Write the failing tests in `crates/fp-app/tests/meter_view.rs`**
+- [x] **Step 1: Write the failing tests in `crates/fp-app/tests/meter_view.rs`**
 
 Extend the `use fp_app::ui::widgets::{…}` list with `LABEL_COLUMN, MeterTick, Side, TickKind, minor_marks`. Append:
 
@@ -320,12 +320,12 @@ fn the_meter_with_its_rulers_fits_the_minimum_player_width() {
 
 (If `get_by_label("Volume")` is not the fader's accessible name, copy the label the existing test `the_meter_and_fader_fill_the_height_they_are_given` style uses in `main_screen.rs`: run `grep -n "fader" crates/fp-app/tests/main_screen.rs` and use the label found there.)
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test meter_view 2>&1 | tail -20`
 Expected: compile error, `no field rulers` / unresolved imports `Side`, `TickKind`, `minor_marks`, `MeterTick`, `LABEL_COLUMN`.
 
-- [ ] **Step 3: Write the implementation in `widgets.rs`**
+- [x] **Step 3: Write the implementation in `widgets.rs`**
 
 Replace the width constants (~L612) with:
 
@@ -541,17 +541,17 @@ In `meter_layout`: change `let bars_left = rect.left() + LABEL_COLUMN + LABEL_GA
 
 After `lines.sort_by(...)`, build `let ticks = ruler_ticks(&lines, c, top, bottom);` and put `rulers` and `ticks` in the returned `MeterLayout` (keep `labels_right: rect.left() + LABEL_COLUMN`, `lines_x`, `alignment_notches` as they are; `vu` still uses them until Task 2). Update the doc comment of `meter_layout`: "the labels and ticks of a ruler on each side of the two bars".
 
-- [ ] **Step 4: Run the layout tests**
+- [x] **Step 4: Run the layout tests**
 
 Run: `cargo test -p fp-app --test meter_view 2>&1 | tail -30`
 Expected: all new tests PASS. The old tests (`lines_cross_both_bars_and_nothing_sits_between_them`, notches, segments) still pass because the old fields are kept. If `minor_marks_follow_a_custom_floor_and_reference` fails on a float edge, check `while a + step * n < b - SAME_MARK_DB` accumulates `n` as a float count, not a repeated sum.
 
-- [ ] **Step 5: Run the 380 px tests and apply the ladder only if needed**
+- [x] **Step 5: Run the 380 px tests and apply the ladder only if needed**
 
 Run: `cargo test -p fp-app --test main_screen -- the_meter_with_its_rulers at_the_minimum_player_width an_hour_long_countdown 2>&1 | tail -20`
 Expected: PASS. If one of the two countdown tests fails (the meter column is 26 px wider), apply in `crates/fp-app/src/ui/player.rs` one rung at a time and re-run after each: (a) `const METER_COLUMN_GAP: f32 = 6.0;` (was 10.0, ~L420); (b) `const COUNTDOWN_MIN_SCALE: f32 = 16.0 / 38.0;` (~L425); (c) `pub const LABEL_COLUMN: f32 = 16.0;` in `widgets.rs` (then `METER_WIDTH` is 74 and `assert_eq!(METER_WIDTH, 78.0)` in the first test becomes `74.0`). Record the rung used in the commit body.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
@@ -586,7 +586,7 @@ Mechanical: switch the painter to the new layout, delete the old API and constan
 - Consumes: `MeterLayout::{rulers, ticks, lines, bars}`, `Ruler::tick_rect`, `TickKind` (Task 1).
 - Produces: `pub fn tick_colour(kind: TickKind) -> Color32` in `widgets.rs`; in `theme.rs`: `pub const METER_TICK: Color32 = NEUTRAL_400;`, `pub const METER_TICK_MINOR_ALPHA: f32 = 0.60;`, `pub const METER_ALIGNMENT_TICK: Color32 = Color32::WHITE;`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `crates/fp-app/tests/theme.rs` replace `the_meter_reference_lines_are_visible_over_both_parts_of_the_bar` with:
 
@@ -701,12 +701,12 @@ fn nothing_is_drawn_over_the_bars_or_between_them() {
 
 (`rms_db`, `max_db` and `lufs_momentary` are real `MeterReading` fields; run `grep -n "pub " crates/fp-engine/src/meter.rs | head -30` to confirm the exact names and `LoudnessReadout` variant names, and adjust the two lines that set them.)
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test meter_view nothing_is_drawn 2>&1 | tail -15` and `cargo test -p fp-app --test theme the_meter_ticks 2>&1 | tail -8`
 Expected: compile errors (`tick_colour`, `METER_TICK` not found). After adding only the constants and `tick_colour` (Step 3, first part), `nothing_is_drawn_over_the_bars_or_between_them` FAILS on the digital meter (the reference line across the gap).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `theme.rs`: replace the `METER_LINE_*` block with
 
@@ -756,12 +756,12 @@ In `vu`, replace everything from the comment "The scale: a faint reference line�
 
 Update the doc comment of `vu`: "the scale on a ruler on each side of the bars (labels, a tick for every label, minor ticks, a white alignment tick), a continuous bar per channel … the peak hold, … Nothing is drawn over the bars." Remove "reference lines across both bars". Remove the now-unused `level_y` binding only if the compiler says it is unused (it is still used by `column`).
 
-- [ ] **Step 4: Run all the affected tests**
+- [x] **Step 4: Run all the affected tests**
 
 Run: `cargo test -p fp-app --test meter_view --test theme 2>&1 | tail -15`
 Expected: PASS. Then `grep -rn "reference_segments\|LineShade\|METER_LINE\|alignment_notches\|lines_x\|labels_right" crates docs/technical docs/user` must print nothing except the historical plans and `docs/technical/audio-engine.md` (Task 3).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
@@ -792,11 +792,11 @@ fi
 - Check: `README.md` (the feature list and the roadmap mention the meter; no change expected)
 - Locales: no strings change, so `crates/fp-app/locales/en-US/main.ftl` and `es-ES/main.ftl` are not edited (state this in the commit body).
 
-- [ ] **Step 1: Check what is already in the tree**
+- [x] **Step 1: Check what is already in the tree**
 
 Run: `grep -n "rulers on both sides\|thicker white tick\|nothing is drawn over the bars" docs/superpowers/specs/2026-09-27-meters-design.md` (expect hits on lines 99, 110, 111) and `grep -n "Superseded by operator feedback 4" docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md` (expect line ~182). If a hit is missing, add the sentence from the Q11 "Spec lines that change" list of the feedback 4 spec to that file. Then `grep -rn "reference line\|notch" docs/user docs/technical README.md` lists every sentence still describing the old meter.
 
-- [ ] **Step 2: Rewrite the user guide**
+- [x] **Step 2: Rewrite the user guide**
 
 In `docs/user/players.md`, replace the sentence from "The scale is labelled on the left:" to "mark the alignment level (−18 dBFS)." with:
 
@@ -814,13 +814,13 @@ The scale is a ruler on each side of the
 
 Refresh the sentence under the heading image if it lists the meter as "meter" only (no change needed otherwise).
 
-- [ ] **Step 3: Rewrite the technical docs**
+- [x] **Step 3: Rewrite the technical docs**
 
 `docs/technical/ui.md` line 30: replace "The meter's geometry is the pure `meter_layout` (labels, lines, bars, readouts), unit-tested" with "The meter's geometry is the pure `meter_layout` (a `Ruler` per side, the `ticks`, the label lines, the bars and the readouts), unit-tested; nothing is painted over the bars (`tests/meter_view.rs` reads the painted shapes)".
 
 `docs/technical/audio-engine.md`: replace the sentence "…`widgets::reference_segments` says which pieces of a reference line lie over the lit part of a bar. The line colours and opacities are the `METER_LINE_*` constants in `ui/theme.rs`." with "…the scale is a ruler on each side of the bars (`MeterLayout::rulers`): a major tick for every label, minor ticks from `widgets::minor_marks` (a step per scale, kept 3 px apart) and a thicker white alignment tick (`MeterLayout::ticks`, painted with `widgets::tick_colour`). Nothing is drawn over the bars or between them. The tick colours are the `METER_TICK*` and `METER_ALIGNMENT_TICK` constants in `ui/theme.rs`."
 
-- [ ] **Step 4: Spec notes**
+- [x] **Step 4: Spec notes**
 
 In `2026-10-01-operator-feedback-2-design.md`, under the O13 "As built" bullet about `reference_segments`, append: "Removed by operator feedback 4, Q11: `reference_segments`, `LineShade`, the notches and the `METER_LINE_*` constants no longer exist."
 
@@ -835,7 +835,7 @@ In `2026-10-06-operator-feedback-4-design.md`, at the end of §5 (before the `--
 
 (If Task 1 needed a ladder rung, add one bullet naming it, with its measured effect.)
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `grep -rn "reference_segments\|METER_LINE\|alignment_notches" docs/user docs/technical crates` (expect nothing).
 
@@ -864,7 +864,7 @@ Checks the look visually in the real app (Xvfb) and refreshes the images that sh
 - Modify only if the look is wrong: the constants in `crates/fp-app/src/ui/widgets.rs` (`TICK_STRIP`, `MINOR_TICK_LEN`, `RULER_GAP`) and `crates/fp-app/src/ui/theme.rs` (`METER_TICK_MINOR_ALPHA`), with `tests/theme.rs` and `tests/meter_view.rs` updated to match.
 - Docs and locales: none beyond the images (no strings).
 
-- [ ] **Step 1: Take the screenshots**
+- [x] **Step 1: Take the screenshots**
 
 Needs `xvfb`, `xdotool`, ImageMagick, `ffmpeg`, `python3`, `curl` (CLAUDE.md, Testing notes). Run:
 
@@ -874,7 +874,7 @@ scripts/site/screenshots.sh 2>&1 | tail -30
 
 Expected: the script builds the release binary and the demo session, checks in the log that the null backend is in use, and writes `docs/images/main-screen.png` and every `docs/images/guide/*.png`. This takes several minutes; run it with a 10 minute timeout.
 
-- [ ] **Step 2: Look at the meter**
+- [x] **Step 2: Look at the meter**
 
 Open `docs/images/guide/player.png` and `docs/images/main-screen.png` with the Read tool (it shows images). Check, for the meter of every player:
 1. nothing crosses the two bars or the gap; the bars show only level, peak hold and zones;
@@ -885,11 +885,11 @@ Open `docs/images/guide/player.png` and `docs/images/main-screen.png` with the R
 
 If a point fails, fix the constant named in **Files** (for example `METER_TICK_MINOR_ALPHA` 0.60 to 0.75 when minor ticks vanish on the dark background), update the test that pins it, rerun `cargo test -p fp-app --test theme --test meter_view`, and rerun Step 1 (`scripts/site/screenshots.sh --only main` is enough for the main image; the full run refreshes the guide image).
 
-- [ ] **Step 3: Keep only the images that changed because of the meter**
+- [x] **Step 3: Keep only the images that changed because of the meter**
 
 Run: `git status --short docs/images`. Expected: `main-screen.png` and `guide/player.png` modified. Any other PNG that shows no meter (settings, tag editor, about, track menu, cart wall, CUE window) is regenerated byte-different only by noise: restore each with `git checkout -- <path>`. `docs/images/guide/settings-meters.png` shows the Settings view, not the meter: restore it too unless Settings changed.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \

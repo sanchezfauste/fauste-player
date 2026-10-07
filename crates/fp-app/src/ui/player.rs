@@ -414,14 +414,18 @@ fn cover(
     }
 }
 
-/// Width of the meter and fader column, and its gap to the left part.
-const METER_COLUMN_WIDTH: f32 = widgets::METER_WIDTH + 6.0 + widgets::FADER_WIDTH;
-const METER_COLUMN_GAP: f32 = 10.0;
+/// Width of the meter and fader column for meter `c`.
+fn meter_column_width(c: &fp_model::MeterConfig) -> f32 {
+    widgets::meter_width(c) + 6.0 + widgets::FADER_WIDTH
+}
+/// Gap between the left part and the meter and fader column.
+const METER_COLUMN_GAP: f32 = 6.0;
 /// Vertical gap between the info row and the transport.
 const ROW_GAP: f32 = 8.0;
-/// The countdown shrinks to fit down to this share of its size (38 → 18 px:
-/// an hour-long time in a player at its minimum width).
-const COUNTDOWN_MIN_SCALE: f32 = 18.0 / 38.0;
+/// The countdown shrinks to fit down to this share of its size (38 → 13 px:
+/// a ten-hour time in a player at its minimum width, beside the widest
+/// meter, EBU's, with its two rulers).
+const COUNTDOWN_MIN_SCALE: f32 = 13.0 / 38.0;
 
 /// The info row and the transport on the left, the meter and fader column
 /// on the right spanning both (feedback spec §3.2).
@@ -435,7 +439,7 @@ fn top_block(
 ) {
     let height = PLAY_SIZE * 2.0 + ROW_GAP;
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-    let split = (rect.right() - METER_COLUMN_WIDTH).max(rect.left());
+    let split = (rect.right() - meter_column_width(&scene.state.config.meter)).max(rect.left());
     let left = Rect::from_min_max(
         rect.min,
         pos2((split - METER_COLUMN_GAP).max(rect.left()), rect.bottom()),
