@@ -973,7 +973,14 @@ fn bit_perfect(
             egui::ComboBox::from_id_salt(("dsd-mode", &device.backend, &device.device))
                 .selected_text(dsd_mode_label(t, current))
                 .show_ui(ui, |ui| {
-                    for mode in offered_dsd_modes(info, std::env::consts::OS, current) {
+                    let caps = fp_model::DsdCaps {
+                        // Only bit-perfect devices reach this row until Q3.
+                        bit_perfect: true,
+                        exclusive_capable: info.is_some_and(|d| d.exclusive_capable),
+                        native_dsd: info.is_some_and(|d| d.native_dsd),
+                        linux: std::env::consts::OS == "linux",
+                    };
+                    for mode in fp_model::offered_dsd_modes(caps, current) {
                         if ui
                             .selectable_label(mode == current, dsd_mode_label(t, mode))
                             .clicked()
@@ -1028,28 +1035,6 @@ fn bit_perfect(
                 }
             });
     });
-}
-
-/// The DSD modes a bit-perfect device can be given: PCM always, DoP when the
-/// device can be opened exclusively, native DSD on Linux when it reports a
-/// DSD format; the configured mode stays listed so it can be changed back.
-fn offered_dsd_modes(info: Option<&DeviceInfo>, os: &str, configured: DsdOutput) -> Vec<DsdOutput> {
-    let mut modes = vec![DsdOutput::Pcm];
-    if info.is_some_and(|d| d.exclusive_capable) {
-        modes.push(DsdOutput::Dop);
-    }
-    if os == "linux" && info.is_some_and(|d| d.native_dsd) {
-        modes.push(DsdOutput::Native);
-    }
-    if !modes.contains(&configured) {
-        modes.push(configured);
-        modes.sort_by_key(|m| match m {
-            DsdOutput::Pcm => 0,
-            DsdOutput::Dop => 1,
-            DsdOutput::Native => 2,
-        });
-    }
-    modes
 }
 
 fn dsd_mode_label(t: &crate::i18n::I18n, mode: DsdOutput) -> String {
@@ -1897,51 +1882,6 @@ fn pick_folder(scene: &Scene<'_>) -> Option<Receiver<Option<PathBuf>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn info(exclusive: bool, native: bool) -> DeviceInfo {
-        DeviceInfo {
-            id: fp_backends::DeviceId("hw:0".into()),
-            name: "DAC".into(),
-            detail: None,
-            channels: 2,
-            sample_rates: vec![(44_100, 768_000)],
-            buffer_frames: None,
-            exclusive_capable: exclusive,
-            rate_switching: exclusive,
-            native_dsd: native,
-        }
-    }
-
-    #[test]
-    fn only_the_modes_the_device_can_take_are_offered() {
-        use fp_model::DsdOutput::{Dop, Native, Pcm};
-        assert_eq!(
-            offered_dsd_modes(Some(&info(true, true)), "linux", Pcm),
-            vec![Pcm, Dop, Native]
-        );
-        assert_eq!(
-            offered_dsd_modes(Some(&info(true, true)), "windows", Pcm),
-            vec![Pcm, Dop]
-        );
-        assert_eq!(
-            offered_dsd_modes(Some(&info(true, false)), "linux", Pcm),
-            vec![Pcm, Dop]
-        );
-        assert_eq!(
-            offered_dsd_modes(Some(&info(false, false)), "linux", Pcm),
-            vec![Pcm]
-        );
-        assert_eq!(
-            offered_dsd_modes(None, "linux", Pcm),
-            vec![Pcm],
-            "unplugged"
-        );
-        assert_eq!(
-            offered_dsd_modes(None, "linux", Native),
-            vec![Pcm, Native],
-            "a configured mode stays visible so it can be changed back"
-        );
-    }
 
     #[test]
     fn the_window_has_one_size_clamped_to_the_screen() {

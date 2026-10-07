@@ -8,6 +8,7 @@ pub mod cartwall;
 pub mod columns;
 pub mod command;
 pub mod config;
+pub mod device_offer;
 pub mod dsd;
 mod entry_notice;
 pub mod error;
@@ -47,6 +48,9 @@ pub use config::{
     DeviceOverride, Limits, LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings,
     OutputDevice, OutputsConfig, OutputsView, PlayerRoutes, PlayersConfig, Route,
     SAMPLE_RATE_RANGE, Tuning, UiConfig,
+};
+pub use device_offer::{
+    DsdCaps, DsdNotOffered, dsd_not_offered, offered_buffers, offered_dsd_modes, offered_rates,
 };
 pub use dsd::{
     BpBadge, DEFAULT_DSD_SILENCE_MS, DSD_WORD_BITS, DsdDevice, DsdFacts, DsdFallback, DsdMix,

@@ -718,7 +718,7 @@ fi
   - `pub fn offered_rates(reported: &[(u32, u32)], candidates: &[u32], current: Option<u32>) -> Vec<u32>`.
   - `pub fn offered_buffers(reported: Option<(u32, u32)>, candidates: &[u32], current: Option<u32>) -> Vec<u32>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/fp-model/tests/device_offer.rs` (new file):
 
@@ -832,12 +832,12 @@ fn only_the_buffers_the_device_reports_are_offered() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-model --test device_offer`
 Expected: FAIL to compile with "unresolved imports `fp_model::DsdCaps`, …".
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/fp-model/src/device_offer.rs` (new file):
 
@@ -946,7 +946,7 @@ pub use device_offer::{
 };
 ```
 
-- [ ] **Step 4: Use it in the UI and drop the UI copy**
+- [x] **Step 4: Use it in the UI and drop the UI copy**
 
 In `crates/fp-app/src/ui/settings.rs`, inside `bit_perfect()`, replace `for mode in offered_dsd_modes(info, std::env::consts::OS, current) {` (L957) with:
 
@@ -968,12 +968,12 @@ Then:
 
 The test moved to `fp-model` (Step 1).
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-model --test device_offer && cargo test -p fp-app --lib settings && cargo test -p fp-app --test settings dsd`
 Expected: PASS (the existing DSD kittests still pass: the bit-perfect `dac` offers Convert to PCM and DoP).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/fp-model/src/device_offer.rs crates/fp-model/src/lib.rs crates/fp-model/tests/device_offer.rs \
