@@ -30,6 +30,15 @@
         return new URL(page + window.location.hash, base).href;
     }
 
+    // The links that carry the current #anchor; refreshed when it changes.
+    var anchored = [];
+
+    function refresh() {
+        anchored.forEach(function (item) {
+            item.link.href = href(item.lang);
+        });
+    }
+
     function languageMenu() {
         var bar = document.querySelector("#mdbook-menu-bar .right-buttons");
         if (!bar || data.languages.length < 2) {
@@ -61,6 +70,7 @@
             var link = document.createElement("a");
             link.setAttribute("role", "menuitem");
             link.href = href(lang);
+            anchored.push({ link: link, lang: lang });
             link.lang = lang.code;
             link.hreflang = lang.code;
             link.textContent = lang.name;
@@ -109,6 +119,7 @@
         var link = document.createElement("a");
         link.href = href(english);
         link.hreflang = "en";
+        anchored.push({ link: link, lang: english });
         link.textContent = data.notice.link;
         box.appendChild(link);
         main.insertBefore(box, main.firstChild);
@@ -116,4 +127,5 @@
 
     languageMenu();
     notice();
+    window.addEventListener("hashchange", refresh);
 })();

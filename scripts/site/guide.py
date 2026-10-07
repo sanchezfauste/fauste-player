@@ -4,7 +4,7 @@
 The English guide in docs/user is the only source. Each translation lives in
 docs/i18n/<lang>/ with the same file names and SUMMARY entries, plus
 translation.toml, which records the English commit it was translated from and
-the strings of the AI-translation notice (see docs/technical/site.md).
+the strings of the AI-translation notice (see docs/technical/release-process.md).
 
     guide.py build <mdbook> <out-dir>   English book in <out-dir>, each
                                         translation in <out-dir>/<lang>
@@ -158,6 +158,28 @@ def source_at(commit):
     return out
 
 
+def shallow():
+    """True when the clone is shallow or git cannot say."""
+    return git("rev-parse", "--is-shallow-repository") != "false\n"
+
+
+def hyphen_problems(where, name, text):
+    """Lines of a translated page that end in a letter and a hyphen.
+
+    A line-end hyphen in a compound renders as "word- word" (the line break
+    becomes a space), so compounds must not be split across lines.
+    """
+    out = []
+    fence = False
+    for i, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+        elif not fence and re.search(r"[^\W\d_]-$", line):
+            out.append(f"{where}/{name}:{i}: line ends in a hyphen "
+                       "(it renders with a space; keep the compound on one line)")
+    return out
+
+
 def check(site):
     problems = []
     langs = languages()
@@ -187,11 +209,16 @@ def check(site):
         # English pages added later fall back to the start page in the
         # language menu until the next regeneration.
         source = source_at(commit)
+        if source is None and not shallow() and git("cat-file", "-e", f"{commit}^{{commit}}") is None:
+            problems.append(f"{where}/{META}: source-commit {commit[:7]} does not exist")
+            continue
         if source is None:
             print(f"guide.py: {where}: no git history for {commit[:7]}; "
                   "comparing with the current docs/user", file=sys.stderr)
             source = {n: read(os.path.join(SOURCE, n))
                       for n in os.listdir(SOURCE) if n.endswith(".md")}
+        elif git("cat-file", "-e", f"{commit}^{{commit}}") is None:
+            problems.append(f"{where}/{META}: source-commit {commit[:7]} does not exist")
         elif git("merge-base", "--is-ancestor", commit, "HEAD") is None:
             problems.append(f"{where}/{META}: source-commit {commit[:7]} is not an ancestor of HEAD")
 
@@ -200,6 +227,10 @@ def check(site):
             problems.append(f"{where}: missing {n}")
         for n in sorted(files - set(source)):
             problems.append(f"{where}: {n} is not in the English guide at {commit[:7]}")
+
+        for n in sorted(files):
+            if n.endswith(".md"):
+                problems.extend(hyphen_problems(where, n, read(os.path.join(I18N, lang, n))))
 
         summary = os.path.join(I18N, lang, "SUMMARY.md")
         if "SUMMARY.md" in source and os.path.isfile(summary):
