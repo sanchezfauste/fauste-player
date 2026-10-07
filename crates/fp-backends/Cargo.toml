@@ -36,7 +36,7 @@ audio_thread_priority = "0.35.1"
 
 # Exclusive modes (Phase 4 plan 2), through safe APIs only.
 [target.'cfg(windows)'.dependencies]
-wasapi = "0.24.0"
+wasapi = "0.25.0"
 audio_thread_priority = { version = "0.35.1", default-features = false }
 crossbeam-channel.workspace = true
 
