@@ -291,6 +291,13 @@ fn a_typed_cart_name_is_kept_when_another_cart_is_selected() {
     assert_eq!(fake.state.load().cartwall.pages[0].carts[0].name, "Typed");
 }
 
+fn dac() -> fp_model::OutputDevice {
+    fp_model::OutputDevice {
+        backend: "offline".into(),
+        device: "dac".into(),
+    }
+}
+
 /// Player 1 plays on `dac` (exclusive-capable) and pre-listens on
 /// `speakers` (shared); Settings is open on Audio outputs.
 fn outputs() -> (
@@ -306,12 +313,35 @@ fn outputs_with(
     egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
     Arc<support::Fake>,
 ) {
-    outputs_routed(bit_perfect, "speakers", None)
+    outputs_in(fp_model::OutputsView::Advanced, bit_perfect)
+}
+
+/// `outputs_with` in the given view.
+fn outputs_in(
+    view: fp_model::OutputsView,
+    bit_perfect: Vec<fp_model::OutputDevice>,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
+    outputs_view_routed(view, bit_perfect, "speakers", None)
 }
 
 /// The Audio outputs tab with player 1's Main on `dac` and its Cue on
 /// `cue`, and the cartwall's `(main, cue)` devices when given.
 fn outputs_routed(
+    bit_perfect: Vec<fp_model::OutputDevice>,
+    cue: &str,
+    cartwall: Option<(&str, &str)>,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
+    outputs_view_routed(fp_model::OutputsView::Advanced, bit_perfect, cue, cartwall)
+}
+
+fn outputs_view_routed(
+    view: fp_model::OutputsView,
     bit_perfect: Vec<fp_model::OutputDevice>,
     cue: &str,
     cartwall: Option<(&str, &str)>,
@@ -328,6 +358,7 @@ fn outputs_routed(
         device: device.into(),
         first_channel: 0,
     };
+    s.config.ui.outputs_view = view;
     s.config.outputs.backend = Some("offline".into());
     s.config.outputs.bit_perfect = bit_perfect;
     s.config.outputs.routes = vec![PlayerRoutes {
@@ -347,16 +378,15 @@ fn outputs_routed(
     h.run_steps(2);
     h.get_by_role_and_label(Role::Button, "Audio outputs")
         .click();
-    // Devices are listed by a helper thread.
+    // Devices are listed by a helper thread; the routes show once they are.
     for _ in 0..200 {
         h.run_steps(1);
-        if h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
-            .is_some()
-        {
+        if h.query_all_by_label("Test Main").next().is_some() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
+    h.run_steps(2);
     (h, fake)
 }
 
@@ -511,13 +541,6 @@ fn the_cue_markers_toggle_updates_the_config() {
     );
 }
 
-fn dac() -> fp_model::OutputDevice {
-    fp_model::OutputDevice {
-        backend: "offline".into(),
-        device: "dac".into(),
-    }
-}
-
 #[test]
 fn a_bit_perfect_device_offers_its_dsd_modes_and_the_choice_updates_the_config() {
     let (mut h, fake) = outputs_with(vec![dac()]);
@@ -558,6 +581,66 @@ fn the_dsd_mix_choice_updates_the_config() {
     h.run_steps(2);
     let c = fake.state.load().config.clone();
     assert_eq!(c.outputs.dsd_mix, fp_model::DsdMix::HoldOthers);
+}
+
+#[test]
+fn the_basic_view_hides_the_device_rows() {
+    let (h, _) = outputs_in(fp_model::OutputsView::Basic, vec![dac()]);
+    assert!(
+        h.query_by_role_and_label(Role::RadioButton, "Basic")
+            .is_some()
+    );
+    assert!(
+        h.query_by_value("48000 Hz").is_some(),
+        "the global rate stays"
+    );
+    assert!(h.query_by_value("512").is_some(), "the global buffer stays");
+    assert!(
+        h.query_all_by_label("Test Main").next().is_some(),
+        "the routes stay"
+    );
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+            .is_none()
+    );
+    assert!(h.query_by_value("Continue the DSD track as PCM").is_none());
+}
+
+#[test]
+fn switching_views_changes_only_the_view() {
+    let (mut h, fake) = outputs_with(vec![dac()]);
+    let before = fake.state.load().config.clone();
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+            .is_some()
+    );
+    h.get_by_role_and_label(Role::RadioButton, "Basic").click();
+    h.run_steps(2);
+    let basic = fake.state.load().config.clone();
+    assert_eq!(basic.ui.outputs_view, fp_model::OutputsView::Basic);
+    assert_eq!(basic.outputs, before.outputs, "no output setting changes");
+    assert!(fp_model::restart_pending(&before, &basic).is_empty());
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+            .is_none()
+    );
+    h.get_by_role_and_label(Role::RadioButton, "Advanced")
+        .click();
+    h.run_steps(2);
+    assert_eq!(fake.state.load().config, before);
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
+            .is_some()
+    );
+}
+
+#[test]
+fn the_basic_view_says_when_advanced_settings_are_in_use() {
+    let note = "Some devices have advanced settings";
+    let (h, _) = outputs_in(fp_model::OutputsView::Basic, Vec::new());
+    assert!(h.query_by_label_contains(note).is_none());
+    let (h, _) = outputs_in(fp_model::OutputsView::Basic, vec![dac()]);
+    assert!(h.query_by_label_contains(note).is_some());
 }
 
 const CUE_EQUALS_MAIN: &str = "The Cue output is the same as the Main output";

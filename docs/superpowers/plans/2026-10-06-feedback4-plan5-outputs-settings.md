@@ -1404,7 +1404,7 @@ fi
   - in `settings.rs`, `pub(super) fn caption(ui: &mut Ui, text: &str)` and `pub(super) fn note(ui: &mut Ui, text: &str, color: Color32)`;
   - in the tests, `outputs_in(view: OutputsView, bit_perfect: Vec<OutputDevice>)`.
 
-- [ ] **Step 1: Write the failing kittests**
+- [x] **Step 1: Write the failing kittests**
 
 In `crates/fp-app/tests/settings.rs`, replace `outputs_with` (L303–342) with:
 
@@ -1524,12 +1524,12 @@ fn the_basic_view_says_when_advanced_settings_are_in_use() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test settings view`
 Expected: FAIL to compile with "no field `outputs_view` on type `UiConfig`" only if Task 1 is missing. With Task 1 in place, the three tests fail at run time: `the_basic_view_hides_the_device_rows` with "assertion failed: h.query_by_role_and_label(Role::RadioButton, \"Basic\").is_some()".
 
-- [ ] **Step 3: Add the strings**
+- [x] **Step 3: Add the strings**
 
 In `crates/fp-app/locales/en-US/main.ftl`, replace the two lines `settings-bit-perfect = …` and `settings-bit-perfect-none = …` (L211 and L213) with:
 
@@ -1555,7 +1555,7 @@ settings-devices-none = Elige arriba un dispositivo para un reproductor o la car
 
 `settings-bit-perfect-hint` stays.
 
-- [ ] **Step 4: Add the helpers and the selector**
+- [x] **Step 4: Add the helpers and the selector**
 
 In `crates/fp-app/src/ui/settings.rs`:
 - add `OutputsView` to the `use fp_model::{…}` list;
@@ -1639,7 +1639,7 @@ At the end of `outputs()`, replace `let chosen = chosen_devices(config);` (L817)
 
 Replace the routes caption at L764–772 (`ui.add(egui::Label::new(RichText::new(t.tr("settings-player-routes").to_uppercase()) …))`) with `caption(ui, &t.tr("settings-player-routes"));`.
 
-- [ ] **Step 5: Move the device rows to `devices.rs`**
+- [x] **Step 5: Move the device rows to `devices.rs`**
 
 Create `crates/fp-app/src/ui/settings/devices.rs`:
 
@@ -1714,12 +1714,12 @@ fn dsd_settings(ui: &mut Ui, scene: &Scene<'_>) {
 
 Also move `dsd_mode_label` (old L1035–1041) into `devices.rs` unchanged; nothing else uses it. Delete `chosen_devices` (`OutputsConfig::routed_devices` replaces it) and `bit_perfect()` from `settings.rs`.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test settings && cargo test -p fp-app --test i18n`
 Expected: PASS. That includes the existing bit-perfect and DSD kittests, which now open in Advanced through `outputs_with`, and `both_locales_define_the_same_keys`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add crates/fp-app/src/ui/settings.rs crates/fp-app/src/ui/settings/devices.rs \
