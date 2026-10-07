@@ -600,7 +600,7 @@
 2. **Plan 2 — Play before analysis, start point, CUE follow** (Q1, Q8, Q6).
    Model first: `SetDuration` and `pending_start` with one reducer test per
    rule, then the view and the UI; Q6 starts with the failing kittest.
-   `…-feedback4-plan2-start-point.md`.
+   `…-feedback4-plan2-play-before-analysis.md`.
 3. **Plan 3 — Shared waveform panel** (Q7). After plan 2. Extract
    `wave_panel.rs` with the player as its only caller and its tests green,
    then key the view state by `WaveKey`, then move the CUE window onto it.
