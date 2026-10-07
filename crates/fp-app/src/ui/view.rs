@@ -113,7 +113,7 @@ pub struct CueWindowView {
     pub paused: bool,
     /// The position as a fraction of the file, for the waveform.
     pub position: Option<f32>,
-    /// "Load as next" has something to do: the cued entry is not
+    /// "Set as next" has something to do: the cued entry is not
     /// already the explicit next (the entry on air can be, O37).
     pub can_load_next: bool,
 }
@@ -154,11 +154,15 @@ pub fn cue_window_view(
 /// Feedback 2 spec O17: while `player`'s CUE runs, a single click on a row
 /// moves it to that entry. `Some(entry)` when the CUE is on another entry
 /// and `clicked` can be played; `None` for no CUE, the entry already cued,
-/// or a file that is missing or unreadable. Selection is UI state, so this
-/// decision is here and the move itself is the model's `CueEntry`.
+/// a file that is missing or unreadable, or a player without a Cue output
+/// apart from Main (spec §4.6). Selection is UI state, so this decision is
+/// here and the move itself is the model's `CueEntry`.
 pub fn cue_follow_target(state: &AppState, player: PlayerId, clicked: EntryId) -> Option<EntryId> {
     let cue = state.player(player).ok()?.cue?;
-    (cue.entry != clicked && state.playable_request(clicked).is_some()).then_some(clicked)
+    (cue.entry != clicked
+        && state.config.outputs.player_has_cue(player)
+        && state.playable_request(clicked).is_some())
+    .then_some(clicked)
 }
 
 /// Everything a player column shows. `position` comes from the engine;

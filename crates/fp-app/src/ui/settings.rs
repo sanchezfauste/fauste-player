@@ -810,6 +810,9 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                     backend_id.as_deref(),
                     &devices,
                 );
+                if config.outputs.player_cue_equals_main(player.id) {
+                    cue_equals_main_note(ui, scene);
+                }
             });
         });
     }
@@ -835,9 +838,26 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 backend_id.as_deref(),
                 &devices,
             );
+            if config.outputs.cartwall_cue_equals_main() {
+                cue_equals_main_note(ui, scene);
+            }
         });
     });
     bit_perfect(ui, scene, &backends, &chosen);
+}
+
+/// Spec §4.6: a Cue route equal to Main is refused by the engine (a
+/// pre-listen must never go on air), so the CUE is not available; say so where
+/// the route is chosen.
+fn cue_equals_main_note(ui: &mut Ui, scene: &Scene<'_>) {
+    ui.add(
+        egui::Label::new(
+            RichText::new(scene.i18n.tr("settings-cue-equals-main"))
+                .font(font(11.0))
+                .color(theme::AMBER_TEXT),
+        )
+        .wrap(),
+    );
 }
 
 /// The devices routes name explicitly, each once, in route order.

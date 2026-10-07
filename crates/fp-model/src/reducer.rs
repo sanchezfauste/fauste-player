@@ -835,6 +835,11 @@ fn cue_entry(
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
+    // Spec §4.6: without a Cue output apart from Main nothing could be
+    // heard (the engine never pre-listens on air), so no CUE starts.
+    if !state.config.outputs.player_has_cue(id) {
+        return Ok(());
+    }
     let request = state
         .request_from_cue_in(entry)
         .ok_or(ModelError::UnknownEntry(entry))?;

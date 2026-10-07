@@ -97,6 +97,7 @@ impl RemoteControl for FakeControl {
 /// empty playlist "Night"; one cart page with a cart holding the first track.
 pub fn demo_state() -> AppState {
     let mut s = AppState::new(Config::default(), "Main");
+    give_cue_routes(&mut s);
     let main = s.playlists.first_id().unwrap();
     fp_model::apply(
         &mut s,
@@ -134,4 +135,24 @@ pub fn demo_state() -> AppState {
         t.artist = "Artist".into();
     }
     s
+}
+
+/// A Cue output (headphones) for every player and the cartwall, with Main on
+/// the default output: a CUE needs a Cue output apart from Main (spec §4.6).
+pub fn give_cue_routes(state: &mut AppState) {
+    let phones = fp_model::Route {
+        backend: "null".to_owned(),
+        device: "phones".to_owned(),
+        first_channel: 0,
+    };
+    state.config.outputs.routes = state
+        .players
+        .iter()
+        .map(|p| fp_model::PlayerRoutes {
+            player: p.id,
+            main: None,
+            cue: Some(phones.clone()),
+        })
+        .collect();
+    state.config.outputs.cartwall.cue = Some(phones);
 }

@@ -48,7 +48,10 @@ Each frame, `AppUi::ui`:
    whose command `fp_model::command_available` rejects (R28) is dropped;
 4. draws the screen and sends `Command`s through `ctl.send`. Transport
    buttons take `enabled` from `fp_model::availability`, so unavailable ones
-   are dimmed and inert;
+   are dimmed and inert. A CUE dimmed for want of a Cue output apart from
+   Main (`OutputsConfig::player_has_cue`) takes `tip-cue-no-output` as its
+   tooltip, and the row and cart menus' *Pre-listen on CUE* items say the
+   same when disabled;
 5. requests a repaint: continuously while anything plays, fades or cues,
    otherwise every 100 ms for the clock.
 
@@ -223,7 +226,7 @@ shield report no pan.
 position fraction and `can_load_next`). Its waveform, seek range and
 remaining time run to the end of the file, because a CUE plays the whole
 file. It only sends commands: `SeekCue` (a click on the waveform),
-`SetCuePaused`, `CueToNext` (Load as next) and `SetCue(player, false)` (Stop
+`SetCuePaused`, `CueToNext` (Set as next) and `SetCue(player, false)` (Stop
 and the close button). The model rules behind it: `seek_cue` leaves `paused`
 alone (a seek on a paused CUE stays paused), `set_cue_paused` only emits on a
 change, `cue_entry` clears `paused` (a moved CUE restarts unpaused from the

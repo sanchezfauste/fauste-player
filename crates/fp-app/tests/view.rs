@@ -21,6 +21,7 @@ use fp_model::{
 
 fn state(tracks: usize) -> (AppState, Vec<EntryId>, PlayerId) {
     let mut state = AppState::new(Config::default(), "Main");
+    give_cue_routes(&mut state);
     let playlist = state.playlists.first_id().unwrap();
     let paths = (0..tracks)
         .map(|i| PathBuf::from(format!("/m/Artist {i} - Song {i}.flac")))
@@ -450,6 +451,21 @@ fn a_click_moves_a_running_cue_to_a_playable_other_row() {
 }
 
 #[test]
+fn a_click_leaves_a_cue_whose_output_became_the_main_output() {
+    let (mut s, e, p) = state(3);
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let routes = s
+        .config
+        .outputs
+        .routes
+        .iter_mut()
+        .find(|r| r.player == p)
+        .unwrap();
+    routes.main = routes.cue.clone();
+    assert_eq!(cue_follow_target(&s, p, e[2]), None);
+}
+
+#[test]
 fn a_click_on_a_missing_or_unreadable_file_leaves_the_cue() {
     let (mut s, e, p) = state(3);
     apply(&mut s, Command::ToggleCue(p)).unwrap();
@@ -625,4 +641,24 @@ fn the_playing_row_is_also_marked_as_next_when_it_is_the_explicit_next() {
     );
     assert!(row_is_next(&s, p, playing));
     assert!(!row_is_next(&s, p, e[1]));
+}
+
+/// A Cue output (headphones) for every player and the cartwall, with Main on
+/// the default output: a CUE needs a Cue output apart from Main (spec §4.6).
+fn give_cue_routes(state: &mut AppState) {
+    let phones = fp_model::Route {
+        backend: "null".to_owned(),
+        device: "phones".to_owned(),
+        first_channel: 0,
+    };
+    state.config.outputs.routes = state
+        .players
+        .iter()
+        .map(|p| fp_model::PlayerRoutes {
+            player: p.id,
+            main: None,
+            cue: Some(phones.clone()),
+        })
+        .collect();
+    state.config.outputs.cartwall.cue = Some(phones);
 }

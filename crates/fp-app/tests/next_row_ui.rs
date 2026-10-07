@@ -95,18 +95,14 @@ fn set_as_next_on_the_playing_row_sends_set_next_of_the_current() {
 }
 
 #[test]
-fn a_double_click_on_the_playing_row_sends_nothing() {
+fn a_double_click_on_the_playing_row_sets_it_as_next() {
     let (mut h, fake) = harness(playing());
+    let (p, e) = (fake.player(0), fake.entries());
     h.get_all_by_label("Song 1").last().unwrap().click();
     h.step();
     h.get_all_by_label("Song 1").last().unwrap().click();
     h.run_steps(2);
-    assert!(
-        !fake
-            .take_sent()
-            .iter()
-            .any(|c| matches!(c, Command::SetNext(..)))
-    );
+    assert!(fake.take_sent().contains(&Command::SetNext(p, e[0])));
 }
 
 #[test]

@@ -295,3 +295,27 @@ fn seek_bounds_follow_the_play_range() {
         vec![Command::Seek(p, 150.0)]
     );
 }
+
+/// Spec §4.6: a CUE needs a Cue output apart from Main; without one every
+/// way to start a CUE is unavailable, as the console dims it.
+#[test]
+fn a_cue_without_a_cue_output_apart_from_main_is_a_conflict() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    let e = s.playlists.iter().next().unwrap().entries[2].id;
+    let c = s.cartwall.pages[0].carts[0].id;
+    for r in &mut s.config.outputs.routes {
+        r.main = r.cue.clone();
+    }
+    s.config.outputs.cartwall.main = s.config.outputs.cartwall.cue.clone();
+    for op in [
+        O::SetCue(p, true),
+        O::CueEntry(p, e),
+        O::SetCartCue(c, true),
+    ] {
+        let err = plan(&s, op).unwrap_err();
+        assert_eq!(err.code(), "unavailable", "{op:?}");
+    }
+    assert_eq!(plan(&s, O::SetCue(p, false)).unwrap(), vec![]);
+    assert_eq!(plan(&s, O::SetCartCue(c, false)).unwrap(), vec![]);
+}

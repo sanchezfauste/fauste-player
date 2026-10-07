@@ -48,7 +48,7 @@ pub enum Command {
     /// Spec O12: holds or releases the running CUE. Idempotent; without a
     /// CUE it does nothing.
     SetCuePaused(PlayerId, bool),
-    /// Spec O12 ("Load as next"): the cued entry becomes the player's
+    /// Spec O12 ("Set as next"): the cued entry becomes the player's
     /// explicit next and the CUE keeps running. Without a CUE it does
     /// nothing.
     CueToNext(PlayerId),

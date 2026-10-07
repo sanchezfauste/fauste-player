@@ -1,6 +1,6 @@
 //! The CUE window (feedback 2 spec O12): one floating, non-modal window per
 //! running CUE, with the waveform and position, the elapsed and remaining
-//! time, and Pause/Resume, Stop and Load as next. Closing it stops the CUE.
+//! time, and Pause/Resume, Stop and Set as next. Closing it stops the CUE.
 //! Everything it does is a command; nothing here waits for the engine.
 
 use egui::{Align, Layout, RichText, Stroke, pos2, vec2};
@@ -17,7 +17,6 @@ use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 const WIDTH: f32 = 380.0;
 const WAVE_HEIGHT: f32 = 56.0;
 const BUTTON: egui::Vec2 = vec2(40.0, 28.0);
-const LOAD_NEXT_WIDTH: f32 = 130.0;
 
 /// Draws the window of every player that has a CUE running.
 pub(crate) fn show_all(ctx: &egui::Context, scene: &Scene<'_>) {
@@ -183,8 +182,14 @@ fn buttons(ui: &mut egui::Ui, scene: &Scene<'_>, v: &CueWindowView) {
         {
             scene.ctl.send(Command::SetCue(v.player, false));
         }
-        let label = t.tr("cue-window-load-next");
+        let label = t.tr("menu-set-next");
         let text = format!("{}  {label}", icon::ARROW_BEND_DOWN_RIGHT);
+        let width = ui
+            .painter()
+            .layout_no_wrap(text.clone(), font_semibold(11.0), theme::TEXT)
+            .size()
+            .x
+            + 24.0;
         let style = TileStyle {
             content: if v.can_load_next {
                 theme::CUE
@@ -195,7 +200,7 @@ fn buttons(ui: &mut egui::Ui, scene: &Scene<'_>, v: &CueWindowView) {
         };
         if widgets::tile(
             ui,
-            vec2(LOAD_NEXT_WIDTH, 28.0),
+            vec2(width, 28.0),
             &label,
             v.can_load_next,
             style,

@@ -80,7 +80,10 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   - All of it accumulates in `SourceShared` atomics.
 - **The conductor meters.**
   - Every tick, `Engine::take_meter_input` takes a player's measurement
-    (current plus fading sources; the pre-listen's is dropped). The sums are
+    (current plus fading sources; the pre-listen's is dropped, and so is
+    that of a CUE source ramping down after a CUE seek, replacement or
+    stop, which `PlayerRuntime::cue_outgoing` keeps apart from the
+    player's fading sources). The sums are
     taken one by one, inside `BusShared::whole_blocks`: a block rendered
     meanwhile is taken whole in the same reading, never split across ticks.
   - `meter::MeterState` applies the fall of each preset: 20 dB / 1.7 s,
@@ -133,14 +136,24 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
 
 A `Bus` (`bus.rs`) is one open device, keyed by `(backend, device)`, with one
 mixer shared by every route to that device. It has a watchdog. A backend
-error, or no heartbeat for `tuning.watchdog_timeout_ms` (500 ms; startup grace
-`tuning.watchdog_startup_grace_ms`, 5 s), marks it **Lost**. A virtual-clock
-thread then renders the same mixer into a discard buffer at real-time pace,
-so countdowns, segues and chaining continue. The device is reopened every
-`tuning.reconnect_interval_ms` (2 s) and takes the mixer back when it opens.
-The virtual clock keeps the timeline moving while the device opens, and
-stops once it has: both may render one block meanwhile, so the timeline can
-run one period fast, once per reconnection. A
+error, or no block asked for by the device for `tuning.watchdog_timeout_ms`
+(500 ms; startup grace `tuning.watchdog_startup_grace_ms`, 5 s), marks it
+**Lost**. The watchdog counts `BusShared::device_blocks`, which
+`MixerRenderer` bumps on every device callback (rendered or not) and the
+virtual clock never moves. A virtual-clock thread then renders the same
+mixer into a discard buffer at real-time pace, so countdowns, segues and
+chaining continue. The device is reopened every
+`tuning.reconnect_interval_ms` (2 s). A reopened stream starts in standby
+(`BusShared::standby`): its callback plays idle fill (DSD silence in DSD
+mode, so DoP stays valid) without touching the mixer, and the bus stays
+`Lost`. At its first block `Bus::supervise` stops (joins) the virtual clock
+and only then clears `standby`, so the two never render the mixer
+together. A reopened stream with no block within the startup grace, or one
+that fails, is closed and retried, still `Lost`; the first one of a loss
+logs "opened but never started" once. That is what a sound-server output
+does when its card is held by another output through a direct `hw:` device:
+the server cannot open the card, so its sink never runs. The first open of a
+bus and a rate change reopen (no virtual clock running) render at once. A
 reader that waits for a block to finish (`BusShared::consistent`,
 `whole_blocks`) gives up after 50 ms, so a render thread gone mid-block
 cannot hang the conductor.
@@ -153,7 +166,7 @@ cannot hang the conductor.
   points and test tones (`Engine::rate_of`, `frames_on`). Workers open each
   source at the rate the engine passes in `LoadOptions::rate`.
 - **Bit-perfect buses** are named in `outputs.bit_perfect` and opened with
-  `StreamConfig::exclusive`. If exclusive access is refused (`Unsupported`),
+  `StreamConfig::exclusive`. If exclusive access is refused (`Unsupported` or `Busy`),
   the bus reopens shared and `exclusive_granted` stays false.
 - **The rate follows the file.** When a source starts on a bit-perfect bus
   (`prepare_start`), the bus is reopened at the file's rate
@@ -175,6 +188,27 @@ cannot hang the conductor.
   the rate, not of exclusive access); a bus already shared may change rate
   shared. A double failure leaves the bus `Lost`, for the watchdog. The mixer's
   volume smoothing keeps its duration at the new rate (`Mixer::follow_rate`).
+- **A busy device is not a refusal.** Backends report a device another client
+  holds as `BackendError::Busy` (cpal's `DeviceBusy`: ALSA's `EBUSY` or
+  `EAGAIN`, WASAPI's device in use; native DSD's own ALSA open; macOS hog mode
+  held by another process). On Linux the sound server can grab a `hw:` device
+  in the gap between closing the stream and opening it at the new rate.
+  `Bus::reopen_with` tries a busy open again (`open_retrying_busy`),
+  `tuning.device_busy_retry_ms` apart, sleeping on the conductor thread,
+  while its `BusyBudget` has retries left. The caller takes one budget per
+  operation (`Bus::busy_budget`) and passes it to every reopen of that
+  operation: the open at the new configuration, the restore of the previous
+  one, and the reopens the engine chains (`open_dsd_stream` and its way
+  back; the candidates of `reopen_native_as_pcm`). So one operation waits at
+  most `device_busy_retries × device_busy_retry_ms`: 60 ms by default, 200 ms
+  at the maximum. That wait delays every output's planned events by as much,
+  so keep it below `schedule_lead_ms`. Only an idle bus gets retries
+  (`prepare_start`, `open_dsd_stream`); a sounding bus gets none
+  (`BusyBudget::NONE`), since its stream is closed and no virtual clock
+  runs during the wait, so its timeline would stall. Each try passes the
+  caller's `now` moved on by the time spent waiting. A device still busy
+  restores the previous configuration with a warning and is not added to
+  `refused_rates` or `refused_dsd`, so the next start asks again.
 - While anything on the bus sounds, the rate never changes, since every
   timeline on the bus is in its frames. Preloads never decide the rate.
 - **`PlayerTelemetry::bit_perfect`** is set when all of these hold:
@@ -327,14 +361,18 @@ plus the mixer's DSD mode.
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs }`) to the mixer as exact frames once it is within `schedule_lead_ms` |
 | `FadeOutAndStop`, `StopNow`, `Pause`, `Resume`, `Seek`, `SetVolume` | ramps and commands on the current source. A stop or seek ramps out a source whose start was sent (`Requested`) or whose pause ramp may still run (`pause_ramp_ends`, plus a block of margin); a source that is silent (never started, held, or paused with the ramp over) is released at once |
-| `StartCue`, `StopCue` | a separate source on the player's Cue route |
+| `StartCue`, `StopCue` | a separate source on the player's Cue route. The model sends `StartCue` only for a player whose Cue route is set and differs from Main (`OutputsConfig::player_has_cue`); a Cue route the engine cannot use (`cue_target`: a missing backend, or equal to the resolved Main) ends the CUE at once with `CueEnded` |
 | `SeekCue` | replace the CUE source by one at the target (the CUE plays whole files); it starts idle when the CUE is held, so a held CUE stays held |
 | `SetCuePaused` | `BusCommand::Pause`/`Resume` with the pause ramp for an audible source; a source that has not started yet is held idle and started on release. `PlayerRuntime::cue_paused` remembers the state and a new CUE clears it |
 | `AddPlayer`, `RemovePlayer` | create or retire a worker and its bookkeeping |
 | `LoadPaused` | restore a session: load the source at a position, paused |
 
 The CUE position is `PlayerTelemetry::cue_position_secs`; a held CUE reports a
-constant one. A held CUE is released when it is replaced or stopped.
+constant one. A held CUE is released when it is replaced or stopped. An
+audible CUE source that is sought, replaced or stopped gets the de-click ramp
+in `PlayerRuntime::cue_outgoing`, never in the player's `outgoing`: it is not
+on air, so it is not metered, paused, faded or awaited with the player, and it
+is released when the mixer reports it finished.
 
 The effective play range is `Track::play_range(use_markers)` in `fp-model`
 (`players.use_cue_markers`; off gives 0 to the end of the file, or the source
@@ -386,8 +424,10 @@ added.
 
 - A dedicated worker (`fp-cartwall`) decodes them.
 - **Routes:** they play on the cartwall routes (`config.outputs.cartwall`).
-  Main falls back to the default output. Without a Cue route, a cart
-  pre-listen ends at once (`CartCueEnded { cart }`; the model ignores the end
+  Main falls back to the default output. The model starts no cart
+  pre-listen without a Cue route apart from Main
+  (`OutputsConfig::cartwall_has_cue`); one the engine still cannot route (a
+  missing backend, or the default output Main resolves to) ends at once (`CartCueEnded { cart }`; the model ignores the end
   of a pre-listen that is no longer the current one).
 - **Exact ends and loops:** each load carries `until_secs` (the cue-out) and
   `looped`. The worker cuts the frames past the end, so a cart finishes

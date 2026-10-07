@@ -103,7 +103,8 @@ Row colours:
 ## Mouse
 
 - **Click** selects a track. **Double-click** makes it this player's next
-  track (not the one on air).
+  track. On the track on air it makes it play once more when the current pass
+  ends.
 - **Right-click** opens the context menu:
 
 ![The context menu of a track](../images/guide/track-menu.png)
@@ -111,8 +112,8 @@ Row colours:
 | Item | Action |
 |---|---|
 | Play now | Start this track at once (mixing if the player is on air) |
-| Set as next | Same as double-click, and also available on the track on air: it then plays once more, from its start, when the current pass ends (mixing like Repeat, no gap), then the player goes on. It acts once. Stop after, SINGLE mode and a Stop after mark still end the player first. While a CUE is running it moves to the new next |
-| Pre-listen on CUE | Play it on the CUE output (it opens the CUE window) |
+| Set as next | Same as double-click. On the track on air it plays once more, from its start, when the current pass ends (mixing like Repeat, no gap), then the player goes on. It acts once. Stop after, SINGLE mode and a Stop after mark still end the player first. While a CUE is running it moves to the new next |
+| Pre-listen on CUE | Play it on the CUE output (it opens the CUE window). Dimmed when the player has no Cue output apart from its Main one |
 | Edit tags… | Open the tag editor for this track. **Save** writes the changes into the audio file; **Cancel** (or Esc, when no save is running) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |
 | Add tracks below… | Pick files to insert after this track |
 | Duplicate | Insert an unplayed copy below (with its repeat and stop-after marks) |

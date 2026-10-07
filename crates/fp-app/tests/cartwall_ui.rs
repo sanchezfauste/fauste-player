@@ -191,6 +191,24 @@ fn the_cart_menu_pre_listens_on_cue() {
     let _ = Arc::strong_count(&fake);
 }
 
+#[test]
+fn without_a_cartwall_cue_output_the_pre_listen_item_is_dimmed_with_the_reason() {
+    let mut s = with_cart();
+    s.config.outputs.cartwall.main = s.config.outputs.cartwall.cue.clone();
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Station ID").click_secondary();
+    h.run_steps(2);
+    let item = h.get_by_label("Pre-listen on CUE");
+    assert!(item.accesskit_node().is_disabled());
+    item.hover();
+    h.run_steps(40);
+    assert!(
+        h.query_by_label_contains("The cartwall has no Cue output")
+            .is_some()
+    );
+    assert!(fake.take_sent().is_empty());
+}
+
 #[allow(dead_code)]
 fn unused(_: &Fake) {}
 

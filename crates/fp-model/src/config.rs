@@ -369,6 +369,34 @@ impl Default for OutputsConfig {
 }
 
 impl OutputsConfig {
+    /// The routes configured for `player`, if any.
+    pub fn player_routes(&self, player: PlayerId) -> Option<&PlayerRoutes> {
+        self.routes.iter().find(|r| r.player == player)
+    }
+
+    /// Whether `player` has a Cue output a CUE can be heard on (see
+    /// [`cue_is_usable`]).
+    pub fn player_has_cue(&self, player: PlayerId) -> bool {
+        self.player_routes(player)
+            .is_some_and(|r| cue_is_usable(r.main.as_ref(), r.cue.as_ref()))
+    }
+
+    /// Whether `player`'s Cue route is the same as its Main route.
+    pub fn player_cue_equals_main(&self, player: PlayerId) -> bool {
+        self.player_routes(player)
+            .is_some_and(|r| cue_equals_main(r.main.as_ref(), r.cue.as_ref()))
+    }
+
+    /// Whether the cartwall has a Cue output a cart pre-listen can be heard on.
+    pub fn cartwall_has_cue(&self) -> bool {
+        cue_is_usable(self.cartwall.main.as_ref(), self.cartwall.cue.as_ref())
+    }
+
+    /// Whether the cartwall's Cue route is the same as its Main route.
+    pub fn cartwall_cue_equals_main(&self) -> bool {
+        cue_equals_main(self.cartwall.main.as_ref(), self.cartwall.cue.as_ref())
+    }
+
     /// The DSD mode of a device: its configured mode when it is bit-perfect,
     /// `Pcm` otherwise.
     pub fn dsd_output_for(&self, backend: &str, device: &str) -> crate::dsd::DsdOutput {
@@ -384,6 +412,24 @@ impl OutputsConfig {
             .find(|d| d.backend == backend && d.device == device)
             .map_or(crate::dsd::DsdOutput::Pcm, |d| d.mode)
     }
+}
+
+/// Whether a Cue route can be heard (spec §4.6): there is one, and it is not
+/// the Main route (same backend, device and first channel). The engine never
+/// sends a pre-listen to the Main output, since that would put it on air.
+///
+/// Only what the configuration says is decided here. A missing Main route
+/// goes to the default output, and a route to a backend this machine does
+/// not have is dropped; both are only known to the running engine, so a Cue
+/// route next to a missing Main route counts as usable.
+pub fn cue_is_usable(main: Option<&Route>, cue: Option<&Route>) -> bool {
+    cue.is_some_and(|cue| main != Some(cue))
+}
+
+/// Whether a Cue route is configured and is the same as the Main route: the
+/// case [`cue_is_usable`] refuses that the operator can fix in Settings.
+pub fn cue_equals_main(main: Option<&Route>, cue: Option<&Route>) -> bool {
+    cue.is_some() && main == cue
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -472,6 +518,16 @@ pub struct Tuning {
     /// Watchdog timeout before a newly opened stream delivers its first block.
     pub watchdog_startup_grace_ms: f64,
     pub reconnect_interval_ms: f64,
+    /// When a rate change finds the device busy (another application or the
+    /// sound server took it while the stream was closed), how many more
+    /// times it is tried, `device_busy_retry_ms` apart, before the bus
+    /// keeps its rate. One budget covers the whole operation (the new rate,
+    /// the way back, chained reopens), and the conductor waits meanwhile:
+    /// at most the product per operation (60 ms by default, 200 ms at the
+    /// maximum), which delays every output's planned events by as much.
+    /// Only an idle bus waits; a sounding one tries each open once.
+    pub device_busy_retries: u32,
+    pub device_busy_retry_ms: f64,
     pub gain_smoothing_ms: f64,
     pub save_debounce_ms: f64,
     /// How often files not found (a drive not mounted yet) are looked for
@@ -497,6 +553,8 @@ impl Default for Tuning {
             watchdog_timeout_ms: 500.0,
             watchdog_startup_grace_ms: 5000.0,
             reconnect_interval_ms: 2000.0,
+            device_busy_retries: 3,
+            device_busy_retry_ms: 20.0,
             gain_smoothing_ms: 20.0,
             save_debounce_ms: 1000.0,
             missing_recheck_ms: 30_000.0,
@@ -829,6 +887,20 @@ impl Config {
             &mut w,
         );
         clamp_to(
+            &mut t.device_busy_retries,
+            0,
+            5,
+            "tuning.device_busy_retries",
+            &mut w,
+        );
+        clamp_to(
+            &mut t.device_busy_retry_ms,
+            0.0,
+            40.0,
+            "tuning.device_busy_retry_ms",
+            &mut w,
+        );
+        clamp_to(
             &mut t.gain_smoothing_ms,
             1.0,
             500.0,
@@ -1070,6 +1142,25 @@ mod tests {
                     .any(|w| w.field == "tuning.restart_handoff_ms")
             );
         }
+    }
+
+    #[test]
+    fn the_device_busy_retries_have_their_defaults_and_ranges() {
+        let c: Config = serde_json::from_str(r#"{"tuning":{}}"#).unwrap();
+        assert_eq!(c.tuning.device_busy_retries, 3);
+        assert_eq!(c.tuning.device_busy_retry_ms, 20.0);
+        let mut c = Config::default();
+        c.tuning.device_busy_retries = 1_000;
+        c.tuning.device_busy_retry_ms = 1e6;
+        let warnings = c.validate();
+        assert_eq!(c.tuning.device_busy_retries, 5);
+        assert_eq!(c.tuning.device_busy_retry_ms, 40.0);
+        for field in ["tuning.device_busy_retries", "tuning.device_busy_retry_ms"] {
+            assert!(warnings.iter().any(|w| w.field == field), "{field}");
+        }
+        c.tuning.device_busy_retry_ms = -5.0;
+        c.validate();
+        assert_eq!(c.tuning.device_busy_retry_ms, 0.0);
     }
 
     #[test]

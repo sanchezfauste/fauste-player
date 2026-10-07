@@ -215,14 +215,17 @@ impl Engine {
             exclusive: true,
             ..previous
         };
-        if b.reopen_with(wanted, now).is_err() {
+        // Only on an idle device (`device_idle`): the conductor may wait,
+        // once for the reopen and the way back below.
+        let mut budget = b.busy_budget(true);
+        if b.reopen_with(wanted, now, &mut budget).is_err() {
             return Err(self.refusal(bus, word_rate));
         }
         // Checked here, whatever the backend checked: DoP needs every bit of
         // a 24-bit word, and native DSD a stream the backend packs as DSD.
         if !b.dsd_fits(stream) {
             b.refuse_dsd(word_rate, stream);
-            if let Err(error) = b.reopen_with(previous, now) {
+            if let Err(error) = b.reopen_with(previous, now, &mut budget) {
                 tracing::warn!(?bus, %error, "cannot reopen the PCM stream");
             }
             return Err(match stream {
@@ -576,8 +579,11 @@ impl Engine {
             [Some(pcm), Some(configured), None]
         };
         let mut reopened = false;
+        // A sounding bus never waits for a busy device: its stream is closed
+        // and no virtual clock runs, so its timeline would stall.
+        let mut budget = b.busy_budget(!sounding);
         for config in candidates.into_iter().flatten() {
-            match b.reopen_with(config, now) {
+            match b.reopen_with(config, now, &mut budget) {
                 Ok(()) => {
                     reopened = true;
                     break;

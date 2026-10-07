@@ -90,6 +90,7 @@ pub fn state(players: usize, tracks: usize) -> AppState {
     let mut config = Config::default();
     config.players.count = players;
     let mut state = AppState::new(config, "Main");
+    give_cue_routes(&mut state);
     let playlist = state.playlists.first_id().unwrap();
     let paths = (1..=tracks)
         .map(|n| PathBuf::from(format!("/music/Song {n}.mp3")))
@@ -163,4 +164,24 @@ pub fn harness_sized(
         );
     harness.run_steps(2);
     (harness, fake)
+}
+
+/// A Cue output (headphones) for every player and the cartwall, with Main on
+/// the default output: a CUE needs a Cue output apart from Main (spec §4.6).
+pub fn give_cue_routes(state: &mut AppState) {
+    let phones = fp_model::Route {
+        backend: "null".to_owned(),
+        device: "phones".to_owned(),
+        first_channel: 0,
+    };
+    state.config.outputs.routes = state
+        .players
+        .iter()
+        .map(|p| fp_model::PlayerRoutes {
+            player: p.id,
+            main: None,
+            cue: Some(phones.clone()),
+        })
+        .collect();
+    state.config.outputs.cartwall.cue = Some(phones);
 }

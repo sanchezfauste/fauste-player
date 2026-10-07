@@ -504,9 +504,9 @@ pub(crate) fn track_table(
                 response.clone().on_hover_ui(|ui| {
                     track_tip(ui, scene, track);
                 });
-                // O37: a double-click on the playing row does nothing; the menu
-                // item is the deliberate way to set it as next.
-                if response.double_clicked() && status != RowStatus::Current {
+                // A double-click sets the row as next, the playing one included
+                // (it then plays once more, rule 27a).
+                if response.double_clicked() {
                     scene.ctl.send(Command::SetNext(player, entry.id));
                 }
                 if response.drag_started() {
@@ -771,12 +771,14 @@ fn context_menu(
         scene.ctl.send(Command::SetNext(player, entry));
         ui.close();
     }
+    let can_cue = scene.state.config.outputs.player_has_cue(player);
     if labelled(
         ui,
         glyphs::glyph_text(TransportAction::Cue),
         "menu-cue",
-        true,
+        can_cue,
     )
+    .on_disabled_hover_text(t.tr("tip-cue-no-output"))
     .clicked()
     {
         scene.ctl.send(Command::CueEntry(player, entry));

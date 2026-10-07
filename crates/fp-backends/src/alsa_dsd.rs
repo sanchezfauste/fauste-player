@@ -129,7 +129,14 @@ fn open_pcm(
     // Non-blocking, and kept so: a busy device fails at once instead of
     // parking this thread in the kernel, and writes wait with a timeout.
     let pcm = PCM::new(name, Direction::Playback, true).map_err(|e| {
-        BackendError::Unsupported(format!("cannot open {name} (is it in use?): {e}"))
+        let message = format!("cannot open {name}: {e}");
+        // EBUSY, or EAGAIN from a non-blocking open: held by another client.
+        match std::io::Error::from_raw_os_error(e.errno().abs()).kind() {
+            std::io::ErrorKind::ResourceBusy | std::io::ErrorKind::WouldBlock => {
+                BackendError::Busy(message)
+            }
+            _ => BackendError::Unsupported(message),
+        }
     })?;
     let (format, device_rate, device_period) = {
         let hwp = HwParams::any(&pcm).map_err(unsupported)?;

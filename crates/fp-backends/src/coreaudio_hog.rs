@@ -65,7 +65,7 @@ pub(crate) fn take(name: &str) -> Result<HogGuard, BackendError> {
         NOBODY => {
             let owner = toggle_hog_mode(device).map_err(|e| unsupported("hog mode", e))?;
             if owner != me {
-                return Err(BackendError::Unsupported(
+                return Err(BackendError::Busy(
                     "another application holds the device".to_owned(),
                 ));
             }
@@ -74,7 +74,7 @@ pub(crate) fn take(name: &str) -> Result<HogGuard, BackendError> {
         // means a previous stream of that bus; its guard is gone.
         owner if owner == me => {}
         _ => {
-            return Err(BackendError::Unsupported(
+            return Err(BackendError::Busy(
                 "another application holds the device".to_owned(),
             ));
         }

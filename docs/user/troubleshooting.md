@@ -25,6 +25,16 @@
   analysed, and a device running at the file's rate.
 - **A short silence before a track.** The bit-perfect device reopened at the
   track's sample rate. Keep the library at one rate to avoid it.
+- **A track plays resampled, and the log says the device is busy (Linux).**
+  To change rate, the application closes the device and opens it again. In
+  that moment the sound server (PipeWire) can take the card. The application
+  tries again a few times; if the card is still busy, the track plays at the
+  device's current rate, and the next track asks for its rate again. To give
+  the application the card to itself, open the system's sound settings and
+  set that card's profile to **Off** (or **Pro Audio**), so the sound server
+  leaves its `hw:` device alone. The number of tries and the wait between
+  them are `tuning.device_busy_retries` and `tuning.device_busy_retry_ms` in
+  the configuration file.
 - **The device plays, but the BP badge stays off (Windows or macOS).**
   Exclusive access was refused, and the device plays shared.
   - Windows: another program may hold the device exclusively, or exclusive
@@ -68,6 +78,19 @@ The status bar shows **Output lost: &lt;device&gt;** when a device stops respond
 The players keep counting and mixing on an internal clock, so the automation
 does not stall. The device is retried every 2 seconds and takes over again
 when it returns. Reconnect the cable or power the interface back on.
+
+### "Output lost" that never clears, with a direct `hw:` output
+
+A sound card used through a direct ALSA `hw:` output (for example a
+bit-perfect output) is held by Fauste Player alone: the sound server
+(PipeWire or PulseAudio) cannot use it at the same time. If another output
+goes through the sound server's default device and that default device is
+the same card, that output never starts and stays **Output lost**. The log
+says "output device opened but never started" once.
+
+Use one path per card: route every output of that card through the same
+`hw:` device (with different channels if needed), or choose another card
+as the sound server's default output in your system's sound settings.
 
 ## A track shows a warning icon or a file with a cross
 

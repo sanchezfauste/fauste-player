@@ -290,10 +290,17 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                     }
                 };
                 let cue_label = t.tr("cue");
+                // Without a Cue output apart from Main the CUE is dimmed
+                // (spec §4.6); its tooltip says how to get one.
+                let cue_tip = if pv.cueing || scene.state.config.outputs.player_has_cue(id) {
+                    t.tr("tip-cue")
+                } else {
+                    t.tr("tip-cue-no-output")
+                };
                 if widgets::tile(
                     ui,
                     vec2(50.0, 20.0),
-                    &t.tr("tip-cue"),
+                    &cue_tip,
                     fp_model::availability(scene.state, id).cue,
                     cue_style,
                     |p, r, c| {

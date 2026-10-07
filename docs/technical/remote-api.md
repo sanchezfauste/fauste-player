@@ -17,7 +17,8 @@ over HTTP, live events over Server-Sent Events, OSC, and Settings → Remote.
   change. The command is queued, and its effect shows in the next reads.
 - **Same rules as the console.** Every request becomes the commands the
   interface would send. A transport action whose button is greyed out
-  (availability, R28) is refused with `409`. The commands are then applied to
+  (availability, R28) is refused with `409`, and so is a player CUE, a
+  `cue-entry` or a cart cue without a Cue output apart from Main. The commands are then applied to
   a copy of the current snapshot (a dry run): a refusal there is answered
   `404` (an unknown id) or `409` with the model's reason, and nothing is
   queued. A refusal is still possible if another operator changes the state
