@@ -217,6 +217,27 @@ fn choosing_spanish_switches_the_interface() {
         Some("es-ES")
     );
     assert!(h.query_all_by_label("Configuración").next().is_some());
+    // Back to "System" (now in Spanish): the setting is cleared.
+    h.get_by_role_and_label(Role::ComboBox, "Idioma").click();
+    h.run_steps(2);
+    h.get_by_label("Sistema").click();
+    h.run_steps(4);
+    assert_eq!(fake.state.load().config.ui.language, None);
+}
+
+/// A configured tag that no locale matches behaves as "System", and the
+/// drop-down says so instead of showing the raw tag.
+#[test]
+fn an_unregistered_language_shows_as_system() {
+    let mut s = state(1, 0);
+    s.config.ui.language = Some("xx-YY".to_owned());
+    let (mut h, _fake) = harness(s);
+    open_section(&mut h, "Players");
+    h.get_by_role_and_label(Role::ComboBox, "Language")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(h.query_by_value("System").is_some());
+    assert!(h.query_by_value("xx-YY").is_none());
 }
 
 #[test]

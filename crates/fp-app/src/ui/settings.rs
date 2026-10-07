@@ -1249,7 +1249,12 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
             update(scene, |c| c.players.end_warning_secs = warning);
         }
     });
-    let current = config.ui.language.clone();
+    let configured = config.ui.language.clone();
+    // A tag no locale is registered for behaves as "System" and shows so.
+    let current = configured
+        .as_deref()
+        .and_then(crate::i18n::locale)
+        .map(|l| l.tag);
     labelled_row(ui, &t.tr("settings-language-title"), None, |ui, label| {
         // "System", then every language in its own name, in registry order.
         let system = t.tr("settings-language-system");
@@ -1257,18 +1262,16 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
         choices.extend(crate::i18n::LOCALES.iter().map(|l| (Some(l.tag), l.name)));
         let shown = choices
             .iter()
-            .find(|(tag, _)| current.as_deref() == *tag)
-            .map_or_else(
-                || current.clone().unwrap_or_default(),
-                |(_, n)| (*n).to_owned(),
-            );
+            .find(|(tag, _)| current == *tag)
+            .map_or(system.as_str(), |(_, n)| *n)
+            .to_owned();
         egui::ComboBox::from_id_salt("language")
             .selected_text(shown)
-            .width(260.0)
+            .width(ui.available_width().min(260.0))
             .show_ui(ui, |ui| {
                 for (tag, name) in &choices {
-                    let on = current.as_deref() == *tag;
-                    if ui.selectable_label(on, *name).clicked() && !on {
+                    let on = current == *tag;
+                    if ui.selectable_label(on, *name).clicked() && configured.as_deref() != *tag {
                         let tag = tag.map(str::to_owned);
                         update(scene, |c| c.ui.language = tag);
                     }

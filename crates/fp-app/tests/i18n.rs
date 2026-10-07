@@ -12,7 +12,7 @@ use std::path::Path;
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 use fluent_syntax::ast::{Entry, Expression, InlineExpression, Pattern, PatternElement};
-use fp_app::i18n::{I18n, LOCALES, Locale, Translation, locale, negotiate};
+use fp_app::i18n::{I18n, LOCALES, Locale, Translation, bundle_from, locale, negotiate, resolve};
 
 /// The variables a pattern uses, selectors included.
 fn pattern_vars(pattern: &Pattern<&str>, out: &mut BTreeSet<String>) {
@@ -208,8 +208,8 @@ fn spanish_is_used_when_requested() {
 
 #[test]
 fn unknown_locales_fall_back_to_english() {
-    let i = I18n::new(Some("ja-JP"));
-    assert_eq!(i.lang(), "en-US");
+    assert_eq!(resolve(Some("ja-JP"), Some("ja_JP.UTF-8")).tag, "en-US");
+    let i = I18n::new(Some("en-US"));
     assert_eq!(i.tr("status-on-air"), "On air");
 }
 
@@ -365,4 +365,48 @@ fn every_plural_variant_shows_the_count_it_was_given() {
         }
     }
     assert!(problems.is_empty(), "{problems:#?}");
+}
+
+/// Negotiation against the shipped registry, with the tags operating
+/// systems really report.
+#[test]
+fn negotiation_maps_system_tags_onto_the_registry() {
+    let pick = |r: &str| negotiate(r, LOCALES.iter().map(|l| l.tag));
+    for none in ["C", "C.UTF-8", "POSIX", ""] {
+        assert_eq!(pick(none), None, "{none:?}");
+    }
+    assert_eq!(pick("en_GB.UTF-8"), Some("en-US"));
+    assert_eq!(pick("pt_BR"), Some("pt-PT"));
+    assert_eq!(pick("ca_ES@valencia"), Some("ca-ES"));
+    assert_eq!(pick("ca-ES-valencia"), Some("ca-ES"));
+    assert_eq!(pick("ES-es"), Some("es-ES"));
+    assert_eq!(pick("de_AT.UTF-8"), Some("de-DE"));
+}
+
+/// The configured tag wins; one that matches nothing (unknown, empty)
+/// gives way to the OS locale, and only then to English.
+#[test]
+fn an_unknown_configured_tag_falls_back_to_the_system_locale() {
+    assert_eq!(resolve(Some("de-DE"), Some("fr_FR.UTF-8")).tag, "de-DE");
+    assert_eq!(resolve(None, Some("fr_FR.UTF-8")).tag, "fr-FR");
+    assert_eq!(resolve(Some("ja-JP"), Some("es_ES.UTF-8")).tag, "es-ES");
+    assert_eq!(resolve(Some(""), Some("it_IT")).tag, "it-IT");
+    assert_eq!(resolve(Some("xx"), Some("C")).tag, "en-US");
+    assert_eq!(resolve(Some("xx"), None).tag, "en-US");
+    assert_eq!(resolve(None, None).tag, "en-US");
+}
+
+/// A file with a syntax error keeps the messages it does not touch.
+#[test]
+fn a_broken_entry_does_not_lose_the_valid_ones() {
+    let source = "broken = { $count\nfine = Still here\n";
+    let bundle = bundle_from("fr-FR", source).expect("a bundle");
+    assert!(bundle.get_message("broken").is_none());
+    let pattern = bundle.get_message("fine").and_then(|m| m.value()).unwrap();
+    let mut errors = Vec::new();
+    assert_eq!(
+        bundle.format_pattern(pattern, None, &mut errors),
+        "Still here"
+    );
+    assert!(bundle_from("not a tag!", "a = b\n").is_none());
 }

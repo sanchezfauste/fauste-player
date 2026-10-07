@@ -160,17 +160,19 @@ impl From<String> for Arg {
 }
 
 fn bundle(locale: &Locale) -> Option<FluentBundle<FluentResource>> {
-    let lang: LanguageIdentifier = locale.tag.parse().ok()?;
-    let resource = match FluentResource::try_new(locale.source.to_owned()) {
+    bundle_from(locale.tag, locale.source)
+}
+
+/// A bundle for `tag` from a Fluent source, `None` when the tag does not
+/// parse. Lenient: a syntax error loses only the entries it touches.
+pub fn bundle_from(tag: &str, source: &str) -> Option<FluentBundle<FluentResource>> {
+    let lang: LanguageIdentifier = tag.parse().ok()?;
+    let resource = match FluentResource::try_new(source.to_owned()) {
         Ok(resource) => resource,
         Err((resource, errors)) => {
             // The tests keep the shipped files clean; a stray error loses
             // only the messages it touches.
-            tracing::warn!(
-                locale = locale.tag,
-                ?errors,
-                "locale file has syntax errors"
-            );
+            tracing::warn!(locale = tag, ?errors, "locale file has syntax errors");
             resource
         }
     };
@@ -178,13 +180,19 @@ fn bundle(locale: &Locale) -> Option<FluentBundle<FluentResource>> {
     // No Unicode isolation marks: the strings go straight to egui labels.
     bundle.set_use_isolating(false);
     if let Err(errors) = bundle.add_resource(resource) {
-        tracing::warn!(
-            locale = locale.tag,
-            ?errors,
-            "locale file has duplicate messages"
-        );
+        tracing::warn!(locale = tag, ?errors, "locale file has duplicate messages");
     }
     Some(bundle)
+}
+
+/// The locale for a configured tag and the OS locale: the configured one
+/// when it matches a registered locale, else the system one, else en-US.
+pub fn resolve(requested: Option<&str>, system: Option<&str>) -> &'static Locale {
+    let pick = |r: &str| negotiate(r, LOCALES.iter().map(|l| l.tag)).and_then(locale);
+    requested
+        .and_then(pick)
+        .or_else(|| system.and_then(pick))
+        .unwrap_or(&ENGLISH)
 }
 
 pub struct I18n {
@@ -197,11 +205,7 @@ impl I18n {
     /// `requested` is the configured language; `None` follows the OS locale.
     pub fn new(requested: Option<&str>) -> Self {
         let system = sys_locale::get_locale();
-        let locale = requested
-            .or(system.as_deref())
-            .and_then(|r| negotiate(r, LOCALES.iter().map(|l| l.tag)))
-            .and_then(locale)
-            .unwrap_or(&ENGLISH);
+        let locale = resolve(requested, system.as_deref());
         Self {
             locale,
             primary: bundle(locale),

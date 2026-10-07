@@ -364,12 +364,16 @@ The `test-hooks` feature adds `AppUi::fail_next_frame` and
   shows), its `translation` (`Manual` or `Machine`) and its `source`
   (`include_str!`). en-US comes first, the rest are ordered by `name`; the
   Settings drop-down lists "System" and then the registry in that order.
-- `negotiate` picks the locale for the configured tag or, with none, the OS
-  locale (`sys-locale`): the same tag (case-insensitive, `_` read as `-`,
-  a POSIX `.UTF-8` suffix ignored), else the first locale with the same
-  language subtag (`fr-CA` gives `fr-FR`, `pt-BR` gives `pt-PT`), else
-  en-US. A message missing from a locale falls back to en-US. A file with a
-  syntax error keeps its valid messages and logs a warning.
+- `resolve` picks the locale: the configured tag when it negotiates to a
+  registered locale, else the OS locale (`sys-locale`), else en-US; an
+  unknown or empty configured tag does not hide the OS locale, and Settings
+  shows it as "System". `negotiate` matches one tag: the same tag
+  (case-insensitive, `_` read as `-`, a POSIX `.UTF-8` or `@modifier`
+  suffix ignored), else the first locale with the same language subtag
+  (`fr-CA` gives `fr-FR`, `pt-BR` gives `pt-PT`, `ca-ES-valencia` gives
+  `ca-ES`); `C`, `POSIX` and an empty tag match nothing. A message missing
+  from a locale falls back to en-US. A file with a syntax error keeps its
+  valid messages and logs a warning (`bundle_from`).
 - The About window shows `about-machine-translation` only while a `Machine`
   locale is in use (`I18n::machine_translated`).
 - Plural categories come from CLDR through `fluent-bundle`
