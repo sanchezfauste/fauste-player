@@ -692,8 +692,9 @@ In short:
   the device cannot take shows as PCM without rewriting the configuration
   (`effective_dsd_mode`);
 - an override reaches the engine only for a device a route names; the
-  system-default output opens at the global values, and a stale override
-  stays in the configuration for when the device is routed again;
+  system-default output opens at the global values. (Changed after plan 5,
+  see "Maintainer decisions after plan 5" below: a stale override no
+  longer stays in the configuration.)
 - a saved own rate or buffer the device no longer reports stays listed with
   a note, and a bus whose own rate does not open falls back to the global
   rate and buffer through `pcm_fallback`;
@@ -726,6 +727,30 @@ reverse):
   buffer too.
 
 Task 7, the check on real hardware, is not done.
+
+**Maintainer decisions after plan 5 (as built).**
+- **A device that leaves every route loses its own settings.** The
+  maintainer: there is no need to keep the configuration of a device that
+  may never be connected again. `OutputsConfig::forget_unrouted_devices`
+  (`fp-model`) removes the `device_overrides`, `bit_perfect` and
+  `dsd_output` entries of every device no route names (players' Main and
+  Cue, the cartwall's Main and Cue). The reducer applies it whenever it
+  takes a new configuration (`update_config`), and `fp-store` on load, so a
+  stale entry written by an earlier version goes too. A device routed again
+  starts from the global values. Settings shows the bit-perfect switch and
+  the DSD mode only next to a routed device, like the own rate and buffer,
+  so they follow the same rule. The removal is silent, like the removal of
+  an empty override. The system-default output is untouched: it has no
+  entry, and opens at the global values as before.
+  - Ruling: no warning when an unrouted device's entry is removed — the
+    existing pattern removes an empty override silently, and the operator
+    caused it by changing the route — cost if wrong: a one-line warning in
+    `Store::load`.
+  - Ruling: unrouting a bit-perfect device lists "bit-perfect devices" in
+    the restart notice next to "outputs" (and "DSD output" when it had a
+    DSD mode) — the configuration did change, and
+    both need the same restart — cost if wrong: a filter in
+    `restart_pending`.
 
 ---
 

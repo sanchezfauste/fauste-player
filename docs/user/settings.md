@@ -56,7 +56,10 @@ audio system, the sample rate, the buffer size and the outputs. Advanced
 adds, for each device an output uses, its own rate and buffer, the
 bit-perfect switch and the DSD mode, and then the DSD settings. Switching
 views only shows or hides rows: nothing is changed or reset. When Basic
-hides a setting that is in use, a line says so.
+hides a setting that is in use, a line says so. When no output uses a
+device any more, its own rate and buffer, its bit-perfect switch and its
+DSD mode are forgotten: if an output uses it again, it starts from the
+global values.
 
 | Setting | Meaning |
 |---|---|

@@ -154,6 +154,8 @@ impl Store {
             None => Default::default(),
         };
         warnings.extend(config.validate().into_iter().map(|w| w.to_string()));
+        // An earlier version kept them for a device routed again.
+        config.outputs.forget_unrouted_devices();
         let limits = config.limits.clone();
 
         let lists: Loaded<PlaylistsDoc> = load_doc(

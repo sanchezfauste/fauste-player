@@ -222,6 +222,12 @@ fn bit_perfect_devices_round_trip_and_older_configs_have_none() {
     );
     let mut loaded = s.load("Main");
     assert!(loaded.state.config.outputs.bit_perfect.is_empty());
+    // Kept only for a device a route names (operator feedback 4, Q12).
+    loaded.state.config.outputs.cartwall.main = Some(fp_model::Route {
+        backend: "alsa".into(),
+        device: "hw:CARD=DAC,DEV=0".into(),
+        first_channel: 0,
+    });
     loaded.state.config.outputs.bit_perfect = vec![fp_model::OutputDevice {
         backend: "alsa".into(),
         device: "hw:CARD=DAC,DEV=0".into(),
@@ -371,4 +377,38 @@ fn a_saved_pending_start_that_does_not_parse_is_dropped_with_a_warning() {
         "{:?}",
         loaded.warnings
     );
+}
+
+#[test]
+fn a_devices_own_settings_are_dropped_on_load_when_no_route_names_it() {
+    // Operator feedback 4, Q12: written by an earlier version, which kept
+    // them for when the device was routed again.
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    let path = s.paths().config_file();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        &path,
+        r#"{"schema_version":1,"config":{"outputs":{
+            "routes":[{"player":1,"main":{"backend":"alsa","device":"dac","first_channel":0},"cue":null}],
+            "bit_perfect":[{"backend":"alsa","device":"dac"},{"backend":"alsa","device":"gone"}],
+            "dsd_output":[{"backend":"alsa","device":"gone","mode":"Dop"}],
+            "device_overrides":[
+                {"device":{"backend":"alsa","device":"dac"},"sample_rate":96000},
+                {"device":{"backend":"alsa","device":"gone"},"buffer_frames":256}
+            ]}}}"#,
+    )
+    .unwrap();
+    let loaded = s.load("Main");
+    let o = &loaded.state.config.outputs;
+    let kept: Vec<&str> = o
+        .device_overrides
+        .iter()
+        .map(|d| d.device.device.as_str())
+        .collect();
+    assert_eq!(kept, ["dac"]);
+    let bit_perfect: Vec<&str> = o.bit_perfect.iter().map(|d| d.device.as_str()).collect();
+    assert_eq!(bit_perfect, ["dac"]);
+    assert!(o.dsd_output.is_empty());
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
 }

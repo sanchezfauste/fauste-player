@@ -1078,7 +1078,8 @@ fn delete_playlist(
     Ok(())
 }
 
-/// Takes a new configuration, validated. The player count only changes
+/// Takes a new configuration, validated, without the settings of devices
+/// no route names (`forget_unrouted_devices`). The player count only changes
 /// through `SetPlayerCount`, except that a lower `limits.max_players`
 /// removes the players above it, refused while one of them is busy.
 fn update_config(
@@ -1087,6 +1088,7 @@ fn update_config(
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
     let _ = config.validate();
+    config.outputs.forget_unrouted_devices();
     let count = state.players.len().min(config.limits.max_players);
     if let Some(busy) = state.players[count..]
         .iter()

@@ -9,7 +9,8 @@ processing on the computer should be avoided.
 
 1. In **Settings → Audio outputs**, choose the device explicitly for a
    player's Main output (or the cartwall's). A player left on the system
-   default cannot be made bit-perfect.
+   default cannot be made bit-perfect. A device that no output uses any
+   more loses its bit-perfect switch and its DSD mode.
 2. Choose **Advanced** at the top of the section. Under **Per-device
    settings**, turn on **Bit-perfect** next to the device.
 3. Restart the application.

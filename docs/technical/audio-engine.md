@@ -174,7 +174,9 @@ cannot hang the conductor.
   `outputs.sample_rate`, and asks for the device's own buffer or
   `outputs.buffer_frames` (`buffer_for`). `EngineSettings::from_config` keeps
   only the overrides of devices a route names (`routed_devices`), so the
-  system-default output opens at the global values. A bus with its own
+  system-default output opens at the global values; the model removes
+  the overrides, bit-perfect and DSD entries of a device that leaves every
+  route (`forget_unrouted_devices`). A bus with its own
   rate keeps the global rate and buffer as its `pcm_fallback`: when the
   own rate does not open, the watchdog reopens the device there (warn
   log). The mixer's smoothing and declick
