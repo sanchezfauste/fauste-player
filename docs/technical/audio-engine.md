@@ -121,10 +121,16 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   label gives way to an end label), each label is centred on its line or, at
   the rect's edge, rests on or hangs from it (`MeterLine::label_align`), and
   the scale is a ruler on each side of the bars (`MeterLayout::rulers`): a
-  major tick for every label, minor ticks from `widgets::minor_marks` (a
-  step per scale, kept 3 px apart) and a thicker white alignment tick
-  (`MeterLayout::ticks`, painted with `widgets::tick_colour`). Nothing is
-  drawn over the bars or between them. The tick colours are the
+  major tick for every label, minor ticks and a thicker white alignment
+  tick (`MeterLayout::ticks`, painted with `widgets::tick_colour`). Each
+  segment between two ticks of the scale's marks is ruled at the finest
+  step of a 0.5/1/2/2.5/5/10 dB ladder that is not finer than the scale's
+  own spacing (`widgets::minor_marks`) and keeps the ticks 3 px apart, on
+  the multiples of that step in the scale's units. The label columns are
+  as wide as the scale's widest label (`widgets::label_column`, so the
+  meter's width, `widgets::meter_width`, follows the meter type), with a
+  3 px gap to the ticks. Nothing is drawn over the bars or between them.
+  The tick colours are the
   `METER_TICK*` and `METER_ALIGNMENT_TICK` constants in `ui/theme.rs`.
 - **Tests** (`tests/metering.rs`, `tests/mixer.rs`):
   - the BS.1770 coefficients and the 1 kHz gain at every rate;
