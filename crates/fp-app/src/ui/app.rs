@@ -277,9 +277,10 @@ impl Scene<'_> {
     /// (which has a Path row of its own); `None` when it can.
     pub fn file_reason(&self, track: TrackId) -> Option<String> {
         let track = self.state.library.get(track)?;
-        let key = match super::view::file_problem(track)? {
-            "file-missing-tip" => "file-missing-reason",
-            _ => "file-unreadable-reason",
+        let key = match track.file_state {
+            fp_model::FileState::Ok => return None,
+            fp_model::FileState::Missing => "file-missing-reason",
+            fp_model::FileState::Unreadable => "file-unreadable-reason",
         };
         Some(self.i18n.tr(key))
     }
