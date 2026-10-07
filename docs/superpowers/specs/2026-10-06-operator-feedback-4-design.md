@@ -431,7 +431,7 @@ Rulings made while implementing:
   - Every `SetNext` clears it, `MoveEntry` and `Stop` clear it, and `settle` runs in `reconcile`.
   - `PlayerSession::pending_start` is saved and loaded leniently: a broken or stale value is dropped without a log line.
   - `view::player_view` shows it as the stopped player's position, and `player.rs::wave` is always seekable; the zoom of a stopped player still does not follow.
-  - The remote `seek` on a stopped player (`api.rs`, `O::Seek`) targets the next entry's cue range; `409` only when there is no next.
+  - The remote `seek` on a stopped player (`api.rs`, `O::Seek`) targets the next entry's cue range; `400` for a start at or past its cue-out and `409` when there is no next or its file is missing or unreadable, the cases where rule 3a stores nothing.
   - The engine is unchanged: `take_or_open` already matches a preload on `(entry, start_secs)`, and an engine test pins it.
 
 Rulings made while implementing:

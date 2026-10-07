@@ -135,9 +135,11 @@ red.
   playhead and the countdown move there, and nothing plays until you press
   Play. Choosing another next track, moving or removing it, or Stop goes back
   to the cue-in; so does any other way of starting a track, and Restart,
-  Previous and the automatic advance always use the cue-in. A click after the
-  end (in the darker tail) keeps the cue-in. A click is a press and release
-  without moving the pointer more than a few pixels.
+  Previous and the automatic advance always use the cue-in. A click before
+  the cue-in (in the darker start) chooses the cue-in. A click at or after
+  the cue-out (in the darker tail) cancels an earlier choice: Play starts at
+  the cue-in. A click is a press and release without moving the pointer more
+  than a few pixels.
 - **Press and drag** moves the zoomed view along the track, like grabbing it.
   A drag never jumps, and without zoom it does nothing. Alt-drag still edits
   markers.
