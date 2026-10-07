@@ -1,10 +1,11 @@
 name: pages
 
 # Builds the website (the landing page in site/ and the user guide in
-# docs/user as an mdBook) and deploys it to GitHub Pages. The landing page's
-# download links are filled from the latest release.
+# docs/user, with its translations in docs/i18n, as mdBooks) and deploys it to
+# GitHub Pages. The landing page's download links are filled from the latest
+# release.
 #   - push to master touching the site or the guide: build and deploy;
-#   - pull requests touching them: build and check links only;
+#   - pull requests touching them: build, check links and translations only;
 #   - release-please calls this workflow after its release build, because
 #     releases created with GITHUB_TOKEN trigger no other workflow, so the
 #     links point at the new release;
@@ -16,6 +17,8 @@ on:
     branches: [master]
     paths:
       - docs/user/**
+      - docs/i18n/**
+      - docs/book-assets/**
       - docs/images/**
       - docs/book.toml
       - site/**
@@ -25,6 +28,8 @@ on:
   pull_request:
     paths:
       - docs/user/**
+      - docs/i18n/**
+      - docs/book-assets/**
       - docs/images/**
       - docs/book.toml
       - site/**
@@ -48,12 +53,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The translation check compares each translation with the English
+          # guide at the commit it was translated from.
+          fetch-depth: 0
       - name: Build the site
         run: scripts/site/build.sh _site
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Check links
         run: scripts/site/check-links.sh _site
+      - name: Check the translations
+        run: scripts/site/check-translations.sh _site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

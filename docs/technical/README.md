@@ -18,7 +18,7 @@ the implementation differs from the spec or defers part of it.
 | [Remote control API](remote-api.md) | The HTTP/JSON API: resources, routes, errors, security, the remote thread |
 | [User interface](ui.md) | The egui app: view model, controller, services, panic isolation, i18n |
 | [Testing](testing.md) | Test layers, the Offline backend, stress and soak, UI tests |
-| [Release process](release-process.md) | Versioning, commits, release-please, artefacts, rebuilding a release |
+| [Release process](release-process.md) | Versioning, commits, release-please, artefacts, rebuilding a release, the website and the translated guide |
 
 The implementation plans in [`docs/superpowers/plans`](../superpowers/plans)
 record how each part was built, and the rulings taken on the way.

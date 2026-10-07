@@ -29,3 +29,8 @@ language of the operating system unless you choose one in Settings. English and
 Spanish are written by hand; the other nine were generated with AI and may
 contain errors. If you speak one of them, corrections are welcome as issues or
 pull requests.
+
+The online guide is also available in other languages, translated with AI
+from this English guide: choose one with the globe button in the top bar.
+A translated page says so at the top and links to the English page, which
+is the reference when the two differ.
