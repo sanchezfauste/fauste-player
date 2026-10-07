@@ -471,6 +471,26 @@ impl OutputsConfig {
             .unwrap_or(self.buffer_frames)
     }
 
+    /// The rate the engine opens `device` at: its own when a route names it
+    /// (an override applies only to a routed device), else `sample_rate`.
+    pub fn effective_rate(&self, device: &OutputDevice) -> u32 {
+        if self.routed_devices().contains(device) {
+            self.rate_for(&device.backend, &device.device)
+        } else {
+            self.sample_rate
+        }
+    }
+
+    /// The buffer the engine opens `device` with: its own when a route
+    /// names it, else `buffer_frames`.
+    pub fn effective_buffer(&self, device: &OutputDevice) -> u32 {
+        if self.routed_devices().contains(device) {
+            self.buffer_for(&device.backend, &device.device)
+        } else {
+            self.buffer_frames
+        }
+    }
+
     /// Sets (`Some`) or clears (`None`) `device`'s own rate. A value equal
     /// to the global one is kept as the device's own.
     pub fn set_device_rate(&mut self, device: &OutputDevice, rate: Option<u32>) {

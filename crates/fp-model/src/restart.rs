@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use crate::config::{Config, OutputsConfig, Route};
+use crate::config::{Config, OutputDevice, OutputsConfig, Route};
 use crate::ids::PlayerId;
 
 /// Why a restart is needed, in the order the notice lists them.
@@ -37,45 +37,21 @@ fn player_routes(outputs: &OutputsConfig) -> BTreeMap<PlayerId, Pair<'_>> {
         .collect()
 }
 
-/// The devices the routes name.
-fn routed_devices(o: &OutputsConfig) -> Vec<(&str, &str)> {
-    let mut routes: Vec<&Route> = Vec::new();
-    for r in &o.routes {
-        routes.extend(r.main.iter().chain(r.cue.iter()));
-    }
-    routes.extend(o.cartwall.main.iter().chain(o.cartwall.cue.iter()));
-    routes
-        .into_iter()
-        .map(|r| (r.backend.as_str(), r.device.as_str()))
-        .collect()
-}
-
-fn overridden_devices(o: &OutputsConfig) -> Vec<(&str, &str)> {
-    o.device_overrides
-        .iter()
-        .map(|d| (d.device.backend.as_str(), d.device.device.as_str()))
-        .collect()
-}
-
 /// Whether a device opens differently under `a` and under `b` for one
-/// setting (`effective`: the rate or buffer a device opens with). The
-/// devices checked are the routed ones and every one with an own value in
-/// either configuration, so an own value equal to the global one, which
-/// changes nothing, does not count.
+/// setting (`effective`: the rate or buffer the engine opens it with). Only
+/// devices routed in both are compared: a device routed in only one is a
+/// change of routes, and an own value on an unrouted device applies to
+/// nothing. An own value equal to the global one changes nothing either.
 fn device_values_differ(
     a: &OutputsConfig,
     b: &OutputsConfig,
-    effective: fn(&OutputsConfig, &str, &str) -> u32,
+    effective: fn(&OutputsConfig, &OutputDevice) -> u32,
 ) -> bool {
-    let devices: HashSet<(&str, &str)> = routed_devices(a)
-        .into_iter()
-        .chain(routed_devices(b))
-        .chain(overridden_devices(a))
-        .chain(overridden_devices(b))
-        .collect();
-    devices
-        .into_iter()
-        .any(|(backend, device)| effective(a, backend, device) != effective(b, backend, device))
+    let in_b = b.routed_devices();
+    a.routed_devices()
+        .iter()
+        .filter(|d| in_b.contains(d))
+        .any(|d| effective(a, d) != effective(b, d))
 }
 
 /// What changed between the configuration the application started with
@@ -86,10 +62,12 @@ pub fn restart_pending(started: &Config, current: &Config) -> Vec<RestartReason>
     if a.backend != b.backend {
         reasons.push(RestartReason::AudioSystem);
     }
-    if a.sample_rate != b.sample_rate || device_values_differ(a, b, OutputsConfig::rate_for) {
+    if a.sample_rate != b.sample_rate || device_values_differ(a, b, OutputsConfig::effective_rate) {
         reasons.push(RestartReason::SampleRate);
     }
-    if a.buffer_frames != b.buffer_frames || device_values_differ(a, b, OutputsConfig::buffer_for) {
+    if a.buffer_frames != b.buffer_frames
+        || device_values_differ(a, b, OutputsConfig::effective_buffer)
+    {
         reasons.push(RestartReason::BufferSize);
     }
     if player_routes(a) != player_routes(b) || a.cartwall != b.cartwall {
