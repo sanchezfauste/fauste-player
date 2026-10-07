@@ -11,10 +11,10 @@ use std::path::PathBuf;
 
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
-    PlayerStatus, RowStatus, TipField, analysis_pending, cue_follow_target, cue_window_view,
-    fader_from_gain, file_icon, file_problem, gain_from_fader, player_view, playlist_times,
-    row_is_next, row_status, shown_entry, start_scroll_target, tag_edit_availability, time_text,
-    track_tooltip, volume_db,
+    MarkerFractions, PlayerStatus, RowStatus, TipField, analysis_pending, cue_follow_target,
+    cue_window_view, fader_from_gain, file_icon, file_problem, gain_from_fader, intro_left,
+    marker_fractions, outro_left, player_view, playlist_times, row_is_next, row_status,
+    shown_entry, start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayerId, Track, apply,
@@ -293,6 +293,84 @@ fn use_markers(s: &mut AppState, on: bool) {
     let mut config = s.config.clone();
     config.players.use_cue_markers = on;
     apply(s, Command::UpdateConfig(Box::new(config))).unwrap();
+}
+
+/// Every marker of the track of `entry` set by hand on a 200 s track:
+/// cue-in 10, intro end 30, outro 150, MIX 170, cue-out 190.
+fn all_marked(s: &mut AppState, entry: EntryId) -> fp_model::TrackId {
+    let t = s.playlists.entry(entry).unwrap().track;
+    mark(s, t, MarkerKind::CueIn, 10.0);
+    mark(s, t, MarkerKind::CueOut, 190.0);
+    mark(s, t, MarkerKind::IntroEnd, 30.0);
+    mark(s, t, MarkerKind::OutroStart, 150.0);
+    mark(s, t, MarkerKind::SegueStart, 170.0);
+    t
+}
+
+fn near(v: Option<f32>, want: f32) -> bool {
+    v.is_some_and(|v| (v - want).abs() < 1e-4)
+}
+
+#[test]
+fn marker_fractions_place_the_markers_and_the_position_against_the_total() {
+    let (mut s, e, _) = state(1);
+    let t = all_marked(&mut s, e[0]);
+    let track = s.library.get(t).unwrap();
+    let m = marker_fractions(track, 200.0, 50.0, false);
+    assert!(near(m.position, 0.25), "{m:?}");
+    assert!(near(m.cue_in, 0.05) && near(m.cue_out, 0.95), "{m:?}");
+    assert!(near(m.intro_end, 0.15), "{m:?}");
+    assert!(
+        near(m.outro_start, 0.75) && near(m.segue_start, 0.85),
+        "{m:?}"
+    );
+    assert!(!m.ignored);
+    assert!(marker_fractions(track, 200.0, 50.0, true).ignored);
+}
+
+#[test]
+fn marker_fractions_clamp_the_position_and_need_a_length() {
+    let (mut s, e, _) = state(1);
+    let t = all_marked(&mut s, e[0]);
+    let track = s.library.get(t).unwrap();
+    assert_eq!(
+        marker_fractions(track, 200.0, 900.0, false).position,
+        Some(1.0)
+    );
+    assert_eq!(
+        marker_fractions(track, 0.0, 50.0, true),
+        MarkerFractions {
+            ignored: true,
+            ..MarkerFractions::default()
+        },
+        "no length, nothing to place"
+    );
+}
+
+#[test]
+fn the_intro_and_outro_countdowns_start_at_their_markers() {
+    let (mut s, e, _) = state(1);
+    let t = all_marked(&mut s, e[0]);
+    let track = s.library.get(t).unwrap();
+    assert_eq!(intro_left(track, 20.0), Some(10.0));
+    assert_eq!(intro_left(track, 30.0), None, "the intro is over");
+    assert_eq!(
+        outro_left(track, 100.0, 190.0),
+        None,
+        "not in the outro yet"
+    );
+    assert_eq!(outro_left(track, 160.0, 190.0), Some(30.0));
+    assert_eq!(outro_left(track, 195.0, 190.0), Some(0.0), "never negative");
+}
+
+#[test]
+fn the_player_view_places_its_markers_with_marker_fractions() {
+    let (mut s, e, p) = state(2);
+    let t = all_marked(&mut s, e[0]);
+    apply(&mut s, Command::Play(p)).unwrap();
+    let v = player_view(&s, p, Some(50.0), 0.0).unwrap();
+    let track = s.library.get(t).unwrap();
+    assert_eq!(v.markers, marker_fractions(track, 200.0, 50.0, false));
 }
 
 #[test]

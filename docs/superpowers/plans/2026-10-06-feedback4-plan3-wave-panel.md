@@ -92,7 +92,7 @@ Inputs the spec implies but no rule spells out, most likely to bite first; each 
   - `pub fn outro_left(track: &Track, position: f64, end: f64) -> Option<f64>` — seconds to `end` once at or past the outro start, never negative.
   - private `fn tenths(secs: f64) -> f64` — rounded to a tenth, as the badges show it.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `crates/fp-app/tests/view.rs`, extend the `use fp_app::ui::view::{…}` list with `MarkerFractions, intro_left, marker_fractions, outro_left` (keep it sorted the way `cargo fmt` leaves it), then append after the `use_markers` helper (`tests/view.rs:290-295`):
 
@@ -169,12 +169,12 @@ fn the_player_view_places_its_markers_with_marker_fractions() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test view marker_fractions`
 Expected: does not compile — "unresolved imports `fp_app::ui::view::intro_left`, `marker_fractions`, `outro_left`".
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `crates/fp-app/src/ui/view.rs`, after `fn fraction` (`:79-83`), add:
 
@@ -247,12 +247,12 @@ Then replace the tail of `player_view` (`view.rs:223-247`, from `if let Some(int
 
 (After plan 2, `pos` may come from the pending start; keep plan 2's `pos`.)
 
-- [ ] **Step 4: Run the tests to verify they pass, and the old view rules with them**
+- [x] **Step 4: Run the tests to verify they pass, and the old view rules with them**
 
 Run: `cargo test -p fp-app --test view`
 Expected: PASS, including the untouched `rule18_the_intro_badge_counts_down_only_for_a_marked_intro_and_blinks_at_the_end`, `rule19_the_outro_badge_counts_down_to_cue_out`, `the_countdown_and_the_outro_follow_the_play_range` and `the_view_says_when_the_cue_marks_are_ignored`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
