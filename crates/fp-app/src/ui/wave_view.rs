@@ -2,8 +2,10 @@
 //! pure mapping between seconds and pixels that drawing, markers, marker
 //! handles, the hover tooltip and seeking all share.
 
+use std::collections::HashMap;
+
 use egui::{Rect, pos2};
-use fp_model::EntryId;
+use fp_model::{EntryId, PlayerId};
 
 /// A player's zoomed waveform: the view, the entry it belongs to (another
 /// entry returns to the full view) and when the operator last moved it.
@@ -13,6 +15,50 @@ pub struct WaveZoom {
     pub entry: EntryId,
     /// `Scene::time` of the last zoom or pan.
     pub moved_at: f64,
+}
+
+/// Which waveform a view state belongs to (operator feedback 4, Q7.2): a
+/// player's, or its CUE window's. Their zoom, menu and marker drag are
+/// independent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WaveKey {
+    Player(PlayerId),
+    Cue(PlayerId),
+}
+
+impl WaveKey {
+    /// The waveform's egui id: its memoised columns and its pan drag are
+    /// keyed on it.
+    pub fn id(self) -> egui::Id {
+        match self {
+            Self::Player(p) => egui::Id::new(("waveform", p)),
+            Self::Cue(p) => egui::Id::new(("cue-waveform", p)),
+        }
+    }
+}
+
+/// The zoomed waveforms; one that is not here shows the whole track.
+#[derive(Debug, Clone, Default)]
+pub struct WaveZooms(HashMap<WaveKey, WaveZoom>);
+
+impl WaveZooms {
+    /// The zoom of `key`, when it was made on `entry`: another entry, or
+    /// none, shows the whole track.
+    pub fn get(&self, key: WaveKey, entry: Option<EntryId>) -> Option<WaveZoom> {
+        self.0.get(&key).copied().filter(|z| Some(z.entry) == entry)
+    }
+
+    /// Keeps `zoom` for `key`; `None` returns it to the whole track.
+    pub fn set(&mut self, key: WaveKey, zoom: Option<WaveZoom>) {
+        match zoom {
+            Some(z) => {
+                self.0.insert(key, z);
+            }
+            None => {
+                self.0.remove(&key);
+            }
+        }
+    }
 }
 
 /// The visible stretch of a track, in seconds.

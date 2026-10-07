@@ -288,7 +288,7 @@ fi
   - `#[derive(Debug, Clone, Default)] pub struct WaveZooms` with `pub fn get(&self, key: WaveKey, entry: Option<EntryId>) -> Option<WaveZoom>` and `pub fn set(&mut self, key: WaveKey, zoom: Option<WaveZoom>)`.
   - `ViewState::wave_menu: HashMap<WaveKey, f64>`, `ViewState::wave_zoom: WaveZooms`, `ViewState::marker_drag: Option<(WaveKey, fp_model::MarkerKind, TrackId)>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/fp-app/tests/waveform_view.rs`:
 
@@ -364,12 +364,12 @@ mod keys {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test waveform_view keys`
 Expected: does not compile — "unresolved imports `fp_app::ui::wave_view::WaveKey`, `WaveZooms`".
 
-- [ ] **Step 3: Add the types**
+- [x] **Step 3: Add the types**
 
 In `crates/fp-app/src/ui/wave_view.rs`, change the imports (`:5-6`) to:
 
@@ -431,7 +431,7 @@ impl WaveZooms {
 }
 ```
 
-- [ ] **Step 4: Key the view state**
+- [x] **Step 4: Key the view state**
 
 In `crates/fp-app/src/ui/app.rs`, replace the three fields:
 
@@ -493,12 +493,12 @@ In `crates/fp-app/src/ui/player.rs`:
         .map(|(_, k, _)| k);
 ```
 
-- [ ] **Step 5: Run the new and the existing waveform tests**
+- [x] **Step 5: Run the new and the existing waveform tests**
 
 Run: `cargo test -p fp-app --test waveform_view && cargo test -p fp-app --test waveform_ui && cargo test -p fp-app --test markers_ui`
 Expected: PASS, every existing test unchanged.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \

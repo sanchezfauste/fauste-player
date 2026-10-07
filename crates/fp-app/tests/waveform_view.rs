@@ -362,3 +362,73 @@ fn a_waveform_with_ignored_marks_draws_without_panicking() {
     });
     harness.run();
 }
+
+mod keys {
+    use fp_app::ui::wave_view::{WaveKey, WaveView, WaveZoom, WaveZooms};
+    use fp_model::{EntryId, PlayerId};
+
+    fn zoom(entry: u64, start: f64) -> WaveZoom {
+        WaveZoom {
+            view: WaveView {
+                start_secs: start,
+                span_secs: 10.0,
+            },
+            entry: EntryId(entry),
+            moved_at: 0.0,
+        }
+    }
+
+    #[test]
+    fn a_player_and_its_cue_keep_their_own_zoom() {
+        let p = PlayerId(1);
+        let (player, cue) = (WaveKey::Player(p), WaveKey::Cue(p));
+        let mut z = WaveZooms::default();
+        z.set(player, Some(zoom(5, 20.0)));
+        assert_eq!(z.get(cue, Some(EntryId(5))), None, "the CUE is not zoomed");
+        z.set(cue, Some(zoom(5, 40.0)));
+        assert_eq!(z.get(player, Some(EntryId(5))), Some(zoom(5, 20.0)));
+        assert_eq!(z.get(cue, Some(EntryId(5))), Some(zoom(5, 40.0)));
+        z.set(cue, None);
+        assert_eq!(z.get(cue, Some(EntryId(5))), None);
+        assert_eq!(
+            z.get(player, Some(EntryId(5))),
+            Some(zoom(5, 20.0)),
+            "the player's zoom stays"
+        );
+    }
+
+    #[test]
+    fn players_keep_their_own_zoom() {
+        let mut z = WaveZooms::default();
+        z.set(WaveKey::Player(PlayerId(1)), Some(zoom(5, 20.0)));
+        assert_eq!(z.get(WaveKey::Player(PlayerId(2)), Some(EntryId(5))), None);
+    }
+
+    #[test]
+    fn a_zoom_belongs_to_the_entry_it_was_made_on() {
+        let key = WaveKey::Cue(PlayerId(1));
+        let mut z = WaveZooms::default();
+        z.set(key, Some(zoom(5, 20.0)));
+        assert_eq!(z.get(key, Some(EntryId(6))), None, "another entry");
+        assert_eq!(z.get(key, None), None, "no entry");
+        assert_eq!(z.get(key, Some(EntryId(5))), Some(zoom(5, 20.0)));
+    }
+
+    #[test]
+    fn each_key_keeps_its_waveform_id() {
+        let (p, q) = (PlayerId(1), PlayerId(2));
+        assert_eq!(WaveKey::Player(p).id(), egui::Id::new(("waveform", p)));
+        assert_eq!(WaveKey::Cue(p).id(), egui::Id::new(("cue-waveform", p)));
+        let ids = [
+            WaveKey::Player(p).id(),
+            WaveKey::Cue(p).id(),
+            WaveKey::Player(q).id(),
+            WaveKey::Cue(q).id(),
+        ];
+        for (i, a) in ids.iter().enumerate() {
+            for b in ids.iter().skip(i + 1) {
+                assert_ne!(a, b);
+            }
+        }
+    }
+}

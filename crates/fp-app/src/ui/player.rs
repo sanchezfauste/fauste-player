@@ -17,7 +17,7 @@ use super::tab_strip;
 use super::table;
 use super::theme;
 use super::view::{self, PlayerStatus, PlayerView};
-use super::wave_view::{WaveView, WaveZoom, min_span};
+use super::wave_view::{WaveKey, WaveView, WaveZoom, min_span};
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
 const PLAY_SIZE: f32 = 64.0;
@@ -846,17 +846,17 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         .map(|e| e.track);
     let media = track.and_then(|t| scene.media.get(t));
     let total = pv.total.filter(|t| *t > 0.0);
+    let key = WaveKey::Player(id);
     // A zoom belongs to the entry it was made on.
     let mut zoom = view_state
         .wave_zoom
-        .get(&id)
-        .copied()
-        .filter(|z| Some(z.entry) == current && total.is_some());
-    let wave_id = egui::Id::new(("waveform", id));
+        .get(key, current)
+        .filter(|_| total.is_some());
+    let wave_id = key.id();
     // While zoomed, follow the playhead once the operator's last move is
     // older than the grace (feedback spec F17), but never under a held drag.
     let dragging = widgets::pan_dragging(ui, wave_id)
-        || view_state.marker_drag.is_some_and(|(p, _, _)| p == id);
+        || view_state.marker_drag.is_some_and(|(k, _, _)| k == key);
     if let (Some(z), Some(total), Some(f)) = (zoom.as_mut(), total, pv.markers.position) {
         let grace = scene.state.config.ui.follow_current_grace_secs;
         if dragging {
@@ -912,7 +912,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
     let rect = response.rect;
     if let (Some(track), Some(total)) = (track, total) {
         let shown = view.unwrap_or_else(|| WaveView::full(total));
-        edit_markers(ui, scene, view_state, id, track, shown, pv, &response);
+        edit_markers(ui, scene, view_state, key, track, shown, pv, &response);
     }
     // The wheel zooms around the pointer; Shift or a sideways wheel pans.
     if let (Some(entry), Some(total), Some(p)) = (current, total, response.hover_pos()) {
@@ -1006,14 +1006,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         }
         badge_right = button.left() - 4.0;
     }
-    match zoom {
-        Some(z) => {
-            view_state.wave_zoom.insert(id, z);
-        }
-        None => {
-            view_state.wave_zoom.remove(&id);
-        }
-    }
+    view_state.wave_zoom.set(key, zoom);
     if let Some(left) = pv.intro {
         let fill = if pv.intro_blink == Some(true) {
             theme::INTRO_BADGE_BLINK
@@ -1390,7 +1383,7 @@ fn edit_markers(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
-    id: PlayerId,
+    key: WaveKey,
     track: TrackId,
     view: WaveView,
     pv: &PlayerView,
@@ -1412,9 +1405,9 @@ fn edit_markers(
     if response.secondary_clicked()
         && let Some(p) = response.interact_pointer_pos()
     {
-        view_state.wave_menu.insert(id, secs_at(p.x));
+        view_state.wave_menu.insert(key, secs_at(p.x));
     }
-    let at = view_state.wave_menu.get(&id).copied();
+    let at = view_state.wave_menu.get(&key).copied();
     let open = response.context_menu(|ui| {
         ui.set_min_width(220.0);
         let item = |ui: &mut Ui, key: &str| {
@@ -1460,7 +1453,7 @@ fn edit_markers(
     });
     // Once the menu is closed, the point it was opened at is forgotten.
     if open.is_none() && !response.secondary_clicked() {
-        view_state.wave_menu.remove(&id);
+        view_state.wave_menu.remove(&key);
     }
     let alt = ui.input(|i| i.modifiers.alt);
     // The drag starts once the pointer has moved; pick the marker under
@@ -1475,19 +1468,19 @@ fn edit_markers(
             .filter_map(|(kind, f)| f.map(|f| (*kind, (x_of(f) - p.x).abs())))
             .filter(|(_, d)| *d <= 8.0)
             .min_by(|a, b| a.1.total_cmp(&b.1));
-        view_state.marker_drag = nearest.map(|(kind, _)| (id, kind, track));
+        view_state.marker_drag = nearest.map(|(kind, _)| (key, kind, track));
     }
     // A drag belongs to the track it started on: if the player moved on,
     // it is dropped.
     if view_state
         .marker_drag
-        .is_some_and(|(p, _, t)| p == id && t != track)
+        .is_some_and(|(k, _, t)| k == key && t != track)
     {
         view_state.marker_drag = None;
     }
     let dragging = view_state
         .marker_drag
-        .filter(|(p, _, _)| *p == id)
+        .filter(|(k, _, _)| *k == key)
         .map(|(_, k, _)| k);
     let painter = ui.painter_at(response.rect);
     if alt || dragging.is_some() {
