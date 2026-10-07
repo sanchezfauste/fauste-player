@@ -1017,6 +1017,35 @@ fn the_alignment_tick_is_white_on_both_rulers() {
     }
 }
 
+/// Whether `c` is `base` at some opacity (premultiplied, as
+/// `gamma_multiply` gives it).
+fn is_tint_of(c: egui::Color32, base: egui::Color32) -> bool {
+    if base.a() == 0 {
+        return false;
+    }
+    let tint = base.gamma_multiply(c.a() as f32 / base.a() as f32);
+    c.to_array()
+        .iter()
+        .zip(tint.to_array())
+        .all(|(a, b)| a.abs_diff(b) <= 2)
+}
+
+/// Whether `shape` is part of a bar's own content: a filled rect without a
+/// stroke, in the bar background or a zone colour at any opacity (the
+/// level, the K-System's dimmed peak, the hold).
+fn is_bar_content(shape: &egui::Shape) -> bool {
+    let egui::Shape::Rect(r) = shape else {
+        return false;
+    };
+    let allowed = [
+        fp_app::ui::theme::NEUTRAL_800,
+        fp_app::ui::theme::METER_NORMAL,
+        fp_app::ui::theme::METER_WARNING,
+        fp_app::ui::theme::METER_DANGER,
+    ];
+    r.stroke.is_empty() && allowed.iter().any(|base| is_tint_of(r.fill, *base))
+}
+
 /// Spec Q11.1: of everything `vu` paints, only the bars' own content (the
 /// background, the level, the hold and the zones) touches a bar, and nothing
 /// touches the gap between them.
@@ -1033,7 +1062,7 @@ fn nothing_is_drawn_over_the_bars_or_between_them() {
                 },
                 ..meter(ballistics)
             };
-            let seen: RefCell<Vec<egui::Rect>> = RefCell::new(Vec::new());
+            let seen: RefCell<Vec<egui::Shape>> = RefCell::new(Vec::new());
             let bars: RefCell<[egui::Rect; 2]> = RefCell::new([egui::Rect::NOTHING; 2]);
             let mut h = egui_kittest::Harness::new_ui(|ui| {
                 let labels = fp_app::ui::widgets::MeterLabels {
@@ -1061,7 +1090,7 @@ fn nothing_is_drawn_over_the_bars_or_between_them() {
                     g.entry(layer)
                         .all_entries()
                         .skip(before)
-                        .map(|s| s.shape.visual_bounding_rect())
+                        .map(|s| s.shape.clone())
                         .collect()
                 });
             });
@@ -1070,7 +1099,8 @@ fn nothing_is_drawn_over_the_bars_or_between_them() {
             let gap = egui::Rect::from_x_y_ranges(left.right()..=right.left(), left.y_range());
             let shapes = seen.borrow();
             assert!(!shapes.is_empty(), "{ballistics:?}: nothing painted");
-            for s in shapes.iter() {
+            for shape in shapes.iter() {
+                let s = shape.visual_bounding_rect();
                 assert!(
                     !(gap.width() > 0.0 && s.width() > 0.0 && s.intersects(gap.shrink(0.01))),
                     "{ballistics:?} {loudness}: {s:?} touches the gap {gap:?}"
@@ -1078,8 +1108,12 @@ fn nothing_is_drawn_over_the_bars_or_between_them() {
                 for bar in [left, right] {
                     if s.intersects(bar.shrink(0.01)) {
                         assert!(
-                            bar.expand(0.01).contains_rect(*s),
+                            bar.expand(0.01).contains_rect(s),
                             "{ballistics:?} {loudness}: {s:?} crosses the edge of {bar:?}"
+                        );
+                        assert!(
+                            is_bar_content(shape),
+                            "{ballistics:?} {loudness}: {shape:?} is drawn over {bar:?}"
                         );
                     }
                 }
@@ -1220,6 +1254,51 @@ fn the_top_of_the_digital_scale_is_ruled_evenly() {
                 m.len() == inside.len() && m.iter().zip(&inside).all(|(a, b)| (a - b).abs() < 0.01)
             });
             assert!(regular, "{height}: {inside:?} between {lo} and {hi}");
+        }
+    }
+}
+
+/// Spec Q11.1 on the layout: no tick of any kind, on either ruler, and no
+/// label column touches a bar or the gap between them.
+#[test]
+fn the_rulers_keep_clear_of_the_bars_and_the_gap() {
+    for c in ruled_scales() {
+        for height in [64.0, 136.0, 300.0] {
+            for loudness in [false, true] {
+                let l = meter_layout(column_for(&c, height), &c, loudness);
+                let [left, right] = l.bars;
+                let gap = egui::Rect::from_x_y_ranges(left.right()..=right.left(), left.y_range());
+                let inner = [left, right, gap].map(|r| r.shrink(0.01));
+                let [lr, rr] = &l.rulers;
+                for ruler in [lr, rr] {
+                    for t in &l.ticks {
+                        let r = ruler.tick_rect(t);
+                        assert!(
+                            inner.iter().all(|b| !r.intersects(*b)),
+                            "{:?} {height} {loudness}: {t:?} at {r:?} on the {:?} ruler",
+                            c.ballistics,
+                            ruler.side
+                        );
+                    }
+                }
+                // The labels hang away from the bars, from anchors outside
+                // them.
+                let label_column = label_column(&c);
+                let labels = [
+                    (lr.labels_x - label_column)..=lr.labels_x,
+                    rr.labels_x..=(rr.labels_x + label_column),
+                ];
+                assert_eq!(lr.label_halign, egui::Align::Max);
+                assert_eq!(rr.label_halign, egui::Align::Min);
+                for x in labels {
+                    let column = egui::Rect::from_x_y_ranges(x, left.y_range());
+                    assert!(
+                        inner.iter().all(|b| !column.intersects(*b)),
+                        "{:?} {height} {loudness}: labels at {column:?}",
+                        c.ballistics
+                    );
+                }
+            }
         }
     }
 }
