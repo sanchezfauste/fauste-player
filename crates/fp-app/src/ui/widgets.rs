@@ -1103,6 +1103,12 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         }
     }
     lines.push(alignment);
+    if matches!(
+        c.ballistics,
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom
+    ) {
+        add_intermediate_labels(&mut lines, c, &line);
+    }
     lines.sort_by(|a, b| a.label_centre().total_cmp(&b.label_centre()));
     let ticks = ruler_ticks(&lines, &marks, c, top, bottom);
     MeterLayout {
@@ -1113,6 +1119,67 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
         lines,
         rulers,
         ticks,
+    }
+}
+
+/// The steps (dB) the digital scale's intermediate labels may take, finest
+/// first (see [`add_intermediate_labels`]).
+const LABEL_STEP_LADDER: [f32; 3] = [1.0, 2.0, 5.0];
+
+/// Labels the digital scale more densely where the meter is tall enough:
+/// between each two adjacent labels, every multiple (dBFS) of the finest
+/// step of [`LABEL_STEP_LADDER`] that is not finer than the scale's spacing
+/// ([`minor_step_db`]) and keeps every label of the segment [`LABEL_ROW`]
+/// apart, or none. An intermediate level that is the alignment level labels
+/// the alignment line. The standardized scales keep their own labels.
+fn add_intermediate_labels(
+    lines: &mut Vec<MeterLine>,
+    c: &MeterConfig,
+    line: &impl Fn(f32, bool) -> MeterLine,
+) {
+    let mut labelled: Vec<(f32, f32)> = lines
+        .iter()
+        .filter(|m| !m.label.is_empty())
+        .map(|m| (m.db, m.label_centre()))
+        .collect();
+    labelled.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let alignment = alignment_dbfs(c);
+    let mut added = Vec::new();
+    for pair in labelled.windows(2) {
+        let (Some(&(low, low_centre)), Some(&(high, high_centre))) = (pair.first(), pair.get(1))
+        else {
+            continue;
+        };
+        let finest = minor_step_db(c, low);
+        let fits = |levels: &[MeterLine]| {
+            let centres = std::iter::once(low_centre)
+                .chain(levels.iter().map(MeterLine::label_centre))
+                .chain(std::iter::once(high_centre));
+            centres
+                .clone()
+                .zip(centres.skip(1))
+                .all(|(a, b)| a - b >= LABEL_ROW - 0.01)
+        };
+        let chosen = LABEL_STEP_LADDER
+            .iter()
+            .filter(|step| **step >= finest - SAME_MARK_DB)
+            .map(|step| {
+                step_multiples(low, high, *step, c)
+                    .into_iter()
+                    .map(|db| line(db, false))
+                    .collect::<Vec<_>>()
+            })
+            .find(|levels| !levels.is_empty() && fits(levels));
+        added.extend(chosen.into_iter().flatten());
+    }
+    for new in added {
+        if (new.db - alignment).abs() < SAME_MARK_DB {
+            if let Some(a) = lines.iter_mut().find(|m| m.alignment) {
+                a.label = new.label;
+            }
+        } else {
+            lines.push(new);
+        }
     }
 }
 
