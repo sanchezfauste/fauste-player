@@ -1,0 +1,15 @@
+# Italian translation of the user guide, generated with AI from the English
+# guide in docs/user. Regenerated before each release; see
+# docs/technical/release-process.md.
+language = "it"
+name = "Italiano"
+title = "Fauste Player — Guida per l'utente"
+label = "Lingua"
+# The commit of master whose docs/user this translation was made from, and
+# its `git describe --tags`.
+source-commit = "69320878e299f7829975d5b1a845f1a8c96794bb"
+source-version = "v0.5.0-120-g6932087"
+# The notice on every page; {version} and {commit} are replaced with the
+# fields above, and english-link links to the same page in English.
+notice = "Questa pagina è stata tradotta con l'IA dalla guida in inglese ({version}, commit {commit}) e può contenere errori. In caso di differenze, fa fede la versione inglese."
+english-link = "Leggi l'originale in inglese"
