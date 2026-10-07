@@ -154,11 +154,11 @@ fn a_flac_streaminfo_gives_its_length_without_decoding() {
 #[test]
 fn an_mpeg_stream_without_a_length_frame_has_no_header_duration() {
     let dir = tempfile::tempdir().unwrap();
-    // 40 frames: symphonia estimates a length from the bitrate...
+    // 40 frames: symphonia could estimate a length from the bitrate, which
+    // a VBR file can get wrong: no estimate is made, and none is used.
     let long = write(dir.path(), "vbr.mp3", &mp3(40, false));
     let d = FileDecoder::open(&long).unwrap();
-    assert!(d.frames_hint().is_some(), "symphonia estimates it");
-    // ...which a VBR file can get wrong: it is not used.
+    assert_eq!(d.frames_hint(), None);
     assert_eq!(d.duration_hint_secs(), None);
     // 8 frames: too short even to estimate.
     let short = write(dir.path(), "short.mp3", &mp3(8, false));
@@ -248,4 +248,50 @@ fn a_length_frame_after_an_id3_tag_gives_its_length() {
         .unwrap();
     let expected = 39.0 * 1152.0 / 44_100.0;
     assert!((secs - expected).abs() < 0.05, "{secs} vs {expected}");
+}
+
+/// A VBR MP3 stream without a length frame: `big` silent mono frames at
+/// 320 kbit/s, then `small` at 32 kbit/s (MPEG-1 Layer III, 44.1 kHz). A
+/// length estimated from the first frames' sizes is far too short.
+fn vbr_mp3(big: usize, small: usize) -> Vec<u8> {
+    // (bitrate index, frame length): 144 * bitrate / 44_100, rounded down.
+    let frame = |index: u8, len: usize| {
+        let mut f = vec![0u8; len];
+        f[..4].copy_from_slice(&[0xFF, 0xFB, index << 4, 0xC0]);
+        f
+    };
+    let mut bytes = Vec::new();
+    for _ in 0..big {
+        bytes.extend_from_slice(&frame(14, 1044));
+    }
+    for _ in 0..small {
+        bytes.extend_from_slice(&frame(1, 104));
+    }
+    bytes
+}
+
+/// Frames decoded from `d` until the end of the stream.
+fn decoded_frames(d: &mut FileDecoder) -> usize {
+    let mut out = Vec::new();
+    while d.next_block(&mut out).unwrap() {}
+    out.len() / 2
+}
+
+#[test]
+fn a_vbr_mpeg_stream_without_a_length_frame_decodes_to_its_end() {
+    let dir = tempfile::tempdir().unwrap();
+    // 420 frames, but a length from the first frames' bitrate is ~60.
+    let path = write(dir.path(), "vbr.mp3", &vbr_mp3(20, 400));
+    let mut d = FileDecoder::open(&path).unwrap();
+    assert_eq!(decoded_frames(&mut d), 420 * 1152);
+}
+
+#[test]
+fn a_vbr_mpeg_stream_without_a_length_frame_seeks_past_the_estimate() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(dir.path(), "vbr.mp3", &vbr_mp3(20, 400));
+    let mut d = FileDecoder::open(&path).unwrap();
+    // Frame 300, well past the estimated end.
+    d.seek(300.0 * 1152.0 / 44_100.0).unwrap();
+    assert_eq!(decoded_frames(&mut d), 120 * 1152);
 }

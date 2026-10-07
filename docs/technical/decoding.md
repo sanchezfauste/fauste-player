@@ -36,12 +36,26 @@ Layer III sync after any ID3v2 tag) is a length frame: `Xing` or `Info`
 right after the side information (9, 17 or 32 bytes by version and channel
 mode), or `VBRI` 32 bytes after the header, where symphonia reads them;
 without one symphonia estimates the length from the first frames' bitrate.
-That check reads the file again, so it runs only in `duration_hint_secs`,
-never when a file is opened for playback. Every other reader gets no
+The check reads the first 4 KiB after any ID3v2 tag when the file is
+opened. Every other reader gets no
 length: raw AAC (ADTS), whose count symphonia estimates from a sample of
 frame sizes, Matroska/WebM and any reader added later. WavPack sums its
 block headers, and Monkey's Audio and DSD read their headers' sample
 counts.
+
+symphonia's MPEG reader does more with its estimate than report it: it
+takes it as the end of the stream, so every packet past it is marked to be
+trimmed whole (`trim_end`, decoded to nothing) and a seek past it is out of
+range. A VBR stream whose first frames run at a higher bitrate than the
+rest would stop early in playback, and its analysed length would be short.
+The reader estimates only on a seekable stream, so an MPEG stream without a
+length frame is probed a second time through a source that reports itself
+unseekable until the probe is done (`symph.rs::probe`). It then has no
+length and reads to the last frame; seeking works as usual. Without a LAME
+tag the encoder delay and padding are not known, so they stay in the
+decoded audio (a few tens of milliseconds), as in any decoder. The ADTS
+reader keeps its estimate only as a length and neither trims nor bounds
+seeks by it.
 
 ## symphonia and Opus
 

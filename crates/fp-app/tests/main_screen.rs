@@ -990,9 +990,8 @@ fn hovering_an_unavailable_row_says_why() {
         .hover();
     h.run_steps(40);
     assert!(
-        h.query_by_label_contains("Cannot read the file: /music/Song 2.mp3")
-            .is_some(),
-        "the tooltip gives the reason and the path"
+        h.query_by_label_contains("Cannot read the file").is_some(),
+        "the tooltip gives the reason"
     );
 }
 
@@ -1015,9 +1014,8 @@ fn hovering_the_title_of_an_unavailable_row_says_why() {
     h.get_by_label("Song 2").hover();
     h.run_steps(40);
     assert!(
-        h.query_by_label_contains("File not found: /music/Song 2.mp3")
-            .is_some(),
-        "the tooltip gives the reason and the path"
+        h.query_by_label_contains("File not found").is_some(),
+        "the tooltip gives the reason"
     );
 }
 
@@ -1045,10 +1043,7 @@ fn the_title_says_why_even_without_the_number_column() {
     );
     h.get_by_label("Song 2").hover();
     h.run_steps(40);
-    assert!(
-        h.query_by_label_contains("Cannot read the file: /music/Song 2.mp3")
-            .is_some()
-    );
+    assert!(h.query_by_label_contains("Cannot read the file").is_some());
 }
 
 #[test]

@@ -273,6 +273,18 @@ impl Scene<'_> {
         Some(self.i18n.tr_args(key, &[("path", path.into())]))
     }
 
+    /// Why `track` cannot be played, without its path, for the row popup
+    /// (which has a Path row of its own); `None` when it can.
+    pub fn file_reason(&self, track: TrackId) -> Option<String> {
+        let track = self.state.library.get(track)?;
+        let key = match track.file_state {
+            fp_model::FileState::Ok => return None,
+            fp_model::FileState::Missing => "file-missing-reason",
+            fp_model::FileState::Unreadable => "file-unreadable-reason",
+        };
+        Some(self.i18n.tr(key))
+    }
+
     /// Sends the new list of table columns (feedback 2 spec O24), unless it
     /// is the one in use. The model repairs it (`Config::validate`).
     pub fn set_table_columns(&self, columns: Vec<fp_model::TableColumn>) {

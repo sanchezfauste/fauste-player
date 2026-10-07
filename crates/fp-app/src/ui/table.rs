@@ -872,7 +872,7 @@ fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
 fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
     let t = scene.i18n;
     ui.set_width(TIP_WIDTH.min((ui.ctx().content_rect().width() - 16.0).max(120.0)));
-    let lines = view::track_tooltip(track, scene.file_tip(track.id).as_deref());
+    let lines = view::track_tooltip(track, scene.file_reason(track.id).as_deref());
     let mut rest = lines.as_slice();
     if let Some(((view::TipField::Problem, reason), tail)) = rest.split_first() {
         ui.add(

@@ -175,13 +175,22 @@ fn dsd_settings_apply_at_restart() {
     }
 }
 
+fn routed_to(c: &mut Config, device: &str) {
+    c.outputs.routes.push(PlayerRoutes {
+        player: PlayerId(1),
+        main: Some(route(device)),
+        cue: None,
+    });
+}
+
 #[test]
-fn a_devices_own_rate_or_buffer_waits_for_a_restart() {
+fn a_routed_devices_own_rate_or_buffer_waits_for_a_restart() {
     let dac = OutputDevice {
         backend: "alsa".into(),
         device: "dac".into(),
     };
-    let started = Config::default();
+    let mut started = Config::default();
+    routed_to(&mut started, "dac");
     let mut c = started.clone();
     c.outputs.set_device_rate(&dac, Some(96_000));
     assert_eq!(
@@ -193,6 +202,41 @@ fn a_devices_own_rate_or_buffer_waits_for_a_restart() {
     assert_eq!(
         restart_pending(&started, &c),
         vec![RestartReason::BufferSize]
+    );
+}
+
+#[test]
+fn an_unrouted_devices_own_values_do_not_ask_for_a_restart() {
+    // The engine applies an override only to a routed device, so an
+    // override on an unrouted one changes nothing until it is routed.
+    let dac = OutputDevice {
+        backend: "alsa".into(),
+        device: "dac".into(),
+    };
+    let started = Config::default();
+    let mut c = started.clone();
+    c.outputs.set_device_rate(&dac, Some(96_000));
+    c.outputs.set_device_buffer(&dac, Some(1024));
+    assert!(restart_pending(&started, &c).is_empty());
+}
+
+#[test]
+fn routing_then_unrouting_a_device_with_its_own_values_needs_no_restart() {
+    let dac = OutputDevice {
+        backend: "alsa".into(),
+        device: "dac".into(),
+    };
+    let started = Config::default();
+    let mut c = started.clone();
+    routed_to(&mut c, "dac");
+    c.outputs.set_device_rate(&dac, Some(96_000));
+    c.outputs.set_device_buffer(&dac, Some(1024));
+    // A device routed in only one configuration is a change of routes.
+    assert_eq!(restart_pending(&started, &c), vec![RestartReason::Routes]);
+    c.outputs.routes.clear();
+    assert!(
+        restart_pending(&started, &c).is_empty(),
+        "the routes equal the started ones; the override applies to no device"
     );
 }
 
@@ -209,4 +253,32 @@ fn reordered_overrides_and_the_outputs_view_need_no_restart() {
     c.outputs.device_overrides.reverse();
     c.ui.outputs_view = fp_model::OutputsView::Advanced;
     assert!(restart_pending(&started, &c).is_empty());
+}
+
+#[test]
+fn a_devices_own_value_equal_to_the_global_one_needs_no_restart() {
+    let dac = OutputDevice {
+        backend: "alsa".into(),
+        device: "dac".into(),
+    };
+    let started = Config::default();
+    let mut c = started.clone();
+    c.outputs
+        .set_device_rate(&dac, Some(started.outputs.sample_rate));
+    c.outputs
+        .set_device_buffer(&dac, Some(started.outputs.buffer_frames));
+    assert!(restart_pending(&started, &c).is_empty());
+    // Clearing an own value that equals the global one changes nothing either.
+    assert!(restart_pending(&c, &started).is_empty());
+    // An own value equal to a changed global rate does not need one when the
+    // device already had it.
+    let mut was = started.clone();
+    was.outputs.set_device_rate(&dac, Some(96_000));
+    let mut now = was.clone();
+    now.outputs.sample_rate = 96_000;
+    assert_eq!(
+        restart_pending(&was, &now),
+        vec![RestartReason::SampleRate],
+        "the global rate itself changed"
+    );
 }

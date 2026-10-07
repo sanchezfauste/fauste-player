@@ -180,13 +180,20 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
             }
             let range = track.play_range(state.config.players.use_cue_markers);
             let (from, to) = (range.cue_in, range.cue_out);
-            // ...nor one at its end, where Play would end it at once.
-            if stopped && !(secs >= from && secs < to) {
-                return Err(ApiError::BadRequest(format!(
-                    "secs must be within {from}..{to}"
-                )));
-            }
-            if !(secs >= from && secs <= to) {
+            // ...nor one at its end, where Play would end it at once. A
+            // start before the cue-in is raised to it by the reducer, as
+            // for a click on the local wave, so it is accepted.
+            if stopped {
+                // The reducer's rule (pending_start_at): finite, and before the
+                // end when the end is known.
+                let end = range.known_end();
+                if !(secs.is_finite() && end.is_none_or(|end| secs.max(from) < end)) {
+                    return Err(ApiError::BadRequest(match end {
+                        Some(end) => format!("secs must be before {end}"),
+                        None => "secs must be a finite number".to_owned(),
+                    }));
+                }
+            } else if !(secs >= from && secs <= to) {
                 return Err(ApiError::BadRequest(format!(
                     "secs must be within {from}..={to}"
                 )));

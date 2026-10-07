@@ -96,26 +96,23 @@ impl EngineSettings {
             // other, so the system-default output opens at the global
             // values. A stale override stays in the configuration and
             // applies again when its device is routed.
-            device_streams: {
-                let routed = config.outputs.routed_devices();
-                config
-                    .outputs
-                    .device_overrides
-                    .iter()
-                    .filter(|o| routed.contains(&o.device))
-                    .map(|o| {
-                        let key = BusKey {
-                            backend: o.device.backend.clone(),
-                            device: o.device.device.clone(),
-                        };
-                        let stream = DeviceStream {
-                            sample_rate: o.sample_rate,
-                            buffer_frames: o.buffer_frames,
-                        };
-                        (key, stream)
-                    })
-                    .collect()
-            },
+            device_streams: config
+                .outputs
+                .routed_devices()
+                .into_iter()
+                .filter(|d| config.outputs.device_override(d).is_some())
+                .map(|d| {
+                    let stream = DeviceStream {
+                        sample_rate: Some(config.outputs.effective_rate(&d)),
+                        buffer_frames: Some(config.outputs.effective_buffer(&d)),
+                    };
+                    let key = BusKey {
+                        backend: d.backend,
+                        device: d.device,
+                    };
+                    (key, stream)
+                })
+                .collect(),
             dsd: DsdSettings {
                 // Only bit-perfect devices keep a DSD mode.
                 modes: config

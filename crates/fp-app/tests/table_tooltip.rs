@@ -33,9 +33,7 @@ fn q9_1_the_popup_starts_with_the_reason_above_the_fields() {
     let (mut h, _) = harness(unreadable());
     h.get_by_label("Song 2").hover();
     h.run_steps(40);
-    let reason = h
-        .get_by_label_contains("Cannot read the file: /music/Song 2.mp3")
-        .rect();
+    let reason = h.get_by_label_contains("Cannot read the file").rect();
     let title_field = h.get_by_label("Title").rect();
     assert!(
         reason.bottom() <= title_field.top() + 0.5,
@@ -112,4 +110,14 @@ fn the_popup_stays_inside_a_narrow_window() {
         reason.left() >= 0.0 && reason.right() <= 380.5,
         "{reason:?}"
     );
+}
+
+#[test]
+fn the_popup_shows_the_path_once() {
+    let (mut h, _) = harness(unreadable());
+    h.get_by_label("Song 2").hover();
+    h.run_steps(40);
+    let shown = h.query_all_by_label_contains("/music/Song 2.mp3").count();
+    assert_eq!(shown, 1, "the reason does not repeat the Path row");
+    assert!(h.query_by_label_contains("Cannot read the file").is_some());
 }

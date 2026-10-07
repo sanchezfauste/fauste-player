@@ -269,3 +269,32 @@ fn a_dsf_records_its_dsd_rate_and_a_wav_does_not() {
     let a = analyze_file(&wav, &settings(), &Limits::default()).unwrap();
     assert_eq!(a.analysis.format.unwrap().dsd_rate, None);
 }
+
+#[test]
+fn a_vbr_mp3_without_a_length_frame_is_measured_to_its_end() {
+    // 20 silent mono frames at 320 kbit/s, then 400 at 32 kbit/s (MPEG-1
+    // Layer III, 44.1 kHz) and no Xing frame: a length estimated from the
+    // first frames' bitrate is about 60 frames.
+    let frame = |index: u8, len: usize| {
+        let mut f = vec![0u8; len];
+        f[..4].copy_from_slice(&[0xFF, 0xFB, index << 4, 0xC0]);
+        f
+    };
+    let mut bytes = Vec::new();
+    for _ in 0..20 {
+        bytes.extend_from_slice(&frame(14, 1044));
+    }
+    for _ in 0..400 {
+        bytes.extend_from_slice(&frame(1, 104));
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("vbr.mp3");
+    std::fs::write(&path, bytes).unwrap();
+    let a = analyze_file(&path, &settings(), &Limits::default()).unwrap();
+    let expected = 420.0 * 1152.0 / 44_100.0;
+    assert!(
+        (a.analysis.duration_secs - expected).abs() < 0.05,
+        "{} vs {expected}",
+        a.analysis.duration_secs
+    );
+}
