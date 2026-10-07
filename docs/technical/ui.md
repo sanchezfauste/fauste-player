@@ -96,9 +96,9 @@ language the interface was built with.
 `normalize_columns` on every frame, so a list set without `Config::validate`
 still has Title and Duration). Each cell is a `match` on `TableColumn` in
 `track_table`; the text of the plain columns is `view::cell_text`.
-A row whose file is missing or unreadable gives the reason and the path
-(`Scene::file_tip`) on its icon in the `#` column and on its title, so the
-reason shows without the `#` column too.
+A row whose file is missing or unreadable starts its popup with the reason
+(`Scene::file_reason`, without the path: the popup has its own Path row). A
+cart on the cartwall gives the reason with the path (`Scene::file_tip`).
 
 **Widths.** `ColumnWidths.fractions` is a map from column to fraction (the
 old four-number array is converted when the session loads). `table_layout::column_px`

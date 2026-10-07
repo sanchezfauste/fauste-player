@@ -366,6 +366,8 @@ tip-field-format = Formato
 tip-field-path = Ruta
 file-missing-tip = No se encuentra el archivo: { $path }
 file-unreadable-tip = No se puede leer el archivo: { $path }
+file-missing-reason = No se encuentra el archivo
+file-unreadable-reason = No se puede leer el archivo
 
 # About window
 tip-about = Acerca de Fauste Player
