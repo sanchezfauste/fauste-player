@@ -16,9 +16,9 @@ Cartwall, MIDI and Remote have none.
 ## Restart pending
 
 Some changes only take effect when the application starts again: the audio
-system, sample rate, buffer size, the Main and Cue outputs (players and
-cartwall) and the bit-perfect devices. The number of players is not one of
-them: it applies at once.
+system, sample rate, buffer size (also a device's own), the Main and Cue
+outputs (players and cartwall), the bit-perfect devices and the DSD settings.
+The number of players is not one of them: it applies at once.
 
 The limits and the engine tuning also apply at the next start, but they are
 edited in the configuration file with the application closed (see
@@ -45,19 +45,29 @@ start it from your applications menu.
 Changes in this section wait for a restart: see
 [Restart pending](#restart-pending).
 
-![Settings, Audio outputs: the audio system, sample rate, buffer size and each player's Main and Cue outputs (here the silent system)](../images/guide/settings-outputs.png)
+![Settings, Audio outputs, Basic view: the selector, the audio system, sample rate, buffer size and each player's Main and Cue outputs (here the silent system)](../images/guide/settings-outputs.png)
+
+At the top, **Show** chooses **Basic** or **Advanced**. Basic shows the
+audio system, the sample rate, the buffer size and the outputs. Advanced
+adds, for each device an output uses, its own rate and buffer, the
+bit-perfect switch and the DSD mode, and then the DSD settings. Switching
+views only shows or hides rows: nothing is changed or reset. When Basic
+hides a setting that is in use, a line says so.
 
 | Setting | Meaning |
 |---|---|
 | Audio system | The last choice, **No output (silent)**, plays nothing: timelines run at real-time pace with no sound card (for a machine without one, or to rehearse). Linux: PipeWire (in builds that include it), PulseAudio, JACK or ALSA. Windows: WASAPI, ASIO (in builds that include it) or JACK. macOS: Core Audio or JACK. Systems missing on this computer, or with no output device (a JACK server that is not running), are shown as unavailable. "System default" uses the first available one in that order. |
-| Sample rate | The rate every output runs at; files are converted to it with high-quality resampling. Bit-perfect devices start at this rate and then follow the files. |
-| Buffer size | Frames per audio block; the resulting latency is shown below it |
+| Sample rate | The rate every output runs at unless a device has its own (Advanced); files are converted to it with high-quality resampling. Bit-perfect devices start at their rate and then follow the files. |
+| Buffer size | Frames per audio block, unless a device has its own; the resulting latency is shown below it |
 | Outputs per player | For each player, a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. A sound card that offers several output profiles (ALSA lists front, surround, direct hardware…) shows each as *card — profile*; two entries that would still read the same get their device id in brackets. Multichannel interfaces can carry several players on different pairs. |
 | Test Main / Test Cue | Plays a short tone (1 kHz on Main, 440 Hz on Cue, 1.5 s, −18 dBFS) on the chosen output, so you can check the wiring before going on air |
 | Cartwall | The cartwall's Main and Cue outputs. Main defaults to the system output. Without a Cue there is no cart pre-listen. |
-| Bit-perfect devices | One switch per device chosen above. A bit-perfect device is opened with exclusive access and follows each file's sample rate while nothing plays on it. The switch is disabled where the device cannot give exclusive access. See [Bit-perfect output](bit-perfect.md). |
-| DSD (per bit-perfect device) | **Convert to PCM** (the default), **DoP** or, on Linux, **Native DSD**. Only the modes the device can take are offered. With DoP or native DSD, a DSD track reaches the device unchanged when nothing else plays on it and the player's volume is 100 %. See [DSD](bit-perfect.md#dsd). |
-| When another source needs a DSD output | **Continue the DSD track as PCM** (the default), or **Keep DSD and mute the other sources**. See [DSD](bit-perfect.md#dsd). |
+| Sample rate: *device* (Advanced) | **Global (...)** uses the sample rate above; a value gives this device its own rate. Only the rates the device reports are offered. |
+| Buffer size: *device* (Advanced) | **Global (...)** uses the buffer size above; a value gives this device its own, with its latency below. |
+| Bit-perfect: *device* (Advanced) | A bit-perfect device is opened with exclusive access and follows each file's sample rate while nothing plays on it. The switch is disabled where the device cannot give exclusive access. See [Bit-perfect output](bit-perfect.md). |
+| DSD: *device* (Advanced) | **Convert to PCM** (the default), **DoP** or, on Linux, **Native DSD**. Every device shows it; only the modes the device can take are offered, and a line under it says why the others are not. See [DSD](bit-perfect.md#dsd). |
+| When another source needs a DSD output (Advanced) | **Continue the DSD track as PCM** (the default), or **Keep DSD and mute the other sources**. See [DSD](bit-perfect.md#dsd). |
+| DSD silence (Advanced) | Silence sent before a DSD stream starts, after it ends and on a switch to PCM, so that the converter locks without a click; 200 ms by default, 0 to 2000. |
 
 A Cue output never falls back to the output Main uses, so that pre-listening
 never goes on air. A Cue that names a device on an audio system this

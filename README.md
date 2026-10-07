@@ -93,6 +93,10 @@ audio engine that the interface can never block.
   devices whose driver reports a DSD format), with a DSD badge. DoP and native
   DSD are checked on simulated devices only; a check on a real converter is
   still to do.
+- **Per-device outputs:** Settings → Audio outputs has a Basic and an
+  Advanced view; in Advanced each device can have its own sample rate and
+  buffer size, and shows its bit-perfect switch and DSD mode with why a mode
+  is not offered.
 - **Routing per player:** Main and Cue outputs on any device and channel
   pair. Multichannel interfaces carry several players at once.
 - **Resilient:**

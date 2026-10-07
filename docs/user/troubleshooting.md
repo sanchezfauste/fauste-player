@@ -66,8 +66,8 @@
   The converter does not recognise DoP (or the native format). Set the device
   back to **Convert to PCM**.
 - **A click when a DSD track starts, stops or leaves DSD.** The converter
-  needs more DSD silence: raise `outputs.dsd_silence_ms` (200 by default) in
-  the configuration file.
+  needs more DSD silence: raise **DSD silence** (200 ms by default) in
+  Settings → Audio outputs, Advanced.
 - **Other players or carts are silent on the device.** A DSD track is playing
   with **Keep DSD and mute the other sources**; the **Others muted** badge
   shows. They sound again when the track ends.

@@ -169,7 +169,12 @@ cannot hang the conductor.
 
 ### Rates and bit-perfect buses
 
-- **Each bus has its own rate.** It starts at `outputs.sample_rate`. Every
+- **Each bus has its own rate.** It starts at its device's own rate
+  (`outputs.device_overrides`, `EngineSettings::rate_for`) or
+  `outputs.sample_rate`, and asks for the device's own buffer or
+  `outputs.buffer_frames` (`buffer_for`). The mixer's smoothing and declick
+  lengths are in that rate's frames, and the one-block margins use the bus's
+  own buffer (`Engine::buffer_of`). Every
   seconds↔frames conversion for a source uses the rate of that source's bus:
   fades, declicks, pause ramps, planned transitions, positions, cart loop
   points and test tones (`Engine::rate_of`, `frames_on`). Workers open each
@@ -305,7 +310,7 @@ plus the mixer's DSD mode.
   chosen: an idle bus goes back to the PCM configuration it had before the
   DSD (`DsdBus::pcm`, kept by `open_dsd_stream`); a bus with sources on it
   (a native switch) tries the word rate first, so their timelines stay,
-  then the PCM configuration before the DSD, then `outputs.sample_rate`. When
+  then the PCM configuration before the DSD, then the device's own rate or `outputs.sample_rate` (`rate_for`). When
   the rate changes under sources, `follow_forced_rate` opens every player
   and cart source on the bus again at its position at the new rate, as a
   seek does (a looped cart from its cue-in); sources fading out and test

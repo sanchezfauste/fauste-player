@@ -33,6 +33,13 @@ buffer size the driver settled on. When WASAPI refuses a period and the
 aligned retry fails too, the error keeps the first refusal (the reason), and
 the bus logs it when it falls back to shared.
 
+Each device is asked for its own rate and buffer when it has them
+(`outputs.device_overrides`, operator feedback 4, Q12), else for the global
+ones; a backend sees only the resulting `StreamConfig`. Settings offers a
+device only the rates and buffer sizes its `DeviceInfo` reports
+(`fp_model::offered_rates`, `offered_buffers`), all of them when it reports
+none.
+
 **Exclusive access (Phase 4):**
 - `StreamConfig::exclusive` asks for sole, unconverted access. A backend that
   cannot give it for the device returns `BackendError::Unsupported`.

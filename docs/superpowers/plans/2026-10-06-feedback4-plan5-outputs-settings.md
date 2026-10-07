@@ -2233,12 +2233,12 @@ fi
 - Check only: the spec lines Q12 and Q3 change are already in the main spec (L469), the bit-perfect spec (L42, L85) and the feedback 2 spec (L516–518).
 - Locales: none (Tasks 4 and 5 added every string to both).
 
-- [ ] **Step 1: Check the binding specs**
+- [x] **Step 1: Check the binding specs**
 
 Run: `grep -n "Basic | Advanced" docs/superpowers/specs/2026-09-25-fauste-player-design.md; grep -n "rate override\|Advanced view" docs/superpowers/specs/2026-09-26-phase4-bit-perfect-design.md; grep -n "Advanced outputs view" docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md`
 Expected: one match in each file. If one is missing, apply the replacement text the feedback 4 spec gives under Q12 or Q3, "Spec lines that change".
 
-- [ ] **Step 2: User guide, Settings**
+- [x] **Step 2: User guide, Settings**
 
 In `docs/user/settings.md`, Restart pending, replace "system, sample rate, buffer size, the Main and Cue outputs (players and cartwall) and the bit-perfect devices." with "system, sample rate, buffer size (also a device's own), the Main and Cue outputs (players and cartwall), the bit-perfect devices and the DSD settings."
 
@@ -2270,7 +2270,7 @@ hides a setting that is in use, a line says so.
 
 Copy the text of the rows marked "(unchanged row)" from the current table, not the marker.
 
-- [ ] **Step 3: User guide, Bit-perfect and Troubleshooting**
+- [x] **Step 3: User guide, Bit-perfect and Troubleshooting**
 
 In `docs/user/bit-perfect.md`, "Setting a device bit-perfect", step 2 becomes: "2. Choose **Advanced** at the top of the section. Under **Per-device settings**, turn on **Bit-perfect** next to the device." The device then starts at its own sample rate when it has one (Settings), else at the global rate.
 
@@ -2282,7 +2282,7 @@ In "DSD on a real converter", step 2, replace "a longer `outputs.dsd_silence_ms`
 
 In `docs/user/troubleshooting.md`, replace "raise `outputs.dsd_silence_ms` (200 by default) in the configuration file." with "raise **DSD silence** (200 ms by default) in Settings → Audio outputs, Advanced."
 
-- [ ] **Step 4: Technical docs**
+- [x] **Step 4: Technical docs**
 
 In `docs/technical/persistence.md`, `outputs` table, add after `dsd_silence_ms`:
 
@@ -2309,7 +2309,7 @@ device only the rates and buffer sizes its `DeviceInfo` reports
 none.
 ```
 
-- [ ] **Step 5: README and the spec's "As built" note**
+- [x] **Step 5: README and the spec's "As built" note**
 
 In `README.md`, after the "Bit-perfect output" bullet, add:
 
@@ -2334,11 +2334,11 @@ In short:
 - the section heading is "Per-device settings".
 ```
 
-- [ ] **Step 6: Screenshots**
+- [x] **Step 6: Screenshots**
 
 The Outputs page now has the selector, so the guide image changes. On Linux with `xvfb`, `xdotool`, ImageMagick, `ffmpeg`, `python3` and `curl` installed, run `scripts/site/screenshots.sh`. Check `docs/images/guide/settings-outputs.png`: the page must show the Basic view with the selector, and the crop must still fit (CLAUDE.md, Testing notes). If the tools are missing, record that in the ledger as `Ruling: settings-outputs.png not regenerated — tools missing — the guide image lacks the selector until it is`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add README.md docs/user/settings.md docs/user/bit-perfect.md docs/user/troubleshooting.md \

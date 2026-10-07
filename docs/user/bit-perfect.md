@@ -10,8 +10,12 @@ processing on the computer should be avoided.
 1. In **Settings → Audio outputs**, choose the device explicitly for a
    player's Main output (or the cartwall's). A player left on the system
    default cannot be made bit-perfect.
-2. Under **Bit-perfect devices**, turn on the switch next to the device.
+2. Choose **Advanced** at the top of the section. Under **Per-device
+   settings**, turn on **Bit-perfect** next to the device.
 3. Restart the application.
+
+The device then starts at its own sample rate when you gave it one in the same
+place, else at the global sample rate, and follows each file from there.
 
 The switch is disabled when the device cannot give exclusive access.
 - **Linux:** choose an ALSA device whose name starts with `hw:`. It is the
@@ -61,15 +65,17 @@ The switch is disabled when the device cannot give exclusive access.
 A DSD file normally plays converted to PCM, like any other file. A
 bit-perfect device can instead receive the DSD stream unchanged.
 
-**The three modes.** Under each bit-perfect device, Settings → Audio outputs
-has a **DSD** choice, next to the device's bit-perfect switch:
+**The three modes.** In the Advanced view of Settings → Audio outputs, every
+device an output uses has a **DSD** choice under its bit-perfect switch:
 - **Convert to PCM** (the default): DSD is converted, as on any other device.
 - **DoP** (DSD over PCM): the DSD bits travel inside 24-bit PCM samples, which
   most DSD-capable converters recognise. It works on every system.
 - **Native DSD** (Linux only): raw DSD, for ALSA `hw:` devices whose driver
   reports a DSD sample format.
 
-Only the modes the device can take are offered. Changing a mode, the mixing
+Only the modes the device can take are offered, and a line under the choice
+says why the others are not: bit-perfect is off, the device cannot be opened
+exclusively, native DSD needs Linux, or the device does not take native DSD. Changing a mode, the mixing
 setting or the DSD silence needs a restart, like the other output settings.
 
 **When DSD goes out unchanged.** All of these must hold when the track
@@ -115,8 +121,8 @@ silence first (200 ms by default), so that the converter locks without a
 click. The exception is a DSD track that continues a stream of the same kind
 and DSD rate whose silence is still running: the converter is still locked, so
 it starts with no extra silence. A track therefore starts that much later, and a switch to PCM leaves a
-gap of that length. It is `outputs.dsd_silence_ms` in the configuration file
-(0 to 2000).
+gap of that length. It is **DSD silence** in Settings → Audio outputs, Advanced
+(0 to 2000 ms).
 
 **When another source needs the device.** **When another source needs a DSD
 output** in Settings → Audio outputs chooses what happens when another
@@ -199,7 +205,7 @@ have not been tried on a real converter by the project. To check one:
    PCM**.
 2. Listen for a click or a burst of noise at the start, at Stop, at the end
    of the track and when moving the fader. A click means the converter needs
-   a longer `outputs.dsd_silence_ms`.
+   a longer **DSD silence** (Settings → Audio outputs, Advanced).
 3. Start a cart or another player on the same device, once with each mixing
    setting, and check the behaviour described above.
 4. On Linux, to check native DSD without the application, run
