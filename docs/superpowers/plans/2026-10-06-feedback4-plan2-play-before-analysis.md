@@ -656,7 +656,7 @@ Use `ui` as the scope when the fix is in `crates/fp-app`, and `model` when it is
   - `pub fn FileDecoder::duration_hint_secs(&self) -> Option<f64>`;
   - `pub(crate) fn SymphoniaDecoder::length_declared(&self) -> bool`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/fp-decode/tests/info.rs` (it already has `use fp_decode::FileDecoder;`; add the imports below at the top):
 
@@ -783,13 +783,13 @@ fn a_dsf_header_gives_its_length_in_seconds() {
 }
 ```
 
-- [ ] **Step 2: Run them to make sure they fail**
+- [x] **Step 2: Run them to make sure they fail**
 
 Run: `cargo test -p fp-decode --test info` and `cargo test -p fp-decode --test dsd a_dsf_header_gives_its_length_in_seconds`
 
 Expected: compile errors, because `duration_from_frames` and `duration_hint_secs` are not defined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `crates/fp-decode/src/lib.rs`, after `read_up_to`:
 
@@ -886,13 +886,13 @@ fn mpeg_length_frame(path: &Path) -> bool {
 
 `read_up_to` and `id3v2_len` are private functions of the crate root, and a child module can use them. If `read_up_to` returns `std::io::Result<usize>`, the `let Ok(..) else` above matches it as it is.
 
-- [ ] **Step 4: Run the tests to make sure they pass**
+- [x] **Step 4: Run the tests to make sure they pass**
 
 Run: `cargo test -p fp-decode --test info`, then `cargo test -p fp-decode --test dsd a_dsf_header_gives_its_length_in_seconds`, then `cargo test -p fp-decode`
 
 Expected: PASS, and the decoder's other tests stay green.
 
-- [ ] **Step 5: Docs**
+- [x] **Step 5: Docs**
 
 In `docs/technical/decoding.md`, after the sentence that lists the backend interface (`sample_rate`, …, `frames_hint`, …), add:
 
@@ -905,7 +905,7 @@ the length from the first frames' bitrate, which a VBR file can get short,
 and a short length would end the track early.
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \

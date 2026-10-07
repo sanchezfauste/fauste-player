@@ -22,6 +22,8 @@ pub(crate) struct SymphoniaDecoder {
     bits_per_sample: Option<u32>,
     channels: usize,
     frames_hint: Option<u64>,
+    /// False for an MPEG stream whose length is only symphonia's estimate.
+    length_declared: bool,
     scratch: Vec<f32>,
     /// The track's time base, to place each decoded packet in time.
     time_base: Option<TimeBase>,
@@ -98,6 +100,13 @@ impl SymphoniaDecoder {
         } else {
             0
         };
+        let mpeg = [
+            well_known::CODEC_ID_MP1,
+            well_known::CODEC_ID_MP2,
+            well_known::CODEC_ID_MP3,
+        ]
+        .contains(&params.codec);
+        let length_declared = !mpeg || mpeg_length_frame(path);
         let delay = if is_opus { track.delay.unwrap_or(0) } else { 0 };
         let frames_hint = track.num_frames.map(|n| n.saturating_sub(u64::from(delay)));
         let ts_offset_secs = f64::from(delay) / f64::from(sample_rate.max(1));
@@ -116,6 +125,7 @@ impl SymphoniaDecoder {
             bits_per_sample,
             channels,
             frames_hint,
+            length_declared,
             scratch: Vec::new(),
             time_base,
             target_secs: None,
@@ -142,6 +152,11 @@ impl SymphoniaDecoder {
     }
 
     /// Total frames, when the container knows it without decoding.
+    /// Whether `frames_hint` is the container's own figure.
+    pub(crate) fn length_declared(&self) -> bool {
+        self.length_declared
+    }
+
     pub(crate) fn frames_hint(&self) -> Option<u64> {
         self.frames_hint
     }
@@ -247,4 +262,34 @@ impl SymphoniaDecoder {
             return Ok(true);
         }
     }
+}
+
+/// How far into an MPEG stream (after any ID3v2 tag) a length frame is
+/// looked for: its first frame, with room for the largest.
+const MPEG_LENGTH_FRAME_SPAN: usize = 4096;
+
+/// Whether an MPEG audio file starts with a frame that declares the
+/// stream's length (Xing, Info or VBRI). Without one symphonia estimates
+/// the length from the first frames' bitrate.
+fn mpeg_length_frame(path: &Path) -> bool {
+    use std::io::{Seek, SeekFrom};
+    let Ok(mut file) = File::open(path) else {
+        return false;
+    };
+    let mut head = [0u8; 10];
+    let Ok(read) = crate::read_up_to(&mut file, &mut head) else {
+        return false;
+    };
+    let start = crate::id3v2_len(head.get(..read).unwrap_or_default()).unwrap_or(0);
+    if file.seek(SeekFrom::Start(start)).is_err() {
+        return false;
+    }
+    let mut span = vec![0u8; MPEG_LENGTH_FRAME_SPAN];
+    let Ok(read) = crate::read_up_to(&mut file, &mut span) else {
+        return false;
+    };
+    span.get(..read)
+        .unwrap_or_default()
+        .windows(4)
+        .any(|w| w == b"Xing" || w == b"Info" || w == b"VBRI")
 }

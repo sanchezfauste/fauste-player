@@ -24,6 +24,13 @@ Every backend has the same interface: `sample_rate`, `bits_per_sample`
 `seek(secs)` and `next_block`. All added crates are pure Rust, MIT or
 Apache-2.0, and forbid or deny `unsafe`.
 
+`FileDecoder::duration_hint_secs` turns `frames_hint` into seconds
+(`duration_from_frames`) for the length a track shows before its analysis
+(operator feedback 4, Q1). An MPEG stream (MP1/2/3) has one only when its
+first frame is a Xing, Info or VBRI frame: without it symphonia estimates
+the length from the first frames' bitrate, which a VBR file can get short,
+and a short length would end the track early.
+
 ## symphonia and Opus
 
 symphonia decodes WAV, AIFF, CAF, FLAC, MP1/2/3, AAC, ALAC, Vorbis and

@@ -657,3 +657,16 @@ fn the_decoder_reports_the_dsd_rate_and_pcm_files_none() {
     let ogg = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lossy/tone.ogg");
     assert_eq!(fp_decode::FileDecoder::open(&ogg).unwrap().dsd_rate(), None);
 }
+
+#[test]
+fn a_dsf_header_gives_its_length_in_seconds() {
+    let dir = tempfile::tempdir().unwrap();
+    let samples = DSD64 as usize / 2;
+    let bits = modulate(sine(1000.0, 0.5), DSD64, samples);
+    let path = write(dir.path(), "half.dsf", &dsf(&[pack(&bits)], samples as u64));
+    let secs = FileDecoder::open(&path)
+        .unwrap()
+        .duration_hint_secs()
+        .unwrap();
+    assert!((secs - 0.5).abs() < 1e-9, "{secs}");
+}
