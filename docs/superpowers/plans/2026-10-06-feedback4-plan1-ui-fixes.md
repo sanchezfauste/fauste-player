@@ -1541,7 +1541,7 @@ Suggested executor: `sonnet`.
 - Consumes: `ServiceRequest::ReanalyseTrack(TrackId)` (Task 6), `AppUi::with_services(Sender<ServiceRequest>)`, the row menu's `labelled` helper.
 - Produces: `Scene::services: Option<&Sender<ServiceRequest>>`, `Scene::request(&self, ServiceRequest)` (a full queue or no services is ignored), Fluent key `menu-reanalyse`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `crates/fp-app/tests/reanalyse_ui.rs`:
 
@@ -1587,12 +1587,12 @@ fn the_item_is_in_the_menu_even_without_services() {
 
 (`crossbeam_channel` is already a dev-usable dependency: `tests/outdated_notice.rs` uses it.)
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cargo test -p fp-app --test reanalyse_ui`
 Expected: FAIL (`no node with label "Re-analyse"`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `app.rs`: add to `Scene` `pub services: Option<&'a Sender<ServiceRequest>>,`, set `services: self.services.as_ref(),` where `Scene` is built, and:
 
@@ -1617,12 +1617,12 @@ if labelled(ui, icon::ARROWS_CLOCKWISE, "menu-reanalyse", true).clicked() {
 
 Locales, after `menu-cue`: en-US `menu-reanalyse = Re-analyse`; es-ES `menu-reanalyse = Volver a analizar`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test reanalyse_ui`, `cargo test -p fp-app --test i18n`, `cargo test -p fp-app --test next_row_ui`
 Expected: PASS. Menu-order tests of other files that count menu items, if any, are updated here.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cargo fmt --all

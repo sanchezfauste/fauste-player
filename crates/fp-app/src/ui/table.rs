@@ -761,6 +761,10 @@ fn context_menu(
         scene.ctl.send(Command::CueEntry(player, entry));
         ui.close();
     }
+    if labelled(ui, icon::ARROWS_CLOCKWISE, "menu-reanalyse", true).clicked() {
+        scene.request(crate::services::ServiceRequest::ReanalyseTrack(track.id));
+        ui.close();
+    }
     let block = view::tag_edit_availability(scene.state, track.id);
     let edit = labelled(ui, icon::PENCIL_SIMPLE, "menu-edit-tags", block.is_none());
     let edit = match block {

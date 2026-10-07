@@ -70,6 +70,7 @@ footer-count = { $count ->
 menu-play-now = Reproducir ahora
 menu-set-next = Marcar como siguiente
 menu-cue = Preescuchar en CUE
+menu-reanalyse = Volver a analizar
 menu-add-below = Añadir pistas debajo…
 menu-duplicate = Duplicar
 menu-repeat = Repetir esta pista

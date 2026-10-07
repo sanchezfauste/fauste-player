@@ -248,9 +248,18 @@ pub(crate) struct Scene<'a> {
     pub ctx: egui::Context,
     picks: &'a Sender<Picked>,
     pub files: &'a Sender<FileOutcome>,
+    pub services: Option<&'a Sender<ServiceRequest>>,
 }
 
 impl Scene<'_> {
+    /// Asks the services thread for something. Without services (tests) or
+    /// with a full queue the request is dropped: it is only a convenience.
+    pub fn request(&self, request: ServiceRequest) {
+        if let Some(services) = self.services {
+            let _ = services.try_send(request);
+        }
+    }
+
     /// Why `track` cannot be played, with its path, for the tooltip of its
     /// warning icon; `None` when it can.
     pub fn file_tip(&self, track: TrackId) -> Option<String> {
@@ -624,6 +633,7 @@ impl AppUi {
             ctx: ctx.clone(),
             picks: &self.picks_tx,
             files: &self.files_tx,
+            services: self.services.as_ref(),
         };
         let full = ui.available_rect_before_wrap();
         ui.painter().rect_filled(full, 0.0, theme::BG);
