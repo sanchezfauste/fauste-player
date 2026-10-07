@@ -121,8 +121,8 @@ pub(crate) struct ViewState {
     pub restart_requested: bool,
     /// The notice about tracks an earlier version analysed is open.
     pub outdated_open: bool,
-    /// Where each player's waveform menu was opened, in seconds.
-    pub wave_menu: HashMap<PlayerId, f64>,
+    /// Where each waveform's menu was opened, in seconds.
+    pub wave_menu: HashMap<super::wave_view::WaveKey, f64>,
     /// When the operator last used each player's table or tabs (scroll,
     /// entry drag, row menu, tab click), in `Scene::time`.
     pub table_touched: HashMap<PlayerId, f64>,
@@ -136,10 +136,10 @@ pub(crate) struct ViewState {
     /// The players whose table already had its start-up scroll to the next
     /// entry (feedback 2 spec O7); it happens once, on their first frame.
     pub startup_scrolled: HashSet<PlayerId>,
-    /// Zoomed waveforms; a player without one shows the whole track.
-    pub wave_zoom: HashMap<PlayerId, super::wave_view::WaveZoom>,
+    /// Zoomed waveforms; one without a zoom shows the whole track.
+    pub wave_zoom: super::wave_view::WaveZooms,
     /// A marker being dragged on a waveform, and the track it belongs to.
-    pub marker_drag: Option<(PlayerId, fp_model::MarkerKind, TrackId)>,
+    pub marker_drag: Option<(super::wave_view::WaveKey, fp_model::MarkerKind, TrackId)>,
     /// A cart to open in Settings → Cartwall (`Edit…` on a cart).
     pub edit_cart: Option<(fp_model::CartPageId, usize)>,
     /// A track whose tags the operator asked to edit (feedback 2 spec O23);
@@ -694,7 +694,7 @@ impl AppUi {
         status_bar(&mut status_ui, &scene, &self.view, &self.platform, faults);
         ui.allocate_rect(full, Sense::hover());
         // The CUE windows float over the screen; the dialogs below stay on top.
-        cue_window::show_all(&ctx, &scene);
+        cue_window::show_all(&ctx, &scene, &mut self.view);
         // Once, at start-up: tracks an earlier version analysed wait for
         // the operator (they cost the processor for a while to redo).
         if !self.outdated_checked {

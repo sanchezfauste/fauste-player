@@ -179,7 +179,6 @@ fn a_player_that_unloads_lets_go_of_its_waveform() {
             accessible_label: "Waveform",
             view: None,
             shield: None,
-            seekable: true,
         };
         waveform(ui, 40.0, &input);
     });
@@ -356,9 +355,130 @@ fn a_waveform_with_ignored_marks_draws_without_panicking() {
             accessible_label: "Waveform",
             view: None,
             shield: None,
-            seekable: true,
         };
         waveform(ui, 40.0, &input);
     });
     harness.run();
+}
+
+mod keys {
+    use fp_app::ui::wave_view::{WaveKey, WaveView, WaveZoom, WaveZooms};
+    use fp_model::{EntryId, PlayerId};
+
+    fn zoom(entry: u64, start: f64) -> WaveZoom {
+        WaveZoom {
+            view: WaveView {
+                start_secs: start,
+                span_secs: 10.0,
+            },
+            entry: EntryId(entry),
+            moved_at: 0.0,
+        }
+    }
+
+    #[test]
+    fn a_player_and_its_cue_keep_their_own_zoom() {
+        let p = PlayerId(1);
+        let (player, cue) = (WaveKey::Player(p), WaveKey::Cue(p));
+        let mut z = WaveZooms::default();
+        z.set(player, Some(zoom(5, 20.0)));
+        assert_eq!(z.get(cue, Some(EntryId(5))), None, "the CUE is not zoomed");
+        z.set(cue, Some(zoom(5, 40.0)));
+        assert_eq!(z.get(player, Some(EntryId(5))), Some(zoom(5, 20.0)));
+        assert_eq!(z.get(cue, Some(EntryId(5))), Some(zoom(5, 40.0)));
+        z.set(cue, None);
+        assert_eq!(z.get(cue, Some(EntryId(5))), None);
+        assert_eq!(
+            z.get(player, Some(EntryId(5))),
+            Some(zoom(5, 20.0)),
+            "the player's zoom stays"
+        );
+    }
+
+    #[test]
+    fn players_keep_their_own_zoom() {
+        let mut z = WaveZooms::default();
+        z.set(WaveKey::Player(PlayerId(1)), Some(zoom(5, 20.0)));
+        assert_eq!(z.get(WaveKey::Player(PlayerId(2)), Some(EntryId(5))), None);
+    }
+
+    #[test]
+    fn a_zoom_belongs_to_the_entry_it_was_made_on() {
+        let key = WaveKey::Cue(PlayerId(1));
+        let mut z = WaveZooms::default();
+        z.set(key, Some(zoom(5, 20.0)));
+        assert_eq!(z.get(key, Some(EntryId(6))), None, "another entry");
+        assert_eq!(z.get(key, None), None, "no entry");
+        assert_eq!(z.get(key, Some(EntryId(5))), Some(zoom(5, 20.0)));
+    }
+
+    #[test]
+    fn each_key_keeps_its_waveform_id() {
+        let (p, q) = (PlayerId(1), PlayerId(2));
+        assert_eq!(WaveKey::Player(p).id(), egui::Id::new(("waveform", p)));
+        assert_eq!(WaveKey::Cue(p).id(), egui::Id::new(("cue-waveform", p)));
+        let ids = [
+            WaveKey::Player(p).id(),
+            WaveKey::Cue(p).id(),
+            WaveKey::Player(q).id(),
+            WaveKey::Cue(q).id(),
+        ];
+        for (i, a) in ids.iter().enumerate() {
+            for b in ids.iter().skip(i + 1) {
+                assert_ne!(a, b);
+            }
+        }
+    }
+}
+
+mod wheel {
+    use egui::{MouseWheelUnit, Rect, pos2, vec2};
+    use fp_app::ui::wave_view::{
+        NOTCHES_PER_PAGE, PAN_STEP, POINTS_PER_NOTCH, WaveView, ZOOM_STEP, wheel_notches,
+    };
+
+    fn rect() -> Rect {
+        Rect::from_min_size(pos2(100.0, 10.0), vec2(400.0, 60.0))
+    }
+
+    #[test]
+    fn lines_are_notches_and_points_and_pages_are_converted() {
+        assert_eq!(
+            wheel_notches(MouseWheelUnit::Line, vec2(0.0, 2.0)),
+            vec2(0.0, 2.0)
+        );
+        assert_eq!(
+            wheel_notches(MouseWheelUnit::Point, vec2(0.0, POINTS_PER_NOTCH)),
+            vec2(0.0, 1.0)
+        );
+        assert_eq!(
+            wheel_notches(MouseWheelUnit::Page, vec2(0.0, 1.0)),
+            vec2(0.0, NOTCHES_PER_PAGE)
+        );
+    }
+
+    #[test]
+    fn an_upward_notch_zooms_in_around_the_pointer() {
+        let full = WaveView::full(180.0);
+        let x = rect().center().x;
+        let v = full.wheel(vec2(0.0, 1.0), false, x, rect(), 180.0, 0.0);
+        assert_eq!(v, full.zoom_at(x, rect(), ZOOM_STEP, 180.0, 0.0));
+        assert!((v.span_secs - 144.0).abs() < 1e-9, "{v:?}");
+    }
+
+    #[test]
+    fn shift_or_a_sideways_wheel_pans() {
+        let zoomed = WaveView::full(180.0).zoom_at(300.0, rect(), 0.5, 180.0, 0.0);
+        let by_shift = zoomed.wheel(vec2(0.0, -1.0), true, 300.0, rect(), 180.0, 0.0);
+        assert_eq!(
+            by_shift,
+            zoomed.pan(-rect().width() * PAN_STEP, rect(), 180.0)
+        );
+        let sideways = zoomed.wheel(vec2(1.0, 0.0), false, 300.0, rect(), 180.0, 0.0);
+        assert_eq!(
+            sideways,
+            zoomed.pan(rect().width() * PAN_STEP, rect(), 180.0)
+        );
+        assert_ne!(sideways, zoomed, "the view moved");
+    }
 }

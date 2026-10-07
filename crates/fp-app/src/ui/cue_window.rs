@@ -1,17 +1,21 @@
 //! The CUE window (feedback 2 spec O12): one floating, non-modal window per
-//! running CUE, with the waveform and position, the elapsed and remaining
-//! time, and Pause/Resume, Stop and Set as next. Closing it stops the CUE.
-//! Everything it does is a command; nothing here waits for the engine.
+//! running CUE, with the waveform panel the player uses (zoom, pan, intro,
+//! outro and MIX markers and their editing; operator feedback 4, Q7) and
+//! the position, the elapsed and remaining time, and Pause/Resume, Stop and
+//! Set as next. Closing it stops the CUE. Everything it does is a command;
+//! nothing here waits for the engine.
 
 use egui::{Align, Layout, RichText, Stroke, pos2, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::Command;
 
-use super::app::Scene;
+use super::app::{Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::theme;
 use super::view::{self, CueWindowView};
+use super::wave_panel::{self, WaveBadges, WavePanelInput};
+use super::wave_view::WaveKey;
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
 const WIDTH: f32 = 380.0;
@@ -19,9 +23,10 @@ const WAVE_HEIGHT: f32 = 56.0;
 const BUTTON: egui::Vec2 = vec2(40.0, 28.0);
 
 /// Draws the window of every player that has a CUE running.
-pub(crate) fn show_all(ctx: &egui::Context, scene: &Scene<'_>) {
+pub(crate) fn show_all(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
     for (index, player) in scene.state.players.iter().enumerate() {
         if player.cue.is_none() {
+            forget(view_state, WaveKey::Cue(player.id));
             continue;
         }
         let position = scene
@@ -31,12 +36,29 @@ pub(crate) fn show_all(ctx: &egui::Context, scene: &Scene<'_>) {
             .find(|(id, _)| *id == player.id)
             .and_then(|(_, t)| t.cue_position_secs);
         if let Some(v) = view::cue_window_view(scene.state, player.id, position) {
-            show(ctx, scene, index, &v);
+            show(ctx, scene, view_state, index, &v);
         }
     }
 }
 
-fn show(ctx: &egui::Context, scene: &Scene<'_>, index: usize, v: &CueWindowView) {
+/// A player without a CUE forgets its CUE waveform's zoom, menu point and
+/// marker drag, so the next CUE opens on the whole file and a drag cut off
+/// by Stop never lands on it.
+fn forget(view_state: &mut ViewState, key: WaveKey) {
+    view_state.wave_zoom.set(key, None);
+    view_state.wave_menu.remove(&key);
+    if view_state.marker_drag.is_some_and(|(k, _, _)| k == key) {
+        view_state.marker_drag = None;
+    }
+}
+
+fn show(
+    ctx: &egui::Context,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    index: usize,
+    v: &CueWindowView,
+) {
     let t = scene.i18n;
     let stagger = 28.0 * index as f32;
     egui::Window::new(t.tr_args("cue-window-title", &[("n", (index + 1).into())]))
@@ -74,7 +96,7 @@ fn show(ctx: &egui::Context, scene: &Scene<'_>, index: usize, v: &CueWindowView)
                 .selectable(false)
                 .truncate(),
             );
-            wave(ui, scene, v);
+            wave(ui, scene, view_state, v);
             time_row(ui, v);
             buttons(ui, scene, v);
         });
@@ -113,30 +135,30 @@ fn title_row(ui: &mut egui::Ui, scene: &Scene<'_>, index: usize, v: &CueWindowVi
     });
 }
 
-fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, v: &CueWindowView) {
+fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &CueWindowView) {
     let track = scene.state.playlists.entry(v.entry).map(|e| e.track);
     let media = track.and_then(|track| scene.media.get(track));
-    let markers = view::MarkerFractions {
-        position: v.position,
-        ..view::MarkerFractions::default()
-    };
-    let label = scene.i18n.tr("tip-cue-waveform");
-    let mix_label = String::new();
-    let input = widgets::WaveInput {
-        id: egui::Id::new(("cue-waveform", v.player)),
+    let input = WavePanelInput {
+        key: WaveKey::Cue(v.player),
+        entry: Some(v.entry),
+        track,
         media: media.as_ref(),
         total: v.total,
-        markers,
-        colors: theme::wave_colors(&scene.state.config.ui.wave_color),
-        mix_active: false,
-        mix_label: &mix_label,
-        accessible_label: &label,
-        view: None,
-        shield: None,
-        seekable: true,
+        markers: v.markers,
+        mix_active: v.mix_active,
+        // A playing CUE's zoom follows its position, as a playing player's
+        // does; a paused CUE keeps the view the operator set to place markers.
+        follow: !v.paused,
+        badges: WaveBadges {
+            intro: v.intro,
+            // The talk-over warning is for audio on air; a CUE is not.
+            intro_blink: None,
+            outro: v.outro,
+        },
+        editable_markers: true,
+        height: WAVE_HEIGHT,
     };
-    let output = widgets::waveform(ui, WAVE_HEIGHT, &input);
-    if let Some(secs) = output.seek {
+    if let Some(secs) = wave_panel::show(ui, scene, view_state, &input).seek {
         scene.ctl.send(Command::SeekCue(v.player, secs));
     }
 }

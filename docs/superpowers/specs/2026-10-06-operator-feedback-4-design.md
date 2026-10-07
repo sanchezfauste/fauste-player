@@ -1,7 +1,7 @@
 # Operator Feedback 4 — Design Spec
 
 - **Date:** 2026-10-06
-- **Status:** Plans 1 and 2 implemented (plan 2 on branch `feat/feedback4-plan2-start-point`; Q6 not reproduced, see its "As built"); plans 3 to 5 not implemented.
+- **Status:** Plans 1 to 3 implemented (Q6 not reproduced, see plan 2's "As built"); plans 4 and 5 not implemented.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§3 rules,
   §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md) (M4 display),
   the [bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md) (B3 rate, B6
@@ -474,7 +474,7 @@ Rulings made while implementing:
   - **Q7.1** A new `ui/wave_panel.rs` holds that logic behind an input struct:
     `key: WaveKey` (`Player(PlayerId)` or `Cue(PlayerId)`), the entry, the
     track, the media, the total, the markers, the position, `mix_active`,
-    `seekable`, `follow`, the optional badges, `editable_markers` and the
+    `follow`, the optional badges, `editable_markers` and the
     height. Its output is `{ seek: Option<f64> }`; the caller maps it to
     `Seek` or `SeekCue`.
   - **Q7.2** `ViewState.wave_zoom` and `ViewState.marker_drag` are keyed by
@@ -504,6 +504,20 @@ Rulings made while implementing:
 - **Docs and locales.** Existing marker strings are reused.
   `docs/user/players.md` (CUE window), `docs/user/markers-and-mixing.md`,
   `docs/technical/ui.md`.
+- **As built (plan 3).** `ui/wave_panel.rs` (`WavePanelInput`, `WaveBadges`,
+  `WavePanelOutput`); `wave_view::{WaveKey, WaveZooms, wheel_notches,
+  WaveView::wheel}`; `view::{marker_fractions, intro_left, outro_left}`;
+  `CueWindowView::{markers, intro, outro, mix_active}`. `ViewState::wave_menu`
+  is keyed by `WaveKey` too. The CUE's intro badge never blinks, its MIX
+  marker follows the player's mode, its zoom follows its position while it plays, and a
+  closed CUE window forgets its zoom, menu point and marker drag.
+  - `seekable` is not in the panel's input: every waveform seeks since plan 2
+    (a stopped player's click is rule 3a's pending start), so the switch was
+    dead and `WaveInput::seekable` went with it.
+  - The wheel rules are the pure `wheel_notches` and `WaveView::wheel`; each
+    `WaveKey` has its own egui id, so the memoised columns and the pan-drag
+    flag of a player and its CUE never mix.
+  - The panel sends its seek after its marker commands, in the same frame.
 
 ---
 

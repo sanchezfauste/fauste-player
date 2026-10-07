@@ -2,8 +2,10 @@
 //! pure mapping between seconds and pixels that drawing, markers, marker
 //! handles, the hover tooltip and seeking all share.
 
-use egui::{Rect, pos2};
-use fp_model::EntryId;
+use std::collections::HashMap;
+
+use egui::{MouseWheelUnit, Rect, Vec2, pos2};
+use fp_model::{EntryId, PlayerId};
 
 /// A player's zoomed waveform: the view, the entry it belongs to (another
 /// entry returns to the full view) and when the operator last moved it.
@@ -13,6 +15,50 @@ pub struct WaveZoom {
     pub entry: EntryId,
     /// `Scene::time` of the last zoom or pan.
     pub moved_at: f64,
+}
+
+/// Which waveform a view state belongs to (operator feedback 4, Q7.2): a
+/// player's, or its CUE window's. Their zoom, menu and marker drag are
+/// independent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WaveKey {
+    Player(PlayerId),
+    Cue(PlayerId),
+}
+
+impl WaveKey {
+    /// The waveform's egui id: its memoised columns and its pan drag are
+    /// keyed on it.
+    pub fn id(self) -> egui::Id {
+        match self {
+            Self::Player(p) => egui::Id::new(("waveform", p)),
+            Self::Cue(p) => egui::Id::new(("cue-waveform", p)),
+        }
+    }
+}
+
+/// The zoomed waveforms; one that is not here shows the whole track.
+#[derive(Debug, Clone, Default)]
+pub struct WaveZooms(HashMap<WaveKey, WaveZoom>);
+
+impl WaveZooms {
+    /// The zoom of `key`, when it was made on `entry`: another entry, or
+    /// none, shows the whole track.
+    pub fn get(&self, key: WaveKey, entry: Option<EntryId>) -> Option<WaveZoom> {
+        self.0.get(&key).copied().filter(|z| Some(z.entry) == entry)
+    }
+
+    /// Keeps `zoom` for `key`; `None` returns it to the whole track.
+    pub fn set(&mut self, key: WaveKey, zoom: Option<WaveZoom>) {
+        match zoom {
+            Some(z) => {
+                self.0.insert(key, z);
+            }
+            None => {
+                self.0.remove(&key);
+            }
+        }
+    }
 }
 
 /// The visible stretch of a track, in seconds.
@@ -39,6 +85,27 @@ pub fn min_span(bucket_secs: f64, width: f32) -> f64 {
         0.0
     };
     bucket * f64::from(width.max(1.0))
+}
+
+/// One wheel notch zooms the waveform in to this share of its span.
+pub const ZOOM_STEP: f64 = 0.8;
+/// One sideways notch pans the waveform by this share of its width.
+pub const PAN_STEP: f32 = 0.1;
+/// Smooth-scrolling wheels and trackpads report points: this many make a
+/// notch.
+pub const POINTS_PER_NOTCH: f32 = 50.0;
+/// A wheel that reports pages: one page is this many notches.
+pub const NOTCHES_PER_PAGE: f32 = 3.0;
+
+/// A wheel event in notches: a line is one, points and pages are
+/// converted, so a trackpad zooms in proportion instead of one step per
+/// event.
+pub fn wheel_notches(unit: MouseWheelUnit, delta: Vec2) -> Vec2 {
+    match unit {
+        MouseWheelUnit::Line => delta,
+        MouseWheelUnit::Point => delta / POINTS_PER_NOTCH,
+        MouseWheelUnit::Page => delta * NOTCHES_PER_PAGE,
+    }
 }
 
 impl WaveView {
@@ -110,6 +177,32 @@ impl WaveView {
             self.span_secs,
             total,
         )
+    }
+
+    /// One wheel event of `notches`: Shift or a mostly sideways wheel pans,
+    /// otherwise it zooms around `x`, no closer than `min_span`.
+    pub fn wheel(
+        &self,
+        notches: Vec2,
+        shift: bool,
+        x: f32,
+        rect: Rect,
+        total: f64,
+        min_span: f64,
+    ) -> Self {
+        let sideways = notches.x.abs() > notches.y.abs();
+        if shift || sideways {
+            let step = if sideways { notches.x } else { notches.y };
+            self.pan(step * rect.width() * PAN_STEP, rect, total)
+        } else {
+            self.zoom_at(
+                x,
+                rect,
+                ZOOM_STEP.powf(f64::from(notches.y)),
+                total,
+                min_span,
+            )
+        }
     }
 
     /// Unchanged while `position` is visible; otherwise moved so it sits a

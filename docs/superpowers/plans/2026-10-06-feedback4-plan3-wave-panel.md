@@ -24,7 +24,7 @@ Decisions taken while writing the plan, where the spec is silent or this plan de
 - Ruling: each key keeps today's egui id (`("waveform", player)` and `("cue-waveform", player)`, `WaveKey::id`) and today's accessible label ("Waveform: click to seek", "CUE waveform: click to seek") — the memoised columns, the pan-drag flag and every kittest that finds a waveform by its label are unchanged; no new string — cost if wrong: none.
 - Ruling: the CUE's intro badge counts down to the intro end like the player's, rounded to tenths, and never blinks — the blink is the on-air talk-over warning (rule 18) and a CUE is not on air; the outro badge counts to the end of the file (Q7.5) — cost if wrong: one `intro_blink` expression in `cue_window.rs`.
 - Ruling: the CUE window's MIX marker uses its player's mode (`mix_active`: solid amber in Continuous, dim in Single) — Q7.4 asks for "the same look as the player" — cost if wrong: one field of `CueWindowView`.
-- Ruling: a zoomed CUE waveform follows the CUE position after the grace, paused or not (`follow: true`) — a paused player's zoom follows too (`status != Stopped`), and a paused position does not move — cost if wrong: one boolean in `cue_window.rs`.
+- Ruling: a zoomed CUE waveform follows the CUE position after the grace, paused or not (`follow: true`) — a paused player's zoom follows too (`status != Stopped`), and a paused position does not move — cost if wrong: one boolean in `cue_window.rs`. Superseded by the review: the zoom follows only while the CUE plays (`follow: !paused`), see the ledger.
 - Ruling: when a player has no CUE, its CUE key's zoom, menu point and marker drag are forgotten (`cue_window::forget`) — otherwise a CUE reopened on the same entry restores an old zoom, and a drag cut off by Stop sends a `SetMarker` on the next CUE's first frame — cost if wrong: an operator who wanted the zoom kept across CUEs has to zoom again.
 - Ruling: `WavePanelInput::editable_markers` is kept as Q7.1 lists it, and both callers pass `true` — the spec names it; it is the switch for a later caller that must not edit (a cart, a preview) — cost if wrong: one unused-in-practice field.
 - Ruling: the panel returns the seek and the caller sends it after the panel's marker commands, where the player sent `Seek` before them — in one frame a seek needs a plain click without Alt, while `SetMarker` comes from a menu item (another widget) or an Alt-drag release, so they never share a frame — cost if wrong: the order of two commands in one frame.
@@ -35,7 +35,7 @@ Decisions taken while writing the plan, where the spec is silent or this plan de
 
 - All code, identifiers, comments, docs, specs, plans and commit messages are in English. Never mention other playout or radio-automation products.
 - Spec §9, verbatim: "`CLAUDE.md` rules 1–10 apply to every plan. In particular: English everywhere, and UI strings in both locales; no product names; operator values are `Config` fields with defaults, ranges and lenient loading (Q12's overrides and view); the real-time path never allocates, locks, logs or panics; behaviour lives in `fp-model` (`SetDuration`, `pending_start`, the DSD reasons); the UI never blocks (the header read and the file stat run on helper threads); bad data never crashes (a header without a duration, a file that changes while it is checked); nothing goes on air by itself (a pending start only changes where Play starts)."
-- Q7.1: "A new `ui/wave_panel.rs` holds that logic behind an input struct: `key: WaveKey` (`Player(PlayerId)` or `Cue(PlayerId)`), the entry, the track, the media, the total, the markers, the position, `mix_active`, `seekable`, `follow`, the optional badges, `editable_markers` and the height. Its output is `{ seek: Option<f64> }`; the caller maps it to `Seek` or `SeekCue`."
+- Q7.1: "A new `ui/wave_panel.rs` holds that logic behind an input struct: `key: WaveKey` (`Player(PlayerId)` or `Cue(PlayerId)`), the entry, the track, the media, the total, the markers, the position, `mix_active`, `seekable` (removed in Task 5: every waveform seeks since plan 2), `follow`, the optional badges, `editable_markers` and the height. Its output is `{ seek: Option<f64> }`; the caller maps it to `Seek` or `SeekCue`."
 - Q7.2: "`ViewState.wave_zoom` and `ViewState.marker_drag` are keyed by `WaveKey`, so the player's and its CUE's zoom and drags are independent."
 - Q7.3: "The player and the CUE window are thin callers; the CUE window receives `&mut ViewState`."
 - Q7.4: "The CUE window shows the intro, outro and MIX markers and edits them (right-click menu, Alt-drag) with the same look and commands as the player; it zooms, pans and has the Full view button."
@@ -92,7 +92,7 @@ Inputs the spec implies but no rule spells out, most likely to bite first; each 
   - `pub fn outro_left(track: &Track, position: f64, end: f64) -> Option<f64>` — seconds to `end` once at or past the outro start, never negative.
   - private `fn tenths(secs: f64) -> f64` — rounded to a tenth, as the badges show it.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `crates/fp-app/tests/view.rs`, extend the `use fp_app::ui::view::{…}` list with `MarkerFractions, intro_left, marker_fractions, outro_left` (keep it sorted the way `cargo fmt` leaves it), then append after the `use_markers` helper (`tests/view.rs:290-295`):
 
@@ -169,12 +169,12 @@ fn the_player_view_places_its_markers_with_marker_fractions() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test view marker_fractions`
 Expected: does not compile — "unresolved imports `fp_app::ui::view::intro_left`, `marker_fractions`, `outro_left`".
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `crates/fp-app/src/ui/view.rs`, after `fn fraction` (`:79-83`), add:
 
@@ -247,12 +247,12 @@ Then replace the tail of `player_view` (`view.rs:223-247`, from `if let Some(int
 
 (After plan 2, `pos` may come from the pending start; keep plan 2's `pos`.)
 
-- [ ] **Step 4: Run the tests to verify they pass, and the old view rules with them**
+- [x] **Step 4: Run the tests to verify they pass, and the old view rules with them**
 
 Run: `cargo test -p fp-app --test view`
 Expected: PASS, including the untouched `rule18_the_intro_badge_counts_down_only_for_a_marked_intro_and_blinks_at_the_end`, `rule19_the_outro_badge_counts_down_to_cue_out`, `the_countdown_and_the_outro_follow_the_play_range` and `the_view_says_when_the_cue_marks_are_ignored`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
@@ -288,7 +288,7 @@ fi
   - `#[derive(Debug, Clone, Default)] pub struct WaveZooms` with `pub fn get(&self, key: WaveKey, entry: Option<EntryId>) -> Option<WaveZoom>` and `pub fn set(&mut self, key: WaveKey, zoom: Option<WaveZoom>)`.
   - `ViewState::wave_menu: HashMap<WaveKey, f64>`, `ViewState::wave_zoom: WaveZooms`, `ViewState::marker_drag: Option<(WaveKey, fp_model::MarkerKind, TrackId)>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/fp-app/tests/waveform_view.rs`:
 
@@ -364,12 +364,12 @@ mod keys {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test waveform_view keys`
 Expected: does not compile — "unresolved imports `fp_app::ui::wave_view::WaveKey`, `WaveZooms`".
 
-- [ ] **Step 3: Add the types**
+- [x] **Step 3: Add the types**
 
 In `crates/fp-app/src/ui/wave_view.rs`, change the imports (`:5-6`) to:
 
@@ -431,7 +431,7 @@ impl WaveZooms {
 }
 ```
 
-- [ ] **Step 4: Key the view state**
+- [x] **Step 4: Key the view state**
 
 In `crates/fp-app/src/ui/app.rs`, replace the three fields:
 
@@ -493,12 +493,12 @@ In `crates/fp-app/src/ui/player.rs`:
         .map(|(_, k, _)| k);
 ```
 
-- [ ] **Step 5: Run the new and the existing waveform tests**
+- [x] **Step 5: Run the new and the existing waveform tests**
 
 Run: `cargo test -p fp-app --test waveform_view && cargo test -p fp-app --test waveform_ui && cargo test -p fp-app --test markers_ui`
 Expected: PASS, every existing test unchanged.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
@@ -539,7 +539,7 @@ fi
     - `pub(crate) struct WavePanelOutput { pub seek: Option<f64> }`
     - `pub(crate) fn show(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, input: &WavePanelInput<'_>) -> WavePanelOutput`
 
-- [ ] **Step 1: Write the failing tests for the wheel rules**
+- [x] **Step 1: Write the failing tests for the wheel rules**
 
 Append to `crates/fp-app/tests/waveform_view.rs`:
 
@@ -597,12 +597,12 @@ mod wheel {
 }
 ```
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `cargo test -p fp-app --test waveform_view wheel`
 Expected: does not compile — "unresolved imports `fp_app::ui::wave_view::NOTCHES_PER_PAGE`, `PAN_STEP`, `POINTS_PER_NOTCH`, `ZOOM_STEP`, `wheel_notches`".
 
-- [ ] **Step 3: Move the wheel rules into `wave_view.rs`**
+- [x] **Step 3: Move the wheel rules into `wave_view.rs`**
 
 In `crates/fp-app/src/ui/wave_view.rs`, change `use egui::{Rect, pos2};` to `use egui::{MouseWheelUnit, Rect, Vec2, pos2};` and add after `fn min_span`:
 
@@ -661,7 +661,7 @@ and inside `impl WaveView`, after `pan`:
 
 Run: `cargo test -p fp-app --test waveform_view wheel` — expected: PASS.
 
-- [ ] **Step 4: Create `crates/fp-app/src/ui/wave_panel.rs`**
+- [x] **Step 4: Create `crates/fp-app/src/ui/wave_panel.rs`**
 
 The body of `show` is `player.rs::wave` (`:849-1058`) with `PlayerId`/`PlayerView` replaced by the input, and `edit_markers` is `player.rs::edit_markers` (`:1394-1551`) with `pv` replaced by `total` and `markers`. Whatever plan 2 changed inside those two functions moves along unchanged.
 
@@ -955,7 +955,7 @@ fn edit_markers(
 
 In `crates/fp-app/src/ui.rs`, add `mod wave_panel;` between `pub mod view;` and `pub mod wave_view;`.
 
-- [ ] **Step 5: Make the player a thin caller**
+- [x] **Step 5: Make the player a thin caller**
 
 In `crates/fp-app/src/ui/player.rs`:
 
@@ -1007,12 +1007,12 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
 - delete `fn edit_markers` and its doc comment (`:1394-1551`);
 - remove the imports clippy now reports unused (expected: `MarkerKind` from `fp_model`; check `RichText`, `UiBuilder` and `Rect`, which other functions of `player.rs` still use).
 
-- [ ] **Step 6: Run the whole fp-app suite: the guard of the move**
+- [x] **Step 6: Run the whole fp-app suite: the guard of the move**
 
 Run: `cargo test -p fp-app --test waveform_ui && cargo test -p fp-app --test markers_ui && cargo test -p fp-app --test waveform_view && cargo test -p fp-app --test cue_window && cargo test -p fp-app --test glyphs`
 Expected: PASS with no test edited. If any player waveform test fails, the move changed behaviour: compare the moved code with `git show HEAD:crates/fp-app/src/ui/player.rs` line by line before touching a test.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
@@ -1047,7 +1047,7 @@ fi
 - Consumes: `marker_fractions`, `intro_left`, `outro_left`, `tenths` (Task 1); the test helpers `all_marked`, `near`, `mark`, `use_markers` in `tests/view.rs` (Task 1 and existing).
 - Produces: `CueWindowView::{markers: MarkerFractions, intro: Option<f64>, outro: Option<f64>, mix_active: bool}`; `position` stays.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `crates/fp-app/tests/view.rs`, add `PlayMode` to the `use fp_model::{…}` list, then append after `load_as_next_is_offered_only_when_it_changes_something`:
 
@@ -1122,12 +1122,12 @@ fn a_marker_set_once_shows_in_the_player_and_in_its_cue() {
 
 (`a_cue_window_of_unknown_length_has_no_markers_or_outro` sets the outro while the length is known, since `SetMarker` places intro, outro and MIX inside the play range, then forgets the length.)
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test view cue_window`
 Expected: does not compile — "no field `markers` on type `CueWindowView`" (and `intro`, `outro`, `mix_active`).
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `crates/fp-app/src/ui/view.rs`, add to `struct CueWindowView` after `position`:
 
@@ -1156,12 +1156,12 @@ and in `cue_window_view`, add to the `CueWindowView { … }` literal after `posi
 
 Update the doc comment of `CueWindowView` (`:100-101`) to: "What a CUE window shows (feedback 2 spec O12; operator feedback 4, Q7). A CUE plays the whole file, so its times, markers and badges run to the end of the file, not to the cue-out."
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test view`
 Expected: PASS (the existing `cue_window_view` tests unchanged).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
@@ -1196,7 +1196,7 @@ fi
 
 Plan 1 (Q5) changes `buttons` in the same file and plan 2 (Q6) may add tests to `tests/cue_window.rs`; keep their changes when rebasing.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `crates/fp-app/tests/cue_window.rs`, change the imports to:
 
@@ -1461,12 +1461,12 @@ fn stopping_the_cue_mid_drag_moves_no_marker() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p fp-app --test cue_window`
 Expected: FAIL. The zoom tests find no "Full view" (`the_wheel_zooms_…`: "only the CUE's waveform zoomed" left 0, right 1; `the_cue_full_view_button_…`, `the_player_and_its_cue_zoom_independently` and `a_new_cue_opens_on_the_whole_file` fail the same way), the menu test finds no "Set intro end here", the Alt-drag test sends no `SetMarker`. `a_cue_moved_to_another_entry_shows_it_whole`, `a_cue_without_a_known_length_does_not_zoom` and `stopping_the_cue_mid_drag_moves_no_marker` pass already (nothing zooms or drags yet); they turn into guards once the panel is in, and Step 4 shows the last one failing without `forget`.
 
-- [ ] **Step 3: Make the CUE window a thin caller**
+- [x] **Step 3: Make the CUE window a thin caller**
 
 In `crates/fp-app/src/ui/cue_window.rs`:
 
@@ -1556,7 +1556,6 @@ fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Cu
         total: v.total,
         markers: v.markers,
         mix_active: v.mix_active,
-        seekable: true,
         // A CUE's zoom follows its position, as a playing player's does.
         follow: true,
         badges: WaveBadges {
@@ -1576,14 +1575,14 @@ fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Cu
 
 In `crates/fp-app/src/ui/app.rs:679`: `cue_window::show_all(&ctx, &scene, &mut self.view);` (`scene` borrows other fields of `self`, as `players_row` already shows).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p fp-app --test cue_window && cargo test -p fp-app --test waveform_ui && cargo test -p fp-app --test markers_ui && cargo test -p fp-app --test glyphs`
 Expected: PASS — the new tests, the existing CUE window tests (`clicking_the_waveform_seeks_the_cue`, `a_cue_without_a_known_length_shows_zero_and_cannot_seek`, `two_cues_stack_two_windows`, …) and the player's waveform tests, unchanged.
 
 To confirm `forget` is what makes `stopping_the_cue_mid_drag_moves_no_marker` and `a_new_cue_opens_on_the_whole_file` pass, comment out the `forget(…)` call, run `cargo test -p fp-app --test cue_window a_new_cue stopping_the_cue`, see both fail, and restore it.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 if cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings \
@@ -1621,12 +1620,12 @@ fi
 - Consumes: the names of Tasks 1–5 (`wave_panel.rs`, `WavePanelInput`, `WaveKey`, `WaveZooms`, `marker_fractions`, `cue_window::forget`).
 - Produces: nothing for code.
 
-- [ ] **Step 1: Check the spec lines Q7 changes are in place**
+- [x] **Step 1: Check the spec lines Q7 changes are in place**
 
 Run: `grep -n "same panel as the player's" docs/superpowers/specs/2026-10-01-operator-feedback-2-design.md; grep -n "the CUE window uses the same waveform panel" docs/superpowers/specs/2026-09-25-fauste-player-design.md`
 Expected: one line each (the spec author applied them with the spec). If either is missing, apply the text from §4 "Spec lines that change" of the feedback 4 spec verbatim.
 
-- [ ] **Step 2: User guide**
+- [x] **Step 2: User guide**
 
 `README.md:57-58`:
 
@@ -1655,7 +1654,7 @@ On a player's waveform, or on the waveform of its CUE window (the same
 menu and handles; a change shows in both at once):
 ```
 
-- [ ] **Step 3: Technical docs (`docs/technical/ui.md`)**
+- [x] **Step 3: Technical docs (`docs/technical/ui.md`)**
 
 - Module table: after the `ui/player.rs` row add
 
@@ -1668,7 +1667,7 @@ menu and handles; a change shows in both at once):
 - "Waveform view": "`ViewState::wave_zoom` keeps a `WaveZoom` per zoomed player" becomes "`ViewState::wave_zoom` (`WaveZooms`) keeps a `WaveZoom` per zoomed waveform, keyed by `WaveKey`; `WaveZooms::get` returns it only for the entry it was made on". Add: "The wheel rules are pure: `wave_view::wheel_notches` converts lines, points and pages to notches and `WaveView::wheel` zooms or pans by them. Each `WaveKey` has its own egui id (`WaveKey::id`), so the memoised columns and the pan-drag flag of a player and its CUE never mix."
 - "CUE window": after the first sentence add: "Its waveform is the shared panel (`WaveKey::Cue(player)`): `cue_window_view` gives it `markers` (`marker_fractions` on the whole file, cue edges dimmed), `intro` (never blinking), `outro` (to the end of the file) and `mix_active` (the player's mode). `show_all` receives `&mut ViewState`; for a player without a CUE, `forget` drops its CUE key's zoom, menu point and marker drag."
 
-- [ ] **Step 4: Spec "As built"**
+- [x] **Step 4: Spec "As built"**
 
 At the end of §4 Q7 in `docs/superpowers/specs/2026-10-06-operator-feedback-4-design.md`, add:
 
@@ -1682,12 +1681,12 @@ At the end of §4 Q7 in `docs/superpowers/specs/2026-10-06-operator-feedback-4-d
   closed CUE window forgets its zoom, menu point and marker drag.
 ```
 
-- [ ] **Step 5: The guide image**
+- [x] **Step 5: The guide image**
 
 Run: `scripts/site/screenshots.sh`
 Expected: `docs/images/guide/cue-window.png` is rewritten; open it and check that the window has the same size (the crop `406x222+164+204` in the script) and that its waveform shows the scene's markers. If the window grew, adjust the crop in `scripts/site/screenshots.sh` and run again. If Xvfb, xdotool, ImageMagick or ffmpeg is missing here, leave the image and record `Ruling: cue-window.png not re-taken — <tool> missing — the guide image lacks the markers until the next screenshot run` in the ledger and the PR description.
 
-- [ ] **Step 6: Build the site's links and commit**
+- [x] **Step 6: Build the site's links and commit**
 
 Run: `scripts/site/build.sh /tmp/fp-site && scripts/site/check-links.sh /tmp/fp-site` (needs `gh` or `FAUSTE_RELEASE_JSON`; if neither is available, skip and say so in the PR).
 Expected: no dead link.
@@ -1714,7 +1713,7 @@ fi
 
 | Rule | Task |
 |---|---|
-| Q7.1 `wave_panel.rs`, input struct with key, entry, track, media, total, markers (with the position), `mix_active`, `seekable`, `follow`, badges, `editable_markers`, height; output `{ seek }` | 3 |
+| Q7.1 `wave_panel.rs`, input struct with key, entry, track, media, total, markers (with the position), `mix_active`, `follow`, badges, `editable_markers`, height (`seekable` dropped in Task 5: every waveform seeks); output `{ seek }` | 3 |
 | Q7.2 `wave_zoom` and `marker_drag` keyed by `WaveKey` (and `wave_menu`, ruling) | 2; kittest `the_player_and_its_cue_zoom_independently` (5) |
 | Q7.3 thin callers; the CUE window receives `&mut ViewState` | 3 (player), 5 (CUE) |
 | Q7.4 CUE: markers, menu, Alt-drag, zoom, pan, Full view | 4, 5 (`the_cue_waveform_menu_sets_the_intro_here`, `alt_dragging_the_intro_on_the_cue_waveform_moves_it`, `the_wheel_zooms_…`, `the_cue_full_view_button_…`); pan is the panel's code under `waveform_ui.rs` |

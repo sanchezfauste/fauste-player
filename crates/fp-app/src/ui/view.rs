@@ -82,6 +82,51 @@ fn fraction(value: Option<f64>, total: f64) -> Option<f32> {
         .map(|v| (v / total).clamp(0.0, 1.0) as f32)
 }
 
+/// Seconds rounded to a tenth, as the intro badge shows them.
+fn tenths(secs: f64) -> f64 {
+    (secs * 10.0).round() / 10.0
+}
+
+/// Where the markers of `track` and `position` fall on its waveform, as
+/// fractions of `total` (operator feedback 4, Q7); all `None` without a
+/// length. `ignored` draws cue-in and cue-out as dimmed marks without
+/// shading: a player that does not use them, and every CUE, which plays the
+/// whole file.
+pub fn marker_fractions(
+    track: &Track,
+    total: f64,
+    position: f64,
+    ignored: bool,
+) -> MarkerFractions {
+    MarkerFractions {
+        position: fraction(Some(position), total),
+        cue_in: fraction(track.markers.cue_in.map(|m| m.secs), total),
+        intro_end: fraction(track.intro_end_secs(), total),
+        outro_start: fraction(track.outro_start_secs(), total),
+        segue_start: fraction(track.segue_start_secs(), total),
+        cue_out: fraction(track.markers.cue_out.map(|m| m.secs), total),
+        ignored,
+    }
+}
+
+/// Seconds left of a marked intro at `position` (spec §3 rule 18); `None`
+/// without an intro or once it is over.
+pub fn intro_left(track: &Track, position: f64) -> Option<f64> {
+    track
+        .intro_end_secs()
+        .filter(|end| position < *end)
+        .map(|end| end - position)
+}
+
+/// Seconds from `position` to `end` once the outro has started (rule 19);
+/// `None` before it or without one.
+pub fn outro_left(track: &Track, position: f64, end: f64) -> Option<f64> {
+    track
+        .outro_start_secs()
+        .filter(|outro| position >= *outro)
+        .map(|_| (end - position).max(0.0))
+}
+
 fn line(title: &str, artist: &str) -> String {
     if artist.is_empty() {
         title.to_owned()
@@ -97,8 +142,9 @@ pub fn shown_entry(state: &AppState, player: PlayerId) -> Option<EntryId> {
     p.current.or(p.next)
 }
 
-/// What a CUE window shows (feedback 2 spec O12). A CUE plays the whole
-/// file, so its times run to the end of the file, not to the cue-out.
+/// What a CUE window shows (feedback 2 spec O12; operator feedback 4, Q7).
+/// A CUE plays the whole file, so its times, markers and badges run to the
+/// end of the file, not to the cue-out.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CueWindowView {
     pub player: PlayerId,
@@ -113,6 +159,17 @@ pub struct CueWindowView {
     pub paused: bool,
     /// The position as a fraction of the file, for the waveform.
     pub position: Option<f32>,
+    /// The markers and the position on the whole file. Cue-in and cue-out
+    /// are dimmed marks without shading: a CUE plays the whole file
+    /// (operator feedback 4, Q7.5).
+    pub markers: MarkerFractions,
+    /// Seconds left of a marked intro (spec §3 rule 18); it never blinks,
+    /// since a CUE is not on air.
+    pub intro: Option<f64>,
+    /// Seconds from the outro to the end of the file (Q7.5).
+    pub outro: Option<f64>,
+    /// The MIX marker looks as on the player: solid in Continuous mode.
+    pub mix_active: bool,
     /// "Set as next" has something to do: the cued entry is not
     /// already the explicit next (the entry on air can be, O37).
     pub can_load_next: bool,
@@ -147,6 +204,10 @@ pub fn cue_window_view(
         remaining: total.map_or(0.0, |t| (t - elapsed).max(0.0)),
         paused: cue.paused,
         position: fraction(Some(elapsed), total.unwrap_or(0.0)),
+        markers: marker_fractions(track, total.unwrap_or(0.0), elapsed, true),
+        intro: intro_left(track, elapsed).map(tenths),
+        outro: total.and_then(|end| outro_left(track, elapsed, end)),
+        mix_active: p.mode == PlayMode::Continuous,
         can_load_next: !(p.next == Some(cue.entry) && p.next_explicit),
     })
 }
@@ -243,30 +304,15 @@ pub fn player_view(
     view.end_warning = status == PlayerStatus::OnAir
         && total.is_some()
         && view.remaining <= state.config.players.end_warning_secs;
-    if let Some(intro_end) = track.intro_end_secs()
-        && pos < intro_end
-    {
-        let left = intro_end - pos;
-        view.intro = Some((left * 10.0).round() / 10.0);
+    if let Some(left) = intro_left(track, pos) {
+        view.intro = Some(tenths(left));
         // The talk-over warning blinks only for a track on its way.
         view.intro_blink =
             (left <= 3.0 && p.current.is_some()).then(|| blink_phase.rem_euclid(1.0) < 0.5);
     }
-    if let Some(outro) = track.outro_start_secs()
-        && pos >= outro
-    {
-        view.outro = Some((cue_out - pos).max(0.0));
-    }
+    view.outro = outro_left(track, pos, cue_out);
     if let Some(total) = total {
-        view.markers = MarkerFractions {
-            position: fraction(Some(pos), total),
-            cue_in: fraction(track.markers.cue_in.map(|m| m.secs), total),
-            intro_end: fraction(track.intro_end_secs(), total),
-            outro_start: fraction(track.outro_start_secs(), total),
-            segue_start: fraction(track.segue_start_secs(), total),
-            cue_out: fraction(track.markers.cue_out.map(|m| m.secs), total),
-            ignored: !state.config.players.use_cue_markers,
-        };
+        view.markers = marker_fractions(track, total, pos, !state.config.players.use_cue_markers);
     }
     Some(view)
 }
