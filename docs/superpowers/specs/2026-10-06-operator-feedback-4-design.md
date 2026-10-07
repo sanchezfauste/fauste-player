@@ -686,7 +686,16 @@ In short:
   (the notice does not say which device changed);
 - the DSD reasons and the offered modes live in `fp_model::device_offer`,
   with at most one reason, the most fundamental first;
-- an unplugged device reads as not exclusive-capable;
+- an unplugged device has its own reason (`NotConnected`), and a DSD mode
+  the device cannot take shows as PCM without rewriting the configuration
+  (`effective_dsd_mode`);
+- an override reaches the engine only for a device a route names; the
+  system-default output opens at the global values, and a stale override
+  stays in the configuration for when the device is routed again;
+- a saved own rate or buffer the device no longer reports stays listed with
+  a note, and a bus whose own rate does not open falls back to the global
+  rate and buffer through `pcm_fallback`;
+- `advanced_in_use` counts the DSD mix and silence only with a routed device;
 - the Advanced rows list the devices that routes name (`routed_devices`);
   a player on the system default output gets no rows;
 - a device's own value equal to the global one stays the device's own, and

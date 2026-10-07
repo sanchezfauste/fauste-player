@@ -74,9 +74,12 @@ device an output uses has a **DSD** choice under its bit-perfect switch:
   reports a DSD sample format.
 
 Only the modes the device can take are offered, and a line under the choice
-says why the others are not: bit-perfect is off, the device cannot be opened
-exclusively, native DSD needs Linux, or the device does not take native DSD. Changing a mode, the mixing
-setting or the DSD silence needs a restart, like the other output settings.
+says why the others are not: the device is not connected, bit-perfect is
+off, the device cannot be opened exclusively, native DSD needs Linux, or
+the device does not take native DSD. A mode saved for a device that cannot
+take it now shows as PCM, which is what plays; the saved mode comes back
+when the device can take it again. Changing a mode, the mixing setting or
+the DSD silence needs a restart, like the other output settings.
 
 **When DSD goes out unchanged.** All of these must hold when the track
 starts:
