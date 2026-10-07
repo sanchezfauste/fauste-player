@@ -124,7 +124,10 @@ pub struct PlayerState {
     /// Entries this player left, oldest first (R25); Previous pops from the
     /// end.
     pub history: Vec<EntryId>,
-    /// Entry the engine was last asked to preload.
+    /// Rule 3a (operator feedback 4, Q8): where Play starts the `next`
+    /// entry from Stopped, when the operator chose it with a seek. Only
+    /// while the player is stopped and the entry is its next.
+    pub pending_start: Option<(EntryId, f64)>,
     /// Entry and start position the engine was last asked to preload (the
     /// position changes when analysis finds the real cue-in).
     pub(crate) preloaded: Option<(EntryId, f64)>,
@@ -158,6 +161,7 @@ impl PlayerState {
             volume: 1.0,
             columns: ColumnWidths::default(),
             history: Vec::new(),
+            pending_start: None,
             preloaded: None,
             scheduled: None,
             fade_stop_pending: false,

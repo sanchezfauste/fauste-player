@@ -97,6 +97,17 @@ fn read_up_to(file: &mut std::fs::File, buf: &mut [u8]) -> std::io::Result<usize
     Ok(filled)
 }
 
+/// Seconds of `frames` frames at `rate`: `None` when the count is unknown
+/// or zero, or the rate is zero (operator feedback 4, Q1).
+pub fn duration_from_frames(frames: Option<u64>, rate: u32) -> Option<f64> {
+    let frames = frames.filter(|f| *f > 0)?;
+    if rate == 0 {
+        return None;
+    }
+    let secs = frames as f64 / f64::from(rate);
+    (secs.is_finite() && secs > 0.0).then_some(secs)
+}
+
 enum Backend {
     Symphonia(Box<SymphoniaDecoder>),
     Dsd(Box<DsdDecoder>),
@@ -199,6 +210,23 @@ impl FileDecoder {
             Backend::Ape(d) => d.frames_hint(),
             Backend::Dsd(d) => d.frames_hint(),
         }
+    }
+
+    /// The length the file stores, in seconds, without decoding (operator
+    /// feedback 4, Q1): what a track shows until its analysis. `None`
+    /// unless the format is known to store it: an estimate (a raw AAC
+    /// stream, an MPEG stream with no Xing, Info or VBRI frame) can end a
+    /// VBR track early. WavPack sums its block headers, Monkey's Audio and
+    /// DSD read their headers' sample counts. For MPEG audio this reads the
+    /// file's first frame again.
+    pub fn duration_hint_secs(&self) -> Option<f64> {
+        let frames = match &self.backend {
+            Backend::Symphonia(d) => d.declared_frames(),
+            Backend::WavPack(d) => d.frames_hint(),
+            Backend::Ape(d) => d.frames_hint(),
+            Backend::Dsd(d) => d.frames_hint(),
+        };
+        duration_from_frames(frames, self.sample_rate())
     }
 
     /// Positions the stream so that the next frame produced is at `secs`.

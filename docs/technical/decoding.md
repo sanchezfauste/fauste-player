@@ -24,6 +24,25 @@ Every backend has the same interface: `sample_rate`, `bits_per_sample`
 `seek(secs)` and `next_block`. All added crates are pure Rust, MIT or
 Apache-2.0, and forbid or deny `unsafe`.
 
+`FileDecoder::duration_hint_secs` turns `frames_hint` into seconds
+(`duration_from_frames`) for the length a track shows before its analysis
+(operator feedback 4, Q1), but only when the file stores the count: a short
+length would end a VBR track early, so an estimate is never used. The rule
+is an allowlist of symphonia readers known to read a stored count
+(`symph.rs::stored_length`): FLAC (STREAMINFO), WAV and AIFF (the data
+chunk), CAF, MP4/M4A and Ogg (the last page's granule, so Vorbis and Opus).
+An MPEG stream (MP1/2/3) has one only when its first frame (the first
+Layer III sync after any ID3v2 tag) is a length frame: `Xing` or `Info`
+right after the side information (9, 17 or 32 bytes by version and channel
+mode), or `VBRI` 32 bytes after the header, where symphonia reads them;
+without one symphonia estimates the length from the first frames' bitrate.
+That check reads the file again, so it runs only in `duration_hint_secs`,
+never when a file is opened for playback. Every other reader gets no
+length: raw AAC (ADTS), whose count symphonia estimates from a sample of
+frame sizes, Matroska/WebM and any reader added later. WavPack sums its
+block headers, and Monkey's Audio and DSD read their headers' sample
+counts.
+
 ## symphonia and Opus
 
 symphonia decodes WAV, AIFF, CAF, FLAC, MP1/2/3, AAC, ALAC, Vorbis and

@@ -1,7 +1,7 @@
 # Operator Feedback 4 — Design Spec
 
 - **Date:** 2026-10-06
-- **Status:** Plan 1 implemented (branch `fix/feedback4-ui-fixes`); plans 2 to 5 not written.
+- **Status:** Plans 1 and 2 implemented (plan 2 on branch `feat/feedback4-plan2-start-point`; Q6 not reproduced, see its "As built"); plans 3 to 5 not implemented.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md) (§3 rules,
   §6 analysis, §8 UI), the [meters spec](2026-09-27-meters-design.md) (M4 display),
   the [bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md) (B3 rate, B6
@@ -417,6 +417,38 @@ Rulings made while implementing:
   moves the CUE; reducer tests for `follow_cue` if the cause is in the model.
 - **Docs and locales.** `docs/user/players.md` if the described behaviour
   changes (it should not).
+
+### As built (plan 2)
+
+- **Q6.** Not reproduced. `cue_follow_ui.rs::q6_1_a_click_on_a_row_moves_the_cue_with_its_window_open`, `q6_2_a_double_click_on_a_row_moves_the_cue_with_its_window_open` and `q6_3_the_cue_follows_in_every_layout_tab_and_state` (a matrix of layouts, tabs, windows and gestures, with real pointer events) pass on the product as it was, so no product code changed and the tests pin the behaviour. The maintainer's exact steps are pending (players, window size, how the CUE was started, whether the CUE window covered the row, click or double-click, the file's state, the Cue route, and whether only the window title changed).
+- **Q1.**
+  - `FileDecoder::duration_hint_secs` and `duration_from_frames` (`fp-decode`) give the length the file stores, and never an estimate, which can be short on VBR. An allowlist of symphonia readers (`symph.rs::stored_length`) is trusted: FLAC, WAV, AIFF, CAF, MP4/M4A and Ogg; MP1/2/3 only when the first Layer III frame after any ID3v2 tag has `Xing`/`Info` after its side information or `VBRI` 32 bytes after its header (checked only when the length is asked for). Raw AAC (ADTS), Matroska/WebM and any other reader get no hint; WavPack, Monkey's Audio and DSD use their own headers.
+  - `fp-app/src/header.rs` (`HeaderReader`, the `fp-header-reader` thread) and `Services::header_pass` read the headers, with eight reads in flight (`HEADER_READS_IN_FLIGHT`) and tracks on a player first.
+  - `Command::SetDuration` and `Track::needs_header_duration` (`fp-model`): stored only for a track that is not analysed, finite and positive; the analysis replaces it, and an analysis with no length keeps it.
+  - `view::time_text` shows the total as `placeholder-none` ("—") while it is unknown.
+- **Q8.**
+  - `PlayerState::pending_start` and `fp-model/src/pending_start.rs` (`pending_start_at`, `settle`, `start_request`, `preload_request`). A start at or past the end of the play range is not stored; one before the cue-in becomes the cue-in.
+  - Every `SetNext` clears it, `MoveEntry` and `Stop` clear it, and `settle` runs in `reconcile`.
+  - `PlayerSession::pending_start` is saved and loaded leniently: a broken or stale value is dropped without a log line.
+  - `view::player_view` shows it as the stopped player's position, and `player.rs::wave` is always seekable; the zoom of a stopped player still does not follow.
+  - The remote `seek` on a stopped player (`api.rs`, `O::Seek`) targets the next entry's cue range; `400` for a start at or past its cue-out and `409` when there is no next or its file is missing or unreadable, the cases where rule 3a stores nothing.
+  - The engine is unchanged: `take_or_open` already matches a preload on `(entry, start_secs)`, and an engine test pins it.
+
+Rulings made while implementing:
+
+- Q6: the matrix lets 0.7 s pass (`settle`) before each gesture. Without it egui reads a double-click as a triple click after a click elsewhere within 0.6 s, a test-time artefact unrelated to the CUE. Cost if wrong: hides a real fast-operator case.
+- Q6 [ASK]: not reproduced; no product change shipped. Cost if wrong: Q6 stays open until the maintainer's steps arrive.
+- Q6 side finding [ASK]: a double-click less than 0.6 s after a click elsewhere is a triple click to egui, so `SetNext` is not sent (the CUE still follows via the single click). Left as is; treating `triple_clicked()` like `double_clicked()` would send `SetNext` twice on a real triple click.
+- Task 1's tests are committed alone, as regression tests, because there is no fix to commit with them.
+- Q1: the FLAC test fixture carries one valid frame header after STREAMINFO, because symphonia 0.6.1's FLAC reader resyncs to the first frame when it opens a file.
+- Q1: `Track::needs_header_duration` tests `is_finite() && > 0.0` instead of `!(x > 0.0)` (clippy's `neg_cmp_op_on_partial_ord`); an infinite length counts as no length.
+- Q1: `header_reads_sent` is always counted; only its accessor is behind `test-hooks`.
+- Q1: the header pass reads only tracks whose file state is `Ok`; a missing or unreadable track is read when it is found again.
+- Q8: the engine test's opener is 10 s long (480 000 frames), not 2 s, so the control pass has something to play.
+- Q8: `settle` zips the kept values back with `iter_mut` instead of indexing.
+- Q8: `editing.rs::seek_is_clamped_and_ignored_when_idle` became `seek_is_clamped_and_starts_nothing_when_stopped`; it now asserts only that no playback action is sent, because rule 3a sends the preload at the pending start (Q8.7).
+- Q8.8 [ASK]: a broken or stale `pending_start` in `session.json` is dropped silently, with no log line, like the other lenient session fields (fp-model is pure and `restore` has no warning channel). Cost if wrong: a small follow-up in fp-store.
+- Q8: the remote seek error for no next is "nothing to seek" (was "nothing is playing"), since it now also covers a stopped player.
 
 ---
 

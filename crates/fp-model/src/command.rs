@@ -67,6 +67,14 @@ pub enum Command {
         track: TrackId,
         tags: Box<TrackTags>,
     },
+    /// Operator feedback 4, Q1.2: the length the file's header declares,
+    /// stored only while the track is not analysed and `secs` is finite
+    /// and positive (ignored if the track is gone). The analysis replaces
+    /// it.
+    SetDuration {
+        track: TrackId,
+        secs: f64,
+    },
     /// Records that a track's file is missing or unreadable (or back to Ok).
     SetFileState {
         track: TrackId,

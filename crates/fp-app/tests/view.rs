@@ -13,7 +13,7 @@ use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     PlayerStatus, RowStatus, TipField, analysis_pending, cue_follow_target, cue_window_view,
     fader_from_gain, file_icon, file_problem, gain_from_fader, player_view, playlist_times,
-    row_is_next, row_status, shown_entry, start_scroll_target, tag_edit_availability,
+    row_is_next, row_status, shown_entry, start_scroll_target, tag_edit_availability, time_text,
     track_tooltip, volume_db,
 };
 use fp_model::{
@@ -707,4 +707,63 @@ fn q9_1_the_reason_is_the_first_line_of_the_tooltip() {
 fn q9_1_a_blank_reason_is_left_out() {
     let tip = track_tooltip(&tip_track(), Some(""));
     assert_eq!(tip[0].0, TipField::Title);
+}
+
+/// Operator feedback 4, Q1.3: with a length from its header, a track not
+/// analysed yet has its countdown, total and position.
+#[test]
+fn q1_3_a_track_with_a_header_duration_has_its_countdown_and_total() {
+    let (mut s, e, p) = state(2);
+    let t0 = s.playlists.entry(e[0]).unwrap().track;
+    s.library.get_mut(t0).unwrap().duration_secs = 0.0;
+    apply(
+        &mut s,
+        Command::SetDuration {
+            track: t0,
+            secs: 120.0,
+        },
+    )
+    .unwrap();
+    apply(&mut s, Command::Play(p)).unwrap();
+    let v = player_view(&s, p, Some(30.0), 0.0).unwrap();
+    assert_eq!((v.elapsed, v.total, v.remaining), (30.0, Some(120.0), 90.0));
+    assert_eq!(v.markers.position, Some(0.25));
+}
+
+/// Q1.4: without a header length, the elapsed time shows and the total
+/// is unknown.
+#[test]
+fn q1_4_without_a_header_duration_the_total_is_unknown() {
+    let (mut s, e, p) = state(2);
+    let t0 = s.playlists.entry(e[0]).unwrap().track;
+    s.library.get_mut(t0).unwrap().duration_secs = 0.0;
+    apply(&mut s, Command::Play(p)).unwrap();
+    let v = player_view(&s, p, Some(30.0), 0.0).unwrap();
+    assert_eq!((v.elapsed, v.total), (30.0, None));
+    assert_eq!(v.markers.position, None);
+}
+
+#[test]
+fn the_time_row_shows_a_dash_for_an_unknown_total() {
+    assert_eq!(time_text(30.0, None, "—"), "00:30 / —");
+    assert_eq!(time_text(30.0, Some(f64::NAN), "—"), "00:30 / —");
+    assert_eq!(time_text(30.0, Some(120.0), "—"), "00:30 / 02:00");
+}
+
+/// Rule 3a (operator feedback 4, Q8.6): a stopped player shows its pending
+/// start as its position: the playhead and the countdown.
+#[test]
+fn q8_6_a_stopped_player_shows_its_pending_start() {
+    let (mut s, e, p) = state(3);
+    apply(&mut s, Command::Seek(p, 50.0)).unwrap();
+    let v = player_view(&s, p, Some(150.0), 0.0).unwrap();
+    assert_eq!(v.status, PlayerStatus::Stopped);
+    assert_eq!((v.elapsed, v.remaining), (50.0, 150.0));
+    assert_eq!(v.markers.position, Some(0.25));
+    apply(&mut s, Command::SetNext(p, e[1])).unwrap();
+    assert_eq!(
+        player_view(&s, p, None, 0.0).unwrap().elapsed,
+        0.0,
+        "a new next starts at its cue-in"
+    );
 }

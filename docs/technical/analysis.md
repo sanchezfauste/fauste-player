@@ -243,6 +243,17 @@ The services thread submits tracks when either:
   *Re-analyse all*, so an unchanged file whose analysis is cached comes back
   playable and fails again on the next playback.
 
+The **header reader** (`fp-header-reader`, `fp-app/src/header.rs`, driven
+by `Services::header_pass`) gives a track a length before its analysis
+(operator feedback 4, Q1.1). Each track with no length, no analysis and a
+playable file (`Track::needs_header_duration`) is read once: the file's
+header only (`FileDecoder::duration_hint_secs`), the tracks on a player
+first, at most eight reads waiting at a time. A length goes to the model as
+`Command::SetDuration`; when the conductor's queue is full it is kept and
+sent on a later round, without reading the file again. A file that has none
+(or cannot be opened) gets nothing and waits for its analysis. A panic while reading is caught and
+logged.
+
 A **tag-only pass** reads the tags of tracks that were analysed but not read
 since: `Track::needs_tag_read` (analysed, readable, `tags_read` false) selects
 them and `Services::tag_pass` sends a `TagJob::Read` for each to the `fp-tags`
@@ -260,3 +271,10 @@ date, genre and other tags without a re-analysis. The editor's own jobs
 Results go to the model as `ApplyAnalysis` or `SetFileState`. Peaks and covers
 are kept in the `MediaCache` only for shown tracks. The disk cache brings
 them back cheaply when a track is shown again.
+
+Before its analysis a track has no length. `Command::SetDuration` stores
+the length its file's header declares while the track is not analysed
+(operator feedback 4, Q1.2): a finite, positive value only, ignored once
+the track is analysed. The analysis replaces it when it finds a length.
+With it the track has a countdown, a position and click-to-seek, and its
+play range is `0..duration` (Q1.5).

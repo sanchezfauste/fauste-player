@@ -122,9 +122,16 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::Seek(id, secs) => {
             let i = state.player_index(id)?;
             let player = &state.players[i];
-            if player.transport != Transport::Stopped
-                && let Some(request) = player.current.and_then(|c| state.request_at(c, secs))
-            {
+            if player.transport == Transport::Stopped {
+                // Rule 3a (Q8.2): where Play will start the next. Nothing
+                // goes to the engine but the preload (`reconcile`).
+                if let Some(next) = player.next
+                    && secs.is_finite()
+                {
+                    let at = crate::pending_start::pending_start_at(state, next, secs);
+                    state.players[i].pending_start = at;
+                }
+            } else if let Some(request) = player.current.and_then(|c| state.request_at(c, secs)) {
                 out.push(EngineAction::Seek {
                     player: id,
                     secs: request.from_secs,
@@ -154,6 +161,16 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
                 t.apply_tags(&tags);
             }
         }
+        Command::SetDuration { track, secs } => {
+            // Q1.2: the header's length stands in until the analysis.
+            if secs.is_finite()
+                && secs > 0.0
+                && let Some(t) = state.library.get_mut(track)
+                && !t.analyzed
+            {
+                t.duration_secs = secs;
+            }
+        }
         Command::SetFileState {
             track,
             state: file_state,
@@ -180,6 +197,12 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::RemoveEntry(entry) => remove_entry(state, entry, &mut out)?,
         Command::MoveEntry { entry, to, index } => {
             state.playlists.move_entry(entry, to, index)?;
+            // Q8.4: a moved entry loses the start chosen for it.
+            for p in &mut state.players {
+                if p.pending_start.is_some_and(|(e, _)| e == entry) {
+                    p.pending_start = None;
+                }
+            }
             refresh_next(state);
         }
         Command::ToggleEntryRepeat(entry) => {
@@ -427,7 +450,10 @@ fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Resu
             out.push(EngineAction::Resume { player: id });
         }
         Transport::Paused | Transport::Stopped => {
+            // Q8.3: the pending start is used by this start, once.
+            let pending = state.players[i].pending_start.take();
             if let Some(request) = advance(state, i) {
+                let request = crate::pending_start::start_request(state, pending, request);
                 out.push(EngineAction::StartCurrent {
                     player: id,
                     request,
@@ -504,6 +530,8 @@ fn pause(
 
 fn stop(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
+    // Q8.4: Stop forgets a pending start, even on a stopped player.
+    state.players[i].pending_start = None;
     let player = &state.players[i];
     if player.transport == Transport::Stopped && player.current.is_none() {
         return Ok(());
@@ -546,6 +574,9 @@ fn set_next(state: &mut AppState, id: PlayerId, entry: EntryId) -> Result<(), Mo
     }
     state.players[i].next = Some(entry);
     state.players[i].next_explicit = true;
+    // Q8.4: a new next, or the same one chosen again (Play now), starts at
+    // its cue-in.
+    state.players[i].pending_start = None;
     Ok(())
 }
 
@@ -1257,6 +1288,9 @@ fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
 
 /// Derives the engine work implied by the state: preload whatever is next.
 pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    // Rule 3a (Q8.4): a pending start lives only while its player is
+    // stopped with that entry next, inside the entry's play range.
+    crate::pending_start::settle(state);
     // O38: in Single mode the flag lives only while the current entry
     // repeats (it may have stopped applying: repeat off, a stop-after mark,
     // Next into another entry, a file that cannot be read).
@@ -1279,7 +1313,8 @@ pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
         .map(|(i, p)| {
             (
                 i,
-                preload_target(state, p).and_then(|e| state.request_from_cue_in(e)),
+                preload_target(state, p)
+                    .and_then(|e| crate::pending_start::preload_request(state, p, e)),
             )
         })
         .filter(|(i, request)| {

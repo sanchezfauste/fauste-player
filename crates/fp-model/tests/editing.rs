@@ -251,13 +251,16 @@ fn volume_is_clamped_and_nan_keeps_the_volume() {
 }
 
 #[test]
-fn seek_is_clamped_and_ignored_when_idle() {
+fn seek_is_clamped_and_starts_nothing_when_stopped() {
     let mut state = fixture(1);
     let p = p0(&state);
+    // Rule 3a: a seek while stopped only moves the preload of the next.
+    let actions = apply(&mut state, Command::Seek(p, 10.0)).unwrap();
     assert!(
-        apply(&mut state, Command::Seek(p, 10.0))
-            .unwrap()
-            .is_empty()
+        actions
+            .iter()
+            .all(|a| matches!(a, EngineAction::Preload { .. })),
+        "{actions:?}"
     );
     apply(&mut state, Command::Play(p)).unwrap();
     let actions = apply(&mut state, Command::Seek(p, 999.0)).unwrap();

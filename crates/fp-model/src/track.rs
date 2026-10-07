@@ -384,6 +384,15 @@ impl Track {
         self.analyzed && !self.tags_read && self.file_state.is_playable()
     }
 
+    /// Operator feedback 4, Q1.1: whether the header reader should read
+    /// this track's length: not analysed, no length yet, and a file that
+    /// can be opened.
+    pub fn needs_header_duration(&self) -> bool {
+        // A NaN length counts as no length.
+        let has_length = self.duration_secs.is_finite() && self.duration_secs > 0.0;
+        !self.analyzed && !has_length && self.file_state.is_playable()
+    }
+
     pub fn cue_in_secs(&self) -> f64 {
         self.markers.cue_in.map_or(0.0, |m| m.secs)
     }

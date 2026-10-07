@@ -165,6 +165,16 @@ pub fn cue_follow_target(state: &AppState, player: PlayerId, clicked: EntryId) -
     .then_some(clicked)
 }
 
+/// The `elapsed / total` line under the waveform. `unknown` stands for a
+/// total that is not known (operator feedback 4, Q1.4: a track played
+/// before its analysis whose header gave no length).
+pub fn time_text(elapsed: f64, total: Option<f64>, unknown: &str) -> String {
+    let total = total
+        .filter(|t| t.is_finite() && *t > 0.0)
+        .map_or_else(|| unknown.to_owned(), super::format::clock);
+    format!("{} / {}", super::format::clock(elapsed), total)
+}
+
 /// Everything a player column shows. `position` comes from the engine;
 /// `blink_phase` is a clock in seconds for blinking elements.
 pub fn player_view(
@@ -213,7 +223,16 @@ pub fn player_view(
         return Some(view);
     };
     let range = track.play_range(state.config.players.use_cue_markers);
-    let pos = position.filter(|v| v.is_finite()).unwrap_or(range.cue_in);
+    // Rule 3a (operator feedback 4, Q8.6): a stopped player shows where
+    // Play will start its next.
+    let pending = p
+        .pending_start
+        .filter(|(e, _)| p.transport == Transport::Stopped && p.next == Some(*e))
+        .map(|(_, secs)| secs);
+    let pos = position
+        .filter(|v| v.is_finite())
+        .or(pending)
+        .unwrap_or(range.cue_in);
     let cue_out = range.cue_out;
     let total = (track.duration_secs > 0.0).then_some(track.duration_secs);
     view.title = Some(track.title.clone());

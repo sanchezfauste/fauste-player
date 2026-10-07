@@ -1124,8 +1124,8 @@ pub struct WaveInput<'a> {
     pub view: Option<WaveView>,
     /// An area drawn over the waveform (a button) where no seek starts.
     pub shield: Option<Rect>,
-    /// Clicks seek. A stopped player's next track always starts at its
-    /// cue-in, so its waveform only shows times.
+    /// Clicks seek. On a stopped player a click sets where Play starts the
+    /// next track (rule 3a); the CUE window seeks the CUE.
     pub seekable: bool,
 }
 

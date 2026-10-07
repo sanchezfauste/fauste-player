@@ -1114,3 +1114,92 @@ fn reanalyse_track_brings_back_a_track_that_playback_marked_unreadable() {
     r.run_until("playable again", |r| all_in(r, FileState::Ok));
     assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
 }
+
+/// Operator feedback 4, Q1.1: a track has the length its file's header
+/// declares long before its analysis ends.
+#[test]
+fn a_track_gets_its_header_duration_before_its_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = wav(dir.path(), "a.wav", 2);
+    let mut r = rig_slow(&[file], dir, Duration::from_secs(30));
+    r.run_until("the header duration", |r| only_track(r).duration_secs > 0.0);
+    let t = only_track(&r);
+    assert!(!t.analyzed, "the analysis is still running");
+    assert!((t.duration_secs - 2.0).abs() < 1e-6, "{}", t.duration_secs);
+}
+
+/// A file whose header cannot be read gets no length, and is asked once.
+#[test]
+fn a_file_whose_header_cannot_be_read_gets_no_duration_and_is_asked_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let broken = dir.path().join("broken.wav");
+    std::fs::write(&broken, b"RIFF\x00\x00\x00\x00WAVEjunkjunkjunkjunk").unwrap();
+    let mut r = rig_slow(&[broken], dir, Duration::from_secs(30));
+    let mut rounds = 0;
+    r.run_until("fifty rounds", |_| {
+        rounds += 1;
+        rounds > 50
+    });
+    assert_eq!(only_track(&r).duration_secs, 0.0);
+    assert_eq!(r.services.header_reads_sent(), 1);
+}
+
+/// A length read while the conductor's queue is full is kept and sent
+/// later, not read from the file again.
+#[test]
+fn a_header_length_that_cannot_be_queued_is_sent_later_without_a_second_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = wav(dir.path(), "a.wav", 2);
+    let mut r = rig_slow(&[file], dir, Duration::from_secs(30));
+    let p = r.handle.model.load().players[0].id;
+    while r.handle.send(Command::SetVolume(p, 1.0)) {}
+    // Only the services run: the queue stays full while the answer comes.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while !(r.services.header_reads_sent() >= 1 && r.services.header_reads_in_flight() == 0
+        || r.services.header_reads_sent() > 1)
+    {
+        assert!(Instant::now() < deadline, "timed out waiting for the read");
+        r.services.step(r.now);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(r.services.header_reads_sent(), 1, "read again");
+    r.run_until("the header duration", |r| only_track(r).duration_secs > 0.0);
+    assert!((only_track(&r).duration_secs - 2.0).abs() < 1e-6);
+    assert_eq!(r.services.header_reads_sent(), 1);
+}
+
+/// Tracks on a player get their length ahead of a large library.
+#[test]
+fn a_track_on_a_player_gets_its_header_duration_ahead_of_the_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=30)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = rig_with(&files, dir, Duration::from_secs(30), |s| {
+        let p = s.players[0].id;
+        let last = s.playlists.iter().next().unwrap().entries[29].id;
+        fp_model::apply(s, Command::SetNext(p, last)).unwrap();
+    });
+    let model = r.handle.model.load_full();
+    let next = model.players[0].next.unwrap();
+    let track = model.playlists.entry(next).unwrap().track;
+    r.run_until("the loaded track's length", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .get(track)
+            .is_some_and(|t| t.duration_secs > 0.0)
+    });
+    let known = r
+        .handle
+        .model
+        .load()
+        .library
+        .iter()
+        .filter(|t| t.duration_secs > 0.0)
+        .count();
+    // At most two rounds of eight reads were answered by then.
+    assert!(known <= 16, "{known} lengths were read first");
+}

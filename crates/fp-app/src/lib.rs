@@ -3,6 +3,7 @@
 pub mod bootstrap;
 pub mod cli;
 pub mod crash;
+pub mod header;
 pub mod i18n;
 pub mod instance;
 pub mod logging;

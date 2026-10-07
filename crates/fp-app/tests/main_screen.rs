@@ -634,7 +634,7 @@ fn the_meter_and_fader_form_a_column_right_of_the_transport() {
     // The waveform keeps the player's full width.
     assert!(wave.right() >= fader.right() - 1.0, "{wave:?} {fader:?}");
     // Elapsed / total sits under the waveform, right-aligned.
-    let time = h.get_by_label("00:00 / 00:00").rect();
+    let time = h.get_by_label("00:00 / —").rect();
     assert!(time.top() >= wave.bottom(), "{time:?} {wave:?}");
     assert!(
         (time.right() - wave.right()).abs() <= 1.0,

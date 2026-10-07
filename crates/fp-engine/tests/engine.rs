@@ -1165,3 +1165,40 @@ fn a_sought_cue_releases_the_old_source_once_its_fade_ends() {
     assert_eq!(r.engine.attached_sources(), 1, "only the new CUE source");
     assert_eq!(r.engine.used_slots(), 1, "no leaked slot");
 }
+
+/// An opener that counts the sources it opens.
+fn counting_opener(opened: Arc<std::sync::atomic::AtomicUsize>) -> fp_engine::worker::SourceOpener {
+    let tagged = support::tagged_opener(480_000);
+    Arc::new(move |path, from_secs, rate| {
+        opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        tagged(path, from_secs, rate)
+    })
+}
+
+/// Operator feedback 4, Q8.7: Play from a pending start uses the source
+/// preloaded there; nothing is opened again. (Characterisation: the
+/// engine already matches a preload on entry and start.)
+#[test]
+fn play_from_a_pending_start_uses_the_preload_made_there() {
+    for (start_at, opens) in [(1.0, 1), (2.0, 2)] {
+        let opened = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut r = rig_with(counting_opener(Arc::clone(&opened)), false);
+        r.act(EngineAction::Preload {
+            player: P,
+            request: Some(request(1, 1.0)),
+        });
+        r.act(EngineAction::StartCurrent {
+            player: P,
+            request: request(1, start_at),
+        });
+        r.settle();
+        r.run(4);
+        assert_eq!(
+            opened.load(std::sync::atomic::Ordering::SeqCst),
+            opens,
+            "start at {start_at}"
+        );
+        assert!(r.position() >= start_at, "{}", r.position());
+        assert!((tag(*r.heard.last().unwrap()).1 as f64 / RATE) >= start_at);
+    }
+}
