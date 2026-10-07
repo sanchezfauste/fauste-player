@@ -802,6 +802,14 @@ Task 7, the check on real hardware, is not done.
     the rate (the engine resamples), an edge case since devices report the
     same buffer range at every rate — cost if wrong: a resampled file on
     such a device.
+  The fallback runs only when the device refuses the configuration
+  (`BackendError::Unsupported`, `Bus::open_or_fall_back`): a device missing
+  or busy for a moment (a USB replug, another client) is asked for its own
+  values again at the next retry rather than running at the global ones for
+  the rest of the session. And a bit-perfect bus that follows a file's rate
+  (`reopen_with`, PCM to PCM) keeps, for a device with its own buffer, a
+  fallback at the new rate with the global buffer; a fallback to another
+  rate is still forgotten there.
 
 ---
 

@@ -177,9 +177,12 @@ cannot hang the conductor.
   system-default output opens at the global values; the store removes
   the overrides, bit-perfect and DSD entries of a device no route names on
   load (`forget_unrouted_devices`). A bus with its own rate or buffer
-  keeps the global rate and buffer as its `pcm_fallback`: when its own
-  values do not open, the watchdog reopens the device with the global ones
-  (warn log). A rate change opens the sources on it again
+  keeps the global rate and buffer as its `pcm_fallback`: when the device
+  refuses its own values (`BackendError::Unsupported`), the watchdog
+  reopens it with the global ones (warn log); a device missing or busy for
+  a moment is asked for its own values again at the next retry. After a
+  bit-perfect bus follows a file's rate, a device with its own buffer keeps
+  a fallback at the new rate with the global buffer. A rate change opens the sources on it again
   (`follow_forced_rate`); a buffer change alone leaves them as they are. The mixer's smoothing and declick
   lengths are in that rate's frames, and the one-block margins use the bus's
   own buffer as the stream runs it (`Engine::buffer_of`, `Bus::buffer_frames`:
@@ -366,10 +369,11 @@ plus the mixer's DSD mode.
   configuration comes back only with exclusive access and a stream that fits
   (`dsd_fits`); otherwise the present device is reopened as PCM at the same
   rate, `dsd_lost` is set, and `dsd_stream_lost` drops the record and reports
-  `DsdEnded`: the DSD track goes on from its PCM ring. A PCM rate that does
-  not open, there or on a PCM bus, falls back to the PCM configuration the
-  bus had before the DSD (`Bus::set_pcm_fallback`, forgotten once the bus
-  changes PCM rate by itself); `Bus::take_rate_change` then tells `tick`,
+  `DsdEnded`: the DSD track goes on from its PCM ring. A PCM rate the
+  device refuses (`Unsupported`), there or on a PCM bus, falls back to the
+  PCM configuration the bus had before the DSD (`Bus::set_pcm_fallback`,
+  forgotten once the bus changes PCM rate by itself, except a device's own
+  buffer's fallback, kept at the new rate); `Bus::take_rate_change` then tells `tick`,
   which runs `follow_forced_rate`. So no retry is ever stuck on a rate the
   device cannot take. If no PCM open works either, the DSD configuration is
   restored for the next retry.

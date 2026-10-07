@@ -213,9 +213,13 @@ fn a_device_whose_own_rate_does_not_open_falls_back_to_the_global_rate() {
     assert_eq!(dac.sample_rate, 48_000);
 }
 
-/// Lets the watchdog retry for 20 s of ticks.
+/// Lets the watchdog retry for 20 s of ticks, rendering a block whenever
+/// `dac` is open so a reopened stream starts.
 fn let_the_watchdog_retry(r: &mut Rig) {
     for _ in 0..200 {
+        if r.dac.is_open() {
+            r.dac.render(BLOCK);
+        }
         r.clock += Duration::from_millis(100);
         r.engine.tick(r.clock);
     }
@@ -279,4 +283,37 @@ fn an_own_buffer_the_device_does_not_report_falls_back_to_the_global_one_not_the
     let_the_watchdog_retry(&mut r);
     let dac = r.dac.config().expect("reopened");
     assert_eq!((dac.buffer_frames, dac.exact_buffer), (512, false));
+}
+
+#[test]
+fn a_device_busy_for_a_moment_comes_back_with_its_own_buffer() {
+    // Only a refusal of the configuration falls back to the global values:
+    // a device busy (or missing) for a moment is asked for its own again.
+    let mut r = rig(|c| c.outputs.set_device_buffer(&dev("dac"), Some(256)));
+    r.dac.unplug();
+    let_the_watchdog_retry(&mut r);
+    assert!(r.dac.config().is_none(), "unplugged");
+    r.dac.replug();
+    r.dac.set_busy(1);
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened");
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (48_000, 256));
+}
+
+#[test]
+fn a_bit_perfect_device_that_followed_a_file_keeps_the_global_buffer_fallback() {
+    let mut r = rig(|c| {
+        c.outputs.bit_perfect = vec![dev("dac")];
+        c.outputs.set_device_buffer(&dev("dac"), Some(256));
+    });
+    let path = indexed_wav(r.dir.path(), "a.wav", 44_100, 2, 44_100 * 3);
+    r.start(request(path, pcm16(44_100)));
+    let dac = r.dac.config().unwrap();
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (44_100, 256));
+    r.dac.unplug();
+    r.dac.refuse_buffer(256);
+    r.dac.replug();
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened with the global buffer");
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (44_100, 512));
 }
