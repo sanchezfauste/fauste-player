@@ -452,38 +452,69 @@ fn minor_step_db(c: &MeterConfig, from: f32) -> f32 {
     }
 }
 
-/// The levels (dBFS, ascending) of the minor ticks: between each pair of
-/// adjacent scale marks, at the step of [`minor_step_db`] counted from the
-/// lower mark, never on a mark.
-pub fn minor_marks(c: &MeterConfig) -> Vec<f32> {
-    let marks = scale_marks(c);
+/// The steps (dB, in the scale's own units) a ruler segment's minor ticks
+/// may take, finest first: a segment takes the finest one that is not finer
+/// than its scale's spacing ([`minor_step_db`]) and keeps its ticks
+/// [`MIN_TICK_SPACING`] apart.
+const MINOR_STEP_LADDER: [f32; 6] = [0.5, 1.0, 2.0, 2.5, 5.0, 10.0];
+
+/// The multiples of `step` dB in the scale's own units (counted from
+/// [`scale_zero`]) strictly between `low` and `high` dBFS, ascending.
+fn step_multiples(low: f32, high: f32, step: f32, c: &MeterConfig) -> Vec<f32> {
     let mut out = Vec::new();
-    for pair in marks.windows(2) {
-        let (Some(&a), Some(&b)) = (pair.first(), pair.get(1)) else {
-            continue;
-        };
-        let step = minor_step_db(c, a);
-        // A count, not a running sum, so the levels do not drift.
-        let mut n = 1.0_f32;
-        while a + step * n < b - SAME_MARK_DB {
-            out.push(a + step * n);
-            n += 1.0;
-        }
+    if !(low.is_finite() && high.is_finite() && step.is_finite() && step > 0.0) {
+        return out;
     }
-    out
+    let zero = scale_zero(c);
+    // A count, not a running sum, so the levels do not drift.
+    let mut k = ((low - zero) / step).floor();
+    loop {
+        let db = zero + k * step;
+        if db >= high - SAME_MARK_DB {
+            return out;
+        }
+        if db > low + SAME_MARK_DB {
+            out.push(db);
+        }
+        k += 1.0;
+    }
 }
 
-/// The ticks of both rulers: a major tick for every labelled mark and the
-/// alignment tick, then the scale marks that lost their label and the minor
-/// marks as minor ticks, each kept only where it is at least
-/// [`MIN_TICK_SPACING`] from every tick already kept. Sorted by `y`.
-fn ruler_ticks(lines: &[MeterLine], c: &MeterConfig, top: f32, bottom: f32) -> Vec<MeterTick> {
+/// The levels (dBFS, ascending) of the finest minor ticks: between each
+/// pair of adjacent scale marks, every multiple of [`minor_step_db`] in the
+/// scale's own units, never on a mark. The layout rules a short meter more
+/// coarsely (see [`ruler_ticks`]).
+pub fn minor_marks(c: &MeterConfig) -> Vec<f32> {
+    let marks = scale_marks(c);
+    marks
+        .windows(2)
+        .filter_map(|pair| Some((*pair.first()?, *pair.get(1)?)))
+        .flat_map(|(a, b)| step_multiples(a, b, minor_step_db(c, a), c))
+        .collect()
+}
+
+/// The ticks of both rulers, sorted by `y`:
+/// - a major tick for every labelled mark, and the alignment tick;
+/// - a minor tick for every scale mark that lost its label, where it stays
+///   [`MIN_TICK_SPACING`] from the ticks above;
+/// - between each two of those, minor ticks as on a measuring ruler: every
+///   multiple of the finest step of [`MINOR_STEP_LADDER`] that keeps them
+///   [`MIN_TICK_SPACING`] apart, or none.
+fn ruler_ticks(
+    lines: &[MeterLine],
+    marks: &[f32],
+    c: &MeterConfig,
+    top: f32,
+    bottom: f32,
+) -> Vec<MeterTick> {
     let height = bottom - top;
     let half = TICK_THICKNESS / 2.0;
+    let y_of = |db: f32| bottom - meter_position(db, c) * height;
     let mut ticks: Vec<MeterTick> = lines
         .iter()
         .filter(|m| m.alignment || !m.label.is_empty())
         .map(|m| MeterTick {
+            db: m.db,
             y: m.y,
             kind: if m.alignment {
                 TickKind::Alignment
@@ -492,27 +523,58 @@ fn ruler_ticks(lines: &[MeterLine], c: &MeterConfig, top: f32, bottom: f32) -> V
             },
         })
         .collect();
-    let marks = scale_marks(c);
-    let minors = minor_marks(c);
-    // Top down, as the labels are kept.
-    for db in marks.iter().rev().chain(minors.iter().rev()) {
+    ticks.sort_by(|a, b| a.y.total_cmp(&b.y));
+    // The scale marks that lost their label, top down as the labels are
+    // kept; `ticks` stays sorted by `y`.
+    for &db in marks.iter().rev() {
         if (db - alignment_dbfs(c)).abs() < SAME_MARK_DB {
             continue;
         }
-        // A level off the scale's ends (EBU below −12) has no tick; one on
-        // an end stays inside the bars' height.
-        let y = bottom - meter_position(*db, c) * height;
-        if y < top - 0.01 || y > bottom + 0.01 {
-            continue;
-        }
-        let y = y.clamp(top + half, (bottom - half).max(top + half));
-        if ticks.iter().all(|t| (t.y - y).abs() >= MIN_TICK_SPACING) {
-            ticks.push(MeterTick {
-                y,
-                kind: TickKind::Minor,
-            });
+        let y = y_of(db).clamp(top + half, (bottom - half).max(top + half));
+        let at = ticks.partition_point(|t| t.y < y);
+        let clear = |i: Option<usize>| {
+            i.and_then(|i| ticks.get(i))
+                .is_none_or(|t: &MeterTick| (t.y - y).abs() >= MIN_TICK_SPACING)
+        };
+        if clear(at.checked_sub(1)) && clear(Some(at)) {
+            ticks.insert(
+                at,
+                MeterTick {
+                    db,
+                    y,
+                    kind: TickKind::Minor,
+                },
+            );
         }
     }
+    // Then rule each segment between two of those ticks (bottom up: `y`
+    // falls as the level rises).
+    let mut minors = Vec::new();
+    for pair in ticks.windows(2).rev() {
+        let (Some(high), Some(low)) = (pair.first(), pair.get(1)) else {
+            continue;
+        };
+        let finest = minor_step_db(c, low.db);
+        let fits = |levels: &[f32]| {
+            let ys = std::iter::once(low.y)
+                .chain(levels.iter().map(|db| y_of(*db)))
+                .chain(std::iter::once(high.y));
+            ys.clone()
+                .zip(ys.skip(1))
+                .all(|(a, b)| a - b >= MIN_TICK_SPACING - 0.01)
+        };
+        let ruled = MINOR_STEP_LADDER
+            .iter()
+            .filter(|step| **step >= finest - SAME_MARK_DB)
+            .map(|step| step_multiples(low.db, high.db, *step, c))
+            .find(|levels| fits(levels));
+        minors.extend(ruled.into_iter().flatten().map(|db| MeterTick {
+            db,
+            y: y_of(db),
+            kind: TickKind::Minor,
+        }));
+    }
+    ticks.extend(minors);
     ticks.sort_by(|a, b| a.y.total_cmp(&b.y));
     ticks
 }
@@ -758,6 +820,8 @@ const ALIGNMENT_LINE_THICKNESS: f32 = 2.0;
 /// One labelled mark of the meter's scale (see [`meter_layout`]).
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeterLine {
+    /// The mark's level, dBFS.
+    pub db: f32,
     pub y: f32,
     /// Where the label is anchored vertically: the line's `y`.
     pub label_y: f32,
@@ -803,6 +867,8 @@ pub enum TickKind {
 /// One tick of the rulers, at screen height `y`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeterTick {
+    /// The level the tick marks, dBFS.
+    pub db: f32,
     pub y: f32,
     pub kind: TickKind,
 }
@@ -858,18 +924,22 @@ pub struct MeterLayout {
     pub ticks: Vec<MeterTick>,
 }
 
+/// The level (dBFS) that is 0 in the chosen meter's own units: EBU TEST,
+/// DIN 0, 0 VU, the K-System's 0, and 0 dBFS on the digital meter.
+pub fn scale_zero(c: &MeterConfig) -> f32 {
+    match c.ballistics {
+        MeterBallistics::EbuPpm | MeterBallistics::Vu => c.reference_dbfs,
+        MeterBallistics::DinPpm => c.reference_dbfs + PERMITTED_MAXIMUM_DB,
+        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => alignment_dbfs(c),
+        MeterBallistics::DigitalPeak | MeterBallistics::Custom => 0.0,
+    }
+}
+
 /// The label of the scale mark at `db` dBFS, in the chosen meter's own
 /// units: EBU relative to TEST (shown as `TEST`), DIN to its 0, VU to 0 VU,
 /// K-System to its 0, the digital meter in dBFS.
 pub fn mark_label(db: f32, c: &MeterConfig) -> String {
-    let zero = match c.ballistics {
-        MeterBallistics::EbuPpm => c.reference_dbfs,
-        MeterBallistics::DinPpm => c.reference_dbfs + PERMITTED_MAXIMUM_DB,
-        MeterBallistics::Vu => c.reference_dbfs,
-        MeterBallistics::K20 | MeterBallistics::K14 | MeterBallistics::K12 => alignment_dbfs(c),
-        MeterBallistics::DigitalPeak | MeterBallistics::Custom => 0.0,
-    };
-    let value = (db - zero).round() as i32;
+    let value = (db - scale_zero(c)).round() as i32;
     if c.ballistics == MeterBallistics::EbuPpm && value == 0 {
         "TEST".to_owned()
     } else if value > 0 {
@@ -881,8 +951,8 @@ pub fn mark_label(db: f32, c: &MeterConfig) -> String {
 
 /// Lays the meter out in `rect`: the maximum readout on top, the loudness
 /// line at the bottom when `loudness`, the two bars, and the labels and
-/// ticks of a ruler on each side of them. Labels are kept top down while they have room; the alignment mark
-/// always keeps its line and label.
+/// ticks of a ruler on each side of them. Labels are kept top down while
+/// they have room; the alignment mark always keeps its line and label.
 pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout {
     let bars_left = rect.left() + SIDE_WIDTH;
     let top = rect.top() + MAX_LINE_HEIGHT;
@@ -935,6 +1005,7 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
             egui::Align::Center
         };
         MeterLine {
+            db,
             y,
             label_y: y,
             label_align,
@@ -1006,7 +1077,7 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     }
     lines.push(alignment);
     lines.sort_by(|a, b| a.label_centre().total_cmp(&b.label_centre()));
-    let ticks = ruler_ticks(&lines, c, top, bottom);
+    let ticks = ruler_ticks(&lines, &marks, c, top, bottom);
     MeterLayout {
         bars,
         max: Rect::from_x_y_ranges(bars_left..=bars_right, rect.top()..=top),

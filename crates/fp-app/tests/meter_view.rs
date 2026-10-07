@@ -12,8 +12,8 @@ use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::widgets::{
     LABEL_COLUMN, METER_WIDTH, MeterTick, Side, TickKind, Zone, alignment_dbfs, loudness_line,
-    mark_label, max_readout, meter_layout, meter_position, minor_marks, scale_marks, tick_colour,
-    zone_of,
+    mark_label, max_readout, meter_layout, meter_position, minor_marks, scale_marks, scale_zero,
+    tick_colour, zone_of,
 };
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::PlayerTelemetry;
@@ -842,7 +842,8 @@ fn minor_marks_follow_a_custom_floor_and_reference() {
     let mut c = meter(MeterBallistics::DigitalPeak);
     c.floor_db = -57.0;
     let m = minor_marks(&c);
-    assert!(has(&m, -52.0), "5 dB above the odd floor's first segment");
+    assert!(has(&m, -55.0), "on the 5 dB grid, not 5 dB above the floor");
+    assert!(!has(&m, -52.0), "never off the grid");
     assert!(!has(&m, -57.0), "the floor is a mark");
     let mut c = meter(MeterBallistics::EbuPpm);
     c.reference_dbfs = -20.0;
@@ -887,7 +888,8 @@ fn ticks_stay_inside_the_rect_and_apart() {
 
 #[test]
 fn crowded_marks_keep_a_minor_tick() {
-    // At 64 px labels are thinned out; every scale mark still has a tick.
+    // At 136 px some marks lose their label; every scale mark still has a
+    // tick.
     for ballistics in [MeterBallistics::DigitalPeak, MeterBallistics::DinPpm] {
         let c = meter(ballistics);
         let l = meter_layout(column(136.0), &c, false);
@@ -1019,6 +1021,142 @@ fn nothing_is_drawn_over_the_bars_or_between_them() {
                     }
                 }
             }
+        }
+    }
+}
+
+/// The steps a ruler segment's minor ticks may take, in the scale's units.
+const LADDER: [f32; 6] = [0.5, 1.0, 2.0, 2.5, 5.0, 10.0];
+
+/// The multiples of `step` (in the scale's units, counted from `zero`)
+/// strictly between `lo` and `hi` dBFS.
+fn multiples(lo: f32, hi: f32, step: f32, zero: f32) -> Vec<f32> {
+    let mut out = Vec::new();
+    let mut k = ((lo - zero) / step).floor() as i32;
+    loop {
+        let v = zero + k as f32 * step;
+        if v >= hi - 0.01 {
+            return out;
+        }
+        if v > lo + 0.01 {
+            out.push(v);
+        }
+        k += 1;
+    }
+}
+
+fn is_mark(c: &MeterConfig, db: f32) -> bool {
+    (db - alignment_dbfs(c)).abs() < 0.01 || scale_marks(c).iter().any(|m| (m - db).abs() < 0.01)
+}
+
+/// The scales to rule: every meter, plus an odd digital floor and an EBU
+/// alignment level off the whole dB.
+fn ruled_scales() -> Vec<MeterConfig> {
+    let mut configs: Vec<MeterConfig> = ALL_METERS.iter().map(|b| meter(*b)).collect();
+    let mut odd = meter(MeterBallistics::DigitalPeak);
+    odd.floor_db = -57.0;
+    configs.push(odd);
+    let mut ebu = meter(MeterBallistics::EbuPpm);
+    ebu.reference_dbfs = -20.5;
+    configs.push(ebu);
+    configs
+}
+
+/// Spec Q11.4, as on a measuring ruler: between two ticks of the scale's
+/// marks, the minor ticks are every multiple of one step, evenly spaced, or
+/// none at all.
+#[test]
+fn minor_ticks_rule_each_segment_evenly() {
+    for c in ruled_scales() {
+        let zero = scale_zero(&c);
+        let heights = (40..=400)
+            .step_by(3)
+            .map(|h| h as f32)
+            .chain([120.0, 136.0]);
+        for height in heights {
+            for loudness in [false, true] {
+                let l = meter_layout(column(height), &c, loudness);
+                let mut ticks = l.ticks.clone();
+                ticks.sort_by(|a, b| a.db.total_cmp(&b.db));
+                let bounds: Vec<f32> = ticks
+                    .iter()
+                    .filter(|t| t.kind != TickKind::Minor || is_mark(&c, t.db))
+                    .map(|t| t.db)
+                    .collect();
+                for pair in bounds.windows(2) {
+                    let (lo, hi) = (pair[0], pair[1]);
+                    let inside: Vec<f32> = ticks
+                        .iter()
+                        .filter(|t| t.db > lo + 0.01 && t.db < hi - 0.01)
+                        .map(|t| t.db)
+                        .collect();
+                    if inside.is_empty() {
+                        continue;
+                    }
+                    let regular = LADDER.iter().any(|s| {
+                        let m = multiples(lo, hi, *s, zero);
+                        m.len() == inside.len()
+                            && m.iter().zip(&inside).all(|(a, b)| (a - b).abs() < 0.01)
+                    });
+                    assert!(
+                        regular,
+                        "{:?} floor {} ref {} at {height} {loudness}: {inside:?} between {lo} and {hi}",
+                        c.ballistics, c.floor_db, c.reference_dbfs
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Where there is room, every step of the scale's own spacing is ruled.
+#[test]
+fn a_tall_meter_rules_every_step_of_its_scale() {
+    for c in ruled_scales() {
+        let l = meter_layout(column(1500.0), &c, false);
+        let mut minors: Vec<f32> = l
+            .ticks
+            .iter()
+            .filter(|t| t.kind == TickKind::Minor && !is_mark(&c, t.db))
+            .map(|t| t.db)
+            .collect();
+        minors.sort_by(f32::total_cmp);
+        let expected: Vec<f32> = minor_marks(&c)
+            .into_iter()
+            .filter(|m| (m - alignment_dbfs(&c)).abs() >= 0.01)
+            .collect();
+        assert_eq!(
+            minors.len(),
+            expected.len(),
+            "{:?}: {minors:?}",
+            c.ballistics
+        );
+        for (a, b) in minors.iter().zip(&expected) {
+            assert!((a - b).abs() < 0.01, "{:?}: {minors:?}", c.ballistics);
+        }
+    }
+}
+
+/// The two cases a review found: the top of the digital scale at a bar
+/// height of about 109 px kept −2 and −7 alone, and at 136 px dropped −1.
+#[test]
+fn the_top_of_the_digital_scale_is_ruled_evenly() {
+    let c = meter(MeterBallistics::DigitalPeak);
+    for height in [120.0, 136.0] {
+        let l = meter_layout(column(height), &c, false);
+        for (lo, hi) in [(-10.0, -5.0), (-5.0, 0.0)] {
+            let mut inside: Vec<f32> = l
+                .ticks
+                .iter()
+                .filter(|t| t.db > lo + 0.01 && t.db < hi - 0.01)
+                .map(|t| t.db)
+                .collect();
+            inside.sort_by(f32::total_cmp);
+            let regular = LADDER.iter().any(|s| {
+                let m = multiples(lo, hi, *s, 0.0);
+                m.len() == inside.len() && m.iter().zip(&inside).all(|(a, b)| (a - b).abs() < 0.01)
+            });
+            assert!(regular, "{height}: {inside:?} between {lo} and {hi}");
         }
     }
 }
