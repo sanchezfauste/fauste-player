@@ -534,3 +534,126 @@ fn stopping_the_cue_mid_drag_moves_no_marker() {
     assert!(h.query_by_label(WAVE).is_some(), "the CUE runs again");
     assert!(set_markers(&fake.take_sent()).is_empty());
 }
+
+/// P1 plays entry 0 while its CUE runs on entry 1, whose intro ends at
+/// 30 s: the CUE's track is not the player's. Returns entry 1's track and
+/// entry 0's.
+fn cueing_another_entry() -> (Harness<'static, AppUi>, Arc<Fake>, TrackId, TrackId) {
+    let mut s = state(1, 3);
+    for t in s.library.iter_mut() {
+        t.duration_secs = 180.0;
+    }
+    let entries = s.playlists.iter().next().unwrap().entries.clone();
+    let (on_air, cued) = (entries[0].track, entries[1].track);
+    fp_model::apply(
+        &mut s,
+        Command::SetMarker {
+            track: cued,
+            kind: MarkerKind::IntroEnd,
+            secs: Some(30.0),
+        },
+    )
+    .unwrap();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    let (mut h, fake) = harness(s);
+    fake.send(Command::CueEntry(p, entries[1].id));
+    fake.take_sent();
+    h.run_steps(2);
+    (h, fake, cued, on_air)
+}
+
+#[test]
+fn the_cue_window_edits_and_seeks_the_cues_track_not_the_players() {
+    let (mut h, fake, cued, on_air) = cueing_another_entry();
+    assert_ne!(cued, on_air);
+    let w = h.get_by_label(WAVE).rect();
+    // The menu.
+    let at = pos2(x_of(w, 45.0), w.center().y);
+    h.event(Event::PointerMoved(at));
+    button(&mut h, at, PointerButton::Secondary, true, Modifiers::NONE);
+    button(&mut h, at, PointerButton::Secondary, false, Modifiers::NONE);
+    h.run_steps(2);
+    h.get_by_label("Set intro end here").click();
+    h.run_steps(2);
+    let set = set_markers(&fake.take_sent());
+    assert_eq!(set.len(), 1, "{set:?}");
+    assert_eq!((set[0].0, set[0].1), (cued, MarkerKind::IntroEnd));
+    // The Alt-drag, on the intro the menu moved to 45 s.
+    let from = pos2(x_of(w, 45.0), w.center().y);
+    let to = pos2(x_of(w, 60.0), w.center().y);
+    alt_drag_to(&mut h, from, to);
+    button(&mut h, to, PointerButton::Primary, false, Modifiers::ALT);
+    h.event(Event::ModifiersChanged(Modifiers::NONE));
+    h.run_steps(2);
+    let set = set_markers(&fake.take_sent());
+    assert_eq!(set.len(), 1, "{set:?}");
+    assert_eq!((set[0].0, set[0].1), (cued, MarkerKind::IntroEnd));
+    // A click seeks the CUE and never the player.
+    click(&mut h, pos2(x_of(w, 135.0), w.center().y));
+    let sent = fake.take_sent();
+    assert!(
+        !sent.iter().any(|c| matches!(c, Command::Seek(..))),
+        "{sent:?}"
+    );
+    assert_eq!(cue_seeks(&sent, fake.player(0)).len(), 1, "{sent:?}");
+}
+
+/// A CUE at `secs`, as the engine reports it.
+fn cue_at(fake: &Fake, secs: f64) {
+    fake.telemetry
+        .store(Arc::new(fp_engine::conductor::Telemetry {
+            players: vec![(
+                fake.player(0),
+                fp_engine::engine::PlayerTelemetry {
+                    cue_position_secs: Some(secs),
+                    ..Default::default()
+                },
+            )],
+            ..Default::default()
+        }));
+}
+
+/// A CUE on a 180 s track with a short follow grace, zoomed in around 20 s
+/// and positioned at 20 s. Returns the waveform's rectangle.
+fn zoomed_cue(paused: bool) -> (Harness<'static, AppUi>, Arc<Fake>, Rect) {
+    let mut s = state(1, 3);
+    for t in s.library.iter_mut() {
+        t.duration_secs = 180.0;
+    }
+    s.config.ui.follow_current_grace_secs = 0.01;
+    let (mut h, fake) = harness(s);
+    fake.send(Command::ToggleCue(fake.player(0)));
+    if paused {
+        fake.send(Command::SetCuePaused(fake.player(0), true));
+    }
+    cue_at(&fake, 20.0);
+    h.run_steps(2);
+    let w = h.get_by_label(WAVE).rect();
+    for _ in 0..6 {
+        wheel(&mut h, pos2(x_of(w, 20.0), w.center().y), 1.0);
+    }
+    fake.take_sent();
+    (h, fake, w)
+}
+
+#[test]
+fn a_zoomed_cue_follows_its_position_after_the_grace() {
+    let (mut h, fake, w) = zoomed_cue(false);
+    cue_at(&fake, 150.0);
+    h.run_steps(5);
+    click(&mut h, pos2(x_of(w, 90.0), w.center().y));
+    let seeks = cue_seeks(&sent(&fake), fake.player(0));
+    assert_eq!(seeks.len(), 1);
+    assert!(seeks[0] > 140.0, "the view follows the CUE: {seeks:?}");
+}
+
+#[test]
+fn zooming_one_cue_leaves_the_other_on_the_whole_file() {
+    let (mut h, fake) = cueing(2);
+    fake.send(Command::ToggleCue(fake.player(1)));
+    h.run_steps(2);
+    let w = h.get_all_by_label(WAVE).next().unwrap().rect();
+    wheel(&mut h, pos2(x_of(w, 90.0), w.center().y), 1.0);
+    assert_eq!(h.get_all_by_label(FULL_VIEW).count(), 1);
+}
