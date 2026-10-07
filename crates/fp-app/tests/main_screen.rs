@@ -682,7 +682,10 @@ fn the_meter_with_its_rulers_fits_the_minimum_player_width() {
         .unwrap()
         .rect();
     let grid = h.get_by_label("Stop after the current track").rect();
-    assert_eq!(meter.width(), fp_app::ui::widgets::METER_WIDTH);
+    assert_eq!(
+        meter.width(),
+        fp_app::ui::widgets::meter_width(&fp_model::MeterConfig::default())
+    );
     // The waveform spans the player's content width, inside the column's
     // padding; the fader must not stick out of it.
     let wave = h.get_by_label("Waveform: click to seek").rect();
@@ -693,6 +696,39 @@ fn the_meter_with_its_rulers_fits_the_minimum_player_width() {
         grid.width() > 0.0 && meter.left() >= grid.right(),
         "{meter:?} {grid:?}"
     );
+}
+
+/// The countdowns of `players` players playing a 3:25 track, in a window of
+/// `size`.
+fn countdowns(players: usize, size: egui::Vec2) -> Vec<egui::Rect> {
+    let mut state = state(players, 3);
+    for track in state.library.iter_mut() {
+        track.duration_secs = 205.0;
+    }
+    let ids: Vec<_> = state.players.iter().map(|p| p.id).collect();
+    for p in ids {
+        fp_model::apply(&mut state, Command::Play(p)).unwrap();
+    }
+    let (h, _) = support::harness_sized(state, size, |ui| ui);
+    h.query_all_by_label_contains("-03:2")
+        .map(|n| n.rect())
+        .collect()
+}
+
+/// The meter's two rulers take no size from the countdown in the default
+/// layout: four players in a 1920 × 1080 window (operator feedback 4, Q11.7).
+#[test]
+fn the_countdown_keeps_its_full_size_in_the_default_layout() {
+    let full = countdowns(1, egui::vec2(1000.0, 700.0));
+    let full = full.first().unwrap();
+    let default = countdowns(
+        fp_model::Config::default().players.count,
+        egui::vec2(1920.0, 1080.0),
+    );
+    assert_eq!(default.len(), 4);
+    for c in default {
+        assert_eq!(c.size(), full.size(), "{c:?} {full:?}");
+    }
 }
 
 /// The state with the loudness line off, so the meter is named "Level meter".
@@ -908,19 +944,32 @@ fn resizing_the_window_does_not_store_column_widths() {
 /// at the minimum player width (plan 4, item 15).
 #[test]
 fn a_ten_hour_countdown_fits_between_the_grid_and_the_meter() {
-    let mut state = quiet_meter(state(1, 3));
-    for track in state.library.iter_mut() {
-        track.duration_secs = 36_100.0;
+    // The digital meter, and EBU's, the widest (its TEST label).
+    for ballistics in [
+        fp_model::MeterBallistics::DigitalPeak,
+        fp_model::MeterBallistics::EbuPpm,
+    ] {
+        let mut state = quiet_meter(state(1, 3));
+        state.config.meter.ballistics = ballistics;
+        for track in state.library.iter_mut() {
+            track.duration_secs = 36_100.0;
+        }
+        let p = state.players[0].id;
+        fp_model::apply(&mut state, Command::Play(p)).unwrap();
+        let (h, _) = support::harness_sized(state, egui::vec2(380.0, 700.0), |ui| ui);
+        let countdown = h.get_by_label_contains("-10:01:40").rect();
+        let meter = h.get_by_label("Level meter").rect();
+        let grid = h.get_by_label("Stop after the current track").rect();
+        assert!(
+            countdown.right() <= meter.left(),
+            "{ballistics:?}: {countdown:?} {meter:?}"
+        );
+        assert!(
+            countdown.left() >= grid.right(),
+            "{ballistics:?}: {countdown:?} {grid:?}"
+        );
+        assert!(h.query_by_label("00:00 / 10:01:40").is_some());
     }
-    let p = state.players[0].id;
-    fp_model::apply(&mut state, Command::Play(p)).unwrap();
-    let (h, _) = support::harness_sized(state, egui::vec2(380.0, 700.0), |ui| ui);
-    let countdown = h.get_by_label_contains("-10:01:40").rect();
-    let meter = h.get_by_label("Level meter").rect();
-    let grid = h.get_by_label("Stop after the current track").rect();
-    assert!(countdown.right() <= meter.left(), "{countdown:?} {meter:?}");
-    assert!(countdown.left() >= grid.right(), "{countdown:?} {grid:?}");
-    assert!(h.query_by_label("00:00 / 10:01:40").is_some());
 }
 
 #[test]

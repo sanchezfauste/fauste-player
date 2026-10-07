@@ -672,7 +672,7 @@ pub fn vu(
     c: &MeterConfig,
     labels: &MeterLabels,
 ) -> bool {
-    let (rect, response) = ui.allocate_exact_size(vec2(METER_WIDTH, height), Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(vec2(meter_width(c), height), Sense::hover());
     let meter_label = labels.meter.clone();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Label, true, meter_label.clone())
@@ -787,11 +787,13 @@ pub fn vu(
 /// Size of the scale's labels.
 const LABEL_FONT_SIZE: f32 = 8.0;
 
-/// Width of the label column on each side of the bars.
-pub const LABEL_COLUMN: f32 = 18.0;
-/// Gap between a ruler's tick strip and its bar, and between the strip and
-/// its labels.
-const RULER_GAP: f32 = 1.0;
+/// Advance (px) of one character of the labels' font: the monospace font
+/// (Hack, 1233/2048 em) at [`LABEL_FONT_SIZE`].
+const LABEL_ADVANCE: f32 = LABEL_FONT_SIZE * 1233.0 / 2048.0;
+/// Clear gap between a ruler's tick strip and its labels, so a label's
+/// minus never reads as part of a tick. The strip itself is flush with its
+/// bar.
+const LABEL_TICK_GAP: f32 = 3.0;
 /// Width of a ruler's tick strip: the length of a major tick.
 const TICK_STRIP: f32 = 4.0;
 /// Length of a minor tick.
@@ -801,12 +803,36 @@ const MINOR_TICK_LEN: f32 = 2.0;
 const TICK_THICKNESS: f32 = 1.0;
 /// Minor ticks stay at least this far (px) from every other tick (Q11.4).
 const MIN_TICK_SPACING: f32 = 3.0;
-/// One side of the meter: label column, tick strip and their gaps.
-const SIDE_WIDTH: f32 = LABEL_COLUMN + RULER_GAP + TICK_STRIP + RULER_GAP;
 const BAR_WIDTH: f32 = 14.0;
 const BAR_GAP: f32 = 2.0;
-/// Width of the meter: a ruler on each side of the two bars.
-pub const METER_WIDTH: f32 = 2.0 * SIDE_WIDTH + 2.0 * BAR_WIDTH + BAR_GAP;
+
+/// Width of the label column on each side of the bars for the scale
+/// `marks` of `c`: as wide as its widest label (3 characters, 15 px; EBU's
+/// `TEST`, 20 px).
+fn label_column_for(marks: &[f32], c: &MeterConfig) -> f32 {
+    let chars = marks
+        .iter()
+        .map(|m| mark_label(*m, c).chars().count())
+        .max()
+        .unwrap_or(0);
+    (chars as f32 * LABEL_ADVANCE).ceil()
+}
+
+/// Width of one side of the meter with a `label_column` px label column:
+/// the labels, their gap to the ticks and the tick strip.
+fn side_width(label_column: f32) -> f32 {
+    label_column + LABEL_TICK_GAP + TICK_STRIP
+}
+
+/// Width of the label column on each side of meter `c`'s bars.
+pub fn label_column(c: &MeterConfig) -> f32 {
+    label_column_for(&scale_marks(c), c)
+}
+
+/// Width of meter `c`: a ruler on each side of the two bars.
+pub fn meter_width(c: &MeterConfig) -> f32 {
+    2.0 * side_width(label_column(c)) + 2.0 * BAR_WIDTH + BAR_GAP
+}
 /// Height of the loudness line under the bars.
 const LOUDNESS_LINE_HEIGHT: f32 = 12.0;
 /// The closest two labels may be, centre to centre (monospace 9 px).
@@ -954,7 +980,9 @@ pub fn mark_label(db: f32, c: &MeterConfig) -> String {
 /// ticks of a ruler on each side of them. Labels are kept top down while
 /// they have room; the alignment mark always keeps its line and label.
 pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout {
-    let bars_left = rect.left() + SIDE_WIDTH;
+    let marks = scale_marks(c);
+    let labels = label_column_for(&marks, c);
+    let bars_left = rect.left() + side_width(labels);
     let top = rect.top() + MAX_LINE_HEIGHT;
     let bottom = if loudness {
         rect.bottom() - LOUDNESS_LINE_HEIGHT
@@ -971,15 +999,15 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
     let rulers = [
         Ruler {
             side: Side::Left,
-            labels_x: rect.left() + LABEL_COLUMN,
+            labels_x: rect.left() + labels,
             label_halign: egui::Align::Max,
-            ticks: egui::Rangef::new(bars_left - RULER_GAP - TICK_STRIP, bars_left - RULER_GAP),
+            ticks: egui::Rangef::new(bars_left - TICK_STRIP, bars_left),
         },
         Ruler {
             side: Side::Right,
-            labels_x: bars_right + RULER_GAP + TICK_STRIP + RULER_GAP,
+            labels_x: bars_right + TICK_STRIP + LABEL_TICK_GAP,
             label_halign: egui::Align::Min,
-            ticks: egui::Rangef::new(bars_right + RULER_GAP, bars_right + RULER_GAP + TICK_STRIP),
+            ticks: egui::Rangef::new(bars_right, bars_right + TICK_STRIP),
         },
     ];
     let height = bottom - top;
@@ -1013,7 +1041,6 @@ pub fn meter_layout(rect: Rect, c: &MeterConfig, loudness: bool) -> MeterLayout 
             alignment,
         }
     };
-    let marks = scale_marks(c);
     let mut alignment = line(alignment_dbfs(c), true);
     // The alignment level is labelled only where the scale names it (EBU
     // TEST, K 0, 0 VU); elsewhere (the digital meter's −18) the heavier
