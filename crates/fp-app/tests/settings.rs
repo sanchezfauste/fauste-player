@@ -349,8 +349,24 @@ fn outputs_view_routed(
     egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
     Arc<support::Fake>,
 ) {
+    outputs_built(view, bit_perfect, cue, cartwall, |_, _| {})
+}
+
+/// `outputs_view_routed`, with `tweak` applied to the `dac` test handle and
+/// the state before the app starts.
+fn outputs_built(
+    view: fp_model::OutputsView,
+    bit_perfect: Vec<fp_model::OutputDevice>,
+    cue: &str,
+    cartwall: Option<(&str, &str)>,
+    tweak: impl FnOnce(&fp_backends::OfflineDevice, &mut fp_model::AppState),
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
     let backend = OfflineBackend::new();
-    backend.add_device("dac", 2).set_exclusive_capable(true);
+    let dac_handle = backend.add_device("dac", 2);
+    dac_handle.set_exclusive_capable(true);
     backend.add_device("speakers", 2);
     let mut s = state(1, 1);
     let route = |device: &str| Route {
@@ -372,6 +388,7 @@ fn outputs_view_routed(
             cue: Some(route(cue)),
         };
     }
+    tweak(&dac_handle, &mut s);
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
     let (mut h, fake) = harness_with_backends(s, backends);
     h.get_by_label("Settings").click();
@@ -618,6 +635,7 @@ fn a_device_can_be_given_its_own_buffer() {
     h.run_steps(2);
     h.get_by_label("1024").click();
     h.run_steps(2);
+    assert_eq!(rate_choices(&fake).len(), 1, "one UpdateConfig");
     let c = fake.state.load().config.clone();
     assert_eq!(c.outputs.buffer_for("offline", "dac"), 1024);
     assert_eq!(c.outputs.buffer_for("offline", "speakers"), 512);
@@ -676,6 +694,16 @@ fn the_basic_view_hides_the_device_rows() {
             .is_none()
     );
     assert!(h.query_by_value("Continue the DSD track as PCM").is_none());
+    for combo in ["Sample rate: dac", "Buffer size: dac", "DSD: dac"] {
+        assert!(
+            h.query_by_role_and_label(Role::ComboBox, combo).is_none(),
+            "{combo}"
+        );
+    }
+    assert!(
+        h.query_by_role_and_label(Role::Slider, "DSD silence")
+            .is_none()
+    );
 }
 
 #[test]
@@ -728,4 +756,99 @@ fn a_cue_output_equal_to_main_is_warned_about() {
     assert_eq!(count("speakers", Some(("dac", "dac"))), 1, "the cartwall's");
     assert_eq!(count("dac", Some(("dac", "dac"))), 2, "both");
     assert_eq!(count("speakers", Some(("dac", "speakers"))), 0);
+}
+
+/// `dac` reports only 44.1 to 48 kHz and 64 to 1024 frames, and the
+/// configuration still holds 192 kHz and 4096 frames for it.
+fn a_device_that_narrowed() -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    Arc<support::Fake>,
+) {
+    outputs_built(
+        fp_model::OutputsView::Advanced,
+        Vec::new(),
+        "speakers",
+        None,
+        |dac_handle, s| {
+            dac_handle.set_reported_rates(vec![(44_100, 48_000)]);
+            dac_handle.set_reported_buffers((64, 1024));
+            s.config.outputs.set_device_rate(&dac(), Some(192_000));
+            s.config.outputs.set_device_buffer(&dac(), Some(4096));
+        },
+    )
+}
+
+#[test]
+fn a_saved_rate_the_device_no_longer_reports_is_kept_and_flagged() {
+    let (mut h, _) = a_device_that_narrowed();
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(
+        h.query_by_label("This device no longer reports 192000 Hz; it may not open.")
+            .is_some()
+    );
+    assert!(
+        h.query_by_label_contains("a buffer of 4096 frames")
+            .is_some()
+    );
+    h.get_by_role_and_label(Role::ComboBox, "Sample rate: dac")
+        .click();
+    h.run_steps(2);
+    assert!(h.query_by_label("96000 Hz").is_none(), "not reported");
+    assert!(h.query_by_label("48000 Hz").is_some(), "reported");
+    assert!(
+        h.query_by_label("192000 Hz").is_some(),
+        "the saved one stays"
+    );
+}
+
+#[test]
+fn a_reported_rate_raises_no_note() {
+    let (h, _) = outputs_with(Vec::new());
+    assert!(h.query_by_label_contains("no longer reports").is_none());
+}
+
+#[test]
+fn a_dsd_mode_the_device_cannot_take_shows_as_pcm() {
+    let (mut h, fake) = outputs_built(
+        fp_model::OutputsView::Advanced,
+        vec![dac()],
+        "speakers",
+        None,
+        |dac_handle, s| {
+            dac_handle.set_exclusive_capable(false);
+            s.config.outputs.dsd_output = vec![fp_model::DsdDevice {
+                backend: "offline".into(),
+                device: "dac".into(),
+                mode: fp_model::DsdOutput::Dop,
+            }];
+        },
+    );
+    h.get_by_role_and_label(Role::ComboBox, "DSD: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(h.query_by_value("DoP").is_none(), "the engine plays PCM");
+    assert!(
+        h.query_all_by_value("Convert to PCM").count() >= 2,
+        "dac and speakers"
+    );
+    assert!(
+        fake.take_sent().is_empty(),
+        "showing it as PCM rewrites nothing"
+    );
+}
+
+#[test]
+fn an_unplugged_device_says_it_is_not_connected() {
+    let (mut h, _) = outputs_routed(Vec::new(), "gone", None);
+    h.get_by_role_and_label(Role::ComboBox, "DSD: gone")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(
+        h.query_all_by_label_contains("need the device to be plugged in")
+            .count()
+            >= 1
+    );
+    assert!(h.query_by_label_contains("opened exclusively").is_none());
 }

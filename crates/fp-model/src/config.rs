@@ -532,10 +532,12 @@ impl OutputsConfig {
     /// view says so, since it hides those settings.
     pub fn advanced_in_use(&self) -> bool {
         let defaults = Self::default();
-        self.dsd_mix != defaults.dsd_mix
-            || self.dsd_silence_ms.to_bits() != defaults.dsd_silence_ms.to_bits()
-            || self
-                .routed_devices()
+        let routed = self.routed_devices();
+        // The DSD rows are shown only next to a routed device.
+        let dsd_changed = self.dsd_mix != defaults.dsd_mix
+            || self.dsd_silence_ms.to_bits() != defaults.dsd_silence_ms.to_bits();
+        (!routed.is_empty() && dsd_changed)
+            || routed
                 .iter()
                 .any(|d| self.bit_perfect.contains(d) || self.device_override(d).is_some())
     }

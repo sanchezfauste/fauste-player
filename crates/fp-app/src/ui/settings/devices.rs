@@ -120,6 +120,13 @@ fn device_rows(
             .response;
         response.labelled_by(label);
     });
+    if let (Some(info), Some(r)) = (info, own_rate)
+        && !fp_model::rate_is_reported(&info.sample_rates, r)
+    {
+        let text = t.tr_args("settings-device-rate-unreported", &[("value", r.into())]);
+        note(ui, &text, theme::NEUTRAL_400);
+        ui.add_space(4.0);
+    }
 
     // Its own buffer, with the latency at the rate it runs.
     let rate = outputs.rate_for(&device.backend, &device.device);
@@ -161,15 +168,29 @@ fn device_rows(
         response.labelled_by(label);
     });
 
+    if let (Some(info), Some(b)) = (info, own_buffer)
+        && !fp_model::buffer_is_reported(info.buffer_frames, b)
+    {
+        let text = t.tr_args("settings-device-buffer-unreported", &[("value", b.into())]);
+        note(ui, &text, theme::NEUTRAL_400);
+        ui.add_space(4.0);
+    }
+
     // Its DSD mode, on every routed device (Q3.1), with the default (Q3.3)
     // and why a mode is missing (Q3.2).
     let caps = DsdCaps {
+        connected: info.is_some(),
         bit_perfect: listed,
         exclusive_capable: capable,
         native_dsd: info.is_some_and(|d| d.native_dsd),
         linux: std::env::consts::OS == "linux",
     };
-    let current = outputs.dsd_output_for(&device.backend, &device.device);
+    // A configured mode this device cannot take is not what plays: show PCM
+    // (the configuration stays, for when the device can take it again).
+    let current = fp_model::effective_dsd_mode(
+        caps,
+        outputs.dsd_output_for(&device.backend, &device.device),
+    );
     let modes = fp_model::offered_dsd_modes(caps, current);
     let default_hint = t.tr("settings-dsd-default-pcm");
     let dsd_label = t.tr_args("settings-dsd-mode", &[("device", name.into())]);
@@ -200,6 +221,7 @@ fn device_rows(
 
 fn why_key(why: DsdNotOffered) -> &'static str {
     match why {
+        DsdNotOffered::NotConnected => "settings-dsd-why-not-connected",
         DsdNotOffered::NotExclusive => "settings-dsd-why-not-exclusive",
         DsdNotOffered::BitPerfectOff => "settings-dsd-why-bit-perfect-off",
         DsdNotOffered::NativeNeedsLinux => "settings-dsd-why-native-linux",

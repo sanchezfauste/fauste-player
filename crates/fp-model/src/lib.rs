@@ -50,7 +50,8 @@ pub use config::{
     SAMPLE_RATE_RANGE, Tuning, UiConfig,
 };
 pub use device_offer::{
-    DsdCaps, DsdNotOffered, dsd_not_offered, offered_buffers, offered_dsd_modes, offered_rates,
+    DsdCaps, DsdNotOffered, buffer_is_reported, dsd_not_offered, effective_dsd_mode,
+    offered_buffers, offered_dsd_modes, offered_rates, rate_is_reported,
 };
 pub use dsd::{
     BpBadge, DEFAULT_DSD_SILENCE_MS, DSD_WORD_BITS, DsdDevice, DsdFacts, DsdFallback, DsdMix,

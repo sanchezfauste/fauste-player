@@ -7,6 +7,8 @@ use crate::dsd::DsdOutput;
 /// What Settings knows about a routed device when it offers DSD modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DsdCaps {
+    /// The device is plugged in (reported by the backend).
+    pub connected: bool,
     /// The device is in `outputs.bit_perfect`.
     pub bit_perfect: bool,
     /// The device can be opened exclusively; `false` when it is not plugged in.
@@ -20,6 +22,8 @@ pub struct DsdCaps {
 /// Why DoP or native DSD is not offered (Q3.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DsdNotOffered {
+    /// Neither: the device is not plugged in, so nothing is known of it.
+    NotConnected,
     /// Neither: the device cannot be opened exclusively.
     NotExclusive,
     /// Neither: the device is not bit-perfect.
@@ -53,11 +57,24 @@ pub fn offered_dsd_modes(caps: DsdCaps, configured: DsdOutput) -> Vec<DsdOutput>
     modes
 }
 
+/// The mode a device really plays: `configured` when this device can take
+/// it, PCM otherwise. The configuration is not rewritten, so the mode comes
+/// back when the device can take it again.
+pub fn effective_dsd_mode(caps: DsdCaps, configured: DsdOutput) -> DsdOutput {
+    if offered_dsd_modes(caps, DsdOutput::Pcm).contains(&configured) {
+        configured
+    } else {
+        DsdOutput::Pcm
+    }
+}
+
 /// Why a mode is missing from [`offered_dsd_modes`]: one reason, the most
 /// fundamental first, since it is the one the operator must act on first;
 /// `None` when every mode is offered.
 pub fn dsd_not_offered(caps: DsdCaps) -> Option<DsdNotOffered> {
-    if !caps.exclusive_capable {
+    if !caps.connected {
+        Some(DsdNotOffered::NotConnected)
+    } else if !caps.exclusive_capable {
         Some(DsdNotOffered::NotExclusive)
     } else if !caps.bit_perfect {
         Some(DsdNotOffered::BitPerfectOff)
@@ -70,6 +87,16 @@ pub fn dsd_not_offered(caps: DsdCaps) -> Option<DsdNotOffered> {
     }
 }
 
+/// Whether the device reports `rate` (it does when it reports no ranges).
+pub fn rate_is_reported(reported: &[(u32, u32)], rate: u32) -> bool {
+    reported.is_empty() || reported.iter().any(|(lo, hi)| (*lo..=*hi).contains(&rate))
+}
+
+/// Whether the device reports `frames` (it does when it reports no range).
+pub fn buffer_is_reported(reported: Option<(u32, u32)>, frames: u32) -> bool {
+    reported.is_none_or(|(lo, hi)| (lo..=hi).contains(&frames))
+}
+
 /// The `candidates` within the device's reported rate ranges (all of them
 /// when it reports none), with `current` kept, in ascending order. A device
 /// asked to open at a rate it refuses stays silent, so only what it reports
@@ -79,8 +106,7 @@ pub fn offered_rates(
     candidates: &[u32],
     current: Option<u32>,
 ) -> Vec<u32> {
-    let fits =
-        |r: u32| reported.is_empty() || reported.iter().any(|(lo, hi)| (*lo..=*hi).contains(&r));
+    let fits = |r: u32| rate_is_reported(reported, r);
     with_current(
         candidates.iter().copied().filter(|r| fits(*r)).collect(),
         current,
@@ -94,7 +120,7 @@ pub fn offered_buffers(
     candidates: &[u32],
     current: Option<u32>,
 ) -> Vec<u32> {
-    let fits = |b: u32| reported.is_none_or(|(lo, hi)| (lo..=hi).contains(&b));
+    let fits = |b: u32| buffer_is_reported(reported, b);
     with_current(
         candidates.iter().copied().filter(|b| fits(*b)).collect(),
         current,

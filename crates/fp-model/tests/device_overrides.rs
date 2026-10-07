@@ -224,3 +224,13 @@ fn advanced_settings_are_in_use_only_where_they_apply() {
     c.outputs.dsd_silence_ms = 500.0;
     assert!(c.outputs.advanced_in_use(), "the DSD silence");
 }
+
+#[test]
+fn the_dsd_settings_count_only_with_a_routed_device() {
+    // Advanced hides the DSD rows when no route names a device.
+    let mut c = Config::default();
+    c.outputs.dsd_mix = DsdMix::HoldOthers;
+    c.outputs.dsd_silence_ms = 500.0;
+    assert!(c.outputs.routed_devices().is_empty());
+    assert!(!c.outputs.advanced_in_use());
+}

@@ -3,12 +3,14 @@
 
 use fp_model::DsdOutput::{Dop, Native, Pcm};
 use fp_model::{
-    DsdCaps, DsdNotOffered, dsd_not_offered, offered_buffers, offered_dsd_modes, offered_rates,
+    DsdCaps, DsdNotOffered, dsd_not_offered, effective_dsd_mode, offered_buffers,
+    offered_dsd_modes, offered_rates,
 };
 
 /// A bit-perfect, exclusive-capable Linux device that takes native DSD.
 const FULL: DsdCaps = DsdCaps {
     bit_perfect: true,
+    connected: true,
     exclusive_capable: true,
     native_dsd: true,
     linux: true,
@@ -129,4 +131,32 @@ fn only_the_buffers_the_device_reports_are_offered() {
         offered_buffers(Some((128, 1024)), &BUFFERS, Some(4096)),
         vec![128, 256, 512, 1024, 4096]
     );
+}
+
+#[test]
+fn a_configured_mode_the_device_cannot_take_shows_as_pcm() {
+    assert_eq!(effective_dsd_mode(FULL, Dop), Dop);
+    assert_eq!(effective_dsd_mode(FULL, Native), Native);
+    let shared = DsdCaps {
+        exclusive_capable: false,
+        ..FULL
+    };
+    assert_eq!(effective_dsd_mode(shared, Dop), Pcm);
+    let off = DsdCaps {
+        bit_perfect: false,
+        ..FULL
+    };
+    assert_eq!(effective_dsd_mode(off, Dop), Pcm);
+    assert_eq!(effective_dsd_mode(off, Pcm), Pcm);
+}
+
+#[test]
+fn an_unplugged_device_says_so_instead_of_not_exclusive() {
+    let caps = DsdCaps {
+        connected: false,
+        exclusive_capable: false,
+        native_dsd: false,
+        ..FULL
+    };
+    assert_eq!(dsd_not_offered(caps), Some(DsdNotOffered::NotConnected));
 }
