@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -67,6 +67,20 @@ fn rig_with(
     delay: Duration,
     prepare: impl FnOnce(&mut fp_model::AppState),
 ) -> Rig {
+    rig_hooked(files, dir, delay, prepare, Arc::new(|_| {}))
+}
+
+/// Runs after each analysis, on the worker, before its result is sent.
+type AfterAnalysis = Arc<dyn Fn(&Path) + Send + Sync>;
+
+/// As `rig_with`, with `after` called after each analysis.
+fn rig_hooked(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    delay: Duration,
+    prepare: impl FnOnce(&mut fp_model::AppState),
+    after: AfterAnalysis,
+) -> Rig {
     let paths = AppPaths::under(dir.path());
     let store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
@@ -105,7 +119,9 @@ fn rig_with(
             }
             std::thread::sleep(Duration::from_millis(2));
         }
-        analyze_file_cancellable(path, settings, limits, cancelled)
+        let outcome = analyze_file_cancellable(path, settings, limits, cancelled);
+        after(path);
+        outcome
     });
     let analyzer =
         Analyzer::with_analyze_fn(1, Default::default(), Default::default(), None, counting)
@@ -829,4 +845,272 @@ fn a_stale_snapshot_does_not_read_a_track_twice() {
         version + 1,
         "exactly one ApplyTags"
     );
+}
+
+/// A file with an audio extension that cannot be decoded.
+fn garbage(dir: &Path, name: &str) -> PathBuf {
+    let path = dir.join(name);
+    std::fs::write(&path, b"not audio at all").unwrap();
+    path
+}
+
+fn all_in(r: &Rig, state: FileState) -> bool {
+    r.handle
+        .model
+        .load()
+        .library
+        .iter()
+        .all(|t| t.file_state == state)
+}
+
+/// The track is unreadable and its first look has been answered, so its
+/// size and modification time are recorded.
+fn unreadable_and_stamped(r: &Rig) -> bool {
+    all_in(r, FileState::Unreadable) && r.services.looked_at() == 1
+}
+
+fn quiet_for(r: &mut Rig, ms: u64) {
+    let until = r.now + Duration::from_millis(ms);
+    r.run_until("a quiet period", |r| r.now >= until);
+}
+
+/// Q10.2: neither the size nor the modification time changed, so nothing
+/// happens: no analysis, no save.
+#[test]
+fn an_unreadable_file_that_did_not_change_is_not_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut r = recheck_rig(&[bad], dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    let analyses = r.analyses.load(Ordering::SeqCst);
+    let version = r.handle.telemetry.load().model_version;
+    quiet_for(&mut r, 3_500);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), analyses);
+    assert_eq!(
+        r.handle.telemetry.load().model_version,
+        version,
+        "nothing is saved"
+    );
+}
+
+/// Q10.2 and Q10.5: a fixed file comes back playable by itself.
+#[test]
+fn an_unreadable_file_that_changed_size_is_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let staging = tempfile::tempdir().unwrap();
+    let mut r = recheck_rig(std::slice::from_ref(&bad), dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    // Written elsewhere, then moved: never seen half-written.
+    std::fs::rename(wav(staging.path(), "bad.wav", 1), &bad).unwrap();
+    r.run_until("playable again", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.file_state == FileState::Ok && t.analyzed)
+    });
+    assert_eq!(
+        r.analyses.load(Ordering::SeqCst),
+        2,
+        "one failure and one success"
+    );
+}
+
+/// The same size with a new modification time is a change too, and a file
+/// that fails again is looked at with its new stat: no loop.
+#[test]
+fn a_file_that_fails_again_is_looked_at_with_its_new_stat() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut r = recheck_rig(std::slice::from_ref(&bad), dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    let file = std::fs::OpenOptions::new().write(true).open(&bad).unwrap();
+    file.set_modified(SystemTime::now() + Duration::from_secs(60))
+        .unwrap();
+    drop(file);
+    r.run_until("a second analysis", |r| {
+        r.analyses.load(Ordering::SeqCst) == 2
+    });
+    r.run_until("stamped again", unreadable_and_stamped);
+    quiet_for(&mut r, 3_500);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "no third analysis");
+    assert!(all_in(&r, FileState::Unreadable));
+}
+
+/// Q10.1: the stat recorded is the one of the file the analysis read, not
+/// the one at the first look. A copy that completes while the analysis runs
+/// is analysed again.
+#[test]
+fn a_file_that_changes_while_its_analysis_fails_is_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let staging = tempfile::tempdir().unwrap();
+    let complete = wav(staging.path(), "bad.wav", 1);
+    let once = std::sync::Mutex::new(Some(complete));
+    // After the first analysis failed, before its result is known: the
+    // copy completes.
+    let after: AfterAnalysis = Arc::new(move |path| {
+        if let Some(complete) = once.lock().unwrap().take() {
+            std::fs::rename(complete, path).unwrap();
+        }
+    });
+    let mut r = rig_hooked(
+        std::slice::from_ref(&bad),
+        dir,
+        Duration::ZERO,
+        |s| s.config.tuning.missing_recheck_ms = 1_000.0,
+        after,
+    );
+    r.run_until("playable again", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.file_state == FileState::Ok && t.analyzed)
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
+}
+
+/// Q10.3: it follows the missing-file recheck from then on.
+#[test]
+fn an_unreadable_file_that_disappeared_becomes_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut r = recheck_rig(std::slice::from_ref(&bad), dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    std::fs::remove_file(&bad).unwrap();
+    r.run_until("missing", |r| all_in(r, FileState::Missing));
+}
+
+/// Q10.3: a file found gone is reported once, not again on each look while
+/// the snapshot still says unreadable.
+#[test]
+fn an_unreadable_file_that_disappeared_is_reported_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut r = recheck_rig(std::slice::from_ref(&bad), dir);
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    std::fs::remove_file(&bad).unwrap();
+    r.run_until("missing", |r| all_in(r, FileState::Missing));
+    quiet_for(&mut r, 2_500);
+    assert_eq!(r.services.gone_reports(), 1);
+}
+
+/// Q10.4: the row menu's Re-analyse does not wait for a change, forgets the
+/// failure and goes ahead of the library.
+#[test]
+fn reanalyse_track_analyses_a_failed_file_at_once_whatever_its_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = garbage(dir.path(), "bad.wav");
+    let mut files = vec![bad.clone()];
+    files.extend((1..=6).map(|n| wav(dir.path(), &format!("{n}.wav"), 1)));
+    // The analyses in the order they end; each good file takes a while, so
+    // the library is still queued when the operator asks.
+    let order = Arc::new(std::sync::Mutex::new(Vec::<PathBuf>::new()));
+    let seen = order.clone();
+    let slow = bad.clone();
+    let after: AfterAnalysis = Arc::new(move |path| {
+        if path != slow {
+            std::thread::sleep(Duration::from_millis(150));
+        }
+        seen.lock().unwrap().push(path.to_path_buf());
+    });
+    let mut r = rig_hooked(
+        &files,
+        dir,
+        Duration::ZERO,
+        |s| {
+            s.config.tuning.missing_recheck_ms = 1_000.0;
+            // The failed file is on no player, so only Re-analyse makes it
+            // urgent.
+            let second = s.playlists.iter().next().unwrap().entries[1].id;
+            let players: Vec<_> = s.players.iter().map(|p| p.id).collect();
+            for p in players {
+                fp_model::apply(s, Command::SetNext(p, second)).unwrap();
+            }
+        },
+        after,
+    );
+    let track = r
+        .handle
+        .model
+        .load()
+        .library
+        .iter()
+        .find(|t| t.path == bad)
+        .unwrap()
+        .id;
+    r.run_until("unreadable and stamped", |r| {
+        r.handle.model.load().library.get(track).unwrap().file_state == FileState::Unreadable
+            && r.services.looked_at() == 1
+    });
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(track))
+        .unwrap();
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    assert_eq!(
+        r.services.looked_at(),
+        0,
+        "the recorded failure is forgotten"
+    );
+    let twice = |order: &[PathBuf]| order.iter().filter(|p| **p == bad).count() == 2;
+    r.run_until("a second analysis", |_| twice(&order.lock().unwrap()));
+    let goods = order.lock().unwrap().iter().filter(|p| **p != bad).count();
+    assert!(goods < 6, "{goods} library files were analysed first");
+    r.run_until("stamped again", |r| r.services.looked_at() == 1);
+}
+
+/// The urgent mark of a Re-analyse is used once, even when the track went
+/// to the urgent queue anyway (it is on a player).
+#[test]
+fn reanalysing_a_track_on_a_player_leaves_no_urgent_mark() {
+    let dir = tempfile::tempdir().unwrap();
+    let good = wav(dir.path(), "good.wav", 1);
+    let mut r = rig_with(&[good], dir, Duration::ZERO, |s| {
+        let p = s.players[0].id;
+        let first = s.playlists.iter().next().unwrap().entries[0].id;
+        fp_model::apply(s, Command::SetNext(p, first)).unwrap();
+    });
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    let track = r.handle.model.load().library.iter().next().unwrap().id;
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(track))
+        .unwrap();
+    r.run_until("a second analysis", |r| {
+        r.analyses.load(Ordering::SeqCst) == 2
+    });
+    assert_eq!(r.services.urgent_marks(), 0);
+}
+
+/// Q10.1 and Q10.4: a track that playback marked unreadable is looked at
+/// too, and Re-analyse makes it playable again.
+#[test]
+fn reanalyse_track_brings_back_a_track_that_playback_marked_unreadable() {
+    let dir = tempfile::tempdir().unwrap();
+    let good = wav(dir.path(), "good.wav", 1);
+    let mut r = recheck_rig(&[good], dir);
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    let track = r.handle.model.load().library.iter().next().unwrap().id;
+    // What a playback failure does (the reducer's `SourceFailed`).
+    assert!(r.handle.send(Command::SetFileState {
+        track,
+        state: FileState::Unreadable
+    }));
+    r.run_until("unreadable and stamped", unreadable_and_stamped);
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(track))
+        .unwrap();
+    r.run_until("playable again", |r| all_in(r, FileState::Ok));
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
 }

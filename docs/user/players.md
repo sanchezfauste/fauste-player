@@ -161,6 +161,9 @@ The window shows:
   cued track is the one on air, it plays once more when the current pass
   ends.
 
+While the CUE is paused, its **Pause** button (shown as **Resume**) blinks
+amber, like the player's own.
+
 A jump on a paused CUE keeps it paused. The close button of the window, or
 **Stop**, stops the CUE.
 

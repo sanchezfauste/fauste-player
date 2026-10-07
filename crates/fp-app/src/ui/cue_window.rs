@@ -162,14 +162,14 @@ fn buttons(ui: &mut egui::Ui, scene: &Scene<'_>, v: &CueWindowView) {
             (TransportAction::Pause, "cue-window-pause")
         };
         let label = t.tr(key);
-        if widgets::tile(
-            ui,
-            BUTTON,
-            &label,
-            true,
-            TileStyle::plain(),
-            move |p, r, c| glyphs::paint(p, r, action, 14.0, c),
-        )
+        let style = if v.paused {
+            widgets::paused_style(widgets::blink(scene.time))
+        } else {
+            TileStyle::plain()
+        };
+        if widgets::tile(ui, BUTTON, &label, true, style, move |p, r, c| {
+            glyphs::paint(p, r, action, 14.0, c)
+        })
         .clicked()
         {
             scene.ctl.send(Command::SetCuePaused(v.player, !v.paused));

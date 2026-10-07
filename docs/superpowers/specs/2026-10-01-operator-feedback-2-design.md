@@ -180,6 +180,7 @@
     50 %), so they read as segment gaps.
   - Both values are constants in `ui/theme.rs`. They are tuned with a
     screenshot and pinned by `tests/theme.rs`.
+  - Superseded by operator feedback 4, Q11: nothing is drawn over the bars.
 - **As built.**
   - The digital scale's floor is a mark of its own (`scale_marks`), so a −55
     floor is labelled `-55`.
@@ -271,12 +272,15 @@
 - **O12 CUE window.**
   - When a player starts a CUE, a floating, non-modal window opens for it.
     Several CUE windows stack.
-  - It shows: the title and artist; the waveform with the CUE position, where a
-    click seeks the CUE; the elapsed and remaining time; and the buttons
+  - It shows: the title and artist; the waveform with the CUE position, the
+    same panel as the player's (zoom, pan, intro, outro and MIX markers and
+    their editing; operator feedback 4, Q7), where a click seeks the CUE; the elapsed and remaining time; and the buttons
     **Pause/Resume**, **Stop** and **Load as next**.
   - **Load as next** makes the cued entry the player's explicit next and keeps
     the CUE running.
   - Closing the window stops the CUE.
+  - While the CUE is paused, its Pause button blinks amber like the player's
+    (operator feedback 4, Q5).
   - Model:
     - `CueState` gains `paused: bool`;
     - new commands `SeekCue(PlayerId, f64)`, `SetCuePaused(PlayerId, bool)`
@@ -289,6 +293,8 @@
     from its cue-in. This is a model rule on `SetNext`.
   - selecting a row with a single click in that player's table moves the CUE
     to that entry. Selection is UI state, so the UI sends `CueEntry`.
+  - Operator feedback 4, Q6, fixes a defect where this did not happen in the
+    player's own playlist; its rules Q6.1–Q6.3 restate it.
 - **As built.**
   - O8: `fp_model::entry_notice(state, player) -> Option<EntryNotice>` (`Repeats`, `StopsAfter`) decides; the header draws an outlined amber badge (`badge-entry-repeat`, `badge-entry-stop`) whose tooltip and accessible name are the spec's sentences. None while stopped, during a fade stop, or while stop after current is set; the entry's stop-after wins over its repeat; an unreadable file does not repeat.
   - O10: `widgets::waveform` returns `WaveOutput { response, seek, pan_dx }`. Only `Response::clicked()` seeks. A primary drag that does not start with Alt or under the Full view button pans a zoomed view and does nothing otherwise. The hover time stays; the drag preview and Esc-cancel are gone.
@@ -310,6 +316,9 @@
 - **Tooltip.** Hovering a table row, after the usual tooltip delay, shows the
   title, artist, album, date (as stored), genre, duration, format (codec,
   sample rate, bit depth) and path. A missing field is left out.
+  Operator feedback 4, Q9: the popup has a fixed width and, for a missing
+  or unreadable file, starts with the reason in amber; it replaces the
+  title and number label tooltips.
 - **Editor.**
   - The row context menu gains "Edit tags…". It opens a modal for one track.
     The modal reads the file's tags on a helper thread when it opens and shows
@@ -450,7 +459,8 @@ The audit of every earlier plan found these items still open.
     `bind_log` test.
   - M2 (Matroska Opus pre-skip, ±24 samples) stays a recorded ruling.
 - **Missing-file plan minor M2.** The missing-file reason tooltip also shows on
-  the title cell.
+  the title cell. (Operator feedback 4, Q9, replaces it: the reason is the
+  first line of the row's popup.)
 - **Docs.** `docs/user/players.md` says that only digital peak, K-System and
   custom meters show a peak hold.
 - **Thread priority** (main spec §2.2):
@@ -504,7 +514,8 @@ The audit of every earlier plan found these items still open.
       ALSA on hardware devices that report a DSD sample format.
 
     The setting sits next to the device's bit-perfect switch, and only the
-    modes the device can take are offered.
+    modes the device can take are offered. (Operator feedback 4, Q3: it is in
+    the Advanced outputs view, and a line says why a mode is not offered.)
   - DSD reaches the device unchanged only on a bit-perfect device that is idle
     when the DSD track starts, and only when the device accepts the rate the
     track needs. DoP for DSD256 needs 705.6 kHz, for example. Otherwise the

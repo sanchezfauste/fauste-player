@@ -1,7 +1,10 @@
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 //! The widths of the track table's columns (feedback 2 spec O16 and O24).
 
-use fp_app::ui::table_layout::{column_min, column_px, fit, fractions_of, resize_px};
+use egui::{Rect, pos2, vec2};
+use fp_app::ui::table_layout::{
+    boundary_y, column_min, column_px, drop_index, fit, fractions_of, on_column_edge, resize_px,
+};
 use fp_model::TableColumn::{Album, Artist, Date, Duration, FileName, Genre, Intro, Number, Title};
 use fp_model::{ColumnWidths, TableColumn, default_columns};
 
@@ -250,4 +253,122 @@ fn the_stored_widths_are_each_columns_share() {
     assert!(near(w.fraction(Genre).unwrap(), 0.3));
     assert!(near(w.fraction(Duration).unwrap(), 0.1));
     assert_eq!(w.fraction(Artist), None);
+}
+
+// --- drop_index, boundary_y, on_column_edge (operator feedback 4, Q4)
+
+/// A body 500 x 280 points (ten rows of 28) starting at (100, 50).
+fn body() -> Rect {
+    Rect::from_min_size(pos2(100.0, 50.0), vec2(500.0, 280.0))
+}
+
+#[test]
+fn the_top_of_the_body_is_boundary_zero() {
+    assert_eq!(drop_index(body(), 0.0, 28.0, 5, pos2(200.0, 50.0)), Some(0));
+    assert_eq!(drop_index(body(), 0.0, 28.0, 5, pos2(200.0, 60.0)), Some(0));
+}
+
+#[test]
+fn the_nearest_boundary_wins_in_the_middle_of_the_list() {
+    // Row 3 spans y = 134..162: its upper part is boundary 3, its lower 4.
+    assert_eq!(
+        drop_index(body(), 0.0, 28.0, 9, pos2(200.0, 139.0)),
+        Some(3)
+    );
+    assert_eq!(
+        drop_index(body(), 0.0, 28.0, 9, pos2(200.0, 154.0)),
+        Some(4)
+    );
+}
+
+#[test]
+fn below_the_last_row_the_index_is_the_length() {
+    assert_eq!(
+        drop_index(body(), 0.0, 28.0, 5, pos2(200.0, 320.0)),
+        Some(5)
+    );
+}
+
+#[test]
+fn a_scrolled_body_shifts_the_boundaries() {
+    // Scrolled by two rows: the top of the view is boundary 2.
+    assert_eq!(
+        drop_index(body(), 56.0, 28.0, 100, pos2(200.0, 51.0)),
+        Some(2)
+    );
+    // Scrolled by ten and a half rows: the top of the view is half way
+    // between boundaries 10 and 11; the tie goes down.
+    assert_eq!(
+        drop_index(body(), 294.0, 28.0, 100, pos2(200.0, 50.0)),
+        Some(11)
+    );
+}
+
+#[test]
+fn an_empty_list_has_the_one_boundary_zero() {
+    assert_eq!(
+        drop_index(body(), 0.0, 28.0, 0, pos2(200.0, 200.0)),
+        Some(0)
+    );
+}
+
+#[test]
+fn outside_the_body_there_is_no_target() {
+    for pointer in [
+        pos2(200.0, 40.0),  // the header
+        pos2(90.0, 100.0),  // left of the table
+        pos2(601.0, 100.0), // the scroll bar and beyond
+        pos2(200.0, 331.0), // below the table
+        pos2(f32::NAN, 100.0),
+    ] {
+        assert_eq!(
+            drop_index(body(), 0.0, 28.0, 5, pointer),
+            None,
+            "{pointer:?}"
+        );
+    }
+}
+
+#[test]
+fn a_broken_row_height_gives_no_target() {
+    for height in [0.0, -28.0, f32::NAN, f32::INFINITY] {
+        assert_eq!(drop_index(body(), 0.0, height, 5, pos2(200.0, 100.0)), None);
+    }
+}
+
+#[test]
+fn a_boundary_is_drawn_at_the_top_of_its_row() {
+    assert_eq!(boundary_y(body(), 0.0, 28.0, 0), Some(50.0));
+    assert_eq!(boundary_y(body(), 0.0, 28.0, 3), Some(134.0));
+    assert_eq!(boundary_y(body(), 56.0, 28.0, 2), Some(50.0));
+}
+
+#[test]
+fn a_boundary_outside_the_view_has_no_y() {
+    assert_eq!(boundary_y(body(), 56.0, 28.0, 1), None, "above the view");
+    assert_eq!(
+        boundary_y(body(), 56.0, 28.0, 12),
+        Some(330.0),
+        "the bottom edge"
+    );
+    assert_eq!(boundary_y(body(), 56.0, 28.0, 13), None, "below the view");
+}
+
+#[test]
+fn the_interior_column_edges_are_grab_zones_and_the_last_edge_is_not() {
+    let px = [60.0, 200.0, 100.0, 140.0];
+    // Edges at 160, 360 and 460 for a table starting at x = 100.
+    assert!(on_column_edge(&px, 100.0, 4.0, 160.0));
+    assert!(on_column_edge(&px, 100.0, 4.0, 163.9));
+    assert!(on_column_edge(&px, 100.0, 4.0, 456.5));
+    assert!(!on_column_edge(&px, 100.0, 4.0, 165.0));
+    assert!(
+        !on_column_edge(&px, 100.0, 4.0, 100.0),
+        "the table's own edge"
+    );
+    assert!(
+        !on_column_edge(&px, 100.0, 4.0, 600.0),
+        "the last column's right edge"
+    );
+    assert!(!on_column_edge(&[], 100.0, 4.0, 100.0));
 }

@@ -16,7 +16,7 @@ use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
 use fp_model::{
     AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, RestartReason,
-    ShortcutAction, TrackId, Transport,
+    ShortcutAction, TrackId,
 };
 
 use super::about::{self, NoticeOpener};
@@ -59,6 +59,9 @@ pub(crate) struct DragEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DropTarget {
+    /// The player whose table shows the target: only that table draws the
+    /// drop line (operator feedback 4, Q4.3).
+    pub player: PlayerId,
     pub playlist: PlaylistId,
     pub index: usize,
 }
@@ -98,6 +101,10 @@ pub(crate) struct ViewState {
     pub active_player: Option<PlayerId>,
     pub drop: Option<DropTarget>,
     pub file_drop: Option<DropTarget>,
+    /// The pointer is over a track table but not on a drop target (its
+    /// header, a column edge, the scroll bar, or a window over it): files
+    /// dropped there are not inserted anywhere (Q4.6).
+    pub file_drop_refused: bool,
     /// The pixel widths of each player's table columns in the last frame,
     /// in the order of `ui.table_columns`.
     pub widths: HashMap<PlayerId, Vec<f32>>,
@@ -245,9 +252,18 @@ pub(crate) struct Scene<'a> {
     pub ctx: egui::Context,
     picks: &'a Sender<Picked>,
     pub files: &'a Sender<FileOutcome>,
+    pub services: Option<&'a Sender<ServiceRequest>>,
 }
 
 impl Scene<'_> {
+    /// Asks the services thread for something. Without services (tests) or
+    /// with a full queue the request is dropped: it is only a convenience.
+    pub fn request(&self, request: ServiceRequest) {
+        if let Some(services) = self.services {
+            let _ = services.try_send(request);
+        }
+    }
+
     /// Why `track` cannot be played, with its path, for the tooltip of its
     /// warning icon; `None` when it can.
     pub fn file_tip(&self, track: TrackId) -> Option<String> {
@@ -565,6 +581,7 @@ impl AppUi {
         self.view.rows_built = 0;
         self.view.dropouts.observe(&telemetry, time);
         self.view.file_drop = None;
+        self.view.file_drop_refused = false;
         if !egui::DragAndDrop::has_any_payload(&ctx) {
             self.view.drop = None;
         }
@@ -621,6 +638,7 @@ impl AppUi {
             ctx: ctx.clone(),
             picks: &self.picks_tx,
             files: &self.files_tx,
+            services: self.services.as_ref(),
         };
         let full = ui.available_rect_before_wrap();
         ui.painter().rect_filled(full, 0.0, theme::BG);
@@ -860,10 +878,7 @@ impl AppUi {
         if take_drops && self.view.tag_editor.is_none() && self.view.confirm_reset.is_none() {
             self.file_drops(&ctx, &state);
         }
-        let busy = state
-            .players
-            .iter()
-            .any(|p| p.transport == Transport::Playing || p.fading || p.cue.is_some());
+        let busy = super::view::animating(&state);
         if busy {
             ctx.request_repaint();
         } else {
@@ -1291,6 +1306,10 @@ impl AppUi {
         if dropped.is_empty() {
             return;
         }
+        // Over a table but not on a target: nothing is inserted (Q4.6).
+        if self.view.file_drop.is_none() && self.view.file_drop_refused {
+            return;
+        }
         // Pointer positions are not reported during an OS drag on every
         // platform: without one, the files go to the end of the list shown
         // by the last player used (or the first player).
@@ -1302,6 +1321,7 @@ impl AppUi {
                 .or_else(|| state.players.first())?;
             let list = state.playlists.get(player.playlist)?;
             Some(DropTarget {
+                player: player.id,
                 playlist: list.id,
                 index: list.entries.len(),
             })

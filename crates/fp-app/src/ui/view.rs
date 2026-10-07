@@ -271,6 +271,13 @@ pub fn file_icon(track: &Track) -> &'static str {
     }
 }
 
+/// Q2: the track waits for its analysis and its file can be played, so the
+/// table says why it has no waveform yet. A missing or unreadable file has
+/// its own icon; an analysed one (outdated or not) has nothing pending.
+pub fn analysis_pending(track: &Track) -> bool {
+    !track.analyzed && track.file_state.is_playable()
+}
+
 /// O37: the row of `entry` is the player's next, whatever else it is: the
 /// entry on air can be its own next (it plays once more).
 pub fn row_is_next(state: &AppState, player: PlayerId, entry: EntryId) -> bool {
@@ -374,6 +381,16 @@ pub fn volume_db(gain: f32) -> Option<f32> {
     (gain > 0.0 && !gain.is_nan()).then(|| 20.0 * gain.log10())
 }
 
+/// Something on screen moves on its own (a meter, a countdown, a blinking
+/// Pause button): the interface repaints every frame instead of at the idle
+/// rate. A paused CUE still has its `cue`, so its window keeps blinking.
+pub fn animating(state: &AppState) -> bool {
+    state
+        .players
+        .iter()
+        .any(|p| p.transport == Transport::Playing || p.fading || p.cue.is_some())
+}
+
 /// The text a table cell shows for `column` (feedback 2 spec O24). The `#`
 /// column draws its own icon and number, so it has none here. A column the
 /// track has no value for is empty; the times follow the play range
@@ -408,6 +425,8 @@ pub fn cell_text(track: &Track, column: TableColumn, use_markers: bool) -> Strin
 /// A line of the row tooltip (feedback 2 spec O23).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TipField {
+    /// The reason the file cannot be played (Q9.1).
+    Problem,
     Title,
     Artist,
     Album,
@@ -418,10 +437,15 @@ pub enum TipField {
     Path,
 }
 
-/// What the row tooltip shows for `track`: the fields it has, in this
-/// order. Album artist, composer and comment are left to the editor.
-pub fn track_tooltip(track: &Track) -> Vec<(TipField, String)> {
+/// What the row tooltip shows for `track`: the reason the file cannot be
+/// played first (`problem`, when there is one and it is not blank), then the
+/// fields it has, in this order. Album artist, composer and comment are left
+/// to the editor.
+pub fn track_tooltip(track: &Track, problem: Option<&str>) -> Vec<(TipField, String)> {
     let mut lines = Vec::new();
+    if let Some(reason) = problem.filter(|r| !r.trim().is_empty()) {
+        lines.push((TipField::Problem, reason.to_owned()));
+    }
     let mut text = |field, value: &str| {
         if !value.is_empty() {
             lines.push((field, value.to_owned()));

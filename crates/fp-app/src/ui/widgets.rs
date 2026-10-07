@@ -55,6 +55,30 @@ impl TileStyle {
     }
 }
 
+/// The blink phase of a paused button: lit for the first half of each
+/// second, dark for the second half (main spec rule 6).
+pub fn blink(time: f64) -> bool {
+    (time * 2.0).floor() as i64 % 2 == 0
+}
+
+/// The look of the Pause button of something that is paused: amber, blinking
+/// with `blink`.
+pub fn paused_style(blink: bool) -> TileStyle {
+    TileStyle {
+        fill: if blink {
+            theme::AMBER_BG
+        } else {
+            Color32::TRANSPARENT
+        },
+        content: if blink {
+            theme::AMBER_TEXT
+        } else {
+            theme::AMBER_DIM
+        },
+        ..TileStyle::plain()
+    }
+}
+
 /// A button whose content is painted by `paint`. `label` is its accessible
 /// name and tooltip.
 pub fn tile(

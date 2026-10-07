@@ -198,6 +198,35 @@ fn files_dropped_on_a_row_are_inserted_there() {
     )));
 }
 
+/// Q4.6: over the header or a column edge a file drop finds no target, and
+/// the end-of-list fallback is only for a pointer the system did not report.
+#[test]
+fn files_dropped_on_the_table_header_or_a_column_edge_are_not_inserted() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("new.wav");
+    std::fs::write(&file, b"x").unwrap();
+    for place in ["header", "column edge"] {
+        let (mut h, fake) = harness(state(1, 3));
+        let at = match place {
+            "header" => h.get_by_label("TITLE").rect().center(),
+            _ => {
+                let artist = h.get_by_label("ARTIST").rect();
+                let row = h.get_by_label("Song 2").rect();
+                egui::pos2(artist.left() - 8.0, row.center().y)
+            }
+        };
+        h.hover_at(at);
+        h.step();
+        drop_file(&mut h, &file);
+        assert!(
+            !sent(&fake)
+                .iter()
+                .any(|c| matches!(c, Command::InsertPaths { .. })),
+            "{place}"
+        );
+    }
+}
+
 #[test]
 fn files_dropped_without_a_pointer_go_to_the_end_of_a_shown_list() {
     let dir = tempfile::tempdir().unwrap();

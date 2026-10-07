@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
+use std::time::SystemTime;
 
 use crossbeam_channel::{Receiver, Sender};
 use fp_decode::priority::Priority;
@@ -37,6 +38,9 @@ pub struct AnalysisResult {
     pub track: TrackId,
     pub path: PathBuf,
     pub outcome: Result<Analysis, AnalysisError>,
+    /// The file's size and modification time, read just before it was
+    /// analysed: what the outcome belongs to. `None` if the `stat` failed.
+    pub stamp: Option<(u64, SystemTime)>,
 }
 
 struct Job {
@@ -272,6 +276,11 @@ fn worker(lanes: &Lanes, results: &Sender<AnalysisResult>, shared: &Shared) {
             book.urgent.remove(&job.track);
             book.running.insert(job.track, job.generation);
         }
+        // Before the analysis: a file that changes while it runs (a copy
+        // that completes) is told apart from what was analysed.
+        let stamp = std::fs::metadata(&job.path)
+            .ok()
+            .and_then(|m| Some((m.len(), m.modified().ok()?)));
         let outcome = catch_unwind(AssertUnwindSafe(|| run(&job, shared)))
             .unwrap_or_else(|_| Err(AnalysisError::Unreadable("the analysis crashed".to_owned())));
         let deliver = {
@@ -290,6 +299,7 @@ fn worker(lanes: &Lanes, results: &Sender<AnalysisResult>, shared: &Shared) {
                 track: job.track,
                 path: job.path,
                 outcome,
+                stamp,
             });
         }
     }

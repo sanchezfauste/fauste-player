@@ -4,11 +4,11 @@
 //! non-blocking handle.
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crossbeam_channel::{Receiver, Sender};
 use fp_analysis::analyzer::{AnalysisResult, Analyzer};
@@ -22,25 +22,26 @@ use crate::tags::{TagJob, TagOutcome, TagWorker};
 /// How often the services thread wakes up when running on its own.
 const PERIOD: Duration = Duration::from_millis(50);
 
-/// The thread that looks for files not found, off the services thread: a
-/// share that is offline can make each look block for seconds.
+/// The thread that looks for files not found and at unreadable files, off
+/// the services thread: a share that is offline can make each look block
+/// for seconds.
 struct Probe {
-    paths: Sender<Vec<(TrackId, PathBuf)>>,
-    found: Receiver<Vec<TrackId>>,
+    paths: Sender<Job>,
+    answers: Receiver<Answer>,
     /// A look was sent and its answer has not come back.
     busy: bool,
 }
 
 impl Probe {
     fn spawn() -> Option<Self> {
-        let (paths, jobs) = crossbeam_channel::unbounded::<Vec<(TrackId, PathBuf)>>();
-        let (answers, found) = crossbeam_channel::unbounded();
+        let (paths, jobs) = crossbeam_channel::unbounded::<Job>();
+        let (answer_tx, answers) = crossbeam_channel::unbounded::<Answer>();
         let spawned = std::thread::Builder::new()
             .name("fp-file-probe".to_owned())
             .spawn(move || {
                 // Ends when the services drop their side.
-                while let Ok(batch) = jobs.recv() {
-                    if answers.send(present(batch)).is_err() {
+                while let Ok(job) = jobs.recv() {
+                    if answer_tx.send(run(job)).is_err() {
                         break;
                     }
                 }
@@ -48,7 +49,7 @@ impl Probe {
         match spawned {
             Ok(_) => Some(Self {
                 paths,
-                found,
+                answers,
                 busy: false,
             }),
             Err(e) => {
@@ -88,6 +89,86 @@ fn folder_exists(dir: &std::path::Path, seen: &mut HashMap<PathBuf, bool>) -> bo
     };
     seen.insert(dir.to_path_buf(), exists);
     exists
+}
+
+/// A file's size and modification time: what tells that it changed.
+type Stamp = (u64, SystemTime);
+
+/// What the probe has seen of an unreadable file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Seen {
+    /// Not looked at yet.
+    New,
+    /// Looked at, and the `stat` failed.
+    Unknown,
+    At(Stamp),
+}
+
+/// What one look at an unreadable file means (operator feedback 4, Q10).
+#[derive(Debug, PartialEq)]
+enum Look {
+    /// First stat (or the first that worked): remember it.
+    Record(Seen),
+    /// Nothing to do.
+    Keep,
+    /// The size or the modification time changed: analyse it again.
+    Changed,
+    /// The file is not there any more.
+    Gone,
+}
+
+fn look(seen: Seen, now: std::io::Result<Stamp>) -> Look {
+    match (now, seen) {
+        (Ok(now), Seen::New | Seen::Unknown) => Look::Record(Seen::At(now)),
+        (Ok(now), Seen::At(before)) if now == before => Look::Keep,
+        (Ok(_), Seen::At(_)) => Look::Changed,
+        (Err(e), _) if e.kind() == std::io::ErrorKind::NotFound => Look::Gone,
+        (Err(_), Seen::New) => Look::Record(Seen::Unknown),
+        (Err(_), _) => Look::Keep,
+    }
+}
+
+/// The `stat` of `path`. It never opens or decodes the file.
+fn stamp_of(path: &Path) -> std::io::Result<Stamp> {
+    let meta = std::fs::metadata(path)?;
+    Ok((meta.len(), meta.modified()?))
+}
+
+/// One look of the probe thread: files not found, and unreadable files with
+/// what was seen of them.
+struct Job {
+    missing: Vec<(TrackId, PathBuf)>,
+    unreadable: Vec<(TrackId, PathBuf, Seen)>,
+}
+
+#[derive(Default)]
+struct Answer {
+    /// Missing files that exist now.
+    found: Vec<TrackId>,
+    /// Unreadable files looked at for the first time (or the first time the
+    /// `stat` worked).
+    recorded: Vec<(TrackId, Seen)>,
+    /// Unreadable files whose size or modification time changed.
+    changed: Vec<TrackId>,
+    /// Unreadable files that are not there any more.
+    gone: Vec<TrackId>,
+}
+
+/// One look, on the probe thread.
+fn run(job: Job) -> Answer {
+    let mut answer = Answer {
+        found: present(job.missing),
+        ..Answer::default()
+    };
+    for (id, path, seen) in job.unreadable {
+        match look(seen, stamp_of(&path)) {
+            Look::Record(s) => answer.recorded.push((id, s)),
+            Look::Keep => {}
+            Look::Changed => answer.changed.push(id),
+            Look::Gone => answer.gone.push(id),
+        }
+    }
+    answer
 }
 
 /// What the UI draws for a track besides its model data.
@@ -172,6 +253,9 @@ pub enum ServiceRequest {
     ReanalyseAll,
     /// Analyse the tracks an earlier version analysed (`outdated_tracks`).
     AnalyseOutdated,
+    /// Analyse this track at once, whatever its state (the row menu's
+    /// Re-analyse).
+    ReanalyseTrack(TrackId),
 }
 
 /// Whether `track` was analysed by an earlier version: before formats were
@@ -241,6 +325,21 @@ pub struct Services {
     failed: HashSet<TrackId>,
     /// Tracks to analyse again even if already analysed.
     forced: HashSet<TrackId>,
+    /// What the probe saw of each track whose file is unreadable in the
+    /// model (from the analysis or from playback): a change of size or
+    /// modification time sends it to the analysis again.
+    stamps: HashMap<TrackId, Seen>,
+    /// The size and modification time an analysis that failed saw, kept
+    /// until a snapshot shows the track unreadable and then recorded in
+    /// `stamps`: a file that changed after it was read (a copy that
+    /// completed) is analysed again.
+    failed_at: HashMap<TrackId, Stamp>,
+    /// Unreadable tracks reported gone (`Missing` sent) whose snapshot does
+    /// not show it yet: neither looked at nor reported again meanwhile.
+    gone: HashSet<TrackId>,
+    /// Tracks the operator asked to analyse at once (the row menu's
+    /// Re-analyse): they go ahead of the library.
+    urgent: HashSet<TrackId>,
     /// The operator asked for the outdated tracks to be analysed again.
     analyse_outdated: bool,
     /// Tracks whose result was lost to a panic once already: a second loss
@@ -269,6 +368,8 @@ pub struct Services {
     fail_steps: u32,
     #[cfg(feature = "test-hooks")]
     fail_routes: u32,
+    #[cfg(feature = "test-hooks")]
+    gone_reports: usize,
     saved_version: u64,
     dirty_since: Option<Instant>,
     last_session_save: Option<Instant>,
@@ -293,6 +394,10 @@ impl Services {
             done: HashSet::new(),
             failed: HashSet::new(),
             forced: HashSet::new(),
+            stamps: HashMap::new(),
+            failed_at: HashMap::new(),
+            gone: HashSet::new(),
+            urgent: HashSet::new(),
             analyse_outdated: false,
             retried: HashSet::new(),
             seen_analyzed: HashSet::new(),
@@ -311,6 +416,8 @@ impl Services {
             fail_steps: 0,
             #[cfg(feature = "test-hooks")]
             fail_routes: 0,
+            #[cfg(feature = "test-hooks")]
+            gone_reports: 0,
             saved_version: 0,
             dirty_since: None,
             last_session_save: None,
@@ -346,6 +453,24 @@ impl Services {
     #[cfg(feature = "test-hooks")]
     pub fn tag_pass_on(&mut self, state: &AppState) {
         self.tag_pass(state);
+    }
+
+    /// How many unreadable tracks have had their first look answered.
+    #[cfg(feature = "test-hooks")]
+    pub fn looked_at(&self) -> usize {
+        self.stamps.values().filter(|s| **s != Seen::New).count()
+    }
+
+    /// How many tracks wait with a Re-analyse urgent mark.
+    #[cfg(feature = "test-hooks")]
+    pub fn urgent_marks(&self) -> usize {
+        self.urgent.len()
+    }
+
+    /// How many times an unreadable file was reported gone to the model.
+    #[cfg(feature = "test-hooks")]
+    pub fn gone_reports(&self) -> usize {
+        self.gone_reports
     }
 
     /// One round of work. Never blocks on the analyzer. A panic inside is
@@ -385,6 +510,7 @@ impl Services {
             match request {
                 ServiceRequest::ReanalyseAll => self.restart_analysis(state),
                 ServiceRequest::AnalyseOutdated => self.analyse_outdated = true,
+                ServiceRequest::ReanalyseTrack(id) => self.reanalyse_track(state, id),
             }
         }
         self.follow_settings(state);
@@ -462,29 +588,92 @@ impl Services {
         self.done.clear();
         self.failed.clear();
         self.retried.clear();
+        self.stamps.clear();
+        self.failed_at.clear();
+        self.urgent.clear();
         self.forced = state.library.iter().map(|t| t.id).collect();
     }
 
-    /// Every `tuning.missing_recheck_ms`, files not found (a drive not
-    /// mounted yet) are looked for again on the probe thread; the ones found
-    /// go to the analysis pool, which answers from the cache when they were
-    /// analysed before. Neither this thread nor the pool waits on a share
-    /// that is offline, so autosave and real analyses go on. Unreadable
-    /// files wait for *Re-analyse all*: retrying them would decode them
-    /// every time.
+    /// The row menu's Re-analyse: forget the failure and analyse this track
+    /// now, ahead of the library. Manual markers are kept by the model.
+    fn reanalyse_track(&mut self, state: &AppState, id: TrackId) {
+        if state.library.get(id).is_none() {
+            return;
+        }
+        if self.in_flight.remove(&id) {
+            self.analyzer.cancel(id);
+        }
+        self.done.remove(&id);
+        self.failed.remove(&id);
+        self.retried.remove(&id);
+        self.stamps.remove(&id);
+        self.failed_at.remove(&id);
+        self.forced.insert(id);
+        self.urgent.insert(id);
+    }
+
+    /// Every `tuning.missing_recheck_ms`, the probe thread looks again for
+    /// files not found (a drive not mounted yet) and at unreadable files
+    /// (operator feedback 4, Q10). A missing file found goes to the analysis
+    /// pool, which answers from the cache when it was analysed before. An
+    /// unreadable file is only `stat`ed, never opened: its size and
+    /// modification time are the ones the failed analysis read (or, for a
+    /// playback failure, the first look's), and a change of either clears
+    /// the failure and analyses it again; one that
+    /// disappeared becomes missing. Neither this thread nor the pool waits
+    /// on a share that is offline, so autosave and real analyses go on.
     fn recheck_missing(&mut self, state: &AppState, now: Instant) {
         let Some(probe) = &mut self.probe else {
             return;
         };
         loop {
-            match probe.found.try_recv() {
-                Ok(found) => {
+            match probe.answers.try_recv() {
+                Ok(answer) => {
                     probe.busy = false;
                     // One in flight already (Re-analyse all) needs no second
                     // analysis.
-                    for id in found.into_iter().filter(|id| !self.in_flight.contains(id)) {
+                    for id in answer
+                        .found
+                        .into_iter()
+                        .filter(|id| !self.in_flight.contains(id))
+                    {
                         self.failed.remove(&id);
                         self.forced.insert(id);
+                    }
+                    for (id, seen) in answer.recorded {
+                        // Only a track still waiting for its look: one that
+                        // was re-analysed meanwhile starts again from `New`.
+                        if let Some(known) = self.stamps.get_mut(&id) {
+                            *known = seen;
+                        }
+                    }
+                    for id in answer
+                        .changed
+                        .into_iter()
+                        .filter(|id| !self.in_flight.contains(id))
+                    {
+                        self.stamps.remove(&id);
+                        self.failed.remove(&id);
+                        self.forced.insert(id);
+                    }
+                    for id in answer.gone {
+                        // Q10.3: it follows the missing-file recheck from
+                        // here.
+                        self.stamps.remove(&id);
+                        if self.gone.contains(&id) {
+                            continue;
+                        }
+                        #[cfg(feature = "test-hooks")]
+                        {
+                            self.gone_reports += 1;
+                        }
+                        // Not queued: the next look reports it again.
+                        if self.conductor.send(Command::SetFileState {
+                            track: id,
+                            state: FileState::Missing,
+                        }) {
+                            self.gone.insert(id);
+                        }
                     }
                 }
                 Err(crossbeam_channel::TryRecvError::Empty) => break,
@@ -495,30 +684,90 @@ impl Services {
                 }
             }
         }
-        let interval =
-            Duration::from_secs_f64(state.config.tuning.missing_recheck_ms.max(0.0) / 1000.0);
-        let Some(last) = self.last_recheck else {
-            self.last_recheck = Some(now);
-            return;
-        };
-        // One look at a time: a hung mount only delays the next one.
-        if probe.busy || now.saturating_duration_since(last) < interval {
-            return;
-        }
-        self.last_recheck = Some(now);
-        let missing: Vec<(TrackId, PathBuf)> = state
+        // Every unreadable track, from the analysis or from playback, has an
+        // entry; one that is not unreadable any more loses it.
+        self.stamps.retain(|id, _| {
+            state
+                .library
+                .get(*id)
+                .is_some_and(|t| t.file_state == FileState::Unreadable)
+        });
+        self.gone.retain(|id| {
+            state
+                .library
+                .get(*id)
+                .is_some_and(|t| t.file_state == FileState::Unreadable)
+        });
+        for t in state
             .library
             .iter()
-            .filter(|t| t.file_state == FileState::Missing && !self.in_flight.contains(&t.id))
-            .map(|t| (t.id, t.path.clone()))
-            .collect();
-        if !missing.is_empty() {
-            if probe.paths.send(missing).is_ok() {
-                probe.busy = true;
-            } else {
-                tracing::error!("the file probe stopped; missing files stay missing");
-                self.probe = None;
+            .filter(|t| t.file_state == FileState::Unreadable && !self.gone.contains(&t.id))
+        {
+            // What the failed analysis read, when it could `stat` the file;
+            // otherwise (and for a playback failure) a first look.
+            match self.failed_at.remove(&t.id) {
+                Some(stamp) => {
+                    self.stamps.insert(t.id, Seen::At(stamp));
+                }
+                None => {
+                    self.stamps.entry(t.id).or_insert(Seen::New);
+                }
             }
+        }
+        let interval =
+            Duration::from_secs_f64(state.config.tuning.missing_recheck_ms.max(0.0) / 1000.0);
+        let due = match self.last_recheck {
+            Some(last) => now.saturating_duration_since(last) >= interval,
+            None => {
+                self.last_recheck = Some(now);
+                false
+            }
+        };
+        // A failure without the analysis's stat (a playback failure, or a
+        // `stat` that failed) is looked at once, without waiting for the
+        // timer, so that the recorded stat is close to the failure.
+        let first_look = self
+            .stamps
+            .iter()
+            .any(|(id, s)| *s == Seen::New && !self.in_flight.contains(id));
+        // One look at a time: a hung mount only delays the next one.
+        if probe.busy || !(due || first_look) {
+            return;
+        }
+        if due {
+            self.last_recheck = Some(now);
+        }
+        let missing: Vec<(TrackId, PathBuf)> = if due {
+            state
+                .library
+                .iter()
+                .filter(|t| t.file_state == FileState::Missing && !self.in_flight.contains(&t.id))
+                .map(|t| (t.id, t.path.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let unreadable: Vec<(TrackId, PathBuf, Seen)> = self
+            .stamps
+            .iter()
+            .filter(|(id, seen)| !self.in_flight.contains(id) && (due || **seen == Seen::New))
+            .filter_map(|(id, seen)| state.library.get(*id).map(|t| (*id, t.path.clone(), *seen)))
+            .collect();
+        if missing.is_empty() && unreadable.is_empty() {
+            return;
+        }
+        if probe
+            .paths
+            .send(Job {
+                missing,
+                unreadable,
+            })
+            .is_ok()
+        {
+            probe.busy = true;
+        } else {
+            tracing::error!("the file probe stopped; missing files stay missing");
+            self.probe = None;
         }
     }
 
@@ -603,6 +852,9 @@ impl Services {
         self.failed.retain(|id| known.contains(id));
         self.forced.retain(|id| known.contains(id));
         self.retried.retain(|id| known.contains(id));
+        self.stamps.retain(|id, _| known.contains(id));
+        self.failed_at.retain(|id, _| known.contains(id));
+        self.urgent.retain(|id| known.contains(id));
         self.seen_analyzed.retain(|id| known.contains(id));
         for track in state.library.iter() {
             if track.analyzed {
@@ -645,7 +897,9 @@ impl Services {
             if analyse || show {
                 self.forced.remove(&id);
                 self.in_flight.insert(id);
-                if wanted.contains(&id) {
+                // The mark is used up whichever way the track goes urgent.
+                let asked = self.urgent.remove(&id);
+                if wanted.contains(&id) || asked {
                     self.analyzer.submit_urgent(id, track.path.clone());
                 } else {
                     self.analyzer.submit(id, track.path.clone());
@@ -668,6 +922,7 @@ impl Services {
         }
         self.in_flight.remove(&result.track);
         self.done.insert(result.track);
+        self.failed_at.remove(&result.track);
         let command = match result.outcome {
             Ok(analysis) => {
                 self.failed.remove(&result.track);
@@ -697,6 +952,9 @@ impl Services {
             }
             Err(AnalysisError::Unreadable(reason)) => {
                 self.failed.insert(result.track);
+                if let Some(stamp) = result.stamp {
+                    self.failed_at.insert(result.track, stamp);
+                }
                 tracing::warn!(path = %result.path.display(), %reason, "unreadable file");
                 Command::SetFileState {
                     track: result.track,
@@ -813,5 +1071,52 @@ impl ServicesHandle {
 impl Drop for ServicesHandle {
     fn drop(&mut self) {
         self.stop_and_join();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use std::io::{Error, ErrorKind};
+
+    fn at(secs: u64) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
+    }
+
+    #[test]
+    fn the_first_look_records_what_it_sees() {
+        assert_eq!(
+            look(Seen::New, Ok((10, at(5)))),
+            Look::Record(Seen::At((10, at(5))))
+        );
+        assert_eq!(
+            look(Seen::Unknown, Ok((10, at(5)))),
+            Look::Record(Seen::At((10, at(5))))
+        );
+    }
+
+    #[test]
+    fn the_same_size_and_time_is_unchanged_and_a_new_one_is_a_change() {
+        let seen = Seen::At((10, at(5)));
+        assert_eq!(look(seen, Ok((10, at(5)))), Look::Keep);
+        assert_eq!(look(seen, Ok((11, at(5)))), Look::Changed);
+        assert_eq!(look(seen, Ok((10, at(6)))), Look::Changed);
+    }
+
+    #[test]
+    fn a_file_that_is_gone_is_gone_whatever_was_seen() {
+        for seen in [Seen::New, Seen::Unknown, Seen::At((1, at(1)))] {
+            let gone = Err(Error::from(ErrorKind::NotFound));
+            assert_eq!(look(seen, gone), Look::Gone);
+        }
+    }
+
+    #[test]
+    fn look_keeps_what_it_knows_when_the_stat_fails() {
+        let denied = || Err(Error::from(ErrorKind::PermissionDenied));
+        assert_eq!(look(Seen::New, denied()), Look::Record(Seen::Unknown));
+        assert_eq!(look(Seen::Unknown, denied()), Look::Keep);
+        assert_eq!(look(Seen::At((1, at(1))), denied()), Look::Keep);
     }
 }

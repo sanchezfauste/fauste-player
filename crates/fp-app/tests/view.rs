@@ -11,9 +11,10 @@ use std::path::PathBuf;
 
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
-    PlayerStatus, RowStatus, TipField, cue_follow_target, cue_window_view, fader_from_gain,
-    file_icon, file_problem, gain_from_fader, player_view, playlist_times, row_is_next, row_status,
-    shown_entry, start_scroll_target, tag_edit_availability, track_tooltip, volume_db,
+    PlayerStatus, RowStatus, TipField, analysis_pending, cue_follow_target, cue_window_view,
+    fader_from_gain, file_icon, file_problem, gain_from_fader, player_view, playlist_times,
+    row_is_next, row_status, shown_entry, start_scroll_target, tag_edit_availability,
+    track_tooltip, volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayerId, Track, apply,
@@ -503,7 +504,7 @@ fn tip_track() -> Track {
 
 #[test]
 fn the_tooltip_lists_what_the_track_has_in_order() {
-    let tip = track_tooltip(&tip_track());
+    let tip = track_tooltip(&tip_track(), None);
     let fields: Vec<TipField> = tip.iter().map(|(f, _)| *f).collect();
     assert_eq!(
         fields,
@@ -533,7 +534,7 @@ fn a_missing_field_is_left_out() {
     t.genre.clear();
     t.duration_secs = 0.0;
     t.format = None;
-    let fields: Vec<TipField> = track_tooltip(&t).iter().map(|(f, _)| *f).collect();
+    let fields: Vec<TipField> = track_tooltip(&t, None).iter().map(|(f, _)| *f).collect();
     // The file extension still names the codec, so the format line stays.
     assert_eq!(
         fields,
@@ -555,7 +556,7 @@ fn the_format_line_leaves_out_what_is_unknown() {
         channels: 2,
         dsd_rate: None,
     });
-    let line = track_tooltip(&t)
+    let line = track_tooltip(&t, None)
         .into_iter()
         .find(|(f, _)| *f == TipField::Format)
         .unwrap()
@@ -567,7 +568,7 @@ fn the_format_line_leaves_out_what_is_unknown() {
     t.path = PathBuf::from("/m/no extension");
     t.format = None;
     assert!(
-        track_tooltip(&t)
+        track_tooltip(&t, None)
             .iter()
             .all(|(f, _)| *f != TipField::Format)
     );
@@ -661,4 +662,49 @@ fn give_cue_routes(state: &mut AppState) {
         })
         .collect();
     state.config.outputs.cartwall.cue = Some(phones);
+}
+
+fn pending_track() -> Track {
+    Track::new(fp_model::TrackId(7), PathBuf::from("/m/New.flac"))
+}
+
+#[test]
+fn q2_1_an_unanalysed_playable_track_is_pending() {
+    assert!(analysis_pending(&pending_track()));
+}
+
+#[test]
+fn q2_2_a_missing_or_unreadable_file_is_not_pending() {
+    for state in [FileState::Missing, FileState::Unreadable] {
+        let mut t = pending_track();
+        t.file_state = state;
+        assert!(!analysis_pending(&t), "{state:?}");
+    }
+}
+
+#[test]
+fn q2_3_an_analysed_track_is_not_pending_and_an_outdated_one_keeps_its_own_flag() {
+    let mut t = pending_track();
+    t.analyzed = true;
+    assert!(!analysis_pending(&t));
+    // Analysed by an earlier version: no format and version 0.
+    t.format = None;
+    t.analysis_version = 0;
+    assert!(fp_app::services::outdated(&t));
+    assert!(!analysis_pending(&t));
+}
+
+#[test]
+fn q9_1_the_reason_is_the_first_line_of_the_tooltip() {
+    let reason = "Cannot read the file: /m/Artist - Song.flac";
+    let tip = track_tooltip(&tip_track(), Some(reason));
+    assert_eq!(tip[0], (TipField::Problem, reason.to_owned()));
+    assert_eq!(tip[1].0, TipField::Title);
+    assert_eq!(tip.len(), 9, "the other fields follow as before");
+}
+
+#[test]
+fn q9_1_a_blank_reason_is_left_out() {
+    let tip = track_tooltip(&tip_track(), Some(""));
+    assert_eq!(tip[0].0, TipField::Title);
 }

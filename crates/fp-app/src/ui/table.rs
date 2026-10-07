@@ -16,6 +16,9 @@ use super::widgets::{self, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
 const ROW_HEIGHT: f32 = 28.0;
+/// Width of the track info popup: fixed, so egui's sizing pass gives the
+/// final size and the popup is never shown elsewhere first (Q9.3).
+const TIP_WIDTH: f32 = 380.0;
 /// How long a released column edge keeps its widths while the model catches
 /// up with the command that stores them.
 const HOLD_SECS: f64 = 0.5;
@@ -157,12 +160,8 @@ pub(crate) fn track_table(
     let pressed_in_table = ui.rect_contains_pointer(area) && ui.input(|i| i.pointer.primary_down());
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     let mut built = 0;
-    let mut hovered_row: Option<(usize, bool)> = None;
-    let mut pointer_row: Option<(usize, bool)> = None;
     let pointer = ui.ctx().pointer_hover_pos();
-    let mut released: Option<(DragEntry, usize)> = None;
     let entries = &list.entries;
-    let drop = view_state.drop.filter(|d| d.playlist == playlist);
     let selected = view_state.selection.get(&player).copied();
     let mut clicked: Option<EntryId> = None;
     // O17: the entry a running CUE moves to after a primary click.
@@ -209,7 +208,7 @@ pub(crate) fn track_table(
     // O24: a header being dragged over another, and the move it ended in.
     let mut column_slot: Option<usize> = None;
     let mut column_move: Option<(usize, usize)> = None;
-    builder
+    let output = builder
         .header(HEADER_HEIGHT, |mut header| {
             for (index, column) in columns.iter().enumerate() {
                 let (_, response) = header.col(|ui| {
@@ -286,22 +285,6 @@ pub(crate) fn track_table(
                         0.0,
                         theme::TEXT.gamma_multiply(0.06),
                     );
-                    if let Some(d) = drop {
-                        let y = if d.index == i {
-                            Some(full.top())
-                        } else if d.index == entries.len() && i + 1 == entries.len() {
-                            Some(full.bottom() - 2.0)
-                        } else {
-                            None
-                        };
-                        if let Some(y) = y {
-                            ui.painter().rect_filled(
-                                Rect::from_min_size(pos2(full.left(), y), vec2(full.width(), 2.0)),
-                                0.0,
-                                theme::ACCENT,
-                            );
-                        }
-                    }
                 };
                 for column in &columns {
                     row.col(|ui| {
@@ -354,7 +337,7 @@ pub(crate) fn track_table(
                                 } else {
                                     egui::FontFamily::Proportional
                                 };
-                                let number = ui.add(
+                                ui.add(
                                     egui::Label::new(
                                         RichText::new(label)
                                             .font(egui::FontId::new(12.0, family))
@@ -362,11 +345,6 @@ pub(crate) fn track_table(
                                     )
                                     .selectable(false),
                                 );
-                                if status == RowStatus::Unavailable
-                                    && let Some(tip) = scene.file_tip(entry.track)
-                                {
-                                    number.on_hover_text(tip);
-                                }
                                 // O37: the entry on air is also the next one.
                                 if status == RowStatus::Current
                                     && view::row_is_next(scene.state, player, entry.id)
@@ -405,6 +383,18 @@ pub(crate) fn track_table(
                                             );
                                         });
                                     }
+                                    if view::analysis_pending(track) {
+                                        flag(ui, &t.tr("flag-analysis-pending"), |p, r| {
+                                            widgets::glyph(
+                                                p,
+                                                r,
+                                                icon::HOURGLASS,
+                                                13.0,
+                                                theme::NEUTRAL_400,
+                                                false,
+                                            );
+                                        });
+                                    }
                                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                                         ui.spacing_mut().item_spacing.x = 4.0;
                                         if entry.repeat {
@@ -430,7 +420,7 @@ pub(crate) fn track_table(
                                                 }
                                             });
                                         }
-                                        let title = ui.add(
+                                        ui.add(
                                             egui::Label::new(
                                                 RichText::new(&track.title)
                                                     .font(row_font.clone())
@@ -439,13 +429,6 @@ pub(crate) fn track_table(
                                             .selectable(false)
                                             .truncate(),
                                         );
-                                        // The same reason as the icon's, where the eye is
-                                        // (and the `#` column may be hidden).
-                                        if status == RowStatus::Unavailable
-                                            && let Some(tip) = scene.file_tip(entry.track)
-                                        {
-                                            title.on_hover_text(tip);
-                                        }
                                     });
                                 });
                             }
@@ -513,21 +496,6 @@ pub(crate) fn track_table(
                     response.dnd_set_drag_payload(DragEntry { entry: entry.id });
                     dragged = Some(entry.id);
                 }
-                if let Some(p) = pointer.filter(|p| response.rect.contains(*p)) {
-                    pointer_row = Some((i, p.y > response.rect.center().y));
-                }
-                if response.dnd_hover_payload::<DragEntry>().is_some()
-                    && let Some(pos) = response.hover_pos()
-                {
-                    hovered_row = Some((i, pos.y > response.rect.center().y));
-                }
-                if let Some(payload) = response.dnd_release_payload::<DragEntry>() {
-                    let below = response
-                        .interact_pointer_pos()
-                        .or(response.hover_pos())
-                        .is_some_and(|p| p.y > response.rect.center().y);
-                    released = Some((*payload, if below { i + 1 } else { i }));
-                }
                 response.context_menu(|ui| {
                     menu_open = true;
                     clicked = Some(entry.id);
@@ -549,59 +517,85 @@ pub(crate) fn track_table(
     if edit_tags.is_some() {
         view_state.edit_tags = edit_tags;
     }
-    // Drop target for entries dragged inside the app.
-    let pointer_in = ui
-        .ctx()
-        .pointer_hover_pos()
-        .is_some_and(|p| area.contains(p));
+    // Q4: the drop target comes from the pointer and the body's geometry,
+    // never from the widget under it, and belongs to this table alone: it is
+    // keyed by player and playlist.
+    let body_rect = output.inner_rect;
+    let scroll_y = output.state.offset.y;
+    let grab = ui.style().interaction.resize_grab_radius_side;
+    // A floating window over the table (the CUE window) hides the rows
+    // under it: only a pointer on the table's own layer can drop.
+    let layer = ui.layer_id();
+    let on_table_layer = |p: &egui::Pos2| {
+        ui.ctx()
+            .layer_id_at(*p)
+            .unwrap_or_else(egui::LayerId::background)
+            == layer
+    };
+    let target = pointer
+        .filter(on_table_layer)
+        .filter(|p| !table_layout::on_column_edge(&px, area.left(), grab, p.x))
+        .and_then(|p| table_layout::drop_index(body_rect, scroll_y, ROW_HEIGHT, entries.len(), p));
     if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx()) {
-        match hovered_row {
-            Some((i, below)) => {
+        match target {
+            Some(index) => {
                 view_state.drop = Some(DropTarget {
+                    player,
                     playlist,
-                    index: if below { i + 1 } else { i },
+                    index,
                 });
-            }
-            None if pointer_in => {
-                view_state.drop = Some(DropTarget {
-                    playlist,
-                    index: entries.len(),
-                });
-            }
-            None => {
-                if view_state.drop.is_some_and(|d| d.playlist == playlist) {
-                    view_state.drop = None;
+                // Drawn after the body, from the same geometry: at the
+                // boundary even when the rows next to it were not built.
+                if let Some(y) = table_layout::boundary_y(body_rect, scroll_y, ROW_HEIGHT, index) {
+                    let top = if index > 0 && index == entries.len() {
+                        y - 2.0
+                    } else {
+                        y
+                    };
+                    ui.painter().with_clip_rect(body_rect).rect_filled(
+                        Rect::from_min_size(
+                            pos2(body_rect.left(), top),
+                            vec2(body_rect.width(), 2.0),
+                        ),
+                        0.0,
+                        theme::ACCENT,
+                    );
                 }
             }
+            None if view_state
+                .drop
+                .is_some_and(|d| d.player == player && d.playlist == playlist) =>
+            {
+                view_state.drop = None;
+            }
+            None => {}
+        }
+        if ui.input(|i| i.pointer.any_released())
+            && let Some(index) = target
+            && let Some(payload) = egui::DragAndDrop::payload::<DragEntry>(ui.ctx())
+        {
+            scene.ctl.send(Command::MoveEntry {
+                entry: payload.entry,
+                to: playlist,
+                index,
+            });
+            view_state.drop = None;
         }
     }
-    if let Some((payload, index)) = released {
-        scene.ctl.send(Command::MoveEntry {
-            entry: payload.entry,
-            to: playlist,
-            index,
-        });
-        view_state.drop = None;
-    } else if pointer_in
-        && ui.input(|i| i.pointer.any_released())
-        && let Some(payload) = egui::DragAndDrop::payload::<DragEntry>(ui.ctx())
-    {
-        // Released below the last row.
-        scene.ctl.send(Command::MoveEntry {
-            entry: payload.entry,
-            to: playlist,
-            index: entries.len(),
-        });
-        view_state.drop = None;
-    }
-    // OS file drops land at the hovered row, or at the end.
-    if pointer_in {
-        view_state.file_drop = Some(DropTarget {
-            playlist,
-            index: pointer_row
-                .map(|(i, below)| if below { i + 1 } else { i })
-                .unwrap_or(entries.len()),
-        });
+    // OS file drops follow the same rules (Q4.6): over the table but not
+    // on a target, the files are not inserted anywhere.
+    match target {
+        Some(index) => {
+            view_state.file_drop = Some(DropTarget {
+                player,
+                playlist,
+                index,
+            });
+        }
+        None if pointer.is_some_and(|p| area.contains(p)) => {
+            view_state.file_drop_refused = true;
+        }
+        None => {}
     }
     resize_handles(ui, view_state, player, &columns, &px, area);
     if let Some((from, slot)) = column_move {
@@ -784,6 +778,10 @@ fn context_menu(
         scene.ctl.send(Command::CueEntry(player, entry));
         ui.close();
     }
+    if labelled(ui, icon::ARROWS_CLOCKWISE, "menu-reanalyse", true).clicked() {
+        scene.request(crate::services::ServiceRequest::ReanalyseTrack(track.id));
+        ui.close();
+    }
     let block = view::tag_edit_availability(scene.state, track.id);
     let edit = labelled(ui, icon::PENCIL_SIMPLE, "menu-edit-tags", block.is_none());
     let edit = match block {
@@ -869,35 +867,74 @@ fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
     response.on_hover_text(label);
 }
 
-/// The row tooltip: label and value per line, at most as wide as the window.
+/// The row tooltip: the reason the file cannot be played, when there is one,
+/// then label and value per line. Fixed width, never wider than the window.
 fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
     let t = scene.i18n;
-    ui.set_max_width(420.0);
-    egui::Grid::new("track-tip")
-        .num_columns(2)
-        .spacing(vec2(10.0, 3.0))
-        .show(ui, |ui| {
-            for (field, value) in view::track_tooltip(track) {
-                let key = match field {
-                    view::TipField::Title => "tip-field-title",
-                    view::TipField::Artist => "tip-field-artist",
-                    view::TipField::Album => "tip-field-album",
-                    view::TipField::Date => "tip-field-date",
-                    view::TipField::Genre => "tip-field-genre",
-                    view::TipField::Duration => "tip-field-duration",
-                    view::TipField::Format => "tip-field-format",
-                    view::TipField::Path => "tip-field-path",
-                };
-                ui.label(
+    ui.set_width(TIP_WIDTH.min((ui.ctx().content_rect().width() - 16.0).max(120.0)));
+    let lines = view::track_tooltip(track, scene.file_tip(track.id).as_deref());
+    let mut rest = lines.as_slice();
+    if let Some(((view::TipField::Problem, reason), tail)) = rest.split_first() {
+        ui.add(
+            egui::Label::new(
+                RichText::new(format!("{}  {reason}", view::file_icon(track)))
+                    .font(font(12.0))
+                    .color(theme::AMBER),
+            )
+            .wrap(),
+        );
+        ui.add_space(4.0);
+        rest = tail;
+    }
+    // No `Grid`: it learns its column widths from the previous frame, so the
+    // popup would be laid out three times and move on each (Q9.3). The label
+    // column is measured here instead, so one pass gives the final layout.
+    let keys: Vec<(&'static str, &String)> = rest
+        .iter()
+        .filter_map(|(field, value)| {
+            let key = match field {
+                view::TipField::Problem => return None,
+                view::TipField::Title => "tip-field-title",
+                view::TipField::Artist => "tip-field-artist",
+                view::TipField::Album => "tip-field-album",
+                view::TipField::Date => "tip-field-date",
+                view::TipField::Genre => "tip-field-genre",
+                view::TipField::Duration => "tip-field-duration",
+                view::TipField::Format => "tip-field-format",
+                view::TipField::Path => "tip-field-path",
+            };
+            Some((key, value))
+        })
+        .collect();
+    let key_font = font(11.0);
+    let key_width = keys
+        .iter()
+        .map(|(key, _)| {
+            ui.painter()
+                .layout_no_wrap(t.tr(key), key_font.clone(), theme::NEUTRAL_400)
+                .size()
+                .x
+        })
+        .fold(0.0_f32, f32::max);
+    for (key, value) in keys {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
+            ui.add_sized(
+                vec2(key_width, 14.0),
+                egui::Label::new(
                     RichText::new(t.tr(key))
-                        .font(font(11.0))
+                        .font(key_font.clone())
                         .color(theme::NEUTRAL_400),
-                );
-                ui.add(
-                    egui::Label::new(RichText::new(value).font(font(12.0)).color(theme::TEXT))
-                        .wrap(),
-                );
-                ui.end_row();
-            }
+                ),
+            );
+            ui.add(
+                egui::Label::new(
+                    RichText::new(value.as_str())
+                        .font(font(12.0))
+                        .color(theme::TEXT),
+                )
+                .wrap(),
+            );
         });
+    }
 }
