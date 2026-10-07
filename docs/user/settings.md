@@ -20,6 +20,10 @@ system, sample rate, buffer size (also a device's own), the Main and Cue
 outputs (players and cartwall), the bit-perfect devices and the DSD settings.
 The number of players is not one of them: it applies at once.
 
+A rate or buffer given to a device counts only when it changes what the device
+opens with: giving a device the same value as the global one, or clearing such
+a value, is not pending.
+
 The limits and the engine tuning also apply at the next start, but they are
 edited in the configuration file with the application closed (see
 [Data and backups](data-and-backups.md)), so they never show as pending.

@@ -210,3 +210,31 @@ fn reordered_overrides_and_the_outputs_view_need_no_restart() {
     c.ui.outputs_view = fp_model::OutputsView::Advanced;
     assert!(restart_pending(&started, &c).is_empty());
 }
+
+#[test]
+fn a_devices_own_value_equal_to_the_global_one_needs_no_restart() {
+    let dac = OutputDevice {
+        backend: "alsa".into(),
+        device: "dac".into(),
+    };
+    let started = Config::default();
+    let mut c = started.clone();
+    c.outputs
+        .set_device_rate(&dac, Some(started.outputs.sample_rate));
+    c.outputs
+        .set_device_buffer(&dac, Some(started.outputs.buffer_frames));
+    assert!(restart_pending(&started, &c).is_empty());
+    // Clearing an own value that equals the global one changes nothing either.
+    assert!(restart_pending(&c, &started).is_empty());
+    // An own value equal to a changed global rate does not need one when the
+    // device already had it.
+    let mut was = started.clone();
+    was.outputs.set_device_rate(&dac, Some(96_000));
+    let mut now = was.clone();
+    now.outputs.sample_rate = 96_000;
+    assert_eq!(
+        restart_pending(&was, &now),
+        vec![RestartReason::SampleRate],
+        "the global rate itself changed"
+    );
+}
