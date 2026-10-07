@@ -133,6 +133,10 @@ pub(crate) struct ViewState {
     /// frame, by player (as egui keys the table's scroll state): a drag over
     /// it scrolls it from there.
     pub(crate) table_scroll: HashMap<PlayerId, super::table::TableScroll>,
+    /// Whether the pointer has moved since files from the system began
+    /// hovering the window: until then its position is stale (no pointer
+    /// events come with the files on some platforms).
+    pub(crate) files_pointed: bool,
     /// The current entry each player's table last saw.
     pub followed: HashMap<PlayerId, Option<EntryId>>,
     /// A current entry the table will follow once the operator's grace has
@@ -601,6 +605,15 @@ impl AppUi {
         self.view.dropouts.observe(&telemetry, time);
         self.view.file_drop = None;
         self.view.file_drop_refused = false;
+        let (hovering, moved) = ctx.input(|i| {
+            (
+                !i.raw.hovered_files.is_empty(),
+                i.events
+                    .iter()
+                    .any(|e| matches!(e, egui::Event::PointerMoved(_))),
+            )
+        });
+        self.view.files_pointed = hovering && (self.view.files_pointed || moved);
         if !egui::DragAndDrop::has_any_payload(&ctx) {
             self.view.drop = None;
         }

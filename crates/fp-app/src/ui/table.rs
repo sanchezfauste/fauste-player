@@ -36,6 +36,16 @@ pub(crate) struct TableScroll {
     offset: f32,
     /// The largest offset: the last row at the bottom.
     max: f32,
+    /// The pass (`Context::cumulative_pass_nr`) that left it.
+    pass: u64,
+}
+
+impl TableScroll {
+    /// This geometry if the last pass or the one before left it, `None` if
+    /// it is older: a table not drawn for a while may have moved since.
+    fn current(self, pass: u64) -> Option<Self> {
+        (pass.saturating_sub(self.pass) <= 1).then_some(self)
+    }
 }
 
 /// The scroll offset of a table body this frame while something it accepts
@@ -43,12 +53,15 @@ pub(crate) struct TableScroll {
 /// leave the offset alone. Near the top or bottom edge the body scrolls by
 /// itself, faster the closer the pointer is to the edge; the wheel, which
 /// egui ignores while a widget is dragged, scrolls it too. A column header
-/// being dragged scrolls nothing.
-fn drag_scroll_offset(ui: &mut Ui, last: Option<TableScroll>) -> Option<f32> {
-    let last = last?;
+/// being dragged scrolls nothing. `files_pointed` says whether the pointer
+/// has moved since files from the system began hovering the window: until
+/// then its position is stale (no pointer events come with the files on
+/// some platforms) and the files do not scroll the table.
+fn drag_scroll_offset(ui: &mut Ui, last: Option<TableScroll>, files_pointed: bool) -> Option<f32> {
     let ctx = ui.ctx().clone();
+    let last = last?.current(ctx.cumulative_pass_nr())?;
     let entry_drag = egui::DragAndDrop::has_payload_of_type::<DragEntry>(&ctx);
-    let file_drag = ui.input(|i| !i.raw.hovered_files.is_empty());
+    let file_drag = files_pointed && ui.input(|i| !i.raw.hovered_files.is_empty());
     if !entry_drag && !file_drag {
         return None;
     }
@@ -61,10 +74,18 @@ fn drag_scroll_offset(ui: &mut Ui, last: Option<TableScroll>) -> Option<f32> {
         return None;
     }
     let mut offset = last.offset;
+    let released = ui.input(|i| i.pointer.any_released());
     // egui scrolls with the wheel only while no widget is dragged: the
-    // table takes the wheel then, and only then (never twice).
-    if ctx.dragged_id().is_some() {
-        offset -= ui.input_mut(|i| std::mem::take(&mut i.smooth_scroll_delta.y));
+    // table takes the wheel then (never twice). On the frame the entry is
+    // dropped egui no longer counts it as dragged, but the rest of a wheel
+    // notch is still pending: it is taken and dropped, so the entry lands
+    // where the line was drawn.
+    if entry_drag && (ctx.dragged_id().is_some() || released) {
+        let only_direction = ui.style().always_scroll_the_only_direction;
+        let wheel = ui.input_mut(|i| take_drag_wheel(&mut i.smooth_scroll_delta, only_direction));
+        if !released {
+            offset -= wheel;
+        }
     }
     // Not on the frame the button is released: the entry lands where the
     // line was drawn.
@@ -82,6 +103,20 @@ fn drag_scroll_offset(ui: &mut Ui, last: Option<TableScroll>) -> Option<f32> {
         ctx.request_repaint();
     }
     (offset != last.offset).then_some(offset)
+}
+
+/// Takes the wheel's scroll from `delta` the way egui's vertical-only
+/// scroll area would: the vertical part, or, with the style's
+/// `always_scroll_the_only_direction`, both parts added (a sideways wheel
+/// or shift+wheel scrolls the list too). Returns it in points.
+fn take_drag_wheel(delta: &mut egui::Vec2, only_direction: bool) -> f32 {
+    if only_direction {
+        let taken = delta.x + delta.y;
+        *delta = egui::Vec2::ZERO;
+        taken
+    } else {
+        std::mem::take(&mut delta.y)
+    }
 }
 
 /// A column edge being dragged (feedback 2 spec O16): the widths are
@@ -252,7 +287,11 @@ pub(crate) fn track_table(
     // O23: the track whose tags the operator asked to edit.
     let mut edit_tags: Option<fp_model::TrackId> = None;
     let mut dragged: Option<EntryId> = None;
-    let drag_offset = drag_scroll_offset(ui, view_state.table_scroll.get(&player).copied());
+    let drag_offset = drag_scroll_offset(
+        ui,
+        view_state.table_scroll.get(&player).copied(),
+        view_state.files_pointed,
+    );
     let mut builder = TableBuilder::new(ui)
         .id_salt(("tracks", player.0))
         .striped(false)
@@ -621,6 +660,7 @@ pub(crate) fn track_table(
             body: body_rect,
             offset: scroll_y,
             max: (output.content_size.y - body_rect.height()).max(0.0),
+            pass: ui.ctx().cumulative_pass_nr(),
         },
     );
     let grab = ui.style().interaction.resize_grab_radius_side;
@@ -1042,8 +1082,33 @@ fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
 
 #[cfg(test)]
 mod tests {
-    use super::set_next_on_click;
+    use super::{TableScroll, set_next_on_click, take_drag_wheel};
+    use egui::Rect;
     use fp_model::{EntryId, PlayerId};
+
+    #[test]
+    fn a_table_geometry_older_than_the_last_pass_is_not_used() {
+        let at = |pass| TableScroll {
+            body: Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 100.0)),
+            offset: 10.0,
+            max: 50.0,
+            pass,
+        };
+        assert!(at(7).current(7).is_some(), "this pass");
+        assert!(at(7).current(8).is_some(), "the last pass");
+        assert!(at(7).current(9).is_none(), "older");
+        assert!(at(7).current(100).is_none(), "much older");
+    }
+
+    #[test]
+    fn a_drag_takes_the_wheel_as_egui_s_vertical_scroll_area_would() {
+        let mut d = egui::vec2(3.0, -5.0);
+        assert_eq!(take_drag_wheel(&mut d, false), -5.0);
+        assert_eq!(d, egui::vec2(3.0, 0.0), "the sideways part is left");
+        let mut d = egui::vec2(3.0, -5.0);
+        assert_eq!(take_drag_wheel(&mut d, true), -2.0);
+        assert_eq!(d, egui::Vec2::ZERO, "both parts are taken");
+    }
 
     const A: (PlayerId, EntryId) = (PlayerId(1), EntryId(10));
     const B: (PlayerId, EntryId) = (PlayerId(1), EntryId(11));

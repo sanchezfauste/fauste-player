@@ -246,3 +246,101 @@ fn dragging_a_header_does_not_scroll_the_table() {
     assert_eq!(first_row(&h), 1);
     release(&mut h, near_bottom);
 }
+
+/// The boundary index the drop line shown in the last frame marks: the
+/// one below the row whose bottom is at the line.
+fn line_index(h: &Harness<'_, AppUi>) -> usize {
+    let found = bars(h);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let line = found[0].top();
+    rows(h)
+        .into_iter()
+        .find(|(_, r)| (r.center().y + 14.0 - line).abs() < 2.5)
+        .map(|(n, _)| n)
+        .unwrap_or_else(|| panic!("a row ends at the line {line}: {:?}", rows(h)))
+}
+
+#[test]
+fn a_drop_right_after_the_wheel_lands_on_the_line_shown() {
+    for steps in [1, 2] {
+        let (mut h, fake) = harness(state(1, TRACKS));
+        let (e, playlist) = (
+            fake.entries(),
+            fake.state.load().playlists.first_id().unwrap(),
+        );
+        let from = cell(&h, 2).center();
+        let middle = pos2(from.x, (header_bottom(&h) + footer_top(&h)) / 2.0);
+        begin_drag(&mut h, from, middle);
+        // A wheel notch is spread over several frames: the drop comes
+        // while part of it is still pending.
+        wheel(&mut h, -(10.0 * 28.0));
+        h.run_steps(steps);
+        let n = line_index(&h);
+        fake.take_sent();
+        release(&mut h, middle);
+        assert_eq!(
+            moves(&fake),
+            vec![Command::MoveEntry {
+                entry: e[1],
+                to: playlist,
+                index: n
+            }],
+            "released {steps} steps after the wheel"
+        );
+    }
+}
+
+/// Files from the system hovering the window (no pointer events come with
+/// them on some platforms).
+fn hover_files(h: &mut Harness<'_, AppUi>, on: bool) {
+    let files = &mut h.input_mut().hovered_files;
+    files.clear();
+    if on {
+        files.push(egui::HoveredFile {
+            path: Some("/tmp/song.flac".into()),
+            mime: String::new(),
+        });
+    }
+}
+
+#[test]
+fn hovering_files_with_a_stale_pointer_on_the_edge_does_not_scroll() {
+    let (mut h, _) = harness(state(1, TRACKS));
+    // The pointer was last seen near the bottom edge, before the files.
+    let x = cell(&h, 2).center().x;
+    let near_bottom = pos2(x, footer_top(&h) - 12.0);
+    h.event(Event::PointerMoved(near_bottom));
+    h.run_steps(2);
+    hover_files(&mut h, true);
+    h.run_steps(50);
+    assert_eq!(first_row(&h), 1, "no pointer move came with the files");
+    // Once the pointer moves over the table, its edge scrolls.
+    h.event(Event::PointerMoved(pos2(x, near_bottom.y + 1.0)));
+    h.run_steps(50);
+    assert!(first_row(&h) > 1, "scrolled: {}", first_row(&h));
+    hover_files(&mut h, false);
+    h.run_steps(2);
+}
+
+#[test]
+fn a_sideways_wheel_scrolls_the_table_during_a_drag_where_egui_would() {
+    let (mut h, _) = harness(state(1, TRACKS));
+    // The style that lets a vertical list scroll with a sideways wheel
+    // (shift+wheel, a trackpad's horizontal swipe).
+    h.ctx.style_mut_of(egui::Theme::Dark, |s| {
+        s.always_scroll_the_only_direction = true;
+    });
+    let from = cell(&h, 1).center();
+    let middle = pos2(from.x, (header_bottom(&h) + footer_top(&h)) / 2.0);
+    begin_drag(&mut h, from, middle);
+    assert_eq!(first_row(&h), 1);
+    h.event(Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(-(10.0 * 28.0), 0.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Modifiers::NONE,
+    });
+    h.run_steps(30);
+    let first = first_row(&h);
+    assert!((10..=12).contains(&first), "ten rows down: {first}");
+}

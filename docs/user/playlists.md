@@ -203,7 +203,7 @@ shortcut acts, and files dropped on the application window are ignored.
   wheel scrolls the list during the drag too. The violet line keeps
   following the pointer as the list moves. Dragging files from the file
   manager over a list scrolls it the same way where the system reports the
-  pointer position.
+  pointer position, once you move the pointer over the list.
 - Drag it onto another player's list to move it there.
 - Drag it onto a tab to append it to that playlist.
 - Drop files or folders from the file manager onto a list to insert them at

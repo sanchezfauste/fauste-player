@@ -282,8 +282,20 @@
       the pointer leaves the zone or the drag ends, and not on the frame the
       button is released, so the entry lands where the line was drawn;
     - the wheel scrolls the table: egui ignores it while a widget is
-      dragged, so the table applies `smooth_scroll_delta.y` itself exactly
-      then and consumes it (no double scroll);
+      dragged, so the table applies the wheel itself exactly then and
+      consumes it (no double scroll), as egui's vertical scroll area would
+      read it (`smooth_scroll_delta.y`, or `x + y` with the style's
+      `always_scroll_the_only_direction`); on the frame an entry is dropped
+      egui no longer counts it as dragged while the rest of a wheel notch is
+      still pending, so the table consumes that rest without applying it and
+      the entry lands where the line was drawn;
+    - files from the system scroll the table only once the pointer has moved
+      since they began hovering (`ViewState.files_pointed`): no pointer
+      events come with them on some platforms, and a position left in an
+      edge zone before the files arrived would scroll to the end;
+    - the last frame's geometry (`TableScroll`) counts only if the last
+      pass or the one before left it (`Context::cumulative_pass_nr`), so a
+      table drawn again after a pause does not scroll from an old layout;
     - the drop index and the violet line come from the new offset, so they
       follow the pointer as the rows move; a header (`DragColumn`) drag
       scrolls nothing. Every player table, in every tab and layout, does it.
