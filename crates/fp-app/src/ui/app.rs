@@ -129,6 +129,10 @@ pub(crate) struct ViewState {
     /// When the operator last used each player's table or tabs (scroll,
     /// entry drag, row menu, tab click), in `Scene::time`.
     pub table_touched: HashMap<PlayerId, f64>,
+    /// Where each table body was and how far it was scrolled in the last
+    /// frame, by player (as egui keys the table's scroll state): a drag over
+    /// it scrolls it from there.
+    pub(crate) table_scroll: HashMap<PlayerId, super::table::TableScroll>,
     /// The current entry each player's table last saw.
     pub followed: HashMap<PlayerId, Option<EntryId>>,
     /// A current entry the table will follow once the operator's grace has

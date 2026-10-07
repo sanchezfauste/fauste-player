@@ -196,8 +196,14 @@ shortcut acts, and files dropped on the application window are ignored.
 - Drag a track within the list to reorder it. A violet line shows where it
   will land: it is at the row boundary nearest to the pointer, and only in
   the list under the pointer. Releasing over the header, a column edge, the
-  scroll bar or a window that covers the list (the CUE window) drops nothing. The mouse wheel does not scroll the list while a
-  row is being dragged: scroll first, then drag.
+  scroll bar or a window that covers the list (the CUE window) drops nothing.
+- While you drag a track, hold the pointer near the top or bottom edge of a
+  list to scroll it: the closer to the edge, the faster it goes, and it stops
+  at the ends of the list or when you move away from the edge. The mouse
+  wheel scrolls the list during the drag too. The violet line keeps
+  following the pointer as the list moves. Dragging files from the file
+  manager over a list scrolls it the same way where the system reports the
+  pointer position.
 - Drag it onto another player's list to move it there.
 - Drag it onto a tab to append it to that playlist.
 - Drop files or folders from the file manager onto a list to insert them at

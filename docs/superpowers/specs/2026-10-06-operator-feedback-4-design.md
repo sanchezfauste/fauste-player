@@ -267,6 +267,29 @@
 - **Known limitation (Q4).** The wheel does not scroll the list while a row is
   being dragged: egui 0.36's `ScrollArea` ignores it while a widget is dragged.
   There is no edge auto-scroll either.
+  - **Lifted after plan 5 (as built).** The maintainer asked for scrolling
+    during a drag. While a drag a table accepts is held (a `DragEntry`, or
+    files the system hovers over the window) and the pointer is in a table
+    body, on the table's own layer:
+    - within `table_layout::DRAG_SCROLL_EDGE` (36 points, or a third of a
+      body shorter than 108 points, so its middle never scrolls) of the
+      body's top or bottom, the table scrolls toward that edge at a speed
+      that ramps linearly from 0 at the inner side of the zone to
+      `DRAG_SCROLL_MAX_SPEED` (900 points per second, about 32 rows) at the
+      edge (`drag_scroll_speed`, unit-tested), times the frame's
+      `stable_dt` (at most 0.1 s, `table::MAX_DRAG_SCROLL_DT`), with a
+      repaint requested while it moves; it stops at the list's ends, when
+      the pointer leaves the zone or the drag ends, and not on the frame the
+      button is released, so the entry lands where the line was drawn;
+    - the wheel scrolls the table: egui ignores it while a widget is
+      dragged, so the table applies `smooth_scroll_delta.y` itself exactly
+      then and consumes it (no double scroll);
+    - the drop index and the violet line come from the new offset, so they
+      follow the pointer as the rows move; a header (`DragColumn`) drag
+      scrolls nothing. Every player table, in every tab and layout, does it.
+    Both values are UI metrics (named constants, not `Config` fields).
+    Tests: `fp-app/tests/table_drag_scroll_ui.rs` and the
+    `drag_scroll_*` cases of `fp-app/tests/table_layout.rs`.
 
 Rulings made while implementing:
 
