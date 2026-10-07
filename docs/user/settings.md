@@ -56,7 +56,11 @@ audio system, the sample rate, the buffer size and the outputs. Advanced
 adds, for each device an output uses, its own rate and buffer, the
 bit-perfect switch and the DSD mode, and then the DSD settings. Switching
 views only shows or hides rows: nothing is changed or reset. When Basic
-hides a setting that is in use, a line says so.
+hides a setting that is in use, a line says so. When no output uses a
+device any more, its own rate and buffer, its bit-perfect switch and its
+DSD mode are forgotten the next time the application starts: if an output
+uses it again after that, it starts from the global values. Until then,
+choosing it again (for example after swapping two devices) keeps them.
 
 | Setting | Meaning |
 |---|---|
@@ -67,7 +71,7 @@ hides a setting that is in use, a line says so.
 | Test Main / Test Cue | Plays a short tone (1 kHz on Main, 440 Hz on Cue, 1.5 s, −18 dBFS) on the chosen output, so you can check the wiring before going on air |
 | Cartwall | The cartwall's Main and Cue outputs. Main defaults to the system output. Without a Cue there is no cart pre-listen. |
 | Sample rate: *device* (Advanced) | **Global (...)** uses the sample rate above; a value gives this device its own rate. Only the rates the device reports are offered; a saved rate it no longer reports stays listed with a note that it may not open (the device then falls back to the global rate). The own values apply only to devices an output names, not to the system default output unless one does. |
-| Buffer size: *device* (Advanced) | **Global (...)** uses the buffer size above; a value gives this device its own, with its latency below. |
+| Buffer size: *device* (Advanced) | **Global (...)** uses the buffer size above; a value gives this device its own, with its latency below. A device that does not take its own buffer size falls back to the global one, and to the global rate too when it does not take its own rate either. |
 | Bit-perfect: *device* (Advanced) | A bit-perfect device is opened with exclusive access and follows each file's sample rate while nothing plays on it. The switch is disabled where the device cannot give exclusive access. See [Bit-perfect output](bit-perfect.md). |
 | DSD: *device* (Advanced) | **Convert to PCM** (the default), **DoP** or, on Linux, **Native DSD**. Every device shows it; only the modes the device can take are offered, and a line under it says why the others are not. See [DSD](bit-perfect.md#dsd). |
 | When another source needs a DSD output (Advanced) | **Continue the DSD track as PCM** (the default), or **Keep DSD and mute the other sources**. See [DSD](bit-perfect.md#dsd). |

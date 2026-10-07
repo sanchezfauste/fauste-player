@@ -46,6 +46,7 @@ const STEREO: StreamConfig = StreamConfig {
     channels: 2,
     exclusive: false,
     dsd: None,
+    exact_buffer: false,
 };
 
 fn counter() -> (Box<Counter>, Arc<AtomicU64>) {
@@ -360,6 +361,7 @@ fn offline_dop_needs_exclusive_access_and_a_24_bit_integer_format() {
         channels: 2,
         exclusive: true,
         dsd: Some(DsdStream::Dop),
+        exact_buffer: false,
     };
     assert!(
         matches!(
@@ -385,6 +387,7 @@ fn offline_native_dsd_needs_the_capability() {
         channels: 2,
         exclusive: true,
         dsd: Some(DsdStream::Native),
+        exact_buffer: false,
     };
     assert!(open(&backend, &dac, config).is_err());
     dac.set_native_dsd(true);
@@ -403,6 +406,7 @@ fn null_refuses_any_dsd_stream() {
         channels: 2,
         exclusive: false,
         dsd: Some(DsdStream::Dop),
+        exact_buffer: false,
     };
     assert!(open_null(config).is_err());
 }
@@ -424,4 +428,28 @@ fn offline_devices_can_be_busy_for_a_number_of_opens() {
     assert!(matches!(open(), Err(BackendError::Busy(_))));
     assert!(open().is_ok());
     assert_eq!(device.open_attempts(), 3);
+}
+
+#[test]
+fn offline_opens_a_buffer_outside_its_range_with_its_default_unless_asked_exactly() {
+    let backend = OfflineBackend::new();
+    let dac = backend.add_device("dac", 2);
+    dac.set_reported_buffers((512, 4096));
+    dac.set_default_buffer(2048);
+    let config = |buffer_frames, exact_buffer| StreamConfig {
+        buffer_frames,
+        exact_buffer,
+        ..STEREO
+    };
+    let stream = open(&backend, &dac, config(1024, true)).unwrap();
+    assert_eq!(stream.config().buffer_frames, 1024, "in the range");
+    drop(stream);
+    let stream = open(&backend, &dac, config(256, false)).unwrap();
+    assert_eq!(stream.config().buffer_frames, 2048, "the device's default");
+    assert_eq!(dac.config().unwrap().buffer_frames, 2048);
+    drop(stream);
+    assert!(matches!(
+        open(&backend, &dac, config(256, true)),
+        Err(BackendError::Unsupported(_))
+    ));
 }

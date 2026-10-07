@@ -421,6 +421,7 @@ Rulings made while implementing:
 ### As built (plan 2)
 
 - **Q6.** Not reproduced. `cue_follow_ui.rs::q6_1_a_click_on_a_row_moves_the_cue_with_its_window_open`, `q6_2_a_double_click_on_a_row_moves_the_cue_with_its_window_open` and `q6_3_the_cue_follows_in_every_layout_tab_and_state` (a matrix of layouts, tabs, windows and gestures, with real pointer events) pass on the product as it was, so no product code changed and the tests pin the behaviour. The maintainer's exact steps are pending (players, window size, how the CUE was started, whether the CUE window covered the row, click or double-click, the file's state, the Cue route, and whether only the window title changed).
+  - After plan 2 the maintainer gave the steps: two players, the CUE started with the player's own CUE button (it sends `ToggleCue`, which cues the player's next entry from its cue-in), then a click or a double-click on another row of that player's table. Still not reproduced. `q6_4_after_the_players_cue_button_a_row_moves_the_cue_in_two_players` clicks the CUE button itself with real pointer events, at 1000×700 and 1920×1080, on either player, with a click or a double-click, with and without resting on the row long enough for its tooltip; every case moves the CUE (a mutation that disables `cue_follow_target` makes its click cases fail). The release build, run in Xvfb on the null backend through `scripts/site/screenshots.sh --hold` and driven with `xdotool` clicks, also moved the CUE on a stopped player and on one on air, for a click and a double-click. One case does not move it, by design (feedback 2, O17 says "in that player's table"): a click or double-click in another player's table that shows the same playlist. Two new players both show the first playlist, so this is a candidate for the report; it is left for the maintainer.
 - **Q1.**
   - `FileDecoder::duration_hint_secs` and `duration_from_frames` (`fp-decode`) give the length the file stores, and never an estimate, which can be short on VBR. An allowlist of symphonia readers (`symph.rs::stored_length`) is trusted: FLAC, WAV, AIFF, CAF, MP4/M4A and Ogg; MP1/2/3 only when the first Layer III frame after any ID3v2 tag has `Xing`/`Info` after its side information or `VBRI` 32 bytes after its header (checked when the file is opened). Without one, the stream is probed so that symphonia makes no estimate at all: its MPEG reader would otherwise take the estimate as the end of the stream, decode nothing past it and refuse seeks past it, cutting a VBR track short in playback and in the analysis (`ANALYSIS_VERSION` 8). Raw AAC (ADTS), Matroska/WebM and any other reader get no hint; WavPack, Monkey's Audio and DSD use their own headers.
   - `fp-app/src/header.rs` (`HeaderReader`, the `fp-header-reader` thread) and `Services::header_pass` read the headers, with eight reads in flight (`HEADER_READS_IN_FLIGHT`) and tracks on a player first.
@@ -438,7 +439,10 @@ Rulings made while implementing:
 
 - Q6: the matrix lets 0.7 s pass (`settle`) before each gesture. Without it egui reads a double-click as a triple click after a click elsewhere within 0.6 s, a test-time artefact unrelated to the CUE. Cost if wrong: hides a real fast-operator case.
 - Q6 [ASK]: not reproduced; no product change shipped. Cost if wrong: Q6 stays open until the maintainer's steps arrive.
+- Q6 [ASK], after the maintainer's steps: still not reproduced, so only the regression test is committed. Whether a click in another player's table that shows the same playlist should move this player's CUE is a design question for the maintainer. Cost if wrong: Q6 stays open.
 - Q6 side finding [ASK]: a double-click less than 0.6 s after a click elsewhere is a triple click to egui, so `SetNext` is not sent (the CUE still follows via the single click). Left as is; treating `triple_clicked()` like `double_clicked()` would send `SetNext` twice on a real triple click.
+  - Answered after plan 5 (as built): the maintainer wants a triple click on a playlist row to act like a double-click. `table.rs` sends `SetNext` for a click egui counts as a double or a triple click, once per burst of clicks: `set_next_on_click` remembers the row it set (`ViewState.set_next_sent`), a single click or a click on another row starts a new burst, so a real triple click (double, then triple to egui) sends it once. The track table is the only place in the interface where a double-click is an action (no other widget checks `double_clicked`), so nothing else changes. Tests: `fp-app/tests/row_double_click.rs` (a click on one row, then within 0.6 s a double-click on another, sets that row as next; a real triple click and a plain double-click each send one `SetNext`). The `settle` in the Q6 matrix stays: it tests the gestures apart, as before. A unit test in `table.rs` pins `set_next_on_click` (once per burst, a new row in the same burst, a reset on a single click).
+  - Ruling (accepted): egui counts a click as a triple when it lands within 6 px of the previous click and the click before that was within 0.6 s, so a slow second click right after a quick earlier click can set a row as next — two clicks on one row in quick succession are close to a double-click — cost if wrong: an occasional unintended `SetNext`, undone by setting another row.
 - Task 1's tests are committed alone, as regression tests, because there is no fix to commit with them.
 - Q1: the FLAC test fixture carries one valid frame header after STREAMINFO, because symphonia 0.6.1's FLAC reader resyncs to the first frame when it opens a file.
 - Q1: `Track::needs_header_duration` tests `is_finite() && > 0.0` instead of `!(x > 0.0)` (clippy's `neg_cmp_op_on_partial_ord`); an infinite length counts as no length.
@@ -690,11 +694,13 @@ In short:
   the device cannot take shows as PCM without rewriting the configuration
   (`effective_dsd_mode`);
 - an override reaches the engine only for a device a route names; the
-  system-default output opens at the global values, and a stale override
-  stays in the configuration for when the device is routed again;
+  system-default output opens at the global values. (Changed after plan 5,
+  see "Maintainer decisions after plan 5" below: a stale override no
+  longer stays in the configuration.)
 - a saved own rate or buffer the device no longer reports stays listed with
   a note, and a bus whose own rate does not open falls back to the global
-  rate and buffer through `pcm_fallback`;
+  rate and buffer through `pcm_fallback` (and, after plan 5, so does a
+  bus whose own buffer does not open; see below);
 - `advanced_in_use` counts the DSD mix and silence only with a routed device;
 - the Advanced rows list the devices that routes name (`routed_devices`);
   a player on the system default output gets no rows;
@@ -724,6 +730,87 @@ reverse):
   buffer too.
 
 Task 7, the check on real hardware, is not done.
+
+**Maintainer decisions after plan 5 (as built).**
+- **A device that leaves every route loses its own settings.** The
+  maintainer: there is no need to keep the configuration of a device that
+  may never be connected again. `OutputsConfig::forget_unrouted_devices`
+  (`fp-model`) removes the `device_overrides`, `bit_perfect` and
+  `dsd_output` entries of every device no route names (players' Main and
+  Cue, the cartwall's Main and Cue). Only `fp-store` applies it, on load,
+  so the settings are forgotten the next time the application starts (a
+  stale entry written by an earlier version goes too). Not in the reducer:
+  Settings applies every route click at once, so swapping two devices
+  between players, or going to the system default and back, leaves a
+  device unrouted for a moment, and its settings must survive that; a
+  change of outputs needs a restart anyway. Before pruning, the load drops
+  the routes of players that no longer exist
+  (`OutputsConfig::forget_routes_of_other_players`; a removed player's id
+  is never used again, and its routes would keep its devices routed), but
+  only when the session file loaded, since without it the players' ids are
+  not known. A device routed again after a start starts from the global
+  values. Settings shows the bit-perfect switch and
+  the DSD mode only next to a routed device, like the own rate and buffer,
+  so they follow the same rule. The removal is silent, like the removal of
+  an empty override. The system-default output is untouched: it has no
+  entry, and opens at the global values as before.
+  - Ruling: no warning when an unrouted device's entry is removed — the
+    existing pattern removes an empty override silently, and the operator
+    caused it by changing the route — cost if wrong: a one-line warning in
+    `Store::load`.
+  - Ruling: pruning only on load, not in `update_config` — a route edit
+    in Settings (a swap, the system default and back) must not lose a
+    device's settings, and the restart notice clears when the routes
+    return to the started ones — cost if wrong: a device unrouted during
+    the session keeps its hidden settings until the next start.
+  - Ruling: a removed player's routes are dropped on load only when the
+    session file loaded — without it the restored players get new ids and
+    every route would look stale — cost if wrong: stale routes (and their
+    devices' settings) stay until a start with a session.
+- **A refused own buffer falls back to the global buffer**, like a refused
+  own rate. `ensure_bus` gives a bus the global rate and buffer as its
+  `pcm_fallback` when its device has its own rate or its own buffer (before,
+  only its own rate), and `Bus::open_pcm_fallback` uses it when it differs
+  in the rate or in the buffer. When the device does not take its own
+  values, the watchdog reopens it with the global ones: the global buffer
+  alone when only the buffer was its own, both when both were. The log is
+  the same warn line as the rate fallback's (one for the buffer, which says
+  so); a buffer change alone does not open the sources again, since their
+  timelines are in the same rate. As before, there is no on-screen notice.
+  Tests: `fp-engine/tests/device_overrides.rs`, with
+  `OfflineDevice::refuse_buffer`.
+  cpal never refuses a buffer size: a fixed size outside the device's
+  reported range was skipped and the device opened with its default buffer,
+  so the fallback never ran. A bus with its own buffer now asks for it
+  exactly (`StreamConfig::exact_buffer`): cpal then tries only that fixed
+  size, and refuses it with `Unsupported` when the device reports ranges
+  that leave it out. The fallback (global rate and buffer) is not exact, so
+  the global path keeps its behaviour (outside the range, the device's
+  default). `Engine::buffer_of` uses the buffer the stream runs with
+  (`Bus::buffer_frames`), not the one asked for. The Offline backend models
+  cpal: with a reported range, a size outside it opens with the device's
+  default (`set_default_buffer`) unless asked for exactly.
+  - Ruling: the strictness is a field of the request
+    (`StreamConfig::exact_buffer`), not a reopen after the engine compares
+    buffers — cpal reports the requested size until the first callback, so
+    a mismatch is not known at open, and a refusal reuses the existing
+    `pcm_fallback` path — cost if wrong: one more field every backend sees.
+  - Ruling: a DSD stream is never exact, as before — refusing a DSD stream
+    for its buffer would lose the DSD — cost if wrong: DoP may run at the
+    device's default buffer.
+  - Ruling: a rate the bus follows (bit-perfect) keeps its own buffer
+    exactly; a device that takes the rate only with another buffer refuses
+    the rate (the engine resamples), an edge case since devices report the
+    same buffer range at every rate — cost if wrong: a resampled file on
+    such a device.
+  The fallback runs only when the device refuses the configuration
+  (`BackendError::Unsupported`, `Bus::open_or_fall_back`): a device missing
+  or busy for a moment (a USB replug, another client) is asked for its own
+  values again at the next retry rather than running at the global ones for
+  the rest of the session. And a bit-perfect bus that follows a file's rate
+  (`reopen_with`, PCM to PCM) keeps, for a device with its own buffer, a
+  fallback at the new rate with the global buffer; a fallback to another
+  rate is still forgotten there.
 
 ---
 

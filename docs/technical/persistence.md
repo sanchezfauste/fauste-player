@@ -158,6 +158,8 @@ any field this version does not have.
 | `dsd_silence_ms` | 200 | DSD silence at a DSD stream's start, end and switch to PCM; 0 to 2000 (clamped, with a warning) |
 | `device_overrides[]` | empty | `{ device: { backend, device }, sample_rate?, buffer_frames? }`: a device's own rate and buffer, used instead of `sample_rate` and `buffer_frames` when it opens (operator feedback 4, Q12). Same ranges as the global fields; an out-of-range value is dropped with a warning and the device uses the global one; a device listed twice keeps its first values (warning); an entry with neither is removed |
 
+An entry in `bit_perfect`, `dsd_output` or `device_overrides` for a device no route names (no player's Main or Cue, nor the cartwall's) is removed without a warning on load (`OutputsConfig::forget_unrouted_devices`, operator feedback 4, Q12), not while the application runs, so a route edit in Settings loses nothing: a device that leaves every route starts again from the global values when it is routed again after a start. Before that, when the session file loaded, the routes of players that no longer exist are dropped (`forget_routes_of_other_players`): a removed player's id is never used again.
+
 ### `meter` (Settings → Meters; applied at once)
 
 | Field | Default | Range | Meaning |

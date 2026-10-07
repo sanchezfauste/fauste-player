@@ -174,6 +174,26 @@ fn choose_buffer_frames(ranges: &[(u32, u32)], wanted: u32) -> Option<u32> {
         .then_some(wanted)
 }
 
+/// The buffer sizes to try, in order. A device that rejects a fixed size
+/// must still play rather than leave the bus silent, so the device's own
+/// default comes last; with `exact` (`StreamConfig::exact_buffer`) only
+/// the fixed size is tried, and none when the device reports ranges that
+/// leave it out (cpal itself would not refuse it).
+fn buffer_attempts(ranges: &[(u32, u32)], wanted: u32, exact: bool) -> Vec<cpal::BufferSize> {
+    let mut attempts = Vec::with_capacity(2);
+    if exact {
+        if ranges.is_empty() || choose_buffer_frames(ranges, wanted).is_some() {
+            attempts.push(cpal::BufferSize::Fixed(wanted));
+        }
+        return attempts;
+    }
+    if let Some(frames) = choose_buffer_frames(ranges, wanted) {
+        attempts.push(cpal::BufferSize::Fixed(frames));
+    }
+    attempts.push(cpal::BufferSize::Default);
+    attempts
+}
+
 impl std::fmt::Debug for CpalBackend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CpalBackend")
@@ -472,16 +492,14 @@ impl CpalBackend {
                 cpal::SupportedBufferSize::Unknown => None,
             })
             .collect();
-        let mut attempts = Vec::with_capacity(2);
-        if let Some(frames) = choose_buffer_frames(&ranges, config.buffer_frames) {
-            attempts.push(cpal::BufferSize::Fixed(frames));
-        }
-        // A device that rejects a fixed size must still play rather than
-        // leave the bus silent: fall back to its own default.
-        attempts.push(cpal::BufferSize::Default);
+        let attempts = buffer_attempts(&ranges, config.buffer_frames, config.exact_buffer);
         let scratch_frames = (config.buffer_frames as usize).max(4096);
         let mut renderer = Some(renderer);
-        let mut last = BackendError::Unsupported("no configuration accepted".to_owned());
+        // Only reached without an attempt: an exact buffer out of range.
+        let mut last = BackendError::Unsupported(format!(
+            "a buffer of {} frames is outside the device's range",
+            config.buffer_frames
+        ));
         for buffer_size in attempts {
             let cpal_config = cpal::StreamConfig {
                 channels: config.channels,
@@ -843,6 +861,7 @@ mod tests {
             channels: 2,
             exclusive,
             dsd,
+            exact_buffer: false,
         };
         assert!(check_dsd(&config(Some(DsdStream::Dop), false)).is_err());
         assert!(check_dsd(&config(Some(DsdStream::Dop), true)).is_ok());
@@ -981,6 +1000,25 @@ mod tests {
         assert_eq!(choose_buffer_frames(&[(64, 4096)], 512), Some(512));
         assert_eq!(choose_buffer_frames(&[(1024, 4096)], 512), None);
         assert_eq!(choose_buffer_frames(&[], 512), None);
+    }
+
+    #[test]
+    fn an_exact_buffer_is_never_replaced_by_the_device_default() {
+        use super::buffer_attempts;
+        use cpal::BufferSize::{Default, Fixed};
+        let range = [(64, 4096)];
+        assert_eq!(buffer_attempts(&range, 512, false), [Fixed(512), Default]);
+        assert_eq!(buffer_attempts(&[(1024, 4096)], 512, false), [Default]);
+        assert_eq!(buffer_attempts(&range, 512, true), [Fixed(512)]);
+        assert!(
+            buffer_attempts(&[(1024, 4096)], 512, true).is_empty(),
+            "outside every reported range: refused"
+        );
+        assert_eq!(
+            buffer_attempts(&[], 512, true),
+            [Fixed(512)],
+            "no range reported: the device decides"
+        );
     }
 
     #[test]

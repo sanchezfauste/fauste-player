@@ -25,6 +25,7 @@ struct DeviceState {
     open: Option<Open>,
     exclusive_capable: bool,
     refused_rates: HashSet<u32>,
+    refused_buffers: HashSet<u32>,
     open_attempts: u64,
     /// Opens still to fail with `Busy`.
     busy_opens: u64,
@@ -41,6 +42,8 @@ struct DeviceState {
     reported_rates: Option<Vec<(u32, u32)>>,
     /// Buffer-size range the device reports (`None`: a wide one).
     reported_buffers: Option<(u32, u32)>,
+    /// See `set_default_buffer` (`None`: the range's nearest end).
+    default_buffer: Option<u32>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -139,6 +142,12 @@ impl OfflineDevice {
         lock(&self.state).reported_buffers = Some(range);
     }
 
+    /// The buffer a stream opens with when it asks for a size outside the
+    /// reported range (`set_reported_buffers`) and not exactly.
+    pub fn set_default_buffer(&self, frames: u32) {
+        lock(&self.state).default_buffer = Some(frames);
+    }
+
     /// How many times a stream was opened, or tried to be, on this device.
     pub fn open_attempts(&self) -> u64 {
         lock(&self.state).open_attempts
@@ -147,6 +156,11 @@ impl OfflineDevice {
     /// Makes opens at `rate` fail with `Unsupported`.
     pub fn refuse_rate(&self, rate: u32) {
         lock(&self.state).refused_rates.insert(rate);
+    }
+
+    /// Makes opens with a buffer of `frames` fail with `Unsupported`.
+    pub fn refuse_buffer(&self, frames: u32) {
+        lock(&self.state).refused_buffers.insert(frames);
     }
 
     /// Makes the next `opens` opens on this device that it would accept
@@ -340,6 +354,28 @@ impl AudioBackend for OfflineBackend {
                 "{} Hz is not supported",
                 config.sample_rate
             )));
+        }
+        if state.refused_buffers.contains(&config.buffer_frames) {
+            return Err(BackendError::Unsupported(format!(
+                "a buffer of {} frames is not supported",
+                config.buffer_frames
+            )));
+        }
+        // A size outside the reported range opens with the device's own
+        // buffer, as cpal's default does, unless asked for exactly.
+        let mut config = config;
+        if let Some((min, max)) = state.reported_buffers
+            && !(min..=max).contains(&config.buffer_frames)
+        {
+            if config.exact_buffer {
+                return Err(BackendError::Unsupported(format!(
+                    "a buffer of {} frames is outside {min} to {max}",
+                    config.buffer_frames
+                )));
+            }
+            config.buffer_frames = state
+                .default_buffer
+                .unwrap_or_else(|| config.buffer_frames.clamp(min, max));
         }
         // After the refusals: a configuration the device refuses is refused
         // whoever holds it, and a test can make only a later open busy.

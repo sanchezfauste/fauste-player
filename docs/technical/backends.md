@@ -35,7 +35,12 @@ the bus logs it when it falls back to shared.
 
 Each device is asked for its own rate and buffer when it has them
 (`outputs.device_overrides`, operator feedback 4, Q12), else for the global
-ones; a backend sees only the resulting `StreamConfig`. Settings offers a
+ones; a backend sees only the resulting `StreamConfig`. A device's own
+buffer comes with `StreamConfig::exact_buffer`: the backend opens with that
+size or refuses with `Unsupported` (cpal tries no default buffer, and
+refuses a size outside every range the device reports), so the bus falls
+back to the global buffer instead of the device's default. A driver that
+only rounds the size (WASAPI's aligned period) still opens. Settings offers a
 device only the rates and buffer sizes its `DeviceInfo` reports
 (`fp_model::offered_rates`, `offered_buffers`), all of them when it reports
 none.
@@ -90,7 +95,10 @@ none.
 
   Only safe APIs are used, and `forbid(unsafe_code)` holds.
 - Offline devices can be marked capable (`set_exclusive_capable`) or made to
-  refuse a rate (`refuse_rate`), for tests.
+  refuse a rate (`refuse_rate`) or a buffer size (`refuse_buffer`), for
+  tests. With `set_reported_buffers`, a size outside the range opens with
+  the device's own buffer (`set_default_buffer`, else the nearest end),
+  as cpal's default does, or is refused when `exact_buffer` asks for it.
 - Null refuses `exclusive`, so a bus on it plays shared and never claims to
   be bit-perfect.
 
@@ -171,7 +179,8 @@ Nothing connects to a system until it is first used.
   configuration) is used.
 - **Streams:** they use the same code for every host: the sample format is
   chosen as F32, then I32, then I16 and converted through a preallocated
-  buffer; the requested buffer size is tried first, then the device default.
+  buffer; the requested buffer size is tried first, then the device default
+  (`buffer_attempts`), except with `exact_buffer`.
   Real-time priority comes through cpal's `audio_thread_priority` (rtkit
   over D-Bus on Linux). A DoP stream chooses its format with
   `choose_dop_sample_format` instead.

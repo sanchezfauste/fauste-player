@@ -192,6 +192,8 @@ impl Store {
             .value
             .map(|d| (d.library, d.playlists, d.ids))
             .unwrap_or_default();
+        // Without a session the players' ids are not known.
+        let players_known = session.value.is_some();
         let (sessions, cartwall_session) = session
             .value
             .map(|d| (d.players, d.cartwall))
@@ -215,7 +217,7 @@ impl Store {
             }
             warnings.extend(lists.normalize(&mut probe_ids));
         }
-        let (state, actions) = AppState::restore(
+        let (mut state, actions) = AppState::restore(
             RestoreParts {
                 config,
                 library,
@@ -227,6 +229,15 @@ impl Store {
             &sessions,
             default_playlist_name,
         );
+        // Operator feedback 4, Q12: a removed player's routes and the
+        // settings of a device no route names (kept until now, so a
+        // route edit in Settings loses nothing) are forgotten.
+        let outputs = &mut state.config.outputs;
+        if players_known {
+            let players: Vec<PlayerId> = state.players.iter().map(|p| p.id).collect();
+            outputs.forget_routes_of_other_players(&players);
+        }
+        outputs.forget_unrouted_devices();
         LoadedState {
             state,
             actions,

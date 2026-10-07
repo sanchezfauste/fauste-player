@@ -152,10 +152,13 @@ pub struct Bus {
     /// The device came back from a loss unable to carry the DSD stream it
     /// had, and was reopened as PCM (read once by `take_dsd_lost`).
     dsd_lost: bool,
-    /// The PCM configuration the device ran before it carried DSD: the
-    /// watchdog falls back to it when the stored rate does not open (a
+    /// The PCM configuration the watchdog falls back to when the stored
+    /// one does not open: the one the device ran before it carried DSD (a
     /// device that takes native DSD at a word rate need not take that rate
-    /// as PCM). Forgotten once the bus changes PCM rate by itself.
+    /// as PCM), or the global rate and buffer for a device with its own
+    /// (operator feedback 4, Q12). Once the bus changes PCM rate by itself,
+    /// only a device's own buffer keeps one: the new rate with the global
+    /// buffer.
     pcm_fallback: Option<StreamConfig>,
     /// The watchdog reopened the device at `pcm_fallback`: the rate the
     /// bus ran before (read once by `take_rate_change`).
@@ -351,6 +354,14 @@ impl Bus {
         self.config
     }
 
+    /// The buffer the open stream runs with (a device may choose its own
+    /// when it does not take the one asked for), else the one asked for.
+    pub fn buffer_frames(&self) -> u32 {
+        self.stream
+            .as_ref()
+            .map_or(self.config.buffer_frames, |s| s.config().buffer_frames)
+    }
+
     /// How the open stream carries DSD, if a device stream is open.
     pub fn stream_dsd(&self) -> Option<DsdStream> {
         self.stream.as_ref().and_then(|s| s.dsd())
@@ -401,11 +412,13 @@ impl Bus {
     /// comes back only with exclusive access and a stream that fits it
     /// (`dsd_fits`); otherwise the present device is reopened as PCM at the
     /// same rate (never left closed), the mixer leaves DSD mode before the
-    /// first block, and `dsd_lost` tells the engine. A PCM rate that does
-    /// not open falls back to `pcm_fallback` (`open_pcm_fallback`).
+    /// first block, and `dsd_lost` tells the engine. A PCM configuration
+    /// the device refuses (`Unsupported`) falls back to `pcm_fallback`
+    /// (`open_pcm_fallback`); a device missing or busy for a moment is
+    /// asked for the same configuration again next time.
     fn reconnect(&mut self, now: Instant) -> bool {
         let Some(dsd) = self.config.dsd else {
-            return self.try_open(now, true).is_ok() || self.open_pcm_fallback(now);
+            return self.open_or_fall_back(now);
         };
         // A DoP stream whose DSD has ended keeps its configuration while the
         // mixer is PCM: only a mixer in DSD mode is put back in it below.
@@ -423,7 +436,7 @@ impl Bus {
         });
         let dsd_config = self.config;
         self.config.dsd = None;
-        if self.try_open(now, true).is_ok() || self.open_pcm_fallback(now) {
+        if self.open_or_fall_back(now) {
             tracing::warn!(bus = ?self.key, ?dsd, "the device came back unable to carry DSD; playing PCM");
             self.dsd_lost = true;
             return true;
@@ -441,23 +454,38 @@ impl Bus {
         false
     }
 
-    /// After the stored PCM rate did not open: opens the device at
-    /// `pcm_fallback` when that is another rate, keeping the mixer's
-    /// durations in time; `rate_change` tells the engine, which opens the
-    /// sources again at the new rate. Otherwise the configuration stays.
+    /// Opens the stored PCM configuration, or `pcm_fallback` when the
+    /// device refuses it (operator feedback 4, Q12).
+    fn open_or_fall_back(&mut self, now: Instant) -> bool {
+        match self.try_open(now, true) {
+            Ok(()) => true,
+            Err(BackendError::Unsupported(_)) => self.open_pcm_fallback(now),
+            Err(_) => false,
+        }
+    }
+
+    /// After the stored PCM configuration did not open: opens the device
+    /// with `pcm_fallback` when that has another rate or buffer, keeping
+    /// the mixer's durations in time; on a rate change `rate_change` tells
+    /// the engine, which opens the sources again at the new rate (a buffer
+    /// change alone leaves them as they are). Otherwise the configuration
+    /// stays.
     fn open_pcm_fallback(&mut self, now: Instant) -> bool {
-        let Some(fallback) = self
-            .pcm_fallback
-            .filter(|f| f.sample_rate != self.config.sample_rate)
-        else {
+        let Some(fallback) = self.pcm_fallback.filter(|f| {
+            f.sample_rate != self.config.sample_rate || f.buffer_frames != self.config.buffer_frames
+        }) else {
             return false;
         };
         let previous = self.config;
         self.config = fallback;
         self.follow_rate(previous.sample_rate, fallback.sample_rate);
         if self.try_open(now, true).is_ok() {
-            tracing::warn!(bus = ?self.key, from = previous.sample_rate, to = fallback.sample_rate, "the device did not take its rate; playing at the fallback rate");
-            self.rate_change = Some(previous.sample_rate);
+            if previous.sample_rate == fallback.sample_rate {
+                tracing::warn!(bus = ?self.key, from = previous.buffer_frames, to = fallback.buffer_frames, "the device did not take its buffer size; playing with the fallback buffer");
+            } else {
+                tracing::warn!(bus = ?self.key, from = previous.sample_rate, to = fallback.sample_rate, buffer = fallback.buffer_frames, "the device did not take its rate; playing at the fallback rate");
+                self.rate_change = Some(previous.sample_rate);
+            }
             return true;
         }
         self.config = previous;
@@ -528,8 +556,18 @@ impl Bus {
         if opened.is_ok() {
             tracing::info!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, "stream reopened");
             if previous.dsd.is_none() && config.dsd.is_none() {
-                // Back in PCM, at a rate of its own choosing.
-                self.pcm_fallback = None;
+                // Back in PCM, at a rate of its own choosing: a fallback to
+                // another rate is forgotten, while a device's own buffer
+                // keeps the global one at the new rate (operator feedback
+                // 4, Q12).
+                self.pcm_fallback = self
+                    .pcm_fallback
+                    .filter(|f| config.exact_buffer && f.buffer_frames != config.buffer_frames)
+                    .map(|f| StreamConfig {
+                        buffer_frames: f.buffer_frames,
+                        exact_buffer: false,
+                        ..config
+                    });
             }
             return Ok(());
         }

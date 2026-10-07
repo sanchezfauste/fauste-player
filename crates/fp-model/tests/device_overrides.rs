@@ -3,7 +3,8 @@
 //! Basic | Advanced view of Settings → Audio outputs.
 
 use fp_model::{
-    Config, DeviceOverride, DsdMix, OutputDevice, OutputsView, PlayerId, PlayerRoutes, Route,
+    AppState, Command, Config, DeviceOverride, DsdDevice, DsdMix, DsdOutput, OutputDevice,
+    OutputsView, PlayerId, PlayerRoutes, Route, apply,
 };
 
 fn dev(name: &str) -> OutputDevice {
@@ -233,4 +234,94 @@ fn the_dsd_settings_count_only_with_a_routed_device() {
     c.outputs.dsd_silence_ms = 500.0;
     assert!(c.outputs.routed_devices().is_empty());
     assert!(!c.outputs.advanced_in_use());
+}
+
+fn dsd(name: &str) -> DsdDevice {
+    DsdDevice {
+        backend: "alsa".into(),
+        device: name.into(),
+        mode: DsdOutput::Dop,
+    }
+}
+
+/// `routed()` with own values, bit-perfect and DSD on `dac`, `phones` and
+/// `gone`, a device no route names.
+fn with_settings_on(mut c: Config) -> Config {
+    for name in ["dac", "phones", "gone"] {
+        c.outputs.set_device_rate(&dev(name), Some(96_000));
+        c.outputs.bit_perfect.push(dev(name));
+        c.outputs.dsd_output.push(dsd(name));
+    }
+    c
+}
+
+#[test]
+fn a_device_no_route_names_loses_its_own_settings() {
+    let mut c = with_settings_on(routed());
+    c.outputs.forget_unrouted_devices();
+    assert_eq!(
+        c.outputs.device_overrides,
+        vec![
+            own("dac", Some(96_000), None),
+            own("phones", Some(96_000), None)
+        ]
+    );
+    assert_eq!(c.outputs.bit_perfect, vec![dev("dac"), dev("phones")]);
+    assert_eq!(c.outputs.dsd_output, vec![dsd("dac"), dsd("phones")]);
+}
+
+#[test]
+fn a_cartwall_route_keeps_its_devices_settings() {
+    let mut c = with_settings_on(routed());
+    c.outputs.cartwall.cue = Some(route("gone", 2));
+    c.outputs.forget_unrouted_devices();
+    assert!(c.outputs.device_override(&dev("gone")).is_some());
+    assert!(c.outputs.bit_perfect.contains(&dev("gone")));
+}
+
+#[test]
+fn without_routes_every_device_setting_goes_and_the_globals_stay() {
+    let mut c = with_settings_on(Config::default());
+    c.outputs.sample_rate = 44_100;
+    c.outputs.buffer_frames = 1024;
+    c.outputs.forget_unrouted_devices();
+    assert!(c.outputs.device_overrides.is_empty());
+    assert!(c.outputs.bit_perfect.is_empty());
+    assert!(c.outputs.dsd_output.is_empty());
+    assert_eq!(
+        (c.outputs.sample_rate, c.outputs.buffer_frames),
+        (44_100, 1024),
+        "the system default output keeps the global values"
+    );
+}
+
+/// Applies `edit` to a copy of the configuration, as Settings does with
+/// every combo click.
+fn update(state: &mut AppState, edit: impl FnOnce(&mut PlayerRoutes)) {
+    let mut config = state.config.clone();
+    if let Some(r) = config.outputs.routes.first_mut() {
+        edit(r);
+    }
+    apply(state, Command::UpdateConfig(Box::new(config))).unwrap();
+}
+
+#[test]
+fn a_route_edit_keeps_every_devices_settings_until_the_next_start() {
+    // Settings applies each click at once: swapping Main and Cue unroutes
+    // `dac` for a moment, and going to the system default and back
+    // unroutes it too. Its settings are only forgotten on load.
+    let started = with_settings_on(routed());
+    let mut state = AppState::new(started.clone(), "Main");
+    update(&mut state, |r| r.main = Some(route("phones", 0)));
+    update(&mut state, |r| r.cue = Some(route("dac", 0)));
+    let o = &state.config.outputs;
+    assert_eq!(o.effective_rate(&dev("dac")), 96_000);
+    assert!(o.bit_perfect.contains(&dev("dac")));
+    assert!(o.dsd_output.contains(&dsd("dac")));
+
+    let mut state = AppState::new(started.clone(), "Main");
+    update(&mut state, |r| r.main = None);
+    update(&mut state, |r| r.main = Some(route("dac", 0)));
+    assert_eq!(state.config, started);
+    assert!(fp_model::restart_pending(&started, &state.config).is_empty());
 }

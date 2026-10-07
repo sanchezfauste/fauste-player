@@ -212,3 +212,108 @@ fn a_device_whose_own_rate_does_not_open_falls_back_to_the_global_rate() {
     let dac = r.dac.config().expect("reopened");
     assert_eq!(dac.sample_rate, 48_000);
 }
+
+/// Lets the watchdog retry for 20 s of ticks, rendering a block whenever
+/// `dac` is open so a reopened stream starts.
+fn let_the_watchdog_retry(r: &mut Rig) {
+    for _ in 0..200 {
+        if r.dac.is_open() {
+            r.dac.render(BLOCK);
+        }
+        r.clock += Duration::from_millis(100);
+        r.engine.tick(r.clock);
+    }
+}
+
+#[test]
+fn a_device_whose_own_buffer_does_not_open_falls_back_to_the_global_buffer() {
+    let mut r = rig_with(
+        |d| d.refuse_buffer(256),
+        |c| c.outputs.set_device_buffer(&dev("dac"), Some(256)),
+    );
+    assert!(r.dac.config().is_none(), "256 frames are refused");
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened");
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (48_000, 512));
+}
+
+#[test]
+fn a_device_whose_own_rate_and_buffer_do_not_open_falls_back_to_both_globals() {
+    let mut r = rig_with(
+        |d| {
+            d.refuse_rate(96_000);
+            d.refuse_buffer(256);
+        },
+        |c| {
+            c.outputs.set_device_rate(&dev("dac"), Some(96_000));
+            c.outputs.set_device_buffer(&dev("dac"), Some(256));
+        },
+    );
+    assert!(r.dac.config().is_none());
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened");
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (48_000, 512));
+}
+
+#[test]
+fn a_source_plays_on_after_the_buffer_fallback() {
+    let mut r = rig_with(
+        |d| d.refuse_buffer(256),
+        |c| c.outputs.set_device_buffer(&dev("dac"), Some(256)),
+    );
+    let_the_watchdog_retry(&mut r);
+    let path = indexed_wav(r.dir.path(), "a.wav", 48_000, 2, 48_000 * 4);
+    r.start(request(path, pcm16(48_000)));
+    r.run(48_000);
+    let t = r.engine.telemetry(P).position_secs.expect("playing");
+    assert!((t - 1.0).abs() < 0.05, "{t}");
+}
+
+#[test]
+fn an_own_buffer_the_device_does_not_report_falls_back_to_the_global_one_not_the_default() {
+    // As cpal does: a size outside the reported range would open with the
+    // device's default buffer, unless asked for exactly.
+    let mut r = rig_with(
+        |d| {
+            d.set_reported_buffers((512, 4096));
+            d.set_default_buffer(2048);
+        },
+        |c| c.outputs.set_device_buffer(&dev("dac"), Some(256)),
+    );
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened");
+    assert_eq!((dac.buffer_frames, dac.exact_buffer), (512, false));
+}
+
+#[test]
+fn a_device_busy_for_a_moment_comes_back_with_its_own_buffer() {
+    // Only a refusal of the configuration falls back to the global values:
+    // a device busy (or missing) for a moment is asked for its own again.
+    let mut r = rig(|c| c.outputs.set_device_buffer(&dev("dac"), Some(256)));
+    r.dac.unplug();
+    let_the_watchdog_retry(&mut r);
+    assert!(r.dac.config().is_none(), "unplugged");
+    r.dac.replug();
+    r.dac.set_busy(1);
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened");
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (48_000, 256));
+}
+
+#[test]
+fn a_bit_perfect_device_that_followed_a_file_keeps_the_global_buffer_fallback() {
+    let mut r = rig(|c| {
+        c.outputs.bit_perfect = vec![dev("dac")];
+        c.outputs.set_device_buffer(&dev("dac"), Some(256));
+    });
+    let path = indexed_wav(r.dir.path(), "a.wav", 44_100, 2, 44_100 * 3);
+    r.start(request(path, pcm16(44_100)));
+    let dac = r.dac.config().unwrap();
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (44_100, 256));
+    r.dac.unplug();
+    r.dac.refuse_buffer(256);
+    r.dac.replug();
+    let_the_watchdog_retry(&mut r);
+    let dac = r.dac.config().expect("reopened with the global buffer");
+    assert_eq!((dac.sample_rate, dac.buffer_frames), (44_100, 512));
+}

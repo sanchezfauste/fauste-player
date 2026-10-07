@@ -428,3 +428,82 @@ fn h5_a_click_while_the_player_is_on_air_moves_the_cue() {
         Some(e[2])
     );
 }
+
+/// The CUE button of the `player`-th player (0-based, from the left).
+fn cue_button(h: &Harness<'_, AppUi>, player: usize) -> Rect {
+    let mut rects: Vec<Rect> = h
+        .get_all_by_label("Pre-listen (PFL) the next track")
+        .map(|n| n.rect())
+        .collect();
+    rects.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
+    rects[player]
+}
+
+/// A click as an operator's hand gives it: the pointer rests on `at` for
+/// `hover` frames (long enough, at 40, for the row's tooltip to show),
+/// then the button is pressed and released four frames (80 ms) apart.
+fn hand_click(h: &mut Harness<'_, AppUi>, at: Pos2, hover: usize) {
+    h.event(Event::PointerMoved(at));
+    h.run_steps(hover);
+    for (pressed, frames) in [(true, 4), (false, 1)] {
+        h.event(Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(frames);
+    }
+}
+
+/// The maintainer's steps (Q6, after plan 2): two players, the CUE started
+/// with the player's own CUE button (a real click, not a command), then a
+/// click or a double-click on another row of that player's table. `None`
+/// when the CUE moved to that row, else what went wrong.
+fn button_then_row(size: Vec2, player: usize, gesture: Gesture, hover: usize) -> Option<String> {
+    let (s, _) = setup(2);
+    let (mut h, fake) = harness_sized(s, size, |ui| ui);
+    let target = fake.entries()[2];
+    let button = cue_button(&h, player).center();
+    hand_click(&mut h, button, hover);
+    h.run_steps(30);
+    let cued = fake.state.load().players[player].cue.map(|c| c.entry);
+    if cued.is_none() || cued == Some(target) {
+        return Some(format!("the CUE button cued {cued:?}"));
+    }
+    let Some(at) = visible_point(row(&h, "Song 3", player), cue_window(&h)) else {
+        return Some(format!(
+            "{size:?} P{}: Song 3 is under the CUE window",
+            player + 1
+        ));
+    };
+    fake.take_sent();
+    hand_click(&mut h, at, hover);
+    if matches!(gesture, Gesture::DoubleClick) {
+        hand_click(&mut h, at, 4);
+    }
+    h.run_steps(5);
+    let now = fake.state.load().players[player].cue.map(|c| c.entry);
+    (now != Some(target)).then(|| {
+        format!(
+            "{size:?} P{} {gesture:?} hover {hover}: the CUE is on {now:?}, not {target:?}; sent {:?}",
+            player + 1,
+            fake.take_sent()
+        )
+    })
+}
+
+#[test]
+fn q6_4_after_the_players_cue_button_a_row_moves_the_cue_in_two_players() {
+    let mut failed = Vec::new();
+    for size in [vec2(1000.0, 700.0), vec2(1920.0, 1080.0)] {
+        for player in [0, 1] {
+            for gesture in [Gesture::Click, Gesture::DoubleClick] {
+                for hover in [1, 40] {
+                    failed.extend(button_then_row(size, player, gesture, hover));
+                }
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}

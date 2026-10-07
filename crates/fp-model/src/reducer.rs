@@ -1078,7 +1078,10 @@ fn delete_playlist(
     Ok(())
 }
 
-/// Takes a new configuration, validated. The player count only changes
+/// Takes a new configuration, validated. The settings of a device no route
+/// names stay until the next start (`fp-store` drops them on load):
+/// Settings applies every route click at once, so swapping two devices
+/// unroutes one for a moment. The player count only changes
 /// through `SetPlayerCount`, except that a lower `limits.max_players`
 /// removes the players above it, refused while one of them is busy.
 fn update_config(

@@ -213,6 +213,9 @@ impl Engine {
             sample_rate: word_rate,
             dsd: Some(stream),
             exclusive: true,
+            // A DSD stream takes the device's buffer when it does not take
+            // the one asked for, as before: a refusal would lose the DSD.
+            exact_buffer: false,
             ..previous
         };
         // Only on an idle device (`device_idle`): the conductor may wait,

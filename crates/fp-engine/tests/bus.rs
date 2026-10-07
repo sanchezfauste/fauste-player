@@ -21,6 +21,7 @@ const CONFIG: StreamConfig = StreamConfig {
     channels: 2,
     exclusive: false,
     dsd: None,
+    exact_buffer: false,
 };
 const MIXER: MixerConfig = MixerConfig {
     volume_smoothing_frames: 1,
@@ -486,4 +487,20 @@ fn a_device_that_never_starts_is_reported_again_after_a_failed_reopen() {
         bus.supervise(now);
     });
     assert_eq!(lines.count("opened but never started"), 2);
+}
+
+#[test]
+fn the_bus_reports_the_buffer_its_stream_runs_with() {
+    let backend = OfflineBackend::new();
+    let device = backend.add_device("card", 2);
+    device.set_reported_buffers((512, 4096));
+    device.set_default_buffer(2048);
+    let key = BusKey {
+        backend: "offline".into(),
+        device: "card".into(),
+    };
+    let t0 = Instant::now();
+    let bus = Bus::open(key, Arc::new(backend.clone()), CONFIG, 4, MIXER, TIMING, t0);
+    assert_eq!(bus.config().buffer_frames, 480, "asked for");
+    assert_eq!(bus.buffer_frames(), 2048, "the device's default");
 }

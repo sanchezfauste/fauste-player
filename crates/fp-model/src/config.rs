@@ -546,6 +546,32 @@ impl OutputsConfig {
         devices
     }
 
+    /// Removes the routes of players not in `players`: a removed player's
+    /// id is never used again, so its routes would only keep its devices
+    /// counted as routed.
+    pub fn forget_routes_of_other_players(&mut self, players: &[PlayerId]) {
+        self.routes.retain(|r| players.contains(&r.player));
+    }
+
+    /// Removes the own rate and buffer, the bit-perfect switch and the DSD
+    /// mode of every device no route names (operator feedback 4, Q12): a
+    /// device that leaves every route may never come back, so its settings
+    /// are not kept, and a device routed again starts from the global
+    /// values. Settings shows these only next to a routed device, so
+    /// nothing hidden is lost. Silent, like an empty entry's removal.
+    /// Only on load (`fp-store`): Settings applies every route click at
+    /// once, so a device can leave every route for a moment.
+    pub fn forget_unrouted_devices(&mut self) {
+        let routed = self.routed_devices();
+        self.device_overrides.retain(|o| routed.contains(&o.device));
+        self.bit_perfect.retain(|d| routed.contains(d));
+        self.dsd_output.retain(|d| {
+            routed
+                .iter()
+                .any(|r| r.backend == d.backend && r.device == d.device)
+        });
+    }
+
     /// Whether the Advanced view holds anything that applies (operator
     /// feedback 4, Q12): a routed device that is bit-perfect or has its own
     /// rate or buffer, or a DSD setting away from its default. The Basic

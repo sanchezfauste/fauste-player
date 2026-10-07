@@ -41,6 +41,7 @@ const CONFIG: StreamConfig = StreamConfig {
     channels: 2,
     exclusive: false,
     dsd: None,
+    exact_buffer: false,
 };
 
 /// Waits until `ok`, pumping `drive` (for backends rendered on demand).
@@ -179,6 +180,7 @@ fn native_dsd_on_a_real_device() {
             channels: 2,
             exclusive: true,
             dsd: Some(fp_backends::dsd::DsdStream::Native),
+            exact_buffer: false,
         };
         let stream = backend
             .open_output(

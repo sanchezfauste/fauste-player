@@ -94,8 +94,9 @@ impl EngineSettings {
                 .collect(),
             // Only devices a route names: Settings shows no row for any
             // other, so the system-default output opens at the global
-            // values. A stale override stays in the configuration and
-            // applies again when its device is routed.
+            // values. The store drops the settings of a device no route
+            // names only on load (`forget_unrouted_devices`), so a device
+            // unrouted since the start still has them here.
             device_streams: config
                 .outputs
                 .routed_devices()
@@ -923,12 +924,12 @@ impl Engine {
             .max(1)
     }
 
-    /// The block size `bus` asks its device for.
+    /// The block size `bus` runs with (`Bus::buffer_frames`), else the one
+    /// it will ask its device for.
     fn buffer_of(&self, bus: &BusKey) -> u32 {
-        self.buses.get(bus).map_or_else(
-            || self.settings.buffer_for(bus),
-            |b| b.config().buffer_frames,
-        )
+        self.buses
+            .get(bus)
+            .map_or_else(|| self.settings.buffer_for(bus), Bus::buffer_frames)
     }
 
     /// `ms` milliseconds in frames of `bus`.
@@ -1062,12 +1063,16 @@ impl Engine {
             let channels = self.channels_for(key);
             let t = &self.settings.tuning;
             let rate = self.settings.rate_for(key);
+            let buffer = self.settings.buffer_for(key);
             let config = StreamConfig {
                 sample_rate: rate,
-                buffer_frames: self.settings.buffer_for(key),
+                buffer_frames: buffer,
                 channels,
                 exclusive: self.settings.bit_perfect.contains(key),
                 dsd: None,
+                // A device's own buffer it does not take falls back to the
+                // global one (`pcm_fallback`), not to the device's default.
+                exact_buffer: buffer != self.settings.buffer_frames,
             };
             // Lengths in this bus's frames.
             let mixer = MixerConfig {
@@ -1085,13 +1090,14 @@ impl Engine {
                 ),
             };
             let mut bus = Bus::open(key.clone(), backend, config, 8, mixer, timing, now);
-            if rate != self.settings.sample_rate {
-                // A device's own rate it no longer takes (another DAC, a
-                // changed driver) must not leave it silent for good: the
-                // watchdog falls back to the global values.
+            if rate != self.settings.sample_rate || buffer != self.settings.buffer_frames {
+                // A device's own rate or buffer it no longer takes (another
+                // DAC, a changed driver) must not leave it silent for good:
+                // the watchdog falls back to the global values.
                 bus.set_pcm_fallback(StreamConfig {
                     sample_rate: self.settings.sample_rate,
                     buffer_frames: self.settings.buffer_frames,
+                    exact_buffer: false,
                     ..config
                 });
             }
