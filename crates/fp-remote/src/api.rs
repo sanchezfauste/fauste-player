@@ -167,16 +167,25 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
             let pl = player(p)?;
             // Operator feedback 4, Q8 (rule 3a): a stopped player's seek
             // sets where Play starts its next.
-            let entry = if pl.transport == Transport::Stopped {
-                pl.next
-            } else {
-                pl.current
-            };
+            let stopped = pl.transport == Transport::Stopped;
+            let entry = if stopped { pl.next } else { pl.current };
             let track = entry
                 .and_then(|e| state.track_for_entry(e))
                 .ok_or_else(|| ApiError::Unavailable("nothing to seek".to_owned()))?;
+            // Rule 3a stores no start for a next that cannot be played...
+            if stopped && !track.file_state.is_playable() {
+                return Err(ApiError::Unavailable(
+                    "the next track cannot be played".to_owned(),
+                ));
+            }
             let range = track.play_range(state.config.players.use_cue_markers);
             let (from, to) = (range.cue_in, range.cue_out);
+            // ...nor one at its end, where Play would end it at once.
+            if stopped && !(secs >= from && secs < to) {
+                return Err(ApiError::BadRequest(format!(
+                    "secs must be within {from}..{to}"
+                )));
+            }
             if !(secs >= from && secs <= to) {
                 return Err(ApiError::BadRequest(format!(
                     "secs must be within {from}..={to}"

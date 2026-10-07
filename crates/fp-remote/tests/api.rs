@@ -295,6 +295,43 @@ fn seek_on_a_stopped_player_sets_where_play_starts_its_next() {
     assert_eq!(plan(&s, O::Seek(p, 10.0)).unwrap_err().status(), 409);
 }
 
+/// Rule 3a stores nothing for a start at or past the end of the next's
+/// play range, so the seek is refused instead of answering success.
+#[test]
+fn seek_on_a_stopped_player_at_the_end_of_its_next_is_a_bad_request() {
+    let s = demo_state();
+    let p = s.players[0].id;
+    let next = s.player(p).unwrap().next.unwrap();
+    let end = s
+        .track_for_entry(next)
+        .unwrap()
+        .play_range(s.config.players.use_cue_markers)
+        .cue_out;
+    let e = plan(&s, O::Seek(p, end)).unwrap_err();
+    assert_eq!(e.status(), 400);
+    assert_eq!(e.code(), "bad_request");
+    assert!(plan(&s, O::Seek(p, end - 1.0)).is_ok());
+}
+
+/// Rule 3a stores nothing for a next whose file cannot be played, so the
+/// seek is refused as unavailable.
+#[test]
+fn seek_on_a_stopped_player_whose_next_cannot_be_played_is_a_conflict() {
+    for state in [
+        fp_model::FileState::Missing,
+        fp_model::FileState::Unreadable,
+    ] {
+        let mut s = demo_state();
+        let p = s.players[0].id;
+        let next = s.player(p).unwrap().next.unwrap();
+        let track = s.playlists.entry(next).unwrap().track;
+        s.library.get_mut(track).unwrap().file_state = state;
+        let e = plan(&s, O::Seek(p, 10.0)).unwrap_err();
+        assert_eq!(e.status(), 409, "{state:?}");
+        assert_eq!(e.code(), "unavailable");
+    }
+}
+
 #[test]
 fn seek_bounds_follow_the_play_range() {
     let mut s = demo_state();
