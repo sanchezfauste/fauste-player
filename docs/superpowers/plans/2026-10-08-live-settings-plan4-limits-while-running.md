@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024, `fp-analysis`, `fp-app` (services, remote bridge, crash hook).
 
-**Spec:** `docs/superpowers/specs/2026-10-07-live-settings-design.md` §6 (and the whole spec for context). Independent of plans 2 and 3; needs plan 1 only for the L18/L19 rows of §6, which plan 1 already implements.
+**Spec:** `docs/superpowers/specs/2026-10-07-live-settings-design.md` §6 (and the whole spec for context). Independent of plans 2 and 3; needs nothing from plan 1. Rules L18 and L19 (player and cart-grid limit reductions) are dropped by the maintainer's ruling of 2026-10-08 (limits never change while the application runs); the §6 rows for `max_players` and the cart grid need no work here.
 
 ## Global Constraints
 

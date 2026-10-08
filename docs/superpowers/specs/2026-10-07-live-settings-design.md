@@ -52,7 +52,7 @@ and the relaunch) is no longer needed and is removed (§9.4, Q2).
 | **Device settings** | `DeviceSettings { sample_rate, buffer_frames, bit_perfect, dsd: DsdOutput, dsd_mix: Option<DsdMix>, dsd_silence_ms: Option<f64> }`: everything a device's stream depends on (L4). |
 | **Running** | The value the engine runs with now. **Wanted**: the value of the current `Config`. |
 | **Item** | One pending change: a device, a holder's route, the audio system, the player limit or one cart page (§4.2). |
-| **Cause** | Why an item waits: `BusyCause::{PlayerPlaying, PlayerFading, PlayerCue}(PlayerId)`, `CartPlaying(CartId)`, `CartCue(CartId)`; for limit reductions only, `PlayerPaused(PlayerId)` and `CartsBeyondGrid { page, count }`. |
+| **Cause** | Why an item waits: `BusyCause::{PlayerPlaying, PlayerFading, PlayerCue}(PlayerId)`, `CartPlaying(CartId)`, `CartCue(CartId)`. |
 | **Quiet** (engine) | A bus with no audible source: no started, unpaused source (current, outgoing or CUE), no cart source and no test tone. Paused and waiting sources are quiet. |
 
 ## 4. The pending-change model
@@ -90,8 +90,6 @@ failure: Option<String> }`, in this order:
 | `AudioSystem` | `live.audio_system != config.outputs.backend` | every cause of every holder (L7) |
 | `Route(h)` for each `h` in `live.routes` | `live.routes[h] != config route of h` | the cause of `h` only (L6) |
 | `Device(d)` for each device in use | `live.devices[d] != device_settings(&config.outputs, d)` | the causes of every holder placed on `d` (L5) |
-| `Players` | `players.len() > config.limits.max_players` | for each excess player that is not removable (L18): its L1 cause, else `PlayerPaused` |
-| `CartPage(p)` for each page over the grid limit | `p.rows > max_cart_rows` or `p.cols > max_cart_cols` | `CartPlaying`/`CartCue` of carts on `p`, and `CartsBeyondGrid` (L19) |
 
 A device not in use is never pending: it opens with the wanted values
 when first used (L13). A holder the engine has not reported yet (a player
@@ -150,8 +148,7 @@ configuration (L13).
   `live.devices`) and removes `failures[target]`.
 - **L9** In one step, actions go in this order: `ApplyAudioSystem`, then
   `ApplyRoute` (holders in display order, then the cartwall), then
-  `ApplyDevice`. Limit reductions (L18, L19) run in the same step, in the
-  reducer itself.
+  `ApplyDevice`.
 - **L10** `UpdateConfig` also emits `EngineAction::UpdateSettings(Box<Config>)`
   when `outputs` or `tuning` changed: the engine's target for new buses and
   new holders (L13) and the live tuning (§7). It changes no open bus.
@@ -215,31 +212,19 @@ configuration (L13).
   output) as L16 does, closes unused buses, and reports
   `AudioSystemInUse` and `Applied`. Routes that name a backend keep it.
 
-### 5.4 Limit reductions
+### 5.4 Limit reductions (L18, L19: dropped)
 
-- **L18** *(limits, players)* When `max_players` drops below
-  `players.len()`, `players.count` is clamped at once (`Config::validate`)
-  and the excess players are removed **from the end only**: while the last
-  player is beyond the limit and removable (`transport == Stopped` and
-  `cue.is_none()`), it is removed (`EngineAction::RemovePlayer`). A
-  removable player before a non-removable one waits, so the players kept
-  are always the first `max_players`. `update_config` no longer refuses with
-  `PlayerBusy` for this. (Paused counts as not removable: removing it would
-  lose what is paused on air, O6.)
-- **L19** *(limits, cart grid)* For each page with `rows > max_cart_rows`
-  or `cols > max_cart_cols`, the target is `(min(rows, max_rows),
-  min(cols, max_cols))`. The page is resized (`resize_page`) when no cart
-  of the page is playing or in CUE and no cart at an index ≥ target rows ×
-  cols has a file. Otherwise it waits; `CartsBeyondGrid { page, count }`
-  names how many carts with files must be cleared or moved first. Nothing
-  drops a cart with a file by itself.
+**L18** (players beyond a lower `max_players`) and **L19** (cart pages
+beyond a lower grid limit) are **out of scope** (maintainer ruling
+2026-10-08): limits never change while the application runs, so the rules
+would be unreachable. They are built when limits can change live. The
+numbers stay reserved.
 
 ### 5.5 Apply now
 
 - **L20** `Command::ApplySettingsNow` emits every pending output-side item
   (audio system, routes, devices, including failed ones) with `force:
-  true`, ignoring causes. It never forces L18 or L19: those would stop
-  audio for good or lose carts, not interrupt it briefly.
+  true`, ignoring causes.
 - **L21** Forced apply on a sounding bus: the busy budget is none, the
   stream gap lasts one reopen; sources that were playing are opened again
   at their position and resume as soon as they are ready (as after a
@@ -252,7 +237,7 @@ configuration (L13).
 
 ### 5.6 Other limits and persistence
 
-- **L23** Every other limit applies at once (§6), and every increase
+- **L23** Every limit applies at once (§6), and every increase
   applies at once.
 - **L24** Nothing pending is saved. The configuration is saved as today;
   the next start opens everything with it, so nothing is pending after a
@@ -264,8 +249,8 @@ configuration (L13).
 
 | Field | Today | Live behaviour |
 |---|---|---|
-| `max_players` | read by the reducer; reduction refused if a player beyond is busy | increase at once; reduction by L18 |
-| `max_cart_rows`, `max_cart_cols` | read live by the reducer, Settings and the remote API; pages repaired only on load | increase at once (new grids may be larger); reduction by L19; `cartwall.default_rows/cols` clamped at once |
+| `max_players` | read by the reducer; reduction refused if a player beyond is busy | limits never change while running (L18 dropped) |
+| `max_cart_rows`, `max_cart_cols` | read live by the reducer, Settings and the remote API; pages repaired only on load | increase at once (new grids may be larger); `cartwall.default_rows/cols` clamped at once; a page larger than the new limit is not resized (L19 dropped) |
 | `max_cover_bytes`, `max_cover_pixels` | copied into the analyzer, its cache and the remote's cache reader at start | services forward the new `Limits` to the analyzer (`Analyzer::update_limits`, like `update_settings`) and its cache; the remote reads them from the model snapshot per request. Applies to analyses started after; the library is not analysed again (cache entries keyed by the old limits simply miss). |
 | `max_tag_chars`, `max_tag_values` | analyzer copy; tag editor reads live | as above for the analyzer; existing tags are not trimmed again |
 | `max_state_file_bytes`, `backup_count` | read from `state.config` at each save | already live; no change |
@@ -330,15 +315,11 @@ rate change converts them with the existing `Mixer::follow_rate`.
 | `pending-device` | "{device}: {changes}" — changes as "sample rate 48 → 96 kHz", "buffer 512 → 256", "bit-perfect on", "DSD: DoP", "DSD mix", "DSD silence 200 → 400 ms" |
 | `pending-route` | "{holder} → {device}" (holder: "P{n} Main", "P{n} CUE", "Cartwall Main", "Cartwall CUE") |
 | `pending-audio-system` | "Audio system: {from} → {to}" |
-| `pending-players` | "Players: {from} → {to}" |
-| `pending-cart-page` | "Cart page “{name}”: {rows}×{cols} → {r}×{c}" |
-| `pending-waiting` | "waiting for {causes}" — causes as "P{n} playing", "P{n} fading", "P{n} CUE", "P{n} paused", "cart “{name}” playing", "cart “{name}” CUE", "{count} carts beyond the new grid" |
+| `pending-waiting` | "waiting for {causes}" — causes as "P{n} playing", "P{n} fading", "P{n} CUE", "cart “{name}” playing", "cart “{name}” CUE" |
 | `pending-failed` | "{device} did not take {what}: {reason}. Still {running}." |
-| `pending-cart-grid-on-load` | "If the application starts before this is applied, carts beyond the new grid are dropped." |
 | `settings-apply-now` | "Apply now" |
 | `apply-now-title` | "Apply now?" |
 | `apply-now-body` | "Applying now briefly interrupts the audio on:" then one line per device: "{device}: {causes}" |
-| `apply-now-limits` | "Player and cart page limits keep waiting until what they affect is free." (shown when such items exist) |
 | `apply-now-confirm` | "Interrupt and apply" |
 
 Device names come from the device list Settings already enumerates on a
@@ -370,8 +351,7 @@ follows `live.audio_system_in_use`.
 Station configuration stays a non-goal of the remote API (remote spec §1):
 no endpoint, SSE event or OSC address is added, and neither the API nor
 MIDI can apply settings. What a live change does is published by the
-existing paths: a player removed by L18 as any change of the player
-count, a page resized by L19 as a `cartwall` event. See Q3.
+existing paths: See Q3.
 
 ## 11. Testing
 
@@ -380,7 +360,7 @@ nothing sleeps.
 
 | Layer | Tests |
 |---|---|
-| `fp-model` (`tests/live.rs`) | One test per rule L1–L10, L18–L20, L22–L24: causes per holder state (paused not busy), device causes, route waits on its holder only, audio system waits on all, `device_settings` ignores DSD mix on a PCM device, `due` skips in-flight and failed values, order of actions, `ApplySettingsNow` forces only output items, player removal from the end only, page shrink blocked by a file beyond the grid, other limits at once. Placement is fed with synthetic `Placed` events. |
+| `fp-model` (`tests/live.rs`) | One test per rule L1–L10, L20, L22–L24: causes per holder state (paused not busy), device causes, route waits on its holder only, audio system waits on all, `device_settings` ignores DSD mix on a PCM device, `due` skips in-flight and failed values, order of actions, `ApplySettingsNow` forces only output items, every limit at once. Placement is fed with synthetic `Placed` events. |
 | `fp-engine` (`tests/live_settings.rs`) | L11: an apply waits for a fade tail and a test tone, then runs. L12: `OfflineDevice::config()` after each change kind; a paused source keeps its position and stays paused at the new rate; a bit-perfect rate change opens nothing (`open_attempts` unchanged). L13: an unused bus closes (`is_open` false). L14: `refuse_rate` → running config back, `Err` reported; `set_busy` beyond the budget → same. L15: `unplug` → bus `Lost` with the new config, `replug` → opens it. L16/L17: a holder moved keeps its paused source; an audio system switch moves only default-output holders. L21: forced apply on a playing source resumes it; nothing paused starts. |
 | `fp-engine` (`tests/mixer.rs`, `audio_path_audit.rs`) | `BusCommand::Tune` changes the declick and smoothing lengths from the next block; the audit covers it (no allocation on the callback). `Bus::set_timing` changes the watchdog timeout. |
 | `fp-engine` (`tests/conductor.rs`) | End to end: a rate change while P1 plays waits; Stop P1 → applied on the next tick; `conductor_tick_ms` change honoured. |
@@ -437,7 +417,8 @@ wins.
    pending. Setting it "at start, from `config.outputs.backend`" would make
    a model without an engine (the model and interface tests) see a pending
    change whenever its backend is edited.
-2. **No `live.limits` (§4.1).** No rule reads it: L18 and L19 compare the
+2. **No `live.limits` (§4.1).** No rule reads it (L18 and L19 are dropped, see
+   item 13); if they are built, they compare the
    model (players, pages) with `config.limits`.
 3. **Causes are a list (L1).** `fp_model::live::causes(state, holder) ->
    Vec<BusyCause>`: the cartwall's Main has one cause per playing cart.
@@ -464,14 +445,25 @@ wins.
    route or the audio system always applies). `apply-now-line` ("{device}:
    {causes}") and `holder-player-main`, `holder-player-cue`,
    `holder-cartwall-main`, `holder-cartwall-cue` are added. **Apply now** is
-   offered only while an output item is pending: limit items alone give it
-   nothing to apply.
+   offered only while an output item is pending.
 10. **Tick period test (§11).** `conductor_tick_ms` is tested through
     `Conductor::tick_period()`, read before every sleep; no test times a
     thread.
 11. **`EngineEvent` is no longer `Copy` or `Eq`.** It carries routes,
     devices and `DeviceSettings` (an `f64`).
-12. **Limits are not reachable from the interface yet (§13).** L18 and L19
-    are implemented and tested in the model, but nothing changes limits
-    while running, so the user guide does not describe them.
-
+12. **Limits are not reachable from the interface yet (§13).** Nothing
+    changes limits while running, so the user guide does not describe
+    them.
+13. **L18 and L19 are out of scope (maintainer ruling, 2026-10-08).**
+    Limits never change while the application runs, so the player and
+    cart-grid limit rules (and the `Players` and `CartPage` pending items,
+    `PlayerPaused`, `CartsBeyondGrid`, `pending-players`,
+    `pending-cart-page`, `pending-cart-grid-on-load`, `apply-now-limits`)
+    are not built. They return when limits can change live.
+14. **Pending panel and confirmation (maintainer, 2026-10-08, approved).**
+    The pending panel and the Apply-now confirmation are separate pop-up
+    windows; the pill opens the panel.
+15. **`pending-failed` drops `{running}` (maintainer, 2026-10-08,
+    approved).** Route and audio-system failures do not name the running
+    value, so the message ends after the reason; the new `pending-running`
+    key of item 9 is only for a device refusal where it applies.

@@ -2,13 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Put the live-settings rules (L1–L10, L18–L20, L22–L24) in `fp-model` as pure functions over a runtime `AppState::live`, with the new engine vocabulary (`Placed`, `Unplaced`, `Gone`, `AudioSystemInUse`, `Applied`; `UpdateSettings`, `ApplyAudioSystem`, `ApplyRoute`, `ApplyDevice`; `Command::ApplySettingsNow`).
+**Goal:** Put the live-settings rules (L1–L10, L20, L22–L24; L18 and L19 are dropped, see the ruling below) in `fp-model` as pure functions over a runtime `AppState::live`, with the new engine vocabulary (`Placed`, `Unplaced`, `Gone`, `AudioSystemInUse`, `Applied`; `UpdateSettings`, `ApplyAudioSystem`, `ApplyRoute`, `ApplyDevice`; `Command::ApplySettingsNow`).
 
-**Architecture:** A new module `fp_model::live` holds the types (`Holder`, `DeviceSettings`, `Target`, `Wanted`, `BusyCause`, `LiveSettings`, `Pending`) and the rules (`causes`, `device_causes`, `pending`, `due`, `interruptions`, the limit reductions). The reducer feeds `live` from engine events and, at the end of every `apply` and `on_event`, enforces the limit reductions and emits the output changes that are due. The engine only gets the new action variants as no-ops here (plans 2 and 3 make it report and apply); since it reports nothing yet, nothing is ever due at run time after this plan, and the restart notice of feedback 2 O4 keeps working until plan 5.
+**Architecture:** A new module `fp_model::live` holds the types (`Holder`, `DeviceSettings`, `Target`, `Wanted`, `BusyCause`, `LiveSettings`, `Pending`) and the rules (`causes`, `device_causes`, `pending`, `due`, `interruptions`). The reducer feeds `live` from engine events and, at the end of every `apply` and `on_event`, emits the output changes that are due. The engine only gets the new action variants as no-ops here (plans 2 and 3 make it report and apply); since it reports nothing yet, nothing is ever due at run time after this plan, and the restart notice of feedback 2 O4 keeps working until plan 5.
 
 **Tech Stack:** Rust 2024, `fp-model` (no I/O, no threads), `std::collections::BTreeMap`.
 
 **Spec:** `docs/superpowers/specs/2026-10-07-live-settings-design.md` (read it whole, including §14 and the "Planning notes" added on 2026-10-08).
+
+**Maintainer ruling (2026-10-08), binding:** rules L18 and L19 (the player and cart-grid limit reductions) are dropped: limits never change while the application runs, so they are unreachable. Task 6 is not built; `PendingItem::{Players, CartPage}`, `BusyCause::{PlayerPaused, CartsBeyondGrid}` and `enforce_limits` do not exist; `UpdateConfig` keeps its existing `PlayerBusy` refusal. Where a step below still mentions them, ignore that part (the ledger lists each deviation).
 
 ## Global Constraints
 
@@ -26,7 +28,7 @@
 1. **A player removed while the engine still knows its holders** (the `Gone` event arrives a tick after `RemovePlayer`): `pending` must not list a route or cause for a player that is no longer in `state.players`. Test: Task 4, `a_removed_player_is_never_pending`.
 2. **An `Applied` for an older value after the operator changed the setting again**: the newer value stays in flight and the running value is the one the engine took. Test: Task 5, `l8_an_answer_for_an_older_value_keeps_the_newer_one_in_flight`.
 3. **A device no holder uses any more while its refusal is recorded**: its running settings, in-flight action and failure are forgotten, so a later use starts clean. Test: Task 3, `a_device_no_holder_uses_any_more_is_forgotten_with_its_failure`.
-4. **A lower player limit with the last player busy and an idle one before it**: nothing is removed until the last stops, then both go in the same step. Test: Task 6, `l18_a_busy_last_player_keeps_the_idle_ones_before_it_until_it_stops`.
+4. *(dropped with L18.)*
 5. **A setting changed back while it waits**: the item disappears and no action is sent for it. Test: Task 5, `changing_a_setting_back_while_it_waits_leaves_nothing_pending`.
 
 ---
@@ -41,10 +43,9 @@
 | `crates/fp-model/src/session.rs:173` | `AppState { .. }` literal gets `live` |
 | `crates/fp-model/src/config.rs:305` | `OutputDevice` derives `PartialOrd, Ord` |
 | `crates/fp-model/src/command.rs` | New `EngineEvent`, `EngineAction`, `Command` variants |
-| `crates/fp-model/src/reducer.rs` | Feeds `live` from events; limits and due actions at the end of `apply`/`on_event`; `update_config` (L10, L18) |
+| `crates/fp-model/src/reducer.rs` | Feeds `live` from events; due actions at the end of `apply`/`on_event`; `update_config` (L10) |
 | `crates/fp-engine/src/engine.rs:589` (`execute`) | No-op arms for the new actions (until plans 2 and 3) |
 | `crates/fp-model/tests/live.rs` (new) | One test per rule |
-| `crates/fp-model/tests/editing.rs:224-235,354-364` | Tests of the old `PlayerBusy` refusal on `UpdateConfig` replaced (L18) |
 
 ---
 
@@ -76,7 +77,7 @@ Create `crates/fp-model/tests/live.rs`:
 
 ```rust
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! Live settings spec (2026-10-07): one test per rule L1–L10, L18–L20,
+//! Live settings spec (2026-10-07): one test per rule L1–L10, L20,
 //! L22–L24. The engine is stood in for by the events it reports.
 
 mod common;
@@ -1627,375 +1628,9 @@ EOF
 
 ---
 
-### Task 6: Limit reductions (L18, L19, L23)
+### Task 6: Dropped (L18, L19)
 
-**Files:**
-- Modify: `crates/fp-model/src/live.rs`
-- Modify: `crates/fp-model/src/reducer.rs` (`apply` end, `on_event` end, `update_config` L1080-1106)
-- Modify: `crates/fp-model/tests/editing.rs:354-364` (`a_lower_player_limit_is_refused_while_a_player_it_removes_is_busy`)
-- Test: `crates/fp-model/tests/live.rs`
-
-**Interfaces:**
-- Consumes: `cart_rules::resize_page(state, page, rows, cols) -> Result<(), ModelError>` (`crates/fp-model/src/cart_rules.rs:185`, `pub(crate)`), `PendingItem::{Players, CartPage}` (Task 4).
-- Produces:
-  - `pub(crate) fn enforce_limits(state: &mut AppState, out: &mut Vec<EngineAction>)`
-  - `pending` now ends with the limit items (`Players`, then one `CartPage` per page over the limit, in page order).
-  - `UpdateConfig` no longer refuses with `PlayerBusy` for a lower `max_players`; `config.players.count` becomes `min(count, max_players)` at once.
-
-- [ ] **Step 1: Write the failing tests**
-
-Append to `crates/fp-model/tests/live.rs`:
-
-```rust
-fn players_item(state: &AppState) -> Option<fp_model::Pending> {
-    pending(state)
-        .into_iter()
-        .find(|p| matches!(p.item, PendingItem::Players { .. }))
-}
-
-#[test]
-fn l18_a_lower_player_limit_removes_idle_players_from_the_end_at_once() {
-    let mut s = fixture(3);
-    let last = s.players[3].id;
-    let actions = update(&mut s, |c| c.limits.max_players = 3);
-    assert!(actions.contains(&EngineAction::RemovePlayer { player: last }));
-    assert_eq!((s.players.len(), s.config.players.count), (3, 3));
-    assert!(players_item(&s).is_none());
-}
-
-#[test]
-fn l18_a_busy_last_player_keeps_the_idle_ones_before_it_until_it_stops() {
-    let mut s = fixture(3);
-    let (third, last) = (s.players[2].id, s.players[3].id);
-    apply(&mut s, Command::Play(last)).unwrap();
-    let actions = update(&mut s, |c| c.limits.max_players = 2);
-    assert!(
-        !actions
-            .iter()
-            .any(|a| matches!(a, EngineAction::RemovePlayer { .. }))
-    );
-    assert_eq!((s.players.len(), s.config.players.count), (4, 2));
-    let item = players_item(&s).unwrap();
-    assert_eq!(item.item, PendingItem::Players { from: 4, to: 2 });
-    assert_eq!(item.causes, vec![BusyCause::PlayerPlaying(last)]);
-    let actions = apply(&mut s, Command::Stop(last)).unwrap();
-    assert!(actions.contains(&EngineAction::RemovePlayer { player: last }));
-    assert!(actions.contains(&EngineAction::RemovePlayer { player: third }));
-    assert_eq!(s.players.len(), 2);
-    assert!(players_item(&s).is_none());
-}
-
-#[test]
-fn l18_a_paused_player_beyond_the_limit_is_kept() {
-    let mut s = fixture(3);
-    let last = s.players[3].id;
-    apply(&mut s, Command::Play(last)).unwrap();
-    apply(&mut s, Command::Pause(last)).unwrap();
-    update(&mut s, |c| c.limits.max_players = 3);
-    assert_eq!(s.players.len(), 4, "O6: what is paused on air is not lost");
-    assert_eq!(
-        players_item(&s).unwrap().causes,
-        vec![BusyCause::PlayerPaused(last)]
-    );
-}
-
-fn page_item(state: &AppState) -> Option<fp_model::Pending> {
-    pending(state)
-        .into_iter()
-        .find(|p| matches!(p.item, PendingItem::CartPage { .. }))
-}
-
-#[test]
-fn l19_a_page_over_a_lower_grid_limit_shrinks_when_nothing_is_lost() {
-    let mut s = fixture(0);
-    load_cart(&mut s, 0);
-    update(&mut s, |c| c.limits.max_cart_cols = 4);
-    let page = &s.cartwall.pages[0];
-    assert_eq!((page.rows, page.cols, page.carts.len()), (2, 4, 8));
-    assert!(page_item(&s).is_none());
-    assert_eq!(s.config.cartwall.default_cols, 4, "clamped at once");
-}
-
-#[test]
-fn l19_a_cart_with_a_file_beyond_the_new_grid_keeps_the_page_until_it_is_cleared() {
-    let mut s = fixture(0);
-    let page = s.cartwall.pages[0].id;
-    load_cart(&mut s, 10);
-    update(&mut s, |c| c.limits.max_cart_cols = 4);
-    let item = page_item(&s).unwrap();
-    assert_eq!(
-        item.item,
-        PendingItem::CartPage {
-            page,
-            from: (2, 8),
-            to: (2, 4)
-        }
-    );
-    assert_eq!(
-        item.causes,
-        vec![BusyCause::CartsBeyondGrid { page, count: 1 }]
-    );
-    assert_eq!(s.cartwall.pages[0].cols, 8, "nothing is dropped by itself");
-    apply(&mut s, Command::ClearCartFile { page, index: 10 }).unwrap();
-    assert_eq!(s.cartwall.pages[0].cols, 4);
-    assert!(page_item(&s).is_none());
-}
-
-#[test]
-fn l19_a_playing_cart_keeps_its_page_until_it_stops() {
-    let mut s = fixture(0);
-    let cart = load_cart(&mut s, 0);
-    apply(&mut s, Command::FireCart(cart)).unwrap();
-    update(&mut s, |c| c.limits.max_cart_cols = 4);
-    assert_eq!(
-        page_item(&s).unwrap().causes,
-        vec![BusyCause::CartPlaying(cart)]
-    );
-    apply(&mut s, Command::StopCart(cart)).unwrap();
-    assert_eq!(s.cartwall.pages[0].cols, 4);
-}
-
-#[test]
-fn l23_other_limits_and_every_increase_apply_at_once() {
-    let mut s = fixture(1);
-    report_start(&mut s);
-    let actions = update(&mut s, |c| {
-        c.limits.max_cover_bytes *= 2;
-        c.limits.max_tag_chars *= 2;
-        c.limits.max_players = 32;
-        c.limits.max_cart_rows = 16;
-    });
-    assert!(pending(&s).is_empty());
-    assert!(
-        !actions
-            .iter()
-            .any(|a| matches!(a, EngineAction::UpdateSettings(_))),
-        "limits are not engine settings"
-    );
-    assert_eq!(s.config.limits.max_players, 32);
-}
-```
-
-In `crates/fp-model/tests/editing.rs`, replace the whole test `a_lower_player_limit_is_refused_while_a_player_it_removes_is_busy` (L354-364) with:
-
-```rust
-/// Live settings spec L18: a lower limit waits for the busy player instead
-/// of refusing the change.
-#[test]
-fn a_lower_player_limit_waits_while_a_player_it_removes_is_busy() {
-    let mut state = fixture(1);
-    apply(&mut state, Command::SetPlayerCount(2)).unwrap();
-    let second = state.players[1].id;
-    apply(&mut state, Command::Play(second)).unwrap();
-    let mut config = state.config.clone();
-    config.limits.max_players = 1;
-    apply(&mut state, Command::UpdateConfig(Box::new(config))).unwrap();
-    assert_eq!(state.players.len(), 2);
-    assert_eq!(state.config.limits.max_players, 1);
-    let actions = apply(&mut state, Command::Stop(second)).unwrap();
-    assert!(actions.contains(&EngineAction::RemovePlayer { player: second }));
-    assert_eq!(state.players.len(), 1);
-}
-```
-
-- [ ] **Step 2: Run the tests to verify they fail**
-
-Run: `cargo test -p fp-model --test live --test editing`
-Expected: FAIL: `l18_a_busy_last_player…` (`UpdateConfig` returns `Err(PlayerBusy)`), `l19_…` (pages unchanged), `a_lower_player_limit_waits…`.
-
-- [ ] **Step 3: Write the implementation**
-
-Append to `crates/fp-model/src/live.rs` (add `use crate::cartwall::CartPage; use crate::player::PlayerState;`):
-
-```rust
-/// L18: a player the limit may remove: stopped, without a CUE. A paused
-/// one is kept (removing it would lose what is paused on air, O6).
-fn removable(player: &PlayerState) -> bool {
-    player.transport == Transport::Stopped && player.cue.is_none()
-}
-
-/// L18: why a player beyond the limit is kept: its L1 cause, else paused.
-fn kept_because(player: &PlayerState) -> BusyCause {
-    if player.fading {
-        BusyCause::PlayerFading(player.id)
-    } else if player.transport == Transport::Playing {
-        BusyCause::PlayerPlaying(player.id)
-    } else if player.cue.is_some() {
-        BusyCause::PlayerCue(player.id)
-    } else {
-        BusyCause::PlayerPaused(player.id)
-    }
-}
-
-/// L19: the grid a page shrinks to under the current limits.
-fn grid_target(state: &AppState, page: &CartPage) -> (u16, u16) {
-    let limits = &state.config.limits;
-    (
-        page.rows.min(limits.max_cart_rows),
-        page.cols.min(limits.max_cart_cols),
-    )
-}
-
-/// L19: what keeps `page` from shrinking to `target`: its carts playing or
-/// in CUE, and the carts with a file beyond the new grid.
-fn page_causes(state: &AppState, page: &CartPage, target: (u16, u16)) -> Vec<BusyCause> {
-    let on_page = |id: CartId| page.carts.iter().any(|c| c.id == id);
-    let mut out: Vec<BusyCause> = state
-        .cartwall
-        .playing
-        .iter()
-        .filter(|c| on_page(c.cart))
-        .map(|c| BusyCause::CartPlaying(c.cart))
-        .collect();
-    if let Some(cue) = state.cartwall.cue
-        && on_page(cue)
-    {
-        out.push(BusyCause::CartCue(cue));
-    }
-    let keep = usize::from(target.0) * usize::from(target.1);
-    let count = page
-        .carts
-        .iter()
-        .skip(keep)
-        .filter(|c| c.track.is_some())
-        .count();
-    if count > 0 {
-        out.push(BusyCause::CartsBeyondGrid {
-            page: page.id,
-            count,
-        });
-    }
-    out
-}
-
-/// L18, L19: the limit reductions still waiting.
-fn limit_items(state: &AppState) -> Vec<Pending> {
-    let mut out = Vec::new();
-    let max = state.config.limits.max_players;
-    if state.players.len() > max {
-        let causes = state
-            .players
-            .iter()
-            .skip(max)
-            .filter(|p| !removable(p))
-            .map(kept_because)
-            .collect();
-        out.push(Pending {
-            item: PendingItem::Players {
-                from: state.players.len(),
-                to: max,
-            },
-            causes,
-            failure: None,
-        });
-    }
-    for page in &state.cartwall.pages {
-        let target = grid_target(state, page);
-        if target != (page.rows, page.cols) {
-            out.push(Pending {
-                item: PendingItem::CartPage {
-                    page: page.id,
-                    from: (page.rows, page.cols),
-                    to: target,
-                },
-                causes: page_causes(state, page, target),
-                failure: None,
-            });
-        }
-    }
-    out
-}
-
-/// L18, L19: at the end of every `apply` and `on_event`, the players
-/// beyond `limits.max_players` are removed from the end while the last one
-/// is removable, and each page over the grid limit shrinks once nothing on
-/// it plays and no cart with a file would be dropped. Never forced (L20).
-pub(crate) fn enforce_limits(state: &mut AppState, out: &mut Vec<EngineAction>) {
-    let max = state.config.limits.max_players;
-    while state.players.len() > max {
-        let Some(last) = state.players.last().filter(|p| removable(p)).map(|p| p.id) else {
-            break;
-        };
-        state.players.pop();
-        out.push(EngineAction::RemovePlayer { player: last });
-    }
-    let shrink: Vec<(CartPageId, (u16, u16))> = state
-        .cartwall
-        .pages
-        .iter()
-        .filter_map(|page| {
-            let target = grid_target(state, page);
-            (target != (page.rows, page.cols) && page_causes(state, page, target).is_empty())
-                .then_some((page.id, target))
-        })
-        .collect();
-    for (page, (rows, cols)) in shrink {
-        // Checked above: within the limits, and no cart with a file is
-        // dropped, so it cannot be refused.
-        let _ = crate::cart_rules::resize_page(state, page, rows, cols);
-    }
-}
-```
-
-In `pending`, before the final `out`, add `out.extend(limit_items(state));`.
-
-In `crates/fp-model/src/reducer.rs`:
-- In `apply` and `on_event`, insert `crate::live::enforce_limits(state, &mut out);` just before `fill_empty_next(state);` (both endings edited in Task 5).
-- Replace `update_config` (L1080-1106, doc comment included) with:
-
-```rust
-/// Takes a new configuration, validated. The settings of a device no route
-/// names stay until the next start (`fp-store` drops them on load):
-/// Settings applies every route click at once, so swapping two devices
-/// unroutes one for a moment. The player count only changes through
-/// `SetPlayerCount`, except that it never exceeds a lower
-/// `limits.max_players`: the players above it go as soon as they can
-/// (`live::enforce_limits`, live settings spec L18). A change of the
-/// outputs or the tuning is passed to the engine (L10).
-fn update_config(
-    state: &mut AppState,
-    mut config: Config,
-    out: &mut Vec<EngineAction>,
-) -> Result<(), ModelError> {
-    let _ = config.validate();
-    config.players.count = state
-        .config
-        .players
-        .count
-        .min(config.limits.max_players);
-    if config.outputs != state.config.outputs || config.tuning != state.config.tuning {
-        out.push(EngineAction::UpdateSettings(Box::new(config.clone())));
-    }
-    state.config = config;
-    Ok(())
-}
-```
-
-(`update_config` keeps its `Result` because `RestoreDefaults` uses `?` on it.)
-
-- [ ] **Step 4: Run the tests to verify they pass**
-
-Run: `cargo test -p fp-model`
-Expected: PASS (every model test, including `editing` and `restore`).
-
-- [ ] **Step 5: Run the gate and commit**
-
-Run: `cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace`
-
-```bash
-git add crates/fp-model/src/live.rs crates/fp-model/src/reducer.rs \
-  crates/fp-model/tests/live.rs crates/fp-model/tests/editing.rs
-git commit -m "$(cat <<'EOF'
-feat(model): apply lower player and cart grid limits when it is safe
-
-Live settings spec L18, L19, L23: players beyond a lower limit go from
-the end once stopped, a page shrinks once nothing on it plays and no
-cart with a file would be dropped; a lower limit is no longer refused.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-EOF
-)"
-```
+Dropped by the maintainer ruling above. Only L23 (every other limit applies at once) keeps a test, added in Task 5: `l23_limits_never_make_anything_pending`.
 
 ---
 

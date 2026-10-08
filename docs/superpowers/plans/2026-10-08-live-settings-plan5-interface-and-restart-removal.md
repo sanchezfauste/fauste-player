@@ -10,6 +10,9 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-07-live-settings-design.md` §9, §12, §14 (read it whole, with the "Planning notes"). Plans 1–4 must be merged first (plan 1 gives `pending`, `interruptions`, `has_output_items`, `Command::ApplySettingsNow`; plan 2 the `AudioSystemInUse` report).
 
+
+**Maintainer rulings (2026-10-08), binding:** (1) rules L18 and L19 are dropped: there are no `Players` or `CartPage` pending items, no `PlayerPaused` or `CartsBeyondGrid` causes, and the strings `pending-players`, `pending-cart-page`, `pending-cart-grid-on-load`, `apply-now-limits`, `cause-player-paused` and the grid cause string are not added; ignore every step below that builds them. (2) The pending panel and the Apply-now confirmation are separate pop-up windows; the pill opens the panel. (3) Route and audio-system failures drop the `{running}` part of `pending-failed`.
+
 ## Global Constraints
 
 - All code, identifiers, comments, docs and commit messages in English; never mention other playout or radio-automation products.
