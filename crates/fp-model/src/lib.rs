@@ -62,7 +62,8 @@ pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
 pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
 pub use live::{
-    BusyCause, DeviceSettings, Failure, Holder, LiveSettings, Target, Wanted, device_settings,
+    BusyCause, DeviceSettings, Failure, Holder, LiveSettings, Target, Wanted, causes,
+    configured_route, device_causes, device_settings, holders,
 };
 pub use midi::{MidiAction, MidiBinding, MidiConfig, MidiDevice, MidiTrigger};
 pub use on_air::{OnAir, on_air};

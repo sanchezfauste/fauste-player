@@ -4,9 +4,11 @@
 
 mod common;
 
+use common::{entries, fixture, p0};
 use fp_model::{
-    AppState, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput, LiveSettings, OutputDevice,
-    Route, device_settings,
+    AppState, BusyCause, CartId, Command, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput,
+    Holder, LiveSettings, OutputDevice, Route, TrackAnalysis, apply, causes, device_causes,
+    device_settings,
 };
 
 fn dev(name: &str) -> OutputDevice {
@@ -90,4 +92,97 @@ fn l4_dsd_mix_and_silence_count_only_on_a_device_that_carries_dsd() {
     // A DSD mode on a device that is not bit-perfect is PCM.
     c.outputs.bit_perfect.clear();
     assert_eq!(device_settings(&c.outputs, &dev("dac")).dsd, DsdOutput::Pcm);
+}
+
+/// Gives cart `index` of the first page a 10 s file.
+fn load_cart(state: &mut AppState, index: usize) -> CartId {
+    let page = state.cartwall.pages[0].id;
+    let path = std::path::PathBuf::from(format!("/carts/cart{index}.wav"));
+    apply(state, Command::AssignCartFile { page, index, path }).unwrap();
+    let track = state.cartwall.pages[0].carts[index].track.unwrap();
+    let analysis = TrackAnalysis {
+        duration_secs: 10.0,
+        ..TrackAnalysis::default()
+    };
+    apply(
+        state,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+    state.cartwall.pages[0].carts[index].id
+}
+
+#[test]
+fn l1_a_playing_or_fading_player_is_busy_a_paused_or_loaded_one_is_not() {
+    let mut s = fixture(3);
+    let p = p0(&s);
+    let main = Holder::PlayerMain(p);
+    assert!(causes(&s, main).is_empty(), "stopped with a track loaded");
+    apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(causes(&s, main), vec![BusyCause::PlayerPlaying(p)]);
+    apply(&mut s, Command::Pause(p)).unwrap();
+    assert!(causes(&s, main).is_empty(), "paused is not busy (D2)");
+    apply(&mut s, Command::Pause(p)).unwrap();
+    apply(&mut s, Command::FadeStop(p)).unwrap();
+    assert_eq!(causes(&s, main), vec![BusyCause::PlayerFading(p)]);
+}
+
+#[test]
+fn l1_a_cue_playing_or_held_keeps_the_players_cue_busy() {
+    let mut s = fixture(3);
+    let (p, e) = (p0(&s), entries(&s));
+    apply(&mut s, Command::CueEntry(p, e[1])).unwrap();
+    assert_eq!(
+        causes(&s, Holder::PlayerCue(p)),
+        vec![BusyCause::PlayerCue(p)]
+    );
+    apply(&mut s, Command::SetCuePaused(p, true)).unwrap();
+    assert_eq!(
+        causes(&s, Holder::PlayerCue(p)),
+        vec![BusyCause::PlayerCue(p)],
+        "Q4: a held CUE counts"
+    );
+    assert!(causes(&s, Holder::PlayerMain(p)).is_empty());
+}
+
+#[test]
+fn l1_playing_carts_keep_the_cartwall_main_busy_and_a_cart_cue_its_cue() {
+    let mut s = fixture(0);
+    let (a, b) = (load_cart(&mut s, 0), load_cart(&mut s, 1));
+    apply(&mut s, Command::FireCart(a)).unwrap();
+    apply(&mut s, Command::FireCart(b)).unwrap();
+    assert_eq!(
+        causes(&s, Holder::CartwallMain),
+        vec![BusyCause::CartPlaying(a), BusyCause::CartPlaying(b)]
+    );
+    assert!(causes(&s, Holder::CartwallCue).is_empty());
+    let c = load_cart(&mut s, 2);
+    apply(&mut s, Command::CueCart(c)).unwrap();
+    assert_eq!(causes(&s, Holder::CartwallCue), vec![BusyCause::CartCue(c)]);
+}
+
+#[test]
+fn l2_a_device_collects_the_causes_of_every_holder_placed_on_it() {
+    let mut s = fixture(3);
+    let (p1, p2) = (s.players[0].id, s.players[1].id);
+    // Placements as the engine reports them (Task 3 adds the events).
+    for p in s.players.clone() {
+        s.live
+            .placement
+            .insert(Holder::PlayerMain(p.id), dev("default"));
+        s.live
+            .placement
+            .insert(Holder::PlayerCue(p.id), dev("phones"));
+    }
+    apply(&mut s, Command::Play(p1)).unwrap();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    assert_eq!(
+        device_causes(&s, &dev("default")),
+        vec![BusyCause::PlayerPlaying(p1), BusyCause::PlayerPlaying(p2)]
+    );
+    assert!(device_causes(&s, &dev("phones")).is_empty(), "no CUE");
+    assert!(device_causes(&s, &dev("elsewhere")).is_empty());
 }
