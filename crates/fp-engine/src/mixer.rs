@@ -92,9 +92,10 @@ pub enum BusCommand {
     /// the next block: volume smoothing, de-click length and commands per
     /// block. `config` is in frames of a stream running at `at_rate`; if
     /// the bus reopened at another rate while the command waited in the
-    /// queue, the lengths are scaled to the mixer's current rate. A ramp
-    /// already running keeps its length. Both values are `Copy`: nothing
-    /// is allocated.
+    /// queue, the lengths are scaled to the mixer's current rate. Fades
+    /// and the fail ramp already running keep their length; a volume
+    /// change still being smoothed moves at the new rate from the next
+    /// block. Both values are `Copy`: nothing is allocated.
     Tune { config: MixerConfig, at_rate: u32 },
 }
 
