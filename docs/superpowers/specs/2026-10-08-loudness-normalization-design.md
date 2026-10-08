@@ -1,8 +1,8 @@
 # Loudness Normalization — Design Spec
 
 - **Date:** 2026-10-08
-- **Status:** Draft. The design in §2 is approved by the maintainer
-  (2026-10-08); the open questions in §14 wait for answers.
+- **Status:** Approved for planning. The design in §2 and the answers in
+  §14 are approved by the maintainer (2026-10-08).
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md)
   (§4.3 bus mixer, §6 analysis, §7 persistence, §8.3 main screen, §8.4
   Settings), the [meters spec](2026-09-27-meters-design.md) (M1, M2: the
@@ -32,8 +32,8 @@ automatic gain control and no compressor or limiter.
 | # | Decision |
 |---|---|
 | D1 | A fixed gain per track, measured during analysis. Never an AGC or a compressor. |
-| D2 | The analysis pass measures integrated loudness (EBU R128 / ITU-R BS.1770, gated) and true peak for every file, reusing the R128 code the meter already uses where possible. The result is stored in the analysis cache; `ANALYSIS_VERSION` is bumped. A file that fails measurement degrades to "not measured" with a log line. |
-| D3 | The gain is a pure function in `fp-model`: `target − measured + trim`, limited so that measured true peak + gain ≤ ceiling, and gain ≤ maximum boost. It is fixed when the track is loaded or started and never changes while it sounds. |
+| D2 | The analysis pass measures integrated loudness (EBU R128 / ITU-R BS.1770, gated) and true peak for every file, reusing the R128 code the meter already uses where possible. The result is stored in the analysis cache. A file that fails measurement degrades to "not measured" with a log line. A background loudness-only pass measures the tracks that have no measurement yet (D12). |
+| D3 | The gain is a pure function in `fp-model`: `target − measured + trim`, limited so that a boost never takes the measured true peak above the ceiling, and gain ≤ maximum boost. A cut is never reduced by the ceiling. It is fixed when the track is loaded or started and never changes while it sounds. |
 | D4 | The engine applies one more static per-source gain, multiplied with the fader. It arrives through `BusCommand`; nothing allocates on the device callback (CLAUDE.md rule 5). |
 | D5 | A new configuration section with `normalize`, `target_lufs` (−16), `true_peak_ceiling_dbtp` (−1) and `max_boost_db` (12), each validated with a range. Changes apply to tracks loaded afterwards. |
 | D6 | Per track: exclude it from normalization, or a manual trim in dB, stored with the track's other edits (its markers) and edited where those are edited. |
@@ -41,6 +41,11 @@ automatic gain control and no compressor or limiter.
 | D8 | Bit-perfect and native DSD win: no normalization on such a device, and the interface says so. |
 | D9 | The player shows the applied gain; Settings has a Loudness section; the per-track controls. Remote API and MIDI follow the existing patterns (a state readout at least). Every new string in all 11 locales. |
 | D10 | Rejected: writing normalized copies of files; live AGC. |
+| D11 | `normalize` is off by default (§14, Q1). |
+| D12 | A background loudness-only pass (N6b) measures tracks with no loudness measurement, with no full re-analysis; `ANALYSIS_VERSION` is not bumped (N6). |
+| D13 | The shared K-weighting and true-peak code moves to a new crate `fp-dsp` (N6). |
+| D14 | CUE and pre-listen (player and cart) are normalized exactly like on air (N9). |
+| D15 | Files shorter than 400 ms are not measured: 0 dB and the "not normalized" badge (N5). |
 
 ## 3. Terms
 
@@ -49,7 +54,7 @@ automatic gain control and no compressor or limiter.
 | **Integrated loudness** | ITU-R BS.1770-5 programme loudness of the whole file, in LUFS: K-weighted mean square over 400 ms blocks with 75 % overlap, gated at −70 LUFS (absolute) and −10 LU below the ungated mean (relative). |
 | **True peak** | The largest magnitude of the 4× oversampled signal (BS.1770-5 Annex 2), in dBTP. |
 | **Measurement** | `LoudnessMeasurement { integrated_lufs: Option<f32>, true_peak_dbtp: f32 }`. `integrated_lufs` is `None` when no block passes the absolute gate (a silent file). |
-| **Track loudness** | What the model knows of a track: `Track::loudness: Option<LoudnessMeasurement>`; `None` is **not measured** (not analysed yet, analysed by an earlier version, or the measurement failed). |
+| **Track loudness** | What the model knows of a track: `Track::loudness: Option<LoudnessMeasurement>`; `None` is **not measured** (not analysed yet, not reached by the loudness-only pass yet, shorter than 400 ms, or the measurement failed). |
 | **Loudness edit** | `Track::loudness_edit: LoudnessEdit { excluded: bool, trim_db: f32 }`, the operator's per-track setting. Default: not excluded, 0 dB. |
 | **Holder** | As in the live settings spec §3: `PlayerMain(PlayerId)`, `PlayerCue(PlayerId)`, `CartwallMain`, `CartwallCue`. |
 | **Normalization** | What a source gets, decided by N7: `Normalization { gain_db: f32, status: NormalizationStatus }`. |
@@ -63,9 +68,9 @@ defaults (lenient loading).
 
 | Field | Type | Default | Range in `Config::validate` | Meaning |
 |---|---|---|---|---|
-| `normalize` | `bool` | `false` (Q1) | — | Normalization on or off. |
+| `normalize` | `bool` | `false` (D11) | — | Normalization on or off. |
 | `target_lufs` | `f32` | −16.0 | −36.0 ..= −6.0 | Integrated loudness every track is brought to. |
-| `true_peak_ceiling_dbtp` | `f32` | −1.0 | −12.0 ..= 0.0 | No gain may take the measured true peak above this. |
+| `true_peak_ceiling_dbtp` | `f32` | −1.0 | −12.0 ..= 0.0 | A boost may not take the measured true peak above this; it never cuts a track (N7). |
 | `max_boost_db` | `f32` | 12.0 | 0.0 ..= 24.0 | The largest gain N7 may give (cuts are not limited). |
 | `max_trim_db` | `f32` | 12.0 | 0.0 ..= 24.0 | The per-track trim is limited to ±this (N10). |
 
@@ -83,15 +88,16 @@ defaults (lenient loading).
   it either.
 
 The meter's own `meter.loudness_target_lufs` (−23, the readout's green
-band) stays a separate value (Q4).
+band) stays a separate value, whatever the normalization target (Q4).
 
 ## 5. Measurement (analysis)
 
 - **N4** `analyze_file_cancellable` (`crates/fp-analysis/src/analyze.rs`)
   feeds every decoded stereo block, besides the envelope, to a
-  `LoudnessMeter`: per channel the K-weighting of the meters
-  (`crates/fp-engine/src/kweight.rs`, `KWeighting`) and the true-peak
-  interpolator (`crates/fp-engine/src/truepeak.rs`, `TruePeak`), and the
+  `LoudnessMeter` of `fp-dsp`: per channel the K-weighting of the meters
+  (`KWeighting`, moved from `crates/fp-engine/src/kweight.rs`) and the
+  true-peak interpolator (`TruePeak`, moved from
+  `crates/fp-engine/src/truepeak.rs`), and the
   BS.1770 gating over 400 ms blocks with a 100 ms hop. What is measured is
   what the players play: the stereo downmix `FileDecoder` gives, at the
   file's own rate, both channels weighted 1.0. A damaged stretch that ends
@@ -102,30 +108,74 @@ band) stays a separate value (Q4).
   - None does (digital silence or near it): `integrated_lufs = None`
     (status `Silent` in N7).
   - A file shorter than one gating block (400 ms; short effects on carts)
-    is measured as one block of its own length, then gated the same way
-    (Q7).
+    is not measured (Q7): `loudness = None`, no warning (it is expected),
+    so the track plays at 0 dB with the "not normalized" badge (N7,
+    `NotMeasured`). The loudness-only pass records that it has been
+    tried (N6b) and does not try it again.
   - A non-finite result, or a panic inside the meter, gives no measurement
     (`None` in `TrackAnalysis::loudness`) and a `tracing::warn!` with the
     path; the rest of the analysis is kept (CLAUDE.md rule 9).
 - **N6** `TrackAnalysis` gains `#[serde(default)] loudness:
-  Option<LoudnessMeasurement>`; `ANALYSIS_VERSION` goes from 8 to 9 ("9:
-  integrated loudness and true peak"). The measurement does not depend on
-  `AnalysisSettings` or on `LoudnessConfig`, so the cache key does not
-  change apart from the version, and changing the target never makes the
-  library be analysed again. `Track::apply_analysis` stores the
-  measurement in `Track::loudness`; it never touches `loudness_edit`.
+  Option<LoudnessMeasurement>` and `#[serde(default)] loudness_pass:
+  Option<u32>`, the version of the loudness pass that ran on the file
+  (`LOUDNESS_VERSION`, 1), whatever its outcome. **`ANALYSIS_VERSION` is
+  not bumped** (it stays 8): the measurement is additive, it changes no
+  marker or envelope, so no entry becomes outdated and the library is not
+  offered a full re-analysis. A cache entry written before this work
+  decodes with `loudness = None` and `loudness_pass = None`, which the
+  loudness-only pass (N6b) fills in place under the same key. A later
+  change of the measurement algorithm bumps `LOUDNESS_VERSION` only, which
+  re-runs the loudness-only pass and nothing else. A full analysis (new
+  file, or **Analyse outdated** for a real `ANALYSIS_VERSION` change) also
+  measures loudness and sets `loudness_pass = Some(LOUDNESS_VERSION)`. The
+  measurement does not depend on `AnalysisSettings` or on `LoudnessConfig`,
+  so the cache key does not change and changing the target never makes
+  anything be analysed again. `Track::apply_analysis` stores the
+  measurement in `Track::loudness`; it never touches `loudness_edit`, and
+  a loudness-only result never touches markers.
 
   The DSP shared by the engine and the analysis (`kweight.rs`,
-  `truepeak.rs`) moves to `fp-decode` (module `fp_decode::loudness`; both
-  crates already depend on it and it denies `clippy::indexing_slicing`),
-  and `fp-engine` uses it from there (Q5). The gating integrator is new
-  code in the same module; it allocates only off the device callback (it
-  runs in the analysis pool).
+  `truepeak.rs`) moves to a **new crate `fp-dsp`** (Q5): pure signal
+  processing, no I/O, no dependency on other workspace crates, `unsafe`
+  forbidden and `clippy::indexing_slicing` denied like `fp-engine`. It
+  holds the K-weighting, the true-peak interpolator and the gating
+  integrator (`LoudnessMeter`, new code; it allocates only off the device
+  callback, in the analysis pool). `fp-engine` (the meters) and
+  `fp-analysis` depend on it; `fp-decode` does not change. The workspace
+  `Cargo.toml` members, `deny.toml` if needed and CLAUDE.md "Where things
+  are" gain the crate.
 
-  Tracks analysed by version 8 or earlier become outdated
-  (`services::outdated`) and keep `loudness = None` until the operator
-  analyses them again (the start-up notice and **Settings → Analysis →
-  Analyse outdated**), as for every earlier version bump (Q3).
+- **N6b** The **loudness-only pass** (Q3). When the library is loaded and
+  after each import, the services thread lists the playable tracks with
+  `loudness_pass != Some(LOUDNESS_VERSION)` and queues them in the analysis
+  pool as `AnalysisJob::LoudnessOnly`:
+  - Priority: below every normal analysis job (new files, the operator's
+    **Analyse**, **Analyse outdated**), so it never delays what the
+    operator asked for. It starts only when the normal queue is empty and
+    runs on a bounded share of the analysis pool (at most all but one
+    worker, at least one; the share is derived from the pool size, not a
+    new constant), so the UI and the playback decode path keep their
+    headroom. A track that is loaded in a player or started is not
+    interrupted by it; a job in progress is cancellable like any analysis.
+  - Work: decode the file once (the same `FileDecoder` and downmix as N4)
+    and feed only the `LoudnessMeter`: no envelope, no marker detection,
+    no cover or tag work. It never replaces markers or any operator edit.
+  - Storage: the result (a `LoudnessMeasurement`, or none) and
+    `loudness_pass = Some(LOUDNESS_VERSION)` are written into the existing
+    cache entry (same key, atomic replace). A file with no cache entry yet
+    gets a full analysis in the normal queue instead, which includes
+    loudness. The services thread sends the result to the model like an
+    analysis result (`apply_analysis`-style, loudness fields only); the
+    model stores `Track::loudness` and, by N12, re-preloads the entry
+    waiting to play if its normalization changes. A source on air is never
+    touched (N11).
+  - A failure or a file shorter than 400 ms is recorded with
+    `loudness_pass = Some(..)` and `loudness = None`, so it is not retried
+    on every start; a log line (warn for a failure) names the path.
+  - The pass does not depend on `normalize`: it runs also while
+    normalization is off, so that turning it on finds the library
+    measured. It needs no setting of its own: it is cheap, low priority and
+    always on.
 
 ## 6. The gain (model)
 
@@ -141,12 +191,17 @@ band) stays a separate value (Q4).
   | `integrated_lufs == None` | `Silent` | 0 |
   | otherwise | `Applied { limited }` | `g` below |
 
-  `wanted = target_lufs − integrated_lufs + trim_db`;
-  `g = min(wanted, true_peak_ceiling_dbtp − true_peak_dbtp, max_boost_db)`.
-  `limited` names the bound that won when it is lower than `wanted`
-  (`TruePeak` before `MaxBoost` on a tie), else `None`. The ceiling also
-  cuts a track whose own true peak is above it (Q2). `gain_db` is rounded
-  to 0.01 dB so that equal inputs give equal requests.
+  `wanted = target_lufs − integrated_lufs + trim_db`. The ceiling and the
+  maximum boost only limit boosts (Q2): when `wanted ≤ 0`, `g = wanted`
+  and `limited = None`. When `wanted > 0`,
+  `g = min(wanted, max(0, true_peak_ceiling_dbtp − true_peak_dbtp),
+  max_boost_db)`. `limited` names the bound that won when it is lower than
+  `wanted` (`TruePeak` before `MaxBoost` on a tie), else `None`. So the
+  ceiling never takes a track below `target − measured + trim`: a track
+  whose own true peak is already above the ceiling gets no boost (0 dB at
+  least when `wanted > 0`) and a negative `wanted` is never reduced
+  further. `gain_db` is rounded to 0.01 dB so that equal inputs give equal
+  requests.
 - **N8** `bit_perfect` for a holder is whether the device it plays on is
   bit-perfect: the running settings of its placement
   (`live.devices[live.placement[holder]].bit_perfect`) once the engine has
@@ -163,7 +218,10 @@ band) stays a separate value (Q4).
   it: `Preload`, `StartCurrent`, `Crossfade`, `LoadPaused` (holder
   `PlayerMain`), `StartCue` (`PlayerCue`; a CUE seek reopens the same
   source and keeps its gain, N15),
-  `StartCart` (`CartwallMain`), `StartCartCue` (`CartwallCue`).
+  `StartCart` (`CartwallMain`), `StartCartCue` (`CartwallCue`). The CUE and
+  pre-listen sources are normalized exactly like on air (Q6): the same
+  N7 with the same configuration and track edit; only `bit_perfect` of
+  the CUE holder's own device can make the result differ.
   `AppState::request_from_cue_in` and `request_at` take the holder.
 - **N10** `Command::SetTrackLoudness { track, excluded: bool, trim_db: f32
   }` stores the track's loudness edit. It is refused with
@@ -179,11 +237,11 @@ band) stays a separate value (Q4).
   `LoadPaused`, `StartCue`, `StartCart`, `StartCartCue`) or, for a
   scheduled transition, copied from the preloaded request on
   `TransitionStarted`, and cleared when the source ends. Nothing else
-  changes them: not an analysis result, a configuration change, a loudness
+  changes them: not an analysis or loudness-only result, a configuration change, a loudness
   edit, nor a pending device change applied while the track is paused.
 - **N12** Loaded afterwards. `PlayerState::preloaded` becomes `Option<(
   EntryId, f64, Normalization)>`, so `reconcile` sends a new `Preload` when
-  the normalization of the entry waiting to play changes (an analysis that
+  the normalization of the entry waiting to play changes (an analysis or loudness-only result that
   measured it, `UpdateConfig`, `SetTrackLoudness`, a placement change of
   `PlayerMain`). The preloaded source is not audible, so this is "loaded
   afterwards". A source already started keeps its gain (N11).
@@ -259,8 +317,9 @@ band) stays a separate value (Q4).
   (slider, dBTP), **Maximum boost** (slider, dB), **Maximum trim**
   (slider, dB), a hint "Changes apply to tracks loaded afterwards; what is
   playing keeps its gain.", a line counting tracks not measured
-  (`loudness_unmeasured(state)`: analysed and playable with
-  `loudness == None`) with a pointer to **Analyse outdated**, and
+  (`loudness_unmeasured(state)`: playable with `loudness == None` and
+  `loudness_pass != Some(LOUDNESS_VERSION)`, i.e. still waiting for the
+  pass) saying that the background pass is measuring them, and
   **Restore defaults** (N2). Slider ranges are those of N1.
 
 ### 8.4 Strings (en-US source; es-ES by hand; the other nine locales AI-translated)
@@ -326,10 +385,10 @@ sleeps.
 | Layer | Tests |
 |---|---|
 | `fp-model` (`tests/restore.rs`, new `tests/loudness_config.rs`) | N1: each field clamped with a warning, non-finite → default, a file without `loudness` loads the defaults. N2: Restore defaults resets the section only. N3: `UpdateConfig` with loudness changes only emits `Preload`s (no pending item, no restart reason). |
-| `fp-model` (new `tests/loudness.rs`) | N7: one test per row of the table, the true-peak and max-boost limits (and the tie), a cut not limited by `max_boost_db`, trim added before the limits, rounding. N8: bit-perfect from placement, from the configured route, default output not bit-perfect. N9: every request kind carries the holder's normalization (CUE on a bit-perfect Cue device gets 0 dB while Main gets a gain). N10: refused out of range and non-finite; allowed while playing. N11: an analysis result, a config change and an edit leave `on_air` and the engine untouched while playing; `TransitionStarted` copies the preloaded value. N12: each of the four causes re-preloads the next. N13: `LoadPaused` recomputes. |
-| `fp-model` (`tests/analysis.rs`) | N6: `apply_analysis` stores the measurement and keeps the edit; a version-8 track is not measured. |
-| `fp-decode` (`tests/loudness.rs`) | N4: EBU Tech 3341 / 3342 cases that apply to a file measurement (1 kHz sine at −23 dBFS reads −23.0 LUFS ±0.1 at 44.1 and 48 kHz; the gating cases); true peak of the BS.1770 test signals; the moved K-weighting keeps its existing tests. N5: silence → `None`; a 200 ms file measured as one block; non-finite input does not panic. |
-| `fp-analysis` (`tests/analyze.rs`) | N4–N6: a generated WAV gets a measurement; a cached v9 entry round-trips it; a file truncated mid-stream is measured up to the damage. |
+| `fp-model` (new `tests/loudness.rs`) | N7: one test per row of the table, the true-peak and max-boost limits (and the tie), a cut not limited by `max_boost_db` nor by the ceiling (a −18 LUFS track with a +0.5 dBTP peak and target −16 gets +0 dB, a −10 LUFS track with a +0.5 dBTP peak keeps its −6 dB), a boost with a peak above the ceiling gets 0 dB, trim added before the limits, rounding. N8: bit-perfect from placement, from the configured route, default output not bit-perfect. N9: every request kind carries the holder's normalization; CUE and cart pre-listen get the same gain as on air (Q6), except on a bit-perfect Cue device (0 dB while Main gets a gain). N10: refused out of range and non-finite; allowed while playing. N11: an analysis result, a config change and an edit leave `on_air` and the engine untouched while playing; `TransitionStarted` copies the preloaded value. N12: each of the four causes re-preloads the next. N13: `LoadPaused` recomputes. |
+| `fp-model` (`tests/analysis.rs`) | N6: `apply_analysis` stores the measurement and keeps the edit and the markers; a track without a measurement is `NotMeasured`; a loudness-only result changes no marker; `ANALYSIS_VERSION` stays 8 and a v8 entry is not outdated. |
+| `fp-dsp` (`tests/loudness.rs`) | N4: EBU Tech 3341 / 3342 cases that apply to a file measurement (1 kHz sine at −23 dBFS reads −23.0 LUFS ±0.1 at 44.1 and 48 kHz; the gating cases); true peak of the BS.1770 test signals; the moved K-weighting keeps its existing tests. N5: silence → `None`; a 200 ms file is not measured (`None`, no warning); non-finite input does not panic. |
+| `fp-analysis` (`tests/analyze.rs`, new `tests/loudness_pass.rs`) | N4–N6: a generated WAV gets a measurement; a cache entry round-trips `loudness` and `loudness_pass`; an old entry without them decodes; a file truncated mid-stream is measured up to the damage. N6b: the pass fills the existing entry in place and leaves markers byte-identical; it runs only when the normal queue is empty and yields to a new normal job; a short file or a failure is recorded and not retried; a `LOUDNESS_VERSION` bump re-queues; it runs with `normalize` off. |
 | `fp-engine` (`tests/mixer.rs`, `audio_path_audit.rs`) | N14: a slot attached with +6 dB outputs twice the amplitude and the meter reads it; a fader move keeps the gain; the audit covers `Attach` with a gain (no allocation on the callback). N15: a seek and a forced rate change keep the gain. N16: gain 1 on a bit-perfect bus stays bit-exact; gain ≠ 1 clears the unaltered flag. |
 | `fp-app` kittests (new `tests/loudness_ui.rs`) | N18: each badge and its accessible name; N19: tooltip lines; N20: the Loudness… popup sends `SetTrackLoudness`; N21: the cart dialog does too; N22: the Settings tab updates the config and its sliders keep the ranges. |
 | `fp-remote` (`tests/api.rs`) | N23: the DTO fields for each status; N24: the endpoint, a refused trim and an unknown track. |
@@ -340,14 +399,21 @@ sleeps.
 - `docs/user/settings.md` (the Loudness tab), `docs/user/players.md` (the
   gain badge), `docs/user/markers-and-mixing.md` (the Loudness… popup:
   exclude and trim), `docs/user/cartwall.md` (the cart dialog),
-  `docs/user/bit-perfect.md` (no normalization on bit-perfect devices),
+  `docs/user/bit-perfect.md` (no normalization on bit-perfect devices), `docs/user/analysis.md` or the page that describes analysis (the background loudness measurement),
   `docs/user/remote-control.md` (fields and endpoint).
-- `docs/technical/analysis.md` (measurement, version 9, outdated tracks),
+- `docs/technical/analysis.md` (measurement, the loudness-only pass, `LOUDNESS_VERSION`, `ANALYSIS_VERSION` unchanged),
   `docs/technical/audio-engine.md` (`Attach` gain, gain kept on reopen),
   `docs/technical/persistence.md` (`Track::loudness`,
   `Track::loudness_edit`), `docs/technical/remote-api.md`,
   `docs/technical/ui.md` (badge, popup, Settings tab),
-  `docs/technical/decoding.md` (the `loudness` module).
+  `docs/technical/dsp.md` (new: the `fp-dsp` crate; or a section of
+  `docs/technical/audio-engine.md`) and `docs/technical/README.md` (crate map).
+- `CLAUDE.md` "Where things are": a row `crates/fp-dsp` (K-weighting,
+  true peak, BS.1770 gating: pure signal processing shared by the engine
+  and the analysis), and the safety-lint rule 6 lists `fp-dsp` among the
+  crates that deny `clippy::indexing_slicing`; `AGENTS.md` stays a pointer.
+  Also the workspace `Cargo.toml` and the `README.md` crate overview if it
+  lists crates.
 - Main spec §4.3 (the per-source gain), §6 (the measurement), §8.3 (the
   badge), §8.4 (the Loudness tab); meters spec M1 (the shared module);
   bit-perfect spec B1 (normalization is off on such devices).
@@ -372,34 +438,29 @@ sleeps.
   spec N14), multiplied with the volume; it never changes while the source
   exists."
 - Main spec §6 (analysis): add "Analysis also measures integrated loudness
-  and true peak (loudness normalization spec N4–N6)."
+  and true peak (loudness normalization spec N4–N6); tracks without a
+  measurement get a background loudness-only pass (N6b)."
 - Main spec §8.4: add the Loudness tab.
 
-## 14. Open questions for the maintainer
+## 14. Maintainer decisions (2026-10-08)
 
-- **Q1** `normalize` defaults to **off**, so an upgrade changes nothing on
-  air until the operator turns it on (and an existing library is not
-  measured yet, Q3). On would normalize new installations at once. Off or
-  on?
-- **Q2** N7 follows D3 literally: the ceiling also **cuts** a track whose
-  own true peak is above it (a −18 LUFS track with a +0.5 dBTP peak gets
-  −1.5 dB with a −1 dBTP ceiling). The alternative is to let the ceiling
-  only limit boosts (`g = min(wanted, max(0, ceiling − tp), max_boost)`
-  when `wanted > 0`). Keep the literal rule?
-- **Q3** Bumping `ANALYSIS_VERSION` makes the whole library outdated, and
-  by the existing policy outdated tracks are analysed again only when the
-  operator asks (start-up notice, Settings → Analysis). Until then they are
-  not measured and play at 0 dB with the indicator. Keep this, or run a
-  loudness-only pass automatically in the background (decode only, without
-  replacing markers)?
-- **Q4** The meter's loudness target (`meter.loudness_target_lufs`, −23)
-  stays separate from `loudness.target_lufs` (−16). Should the meter's
-  green band follow the normalization target while normalization is on?
-- **Q5** The shared K-weighting and true-peak code moves to `fp-decode`
-  (module `loudness`). A small new crate (`fp-dsp`) would be cleaner but
-  adds one to the workspace. Which?
-- **Q6** The CUE (player and cart pre-listen) is normalized too, for its
-  own Cue device (N9), so pre-listening sounds as on air. Confirm.
-- **Q7** A file shorter than 400 ms is measured as one block of its own
-  length (N5), outside BS.1770 (which needs one full block). Confirm, or
-  leave such files not measured (0 dB)?
+Answers to the questions raised while writing the spec; binding.
+
+- **Q1** `normalize` defaults to **off**: an upgrade changes nothing on air
+  until the operator turns it on (§4).
+- **Q2** The true-peak ceiling **only limits boosts**: it never cuts a
+  track below `target − measured + trim`, and a negative gain is never
+  reduced further by it (N7).
+- **Q3** A **background loudness-only pass** measures tracks with no
+  loudness measurement, with no full re-analysis. Decision on versions:
+  `ANALYSIS_VERSION` is **not bumped**; a separate `LOUDNESS_VERSION`
+  (with `loudness_pass` in the cache entry) governs the pass, so the
+  library is never made "outdated" by this feature (N6, N6b).
+- **Q4** The meter's −23 LUFS target (`meter.loudness_target_lufs`) stays
+  **separate** from the normalization target (−16).
+- **Q5** The shared K-weighting and true-peak code moves to a **new crate
+  `fp-dsp`** (N6); the crate table in CLAUDE.md is updated (§11).
+- **Q6** CUE and pre-listen (player and cart) are normalized **exactly
+  like on air** (N9).
+- **Q7** Files shorter than 400 ms are **not measured**: 0 dB and the "not
+  normalized" badge (N5).
