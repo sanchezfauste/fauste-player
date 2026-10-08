@@ -1,0 +1,521 @@
+//! Live settings (live settings spec, 2026-10-07): the output settings the
+//! engine still runs with an older value, what keeps each change waiting,
+//! and the engine work that applies a change once it is safe. Everything
+//! here is a pure function of `AppState`; the engine reports what it runs
+//! with through `EngineEvent`s, and `AppState::live` keeps it (runtime
+//! only, never saved: L24).
+
+use std::collections::BTreeMap;
+
+use crate::command::EngineAction;
+use crate::config::{Config, OutputDevice, OutputsConfig, Route};
+use crate::dsd::{DsdMix, DsdOutput};
+use crate::ids::{CartId, PlayerId};
+use crate::player::Transport;
+use crate::state::AppState;
+
+/// One audio path a route places on a device (spec §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Holder {
+    PlayerMain(PlayerId),
+    PlayerCue(PlayerId),
+    CartwallMain,
+    CartwallCue,
+}
+
+/// Everything a device's stream depends on (L4).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DeviceSettings {
+    pub sample_rate: u32,
+    pub buffer_frames: u32,
+    pub bit_perfect: bool,
+    /// `Pcm` unless the device is bit-perfect.
+    pub dsd: DsdOutput,
+    /// Only on a device whose `dsd` is not `Pcm`: elsewhere it changes
+    /// nothing, so it never makes a device pending.
+    pub dsd_mix: Option<DsdMix>,
+    pub dsd_silence_ms: Option<f64>,
+}
+
+/// What one engine action changes. The variant order is the order of L9.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Target {
+    AudioSystem,
+    Route(Holder),
+    Device(OutputDevice),
+}
+
+/// The value an action asks for.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Wanted {
+    AudioSystem(Option<String>),
+    Route(Option<Route>),
+    Device(DeviceSettings),
+}
+
+/// The last value a target refused, and why (L14).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Failure {
+    pub wanted: Wanted,
+    pub reason: String,
+}
+
+/// Why an item waits (spec §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BusyCause {
+    PlayerPlaying(PlayerId),
+    PlayerFading(PlayerId),
+    PlayerCue(PlayerId),
+    CartPlaying(CartId),
+    CartCue(CartId),
+}
+
+/// What the engine runs with, as it reported it (spec §4.1).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LiveSettings {
+    /// The `outputs.backend` the engine runs with; `None` until the engine
+    /// reports it (`AudioSystemInUse`), and then no audio system change is
+    /// pending.
+    pub audio_system: Option<Option<String>>,
+    /// The backend the engine really chose (the status bar's label).
+    pub audio_system_in_use: Option<String>,
+    /// Where each holder with a bus plays.
+    pub placement: BTreeMap<Holder, OutputDevice>,
+    /// The route the engine holds for each holder it knows.
+    pub routes: BTreeMap<Holder, Option<Route>>,
+    /// The running settings of each device in use.
+    pub devices: BTreeMap<OutputDevice, DeviceSettings>,
+    /// Actions sent and not answered yet, with the value asked for.
+    pub in_flight: BTreeMap<Target, Wanted>,
+    /// The last refused value per target.
+    pub failures: BTreeMap<Target, Failure>,
+}
+
+/// L4: the settings `device` opens with under `outputs`.
+pub fn device_settings(outputs: &OutputsConfig, device: &OutputDevice) -> DeviceSettings {
+    let dsd = outputs.dsd_output_for(&device.backend, &device.device);
+    let carries_dsd = dsd != DsdOutput::Pcm;
+    DeviceSettings {
+        sample_rate: outputs.effective_rate(device),
+        buffer_frames: outputs.effective_buffer(device),
+        bit_perfect: outputs.bit_perfect.contains(device),
+        dsd,
+        dsd_mix: carries_dsd.then_some(outputs.dsd_mix),
+        dsd_silence_ms: carries_dsd.then_some(outputs.dsd_silence_ms),
+    }
+}
+
+/// Every holder, in display order: each player's Main then Cue, then the
+/// cartwall's Main and Cue (L9).
+pub fn holders(state: &AppState) -> Vec<Holder> {
+    state
+        .players
+        .iter()
+        .flat_map(|p| [Holder::PlayerMain(p.id), Holder::PlayerCue(p.id)])
+        .chain([Holder::CartwallMain, Holder::CartwallCue])
+        .collect()
+}
+
+/// The route `config` gives `holder`.
+pub fn configured_route(config: &Config, holder: Holder) -> Option<Route> {
+    let outputs = &config.outputs;
+    match holder {
+        Holder::PlayerMain(p) => outputs.player_routes(p).and_then(|r| r.main.clone()),
+        Holder::PlayerCue(p) => outputs.player_routes(p).and_then(|r| r.cue.clone()),
+        Holder::CartwallMain => outputs.cartwall.main.clone(),
+        Holder::CartwallCue => outputs.cartwall.cue.clone(),
+    }
+}
+
+/// L1: why `holder` carries audio now; empty when it does not. A paused
+/// player, a stopped one with a track loaded and a preload carry nothing
+/// (D2); a held CUE does (Q4).
+pub fn causes(state: &AppState, holder: Holder) -> Vec<BusyCause> {
+    match holder {
+        Holder::PlayerMain(id) => state
+            .player(id)
+            .ok()
+            .and_then(|p| {
+                if p.fading {
+                    Some(BusyCause::PlayerFading(id))
+                } else if p.transport == Transport::Playing {
+                    Some(BusyCause::PlayerPlaying(id))
+                } else {
+                    None
+                }
+            })
+            .into_iter()
+            .collect(),
+        Holder::PlayerCue(id) => state
+            .player(id)
+            .ok()
+            .filter(|p| p.cue.is_some())
+            .map(|_| BusyCause::PlayerCue(id))
+            .into_iter()
+            .collect(),
+        Holder::CartwallMain => state
+            .cartwall
+            .playing
+            .iter()
+            .map(|c| BusyCause::CartPlaying(c.cart))
+            .collect(),
+        Holder::CartwallCue => state
+            .cartwall
+            .cue
+            .map(BusyCause::CartCue)
+            .into_iter()
+            .collect(),
+    }
+}
+
+/// Appends the causes of `holders` to `out`, each once.
+fn collect_causes(
+    state: &AppState,
+    holders: impl Iterator<Item = Holder>,
+    out: &mut Vec<BusyCause>,
+) {
+    for holder in holders {
+        for cause in causes(state, holder) {
+            if !out.contains(&cause) {
+                out.push(cause);
+            }
+        }
+    }
+}
+
+/// L2: the causes of every holder placed on `device`. A device is idle
+/// when this is empty.
+pub fn device_causes(state: &AppState, device: &OutputDevice) -> Vec<BusyCause> {
+    let mut out = Vec::new();
+    let on_device = holders(state)
+        .into_iter()
+        .filter(|h| state.live.placement.get(h) == Some(device));
+    collect_causes(state, on_device, &mut out);
+    out
+}
+
+/// Forgets the running settings, in-flight actions and failures of every
+/// device no holder is placed on any more.
+fn forget_unused_devices(live: &mut LiveSettings) {
+    let used: Vec<OutputDevice> = live.placement.values().cloned().collect();
+    live.devices.retain(|d, _| used.contains(d));
+    let unused = |t: &Target| matches!(t, Target::Device(d) if !used.contains(d));
+    live.in_flight.retain(|t, _| !unused(t));
+    live.failures.retain(|t, _| !unused(t));
+}
+
+/// L3: `EngineEvent::Placed`.
+pub(crate) fn placed(
+    state: &mut AppState,
+    holder: Holder,
+    route: Option<Route>,
+    device: OutputDevice,
+    running: DeviceSettings,
+) {
+    let live = &mut state.live;
+    live.placement.insert(holder, device.clone());
+    live.routes.insert(holder, route);
+    live.devices.insert(device, running);
+    forget_unused_devices(live);
+}
+
+/// L3: `EngineEvent::Unplaced`.
+pub(crate) fn unplaced(state: &mut AppState, holder: Holder, route: Option<Route>) {
+    let live = &mut state.live;
+    live.placement.remove(&holder);
+    live.routes.insert(holder, route);
+    forget_unused_devices(live);
+}
+
+/// L3: `EngineEvent::Gone`.
+pub(crate) fn gone(state: &mut AppState, holder: Holder) {
+    let live = &mut state.live;
+    live.placement.remove(&holder);
+    live.routes.remove(&holder);
+    live.in_flight.remove(&Target::Route(holder));
+    live.failures.remove(&Target::Route(holder));
+    forget_unused_devices(live);
+}
+
+/// `EngineEvent::AudioSystemInUse`.
+pub(crate) fn audio_system_in_use(
+    state: &mut AppState,
+    configured: Option<String>,
+    in_use: String,
+) {
+    state.live.audio_system = Some(configured);
+    state.live.audio_system_in_use = Some(in_use);
+}
+
+/// L8, L14: `EngineEvent::Applied`. The action is no longer in flight when
+/// it asked for `wanted` (a newer one stays). On `Ok` the value is the
+/// running one; on `Err` it is recorded as refused and not tried again
+/// until the wanted value changes or the operator presses Apply now.
+pub(crate) fn applied(
+    state: &mut AppState,
+    target: Target,
+    wanted: Wanted,
+    outcome: Result<(), String>,
+) {
+    let live = &mut state.live;
+    if live.in_flight.get(&target) == Some(&wanted) {
+        live.in_flight.remove(&target);
+    }
+    match outcome {
+        Ok(()) => {
+            match (&target, &wanted) {
+                (Target::AudioSystem, Wanted::AudioSystem(backend)) => {
+                    live.audio_system = Some(backend.clone());
+                }
+                (Target::Route(holder), Wanted::Route(route)) => {
+                    if let Some(running) = live.routes.get_mut(holder) {
+                        *running = route.clone();
+                    }
+                }
+                (Target::Device(device), Wanted::Device(settings)) => {
+                    if let Some(running) = live.devices.get_mut(device) {
+                        *running = *settings;
+                    }
+                }
+                _ => {}
+            }
+            live.failures.remove(&target);
+        }
+        Err(reason) => {
+            // A device no holder uses any more was forgotten already.
+            let forgotten = matches!(&target, Target::Device(d) if !live.devices.contains_key(d));
+            if !forgotten {
+                live.failures.insert(target, Failure { wanted, reason });
+            }
+        }
+    }
+}
+
+/// One pending change (spec §4.2), with the value it changes from and to.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PendingItem {
+    AudioSystem {
+        from: Option<String>,
+        to: Option<String>,
+    },
+    Route {
+        holder: Holder,
+        from: Option<Route>,
+        to: Option<Route>,
+    },
+    Device {
+        device: OutputDevice,
+        from: DeviceSettings,
+        to: DeviceSettings,
+    },
+}
+
+impl PendingItem {
+    /// The engine target this change applies to.
+    pub fn target(&self) -> Target {
+        match self {
+            Self::AudioSystem { .. } => Target::AudioSystem,
+            Self::Route { holder, .. } => Target::Route(*holder),
+            Self::Device { device, .. } => Target::Device(device.clone()),
+        }
+    }
+
+    /// The value this change asks for.
+    pub fn wanted(&self) -> Wanted {
+        match self {
+            Self::AudioSystem { to, .. } => Wanted::AudioSystem(to.clone()),
+            Self::Route { to, .. } => Wanted::Route(to.clone()),
+            Self::Device { to, .. } => Wanted::Device(*to),
+        }
+    }
+}
+
+/// A pending item, what it waits for, and why the engine refused its
+/// value last time (only while the same value is wanted).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pending {
+    pub item: PendingItem,
+    pub causes: Vec<BusyCause>,
+    pub failure: Option<String>,
+}
+
+/// L7: the causes of every holder, wherever it plays.
+fn all_causes(state: &AppState) -> Vec<BusyCause> {
+    let mut out = Vec::new();
+    collect_causes(state, holders(state).into_iter(), &mut out);
+    out
+}
+
+/// The devices holders are placed on, each once, in the order of their
+/// first holder in display order.
+fn devices_in_use(state: &AppState) -> Vec<OutputDevice> {
+    let mut out: Vec<OutputDevice> = Vec::new();
+    for holder in holders(state) {
+        if let Some(device) = state.live.placement.get(&holder)
+            && !out.contains(device)
+        {
+            out.push(device.clone());
+        }
+    }
+    out
+}
+
+/// A pending output item, with its failure when the same value was
+/// refused.
+fn output_item(state: &AppState, item: PendingItem, causes: Vec<BusyCause>) -> Pending {
+    let failure = state
+        .live
+        .failures
+        .get(&item.target())
+        .filter(|f| f.wanted == item.wanted())
+        .map(|f| f.reason.clone());
+    Pending {
+        item,
+        causes,
+        failure,
+    }
+}
+
+/// Spec §4.2: every change the engine does not run yet, in L9 order (the
+/// audio system, the routes in display order, the devices). A device no
+/// holder uses is never pending, nor is a holder the engine has not reported (both open with the current configuration,
+/// L13).
+pub fn pending(state: &AppState) -> Vec<Pending> {
+    let mut out = Vec::new();
+    let live = &state.live;
+    let configured = &state.config.outputs.backend;
+    if let Some(running) = &live.audio_system
+        && running != configured
+    {
+        let item = PendingItem::AudioSystem {
+            from: running.clone(),
+            to: configured.clone(),
+        };
+        out.push(output_item(state, item, all_causes(state)));
+    }
+    for holder in holders(state) {
+        let Some(running) = live.routes.get(&holder) else {
+            continue;
+        };
+        let wanted = configured_route(&state.config, holder);
+        if *running != wanted {
+            let item = PendingItem::Route {
+                holder,
+                from: running.clone(),
+                to: wanted,
+            };
+            out.push(output_item(state, item, causes(state, holder)));
+        }
+    }
+    for device in devices_in_use(state) {
+        let Some(running) = live.devices.get(&device) else {
+            continue;
+        };
+        let wanted = device_settings(&state.config.outputs, &device);
+        if *running != wanted {
+            let causes = device_causes(state, &device);
+            let item = PendingItem::Device {
+                from: *running,
+                to: wanted,
+                device,
+            };
+            out.push(output_item(state, item, causes));
+        }
+    }
+    out
+}
+
+/// The engine action that applies an output item.
+fn action_for(item: &PendingItem, force: bool) -> EngineAction {
+    match item {
+        PendingItem::AudioSystem { to, .. } => EngineAction::ApplyAudioSystem {
+            backend: to.clone(),
+            force,
+        },
+        PendingItem::Route { holder, to, .. } => EngineAction::ApplyRoute {
+            holder: *holder,
+            route: to.clone(),
+            force,
+        },
+        PendingItem::Device { device, to, .. } => EngineAction::ApplyDevice {
+            device: device.clone(),
+            settings: *to,
+            force,
+        },
+    }
+}
+
+/// What an `Apply…` action changes and the value it asks for.
+pub fn target_and_wanted(action: &EngineAction) -> Option<(Target, Wanted)> {
+    match action {
+        EngineAction::ApplyAudioSystem { backend, .. } => {
+            Some((Target::AudioSystem, Wanted::AudioSystem(backend.clone())))
+        }
+        EngineAction::ApplyRoute { holder, route, .. } => {
+            Some((Target::Route(*holder), Wanted::Route(route.clone())))
+        }
+        EngineAction::ApplyDevice {
+            device, settings, ..
+        } => Some((Target::Device(device.clone()), Wanted::Device(*settings))),
+        _ => None,
+    }
+}
+
+/// L8: the output items with no cause whose value is neither in flight nor
+/// refused already, in L9 order.
+pub fn due(state: &AppState) -> Vec<EngineAction> {
+    let live = &state.live;
+    pending(state)
+        .iter()
+        .filter(|p| p.causes.is_empty())
+        .map(|p| action_for(&p.item, false))
+        .filter(|action| {
+            target_and_wanted(action).is_some_and(|(target, wanted)| {
+                live.in_flight.get(&target) != Some(&wanted)
+                    && live.failures.get(&target).map(|f| &f.wanted) != Some(&wanted)
+            })
+        })
+        .collect()
+}
+
+/// Sends `action`, recording it in flight.
+fn send(state: &mut AppState, action: EngineAction, out: &mut Vec<EngineAction>) {
+    if let Some((target, wanted)) = target_and_wanted(&action) {
+        state.live.in_flight.insert(target, wanted);
+    }
+    out.push(action);
+}
+
+/// L8: called at the end of every `apply` and `on_event`.
+pub(crate) fn dispatch_due(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    for action in due(state) {
+        send(state, action, out);
+    }
+}
+
+/// L20: every pending output item, forced, including those in flight or
+/// refused.
+pub(crate) fn apply_now(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    let actions: Vec<EngineAction> = pending(state)
+        .iter()
+        .map(|p| action_for(&p.item, true))
+        .collect();
+    for action in actions {
+        send(state, action, out);
+    }
+}
+
+/// L22: the output items Apply now would force that have causes. The UI
+/// asks for confirmation if and only if this is not empty.
+pub fn interruptions(state: &AppState) -> Vec<(Target, Vec<BusyCause>)> {
+    pending(state)
+        .into_iter()
+        .filter(|p| !p.causes.is_empty())
+        .map(|p| (p.item.target(), p.causes))
+        .collect()
+}
+
+/// Whether Apply now has anything to apply: an output item is pending.
+pub fn has_output_items(state: &AppState) -> bool {
+    !pending(state).is_empty()
+}

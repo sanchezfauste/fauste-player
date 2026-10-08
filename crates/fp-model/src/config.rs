@@ -302,7 +302,7 @@ pub struct Route {
 }
 
 /// One output device, as a bit-perfect setting names it (Phase 4 spec B1).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct OutputDevice {
     pub backend: String,
     pub device: String,

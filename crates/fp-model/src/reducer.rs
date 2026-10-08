@@ -315,6 +315,7 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             crate::restore::restore_defaults(&mut config, section);
             update_config(state, config, &mut out)?;
         }
+        Command::ApplySettingsNow => crate::live::apply_now(state, &mut out),
         Command::ResetMarkers { track } => {
             let t = state
                 .library
@@ -327,6 +328,7 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
     }
     fill_empty_next(state);
     reconcile(state, &mut out);
+    crate::live::dispatch_due(state, &mut out);
     Ok(out)
 }
 
@@ -436,9 +438,26 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                 state.players[i].cue = None;
             }
         }
+        EngineEvent::Placed {
+            holder,
+            route,
+            device,
+            running,
+        } => crate::live::placed(state, holder, route, device, running),
+        EngineEvent::Unplaced { holder, route } => crate::live::unplaced(state, holder, route),
+        EngineEvent::Gone { holder } => crate::live::gone(state, holder),
+        EngineEvent::AudioSystemInUse { configured, in_use } => {
+            crate::live::audio_system_in_use(state, configured, in_use)
+        }
+        EngineEvent::Applied {
+            target,
+            wanted,
+            outcome,
+        } => crate::live::applied(state, target, wanted, outcome),
     }
     fill_empty_next(state);
     reconcile(state, &mut out);
+    crate::live::dispatch_due(state, &mut out);
     out
 }
 
@@ -1098,6 +1117,9 @@ fn update_config(
         return Err(ModelError::PlayerBusy(busy.id));
     }
     config.players.count = state.config.players.count;
+    if config.outputs != state.config.outputs || config.tuning != state.config.tuning {
+        out.push(EngineAction::UpdateSettings(Box::new(config.clone())));
+    }
     state.config = config;
     if count < state.players.len() {
         set_player_count(state, count, out)?;
