@@ -323,5 +323,9 @@ fn a_route_edit_keeps_every_devices_settings_until_the_next_start() {
     update(&mut state, |r| r.main = None);
     update(&mut state, |r| r.main = Some(route("dac", 0)));
     assert_eq!(state.config, started);
-    assert!(fp_model::restart_pending(&started, &state.config).is_empty());
+    assert_eq!(
+        fp_model::device_settings(&state.config.outputs, &dev("dac")),
+        fp_model::device_settings(&started.outputs, &dev("dac")),
+        "the device opens as before"
+    );
 }
