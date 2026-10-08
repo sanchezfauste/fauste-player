@@ -1,5 +1,6 @@
-// The language menu in the guide's top bar and, on a translated page, the
-// notice that it was translated with AI. The data (languages, the pages each
+// The language menu in the guide's top bar, the notice on a translated page
+// that it was translated with AI and, on an English page, the jump to the
+// browser's language the first time. The data (languages, the pages each
 // one has, the notice) comes from languages.js, which scripts/site/guide.py
 // generates for every book. Uses no external resources.
 (function () {
@@ -20,6 +21,32 @@
         page += "index.html";
     }
 
+    var STORE = "fauste-player-guide-language";
+
+    function stored() {
+        try {
+            return window.localStorage.getItem(STORE);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function remember(code) {
+        try {
+            window.localStorage.setItem(STORE, code);
+        } catch (e) {
+            // Private window or blocked storage: the ?lang=en flag still works.
+        }
+    }
+
+    // Choosing a language, in the menu or by the notice's link, is final:
+    // the automatic jump never overrides it.
+    function chosen(link, lang) {
+        link.addEventListener("click", function () {
+            remember(lang.code);
+        });
+    }
+
     function href(lang) {
         var base = lang.code === "en" ? guideRoot : new URL(lang.code + "/", guideRoot);
         // A page the other language does not have yet opens its start page.
@@ -27,7 +54,43 @@
         if (lang.pages.indexOf(page) < 0) {
             return new URL("index.html", base).href;
         }
-        return new URL(page + window.location.hash, base).href;
+        var url = new URL(page + window.location.hash, base);
+        // A link to English says so, for browsers that cannot store the choice.
+        if (lang.code === "en") {
+            url.search = "?lang=en";
+        }
+        return url.href;
+    }
+
+    // The first visit to an English page: go to the translation that matches
+    // the browser's languages (the first one that is English or has a
+    // translation decides), unless a language was chosen before or the page
+    // was opened with ?lang=en. Without JavaScript nothing moves.
+    function detect() {
+        if (data.current !== "en") {
+            return;
+        }
+        if (/[?&]lang=en(&|$)/.test(window.location.search)) {
+            remember("en");
+            return;
+        }
+        if (stored()) {
+            return;
+        }
+        var wanted = window.navigator.languages ||
+            (window.navigator.language ? [window.navigator.language] : []);
+        for (var i = 0; i < wanted.length; i++) {
+            var primary = String(wanted[i]).toLowerCase().split(/[-_]/)[0];
+            if (primary === "en") {
+                return;
+            }
+            for (var j = 1; j < data.languages.length; j++) {
+                if (data.languages[j].code === primary) {
+                    window.location.replace(href(data.languages[j]));
+                    return;
+                }
+            }
+        }
     }
 
     // The links that carry the current #anchor; refreshed when it changes.
@@ -74,6 +137,7 @@
             link.lang = lang.code;
             link.hreflang = lang.code;
             link.textContent = lang.name;
+            chosen(link, lang);
             if (lang.code === data.current) {
                 link.setAttribute("aria-current", "true");
             }
@@ -108,10 +172,20 @@
         var main = document.querySelector("#mdbook-content main") || document.querySelector("main");
         // The start page has the notice in its source, which works without
         // JavaScript; do not repeat it there.
-        if (!data.notice || !main || main.querySelector(".ai-notice")) {
+        if (!data.notice || !main) {
             return;
         }
         var english = data.languages[0];
+        var present = main.querySelector(".ai-notice");
+        if (present) {
+            // Its link to English counts as a choice too.
+            Array.prototype.forEach.call(present.querySelectorAll("a"), function (link) {
+                anchored.push({ link: link, lang: english });
+                chosen(link, english);
+            });
+            refresh();
+            return;
+        }
         var box = document.createElement("div");
         box.className = "ai-notice";
         box.setAttribute("role", "note");
@@ -120,11 +194,13 @@
         link.href = href(english);
         link.hreflang = "en";
         anchored.push({ link: link, lang: english });
+        chosen(link, english);
         link.textContent = data.notice.link;
         box.appendChild(link);
         main.insertBefore(box, main.firstChild);
     }
 
+    detect();
     languageMenu();
     notice();
     window.addEventListener("hashchange", refresh);

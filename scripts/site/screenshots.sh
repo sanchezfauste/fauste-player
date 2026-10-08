@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Takes the screenshots of the README and the user guide from a scripted
-# scene, in English, in a virtual X server (Linux):
+# scene, in a virtual X server (Linux):
 #
-#   scripts/site/screenshots.sh [--only main] [--hold]
+#   scripts/site/screenshots.sh [--only main] [--hold] [--lang <locale>] [--out <dir>]
 #
-#   --only main  only the README image (docs/images/main-screen.png)
+#   --only main  only the README image (main-screen.png)
+#   --lang       the interface language, a locale tag of crates/fp-app/locales
+#                (default en-US); the scene's own text (tracks, carts) stays
+#   --out        where the images go: <dir>/main-screen.png and <dir>/guide/*.png
+#                (default docs/images, the committed English set)
 #   --hold       build the scene, then keep the app running until killed
 #                (to look around: the display and port are printed)
 #
 # It builds the release binary and the demo_session example, generates
 # stand-in songs and carts (scripts/site/tones.sh), writes a scratch
-# FAUSTE_HOME (the demo session, and a config.json with ui.language en-US,
+# FAUSTE_HOME (the demo session, and a config.json with ui.language (en-US by default),
 # the remote HTTP API on and every output on the silent "null" backend),
 # starts Xvfb on a free display, starts the app there, waits for the API,
 # builds the scene and captures. Nothing is ever played on a sound card: the
@@ -29,14 +33,21 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 only=all
 hold=false
+lang=en-US
+out=
 while [[ $# -gt 0 ]]; do
     case $1 in
         --only) only=${2:?--only needs a name}; shift 2 ;;
         --hold) hold=true; shift ;;
-        *) echo "usage: screenshots.sh [--only main] [--hold]" >&2; exit 2 ;;
+        --lang) lang=${2:?--lang needs a locale}; shift 2 ;;
+        --out) out=${2:?--out needs a folder}; shift 2 ;;
+        *) echo "usage: screenshots.sh [--only main] [--hold] [--lang <locale>] [--out <dir>]" >&2; exit 2 ;;
     esac
 done
 case $only in all | main) ;; *) echo "screenshots.sh: unknown --only $only" >&2; exit 2 ;; esac
+
+[[ -f $root/crates/fp-app/locales/$lang/main.ftl ]] \
+    || { echo "screenshots.sh: unknown locale $lang (see crates/fp-app/locales)" >&2; exit 2; }
 
 for tool in Xvfb xdotool xwininfo import convert ffmpeg python3 curl; do
     command -v "$tool" >/dev/null || { echo "screenshots.sh: $tool is needed" >&2; exit 1; }
@@ -50,7 +61,9 @@ home=${SHOTS_HOME:-$work/home}
 # the songs are reached through a short neutral link that never names a
 # home folder: SHOTS_MEDIA (default /tmp/fauste-demo) -> the work folder.
 media=${SHOTS_MEDIA:-/tmp/fauste-demo}
-images=$root/docs/images
+images=${out:-$root/docs/images}
+mkdir -p "$images"
+images=$(cd "$images" && pwd)
 guide=$images/guide
 log() { echo "screenshots.sh: $*" >&2; }
 die() { log "$*"; exit 1; }
@@ -177,9 +190,9 @@ write_home() {
     mkdir -p "$home"
     touch "$home/.screenshots-home"
     FAUSTE_HOME=$home "$root/target/release/examples/demo_session" "$media/music" "$media/carts" >&2
-    python3 - "$home" "$port" <<'EOF'
+    python3 - "$home" "$port" "$lang" <<'EOF'
 import json, sys
-home, port = sys.argv[1], int(sys.argv[2])
+home, port, lang = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 path = f"{home}/config/config.json"
 doc = json.load(open(path))
 players = [p["id"] for p in json.load(open(f"{home}/data/session.json"))["players"]]
@@ -189,7 +202,7 @@ c["outputs"]["backend"] = "null"
 c["outputs"]["routes"] = [{"player": p, "main": null(0), "cue": null(2)} for p in players]
 c["outputs"]["cartwall"] = {"main": null(0), "cue": null(2)}
 c["outputs"]["bit_perfect"] = []
-c["ui"]["language"] = "en-US"
+c["ui"]["language"] = lang
 c["remote"]["http"]["enabled"] = True
 c["remote"]["http"]["bind"] = "127.0.0.1"
 c["remote"]["http"]["port"] = port

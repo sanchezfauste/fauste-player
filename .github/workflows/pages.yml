@@ -3,7 +3,8 @@ name: pages
 # Builds the website (the landing page in site/ and the user guide in
 # docs/user, with its translations in docs/i18n, as mdBooks) and deploys it to
 # GitHub Pages. The landing page's download links are filled from the latest
-# release.
+# release. The screenshots of the guide are taken in the app, in English and
+# in every guide language, each time the site is built (never committed).
 #   - push to master touching the site or the guide: build and deploy;
 #   - pull requests touching them: build, check links and translations only;
 #   - release-please calls this workflow after its release build, because
@@ -23,6 +24,7 @@ on:
       - docs/book.toml
       - site/**
       - scripts/site/**
+      - crates/fp-app/locales/**
       - packaging/icons/fauste-player.svg
       - .github/workflows/pages.yml
   pull_request:
@@ -34,6 +36,7 @@ on:
       - docs/book.toml
       - site/**
       - scripts/site/**
+      - crates/fp-app/locales/**
       - packaging/icons/fauste-player.svg
       - .github/workflows/pages.yml
   workflow_dispatch:
@@ -57,10 +60,35 @@ jobs:
           # The translation check compares each translation with the English
           # guide at the commit it was translated from.
           fetch-depth: 0
+      # The screenshots come from the real app on a virtual display with the
+      # silent null audio backend (see scripts/site/screenshots.sh).
+      - name: Install the screenshot tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libasound2-dev libdbus-1-dev xvfb xdotool x11-utils \
+            imagemagick ffmpeg libxkbcommon-x11-0 libgl1 libegl1 libgl1-mesa-dri mesa-vulkan-drivers
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # One release build serves every language. A pull request takes only
+      # the Spanish set, to prove the pipeline without the full cost.
+      # The scratch state lives outside target/: rust-cache restores target/
+      # without the marker that lets screenshots.sh replace it.
+      - name: Take the screenshots
+        env:
+          SHOTS_HOME: ${{ runner.temp }}/shots-home
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            scripts/site/localized-screenshots.sh "$RUNNER_TEMP/shots" es
+          else
+            scripts/site/localized-screenshots.sh "$RUNNER_TEMP/shots"
+          fi
       - name: Build the site
         run: scripts/site/build.sh _site
         env:
           GH_TOKEN: ${{ github.token }}
+          FAUSTE_SHOTS_DIR: ${{ runner.temp }}/shots
       - name: Check links
         run: scripts/site/check-links.sh _site
       - name: Check the translations

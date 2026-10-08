@@ -4,6 +4,11 @@
 # guide under guide/ (each translation under guide/<lang>/) and the
 # screenshots under images/.
 #
+# FAUSTE_SHOTS_DIR names a folder with screenshots taken in each language
+# (<lang>/main-screen.png, <lang>/guide/*.png; see
+# scripts/site/localized-screenshots.sh): each translated book then shows
+# its own, and any it lacks keeps the English one from docs/images.
+#
 # The release comes from `gh release view --json tagName,url,assets`, or from
 # the JSON file named by FAUSTE_RELEASE_JSON (tests, offline builds). Without
 # a release the page is still built, and its download links point at the
@@ -48,6 +53,9 @@ out=$abs
 python3 "$root/scripts/site/guide.py" build "$mdbook" "$out/guide"
 mkdir -p "$out/images"
 cp -R "$root"/docs/images/. "$out/images/"
+if [ -n "${FAUSTE_SHOTS_DIR:-}" ]; then
+    python3 "$root/scripts/site/guide.py" images "$out" "$FAUSTE_SHOTS_DIR"
+fi
 
 cp "$root"/site/* "$out/"
 cp "$root/packaging/icons/fauste-player.svg" "$out/favicon.svg"
