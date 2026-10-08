@@ -15,7 +15,9 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::app::AppUi;
 use fp_app::ui::controller::Controller;
-use fp_model::{AppState, Command, EngineEvent, Holder, OutputDevice, Route, device_settings};
+use fp_model::{
+    AppState, Command, EngineEvent, Holder, OutputDevice, Route, Target, Wanted, device_settings,
+};
 use support::{Fake, harness, state};
 
 const PILL: &str = "Settings pending";
@@ -196,9 +198,6 @@ fn apply_now_in_the_panel_asks_first_and_the_panel_gives_way_to_the_question() {
         "the panel and the question are separate windows"
     );
     assert!(fake.take_sent().is_empty());
-    // The question replaces the panel in one frame; let it settle.
-    h.run_steps(3);
-    assert!(h.query_by_label(CONFIRM).is_some(), "still open");
     h.get_by_label("Interrupt and apply").click();
     h.run_steps(2);
     assert_eq!(fake.take_sent(), vec![Command::ApplySettingsNow]);
@@ -243,4 +242,106 @@ fn the_status_bar_names_the_audio_system_in_use() {
         h.query_by_label(&format!("{os} · No output (silent)"))
             .is_some()
     );
+}
+
+#[test]
+fn apply_now_in_the_panel_with_nothing_on_air_sends_at_once() {
+    let (mut h, fake) = harness(reported(1));
+    set_buffer(&mut h, &fake, 1024);
+    h.get_by_label(PILL).click();
+    h.run_steps(2);
+    h.get_by_label("Apply now").click();
+    h.run_steps(2);
+    assert!(h.query_by_label(CONFIRM).is_none());
+    assert_eq!(fake.take_sent(), vec![Command::ApplySettingsNow]);
+}
+
+#[test]
+fn close_button_closes_the_panel_and_keeps_the_pill() {
+    let (mut h, fake) = harness(playing(1));
+    set_buffer(&mut h, &fake, 1024);
+    h.get_by_label(PILL).click();
+    h.run_steps(2);
+    h.get_by_label("Close").click();
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("null: buffer 512 → 1024 — waiting for P1 playing")
+            .is_none()
+    );
+    assert!(h.query_by_role_and_label(Role::Button, PILL).is_some());
+    assert!(fake.take_sent().is_empty());
+}
+
+#[test]
+fn clicking_the_backdrop_closes_the_panel() {
+    let (mut h, fake) = harness(playing(1));
+    set_buffer(&mut h, &fake, 1024);
+    h.get_by_label(PILL).click();
+    h.run_steps(2);
+    // Far from the centred panel.
+    h.hover_at(egui::pos2(2.0, 2.0));
+    h.event(egui::Event::PointerButton {
+        pos: egui::pos2(2.0, 2.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.event(egui::Event::PointerButton {
+        pos: egui::pos2(2.0, 2.0),
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("null: buffer 512 → 1024 — waiting for P1 playing")
+            .is_none()
+    );
+    assert!(fake.take_sent().is_empty());
+}
+
+#[test]
+fn the_panel_shows_what_the_device_refused() {
+    let (mut h, fake) = harness(playing(1));
+    set_buffer(&mut h, &fake, 1024);
+    let device = null("null");
+    let mut next = (**fake.state.load()).clone();
+    let wanted = Wanted::Device(device_settings(&next.config.outputs, &device));
+    fp_model::on_event(
+        &mut next,
+        EngineEvent::Applied {
+            target: Target::Device(device),
+            wanted,
+            outcome: Err("no such buffer".into()),
+        },
+    );
+    fake.state.store(std::sync::Arc::new(next));
+    h.run_steps(2);
+    h.get_by_label(PILL).click();
+    h.run_steps(2);
+    assert!(
+        h.query_by_label_contains("did not take").is_some(),
+        "the refusal line"
+    );
+    assert!(h.query_by_label_contains("no such buffer").is_some());
+}
+
+#[test]
+fn cancel_in_the_confirmation_brings_the_panel_back() {
+    let (mut h, fake) = harness(playing(1));
+    set_buffer(&mut h, &fake, 1024);
+    h.get_by_label(PILL).click();
+    h.run_steps(2);
+    h.get_by_label("Apply now").click();
+    h.run_steps(2);
+    assert!(h.query_by_label(CONFIRM).is_some());
+    h.get_by_label("Cancel").click();
+    h.run_steps(2);
+    assert!(h.query_by_label(CONFIRM).is_none());
+    assert!(
+        h.query_by_label("null: buffer 512 → 1024 — waiting for P1 playing")
+            .is_some(),
+        "the panel is back"
+    );
+    assert!(fake.take_sent().is_empty());
 }
