@@ -64,6 +64,7 @@ impl Engine {
 
     /// Creates the cartwall worker and opens its buses on first use.
     fn ensure_cartwall(&mut self, now: Instant) -> bool {
+        let mut created = None;
         if self.cartwall.is_none() {
             let routes = self.settings.cartwall_routes.clone();
             let main = match &routes.main {
@@ -90,6 +91,11 @@ impl Engine {
                     return false;
                 }
             };
+            created = Some((
+                main.0.clone(),
+                cue.as_ref().map(|c| c.0.clone()),
+                routes.clone(),
+            ));
             self.cartwall = Some(CartwallRuntime {
                 worker,
                 main,
@@ -109,6 +115,10 @@ impl Engine {
             .collect();
         for key in keys {
             self.ensure_bus(&key, now);
+        }
+        if let Some((main_key, cue_key, routes)) = created {
+            self.report_placement(Holder::CartwallMain, routes.main, Some(&main_key));
+            self.report_placement(Holder::CartwallCue, routes.cue, cue_key.as_ref());
         }
         true
     }
@@ -161,12 +171,14 @@ impl Engine {
         }
         self.next_key += 1;
         let key = SourceKey(self.next_key);
+        let rate = self.rate_of(&bus_key);
         let options = LoadOptions {
             until_secs: Some(request.until_secs).filter(|u| u.is_finite()),
             looped: request.looped,
-            rate: Some(self.rate_of(&bus_key)),
+            rate: Some(rate),
             fade_out_frames: self.frames_on(&bus_key, self.settings.tuning.declick_ms),
             dsd: false,
+            ready_frames: Some(frames_at(rate, self.settings.tuning.ready_threshold_ms) as usize),
         };
         if let Some(c) = self.cartwall.as_ref() {
             c.worker.load_with(

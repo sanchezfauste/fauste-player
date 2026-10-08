@@ -15,9 +15,7 @@ use fp_app::ui::app::AppUi;
 use fp_app::ui::shell::Shell;
 use fp_app::ui::theme;
 use fp_app::{bootstrap, cli, crash, instance, logging};
-use fp_backends::{
-    AudioBackend, Availability, NullBackend, choose_default_backend, display_name, system_backends,
-};
+use fp_backends::{AudioBackend, Availability, NullBackend, display_name, system_backends};
 use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
@@ -164,29 +162,9 @@ fn run(
         .iter()
         .map(|b| (b.id().0, b.availability() == Availability::Available))
         .collect();
-    let listed: Vec<(&str, bool)> = availability
-        .iter()
-        .map(|(id, ok)| (id.as_str(), *ok))
-        .collect();
-    let mut settings = EngineSettings::from_config(&config);
-    let chosen = choose_default_backend(
-        settings.default_backend.as_deref(),
-        &listed,
-        std::env::consts::OS,
-    )
-    .map(str::to_owned);
-    if settings.default_backend.is_some() && settings.default_backend != chosen {
-        tracing::warn!(
-            backend = ?settings.default_backend,
-            fallback = ?chosen,
-            "configured audio system unavailable"
-        );
-    }
-    settings.default_backend = chosen;
-    let in_use = settings
-        .default_backend
-        .clone()
-        .unwrap_or_else(|| "null".to_owned());
+    let settings = EngineSettings::from_config(&config);
+    let engine = Engine::new(backends.clone(), settings, file_opener());
+    let in_use = engine.backend_in_use().to_owned();
     tracing::info!(backend = %in_use, ?availability, "audio systems");
     let output = if in_use == "null" {
         i18n.tr("settings-backend-null")
@@ -194,10 +172,8 @@ fn run(
         display_name(&in_use).to_owned()
     };
     let platform = format!("{} · {}", os_name(), output);
-    let engine = Engine::new(backends.clone(), settings, file_opener());
     let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
-    let tick = Duration::from_secs_f64(config.tuning.conductor_tick_ms.max(1.0) / 1000.0);
-    let handle = Arc::new(conductor.spawn(handle, tick)?);
+    let handle = Arc::new(conductor.spawn(handle)?);
 
     let cache = AnalysisCache::new(paths.cache_dir.join("analysis"), &config.limits);
     let analyzer = Analyzer::spawn(

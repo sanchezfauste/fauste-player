@@ -482,10 +482,47 @@ added.
 - **Known limit:** a marker change on a cart's track applies from the next
   fire. A cart already playing keeps the end it started with.
 
+## Live settings
+
+The engine tells the model what it runs with (live settings spec, L3). At
+start, `Engine::new` reports `AudioSystemInUse { configured, in_use }`: the
+configured `outputs.backend` and the backend it chose for the default output
+(`choose_default_backend`, the same OS preference and availability list
+`main` used before), and `Unplaced` for the cartwall's Main and Cue (no bus
+before the first cart). Adding a player reports `Placed` for its Main and
+`Placed` or `Unplaced` for its Cue; the cartwall's first cart reports its
+two holders; removing a player reports `Gone` for both. `Placed` carries the
+route the engine holds, the device and the device's running settings
+(`DeviceSettings`).
+
+Each open bus keeps the settings it was opened with in `Engine::running`
+(`running_settings` for a device). Whatever decides something for an open
+bus reads them: bit-perfect rate following (`prepare_start`, the BP badge),
+the DSD mode, mix and silence, and the configured PCM rate a native DSD bus
+returns to. `EngineSettings::device_settings` gives what a bus would open
+with now and equals `fp_model::device_settings` for the same configuration.
+
+`EngineAction::UpdateSettings(config)` replaces `EngineSettings`: new buses,
+new players and the cartwall's first cart use it (L13); no open bus changes.
+The tuning is read live (§7): fades, pauses, prebuffer, schedule lead and
+ready threshold are read where they are used (the ready threshold travels
+with each `LoadOptions`, so a source keeps the one it was opened with);
+`mixer_headroom` grows each bus's capacity at once; every bus gets
+`Bus::set_timing` and a `BusCommand::Tune` with the mixer lengths at its
+running rate (a full command queue is tried again next tick); the conductor
+reads `conductor_tick_ms` before every sleep.
+
+`Tune` names the rate its lengths were sized for (`at_rate`). The mixer
+remembers the rate it last followed (`Mixer::follow_rate`, called when a bus
+reopens at another rate), so a `Tune` that was still in the command queue
+when the bus reopened (a tuning update and a bit-perfect rate change in the
+same tick) is scaled to the rate the mixer runs at.
+
 ## Conductor
 
 `Conductor` (`conductor.rs`) owns `AppState` and the `Engine`. Each tick
-(`tuning.conductor_tick_ms`) it:
+(`tuning.conductor_tick_ms`, read again before every sleep:
+`Conductor::tick_period`) it:
 
 1. applies queued `Command`s with `fp_model::apply`. Refusals go back to the
    UI on the `rejected` channel;

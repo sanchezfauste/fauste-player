@@ -504,3 +504,14 @@ fn the_bus_reports_the_buffer_its_stream_runs_with() {
     assert_eq!(bus.config().buffer_frames, 480, "asked for");
     assert_eq!(bus.buffer_frames(), 2048, "the device's default");
 }
+
+#[test]
+fn a_new_timing_applies_at_the_next_supervision() {
+    let (_b, _device, mut bus, t0) = setup(true);
+    bus.set_timing(BusTiming {
+        startup_grace: Duration::from_millis(10),
+        ..TIMING
+    });
+    bus.supervise(t0 + Duration::from_millis(50));
+    assert_eq!(bus.health(), BusHealth::Lost, "the shorter grace applies");
+}

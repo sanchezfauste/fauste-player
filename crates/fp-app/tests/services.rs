@@ -842,6 +842,9 @@ fn a_stale_snapshot_does_not_read_a_track_twice() {
             track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
         }
     });
+    // The engine's first report (where each holder plays) is one model
+    // version of its own: let it land before counting.
+    r.conductor.tick(r.now);
     let version = r.handle.telemetry.load().model_version;
     // A snapshot that never shows the answer, as one taken before the
     // command lands.

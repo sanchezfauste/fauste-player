@@ -775,3 +775,85 @@ fn a_stop_on_a_paused_slot_finishes_it() {
         vec![BusEvent::Finished { slot: 0, frame: 10 }]
     );
 }
+
+/// A mixer with one started slot of constant 1.0 at full volume.
+fn smoothing_rig(
+    smoothing: u32,
+) -> (
+    Mixer,
+    MixerHandle,
+    Arc<AtomicF32>,
+    fp_engine::source::SourceProducer,
+) {
+    let config = MixerConfig {
+        volume_smoothing_frames: smoothing,
+        declick_frames: 0,
+        max_commands_per_block: 64,
+    };
+    let (m, mut h) = Mixer::new(2, config);
+    let (mut p, c) = source_pair(16);
+    p.push(&[1.0; 32]);
+    let volume = full_volume();
+    assert!(
+        h.commands
+            .push(BusCommand::Attach {
+                slot: 0,
+                source: c,
+                volume: volume.clone(),
+                first_channel: 0
+            })
+            .is_ok()
+    );
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    (m, h, volume, p)
+}
+
+#[test]
+fn a_tune_changes_the_volume_smoothing_from_the_next_block() {
+    let (mut m, mut h, volume, _p) = smoothing_rig(4);
+    send(
+        &mut h,
+        BusCommand::Tune {
+            config: MixerConfig {
+                volume_smoothing_frames: 2,
+                declick_frames: 0,
+                max_commands_per_block: 64,
+            },
+            at_rate: 48_000,
+        },
+    );
+    render(&mut m, 1, 2);
+    volume.store(0.0);
+    // `render` asserts that nothing allocates on the real-time path.
+    let out = render(&mut m, 3, 2);
+    assert_eq!(left(&out), vec![0.5, 0.0, 0.0]);
+}
+
+#[test]
+fn a_tune_sized_for_the_old_rate_is_scaled_when_the_rate_changed_first() {
+    // The bus reopened at 96 kHz while a Tune computed at 48 kHz still
+    // waited in the command queue: the lengths must be in 96 kHz frames.
+    let (mut m, mut h, volume, _p) = smoothing_rig(2);
+    m.follow_rate(48_000, 96_000);
+    send(
+        &mut h,
+        BusCommand::Tune {
+            config: MixerConfig {
+                volume_smoothing_frames: 2,
+                declick_frames: 0,
+                max_commands_per_block: 64,
+            },
+            at_rate: 48_000,
+        },
+    );
+    render(&mut m, 1, 2);
+    volume.store(0.0);
+    let out = render(&mut m, 5, 2);
+    assert_eq!(left(&out), vec![0.75, 0.5, 0.25, 0.0, 0.0]);
+}

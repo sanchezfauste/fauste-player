@@ -247,6 +247,11 @@ pub struct LoadOptions {
     /// Open the file as a DSD source (raw words beside the PCM conversion).
     /// `looped` is refused for it. Its fade only touches the PCM ring.
     pub dsd: bool,
+    /// Frames (at the produced rate) buffered before the source is ready;
+    /// `None` is the threshold the worker was spawned with, scaled to the
+    /// rate. Lets a new `tuning.ready_threshold_ms` reach the next source
+    /// (live settings spec §7).
+    pub ready_frames: Option<usize>,
 }
 
 pub enum WorkerCommand {
@@ -294,6 +299,8 @@ struct Job {
     pass_frames: u64,
     /// Output rate of this source.
     rate: u32,
+    /// The ready threshold this source was opened with (see `LoadOptions`).
+    ready_frames: Option<usize>,
 }
 
 /// Handle to a running worker thread; dropping it stops the thread.
@@ -457,6 +464,7 @@ fn run(
                         },
                         pass_frames: 0,
                         rate,
+                        ready_frames: options.ready_frames,
                     });
                 }
                 WorkerCommand::Drop { key } => jobs.retain(|j| j.key != key),
@@ -471,7 +479,9 @@ fn run(
             .min_by_key(|j| j.producer.buffered_frames())
         {
             // The threshold is a time: scale it to the rate the source plays at.
-            let ready = scaled_frames(ready_frames, job.rate, bus_rate);
+            let ready = job
+                .ready_frames
+                .unwrap_or_else(|| scaled_frames(ready_frames, job.rate, bus_rate));
             let outcome = catch_unwind(AssertUnwindSafe(|| step(job, opener, dsd_opener, ready)));
             let error = match outcome {
                 Ok(Ok(())) => None,

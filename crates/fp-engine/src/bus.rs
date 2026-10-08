@@ -31,6 +31,25 @@ pub struct BusKey {
     pub device: String,
 }
 
+impl From<&fp_model::OutputDevice> for BusKey {
+    fn from(device: &fp_model::OutputDevice) -> Self {
+        Self {
+            backend: device.backend.clone(),
+            device: device.device.clone(),
+        }
+    }
+}
+
+impl BusKey {
+    /// The model's name for this device.
+    pub fn output_device(&self) -> fp_model::OutputDevice {
+        fp_model::OutputDevice {
+            backend: self.backend.clone(),
+            device: self.device.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BusHealth {
     Ok,
@@ -704,6 +723,12 @@ impl Bus {
             *u = true;
         }
         Some(slot)
+    }
+
+    /// New watchdog, reconnection and busy-retry timing (live settings
+    /// spec §7): the next `supervise` and the next reopen use it.
+    pub fn set_timing(&mut self, timing: BusTiming) {
+        self.timing = timing;
     }
 
     /// Free places in the command queue.

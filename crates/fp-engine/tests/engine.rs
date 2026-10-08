@@ -20,6 +20,23 @@ use fp_model::{
 };
 use support::{gated_opener, tagged_opener};
 
+/// What the engine reported besides where holders play (live settings
+/// spec L3).
+fn reported(events: &[EngineEvent]) -> Vec<&EngineEvent> {
+    events
+        .iter()
+        .filter(|e| {
+            !matches!(
+                e,
+                EngineEvent::Placed { .. }
+                    | EngineEvent::Unplaced { .. }
+                    | EngineEvent::Gone { .. }
+                    | EngineEvent::AudioSystemInUse { .. }
+            )
+        })
+        .collect()
+}
+
 const RATE: f64 = 48_000.0;
 const BLOCK: usize = 480;
 const P: PlayerId = PlayerId(1);
@@ -1030,7 +1047,7 @@ fn cue_commands_without_a_cue_source_are_ignored() {
     r.settle();
     r.run(2);
     assert_eq!(r.cue_position(), None);
-    assert!(r.events.is_empty(), "{:?}", r.events);
+    assert!(reported(&r.events).is_empty(), "{:?}", r.events);
 }
 
 #[test]

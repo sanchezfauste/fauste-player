@@ -434,12 +434,14 @@ impl Conductor {
         }
     }
 
-    /// Runs the conductor on its own thread, ticking every `period`.
-    pub fn spawn(
-        mut self,
-        mut handle: ConductorHandle,
-        period: Duration,
-    ) -> std::io::Result<ConductorHandle> {
+    /// How long the conductor sleeps between ticks: `tuning.conductor_tick_ms`,
+    /// read again before every sleep (live settings spec §7).
+    pub fn tick_period(&self) -> Duration {
+        Duration::from_secs_f64(self.state.config.tuning.conductor_tick_ms.max(1.0) / 1000.0)
+    }
+
+    /// Runs the conductor on its own thread, ticking every `tick_period`.
+    pub fn spawn(mut self, mut handle: ConductorHandle) -> std::io::Result<ConductorHandle> {
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
         let thread = std::thread::Builder::new()
@@ -448,7 +450,7 @@ impl Conductor {
                 while !flag.load(Ordering::Acquire) {
                     let started = Instant::now();
                     self.tick(started);
-                    if let Some(rest) = period.checked_sub(started.elapsed()) {
+                    if let Some(rest) = self.tick_period().checked_sub(started.elapsed()) {
                         std::thread::sleep(rest);
                     }
                 }
