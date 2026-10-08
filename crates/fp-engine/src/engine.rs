@@ -846,7 +846,8 @@ impl Engine {
         true
     }
 
-    /// Reopens `key` with `wanted` in one reopen (L12), keeping the mixer,
+    /// Reopens `key` with `wanted` in one reopen (L12; a bus carrying DSD
+    /// first goes back to its PCM stream, then takes the change), keeping the mixer,
     /// its clock and its slots; the sources on it follow a new rate. A
     /// refusal brings the running configuration back (L14).
     fn reopen_device(
@@ -858,6 +859,7 @@ impl Engine {
     ) -> Result<(), String> {
         let now = self.now;
         let before_rate = self.rate_of(key);
+        let left_dsd = self.leave_dsd_for_reopen(key, quiet);
         let global = (self.settings.sample_rate, self.settings.buffer_frames);
         let Some(bus) = self.buses.get_mut(key) else {
             return Ok(());
@@ -882,7 +884,8 @@ impl Engine {
         if outcome.is_ok() {
             bus.replace_pcm_fallback(pcm_fallback_for(global, wanted, config));
         }
-        if self.rate_of(key) != before_rate {
+        // DSD sources become PCM ones; any source follows a new rate.
+        if left_dsd || self.rate_of(key) != before_rate {
             self.reopen_on_bus(key, before_rate);
         }
         outcome
