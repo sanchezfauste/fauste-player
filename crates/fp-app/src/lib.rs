@@ -9,7 +9,6 @@ pub mod instance;
 pub mod logging;
 pub mod midi;
 pub mod remote;
-pub mod restart;
 pub mod services;
 pub mod tags;
 pub mod ui;

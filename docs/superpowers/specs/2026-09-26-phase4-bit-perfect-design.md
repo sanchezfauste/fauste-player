@@ -84,7 +84,7 @@ The badge in the player header uses it. It was inactive since Phase 1.
 
 - **Settings → Audio outputs**, in its Advanced view (operator feedback 4, Q12), lists the devices the routes use, each with a **Bit-perfect** checkbox, its own rate and buffer, and its DSD mode.
   - The checkbox is disabled, with the reason in a tooltip ("This device is shared by a sound server"), when the device is not exclusive-capable.
-  - Changes apply after a restart, like every output change.
+  - Changes apply after a restart, like every output change. *(Replaced by the live settings spec, 2026-10-07: they apply while running, once the device is idle.)*
 - The cue devices can be bit-perfect as well, but the badge follows Main only.
 
 ## B7. Out of scope

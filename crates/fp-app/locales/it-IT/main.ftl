@@ -305,7 +305,6 @@ cart-empty-edit = Scegli un file per il cart { $n }
 shortcut-reserved = { $key } è riservato e non si può cambiare.
 playlist-import-empty = «{ $name }» non contiene file da importare.
 already-running = Fauste Player è già in esecuzione.
-restart-failed = Impossibile riavviare Fauste Player. Avvialo dal menu delle applicazioni.
 
 # Level meters (Settings → Meters)
 settings-tab-meters = Meter

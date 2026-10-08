@@ -662,7 +662,7 @@ Rulings made while implementing:
     device at its own rate and buffer when it has them. A bit-perfect bus
     starts at that rate and follows the file as before (bit-perfect spec B3).
   - **Q12.6** Changing an override needs a restart, like the global values
-    (`RestartReason`).
+    (`RestartReason`). *Replaced by the live settings spec (2026-10-07): an override applies while running, once its device is idle.*
   - **Q12.7** Switching to Basic never changes the configuration: it only
     hides the advanced rows. The defaults are no bit-perfect device and DSD
     converted to PCM.

@@ -305,7 +305,6 @@ cart-empty-edit = Triar un fitxer per al cartutx { $n }
 shortcut-reserved = { $key } està reservada i no es pot canviar.
 playlist-import-empty = «{ $name }» no té fitxers per importar.
 already-running = Fauste Player ja està en marxa.
-restart-failed = Fauste Player no s'ha pogut tornar a iniciar. Obre'l des del menú d'aplicacions.
 
 # Level meters (Settings → Meters)
 settings-tab-meters = Vúmetres

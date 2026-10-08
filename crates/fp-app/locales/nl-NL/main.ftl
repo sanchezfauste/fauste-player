@@ -305,7 +305,6 @@ cart-empty-edit = Een bestand kiezen voor cart { $n }
 shortcut-reserved = { $key } is gereserveerd en kan niet worden gewijzigd.
 playlist-import-empty = “{ $name }” heeft geen bestanden om te importeren.
 already-running = Fauste Player draait al.
-restart-failed = Fauste Player kon niet opnieuw starten. Start het vanuit het programmamenu.
 
 # Level meters (Settings → Meters)
 settings-tab-meters = Meters

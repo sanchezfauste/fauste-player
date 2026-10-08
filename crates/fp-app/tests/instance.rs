@@ -9,7 +9,7 @@ use fp_app::instance::{acquire, acquire_with_retry, collect, deliver, watch};
 
 #[test]
 fn a_lock_held_for_an_instant_is_taken_on_a_retry() {
-    // A restarting instance probes the lock while it waits for the new one.
+    // An instance that is ending may hold the lock for an instant longer.
     let dir = tempfile::tempdir().unwrap();
     let probe = acquire(dir.path()).unwrap().unwrap();
     let release = std::thread::spawn(move || {

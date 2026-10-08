@@ -713,10 +713,6 @@ pub struct Tuning {
     /// How often files not found (a drive not mounted yet) are looked for
     /// again.
     pub missing_recheck_ms: f64,
-    /// Inside a Flatpak, how long Restart now waits for the new instance to
-    /// take the instance lock before this one ends (its sandbox, and the
-    /// launcher in it, end with it).
-    pub restart_handoff_ms: f64,
 }
 
 impl Default for Tuning {
@@ -738,7 +734,6 @@ impl Default for Tuning {
             gain_smoothing_ms: 20.0,
             save_debounce_ms: 1000.0,
             missing_recheck_ms: 30_000.0,
-            restart_handoff_ms: 5_000.0,
         }
     }
 }
@@ -1154,13 +1149,6 @@ impl Config {
             "tuning.missing_recheck_ms",
             &mut w,
         );
-        clamp_to(
-            &mut t.restart_handoff_ms,
-            500.0,
-            60_000.0,
-            "tuning.restart_handoff_ms",
-            &mut w,
-        );
 
         // One chord per action and one action per chord; the first wins.
         let mut chords = std::collections::HashSet::new();
@@ -1355,24 +1343,6 @@ mod tests {
                 warnings
                     .iter()
                     .any(|w| w.field == "tuning.missing_recheck_ms")
-            );
-        }
-    }
-
-    #[test]
-    fn the_restart_handoff_has_its_default_and_range() {
-        assert_eq!(Tuning::default().restart_handoff_ms, 5_000.0);
-        let c: Config = serde_json::from_str(r#"{"tuning":{}}"#).unwrap();
-        assert_eq!(c.tuning.restart_handoff_ms, 5_000.0);
-        for (set, kept) in [(10.0, 500.0), (1e7, 60_000.0)] {
-            let mut c = Config::default();
-            c.tuning.restart_handoff_ms = set;
-            let warnings = c.validate();
-            assert_eq!(c.tuning.restart_handoff_ms, kept);
-            assert!(
-                warnings
-                    .iter()
-                    .any(|w| w.field == "tuning.restart_handoff_ms")
             );
         }
     }
