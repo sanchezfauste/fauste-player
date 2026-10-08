@@ -292,10 +292,11 @@ band) stays a separate value, whatever the normalization target (Q4).
   `view::gain_badge(&Normalization, &LoudnessConfig, &Track) -> Option<GainBadge>`
   is a pure function in `crates/fp-app/src/ui/view.rs`; `player.rs` paints it
   with the existing badge helper.
-- **N19** The track tooltip (operator feedback 4, Q9) adds a line
-  "Loudness: {lufs} LUFS, true peak {tp} dBTP" when measured, "Loudness:
-  not measured" otherwise, and "Excluded from normalization" or "Trim
-  {trim} dB" when the edit is not the default.
+- **N19** The row tooltip of the track tables (`view::track_tooltip`,
+  the hover text of a playlist, library or cart row) gains a loudness
+  line after the format: "Loudness: {lufs} LUFS, true peak {tp} dBTP" when
+  measured, "Loudness: not measured" otherwise, and "Excluded from
+  normalization" or "Trim {trim} dB" when the edit is not the default.
 
 ### 8.2 Per-track controls
 
