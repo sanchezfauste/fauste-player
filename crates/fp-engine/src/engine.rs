@@ -849,13 +849,15 @@ impl Engine {
     /// Reopens `key` with `wanted` in one reopen (L12; a bus carrying DSD
     /// first goes back to its PCM stream, then takes the change), keeping the mixer,
     /// its clock and its slots; the sources on it follow a new rate. A
-    /// refusal brings the running configuration back (L14).
+    /// refusal brings the running configuration back (L14); a device that
+    /// is not there keeps the new one for when it returns (L15). A forced
+    /// change asks again for what the device refused before.
     fn reopen_device(
         &mut self,
         key: &BusKey,
         wanted: DeviceSettings,
         quiet: bool,
-        _force: bool,
+        force: bool,
     ) -> Result<(), String> {
         let now = self.now;
         let before_rate = self.rate_of(key);
@@ -879,8 +881,11 @@ impl Engine {
         };
         // A sounding bus (a forced change) never waits for a busy device:
         // its timeline would stall (L14, L21).
+        if force {
+            bus.forget_refusals();
+        }
         let mut budget = bus.busy_budget(quiet);
-        let outcome = bus.reopen_with(config, now, &mut budget);
+        let outcome = bus.apply_config(config, now, &mut budget);
         if outcome.is_ok() {
             bus.replace_pcm_fallback(pcm_fallback_for(global, wanted, config));
         }

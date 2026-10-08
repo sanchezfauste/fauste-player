@@ -555,3 +555,86 @@ fn a_change_for_a_device_not_open_is_done_at_once() {
     assert_eq!(applied(&r.events, "other"), Some(&Ok(())));
     assert!(!r.other.is_open(), "L13: it opens when first used");
 }
+
+#[test]
+fn l14_a_refused_rate_keeps_the_running_one_and_says_why() {
+    let mut r = rig();
+    r.main.refuse_rate(44_100);
+    let running = settings_of(&r, "main");
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..running
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.main.config().unwrap().sample_rate, 48_000);
+    assert!(matches!(applied(&r.events, "main"), Some(Err(_))));
+    assert_eq!(settings_of(&r, "main"), running);
+}
+
+#[test]
+fn l14_a_device_busy_beyond_the_budget_keeps_the_running_settings() {
+    let mut c = config();
+    c.tuning.device_busy_retry_ms = 0.0;
+    let mut r = rig_with(&c);
+    // The first open and the three retries meet a busy device; the
+    // restore of the running settings opens.
+    r.main.set_busy(4);
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.main.config().unwrap().buffer_frames, 480);
+    assert!(matches!(applied(&r.events, "main"), Some(Err(_))));
+}
+
+#[test]
+fn l14_apply_now_asks_a_device_again_for_a_rate_it_refused() {
+    let mut r = rig();
+    r.main.refuse_rate(44_100);
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    let attempts = r.main.open_attempts();
+    apply_device(&mut r, "main", wanted, true);
+    assert!(
+        r.main.open_attempts() > attempts,
+        "asked again, not from memory"
+    );
+}
+
+#[test]
+fn l15_an_absent_device_takes_the_new_settings_when_it_returns() {
+    let mut r = rig();
+    r.main.unplug();
+    r.run(1);
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+    assert_eq!(settings_of(&r, "main"), wanted);
+    r.main.replug();
+    r.clock += Duration::from_secs(3);
+    r.tick();
+    assert_eq!(r.main.config().unwrap().buffer_frames, 960);
+}
+
+#[test]
+fn l15_a_device_gone_during_the_change_keeps_the_new_settings() {
+    let mut r = rig();
+    r.main.unplug();
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+    r.main.replug();
+    r.clock += Duration::from_secs(3);
+    r.tick();
+    assert_eq!(r.main.config().unwrap().buffer_frames, 960);
+}

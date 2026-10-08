@@ -182,6 +182,8 @@ pub struct Bus {
     /// The watchdog reopened the device at `pcm_fallback`: the rate the
     /// bus ran before (read once by `take_rate_change`).
     rate_change: Option<u32>,
+    /// The last open failed because the device was not there.
+    missing: bool,
 }
 
 impl Bus {
@@ -222,6 +224,7 @@ impl Bus {
             dsd_lost: false,
             pcm_fallback: None,
             rate_change: None,
+            missing: false,
         };
         if bus.try_open(now, true).is_err() {
             // The stand-in renders the mixer without DoP encoding or native
@@ -290,6 +293,7 @@ impl Bus {
                 .backend
                 .open_output(&self.device, shared, renderer, errors);
         }
+        self.missing = matches!(opened, Err(BackendError::DeviceNotFound(_)));
         match opened {
             Ok(stream) => {
                 self.stream = Some(stream);
@@ -544,7 +548,7 @@ impl Bus {
     /// device refuses, the refusal is remembered (a rate, or a DSD stream at
     /// a rate) and not asked again until the device comes back from a loss,
     /// and the previous configuration is restored. A device that stays busy
-    /// through `busy_retries` refused nothing: the previous configuration is
+    /// through `busy_retries`, or is not there, refused nothing: the previous configuration is
     /// restored without remembering it. If the restore fails too the
     /// bus is `Lost` and the watchdog takes over. Leaving native DSD never
     /// restores it (PCM would reach a DSD stream): the bus stays `Lost` with
@@ -597,17 +601,23 @@ impl Bus {
             return Ok(());
         }
         let error = self.last_error.clone().unwrap_or_default();
-        if matches!(opened, Err(BackendError::Busy(_))) {
+        match &opened {
             // Not a refusal of the configuration: the next start asks again.
-            tracing::warn!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, %error, "device busy (another application or the sound server may be using it); keeping the previous stream");
-        } else {
-            tracing::warn!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, %error, "stream refused; keeping the previous one");
-            match config.dsd {
-                Some(dsd) => {
-                    self.refused_dsd.insert((config.sample_rate, dsd));
-                }
-                None => {
-                    self.refused_rates.insert(config.sample_rate);
+            Err(BackendError::Busy(_)) => {
+                tracing::warn!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, %error, "device busy (another application or the sound server may be using it); keeping the previous stream");
+            }
+            Err(BackendError::DeviceNotFound(_)) => {
+                tracing::warn!(bus = ?self.key, %error, "device not there; keeping the previous configuration");
+            }
+            _ => {
+                tracing::warn!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, %error, "stream refused; keeping the previous one");
+                match config.dsd {
+                    Some(dsd) => {
+                        self.refused_dsd.insert((config.sample_rate, dsd));
+                    }
+                    None => {
+                        self.refused_rates.insert(config.sample_rate);
+                    }
                 }
             }
         }
@@ -621,6 +631,44 @@ impl Bus {
             self.start_virtual_clock();
         }
         Err(error)
+    }
+
+    /// A device change (live settings spec L12, L14, L15): `reopen_with`,
+    /// except that a device that is not there, missing now or lost
+    /// already, keeps `config` for when it returns: nothing is
+    /// interrupted, the bus stays `Lost` on the virtual clock, and the
+    /// watchdog opens `config` (falling back to `pcm_fallback` if refused).
+    pub fn apply_config(
+        &mut self,
+        config: StreamConfig,
+        now: Instant,
+        budget: &mut BusyBudget,
+    ) -> Result<(), String> {
+        let absent = self.health == BusHealth::Lost && self.stream.is_none();
+        if !absent {
+            match self.reopen_with(config, now, budget) {
+                Ok(()) => return Ok(()),
+                Err(error) if !self.missing => return Err(error),
+                Err(_) => {}
+            }
+        }
+        let previous = self.config;
+        self.stream = None;
+        self.config = config;
+        self.follow_rate(previous.sample_rate, config.sample_rate);
+        self.health = BusHealth::Lost;
+        // The stand-in clock runs at the new rate.
+        self.virtual_clock = None;
+        self.start_virtual_clock();
+        tracing::info!(bus = ?self.key, "device not there; it opens with the new settings when it returns");
+        Ok(())
+    }
+
+    /// Forgets the rates and DSD streams this device refused, so that the
+    /// operator's Apply now asks it again (L14).
+    pub fn forget_refusals(&mut self) {
+        self.refused_rates.clear();
+        self.refused_dsd.clear();
     }
 
     /// Keeps the mixer's frame-based durations at their length in time.
