@@ -847,3 +847,30 @@ fn the_conductor_follows_a_new_tick_period() {
     conductor.tick(now);
     assert_eq!(conductor.tick_period(), Duration::from_millis(20));
 }
+
+#[test]
+fn a_rate_change_waits_for_the_playing_player_and_applies_after_its_stop() {
+    let (mut conductor, handle, device, mut now) = offline_conductor(model(1, 3));
+    let p = conductor.state().players[0].id;
+    conductor.tick(now);
+    assert!(handle.send(Command::Play(p)));
+    settle(&mut conductor, now);
+    let mut config = conductor.state().config.clone();
+    config.outputs.sample_rate = 44_100;
+    assert!(handle.send(Command::UpdateConfig(Box::new(config))));
+    for _ in 0..5 {
+        conductor.tick(now);
+        let _ = device.render(BLOCK);
+        now += Duration::from_millis(10);
+    }
+    assert_eq!(device.config().unwrap().sample_rate, 48_000, "P1 is on air");
+    assert!(!fp_model::pending(conductor.state()).is_empty());
+    assert!(handle.send(Command::Stop(p)));
+    for _ in 0..10 {
+        conductor.tick(now);
+        let _ = device.render(BLOCK);
+        now += Duration::from_millis(10);
+    }
+    assert_eq!(device.config().unwrap().sample_rate, 44_100);
+    assert!(fp_model::pending(conductor.state()).is_empty());
+}

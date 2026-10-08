@@ -935,3 +935,73 @@ fn l17_a_device_change_for_the_device_the_switch_abandons_is_skipped() {
     assert_eq!(r.main.open_attempts(), attempts, "not reopened");
     assert_eq!(applied(&r.take_events(), "main"), Some(&Ok(())));
 }
+
+#[test]
+fn l21_a_forced_change_resumes_what_played_and_starts_nothing_paused() {
+    let mut c = config();
+    c.outputs.routes.push(PlayerRoutes {
+        player: Q,
+        main: Some(route("main")),
+        cue: None,
+    });
+    let mut r = rig_with(&c);
+    r.act(EngineAction::AddPlayer { player: Q });
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.act(EngineAction::LoadPaused {
+        player: Q,
+        request: request(2, 3.0),
+    });
+    r.settle();
+    r.run(5);
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, true);
+    assert_eq!(
+        r.main.config().unwrap().sample_rate,
+        44_100,
+        "forced: at once"
+    );
+    r.settle();
+    let heard = r.run(10);
+    assert!(
+        heard.iter().any(|v| (*v as u64) / 100_000 == 1),
+        "P plays again after the gap"
+    );
+    assert!(
+        !heard.iter().any(|v| (*v as u64) / 100_000 == 2),
+        "Q stays paused (rule 10)"
+    );
+    let q = r.engine.telemetry(Q).position_secs.unwrap();
+    assert!((q - 3.0).abs() < 0.01, "{q}");
+}
+
+#[test]
+fn l21_a_forced_change_cuts_a_fade_and_reports_its_end() {
+    let mut r = rig();
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    r.run(3);
+    r.act(EngineAction::FadeOutAndStop {
+        player: P,
+        fade_ms: 2_000,
+    });
+    r.run(2);
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, true);
+    r.tick();
+    assert!(r.events.contains(&EngineEvent::ReachedEnd {
+        player: P,
+        entry: EntryId(1)
+    }));
+}
