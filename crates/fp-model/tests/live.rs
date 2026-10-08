@@ -304,6 +304,23 @@ fn a_device_no_holder_uses_any_more_is_forgotten_with_its_failure() {
 }
 
 #[test]
+fn a_refusal_for_a_device_no_holder_uses_is_not_recorded() {
+    let mut s = fixture(1);
+    report_start(&mut s);
+    let target = Target::Device(dev("gone"));
+    let wanted = Wanted::Device(device_settings(&s.config.outputs, &dev("gone")));
+    on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: target.clone(),
+            wanted,
+            outcome: Err("refused".into()),
+        },
+    );
+    assert!(!s.live.failures.contains_key(&target));
+}
+
+#[test]
 fn l14_an_accepted_value_becomes_the_running_one_and_clears_the_failure() {
     let mut s = fixture(1);
     report_start(&mut s);

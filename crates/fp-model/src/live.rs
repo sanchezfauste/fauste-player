@@ -282,10 +282,15 @@ pub(crate) fn applied(
             live.failures.remove(&target);
         }
         Err(reason) => {
-            live.failures.insert(target, Failure { wanted, reason });
+            // A device no holder uses any more was forgotten already.
+            let forgotten = matches!(&target, Target::Device(d) if !live.devices.contains_key(d));
+            if !forgotten {
+                live.failures.insert(target, Failure { wanted, reason });
+            }
         }
     }
 }
+
 /// One pending change (spec §4.2), with the value it changes from and to.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PendingItem {
@@ -372,8 +377,8 @@ fn output_item(state: &AppState, item: PendingItem, causes: Vec<BusyCause>) -> P
 }
 
 /// Spec §4.2: every change the engine does not run yet, in L9 order (the
-/// audio system, the routes in display order, the devices). A device no holder uses is never pending, nor is a holder
-/// the engine has not reported (both open with the current configuration,
+/// audio system, the routes in display order, the devices). A device no
+/// holder uses is never pending, nor is a holder the engine has not reported (both open with the current configuration,
 /// L13).
 pub fn pending(state: &AppState) -> Vec<Pending> {
     let mut out = Vec::new();
