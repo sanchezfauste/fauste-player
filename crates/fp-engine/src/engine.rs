@@ -1190,6 +1190,13 @@ impl Engine {
                     }
                 }
             }
+            // Live settings: the engine takes them from plan 2 (settings)
+            // and plan 3 (applies) of the live settings work. Until then it
+            // reports no placement, so the model never sends an apply.
+            EngineAction::UpdateSettings(_)
+            | EngineAction::ApplyAudioSystem { .. }
+            | EngineAction::ApplyRoute { .. }
+            | EngineAction::ApplyDevice { .. } => {}
         }
     }
 

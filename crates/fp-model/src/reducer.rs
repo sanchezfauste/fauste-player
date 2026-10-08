@@ -327,6 +327,7 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
     }
     fill_empty_next(state);
     reconcile(state, &mut out);
+    crate::live::dispatch_due(state, &mut out);
     Ok(out)
 }
 
@@ -455,6 +456,7 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
     }
     fill_empty_next(state);
     reconcile(state, &mut out);
+    crate::live::dispatch_due(state, &mut out);
     out
 }
 
@@ -1114,6 +1116,9 @@ fn update_config(
         return Err(ModelError::PlayerBusy(busy.id));
     }
     config.players.count = state.config.players.count;
+    if config.outputs != state.config.outputs || config.tuning != state.config.tuning {
+        out.push(EngineAction::UpdateSettings(Box::new(config.clone())));
+    }
     state.config = config;
     if count < state.players.len() {
         set_player_count(state, count, out)?;

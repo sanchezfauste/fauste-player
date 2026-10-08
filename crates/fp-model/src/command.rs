@@ -386,6 +386,29 @@ pub enum EngineAction {
     /// Pre-listen a cart on the cartwall Cue route.
     StartCartCue(CartRequest),
     StopCartCue,
+    /// L10: the configuration the engine takes for new buses and new
+    /// holders, and the tuning it reads live. It changes no open bus.
+    UpdateSettings(Box<Config>),
+    /// L17: change the audio system the default output uses. Not forced,
+    /// it waits until every bus is quiet (L11).
+    ApplyAudioSystem {
+        backend: Option<String>,
+        force: bool,
+    },
+    /// L16: move `holder` to `route`. Not forced, it waits until the
+    /// holder's own sources are quiet (L6, L11).
+    ApplyRoute {
+        holder: Holder,
+        route: Option<Route>,
+        force: bool,
+    },
+    /// L12: run `device` with `settings`. Not forced, it waits until the
+    /// device's bus is quiet (L11).
+    ApplyDevice {
+        device: OutputDevice,
+        settings: DeviceSettings,
+        force: bool,
+    },
 }
 
 /// Everything the engine needs to play one cart.

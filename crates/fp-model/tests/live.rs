@@ -7,9 +7,9 @@ mod common;
 use common::{entries, fixture, p0};
 use fp_model::{
     AppState, BusyCause, CartId, Command, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput,
-    EngineEvent, Failure, Holder, LiveSettings, OutputDevice, PendingItem, Route, Target,
-    TrackAnalysis, Wanted, apply, causes, configured_route, device_causes, device_settings,
-    on_event, pending,
+    EngineAction, EngineEvent, Failure, Holder, LiveSettings, OutputDevice, PendingItem, Route,
+    Target, TrackAnalysis, Wanted, apply, causes, configured_route, device_causes, device_settings,
+    due, on_event, pending,
 };
 
 fn dev(name: &str) -> OutputDevice {
@@ -450,4 +450,165 @@ fn a_removed_player_is_never_pending() {
             .any(|p| matches!(p.item, PendingItem::Route { holder: Holder::PlayerMain(h), .. } if h == last)),
         "the engine has not said Gone yet, but the player is gone"
     );
+}
+
+fn apply_device(state: &AppState, name: &str, force: bool) -> EngineAction {
+    EngineAction::ApplyDevice {
+        device: dev(name),
+        settings: device_settings(&state.config.outputs, &dev(name)),
+        force,
+    }
+}
+
+#[test]
+fn l8_an_idle_change_is_sent_once_and_completes_with_applied() {
+    let mut s = fixture(1);
+    report_start(&mut s);
+    let actions = update(&mut s, |c| c.outputs.sample_rate = 44_100);
+    let wanted = apply_device(&s, "default", false);
+    assert!(actions.contains(&wanted));
+    assert!(actions.contains(&apply_device(&s, "phones", false)));
+    let again = apply(&mut s, Command::SetCartwallOpen(true)).unwrap();
+    assert!(!again.contains(&wanted), "in flight: not sent twice");
+    assert!(due(&s).is_empty());
+    let settings = device_settings(&s.config.outputs, &dev("default"));
+    on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: Target::Device(dev("default")),
+            wanted: Wanted::Device(settings),
+            outcome: Ok(()),
+        },
+    );
+    assert!(device_item(&s, "default").is_none());
+    assert!(
+        !s.live
+            .in_flight
+            .contains_key(&Target::Device(dev("default")))
+    );
+}
+
+#[test]
+fn l8_a_refused_value_is_not_tried_again_until_the_setting_changes() {
+    let mut s = fixture(1);
+    report_start(&mut s);
+    update(&mut s, |c| c.outputs.sample_rate = 44_100);
+    let settings = device_settings(&s.config.outputs, &dev("default"));
+    on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: Target::Device(dev("default")),
+            wanted: Wanted::Device(settings),
+            outcome: Err("44100 Hz refused".into()),
+        },
+    );
+    let item = device_item(&s, "default").unwrap();
+    assert_eq!(item.failure.as_deref(), Some("44100 Hz refused"));
+    let again = apply(&mut s, Command::SetCartwallOpen(true)).unwrap();
+    assert!(!again.contains(&apply_device(&s, "default", false)));
+    let actions = update(&mut s, |c| c.outputs.sample_rate = 96_000);
+    assert!(actions.contains(&apply_device(&s, "default", false)));
+    assert_eq!(device_item(&s, "default").unwrap().failure, None);
+}
+
+#[test]
+fn l8_an_answer_for_an_older_value_keeps_the_newer_one_in_flight() {
+    let mut s = fixture(1);
+    report_start(&mut s);
+    update(&mut s, |c| c.outputs.sample_rate = 44_100);
+    let older = device_settings(&s.config.outputs, &dev("default"));
+    update(&mut s, |c| c.outputs.sample_rate = 96_000);
+    let newer = device_settings(&s.config.outputs, &dev("default"));
+    on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: Target::Device(dev("default")),
+            wanted: Wanted::Device(older),
+            outcome: Ok(()),
+        },
+    );
+    assert_eq!(s.live.devices.get(&dev("default")), Some(&older));
+    assert_eq!(
+        s.live.in_flight.get(&Target::Device(dev("default"))),
+        Some(&Wanted::Device(newer))
+    );
+}
+
+#[test]
+fn l9_the_audio_system_goes_first_then_routes_then_devices() {
+    let mut s = fixture(1);
+    report_start(&mut s);
+    let actions = update(&mut s, |c| {
+        c.outputs.backend = Some("other".into());
+        c.outputs.routes[0].main = Some(route_to("dac"));
+        c.outputs.buffer_frames = 1024;
+    });
+    let kinds: Vec<u8> = actions
+        .iter()
+        .filter_map(|a| match a {
+            EngineAction::ApplyAudioSystem { .. } => Some(0),
+            EngineAction::ApplyRoute { .. } => Some(1),
+            EngineAction::ApplyDevice { .. } => Some(2),
+            _ => None,
+        })
+        .collect();
+    let mut sorted = kinds.clone();
+    sorted.sort_unstable();
+    assert_eq!(kinds, sorted);
+    assert_eq!(kinds.first(), Some(&0));
+    assert!(kinds.contains(&1) && kinds.contains(&2));
+}
+
+#[test]
+fn l10_update_config_tells_the_engine_only_when_outputs_or_tuning_change() {
+    let mut s = fixture(1);
+    let actions = update(&mut s, |c| c.players.fade_ms = 2500);
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, EngineAction::UpdateSettings(_)))
+    );
+    let actions = update(&mut s, |c| c.outputs.buffer_frames = 1024);
+    assert!(actions.contains(&EngineAction::UpdateSettings(Box::new(s.config.clone()))));
+    let actions = update(&mut s, |c| c.tuning.prebuffer_secs = 8.0);
+    assert!(
+        actions.iter().any(
+            |a| matches!(a, EngineAction::UpdateSettings(c) if c.tuning.prebuffer_secs == 8.0)
+        )
+    );
+}
+
+#[test]
+fn changing_a_setting_back_while_it_waits_leaves_nothing_pending() {
+    let mut s = fixture(3);
+    let p1 = p0(&s);
+    report_start(&mut s);
+    apply(&mut s, Command::Play(p1)).unwrap();
+    update(&mut s, |c| c.outputs.buffer_frames = 1024);
+    assert!(!device_item(&s, "default").unwrap().causes.is_empty());
+    let actions = update(&mut s, |c| c.outputs.buffer_frames = 512);
+    assert!(device_item(&s, "default").is_none());
+    assert!(!actions.iter().any(
+        |a| matches!(a, EngineAction::ApplyDevice { device, .. } if *device == dev("default"))
+    ));
+}
+
+#[test]
+fn l23_limits_never_make_anything_pending_nor_reach_the_engine() {
+    let mut s = fixture(1);
+    report_start(&mut s);
+    let actions = update(&mut s, |c| {
+        c.limits.max_cover_bytes *= 2;
+        c.limits.max_tag_chars *= 2;
+        c.limits.max_players = 32;
+        c.limits.max_cart_rows = 16;
+    });
+    assert!(pending(&s).is_empty());
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, EngineAction::UpdateSettings(_))),
+        "limits are not engine settings"
+    );
+    assert_eq!(s.config.limits.max_players, 32);
 }

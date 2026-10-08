@@ -7,6 +7,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::command::EngineAction;
 use crate::config::{Config, OutputDevice, OutputsConfig, Route};
 use crate::dsd::{DsdMix, DsdOutput};
 use crate::ids::{CartId, PlayerId};
@@ -417,4 +418,72 @@ pub fn pending(state: &AppState) -> Vec<Pending> {
         }
     }
     out
+}
+
+/// The engine action that applies an output item.
+fn action_for(item: &PendingItem, force: bool) -> EngineAction {
+    match item {
+        PendingItem::AudioSystem { to, .. } => EngineAction::ApplyAudioSystem {
+            backend: to.clone(),
+            force,
+        },
+        PendingItem::Route { holder, to, .. } => EngineAction::ApplyRoute {
+            holder: *holder,
+            route: to.clone(),
+            force,
+        },
+        PendingItem::Device { device, to, .. } => EngineAction::ApplyDevice {
+            device: device.clone(),
+            settings: *to,
+            force,
+        },
+    }
+}
+
+/// What an `Apply…` action changes and the value it asks for.
+pub fn target_and_wanted(action: &EngineAction) -> Option<(Target, Wanted)> {
+    match action {
+        EngineAction::ApplyAudioSystem { backend, .. } => {
+            Some((Target::AudioSystem, Wanted::AudioSystem(backend.clone())))
+        }
+        EngineAction::ApplyRoute { holder, route, .. } => {
+            Some((Target::Route(*holder), Wanted::Route(route.clone())))
+        }
+        EngineAction::ApplyDevice {
+            device, settings, ..
+        } => Some((Target::Device(device.clone()), Wanted::Device(*settings))),
+        _ => None,
+    }
+}
+
+/// L8: the output items with no cause whose value is neither in flight nor
+/// refused already, in L9 order.
+pub fn due(state: &AppState) -> Vec<EngineAction> {
+    let live = &state.live;
+    pending(state)
+        .iter()
+        .filter(|p| p.causes.is_empty())
+        .map(|p| action_for(&p.item, false))
+        .filter(|action| {
+            target_and_wanted(action).is_some_and(|(target, wanted)| {
+                live.in_flight.get(&target) != Some(&wanted)
+                    && live.failures.get(&target).map(|f| &f.wanted) != Some(&wanted)
+            })
+        })
+        .collect()
+}
+
+/// Sends `action`, recording it in flight.
+fn send(state: &mut AppState, action: EngineAction, out: &mut Vec<EngineAction>) {
+    if let Some((target, wanted)) = target_and_wanted(&action) {
+        state.live.in_flight.insert(target, wanted);
+    }
+    out.push(action);
+}
+
+/// L8: called at the end of every `apply` and `on_event`.
+pub(crate) fn dispatch_due(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    for action in due(state) {
+        send(state, action, out);
+    }
 }
