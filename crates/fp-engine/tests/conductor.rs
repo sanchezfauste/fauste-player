@@ -137,7 +137,7 @@ fn the_spawned_conductor_runs_in_real_time_on_the_null_backend() {
     );
     let (conductor, handle) = Conductor::new(state, Vec::new(), engine, Instant::now());
     let p = conductor.state().players[0].id;
-    let handle = conductor.spawn(handle, Duration::from_millis(5)).unwrap();
+    let handle = conductor.spawn(handle).unwrap();
     handle.send(Command::Play(p));
     // Poll with a generous deadline instead of a fixed sleep (slow CI runners).
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -835,4 +835,15 @@ fn the_model_learns_where_each_holder_plays() {
         Some("main")
     );
     assert!(fp_model::pending(conductor.state()).is_empty());
+}
+
+#[test]
+fn the_conductor_follows_a_new_tick_period() {
+    let (mut conductor, handle, _device, now) = offline_conductor(model(1, 1));
+    assert_eq!(conductor.tick_period(), Duration::from_millis(5));
+    let mut config = conductor.state().config.clone();
+    config.tuning.conductor_tick_ms = 20.0;
+    handle.send(Command::UpdateConfig(Box::new(config)));
+    conductor.tick(now);
+    assert_eq!(conductor.tick_period(), Duration::from_millis(20));
 }

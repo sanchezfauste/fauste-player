@@ -156,6 +156,7 @@ fn a_source_with_until_ends_exactly_there() {
     let (p, mut c) = source_pair(4_000);
     let shared = p.shared.clone();
     let options = LoadOptions {
+        ready_frames: None,
         dsd: false,
         until_secs: Some(frames_secs(130)),
         looped: false,
@@ -182,6 +183,7 @@ fn a_looped_source_repeats_without_gaps() {
     let (p, mut c) = source_pair(4_000);
     let shared = p.shared.clone();
     let options = LoadOptions {
+        ready_frames: None,
         dsd: false,
         until_secs: Some(frames_secs(70)),
         looped: true,
@@ -206,6 +208,7 @@ fn a_looped_source_without_until_loops_at_the_end_of_the_file() {
     let (w, _f) = worker(counting_opener(50));
     let (p, mut c) = source_pair(4_000);
     let options = LoadOptions {
+        ready_frames: None,
         dsd: false,
         until_secs: None,
         looped: true,
@@ -224,6 +227,7 @@ fn a_zero_length_loop_ends() {
     let (p, mut c) = source_pair(4_000);
     let shared = p.shared.clone();
     let options = LoadOptions {
+        ready_frames: None,
         dsd: false,
         until_secs: Some(frames_secs(10)),
         looped: true,
@@ -293,6 +297,7 @@ fn a_bounded_pass_fades_its_last_frames_to_zero() {
     let (p, mut c) = source_pair(4_000);
     let shared = p.shared.clone();
     let options = LoadOptions {
+        ready_frames: None,
         dsd: false,
         until_secs: Some(frames_secs(100)),
         looped: false,
@@ -315,6 +320,7 @@ fn a_looped_pass_is_not_faded() {
     let (w, _f) = worker(constant_opener(1_000));
     let (p, mut c) = source_pair(4_000);
     let options = LoadOptions {
+        ready_frames: None,
         dsd: false,
         until_secs: Some(frames_secs(100)),
         looped: true,
@@ -463,4 +469,44 @@ fn a_looped_dsd_load_fails() {
     );
     let failure = failures.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(failure.key, SourceKey(1));
+}
+
+/// Emits `left` frames, then nothing more however often it is asked.
+struct StallsAfter {
+    left: u64,
+}
+
+impl SampleSource for StallsAfter {
+    fn next_block(&mut self, out: &mut Vec<f32>) -> Result<bool, String> {
+        if self.left == 0 {
+            std::thread::sleep(Duration::from_millis(1));
+            return Ok(true);
+        }
+        let n = self.left.min(64);
+        for _ in 0..n {
+            out.extend_from_slice(&[0.5, 0.5]);
+        }
+        self.left -= n;
+        Ok(true)
+    }
+}
+
+#[test]
+fn a_source_becomes_ready_at_the_threshold_it_was_opened_with() {
+    let opener: SourceOpener =
+        Arc::new(|_, _, _| Ok(Box::new(StallsAfter { left: 2_000 }) as Box<dyn SampleSource>));
+    let (w, _f) = worker(opener); // spawned with a threshold of 100 frames
+    let (p, c) = source_pair(40_000);
+    let shared = p.shared.clone();
+    let options = LoadOptions {
+        ready_frames: Some(5_000),
+        ..LoadOptions::default()
+    };
+    w.load_with(SourceKey(1), PathBuf::from("x"), 0.0, p, options);
+    wait_until("2000 frames buffered", || c.buffered_frames() >= 2_000);
+    assert!(!shared.is_ready(), "5000 frames asked for, 2000 there");
+    let (p, _c2) = source_pair(40_000);
+    let shared = p.shared.clone();
+    w.load(SourceKey(2), PathBuf::from("x"), 0.0, p);
+    wait_until("ready at the spawn threshold", || shared.is_ready());
 }

@@ -171,12 +171,14 @@ impl Engine {
         }
         self.next_key += 1;
         let key = SourceKey(self.next_key);
+        let rate = self.rate_of(&bus_key);
         let options = LoadOptions {
             until_secs: Some(request.until_secs).filter(|u| u.is_finite()),
             looped: request.looped,
-            rate: Some(self.rate_of(&bus_key)),
+            rate: Some(rate),
             fade_out_frames: self.frames_on(&bus_key, self.settings.tuning.declick_ms),
             dsd: false,
+            ready_frames: Some(frames_at(rate, self.settings.tuning.ready_threshold_ms) as usize),
         };
         if let Some(c) = self.cartwall.as_ref() {
             c.worker.load_with(

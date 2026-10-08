@@ -725,6 +725,12 @@ impl Bus {
         Some(slot)
     }
 
+    /// New watchdog, reconnection and busy-retry timing (live settings
+    /// spec §7): the next `supervise` and the next reopen use it.
+    pub fn set_timing(&mut self, timing: BusTiming) {
+        self.timing = timing;
+    }
+
     /// Free places in the command queue.
     pub fn command_room(&self) -> usize {
         self.handle.commands.slots()

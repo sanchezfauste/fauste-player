@@ -362,6 +362,8 @@ pub struct Engine {
     /// What each open bus runs with (L4). A new configuration reaches an
     /// open bus only through `ApplyDevice`.
     running: HashMap<BusKey, DeviceSettings>,
+    /// Buses that still need the current mixer tuning (`BusCommand::Tune`).
+    tune_due: std::collections::BTreeSet<BusKey>,
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -416,6 +418,26 @@ fn choose_backend(backends: &[Arc<dyn AudioBackend>], configured: Option<&str>) 
     chosen
 }
 
+/// The mixer's lengths in frames of a bus running at `rate` (§7).
+fn mixer_config(t: &Tuning, rate: u32) -> MixerConfig {
+    MixerConfig {
+        volume_smoothing_frames: frames_at(rate, t.gain_smoothing_ms).max(1) as u32,
+        declick_frames: frames_at(rate, t.declick_ms) as u32,
+        max_commands_per_block: t.max_commands_per_block,
+    }
+}
+
+/// The watchdog, reconnection and busy-retry timing of every bus (§7).
+fn bus_timing(t: &Tuning) -> BusTiming {
+    BusTiming {
+        watchdog_timeout: Duration::from_secs_f64(t.watchdog_timeout_ms / 1000.0),
+        reconnect_interval: Duration::from_secs_f64(t.reconnect_interval_ms / 1000.0),
+        startup_grace: Duration::from_secs_f64(t.watchdog_startup_grace_ms / 1000.0),
+        busy_retries: t.device_busy_retries,
+        busy_retry_interval: Duration::from_secs_f64(t.device_busy_retry_ms.max(0.0) / 1000.0),
+    }
+}
+
 impl Engine {
     /// `backends` are tried by id for routes; a `Null` backend is always
     /// available as the last resort so a player can never stall.
@@ -457,6 +479,7 @@ impl Engine {
             audio_system,
             backend_in_use,
             running: HashMap::new(),
+            tune_due: std::collections::BTreeSet::new(),
         };
         // L3: what the engine runs with, before anything is placed. The
         // cartwall has no bus until its first cart.
@@ -630,6 +653,50 @@ impl Engine {
             .get(bus)
             .copied()
             .unwrap_or_else(|| self.settings.device_settings(bus))
+    }
+
+    /// L10: the configuration new buses and new holders take (L13), and
+    /// the tuning, read live (§7). No open bus changes: a device changes
+    /// only through `ApplyDevice`, a holder through `ApplyRoute`, the
+    /// default output through `ApplyAudioSystem`.
+    fn update_settings(&mut self, config: &Config, now: Instant) {
+        let retune = self.settings.tuning != config.tuning;
+        self.settings = EngineSettings::from_config(config);
+        if !retune {
+            return;
+        }
+        let timing = bus_timing(&self.settings.tuning);
+        let keys: Vec<BusKey> = self.buses.keys().cloned().collect();
+        for key in keys {
+            if let Some(bus) = self.buses.get_mut(&key) {
+                bus.set_timing(timing);
+            }
+            // `mixer_headroom`: the capacity is derived again; it only grows.
+            self.ensure_bus(&key, now);
+            self.tune_due.insert(key);
+        }
+        self.send_tunes();
+    }
+
+    /// Sends every bus that waits for it the mixer tuning at its running
+    /// rate. A full command queue is tried again next tick; only the
+    /// latest tuning matters.
+    fn send_tunes(&mut self) {
+        let tuning = &self.settings.tuning;
+        let mut sent = Vec::new();
+        for key in &self.tune_due {
+            if let Some(bus) = self.buses.get_mut(key) {
+                let at_rate = bus.sample_rate();
+                let config = mixer_config(tuning, at_rate);
+                if !bus.send(BusCommand::Tune { config, at_rate }) {
+                    continue;
+                }
+            }
+            sent.push(key.clone());
+        }
+        for key in sent {
+            self.tune_due.remove(&key);
+        }
     }
 
     /// L3: `holder` holds `route` and plays on `bus`, or has no bus.
@@ -1163,7 +1230,6 @@ impl Engine {
                 .find_backend(&key.backend)
                 .unwrap_or_else(|| Arc::new(NullBackend));
             let channels = self.channels_for(key);
-            let t = &self.settings.tuning;
             let device = self.settings.device_settings(key);
             let (rate, buffer) = (device.sample_rate, device.buffer_frames);
             let config = StreamConfig {
@@ -1177,20 +1243,8 @@ impl Engine {
                 exact_buffer: buffer != self.settings.buffer_frames,
             };
             // Lengths in this bus's frames.
-            let mixer = MixerConfig {
-                volume_smoothing_frames: frames_at(rate, t.gain_smoothing_ms).max(1) as u32,
-                declick_frames: frames_at(rate, t.declick_ms) as u32,
-                max_commands_per_block: t.max_commands_per_block,
-            };
-            let timing = BusTiming {
-                watchdog_timeout: Duration::from_secs_f64(t.watchdog_timeout_ms / 1000.0),
-                reconnect_interval: Duration::from_secs_f64(t.reconnect_interval_ms / 1000.0),
-                startup_grace: Duration::from_secs_f64(t.watchdog_startup_grace_ms / 1000.0),
-                busy_retries: t.device_busy_retries,
-                busy_retry_interval: Duration::from_secs_f64(
-                    t.device_busy_retry_ms.max(0.0) / 1000.0,
-                ),
-            };
+            let mixer = mixer_config(&self.settings.tuning, rate);
+            let timing = bus_timing(&self.settings.tuning);
             let mut bus = Bus::open(key.clone(), backend, config, 8, mixer, timing, now);
             if rate != self.settings.sample_rate || buffer != self.settings.buffer_frames {
                 // A device's own rate or buffer it no longer takes (another
@@ -1296,8 +1350,9 @@ impl Engine {
             // Live settings: the engine takes them from plan 2 (settings)
             // and plan 3 (applies) of the live settings work. Until then it
             // reports no placement, so the model never sends an apply.
-            EngineAction::UpdateSettings(_)
-            | EngineAction::ApplyAudioSystem { .. }
+            EngineAction::UpdateSettings(config) => self.update_settings(&config, now),
+            // Live settings: the applies come with plan 3.
+            EngineAction::ApplyAudioSystem { .. }
             | EngineAction::ApplyRoute { .. }
             | EngineAction::ApplyDevice { .. } => {}
         }
@@ -1446,6 +1501,9 @@ impl Engine {
             let options = crate::worker::LoadOptions {
                 rate: Some(rate),
                 dsd,
+                ready_frames: Some(
+                    frames_at(rate, self.settings.tuning.ready_threshold_ms) as usize
+                ),
                 ..crate::worker::LoadOptions::default()
             };
             rt.worker.load_with(
@@ -2130,6 +2188,7 @@ impl Engine {
         self.end_dsd_streams();
         self.start_ready_sources();
         self.dispatch_plans();
+        self.send_tunes();
         std::mem::take(&mut self.events)
     }
 
@@ -2706,5 +2765,47 @@ impl Engine {
             rt.cue_outgoing.len(),
             self.buses.values().map(|b| b.capacity()).sum::<usize>()
         )
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests {
+    use super::*;
+    use fp_backends::OfflineBackend;
+
+    #[test]
+    fn a_tune_waits_for_room_in_the_command_queue() {
+        let backend = OfflineBackend::new();
+        let device = backend.add_device("main", 2);
+        let mut config = Config::default();
+        config.outputs.backend = Some("offline".into());
+        let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
+        let mut engine = Engine::new(
+            backends,
+            EngineSettings::from_config(&config),
+            crate::worker::file_opener(),
+        );
+        let now = Instant::now();
+        engine.execute(
+            EngineAction::AddPlayer {
+                player: PlayerId(1),
+            },
+            now,
+        );
+        let key = BusKey {
+            backend: "offline".into(),
+            device: "main".into(),
+        };
+        let bus = engine.buses.get_mut(&key).unwrap();
+        // Nothing renders, so nothing drains the queue.
+        while bus.send(BusCommand::Cancel { slot: 0 }) {}
+        config.tuning.gain_smoothing_ms = 10.0;
+        engine.execute(EngineAction::UpdateSettings(Box::new(config)), now);
+        assert_eq!(engine.tune_due.len(), 1, "kept: the queue is full");
+        // A block takes `max_commands_per_block` commands off the queue.
+        device.render(480).unwrap();
+        engine.tick(now);
+        assert!(engine.tune_due.is_empty(), "sent once the mixer made room");
     }
 }

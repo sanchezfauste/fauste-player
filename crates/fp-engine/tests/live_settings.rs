@@ -20,9 +20,9 @@ use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::bus::BusKey;
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_model::{
-    CartId, CartRequest, Config, DsdDevice, DsdMix, DsdOutput, EngineAction, EngineEvent, EntryId,
-    Holder, OutputDevice, PlayerId, PlayerRoutes, Route, SOURCE_END, SourceRequest, TrackId,
-    device_settings,
+    AudioFormat, CartId, CartRequest, Config, DsdDevice, DsdMix, DsdOutput, EngineAction,
+    EngineEvent, EntryId, Holder, OutputDevice, PlayerId, PlayerRoutes, Route, SOURCE_END,
+    SourceRequest, TrackId, device_settings,
 };
 use support::tagged_opener;
 
@@ -256,4 +256,115 @@ fn an_unusable_configured_audio_system_falls_back_and_says_so() {
         configured: Some("missing".into()),
         in_use: "offline".into(),
     }));
+}
+
+#[test]
+fn l10_new_settings_change_no_open_bus_and_a_device_first_used_takes_them() {
+    let mut r = rig();
+    let q = PlayerId(2);
+    let mut c = config();
+    c.outputs.buffer_frames = 960;
+    c.outputs.routes.push(PlayerRoutes {
+        player: q,
+        main: Some(route("other")),
+        cue: None,
+    });
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.tick();
+    assert_eq!(
+        r.main.config().unwrap().buffer_frames,
+        480,
+        "open: unchanged"
+    );
+    r.act(EngineAction::AddPlayer { player: q });
+    assert_eq!(r.other.config().unwrap().buffer_frames, 960, "L13");
+}
+
+#[test]
+fn a_new_gain_smoothing_reaches_the_open_mixer() {
+    let mut r = rig();
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    r.run(5);
+    let mut c = config();
+    c.tuning.gain_smoothing_ms = 10.0; // 480 frames at 48 kHz
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.run(1);
+    r.act(EngineAction::SetVolume {
+        player: P,
+        volume: 0.0,
+    });
+    let heard = r.run(3);
+    let audible = heard.iter().filter(|v| **v != 0.0).count();
+    assert!(
+        audible > 400,
+        "the volume moved over 10 ms, not at once: {audible} frames"
+    );
+}
+
+#[test]
+fn an_open_bus_keeps_its_running_bit_perfect_setting() {
+    let mut r = rig();
+    r.main.set_exclusive_capable(true);
+    let mut c = config();
+    c.outputs.bit_perfect = vec![out("main")];
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    let mut request = request(1, 0.0);
+    request.format = Some(AudioFormat {
+        sample_rate: 44_100,
+        bits: Some(16),
+        channels: 2,
+        dsd_rate: None,
+    });
+    r.act(EngineAction::StartCurrent { player: P, request });
+    r.settle();
+    assert_eq!(
+        r.main.config().unwrap().sample_rate,
+        48_000,
+        "not bit-perfect until ApplyDevice: the file is resampled"
+    );
+    assert!(!r.engine.running_settings(&out("main")).unwrap().bit_perfect);
+}
+
+/// A tuning update and a rate change in the same tick: the `Tune` is
+/// computed for the rate the bus has when it is sent (48 kHz) and may still
+/// wait in the command queue when the bit-perfect bus reopens at the file's
+/// rate (44.1 kHz). The lengths must end up in 44.1 kHz frames.
+#[test]
+fn a_tuning_update_and_a_rate_change_in_one_tick_size_the_mixer_for_the_new_rate() {
+    let mut c = config();
+    c.outputs.bit_perfect = vec![out("main")];
+    let mut r = rig_with(&c);
+    r.main.set_exclusive_capable(true);
+    let mut tuned = c.clone();
+    tuned.tuning.gain_smoothing_ms = 10.0; // 480 frames at 48 kHz, 441 at 44.1
+    r.act(EngineAction::UpdateSettings(Box::new(tuned)));
+    let mut request = request(1, 0.0);
+    request.format = Some(AudioFormat {
+        sample_rate: 44_100,
+        bits: Some(16),
+        channels: 2,
+        dsd_rate: None,
+    });
+    r.act(EngineAction::StartCurrent { player: P, request });
+    r.settle();
+    assert_eq!(
+        r.main.config().unwrap().sample_rate,
+        44_100,
+        "the bit-perfect bus followed the file"
+    );
+    r.run(5);
+    r.act(EngineAction::SetVolume {
+        player: P,
+        volume: 0.0,
+    });
+    let heard = r.run(3);
+    let audible = heard.iter().filter(|v| **v != 0.0).count();
+    assert!(
+        (430..=450).contains(&audible),
+        "10 ms at 44.1 kHz is 441 frames: {audible}"
+    );
 }

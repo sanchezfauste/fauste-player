@@ -173,8 +173,7 @@ fn run(
     };
     let platform = format!("{} · {}", os_name(), output);
     let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
-    let tick = Duration::from_secs_f64(config.tuning.conductor_tick_ms.max(1.0) / 1000.0);
-    let handle = Arc::new(conductor.spawn(handle, tick)?);
+    let handle = Arc::new(conductor.spawn(handle)?);
 
     let cache = AnalysisCache::new(paths.cache_dir.join("analysis"), &config.limits);
     let analyzer = Analyzer::spawn(
