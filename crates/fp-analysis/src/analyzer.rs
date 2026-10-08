@@ -83,7 +83,7 @@ struct Shared {
     book: Mutex<Bookkeeping>,
     settings: Mutex<AnalysisSettings>,
     stop: AtomicBool,
-    limits: Limits,
+    limits: Mutex<Limits>,
     cache: Option<AnalysisCache>,
     analyze: AnalyzeFn,
 }
@@ -131,7 +131,7 @@ impl Analyzer {
             book: Mutex::new(Bookkeeping::default()),
             settings: Mutex::new(settings),
             stop: AtomicBool::new(false),
-            limits,
+            limits: Mutex::new(limits),
             cache,
             analyze,
         });
@@ -227,6 +227,18 @@ impl Analyzer {
         *lock(&self.shared.settings) = settings;
     }
 
+    /// Limits for jobs that start after this call (live settings spec §6);
+    /// the cache keys are built from the same snapshot, so entries made under the old limits
+    /// miss. Nothing is analysed again.
+    pub fn update_limits(&self, limits: Limits) {
+        *lock(&self.shared.limits) = limits;
+    }
+
+    /// The limits jobs start with now.
+    pub fn limits(&self) -> Limits {
+        lock(&self.shared.limits).clone()
+    }
+
     pub fn results(&self) -> &Receiver<AnalysisResult> {
         &self.results
     }
@@ -307,22 +319,25 @@ fn worker(lanes: &Lanes, results: &Sender<AnalysisResult>, shared: &Shared) {
 
 fn run(job: &Job, shared: &Shared) -> Result<Analysis, AnalysisError> {
     let settings = lock(&shared.settings).clone();
+    let limits = lock(&shared.limits).clone();
     // The key is taken before analysing: if the file changes meanwhile, the
     // result belongs to the old file and must not be cached for the new one.
+    // It and the analysis use the same `limits` snapshot, so a change of
+    // limits during the job cannot store a result under the new key.
     let key = shared
         .cache
         .as_ref()
-        .and_then(|c| c.key(&job.path, &settings));
+        .and_then(|c| c.key(&job.path, &settings, &limits));
     if let (Some(cache), Some(key)) = (&shared.cache, &key)
-        && let Some(analysis) = cache.load_key(key)
+        && let Some(analysis) = cache.load_key(key, &limits)
     {
         return Ok(analysis);
     }
     let cancelled = || shared.stop.load(Ordering::Acquire) || !lock(&shared.book).is_current(job);
-    let outcome = (shared.analyze)(&job.path, &settings, &shared.limits, &cancelled);
+    let outcome = (shared.analyze)(&job.path, &settings, &limits, &cancelled);
     if let (Ok(analysis), Some(cache), Some(key)) = (&outcome, &shared.cache, &key)
-        && cache.key(&job.path, &settings).as_ref() == Some(key)
-        && let Err(e) = cache.store_key(key, analysis)
+        && cache.key(&job.path, &settings, &limits).as_ref() == Some(key)
+        && let Err(e) = cache.store_key(key, analysis, &limits)
     {
         tracing::warn!(path = %job.path.display(), "cannot cache the analysis: {e}");
     }

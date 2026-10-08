@@ -354,6 +354,10 @@ pub struct Services {
     /// (markers reset) is analysed again.
     seen_analyzed: HashSet<TrackId>,
     settings: Option<AnalysisSettings>,
+    /// The limits the analysis was last given (live settings spec §6).
+    limits: Option<fp_model::Limits>,
+    /// The crash report cap (live settings spec §6), when `main` gave it.
+    report_cap: Option<crate::crash::ReportCap>,
     /// When files not found were last looked for again.
     last_recheck: Option<Instant>,
     /// Looks for them; `None` if its thread could not start.
@@ -419,6 +423,8 @@ impl Services {
             retried: HashSet::new(),
             seen_analyzed: HashSet::new(),
             settings: None,
+            limits: None,
+            report_cap: None,
             last_recheck: None,
             probe: Probe::spawn(),
             tag_worker: TagWorker::spawn(Box::new(|| {}))
@@ -448,6 +454,12 @@ impl Services {
             dirty_since: None,
             last_session_save: None,
         }
+    }
+
+    /// Keeps the crash report cap in step with `limits.max_crash_reports`.
+    pub fn with_report_cap(mut self, cap: crate::crash::ReportCap) -> Self {
+        self.report_cap = Some(cap);
+        self
     }
 
     /// Where the UI sends its requests.
@@ -553,6 +565,7 @@ impl Services {
             }
         }
         self.follow_settings(state);
+        self.follow_limits(state);
         self.recheck_missing(state, now);
         self.submit_new(state);
         self.header_pass(state);
@@ -617,6 +630,27 @@ impl Services {
             self.restart_analysis(state);
         }
         self.settings = Some(current.clone());
+    }
+
+    /// Live settings spec §6: new cover and tag limits reach the analysis
+    /// and its cache for jobs that start after them; nothing is analysed
+    /// again.
+    fn follow_limits(&mut self, state: &AppState) {
+        let current = &state.config.limits;
+        if self.limits.as_ref() == Some(current) {
+            return;
+        }
+        self.analyzer.update_limits(current.clone());
+        if let Some(cap) = &self.report_cap {
+            cap.set(current.max_crash_reports);
+        }
+        self.limits = Some(current.clone());
+    }
+
+    /// The limits the analysis has now. Used by tests.
+    #[cfg(feature = "test-hooks")]
+    pub fn analyzer_limits(&self) -> fp_model::Limits {
+        self.analyzer.limits()
     }
 
     /// Analyses every track again; running analyses are cancelled so that

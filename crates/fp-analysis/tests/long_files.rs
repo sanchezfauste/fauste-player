@@ -21,7 +21,7 @@ fn long_files_analyse_cache_and_seek() {
     let s = AnalysisSettings::default();
     let limits = Limits::default();
     let cache_dir = std::env::temp_dir().join(format!("fp-long-cache-{}", std::process::id()));
-    let cache = AnalysisCache::new(cache_dir.clone(), &limits);
+    let cache = AnalysisCache::new(cache_dir.clone());
     let mut paths: Vec<_> = std::fs::read_dir(&dir)
         .unwrap()
         .filter_map(|e| e.ok().map(|e| e.path()))
@@ -41,9 +41,9 @@ fn long_files_analyse_cache_and_seek() {
         };
         let took = t0.elapsed();
         let t = &a.analysis;
-        let key = cache.key(&path, &s).unwrap();
-        let stored = cache.store_key(&key, &a);
-        let cached = cache.load_key(&key).is_some();
+        let key = cache.key(&path, &s, &limits).unwrap();
+        let stored = cache.store_key(&key, &a, &limits);
+        let cached = cache.load_key(&key, &limits).is_some();
         let mut decoder = FileDecoder::open(&path).unwrap();
         let target = t.duration_secs - 60.0;
         let t1 = Instant::now();

@@ -82,7 +82,7 @@ fn a_non_audio_file_is_reported_as_unreadable() {
 }
 
 fn cache(dir: &Path) -> AnalysisCache {
-    AnalysisCache::new(dir.join("cache"), &Limits::default())
+    AnalysisCache::new(dir.join("cache"))
 }
 
 #[test]
@@ -91,9 +91,9 @@ fn cache_round_trips() {
     let path = fixture(dir.path(), "a.wav", 5);
     let a = analyze_file(&path, &settings(), &Limits::default()).unwrap();
     let c = cache(dir.path());
-    assert!(c.load(&path, &settings()).is_none());
-    c.store(&path, &settings(), &a).unwrap();
-    assert_eq!(c.load(&path, &settings()), Some(a));
+    assert!(c.load(&path, &settings(), &Limits::default()).is_none());
+    c.store(&path, &settings(), &Limits::default(), &a).unwrap();
+    assert_eq!(c.load(&path, &settings(), &Limits::default()), Some(a));
 }
 
 #[test]
@@ -102,9 +102,9 @@ fn a_modified_file_invalidates_the_cache() {
     let path = fixture(dir.path(), "a.wav", 5);
     let a = analyze_file(&path, &settings(), &Limits::default()).unwrap();
     let c = cache(dir.path());
-    c.store(&path, &settings(), &a).unwrap();
+    c.store(&path, &settings(), &Limits::default(), &a).unwrap();
     fixture(dir.path(), "a.wav", 6); // re-recorded: different size
-    assert!(c.load(&path, &settings()).is_none());
+    assert!(c.load(&path, &settings(), &Limits::default()).is_none());
 }
 
 #[test]
@@ -113,12 +113,12 @@ fn changing_the_settings_invalidates_the_cache() {
     let path = fixture(dir.path(), "a.wav", 5);
     let a = analyze_file(&path, &settings(), &Limits::default()).unwrap();
     let c = cache(dir.path());
-    c.store(&path, &settings(), &a).unwrap();
+    c.store(&path, &settings(), &Limits::default(), &a).unwrap();
     let changed = AnalysisSettings {
         segue_drop_db: 12.0,
         ..settings()
     };
-    assert!(c.load(&path, &changed).is_none());
+    assert!(c.load(&path, &changed, &Limits::default()).is_none());
 }
 
 #[test]
@@ -127,11 +127,11 @@ fn a_corrupt_cache_entry_is_recomputed() {
     let path = fixture(dir.path(), "a.wav", 5);
     let a = analyze_file(&path, &settings(), &Limits::default()).unwrap();
     let c = cache(dir.path());
-    c.store(&path, &settings(), &a).unwrap();
+    c.store(&path, &settings(), &Limits::default(), &a).unwrap();
     for entry in std::fs::read_dir(dir.path().join("cache")).unwrap() {
         std::fs::write(entry.unwrap().path(), b"garbage").unwrap();
     }
-    assert!(c.load(&path, &settings()).is_none());
+    assert!(c.load(&path, &settings(), &Limits::default()).is_none());
     assert_eq!(
         std::fs::read_dir(dir.path().join("cache")).unwrap().count(),
         0,
@@ -197,7 +197,9 @@ fn entries_of_older_analysis_versions_are_pruned() {
     let dir = tempfile::tempdir().unwrap();
     let path = fixture(dir.path(), "a.wav", 5);
     let a = analyze_file(&path, &settings(), &Limits::default()).unwrap();
-    cache(dir.path()).store(&path, &settings(), &a).unwrap();
+    cache(dir.path())
+        .store(&path, &settings(), &Limits::default(), &a)
+        .unwrap();
     let cache_dir = dir.path().join("cache");
     let old = ANALYSIS_VERSION - 1;
     std::fs::write(cache_dir.join("0123456789abcdef.bin"), b"unversioned").unwrap();
@@ -223,7 +225,7 @@ fn entries_of_older_analysis_versions_are_pruned() {
         "{names:?}"
     );
     assert_eq!(
-        c.load(&path, &settings()),
+        c.load(&path, &settings(), &Limits::default()),
         Some(a),
         "the current entry stays"
     );

@@ -1266,3 +1266,25 @@ fn a_track_on_a_player_gets_its_header_duration_ahead_of_the_library() {
     // At most two rounds of eight reads were answered by then.
     assert!(known <= 16, "{known} lengths were read first");
 }
+
+#[test]
+fn new_limits_reach_the_analyzer() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 1);
+    let mut r = rig(&[a], dir);
+    r.run_until("analysis", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    let analysed = r.analyses.load(Ordering::SeqCst);
+    let mut config = r.handle.model.load().config.clone();
+    config.limits.max_cover_pixels = 1_000;
+    r.handle.send(Command::UpdateConfig(Box::new(config)));
+    r.run_until("the analyzer has the new limits", |r| {
+        r.services.analyzer_limits().max_cover_pixels == 1_000
+    });
+    assert_eq!(
+        r.analyses.load(Ordering::SeqCst),
+        analysed,
+        "the library is not analysed again"
+    );
+}

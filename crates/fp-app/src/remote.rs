@@ -33,7 +33,10 @@ impl Bridge {
         let model = self.conductor.model.load_full();
         let path = &model.library.get(track)?.path;
         let settings = &model.config.analysis;
-        if let Some(analysis) = self.cache.load(path, settings) {
+        // The limits of this snapshot (live settings spec §6): the cache
+        // keeps none, so concurrent requests cannot disturb each other.
+        let limits = &model.config.limits;
+        if let Some(analysis) = self.cache.load(path, settings, limits) {
             return Some(analysis);
         }
         if !model.library.is_playable(track) {
@@ -44,17 +47,17 @@ impl Bridge {
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         // A request that waited for the lock finds the other one's result.
-        if let Some(analysis) = self.cache.load(path, settings) {
+        if let Some(analysis) = self.cache.load(path, settings, limits) {
             return Some(analysis);
         }
-        let analysis = match analyse_low(path, settings, &model.config.limits) {
+        let analysis = match analyse_low(path, settings, limits) {
             Ok(analysis) => analysis,
             Err(error) => {
                 tracing::warn!(path = %path.display(), %error, "cannot analyse the track");
                 return None;
             }
         };
-        if let Err(error) = self.cache.store(path, settings, &analysis) {
+        if let Err(error) = self.cache.store(path, settings, limits, &analysis) {
             tracing::warn!(path = %path.display(), %error, "cannot cache the analysis");
         }
         Some(analysis)
@@ -133,12 +136,11 @@ pub fn start(
     conductor: Arc<ConductorHandle>,
     media: MediaCache,
     analysis_dir: PathBuf,
-    limits: &Limits,
 ) -> Option<RemoteHandle> {
     let bridge = Bridge {
         conductor,
         media,
-        cache: AnalysisCache::new(analysis_dir, limits),
+        cache: AnalysisCache::new(analysis_dir),
         on_demand: Mutex::new(()),
     };
     match fp_remote::spawn(Arc::new(bridge)) {

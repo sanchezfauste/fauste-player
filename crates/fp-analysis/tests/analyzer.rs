@@ -7,8 +7,8 @@
 //! The background analysis pool.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use fp_analysis::analyzer::{AnalyzeFn, Analyzer};
@@ -89,7 +89,7 @@ fn cached_results_are_returned_without_analysing_again() {
     });
     let dir = tempfile::tempdir().unwrap();
     let path = wav(dir.path(), "a.wav");
-    let cache = AnalysisCache::new(dir.path().join("cache"), &Limits::default());
+    let cache = AnalysisCache::new(dir.path().join("cache"));
     let analyzer = Analyzer::with_analyze_fn(
         1,
         AnalysisSettings::default(),
@@ -245,7 +245,7 @@ fn a_file_changed_during_analysis_is_not_cached_under_its_new_key() {
         std::fs::write(path, vec![0u8; 12_345]).unwrap();
         result
     });
-    let cache = AnalysisCache::new(cache_dir.clone(), &Limits::default());
+    let cache = AnalysisCache::new(cache_dir.clone());
     let analyzer = Analyzer::with_analyze_fn(
         1,
         AnalysisSettings::default(),
@@ -256,9 +256,11 @@ fn a_file_changed_during_analysis_is_not_cached_under_its_new_key() {
     .unwrap();
     analyzer.submit(TrackId(1), path.clone());
     analyzer.results().recv_timeout(WAIT).unwrap();
-    let check = AnalysisCache::new(cache_dir, &Limits::default());
+    let check = AnalysisCache::new(cache_dir);
     assert!(
-        check.load(&path, &AnalysisSettings::default()).is_none(),
+        check
+            .load(&path, &AnalysisSettings::default(), &Limits::default())
+            .is_none(),
         "stale result cached for the new file"
     );
 }
@@ -270,7 +272,7 @@ fn the_pool_sweeps_old_cache_entries_off_the_callers_thread() {
     std::fs::create_dir_all(&cache_dir).unwrap();
     let stale = cache_dir.join("0123456789abcdef.bin");
     std::fs::write(&stale, b"unversioned").unwrap();
-    let cache = AnalysisCache::new(cache_dir, &Limits::default());
+    let cache = AnalysisCache::new(cache_dir);
     assert!(stale.exists(), "opening the cache does not sweep");
     let analyzer = Analyzer::spawn(
         1,
@@ -396,4 +398,89 @@ fn the_pool_runs_at_low_priority() {
         analyzer.results().recv_timeout(WAIT).unwrap();
     }
     assert_eq!(*seen.lock().unwrap(), vec![19; 4]);
+}
+
+#[test]
+fn new_limits_reach_the_jobs_that_start_after_them() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let record = seen.clone();
+    let capture: AnalyzeFn = Arc::new(move |path, settings, limits, _cancelled| {
+        record.lock().unwrap().push(limits.max_cover_pixels);
+        analyze_file(path, settings, limits)
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav");
+    let b = wav(dir.path(), "b.wav");
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        None,
+        capture,
+    )
+    .unwrap();
+    analyzer.submit(TrackId(1), a);
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    analyzer.update_limits(Limits {
+        max_cover_pixels: 1_000,
+        ..Limits::default()
+    });
+    assert_eq!(analyzer.limits().max_cover_pixels, 1_000);
+    analyzer.submit(TrackId(2), b);
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![Limits::default().max_cover_pixels, 1_000]
+    );
+}
+
+#[test]
+fn the_cache_key_follows_the_cover_limits() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "a.wav");
+    let cache = AnalysisCache::new(dir.path().join("cache"));
+    let settings = AnalysisSettings::default();
+    let before = cache.key(&path, &settings, &Limits::default()).unwrap();
+    let lowered = Limits {
+        max_cover_pixels: 1_000,
+        ..Limits::default()
+    };
+    assert_ne!(cache.key(&path, &settings, &lowered).unwrap(), before);
+}
+
+#[test]
+fn a_limits_change_during_a_job_stores_under_the_limits_it_used() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "a.wav");
+    let cache_dir = dir.path().join("cache");
+    let hook: Arc<Mutex<Option<Arc<Analyzer>>>> = Arc::new(Mutex::new(None));
+    let lowered = Limits {
+        max_cover_pixels: 1_000,
+        ..Limits::default()
+    };
+    let (h, l) = (hook.clone(), lowered.clone());
+    let change: AnalyzeFn = Arc::new(move |path, settings, limits, _cancelled| {
+        if let Some(analyzer) = h.lock().unwrap().as_ref() {
+            analyzer.update_limits(l.clone());
+        }
+        analyze_file(path, settings, limits)
+    });
+    let analyzer = Arc::new(
+        Analyzer::with_analyze_fn(
+            1,
+            AnalysisSettings::default(),
+            Limits::default(),
+            Some(AnalysisCache::new(cache_dir.clone())),
+            change,
+        )
+        .unwrap(),
+    );
+    *hook.lock().unwrap() = Some(analyzer.clone());
+    analyzer.submit(TrackId(1), path.clone());
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    let cache = AnalysisCache::new(cache_dir);
+    let settings = AnalysisSettings::default();
+    assert!(cache.load(&path, &settings, &Limits::default()).is_some());
+    assert!(cache.load(&path, &settings, &lowered).is_none());
+    *hook.lock().unwrap() = None;
 }

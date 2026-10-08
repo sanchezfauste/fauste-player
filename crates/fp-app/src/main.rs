@@ -99,7 +99,7 @@ fn main() -> ExitCode {
         }
     };
     let _log = logging::init(&paths.log_dir);
-    crash::install_panic_hook(
+    let report_cap = crash::install_panic_hook(
         paths.log_dir.clone(),
         fp_model::Limits::default().max_crash_reports,
     );
@@ -110,7 +110,7 @@ fn main() -> ExitCode {
         tracing::warn!(path = %path.display(), "not a playlist, ignored");
     }
     let data_dir = paths.data_dir.clone();
-    let result = run(paths, playlists);
+    let result = run(paths, playlists, report_cap);
     drop(lock);
     match result {
         Ok(Exit::Quit) => {
@@ -145,6 +145,7 @@ fn main() -> ExitCode {
 fn run(
     paths: fp_store::AppPaths,
     playlists: Vec<std::path::PathBuf>,
+    report_cap: crash::ReportCap,
 ) -> Result<Exit, Box<dyn std::error::Error>> {
     let store = Store::new(paths.clone(), fp_model::Limits::default());
     let default_name = I18n::new(None).tr("default-playlist-name");
@@ -153,6 +154,7 @@ fn run(
         tracing::warn!(%warning, "while loading the saved state");
     }
     let config = loaded.state.config.clone();
+    report_cap.set(config.limits.max_crash_reports);
     let i18n = I18n::new(config.ui.language.as_deref());
 
     // Every audio system this build supports, plus Null as the last resort.
@@ -175,7 +177,7 @@ fn run(
     let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
     let handle = Arc::new(conductor.spawn(handle)?);
 
-    let cache = AnalysisCache::new(paths.cache_dir.join("analysis"), &config.limits);
+    let cache = AnalysisCache::new(paths.cache_dir.join("analysis"));
     let analyzer = Analyzer::spawn(
         ANALYSIS_THREADS,
         config.analysis.clone(),
@@ -183,7 +185,8 @@ fn run(
         Some(cache),
     )?;
     let media = MediaCache::default();
-    let services = Services::new(handle.clone(), store, analyzer, media.clone());
+    let services =
+        Services::new(handle.clone(), store, analyzer, media.clone()).with_report_cap(report_cap);
     let requests = services.requests();
     let faults = services.faults();
     let services = services.spawn()?;
@@ -192,7 +195,6 @@ fn run(
         handle.clone(),
         media.clone(),
         paths.cache_dir.join("analysis"),
-        &config.limits,
     );
     let mut app = AppUi::new(handle.clone(), i18n, media)
         .with_services(requests)
