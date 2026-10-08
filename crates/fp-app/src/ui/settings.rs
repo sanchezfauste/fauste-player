@@ -98,6 +98,16 @@ impl SettingsState {
         self.keys.capturing() || self.midi_learning.is_some() || self.confirm_restore.is_some()
     }
 
+    /// The name the device pickers give `device`, once the device lists
+    /// have been read (Settings opened once); its id until then. Nothing
+    /// is enumerated for this (rule 8).
+    pub(crate) fn device_label(&self, device: &fp_model::OutputDevice) -> String {
+        match &self.backends {
+            Some(backends) => devices::find(backends, device).1,
+            None => device.device.clone(),
+        }
+    }
+
     /// Opens the Cartwall section on one cart (`Edit…` on a cart button).
     pub fn edit_cart(&mut self, page: fp_model::CartPageId, index: usize) {
         self.section = Section::Cartwall;
@@ -178,8 +188,12 @@ pub(crate) struct SettingsDeps<'a> {
     pub notice: Option<String>,
     pub midi: Option<&'a fp_control::service::MidiHandle>,
     pub remote: Option<fp_remote::RemoteStatus>,
-    /// A start-up setting changed: the footer offers Restart now.
-    pub restart_pending: bool,
+    /// An output change waits (live settings spec §9.1).
+    pub pending: bool,
+    /// One of them is an output change Apply now can apply.
+    pub can_apply: bool,
+    /// What waits, one item per line (Apply now's tooltip).
+    pub pending_tip: String,
     /// How many tracks an earlier version analysed.
     pub outdated: usize,
 }
@@ -188,8 +202,8 @@ pub(crate) struct SettingsDeps<'a> {
 pub(crate) struct Outcome {
     /// `false` once the modal should close.
     pub open: bool,
-    /// The operator pressed Restart now.
-    pub restart: bool,
+    /// The operator pressed Apply now.
+    pub apply_now: bool,
 }
 
 /// Draws the modal for one frame.
@@ -211,7 +225,7 @@ pub(crate) fn show(
     }
     let t = scene.i18n;
     let mut open = true;
-    let mut restart = false;
+    let mut apply_now = false;
     let size = window_size(ctx.content_rect().size());
     let modal = egui::Modal::new(egui::Id::new("settings"))
         .frame(egui::Frame::new().fill(theme::SURFACE))
@@ -323,8 +337,8 @@ pub(crate) fn show(
                     {
                         open = false;
                     }
-                    if deps.restart_pending {
-                        let label = t.tr("settings-restart-now");
+                    if deps.can_apply {
+                        let label = t.tr("settings-apply-now");
                         let width = ui
                             .painter()
                             .layout_no_wrap(label.clone(), font_medium(13.0), theme::TEXT)
@@ -344,16 +358,17 @@ pub(crate) fn show(
                                 c,
                             );
                         })
+                        .on_hover_text(&deps.pending_tip)
                         .clicked()
                         {
-                            restart = true;
+                            apply_now = true;
                         }
                     }
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                         ui.add_space(16.0);
-                        let (text, color) = match (&deps.notice, deps.restart_pending) {
+                        let (text, color) = match (&deps.notice, deps.pending) {
                             (Some(n), _) => (n.clone(), theme::AMBER),
-                            (None, true) => (t.tr("settings-restart-pending"), theme::AMBER),
+                            (None, true) => (t.tr("settings-pending"), theme::AMBER),
                             (None, false) => (t.tr("settings-applies-now"), theme::NEUTRAL_500),
                         };
                         ui.add(
@@ -365,15 +380,11 @@ pub(crate) fn show(
                 },
             );
         });
-    // A typed address or token is saved before the window closes.
-    if restart {
-        remote::flush(scene, &mut st.remote);
-    }
     confirm_restore(ctx, scene, st);
     if modal.should_close() && !capturing {
         open = false;
     }
-    Outcome { open, restart }
+    Outcome { open, apply_now }
 }
 
 fn separator(ui: &mut Ui, width: f32) {

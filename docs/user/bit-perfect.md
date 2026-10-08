@@ -14,7 +14,8 @@ processing on the computer should be avoided.
    application starts.
 2. Choose **Advanced** at the top of the section. Under **Per-device
    settings**, turn on **Bit-perfect** next to the device.
-3. Restart the application.
+3. The device becomes bit-perfect as soon as nothing plays on it (see
+   [Settings pending](settings.md#settings-pending)).
 
 The device then starts at its own sample rate when you gave it one in the same
 place, else at the global sample rate, and follows each file from there.
@@ -81,7 +82,8 @@ off, the device cannot be opened exclusively, native DSD needs Linux, or
 the device does not take native DSD. A mode saved for a device that cannot
 take it now shows as PCM, which is what plays; the saved mode comes back
 when the device can take it again. Changing a mode, the mixing setting or
-the DSD silence needs a restart, like the other output settings.
+the DSD silence applies once nothing plays on the device, like the other
+output settings.
 
 **When DSD goes out unchanged.** All of these must hold when the track
 starts:
@@ -202,7 +204,7 @@ application, on a simulated device.
 
 The automated tests check DSD on simulated devices only. DoP and native DSD
 have not been tried on a real converter by the project. To check one:
-1. Set the device to **DoP** (or **Native DSD** on Linux), restart, and play
+1. Set the device to **DoP** (or **Native DSD** on Linux) and play
    a DSD file at 100 % with nothing else playing. The header must show
    **DSD**, and the converter's own display should show the DSD rate (for
    example DSD64) instead of a PCM rate. A converter that shows a PCM rate

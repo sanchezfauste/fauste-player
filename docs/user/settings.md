@@ -13,41 +13,52 @@ resets only that section (Players keeps the number of players and the
 language; Shortcuts has no other reset button). Audio outputs, Playlists,
 Cartwall, MIDI and Remote have none.
 
-## Restart pending
+## Settings pending
 
-Some changes only take effect when the application starts again: the audio
-system, sample rate, buffer size (also a device's own), the Main and Cue
-outputs (players and cartwall), the bit-perfect devices and the DSD settings.
-The number of players is not one of them: it applies at once.
+Every setting applies while the application runs. The audio system, the
+sample rate, the buffer size (also a device's own), the Main and Cue outputs
+(players and cartwall), the bit-perfect devices and the DSD settings change
+how an output device is opened, so they apply as soon as that is safe:
 
-A rate or buffer given to a device counts only when it changes what the device
-opens with: giving a device the same value as the global one, or clearing such
-a value, is not pending.
+- A device's settings apply when nothing plays on that device: no player
+  routed to it is playing, fading or pre-listening (CUE, also when held),
+  and no cart plays on it. A paused player, or one with a track only loaded,
+  does not hold a device: its track stays paused where it was.
+- A player's or the cartwall's output moves when that player (or the
+  cartwall) is not playing; other players on the same devices are not
+  interrupted.
+- A new audio system applies when nothing plays anywhere.
 
-The limits and the engine tuning also apply at the next start, but they are
-edited in the configuration file with the application closed (see
-[Data and backups](data-and-backups.md)), so they never show as pending.
+A waiting change runs at the first moment nothing it affects plays. That
+can be the gap between one track ending and the next starting: the next
+track then starts later by the time the device takes to reopen. **Apply
+now** (below) forces the change at once instead.
 
-While one of these is waiting, the Settings footer says "Some changes take
-effect after a restart." and offers **Restart now**, and the top bar shows a
-**Restart pending** pill. Hover the pill to see what is waiting. A short
-notice (for example, that a setting was saved) can take the place of the
-footer text for a moment; **Restart now** stays. Both do the same thing:
+A rate or buffer given to a device counts only when it changes what the
+device opens with: giving a device the same value as the global one, or
+clearing such a value, changes nothing.
 
-- When nothing is on air, **Restart now** (or the pill) restarts at once.
-- When something is on air, the window that lists what is sounding appears,
-  with **Stop and restart** or **Cancel**.
+Until then the top bar shows **Settings pending**. Hover it to see what
+waits and on what; click it for the list, which also shows any change a
+device or output refused (the device keeps its current settings; the change
+is tried again when you change it or press **Apply now**). The Settings
+footer says "Some changes wait until the outputs they affect are free." and
+offers **Apply now**; a short notice (for example, that a setting was saved)
+can take the place of that text for a moment.
 
-The session is saved first and the audio and MIDI control stop, then the
-application starts again with the same data folder (`FAUSTE_HOME`), and
-nothing goes on air by itself afterwards. If the application cannot start
-again (in a Flatpak, also when the new one does not start in time), it says so;
-start it from your applications menu.
+**Apply now** applies every waiting output change at once. When that would
+interrupt something, it first lists the devices and what plays on them;
+**Interrupt and apply** then briefly interrupts the audio on those devices:
+what was playing goes on from where it was after a short gap, and nothing
+paused or stopped starts. **Cancel** (or `Esc`) keeps waiting.
+
+The limits and the engine tuning are edited in the configuration file with
+the application closed (see [Data and backups](data-and-backups.md)).
 
 ## Audio outputs
 
-Changes in this section wait for a restart: see
-[Restart pending](#restart-pending).
+Changes in this section apply while the application runs, as soon as nothing
+they affect is playing: see [Settings pending](#settings-pending).
 
 ![Settings, Audio outputs, Basic view: the selector, the audio system, sample rate, buffer size and each player's Main and Cue outputs (here the silent system)](../images/guide/settings-outputs.png)
 

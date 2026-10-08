@@ -15,7 +15,7 @@ use crate::ui::theme;
 
 /// The device as its backend lists it, and the label the pickers give it
 /// (its id when it is not listed: unplugged, or another system).
-fn find<'a>(
+pub(super) fn find<'a>(
     backends: &'a [BackendChoice],
     device: &OutputDevice,
 ) -> (Option<&'a DeviceInfo>, String) {

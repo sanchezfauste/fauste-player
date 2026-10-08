@@ -2,13 +2,16 @@
 //! confirmation of Apply now. The rules are `fp_model::live`; this module
 //! only describes them and asks.
 
-#![allow(dead_code)] // Used by the interface from the next task on.
-
+use egui::{RichText, vec2};
 use fp_model::{
     AppState, BusyCause, CartId, DeviceSettings, DsdOutput, Holder, OutputDevice, Pending,
     PendingItem, PlayerId, Route, Target,
 };
 
+use super::app::Scene;
+use super::exit_guard::button;
+use super::theme;
+use super::widgets::{font, font_medium};
 use crate::i18n::I18n;
 
 /// Names a device as the Settings pickers do; an unknown id as is.
@@ -61,7 +64,7 @@ fn audio_system_label(t: &I18n, backend: Option<&str>) -> String {
 
 /// A rate in kHz as the pickers show it: 48, 44.1, 88.2.
 fn khz(rate: u32) -> String {
-    if rate % 1000 == 0 {
+    if rate.is_multiple_of(1000) {
         (rate / 1000).to_string()
     } else {
         format!("{}", f64::from(rate) / 1000.0)
@@ -287,6 +290,123 @@ pub(crate) fn target_label(
         Target::Route(holder) => holder_label(t, state, *holder),
         Target::Device(device) => names(device),
     }
+}
+
+/// What the operator chose in the pending panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Answer {
+    Close,
+    ApplyNow,
+}
+
+fn text(ui: &mut egui::Ui, text: String, size: f32, color: egui::Color32) {
+    ui.add(
+        egui::Label::new(RichText::new(text).font(font(size)).color(color))
+            .selectable(false)
+            .wrap(),
+    );
+}
+
+fn title(ui: &mut egui::Ui, text: String) {
+    ui.add(
+        egui::Label::new(
+            RichText::new(text)
+                .font(font_medium(18.0))
+                .color(theme::TEXT),
+        )
+        .selectable(false),
+    );
+}
+
+/// The pending panel (§9.1): every item, what it waits for, and any
+/// refusal; Apply now while an output change is pending. `None` keeps it
+/// open; Esc is answered by `AppUi::keyboard`, a click on the backdrop
+/// closes it.
+pub(crate) fn show_panel(
+    ctx: &egui::Context,
+    scene: &Scene<'_>,
+    names: DeviceNames<'_>,
+) -> Option<Answer> {
+    let (t, state) = (scene.i18n, scene.state);
+    let items = fp_model::pending(state);
+    let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 520.0);
+    let mut answer = None;
+    let modal = egui::Modal::new(egui::Id::new("settings-pending"))
+        .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
+        .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
+        .show(ctx, |ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+            title(ui, t.tr("top-settings-pending"));
+            text(ui, t.tr("settings-pending"), 12.0, theme::NEUTRAL_300);
+            for p in &items {
+                text(ui, describe(t, state, names, p), 12.0, theme::TEXT);
+                if let Some(failure) = describe_failure(t, state, names, p) {
+                    text(ui, failure, 11.0, theme::AMBER);
+                }
+            }
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if button(ui, &t.tr("settings-close"), None) {
+                    answer = Some(Answer::Close);
+                }
+                if fp_model::has_output_items(state)
+                    && button(ui, &t.tr("settings-apply-now"), Some(theme::AMBER))
+                {
+                    answer = Some(Answer::ApplyNow);
+                }
+            });
+        });
+    if answer.is_none() && modal.should_close() {
+        answer = Some(Answer::Close);
+    }
+    answer
+}
+
+/// Apply now's confirmation (§9.3): what it briefly interrupts. `Some(true)`
+/// interrupts and applies; `Some(false)` cancels (the button or the
+/// backdrop; Esc is answered by `AppUi::keyboard`).
+pub(crate) fn show_confirm(
+    ctx: &egui::Context,
+    scene: &Scene<'_>,
+    names: DeviceNames<'_>,
+) -> Option<bool> {
+    let (t, state) = (scene.i18n, scene.state);
+    let interruptions = fp_model::interruptions(state);
+    let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 440.0);
+    let mut answer = None;
+    let modal = egui::Modal::new(egui::Id::new("apply-now"))
+        .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
+        .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
+        .show(ctx, |ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+            title(ui, t.tr("apply-now-title"));
+            text(ui, t.tr("apply-now-body"), 12.0, theme::NEUTRAL_300);
+            for (target, causes) in &interruptions {
+                let line = t.tr_args(
+                    "apply-now-line",
+                    &[
+                        ("device", target_label(t, state, names, target).into()),
+                        ("causes", causes_list(t, state, causes).into()),
+                    ],
+                );
+                text(ui, line, 12.0, theme::TEXT);
+            }
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if button(ui, &t.tr("exit-guard-cancel"), None) {
+                    answer = Some(false);
+                }
+                if button(ui, &t.tr("apply-now-confirm"), Some(theme::ON_AIR_ROW)) {
+                    answer = Some(true);
+                }
+            });
+        });
+    if answer.is_none() && modal.should_close() {
+        answer = Some(false);
+    }
+    answer
 }
 
 #[cfg(test)]

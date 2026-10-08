@@ -4,7 +4,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender};
@@ -15,8 +14,7 @@ use fp_backends::AudioBackend;
 use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
 use fp_model::{
-    AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, RestartReason,
-    ShortcutAction, TrackId,
+    AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, ShortcutAction, TrackId,
 };
 
 use super::about::{self, NoticeOpener};
@@ -26,6 +24,7 @@ use super::cue_window;
 use super::exit_guard::{self, ExitIntent};
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::notice;
+use super::pending;
 use super::player;
 use super::playlist_files::{self, FileOutcome};
 use super::reset_played;
@@ -120,8 +119,12 @@ pub(crate) struct ViewState {
     pub exit_guard: Option<ExitIntent>,
     /// The operator confirmed the close: let the window go.
     pub close_confirmed: bool,
-    /// Restart now was pressed (Settings footer or the top-bar pill).
-    pub restart_requested: bool,
+    /// The pending panel is open (live settings spec §9.1).
+    pub pending_open: bool,
+    /// Apply now was pressed (Settings footer or the pending panel).
+    pub apply_now_requested: bool,
+    /// Apply now's confirmation is open (§9.3).
+    pub confirm_apply_now: bool,
     /// The notice about tracks an earlier version analysed is open.
     pub outdated_open: bool,
     /// Where each waveform's menu was opened, in seconds.
@@ -342,7 +345,6 @@ pub struct AppUi {
     i18n: I18n,
     media: MediaCache,
     services: Option<Sender<ServiceRequest>>,
-    platform: String,
     pub(crate) view: ViewState,
     covers: HashMap<TrackId, TextureHandle>,
     covers_version: u64,
@@ -376,11 +378,6 @@ pub struct AppUi {
     midi: Option<fp_control::service::MidiHandle>,
     /// The remote servers' state (Settings > Remote), when they started.
     remote_status: Option<Arc<arc_swap::ArcSwap<fp_remote::RemoteStatus>>>,
-    /// The configuration the engine was built with (feedback 2 spec O4).
-    started: fp_model::Config,
-    /// Set once a restart is confirmed; `main` reads it after the window
-    /// closes.
-    restart: Arc<AtomicBool>,
     /// Reads and writes tags off the interface thread; started by the first
     /// use of the tag editor.
     tag_worker: Option<TagWorker>,
@@ -407,13 +404,11 @@ impl AppUi {
         let (picks_tx, picks_rx) = crossbeam_channel::unbounded();
         let (files_tx, files_rx) = crossbeam_channel::unbounded();
         let (cover_picks_tx, cover_picks_rx) = crossbeam_channel::unbounded();
-        let started = ctl.model().config.clone();
         Self {
             ctl,
             i18n,
             media,
             services: None,
-            platform: default_platform(),
             view: ViewState::default(),
             covers: HashMap::new(),
             covers_version: 0,
@@ -438,8 +433,6 @@ impl AppUi {
             opener: about::system_opener(),
             midi: None,
             remote_status: None,
-            started,
-            restart: Arc::new(AtomicBool::new(false)),
             tag_worker: None,
             cover_picks_tx,
             cover_picks_rx,
@@ -447,19 +440,6 @@ impl AppUi {
             #[cfg(feature = "test-hooks")]
             cover_picker: None,
         }
-    }
-
-    /// The configuration the audio engine was built with; a change to a
-    /// start-up setting after it shows "Restart pending".
-    pub fn with_started_config(mut self, config: fp_model::Config) -> Self {
-        self.started = config;
-        self
-    }
-
-    /// True once the operator confirmed a restart: `main` starts the
-    /// application again after its normal shutdown.
-    pub fn restart_flag(&self) -> Arc<AtomicBool> {
-        self.restart.clone()
     }
 
     /// The services thread's fault counter, shown as a status-bar alert.
@@ -477,12 +457,6 @@ impl AppUi {
     /// Where "Re-analyse all" goes.
     pub fn with_services(mut self, services: Sender<ServiceRequest>) -> Self {
         self.services = Some(services);
-        self
-    }
-
-    /// The backend/OS label in the status bar.
-    pub fn with_platform(mut self, platform: String) -> Self {
-        self.platform = platform;
         self
     }
 
@@ -659,7 +633,7 @@ impl AppUi {
             self.open_tag_editor(&ctx, &state, track);
         }
         self.keyboard(&ctx, &state);
-        let pending = fp_model::restart_pending(&self.started, &state.config);
+        let pending = fp_model::pending(&state);
         let scene = Scene {
             ctl: self.ctl.as_ref(),
             i18n: &self.i18n,
@@ -688,7 +662,9 @@ impl AppUi {
                 .max_rect(top)
                 .layout(Layout::left_to_right(Align::Center)),
         );
-        top_bar(&mut top_ui, &scene, &mut self.view, &pending);
+        top_bar(&mut top_ui, &scene, &mut self.view, &pending, &|d| {
+            self.settings.device_label(d)
+        });
         // The cartwall strip takes the bottom of the middle area.
         let inner = middle.shrink(8.0);
         let cart_height = cartwall::height(&scene).min(inner.height() * 0.6);
@@ -723,7 +699,7 @@ impl AppUi {
             .service_faults
             .as_ref()
             .map_or(0, |f| f.load(std::sync::atomic::Ordering::Acquire));
-        status_bar(&mut status_ui, &scene, &self.view, &self.platform, faults);
+        status_bar(&mut status_ui, &scene, &self.view, faults);
         ui.allocate_rect(full, Sense::hover());
         // The CUE windows float over the screen; the dialogs below stay on top.
         cue_window::show_all(&ctx, &scene, &mut self.view);
@@ -744,6 +720,14 @@ impl AppUi {
             if let Some((page, index)) = self.view.edit_cart.take() {
                 self.settings.edit_cart(page, index);
             }
+            let pending_tip = {
+                let names = |d: &fp_model::OutputDevice| self.settings.device_label(d);
+                pending
+                    .iter()
+                    .map(|p| pending::describe(&self.i18n, &state, &names, p))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
             let deps = SettingsDeps {
                 backends: &self.backends,
                 services: self.services.as_ref(),
@@ -755,12 +739,14 @@ impl AppUi {
                     .map(|(text, _)| text.clone()),
                 midi: self.midi.as_ref(),
                 remote: self.remote_status.as_ref().map(|s| (**s.load()).clone()),
-                restart_pending: !pending.is_empty(),
+                pending: !pending.is_empty(),
+                can_apply: fp_model::has_output_items(&state),
+                pending_tip,
                 outdated: self.outdated.get(&state),
             };
             let outcome = settings::show(&ctx, &scene, &mut self.settings, &deps);
             self.view.settings_open = outcome.open;
-            self.view.restart_requested |= outcome.restart;
+            self.view.apply_now_requested |= outcome.apply_now;
         } else {
             self.settings_shown = false;
             // Closing Settings ends MIDI learn: the next press on a surface
@@ -869,12 +855,43 @@ impl AppUi {
                 }
             }
         }
-        // O4: Restart now asks the close guard first when audio is on air.
-        if std::mem::take(&mut self.view.restart_requested) {
-            if fp_model::on_air(&state).is_empty() {
-                begin_restart(&self.restart, &mut self.view, &ctx);
+        // Live settings §9.3: Apply now sends at once when it interrupts
+        // nothing; otherwise it asks first.
+        if std::mem::take(&mut self.view.apply_now_requested) {
+            if fp_model::interruptions(&state).is_empty() {
+                scene.ctl.send(Command::ApplySettingsNow);
             } else {
-                self.view.exit_guard = Some(ExitIntent::Restart);
+                self.view.confirm_apply_now = true;
+            }
+        }
+        if self.view.pending_open && !self.view.confirm_apply_now {
+            if pending.is_empty() {
+                self.view.pending_open = false;
+            } else {
+                let names = |d: &fp_model::OutputDevice| self.settings.device_label(d);
+                match pending::show_panel(&ctx, &scene, &names) {
+                    Some(pending::Answer::Close) => self.view.pending_open = false,
+                    Some(pending::Answer::ApplyNow) => self.view.apply_now_requested = true,
+                    None => {}
+                }
+            }
+        }
+        if self.view.confirm_apply_now {
+            if fp_model::interruptions(&state).is_empty() {
+                // What it would interrupt ended meanwhile: nothing left to
+                // confirm (as the close guard does), the request stands.
+                self.view.confirm_apply_now = false;
+                scene.ctl.send(Command::ApplySettingsNow);
+            } else {
+                let names = |d: &fp_model::OutputDevice| self.settings.device_label(d);
+                match pending::show_confirm(&ctx, &scene, &names) {
+                    Some(true) => {
+                        self.view.confirm_apply_now = false;
+                        scene.ctl.send(Command::ApplySettingsNow);
+                    }
+                    Some(false) => self.view.confirm_apply_now = false,
+                    None => {}
+                }
             }
         }
         // The guard takes precedence over Settings and About: drawn last, it
@@ -895,9 +912,6 @@ impl AppUi {
                             ExitIntent::Close => {
                                 self.view.close_confirmed = true;
                                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                            }
-                            ExitIntent::Restart => {
-                                begin_restart(&self.restart, &mut self.view, &ctx);
                             }
                         }
                     }
@@ -1121,6 +1135,20 @@ impl AppUi {
             });
             if escape {
                 self.view.exit_guard = None;
+            }
+            return;
+        }
+        // Apply now's confirmation, then the pending panel, own the keyboard
+        // the same way: Esc cancels the top one (Cancel is the default). The
+        // key is consumed, so Settings under the confirmation does not close
+        // on the same press.
+        if self.view.confirm_apply_now || self.view.pending_open {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
+                if self.view.confirm_apply_now {
+                    self.view.confirm_apply_now = false;
+                } else {
+                    self.view.pending_open = false;
+                }
             }
             return;
         }
@@ -1425,6 +1453,17 @@ fn shortcut_command(state: &AppState, action: ShortcutAction) -> Option<Command>
     })
 }
 
+/// The status bar's label: the OS and the audio system the engine uses
+/// (live settings spec §9.4); the OS alone until the engine has said.
+fn platform_label(t: &I18n, state: &AppState) -> String {
+    let os = default_platform();
+    match state.live.audio_system_in_use.as_deref() {
+        None => os,
+        Some("null") => format!("{os} · {}", t.tr("settings-backend-null")),
+        Some(id) => format!("{os} · {}", fp_backends::display_name(id)),
+    }
+}
+
 fn default_platform() -> String {
     match std::env::consts::OS {
         "linux" => "Linux".to_owned(),
@@ -1517,28 +1556,13 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
     }
 }
 
-/// Closes the window for a restart. The close guard lets it through: what
-/// was on air has been stopped, or nothing was.
-fn begin_restart(restart: &AtomicBool, view: &mut ViewState, ctx: &egui::Context) {
-    restart.store(true, Ordering::Release);
-    view.close_confirmed = true;
-    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-}
-
-fn restart_reason_key(reason: RestartReason) -> &'static str {
-    match reason {
-        RestartReason::AudioSystem => "restart-reason-audio-system",
-        RestartReason::SampleRate => "restart-reason-sample-rate",
-        RestartReason::BufferSize => "restart-reason-buffer-size",
-        RestartReason::Routes => "restart-reason-routes",
-        RestartReason::BitPerfect => "restart-reason-bit-perfect",
-        RestartReason::DsdOutput => "restart-reason-dsd",
-        RestartReason::Limits => "restart-reason-limits",
-        RestartReason::Tuning => "restart-reason-tuning",
-    }
-}
-
-fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, pending: &[RestartReason]) {
+fn top_bar(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    pending: &[fp_model::Pending],
+    names: pending::DeviceNames<'_>,
+) {
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
     ui.painter().rect_filled(
@@ -1604,13 +1628,12 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, pending: 
         }
         if !pending.is_empty() {
             let i18n = scene.i18n;
-            let label = i18n.tr("top-restart-pending");
-            let reasons = pending
+            let label = i18n.tr("top-settings-pending");
+            let tip = pending
                 .iter()
-                .map(|r| i18n.tr(restart_reason_key(*r)))
+                .map(|p| pending::describe(i18n, scene.state, names, p))
                 .collect::<Vec<_>>()
-                .join(", ");
-            let tip = i18n.tr_args("tip-restart-pending", &[("reasons", reasons.into())]);
+                .join("\n");
             let width = ui
                 .painter()
                 .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
@@ -1627,7 +1650,7 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, pending: 
                 p.text(
                     r.center(),
                     egui::Align2::CENTER_CENTER,
-                    format!("{} {label}", egui_phosphor::regular::ARROWS_CLOCKWISE),
+                    format!("{} {label}", egui_phosphor::regular::HOURGLASS),
                     font(12.0),
                     c,
                 );
@@ -1635,7 +1658,7 @@ fn top_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, pending: 
             .on_hover_text(tip)
             .clicked()
             {
-                view_state.restart_requested = true;
+                view_state.pending_open = true;
             }
         }
     });
@@ -1702,7 +1725,7 @@ fn legend(ui: &mut Ui, color: Color32, label: &str) {
     });
 }
 
-fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, platform: &str, faults: u64) {
+fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u64) {
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
     ui.painter().rect_filled(
@@ -1740,7 +1763,7 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, platform: 
         ui.add_space(12.0);
         ui.add(
             egui::Label::new(
-                RichText::new(platform)
+                RichText::new(platform_label(t, scene.state))
                     .font(font(11.0))
                     .color(theme::NEUTRAL_500),
             )
