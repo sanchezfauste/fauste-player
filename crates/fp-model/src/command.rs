@@ -3,8 +3,9 @@
 use std::path::PathBuf;
 
 use crate::cartwall::{CartEdit, CartFileChange, CartPageImport};
-use crate::config::Config;
+use crate::config::{Config, OutputDevice, Route};
 use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
+use crate::live::{DeviceSettings, Holder, Target, Wanted};
 use crate::player::{ColumnWidths, PlayMode};
 use crate::shortcuts::{KeyChord, ShortcutAction};
 use crate::track::{AudioFormat, FileState, MarkerKind, TrackAnalysis, TrackTags};
@@ -198,7 +199,7 @@ pub enum Command {
 }
 
 /// Something the audio engine observed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EngineEvent {
     /// A crossfade or segue fade-out finished.
     FadeCompleted { player: PlayerId },
@@ -233,6 +234,38 @@ pub enum EngineEvent {
     },
     /// The DSD stream of `entry` ended or was switched to PCM.
     DsdEnded { player: PlayerId, entry: EntryId },
+    /// Live settings spec L3: the engine bound `holder` to the bus of
+    /// `device` (a player added, a route or the audio system applied, the
+    /// cartwall's first cart), holding `route`; the device runs with
+    /// `running`.
+    Placed {
+        holder: Holder,
+        route: Option<Route>,
+        device: OutputDevice,
+        running: DeviceSettings,
+    },
+    /// L3: the engine holds `route` for `holder`, which has no bus (a
+    /// player without a usable Cue route, the cartwall before its first
+    /// cart).
+    Unplaced {
+        holder: Holder,
+        route: Option<Route>,
+    },
+    /// L3: a player was removed; its holders are forgotten.
+    Gone { holder: Holder },
+    /// The audio system the engine runs with (`outputs.backend`) and the
+    /// backend it really chose; reported at start and after
+    /// `ApplyAudioSystem`.
+    AudioSystemInUse {
+        configured: Option<String>,
+        in_use: String,
+    },
+    /// L8, L14: the engine ran an `Apply…` action for `target`.
+    Applied {
+        target: Target,
+        wanted: Wanted,
+        outcome: Result<(), String>,
+    },
 }
 
 /// Everything the engine needs to open and position one source.

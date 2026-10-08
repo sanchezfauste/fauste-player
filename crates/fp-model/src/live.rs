@@ -192,3 +192,96 @@ pub fn device_causes(state: &AppState, device: &OutputDevice) -> Vec<BusyCause> 
     collect_causes(state, on_device, &mut out);
     out
 }
+
+/// Forgets the running settings, in-flight actions and failures of every
+/// device no holder is placed on any more.
+fn forget_unused_devices(live: &mut LiveSettings) {
+    let used: Vec<OutputDevice> = live.placement.values().cloned().collect();
+    live.devices.retain(|d, _| used.contains(d));
+    let unused = |t: &Target| matches!(t, Target::Device(d) if !used.contains(d));
+    live.in_flight.retain(|t, _| !unused(t));
+    live.failures.retain(|t, _| !unused(t));
+}
+
+/// L3: `EngineEvent::Placed`.
+pub(crate) fn placed(
+    state: &mut AppState,
+    holder: Holder,
+    route: Option<Route>,
+    device: OutputDevice,
+    running: DeviceSettings,
+) {
+    let live = &mut state.live;
+    live.placement.insert(holder, device.clone());
+    live.routes.insert(holder, route);
+    live.devices.insert(device, running);
+    forget_unused_devices(live);
+}
+
+/// L3: `EngineEvent::Unplaced`.
+pub(crate) fn unplaced(state: &mut AppState, holder: Holder, route: Option<Route>) {
+    let live = &mut state.live;
+    live.placement.remove(&holder);
+    live.routes.insert(holder, route);
+    forget_unused_devices(live);
+}
+
+/// L3: `EngineEvent::Gone`.
+pub(crate) fn gone(state: &mut AppState, holder: Holder) {
+    let live = &mut state.live;
+    live.placement.remove(&holder);
+    live.routes.remove(&holder);
+    live.in_flight.remove(&Target::Route(holder));
+    live.failures.remove(&Target::Route(holder));
+    forget_unused_devices(live);
+}
+
+/// `EngineEvent::AudioSystemInUse`.
+pub(crate) fn audio_system_in_use(
+    state: &mut AppState,
+    configured: Option<String>,
+    in_use: String,
+) {
+    state.live.audio_system = Some(configured);
+    state.live.audio_system_in_use = Some(in_use);
+}
+
+/// L8, L14: `EngineEvent::Applied`. The action is no longer in flight when
+/// it asked for `wanted` (a newer one stays). On `Ok` the value is the
+/// running one; on `Err` it is recorded as refused and not tried again
+/// until the wanted value changes or the operator presses Apply now.
+pub(crate) fn applied(
+    state: &mut AppState,
+    target: Target,
+    wanted: Wanted,
+    outcome: Result<(), String>,
+) {
+    let live = &mut state.live;
+    if live.in_flight.get(&target) == Some(&wanted) {
+        live.in_flight.remove(&target);
+    }
+    match outcome {
+        Ok(()) => {
+            match (&target, &wanted) {
+                (Target::AudioSystem, Wanted::AudioSystem(backend)) => {
+                    live.audio_system = Some(backend.clone());
+                }
+                (Target::Route(holder), Wanted::Route(route)) => {
+                    if let Some(running) = live.routes.get_mut(holder) {
+                        *running = route.clone();
+                    }
+                }
+                (Target::Device(device), Wanted::Device(settings)) => {
+                    if let Some(running) = live.devices.get_mut(device) {
+                        *running = *settings;
+                    }
+                }
+                _ => {}
+            }
+            live.failures.remove(&target);
+        }
+        Err(reason) => {
+            live.failures.insert(target, Failure { wanted, reason });
+        }
+    }
+}

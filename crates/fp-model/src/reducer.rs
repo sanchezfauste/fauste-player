@@ -436,6 +436,22 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                 state.players[i].cue = None;
             }
         }
+        EngineEvent::Placed {
+            holder,
+            route,
+            device,
+            running,
+        } => crate::live::placed(state, holder, route, device, running),
+        EngineEvent::Unplaced { holder, route } => crate::live::unplaced(state, holder, route),
+        EngineEvent::Gone { holder } => crate::live::gone(state, holder),
+        EngineEvent::AudioSystemInUse { configured, in_use } => {
+            crate::live::audio_system_in_use(state, configured, in_use)
+        }
+        EngineEvent::Applied {
+            target,
+            wanted,
+            outcome,
+        } => crate::live::applied(state, target, wanted, outcome),
     }
     fill_empty_next(state);
     reconcile(state, &mut out);

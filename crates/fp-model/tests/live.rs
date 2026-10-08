@@ -7,8 +7,8 @@ mod common;
 use common::{entries, fixture, p0};
 use fp_model::{
     AppState, BusyCause, CartId, Command, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput,
-    Holder, LiveSettings, OutputDevice, Route, TrackAnalysis, apply, causes, device_causes,
-    device_settings,
+    EngineEvent, Failure, Holder, LiveSettings, OutputDevice, Route, Target, TrackAnalysis, Wanted,
+    apply, causes, configured_route, device_causes, device_settings, on_event,
 };
 
 fn dev(name: &str) -> OutputDevice {
@@ -185,4 +185,154 @@ fn l2_a_device_collects_the_causes_of_every_holder_placed_on_it() {
     );
     assert!(device_causes(&s, &dev("phones")).is_empty(), "no CUE");
     assert!(device_causes(&s, &dev("elsewhere")).is_empty());
+}
+
+/// Reports a holder as the engine does (L3).
+fn report(
+    state: &mut AppState,
+    holder: Holder,
+    route: Option<Route>,
+    target: Option<OutputDevice>,
+) {
+    let event = match target {
+        Some(device) => EngineEvent::Placed {
+            holder,
+            route,
+            running: device_settings(&state.config.outputs, &device),
+            device,
+        },
+        None => EngineEvent::Unplaced { holder, route },
+    };
+    on_event(state, event);
+}
+
+/// What the engine reports at start (L3): the audio system, each
+/// player's Main on its route's device (`default` without one), its Cue
+/// on its route's device, and the cartwall unplaced.
+fn report_start(state: &mut AppState) {
+    let configured = state.config.outputs.backend.clone();
+    on_event(
+        state,
+        EngineEvent::AudioSystemInUse {
+            configured,
+            in_use: "null".into(),
+        },
+    );
+    let ids: Vec<_> = state.players.iter().map(|p| p.id).collect();
+    for id in ids {
+        for holder in [Holder::PlayerMain(id), Holder::PlayerCue(id)] {
+            let route = configured_route(&state.config, holder);
+            let target = match (&route, holder) {
+                (Some(r), _) => Some(dev(&r.device)),
+                (None, Holder::PlayerMain(_)) => Some(dev("default")),
+                (None, _) => None,
+            };
+            report(state, holder, route, target);
+        }
+    }
+    for holder in [Holder::CartwallMain, Holder::CartwallCue] {
+        let route = configured_route(&state.config, holder);
+        report(state, holder, route, None);
+    }
+}
+
+#[test]
+fn l3_the_engine_reports_where_each_holder_plays() {
+    let mut s = fixture(1);
+    let p = p0(&s);
+    report_start(&mut s);
+    assert_eq!(s.live.audio_system, Some(None));
+    assert_eq!(s.live.audio_system_in_use.as_deref(), Some("null"));
+    assert_eq!(
+        s.live.placement.get(&Holder::PlayerMain(p)),
+        Some(&dev("default"))
+    );
+    assert_eq!(
+        s.live.placement.get(&Holder::PlayerCue(p)),
+        Some(&dev("phones"))
+    );
+    assert_eq!(s.live.placement.get(&Holder::CartwallMain), None);
+    assert_eq!(
+        s.live.routes.get(&Holder::CartwallCue),
+        Some(&Some(route_to("phones")))
+    );
+    assert_eq!(
+        s.live.devices.get(&dev("default")),
+        Some(&device_settings(&s.config.outputs, &dev("default")))
+    );
+    on_event(
+        &mut s,
+        EngineEvent::Gone {
+            holder: Holder::PlayerMain(p),
+        },
+    );
+    assert!(!s.live.placement.contains_key(&Holder::PlayerMain(p)));
+    assert!(!s.live.routes.contains_key(&Holder::PlayerMain(p)));
+}
+
+#[test]
+fn a_device_no_holder_uses_any_more_is_forgotten_with_its_failure() {
+    let mut s = fixture(1);
+    let p = p0(&s);
+    s.config.outputs.routes[0].main = Some(route_to("dac"));
+    report_start(&mut s);
+    let target = Target::Device(dev("dac"));
+    let wanted = Wanted::Device(DeviceSettings {
+        buffer_frames: 1024,
+        ..device_settings(&s.config.outputs, &dev("dac"))
+    });
+    on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: target.clone(),
+            wanted: wanted.clone(),
+            outcome: Err("refused".into()),
+        },
+    );
+    assert_eq!(
+        s.live.failures.get(&target),
+        Some(&Failure {
+            wanted,
+            reason: "refused".into()
+        })
+    );
+    // The holder moves to the default output: nothing uses dac any more.
+    report(&mut s, Holder::PlayerMain(p), None, Some(dev("default")));
+    assert!(!s.live.devices.contains_key(&dev("dac")));
+    assert!(!s.live.failures.contains_key(&target));
+}
+
+#[test]
+fn l14_an_accepted_value_becomes_the_running_one_and_clears_the_failure() {
+    let mut s = fixture(1);
+    report_start(&mut s);
+    let d = dev("default");
+    let target = Target::Device(d.clone());
+    let settings = DeviceSettings {
+        sample_rate: 44_100,
+        ..device_settings(&s.config.outputs, &d)
+    };
+    on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: target.clone(),
+            wanted: Wanted::Device(settings),
+            outcome: Err("refused".into()),
+        },
+    );
+    assert_eq!(
+        s.live.devices.get(&d).map(|r| r.sample_rate),
+        Some(48_000),
+        "a refusal keeps the running value"
+    );
+    on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: target.clone(),
+            wanted: Wanted::Device(settings),
+            outcome: Ok(()),
+        },
+    );
+    assert_eq!(s.live.devices.get(&d), Some(&settings));
+    assert!(!s.live.failures.contains_key(&target));
 }
