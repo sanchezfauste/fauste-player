@@ -73,7 +73,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # One release build serves every language. A pull request takes only
       # the Spanish set, to prove the pipeline without the full cost.
+      # The scratch state lives outside target/: rust-cache restores target/
+      # without the marker that lets screenshots.sh replace it.
       - name: Take the screenshots
+        env:
+          SHOTS_HOME: ${{ runner.temp }}/shots-home
         run: |
           if [ "${{ github.event_name }}" = pull_request ]; then
             scripts/site/localized-screenshots.sh "$RUNNER_TEMP/shots" es
