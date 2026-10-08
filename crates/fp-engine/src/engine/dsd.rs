@@ -55,6 +55,56 @@ impl Engine {
         !p.cue && self.dsd_slot(&p.bus, p.slot)
     }
 
+    /// Whether `bus` runs a DSD stream's silence (its tail, or a switch to
+    /// PCM): not quiet, so a device change waits for it (live settings L11).
+    pub(super) fn dsd_silence_running(&self, bus: &BusKey) -> bool {
+        self.dsd_buses
+            .get(bus)
+            .is_some_and(|d| !matches!(d.state, DsdState::Playing { .. }))
+    }
+
+    /// Before a device change on `bus` (live settings spec L12): a bus that
+    /// carries DSD goes back at once to the PCM stream it had before, so the
+    /// change starts from PCM; the DSD sources on it are opened again as
+    /// PCM by the caller. Returns whether the bus carried DSD. Only for a
+    /// quiet bus or a forced change.
+    pub(super) fn leave_dsd_for_reopen(&mut self, bus: &BusKey, quiet: bool) -> bool {
+        let Some(d) = self.dsd_buses.remove(bus) else {
+            return false;
+        };
+        // A switch to PCM already reported the end of the stream.
+        if matches!(d.state, DsdState::Playing { .. } | DsdState::Tail { .. }) {
+            self.events.push(EngineEvent::DsdEnded {
+                player: d.player,
+                entry: d.entry,
+            });
+        }
+        let now_frame = self.now_frame(bus);
+        self.send(
+            bus,
+            BusCommand::DsdMode {
+                on: false,
+                at_frame: 0,
+            },
+        );
+        // Ends a native switch's hold.
+        self.send(
+            bus,
+            BusCommand::HoldAll {
+                from_frame: 0,
+                until_frame: now_frame,
+            },
+        );
+        let now = self.now;
+        if let Some(b) = self.buses.get_mut(bus) {
+            let mut budget = b.busy_budget(quiet);
+            if let Err(error) = b.reopen_with(d.pcm, now, &mut budget) {
+                tracing::warn!(?bus, %error, "cannot reopen the DSD device as PCM before the change");
+            }
+        }
+        true
+    }
+
     /// The pause and resume ramp of `slot`: none for a DSD stream (the
     /// mixer holds at once and the DSD silence keeps the stream valid).
     pub(super) fn pause_ramp_of(&self, bus: &BusKey, slot: usize) -> u32 {

@@ -404,6 +404,8 @@ plus the mixer's DSD mode.
 | `SetCuePaused` | `BusCommand::Pause`/`Resume` with the pause ramp for an audible source; a source that has not started yet is held idle and started on release. `PlayerRuntime::cue_paused` remembers the state and a new CUE clears it |
 | `AddPlayer`, `RemovePlayer` | create or retire a worker and its bookkeeping |
 | `LoadPaused` | restore a session: load the source at a position, paused |
+| `UpdateSettings` | take a new configuration for new buses and holders, and the tuning (see "Live settings") |
+| `ApplyDevice`, `ApplyRoute`, `ApplyAudioSystem` | apply an output change when what it touches is quiet, or at once when forced (see "Live settings") |
 
 The CUE position is `PlayerTelemetry::cue_position_secs`; a held CUE reports a
 constant one. A held CUE is released when it is replaced or stopped. An
@@ -510,13 +512,54 @@ with each `LoadOptions`, so a source keeps the one it was opened with);
 `mixer_headroom` grows each bus's capacity at once; every bus gets
 `Bus::set_timing` and a `BusCommand::Tune` with the mixer lengths at its
 running rate (a full command queue is tried again next tick); the conductor
-reads `conductor_tick_ms` before every sleep.
+reads `conductor_tick_ms` before every sleep. While the cartwall has no bus
+yet, a changed cartwall route is reported at once as `Unplaced { route }`
+for both its holders, so the model never shows a pending route change for a
+holder that has nothing to move.
 
 `Tune` names the rate its lengths were sized for (`at_rate`). The mixer
 remembers the rate it last followed (`Mixer::follow_rate`, called when a bus
 reopens at another rate), so a `Tune` that was still in the command queue
 when the bus reopened (a tuning update and a bit-perfect rate change in the
 same tick) is scaled to the rate the mixer runs at.
+
+### Applying a change
+
+The model sends `ApplyAudioSystem`, `ApplyRoute` and `ApplyDevice` when
+what they affect is idle in its view, and forced ones for **Apply now**.
+The engine keeps each in `Engine::kept` (one per `Target`; a newer one
+replaces it) and runs it, at once or on a later tick, when what it touches
+is quiet (L11): for a device, its bus; for a route, the holder's own
+sources; for the audio system, every bus. Quiet means no started, unpaused
+source (current, outgoing, CUE), no cart, no test tone and no DSD silence
+running; paused and waiting sources are quiet. A forced action runs at once.
+Each one ends with `EngineEvent::Applied { target, wanted, outcome }`.
+
+- `ApplyDevice` (L12): one `Bus::apply_config` on the open bus with the
+  new rate (kept on a bit-perfect device, where the next file sets it),
+  buffer and exclusive access; a bus carrying DSD goes back to PCM first.
+  The DSD mix and silence are only stored. A new rate, or DSD left, opens
+  every source on the bus again at its position (`reopen_on_bus`, also used
+  when the watchdog had to change rate): playing sources resume when ready,
+  paused and waiting ones stay so, fades and test tones are cut and end as
+  they would have. A refusal reopens the running configuration and reports
+  `Err` (L14); a forced change first forgets the device's remembered
+  refusals. A device that is not there keeps the new configuration and the
+  watchdog opens it when it returns (L15). `pcm_fallback` is set again as
+  for a new bus. A change for a device every holder has just left (the
+  audio system switch ran first, L9) is answered as applied without
+  reopening it.
+- `ApplyRoute` (L16): the holder's sources are opened again on the new bus
+  at their position (`reopen_player_sources`, `reopen_carts`); a device
+  open with too few channels for the new pair is reopened with more when it
+  is quiet; the cartwall before its first cart only takes the route; a Cue
+  route removed while that CUE is open (forced) ends it with `CueEnded` or
+  `CartCueEnded`. Reports `Placed` or `Unplaced`.
+- `ApplyAudioSystem` (L17): see `backends.md`.
+
+A bus a holder left is closed once nothing uses it, it is quiet and the
+mixer has handed every slot back (`close_orphans`, L13), so its device is
+released. Removing a player does the same for the buses it used.
 
 ## Conductor
 

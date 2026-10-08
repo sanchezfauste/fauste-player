@@ -20,14 +20,15 @@ use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::bus::BusKey;
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_model::{
-    AudioFormat, CartId, CartRequest, Config, DsdDevice, DsdMix, DsdOutput, EngineAction,
-    EngineEvent, EntryId, Holder, OutputDevice, PlayerId, PlayerRoutes, Route, SOURCE_END,
-    SourceRequest, TrackId, device_settings,
+    AudioFormat, CartId, CartRequest, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput,
+    EngineAction, EngineEvent, EntryId, Holder, OutputDevice, PlayerId, PlayerRoutes, Route,
+    SOURCE_END, SourceRequest, Target, TrackId, Wanted, device_settings,
 };
 use support::tagged_opener;
 
 const BLOCK: usize = 480;
 const P: PlayerId = PlayerId(1);
+const Q: PlayerId = PlayerId(2);
 
 fn route(device: &str) -> Route {
     Route {
@@ -366,5 +367,826 @@ fn a_tuning_update_and_a_rate_change_in_one_tick_size_the_mixer_for_the_new_rate
     assert!(
         (430..=450).contains(&audible),
         "10 ms at 44.1 kHz is 441 frames: {audible}"
+    );
+}
+
+fn settings_of(r: &Rig, device: &str) -> DeviceSettings {
+    r.engine.running_settings(&out(device)).unwrap()
+}
+
+/// The outcome the engine reported for `device`, if any.
+fn applied<'a>(events: &'a [EngineEvent], device: &str) -> Option<&'a Result<(), String>> {
+    events.iter().find_map(|e| match e {
+        EngineEvent::Applied {
+            target: Target::Device(d),
+            outcome,
+            ..
+        } if *d == out(device) => Some(outcome),
+        _ => None,
+    })
+}
+
+fn apply_device(r: &mut Rig, device: &str, settings: DeviceSettings, force: bool) {
+    r.act(EngineAction::ApplyDevice {
+        device: out(device),
+        settings,
+        force,
+    });
+    // Events reach the test with the next tick.
+    r.tick();
+}
+
+#[test]
+fn l11_a_device_change_waits_for_a_fade_tail_then_runs() {
+    let mut r = rig();
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    r.run(3);
+    r.act(EngineAction::FadeOutAndStop {
+        player: P,
+        fade_ms: 200,
+    });
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    r.run(2);
+    assert_eq!(
+        r.main.config().unwrap().buffer_frames,
+        480,
+        "the fade sounds"
+    );
+    assert!(applied(&r.events, "main").is_none());
+    r.run(30);
+    assert_eq!(r.main.config().unwrap().buffer_frames, 960);
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+    assert_eq!(settings_of(&r, "main"), wanted);
+}
+
+#[test]
+fn l11_a_device_change_waits_for_a_test_tone() {
+    let mut r = rig();
+    r.engine
+        .play_test_tone(&route("main"), 440.0, 0.1, -18.0, r.clock);
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    r.run(2);
+    assert_eq!(r.main.config().unwrap().buffer_frames, 480);
+    r.run(20);
+    assert_eq!(r.main.config().unwrap().buffer_frames, 960);
+}
+
+#[test]
+fn l12_a_new_rate_reopens_the_device_and_a_paused_track_stays_paused_where_it_was() {
+    let mut r = rig();
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 2.0),
+    });
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::Pause { player: P });
+    // The pause ramp is still running: the bus is not quiet yet.
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.main.config().unwrap().sample_rate, 48_000);
+    // The ramp (480 frames) and one block of margin.
+    r.run(3);
+    assert_eq!(r.main.config().unwrap().sample_rate, 44_100);
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    r.settle();
+    let heard = r.run(5);
+    assert!(heard.iter().all(|v| *v == 0.0), "nothing paused starts");
+    let after = r.engine.telemetry(P).position_secs.unwrap();
+    assert!((after - position).abs() < 0.001, "{position} then {after}");
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+}
+
+#[test]
+fn l12_a_new_buffer_reopens_at_the_running_rate() {
+    let mut r = rig();
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    let config = r.main.config().unwrap();
+    assert_eq!((config.sample_rate, config.buffer_frames), (48_000, 960));
+}
+
+#[test]
+fn l12_a_bit_perfect_device_takes_a_new_rate_without_reopening() {
+    let mut c = config();
+    c.outputs.bit_perfect = vec![out("main")];
+    let mut r = rig_with(&c);
+    let attempts = r.main.open_attempts();
+    let wanted = DeviceSettings {
+        sample_rate: 96_000,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(
+        r.main.open_attempts(),
+        attempts,
+        "the next file sets the rate"
+    );
+    assert_eq!(settings_of(&r, "main").sample_rate, 96_000);
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+}
+
+#[test]
+fn l12_bit_perfect_on_reopens_exclusive_and_a_refusal_plays_shared() {
+    let mut r = rig();
+    r.main.set_exclusive_capable(true);
+    let shared = settings_of(&r, "main");
+    let exclusive = DeviceSettings {
+        bit_perfect: true,
+        ..shared
+    };
+    apply_device(&mut r, "main", exclusive, false);
+    assert!(r.main.config().unwrap().exclusive);
+    apply_device(&mut r, "main", shared, false);
+    assert!(!r.main.config().unwrap().exclusive);
+    r.main.set_exclusive_capable(false);
+    apply_device(&mut r, "main", exclusive, false);
+    assert!(!r.main.config().unwrap().exclusive, "B4: plays shared");
+    assert!(settings_of(&r, "main").bit_perfect);
+}
+
+#[test]
+fn l12_dsd_mix_and_silence_are_stored_without_a_reopen() {
+    let mut c = config();
+    c.outputs.bit_perfect = vec![out("main")];
+    c.outputs.dsd_output = vec![DsdDevice {
+        backend: "offline".into(),
+        device: "main".into(),
+        mode: DsdOutput::Dop,
+    }];
+    let mut r = rig_with(&c);
+    let attempts = r.main.open_attempts();
+    let wanted = DeviceSettings {
+        dsd_mix: Some(DsdMix::HoldOthers),
+        dsd_silence_ms: Some(400.0),
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.main.open_attempts(), attempts);
+    assert_eq!(settings_of(&r, "main"), wanted);
+}
+
+#[test]
+fn a_change_for_a_device_not_open_is_done_at_once() {
+    let mut r = rig();
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..device_settings(&config().outputs, &out("other"))
+    };
+    apply_device(&mut r, "other", wanted, false);
+    assert_eq!(applied(&r.events, "other"), Some(&Ok(())));
+    assert!(!r.other.is_open(), "L13: it opens when first used");
+}
+
+#[test]
+fn l14_a_refused_rate_keeps_the_running_one_and_says_why() {
+    let mut r = rig();
+    r.main.refuse_rate(44_100);
+    let running = settings_of(&r, "main");
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..running
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.main.config().unwrap().sample_rate, 48_000);
+    assert!(matches!(applied(&r.events, "main"), Some(Err(_))));
+    assert_eq!(settings_of(&r, "main"), running);
+}
+
+#[test]
+fn l14_a_device_busy_beyond_the_budget_keeps_the_running_settings() {
+    let mut c = config();
+    c.tuning.device_busy_retry_ms = 0.0;
+    let mut r = rig_with(&c);
+    // The first open and the three retries meet a busy device; the
+    // restore of the running settings opens.
+    r.main.set_busy(4);
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.main.config().unwrap().buffer_frames, 480);
+    assert!(matches!(applied(&r.events, "main"), Some(Err(_))));
+}
+
+#[test]
+fn l14_apply_now_asks_a_device_again_for_a_rate_it_refused() {
+    let mut r = rig();
+    r.main.refuse_rate(44_100);
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    let attempts = r.main.open_attempts();
+    apply_device(&mut r, "main", wanted, true);
+    assert!(
+        r.main.open_attempts() > attempts,
+        "asked again, not from memory"
+    );
+}
+
+#[test]
+fn l15_an_absent_device_takes_the_new_settings_when_it_returns() {
+    let mut r = rig();
+    r.main.unplug();
+    r.run(1);
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+    assert_eq!(settings_of(&r, "main"), wanted);
+    r.main.replug();
+    r.clock += Duration::from_secs(3);
+    r.tick();
+    assert_eq!(r.main.config().unwrap().buffer_frames, 960);
+}
+
+#[test]
+fn l15_a_device_gone_during_the_change_keeps_the_new_settings() {
+    let mut r = rig();
+    r.main.unplug();
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+    r.main.replug();
+    r.clock += Duration::from_secs(3);
+    r.tick();
+    assert_eq!(r.main.config().unwrap().buffer_frames, 960);
+}
+
+fn route_applied(events: &[EngineEvent], holder: Holder) -> bool {
+    events.iter().any(|e| {
+        matches!(e, EngineEvent::Applied { target: Target::Route(h), outcome: Ok(()), .. } if *h == holder)
+    })
+}
+
+#[test]
+fn l16_a_moved_player_keeps_its_paused_track_paused_on_the_new_device() {
+    let mut r = rig();
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: request(1, 2.0),
+    });
+    r.settle();
+    r.take_events();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(P),
+        route: Some(route("other")),
+        force: false,
+    });
+    r.settle();
+    let events = r.take_events();
+    assert!(events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Placed { holder: Holder::PlayerMain(p), device, .. }
+            if *p == P && *device == out("other")
+    )));
+    assert!(route_applied(&events, Holder::PlayerMain(P)));
+    r.run(3);
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!((position - 2.0).abs() < 0.01, "{position}");
+    assert!(r.other.is_open());
+    assert!(!r.main.is_open(), "L13: closed once nothing uses it");
+}
+
+#[test]
+fn l16_a_route_change_waits_for_its_own_holder_only() {
+    let mut c = config();
+    c.outputs.routes.push(PlayerRoutes {
+        player: Q,
+        main: Some(route("main")),
+        cue: None,
+    });
+    let mut r = rig_with(&c);
+    r.act(EngineAction::AddPlayer { player: Q });
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(Q),
+        route: Some(route("other")),
+        force: false,
+    });
+    r.tick();
+    assert!(route_applied(&r.events, Holder::PlayerMain(Q)), "Q is idle");
+    let heard = r.run(3);
+    assert!(heard.iter().all(|v| *v != 0.0), "P plays on, uninterrupted");
+    assert!(r.main.is_open(), "P still uses it");
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(P),
+        route: Some(route("other")),
+        force: false,
+    });
+    r.run(2);
+    assert!(!route_applied(&r.events, Holder::PlayerMain(P)), "P sounds");
+    r.act(EngineAction::StopNow { player: P });
+    r.run(5);
+    assert!(route_applied(&r.events, Holder::PlayerMain(P)));
+}
+
+#[test]
+fn l16_removing_a_cue_route_by_force_ends_the_open_cue() {
+    let mut c = config();
+    c.outputs.routes[0].cue = Some(route("other"));
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: request(2, 0.0),
+    });
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerCue(P),
+        route: None,
+        force: false,
+    });
+    r.run(2);
+    assert!(
+        !route_applied(&r.events, Holder::PlayerCue(P)),
+        "the CUE sounds"
+    );
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerCue(P),
+        route: None,
+        force: true,
+    });
+    r.tick();
+    assert!(r.events.contains(&EngineEvent::CueEnded {
+        player: P,
+        entry: EntryId(2)
+    }));
+    assert!(r.events.contains(&EngineEvent::Unplaced {
+        holder: Holder::PlayerCue(P),
+        route: None
+    }));
+}
+
+#[test]
+fn l16_the_cartwall_before_its_first_cart_only_takes_the_route() {
+    let mut r = rig();
+    r.take_events();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::CartwallMain,
+        route: Some(route("other")),
+        force: false,
+    });
+    r.tick();
+    let events = r.take_events();
+    assert!(events.contains(&EngineEvent::Unplaced {
+        holder: Holder::CartwallMain,
+        route: Some(route("other"))
+    }));
+    assert!(route_applied(&events, Holder::CartwallMain));
+    assert!(!r.other.is_open());
+}
+
+#[test]
+fn l16_a_route_to_channels_the_open_device_lacks_reopens_it_with_more() {
+    let mut c = config();
+    c.outputs.routes[0].main = Some(route("other"));
+    let mut r = rig_with(&c);
+    assert_eq!(r.other.config().unwrap().channels, 2);
+    let pair = Route {
+        first_channel: 2,
+        ..route("other")
+    };
+    c.outputs.routes[0].cue = Some(pair.clone());
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerCue(P),
+        route: Some(pair),
+        force: false,
+    });
+    r.tick();
+    assert_eq!(r.other.config().unwrap().channels, 4);
+    assert!(route_applied(&r.events, Holder::PlayerCue(P)));
+}
+
+/// L3, L13: the cartwall has no bus before its first cart, so its holder is
+/// `Unplaced` with the route the engine holds. A new cartwall route must be
+/// reported at once: the model would show a false pending change otherwise.
+#[test]
+fn l3_a_cartwall_route_changed_before_its_first_cart_is_reported_unplaced_with_it() {
+    let mut r = rig();
+    r.tick();
+    r.take_events();
+    let mut c = config();
+    c.outputs.cartwall.main = Some(route("other"));
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.tick();
+    let events = r.take_events();
+    assert!(events.contains(&EngineEvent::Unplaced {
+        holder: Holder::CartwallMain,
+        route: Some(route("other")),
+    }));
+    assert!(events.contains(&EngineEvent::Unplaced {
+        holder: Holder::CartwallCue,
+        route: None,
+    }));
+    assert!(!r.other.is_open(), "nothing opens before the first cart");
+    // The same routes again, or any other setting: nothing to report.
+    let mut c = config();
+    c.outputs.cartwall.main = Some(route("other"));
+    c.outputs.buffer_frames = 960;
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.tick();
+    assert!(
+        !r.take_events()
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Unplaced { .. })),
+        "unchanged routes are not reported again"
+    );
+}
+
+/// P on the default output (`main`), Q on `other` by name.
+fn two_players() -> Rig {
+    let mut c = config();
+    c.outputs.routes = vec![
+        PlayerRoutes {
+            player: P,
+            main: None,
+            cue: None,
+        },
+        PlayerRoutes {
+            player: Q,
+            main: Some(route("other")),
+            cue: None,
+        },
+    ];
+    let mut r = rig_with(&c);
+    r.act(EngineAction::AddPlayer { player: Q });
+    r
+}
+
+#[test]
+fn l17_a_new_audio_system_moves_only_the_holders_on_the_default_output() {
+    let mut r = two_players();
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: request(1, 1.0),
+    });
+    r.settle();
+    r.take_events();
+    r.act(EngineAction::ApplyAudioSystem {
+        backend: Some("null".into()),
+        force: false,
+    });
+    r.settle();
+    let events = r.take_events();
+    assert!(events.contains(&EngineEvent::AudioSystemInUse {
+        configured: Some("null".into()),
+        in_use: "null".into(),
+    }));
+    assert!(events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Placed { holder: Holder::PlayerMain(p), device, .. }
+            if *p == P && device.backend == "null"
+    )));
+    assert!(
+        !events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Placed { holder: Holder::PlayerMain(q), .. } if *q == Q
+        )),
+        "a route that names a backend keeps it"
+    );
+    assert!(events.contains(&EngineEvent::Applied {
+        target: Target::AudioSystem,
+        wanted: Wanted::AudioSystem(Some("null".into())),
+        outcome: Ok(()),
+    }));
+    assert_eq!(r.engine.backend_in_use(), "null");
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!((position - 1.0).abs() < 0.01, "{position}");
+    r.run(3);
+    assert!(!r.main.is_open(), "nothing uses it any more");
+}
+
+#[test]
+fn l17_the_audio_system_waits_until_every_device_is_quiet() {
+    let mut r = two_players();
+    r.act(EngineAction::StartCurrent {
+        player: Q,
+        request: request(2, 0.0),
+    });
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::ApplyAudioSystem {
+        backend: Some("null".into()),
+        force: false,
+    });
+    r.run(2);
+    assert_eq!(r.engine.backend_in_use(), "offline", "Q plays on other");
+    r.act(EngineAction::StopNow { player: Q });
+    r.run(5);
+    assert_eq!(r.engine.backend_in_use(), "null");
+}
+
+/// The model sends the audio system and the device it leaves together
+/// (L9 order). The switch abandons the old default device, so changing it
+/// would only reopen a device nothing uses: it is told "applied" and left.
+#[test]
+fn l17_a_device_change_for_the_device_the_switch_abandons_is_skipped() {
+    let mut r = two_players();
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: request(1, 1.0),
+    });
+    r.settle();
+    r.take_events();
+    let attempts = r.main.open_attempts();
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    r.act(EngineAction::ApplyAudioSystem {
+        backend: Some("null".into()),
+        force: false,
+    });
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.engine.backend_in_use(), "null");
+    assert_eq!(r.main.open_attempts(), attempts, "not reopened");
+    assert_eq!(applied(&r.take_events(), "main"), Some(&Ok(())));
+}
+
+#[test]
+fn l21_a_forced_change_resumes_what_played_and_starts_nothing_paused() {
+    let mut c = config();
+    c.outputs.routes.push(PlayerRoutes {
+        player: Q,
+        main: Some(route("main")),
+        cue: None,
+    });
+    let mut r = rig_with(&c);
+    r.act(EngineAction::AddPlayer { player: Q });
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.act(EngineAction::LoadPaused {
+        player: Q,
+        request: request(2, 3.0),
+    });
+    r.settle();
+    r.run(5);
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, true);
+    assert_eq!(
+        r.main.config().unwrap().sample_rate,
+        44_100,
+        "forced: at once"
+    );
+    r.settle();
+    let heard = r.run(10);
+    assert!(
+        heard.iter().any(|v| (*v as u64) / 100_000 == 1),
+        "P plays again after the gap"
+    );
+    assert!(
+        !heard.iter().any(|v| (*v as u64) / 100_000 == 2),
+        "Q stays paused (rule 10)"
+    );
+    let q = r.engine.telemetry(Q).position_secs.unwrap();
+    assert!((q - 3.0).abs() < 0.01, "{q}");
+}
+
+#[test]
+fn l21_a_forced_change_cuts_a_fade_and_reports_its_end() {
+    let mut r = rig();
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    r.run(3);
+    r.act(EngineAction::FadeOutAndStop {
+        player: P,
+        fade_ms: 2_000,
+    });
+    r.run(2);
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, true);
+    r.tick();
+    assert!(r.events.contains(&EngineEvent::ReachedEnd {
+        player: P,
+        entry: EntryId(1)
+    }));
+}
+
+fn cart_request(cart: u64) -> CartRequest {
+    CartRequest {
+        cart: CartId(cart),
+        track: TrackId(9),
+        path: PathBuf::from("track9"),
+        from_secs: 0.0,
+        until_secs: SOURCE_END,
+        looped: false,
+        format: None,
+    }
+}
+
+/// P: Main on `main`, Cue on `other`, pre-listening (PFL) on `other`.
+fn pfl_rig() -> Rig {
+    let mut c = config();
+    c.outputs.routes[0].cue = Some(route("other"));
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: request(2, 0.0),
+    });
+    r.settle();
+    r.run(2);
+    r.take_events();
+    r
+}
+
+fn cue_ended(events: &[EngineEvent]) -> bool {
+    events.iter().any(|e| {
+        matches!(
+            e,
+            EngineEvent::CueEnded { .. } | EngineEvent::CartCueEnded { .. }
+        )
+    })
+}
+
+/// L11, L16, L20: a Main moved onto the Cue's pair drops the Cue, which is
+/// a Cue change: it waits for the pre-listen unless forced.
+#[test]
+fn l16_a_main_moved_onto_the_cue_pair_waits_for_the_pre_listen() {
+    let mut r = pfl_rig();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(P),
+        route: Some(route("other")),
+        force: false,
+    });
+    r.run(3);
+    assert!(!cue_ended(&r.events), "the pre-listen is not cut");
+    assert!(!route_applied(&r.events, Holder::PlayerMain(P)));
+    r.act(EngineAction::StopCue { player: P });
+    r.run(5);
+    assert!(route_applied(&r.events, Holder::PlayerMain(P)));
+}
+
+#[test]
+fn l16_a_forced_main_move_onto_the_cue_pair_applies_at_once() {
+    let mut r = pfl_rig();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(P),
+        route: Some(route("other")),
+        force: true,
+    });
+    r.tick();
+    assert!(route_applied(&r.events, Holder::PlayerMain(P)));
+    assert!(cue_ended(&r.events));
+}
+
+#[test]
+fn l16_a_cartwall_main_moved_onto_the_cue_pair_waits_for_the_pre_listen() {
+    let mut c = config();
+    c.outputs.cartwall.cue = Some(route("other"));
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCartCue(cart_request(1)));
+    r.settle();
+    r.run(2);
+    r.take_events();
+    let apply = |force| EngineAction::ApplyRoute {
+        holder: Holder::CartwallMain,
+        route: Some(route("other")),
+        force,
+    };
+    r.act(apply(false));
+    r.run(3);
+    assert!(!cue_ended(&r.events), "the pre-listen is not cut");
+    assert!(!route_applied(&r.events, Holder::CartwallMain));
+    r.act(EngineAction::StopCartCue);
+    r.run(5);
+    assert!(route_applied(&r.events, Holder::CartwallMain));
+}
+
+#[test]
+fn l16_a_forced_cartwall_main_move_onto_the_cue_pair_applies_at_once() {
+    let mut c = config();
+    c.outputs.cartwall.cue = Some(route("other"));
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCartCue(cart_request(1)));
+    r.settle();
+    r.run(2);
+    r.take_events();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::CartwallMain,
+        route: Some(route("other")),
+        force: true,
+    });
+    r.tick();
+    assert!(route_applied(&r.events, Holder::CartwallMain));
+    assert!(cue_ended(&r.events));
+}
+
+/// A device that cannot open more channels than it has open: the route is
+/// reported as failed, and the running rate is not marked as refused.
+#[test]
+fn l16_a_device_that_refuses_more_channels_fails_the_route_and_keeps_its_rates() {
+    let mut c = config();
+    c.outputs.routes[0].main = Some(route("other"));
+    let mut r = rig_with(&c);
+    assert_eq!(r.other.config().unwrap().channels, 2);
+    r.other.set_max_channels(2);
+    let pair = Route {
+        first_channel: 2,
+        ..route("other")
+    };
+    c.outputs.routes[0].cue = Some(pair.clone());
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.take_events();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerCue(P),
+        route: Some(pair),
+        force: false,
+    });
+    r.tick();
+    assert!(
+        r.events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Applied {
+                target: Target::Route(Holder::PlayerCue(_)),
+                outcome: Err(_),
+                ..
+            }
+        )),
+        "{:?}",
+        r.events
+    );
+    let lower = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "other")
+    };
+    let back = settings_of(&r, "other");
+    r.take_events();
+    apply_device(&mut r, "other", lower, false);
+    assert_eq!(applied(&r.events, "other"), Some(&Ok(())));
+    r.take_events();
+    apply_device(&mut r, "other", back, false);
+    assert_eq!(applied(&r.events, "other"), Some(&Ok(())), "48 kHz works");
+}
+
+/// A Cue-only move on a device shared with Main must leave the de-click
+/// tail of a Main cart alone.
+#[test]
+fn l16_a_cue_move_leaves_the_main_carts_declick_tail() {
+    let mut c = config();
+    c.outputs.cartwall.main = Some(route("other"));
+    c.outputs.cartwall.cue = Some(Route {
+        first_channel: 2,
+        ..route("other")
+    });
+    c.tuning.declick_ms = 100.0;
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCart(cart_request(1)));
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::StopCart { cart: CartId(1) });
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::CartwallCue,
+        route: Some(route("main")),
+        force: true,
+    });
+    let heard = r.other.render(BLOCK).unwrap();
+    let left: Vec<f32> = heard.chunks(4).map(|f| f[0]).collect();
+    assert!(
+        left.iter().all(|v| *v != 0.0),
+        "the tail keeps fading, not cut"
     );
 }

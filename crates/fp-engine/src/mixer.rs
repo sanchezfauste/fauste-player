@@ -643,6 +643,12 @@ impl Mixer {
         self.declick_base = config.declick_frames;
     }
 
+    /// The volume smoothing the mixer runs with, for tests of `Tune`.
+    #[cfg(test)]
+    pub(crate) fn volume_smoothing_frames(&self) -> u32 {
+        self.config.volume_smoothing_frames
+    }
+
     /// Mixes one block into `out` (interleaved, `channels` per frame).
     pub fn render(&mut self, out: &mut [f32], channels: usize) {
         self.shared.render_seq.fetch_add(1, Ordering::AcqRel);

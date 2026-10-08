@@ -188,7 +188,16 @@ Nothing connects to a system until it is first used.
   backend when it is available, otherwise `preferred_backend` picks the
   first available one in the OS order (Linux: PipeWire, PulseAudio, JACK,
   ALSA; Windows: WASAPI, ASIO, JACK; macOS: Core Audio, JACK), with a
-  warning.
+  warning. The engine makes the choice (`Engine::new`, `choose_backend`)
+  and reports it to the model (`EngineEvent::AudioSystemInUse { configured,
+  in_use }`); the status bar shows `in_use`. Changing **Audio system** in
+  Settings applies while the application runs (live settings spec L17)
+  once nothing plays on any device: the engine chooses again with the same
+  rule, re-places every holder on the default output (no route, or a route
+  to a backend this machine lacks), closes the buses nothing uses any
+  more, and reports the new choice. Routes that name a backend keep it.
+  A device change kept for the device the switch leaves is answered as
+  applied without reopening it.
 - **Routes:** the engine notes which backends were unavailable when it
   started. A Main route to one plays on the default output, and a Cue route
   to one means no cue, as for a backend this build does not have. A backend

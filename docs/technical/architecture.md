@@ -56,6 +56,12 @@ or `panic` outside tests.
 4. After each change, the conductor publishes an immutable `Arc<AppState>`
    through `arc-swap`, plus a `Telemetry` snapshot (positions, peaks, bus
    health, model version). The UI and the services thread read them.
+5. Output settings apply while running (live settings spec): the engine
+   reports where each holder plays and what each device runs with
+   (`Placed`, `AudioSystemInUse`); `fp_model::live::pending` compares that
+   with the configuration; the reducer sends each change once nothing it
+   affects is playing, and the engine applies it once its buses are quiet
+   and answers with `Applied`.
 
 ## Restart
 

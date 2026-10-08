@@ -20,8 +20,9 @@ use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice, SampleFormat};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::{dsd_file_opener, file_opener};
 use fp_model::{
-    AudioFormat, Config, DsdDevice, DsdMix, DsdOutput, EngineAction, EngineEvent, EntryId,
-    OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, TrackId, TransitionPlan,
+    AudioFormat, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput, EngineAction, EngineEvent,
+    EntryId, OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, Target, TrackId,
+    TransitionPlan, Wanted,
 };
 use support::{DSD64, dsf_file, indexed_wav};
 
@@ -1511,4 +1512,90 @@ fn a_device_lost_after_a_dop_stream_ended_comes_back_playing_pcm() {
         "PCM plays, not DoP silence"
     );
     assert!(raw.iter().any(|f| f[0] != 0.0), "Q is heard");
+}
+
+fn dac() -> OutputDevice {
+    OutputDevice {
+        backend: "offline".into(),
+        device: "dac".into(),
+    }
+}
+
+/// Plays a DSD track to DoP on the dac, then pauses it.
+fn paused_dsd(r: &mut Rig) {
+    let (left, right) = pattern();
+    let path = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, request(1, path, dsd64()));
+    r.run_raw(SILENCE_FRAMES + BLOCK * 4);
+    assert!(
+        r.seen
+            .iter()
+            .any(|e| matches!(e, EngineEvent::DsdStarted { player, .. } if *player == P))
+    );
+    r.act(EngineAction::Pause { player: P });
+    // Past the pause ramp: the bus is quiet.
+    r.run_raw(BLOCK * 8);
+}
+
+/// Live settings spec L12, §8: the DSD mode changes while a DSD track is
+/// paused on the device.
+#[test]
+fn a_dsd_mode_change_leaves_dsd_and_keeps_the_paused_track_paused() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    paused_dsd(&mut r);
+    let settings = DeviceSettings {
+        dsd: DsdOutput::Pcm,
+        dsd_mix: None,
+        dsd_silence_ms: None,
+        ..r.engine.running_settings(&dac()).unwrap()
+    };
+    r.act(EngineAction::ApplyDevice {
+        device: dac(),
+        settings,
+        force: false,
+    });
+    r.settle();
+    assert_eq!(r.dac.config().unwrap().dsd, None, "back to PCM");
+    assert!(r.seen.contains(&EngineEvent::DsdEnded {
+        player: P,
+        entry: EntryId(1)
+    }));
+    assert!(r.seen.contains(&EngineEvent::Applied {
+        target: Target::Device(dac()),
+        wanted: Wanted::Device(settings),
+        outcome: Ok(()),
+    }));
+    let out = r.run_raw(BLOCK * 10);
+    assert!(
+        out.iter().all(|f| f[0] == 0.0 && f[1] == 0.0),
+        "the paused track stays paused"
+    );
+}
+
+/// §8: bit-perfect turned off on a device carrying DSD (a paused DSD track).
+#[test]
+fn bit_perfect_off_leaves_dsd_and_reopens_shared() {
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    paused_dsd(&mut r);
+    let settings = DeviceSettings {
+        sample_rate: 48_000,
+        buffer_frames: BLOCK as u32,
+        bit_perfect: false,
+        dsd: DsdOutput::Pcm,
+        dsd_mix: None,
+        dsd_silence_ms: None,
+    };
+    r.act(EngineAction::ApplyDevice {
+        device: dac(),
+        settings,
+        force: false,
+    });
+    r.settle();
+    let config = r.dac.config().unwrap();
+    assert_eq!(
+        (config.dsd, config.exclusive, config.sample_rate),
+        (None, false, 48_000)
+    );
+    let out = r.run_raw(BLOCK * 10);
+    assert!(out.iter().all(|f| f[0] == 0.0 && f[1] == 0.0));
 }
