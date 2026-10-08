@@ -22,7 +22,7 @@ use fp_engine::engine::{Engine, EngineSettings};
 use fp_model::{
     AudioFormat, CartId, CartRequest, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput,
     EngineAction, EngineEvent, EntryId, Holder, OutputDevice, PlayerId, PlayerRoutes, Route,
-    SOURCE_END, SourceRequest, Target, TrackId, device_settings,
+    SOURCE_END, SourceRequest, Target, TrackId, Wanted, device_settings,
 };
 use support::tagged_opener;
 
@@ -824,4 +824,114 @@ fn l3_a_cartwall_route_changed_before_its_first_cart_is_reported_unplaced_with_i
             .any(|e| matches!(e, EngineEvent::Unplaced { .. })),
         "unchanged routes are not reported again"
     );
+}
+
+/// P on the default output (`main`), Q on `other` by name.
+fn two_players() -> Rig {
+    let mut c = config();
+    c.outputs.routes = vec![
+        PlayerRoutes {
+            player: P,
+            main: None,
+            cue: None,
+        },
+        PlayerRoutes {
+            player: Q,
+            main: Some(route("other")),
+            cue: None,
+        },
+    ];
+    let mut r = rig_with(&c);
+    r.act(EngineAction::AddPlayer { player: Q });
+    r
+}
+
+#[test]
+fn l17_a_new_audio_system_moves_only_the_holders_on_the_default_output() {
+    let mut r = two_players();
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: request(1, 1.0),
+    });
+    r.settle();
+    r.take_events();
+    r.act(EngineAction::ApplyAudioSystem {
+        backend: Some("null".into()),
+        force: false,
+    });
+    r.settle();
+    let events = r.take_events();
+    assert!(events.contains(&EngineEvent::AudioSystemInUse {
+        configured: Some("null".into()),
+        in_use: "null".into(),
+    }));
+    assert!(events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Placed { holder: Holder::PlayerMain(p), device, .. }
+            if *p == P && device.backend == "null"
+    )));
+    assert!(
+        !events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Placed { holder: Holder::PlayerMain(q), .. } if *q == Q
+        )),
+        "a route that names a backend keeps it"
+    );
+    assert!(events.contains(&EngineEvent::Applied {
+        target: Target::AudioSystem,
+        wanted: Wanted::AudioSystem(Some("null".into())),
+        outcome: Ok(()),
+    }));
+    assert_eq!(r.engine.backend_in_use(), "null");
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!((position - 1.0).abs() < 0.01, "{position}");
+    r.run(3);
+    assert!(!r.main.is_open(), "nothing uses it any more");
+}
+
+#[test]
+fn l17_the_audio_system_waits_until_every_device_is_quiet() {
+    let mut r = two_players();
+    r.act(EngineAction::StartCurrent {
+        player: Q,
+        request: request(2, 0.0),
+    });
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::ApplyAudioSystem {
+        backend: Some("null".into()),
+        force: false,
+    });
+    r.run(2);
+    assert_eq!(r.engine.backend_in_use(), "offline", "Q plays on other");
+    r.act(EngineAction::StopNow { player: Q });
+    r.run(5);
+    assert_eq!(r.engine.backend_in_use(), "null");
+}
+
+/// The model sends the audio system and the device it leaves together
+/// (L9 order). The switch abandons the old default device, so changing it
+/// would only reopen a device nothing uses: it is told "applied" and left.
+#[test]
+fn l17_a_device_change_for_the_device_the_switch_abandons_is_skipped() {
+    let mut r = two_players();
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: request(1, 1.0),
+    });
+    r.settle();
+    r.take_events();
+    let attempts = r.main.open_attempts();
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    r.act(EngineAction::ApplyAudioSystem {
+        backend: Some("null".into()),
+        force: false,
+    });
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.engine.backend_in_use(), "null");
+    assert_eq!(r.main.open_attempts(), attempts, "not reopened");
+    assert_eq!(applied(&r.take_events(), "main"), Some(&Ok(())));
 }

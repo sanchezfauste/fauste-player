@@ -293,6 +293,11 @@ impl Engine {
         })
     }
 
+    /// The cartwall's held Main route; `None` before its first cart.
+    pub(super) fn cartwall_main_route(&self) -> Option<Option<Route>> {
+        self.cartwall.as_ref().map(|c| c.main_route.clone())
+    }
+
     /// Whether the cartwall plays or pre-listens on `key`.
     pub(super) fn cartwall_uses(&self, key: &BusKey) -> bool {
         self.cartwall

@@ -813,6 +813,9 @@ impl Engine {
                     settings,
                     force,
                 } => self.apply_device(&device, settings, force),
+                EngineAction::ApplyAudioSystem { backend, force } => {
+                    self.apply_audio_system(backend, force)
+                }
                 EngineAction::ApplyRoute {
                     holder,
                     route,
@@ -841,6 +844,43 @@ impl Engine {
         });
     }
 
+    /// L17: the default output moves to `backend`'s choice. Waits (L7,
+    /// L11) until every bus is quiet unless forced. Every holder whose
+    /// route does not name a usable backend (no route, or a route to a
+    /// backend this machine lacks) is re-placed as a route change does;
+    /// routes that name a backend keep it.
+    fn apply_audio_system(&mut self, backend: Option<String>, force: bool) -> bool {
+        if !force && !self.buses.keys().all(|k| self.bus_quiet(k)) {
+            return false;
+        }
+        self.backend_in_use = choose_backend(&self.backends, backend.as_deref());
+        self.audio_system = backend.clone();
+        let on_default = |route: &Option<Route>| {
+            route
+                .as_ref()
+                .is_none_or(|r| self.route_backend(&r.backend).is_none())
+        };
+        let players: Vec<(PlayerId, Option<Route>)> = self
+            .players
+            .iter()
+            .filter(|(_, rt)| on_default(&rt.main_route))
+            .map(|(id, rt)| (*id, rt.main_route.clone()))
+            .collect();
+        let cartwall = self.cartwall_main_route().filter(|route| on_default(route));
+        for (player, route) in players {
+            self.move_player_main(player, route, true);
+        }
+        if let Some(route) = cartwall {
+            self.move_cartwall(Holder::CartwallMain, route, true);
+        }
+        self.events.push(EngineEvent::AudioSystemInUse {
+            configured: backend.clone(),
+            in_use: self.backend_in_use.clone(),
+        });
+        self.report_applied(Target::AudioSystem, Wanted::AudioSystem(backend), Ok(()));
+        true
+    }
+
     /// L12: `device` runs with `wanted`. Returns `false` while it must wait
     /// (L11): its bus sounds and the change is not forced.
     fn apply_device(&mut self, device: &OutputDevice, wanted: DeviceSettings, force: bool) -> bool {
@@ -851,6 +891,14 @@ impl Engine {
             self.report_applied(target, Wanted::Device(wanted), Ok(()));
             return true;
         };
+        // A device every holder just left (the audio system switch ran
+        // first, L9) closes once quiet: reopening it for settings nobody
+        // will use would only risk a refusal. It is told "applied", and
+        // opens with the current configuration when used again (L13).
+        if self.orphans.contains(&key) && !self.bus_in_use(&key) {
+            self.report_applied(target, Wanted::Device(wanted), Ok(()));
+            return true;
+        }
         let quiet = self.bus_quiet(&key);
         if !quiet && !force {
             return false;
@@ -1096,18 +1144,22 @@ impl Engine {
         }
     }
 
+    /// Whether a holder (a player's Main or Cue, the cartwall) plays on
+    /// `key`.
+    fn bus_in_use(&self, key: &BusKey) -> bool {
+        self.players
+            .values()
+            .any(|rt| rt.main.0 == *key || rt.cue.as_ref().is_some_and(|c| c.0 == *key))
+            || self.cartwall_uses(key)
+    }
+
     /// L13: closes the buses holders left, once no holder uses them,
     /// nothing on them sounds and the mixer has handed every slot back. The
     /// device is released (exclusive access matters).
     fn close_orphans(&mut self) {
         let orphans: Vec<BusKey> = self.orphans.iter().cloned().collect();
         for key in orphans {
-            let used = self
-                .players
-                .values()
-                .any(|rt| rt.main.0 == key || rt.cue.as_ref().is_some_and(|c| c.0 == key))
-                || self.cartwall_uses(&key);
-            if used {
+            if self.bus_in_use(&key) {
                 self.orphans.remove(&key);
                 continue;
             }
@@ -1780,11 +1832,9 @@ impl Engine {
                 }
             }
             EngineAction::UpdateSettings(config) => self.update_settings(&config, now),
-            apply @ (EngineAction::ApplyDevice { .. } | EngineAction::ApplyRoute { .. }) => {
-                self.keep(apply)
-            }
-            // Live settings: the audio system comes with task 5 of plan 3.
-            EngineAction::ApplyAudioSystem { .. } => {}
+            apply @ (EngineAction::ApplyAudioSystem { .. }
+            | EngineAction::ApplyRoute { .. }
+            | EngineAction::ApplyDevice { .. }) => self.keep(apply),
         }
     }
 
