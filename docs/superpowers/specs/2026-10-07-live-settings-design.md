@@ -1,7 +1,9 @@
 # Live Settings — Design Spec
 
 - **Date:** 2026-10-07
-- **Status:** Draft, for the maintainer's review.
+- **Status:** Approved (2026-10-07, §14). Planned in
+  `docs/superpowers/plans/2026-10-08-live-settings-plan{1..5}-*.md`; §15
+  records what planning sharpened.
 - **Extends:** [the main design spec](2026-09-25-fauste-player-design.md)
   (§3 rules, §4 engine, §8.4 Settings), the
   [bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md) (B3, B4, B6),
@@ -421,3 +423,55 @@ nothing sleeps.
   kept (§9.4); `restart_handoff_ms` goes with it.
 - **Q3** Confirmed: the remote API does not expose pending items (§10).
 - **Q4** Confirmed: a held (paused) CUE counts as busy (L1).
+
+## 15. Planning notes (2026-10-08)
+
+Points found while turning this spec into plans. Each one fixes a gap or
+sharpens a rule above; where it differs from the text above, this section
+wins.
+
+1. **Running audio system unknown until reported (§4.1).**
+   `live.audio_system` is `Option<Option<String>>`: `None` until the engine
+   reports `AudioSystemInUse { configured, in_use }` (at start and after
+   `ApplyAudioSystem`); while it is unknown, no audio system item is
+   pending. Setting it "at start, from `config.outputs.backend`" would make
+   a model without an engine (the model and interface tests) see a pending
+   change whenever its backend is edited.
+2. **No `live.limits` (§4.1).** No rule reads it: L18 and L19 compare the
+   model (players, pages) with `config.limits`.
+3. **Causes are a list (L1).** `fp_model::live::causes(state, holder) ->
+   Vec<BusyCause>`: the cartwall's Main has one cause per playing cart.
+4. **`Pending` shape (§4.2).** `from` and `to` live in the item:
+   `PendingItem::{AudioSystem { from, to }, Route { holder, from, to },
+   Device { device, from, to }, Players { from, to }, CartPage { page,
+   from, to }}`.
+5. **Route guard (L11, L16).** For `ApplyRoute` the engine checks the
+   holder's own sources, not whole buses, as L6 says. When the new device
+   is open with too few channels for the route's pair (a Cue on channels
+   3/4 of an open stereo stream), it is reopened with more channels once it
+   is quiet, or at once when forced; until then the route waits.
+6. **Default output and new holders (L13, L17).** The default output
+   follows the running audio system until `ApplyAudioSystem` runs; a holder
+   created meanwhile goes there and moves with the others.
+7. **Leaving DSD (L12).** A bus carrying DSD first goes back to the PCM
+   stream it had, then takes the change: two reopens in that case only.
+8. **Refusal memory (L14, L15).** A forced change first forgets the
+   device's remembered refusals, so Apply now really asks again.
+   `Bus::reopen_with` does not remember a configuration as refused when the
+   device was not there (`DeviceNotFound`), as it already does for `Busy`.
+9. **Strings (§9.2).** `pending-failed`'s `{running}` uses a new key,
+   `pending-running` ("48 kHz, buffer 512"); only a device can refuse (a
+   route or the audio system always applies). `apply-now-line` ("{device}:
+   {causes}") and `holder-player-main`, `holder-player-cue`,
+   `holder-cartwall-main`, `holder-cartwall-cue` are added. **Apply now** is
+   offered only while an output item is pending: limit items alone give it
+   nothing to apply.
+10. **Tick period test (§11).** `conductor_tick_ms` is tested through
+    `Conductor::tick_period()`, read before every sleep; no test times a
+    thread.
+11. **`EngineEvent` is no longer `Copy` or `Eq`.** It carries routes,
+    devices and `DeviceSettings` (an `f64`).
+12. **Limits are not reachable from the interface yet (§13).** L18 and L19
+    are implemented and tested in the model, but nothing changes limits
+    while running, so the user guide does not describe them.
+
