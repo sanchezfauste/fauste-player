@@ -3295,5 +3295,73 @@ mod tests {
         device.render(480).unwrap();
         engine.tick(now);
         assert!(engine.tune_due.is_empty(), "sent once the mixer made room");
+        // The next block takes the Tune off the queue: the mixer runs with
+        // the new smoothing (10 ms at the bus rate), not the default one.
+        let rate = engine.buses.get(&key).unwrap().sample_rate();
+        let tuned = mixer_config(&engine.settings.tuning, rate).volume_smoothing_frames;
+        let before = engine
+            .buses
+            .get(&key)
+            .unwrap()
+            .mixer_volume_smoothing_frames();
+        assert_ne!(before, tuned, "the test needs a tuning that differs");
+        // The Tune waits behind the commands that filled the queue; each
+        // block takes `max_commands_per_block` of them.
+        for _ in 0..10_000 {
+            device.render(480).unwrap();
+            if engine
+                .buses
+                .get(&key)
+                .unwrap()
+                .mixer_volume_smoothing_frames()
+                != before
+            {
+                break;
+            }
+        }
+        assert_eq!(
+            engine
+                .buses
+                .get(&key)
+                .unwrap()
+                .mixer_volume_smoothing_frames(),
+            tuned
+        );
+    }
+
+    #[test]
+    fn a_settings_update_with_the_same_tuning_sends_no_tune() {
+        let backend = OfflineBackend::new();
+        let _device = backend.add_device("main", 2);
+        let mut config = Config::default();
+        config.outputs.backend = Some("offline".into());
+        let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
+        let mut engine = Engine::new(
+            backends,
+            EngineSettings::from_config(&config),
+            crate::worker::file_opener(),
+        );
+        let now = Instant::now();
+        engine.execute(
+            EngineAction::AddPlayer {
+                player: PlayerId(1),
+            },
+            now,
+        );
+        // Another setting changes, the tuning does not.
+        config.outputs.buffer_frames = 960;
+        engine.execute(EngineAction::UpdateSettings(Box::new(config.clone())), now);
+        assert!(engine.tune_due.is_empty(), "no bus waits for a Tune");
+        // Nothing was queued either: a full queue is the only way to tell,
+        // since a Tune would have been refused and kept in `tune_due`.
+        let key = BusKey {
+            backend: "offline".into(),
+            device: "main".into(),
+        };
+        let bus = engine.buses.get_mut(&key).unwrap();
+        while bus.send(BusCommand::Cancel { slot: 0 }) {}
+        engine.execute(EngineAction::UpdateSettings(Box::new(config)), now);
+        engine.tick(now);
+        assert!(engine.tune_due.is_empty(), "still no Tune to send");
     }
 }

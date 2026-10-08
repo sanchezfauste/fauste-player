@@ -687,6 +687,15 @@ impl Bus {
         self.handle.shared.frames_rendered()
     }
 
+    /// The volume smoothing the mixer runs with, for tests of `Tune`.
+    #[cfg(test)]
+    pub(crate) fn mixer_volume_smoothing_frames(&self) -> u32 {
+        self.mixer
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .volume_smoothing_frames()
+    }
+
     pub fn shared(&self) -> &Arc<crate::mixer::BusShared> {
         &self.handle.shared
     }
