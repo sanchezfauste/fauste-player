@@ -335,9 +335,11 @@ two modals in the close guard's style: the pending panel (`show_panel`,
 opened from the top bar's **Settings pending** pill, whose tooltip lists the
 same lines) and Apply now's confirmation (`show_confirm`). They are separate
 windows: while the confirmation is open the panel is not drawn. **Apply now**
-(Settings footer or the panel) sets `ViewState::apply_now_requested`; the
-next frame sends `Command::ApplySettingsNow` at once when `interruptions`
-is empty, else sets `confirm_apply_now`. The confirmation closes and sends
+in the Settings footer sets `ViewState::apply_now_requested`, handled
+later in the same frame; in the panel it is handled on the spot, so the
+confirmation replaces the panel without a blank frame. Either way it sends
+`Command::ApplySettingsNow` at once when `interruptions` is empty, else
+sets `confirm_apply_now`. The confirmation closes and sends
 the command by itself when the list becomes empty; Cancel, `Esc` (answered
 in `keyboard`, before Settings sees it) and the backdrop cancel it. Device
 names come from `SettingsState::device_label` (the lists Settings read on

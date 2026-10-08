@@ -871,7 +871,15 @@ impl AppUi {
                 let names = |d: &fp_model::OutputDevice| self.settings.device_label(d);
                 match pending::show_panel(&ctx, &scene, &names) {
                     Some(pending::Answer::Close) => self.view.pending_open = false,
-                    Some(pending::Answer::ApplyNow) => self.view.apply_now_requested = true,
+                    // Acted on in this frame, so the confirmation (drawn
+                    // below) replaces the panel without a blank frame.
+                    Some(pending::Answer::ApplyNow) => {
+                        if fp_model::interruptions(&state).is_empty() {
+                            scene.ctl.send(Command::ApplySettingsNow);
+                        } else {
+                            self.view.confirm_apply_now = true;
+                        }
+                    }
                     None => {}
                 }
             }
