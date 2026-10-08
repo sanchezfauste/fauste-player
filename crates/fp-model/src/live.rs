@@ -487,3 +487,30 @@ pub(crate) fn dispatch_due(state: &mut AppState, out: &mut Vec<EngineAction>) {
         send(state, action, out);
     }
 }
+
+/// L20: every pending output item, forced, including those in flight or
+/// refused.
+pub(crate) fn apply_now(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    let actions: Vec<EngineAction> = pending(state)
+        .iter()
+        .map(|p| action_for(&p.item, true))
+        .collect();
+    for action in actions {
+        send(state, action, out);
+    }
+}
+
+/// L22: the output items Apply now would force that have causes. The UI
+/// asks for confirmation if and only if this is not empty.
+pub fn interruptions(state: &AppState) -> Vec<(Target, Vec<BusyCause>)> {
+    pending(state)
+        .into_iter()
+        .filter(|p| !p.causes.is_empty())
+        .map(|p| (p.item.target(), p.causes))
+        .collect()
+}
+
+/// Whether Apply now has anything to apply: an output item is pending.
+pub fn has_output_items(state: &AppState) -> bool {
+    !pending(state).is_empty()
+}

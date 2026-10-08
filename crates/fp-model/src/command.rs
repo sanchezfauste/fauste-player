@@ -196,6 +196,9 @@ pub enum Command {
     ResetShortcuts,
     /// Resets one Settings section to its defaults (feedback 2 spec O2).
     RestoreDefaults(crate::restore::SettingsSection),
+    /// Live settings spec L20: every pending output change now, forced,
+    /// even where it briefly interrupts the audio on a device.
+    ApplySettingsNow,
 }
 
 /// Something the audio engine observed.

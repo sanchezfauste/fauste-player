@@ -315,6 +315,7 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             crate::restore::restore_defaults(&mut config, section);
             update_config(state, config, &mut out)?;
         }
+        Command::ApplySettingsNow => crate::live::apply_now(state, &mut out),
         Command::ResetMarkers { track } => {
             let t = state
                 .library

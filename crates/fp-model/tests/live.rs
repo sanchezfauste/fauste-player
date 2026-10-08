@@ -4,12 +4,12 @@
 
 mod common;
 
-use common::{entries, fixture, p0};
+use common::{entries, fixture, p0, roundtrip};
 use fp_model::{
     AppState, BusyCause, CartId, Command, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput,
     EngineAction, EngineEvent, Failure, Holder, LiveSettings, OutputDevice, PendingItem, Route,
     Target, TrackAnalysis, Wanted, apply, causes, configured_route, device_causes, device_settings,
-    due, on_event, pending,
+    due, has_output_items, interruptions, on_event, pending,
 };
 
 fn dev(name: &str) -> OutputDevice {
@@ -611,4 +611,70 @@ fn l23_limits_never_make_anything_pending_nor_reach_the_engine() {
         "limits are not engine settings"
     );
     assert_eq!(s.config.limits.max_players, 32);
+}
+
+#[test]
+fn l20_apply_now_forces_every_output_change_even_one_in_flight() {
+    let mut s = fixture(3);
+    let last = s.players[3].id;
+    report_start(&mut s);
+    apply(&mut s, Command::Play(last)).unwrap();
+    update(&mut s, |c| c.outputs.buffer_frames = 1024);
+    let actions = apply(&mut s, Command::ApplySettingsNow).unwrap();
+    assert!(actions.contains(&apply_device(&s, "default", true)));
+    assert!(
+        actions.contains(&apply_device(&s, "phones", true)),
+        "in flight already: sent again, forced"
+    );
+}
+
+#[test]
+fn l20_apply_now_retries_a_refused_value() {
+    let mut s = fixture(1);
+    report_start(&mut s);
+    update(&mut s, |c| c.outputs.sample_rate = 44_100);
+    let settings = device_settings(&s.config.outputs, &dev("default"));
+    on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: Target::Device(dev("default")),
+            wanted: Wanted::Device(settings),
+            outcome: Err("refused".into()),
+        },
+    );
+    let actions = apply(&mut s, Command::ApplySettingsNow).unwrap();
+    assert!(actions.contains(&apply_device(&s, "default", true)));
+}
+
+#[test]
+fn l22_interruptions_name_only_what_apply_now_would_cut() {
+    let mut s = fixture(3);
+    let (p1, last) = (p0(&s), s.players[3].id);
+    report_start(&mut s);
+    assert!(interruptions(&s).is_empty());
+    assert!(!has_output_items(&s));
+    apply(&mut s, Command::Play(p1)).unwrap();
+    apply(&mut s, Command::Play(last)).unwrap();
+    update(&mut s, |c| c.outputs.buffer_frames = 1024);
+    assert_eq!(
+        interruptions(&s),
+        vec![(
+            Target::Device(dev("default")),
+            vec![BusyCause::PlayerPlaying(p1), BusyCause::PlayerPlaying(last)]
+        )]
+    );
+    assert!(has_output_items(&s));
+}
+
+#[test]
+fn l24_nothing_pending_is_saved() {
+    let mut s = fixture(3);
+    let p1 = p0(&s);
+    report_start(&mut s);
+    apply(&mut s, Command::Play(p1)).unwrap();
+    update(&mut s, |c| c.outputs.buffer_frames = 1024);
+    assert!(!pending(&s).is_empty());
+    let restored = roundtrip(&s);
+    assert_eq!(restored.live, LiveSettings::default());
+    assert!(pending(&restored).is_empty());
 }
