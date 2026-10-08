@@ -12,6 +12,7 @@ pub mod format;
 pub mod glyphs;
 pub mod icons;
 mod notice;
+pub mod pending;
 mod player;
 pub mod playlist_files;
 mod reset_played;

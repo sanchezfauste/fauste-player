@@ -13,8 +13,6 @@ use super::widgets::{self, TileStyle, font, font_medium};
 pub enum ExitIntent {
     /// Close the window and quit.
     Close,
-    /// Restart the application to apply settings (feedback 2 spec O4).
-    Restart,
 }
 
 /// The commands that stop everything in `items`: each player, then all
@@ -80,7 +78,7 @@ fn describe(scene: &Scene<'_>, state: &AppState, item: &OnAir) -> String {
     }
 }
 
-fn button(ui: &mut egui::Ui, label: &str, border: Option<egui::Color32>) -> bool {
+pub(crate) fn button(ui: &mut egui::Ui, label: &str, border: Option<egui::Color32>) -> bool {
     let w = ui
         .painter()
         .layout_no_wrap(label.to_owned(), font(12.0), theme::NEUTRAL_300)
@@ -115,7 +113,6 @@ pub(crate) fn show(
     let t = scene.i18n;
     let (body, confirm) = match intent {
         ExitIntent::Close => ("exit-guard-close-body", "exit-guard-close-confirm"),
-        ExitIntent::Restart => ("exit-guard-restart-body", "exit-guard-restart-confirm"),
     };
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 440.0);
     let mut answer = None;

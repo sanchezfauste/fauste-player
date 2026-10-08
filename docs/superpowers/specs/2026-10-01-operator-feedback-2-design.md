@@ -130,6 +130,7 @@
     including fields the section does not show. One test per
     section checks that the other sections are untouched.
 - **O4 Restart.**
+  - *Replaced by the [live settings spec](2026-10-07-live-settings-design.md) (2026-10-07): output settings apply while the application runs, and the restart, its pill and the relaunch are removed.*
   - At start-up the app keeps the configuration the engine was built with.
   - A pure function `fp_model::restart_pending(started: &Config, current:
     &Config) -> Vec<RestartReason>` lists the changed fields that apply only on

@@ -327,10 +327,24 @@ mode (the banner after a UI panic) the close is not guarded, because the dialog
 cannot be drawn. `ExitIntent` names why the guard opened, so other exits can
 reuse it.
 
-`ExitIntent::Restart` opens the same modal for **Restart now** while something
-is on air (its own text: "Stop and restart"). With nothing on air,
-`begin_restart` sets the restart flag, marks the close as confirmed and sends
-the viewport close command. See "Restart" in `architecture.md`.
+## Settings pending
+
+`ui/pending.rs` turns `fp_model::live::pending` and `interruptions` into
+text (`describe`, `describe_failure`, `target_label`; unit-tested) and draws
+two modals in the close guard's style: the pending panel (`show_panel`,
+opened from the top bar's **Settings pending** pill, whose tooltip lists the
+same lines) and Apply now's confirmation (`show_confirm`). They are separate
+windows: while the confirmation is open the panel is not drawn. **Apply now**
+in the Settings footer sets `ViewState::apply_now_requested`, handled
+later in the same frame; in the panel it is handled on the spot, so the
+confirmation replaces the panel without a blank frame. Either way it sends
+`Command::ApplySettingsNow` at once when `interruptions` is empty, else
+sets `confirm_apply_now`. The confirmation closes and sends
+the command by itself when the list becomes empty; Cancel, `Esc` (answered
+in `keyboard`, before Settings sees it) and the backdrop cancel it. Device
+names come from `SettingsState::device_label` (the lists Settings read on
+its helper thread; the id until then). The status bar's label follows
+`state.live.audio_system_in_use`.
 
 ## Settings window
 
@@ -339,10 +353,7 @@ the main window minus a margin (never below 320 × 300). It does not change when
 a section is selected. The section header (title and **Restore defaults**) is
 fixed; the body below it sits in `ScrollArea::both`. Rows use
 `labelled_row`, with a label column of `LABEL_WIDTH` (180 px), so every section
-shares one grid. The footer spans the window width and holds the restart notice
-and **Restart now** while `fp_model::restart_pending` is not empty. A transient
-notice (`SettingsDeps::notice`) briefly takes the place of the restart text;
-**Restart now** stays.
+shares one grid. The footer spans the window width and holds the pending notice and **Apply now** while an output change waits (`SettingsDeps::{pending, can_apply}`). A transient notice (`SettingsDeps::notice`) briefly takes the place of the pending text; **Apply now** stays.
 
 Settings → Remote keeps what is being typed (`RemoteState::drafts` for text,
 `RemoteState::numbers` for the drag values, which do not wait for Enter), so

@@ -483,3 +483,26 @@ fn without_a_session_no_route_is_dropped() {
     assert!(o.player_routes(removed).is_some());
     assert_eq!(o.device_overrides, state.config.outputs.device_overrides);
 }
+
+#[test]
+fn an_old_restart_handoff_is_ignored_on_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    write_config(
+        &s,
+        r#"{"schema_version":1,"config":{"tuning":{"restart_handoff_ms":5000,"declick_ms":7}}}"#,
+    );
+    let loaded = s.load("Main");
+    assert_eq!(
+        loaded.state.config.tuning.declick_ms, 7.0,
+        "the rest is kept"
+    );
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.contains("restart_handoff_ms")),
+        "{:?}",
+        loaded.warnings
+    );
+}

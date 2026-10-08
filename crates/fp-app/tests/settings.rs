@@ -756,7 +756,6 @@ fn switching_views_changes_only_the_view() {
     let basic = fake.state.load().config.clone();
     assert_eq!(basic.ui.outputs_view, fp_model::OutputsView::Basic);
     assert_eq!(basic.outputs, before.outputs, "no output setting changes");
-    assert!(fp_model::restart_pending(&before, &basic).is_empty());
     assert!(
         h.query_by_role_and_label(Role::CheckBox, "Bit-perfect: dac")
             .is_none()

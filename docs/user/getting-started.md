@@ -93,8 +93,9 @@ playlists.
 On Windows the release program opens no console window: `--version`,
 `--help` and start-up errors appear in a message box instead.
 
-When a setting needs a restart, a **Restart pending** pill appears in the top
-bar: press it to restart (see [Settings](settings.md#restart-pending)).
+When a change to the outputs waits for something on air, a **Settings
+pending** pill appears in the top bar; it says what waits (see
+[Settings](settings.md#settings-pending)).
 
 ### Closing while audio is on air
 

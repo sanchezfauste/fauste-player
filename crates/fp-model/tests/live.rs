@@ -722,3 +722,27 @@ fn l24_nothing_pending_is_saved() {
     assert_eq!(restored.live, LiveSettings::default());
     assert!(pending(&restored).is_empty());
 }
+
+#[test]
+fn l4_an_own_value_equal_to_the_global_one_changes_nothing() {
+    let mut c = Config::default();
+    c.outputs.routes = vec![fp_model::PlayerRoutes {
+        player: fp_model::PlayerId(1),
+        main: Some(route_to("dac")),
+        cue: None,
+    }];
+    let before = device_settings(&c.outputs, &dev("dac"));
+    c.outputs
+        .set_device_rate(&dev("dac"), Some(c.outputs.sample_rate));
+    c.outputs
+        .set_device_buffer(&dev("dac"), Some(c.outputs.buffer_frames));
+    assert_eq!(device_settings(&c.outputs, &dev("dac")), before);
+}
+
+#[test]
+fn l4_an_own_value_on_a_device_no_route_names_applies_to_nothing() {
+    let mut c = Config::default();
+    let before = device_settings(&c.outputs, &dev("spare"));
+    c.outputs.set_device_rate(&dev("spare"), Some(96_000));
+    assert_eq!(device_settings(&c.outputs, &dev("spare")), before);
+}

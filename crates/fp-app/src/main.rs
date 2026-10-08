@@ -15,7 +15,7 @@ use fp_app::ui::app::AppUi;
 use fp_app::ui::shell::Shell;
 use fp_app::ui::theme;
 use fp_app::{bootstrap, cli, crash, instance, logging};
-use fp_backends::{AudioBackend, Availability, NullBackend, display_name, system_backends};
+use fp_backends::{AudioBackend, Availability, NullBackend, system_backends};
 use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
@@ -32,22 +32,10 @@ const APP_ID: &str = "org.fauste.FaustePlayer";
 /// How often the running instance looks for playlists handed over.
 const INBOX_INTERVAL: Duration = Duration::from_millis(500);
 
-/// Tries at the instance lock, and the pause between them: a restarting
-/// instance probes the lock for an instant while it waits for this one.
+/// Tries at the instance lock, and the pause between them: an instance that
+/// is ending may hold it for an instant longer.
 const LOCK_ATTEMPTS: usize = 3;
 const LOCK_RETRY_PAUSE: Duration = Duration::from_millis(20);
-
-/// How the interface ended.
-enum Exit {
-    Quit,
-    /// The operator asked for a restart (feedback 2 spec O4); inside a
-    /// Flatpak, this process waits at most `handoff` for the new one.
-    Restart {
-        handoff: Duration,
-        /// `ui.language`, for a failure message after the shutdown.
-        language: Option<String>,
-    },
-}
 
 fn main() -> ExitCode {
     let (playlists, ignored) = match cli::parse(std::env::args_os().skip(1)) {
@@ -109,30 +97,12 @@ fn main() -> ExitCode {
     for path in &ignored {
         tracing::warn!(path = %path.display(), "not a playlist, ignored");
     }
-    let data_dir = paths.data_dir.clone();
     let result = run(paths, playlists, report_cap);
     drop(lock);
     match result {
-        Ok(Exit::Quit) => {
+        Ok(()) => {
             tracing::info!("stopped");
             ExitCode::SUCCESS
-        }
-        Ok(Exit::Restart { handoff, language }) => {
-            // The lock is released above: the new process can take it.
-            match fp_app::restart::relaunch(&data_dir, handoff) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(e) => {
-                    tracing::error!(error = %e, "could not start again");
-                    let i18n = I18n::new(language.as_deref());
-                    eprintln!("fauste-player: {}", i18n.tr("restart-failed"));
-                    let _ = rfd::MessageDialog::new()
-                        .set_title("Fauste Player")
-                        .set_description(i18n.tr("restart-failed"))
-                        .set_level(rfd::MessageLevel::Error)
-                        .show();
-                    ExitCode::FAILURE
-                }
-            }
         }
         Err(e) => {
             tracing::error!(error = %e, "could not start");
@@ -146,7 +116,7 @@ fn run(
     paths: fp_store::AppPaths,
     playlists: Vec<std::path::PathBuf>,
     report_cap: crash::ReportCap,
-) -> Result<Exit, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let store = Store::new(paths.clone(), fp_model::Limits::default());
     let default_name = I18n::new(None).tr("default-playlist-name");
     let loaded = store.load(&default_name);
@@ -168,12 +138,6 @@ fn run(
     let engine = Engine::new(backends.clone(), settings, file_opener());
     let in_use = engine.backend_in_use().to_owned();
     tracing::info!(backend = %in_use, ?availability, "audio systems");
-    let output = if in_use == "null" {
-        i18n.tr("settings-backend-null")
-    } else {
-        display_name(&in_use).to_owned()
-    };
-    let platform = format!("{} · {}", os_name(), output);
     let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
     let handle = Arc::new(conductor.spawn(handle)?);
 
@@ -200,15 +164,11 @@ fn run(
         .with_services(requests)
         .with_service_faults(faults)
         .with_backends(backends)
-        .with_platform(platform)
-        // The engine above was built from this configuration.
-        .with_started_config(config.clone())
         .with_notices(
             std::env::current_exe()
                 .ok()
                 .and_then(|exe| fp_app::ui::about::find_notices(&exe)),
         );
-    let restart = app.restart_flag();
     if let Some(r) = &remote {
         app = app.with_remote_status(r.status_cell());
     }
@@ -244,11 +204,6 @@ fn run(
             Ok(Box::new(Shell::new(app)))
         }),
     );
-    let final_config = handle.model.load_full();
-    let handoff =
-        Duration::from_secs_f64(final_config.config.tuning.restart_handoff_ms.max(0.0) / 1000.0);
-    let language = final_config.config.ui.language.clone();
-    drop(final_config);
     // Everything that can send commands stops first; then the final save
     // with the current positions, then the audio.
     drop(remote);
@@ -258,17 +213,11 @@ fn run(
     services.shutdown();
     stop_engine(handle);
     result.map_err(|e| e.to_string())?;
-    // Only a confirmed Restart now sets the flag; a plain close quits.
-    Ok(if restart.load(std::sync::atomic::Ordering::Acquire) {
-        Exit::Restart { handoff, language }
-    } else {
-        Exit::Quit
-    })
+    Ok(())
 }
 
-/// Stops the conductor and the engine, closing the output streams, now:
-/// a restarted instance may need the same device. Every other holder of the
-/// handle must have stopped already.
+/// Stops the conductor and the engine, closing the output streams, now.
+/// Every other holder of the handle must have stopped already.
 fn stop_engine(handle: Arc<ConductorHandle>) {
     match Arc::try_unwrap(handle) {
         Ok(conductor) => {
@@ -306,13 +255,4 @@ fn hand_over(data_dir: &std::path::Path, playlists: &[std::path::PathBuf]) -> Ex
         .set_level(rfd::MessageLevel::Info)
         .show();
     ExitCode::SUCCESS
-}
-
-fn os_name() -> &'static str {
-    match std::env::consts::OS {
-        "linux" => "Linux",
-        "windows" => "Windows",
-        "macos" => "macOS",
-        other => other,
-    }
 }

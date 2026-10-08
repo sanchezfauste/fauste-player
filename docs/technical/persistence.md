@@ -143,7 +143,7 @@ The fields `silence_threshold_db` and `segue_threshold_db` of earlier
 versions are ignored on load with a warning (their meaning changed), like
 any field this version does not have.
 
-### `outputs` (Settings → Audio outputs; applied at the next start)
+### `outputs` (Settings → Audio outputs; applied while running once nothing plays on the affected device)
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -264,6 +264,8 @@ grid limits are read at start only. The others are read where they are used.
 
 ### `tuning` (config file only)
 
+Every value is read while the application runs (live settings spec §7): a new value applies at its next use.
+
 | Field | Default | Meaning |
 |---|---|---|
 | `declick_ms` | 5 | stop ramp |
@@ -282,4 +284,3 @@ grid limits are read at start only. The others are read where they are used.
 | `gain_smoothing_ms` | 20 | volume smoothing |
 | `save_debounce_ms` | 1000 | autosave delay |
 | `missing_recheck_ms` | 30000 | how often files not found are looked for again |
-| `restart_handoff_ms` | 5000 | inside a Flatpak, how long Restart now waits for the new instance to take the instance lock (500–60000) |

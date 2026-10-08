@@ -4,8 +4,9 @@
 
 1. Open **Settings → Audio outputs** and press **Test Main** for the player.
    If you hear the tone, check the player's volume fader.
-2. If you hear nothing, pick another device or channel pair. Changes to
-   outputs take effect after a restart: press **Restart now** in Settings.
+2. If you hear nothing, pick another device or channel pair. A change to
+   the outputs applies once nothing plays on them; **Apply now** in Settings
+   applies it at once.
 3. On Linux, prefer **PipeWire** or **PulseAudio** in Settings → Audio
    outputs → Audio system. They share the sound card with other programs.
    **ALSA** talks to the card directly and may find it busy.
@@ -118,7 +119,7 @@ seconds per kind, with how many happened. Not every audio system reports
 xruns (PulseAudio does not; Windows exclusive mode does not).
 
 
-- Increase the **buffer size** in Settings (and press **Restart now**).
+- Increase the **buffer size** in Settings (it applies once nothing plays on that device, or at once with **Apply now**).
 - On Linux, allow real-time scheduling. The application asks the system for
   it through rtkit (D-Bus). Membership of the `audio` group with an `rtprio`
   limit also works.
