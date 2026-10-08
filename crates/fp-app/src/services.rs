@@ -356,6 +356,8 @@ pub struct Services {
     settings: Option<AnalysisSettings>,
     /// The limits the analysis was last given (live settings spec §6).
     limits: Option<fp_model::Limits>,
+    /// The crash report cap (live settings spec §6), when `main` gave it.
+    report_cap: Option<crate::crash::ReportCap>,
     /// When files not found were last looked for again.
     last_recheck: Option<Instant>,
     /// Looks for them; `None` if its thread could not start.
@@ -422,6 +424,7 @@ impl Services {
             seen_analyzed: HashSet::new(),
             settings: None,
             limits: None,
+            report_cap: None,
             last_recheck: None,
             probe: Probe::spawn(),
             tag_worker: TagWorker::spawn(Box::new(|| {}))
@@ -451,6 +454,12 @@ impl Services {
             dirty_since: None,
             last_session_save: None,
         }
+    }
+
+    /// Keeps the crash report cap in step with `limits.max_crash_reports`.
+    pub fn with_report_cap(mut self, cap: crate::crash::ReportCap) -> Self {
+        self.report_cap = Some(cap);
+        self
     }
 
     /// Where the UI sends its requests.
@@ -632,6 +641,9 @@ impl Services {
             return;
         }
         self.analyzer.update_limits(current.clone());
+        if let Some(cap) = &self.report_cap {
+            cap.set(current.max_crash_reports);
+        }
         self.limits = Some(current.clone());
     }
 
