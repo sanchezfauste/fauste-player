@@ -375,6 +375,33 @@ fn l5_a_busy_device_delays_only_its_own_change() {
     assert!(device_item(&s, "default").unwrap().causes.is_empty());
 }
 
+fn apply_devices(actions: &[EngineAction]) -> Vec<OutputDevice> {
+    actions
+        .iter()
+        .filter_map(|a| match a {
+            EngineAction::ApplyDevice { device, .. } => Some(device.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn l8_waiting_change_is_sent_only_when_idle() {
+    let mut s = fixture(3);
+    let p1 = p0(&s);
+    s.config.outputs.routes[0].main = Some(route_to("dac"));
+    report_start(&mut s);
+    apply(&mut s, Command::Play(p1)).unwrap();
+    let entry = s.players[0].current.unwrap();
+    let actions = update(&mut s, |c| c.outputs.buffer_frames = 1024);
+    let sent = apply_devices(&actions);
+    assert!(sent.contains(&dev("default")), "the idle device goes out");
+    assert!(!sent.contains(&dev("dac")), "the busy device waits");
+    // The track ends: the device is idle and the waiting change goes out.
+    let actions = on_event(&mut s, EngineEvent::ReachedEnd { player: p1, entry });
+    assert_eq!(apply_devices(&actions), vec![dev("dac")]);
+}
+
 #[test]
 fn l6_a_route_change_waits_for_its_own_holder_only() {
     let mut s = fixture(3);
