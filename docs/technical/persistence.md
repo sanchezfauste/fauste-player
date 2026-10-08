@@ -143,7 +143,7 @@ The fields `silence_threshold_db` and `segue_threshold_db` of earlier
 versions are ignored on load with a warning (their meaning changed), like
 any field this version does not have.
 
-### `outputs` (Settings → Audio outputs; applied at the next start)
+### `outputs` (Settings → Audio outputs; applied while running once nothing plays on the affected device)
 
 | Field | Default | Meaning |
 |---|---|---|

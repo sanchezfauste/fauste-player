@@ -441,8 +441,8 @@ wins.
    `Bus::reopen_with` does not remember a configuration as refused when the
    device was not there (`DeviceNotFound`), as it already does for `Busy`.
 9. **Strings (§9.2).** `pending-failed`'s `{running}` uses a new key,
-   `pending-running` ("48 kHz, buffer 512"); only a device can refuse (a
-   route or the audio system always applies). `apply-now-line` ("{device}:
+   `pending-running` ("48 kHz, buffer 512"); only a device's refusal says what it keeps
+   running with (a route's or the audio system's does not, see item 15). `apply-now-line` ("{device}:
    {causes}") and `holder-player-main`, `holder-player-cue`,
    `holder-cartwall-main`, `holder-cartwall-cue` are added. **Apply now** is
    offered only while an output item is pending.
