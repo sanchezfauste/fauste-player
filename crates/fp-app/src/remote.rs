@@ -33,6 +33,8 @@ impl Bridge {
         let model = self.conductor.model.load_full();
         let path = &model.library.get(track)?.path;
         let settings = &model.config.analysis;
+        // The limits of this snapshot (live settings spec §6).
+        self.cache.set_limits(&model.config.limits);
         if let Some(analysis) = self.cache.load(path, settings) {
             return Some(analysis);
         }

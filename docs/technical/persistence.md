@@ -240,6 +240,13 @@ See [Remote control API](remote-api.md).
 
 ### `limits` (config file only)
 
+Changed while the application runs (live settings spec §6, §15): new cover
+and tag limits apply to analyses started afterwards (the analysis pool, its
+cache and the remote's cache reader take them; entries made under the old
+cover limits simply miss, nothing is analysed again, existing tags are not
+trimmed again). `max_crash_reports` follows too. `max_players` and the cart
+grid limits are read at start only. The others are read where they are used.
+
 | Field | Default |
 |---|---|
 | `max_players` | 16 |

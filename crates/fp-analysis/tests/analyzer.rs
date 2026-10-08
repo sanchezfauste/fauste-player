@@ -7,8 +7,8 @@
 //! The background analysis pool.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use fp_analysis::analyzer::{AnalyzeFn, Analyzer};
@@ -396,4 +396,52 @@ fn the_pool_runs_at_low_priority() {
         analyzer.results().recv_timeout(WAIT).unwrap();
     }
     assert_eq!(*seen.lock().unwrap(), vec![19; 4]);
+}
+
+#[test]
+fn new_limits_reach_the_jobs_that_start_after_them() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let record = seen.clone();
+    let capture: AnalyzeFn = Arc::new(move |path, settings, limits, _cancelled| {
+        record.lock().unwrap().push(limits.max_cover_pixels);
+        analyze_file(path, settings, limits)
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav");
+    let b = wav(dir.path(), "b.wav");
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        None,
+        capture,
+    )
+    .unwrap();
+    analyzer.submit(TrackId(1), a);
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    analyzer.update_limits(Limits {
+        max_cover_pixels: 1_000,
+        ..Limits::default()
+    });
+    assert_eq!(analyzer.limits().max_cover_pixels, 1_000);
+    analyzer.submit(TrackId(2), b);
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![Limits::default().max_cover_pixels, 1_000]
+    );
+}
+
+#[test]
+fn the_cache_key_follows_new_cover_limits() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "a.wav");
+    let cache = AnalysisCache::new(dir.path().join("cache"), &Limits::default());
+    let settings = AnalysisSettings::default();
+    let before = cache.key(&path, &settings).unwrap();
+    cache.set_limits(&Limits {
+        max_cover_pixels: 1_000,
+        ..Limits::default()
+    });
+    assert_ne!(cache.key(&path, &settings).unwrap(), before);
 }

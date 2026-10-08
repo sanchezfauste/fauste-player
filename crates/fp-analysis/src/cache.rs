@@ -7,7 +7,7 @@
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
 
 use fp_model::{AnalysisSettings, Limits};
@@ -32,8 +32,11 @@ pub struct CacheKey(String);
 
 pub struct AnalysisCache {
     dir: PathBuf,
-    max_bytes: u64,
-    cover_limits: (u64, u32),
+    /// Limits read at each use: the services thread and the remote's
+    /// reader update them while running (live settings spec §6).
+    max_bytes: AtomicU64,
+    cover_bytes: AtomicU64,
+    cover_pixels: AtomicU32,
     tmp_counter: AtomicU64,
 }
 
@@ -55,10 +58,22 @@ impl AnalysisCache {
     pub fn new(dir: PathBuf, limits: &Limits) -> Self {
         Self {
             dir,
-            max_bytes: limits.max_state_file_bytes,
-            cover_limits: (limits.max_cover_bytes, limits.max_cover_pixels),
+            max_bytes: AtomicU64::new(limits.max_state_file_bytes),
+            cover_bytes: AtomicU64::new(limits.max_cover_bytes),
+            cover_pixels: AtomicU32::new(limits.max_cover_pixels),
             tmp_counter: AtomicU64::new(0),
         }
+    }
+
+    /// New limits for keys computed and entries read or written after
+    /// this call.
+    pub fn set_limits(&self, limits: &Limits) {
+        self.max_bytes
+            .store(limits.max_state_file_bytes, Ordering::Relaxed);
+        self.cover_bytes
+            .store(limits.max_cover_bytes, Ordering::Relaxed);
+        self.cover_pixels
+            .store(limits.max_cover_pixels, Ordering::Relaxed);
     }
 
     /// Removes temporary files left by an interrupted run and entries of
@@ -92,7 +107,8 @@ impl AnalysisCache {
             .duration_since(UNIX_EPOCH)
             .ok()?
             .as_nanos();
-        let (cover_bytes, cover_pixels) = self.cover_limits;
+        let cover_bytes = self.cover_bytes.load(Ordering::Relaxed);
+        let cover_pixels = self.cover_pixels.load(Ordering::Relaxed);
         Some(CacheKey(format!(
             "{}|{}|{mtime}|{ANALYSIS_VERSION}|{settings:?}|{cover_bytes}|{cover_pixels}",
             canonical.display(),
@@ -112,7 +128,7 @@ impl AnalysisCache {
     /// removed so it is recomputed.
     pub fn load_key(&self, key: &CacheKey) -> Option<Analysis> {
         let file = self.file_for(key);
-        if fs::metadata(&file).ok()?.len() > self.max_bytes {
+        if fs::metadata(&file).ok()?.len() > self.max_bytes.load(Ordering::Relaxed) {
             let _ = fs::remove_file(&file);
             return None;
         }
@@ -135,7 +151,7 @@ impl AnalysisCache {
             analysis: analysis.clone(),
         })
         .map_err(io::Error::other)?;
-        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > self.max_bytes {
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > self.max_bytes.load(Ordering::Relaxed) {
             return Err(io::Error::other(
                 "analysis larger than the state file limit",
             ));
