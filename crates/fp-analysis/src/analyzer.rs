@@ -228,12 +228,9 @@ impl Analyzer {
     }
 
     /// Limits for jobs that start after this call (live settings spec §6);
-    /// the cache keys follow them, so entries made under the old limits
+    /// the cache keys are built from the same snapshot, so entries made under the old limits
     /// miss. Nothing is analysed again.
     pub fn update_limits(&self, limits: Limits) {
-        if let Some(cache) = &self.shared.cache {
-            cache.set_limits(&limits);
-        }
         *lock(&self.shared.limits) = limits;
     }
 
@@ -325,20 +322,22 @@ fn run(job: &Job, shared: &Shared) -> Result<Analysis, AnalysisError> {
     let limits = lock(&shared.limits).clone();
     // The key is taken before analysing: if the file changes meanwhile, the
     // result belongs to the old file and must not be cached for the new one.
+    // It and the analysis use the same `limits` snapshot, so a change of
+    // limits during the job cannot store a result under the new key.
     let key = shared
         .cache
         .as_ref()
-        .and_then(|c| c.key(&job.path, &settings));
+        .and_then(|c| c.key(&job.path, &settings, &limits));
     if let (Some(cache), Some(key)) = (&shared.cache, &key)
-        && let Some(analysis) = cache.load_key(key)
+        && let Some(analysis) = cache.load_key(key, &limits)
     {
         return Ok(analysis);
     }
     let cancelled = || shared.stop.load(Ordering::Acquire) || !lock(&shared.book).is_current(job);
     let outcome = (shared.analyze)(&job.path, &settings, &limits, &cancelled);
     if let (Ok(analysis), Some(cache), Some(key)) = (&outcome, &shared.cache, &key)
-        && cache.key(&job.path, &settings).as_ref() == Some(key)
-        && let Err(e) = cache.store_key(key, analysis)
+        && cache.key(&job.path, &settings, &limits).as_ref() == Some(key)
+        && let Err(e) = cache.store_key(key, analysis, &limits)
     {
         tracing::warn!(path = %job.path.display(), "cannot cache the analysis: {e}");
     }

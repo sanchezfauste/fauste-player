@@ -105,7 +105,6 @@ fn serve(
     )
     .unwrap();
     prepare(state);
-    let limits = state.config.limits.clone();
 
     let backend = OfflineBackend::new();
     let _device = backend.add_device("main", 2);
@@ -121,7 +120,6 @@ fn serve(
         handle.clone(),
         MediaCache::default(),
         paths.cache_dir.join("analysis"),
-        &limits,
     )
     .unwrap();
 

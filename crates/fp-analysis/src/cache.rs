@@ -7,7 +7,7 @@
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
 
 use fp_model::{AnalysisSettings, Limits};
@@ -32,11 +32,6 @@ pub struct CacheKey(String);
 
 pub struct AnalysisCache {
     dir: PathBuf,
-    /// Limits read at each use: the services thread and the remote's
-    /// reader update them while running (live settings spec §6).
-    max_bytes: AtomicU64,
-    cover_bytes: AtomicU64,
-    cover_pixels: AtomicU32,
     tmp_counter: AtomicU64,
 }
 
@@ -55,25 +50,11 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 impl AnalysisCache {
     /// Opens (or creates on first store) a cache in `dir`, without touching
     /// the disk: `sweep` tidies it, off the caller's thread.
-    pub fn new(dir: PathBuf, limits: &Limits) -> Self {
+    pub fn new(dir: PathBuf) -> Self {
         Self {
             dir,
-            max_bytes: AtomicU64::new(limits.max_state_file_bytes),
-            cover_bytes: AtomicU64::new(limits.max_cover_bytes),
-            cover_pixels: AtomicU32::new(limits.max_cover_pixels),
             tmp_counter: AtomicU64::new(0),
         }
-    }
-
-    /// New limits for keys computed and entries read or written after
-    /// this call.
-    pub fn set_limits(&self, limits: &Limits) {
-        self.max_bytes
-            .store(limits.max_state_file_bytes, Ordering::Relaxed);
-        self.cover_bytes
-            .store(limits.max_cover_bytes, Ordering::Relaxed);
-        self.cover_pixels
-            .store(limits.max_cover_pixels, Ordering::Relaxed);
     }
 
     /// Removes temporary files left by an interrupted run and entries of
@@ -97,8 +78,16 @@ impl AnalysisCache {
         }
     }
 
-    /// The key of `path` as it is right now, or `None` if it cannot be read.
-    pub fn key(&self, path: &Path, settings: &AnalysisSettings) -> Option<CacheKey> {
+    /// The key of `path` as it is right now under `limits`, or `None` if it
+    /// cannot be read. The cache keeps no limits of its own: the caller
+    /// passes the snapshot the analysis uses, so a key always matches it
+    /// (live settings spec §6).
+    pub fn key(
+        &self,
+        path: &Path,
+        settings: &AnalysisSettings,
+        limits: &Limits,
+    ) -> Option<CacheKey> {
         let canonical = path.canonicalize().ok()?;
         let meta = fs::metadata(&canonical).ok()?;
         let mtime = meta
@@ -107,8 +96,8 @@ impl AnalysisCache {
             .duration_since(UNIX_EPOCH)
             .ok()?
             .as_nanos();
-        let cover_bytes = self.cover_bytes.load(Ordering::Relaxed);
-        let cover_pixels = self.cover_pixels.load(Ordering::Relaxed);
+        let cover_bytes = limits.max_cover_bytes;
+        let cover_pixels = limits.max_cover_pixels;
         Some(CacheKey(format!(
             "{}|{}|{mtime}|{ANALYSIS_VERSION}|{settings:?}|{cover_bytes}|{cover_pixels}",
             canonical.display(),
@@ -126,9 +115,9 @@ impl AnalysisCache {
 
     /// The cached analysis for `key`. A corrupt or oversized entry is
     /// removed so it is recomputed.
-    pub fn load_key(&self, key: &CacheKey) -> Option<Analysis> {
+    pub fn load_key(&self, key: &CacheKey, limits: &Limits) -> Option<Analysis> {
         let file = self.file_for(key);
-        if fs::metadata(&file).ok()?.len() > self.max_bytes.load(Ordering::Relaxed) {
+        if fs::metadata(&file).ok()?.len() > limits.max_state_file_bytes {
             let _ = fs::remove_file(&file);
             return None;
         }
@@ -145,13 +134,18 @@ impl AnalysisCache {
 
     /// Stores `analysis` under `key` (written to a unique temporary file,
     /// then renamed into place).
-    pub fn store_key(&self, key: &CacheKey, analysis: &Analysis) -> io::Result<()> {
+    pub fn store_key(
+        &self,
+        key: &CacheKey,
+        analysis: &Analysis,
+        limits: &Limits,
+    ) -> io::Result<()> {
         let bytes = postcard::to_allocvec(&CachedAnalysis {
             key: key.0.clone(),
             analysis: analysis.clone(),
         })
         .map_err(io::Error::other)?;
-        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > self.max_bytes.load(Ordering::Relaxed) {
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limits.max_state_file_bytes {
             return Err(io::Error::other(
                 "analysis larger than the state file limit",
             ));
@@ -170,19 +164,25 @@ impl AnalysisCache {
         })
     }
 
-    pub fn load(&self, path: &Path, settings: &AnalysisSettings) -> Option<Analysis> {
-        self.load_key(&self.key(path, settings)?)
+    pub fn load(
+        &self,
+        path: &Path,
+        settings: &AnalysisSettings,
+        limits: &Limits,
+    ) -> Option<Analysis> {
+        self.load_key(&self.key(path, settings, limits)?, limits)
     }
 
     pub fn store(
         &self,
         path: &Path,
         settings: &AnalysisSettings,
+        limits: &Limits,
         analysis: &Analysis,
     ) -> io::Result<()> {
         let key = self
-            .key(path, settings)
+            .key(path, settings, limits)
             .ok_or_else(|| io::Error::other("file metadata unavailable"))?;
-        self.store_key(&key, analysis)
+        self.store_key(&key, analysis, limits)
     }
 }

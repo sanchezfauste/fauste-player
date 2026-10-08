@@ -177,7 +177,7 @@ fn run(
     let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
     let handle = Arc::new(conductor.spawn(handle)?);
 
-    let cache = AnalysisCache::new(paths.cache_dir.join("analysis"), &config.limits);
+    let cache = AnalysisCache::new(paths.cache_dir.join("analysis"));
     let analyzer = Analyzer::spawn(
         ANALYSIS_THREADS,
         config.analysis.clone(),
@@ -195,7 +195,6 @@ fn run(
         handle.clone(),
         media.clone(),
         paths.cache_dir.join("analysis"),
-        &config.limits,
     );
     let mut app = AppUi::new(handle.clone(), i18n, media)
         .with_services(requests)
