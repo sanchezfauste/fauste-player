@@ -88,6 +88,14 @@ pub enum BusCommand {
     /// where a mode switch at the same frame applies). The latest command
     /// wins, so a `HoldAll` ending at the current frame ends a hold.
     HoldAll { from_frame: u64, until_frame: u64 },
+    /// Replaces the mixer's tuning (live settings spec §7) at the start of
+    /// the next block: volume smoothing, de-click length and commands per
+    /// block. `config` is in frames of a stream running at `at_rate`; if
+    /// the bus reopened at another rate while the command waited in the
+    /// queue, the lengths are scaled to the mixer's current rate. A ramp
+    /// already running keeps its length. Both values are `Copy`: nothing
+    /// is allocated.
+    Tune { config: MixerConfig, at_rate: u32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -333,6 +341,9 @@ pub struct Mixer {
     smoothing_base: Option<(u32, u32)>,
     /// The de-click length at the same base rate as `smoothing_base`.
     declick_base: u32,
+    /// The rate the mixer last followed to (`follow_rate`); `None` while it
+    /// has run at the rate it was created for.
+    rate: Option<u32>,
     /// DSD mode (see `BusCommand::DsdMode`) and its pending switch.
     dsd_on: bool,
     /// Pending switches `(at_frame, on)`, ordered by frame, oldest first.
@@ -363,6 +374,7 @@ impl Mixer {
             volume_step,
             smoothing_base: None,
             declick_base: config.declick_frames,
+            rate: None,
             dsd_on: false,
             pending_dsd: [None; PENDING_DSD],
             hold_from: 0,
@@ -583,6 +595,7 @@ impl Mixer {
                 self.hold_from = from_frame;
                 self.hold_until = until_frame;
             }
+            BusCommand::Tune { config, at_rate } => self.tune(config, at_rate),
             BusCommand::Grow(mut storage) => {
                 if storage.len() >= self.slots.len() {
                     for (new, old) in storage.0.iter_mut().zip(self.slots.0.iter_mut()) {
@@ -609,6 +622,24 @@ impl Mixer {
         self.volume_step = 1.0 / self.config.volume_smoothing_frames as f32;
         let declick = u64::from(self.declick_base) * u64::from(to_rate) / u64::from(base_rate);
         self.config.declick_frames = u32::try_from(declick).unwrap_or(u32::MAX);
+        self.rate = Some(to_rate);
+    }
+
+    /// Takes a new tuning (`BusCommand::Tune`), in this mixer's current
+    /// rate. `follow_rate` sizes from these values from now on.
+    fn tune(&mut self, mut config: MixerConfig, at_rate: u32) {
+        if let Some(rate) = self.rate.filter(|r| *r != at_rate) {
+            let scale = |frames: u32| {
+                let scaled = u64::from(frames) * u64::from(rate) / u64::from(at_rate.max(1));
+                u32::try_from(scaled).unwrap_or(u32::MAX)
+            };
+            config.volume_smoothing_frames = scale(config.volume_smoothing_frames).max(1);
+            config.declick_frames = scale(config.declick_frames);
+        }
+        self.config = config;
+        self.volume_step = 1.0 / config.volume_smoothing_frames.max(1) as f32;
+        self.smoothing_base = None;
+        self.declick_base = config.declick_frames;
     }
 
     /// Mixes one block into `out` (interleaved, `channels` per frame).
