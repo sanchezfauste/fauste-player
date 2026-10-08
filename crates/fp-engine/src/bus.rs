@@ -31,6 +31,25 @@ pub struct BusKey {
     pub device: String,
 }
 
+impl From<&fp_model::OutputDevice> for BusKey {
+    fn from(device: &fp_model::OutputDevice) -> Self {
+        Self {
+            backend: device.backend.clone(),
+            device: device.device.clone(),
+        }
+    }
+}
+
+impl BusKey {
+    /// The model's name for this device.
+    pub fn output_device(&self) -> fp_model::OutputDevice {
+        fp_model::OutputDevice {
+            backend: self.backend.clone(),
+            device: self.device.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BusHealth {
     Ok,

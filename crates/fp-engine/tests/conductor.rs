@@ -17,7 +17,8 @@ use fp_backends::{AudioBackend, NullBackend, OfflineBackend, OfflineDevice};
 use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_model::{
-    AppState, Command, Config, EntryId, FileState, ModelError, PlayMode, PlayerId, Transport,
+    AppState, Command, Config, EntryId, FileState, Holder, ModelError, PlayMode, PlayerId,
+    Transport,
 };
 use support::tagged_opener;
 
@@ -818,4 +819,20 @@ fn play_just_after_a_replay_boundary_keeps_the_model_consistent() {
         player.history.iter().filter(|h| **h == e[0]).count() <= 1,
         "{player:?}"
     );
+}
+
+#[test]
+fn the_model_learns_where_each_holder_plays() {
+    let (mut conductor, _handle, _device, now) = offline_conductor(model(1, 1));
+    let p = conductor.state().players[0].id;
+    conductor.tick(now);
+    let live = &conductor.state().live;
+    assert_eq!(live.audio_system_in_use.as_deref(), Some("offline"));
+    assert_eq!(
+        live.placement
+            .get(&Holder::PlayerMain(p))
+            .map(|d| d.device.as_str()),
+        Some("main")
+    );
+    assert!(fp_model::pending(conductor.state()).is_empty());
 }

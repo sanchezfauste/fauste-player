@@ -64,6 +64,7 @@ impl Engine {
 
     /// Creates the cartwall worker and opens its buses on first use.
     fn ensure_cartwall(&mut self, now: Instant) -> bool {
+        let mut created = None;
         if self.cartwall.is_none() {
             let routes = self.settings.cartwall_routes.clone();
             let main = match &routes.main {
@@ -90,6 +91,11 @@ impl Engine {
                     return false;
                 }
             };
+            created = Some((
+                main.0.clone(),
+                cue.as_ref().map(|c| c.0.clone()),
+                routes.clone(),
+            ));
             self.cartwall = Some(CartwallRuntime {
                 worker,
                 main,
@@ -109,6 +115,10 @@ impl Engine {
             .collect();
         for key in keys {
             self.ensure_bus(&key, now);
+        }
+        if let Some((main_key, cue_key, routes)) = created {
+            self.report_placement(Holder::CartwallMain, routes.main, Some(&main_key));
+            self.report_placement(Holder::CartwallCue, routes.cue, cue_key.as_ref());
         }
         true
     }

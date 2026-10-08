@@ -67,7 +67,11 @@ impl Engine {
 
     /// The DSD silence in frames of `bus`.
     fn silence_frames(&self, bus: &BusKey) -> u64 {
-        self.frames_on(bus, self.settings.dsd.silence_ms)
+        let ms = self
+            .device_of(bus)
+            .dsd_silence_ms
+            .unwrap_or(self.settings.dsd.silence_ms);
+        self.frames_on(bus, ms)
     }
 
     /// Before a track of `player` starts on `bus`: whether it can go out as
@@ -81,13 +85,7 @@ impl Engine {
         bus: &BusKey,
         request: &SourceRequest,
     ) -> Option<Playing> {
-        let mode = self
-            .settings
-            .dsd
-            .modes
-            .get(bus)
-            .copied()
-            .unwrap_or(DsdOutput::Pcm);
+        let mode = self.device_of(bus).dsd;
         let volume = self.players.get(&player)?.volume.load();
         let wanted = match mode {
             DsdOutput::Pcm => None,
@@ -337,7 +335,7 @@ impl Engine {
         self.events.push(EngineEvent::DsdStarted {
             player,
             entry,
-            hold_others: self.settings.dsd.mix == DsdMix::HoldOthers,
+            hold_others: self.device_of(bus).dsd_mix == Some(DsdMix::HoldOthers),
         });
     }
 
@@ -364,10 +362,12 @@ impl Engine {
             return at_frame;
         };
         match state {
-            DsdState::Playing { .. } => match self.settings.dsd.mix {
-                DsdMix::HoldOthers => at_frame,
-                DsdMix::ConvertToPcm => self.switch_to_pcm(bus, at_frame),
-            },
+            DsdState::Playing { .. } => {
+                match self.device_of(bus).dsd_mix.unwrap_or(self.settings.dsd.mix) {
+                    DsdMix::HoldOthers => at_frame,
+                    DsdMix::ConvertToPcm => self.switch_to_pcm(bus, at_frame),
+                }
+            }
             DsdState::Tail { until } => self.end_tail_at(bus, at_frame.max(until)),
             DsdState::Switching { until } => at_frame.max(until),
         }
@@ -566,7 +566,7 @@ impl Engine {
         );
         let sounding = self.bus_sounding(bus);
         let configured = StreamConfig {
-            sample_rate: self.settings.rate_for(bus),
+            sample_rate: self.device_of(bus).sample_rate,
             ..pcm
         };
         let Some(b) = self.buses.get_mut(bus) else {

@@ -9,10 +9,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use fp_backends::{AudioBackend, Availability, NullBackend, StreamConfig};
+use fp_backends::{AudioBackend, Availability, NullBackend, StreamConfig, choose_default_backend};
 use fp_model::{
-    CartwallRoutes, Config, EngineAction, EngineEvent, EntryId, PlayerId, PlayerRoutes, Route,
-    SourceRequest, TransitionPlan, Tuning,
+    CartwallRoutes, Config, DeviceSettings, EngineAction, EngineEvent, EntryId, Holder,
+    OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, TransitionPlan, Tuning,
 };
 
 use crate::atomic::AtomicF32;
@@ -150,6 +150,31 @@ impl EngineSettings {
             .get(key)
             .and_then(|d| d.buffer_frames)
             .unwrap_or(self.buffer_frames)
+    }
+
+    /// What a bus for `key` opens with under these settings (live settings
+    /// spec L4; the same as `fp_model::device_settings` for the
+    /// configuration they came from).
+    pub fn device_settings(&self, key: &BusKey) -> DeviceSettings {
+        let bit_perfect = self.bit_perfect.contains(key);
+        let dsd = if bit_perfect {
+            self.dsd
+                .modes
+                .get(key)
+                .copied()
+                .unwrap_or(fp_model::DsdOutput::Pcm)
+        } else {
+            fp_model::DsdOutput::Pcm
+        };
+        let carries_dsd = dsd != fp_model::DsdOutput::Pcm;
+        DeviceSettings {
+            sample_rate: self.rate_for(key),
+            buffer_frames: self.buffer_for(key),
+            bit_perfect,
+            dsd,
+            dsd_mix: carries_dsd.then_some(self.dsd.mix),
+            dsd_silence_ms: carries_dsd.then_some(self.dsd.silence_ms),
+        }
     }
 
     fn frames(&self, ms: f64) -> u64 {
@@ -329,6 +354,14 @@ pub struct Engine {
     integration: (f32, f32, f32),
     /// Buses carrying (or just done carrying) DSD unchanged.
     dsd_buses: HashMap<BusKey, dsd::DsdBus>,
+    /// The configured audio system the default output runs with
+    /// (`outputs.backend`), and the backend really chosen for it (live
+    /// settings spec L17). Only `ApplyAudioSystem` changes them.
+    audio_system: Option<String>,
+    backend_in_use: String,
+    /// What each open bus runs with (L4). A new configuration reaches an
+    /// open bus only through `ApplyDevice`.
+    running: HashMap<BusKey, DeviceSettings>,
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -366,6 +399,23 @@ fn frames_at(rate: u32, ms: f64) -> u64 {
     (ms.max(0.0) * f64::from(rate) / 1000.0).round() as u64
 }
 
+/// The backend the default output uses (L17): the configured one when it
+/// is available here, else the preferred available one, else Null.
+fn choose_backend(backends: &[Arc<dyn AudioBackend>], configured: Option<&str>) -> String {
+    let listed: Vec<(String, bool)> = backends
+        .iter()
+        .map(|b| (b.id().0, b.availability() == Availability::Available))
+        .collect();
+    let refs: Vec<(&str, bool)> = listed.iter().map(|(id, ok)| (id.as_str(), *ok)).collect();
+    let chosen = choose_default_backend(configured, &refs, std::env::consts::OS)
+        .unwrap_or("null")
+        .to_owned();
+    if configured.is_some_and(|c| c != chosen) {
+        tracing::warn!(backend = ?configured, fallback = %chosen, "configured audio system unavailable");
+    }
+    chosen
+}
+
 impl Engine {
     /// `backends` are tried by id for routes; a `Null` backend is always
     /// available as the last resort so a player can never stall.
@@ -380,8 +430,11 @@ impl Engine {
             .filter(|b| b.availability() != Availability::Available)
             .map(|b| b.id().0)
             .collect();
+        let audio_system = settings.default_backend.clone();
+        let backend_in_use = choose_backend(&backends, audio_system.as_deref());
+        let cartwall_routes = settings.cartwall_routes.clone();
         let (failures_tx, failures_rx) = crossbeam_channel::unbounded();
-        Self {
+        let mut engine = Self {
             backends,
             unusable,
             settings,
@@ -401,7 +454,25 @@ impl Engine {
             true_peak: false,
             integration: (0.0, 0.0, 0.0),
             dsd_buses: HashMap::new(),
-        }
+            audio_system,
+            backend_in_use,
+            running: HashMap::new(),
+        };
+        // L3: what the engine runs with, before anything is placed. The
+        // cartwall has no bus until its first cart.
+        engine.events.push(EngineEvent::AudioSystemInUse {
+            configured: engine.audio_system.clone(),
+            in_use: engine.backend_in_use.clone(),
+        });
+        engine.events.push(EngineEvent::Unplaced {
+            holder: Holder::CartwallMain,
+            route: cartwall_routes.main,
+        });
+        engine.events.push(EngineEvent::Unplaced {
+            holder: Holder::CartwallCue,
+            route: cartwall_routes.cue,
+        });
+        engine
     }
 
     /// Sources that could not be attached for lack of a mixer slot.
@@ -542,6 +613,39 @@ impl Engine {
         &self.settings
     }
 
+    /// The backend the default output uses (L17).
+    pub fn backend_in_use(&self) -> &str {
+        &self.backend_in_use
+    }
+
+    /// What `device`'s bus runs with, while it is open (L4).
+    pub fn running_settings(&self, device: &OutputDevice) -> Option<DeviceSettings> {
+        self.running.get(&BusKey::from(device)).copied()
+    }
+
+    /// What `bus` runs with: its running settings when open, else what it
+    /// would open with now (L13).
+    fn device_of(&self, bus: &BusKey) -> DeviceSettings {
+        self.running
+            .get(bus)
+            .copied()
+            .unwrap_or_else(|| self.settings.device_settings(bus))
+    }
+
+    /// L3: `holder` holds `route` and plays on `bus`, or has no bus.
+    fn report_placement(&mut self, holder: Holder, route: Option<Route>, bus: Option<&BusKey>) {
+        let event = match bus {
+            Some(bus) => EngineEvent::Placed {
+                holder,
+                route,
+                device: bus.output_device(),
+                running: self.device_of(bus),
+            },
+            None => EngineEvent::Unplaced { holder, route },
+        };
+        self.events.push(event);
+    }
+
     pub fn bus_status(&self) -> Vec<BusStatus> {
         self.buses
             .values()
@@ -575,7 +679,7 @@ impl Engine {
         !p.cue
             && !self.is_dsd_direct(p)
             && p.start == StartState::Started
-            && self.settings.bit_perfect.contains(&p.bus)
+            && self.device_of(&p.bus).bit_perfect
             && bus.exclusive_granted()
             && format.sample_rate == bus.sample_rate()
             && bus.sample_format().is_some_and(|f| f.holds_bits(bits))
@@ -694,7 +798,7 @@ impl Engine {
     fn prepare_start(&mut self, bus: &BusKey, format: Option<fp_model::AudioFormat>) {
         // A bus still carrying DSD (its tail, or a switch) keeps its stream:
         // the start waits for the PCM stream (see `before_start_on`).
-        if !self.settings.bit_perfect.contains(bus) || self.dsd_buses.contains_key(bus) {
+        if !self.device_of(bus).bit_perfect || self.dsd_buses.contains_key(bus) {
             return;
         }
         let Some(rate) = format.map(|f| f.sample_rate).filter(|r| *r > 0) else {
@@ -943,12 +1047,10 @@ impl Engine {
             .filter(|b| !self.unusable.contains(&b.id().0))
     }
 
-    /// The configured default backend, else the first usable one.
+    /// The backend the default output uses (`backend_in_use`), else the
+    /// first usable one.
     fn default_backend(&self) -> Arc<dyn AudioBackend> {
-        self.settings
-            .default_backend
-            .as_deref()
-            .and_then(|id| self.route_backend(id))
+        self.route_backend(&self.backend_in_use)
             .or_else(|| {
                 self.backends
                     .iter()
@@ -1062,13 +1164,13 @@ impl Engine {
                 .unwrap_or_else(|| Arc::new(NullBackend));
             let channels = self.channels_for(key);
             let t = &self.settings.tuning;
-            let rate = self.settings.rate_for(key);
-            let buffer = self.settings.buffer_for(key);
+            let device = self.settings.device_settings(key);
+            let (rate, buffer) = (device.sample_rate, device.buffer_frames);
             let config = StreamConfig {
                 sample_rate: rate,
                 buffer_frames: buffer,
                 channels,
-                exclusive: self.settings.bit_perfect.contains(key),
+                exclusive: device.bit_perfect,
                 dsd: None,
                 // A device's own buffer it does not take falls back to the
                 // global one (`pcm_fallback`), not to the device's default.
@@ -1106,6 +1208,7 @@ impl Engine {
                 .store(self.true_peak, std::sync::atomic::Ordering::Release);
             store_integration(bus.shared(), self.integration);
             self.buses.insert(key.clone(), bus);
+            self.running.insert(key.clone(), device);
         }
         // Capacity derived from routing (spec §4.3): per player on Main, a
         // current, a preload and up to three outgoing; per Cue, two.
@@ -1205,6 +1308,9 @@ impl Engine {
             return;
         }
         let (main, cue) = self.resolve_routes(player);
+        let routes = self.settings.routes.iter().find(|r| r.player == player);
+        let main_route = routes.and_then(|r| r.main.clone());
+        let cue_route = routes.and_then(|r| r.cue.clone());
         let t = &self.settings.tuning;
         let ready = self.settings.frames(t.ready_threshold_ms) as usize;
         let worker = match PlayerWorker::spawn(
@@ -1241,9 +1347,15 @@ impl Engine {
             },
         );
         self.ensure_bus(&main.0, now);
-        if let Some((key, _)) = cue {
-            self.ensure_bus(&key, now);
+        if let Some((key, _)) = &cue {
+            self.ensure_bus(key, now);
         }
+        self.report_placement(Holder::PlayerMain(player), main_route, Some(&main.0));
+        self.report_placement(
+            Holder::PlayerCue(player),
+            cue_route,
+            cue.as_ref().map(|c| &c.0),
+        );
     }
 
     fn remove_player(&mut self, player: PlayerId) {
@@ -1262,6 +1374,12 @@ impl Engine {
                 self.owners.remove(&p.key);
                 self.dsd_source_gone(&p);
             }
+            self.events.push(EngineEvent::Gone {
+                holder: Holder::PlayerMain(player),
+            });
+            self.events.push(EngineEvent::Gone {
+                holder: Holder::PlayerCue(player),
+            });
         }
     }
 

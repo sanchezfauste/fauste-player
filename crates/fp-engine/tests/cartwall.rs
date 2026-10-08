@@ -19,6 +19,23 @@ use fp_model::{
 };
 use support::tagged_opener;
 
+/// What the engine reported besides where holders play (live settings
+/// spec L3).
+fn reported(events: &[EngineEvent]) -> Vec<&EngineEvent> {
+    events
+        .iter()
+        .filter(|e| {
+            !matches!(
+                e,
+                EngineEvent::Placed { .. }
+                    | EngineEvent::Unplaced { .. }
+                    | EngineEvent::Gone { .. }
+                    | EngineEvent::AudioSystemInUse { .. }
+            )
+        })
+        .collect()
+}
+
 const BLOCK: usize = 480;
 const RATE: f64 = 48_000.0;
 
@@ -157,7 +174,7 @@ fn stopping_a_cart_before_it_starts_releases_its_slot() {
     r.run(20);
     assert_eq!(audible(&r.channel(0)), 0);
     assert_eq!(r.engine.used_slots(), 0);
-    assert!(r.events.is_empty(), "{:?}", r.events);
+    assert!(reported(&r.events).is_empty(), "{:?}", r.events);
 }
 
 #[test]
