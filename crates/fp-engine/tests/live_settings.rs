@@ -638,3 +638,190 @@ fn l15_a_device_gone_during_the_change_keeps_the_new_settings() {
     r.tick();
     assert_eq!(r.main.config().unwrap().buffer_frames, 960);
 }
+
+fn route_applied(events: &[EngineEvent], holder: Holder) -> bool {
+    events.iter().any(|e| {
+        matches!(e, EngineEvent::Applied { target: Target::Route(h), outcome: Ok(()), .. } if *h == holder)
+    })
+}
+
+#[test]
+fn l16_a_moved_player_keeps_its_paused_track_paused_on_the_new_device() {
+    let mut r = rig();
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: request(1, 2.0),
+    });
+    r.settle();
+    r.take_events();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(P),
+        route: Some(route("other")),
+        force: false,
+    });
+    r.settle();
+    let events = r.take_events();
+    assert!(events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Placed { holder: Holder::PlayerMain(p), device, .. }
+            if *p == P && *device == out("other")
+    )));
+    assert!(route_applied(&events, Holder::PlayerMain(P)));
+    r.run(3);
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!((position - 2.0).abs() < 0.01, "{position}");
+    assert!(r.other.is_open());
+    assert!(!r.main.is_open(), "L13: closed once nothing uses it");
+}
+
+#[test]
+fn l16_a_route_change_waits_for_its_own_holder_only() {
+    let mut c = config();
+    c.outputs.routes.push(PlayerRoutes {
+        player: Q,
+        main: Some(route("main")),
+        cue: None,
+    });
+    let mut r = rig_with(&c);
+    r.act(EngineAction::AddPlayer { player: Q });
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(Q),
+        route: Some(route("other")),
+        force: false,
+    });
+    r.tick();
+    assert!(route_applied(&r.events, Holder::PlayerMain(Q)), "Q is idle");
+    let heard = r.run(3);
+    assert!(heard.iter().all(|v| *v != 0.0), "P plays on, uninterrupted");
+    assert!(r.main.is_open(), "P still uses it");
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(P),
+        route: Some(route("other")),
+        force: false,
+    });
+    r.run(2);
+    assert!(!route_applied(&r.events, Holder::PlayerMain(P)), "P sounds");
+    r.act(EngineAction::StopNow { player: P });
+    r.run(5);
+    assert!(route_applied(&r.events, Holder::PlayerMain(P)));
+}
+
+#[test]
+fn l16_removing_a_cue_route_by_force_ends_the_open_cue() {
+    let mut c = config();
+    c.outputs.routes[0].cue = Some(route("other"));
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: request(2, 0.0),
+    });
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerCue(P),
+        route: None,
+        force: false,
+    });
+    r.run(2);
+    assert!(
+        !route_applied(&r.events, Holder::PlayerCue(P)),
+        "the CUE sounds"
+    );
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerCue(P),
+        route: None,
+        force: true,
+    });
+    r.tick();
+    assert!(r.events.contains(&EngineEvent::CueEnded {
+        player: P,
+        entry: EntryId(2)
+    }));
+    assert!(r.events.contains(&EngineEvent::Unplaced {
+        holder: Holder::PlayerCue(P),
+        route: None
+    }));
+}
+
+#[test]
+fn l16_the_cartwall_before_its_first_cart_only_takes_the_route() {
+    let mut r = rig();
+    r.take_events();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::CartwallMain,
+        route: Some(route("other")),
+        force: false,
+    });
+    r.tick();
+    let events = r.take_events();
+    assert!(events.contains(&EngineEvent::Unplaced {
+        holder: Holder::CartwallMain,
+        route: Some(route("other"))
+    }));
+    assert!(route_applied(&events, Holder::CartwallMain));
+    assert!(!r.other.is_open());
+}
+
+#[test]
+fn l16_a_route_to_channels_the_open_device_lacks_reopens_it_with_more() {
+    let mut c = config();
+    c.outputs.routes[0].main = Some(route("other"));
+    let mut r = rig_with(&c);
+    assert_eq!(r.other.config().unwrap().channels, 2);
+    let pair = Route {
+        first_channel: 2,
+        ..route("other")
+    };
+    c.outputs.routes[0].cue = Some(pair.clone());
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerCue(P),
+        route: Some(pair),
+        force: false,
+    });
+    r.tick();
+    assert_eq!(r.other.config().unwrap().channels, 4);
+    assert!(route_applied(&r.events, Holder::PlayerCue(P)));
+}
+
+/// L3, L13: the cartwall has no bus before its first cart, so its holder is
+/// `Unplaced` with the route the engine holds. A new cartwall route must be
+/// reported at once: the model would show a false pending change otherwise.
+#[test]
+fn l3_a_cartwall_route_changed_before_its_first_cart_is_reported_unplaced_with_it() {
+    let mut r = rig();
+    r.tick();
+    r.take_events();
+    let mut c = config();
+    c.outputs.cartwall.main = Some(route("other"));
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.tick();
+    let events = r.take_events();
+    assert!(events.contains(&EngineEvent::Unplaced {
+        holder: Holder::CartwallMain,
+        route: Some(route("other")),
+    }));
+    assert!(events.contains(&EngineEvent::Unplaced {
+        holder: Holder::CartwallCue,
+        route: None,
+    }));
+    assert!(!r.other.is_open(), "nothing opens before the first cart");
+    // The same routes again, or any other setting: nothing to report.
+    let mut c = config();
+    c.outputs.cartwall.main = Some(route("other"));
+    c.outputs.buffer_frames = 960;
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.tick();
+    assert!(
+        !r.take_events()
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Unplaced { .. })),
+        "unchanged routes are not reported again"
+    );
+}
