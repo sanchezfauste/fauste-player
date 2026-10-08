@@ -177,6 +177,7 @@ impl AppState {
             players: Vec::new(),
             cartwall,
             ids,
+            live: crate::live::LiveSettings::default(),
         };
         // Tracks nothing references (left by an interrupted save) are dropped.
         let orphans: Vec<_> = state

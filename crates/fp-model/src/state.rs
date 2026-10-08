@@ -17,6 +17,8 @@ pub struct AppState {
     pub players: Vec<PlayerState>,
     pub cartwall: Cartwall,
     pub ids: IdGen,
+    /// What the engine runs with (live settings spec); runtime only.
+    pub live: crate::live::LiveSettings,
 }
 
 impl AppState {
@@ -46,6 +48,7 @@ impl AppState {
                 ..Cartwall::default()
             },
             ids,
+            live: crate::live::LiveSettings::default(),
         }
     }
 
