@@ -420,6 +420,12 @@ impl Bus {
         self.pcm_fallback = Some(config);
     }
 
+    /// Replaces the PCM fallback after a device change (live settings spec
+    /// L12), as `Engine::ensure_bus` sets it for a new bus.
+    pub fn replace_pcm_fallback(&mut self, fallback: Option<StreamConfig>) {
+        self.pcm_fallback = fallback;
+    }
+
     /// The rate the bus ran before the watchdog reopened it at another one
     /// (`pcm_fallback`); the sources on it were opened for that rate.
     /// Cleared by the call.

@@ -20,14 +20,15 @@ use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::bus::BusKey;
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_model::{
-    AudioFormat, CartId, CartRequest, Config, DsdDevice, DsdMix, DsdOutput, EngineAction,
-    EngineEvent, EntryId, Holder, OutputDevice, PlayerId, PlayerRoutes, Route, SOURCE_END,
-    SourceRequest, TrackId, device_settings,
+    AudioFormat, CartId, CartRequest, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput,
+    EngineAction, EngineEvent, EntryId, Holder, OutputDevice, PlayerId, PlayerRoutes, Route,
+    SOURCE_END, SourceRequest, Target, TrackId, device_settings,
 };
 use support::tagged_opener;
 
 const BLOCK: usize = 480;
 const P: PlayerId = PlayerId(1);
+const Q: PlayerId = PlayerId(2);
 
 fn route(device: &str) -> Route {
     Route {
@@ -367,4 +368,190 @@ fn a_tuning_update_and_a_rate_change_in_one_tick_size_the_mixer_for_the_new_rate
         (430..=450).contains(&audible),
         "10 ms at 44.1 kHz is 441 frames: {audible}"
     );
+}
+
+fn settings_of(r: &Rig, device: &str) -> DeviceSettings {
+    r.engine.running_settings(&out(device)).unwrap()
+}
+
+/// The outcome the engine reported for `device`, if any.
+fn applied<'a>(events: &'a [EngineEvent], device: &str) -> Option<&'a Result<(), String>> {
+    events.iter().find_map(|e| match e {
+        EngineEvent::Applied {
+            target: Target::Device(d),
+            outcome,
+            ..
+        } if *d == out(device) => Some(outcome),
+        _ => None,
+    })
+}
+
+fn apply_device(r: &mut Rig, device: &str, settings: DeviceSettings, force: bool) {
+    r.act(EngineAction::ApplyDevice {
+        device: out(device),
+        settings,
+        force,
+    });
+    // Events reach the test with the next tick.
+    r.tick();
+}
+
+#[test]
+fn l11_a_device_change_waits_for_a_fade_tail_then_runs() {
+    let mut r = rig();
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    r.run(3);
+    r.act(EngineAction::FadeOutAndStop {
+        player: P,
+        fade_ms: 200,
+    });
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    r.run(2);
+    assert_eq!(
+        r.main.config().unwrap().buffer_frames,
+        480,
+        "the fade sounds"
+    );
+    assert!(applied(&r.events, "main").is_none());
+    r.run(30);
+    assert_eq!(r.main.config().unwrap().buffer_frames, 960);
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+    assert_eq!(settings_of(&r, "main"), wanted);
+}
+
+#[test]
+fn l11_a_device_change_waits_for_a_test_tone() {
+    let mut r = rig();
+    r.engine
+        .play_test_tone(&route("main"), 440.0, 0.1, -18.0, r.clock);
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    r.run(2);
+    assert_eq!(r.main.config().unwrap().buffer_frames, 480);
+    r.run(20);
+    assert_eq!(r.main.config().unwrap().buffer_frames, 960);
+}
+
+#[test]
+fn l12_a_new_rate_reopens_the_device_and_a_paused_track_stays_paused_where_it_was() {
+    let mut r = rig();
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 2.0),
+    });
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::Pause { player: P });
+    // The pause ramp is still running: the bus is not quiet yet.
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.main.config().unwrap().sample_rate, 48_000);
+    // The ramp (480 frames) and one block of margin.
+    r.run(3);
+    assert_eq!(r.main.config().unwrap().sample_rate, 44_100);
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    r.settle();
+    let heard = r.run(5);
+    assert!(heard.iter().all(|v| *v == 0.0), "nothing paused starts");
+    let after = r.engine.telemetry(P).position_secs.unwrap();
+    assert!((after - position).abs() < 0.001, "{position} then {after}");
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+}
+
+#[test]
+fn l12_a_new_buffer_reopens_at_the_running_rate() {
+    let mut r = rig();
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    let config = r.main.config().unwrap();
+    assert_eq!((config.sample_rate, config.buffer_frames), (48_000, 960));
+}
+
+#[test]
+fn l12_a_bit_perfect_device_takes_a_new_rate_without_reopening() {
+    let mut c = config();
+    c.outputs.bit_perfect = vec![out("main")];
+    let mut r = rig_with(&c);
+    let attempts = r.main.open_attempts();
+    let wanted = DeviceSettings {
+        sample_rate: 96_000,
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(
+        r.main.open_attempts(),
+        attempts,
+        "the next file sets the rate"
+    );
+    assert_eq!(settings_of(&r, "main").sample_rate, 96_000);
+    assert_eq!(applied(&r.events, "main"), Some(&Ok(())));
+}
+
+#[test]
+fn l12_bit_perfect_on_reopens_exclusive_and_a_refusal_plays_shared() {
+    let mut r = rig();
+    r.main.set_exclusive_capable(true);
+    let shared = settings_of(&r, "main");
+    let exclusive = DeviceSettings {
+        bit_perfect: true,
+        ..shared
+    };
+    apply_device(&mut r, "main", exclusive, false);
+    assert!(r.main.config().unwrap().exclusive);
+    apply_device(&mut r, "main", shared, false);
+    assert!(!r.main.config().unwrap().exclusive);
+    r.main.set_exclusive_capable(false);
+    apply_device(&mut r, "main", exclusive, false);
+    assert!(!r.main.config().unwrap().exclusive, "B4: plays shared");
+    assert!(settings_of(&r, "main").bit_perfect);
+}
+
+#[test]
+fn l12_dsd_mix_and_silence_are_stored_without_a_reopen() {
+    let mut c = config();
+    c.outputs.bit_perfect = vec![out("main")];
+    c.outputs.dsd_output = vec![DsdDevice {
+        backend: "offline".into(),
+        device: "main".into(),
+        mode: DsdOutput::Dop,
+    }];
+    let mut r = rig_with(&c);
+    let attempts = r.main.open_attempts();
+    let wanted = DeviceSettings {
+        dsd_mix: Some(DsdMix::HoldOthers),
+        dsd_silence_ms: Some(400.0),
+        ..settings_of(&r, "main")
+    };
+    apply_device(&mut r, "main", wanted, false);
+    assert_eq!(r.main.open_attempts(), attempts);
+    assert_eq!(settings_of(&r, "main"), wanted);
+}
+
+#[test]
+fn a_change_for_a_device_not_open_is_done_at_once() {
+    let mut r = rig();
+    let wanted = DeviceSettings {
+        buffer_frames: 960,
+        ..device_settings(&config().outputs, &out("other"))
+    };
+    apply_device(&mut r, "other", wanted, false);
+    assert_eq!(applied(&r.events, "other"), Some(&Ok(())));
+    assert!(!r.other.is_open(), "L13: it opens when first used");
 }

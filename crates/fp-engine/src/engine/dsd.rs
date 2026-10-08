@@ -55,6 +55,14 @@ impl Engine {
         !p.cue && self.dsd_slot(&p.bus, p.slot)
     }
 
+    /// Whether `bus` runs a DSD stream's silence (its tail, or a switch to
+    /// PCM): not quiet, so a device change waits for it (live settings L11).
+    pub(super) fn dsd_silence_running(&self, bus: &BusKey) -> bool {
+        self.dsd_buses
+            .get(bus)
+            .is_some_and(|d| !matches!(d.state, DsdState::Playing { .. }))
+    }
+
     /// The pause and resume ramp of `slot`: none for a DSD stream (the
     /// mixer holds at once and the DSD silence keeps the stream valid).
     pub(super) fn pause_ramp_of(&self, bus: &BusKey, slot: usize) -> u32 {

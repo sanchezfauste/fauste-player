@@ -12,7 +12,8 @@ use crossbeam_channel::{Receiver, Sender};
 use fp_backends::{AudioBackend, Availability, NullBackend, StreamConfig, choose_default_backend};
 use fp_model::{
     CartwallRoutes, Config, DeviceSettings, EngineAction, EngineEvent, EntryId, Holder,
-    OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, TransitionPlan, Tuning,
+    OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, Target, TransitionPlan, Tuning,
+    Wanted,
 };
 
 use crate::atomic::AtomicF32;
@@ -364,6 +365,25 @@ pub struct Engine {
     running: HashMap<BusKey, DeviceSettings>,
     /// Buses that still need the current mixer tuning (`BusCommand::Tune`).
     tune_due: std::collections::BTreeSet<BusKey>,
+    /// Output changes kept until what they touch is quiet (live settings
+    /// spec L11), one per target: a newer action for a target replaces it.
+    kept: BTreeMap<Target, EngineAction>,
+}
+
+/// The configuration the watchdog falls back to when a device's own rate
+/// or buffer does not open any more (operator feedback 4, Q12): the global
+/// rate and buffer. `None` for a device that runs at the global values.
+fn pcm_fallback_for(
+    (rate, buffer): (u32, u32),
+    wanted: DeviceSettings,
+    config: StreamConfig,
+) -> Option<StreamConfig> {
+    (wanted.sample_rate != rate || wanted.buffer_frames != buffer).then_some(StreamConfig {
+        sample_rate: rate,
+        buffer_frames: buffer,
+        exact_buffer: false,
+        ..config
+    })
 }
 
 /// Which source of a player a bus slot belongs to.
@@ -480,6 +500,7 @@ impl Engine {
             backend_in_use,
             running: HashMap::new(),
             tune_due: std::collections::BTreeSet::new(),
+            kept: BTreeMap::new(),
         };
         // L3: what the engine runs with, before anything is placed. The
         // cartwall has no bus until its first cart.
@@ -711,6 +732,160 @@ impl Engine {
             None => EngineEvent::Unplaced { holder, route },
         };
         self.events.push(event);
+    }
+
+    /// L11: whether nothing on `bus` is audible: no started source of a
+    /// player that is not paused (current, outgoing, a preload a
+    /// transition started, a CUE not held), no cart, no test tone and no
+    /// DSD silence running. Paused and waiting sources are quiet.
+    fn bus_quiet(&self, bus: &BusKey) -> bool {
+        self.players
+            .values()
+            .all(|rt| self.player_quiet(rt, |p| &p.bus == bus))
+            && !self.carts_sounding(bus)
+            && !self.tones.iter().any(|(b, _)| b == bus)
+            && !self.dsd_silence_running(bus)
+    }
+
+    /// Whether every source of `rt` that `on` selects is silent: never
+    /// started, a held CUE, or paused with its pause ramp over.
+    fn player_quiet(&self, rt: &PlayerRuntime, on: impl Fn(&Playing) -> bool) -> bool {
+        let main = &rt.main.0;
+        // One block of margin: the engine's frame lags the mixer's.
+        let paused = rt.paused
+            && self.now_frame(main)
+                >= rt
+                    .pause_ramp_ends
+                    .saturating_add(u64::from(self.buffer_of(main)));
+        let silent = |p: &Playing, held: bool| !on(p) || p.start == StartState::Idle || held;
+        rt.current.iter().all(|p| silent(p, paused))
+            && rt.outgoing.iter().all(|p| silent(p, paused))
+            && rt.preload.iter().all(|p| silent(p, false))
+            && rt.cue_src.iter().all(|p| silent(p, rt.cue_paused))
+            && rt.cue_outgoing.iter().all(|p| silent(p, false))
+    }
+
+    /// L11: keeps `action` (replacing an older one for its target) and runs
+    /// whatever kept action can run now.
+    fn keep(&mut self, action: EngineAction) {
+        if let Some((target, _)) = fp_model::target_and_wanted(&action) {
+            self.kept.insert(target, action);
+        }
+        self.run_kept();
+    }
+
+    /// Runs the kept output changes that are forced or whose paths are
+    /// quiet, in L9 order (`Target` sorts the audio system, the routes,
+    /// then the devices). Called by `keep` and on every tick.
+    fn run_kept(&mut self) {
+        let targets: Vec<Target> = self.kept.keys().cloned().collect();
+        for target in targets {
+            let Some(action) = self.kept.get(&target).cloned() else {
+                continue;
+            };
+            let done = match action {
+                EngineAction::ApplyDevice {
+                    device,
+                    settings,
+                    force,
+                } => self.apply_device(&device, settings, force),
+                _ => true,
+            };
+            if done {
+                self.kept.remove(&target);
+            }
+        }
+    }
+
+    /// L8: tells the model an output change ran.
+    fn report_applied(&mut self, target: Target, wanted: Wanted, outcome: Result<(), String>) {
+        match &outcome {
+            Ok(()) => tracing::info!(?target, "output change applied"),
+            Err(reason) => {
+                tracing::warn!(?target, %reason, "output change refused; the running settings stay");
+            }
+        }
+        self.events.push(EngineEvent::Applied {
+            target,
+            wanted,
+            outcome,
+        });
+    }
+
+    /// L12: `device` runs with `wanted`. Returns `false` while it must wait
+    /// (L11): its bus sounds and the change is not forced.
+    fn apply_device(&mut self, device: &OutputDevice, wanted: DeviceSettings, force: bool) -> bool {
+        let key = BusKey::from(device);
+        let target = Target::Device(device.clone());
+        let Some(old) = self.running.get(&key).copied() else {
+            // Not open: it opens with the current configuration (L13).
+            self.report_applied(target, Wanted::Device(wanted), Ok(()));
+            return true;
+        };
+        let quiet = self.bus_quiet(&key);
+        if !quiet && !force {
+            return false;
+        }
+        let carries_dsd = self.dsd_buses.contains_key(&key);
+        // A bit-perfect rate is only where the bus starts: the next file
+        // sets it (B3). DSD mix and silence are read at the next DSD
+        // decision. Neither reopens.
+        let reopen = old.buffer_frames != wanted.buffer_frames
+            || old.bit_perfect != wanted.bit_perfect
+            || (!wanted.bit_perfect && old.sample_rate != wanted.sample_rate)
+            || (carries_dsd && old.dsd != wanted.dsd);
+        let outcome = if reopen {
+            self.reopen_device(&key, wanted, quiet, force)
+        } else {
+            Ok(())
+        };
+        if outcome.is_ok() {
+            self.running.insert(key, wanted);
+        }
+        self.report_applied(target, Wanted::Device(wanted), outcome);
+        true
+    }
+
+    /// Reopens `key` with `wanted` in one reopen (L12), keeping the mixer,
+    /// its clock and its slots; the sources on it follow a new rate. A
+    /// refusal brings the running configuration back (L14).
+    fn reopen_device(
+        &mut self,
+        key: &BusKey,
+        wanted: DeviceSettings,
+        quiet: bool,
+        _force: bool,
+    ) -> Result<(), String> {
+        let now = self.now;
+        let before_rate = self.rate_of(key);
+        let global = (self.settings.sample_rate, self.settings.buffer_frames);
+        let Some(bus) = self.buses.get_mut(key) else {
+            return Ok(());
+        };
+        let base = bus.config();
+        let config = StreamConfig {
+            sample_rate: if wanted.bit_perfect {
+                base.sample_rate
+            } else {
+                wanted.sample_rate
+            },
+            buffer_frames: wanted.buffer_frames,
+            exclusive: wanted.bit_perfect,
+            dsd: None,
+            exact_buffer: wanted.buffer_frames != global.1,
+            ..base
+        };
+        // A sounding bus (a forced change) never waits for a busy device:
+        // its timeline would stall (L14, L21).
+        let mut budget = bus.busy_budget(quiet);
+        let outcome = bus.reopen_with(config, now, &mut budget);
+        if outcome.is_ok() {
+            bus.replace_pcm_fallback(pcm_fallback_for(global, wanted, config));
+        }
+        if self.rate_of(key) != before_rate {
+            self.reopen_on_bus(key, before_rate);
+        }
+        outcome
     }
 
     pub fn bus_status(&self) -> Vec<BusStatus> {
@@ -957,119 +1132,20 @@ impl Engine {
             new_rate,
             "the device changed rate; reopening its sources"
         );
-        let old = f64::from(old_rate.max(1));
-        let position = |p: &Playing| p.start_secs + p.shared.frames_played() as f64 / old;
+        self.reopen_on_bus(bus, old_rate);
+    }
+
+    /// Every player and cart source on `bus` is opened again at its
+    /// position, measured at `old_rate`, as a seek does: one that was
+    /// playing starts again as soon as it is ready, a waiting or paused one
+    /// stays waiting. Fades in progress and test tones are cut; a cut fade
+    /// ends as it would have (`ReachedEnd`, `FadeCompleted`). Used when the
+    /// device changed rate under its sources, when a DSD stream was left,
+    /// and by a forced device change (live settings spec L12, L21).
+    fn reopen_on_bus(&mut self, bus: &BusKey, old_rate: u32) {
         let ids: Vec<PlayerId> = self.players.keys().copied().collect();
         for player in ids {
-            let on_bus = |p: &Playing| &p.bus == bus;
-            let touches = self.players.get(&player).is_some_and(|rt| {
-                rt.current
-                    .iter()
-                    .chain(rt.preload.iter())
-                    .chain(rt.cue_src.iter())
-                    .chain(rt.outgoing.iter())
-                    .chain(rt.cue_outgoing.iter())
-                    .any(on_bus)
-            });
-            if !touches {
-                continue;
-            }
-            self.undispatch(player);
-            let Some(rt) = self.players.get_mut(&player) else {
-                continue;
-            };
-            let (gone, kept): (Vec<Playing>, Vec<Playing>) = std::mem::take(&mut rt.outgoing)
-                .into_iter()
-                .partition(on_bus);
-            rt.outgoing = kept;
-            let (cue_gone, cue_kept): (Vec<Playing>, Vec<Playing>) =
-                std::mem::take(&mut rt.cue_outgoing)
-                    .into_iter()
-                    .partition(on_bus);
-            rt.cue_outgoing = cue_kept;
-            // A CUE source ramping down is cut silently: nothing waits for it.
-            for p in cue_gone {
-                self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
-                self.release(p);
-            }
-            // Cut fades end as a finished fade does (`Finished` on an
-            // outgoing source): `ReachedEnd` for a fade stop, and
-            // `FadeCompleted` once the last one of a crossfade is gone.
-            let last = gone.len();
-            for (k, p) in gone.into_iter().enumerate() {
-                let report = p.report_end.then_some(p.entry);
-                let done = k + 1 == last
-                    && self.players.get_mut(&player).is_some_and(|rt| {
-                        rt.outgoing.is_empty() && std::mem::take(&mut rt.notify_fade)
-                    });
-                self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
-                self.release(p);
-                if let Some(entry) = report {
-                    self.events.push(EngineEvent::ReachedEnd { player, entry });
-                } else if done {
-                    self.events.push(EngineEvent::FadeCompleted { player });
-                }
-            }
-            for role in [Role::Current, Role::Preload, Role::Cue] {
-                let Some(rt) = self.players.get_mut(&player) else {
-                    break;
-                };
-                let (paused, field) = match role {
-                    Role::Current => (rt.paused, &mut rt.current),
-                    Role::Preload => (true, &mut rt.preload),
-                    _ => (rt.cue_paused, &mut rt.cue_src),
-                };
-                let Some(old_source) = field.take_if(|p| on_bus(p)) else {
-                    continue;
-                };
-                let waiting = old_source.start == StartState::Idle;
-                let mut request = old_source.request.clone();
-                if !waiting {
-                    request.from_secs = position(&old_source);
-                    self.send(
-                        &old_source.bus,
-                        BusCommand::Cancel {
-                            slot: old_source.slot,
-                        },
-                    );
-                }
-                let cue = old_source.cue;
-                self.release(old_source);
-                match self.new_source(player, cue, &request) {
-                    Ok(mut fresh) => {
-                        fresh.start = if waiting || paused {
-                            StartState::Idle
-                        } else {
-                            // A de-click only where it starts mid-file.
-                            StartState::WhenReady {
-                                fade_in: !cue && request.from_secs > 0.0,
-                            }
-                        };
-                        if let Some(rt) = self.players.get_mut(&player) {
-                            match role {
-                                Role::Current => rt.current = Some(fresh),
-                                Role::Preload => rt.preload = Some(fresh),
-                                _ => rt.cue_src = Some(fresh),
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        // An engine limitation, not a bad file.
-                        tracing::error!(?player, error = ?e, "cannot reopen a source at the new rate");
-                        match role {
-                            Role::Current => self.events.push(EngineEvent::ReachedEnd {
-                                player,
-                                entry: request.entry,
-                            }),
-                            Role::Cue => self.events.push(EngineEvent::CueEnded {
-                                player,
-                                entry: request.entry,
-                            }),
-                            _ => {}
-                        }
-                    }
-                }
-            }
+            self.reopen_player_sources(player, |p| &p.bus == bus, old_rate);
         }
         self.follow_forced_rate_carts(bus, old_rate);
         let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.tones)
@@ -1078,6 +1154,128 @@ impl Engine {
         self.tones = kept;
         for (bus, slot) in gone {
             self.send(&bus, BusCommand::Detach { slot });
+        }
+    }
+
+    /// The sources of `player` that `on` selects, opened again where the
+    /// player's routes point now (`rt.main`, `rt.cue`), at their position
+    /// measured at `old_rate` (see `reopen_on_bus`). A route change (L16)
+    /// moves a holder with it.
+    fn reopen_player_sources(
+        &mut self,
+        player: PlayerId,
+        on: impl Fn(&Playing) -> bool,
+        old_rate: u32,
+    ) {
+        let old = f64::from(old_rate.max(1));
+        let position = |p: &Playing| p.start_secs + p.shared.frames_played() as f64 / old;
+        let touches = self.players.get(&player).is_some_and(|rt| {
+            rt.current
+                .iter()
+                .chain(rt.preload.iter())
+                .chain(rt.cue_src.iter())
+                .chain(rt.outgoing.iter())
+                .chain(rt.cue_outgoing.iter())
+                .any(&on)
+        });
+        if !touches {
+            return;
+        }
+        self.undispatch(player);
+        let Some(rt) = self.players.get_mut(&player) else {
+            return;
+        };
+        let (gone, kept): (Vec<Playing>, Vec<Playing>) = std::mem::take(&mut rt.outgoing)
+            .into_iter()
+            .partition(|p| on(p));
+        rt.outgoing = kept;
+        let (cue_gone, cue_kept): (Vec<Playing>, Vec<Playing>) =
+            std::mem::take(&mut rt.cue_outgoing)
+                .into_iter()
+                .partition(|p| on(p));
+        rt.cue_outgoing = cue_kept;
+        // A CUE source ramping down is cut silently: nothing waits for it.
+        for p in cue_gone {
+            self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
+            self.release(p);
+        }
+        // Cut fades end as a finished fade does (`Finished` on an
+        // outgoing source): `ReachedEnd` for a fade stop, and
+        // `FadeCompleted` once the last one of a crossfade is gone.
+        let last = gone.len();
+        for (k, p) in gone.into_iter().enumerate() {
+            let report = p.report_end.then_some(p.entry);
+            let done = k + 1 == last
+                && self.players.get_mut(&player).is_some_and(|rt| {
+                    rt.outgoing.is_empty() && std::mem::take(&mut rt.notify_fade)
+                });
+            self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
+            self.release(p);
+            if let Some(entry) = report {
+                self.events.push(EngineEvent::ReachedEnd { player, entry });
+            } else if done {
+                self.events.push(EngineEvent::FadeCompleted { player });
+            }
+        }
+        for role in [Role::Current, Role::Preload, Role::Cue] {
+            let Some(rt) = self.players.get_mut(&player) else {
+                break;
+            };
+            let (paused, field) = match role {
+                Role::Current => (rt.paused, &mut rt.current),
+                Role::Preload => (true, &mut rt.preload),
+                _ => (rt.cue_paused, &mut rt.cue_src),
+            };
+            let Some(old_source) = field.take_if(|p| on(p)) else {
+                continue;
+            };
+            let waiting = old_source.start == StartState::Idle;
+            let mut request = old_source.request.clone();
+            if !waiting {
+                request.from_secs = position(&old_source);
+                self.send(
+                    &old_source.bus,
+                    BusCommand::Cancel {
+                        slot: old_source.slot,
+                    },
+                );
+            }
+            let cue = old_source.cue;
+            self.release(old_source);
+            match self.new_source(player, cue, &request) {
+                Ok(mut fresh) => {
+                    fresh.start = if waiting || paused {
+                        StartState::Idle
+                    } else {
+                        // A de-click only where it starts mid-file.
+                        StartState::WhenReady {
+                            fade_in: !cue && request.from_secs > 0.0,
+                        }
+                    };
+                    if let Some(rt) = self.players.get_mut(&player) {
+                        match role {
+                            Role::Current => rt.current = Some(fresh),
+                            Role::Preload => rt.preload = Some(fresh),
+                            _ => rt.cue_src = Some(fresh),
+                        }
+                    }
+                }
+                Err(e) => {
+                    // An engine limitation, not a bad file.
+                    tracing::error!(?player, error = ?e, "cannot reopen a source at the new rate");
+                    match role {
+                        Role::Current => self.events.push(EngineEvent::ReachedEnd {
+                            player,
+                            entry: request.entry,
+                        }),
+                        Role::Cue => self.events.push(EngineEvent::CueEnded {
+                            player,
+                            entry: request.entry,
+                        }),
+                        _ => {}
+                    }
+                }
+            }
         }
     }
 
@@ -1246,16 +1444,12 @@ impl Engine {
             let mixer = mixer_config(&self.settings.tuning, rate);
             let timing = bus_timing(&self.settings.tuning);
             let mut bus = Bus::open(key.clone(), backend, config, 8, mixer, timing, now);
-            if rate != self.settings.sample_rate || buffer != self.settings.buffer_frames {
-                // A device's own rate or buffer it no longer takes (another
-                // DAC, a changed driver) must not leave it silent for good:
-                // the watchdog falls back to the global values.
-                bus.set_pcm_fallback(StreamConfig {
-                    sample_rate: self.settings.sample_rate,
-                    buffer_frames: self.settings.buffer_frames,
-                    exact_buffer: false,
-                    ..config
-                });
+            // A device's own rate or buffer it no longer takes (another
+            // DAC, a changed driver) must not leave it silent for good:
+            // the watchdog falls back to the global values.
+            let global = (self.settings.sample_rate, self.settings.buffer_frames);
+            if let Some(fallback) = pcm_fallback_for(global, device, config) {
+                bus.set_pcm_fallback(fallback);
             }
             bus.shared()
                 .true_peak
@@ -1347,14 +1541,11 @@ impl Engine {
                     }
                 }
             }
-            // Live settings: the engine takes them from plan 2 (settings)
-            // and plan 3 (applies) of the live settings work. Until then it
-            // reports no placement, so the model never sends an apply.
             EngineAction::UpdateSettings(config) => self.update_settings(&config, now),
-            // Live settings: the applies come with plan 3.
-            EngineAction::ApplyAudioSystem { .. }
-            | EngineAction::ApplyRoute { .. }
-            | EngineAction::ApplyDevice { .. } => {}
+            apply @ EngineAction::ApplyDevice { .. } => self.keep(apply),
+            // Live settings: routes and the audio system come with tasks 4
+            // and 5 of plan 3.
+            EngineAction::ApplyAudioSystem { .. } | EngineAction::ApplyRoute { .. } => {}
         }
     }
 
@@ -2186,6 +2377,7 @@ impl Engine {
             }
         }
         self.end_dsd_streams();
+        self.run_kept();
         self.start_ready_sources();
         self.dispatch_plans();
         self.send_tunes();
