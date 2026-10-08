@@ -611,13 +611,17 @@ impl Bus {
             }
             _ => {
                 tracing::warn!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, %error, "stream refused; keeping the previous one");
+                // A refusal of the rate only when the rate was asked for:
+                // one that only changed the channel count says nothing of
+                // the running rate.
                 match config.dsd {
                     Some(dsd) => {
                         self.refused_dsd.insert((config.sample_rate, dsd));
                     }
-                    None => {
+                    None if config.sample_rate != previous.sample_rate => {
                         self.refused_rates.insert(config.sample_rate);
                     }
+                    None => {}
                 }
             }
         }

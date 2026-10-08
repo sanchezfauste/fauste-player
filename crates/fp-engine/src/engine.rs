@@ -992,21 +992,24 @@ impl Engine {
 
     /// Whether `target` can carry a route at its channel pair (L16): an
     /// open device with too few channels is reopened with more while it is
-    /// quiet (or the change is forced); otherwise the change waits. A
-    /// device that has no more channels keeps what it has.
-    fn make_room(&mut self, target: &(BusKey, u16), force: bool) -> bool {
+    /// quiet (or the change is forced); otherwise the change waits (`None`).
+    /// A device that has no more channels keeps what it has, and one that
+    /// refuses to open them is an `Err`: the route is placed but cannot be
+    /// heard on those channels.
+    fn make_room(&mut self, target: &(BusKey, u16), force: bool) -> Option<Result<(), String>> {
         let Some(open) = self.buses.get(&target.0).map(|b| b.config().channels) else {
-            return true;
+            return Some(Ok(()));
         };
         let channels = self.channels_for(&target.0);
         if channels <= open {
-            return true;
+            return Some(Ok(()));
         }
         let quiet = self.bus_quiet(&target.0);
         if !quiet && !force {
-            return false;
+            return None;
         }
         let now = self.now;
+        let mut outcome = Ok(());
         if let Some(bus) = self.buses.get_mut(&target.0) {
             let config = StreamConfig {
                 channels,
@@ -1015,14 +1018,17 @@ impl Engine {
             let mut budget = bus.busy_budget(quiet);
             if let Err(error) = bus.reopen_with(config, now, &mut budget) {
                 tracing::warn!(bus = ?target.0, %error, "cannot open more channels on the device");
+                outcome = Err(format!(
+                    "the device cannot open {channels} channels: {error}"
+                ));
             }
         }
-        true
+        Some(outcome)
     }
 
     /// L16: `ApplyRoute`. Returns `false` while it must wait (L11): the
-    /// holder still sounds, or its new device must open more channels and
-    /// sounds, and the change is not forced.
+    /// holder still sounds, or a Cue it changes does, or a new device must
+    /// open more channels and sounds, and the change is not forced.
     fn apply_route(&mut self, holder: Holder, route: Option<Route>, force: bool) -> bool {
         if !force && !self.holder_quiet(holder) {
             return false;
@@ -1034,34 +1040,53 @@ impl Engine {
                 self.move_cartwall(holder, route.clone(), force)
             }
         };
-        if done {
-            self.report_applied(Target::Route(holder), Wanted::Route(route), Ok(()));
-        }
-        done
+        let Some(outcome) = done else {
+            return false;
+        };
+        self.report_applied(Target::Route(holder), Wanted::Route(route), outcome);
+        true
     }
 
     /// L16: `player`'s Main goes to `route` (the default output without
     /// one). Its sources are opened again on the new bus at their position:
     /// paused stays paused, waiting stays waiting. A Cue route equal to the
     /// new Main is dropped; one that differed again comes back.
-    fn move_player_main(&mut self, player: PlayerId, route: Option<Route>, force: bool) -> bool {
+    fn move_player_main(
+        &mut self,
+        player: PlayerId,
+        route: Option<Route>,
+        force: bool,
+    ) -> Option<Result<(), String>> {
         let target = match &route {
             Some(r) => self.route_target(r),
             None => (self.default_output(), 0),
         };
-        if !self.make_room(&target, force) {
-            return false;
+        let Some((cue_route, cue_now)) = self
+            .players
+            .get(&player)
+            .map(|rt| (rt.cue_route.clone(), rt.cue.clone()))
+        else {
+            return Some(Ok(()));
+        };
+        let cue = cue_route.as_ref().and_then(|r| self.cue_target(r, &target));
+        let cue_changes = cue != cue_now;
+        // A Cue that changes with Main (it equals the new Main, or comes
+        // back) is a Cue change too: it waits for a pre-listen (L11, L20).
+        if cue_changes && !force && !self.holder_quiet(Holder::PlayerCue(player)) {
+            return None;
+        }
+        let mut outcome = self.make_room(&target, force)?;
+        if cue_changes && let Some(cue_target) = &cue {
+            outcome = outcome.and(self.make_room(cue_target, force)?);
         }
         let now = self.now;
         let Some(rt) = self.players.get_mut(&player) else {
-            return true;
+            return Some(Ok(()));
         };
         let old = std::mem::replace(&mut rt.main, target.clone());
         rt.main_route = route.clone();
         // The pause ramp was in the old bus's frames.
         rt.pause_ramp_ends = 0;
-        let cue_route = rt.cue_route.clone();
-        let cue_now = rt.cue.clone();
         self.ensure_bus(&target.0, now);
         if old != target {
             let rate = self.rate_of(&old.0);
@@ -1069,27 +1094,30 @@ impl Engine {
             self.orphans.insert(old.0);
         }
         self.report_placement(Holder::PlayerMain(player), route, Some(&target.0));
-        let cue = cue_route.as_ref().and_then(|r| self.cue_target(r, &target));
-        if cue != cue_now {
+        if cue_changes {
             self.place_player_cue(player, cue, cue_route);
         }
-        true
+        Some(outcome)
     }
 
     /// L16: `player`'s Cue goes to `route` (no Cue without one, or when it
     /// equals Main).
-    fn move_player_cue(&mut self, player: PlayerId, route: Option<Route>, force: bool) -> bool {
+    fn move_player_cue(
+        &mut self,
+        player: PlayerId,
+        route: Option<Route>,
+        force: bool,
+    ) -> Option<Result<(), String>> {
         let Some(main) = self.players.get(&player).map(|rt| rt.main.clone()) else {
-            return true;
+            return Some(Ok(()));
         };
         let cue = route.as_ref().and_then(|r| self.cue_target(r, &main));
-        if let Some(target) = &cue
-            && !self.make_room(target, force)
-        {
-            return false;
-        }
+        let outcome = match &cue {
+            Some(target) => self.make_room(target, force)?,
+            None => Ok(()),
+        };
         self.place_player_cue(player, cue, route);
-        true
+        Some(outcome)
     }
 
     /// Puts `player`'s CUE path on `cue`: its sources move there at their

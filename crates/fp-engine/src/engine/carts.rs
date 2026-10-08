@@ -31,6 +31,8 @@ pub(super) struct CartSource {
     failed: bool,
     /// What it was opened from, to open it again (`follow_forced_rate`).
     request: CartRequest,
+    /// A pre-listen (on the Cue path), not a cart on air.
+    cue: bool,
 }
 
 pub(super) struct CartwallRuntime {
@@ -205,6 +207,7 @@ impl Engine {
             start: StartState::WhenReady { fade_in: false },
             failed: false,
             request: request.clone(),
+            cue,
         })
     }
 
@@ -217,7 +220,8 @@ impl Engine {
     /// now, at their position measured at `old_rate` (a looped one from its
     /// cue-in, since its loop restarts where it is opened): the playing
     /// carts when `main`, the pre-listen when `cue`. A cart de-clicking on
-    /// `bus` is cut.
+    /// `bus` on a path being moved is cut; one on the other path keeps its
+    /// tail.
     fn reopen_carts(&mut self, bus: &BusKey, main: bool, cue: bool, old_rate: u32) {
         let Some(c) = self.cartwall.as_mut() else {
             return;
@@ -225,7 +229,7 @@ impl Engine {
         let on_bus = |s: &CartSource| &s.bus == bus;
         let (stopping, kept): (Vec<CartSource>, Vec<CartSource>) = std::mem::take(&mut c.stopping)
             .into_iter()
-            .partition(on_bus);
+            .partition(|s| on_bus(s) && if s.cue { cue } else { main });
         c.stopping = kept;
         let (playing, kept): (Vec<CartSource>, Vec<CartSource>) = if main {
             std::mem::take(&mut c.playing).into_iter().partition(on_bus)
@@ -307,16 +311,20 @@ impl Engine {
 
     /// L16 for the cartwall. Before its first cart only the route changes:
     /// the cartwall opens with the current configuration (L13). Returns
-    /// `false` while the new device must open more channels and sounds.
+    /// `None` while the change must wait (L11).
     pub(super) fn move_cartwall(
         &mut self,
         holder: Holder,
         route: Option<Route>,
         force: bool,
-    ) -> bool {
-        let Some(main) = self.cartwall.as_ref().map(|c| c.main.clone()) else {
+    ) -> Option<Result<(), String>> {
+        let Some((main, cue_route, cue_now)) = self
+            .cartwall
+            .as_ref()
+            .map(|c| (c.main.clone(), c.cue_route.clone(), c.cue.clone()))
+        else {
             self.events.push(EngineEvent::Unplaced { holder, route });
-            return true;
+            return Some(Ok(()));
         };
         match holder {
             Holder::CartwallMain => {
@@ -324,17 +332,21 @@ impl Engine {
                     Some(r) => self.route_target(r),
                     None => (self.default_output(), 0),
                 };
-                if !self.make_room(&target, force) {
-                    return false;
+                let cue = cue_route.as_ref().and_then(|r| self.cue_target(r, &target));
+                let cue_changes = cue != cue_now;
+                // A Cue that changes with Main waits for a pre-listen
+                // (L11, L20).
+                if cue_changes && !force && !self.holder_quiet(Holder::CartwallCue) {
+                    return None;
+                }
+                let mut outcome = self.make_room(&target, force)?;
+                if cue_changes && let Some(cue_target) = &cue {
+                    outcome = outcome.and(self.make_room(cue_target, force)?);
                 }
                 let now = self.now;
-                let Some(c) = self.cartwall.as_mut() else {
-                    return true;
-                };
+                let c = self.cartwall.as_mut()?;
                 c.main = target.clone();
                 c.main_route = route.clone();
-                let cue_route = c.cue_route.clone();
-                let cue_now = c.cue.clone();
                 self.ensure_bus(&target.0, now);
                 if main != target {
                     let rate = self.rate_of(&main.0);
@@ -342,23 +354,22 @@ impl Engine {
                     self.orphans.insert(main.0);
                 }
                 self.report_placement(Holder::CartwallMain, route, Some(&target.0));
-                let cue = cue_route.as_ref().and_then(|r| self.cue_target(r, &target));
-                if cue != cue_now {
+                if cue_changes {
                     self.place_cart_cue(cue, cue_route);
                 }
+                Some(outcome)
             }
             Holder::CartwallCue => {
                 let cue = route.as_ref().and_then(|r| self.cue_target(r, &main));
-                if let Some(target) = &cue
-                    && !self.make_room(target, force)
-                {
-                    return false;
-                }
+                let outcome = match &cue {
+                    Some(target) => self.make_room(target, force)?,
+                    None => Ok(()),
+                };
                 self.place_cart_cue(cue, route);
+                Some(outcome)
             }
-            Holder::PlayerMain(_) | Holder::PlayerCue(_) => {}
+            Holder::PlayerMain(_) | Holder::PlayerCue(_) => Some(Ok(())),
         }
-        true
     }
 
     /// Puts the cart pre-listen path on `cue`; without a target an open

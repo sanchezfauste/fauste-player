@@ -26,6 +26,8 @@ struct DeviceState {
     exclusive_capable: bool,
     refused_rates: HashSet<u32>,
     refused_buffers: HashSet<u32>,
+    /// Opens with more channels fail with `Unsupported`.
+    max_channels: Option<u16>,
     open_attempts: u64,
     /// Opens still to fail with `Busy`.
     busy_opens: u64,
@@ -161,6 +163,13 @@ impl OfflineDevice {
     /// Makes opens with a buffer of `frames` fail with `Unsupported`.
     pub fn refuse_buffer(&self, frames: u32) {
         lock(&self.state).refused_buffers.insert(frames);
+    }
+
+    /// Makes opens with more than `channels` channels fail with
+    /// `Unsupported`, as a device whose driver offers fewer than it
+    /// enumerates would.
+    pub fn set_max_channels(&self, channels: u16) {
+        lock(&self.state).max_channels = Some(channels);
     }
 
     /// Makes the next `opens` opens on this device that it would accept
@@ -353,6 +362,12 @@ impl AudioBackend for OfflineBackend {
             return Err(BackendError::Unsupported(format!(
                 "{} Hz is not supported",
                 config.sample_rate
+            )));
+        }
+        if state.max_channels.is_some_and(|max| config.channels > max) {
+            return Err(BackendError::Unsupported(format!(
+                "{} channels are not supported",
+                config.channels
             )));
         }
         if state.refused_buffers.contains(&config.buffer_frames) {

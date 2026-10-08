@@ -1005,3 +1005,188 @@ fn l21_a_forced_change_cuts_a_fade_and_reports_its_end() {
         entry: EntryId(1)
     }));
 }
+
+fn cart_request(cart: u64) -> CartRequest {
+    CartRequest {
+        cart: CartId(cart),
+        track: TrackId(9),
+        path: PathBuf::from("track9"),
+        from_secs: 0.0,
+        until_secs: SOURCE_END,
+        looped: false,
+        format: None,
+    }
+}
+
+/// P: Main on `main`, Cue on `other`, pre-listening (PFL) on `other`.
+fn pfl_rig() -> Rig {
+    let mut c = config();
+    c.outputs.routes[0].cue = Some(route("other"));
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: request(2, 0.0),
+    });
+    r.settle();
+    r.run(2);
+    r.take_events();
+    r
+}
+
+fn cue_ended(events: &[EngineEvent]) -> bool {
+    events.iter().any(|e| {
+        matches!(
+            e,
+            EngineEvent::CueEnded { .. } | EngineEvent::CartCueEnded { .. }
+        )
+    })
+}
+
+/// L11, L16, L20: a Main moved onto the Cue's pair drops the Cue, which is
+/// a Cue change: it waits for the pre-listen unless forced.
+#[test]
+fn l16_a_main_moved_onto_the_cue_pair_waits_for_the_pre_listen() {
+    let mut r = pfl_rig();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(P),
+        route: Some(route("other")),
+        force: false,
+    });
+    r.run(3);
+    assert!(!cue_ended(&r.events), "the pre-listen is not cut");
+    assert!(!route_applied(&r.events, Holder::PlayerMain(P)));
+    r.act(EngineAction::StopCue { player: P });
+    r.run(5);
+    assert!(route_applied(&r.events, Holder::PlayerMain(P)));
+}
+
+#[test]
+fn l16_a_forced_main_move_onto_the_cue_pair_applies_at_once() {
+    let mut r = pfl_rig();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerMain(P),
+        route: Some(route("other")),
+        force: true,
+    });
+    r.tick();
+    assert!(route_applied(&r.events, Holder::PlayerMain(P)));
+    assert!(cue_ended(&r.events));
+}
+
+#[test]
+fn l16_a_cartwall_main_moved_onto_the_cue_pair_waits_for_the_pre_listen() {
+    let mut c = config();
+    c.outputs.cartwall.cue = Some(route("other"));
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCartCue(cart_request(1)));
+    r.settle();
+    r.run(2);
+    r.take_events();
+    let apply = |force| EngineAction::ApplyRoute {
+        holder: Holder::CartwallMain,
+        route: Some(route("other")),
+        force,
+    };
+    r.act(apply(false));
+    r.run(3);
+    assert!(!cue_ended(&r.events), "the pre-listen is not cut");
+    assert!(!route_applied(&r.events, Holder::CartwallMain));
+    r.act(EngineAction::StopCartCue);
+    r.run(5);
+    assert!(route_applied(&r.events, Holder::CartwallMain));
+}
+
+#[test]
+fn l16_a_forced_cartwall_main_move_onto_the_cue_pair_applies_at_once() {
+    let mut c = config();
+    c.outputs.cartwall.cue = Some(route("other"));
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCartCue(cart_request(1)));
+    r.settle();
+    r.run(2);
+    r.take_events();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::CartwallMain,
+        route: Some(route("other")),
+        force: true,
+    });
+    r.tick();
+    assert!(route_applied(&r.events, Holder::CartwallMain));
+    assert!(cue_ended(&r.events));
+}
+
+/// A device that cannot open more channels than it has open: the route is
+/// reported as failed, and the running rate is not marked as refused.
+#[test]
+fn l16_a_device_that_refuses_more_channels_fails_the_route_and_keeps_its_rates() {
+    let mut c = config();
+    c.outputs.routes[0].main = Some(route("other"));
+    let mut r = rig_with(&c);
+    assert_eq!(r.other.config().unwrap().channels, 2);
+    r.other.set_max_channels(2);
+    let pair = Route {
+        first_channel: 2,
+        ..route("other")
+    };
+    c.outputs.routes[0].cue = Some(pair.clone());
+    r.act(EngineAction::UpdateSettings(Box::new(c)));
+    r.take_events();
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::PlayerCue(P),
+        route: Some(pair),
+        force: false,
+    });
+    r.tick();
+    assert!(
+        r.events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Applied {
+                target: Target::Route(Holder::PlayerCue(_)),
+                outcome: Err(_),
+                ..
+            }
+        )),
+        "{:?}",
+        r.events
+    );
+    let lower = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(&r, "other")
+    };
+    let back = settings_of(&r, "other");
+    r.take_events();
+    apply_device(&mut r, "other", lower, false);
+    assert_eq!(applied(&r.events, "other"), Some(&Ok(())));
+    r.take_events();
+    apply_device(&mut r, "other", back, false);
+    assert_eq!(applied(&r.events, "other"), Some(&Ok(())), "48 kHz works");
+}
+
+/// A Cue-only move on a device shared with Main must leave the de-click
+/// tail of a Main cart alone.
+#[test]
+fn l16_a_cue_move_leaves_the_main_carts_declick_tail() {
+    let mut c = config();
+    c.outputs.cartwall.main = Some(route("other"));
+    c.outputs.cartwall.cue = Some(Route {
+        first_channel: 2,
+        ..route("other")
+    });
+    c.tuning.declick_ms = 100.0;
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCart(cart_request(1)));
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::StopCart { cart: CartId(1) });
+    r.act(EngineAction::ApplyRoute {
+        holder: Holder::CartwallCue,
+        route: Some(route("main")),
+        force: true,
+    });
+    let heard = r.other.render(BLOCK).unwrap();
+    let left: Vec<f32> = heard.chunks(4).map(|f| f[0]).collect();
+    assert!(
+        left.iter().all(|v| *v != 0.0),
+        "the tail keeps fading, not cut"
+    );
+}
