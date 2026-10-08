@@ -66,7 +66,8 @@ scripts/site/build.sh [out]                   # website: landing page + mdBook g
 scripts/site/check-links.sh <out>             # dead links in the built site
 scripts/site/check-translations.sh [out]      # translated guides (docs/i18n) mirror docs/user and carry the AI notice
 python3 scripts/site/guide.py changed [lang]  # English guide pages changed since each translation
-scripts/site/screenshots.sh [--only main]     # README and guide screenshots from a scripted scene (Xvfb; see Testing notes)
+scripts/site/screenshots.sh [--only main] [--lang es-ES] [--out <dir>]  # README and guide screenshots from a scripted scene (Xvfb; see Testing notes)
+scripts/site/localized-screenshots.sh <dir> [lang…]  # the same in English and every guide language (CI does it on publish)
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test real_music -- --ignored   # real-music corpus (local only)
 cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
@@ -213,7 +214,10 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   reached through the link `/tmp/fauste-demo` (`SHOTS_MEDIA`), so no
   screenshot shows a home path.
   `--hold` keeps the app running for a look (`DISPLAY=:<n> import -window
-  <id> shot.png`). The crops follow the default 1920×1080 layout: after a
+  <id> shot.png`). `--lang <locale>` sets the interface language (a tag of
+  `crates/fp-app/locales`; the scene's own text stays) and `--out <dir>`
+  writes `main-screen.png` and `guide/*.png` there instead of `docs/images`.
+  The crops follow the default 1920×1080 layout: after a
   layout change, check every PNG and adjust the positions in the script.
 
   On a GNOME Wayland desktop, `xdotool` clicks into XWayland windows need

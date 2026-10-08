@@ -96,6 +96,23 @@ scripts, and by hand. Pull requests touching those paths build the site and
 run `scripts/site/check-links.sh` and `scripts/site/check-translations.sh`
 without deploying.
 
+### The screenshots
+
+`docs/images` holds the English screenshots; they are the default and what
+a plain local build shows. On every publish `pages.yml` runs
+`scripts/site/localized-screenshots.sh`, which calls
+`scripts/site/screenshots.sh --lang <locale> --out <dir>` for English and
+each translation, mapping a guide language to the interface locale of
+`crates/fp-app/locales` that starts with its code (`es` to `es-ES`, `pt` to
+`pt-PT`; a language with no locale keeps the English images). The images are
+never committed. `build.sh` receives them through `FAUSTE_SHOTS_DIR`
+(`<lang>/main-screen.png`, `<lang>/guide/*.png`): the English ones replace
+`images/` in the site, the others go to `images/<lang>/`, and
+`guide.py images` points each translated page at its own copy, or leaves the
+English link when that screenshot is missing. Pull requests take only the
+Spanish set, as a smoke test of the pipeline; the workflow caches the Rust
+build, which is done once for all languages.
+
 ### The guide in other languages
 
 The English guide in `docs/user` is the only source: pull requests change
@@ -110,8 +127,8 @@ building.
   the interface. `docs/i18n/<lang>/` mirrors `docs/user`: the same file
   names, the same `SUMMARY.md` entries (targets, order and nesting), the
   English heading ids (`{#id}` after each translated heading), and
-  image links one level deeper (`../../images/…`), since the screenshots are
-  shared.
+  image links one level deeper (`../../images/…`); the committed images are
+  English, and the published site replaces them (see "The screenshots").
 - **Metadata:** `docs/i18n/<lang>/translation.toml` holds the language tag,
   its name in the language menu, the book title, the menu label,
   `source-commit` (the full hash of the `master` commit whose `docs/user`
@@ -131,6 +148,16 @@ building.
   of every book, English included. It links to the same page in each
   language, or to that language's start page when the page does not exist
   there yet (an English page added after the last regeneration).
+- **The browser's language:** the first time someone opens an English page,
+  the same script reads `navigator.languages`; the first tag that is
+  English (stay) or has a translation (`pt-BR` and `pt-PT` match `pt`)
+  decides, and the visitor goes to the same page in that language (the start
+  page when it has no such page). Choosing a language in the menu, or the
+  notice's link to English, stores the choice in `localStorage`
+  (`fauste-player-guide-language`) and the jump never overrides it; links to
+  English also carry `?lang=en`, which stores English and stops the jump
+  where storage is blocked. Nothing moves without JavaScript, so crawlers
+  see the English page.
 - **The build:** `scripts/site/build.sh` calls `scripts/site/guide.py build`,
   which copies `docs/` to a staging folder, writes
   `book-assets/languages.js` (the languages, each one's pages, the notice)

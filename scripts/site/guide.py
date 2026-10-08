@@ -11,6 +11,10 @@ the strings of the AI-translation notice (see docs/technical/release-process.md)
     guide.py check [<site-dir>]         translations match their source;
                                         with a built site, every translated
                                         page carries the notice
+    guide.py images <site-dir> <shots>  screenshots taken in each language
+                                        (<shots>/<lang>/guide/*.png) into the
+                                        site; each translated book links its
+                                        own, else the English ones
     guide.py changed [<lang>...]        English pages changed since each
                                         translation's source commit
 
@@ -280,6 +284,55 @@ def check(site):
     print(f"{len(langs)} translation(s) checked: {', '.join(langs) or 'none'}")
 
 
+# --- images ----------------------------------------------------------------
+
+def images(site, shots):
+    """Copies the per-language screenshots into the site and points each
+    translated book at its own.
+
+    <shots>/<lang>/ holds main-screen.png and guide/*.png (scripts/site/
+    localized-screenshots.sh). English ones replace the committed images in
+    <site>/images; the others go to <site>/images/<lang>/. A translation
+    links ../../images/guide/<name>; it is rewritten to its own copy only
+    when that copy exists, so a missing screenshot keeps the English one.
+    """
+    if not os.path.isdir(shots):
+        fail(f"{shots}: no such folder")
+    pictures = os.path.join(site, "images")
+    rewritten = 0
+    for lang in sorted(os.listdir(shots)):
+        src = os.path.join(shots, lang)
+        if not os.path.isdir(src):
+            continue
+        if lang == "en":
+            shutil.copytree(src, pictures, dirs_exist_ok=True)
+            continue
+        if lang not in languages():
+            fail(f"{src}: {lang} is not a translation in docs/i18n")
+        shutil.copytree(src, os.path.join(pictures, lang), dirs_exist_ok=True)
+        book = os.path.join(site, "guide", lang)
+        for d, _, files in os.walk(book):
+            for f in files:
+                if not f.endswith(".html"):
+                    continue
+                path = os.path.join(d, f)
+                html = read(path)
+
+                def own(m):
+                    name = m.group(2)
+                    if os.path.isfile(os.path.join(pictures, lang, "guide", name)):
+                        return f"{m.group(1)}images/{lang}/guide/{name}"
+                    return m.group(0)
+
+                new = re.sub(r'((?:\.\./)+)images/guide/([^"\'#?)\s]+)', own, html)
+                if new != html:
+                    rewritten += 1
+                    with open(path, "w", encoding="utf-8") as fh:
+                        fh.write(new)
+    print(f"screenshots in {len(os.listdir(shots))} language(s); "
+          f"{rewritten} translated page(s) use their own")
+
+
 # --- changed ---------------------------------------------------------------
 
 def changed(langs):
@@ -302,6 +355,8 @@ def main(argv):
         build(argv[1], argv[2])
     elif len(argv) >= 1 and argv[0] == "check" and len(argv) <= 2:
         check(argv[1] if len(argv) == 2 else None)
+    elif len(argv) == 3 and argv[0] == "images":
+        images(argv[1], argv[2])
     elif len(argv) >= 1 and argv[0] == "changed":
         changed(argv[1:])
     else:
