@@ -7,8 +7,9 @@ mod common;
 use common::{entries, fixture, p0};
 use fp_model::{
     AppState, BusyCause, CartId, Command, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput,
-    EngineEvent, Failure, Holder, LiveSettings, OutputDevice, Route, Target, TrackAnalysis, Wanted,
-    apply, causes, configured_route, device_causes, device_settings, on_event,
+    EngineEvent, Failure, Holder, LiveSettings, OutputDevice, PendingItem, Route, Target,
+    TrackAnalysis, Wanted, apply, causes, configured_route, device_causes, device_settings,
+    on_event, pending,
 };
 
 fn dev(name: &str) -> OutputDevice {
@@ -335,4 +336,118 @@ fn l14_an_accepted_value_becomes_the_running_one_and_clears_the_failure() {
     );
     assert_eq!(s.live.devices.get(&d), Some(&settings));
     assert!(!s.live.failures.contains_key(&target));
+}
+
+fn update(state: &mut AppState, edit: impl FnOnce(&mut Config)) -> Vec<fp_model::EngineAction> {
+    let mut config = state.config.clone();
+    edit(&mut config);
+    apply(state, Command::UpdateConfig(Box::new(config))).unwrap()
+}
+
+fn device_item(state: &AppState, name: &str) -> Option<fp_model::Pending> {
+    pending(state)
+        .into_iter()
+        .find(|p| matches!(&p.item, PendingItem::Device { device, .. } if *device == dev(name)))
+}
+
+#[test]
+fn nothing_is_pending_while_the_engine_runs_the_configuration() {
+    let mut s = fixture(1);
+    assert!(pending(&s).is_empty(), "nothing reported");
+    report_start(&mut s);
+    assert!(pending(&s).is_empty());
+}
+
+#[test]
+fn l5_a_busy_device_delays_only_its_own_change() {
+    let mut s = fixture(3);
+    let p1 = p0(&s);
+    s.config.outputs.routes[0].main = Some(route_to("dac"));
+    report_start(&mut s);
+    apply(&mut s, Command::Play(p1)).unwrap();
+    update(&mut s, |c| c.outputs.buffer_frames = 1024);
+    let dac = device_item(&s, "dac").unwrap();
+    assert_eq!(dac.causes, vec![BusyCause::PlayerPlaying(p1)]);
+    let PendingItem::Device { from, to, .. } = dac.item else {
+        panic!("a device item")
+    };
+    assert_eq!((from.buffer_frames, to.buffer_frames), (512, 1024));
+    assert!(device_item(&s, "default").unwrap().causes.is_empty());
+}
+
+#[test]
+fn l6_a_route_change_waits_for_its_own_holder_only() {
+    let mut s = fixture(3);
+    let (p1, p2) = (s.players[0].id, s.players[1].id);
+    report_start(&mut s);
+    apply(&mut s, Command::Play(p1)).unwrap();
+    update(&mut s, |c| {
+        c.outputs.routes[0].main = Some(route_to("dac"));
+        c.outputs.routes[1].main = Some(route_to("dac"));
+    });
+    let route_of = |h: Holder| {
+        pending(&s)
+            .into_iter()
+            .find(|p| matches!(p.item, PendingItem::Route { holder, .. } if holder == h))
+            .unwrap()
+    };
+    assert_eq!(
+        route_of(Holder::PlayerMain(p1)).causes,
+        vec![BusyCause::PlayerPlaying(p1)]
+    );
+    assert!(
+        route_of(Holder::PlayerMain(p2)).causes.is_empty(),
+        "P2 is idle: moving it interrupts nobody (Q1)"
+    );
+}
+
+#[test]
+fn l7_the_audio_system_waits_until_nothing_plays_anywhere() {
+    let mut s = fixture(3);
+    let p1 = p0(&s);
+    report_start(&mut s);
+    let cart = load_cart(&mut s, 0);
+    apply(&mut s, Command::Play(p1)).unwrap();
+    apply(&mut s, Command::FireCart(cart)).unwrap();
+    update(&mut s, |c| c.outputs.backend = Some("other".into()));
+    let item = pending(&s)
+        .into_iter()
+        .find(|p| matches!(p.item, PendingItem::AudioSystem { .. }))
+        .unwrap();
+    assert_eq!(
+        item.item,
+        PendingItem::AudioSystem {
+            from: None,
+            to: Some("other".into())
+        }
+    );
+    assert_eq!(
+        item.causes,
+        vec![BusyCause::PlayerPlaying(p1), BusyCause::CartPlaying(cart)]
+    );
+}
+
+#[test]
+fn a_device_no_holder_is_placed_on_is_never_pending() {
+    let mut s = fixture(1);
+    report_start(&mut s);
+    update(&mut s, |c| {
+        c.outputs.set_device_buffer(&dev("unused"), Some(1024))
+    });
+    assert!(device_item(&s, "unused").is_none());
+}
+
+#[test]
+fn a_removed_player_is_never_pending() {
+    let mut s = fixture(1);
+    let last = s.players[3].id;
+    report_start(&mut s);
+    update(&mut s, |c| c.outputs.routes[3].main = Some(route_to("dac")));
+    apply(&mut s, Command::SetPlayerCount(3)).unwrap();
+    assert!(
+        !pending(&s)
+            .iter()
+            .any(|p| matches!(p.item, PendingItem::Route { holder: Holder::PlayerMain(h), .. } if h == last)),
+        "the engine has not said Gone yet, but the player is gone"
+    );
 }

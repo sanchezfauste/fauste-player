@@ -285,3 +285,136 @@ pub(crate) fn applied(
         }
     }
 }
+/// One pending change (spec §4.2), with the value it changes from and to.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PendingItem {
+    AudioSystem {
+        from: Option<String>,
+        to: Option<String>,
+    },
+    Route {
+        holder: Holder,
+        from: Option<Route>,
+        to: Option<Route>,
+    },
+    Device {
+        device: OutputDevice,
+        from: DeviceSettings,
+        to: DeviceSettings,
+    },
+}
+
+impl PendingItem {
+    /// The engine target this change applies to.
+    pub fn target(&self) -> Target {
+        match self {
+            Self::AudioSystem { .. } => Target::AudioSystem,
+            Self::Route { holder, .. } => Target::Route(*holder),
+            Self::Device { device, .. } => Target::Device(device.clone()),
+        }
+    }
+
+    /// The value this change asks for.
+    pub fn wanted(&self) -> Wanted {
+        match self {
+            Self::AudioSystem { to, .. } => Wanted::AudioSystem(to.clone()),
+            Self::Route { to, .. } => Wanted::Route(to.clone()),
+            Self::Device { to, .. } => Wanted::Device(*to),
+        }
+    }
+}
+
+/// A pending item, what it waits for, and why the engine refused its
+/// value last time (only while the same value is wanted).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pending {
+    pub item: PendingItem,
+    pub causes: Vec<BusyCause>,
+    pub failure: Option<String>,
+}
+
+/// L7: the causes of every holder, wherever it plays.
+fn all_causes(state: &AppState) -> Vec<BusyCause> {
+    let mut out = Vec::new();
+    collect_causes(state, holders(state).into_iter(), &mut out);
+    out
+}
+
+/// The devices holders are placed on, each once, in the order of their
+/// first holder in display order.
+fn devices_in_use(state: &AppState) -> Vec<OutputDevice> {
+    let mut out: Vec<OutputDevice> = Vec::new();
+    for holder in holders(state) {
+        if let Some(device) = state.live.placement.get(&holder)
+            && !out.contains(device)
+        {
+            out.push(device.clone());
+        }
+    }
+    out
+}
+
+/// A pending output item, with its failure when the same value was
+/// refused.
+fn output_item(state: &AppState, item: PendingItem, causes: Vec<BusyCause>) -> Pending {
+    let failure = state
+        .live
+        .failures
+        .get(&item.target())
+        .filter(|f| f.wanted == item.wanted())
+        .map(|f| f.reason.clone());
+    Pending {
+        item,
+        causes,
+        failure,
+    }
+}
+
+/// Spec §4.2: every change the engine does not run yet, in L9 order (the
+/// audio system, the routes in display order, the devices). A device no holder uses is never pending, nor is a holder
+/// the engine has not reported (both open with the current configuration,
+/// L13).
+pub fn pending(state: &AppState) -> Vec<Pending> {
+    let mut out = Vec::new();
+    let live = &state.live;
+    let configured = &state.config.outputs.backend;
+    if let Some(running) = &live.audio_system
+        && running != configured
+    {
+        let item = PendingItem::AudioSystem {
+            from: running.clone(),
+            to: configured.clone(),
+        };
+        out.push(output_item(state, item, all_causes(state)));
+    }
+    for holder in holders(state) {
+        let Some(running) = live.routes.get(&holder) else {
+            continue;
+        };
+        let wanted = configured_route(&state.config, holder);
+        if *running != wanted {
+            let item = PendingItem::Route {
+                holder,
+                from: running.clone(),
+                to: wanted,
+            };
+            out.push(output_item(state, item, causes(state, holder)));
+        }
+    }
+    for device in devices_in_use(state) {
+        let Some(running) = live.devices.get(&device) else {
+            continue;
+        };
+        let wanted = device_settings(&state.config.outputs, &device);
+        if *running != wanted {
+            let causes = device_causes(state, &device);
+            let item = PendingItem::Device {
+                from: *running,
+                to: wanted,
+                device,
+            };
+            out.push(output_item(state, item, causes));
+        }
+    }
+    out
+}
