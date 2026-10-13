@@ -1409,6 +1409,31 @@ impl Engine {
         }
     }
 
+    /// BR6 steps 3–4: `player`'s current track has stopped at the cut. Its
+    /// Main bus reopens at the preload's rate as B3.2 does, when nothing
+    /// else sounds there (the current is gone and the next only waits); if
+    /// something sounds or the device refuses (B3.4), the bus keeps its
+    /// rate and the next is opened again at it (resampled).
+    fn cut_to(&mut self, player: PlayerId, rate: u32) {
+        let Some((bus, format)) = self.players.get(&player).map(|rt| {
+            let format = rt.preload.as_ref().and_then(|p| p.request.format);
+            (rt.main.0.clone(), format)
+        }) else {
+            return;
+        };
+        self.prepare_start(&bus, format);
+        let stream = self.rate_of(&bus);
+        if stream != rate {
+            tracing::info!(
+                ?player,
+                rate,
+                stream,
+                "rate cut not taken; the next track is resampled"
+            );
+        }
+        self.reopen_preload_at(player, stream);
+    }
+
     /// Re-creates every waiting (never started) player source on `bus` at
     /// the bus's new rate; their old ones were opened at the old rate.
     fn reopen_waiting(&mut self, bus: &BusKey) {
@@ -3030,6 +3055,15 @@ impl Engine {
                 .push(EngineEvent::SourceFailed { player, entry });
             return;
         }
+        // BR6: a planned rate cut reopens the device now, between the two
+        // tracks; the next then starts as at any end of stream.
+        if let Some(TransitionPlan::StartNextAt {
+            rate_cut: Some(rate),
+            ..
+        }) = plan
+        {
+            self.cut_to(player, rate);
+        }
         let next = match plan {
             Some(TransitionPlan::StartNextAt { .. }) => self
                 .players
@@ -3249,15 +3283,30 @@ impl Engine {
     }
 
     fn dispatch(&mut self, player: PlayerId, plan: TransitionPlan, at_frame: u64, declick: u64) {
+        // BR6: a plan with a rate cut only stops the current here, with its
+        // declick; the bus reopens and the next starts once the current has
+        // finished (`current_finished`).
+        let cut = matches!(
+            plan,
+            TransitionPlan::StartNextAt {
+                rate_cut: Some(_),
+                ..
+            }
+        );
+        if !cut {
+            // A next prepared for a cut the plan no longer has plays at the
+            // stream rate (BR6 fallback).
+            self.fit_preload(player);
+        }
         // A next that needs a bus carrying DSD may have to wait for the
         // switch to PCM: the whole transition moves with it.
         let next_bus = match plan {
-            TransitionPlan::StartNextAt { .. } => self
+            TransitionPlan::StartNextAt { rate_cut: None, .. } => self
                 .players
                 .get(&player)
                 .and_then(|rt| rt.preload.as_ref())
                 .map(|p| p.bus.clone()),
-            TransitionPlan::StopAt { .. } => None,
+            _ => None,
         };
         let at_frame = match next_bus {
             Some(bus) => self.before_start_on(&bus, at_frame),
@@ -3278,7 +3327,7 @@ impl Engine {
         };
         let (cur_bus, cur_slot) = (current.bus.clone(), current.slot);
         let next = match plan {
-            TransitionPlan::StartNextAt { .. } => rt.preload.as_mut().map(|p| {
+            TransitionPlan::StartNextAt { rate_cut: None, .. } => rt.preload.as_mut().map(|p| {
                 // A next that is not buffered yet starts as soon as it is,
                 // instead of on the frame as silence counted as underruns.
                 let ready = p.shared.is_ready();
@@ -3290,7 +3339,7 @@ impl Engine {
                 };
                 (p.bus.clone(), p.slot, ready, p.start_secs > 0.0)
             }),
-            TransitionPlan::StopAt { .. } => None,
+            _ => None,
         };
         let declick32 = u32::try_from(declick).unwrap_or(u32::MAX);
         match (plan, next) {
@@ -3348,7 +3397,8 @@ impl Engine {
                     }
                 }
             }
-            // A stop, or a start with nothing preloaded: end the current track there.
+            // A stop, a rate cut, or a start with nothing preloaded: end the
+            // current track there.
             _ => {
                 // The stop goes first: the ramp checks it to tell a cut inside
                 // the file from the file's own end (a gapless join).

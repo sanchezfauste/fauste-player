@@ -137,6 +137,12 @@ impl Rig {
             .collect()
     }
 
+    fn transition_started(&self, entry: u64) -> bool {
+        self.events.iter().any(|e| {
+            matches!(e, EngineEvent::TransitionStarted { entry: EntryId(n), .. } if *n == entry)
+        })
+    }
+
     fn rate(&self) -> u32 {
         self.dac.config().unwrap().sample_rate
     }
@@ -502,4 +508,107 @@ fn br6_a_dropped_cut_opens_the_next_again_at_the_stream_rate() {
     r.act(cut_plan(0.5, None));
     r.settle();
     assert_eq!(decode_rate(&r, "pre ["), Some(44_100));
+}
+
+/// Renders block by block until the dac runs at `rate`, at most `frames`.
+fn run_until_rate(r: &mut Rig, rate: u32, frames: usize) -> bool {
+    for _ in 0..frames.div_ceil(BLOCK) {
+        if r.rate() == rate {
+            return true;
+        }
+        r.run(BLOCK);
+    }
+    r.rate() == rate
+}
+
+fn jingle(r: &Rig) -> EngineAction {
+    EngineAction::StartCart(CartRequest {
+        cart: CartId(1),
+        track: TrackId(9),
+        path: wav(r.dir.path(), "j.wav", 44_100),
+        from_secs: 0.0,
+        until_secs: f64::INFINITY,
+        looped: false,
+        format: pcm16(44_100),
+    })
+}
+
+#[test]
+fn br6_a_scheduled_cut_reopens_the_device_between_the_tracks() {
+    let mut r = rig(true, true);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    assert!(
+        run_until_rate(&mut r, 48_000, 44_100),
+        "past 0.5 s the device runs at 48 kHz"
+    );
+    assert_eq!(
+        r.engine.unsettled_sources(),
+        0,
+        "the next was ready at the new rate: nothing to buffer after the reopen"
+    );
+    r.run(4_800);
+    assert!(r.transition_started(2));
+    assert!(
+        bit_perfect_after(&mut r, 4_800),
+        "the next track is bit-perfect"
+    );
+    assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![])));
+}
+
+#[test]
+fn br6_without_a_cut_the_hard_join_keeps_the_rate() {
+    let mut r = rig(true, true);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 44_100);
+    r.start(request(1, a, pcm16(44_100)));
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(request(2, b, pcm16(44_100))),
+    });
+    r.act(cut_plan(0.5, None));
+    r.settle();
+    let attempts = r.dac.open_attempts();
+    r.run(44_100);
+    assert!(r.transition_started(2));
+    assert_eq!(r.rate(), 44_100);
+    assert_eq!(r.dac.open_attempts(), attempts, "no reopen");
+    assert!(bit_perfect_after(&mut r, 4_410));
+}
+
+#[test]
+fn br6_a_cart_fired_just_before_the_cut_keeps_the_rate_and_the_next_plays() {
+    let mut r = rig(true, true);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    let cart = jingle(&r);
+    r.act(cart);
+    r.settle();
+    r.run(44_100);
+    r.settle();
+    r.run(4_410);
+    assert!(r.transition_started(2), "the next plays");
+    assert_eq!(r.rate(), 44_100, "the cart sounds: no reopen");
+    assert_eq!(decode_rate(&r, "cur ["), Some(44_100), "at the stream rate");
+    assert!(!r.engine.telemetry(P).bit_perfect, "resampled");
+}
+
+#[test]
+fn br6_a_refused_cut_falls_back_and_the_next_plays() {
+    let mut r = rig(true, true);
+    r.dac.refuse_rate(48_000);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    r.run(44_100);
+    r.settle();
+    r.run(4_410);
+    assert!(r.transition_started(2));
+    assert_eq!(r.rate(), 44_100, "B3.4: back to the previous rate");
+    assert_eq!(r.stream_rates().last(), Some(&(44_100, vec![48_000])));
+    assert_eq!(decode_rate(&r, "cur ["), Some(44_100), "at the stream rate");
+    let heard = r.run(4_410);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays, resampled");
 }
