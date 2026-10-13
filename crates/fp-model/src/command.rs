@@ -269,6 +269,14 @@ pub enum EngineEvent {
         wanted: Wanted,
         outcome: Result<(), String>,
     },
+    /// Bit-perfect rate and fader spec BR1: `device`'s stream runs at
+    /// `rate`, and it refused `refused` (ascending; B3.4). Reported when its
+    /// bus opens and whenever either changes.
+    StreamRate {
+        device: OutputDevice,
+        rate: u32,
+        refused: Vec<u32>,
+    },
 }
 
 /// Everything the engine needs to open and position one source.

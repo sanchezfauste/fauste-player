@@ -454,6 +454,11 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             wanted,
             outcome,
         } => crate::live::applied(state, target, wanted, outcome),
+        EngineEvent::StreamRate {
+            device,
+            rate,
+            refused,
+        } => crate::live::stream_rate(state, device, rate, refused),
     }
     fill_empty_next(state);
     reconcile(state, &mut out);
