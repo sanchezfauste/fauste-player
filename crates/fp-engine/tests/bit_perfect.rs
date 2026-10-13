@@ -19,7 +19,7 @@ use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
 use fp_model::{
     AudioFormat, CartId, CartRequest, Config, EngineAction, EngineEvent, EntryId, OutputDevice,
-    PlayerId, PlayerRoutes, Route, SourceRequest, TrackId,
+    PlayerId, PlayerRoutes, Route, SourceRequest, TrackId, TransitionPlan,
 };
 use support::indexed_wav;
 
@@ -443,4 +443,63 @@ fn br1_a_refused_rate_is_reported() {
     let path = wav(r.dir.path(), "a.wav", 44_100);
     r.start(request(1, path, pcm16(44_100)));
     assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![44_100])));
+}
+
+fn cut_plan(at_secs: f64, rate_cut: Option<u32>) -> EngineAction {
+    EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs,
+            fade_current_until_secs: None,
+            rate_cut,
+        }),
+    }
+}
+
+/// A 44.1 kHz track on air on the bit-perfect bus, and a 48 kHz next preloaded.
+fn on_air_with_next(r: &mut Rig) {
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    assert_eq!(r.rate(), 44_100);
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(request(2, b, pcm16(48_000))),
+    });
+}
+
+/// The decode rate of P's source in `part` (`"cur ["` or `"pre ["`), read
+/// from the engine's one-line description.
+fn decode_rate(r: &Rig, part: &str) -> Option<u32> {
+    let d = r.engine.describe_player(P);
+    let source = d.split(part).nth(1)?.split(']').next()?;
+    source
+        .split("rate ")
+        .nth(1)?
+        .split(' ')
+        .next()?
+        .parse()
+        .ok()
+}
+
+#[test]
+fn br6_the_next_of_a_planned_cut_is_prepared_at_the_new_rate() {
+    let mut r = rig(true, true);
+    on_air_with_next(&mut r);
+    assert_eq!(decode_rate(&r, "pre ["), Some(44_100), "no cut planned yet");
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    assert_eq!(r.rate(), 44_100, "nothing reopens before the transition");
+    assert_eq!(decode_rate(&r, "pre ["), Some(48_000));
+}
+
+#[test]
+fn br6_a_dropped_cut_opens_the_next_again_at_the_stream_rate() {
+    let mut r = rig(true, true);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    r.act(cut_plan(0.5, None));
+    r.settle();
+    assert_eq!(decode_rate(&r, "pre ["), Some(44_100));
 }
