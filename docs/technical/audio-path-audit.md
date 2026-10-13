@@ -412,6 +412,15 @@ until the device comes back from a loss, and is not asked for again
 `an_idle_bit_perfect_bus_reopens_at_the_file_rate`. Verdict: **no change
 needed** (A21).
 
+Since the bit-perfect rate and fader spec (2026-10-08), a bit-perfect
+player's transitions are hard and the device reopens between two tracks at
+different rates when nothing else sounds (BR6, BR8); B3.3 still holds for a
+sounding bus (BR11). Every reopen runs on the conductor thread through
+`prepare_start`; nothing new runs on the device callback. Evidence:
+`tests/bit_perfect.rs` `br6_a_scheduled_cut_reopens_the_device_between_the_tracks`,
+`br8_a_hard_start_at_another_rate_reopens_after_the_declick`,
+`br8_a_crossfade_at_another_rate_does_not_reopen`.
+
 ## 6. Real-time safety of the callback (CLAUDE.md rule 5)
 
 | Function | Allocation / free | Locks | Logging, I/O | Panics, indexing |
@@ -555,5 +564,5 @@ building only if operators report clipping on air. Whatever the choice,
 | A18 | 3.1 Downmix | 3.0 and 3.1 files fold the centre in at −3 dB without normalisation (up to +4.6 dB), while 5.x is normalised. | `lib.rs:215-231`; probe `a_three_channel_file_downmixes_above_full_scale` | no change needed | documented in §7 |
 | A19 | 5.3 Device loss | Virtual clock, watchdog, reconnection and the lost-device alert work. | `bus.rs:298-336`; `tests/bus.rs` | no change needed | — |
 | A20 | 5.1 Buffers | Requested size used when the device allows it, else its default; the size in use is reported; oversize callbacks render in pieces. | `cpal_backend.rs:109-159`, `cpal_backend.rs:365-372` and its tests | no change needed | — |
-| A21 | 5.4 Rate changes | Reopen at the file rate keeping the clock; refused rates restored and remembered. | `bus.rs:249-278`; `tests/bit_perfect.rs` | no change needed | — |
+| A21 | 5.4 Rate changes | Reopen at the file rate keeping the clock; refused rates restored and remembered; rate cuts between two tracks only when nothing else sounds. | `bus.rs:249-278`; `tests/bit_perfect.rs` (`br6_…`, `br8_…`) | no change needed | — |
 | A22 | 6 Real-time safety | No allocation, lock (beyond `try_lock`), logging, I/O or panic on the callback paths; the WASAPI crate's calls are not verifiable on Linux. | §6 table; `tests/mixer.rs`; probe `the_renderer_the_device_calls_and_the_sample_writer_never_allocate` | no change needed | — |

@@ -247,6 +247,53 @@ cannot hang the conductor.
   `refused_rates` or `refused_dsd`, so the next start asks again.
 - While anything on the bus sounds, the rate never changes, since every
   timeline on the bus is in its frames. Preloads never decide the rate.
+  The two rate cuts below are not exceptions: at their reopen nothing on
+  the bus sounds (bit-perfect rate and fader spec BR11).
+- **Stream rates reach the model (BR1).** At the end of every tick
+  `report_stream_rates` compares each bus's rate and refused rates
+  (`Bus::refused_rates`, ascending) with what it last reported
+  (`Engine::reported_rates`) and emits `EngineEvent::StreamRate { device,
+  rate, refused }` for each difference. One comparison covers every cause:
+  a bus opened, a B3.2 reopen, a rate cut, a refusal, a live-settings
+  reopen and the watchdog. A bus opened by an action is reported after its
+  `Placed`; a holder that left the bus in the same tick is reported
+  `Unplaced` first, so the model drops a rate for a device no holder uses.
+- **Every source knows its rate.** `Playing::rate` is the rate its worker
+  decodes to (`open_source_at`): its bus's rate, or the rate of a planned
+  cut. A source never starts at a rate other than its bus's: `take_or_open`
+  takes a preload only at the rate the start runs at, `fit_preload` opens a
+  preload again when its plan gains or drops a cut (on `Schedule`, and
+  before a dispatch without a cut), `reopen_waiting` keeps a waiting source
+  that already decodes at the new rate, and `fit_current` opens a waiting
+  current again at its bus's rate when a rate change it was prepared for
+  did not happen.
+- **A scheduled rate cut (BR6).** A bit-perfect player's plan is always
+  hard, and `TransitionPlan::StartNextAt::rate_cut` carries the rate the
+  device reopens at between the two tracks (decided by the model,
+  `fp_model::bit_perfect::rate_cut`). The preload is prepared at that rate
+  in advance (`preload_rate`), so the cut does not wait for it to buffer.
+  `dispatch` sends only the stop of the current (`StopAt` and
+  `RampOutBeforeCut`, the usual declick) and leaves the preload waiting;
+  when the mixer reports the current finished, `current_finished` calls
+  `cut_to`, which reopens the bus through `prepare_start` (when nothing
+  else sounds there) and then starts the next as at any end of stream. If
+  something sounds after all (a cart fired since the plan) or the device
+  refuses the rate (B3.4), the bus keeps its rate and `cut_to` opens the
+  next again at it: it plays resampled, after a longer gap. Without a cut
+  the plan is the existing hard join.
+- **A rate cut under a hard start (BR8).** `StartCurrent` without a
+  crossfade, on a bit-perfect bus not carrying DSD, of a PCM file at
+  another rate that was not refused, replacing a track of the same player
+  (playing or paused) with nothing else sounding there (`hard_start_cut`,
+  `sounding_besides`): the new current is opened at the file's rate and
+  waits idle (`PlayerRuntime::rate_cut`). Once per tick, `run_rate_cuts`
+  waits until the player's outgoing sources on the bus (the declick tail)
+  have ended, reopens the bus through `prepare_start` and starts the
+  current; if the bus kept its rate, the current is opened again at it
+  first. A pause, stop, seek or another start drops the waiting cut; a
+  resume then follows B3.2. At the same rate, with a crossfade, or from
+  silence, the start is unchanged. A rate cut reopens with the settings
+  the device runs with and never applies a kept change (BR12).
 - **`PlayerTelemetry::bit_perfect`** is set when all of these hold:
   - the current source is on its Main bus, which is bit-perfect, `Ok`, and
     exclusive;
@@ -257,8 +304,11 @@ cannot hang the conductor.
 
   This drives the BP badge.
 - **Tests:** `tests/bit_perfect.rs` plays WAV files through `file_opener` on
-  an Offline device. It covers the rate changes and refusals, and a
-  bit-exact comparison of every rendered sample with the file.
+  an Offline device. It covers the rate changes and refusals, a bit-exact
+  comparison of every rendered sample with the file, the `StreamRate`
+  reports (`br1_…`), the scheduled and manual rate cuts with their
+  fallbacks (`br6_…`, `br8_…`), the quiet guard (`br13_…`) and bit-perfect
+  turned off (`br14_…`).
 
 ### DSD buses
 
@@ -397,7 +447,7 @@ plus the mixer's DSD mode.
 | `Preload` | ask the worker for a source of the next entry at its cue-in, or at its pending start instead while the player is stopped and the operator chose one (rule 3a, operator feedback 4 Q8.7); `StartCurrent` then asks for the same entry and start, so `take_or_open` uses that preload and Play starts without a gap; attach it idle. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut). The same pair serves O37: a self-next (the entry on air set as next) is preloaded and restarted in the same way, once; the model tells the pass apart from a repeat pass in `on_event` |
 | `StartCurrent` | start the preloaded source, or open one, once ready |
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
-| `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs }`) to the mixer as exact frames once it is within `schedule_lead_ms` |
+| `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs, rate_cut }`) to the mixer as exact frames once it is within `schedule_lead_ms`; a `rate_cut` prepares the preload at that rate and reopens a bit-perfect device between the two tracks (see "Rates and bit-perfect buses") |
 | `FadeOutAndStop`, `StopNow`, `Pause`, `Resume`, `Seek`, `SetVolume` | ramps and commands on the current source. A stop or seek ramps out a source whose start was sent (`Requested`) or whose pause ramp may still run (`pause_ramp_ends`, plus a block of margin); a source that is silent (never started, held, or paused with the ramp over) is released at once |
 | `StartCue`, `StopCue` | a separate source on the player's Cue route. The model sends `StartCue` only for a player whose Cue route is set and differs from Main (`OutputsConfig::player_has_cue`); a Cue route the engine cannot use (`cue_target`: a missing backend, or equal to the resolved Main) ends the CUE at once with `CueEnded` |
 | `SeekCue` | replace the CUE source by one at the target (the CUE plays whole files); it starts idle when the CUE is held, so a held CUE stays held |
@@ -532,7 +582,10 @@ replaces it) and runs it, at once or on a later tick, when what it touches
 is quiet (L11): for a device, its bus; for a route, the holder's own
 sources; for the audio system, every bus. Quiet means no started, unpaused
 source (current, outgoing, CUE), no cart, no test tone and no DSD silence
-running; paused and waiting sources are quiet. A forced action runs at once.
+running; paused and waiting sources are quiet, except a current waiting
+for a rate cut under a hard start (`PlayerRuntime::rate_cut`, bit-perfect
+rate and fader spec BR13), so a kept change never runs in the cut's gap.
+A forced action runs at once.
 Each one ends with `EngineEvent::Applied { target, wanted, outcome }`.
 
 - `ApplyDevice` (L12): one `Bus::apply_config` on the open bus with the

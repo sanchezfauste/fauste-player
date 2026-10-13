@@ -814,3 +814,26 @@ fn br8_next_over_a_paused_track_reopens_and_a_device_change_waits() {
     r.run(BLOCK * 4);
     assert!(applied(&r), "once the device is quiet");
 }
+
+#[test]
+fn br14_bit_perfect_turned_off_reopens_shared_at_the_configured_rate_and_reports_it() {
+    let mut r = rig(true, true);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::StopNow { player: P });
+    r.run(BLOCK * 4);
+    let running = r.engine.running_settings(&dac()).unwrap();
+    r.act(EngineAction::ApplyDevice {
+        device: dac(),
+        settings: fp_model::DeviceSettings {
+            bit_perfect: false,
+            ..running
+        },
+        force: false,
+    });
+    r.run(BLOCK);
+    assert_eq!(r.rate(), 48_000, "effective_rate");
+    assert!(!r.dac.config().unwrap().exclusive);
+    assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![])));
+}
