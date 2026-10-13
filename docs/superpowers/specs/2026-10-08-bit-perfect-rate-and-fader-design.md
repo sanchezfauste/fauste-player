@@ -132,8 +132,10 @@ costs. Three things such a station expects and does not get today:
   after current, an entry's stop-after, no next, the O25 hold) are
   unchanged. `TransitionPlan::StartNextAt` gains the field `rate_cut:
   Option<u32>`; every other player's plan has `None`. An R26 repeat and an
-  O37 replay are the same file, so their `rate_cut` is always `None`
-  (BR3.3).
+  O37 replay are the same file, so their `rate_cut` is `None` when the
+  pass on air plays at its own rate; a pass that started resampled (a cart
+  was sounding) gives `Some(file rate)` like any other entry (BR3), so the
+  next pass is bit-perfect again.
 - **BR5 The plan follows the state until the transition.** `reconcile`
   already recomputes `plan_for` after every command and event and sends a
   new `Schedule` when it changes (~L1358). No new state is kept for this:
@@ -148,8 +150,8 @@ costs. Three things such a station expects and does not get today:
     L8), turns the plan hard; moved off, or bit-perfect turned off, gives
     back the ordinary plan (a segue when automatic mix is on). If the
     position has already passed that plan's point, the engine runs it at
-    once, as it does today for any plan that arrives late (`due` in the
-    conductor tick, `crates/fp-engine/src/engine.rs` ~L3119). Live
+    once, as it does today for any plan that arrives late (`dispatch_plans`
+    in the conductor tick, `crates/fp-engine/src/engine.rs` ~L3091). Live
     settings apply such a change only when the player is idle (L5, L6)
     unless the operator forces it (Apply now); a transition already
     started finishes as it began.
@@ -252,8 +254,8 @@ costs. Three things such a station expects and does not get today:
   - the large Play/Next button's tooltip while the player is on air reads
     `tip-next-bit-perfect` instead of `tip-next` (§6.4);
   - the waveform draws the MIX marker of the current and next tracks dim,
-    with the style it already uses for markers that do not apply (the cue
-    markers with "Use cue-in and cue-out" off): the marker belongs to the
+    with the dim style it already uses for the MIX marker in Single mode
+    (`crates/fp-app/src/ui/widgets.rs` ~L1626): the marker belongs to the
     track and still applies on other players;
   - Settings → Players shows the note `settings-players-bit-perfect-note`
     (§6.5) under **Fade time** and **Automatic mix at the MIX point** while
@@ -326,8 +328,8 @@ costs. Three things such a station expects and does not get today:
 ### 5.3 MIDI
 
 - **BF10 A fader binding of a locked player is ignored.** In
-  `Router::handle` (`crates/fp-control/src/router.rs` ~L110,
-  `MidiAction::Volume`) the message gives no command when
+  `Router::on_message` (`crates/fp-control/src/router.rs` ~L58, the
+  `MidiAction::Volume` arm ~L112) the message gives no command when
   `fader_locked`, and the binding's soft takeover forgets its pickup
   (`picked = false`, `last_set = None`): once the fader unlocks, the
   surface's control must pick up the volume at 100 % (by reaching the top
@@ -340,7 +342,7 @@ costs. Three things such a station expects and does not get today:
 
 ### 5.4 Remote API and OSC
 
-- **BF12 Refused, with a reason.** `POST /players/{id}/fader` with a value
+- **BF12 Refused, with a reason.** `PUT /players/{id}/volume` with `{"fader": f}`, a value
   below 1 on a locked player is refused with **409 `unavailable`** and the
   model's message, through the existing path (`api::plan` → `dry_run` →
   `ApiError::from_model`, `crates/fp-remote/src/api.rs` ~L116). A value of
@@ -377,6 +379,9 @@ en-US and es-ES, the other nine are translated from the en-US text then.
 list such as "P1, P2" built from the existing player labels.
 
 ### 6.1 `tip-volume-locked` (new)
+
+The fader's tooltip, and also the interface's notice when the model
+refuses a `SetVolume` with `ModelError::FaderLocked`.
 
 | Locale | Text |
 |---|---|
@@ -438,7 +443,7 @@ message, and is not a Fluent string.
 |---|---|
 | `fp-model` | New module `bit_perfect` (`bit_perfect_player`, `rate_cut`, `fader_locked`, `faders_reset_by`); `LiveSettings` gains `stream_rates` and `refused_rates`; `EngineEvent::StreamRate`; `TransitionPlan::StartNextAt::rate_cut`; `plan_for` (BR4); `play` and `previous` through `start_or_crossfade` (BR7); `reconcile` (BF2); `Command::SetVolume` (BF3); `ModelError::FaderLocked`; `Availability::fader`. |
 | `fp-engine` | `StreamRate` reports (BR1); the scheduled rate cut (BR6); `start_current` and `prepare_start` under a hard start (BR8); the quiet guard (BR13). A hard `StartNextAt` without a rate cut uses the existing path. |
-| `fp-control` | `Router::handle` for `Volume` (BF10). |
+| `fp-control` | `Router::on_message`, `Volume` arm (BF10). |
 | `fp-remote` | `PlayerDto::fader_locked`, OSC `volume-locked` (BF13); refusals come from the model (BF12). |
 | `fp-app` | `widgets::fader` `enabled`; `meter_column` (BF7); the Play/Next tooltip, the dim MIX marker and the Settings → Players note (BR15); the Apply now confirmation (BF8); locales (§6). |
 
@@ -468,8 +473,8 @@ backend and explicit `now: Instant`; nothing sleeps.
 | BR10 | `fp-model` `tests/bit_perfect_rules.rs` | an unknown-format next gets a hard plan with `rate_cut: None`; a DSD next and a DSD stream on air get no rate cut; the O25 hold still gives `StopAt`; a non-bit-perfect player on the same device set keeps its segue plan. |
 | BR11 | `fp-engine` `tests/bit_perfect.rs` | the existing B3.3 test (a source started on a sounding bus is resampled) still passes. |
 | BR12 | `fp-model` `tests/live.rs` | with a rate cut scheduled, a pending buffer change on the player's device is not due at any point up to `TransitionStarted` (the player stays `Playing`, so it stays a cause). |
-| BR13 | `fp-engine` `tests/live_settings.rs` | an `ApplyDevice` kept by the guard does not run in the rate cut's gap; it runs once the device is quiet. |
-| BR14 | `fp-engine` `tests/live_settings.rs` | bit-perfect off reports `StreamRate` at `effective_rate`; the next manual start is a crossfade again. |
+| BR13 | `fp-engine` `tests/bit_perfect.rs` | an `ApplyDevice` kept by the guard does not run in the rate cut's gap; it runs once the device is quiet. |
+| BR14 | `fp-engine` `tests/bit_perfect.rs` | bit-perfect off reports `StreamRate` at `effective_rate`; the next manual start is a crossfade again. |
 | BR15 | `fp-app` `tests/` (kittest, player and settings) | a bit-perfect player's Play/Next tooltip is `tip-next-bit-perfect` while on air; its MIX marker is drawn dim; Settings → Players shows `settings-players-bit-perfect-note` only while a bit-perfect player exists. |
 | BR16 | `fp-remote` `tests/api.rs`, `fp-control` `tests/router.rs` | `POST /players/{id}/play` on air and the MIDI Play/Next binding on a bit-perfect player are accepted and give `Command::Play` (the model then starts hard, BR7). |
 | BF1 | `fp-model` `tests/bit_perfect_rules.rs` | locked exactly when `bit_perfect_player`; unplaced is not locked. |
@@ -483,7 +488,7 @@ backend and explicit `now: Instant`; nothing sleeps.
 | BF9 | `fp-app` i18n test | every locale has the new keys (§6) and no `tip-volume-dsd` (the existing key-parity test). |
 | BF10 | `fp-control` `tests/router.rs` | a fader message for a locked player gives nothing; after unlocking, a control at 50 % gives nothing until it reaches the top. |
 | BF11 | `fp-control` `tests/feedback.rs` | feedback for a locked player's buttons is unchanged. |
-| BF12 | `fp-remote` `tests/api.rs`, `tests/osc_server.rs` | fader 0.5 on a locked player → 409 `unavailable` with the model's message; fader 1 → 200; the OSC message is refused and noted. |
+| BF12 | `fp-remote` `tests/api.rs`, `tests/osc_server.rs` | fader 0.5 on a locked player → 409 `unavailable` with the model's message; fader 1 → 202 Accepted; the OSC message is refused and noted. |
 | BF13 | `fp-remote` `tests/dto.rs`, `tests/osc.rs` | `fader_locked` and `volume-locked` follow the lock. |
 
 The manual loopback check of the bit-perfect docs gains two steps: play a
