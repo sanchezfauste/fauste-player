@@ -6,7 +6,7 @@
 use crate::command::SourceRequest;
 use crate::config::OutputDevice;
 use crate::ids::PlayerId;
-use crate::live::{Holder, causes, holders};
+use crate::live::{Holder, PendingItem, causes, device_settings, holders, pending};
 use crate::state::AppState;
 
 /// Where the engine placed `player`'s Main; `None` before it is placed.
@@ -67,4 +67,36 @@ pub fn rate_cut(state: &AppState, player: PlayerId, next: &SourceRequest) -> Opt
         return None;
     }
     Some(rate)
+}
+
+/// BF8: the players whose fader Apply now (live settings L20) would lock
+/// while it is below 100 %. Apply now forces every pending output item, so
+/// afterwards each device runs its configured settings; a player's Main
+/// is then on the `to` of its pending route, or where it is placed now. A
+/// pending route to the default output is not resolved here: the engine
+/// chooses that device (BF2 still resets the fader once it is placed).
+pub fn faders_reset_by(state: &AppState) -> Vec<PlayerId> {
+    let items = pending(state);
+    state
+        .players
+        .iter()
+        .filter(|p| p.volume < 1.0 && !fader_locked(state, p.id))
+        .filter(|p| {
+            let holder = Holder::PlayerMain(p.id);
+            let moved = items.iter().find_map(|item| match &item.item {
+                PendingItem::Route { holder: h, to, .. } if *h == holder => Some(to.clone()),
+                _ => None,
+            });
+            let device = match moved {
+                Some(Some(route)) => Some(OutputDevice {
+                    backend: route.backend,
+                    device: route.device,
+                }),
+                Some(None) => None,
+                None => state.live.placement.get(&holder).cloned(),
+            };
+            device.is_some_and(|d| device_settings(&state.config.outputs, &d).bit_perfect)
+        })
+        .map(|p| p.id)
+        .collect()
 }

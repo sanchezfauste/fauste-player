@@ -665,3 +665,65 @@ fn bf6_a_cue_route_on_the_device_locks_nothing_and_cue_plays() {
         "{out:?}"
     );
 }
+
+#[test]
+fn bf8_apply_now_lists_the_faders_it_would_reset() {
+    let mut s = fixture(3);
+    let (p, q, r) = (s.players[0].id, s.players[1].id, s.players[2].id);
+    // P1 at 50 % on dac, which runs shared and is wanted bit-perfect.
+    let dac = bp_device();
+    let shared = fp_model::device_settings(&s.config.outputs, &dac);
+    for holder in [Holder::PlayerMain(p), Holder::PlayerMain(r)] {
+        on_event(
+            &mut s,
+            EngineEvent::Placed {
+                holder,
+                route: Some(common::bp_route()),
+                device: dac.clone(),
+                running: shared,
+            },
+        );
+    }
+    for player in [p, r] {
+        s.config
+            .outputs
+            .routes
+            .iter_mut()
+            .find(|x| x.player == player)
+            .unwrap()
+            .main = Some(common::bp_route());
+    }
+    apply(&mut s, Command::SetVolume(p, 0.5)).unwrap();
+    s.config.outputs.bit_perfect = vec![dac.clone()];
+    // Q at 70 % elsewhere, with a pending route to dac.
+    apply(&mut s, Command::SetVolume(q, 0.7)).unwrap();
+    s.config
+        .outputs
+        .routes
+        .iter_mut()
+        .find(|x| x.player == q)
+        .unwrap()
+        .main = Some(common::bp_route());
+    let speakers = fp_model::OutputDevice {
+        backend: "null".into(),
+        device: "speakers".into(),
+    };
+    let running = fp_model::device_settings(&s.config.outputs, &speakers);
+    on_event(
+        &mut s,
+        EngineEvent::Placed {
+            holder: Holder::PlayerMain(q),
+            route: None,
+            device: speakers,
+            running,
+        },
+    );
+    // R is on dac at 100 %: nothing to reset.
+    assert_eq!(fp_model::faders_reset_by(&s), vec![p, q]);
+}
+
+#[test]
+fn bf8_a_locked_player_is_not_listed() {
+    let (s, _, _) = on_air();
+    assert!(fp_model::faders_reset_by(&s).is_empty());
+}
