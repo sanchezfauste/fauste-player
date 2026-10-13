@@ -20,7 +20,7 @@ use fp_model::{
 use support::tagged_opener;
 
 /// What the engine reported besides where holders play (live settings
-/// spec L3).
+/// spec L3) and the rate each bus runs at (bit-perfect spec BR1).
 fn reported(events: &[EngineEvent]) -> Vec<&EngineEvent> {
     events
         .iter()
@@ -31,6 +31,7 @@ fn reported(events: &[EngineEvent]) -> Vec<&EngineEvent> {
                     | EngineEvent::Unplaced { .. }
                     | EngineEvent::Gone { .. }
                     | EngineEvent::AudioSystemInUse { .. }
+                    | EngineEvent::StreamRate { .. }
             )
         })
         .collect()

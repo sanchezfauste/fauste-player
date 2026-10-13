@@ -59,6 +59,25 @@ fn br1_the_rates_are_forgotten_with_the_last_holder() {
     assert_eq!(s.live.refused_rates.get(&bp_device()), None);
 }
 
+#[test]
+fn br1_a_rate_reported_for_a_device_no_holder_uses_is_dropped() {
+    // The engine reports a bus's rate at the end of its tick: a holder that
+    // left the bus in that tick is unplaced before the report arrives.
+    let mut s = fixture(3);
+    let p = p0(&s);
+    place_on_dac(&mut s, Holder::PlayerMain(p));
+    fp_model::on_event(
+        &mut s,
+        EngineEvent::Unplaced {
+            holder: Holder::PlayerMain(p),
+            route: None,
+        },
+    );
+    report_stream_rate(&mut s, 96_000, vec![44_100]);
+    assert_eq!(s.live.stream_rates.get(&bp_device()), None);
+    assert_eq!(s.live.refused_rates.get(&bp_device()), None);
+}
+
 /// `fixture(3)`: P1's Main on `dac`, which runs bit-perfect at 44.1 kHz;
 /// every track 44.1 kHz 16-bit; P1 plays its first entry.
 fn on_air() -> (AppState, PlayerId, [EntryId; 3]) {

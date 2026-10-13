@@ -259,6 +259,10 @@ struct Playing {
     request: SourceRequest,
     entry: EntryId,
     start_secs: f64,
+    /// The rate its worker decodes to: its bus's rate when it was opened,
+    /// or the rate of the cut its player's plan carries (bit-perfect rate
+    /// and fader spec BR6.1). It starts only when its bus runs at it.
+    rate: u32,
     shared: Arc<SourceShared>,
     start: StartState,
     /// The bus frame a `Requested` start was sent for (0: at once).
@@ -326,6 +330,9 @@ struct PlayerRuntime {
     pause_ramp_ends: u64,
     /// Emit `FadeCompleted` once `outgoing` is empty.
     notify_fade: bool,
+    /// BR8: a hard start waits to reopen the Main bus at this rate once the
+    /// declick of the track it replaced has ended (`run_rate_cuts`).
+    rate_cut: Option<u32>,
 }
 
 pub struct Engine {
@@ -375,6 +382,9 @@ pub struct Engine {
     /// Buses a holder left (a route or the audio system changed, a player
     /// was removed): closed once nothing uses them and they are quiet (L13).
     orphans: std::collections::BTreeSet<BusKey>,
+    /// The stream rate and refused rates last reported for each bus
+    /// (bit-perfect rate and fader spec BR1).
+    reported_rates: HashMap<BusKey, (u32, Vec<u32>)>,
 }
 
 /// The configuration the watchdog falls back to when a device's own rate
@@ -509,6 +519,7 @@ impl Engine {
             tune_due: std::collections::BTreeSet::new(),
             kept: BTreeMap::new(),
             orphans: std::collections::BTreeSet::new(),
+            reported_rates: HashMap::new(),
         };
         // L3: what the engine runs with, before anything is placed. The
         // cartwall has no bus until its first cart.
@@ -758,6 +769,27 @@ impl Engine {
         self.events.push(event);
     }
 
+    /// BR1: reports each bus whose stream rate or refused rates changed
+    /// since it was last reported (a bus just opened has nothing reported),
+    /// whatever changed them: a B3.2 reopen, a rate cut, a refusal, a
+    /// live-settings reopen or the watchdog. Called at the end of `tick`,
+    /// so a bus opened by an action is reported after its `Placed`.
+    fn report_stream_rates(&mut self) {
+        let buses = &self.buses;
+        self.reported_rates.retain(|key, _| buses.contains_key(key));
+        for (key, bus) in &self.buses {
+            let now = (bus.sample_rate(), bus.refused_rates());
+            if self.reported_rates.get(key) != Some(&now) {
+                self.events.push(EngineEvent::StreamRate {
+                    device: key.output_device(),
+                    rate: now.0,
+                    refused: now.1.clone(),
+                });
+                self.reported_rates.insert(key.clone(), now);
+            }
+        }
+    }
+
     /// L11: whether nothing on `bus` is audible: no started source of a
     /// player that is not paused (current, outgoing, a preload a
     /// transition started, a CUE not held), no cart, no test tone and no
@@ -774,6 +806,11 @@ impl Engine {
     /// Whether every source of `rt` that `on` selects is silent: never
     /// started, a held CUE, or paused with its pause ramp over.
     fn player_quiet(&self, rt: &PlayerRuntime, on: impl Fn(&Playing) -> bool) -> bool {
+        // BR13: a player between the stop and the start of a rate cut is
+        // not quiet on its Main bus.
+        if rt.rate_cut.is_some() && rt.current.as_ref().is_some_and(&on) {
+            return false;
+        }
         let main = &rt.main.0;
         // One block of margin: the engine's frame lags the mixer's.
         let paused = rt.paused
@@ -1338,17 +1375,157 @@ impl Engine {
     /// Sources that merely wait (preloads, a track loaded paused) do not
     /// count: they are reopened when the rate changes.
     fn bus_sounding(&self, bus: &BusKey) -> bool {
+        self.sounding_besides(bus, None)
+    }
+
+    /// As `bus_sounding`, not counting `player`'s current and outgoing
+    /// sources (the track a hard start replaces and its declick tail, BR8).
+    /// Its own CUE and preload still count.
+    fn sounding_besides(&self, bus: &BusKey, player: Option<PlayerId>) -> bool {
         let sounding = |start: StartState| start != StartState::Idle;
-        let players = self.players.values().any(|rt| {
+        let players = self.players.iter().any(|(id, rt)| {
+            let own = Some(*id) == player;
             rt.current
                 .iter()
+                .chain(rt.outgoing.iter())
+                .filter(|_| !own)
                 .chain(rt.preload.iter())
                 .chain(rt.cue_src.iter())
-                .chain(rt.outgoing.iter())
                 .chain(rt.cue_outgoing.iter())
                 .any(|p| &p.bus == bus && sounding(p.start))
         });
         players || self.carts_sounding(bus) || self.tones.iter().any(|(b, _)| b == bus)
+    }
+
+    /// BR8: the rate `player`'s hard start of a file with `format` reopens
+    /// its Main bus at, once the replaced track's declick has ended: a
+    /// bit-perfect bus not carrying DSD, a PCM file whose known rate is not
+    /// the bus's and was not refused, something of this player's own
+    /// sounding there (else it is a start from silence, B3.2), and nothing
+    /// else. `None`: today's hard start.
+    fn hard_start_cut(
+        &self,
+        player: PlayerId,
+        bus: &BusKey,
+        format: Option<fp_model::AudioFormat>,
+    ) -> Option<u32> {
+        if !self.device_of(bus).bit_perfect || self.dsd_buses.contains_key(bus) {
+            return None;
+        }
+        let rate = format
+            .filter(|f| f.dsd_rate.is_none())
+            .map(|f| f.sample_rate)
+            .filter(|r| *r > 0)?;
+        let running = self.buses.get(bus)?;
+        if running.sample_rate() == rate || running.refused_rates().contains(&rate) {
+            return None;
+        }
+        let replaces = self.players.get(&player).is_some_and(|rt| {
+            rt.current
+                .iter()
+                .chain(rt.outgoing.iter())
+                .any(|p| &p.bus == bus && p.start != StartState::Idle)
+        });
+        (replaces && !self.sounding_besides(bus, Some(player))).then_some(rate)
+    }
+
+    /// BR8: hard starts waiting for their bus to change rate. Once the
+    /// player's outgoing sources on its Main bus have ended, the bus reopens
+    /// as B3.2 does when nothing else sounds, and the new current starts;
+    /// if it keeps its rate, the current is opened again at it (resampled).
+    /// A cut whose player paused, or whose current is no longer the waiting
+    /// source (a stop, a seek, another start), is dropped: a resume follows
+    /// B3.2 itself.
+    fn run_rate_cuts(&mut self) {
+        let waiting: Vec<(PlayerId, u32)> = self
+            .players
+            .iter()
+            .filter_map(|(id, rt)| rt.rate_cut.map(|r| (*id, r)))
+            .collect();
+        for (player, rate) in waiting {
+            let Some(rt) = self.players.get_mut(&player) else {
+                continue;
+            };
+            let idle = rt
+                .current
+                .as_ref()
+                .is_some_and(|c| c.start == StartState::Idle);
+            if rt.paused || !idle {
+                rt.rate_cut = None;
+                continue;
+            }
+            let bus = rt.main.0.clone();
+            if rt.outgoing.iter().any(|p| p.bus == bus) {
+                continue;
+            }
+            rt.rate_cut = None;
+            let format = rt.current.as_ref().and_then(|c| c.request.format);
+            self.prepare_start(&bus, format);
+            let stream = self.rate_of(&bus);
+            if stream != rate {
+                tracing::info!(
+                    ?player,
+                    rate,
+                    stream,
+                    "rate change not taken; the track is resampled"
+                );
+            }
+            // `prepare_start` reopened every waiting source not at the new
+            // rate; when the bus kept its rate, the current is fitted to it.
+            if !self.fit_current(player) {
+                continue;
+            }
+            if let Some(c) = self
+                .players
+                .get_mut(&player)
+                .and_then(|rt| rt.current.as_mut())
+            {
+                c.start = StartState::WhenReady { fade_in: false };
+            }
+        }
+    }
+
+    /// Opens `player`'s waiting current again at its bus's rate when it
+    /// decodes at another one (a source prepared for a rate change that did
+    /// not happen): a source never starts at a rate other than its bus's.
+    /// Returns `false` when the current could not be opened again (its
+    /// entry is then reported ended).
+    fn fit_current(&mut self, player: PlayerId) -> bool {
+        let stale = self.players.get(&player).and_then(|rt| {
+            rt.current
+                .as_ref()
+                .filter(|c| c.start == StartState::Idle && c.rate != self.rate_of(&c.bus))
+                .map(|c| c.bus.clone())
+        });
+        let Some(bus) = stale else {
+            return true;
+        };
+        let Some(old) = self
+            .players
+            .get_mut(&player)
+            .and_then(|rt| rt.current.take())
+        else {
+            return true;
+        };
+        let request = old.request.clone();
+        self.release(old);
+        let rate = self.rate_of(&bus);
+        match self.open_source_at(player, false, &request, false, Some(rate)) {
+            Ok(fresh) => {
+                if let Some(rt) = self.players.get_mut(&player) {
+                    rt.current = Some(fresh);
+                }
+                true
+            }
+            Err(e) => {
+                tracing::error!(?player, error = ?e, "cannot reopen a source");
+                self.events.push(EngineEvent::ReachedEnd {
+                    player,
+                    entry: request.entry,
+                });
+                false
+            }
+        }
     }
 
     /// Before a source with `format` starts on `bus`: a bit-perfect bus
@@ -1380,6 +1557,31 @@ impl Engine {
         }
     }
 
+    /// BR6 steps 3–4: `player`'s current track has stopped at the cut. Its
+    /// Main bus reopens at the preload's rate as B3.2 does, when nothing
+    /// else sounds there (the current is gone and the next only waits); if
+    /// something sounds or the device refuses (B3.4), the bus keeps its
+    /// rate and the next is opened again at it (resampled).
+    fn cut_to(&mut self, player: PlayerId, rate: u32) {
+        let Some((bus, format)) = self.players.get(&player).map(|rt| {
+            let format = rt.preload.as_ref().and_then(|p| p.request.format);
+            (rt.main.0.clone(), format)
+        }) else {
+            return;
+        };
+        self.prepare_start(&bus, format);
+        let stream = self.rate_of(&bus);
+        if stream != rate {
+            tracing::info!(
+                ?player,
+                rate,
+                stream,
+                "rate cut not taken; the next track is resampled"
+            );
+        }
+        self.reopen_preload_at(player, stream);
+    }
+
     /// Re-creates every waiting (never started) player source on `bus` at
     /// the bus's new rate; their old ones were opened at the old rate.
     fn reopen_waiting(&mut self, bus: &BusKey) {
@@ -1389,23 +1591,31 @@ impl Engine {
                 p.as_ref()
                     .is_some_and(|p| &p.bus == bus && p.start == StartState::Idle)
             };
+            // One that already decodes at the rate it must have is kept:
+            // the next of a planned cut was prepared at the new rate.
+            let preload_rate = self.preload_rate(player);
+            let bus_rate = self.rate_of(bus);
             let Some(rt) = self.players.get_mut(&player) else {
                 continue;
             };
-            let old_preload = if waiting(&rt.preload) {
-                rt.preload.take()
-            } else {
-                None
-            };
-            let old_current = if waiting(&rt.current) {
-                rt.current.take()
-            } else {
-                None
-            };
+            let old_preload =
+                if waiting(&rt.preload) && rt.preload.as_ref().map(|p| p.rate) != preload_rate {
+                    rt.preload.take()
+                } else {
+                    None
+                };
+            let old_current =
+                if waiting(&rt.current) && rt.current.as_ref().map(|p| p.rate) != Some(bus_rate) {
+                    rt.current.take()
+                } else {
+                    None
+                };
             if let Some(old) = old_preload {
                 let request = old.request.clone();
                 self.release(old);
-                let fresh = self.new_source(player, false, &request).ok();
+                let fresh = self
+                    .open_source_at(player, false, &request, false, preload_rate)
+                    .ok();
                 if let Some(rt) = self.players.get_mut(&player) {
                     rt.preload = fresh;
                 }
@@ -1825,6 +2035,8 @@ impl Engine {
                 if let Some(rt) = self.players.get_mut(&player) {
                     rt.plan = plan.map_or(Plan::None, Plan::Waiting);
                 }
+                // BR6.1: the next is prepared at the rate it will play at.
+                self.fit_preload(player);
             }
             EngineAction::Seek { player, secs } => self.seek(player, secs),
             EngineAction::LeaveDsd { player } => self.leave_dsd(player),
@@ -1909,6 +2121,7 @@ impl Engine {
                 paused: false,
                 pause_ramp_ends: 0,
                 notify_fade: false,
+                rate_cut: None,
             },
         );
         self.ensure_bus(&main.0, now);
@@ -1972,6 +2185,20 @@ impl Engine {
         request: &SourceRequest,
         dsd: bool,
     ) -> Result<Playing, AttachError> {
+        self.open_source_at(player, cue, request, dsd, None)
+    }
+
+    /// Like `open_source`, decoding at `rate` instead of the bus's rate
+    /// (`None`): the next track of a planned rate cut is prepared at the
+    /// rate the bus will run at (bit-perfect rate and fader spec BR6.1).
+    fn open_source_at(
+        &mut self,
+        player: PlayerId,
+        cue: bool,
+        request: &SourceRequest,
+        dsd: bool,
+        rate: Option<u32>,
+    ) -> Result<Playing, AttachError> {
         let rt = self.players.get(&player).ok_or(AttachError::NoPlayer)?;
         let (bus_key, channel) = if cue {
             rt.cue.clone().ok_or(AttachError::NoRoute)?
@@ -1985,8 +2212,10 @@ impl Engine {
         };
         // A bus running faster than configured needs more frames for the
         // same seconds of buffer.
-        let rate = self.rate_of(&bus_key).max(self.settings.sample_rate);
-        let ring = ((self.settings.tuning.prebuffer_secs * f64::from(rate)) as usize).max(1024);
+        let decode_rate = rate.unwrap_or_else(|| self.rate_of(&bus_key));
+        let ring = ((self.settings.tuning.prebuffer_secs
+            * f64::from(decode_rate.max(self.settings.sample_rate))) as usize)
+            .max(1024);
         let bus = self.buses.get_mut(&bus_key).ok_or(AttachError::NoRoute)?;
         let Some(slot) = bus.alloc_slot() else {
             self.slot_exhaustions += 1;
@@ -2010,7 +2239,7 @@ impl Engine {
         }
         self.next_key += 1;
         let key = SourceKey(self.next_key);
-        let rate = self.rate_of(&bus_key);
+        let rate = decode_rate;
         if let Some(rt) = self.players.get(&player) {
             let options = crate::worker::LoadOptions {
                 rate: Some(rate),
@@ -2036,6 +2265,7 @@ impl Engine {
             request: request.clone(),
             entry: request.entry,
             start_secs: request.from_secs,
+            rate,
             shared,
             start: StartState::Idle,
             start_frame: 0,
@@ -2268,28 +2498,91 @@ impl Engine {
         if let Some(req) = request {
             // A preload that cannot attach is simply absent; the transition
             // then ends the current track instead (see `dispatch`).
-            let p = self.new_source(player, false, &req).ok();
+            let rate = self.preload_rate(player);
+            let p = self.open_source_at(player, false, &req, false, rate).ok();
             if let Some(rt) = self.players.get_mut(&player) {
                 rt.preload = p;
             }
         }
     }
 
-    /// Takes the preload if it matches `request`, otherwise opens a new source.
+    /// Takes the preload if it matches `request` and decodes at `rate`
+    /// (the bus's rate when `None`), otherwise opens a new source at it: a
+    /// preload opened for a planned cut never plays at another rate.
     fn take_or_open(
         &mut self,
         player: PlayerId,
         request: &SourceRequest,
+        rate: Option<u32>,
     ) -> Result<Playing, AttachError> {
-        let rt = self.players.get_mut(&player).ok_or(AttachError::NoPlayer)?;
-        let matches = rt
-            .preload
-            .as_ref()
-            .is_some_and(|p| p.entry == request.entry && p.start_secs == request.from_secs);
-        if matches && let Some(p) = rt.preload.take() {
+        let rt = self.players.get(&player).ok_or(AttachError::NoPlayer)?;
+        let wanted = rate.unwrap_or_else(|| self.rate_of(&rt.main.0));
+        let matches = rt.preload.as_ref().is_some_and(|p| {
+            p.entry == request.entry && p.start_secs == request.from_secs && p.rate == wanted
+        });
+        if matches
+            && let Some(p) = self
+                .players
+                .get_mut(&player)
+                .and_then(|rt| rt.preload.take())
+        {
             return Ok(p);
         }
-        self.new_source(player, false, request)
+        self.open_source_at(player, false, request, false, Some(wanted))
+    }
+
+    /// The rate `player`'s preload must decode at now: the rate of the cut
+    /// its plan carries, on a bit-perfect Main bus (BR6.1), else its Main
+    /// bus's rate.
+    fn preload_rate(&self, player: PlayerId) -> Option<u32> {
+        let rt = self.players.get(&player)?;
+        let cut = match rt.plan {
+            Plan::Waiting(TransitionPlan::StartNextAt { rate_cut, .. })
+            | Plan::Dispatched(TransitionPlan::StartNextAt { rate_cut, .. }, _) => rate_cut,
+            _ => None,
+        };
+        let bus = &rt.main.0;
+        Some(
+            cut.filter(|_| self.device_of(bus).bit_perfect)
+                .unwrap_or_else(|| self.rate_of(bus)),
+        )
+    }
+
+    /// Opens `player`'s waiting preload again at `rate` when it decodes at
+    /// another one.
+    fn reopen_preload_at(&mut self, player: PlayerId, rate: u32) {
+        let stale = self.players.get(&player).is_some_and(|rt| {
+            rt.preload
+                .as_ref()
+                .is_some_and(|p| p.start == StartState::Idle && p.rate != rate)
+        });
+        if !stale {
+            return;
+        }
+        let Some(old) = self
+            .players
+            .get_mut(&player)
+            .and_then(|rt| rt.preload.take())
+        else {
+            return;
+        };
+        let request = old.request.clone();
+        self.release(old);
+        let fresh = self
+            .open_source_at(player, false, &request, false, Some(rate))
+            .ok();
+        if let Some(rt) = self.players.get_mut(&player) {
+            rt.preload = fresh;
+        }
+    }
+
+    /// Opens `player`'s preload again if it does not decode at the rate it
+    /// must play at now (`preload_rate`): a plan that gains a cut prepares
+    /// the next at the new rate, one that drops it at the stream rate.
+    fn fit_preload(&mut self, player: PlayerId) {
+        if let Some(rate) = self.preload_rate(player) {
+            self.reopen_preload_at(player, rate);
+        }
     }
 
     fn start_current(
@@ -2334,13 +2627,19 @@ impl Engine {
             Some(main) => self.try_start_dsd(player, main, request),
             None => None,
         };
+        // BR8: a hard start at another rate waits for the old track's
+        // declick, then the bus reopens (`run_rate_cuts`).
+        let cut = match (&main, &direct, crossfade_ms) {
+            (Some(main), None, None) => self.hard_start_cut(player, main, request.format),
+            _ => None,
+        };
         let opened = match direct {
             Some(p) => Ok(p),
             None => {
-                if let Some(main) = &main {
+                if let (Some(main), None) = (&main, cut) {
                     self.prepare_start(main, request.format);
                 }
-                self.take_or_open(player, request)
+                self.take_or_open(player, request, cut)
             }
         };
         let mut next = match opened {
@@ -2361,12 +2660,18 @@ impl Engine {
         if next.start == StartState::Requested {
             self.send(&next.bus, BusCommand::Cancel { slot: next.slot });
         }
-        next.start = StartState::WhenReady { fade_in: false };
+        // A cut keeps it waiting until the bus has reopened.
+        next.start = if cut.is_some() {
+            StartState::Idle
+        } else {
+            StartState::WhenReady { fade_in: false }
+        };
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
         rt.paused = false;
         rt.plan = Plan::None;
+        rt.rate_cut = cut;
         let old = rt.current.replace(next);
         let queued = match (old, crossfade_ms) {
             (Some(old), Some(ms)) => self.fade_out(player, old, f64::from(ms), Curve::EqualPower),
@@ -2425,6 +2730,8 @@ impl Engine {
         };
         let already_paused = rt.paused;
         rt.paused = true;
+        // A waiting rate cut is dropped: a resume follows B3.2.
+        rt.rate_cut = None;
         let main = rt.main.0.clone();
         let targets: Vec<(BusKey, usize)> = rt
             .current
@@ -2480,6 +2787,9 @@ impl Engine {
                         rt.current = old;
                     }
                     self.prepare_start(&bus, request.format);
+                    // One prepared for a rate cut (BR8) that the bus did
+                    // not take plays at the bus's rate.
+                    self.fit_current(player);
                 }
             }
         }
@@ -2518,6 +2828,7 @@ impl Engine {
         };
         rt.plan = Plan::None;
         rt.notify_fade = false;
+        rt.rate_cut = None;
         let all: Vec<Playing> = rt
             .current
             .take()
@@ -2700,11 +3011,13 @@ impl Engine {
             }
         }
         self.end_dsd_streams();
+        self.run_rate_cuts();
         self.run_kept();
         self.close_orphans();
         self.start_ready_sources();
         self.dispatch_plans();
         self.send_tunes();
+        self.report_stream_rates();
         std::mem::take(&mut self.events)
     }
 
@@ -2909,6 +3222,15 @@ impl Engine {
             self.events
                 .push(EngineEvent::SourceFailed { player, entry });
             return;
+        }
+        // BR6: a planned rate cut reopens the device now, between the two
+        // tracks; the next then starts as at any end of stream.
+        if let Some(TransitionPlan::StartNextAt {
+            rate_cut: Some(rate),
+            ..
+        }) = plan
+        {
+            self.cut_to(player, rate);
         }
         let next = match plan {
             Some(TransitionPlan::StartNextAt { .. }) => self
@@ -3129,15 +3451,30 @@ impl Engine {
     }
 
     fn dispatch(&mut self, player: PlayerId, plan: TransitionPlan, at_frame: u64, declick: u64) {
+        // BR6: a plan with a rate cut only stops the current here, with its
+        // declick; the bus reopens and the next starts once the current has
+        // finished (`current_finished`).
+        let cut = matches!(
+            plan,
+            TransitionPlan::StartNextAt {
+                rate_cut: Some(_),
+                ..
+            }
+        );
+        if !cut {
+            // A next prepared for a cut the plan no longer has plays at the
+            // stream rate (BR6 fallback).
+            self.fit_preload(player);
+        }
         // A next that needs a bus carrying DSD may have to wait for the
         // switch to PCM: the whole transition moves with it.
         let next_bus = match plan {
-            TransitionPlan::StartNextAt { .. } => self
+            TransitionPlan::StartNextAt { rate_cut: None, .. } => self
                 .players
                 .get(&player)
                 .and_then(|rt| rt.preload.as_ref())
                 .map(|p| p.bus.clone()),
-            TransitionPlan::StopAt { .. } => None,
+            _ => None,
         };
         let at_frame = match next_bus {
             Some(bus) => self.before_start_on(&bus, at_frame),
@@ -3158,7 +3495,7 @@ impl Engine {
         };
         let (cur_bus, cur_slot) = (current.bus.clone(), current.slot);
         let next = match plan {
-            TransitionPlan::StartNextAt { .. } => rt.preload.as_mut().map(|p| {
+            TransitionPlan::StartNextAt { rate_cut: None, .. } => rt.preload.as_mut().map(|p| {
                 // A next that is not buffered yet starts as soon as it is,
                 // instead of on the frame as silence counted as underruns.
                 let ready = p.shared.is_ready();
@@ -3170,7 +3507,7 @@ impl Engine {
                 };
                 (p.bus.clone(), p.slot, ready, p.start_secs > 0.0)
             }),
-            TransitionPlan::StopAt { .. } => None,
+            _ => None,
         };
         let declick32 = u32::try_from(declick).unwrap_or(u32::MAX);
         match (plan, next) {
@@ -3228,7 +3565,8 @@ impl Engine {
                     }
                 }
             }
-            // A stop, or a start with nothing preloaded: end the current track there.
+            // A stop, a rate cut, or a start with nothing preloaded: end the
+            // current track there.
             _ => {
                 // The stop goes first: the ramp checks it to tell a cut inside
                 // the file from the file's own end (a gapless join).
@@ -3260,8 +3598,9 @@ impl Engine {
         };
         let d = |p: &Playing| {
             format!(
-                "key{} slot{} start {:?} ready {} failed {} eof {} played {} under {}",
+                "key{} rate {} slot{} start {:?} ready {} failed {} eof {} played {} under {}",
                 p.key.0,
+                p.rate,
                 p.slot,
                 p.start,
                 p.shared.is_ready(),

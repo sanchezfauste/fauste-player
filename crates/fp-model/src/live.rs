@@ -254,7 +254,9 @@ pub(crate) fn audio_system_in_use(
     state.live.audio_system_in_use = Some(in_use);
 }
 
-/// Bit-perfect rate and fader spec BR1: `EngineEvent::StreamRate`.
+/// Bit-perfect rate and fader spec BR1: `EngineEvent::StreamRate`. The
+/// engine reports at the end of its tick, after any `Unplaced` of that
+/// tick, so a report for a device no holder uses any more is dropped.
 pub(crate) fn stream_rate(
     state: &mut AppState,
     device: OutputDevice,
@@ -263,6 +265,7 @@ pub(crate) fn stream_rate(
 ) {
     state.live.stream_rates.insert(device.clone(), rate);
     state.live.refused_rates.insert(device, refused);
+    forget_unused_devices(&mut state.live);
 }
 
 /// L8, L14: `EngineEvent::Applied`. The action is no longer in flight when
