@@ -46,6 +46,7 @@ cue-window-stop = Ferma il CUE
 cue-window-close = Chiudi e ferma il CUE
 tip-cue-waveform = Forma d'onda del CUE: fai clic per spostarti
 tip-volume = Volume: { $db }
+tip-volume-locked = Volume bloccato al 100 %: l'uscita di questo lettore è bit-perfect.
 no-track = Nessuna riproduzione
 remaining = Rimanente
 intro-badge = INTRO { $secs }

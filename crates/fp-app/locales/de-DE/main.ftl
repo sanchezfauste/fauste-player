@@ -46,6 +46,7 @@ cue-window-stop = CUE stoppen
 cue-window-close = Schließen und CUE stoppen
 tip-cue-waveform = CUE-Wellenform: klicken, um zu springen
 tip-volume = Lautstärke: { $db }
+tip-volume-locked = Lautstärke fest auf 100 %: Der Ausgang dieses Players ist bit-perfect.
 no-track = Keine Wiedergabe
 remaining = Restzeit
 intro-badge = INTRO { $secs }

@@ -41,4 +41,7 @@ pub enum ModelError {
     CartsWouldBeLost,
     #[error("the cart grid is outside the configured limits")]
     CartGridOutOfRange,
+    /// Bit-perfect rate and fader spec BF3.
+    #[error("the volume of player {} is held at 100 % on a bit-perfect output", .0.0)]
+    FaderLocked(PlayerId),
 }

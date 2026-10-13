@@ -111,8 +111,21 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             if volume.is_nan() {
                 return Ok(out);
             }
+            // BF3 (bit-perfect rate and fader spec): a bit-perfect player's
+            // fader is held at exactly 100 %; only that level is accepted,
+            // and it changes nothing.
+            if crate::bit_perfect::fader_locked(state, id) {
+                #[allow(clippy::float_cmp)] // exactly unity is the only level allowed
+                if volume != 1.0 {
+                    return Err(ModelError::FaderLocked(id));
+                }
+                return Ok(out);
+            }
             let volume = volume.clamp(0.0, 1.0);
             state.players[i].volume = volume;
+            // O25. Since the bit-perfect rate and fader spec (§5.5) a DSD
+            // stream only plays where the fader is locked, so the fader no
+            // longer reaches this rule; it stays as a guard.
             #[allow(clippy::float_cmp)] // only exactly unity keeps DSD unchanged
             if volume != 1.0 && state.players[i].dsd.take().is_some() {
                 out.push(EngineAction::LeaveDsd { player: id });
@@ -1342,6 +1355,24 @@ fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
 
 /// Derives the engine work implied by the state: preload whatever is next.
 pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    // BF2 (bit-perfect rate and fader spec): a locked fader is at exactly
+    // 100 % after every command and event.
+    #[allow(clippy::float_cmp)] // exactly unity is the locked level
+    let locked: Vec<usize> = state
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.volume != 1.0 && crate::bit_perfect::fader_locked(state, p.id))
+        .map(|(i, _)| i)
+        .collect();
+    for i in locked {
+        let player = &mut state.players[i];
+        player.volume = 1.0;
+        out.push(EngineAction::SetVolume {
+            player: player.id,
+            volume: 1.0,
+        });
+    }
     // Rule 3a (Q8.4): a pending start lives only while its player is
     // stopped with that entry next, inside the entry's play range.
     crate::pending_start::settle(state);

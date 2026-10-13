@@ -29,6 +29,7 @@ fn a_stopped_player_with_a_next_can_play_cue_and_arm_stop_after() {
             play: true,
             cue: true,
             stop_after_current: true,
+            fader: true,
             ..Availability::default()
         }
     );
@@ -42,6 +43,7 @@ fn an_empty_playlist_offers_only_stop_after() {
         a,
         Availability {
             stop_after_current: true,
+            fader: true,
             ..Availability::default()
         }
     );

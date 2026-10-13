@@ -46,6 +46,7 @@ cue-window-stop = CUE stoppen
 cue-window-close = Sluiten en CUE stoppen
 tip-cue-waveform = CUE-golfvorm: klik om te springen
 tip-volume = Volume: { $db }
+tip-volume-locked = Volume vast op 100 %: de uitgang van deze speler is bit-perfect.
 no-track = Er speelt niets
 remaining = Resterend
 intro-badge = INTRO { $secs }

@@ -1560,6 +1560,7 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
         ModelError::LastCartPage => i18n.tr("error-last-cart-page"),
         ModelError::CartsWouldBeLost => i18n.tr("error-carts-would-be-lost"),
         ModelError::CartGridOutOfRange => i18n.tr("error-cart-grid"),
+        ModelError::FaderLocked(_) => i18n.tr("tip-volume-locked"),
         ModelError::NoPlaylists => i18n.tr("error-no-playlists"),
     }
 }

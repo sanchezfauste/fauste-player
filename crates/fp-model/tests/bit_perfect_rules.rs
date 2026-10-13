@@ -503,3 +503,165 @@ fn br9_fade_stop_pause_and_restart_are_unchanged() {
     let out = apply(&mut s, Command::FadeStop(p)).unwrap();
     assert!(out.contains(&EngineAction::FadeOutAndStop { player: p, fade_ms }));
 }
+
+fn set_volumes(out: &[EngineAction], p: PlayerId) -> Vec<f32> {
+    out.iter()
+        .filter_map(|a| match a {
+            EngineAction::SetVolume { player, volume } if *player == p => Some(*volume),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `fixture(3)` with P1 at half volume, not placed yet.
+fn half() -> (AppState, PlayerId) {
+    let mut s = fixture(3);
+    let p = p0(&s);
+    apply(&mut s, Command::SetVolume(p, 0.5)).unwrap();
+    (s, p)
+}
+
+#[test]
+fn bf2_placed_on_a_bit_perfect_device_the_fader_goes_to_full() {
+    let (mut s, p) = half();
+    let out = place_on_dac(&mut s, Holder::PlayerMain(p));
+    assert_eq!(s.player(p).unwrap().volume, 1.0);
+    assert_eq!(set_volumes(&out, p), vec![1.0]);
+}
+
+#[test]
+fn bf2_bit_perfect_turned_on_for_its_device_resets_the_fader() {
+    let (mut s, p) = half();
+    // P1 on dac, which runs shared: not locked yet.
+    let dac = bp_device();
+    let shared = fp_model::device_settings(&s.config.outputs, &dac);
+    on_event(
+        &mut s,
+        EngineEvent::Placed {
+            holder: Holder::PlayerMain(p),
+            route: None,
+            device: dac.clone(),
+            running: shared,
+        },
+    );
+    assert_eq!(s.player(p).unwrap().volume, 0.5);
+    let on = DeviceSettings {
+        bit_perfect: true,
+        ..shared
+    };
+    let out = on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: Target::Device(dac),
+            wanted: Wanted::Device(on),
+            outcome: Ok(()),
+        },
+    );
+    assert_eq!(s.player(p).unwrap().volume, 1.0);
+    assert_eq!(set_volumes(&out, p), vec![1.0]);
+}
+
+#[test]
+fn bf2_a_restored_lower_volume_goes_to_full_when_placed() {
+    let (s, p) = half();
+    let mut s = common::roundtrip(&s);
+    assert_eq!(s.player(p).unwrap().volume, 0.5, "restored as saved");
+    let out = place_on_dac(&mut s, Holder::PlayerMain(p));
+    assert_eq!(set_volumes(&out, p), vec![1.0]);
+}
+
+#[test]
+fn bf2_the_reset_is_sent_once() {
+    let (mut s, p) = half();
+    place_on_dac(&mut s, Holder::PlayerMain(p));
+    let out = report_stream_rate(&mut s, 44_100, vec![]);
+    assert!(set_volumes(&out, p).is_empty(), "already at 100 %");
+}
+
+#[test]
+fn bf3_a_locked_fader_refuses_any_level_but_full() {
+    let (mut s, p, _) = on_air();
+    let before = s.clone();
+    assert_eq!(
+        apply(&mut s, Command::SetVolume(p, 0.5)),
+        Err(fp_model::ModelError::FaderLocked(p))
+    );
+    assert_eq!(s, before, "a refused command changes nothing");
+    let out = apply(&mut s, Command::SetVolume(p, 1.0)).unwrap();
+    assert!(
+        set_volumes(&out, p).is_empty(),
+        "accepted, nothing to change"
+    );
+    assert!(
+        apply(&mut s, Command::SetVolume(p, f32::NAN)).is_ok(),
+        "ignored as today"
+    );
+    assert_eq!(
+        fp_model::ModelError::FaderLocked(p).to_string(),
+        format!(
+            "the volume of player {} is held at 100 % on a bit-perfect output",
+            p.0
+        )
+    );
+}
+
+#[test]
+fn bf3_availability_says_the_fader_is_locked() {
+    let (s, p, _) = on_air();
+    assert!(!fp_model::availability(&s, p).fader);
+    assert!(!fp_model::command_available(
+        &s,
+        &Command::SetVolume(p, 0.5)
+    ));
+    assert!(fp_model::command_available(&s, &Command::SetVolume(p, 1.0)));
+    let q = s.players[1].id;
+    assert!(fp_model::availability(&s, q).fader);
+}
+
+#[test]
+fn bf4_unlocking_keeps_full_volume_and_frees_the_fader() {
+    let (mut s, p, _) = on_air();
+    let off = DeviceSettings {
+        bit_perfect: false,
+        ..*s.live.devices.get(&bp_device()).unwrap()
+    };
+    let out = on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: Target::Device(bp_device()),
+            wanted: Wanted::Device(off),
+            outcome: Ok(()),
+        },
+    );
+    assert!(set_volumes(&out, p).is_empty(), "nothing moves it");
+    assert_eq!(s.player(p).unwrap().volume, 1.0);
+    let out = apply(&mut s, Command::SetVolume(p, 0.5)).unwrap();
+    assert_eq!(set_volumes(&out, p), vec![0.5]);
+}
+
+#[test]
+fn bf5_fade_stop_does_not_touch_the_volume() {
+    let (mut s, p, _) = on_air();
+    let out = apply(&mut s, Command::FadeStop(p)).unwrap();
+    assert!(
+        out.iter()
+            .any(|a| matches!(a, EngineAction::FadeOutAndStop { .. }))
+    );
+    assert!(set_volumes(&out, p).is_empty());
+    assert_eq!(s.player(p).unwrap().volume, 1.0);
+}
+
+#[test]
+fn bf6_a_cue_route_on_the_device_locks_nothing_and_cue_plays() {
+    let (mut s, p) = half();
+    let out = place_on_dac(&mut s, Holder::PlayerCue(p));
+    assert!(set_volumes(&out, p).is_empty());
+    assert!(!fader_locked(&s, p));
+    let e = entries(&s);
+    let out = apply(&mut s, Command::CueEntry(p, e[1])).unwrap();
+    assert!(
+        out.iter()
+            .any(|a| matches!(a, EngineAction::StartCue { .. })),
+        "{out:?}"
+    );
+}

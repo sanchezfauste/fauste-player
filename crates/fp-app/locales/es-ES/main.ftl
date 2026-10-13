@@ -46,6 +46,7 @@ cue-window-stop = Parar CUE
 cue-window-close = Cerrar y parar CUE
 tip-cue-waveform = Forma de onda del CUE: clic para saltar
 tip-volume = Volumen: { $db }
+tip-volume-locked = Volumen fijo al 100 %: la salida de este reproductor es bit-perfect.
 no-track = Sin reproducción
 remaining = Restante
 intro-badge = INTRO { $secs }
