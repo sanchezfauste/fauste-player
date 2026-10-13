@@ -375,6 +375,9 @@ pub struct Engine {
     /// Buses a holder left (a route or the audio system changed, a player
     /// was removed): closed once nothing uses them and they are quiet (L13).
     orphans: std::collections::BTreeSet<BusKey>,
+    /// The stream rate and refused rates last reported for each bus
+    /// (bit-perfect rate and fader spec BR1).
+    reported_rates: HashMap<BusKey, (u32, Vec<u32>)>,
 }
 
 /// The configuration the watchdog falls back to when a device's own rate
@@ -509,6 +512,7 @@ impl Engine {
             tune_due: std::collections::BTreeSet::new(),
             kept: BTreeMap::new(),
             orphans: std::collections::BTreeSet::new(),
+            reported_rates: HashMap::new(),
         };
         // L3: what the engine runs with, before anything is placed. The
         // cartwall has no bus until its first cart.
@@ -756,6 +760,27 @@ impl Engine {
             None => EngineEvent::Unplaced { holder, route },
         };
         self.events.push(event);
+    }
+
+    /// BR1: reports each bus whose stream rate or refused rates changed
+    /// since it was last reported (a bus just opened has nothing reported),
+    /// whatever changed them: a B3.2 reopen, a rate cut, a refusal, a
+    /// live-settings reopen or the watchdog. Called at the end of `tick`,
+    /// so a bus opened by an action is reported after its `Placed`.
+    fn report_stream_rates(&mut self) {
+        let buses = &self.buses;
+        self.reported_rates.retain(|key, _| buses.contains_key(key));
+        for (key, bus) in &self.buses {
+            let now = (bus.sample_rate(), bus.refused_rates());
+            if self.reported_rates.get(key) != Some(&now) {
+                self.events.push(EngineEvent::StreamRate {
+                    device: key.output_device(),
+                    rate: now.0,
+                    refused: now.1.clone(),
+                });
+                self.reported_rates.insert(key.clone(), now);
+            }
+        }
     }
 
     /// L11: whether nothing on `bus` is audible: no started source of a
@@ -2705,6 +2730,7 @@ impl Engine {
         self.start_ready_sources();
         self.dispatch_plans();
         self.send_tunes();
+        self.report_stream_rates();
         std::mem::take(&mut self.events)
     }
 

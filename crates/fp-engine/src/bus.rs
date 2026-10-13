@@ -361,6 +361,13 @@ impl Bus {
         self.config.sample_rate
     }
 
+    /// The rates this device refused (Phase 4 spec B3.4), ascending.
+    pub fn refused_rates(&self) -> Vec<u32> {
+        let mut rates: Vec<u32> = self.refused_rates.iter().copied().collect();
+        rates.sort_unstable();
+        rates
+    }
+
     /// Whether the device is open with the exclusive access it asked for.
     pub fn exclusive_granted(&self) -> bool {
         self.health == BusHealth::Ok && self.exclusive_granted

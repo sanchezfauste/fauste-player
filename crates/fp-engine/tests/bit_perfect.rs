@@ -18,8 +18,8 @@ use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
 use fp_model::{
-    AudioFormat, CartId, CartRequest, Config, EngineAction, EntryId, OutputDevice, PlayerId,
-    PlayerRoutes, Route, SourceRequest, TrackId,
+    AudioFormat, CartId, CartRequest, Config, EngineAction, EngineEvent, EntryId, OutputDevice,
+    PlayerId, PlayerRoutes, Route, SourceRequest, TrackId,
 };
 use support::indexed_wav;
 
@@ -31,6 +31,8 @@ struct Rig {
     dac: OfflineDevice,
     clock: Instant,
     dir: tempfile::TempDir,
+    /// Every event the engine reported, in order.
+    events: Vec<EngineEvent>,
 }
 
 fn rig(bit_perfect: bool, exclusive_capable: bool) -> Rig {
@@ -73,6 +75,7 @@ fn rig(bit_perfect: bool, exclusive_capable: bool) -> Rig {
         dac,
         clock,
         dir: tempfile::tempdir().unwrap(),
+        events: Vec::new(),
     }
 }
 
@@ -112,10 +115,26 @@ impl Rig {
     fn settle(&mut self) {
         let deadline = Instant::now() + Duration::from_secs(5);
         while self.engine.unsettled_sources() > 0 && Instant::now() < deadline {
-            self.engine.tick(self.clock);
+            self.tick();
             std::thread::sleep(Duration::from_millis(1));
         }
-        self.engine.tick(self.clock);
+        self.tick();
+    }
+
+    fn tick(&mut self) {
+        let events = self.engine.tick(self.clock);
+        self.events.extend(events);
+    }
+
+    /// The `StreamRate` reports so far, in order.
+    fn stream_rates(&self) -> Vec<(u32, Vec<u32>)> {
+        self.events
+            .iter()
+            .filter_map(|e| match e {
+                EngineEvent::StreamRate { rate, refused, .. } => Some((*rate, refused.clone())),
+                _ => None,
+            })
+            .collect()
     }
 
     fn rate(&self) -> u32 {
@@ -130,7 +149,7 @@ impl Rig {
             let out = self.dac.render(BLOCK).unwrap();
             heard.extend(out.chunks(2).map(|f| f[0]));
             self.clock += Duration::from_secs_f64(BLOCK as f64 / f64::from(rate));
-            self.engine.tick(self.clock);
+            self.tick();
         }
         heard
     }
@@ -390,4 +409,38 @@ fn a_refused_rate_is_not_tried_again_on_every_start() {
     r.start(request(2, path, pcm16(44_100)));
     assert_eq!(r.dac.open_attempts(), attempts, "the device said no once");
     assert_eq!(r.rate(), 48_000);
+}
+
+#[test]
+fn br1_a_bus_reports_its_rate_when_it_opens_and_when_it_follows_a_file() {
+    let mut r = rig(true, true);
+    r.settle();
+    assert_eq!(
+        r.stream_rates(),
+        vec![(48_000, vec![])],
+        "opened at the global rate"
+    );
+    let path = wav(r.dir.path(), "a.wav", 44_100);
+    r.start(request(1, path, pcm16(44_100)));
+    assert_eq!(
+        r.stream_rates().last(),
+        Some(&(44_100, vec![])),
+        "a B3.2 reopen"
+    );
+    let before = r.stream_rates().len();
+    r.run(4_410);
+    assert_eq!(
+        r.stream_rates().len(),
+        before,
+        "nothing changed, nothing reported"
+    );
+}
+
+#[test]
+fn br1_a_refused_rate_is_reported() {
+    let mut r = rig(true, true);
+    r.dac.refuse_rate(44_100);
+    let path = wav(r.dir.path(), "a.wav", 44_100);
+    r.start(request(1, path, pcm16(44_100)));
+    assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![44_100])));
 }
