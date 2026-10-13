@@ -612,3 +612,205 @@ fn br6_a_refused_cut_falls_back_and_the_next_plays() {
     let heard = r.run(4_410);
     assert!(heard.iter().any(|v| *v != 0.0), "it plays, resampled");
 }
+
+/// P plays a 44.1 kHz track; `b` (48 kHz) is started over it with `action`.
+fn started_over(action: fn(SourceRequest) -> EngineAction) -> Rig {
+    let mut r = rig(true, true);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(action(request(2, b, pcm16(48_000))));
+    r
+}
+
+fn hard_start(request: SourceRequest) -> EngineAction {
+    EngineAction::StartCurrent { player: P, request }
+}
+
+fn crossfade(request: SourceRequest) -> EngineAction {
+    EngineAction::Crossfade {
+        player: P,
+        request,
+        fade_ms: 200,
+    }
+}
+
+fn dac() -> OutputDevice {
+    OutputDevice {
+        backend: "offline".into(),
+        device: "dac".into(),
+    }
+}
+
+#[test]
+fn br8_a_hard_start_at_another_rate_reopens_after_the_declick() {
+    let mut r = started_over(hard_start);
+    assert_eq!(r.rate(), 44_100, "not while the old track's declick sounds");
+    r.settle();
+    r.run(BLOCK);
+    r.settle();
+    assert_eq!(r.rate(), 48_000);
+    assert!(bit_perfect_after(&mut r, 4_800));
+    assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![])));
+}
+
+#[test]
+fn br8_at_the_same_rate_the_hard_start_does_not_reopen() {
+    let mut r = rig(true, true);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 44_100);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    let attempts = r.dac.open_attempts();
+    r.start(request(2, b, pcm16(44_100)));
+    r.run(4_410);
+    assert_eq!(r.dac.open_attempts(), attempts);
+    assert!(bit_perfect_after(&mut r, 4_410));
+}
+
+#[test]
+fn br8_a_crossfade_at_another_rate_does_not_reopen() {
+    let mut r = started_over(crossfade);
+    r.settle();
+    r.run(9_600);
+    assert_eq!(r.rate(), 44_100, "BR11: a sounding bus keeps its rate");
+    assert!(!r.engine.telemetry(P).bit_perfect, "resampled");
+}
+
+#[test]
+fn br8_stop_in_the_gap_starts_nothing() {
+    let mut r = started_over(hard_start);
+    r.act(EngineAction::StopNow { player: P });
+    r.settle();
+    let heard = r.run(9_600);
+    assert_eq!(r.rate(), 44_100, "no reopen for a track that will not play");
+    assert!(heard.iter().skip(BLOCK * 2).all(|v| *v == 0.0), "silence");
+}
+
+#[test]
+fn br8_a_pause_in_the_gap_resumes_at_the_stream_rate_when_a_cart_sounds() {
+    let mut r = started_over(hard_start);
+    r.act(EngineAction::Pause { player: P });
+    r.run(BLOCK);
+    let cart = jingle(&r);
+    r.act(cart);
+    r.settle();
+    r.run(BLOCK);
+    r.act(EngineAction::Resume { player: P });
+    r.settle();
+    assert_eq!(r.rate(), 44_100, "the cart sounds: no reopen");
+    assert_eq!(
+        decode_rate(&r, "cur ["),
+        Some(44_100),
+        "opened again at the stream rate, never played at the wrong speed"
+    );
+}
+
+#[test]
+fn br8_next_takes_a_preload_opened_for_a_cut_only_at_its_rate() {
+    let mut r = rig(true, true);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(2.5, Some(48_000)));
+    r.settle();
+    // The operator presses Next before the planned cut: the same entry.
+    let b = r.dir.path().join("b.wav");
+    r.act(hard_start(request(2, b, pcm16(48_000))));
+    r.settle();
+    r.run(BLOCK);
+    r.settle();
+    assert_eq!(r.rate(), 48_000);
+    assert!(
+        bit_perfect_after(&mut r, 4_800),
+        "played at its own rate, at the right speed"
+    );
+}
+
+#[test]
+fn br8_without_a_cut_next_does_not_take_a_preload_at_another_rate() {
+    let mut r = rig(true, true);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(2.5, Some(48_000)));
+    r.settle();
+    assert_eq!(decode_rate(&r, "pre ["), Some(48_000));
+    // A cart sounds on the device: the hard start keeps the rate (D2).
+    let cart = jingle(&r);
+    r.act(cart);
+    r.settle();
+    let b = r.dir.path().join("b.wav");
+    r.act(hard_start(request(2, b, pcm16(48_000))));
+    assert_eq!(
+        decode_rate(&r, "cur ["),
+        Some(44_100),
+        "opened again at the stream rate, never played at the wrong speed"
+    );
+    r.settle();
+    r.run(4_410);
+    assert_eq!(r.rate(), 44_100);
+}
+
+#[test]
+fn br13_a_kept_device_change_waits_through_the_gap() {
+    let mut r = started_over(hard_start);
+    let running = r.engine.running_settings(&dac()).unwrap();
+    r.act(EngineAction::ApplyDevice {
+        device: dac(),
+        settings: fp_model::DeviceSettings {
+            buffer_frames: 960,
+            ..running
+        },
+        force: false,
+    });
+    r.settle();
+    r.run(BLOCK);
+    let applied = |r: &Rig| {
+        r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Applied { .. }))
+    };
+    assert!(
+        !applied(&r),
+        "not in the gap, nor while the new track plays"
+    );
+    r.act(EngineAction::StopNow { player: P });
+    r.run(BLOCK * 4);
+    assert!(applied(&r), "once the device is quiet");
+}
+
+#[test]
+fn br8_next_over_a_paused_track_reopens_and_a_device_change_waits() {
+    let mut r = rig(true, true);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::Pause { player: P });
+    r.run(BLOCK * 4);
+    // The paused track is the one Next replaces: it does not keep the rate.
+    r.act(hard_start(request(2, b, pcm16(48_000))));
+    let running = r.engine.running_settings(&dac()).unwrap();
+    r.act(EngineAction::ApplyDevice {
+        device: dac(),
+        settings: fp_model::DeviceSettings {
+            buffer_frames: 960,
+            ..running
+        },
+        force: false,
+    });
+    let applied = |r: &Rig| {
+        r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Applied { .. }))
+    };
+    r.run(BLOCK);
+    r.settle();
+    assert!(
+        !applied(&r),
+        "not in the gap, nor while the new track plays"
+    );
+    assert_eq!(r.rate(), 48_000, "the cut reopened the device");
+    assert!(bit_perfect_after(&mut r, 4_800));
+    r.act(EngineAction::StopNow { player: P });
+    r.run(BLOCK * 4);
+    assert!(applied(&r), "once the device is quiet");
+}
