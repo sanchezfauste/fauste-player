@@ -191,7 +191,8 @@ fn unanalysed_tracks_transition_at_the_end_of_the_source() {
         scheduled(&actions, p),
         Some(Some(TransitionPlan::StartNextAt {
             at_secs: SOURCE_END,
-            fade_current_until_secs: None
+            fade_current_until_secs: None,
+            rate_cut: None,
         }))
     );
     let actions = apply(&mut state, Command::Seek(p, 999.0)).unwrap();

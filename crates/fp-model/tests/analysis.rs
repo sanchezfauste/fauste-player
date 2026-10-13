@@ -121,7 +121,7 @@ fn a_newly_known_segue_reschedules_the_playing_transition() {
     .unwrap();
     assert!(actions.iter().any(|a| matches!(
         a,
-        EngineAction::Schedule { player, plan: Some(TransitionPlan::StartNextAt { at_secs, fade_current_until_secs: Some(_) }) }
+        EngineAction::Schedule { player, plan: Some(TransitionPlan::StartNextAt { at_secs, fade_current_until_secs: Some(_), ..  }) }
             if *player == p && *at_secs == 194.0
     )), "{actions:?}");
 }
@@ -210,7 +210,7 @@ fn an_automatic_segue_outside_a_manual_cue_out_is_not_used() {
     let actions = apply(&mut state, Command::Play(p)).unwrap();
     assert!(actions.iter().any(|a| matches!(
         a,
-        EngineAction::Schedule { plan: Some(TransitionPlan::StartNextAt { at_secs, fade_current_until_secs: None }), .. }
+        EngineAction::Schedule { plan: Some(TransitionPlan::StartNextAt { at_secs, fade_current_until_secs: None, ..  }), .. }
             if *at_secs == 150.0
     )), "the manual cue-out wins and the stale segue is ignored: {actions:?}");
 }

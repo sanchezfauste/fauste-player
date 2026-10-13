@@ -2940,6 +2940,7 @@ impl Engine {
                         TransitionPlan::StartNextAt {
                             at_secs: 0.0,
                             fade_current_until_secs: None,
+                            rate_cut: None,
                         },
                         at,
                     );
@@ -3177,6 +3178,7 @@ impl Engine {
                 TransitionPlan::StartNextAt {
                     at_secs,
                     fade_current_until_secs,
+                    ..
                 },
                 Some((bus, slot, ready, inside)),
             ) => {

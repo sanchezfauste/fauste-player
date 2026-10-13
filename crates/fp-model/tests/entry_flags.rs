@@ -77,6 +77,7 @@ fn preload(out: &[EngineAction], p: PlayerId) -> Option<Option<EntryId>> {
 const HARD_END: TransitionPlan = TransitionPlan::StartNextAt {
     at_secs: 180.0,
     fade_current_until_secs: None,
+    rate_cut: None,
 };
 
 // R27
@@ -212,7 +213,8 @@ fn r26_an_entry_of_unknown_length_restarts_at_the_source_end() {
         plan(&s, p),
         Some(TransitionPlan::StartNextAt {
             at_secs: SOURCE_END,
-            fade_current_until_secs: None
+            fade_current_until_secs: None,
+            rate_cut: None,
         })
     );
 }

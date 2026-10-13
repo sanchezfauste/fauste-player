@@ -205,6 +205,7 @@ fn a_segue_starts_the_next_on_the_exact_frame_and_overlaps_the_fade() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 0.5,
             fade_current_until_secs: Some(0.6),
+            rate_cut: None,
         }),
     });
     r.run(80);
@@ -253,6 +254,7 @@ fn source_end_plans_chain_when_the_file_runs_out() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: SOURCE_END,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     r.settle();
@@ -492,6 +494,7 @@ fn pausing_before_a_dispatched_transition_takes_it_back() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 0.2,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     r.run(12); // ~0.12 s: the transition is now dispatched (within the 200 ms lead).
@@ -527,6 +530,7 @@ fn a_transition_that_already_happened_when_pause_arrives_leaves_the_player_playi
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 0.2,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     r.run(12); // dispatched
@@ -728,6 +732,7 @@ fn a_fade_stop_on_the_exact_frame_of_a_transition_still_ends() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 0.5,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     // Render up to the transition's frame exactly: it is the next frame the
@@ -781,6 +786,7 @@ fn a_transition_to_a_next_not_ready_yet_starts_it_when_ready_without_underruns()
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 0.1,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     r.run(30); // past the transition, the next still opening
@@ -831,6 +837,7 @@ fn slow_next(at_secs: f64, fade_until: Option<f64>) -> (Rig, Arc<std::sync::atom
         plan: Some(TransitionPlan::StartNextAt {
             at_secs,
             fade_current_until_secs: fade_until,
+            rate_cut: None,
         }),
     });
     (r, gate)

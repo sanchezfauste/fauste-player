@@ -1157,6 +1157,7 @@ fn a_repeat_pass_reports_the_dsd_end_before_the_transition() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 0.1,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     r.run_raw(WORD_RATE as usize / 4);
@@ -1348,6 +1349,7 @@ fn a_scheduled_transition_waits_for_the_switch_and_keeps_the_next_head() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 0.3,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     let raw = r.run_raw(WORD_RATE as usize * 6 / 10);
@@ -1389,6 +1391,7 @@ fn a_dsd_track_ending_into_its_next_keeps_the_next_head() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: fp_model::SOURCE_END,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     let raw = r.run_raw(WORD_RATE as usize / 2);

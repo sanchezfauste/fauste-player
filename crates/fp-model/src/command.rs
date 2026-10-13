@@ -303,10 +303,14 @@ pub enum TransitionPlan {
         at_secs: f64,
     },
     /// Start the preloaded next at `at_secs`. When `fade_current_until_secs`
-    /// is set, the current source keeps playing and fades out until then (overlap).
+    /// is set, the current source keeps playing and fades out until then
+    /// (overlap). With `rate_cut`, a hard transition on a bit-perfect
+    /// device that reopens at that rate between the two tracks (bit-perfect
+    /// rate and fader spec BR4, BR6); `None` for every other plan.
     StartNextAt {
         at_secs: f64,
         fade_current_until_secs: Option<f64>,
+        rate_cut: Option<u32>,
     },
 }
 

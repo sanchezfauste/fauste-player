@@ -260,6 +260,7 @@ fn a_pause_after_an_executed_overlap_keeps_playing_and_completes_the_fade() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 0.2,
             fade_current_until_secs: Some(0.4),
+            rate_cut: None,
         }),
     });
     r.run(12); // dispatched

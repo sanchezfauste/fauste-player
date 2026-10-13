@@ -742,12 +742,29 @@ fn successors_of(state: &AppState, entry: EntryId) -> Successors {
 
 /// Rules 9–11 (see `ordinary_plan`), then O25: a DSD stream that holds its
 /// output is never overlapped; it plays to its end and the next entry
-/// starts from `ReachedEnd` (`dsd_hold_continue`).
+/// starts from `ReachedEnd` (`dsd_hold_continue`). Then BR4 (bit-perfect
+/// rate and fader spec): a bit-perfect player never segues; it plays to
+/// the end of its play range, and the device reopens at the next entry's
+/// rate when BR3 allows.
 pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan> {
     let plan = ordinary_plan(state, player)?;
-    if dsd_holds(player) && matches!(plan, TransitionPlan::StartNextAt { .. }) {
+    if !matches!(plan, TransitionPlan::StartNextAt { .. }) {
+        return Some(plan);
+    }
+    if dsd_holds(player) {
         let end = current_end(state, player)?;
         return Some(TransitionPlan::StopAt { at_secs: end });
+    }
+    if crate::bit_perfect::bit_perfect_player(state, player.id) {
+        let end = current_end(state, player)?;
+        let rate_cut = preload_target(state, player)
+            .and_then(|e| crate::pending_start::preload_request(state, player, e))
+            .and_then(|next| crate::bit_perfect::rate_cut(state, player.id, &next));
+        return Some(TransitionPlan::StartNextAt {
+            at_secs: end,
+            fade_current_until_secs: None,
+            rate_cut,
+        });
     }
     Some(plan)
 }
@@ -831,6 +848,7 @@ fn ordinary_plan(state: &AppState, player: &PlayerState) -> Option<TransitionPla
         return Some(TransitionPlan::StartNextAt {
             at_secs: end,
             fade_current_until_secs: None,
+            rate_cut: None,
         });
     }
     if player.mode == PlayMode::Single || player.stop_after_current || player.next.is_none() {
@@ -845,6 +863,7 @@ fn ordinary_plan(state: &AppState, player: &PlayerState) -> Option<TransitionPla
             TransitionPlan::StartNextAt {
                 at_secs: end,
                 fade_current_until_secs: None,
+                rate_cut: None,
             }
         } else {
             TransitionPlan::StopAt { at_secs: end }
@@ -860,11 +879,13 @@ fn ordinary_plan(state: &AppState, player: &PlayerState) -> Option<TransitionPla
             Some(TransitionPlan::StartNextAt {
                 at_secs: segue,
                 fade_current_until_secs: Some(end),
+                rate_cut: None,
             })
         }
         _ => Some(TransitionPlan::StartNextAt {
             at_secs: end,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     }
 }

@@ -7,8 +7,9 @@ mod common;
 
 use common::{bp_device, entries, fixture, p0, place_on_dac, report_stream_rate, set_track_rates};
 use fp_model::{
-    AppState, Command, CueState, DsdOnAir, EngineEvent, EntryId, Holder, PlayerId, SourceRequest,
-    apply, bit_perfect_player, fader_locked, rate_cut,
+    AppState, Command, CueState, DeviceSettings, DsdOnAir, EngineAction, EngineEvent, EntryId,
+    Holder, MarkerKind, PlayMode, PlayerId, SourceRequest, Target, TrackAnalysis, TransitionPlan,
+    Wanted, apply, bit_perfect_player, fader_locked, on_event, plan_for, rate_cut,
 };
 
 #[test]
@@ -216,4 +217,230 @@ fn br3_6_a_dsd_stream_on_air() {
         hold_others: false,
     });
     assert_eq!(rate_cut(&s, p, &next_request(&s, b)), None);
+}
+
+fn plan(s: &AppState, p: PlayerId) -> Option<TransitionPlan> {
+    plan_for(s, s.player(p).unwrap())
+}
+
+/// A MIX point at 170 s on every track (they are 180 s long).
+fn with_segue(s: &mut AppState) {
+    s.config.players.auto_segue = true;
+    for t in s.library.iter_mut() {
+        t.markers.set_auto(MarkerKind::SegueStart, Some(170.0));
+    }
+}
+
+fn hard(rate_cut: Option<u32>) -> Option<TransitionPlan> {
+    Some(TransitionPlan::StartNextAt {
+        at_secs: 180.0,
+        fade_current_until_secs: None,
+        rate_cut,
+    })
+}
+
+const SEGUE: Option<TransitionPlan> = Some(TransitionPlan::StartNextAt {
+    at_secs: 170.0,
+    fade_current_until_secs: Some(180.0),
+    rate_cut: None,
+});
+
+/// The last `Schedule` sent for `p` in `out`.
+fn scheduled(out: &[EngineAction], p: PlayerId) -> Option<Option<TransitionPlan>> {
+    out.iter().rev().find_map(|a| match a {
+        EngineAction::Schedule { player, plan } if *player == p => Some(*plan),
+        _ => None,
+    })
+}
+
+#[test]
+fn br4_a_bit_perfect_player_plays_to_its_end_and_never_segues() {
+    let (mut s, p, _) = on_air();
+    with_segue(&mut s);
+    assert_eq!(plan(&s, p), hard(None), "same rate: no reopen");
+    rates(&mut s, 96_000);
+    assert_eq!(plan(&s, p), hard(Some(96_000)));
+}
+
+#[test]
+fn br4_stop_plans_are_unchanged() {
+    let (mut s, p, _) = on_air();
+    with_segue(&mut s);
+    apply(&mut s, Command::SetMode(p, PlayMode::Single)).unwrap();
+    assert_eq!(plan(&s, p), Some(TransitionPlan::StopAt { at_secs: 180.0 }));
+}
+
+#[test]
+fn br4_off_bit_perfect_the_plan_is_the_segue() {
+    let (mut s, p, _) = on_air();
+    with_segue(&mut s);
+    s.live.devices.get_mut(&bp_device()).unwrap().bit_perfect = false;
+    assert_eq!(plan(&s, p), SEGUE);
+}
+
+#[test]
+fn br5_a_cart_on_the_device_drops_the_reopen_and_its_end_brings_it_back() {
+    let (mut s, p, _) = on_air();
+    with_segue(&mut s);
+    rates(&mut s, 96_000);
+    // Any command reconciles: the plan now carries the cut.
+    apply(&mut s, Command::SetMode(p, PlayMode::Continuous)).unwrap();
+    assert_eq!(plan(&s, p), hard(Some(96_000)));
+    place_on_dac(&mut s, Holder::CartwallMain);
+    let cart = load_cart(&mut s);
+    let out = apply(&mut s, Command::FireCart(cart)).unwrap();
+    assert_eq!(scheduled(&out, p), Some(hard(None)), "{out:?}");
+    let out = on_event(&mut s, EngineEvent::CartEnded { cart });
+    assert_eq!(scheduled(&out, p), Some(hard(Some(96_000))), "{out:?}");
+}
+
+#[test]
+fn br5_an_analysed_next_brings_its_rate_cut() {
+    let (mut s, p, [_, b, _]) = on_air();
+    let track = s.playlists.entry(b).unwrap().track;
+    s.library.get_mut(track).unwrap().format = None;
+    // Any command reconciles; the plan is hard with no reopen.
+    apply(&mut s, Command::SetMode(p, PlayMode::Continuous)).unwrap();
+    assert_eq!(plan(&s, p), hard(None));
+    let analysis = TrackAnalysis {
+        duration_secs: 180.0,
+        format: Some(fp_model::AudioFormat {
+            sample_rate: 96_000,
+            bits: Some(24),
+            channels: 2,
+            dsd_rate: None,
+        }),
+        ..TrackAnalysis::default()
+    };
+    let out = apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+    assert_eq!(scheduled(&out, p), Some(hard(Some(96_000))), "{out:?}");
+}
+
+#[test]
+fn br5_a_refused_rate_drops_the_cut() {
+    let (mut s, p, _) = on_air();
+    rates(&mut s, 96_000);
+    apply(&mut s, Command::SetMode(p, PlayMode::Continuous)).unwrap();
+    assert_eq!(plan(&s, p), hard(Some(96_000)));
+    let out = report_stream_rate(&mut s, 44_100, vec![96_000]);
+    assert_eq!(scheduled(&out, p), Some(hard(None)));
+}
+
+#[test]
+fn br5_moved_off_the_device_gives_back_the_segue() {
+    let (mut s, p, _) = on_air();
+    with_segue(&mut s);
+    apply(&mut s, Command::SetMode(p, PlayMode::Continuous)).unwrap();
+    let speakers = fp_model::OutputDevice {
+        backend: "null".into(),
+        device: "speakers".into(),
+    };
+    let running = fp_model::device_settings(&s.config.outputs, &speakers);
+    let out = on_event(
+        &mut s,
+        EngineEvent::Placed {
+            holder: Holder::PlayerMain(p),
+            route: None,
+            device: speakers,
+            running,
+        },
+    );
+    assert_eq!(scheduled(&out, p), Some(SEGUE));
+}
+
+#[test]
+fn br10_an_unanalysed_next_is_hard_without_a_reopen() {
+    let (mut s, p, [_, b, _]) = on_air();
+    let track = s.playlists.entry(b).unwrap().track;
+    s.library.get_mut(track).unwrap().format = None;
+    assert_eq!(plan(&s, p), hard(None));
+}
+
+#[test]
+fn br10_dsd_next_or_dsd_on_air_takes_no_cut_and_the_hold_still_stops() {
+    let (mut s, p, [a, b, _]) = on_air();
+    let track = s.playlists.entry(b).unwrap().track;
+    s.library.get_mut(track).unwrap().format = Some(fp_model::AudioFormat {
+        sample_rate: 88_200,
+        bits: None,
+        channels: 2,
+        dsd_rate: Some(2_822_400),
+    });
+    assert_eq!(plan(&s, p), hard(None), "the PCM of a DSD next");
+    rates(&mut s, 96_000);
+    s.players[0].dsd = Some(DsdOnAir {
+        entry: a,
+        hold_others: false,
+    });
+    assert_eq!(plan(&s, p), hard(None), "a DSD stream on air");
+    s.players[0].dsd = Some(DsdOnAir {
+        entry: a,
+        hold_others: true,
+    });
+    assert_eq!(plan(&s, p), Some(TransitionPlan::StopAt { at_secs: 180.0 }));
+}
+
+#[test]
+fn br10_another_player_on_an_ordinary_device_keeps_its_segue() {
+    let (mut s, _, _) = on_air();
+    with_segue(&mut s);
+    let q = s.players[1].id;
+    apply(&mut s, Command::Play(q)).unwrap();
+    assert_eq!(plan(&s, q), SEGUE);
+}
+
+#[test]
+fn br14_bit_perfect_turned_off_gives_back_the_ordinary_plan() {
+    let (mut s, p, _) = on_air();
+    with_segue(&mut s);
+    apply(&mut s, Command::SetMode(p, PlayMode::Continuous)).unwrap();
+    let off = DeviceSettings {
+        bit_perfect: false,
+        ..*s.live.devices.get(&bp_device()).unwrap()
+    };
+    let out = on_event(
+        &mut s,
+        EngineEvent::Applied {
+            target: Target::Device(bp_device()),
+            wanted: Wanted::Device(off),
+            outcome: Ok(()),
+        },
+    );
+    assert_eq!(scheduled(&out, p), Some(SEGUE));
+}
+
+/// Gives cart 0 of the first page a 10 s file.
+fn load_cart(state: &mut AppState) -> fp_model::CartId {
+    let page = state.cartwall.pages[0].id;
+    let path = std::path::PathBuf::from("/carts/cart0.wav");
+    apply(
+        state,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path,
+        },
+    )
+    .unwrap();
+    let track = state.cartwall.pages[0].carts[0].track.unwrap();
+    let analysis = TrackAnalysis {
+        duration_secs: 10.0,
+        ..TrackAnalysis::default()
+    };
+    apply(
+        state,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+    state.cartwall.pages[0].carts[0].id
 }

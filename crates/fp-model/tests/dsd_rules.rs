@@ -321,7 +321,8 @@ fn d15_convert_to_pcm_keeps_the_ordinary_plan() {
         plan(&s, p),
         Some(TransitionPlan::StartNextAt {
             at_secs: 170.0,
-            fade_current_until_secs: Some(180.0)
+            fade_current_until_secs: Some(180.0),
+            rate_cut: None,
         })
     );
 }
