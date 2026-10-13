@@ -2,7 +2,8 @@
 
 - **Date:** 2026-10-08, amended 2026-10-13 (D8: no crossfades on
   bit-perfect devices).
-- **Status:** Draft, for the maintainer's review (§12).
+- **Status:** Approved (2026-10-13); implemented by the plans
+  `2026-10-13-bit-perfect-plan1` to `plan4`.
 - **Amends:** [the bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md)
   (**B3.3 is replaced** by §4; B1 "unaltered source", B7 out of scope),
   [the main spec](2026-09-25-fauste-player-design.md) §3.2 rules 5 (Play

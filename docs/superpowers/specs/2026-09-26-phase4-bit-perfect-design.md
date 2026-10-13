@@ -24,6 +24,8 @@
 
   In f32, `x * 1.0` and `x + 0.0` are exact, so the mixer passes such a source through bit for bit with no special path.
 
+  *The fader of a bit-perfect player is now held at 100 % ([bit-perfect rate and fader spec](2026-10-08-bit-perfect-rate-and-fader-design.md) BF1–BF3), so the volume can no longer alter such a source.*
+
 ## B2. File format
 
 - **Analysis records the format:** `TrackAnalysis` gains `format: Option<AudioFormat>`, holding:
@@ -51,7 +53,9 @@ Rules for a bit-perfect bus:
    - Every source that is only **waiting** on that bus (preloads, a track loaded paused, of any player) is re-created at the new rate. It has not played a frame, so no timeline moves.
    - Reopening takes as long as the device needs to start (typically tens of milliseconds). This gap is the documented cost of changing rate.
    - Preloads never decide the rate: at start-up every player preloads, and the first preload would otherwise fix the rate for the session.
-3. **A sounding bus keeps its rate:** a source that starts on a sounding bit-perfect bus at another rate is resampled to the bus rate, as in Phase 1, and is not bit-perfect. For example, a segue from a 44.1 kHz track into a 48 kHz one plays the 48 kHz track resampled for its whole length. A bus's rate never changes while anything on it sounds, because every frame-based timeline on the bus (planned stops, segues, positions) is in that bus's frames.
+3. *Replaced by the [bit-perfect rate and fader spec](2026-10-08-bit-perfect-rate-and-fader-design.md) (2026-10-08) §4: a bit-perfect player's transitions are hard, and the device reopens at the next track's rate between them when nothing else sounds; the rest of this rule stays as BR11.*
+
+   **A sounding bus keeps its rate:** a source that starts on a sounding bit-perfect bus at another rate is resampled to the bus rate, as in Phase 1, and is not bit-perfect. For example, a segue from a 44.1 kHz track into a 48 kHz one plays the 48 kHz track resampled for its whole length. A bus's rate never changes while anything on it sounds, because every frame-based timeline on the bus (planned stops, segues, positions) is in that bus's frames.
 4. **A failed reopen:** if the reopen at the new rate fails (the device does not support the rate), the bus goes back to its previous rate, the source is resampled, and a warning is logged. If the previous rate also fails, the bus is `Lost` and follows the Phase 1 watchdog rules. A device that answers **busy** (another application, or the sound server, took it in the moment the stream was closed) has refused nothing: the open is tried again up to `tuning.device_busy_retries` times (default 3, at most 5), `tuning.device_busy_retry_ms` apart (default 20 ms, at most 40). The conductor waits meanwhile, so one budget of retries covers the whole operation (the new rate, the way back, and any reopen chained to it): at most 60 ms by default and 200 ms at the maximum. Only a bus with nothing sounding waits; a sounding bus (a native DSD stream reopened as PCM under a playing source) tries each open once. If it stays busy, the bus goes back to its previous rate as above, with a warning that the device is busy, but the rate is **not** remembered as refused: the next start asks for it again. Only a real refusal of the rate or format is remembered.
 5. **Timelines use the bus rate:** everything that converts between seconds and frames for a source uses the rate of that source's bus: fades, declicks, planned stops, positions, loop points and test tones. The worker opens each source at the rate the engine gives it in `LoadOptions.rate`.
 
@@ -91,8 +95,8 @@ The badge in the player header uses it. It was inactive since Phase 1.
 
 - DSD and DoP.
 - Integer mixing paths.
-- Automatic volume bypass (the operator sets 100 %).
-- Changing the rate while a bus is busy.
+- Automatic volume bypass (the operator sets 100 %). *(Now in scope as the locked fader, [bit-perfect rate and fader spec](2026-10-08-bit-perfect-rate-and-fader-design.md) §5.)*
+- Changing the rate while a bus is busy. *(Now in scope as the rate cut between two tracks of a hard transition, §4.)*
 - Switching devices' clock sources.
 
 ## B8. Plans

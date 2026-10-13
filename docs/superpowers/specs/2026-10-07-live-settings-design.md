@@ -392,7 +392,8 @@ nothing sleeps.
 - Changing the player count from Settings (`set_player_count`): it keeps
   refusing a busy player, as today.
 - The load-time repair of cart pages (L24).
-- Multichannel layouts, and the bit-perfect rate change at transitions.
+- Multichannel layouts, and the bit-perfect rate change at transitions
+  (specified in the [bit-perfect rate and fader spec](2026-10-08-bit-perfect-rate-and-fader-design.md)).
 - Any remote or MIDI control of settings (§10).
 
 ## 14. Maintainer answers (2026-10-07)
