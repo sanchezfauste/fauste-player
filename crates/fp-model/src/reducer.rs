@@ -498,7 +498,8 @@ fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Resu
 }
 
 /// R24: pops the history until an entry that still exists and can play,
-/// crossfades into it like Play-while-Playing, and queues the entry left as
+/// starts it like Play-while-Playing (a crossfade, or a hard start on a
+/// bit-perfect player), and queues the entry left as
 /// the explicit next without recording it (so Previous keeps going back).
 fn previous(
     state: &mut AppState,
@@ -805,8 +806,10 @@ fn dsd_hold_continue(state: &mut AppState, i: usize) -> Option<SourceRequest> {
     advance_to(state, i, next, true)
 }
 
-/// Play-while-playing starts: a crossfade, or (O25 HoldOthers, `held`) a
-/// hard start that ends the DSD stream.
+/// Play-while-playing starts: a crossfade, or a hard start that cuts the
+/// current track with the declick: a DSD stream holding its output (O25
+/// HoldOthers, `held`) or any bit-perfect player (bit-perfect rate and
+/// fader spec BR7), which never enters `fading`.
 fn start_or_crossfade(
     state: &mut AppState,
     i: usize,
@@ -815,7 +818,7 @@ fn start_or_crossfade(
     out: &mut Vec<EngineAction>,
 ) {
     let player = state.players[i].id;
-    if held {
+    if held || crate::bit_perfect::bit_perfect_player(state, player) {
         out.push(EngineAction::StartCurrent { player, request });
         return;
     }

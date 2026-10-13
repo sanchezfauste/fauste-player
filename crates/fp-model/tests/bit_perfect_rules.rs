@@ -444,3 +444,62 @@ fn load_cart(state: &mut AppState) -> fp_model::CartId {
     .unwrap();
     state.cartwall.pages[0].carts[0].id
 }
+
+/// What a manual start sent: `Ok(entry)` for `StartCurrent`, `Err(entry)` for `Crossfade`.
+fn start_of(out: &[EngineAction], p: PlayerId) -> Option<Result<EntryId, EntryId>> {
+    out.iter().find_map(|a| match a {
+        EngineAction::StartCurrent { player, request } if *player == p => Some(Ok(request.entry)),
+        EngineAction::Crossfade {
+            player, request, ..
+        } if *player == p => Some(Err(request.entry)),
+        _ => None,
+    })
+}
+
+#[test]
+fn br7_play_while_playing_and_previous_start_hard_at_any_rate() {
+    for next_rate in [44_100, 96_000] {
+        let (mut s, p, [a, b, _]) = on_air();
+        rates(&mut s, next_rate);
+        let out = apply(&mut s, Command::Play(p)).unwrap();
+        assert_eq!(start_of(&out, p), Some(Ok(b)), "{next_rate}");
+        assert!(!s.player(p).unwrap().fading, "no Mixing badge");
+        let out = apply(&mut s, Command::Previous(p)).unwrap();
+        assert_eq!(start_of(&out, p), Some(Ok(a)), "{next_rate}");
+        assert!(!s.player(p).unwrap().fading);
+    }
+}
+
+#[test]
+fn br7_play_on_the_entry_on_air_set_as_next_starts_hard() {
+    let (mut s, p, [a, _, _]) = on_air();
+    apply(&mut s, Command::SetNext(p, a)).unwrap();
+    let out = apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(start_of(&out, p), Some(Ok(a)));
+}
+
+#[test]
+fn br7_another_player_still_crossfades() {
+    let (mut s, _, _) = on_air();
+    let q = s.players[1].id;
+    apply(&mut s, Command::Play(q)).unwrap();
+    let out = apply(&mut s, Command::Play(q)).unwrap();
+    assert!(matches!(start_of(&out, q), Some(Err(_))), "{out:?}");
+    assert!(s.player(q).unwrap().fading);
+}
+
+#[test]
+fn br9_fade_stop_pause_and_restart_are_unchanged() {
+    let (mut s, p, _) = on_air();
+    let fade_ms = s.config.players.fade_ms;
+    let out = apply(&mut s, Command::Pause(p)).unwrap();
+    assert!(out.contains(&EngineAction::Pause { player: p }));
+    apply(&mut s, Command::Play(p)).unwrap(); // resume
+    let out = apply(&mut s, Command::Restart(p)).unwrap();
+    assert!(
+        out.iter()
+            .any(|a| matches!(a, EngineAction::Seek { player, .. } if *player == p))
+    );
+    let out = apply(&mut s, Command::FadeStop(p)).unwrap();
+    assert!(out.contains(&EngineAction::FadeOutAndStop { player: p, fade_ms }));
+}
