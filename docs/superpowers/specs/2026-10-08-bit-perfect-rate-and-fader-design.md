@@ -2,8 +2,8 @@
 
 - **Date:** 2026-10-08, amended 2026-10-13 (D8: no crossfades on
   bit-perfect devices).
-- **Status:** Approved (2026-10-13); implemented by the plans
-  `2026-10-13-bit-perfect-plan1` to `plan4`.
+- **Status:** Approved (2026-10-13); implementation in progress (the plans
+  `2026-10-13-bit-perfect-plan1` to `plan4`).
 - **Amends:** [the bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md)
   (**B3.3 is replaced** by §4; B1 "unaltered source", B7 out of scope),
   [the main spec](2026-09-25-fauste-player-design.md) §3.2 rules 5 (Play
@@ -109,8 +109,10 @@ costs. Three things such a station expects and does not get today:
   4. `r` is not among the refused rates of `d`;
   5. nothing else sounds on `d`: every holder placed on `d` other than
      `PlayerMain(player)` has no cause (`fp_model::live::causes`, live
-     settings L1). This player's own CUE placed on `d` counts as something
-     else;
+     settings L1) and is not another player's Main paused with a current
+     track (the engine keeps that track's timeline on the bus and never
+     reopens under it, B3.3). This player's own CUE placed on `d` counts as
+     something else;
   6. the player's current entry does not go out as DSD (`player.dsd` is
      `None`): the end of a DSD stream, its silence and the rate the device
      goes back to belong to O25 (BR10).

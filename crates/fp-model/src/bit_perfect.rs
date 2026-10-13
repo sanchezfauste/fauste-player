@@ -7,6 +7,7 @@ use crate::command::SourceRequest;
 use crate::config::OutputDevice;
 use crate::ids::PlayerId;
 use crate::live::{Holder, PendingItem, causes, device_settings, holders, pending};
+use crate::player::Transport;
 use crate::state::AppState;
 
 /// Where the engine placed `player`'s Main; `None` before it is placed.
@@ -53,12 +54,14 @@ pub fn rate_cut(state: &AppState, player: PlayerId, next: &SourceRequest) -> Opt
     {
         return None;
     }
-    // 5. Nothing else sounds on `d` (this player's own CUE counts).
+    // 5. Nothing else sounds on `d` (this player's own CUE counts, and so
+    // does another player paused with a track: the engine keeps its
+    // timeline on the bus and never reopens under it).
     let others_quiet = holders(state)
         .into_iter()
         .filter(|h| *h != Holder::PlayerMain(player))
         .filter(|h| state.live.placement.get(h) == Some(device))
-        .all(|h| causes(state, h).is_empty());
+        .all(|h| causes(state, h).is_empty() && !paused_with_track(state, h));
     if !others_quiet {
         return None;
     }
@@ -67,6 +70,16 @@ pub fn rate_cut(state: &AppState, player: PlayerId, next: &SourceRequest) -> Opt
         return None;
     }
     Some(rate)
+}
+
+/// Another player's Main paused with a current track (BR3.5).
+fn paused_with_track(state: &AppState, holder: Holder) -> bool {
+    match holder {
+        Holder::PlayerMain(id) => state
+            .player(id)
+            .is_ok_and(|p| p.transport == Transport::Paused && p.current.is_some()),
+        _ => false,
+    }
 }
 
 /// BF8: the players whose fader Apply now (live settings L20) would lock

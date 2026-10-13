@@ -209,6 +209,20 @@ fn br3_5_something_else_sounds_on_the_device() {
 }
 
 #[test]
+fn br3_5_a_paused_player_on_the_device_counts_as_sounding() {
+    // The engine keeps a paused source's timeline on its bus and never
+    // reopens under it, so the model must not plan a cut either.
+    let (mut s, p, [_, b, _]) = on_air();
+    rates(&mut s, 96_000);
+    let q = s.players[1].id;
+    place_on_dac(&mut s, Holder::PlayerMain(q));
+    apply(&mut s, Command::Play(q)).unwrap();
+    apply(&mut s, Command::Pause(q)).unwrap();
+    assert_eq!(s.player(q).unwrap().transport, fp_model::Transport::Paused);
+    assert_eq!(rate_cut(&s, p, &next_request(&s, b)), None);
+}
+
+#[test]
 fn br3_6_a_dsd_stream_on_air() {
     let (mut s, p, [a, b, _]) = on_air();
     rates(&mut s, 96_000);
