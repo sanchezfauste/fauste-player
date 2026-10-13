@@ -33,7 +33,8 @@ fn rule11_continuous_with_segue_overlaps_at_segue_start() {
         scheduled(&actions, p),
         Some(Some(TransitionPlan::StartNextAt {
             at_secs: 172.0,
-            fade_current_until_secs: Some(180.0)
+            fade_current_until_secs: Some(180.0),
+            rate_cut: None,
         }))
     );
 }
@@ -47,7 +48,8 @@ fn rule11_without_segue_the_next_starts_at_cue_out() {
         scheduled(&actions, p),
         Some(Some(TransitionPlan::StartNextAt {
             at_secs: 180.0,
-            fade_current_until_secs: None
+            fade_current_until_secs: None,
+            rate_cut: None,
         }))
     );
 }
@@ -63,7 +65,8 @@ fn rule11_auto_segue_disabled_ignores_the_segue_marker() {
         scheduled(&actions, p),
         Some(Some(TransitionPlan::StartNextAt {
             at_secs: 180.0,
-            fade_current_until_secs: None
+            fade_current_until_secs: None,
+            rate_cut: None,
         }))
     );
 }

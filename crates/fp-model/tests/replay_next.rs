@@ -33,6 +33,7 @@ fn preload(out: &[EngineAction], p: PlayerId) -> Option<Option<EntryId>> {
 const HARD_END: TransitionPlan = TransitionPlan::StartNextAt {
     at_secs: 180.0,
     fade_current_until_secs: None,
+    rate_cut: None,
 };
 
 fn started(s: &mut AppState, p: PlayerId, e: EntryId) -> Vec<EngineAction> {

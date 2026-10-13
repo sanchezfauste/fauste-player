@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{entries, fixture, p0, roundtrip};
+use common::{entries, fixture, p0, place_on_dac, report_stream_rate, roundtrip, set_track_rates};
 use fp_model::{
     AppState, BusyCause, CartId, Command, Config, DeviceSettings, DsdDevice, DsdMix, DsdOutput,
     EngineAction, EngineEvent, Failure, Holder, LiveSettings, OutputDevice, PendingItem, Route,
@@ -745,4 +745,42 @@ fn l4_an_own_value_on_a_device_no_route_names_applies_to_nothing() {
     let before = device_settings(&c.outputs, &dev("spare"));
     c.outputs.set_device_rate(&dev("spare"), Some(96_000));
     assert_eq!(device_settings(&c.outputs, &dev("spare")), before);
+}
+
+#[test]
+fn br12_a_rate_cut_keeps_a_pending_device_change_waiting_until_the_transition() {
+    let mut s = fixture(3);
+    let p = p0(&s);
+    let e = entries(&s);
+    place_on_dac(&mut s, Holder::PlayerMain(p));
+    report_stream_rate(&mut s, 44_100, vec![]);
+    set_track_rates(&mut s, &[44_100, 96_000, 44_100]);
+    apply(&mut s, Command::Play(p)).unwrap();
+    let mut config = s.config.clone();
+    config
+        .outputs
+        .set_device_buffer(&common::bp_device(), Some(256));
+    let out = apply(&mut s, Command::UpdateConfig(Box::new(config))).unwrap();
+    assert!(
+        !out.iter()
+            .any(|a| matches!(a, EngineAction::ApplyDevice { .. })),
+        "P1 plays: the buffer waits"
+    );
+    assert!(due(&s).is_empty());
+    // The engine cuts: the old track stopped, the device reopens, the next
+    // starts. The model hears only `TransitionStarted`; P1 stays Playing.
+    report_stream_rate(&mut s, 96_000, vec![]);
+    assert!(due(&s).is_empty(), "during the gap");
+    let out = on_event(
+        &mut s,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: e[1],
+        },
+    );
+    assert!(
+        !out.iter()
+            .any(|a| matches!(a, EngineAction::ApplyDevice { .. }))
+    );
+    assert!(due(&s).is_empty(), "still playing after the transition");
 }

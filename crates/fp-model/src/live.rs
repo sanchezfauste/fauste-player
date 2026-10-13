@@ -89,6 +89,11 @@ pub struct LiveSettings {
     pub in_flight: BTreeMap<Target, Wanted>,
     /// The last refused value per target.
     pub failures: BTreeMap<Target, Failure>,
+    /// The rate each device's stream runs at now (bit-perfect rate and
+    /// fader spec BR1); a device missing here has an unknown stream rate.
+    pub stream_rates: BTreeMap<OutputDevice, u32>,
+    /// The rates each device refused (B3.4), ascending.
+    pub refused_rates: BTreeMap<OutputDevice, Vec<u32>>,
 }
 
 /// L4: the settings `device` opens with under `outputs`.
@@ -194,11 +199,13 @@ pub fn device_causes(state: &AppState, device: &OutputDevice) -> Vec<BusyCause> 
     out
 }
 
-/// Forgets the running settings, in-flight actions and failures of every
-/// device no holder is placed on any more.
+/// Forgets the running settings, stream rates, in-flight actions and
+/// failures of every device no holder is placed on any more.
 fn forget_unused_devices(live: &mut LiveSettings) {
     let used: Vec<OutputDevice> = live.placement.values().cloned().collect();
     live.devices.retain(|d, _| used.contains(d));
+    live.stream_rates.retain(|d, _| used.contains(d));
+    live.refused_rates.retain(|d, _| used.contains(d));
     let unused = |t: &Target| matches!(t, Target::Device(d) if !used.contains(d));
     live.in_flight.retain(|t, _| !unused(t));
     live.failures.retain(|t, _| !unused(t));
@@ -245,6 +252,17 @@ pub(crate) fn audio_system_in_use(
 ) {
     state.live.audio_system = Some(configured);
     state.live.audio_system_in_use = Some(in_use);
+}
+
+/// Bit-perfect rate and fader spec BR1: `EngineEvent::StreamRate`.
+pub(crate) fn stream_rate(
+    state: &mut AppState,
+    device: OutputDevice,
+    rate: u32,
+    refused: Vec<u32>,
+) {
+    state.live.stream_rates.insert(device.clone(), rate);
+    state.live.refused_rates.insert(device, refused);
 }
 
 /// L8, L14: `EngineEvent::Applied`. The action is no longer in flight when

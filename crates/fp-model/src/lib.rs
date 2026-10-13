@@ -3,6 +3,7 @@
 //! This crate performs no I/O and spawns no threads.
 
 pub mod availability;
+pub mod bit_perfect;
 mod cart_rules;
 pub mod cartwall;
 pub mod columns;
@@ -32,6 +33,7 @@ pub mod track;
 pub mod volume;
 
 pub use availability::{Availability, availability, command_available};
+pub use bit_perfect::{bit_perfect_player, fader_locked, faders_reset_by, rate_cut};
 pub use cartwall::{
     Cart, CartEdit, CartFileChange, CartKind, CartPage, CartPageImport, Cartwall, CartwallSession,
     PlayingCart,

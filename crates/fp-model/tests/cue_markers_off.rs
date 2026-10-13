@@ -161,7 +161,8 @@ fn a_transition_is_planned_at_the_end_of_the_range() {
             scheduled(&actions, p),
             Some(Some(TransitionPlan::StartNextAt {
                 at_secs: want,
-                fade_current_until_secs: None
+                fade_current_until_secs: None,
+                rate_cut: None,
             })),
             "use markers {on}"
         );
@@ -186,7 +187,8 @@ fn a_mix_point_past_the_cue_out_is_used_only_while_the_markers_are_off() {
         plan(&state),
         Some(TransitionPlan::StartNextAt {
             at_secs: 170.0,
-            fade_current_until_secs: None
+            fade_current_until_secs: None,
+            rate_cut: None,
         }),
         "stale against the cue-out"
     );
@@ -195,7 +197,8 @@ fn a_mix_point_past_the_cue_out_is_used_only_while_the_markers_are_off() {
         plan(&state),
         Some(TransitionPlan::StartNextAt {
             at_secs: 175.0,
-            fade_current_until_secs: Some(180.0)
+            fade_current_until_secs: Some(180.0),
+            rate_cut: None,
         })
     );
     set_use(&mut state, true);
@@ -203,7 +206,8 @@ fn a_mix_point_past_the_cue_out_is_used_only_while_the_markers_are_off() {
         plan(&state),
         Some(TransitionPlan::StartNextAt {
             at_secs: 170.0,
-            fade_current_until_secs: None
+            fade_current_until_secs: None,
+            rate_cut: None,
         })
     );
 }
@@ -286,7 +290,8 @@ fn an_unknown_duration_plans_to_the_source_end() {
         scheduled(&actions, p),
         Some(Some(TransitionPlan::StartNextAt {
             at_secs: SOURCE_END,
-            fade_current_until_secs: None
+            fade_current_until_secs: None,
+            rate_cut: None,
         }))
     );
 }
@@ -313,7 +318,8 @@ fn toggling_while_on_air_replans_without_touching_the_sound() {
         scheduled(&actions, p),
         Some(Some(TransitionPlan::StartNextAt {
             at_secs: 180.0,
-            fade_current_until_secs: None
+            fade_current_until_secs: None,
+            rate_cut: None,
         }))
     );
     assert!(

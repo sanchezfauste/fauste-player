@@ -111,8 +111,21 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             if volume.is_nan() {
                 return Ok(out);
             }
+            // BF3 (bit-perfect rate and fader spec): a bit-perfect player's
+            // fader is held at exactly 100 %; only that level is accepted,
+            // and it changes nothing.
+            if crate::bit_perfect::fader_locked(state, id) {
+                #[allow(clippy::float_cmp)] // exactly unity is the only level allowed
+                if volume != 1.0 {
+                    return Err(ModelError::FaderLocked(id));
+                }
+                return Ok(out);
+            }
             let volume = volume.clamp(0.0, 1.0);
             state.players[i].volume = volume;
+            // O25. Since the bit-perfect rate and fader spec (§5.5) a DSD
+            // stream only plays where the fader is locked, so the fader no
+            // longer reaches this rule; it stays as a guard.
             #[allow(clippy::float_cmp)] // only exactly unity keeps DSD unchanged
             if volume != 1.0 && state.players[i].dsd.take().is_some() {
                 out.push(EngineAction::LeaveDsd { player: id });
@@ -454,6 +467,11 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             wanted,
             outcome,
         } => crate::live::applied(state, target, wanted, outcome),
+        EngineEvent::StreamRate {
+            device,
+            rate,
+            refused,
+        } => crate::live::stream_rate(state, device, rate, refused),
     }
     fill_empty_next(state);
     reconcile(state, &mut out);
@@ -493,7 +511,8 @@ fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Resu
 }
 
 /// R24: pops the history until an entry that still exists and can play,
-/// crossfades into it like Play-while-Playing, and queues the entry left as
+/// starts it like Play-while-Playing (a crossfade, or a hard start on a
+/// bit-perfect player), and queues the entry left as
 /// the explicit next without recording it (so Previous keeps going back).
 fn previous(
     state: &mut AppState,
@@ -737,12 +756,29 @@ fn successors_of(state: &AppState, entry: EntryId) -> Successors {
 
 /// Rules 9–11 (see `ordinary_plan`), then O25: a DSD stream that holds its
 /// output is never overlapped; it plays to its end and the next entry
-/// starts from `ReachedEnd` (`dsd_hold_continue`).
+/// starts from `ReachedEnd` (`dsd_hold_continue`). Then BR4 (bit-perfect
+/// rate and fader spec): a bit-perfect player never segues; it plays to
+/// the end of its play range, and the device reopens at the next entry's
+/// rate when BR3 allows.
 pub fn plan_for(state: &AppState, player: &PlayerState) -> Option<TransitionPlan> {
     let plan = ordinary_plan(state, player)?;
-    if dsd_holds(player) && matches!(plan, TransitionPlan::StartNextAt { .. }) {
+    if !matches!(plan, TransitionPlan::StartNextAt { .. }) {
+        return Some(plan);
+    }
+    if dsd_holds(player) {
         let end = current_end(state, player)?;
         return Some(TransitionPlan::StopAt { at_secs: end });
+    }
+    if crate::bit_perfect::bit_perfect_player(state, player.id) {
+        let end = current_end(state, player)?;
+        let rate_cut = preload_target(state, player)
+            .and_then(|e| crate::pending_start::preload_request(state, player, e))
+            .and_then(|next| crate::bit_perfect::rate_cut(state, player.id, &next));
+        return Some(TransitionPlan::StartNextAt {
+            at_secs: end,
+            fade_current_until_secs: None,
+            rate_cut,
+        });
     }
     Some(plan)
 }
@@ -783,8 +819,10 @@ fn dsd_hold_continue(state: &mut AppState, i: usize) -> Option<SourceRequest> {
     advance_to(state, i, next, true)
 }
 
-/// Play-while-playing starts: a crossfade, or (O25 HoldOthers, `held`) a
-/// hard start that ends the DSD stream.
+/// Play-while-playing starts: a crossfade, or a hard start that cuts the
+/// current track with the declick: a DSD stream holding its output (O25
+/// HoldOthers, `held`) or any bit-perfect player (bit-perfect rate and
+/// fader spec BR7), which never enters `fading`.
 fn start_or_crossfade(
     state: &mut AppState,
     i: usize,
@@ -793,7 +831,7 @@ fn start_or_crossfade(
     out: &mut Vec<EngineAction>,
 ) {
     let player = state.players[i].id;
-    if held {
+    if held || crate::bit_perfect::bit_perfect_player(state, player) {
         out.push(EngineAction::StartCurrent { player, request });
         return;
     }
@@ -826,6 +864,7 @@ fn ordinary_plan(state: &AppState, player: &PlayerState) -> Option<TransitionPla
         return Some(TransitionPlan::StartNextAt {
             at_secs: end,
             fade_current_until_secs: None,
+            rate_cut: None,
         });
     }
     if player.mode == PlayMode::Single || player.stop_after_current || player.next.is_none() {
@@ -840,6 +879,7 @@ fn ordinary_plan(state: &AppState, player: &PlayerState) -> Option<TransitionPla
             TransitionPlan::StartNextAt {
                 at_secs: end,
                 fade_current_until_secs: None,
+                rate_cut: None,
             }
         } else {
             TransitionPlan::StopAt { at_secs: end }
@@ -855,11 +895,13 @@ fn ordinary_plan(state: &AppState, player: &PlayerState) -> Option<TransitionPla
             Some(TransitionPlan::StartNextAt {
                 at_secs: segue,
                 fade_current_until_secs: Some(end),
+                rate_cut: None,
             })
         }
         _ => Some(TransitionPlan::StartNextAt {
             at_secs: end,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     }
 }
@@ -1313,6 +1355,24 @@ fn preload_target(state: &AppState, player: &PlayerState) -> Option<EntryId> {
 
 /// Derives the engine work implied by the state: preload whatever is next.
 pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    // BF2 (bit-perfect rate and fader spec): a locked fader is at exactly
+    // 100 % after every command and event.
+    #[allow(clippy::float_cmp)] // exactly unity is the locked level
+    let locked: Vec<usize> = state
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.volume != 1.0 && crate::bit_perfect::fader_locked(state, p.id))
+        .map(|(i, _)| i)
+        .collect();
+    for i in locked {
+        let player = &mut state.players[i];
+        player.volume = 1.0;
+        out.push(EngineAction::SetVolume {
+            player: player.id,
+            volume: 1.0,
+        });
+    }
     // Rule 3a (Q8.4): a pending start lives only while its player is
     // stopped with that entry next, inside the entry's play range.
     crate::pending_start::settle(state);

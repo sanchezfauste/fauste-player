@@ -340,6 +340,7 @@ fn a1_the_next_source_at_a_cue_in_ramps_in() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 0.5,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     r.run(60);
@@ -477,6 +478,7 @@ fn a2_a_gapless_join_at_the_end_of_the_file_keeps_the_level() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 1.0,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     r.run(110);
@@ -519,6 +521,7 @@ fn a2_a_hard_cut_inside_the_file_still_ramps_the_outgoing_source_out() {
         plan: Some(TransitionPlan::StartNextAt {
             at_secs: 1.0,
             fade_current_until_secs: None,
+            rate_cut: None,
         }),
     });
     r.run(110);

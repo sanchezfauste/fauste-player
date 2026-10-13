@@ -19,6 +19,9 @@ pub struct Availability {
     /// Continuous mode, or Single mode while the current entry repeats (O38).
     pub stop_after_current: bool,
     pub cue: bool,
+    /// The volume fader can move: false while it is locked at 100 % on a
+    /// bit-perfect output (bit-perfect rate and fader spec BF3).
+    pub fader: bool,
 }
 
 /// The actions `player` can take now; all off for an unknown player.
@@ -44,10 +47,12 @@ pub fn availability(state: &AppState, player: PlayerId) -> Availability {
         // A running CUE can always be stopped; a new one needs a Cue output
         // that is not the Main output (spec §4.6).
         cue: (p.next.is_some() && state.config.outputs.player_has_cue(player)) || p.cue.is_some(),
+        fader: !crate::bit_perfect::fader_locked(state, player),
     }
 }
 
 /// False for a transport command that `availability` marks unavailable,
+/// for a `SetVolume` that a locked fader refuses (BF3),
 /// and for a CUE of an entry or a cart pre-listen that has no Cue output
 /// apart from Main (spec §4.6); true for every other command.
 pub fn command_available(state: &AppState, command: &Command) -> bool {
@@ -61,6 +66,9 @@ pub fn command_available(state: &AppState, command: &Command) -> bool {
         Command::Previous(id) => a(id).previous,
         Command::ToggleStopAfterCurrent(id) => a(id).stop_after_current,
         Command::ToggleCue(id) => a(id).cue,
+        // BF3: a locked fader takes only exactly 100 % (a NaN is ignored).
+        #[allow(clippy::float_cmp)]
+        Command::SetVolume(id, v) => a(id).fader || *v == 1.0 || v.is_nan(),
         Command::CueEntry(id, _) => state.config.outputs.player_has_cue(*id),
         // A running cart pre-listen can always be stopped.
         Command::CueCart(cart) => {
