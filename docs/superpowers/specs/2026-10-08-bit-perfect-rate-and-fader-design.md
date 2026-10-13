@@ -35,7 +35,7 @@ today:
    fader of a player whose Main output is bit-perfect is **held at 100 %**
    in the interface, on MIDI surfaces and through the remote API and OSC.
 
-## 2. Maintainer decisions (binding, 2026-10-03 and 2026-10-08)
+## 2. Maintainer decisions (binding, 2026-10-03, 2026-10-08 and 2026-10-13)
 
 | # | Decision |
 |---|---|
@@ -45,6 +45,7 @@ today:
 | D4 | Fades and segue crossfades stay. While they run the source is not bit-perfect (as today). |
 | D5 | When bit-perfect is turned on for a device (under live settings, when the device is idle), the faders of the players on it go to 100 % at that moment, so there is no level jump on air. When bit-perfect is turned off, the fader is unlocked and stays at 100 %. |
 | D6 | Rules live in `fp-model` as pure functions, one test per rule; the engine and the interface only execute and display (CLAUDE.md rule 7). Nothing goes on air by itself (rule 10). |
+| D7 | **No switch for the cut** (2026-10-13). The gap is the price of bit-perfect output, which a station turns on only when it wants audiophile playback; such a device does not crossfade across a rate change and accepts a silence there. Every bit-perfect device cuts; there is no per-device option. |
 
 ## 3. Terms
 
@@ -445,10 +446,9 @@ shows 96 kHz on the second track and the BP badge lights on both.
 | S12 | The CUE path and carts are untouched (BF6). | The brief's lock is about the on-air player fader; CUE has its own gain and no fader, and the BP badge follows Main only (B6). |
 | S13 | `PlayerDto::fader_locked` and OSC `volume-locked` are added (BF13). | Remote surfaces must be able to grey their fader as the interface does; both are additive. |
 
-## 12. Open questions for the maintainer
+## 12. Answered questions
 
-- **Q1** Should rate cuts be optional per device (for example an
-  `outputs.rate_cut` list or a per-device "follow the rate between tracks"
-  switch, on by default), for stations that prefer an uninterrupted segue
-  resampled over a gap? This spec has no switch: D1 makes the cut the
-  behaviour of every bit-perfect device.
+- **Q1** Should rate cuts be optional per device, for stations that prefer
+  an uninterrupted segue resampled over a gap? **No** (D7): the cut and
+  its gap are the price of bit-perfect output, and every bit-perfect
+  device cuts.
