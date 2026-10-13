@@ -1,15 +1,19 @@
-# Bit-perfect: rate cuts and the locked fader — Design Spec
+# Bit-perfect: hard transitions, rate cuts and the locked fader — Design Spec
 
-- **Date:** 2026-10-08
+- **Date:** 2026-10-08, amended 2026-10-13 (D8: no crossfades on
+  bit-perfect devices).
 - **Status:** Draft, for the maintainer's review (§12).
 - **Amends:** [the bit-perfect spec](2026-09-26-phase4-bit-perfect-design.md)
   (**B3.3 is replaced** by §4; B1 "unaltered source", B7 out of scope),
+  [the main spec](2026-09-25-fauste-player-design.md) §3.2 rules 5 (Play
+  while Playing) and 11 (Continuous mode) and R24 (Previous) for a player
+  whose Main output is bit-perfect (§4),
   [the live settings spec](2026-10-07-live-settings-design.md) (§8 and
   §13 "the bit-perfect rate change at transitions"), and
   [the second operator feedback spec](2026-10-01-operator-feedback-2-design.md)
-  O25 (the fader that leaves unity, §5.4).
-- **Numbering:** rate rules are `BR<n>`, fader rules `BF<n>`. Each rule is
-  testable and gets at least one test (§8).
+  O25 (the fader that leaves unity, §5.5).
+- **Numbering:** transition rules are `BR<n>`, fader rules `BF<n>`. Each
+  rule is testable and gets at least one test (§8).
 - **Line numbers** are those of `master` at the date above (`c31aba4`);
   each reference also names the function.
 
@@ -17,19 +21,28 @@
 
 ## 1. Goal
 
-Two things a station with a bit-perfect output expects and does not get
-today:
+Bit-perfect output is a **special mode for audiophile playback**, not the
+default: a station turns it on for a device when it wants every track to
+reach the converter exactly as it is in the file, and accepts what that
+costs. Three things such a station expects and does not get today:
 
-1. **The device follows the music, track after track.** Today B3.3 keeps a
-   sounding bus at its rate, and in continuous play the bus always sounds
-   (the next track starts while the current one ends, or segues into it).
-   So the rate set by the first track of the session is, in practice, the
-   rate of every track after it: a 96 kHz track after a 44.1 kHz one is
-   resampled for its whole length and is never bit-perfect. From now on, a
-   change of rate between two tracks of the same player becomes a **rate
-   cut**: the current track ends, the device reopens at the new rate, the
-   next track starts. A short gap is the documented cost.
-2. **No level change reaches a bit-perfect output by accident.** A fader
+1. **No track is altered by a transition.** A segue or a crossfade mixes
+   two tracks, so neither is bit-perfect while they overlap, and the
+   incoming one keeps the outgoing one's rate (B3.3) for its whole length.
+   From now on a player whose Main output is on a bit-perfect device
+   **never crossfades or segues between tracks**: every track change is a
+   **hard transition** (the current track ends, the next one starts, with
+   no overlap).
+2. **The device follows the music, track after track.** Today B3.3 keeps a
+   sounding bus at its rate, and in continuous play the bus always sounds,
+   so the rate of the first track of the session is in practice the rate
+   of every track after it: a 96 kHz track after a 44.1 kHz one is
+   resampled for its whole length. From now on, when the next track's rate
+   differs and nothing else sounds on the device, the hard transition is a
+   **rate cut**: the device reopens at the new rate between the two tracks.
+   A short silence is the documented cost. At the same rate the next track
+   follows straight after, with no gap.
+3. **No level change reaches a bit-perfect output by accident.** A fader
    below 100 % alters every sample, so the track is not bit-perfect and the
    BP badge stays off, often without the operator noticing. From now on the
    fader of a player whose Main output is bit-perfect is **held at 100 %**
@@ -39,13 +52,14 @@ today:
 
 | # | Decision |
 |---|---|
-| D1 | **Rate cut.** On a bit-perfect device, when the next track's sample rate differs from the device's running rate and the only thing sounding on that device is this player's outgoing track, the transition is a hard cut: the current track plays to its cue-out (or stops at once on a manual Next), the device reopens at the new rate, then the next track starts. A short gap is accepted. There is no segue or crossfade across a rate change. |
-| D2 | If another player or a cart sounds on that device, nothing on air is cut: the next track is resampled to the running rate and is not bit-perfect (today's behaviour, B3.3). |
+| D1 | **Rate cut.** On a bit-perfect device, when the next track's sample rate differs from the device's running rate and the only thing sounding on that device is this player's outgoing track, the device reopens at the new rate between the two tracks of the hard transition (D8). A short gap is accepted. *(2026-10-13: the transition itself is now set by D8 for every track change; D1 only adds the reopen.)* |
+| D2 | If another player or a cart sounds on that device, nothing on air is cut: the device does not reopen and the next track is resampled to the running rate, so it is not bit-perfect (today's behaviour, B3.3). The transition is still hard (D8): no crossfade. |
 | D3 | **Fader locked.** For a player whose Main output is on a bit-perfect device the fader is held at 100 % and disabled in the interface, on MIDI and in the remote API and OSC. |
-| D4 | Fades and segue crossfades stay. While they run the source is not bit-perfect (as today). |
+| D4 | Fades that are not a transition between two tracks stay: Fade stop, the pause and resume ramps and the declicks (BR9). While they run the source is not bit-perfect (as today). *(2026-10-13: segue and Play-while-playing crossfades no longer stay on a bit-perfect Main; superseded by D8.)* |
 | D5 | When bit-perfect is turned on for a device (under live settings, when the device is idle), the faders of the players on it go to 100 % at that moment, so there is no level jump on air. When bit-perfect is turned off, the fader is unlocked and stays at 100 %. |
 | D6 | Rules live in `fp-model` as pure functions, one test per rule; the engine and the interface only execute and display (CLAUDE.md rule 7). Nothing goes on air by itself (rule 10). |
 | D7 | **No switch for the cut** (2026-10-13). The gap is the price of bit-perfect output, which a station turns on only when it wants audiophile playback; such a device does not crossfade across a rate change and accepts a silence there. Every bit-perfect device cuts; there is no per-device option. |
+| D8 | **Never a crossfade or a segue on a bit-perfect device** (2026-10-13). A player whose Main output is on a bit-perfect device never crossfades or segues between tracks. Every transition behaves the same way, whatever the rates: the current track plays to the end of its play range (its cue-out with markers on; a manual Next or Previous stops it at once with the usual declick), then the next track starts. When the rate changes and nothing else sounds on the device, the device reopens at the new rate in between (D1), so there is a short silence; at the same rate the next track follows straight after (no overlap). The silence and the missing crossfades are the accepted price of bit-perfect output, which is a special mode for audiophile playback, not the default. **Supersedes** the parts of D1 and D4 (and of the former BR8) that let tracks at the same rate segue and crossfade. |
 
 ## 3. Terms
 
@@ -53,13 +67,15 @@ today:
 |---|---|
 | **Bit-perfect device** | As B1: a device listed in `outputs.bit_perfect`. For the rules below, the value the device **runs** with counts: `live.devices[d].bit_perfect` (live settings §4.1), not the wanted value of `Config`. A pending "bit-perfect on" or "off" changes nothing until it is applied. |
 | **Main device of a player** | `live.placement[Holder::PlayerMain(p)]`: where the engine really put the player's Main (live settings, "Placement"). A player the engine has not placed yet has none. |
+| **Bit-perfect player** | A player whose Main device is a bit-perfect device (BR2). Its Cue route does not count. |
 | **Stream rate** | The rate a device's stream runs at now (`Bus::sample_rate`). On a bit-perfect device it follows the files (B3) and is not the configured rate. New in the model: `live.stream_rates` (BR1). |
 | **Refused rates** | The rates a device refused (`Bus::refused_rates`, `crates/fp-engine/src/bus.rs` ~L167), not asked for again until the device comes back (B3.4). New in the model: `live.refused_rates` (BR1). |
-| **Rate cut** | A transition between two entries of one player with no overlap, during which the device reopens at the next entry's rate (BR2). |
+| **Hard transition** | A change from one entry of a player to the next with no overlap and no fade: the current entry stops (at the end of its play range, or at once with the declick for a manual start), then the next starts. Today it is what Continuous mode does without a MIX point or with automatic mix off (main spec rule 11, second bullet), and what O25 `HoldOthers` and the R26/O37 passes do. On a bit-perfect player every transition is hard (D8). |
+| **Rate cut** | A hard transition during which the device reopens at the next entry's rate (BR3). |
 | **Fader locked** | The player's volume is held at exactly 1.0 (100 %, 0 dB) and nothing may change it (BF1). |
-| **Manual start over the current** | Play while playing (the transport's Next button, "Fade into the next track", `play`, `crates/fp-model/src/reducer.rs` ~L464, `Transport::Playing` arm) and Previous (R24, `previous` ~L498): today both crossfade (`start_or_crossfade` ~L787). |
+| **Manual start over the current** | Play while playing (the transport's Next button, "Fade into the next track", `play`, `crates/fp-model/src/reducer.rs` ~L464, `Transport::Playing` arm, including Play on the entry on air set as next, O37) and Previous (R24, `previous` ~L498): today both crossfade (`start_or_crossfade` ~L787). |
 
-## 4. Rate cuts (replaces B3.3)
+## 4. Hard transitions and rate cuts (replaces B3.3)
 
 ### 4.1 What the model knows
 
@@ -74,12 +90,18 @@ today:
   for a device no holder uses. A device with no reported rate has an
   **unknown** stream rate.
 
-### 4.2 The decision
+### 4.2 The decisions
 
-- **BR2 `fp_model::bit_perfect::rate_cut(state, player, next: &SourceRequest)
-  -> Option<u32>`** gives the rate to cut to, or `None` for an ordinary
-  transition. It is `Some(r)` exactly when all hold:
-  1. the player has a Main device `d`, and `d` runs bit-perfect (§3);
+- **BR2 `fp_model::bit_perfect::bit_perfect_player(state, player) ->
+  bool`:** true when the player has a Main device and that device runs
+  bit-perfect (§3). A player not placed yet is not a bit-perfect player.
+  It decides every rule of this spec: hard transitions (BR4, BR7) and the
+  locked fader (BF1).
+- **BR3 `fp_model::bit_perfect::rate_cut(state, player, next:
+  &SourceRequest) -> Option<u32>`** gives the rate the device reopens at
+  during a hard transition, or `None` when it keeps its rate. It is
+  `Some(r)` exactly when all hold:
+  1. the player is a bit-perfect player (BR2), on Main device `d`;
   2. the stream rate of `d` is known;
   3. the next entry's format is known, it is PCM (`dsd_rate` is `None`),
      and its `sample_rate` `r` is not zero and differs from the stream rate;
@@ -87,107 +109,170 @@ today:
   5. nothing else sounds on `d`: every holder placed on `d` other than
      `PlayerMain(player)` has no cause (`fp_model::live::causes`, live
      settings L1). This player's own CUE placed on `d` counts as something
-     else.
+     else;
+  6. the player's current entry does not go out as DSD (`player.dsd` is
+     `None`): the end of a DSD stream, its silence and the rate the device
+     goes back to belong to O25 (BR10).
 
-  When any of these fails the transition is the ordinary one: the next
-  track starts at the running rate, resampled if its rate differs (D2).
+  When any of these fails the transition is still hard (on a bit-perfect
+  player), but the device keeps its rate: the next track starts at the
+  running rate, resampled if its rate differs (D2).
 
 ### 4.3 Scheduled transitions
 
-- **BR3 A scheduled rate cut.** `plan_for` (`crates/fp-model/src/reducer.rs`
-  ~L741) applies after the ordinary plan and the O25 hold: when the plan is
-  `StartNextAt` and `rate_cut` gives `Some(r)` for the entry the player
-  preloads (`preload_target`), the plan becomes `StartNextAt { at_secs: end,
-  fade_current_until_secs: None, rate_cut: Some(r) }`, where `end` is the
-  current entry's play-range end (`current_end`, ~L751: the cue-out with
-  markers on, the end of the file without). The segue point and the
-  crossfade are not used. `TransitionPlan::StartNextAt` gains the field
-  `rate_cut: Option<u32>`; every other plan has `None`.
-- **BR4 The plan follows the state until the transition.** `reconcile`
+- **BR4 A bit-perfect player's plan is always hard.** `plan_for`
+  (`crates/fp-model/src/reducer.rs` ~L741) applies after the ordinary plan
+  and the O25 hold: when the player is a bit-perfect player (BR2) and the
+  plan is `StartNextAt`, the plan becomes `StartNextAt { at_secs: end,
+  fade_current_until_secs: None, rate_cut }`, where `end` is the current
+  entry's play-range end (`current_end`, ~L751: the cue-out with markers
+  on, the end of the file without) and `rate_cut` is BR3 for the request
+  the player preloads (`preload_target`). The MIX point (`segue_start`) and
+  `players.auto_segue` are not used. `StopAt` plans (Single mode, stop
+  after current, an entry's stop-after, no next, the O25 hold) are
+  unchanged. `TransitionPlan::StartNextAt` gains the field `rate_cut:
+  Option<u32>`; every other player's plan has `None`. An R26 repeat and an
+  O37 replay are the same file, so their `rate_cut` is always `None`
+  (BR3.3).
+- **BR5 The plan follows the state until the transition.** `reconcile`
   already recomputes `plan_for` after every command and event and sends a
-  new `Schedule` when it changes (~L1358). So a cart fired, or another
-  player started, on the device while the current track plays turns the
-  plan back into the ordinary one (segue, resampled); when it ends, the
-  plan becomes a rate cut again. No new state is kept for this.
-- **BR5 The engine executes a scheduled rate cut.** On a plan with
-  `rate_cut: Some(r)`:
-  1. the engine prepares the next source at `r` (the preload is opened
-     again with `LoadOptions.rate = r`), so the cut does not wait for it to
-     buffer; a plan that drops the cut has it opened again at the stream
-     rate;
-  2. at `at_secs` the current source stops with the usual declick
-     (`tuning.declick_ms`);
-  3. when the declick has ended the bus reopens at `r` as B3.2 does (the
-     busy budget of a quiet bus; waiting sources of other players reopened
-     at `r`), and the next source starts at once;
-  4. the engine reports `TransitionStarted` as for any scheduled
-     transition, and `StreamRate` (BR1).
+  new `Schedule` when it changes (~L1358). No new state is kept for this:
+  - a cart fired, or another player started, on the device while the
+    current track plays turns `rate_cut` into `None` (BR3.5); when it ends,
+    `rate_cut` is `Some(r)` again. The plan stays hard at the same point
+    throughout: only the reopen comes and goes;
+  - the next entry changed, or analysed (its format becomes known), gives
+    the plan the new entry's `rate_cut`;
+  - the player's Main moved onto a bit-perfect device, or bit-perfect
+    turned on for its device (a `Placed` or `Applied` event, live settings
+    L8), turns the plan hard; moved off, or bit-perfect turned off, gives
+    back the ordinary plan (a segue when automatic mix is on). If the
+    position has already passed that plan's point, the engine runs it at
+    once, as it does today for any plan that arrives late (`due` in the
+    conductor tick, `crates/fp-engine/src/engine.rs` ~L3119). Live
+    settings apply such a change only when the player is idle (L5, L6)
+    unless the operator forces it (Apply now); a transition already
+    started finishes as it began.
+- **BR6 The engine executes a scheduled hard transition.**
+  - With `rate_cut: None` the engine does what it does today for a hard
+    `StartNextAt` (automatic mix off): at `at_secs` the next source starts
+    on the frame where the current one stops, with the declick only when
+    the cue-out is inside the file and a gapless join at the file's own end
+    (`dispatch`, ~L3130). Nothing new.
+  - With `rate_cut: Some(r)`:
+    1. the engine prepares the next source at `r` (the preload is opened
+       again with `LoadOptions.rate = r`), so the cut does not wait for it
+       to buffer; a plan that drops the cut has it opened again at the
+       stream rate;
+    2. at `at_secs` the current source stops with the usual declick
+       (`tuning.declick_ms`);
+    3. when the declick has ended the bus reopens at `r` as B3.2 does (the
+       busy budget of a quiet bus; waiting sources of other players
+       reopened at `r`), and the next source starts at once;
+    4. the engine reports `TransitionStarted` as for any scheduled
+       transition, and `StreamRate` (BR1).
 
-  If, at step 3, something else sounds on the bus after all (a cart fired
-  in the moment between the model's last plan and the cut), the bus keeps
-  its rate and the next source, opened again at the stream rate, starts
-  as soon as it is ready (resampled). If the reopen fails, B3.4 applies
-  (back to the previous rate, the source resampled, the rate remembered as
-  refused and reported in `StreamRate`). Either way the gap is longer but
-  the next track plays.
+    If, at step 3, something else sounds on the bus after all (a cart fired
+    in the moment between the model's last plan and the cut), the bus keeps
+    its rate and the next source, opened again at the stream rate, starts
+    as soon as it is ready (resampled). If the reopen fails, B3.4 applies
+    (back to the previous rate, the source resampled, the rate remembered
+    as refused and reported in `StreamRate`). Either way the gap is longer
+    but the next track plays.
 
 ### 4.4 Manual starts
 
-- **BR6 A manual start over the current is a hard start when it is a rate
-  cut.** In Play while playing and in Previous, when `rate_cut` gives
-  `Some(_)` for the request the model is about to start, the model emits
-  `EngineAction::StartCurrent` instead of `Crossfade`, as the O25 hold
-  already does (`held` in `start_or_crossfade`); the player does not enter
-  `fading`.
-- **BR7 The engine reopens under a hard start.** In `start_current`
-  (`crates/fp-engine/src/engine.rs` ~L2295) without a crossfade, the
+- **BR7 A manual start over the current is always hard on a bit-perfect
+  player.** In Play while playing (including Play on the entry on air set
+  as next, O37) and in Previous, when the player is a bit-perfect player
+  (BR2), the model emits `EngineAction::StartCurrent` instead of
+  `Crossfade`, whatever the rates, as the O25 hold already does (`held` in
+  `start_or_crossfade`); the player does not enter `fading`, so the
+  **Mixing** badge never lights and Previous stays available.
+  `players.fade_ms` is not used for these starts.
+- **BR8 The engine reopens under a hard start.** In `start_current`
+  (`crates/fp-engine/src/engine.rs` ~L2295) without a crossfade, on a
+  bit-perfect bus, when the file's rate differs from the stream rate: the
   player's current source that the start replaces, and its declick tail,
-  do not count as sounding for `prepare_start` (~L1358): the start waits
+  do not count as sounding for `prepare_start` (~L1358); the start waits
   for the tail to end, then `prepare_start` reopens the bus at the file's
-  rate if nothing else sounds, then the source starts. With a crossfade,
-  the outgoing source counts as sounding, as today. Starting from silence
-  (Play from stopped or paused, a pre-listen, a cart) keeps B3.2 unchanged.
+  rate if nothing else sounds, then the source starts. At the same rate the
+  start is today's hard start (the current stops with the declick and the
+  next starts at once). Starting from silence (Play from stopped or
+  paused, a pre-listen, a cart) keeps B3.2 unchanged.
 
 ### 4.5 What does not change
 
-- **BR8 Same rate, unknown rate, DSD.** Two tracks at the same rate segue
-  and crossfade as today, and stay bit-perfect outside the overlap. A next
-  entry not analysed yet (format unknown) plays at the running rate (B2).
-  A DSD next entry, or a DSD stream on air, follows O25 unchanged (the
-  `HoldOthers` hold is already a hard transition; the converted PCM of a
-  DSD file does not trigger a rate cut). R26 repeats and O37 replays are
-  the same file, so they never cut.
-- **BR9 A sounding bus keeps its rate (the rest of B3.3).** Outside BR5 and
-  BR7 a bus's rate still never changes while anything on it sounds, for the
-  reason B3.3 gives (every frame-based timeline on the bus is in its
-  frames). A rate cut is not an exception to that: at the reopen, nothing
-  on the bus sounds.
+- **BR9 Fades that are not transitions stay.** On a bit-perfect player:
+  Fade stop still fades out over `players.fade_ms` and stops
+  (`FadeOutAndStop`, main spec rule 8); Pause and resume keep their ramp
+  (`tuning.pause_ramp_ms`); Stop, a manual start over the current and a cut
+  inside the file keep the declick (`tuning.declick_ms`), and a start
+  inside the audio keeps its declick ramp in (audio path audit A1).
+  Restart is a seek and is unchanged. While any of them runs the source is
+  not bit-perfect, as today (D4). The DSD exceptions of O25 (Stop and Fade
+  stop end a DSD stream at once) are unchanged.
+- **BR10 What else keeps its behaviour.** Players whose Main is not on a
+  bit-perfect device keep segues and crossfades, even when their Cue route
+  plays on one (BF6). Carts and Cue (PFL) are untouched: they never cause
+  a hard transition or a rate cut, and when they sound on the device they
+  only turn the reopen off (BR3.5). A next entry not analysed yet (format
+  unknown) gets a hard transition with no reopen and plays at the running
+  rate (B2). DSD follows O25 unchanged: the `HoldOthers` hold already gives
+  a hard transition; a DSD stream on air never takes a rate cut (BR3.6);
+  the converted PCM of a DSD next entry does not trigger one (BR3.3).
+- **BR11 A sounding bus keeps its rate (the rest of B3.3).** Outside BR6
+  and BR8 a bus's rate still never changes while anything on it sounds,
+  for the reason B3.3 gives (every frame-based timeline on the bus is in
+  its frames). A rate cut is not an exception to that: at the reopen,
+  nothing on the bus sounds.
 
 ### 4.6 Live settings
 
-- **BR10 A rate cut is not a settings change.** It reopens the device with
+- **BR12 A rate cut is not a settings change.** It reopens the device with
   the settings it **runs** with (buffer size, exclusive access, DSD mode);
   it never applies a pending item. A pending device item keeps waiting on
   its causes (live settings L5): the player stays `Playing` in the model
   for the whole cut, so its cause never lapses and `live::due` emits
   nothing for that device during the gap.
-- **BR11 The engine's quiet guard sees the cut.** A bus whose player is
-  between the stop and the start of a rate cut (BR5 steps 2–3, BR7) is not
+- **BR13 The engine's quiet guard sees the cut.** A bus whose player is
+  between the stop and the start of a rate cut (BR6 steps 2–3, BR8) is not
   quiet for live settings L11: an `ApplyDevice`, `ApplyRoute` or
   `ApplyAudioSystem` kept by the engine does not run in the gap.
-- **BR12 A settings change on a bit-perfect device.** As live settings
+- **BR14 A settings change on a bit-perfect device.** As live settings
   L12: a new configured rate is only where the device starts; bit-perfect
-  turned off reopens the device shared at `effective_rate`, and the next
-  transition is ordinary again (BR2.1 fails). Each reopen is reported
-  through `StreamRate` (BR1).
+  turned off reopens the device shared at `effective_rate`, the player is
+  no longer a bit-perfect player (BR2) and its transitions are ordinary
+  again (BR5). Each reopen is reported through `StreamRate` (BR1).
+
+### 4.7 Interface, MIDI and remote control
+
+- **BR15 The interface says that a bit-perfect player does not mix.** It
+  reads `bit_perfect_player` from the snapshot; nothing else changes:
+  - the large Play/Next button's tooltip while the player is on air reads
+    `tip-next-bit-perfect` instead of `tip-next` (§6.4);
+  - the waveform draws the MIX marker of the current and next tracks dim,
+    with the style it already uses for markers that do not apply (the cue
+    markers with "Use cue-in and cue-out" off): the marker belongs to the
+    track and still applies on other players;
+  - Settings → Players shows the note `settings-players-bit-perfect-note`
+    (§6.5) under **Fade time** and **Automatic mix at the MIX point** while
+    at least one player is a bit-perfect player. Both settings stay
+    editable: they are global and still apply to the other players.
+- **BR16 MIDI, the remote API and OSC add nothing.** Their Play/Next and
+  Previous map to `Command::Play` and `Command::Previous`, so on a
+  bit-perfect player they start hard (BR7); they are accepted, never
+  refused, since the start itself happens. A client tells a bit-perfect
+  player by `PlayerDto::fader_locked` and OSC `volume-locked` (BF13),
+  which hold exactly when BR2 does; the documentation says so. No
+  "crossfade" operation exists in either protocol, so none is refused.
 
 ## 5. The locked fader
 
 ### 5.1 Rules
 
 - **BF1 `fp_model::bit_perfect::fader_locked(state, player) -> bool`:**
-  true when the player's Main device runs bit-perfect (§3). A player not
-  placed yet is not locked.
+  `bit_perfect_player` (BR2). A player not placed yet is not locked.
 - **BF2 The fader goes to 100 % when it locks.** After every command and
   every event (in `reconcile`, so every path is covered), a locked player
   whose volume is not exactly 1.0 gets `volume = 1.0` and
@@ -207,9 +292,9 @@ today:
   (bit-perfect turned off, the route moved off the device, the device
   replaced by the default output of an audio system without bit-perfect),
   the volume stays at 1.0 and the fader works again. Nothing moves it.
-- **BF5 Fades are not the fader.** Fade stops, segue fade-outs, crossfades
-  and pause ramps run as today (D4). They act on the mixer's gain, not on
-  the player's volume, and BF3 does not see them.
+- **BF5 Fades are not the fader.** The fades that remain on a bit-perfect
+  player (BR9: Fade stop, pause ramps, declicks) act on the mixer's gain,
+  not on the player's volume, and BF3 does not see them.
 - **BF6 Cue (PFL) is not affected.** The CUE path has its own gain
   (`cue_volume`, `crates/fp-engine/src/engine.rs` `open_source`) and no
   fader; it is neither locked nor reset, wherever the Cue route plays.
@@ -233,9 +318,10 @@ today:
   faders_reset_by(state) -> Vec<PlayerId>` computes them. Applied without
   confirmation (the device idle), BF2 needs no warning: nothing plays.
 - **BF9 Settings.** The bit-perfect hint under Settings → Audio outputs →
-  Advanced (`settings-bit-perfect-hint`) says that the device follows each
-  track's rate with a short gap, and that the faders of the players on it
-  are held at 100 %.
+  Advanced (`settings-bit-perfect-hint`, §6.3) says that it is a special
+  mode, that the players on the device never crossfade or mix, that a
+  change of rate leaves a short silence, and that their volume is held at
+  100 %.
 
 ### 5.3 MIDI
 
@@ -268,7 +354,8 @@ today:
 - **BF13 Clients can see the lock.** `PlayerDto` gains `fader_locked:
   bool`, and OSC publishes `/fauste/player/{n}/volume-locked` (int 0/1)
   beside `/volume`, so remote surfaces can grey their fader. Both are
-  additive (no breaking change for clients).
+  additive (no breaking change for clients). They are true exactly for a
+  bit-perfect player, which also starts every track hard (BR16).
 
 ### 5.5 O25 (DSD) amended
 
@@ -282,9 +369,12 @@ stays too.
 ## 6. Interface strings
 
 New and changed keys. `en-US` and `es-ES` are written by hand; the others
-are AI translations, to be checked like every locale. `tip-volume-dsd` is
-removed from every locale (BF7). `{ $players }` is a list such as "P1, P2"
-built from the existing player labels.
+are AI translations, written at implementation time for **all eleven
+locales** (ca-ES, de-DE, en-US, es-ES, eu-ES, fr-FR, gl-ES, it-IT, nl-NL,
+pl-PL, pt-PT) and checked like every locale. Where a table below lists only
+en-US and es-ES, the other nine are translated from the en-US text then.
+`tip-volume-dsd` is removed from every locale (BF7). `{ $players }` is a
+list such as "P1, P2" built from the existing player labels.
 
 ### 6.1 `tip-volume-locked` (new)
 
@@ -322,17 +412,22 @@ built from the existing player labels.
 
 | Locale | Text |
 |---|---|
-| en-US | Exclusive access, and the device follows each track's sample rate: when nothing else plays on it, a change of rate between two tracks is a hard cut with a short gap. The volume of the players on it is held at 100 %. With no fade and nothing else on the same outputs, the samples reach it unchanged; the BP badge lights while that is true. |
-| es-ES | Acceso exclusivo, y el dispositivo sigue la frecuencia de muestreo de cada pista: cuando no suena nada más en él, un cambio de frecuencia entre dos pistas es un corte seco con una breve pausa. El volumen de los reproductores que salen por él queda fijo al 100 %. Sin fundido y sin nada más en las mismas salidas, las muestras le llegan sin cambios; el distintivo BP se enciende mientras sea así. |
-| ca-ES | Accés exclusiu, i el dispositiu segueix la freqüència de mostreig de cada pista: quan no hi sona res més, un canvi de freqüència entre dues pistes és un tall sec amb una breu pausa. El volum dels reproductors que hi surten queda fix al 100 %. Sense fos i sense res més a les mateixes sortides, les mostres hi arriben sense canvis; el distintiu BP s'encén mentre és així. |
-| de-DE | Exklusiver Zugriff, und das Gerät folgt der Abtastrate jedes Tracks: Spielt sonst nichts darauf, wird ein Ratenwechsel zwischen zwei Tracks zu einem harten Schnitt mit einer kurzen Pause. Die Lautstärke der Player darauf bleibt fest auf 100 %. Ohne Blende und ohne andere Quellen auf denselben Ausgängen erreichen die Samples es unverändert; solange das gilt, leuchtet das BP-Symbol. |
-| eu-ES | Sarbide esklusiboa, eta gailuak pista bakoitzaren lagintze-maiztasuna jarraitzen du: bertan beste ezer entzuten ez denean, bi pisten arteko maiztasun-aldaketa ebaki lehor bat da, eten labur batekin. Bertatik ateratzen diren erreproduzigailuen bolumena % 100ean finkatuta geratzen da. Itzaltzerik gabe eta irteera berberetan beste ezer gabe, laginak aldaketarik gabe iristen zaizkio; hala den bitartean, BP ikurra pizten da. |
-| fr-FR | Accès exclusif, et le périphérique suit la fréquence d'échantillonnage de chaque piste : quand rien d'autre n'y est diffusé, un changement de fréquence entre deux pistes devient une coupure franche avec un court blanc. Le volume des lecteurs qui y sortent reste bloqué à 100 %. Sans fondu et sans rien d'autre sur les mêmes sorties, les échantillons lui parviennent intacts ; le badge BP s'allume tant que c'est le cas. |
-| gl-ES | Acceso exclusivo, e o dispositivo segue a frecuencia de mostraxe de cada pista: cando non soa nada máis nel, un cambio de frecuencia entre dúas pistas é un corte seco cunha breve pausa. O volume dos reprodutores que saen por el queda fixo ao 100 %. Sen fundido e sen nada máis nas mesmas saídas, as mostras chéganlle sen cambios; o distintivo BP acéndese mentres sexa así. |
-| it-IT | Accesso esclusivo, e il dispositivo segue la frequenza di campionamento di ogni brano: quando non vi suona nient'altro, un cambio di frequenza tra due brani diventa uno stacco netto con una breve pausa. Il volume dei lettori che vi escono resta bloccato al 100 %. Senza dissolvenza e senza altro sulle stesse uscite, i campioni gli arrivano inalterati; il badge BP si accende finché è così. |
-| nl-NL | Exclusieve toegang, en het apparaat volgt de samplefrequentie van elk nummer: speelt er verder niets op, dan wordt een frequentiewissel tussen twee nummers een harde overgang met een korte pauze. Het volume van de spelers erop staat vast op 100 %. Zonder fade en zonder iets anders op dezelfde uitgangen bereiken de samples het ongewijzigd; de BP-badge brandt zolang dat zo is. |
-| pl-PL | Dostęp na wyłączność, a urządzenie dostosowuje się do częstotliwości próbkowania każdego utworu: gdy nic innego na nim nie gra, zmiana częstotliwości między dwoma utworami staje się twardym cięciem z krótką przerwą. Głośność odtwarzaczy na nim jest zablokowana na 100 %. Bez wyciszania i bez niczego innego na tych samych wyjściach próbki docierają do niego bez zmian; wskaźnik BP świeci, dopóki tak jest. |
-| pt-PT | Acesso exclusivo, e o dispositivo segue a frequência de amostragem de cada faixa: quando nada mais está a tocar nele, uma mudança de frequência entre duas faixas é um corte seco com uma breve pausa. O volume dos leitores que saem por ele fica fixo a 100 %. Sem fade e sem mais nada nas mesmas saídas, as amostras chegam-lhe sem alterações; o indicador BP acende enquanto assim for. |
+| en-US | A special mode for audiophile playback, not for mixed programmes. The device is opened with exclusive access and follows each track's sample rate. The players that play on it never crossfade or mix: each track plays to its end, then the next one starts. When the sample rate changes and nothing else plays on the device, there is a short silence while it reopens. Their volume is held at 100 %. With no fade and nothing else on the same outputs, the samples reach the device unchanged; the BP badge lights while that is true. |
+| es-ES | Un modo especial para la escucha audiófila, no para programas con mezclas. El dispositivo se abre en acceso exclusivo y sigue la frecuencia de muestreo de cada pista. Los reproductores que salen por él nunca encadenan ni mezclan pistas: cada pista suena hasta el final y luego empieza la siguiente. Si cambia la frecuencia de muestreo y no suena nada más en el dispositivo, hay un breve silencio mientras se vuelve a abrir. Su volumen queda fijo al 100 %. Sin fundidos y sin nada más en las mismas salidas, las muestras llegan al dispositivo sin cambios; el distintivo BP se enciende mientras sea así. |
+
+### 6.4 `tip-next-bit-perfect` (new, BR15)
+
+| Locale | Text |
+|---|---|
+| en-US | Next track, at once and without a crossfade (bit-perfect output) |
+| es-ES | Siguiente pista, al momento y sin fundido (salida bit-perfect) |
+
+### 6.5 `settings-players-bit-perfect-note` (new, BR15)
+
+| Locale | Text |
+|---|---|
+| en-US | Players on a bit-perfect output never mix or crossfade: automatic mix does not apply to them, and the fade time only to Fade stop. |
+| es-ES | Los reproductores con salida bit-perfect nunca mezclan ni encadenan con fundido: la mezcla automática no se les aplica, y la duración del fundido solo cuenta para Stop con fundido. |
 
 The remote API's error message (BF3, BF12) is English, like every API
 message, and is not a Fluent string.
@@ -341,15 +436,17 @@ message, and is not a Fluent string.
 
 | Crate | Change |
 |---|---|
-| `fp-model` | New module `bit_perfect` (`rate_cut`, `fader_locked`, `faders_reset_by`); `LiveSettings` gains `stream_rates` and `refused_rates`; `EngineEvent::StreamRate`; `TransitionPlan::StartNextAt::rate_cut`; `plan_for` (BR3); `play` and `previous` (BR6); `reconcile` (BF2); `Command::SetVolume` (BF3); `ModelError::FaderLocked`; `Availability::fader`. |
-| `fp-engine` | `StreamRate` reports (BR1); the scheduled rate cut (BR5); `start_current` and `prepare_start` under a hard start (BR7); the quiet guard (BR11). |
+| `fp-model` | New module `bit_perfect` (`bit_perfect_player`, `rate_cut`, `fader_locked`, `faders_reset_by`); `LiveSettings` gains `stream_rates` and `refused_rates`; `EngineEvent::StreamRate`; `TransitionPlan::StartNextAt::rate_cut`; `plan_for` (BR4); `play` and `previous` through `start_or_crossfade` (BR7); `reconcile` (BF2); `Command::SetVolume` (BF3); `ModelError::FaderLocked`; `Availability::fader`. |
+| `fp-engine` | `StreamRate` reports (BR1); the scheduled rate cut (BR6); `start_current` and `prepare_start` under a hard start (BR8); the quiet guard (BR13). A hard `StartNextAt` without a rate cut uses the existing path. |
 | `fp-control` | `Router::handle` for `Volume` (BF10). |
 | `fp-remote` | `PlayerDto::fader_locked`, OSC `volume-locked` (BF13); refusals come from the model (BF12). |
-| `fp-app` | `widgets::fader` `enabled`; `meter_column` (BF7); the Apply now confirmation (BF8); locales (§6). |
+| `fp-app` | `widgets::fader` `enabled`; `meter_column` (BF7); the Play/Next tooltip, the dim MIX marker and the Settings → Players note (BR15); the Apply now confirmation (BF8); locales (§6). |
 
-No configuration field is added: a rate cut has nothing to tune (its gap
-is the device's reopen time plus `tuning.declick_ms`, both already
-configurable or the device's own), and the lock has no setting (Q1).
+No configuration field is added: a hard transition and a rate cut have
+nothing to tune (the gap is the device's reopen time plus
+`tuning.declick_ms`, both already configurable or the device's own), the
+lock has no setting (Q1), and `players.fade_ms` and `players.auto_segue`
+keep their meaning for the other players (BR15).
 
 ## 8. Testing
 
@@ -360,91 +457,205 @@ backend and explicit `now: Instant`; nothing sleeps.
 |---|---|---|
 | BR1 | `fp-model` `tests/bit_perfect_rules.rs` | `StreamRate` sets `live.stream_rates` and `refused_rates`; `Unplaced` of the last holder forgets them. |
 | BR1 | `fp-engine` `tests/bit_perfect.rs` | a bus open, a B3.2 reopen and a refused rate each report `StreamRate` with the right rate and refused set. |
-| BR2 | `fp-model` `tests/bit_perfect_rules.rs` | one test per condition 1–5: each one false gives `None`; all true gives `Some(r)`. |
-| BR3 | `fp-model` `tests/bit_perfect_rules.rs` | a segue plan into a 96 kHz entry on a 44.1 kHz bit-perfect device becomes `StartNextAt { at: cue-out, fade: None, rate_cut: Some(96000) }`. |
-| BR4 | `fp-model` `tests/bit_perfect_rules.rs` | a cart starting on the device sends a `Schedule` with the segue plan; `CartEnded` sends the rate cut again. |
-| BR5 | `fp-engine` `tests/bit_perfect.rs` | the preload is opened at `r`; at `at_secs` the current stops, `OfflineDevice::config()` shows `r`, the next starts and is bit-perfect; `TransitionStarted` is reported. A cart fired just before the cut: no reopen, the next plays resampled. A refused rate: B3.4 fallback, the next plays. |
-| BR6 | `fp-model` `tests/bit_perfect_rules.rs` | Play while playing and Previous emit `StartCurrent` (not `Crossfade`) when a rate cut applies, and `Crossfade` when not. |
-| BR7 | `fp-engine` `tests/bit_perfect.rs` | a hard `StartCurrent` at another rate reopens the bus after the declick; a `Crossfade` at another rate does not (resampled). |
-| BR8 | `fp-model` `tests/bit_perfect_rules.rs` | same rate, unknown format and a DSD next entry keep the ordinary plan. |
-| BR9 | `fp-engine` `tests/bit_perfect.rs` | the existing B3.3 test (a source started on a sounding bus is resampled) still passes. |
-| BR10 | `fp-model` `tests/live.rs` | with a rate cut scheduled, a pending buffer change on the player's device is not due at any point up to `TransitionStarted` (the player stays `Playing`, so it stays a cause). |
-| BR11 | `fp-engine` `tests/live_settings.rs` | an `ApplyDevice` kept by the guard does not run in the rate cut's gap; it runs once the device is quiet. |
-| BR12 | `fp-engine` `tests/live_settings.rs` | bit-perfect off reports `StreamRate` at `effective_rate`; the next transition is a crossfade. |
-| BF1 | `fp-model` `tests/bit_perfect_rules.rs` | locked by the running settings, not the wanted ones; unplaced is not locked. |
+| BR2 | `fp-model` `tests/bit_perfect_rules.rs` | true for a Main placed on a device running bit-perfect; false for the wanted-but-pending value, for an unplaced player, and for a player whose only Cue route is on the device. |
+| BR3 | `fp-model` `tests/bit_perfect_rules.rs` | one test per condition 1–6: each one false gives `None`; all true gives `Some(r)`. |
+| BR4 | `fp-model` `tests/bit_perfect_rules.rs` | on a bit-perfect player with automatic mix on and a MIX point: a next at the same rate gives `StartNextAt { at: cue-out, fade: None, rate_cut: None }`; a 96 kHz next on a 44.1 kHz device gives `rate_cut: Some(96000)`; Single mode still gives `StopAt`; the same player off bit-perfect gives the segue plan. |
+| BR5 | `fp-model` `tests/bit_perfect_rules.rs` | a cart starting on the device sends a `Schedule` with `rate_cut: None` and the same `at_secs`; `CartEnded` sends `Some(r)` again; `Placed` off the device sends the segue plan. |
+| BR6 | `fp-engine` `tests/bit_perfect.rs` | `rate_cut: None`: the next starts on the current's stop frame with no overlapping ramp and the device keeps its rate. `rate_cut: Some(r)`: the preload is opened at `r`; at `at_secs` the current stops, `OfflineDevice::config()` shows `r`, the next starts and is bit-perfect; `TransitionStarted` is reported. A cart fired just before the cut: no reopen, the next plays resampled. A refused rate: B3.4 fallback, the next plays. |
+| BR7 | `fp-model` `tests/bit_perfect_rules.rs` | on a bit-perfect player, Play while playing, Play on the self-next (O37) and Previous emit `StartCurrent` (not `Crossfade`) at the same rate and at another rate, and `fading` stays false; on another player they emit `Crossfade`. |
+| BR8 | `fp-engine` `tests/bit_perfect.rs` | a `StartCurrent` at another rate replacing a playing source on a bit-perfect bus reopens the bus after the declick; at the same rate it starts at once with no reopen; a `Crossfade` at another rate does not reopen (resampled). |
+| BR9 | `fp-model` `tests/bit_perfect_rules.rs` | on a bit-perfect player `FadeStop` emits `FadeOutAndStop` with `fade_ms`, and `Pause` and `Restart` emit what they emit on any player. |
+| BR10 | `fp-model` `tests/bit_perfect_rules.rs` | an unknown-format next gets a hard plan with `rate_cut: None`; a DSD next and a DSD stream on air get no rate cut; the O25 hold still gives `StopAt`; a non-bit-perfect player on the same device set keeps its segue plan. |
+| BR11 | `fp-engine` `tests/bit_perfect.rs` | the existing B3.3 test (a source started on a sounding bus is resampled) still passes. |
+| BR12 | `fp-model` `tests/live.rs` | with a rate cut scheduled, a pending buffer change on the player's device is not due at any point up to `TransitionStarted` (the player stays `Playing`, so it stays a cause). |
+| BR13 | `fp-engine` `tests/live_settings.rs` | an `ApplyDevice` kept by the guard does not run in the rate cut's gap; it runs once the device is quiet. |
+| BR14 | `fp-engine` `tests/live_settings.rs` | bit-perfect off reports `StreamRate` at `effective_rate`; the next manual start is a crossfade again. |
+| BR15 | `fp-app` `tests/` (kittest, player and settings) | a bit-perfect player's Play/Next tooltip is `tip-next-bit-perfect` while on air; its MIX marker is drawn dim; Settings → Players shows `settings-players-bit-perfect-note` only while a bit-perfect player exists. |
+| BR16 | `fp-remote` `tests/api.rs`, `fp-control` `tests/router.rs` | `POST /players/{id}/play` on air and the MIDI Play/Next binding on a bit-perfect player are accepted and give `Command::Play` (the model then starts hard, BR7). |
+| BF1 | `fp-model` `tests/bit_perfect_rules.rs` | locked exactly when `bit_perfect_player`; unplaced is not locked. |
 | BF2 | `fp-model` `tests/bit_perfect_rules.rs` | `Applied` bit-perfect on, `Placed` on a bit-perfect device and a restored volume of 0.5 each give volume 1.0 and one `SetVolume { 1.0 }`. |
 | BF3 | `fp-model` `tests/bit_perfect_rules.rs` | `SetVolume(p, 0.5)` refused with `FaderLocked`, state unchanged; `SetVolume(p, 1.0)` accepted; `availability(..).fader` false. |
 | BF4 | `fp-model` `tests/bit_perfect_rules.rs` | `Applied` bit-perfect off leaves volume 1.0 and accepts `SetVolume(p, 0.5)`. |
-| BF5 | `fp-model` `tests/bit_perfect_rules.rs` | `FadeStop` and a segue still produce `FadeOutAndStop` and `Crossfade` on a locked player. |
+| BF5 | `fp-model` `tests/bit_perfect_rules.rs` | `FadeStop` on a locked player produces `FadeOutAndStop` and leaves `volume` at 1.0. |
 | BF6 | `fp-model` `tests/bit_perfect_rules.rs` | a player whose Cue route is the bit-perfect device and Main is not: not locked, CUE starts. |
 | BF7 | `fp-app` `tests/` (kittest, player) | a locked player's fader is disabled, does not send `SetVolume` on drag, and shows `tip-volume-locked`. |
 | BF8 | `fp-app` `tests/live_settings.rs` (kittest) | the Apply now confirmation lists `apply-now-fader-reset` with the player; `faders_reset_by` unit test in `fp-model`. |
-| BF9 | `fp-app` i18n test | every locale has the new keys and no `tip-volume-dsd` (the existing key-parity test). |
+| BF9 | `fp-app` i18n test | every locale has the new keys (§6) and no `tip-volume-dsd` (the existing key-parity test). |
 | BF10 | `fp-control` `tests/router.rs` | a fader message for a locked player gives nothing; after unlocking, a control at 50 % gives nothing until it reaches the top. |
 | BF11 | `fp-control` `tests/feedback.rs` | feedback for a locked player's buttons is unchanged. |
 | BF12 | `fp-remote` `tests/api.rs`, `tests/osc_server.rs` | fader 0.5 on a locked player → 409 `unavailable` with the model's message; fader 1 → 200; the OSC message is refused and noted. |
 | BF13 | `fp-remote` `tests/dto.rs`, `tests/osc.rs` | `fader_locked` and `volume-locked` follow the lock. |
 
-The manual loopback check of the bit-perfect docs gains a step: play a
-44.1 kHz track followed by a 96 kHz one in continuous mode; the converter
-shows 96 kHz on the second track and the BP badge lights on both.
+The manual loopback check of the bit-perfect docs gains two steps: play a
+44.1 kHz track followed by a 96 kHz one in continuous mode, with automatic
+mix on and a MIX point; the first plays to its cue-out with no fade, the
+converter shows 96 kHz on the second track after a short silence, and the
+BP badge lights on both. Then two tracks at the same rate: the second
+follows the first with no gap and no overlap.
 
 ## 9. Documentation to update
 
-- `docs/user/bit-perfect.md`: "The rate follows the file" (rate cuts, the
-  gap, when the next track is resampled instead); the BP conditions (the
-  volume is held at 100 %); the DSD section (the fader is locked, so the
-  "moving the fader switches to PCM" lines go); the loopback procedure
-  (§8).
-- `docs/user/players.md` (the fader), `docs/user/markers-and-mixing.md`
-  (no segue across a rate change on a bit-perfect output),
-  `docs/user/settings.md` (Audio outputs, bit-perfect),
-  `docs/user/midi.md` (a locked fader binding is ignored and picks up at
-  100 %), `docs/user/remote-control.md` (409 on a locked fader,
-  `fader_locked`, `volume-locked`).
-- `docs/technical/audio-engine.md` ("Rates and bit-perfect buses": rate
-  cuts, `StreamRate`, hard starts), `docs/technical/remote-api.md`
-  (`fader_locked`, the 409, the OSC address), `docs/technical/ui.md` if
-  it describes the fader.
-- `README.md`: the bit-perfect feature line (the rate follows each track;
-  the volume is held at 100 %).
-- Specs: B3.3 marked "Replaced by the bit-perfect rate and fader spec
-  (2026-10-08)"; B1 and B7 notes ("Automatic volume bypass" and "Changing
-  the rate while a bus is busy" are no longer out of scope in the form of
-  §4 and §5); live settings §13 "the bit-perfect rate change at
-  transitions" points here; feedback-2 O25 note (§5.5).
-- Locales: §6 in all eleven files.
+The maintainer asks for this mode to be explained well: an operator must
+learn from the guide, before turning it on, that bit-perfect is a special
+mode and what it costs. Every page below says the same thing in its own
+place.
+
+### 9.1 User guide (`docs/user/`, English only)
+
+- **`bit-perfect.md`**
+  - **Introduction** (the first paragraph): add that it is a special mode
+    for audiophile playback (archive listening, a hi-fi or monitoring
+    chain, checking a digital link), not the default and not meant for a
+    mixed music programme.
+  - **New section "What it costs", right after the introduction and
+    before "Setting a device bit-perfect"**, a plain list for every player
+    whose Main output is on the device:
+    - no crossfades and no segues between tracks: each track plays to its
+      end (its cue-out), then the next starts; **Automatic mix at the MIX
+      point** and the MIX point are not used, and **Play / Next** and
+      **Previous** while on air switch at once (with a click-free stop)
+      instead of fading;
+    - a **short silence** between two tracks whose sample rates differ,
+      while the device reopens (usually a few tens of milliseconds, longer
+      on some devices); none between tracks at the same rate, which follow
+      each other with no gap;
+    - the **volume fader is held at 100 %**, on screen, on MIDI and over
+      the remote API and OSC, and goes to 100 % when bit-perfect is turned
+      on;
+    - **what still works:** Fade stop (it fades over the fade time), Pause,
+      Stop, Restart, repeat and stop-after marks, Single and Continuous
+      modes, Cue (pre-listen, which is not locked), carts (they play, and
+      while one plays on the device the next track is not bit-perfect and
+      no silence is inserted), DSD output, and every player whose Main
+      output is on another device, which mixes as usual;
+    - **when to use it**, and when not: use it when every track must reach
+      the converter untouched; keep it off for an on-air programme that
+      needs mixed transitions or level changes.
+  - **"What happens on a bit-perfect device"**: rewrite "The rate follows
+    the file" for hard transitions and rate cuts (when the device reopens
+    between two tracks, when the next track is resampled instead: another
+    player, a cart or a CUE on the device, a rate the device refused, an
+    unanalysed track); the example "a 48 kHz track mixed into after a
+    44.1 kHz one" goes. In "No processing, when nothing asks for it", the
+    volume is held at 100 % rather than something to check.
+  - **"DSD"**: the "volume must stay at 100 %: the fader's tooltip says so.
+    Moving it switches the track to PCM" line and the two "moving the
+    fader" remarks go (the fader is locked); "Pressing Play on another
+    track while it plays cuts it the same way instead of crossfading" and
+    "The player's own next track does not overlap" become true of every
+    track on a bit-perfect player and are said once, in "What it costs";
+    "An album does not stay DSD" loses "a segue or a crossfade".
+  - **"The BP badge"**: "volume is 100 %" becomes "the volume is held at
+    100 % on a bit-perfect output"; "no fade runs" names Fade stop and the
+    pause ramp, the only fades left.
+  - **"Checking it yourself"**: the two loopback steps of §8.
+- **`players.md`**: the **Mixing** badge (Header table: never on a
+  bit-perfect player); the **Volume fader** bullet (locked at 100 % on a
+  bit-perfect output, with its tooltip); the Transport table rows **Play /
+  Next** and **Previous** (on a bit-perfect output they switch at once,
+  without a fade); the **Waveform** section (the MIX marker is drawn dim
+  on a bit-perfect player).
+- **`markers-and-mixing.md`**, "What the player does with them": a bullet
+  saying that a player on a bit-perfect output ignores the MIX point and
+  the automatic mix, and that Play while on air does not fade there, with
+  a link to "What it costs".
+- **`settings.md`**: in **Players**, the **Fade time** and **Automatic mix
+  at the MIX point** rows say they do not apply to players on a
+  bit-perfect output (except Fade stop), and the note under them is
+  mentioned; in **Audio outputs**, the **Bit-perfect: *device*** row says
+  it is a special mode, the players on it never crossfade, a change of rate
+  leaves a short silence and their volume is held at 100 %, linking to
+  "What it costs".
+- **`midi.md`**, "How the controls behave": a locked volume binding is
+  ignored and picks up again at 100 % once unlocked; Play/Next and
+  Previous on a bit-perfect player switch at once.
+- **`remote-control.md`**, "What a client can do" and "OSC": `play` and
+  `previous` on a bit-perfect player switch at once; a fader below 1 is
+  refused (409) and exactly 1 is accepted; `fader_locked` and
+  `volume-locked` tell a bit-perfect player.
+- **`troubleshooting.md`**, "Bit-perfect": "A short silence before a
+  track" explains the rate change and that it happens only when the rate
+  changes; new entries "Tracks do not mix, and Play does not fade" and
+  "The volume fader does not move", both pointing to "What it costs".
+- **`README.md`** of the guide (the page table): the Bit-perfect output
+  row adds "a special mode: no crossfades, volume at 100 %".
+
+### 9.2 Repository README and technical docs
+
+- **`README.md`**, the **Bit-perfect output** feature line: a special
+  mode; the device follows each track's rate, with a short silence when it
+  changes; tracks follow each other without crossfades; the volume is held
+  at 100 %.
+- **`docs/technical/audio-engine.md`**: "Rates and bit-perfect buses"
+  (hard transitions and `rate_cut`, `StreamRate`, the reopen under a hard
+  start, BR6 and BR8); the engine action table (`Schedule(plan)` lists
+  `rate_cut`); "Live settings" (the quiet guard in a rate cut's gap,
+  BR13).
+- **`docs/technical/remote-api.md`**: `fader_locked`, the 409, the OSC
+  address `volume-locked`, and that `play` and `previous` start hard on a
+  bit-perfect player.
+- **`docs/technical/ui.md`**: the fader's `enabled` flag, the Play/Next
+  tooltip, the dim MIX marker and the Settings → Players note (BR15).
+- **`docs/technical/audio-path-audit.md`** §5.4 "Rate changes on
+  bit-perfect devices": a note pointing to this spec.
+
+### 9.3 Specs
+
+- The bit-perfect spec: B3.3 marked "Replaced by the bit-perfect rate and
+  fader spec (2026-10-08)"; B1 and B7 notes ("Automatic volume bypass" and
+  "Changing the rate while a bus is busy" are no longer out of scope in
+  the form of §4 and §5).
+- The main spec §3.2: rules 5 and 11 and R24 note "except on a bit-perfect
+  player: a hard transition (bit-perfect rate and fader spec, D8)".
+- Live settings §13 "the bit-perfect rate change at transitions" points
+  here.
+- Feedback-2 O25: the note of §5.5.
+
+### 9.4 Locales
+
+§6 in all eleven files.
 
 ## 10. Out of scope
 
+- Any crossfade or segue on a bit-perfect player (D8), including an
+  option to allow them at the same rate, per device (D7), per player or
+  per entry.
 - Changing the rate while anything else sounds on the device (D2), or in
   the middle of a track.
-- A rate cut for the Cue path, carts, or DSD entries (BR8).
+- A rate cut for the Cue path, carts, or DSD streams (BR10).
 - Gapless rate changes: the gap is the device's reopen and cannot be
   hidden without resampling.
+- Hiding or disabling the fade time and automatic mix settings: they are
+  global and apply to the other players (BR15).
 - Fader position feedback to MIDI surfaces (motorised faders, LED rings)
   (BF11).
 - Locking any gain other than the player's volume (carts, CUE).
-- Shortening the gap further than BR5.1 does (for example keeping a second
+- Shortening the gap further than BR6.1 does (for example keeping a second
   stream open at the next rate).
 
 ## 11. Decisions taken in this spec (for review)
 
 | # | Decision | Rationale |
 |---|---|---|
-| S1 | The model decides a rate cut (BR2) from a new `StreamRate` report, not the engine on its own. | Behaviour lives in `fp-model` (D6); the device's running rate on a bit-perfect device follows the files and is not in `DeviceSettings`, so it needs its own report. The engine keeps the final word only when the moment has changed (BR5 fallback). |
-| S2 | Known refused rates never cause a cut (BR2.4). | A cut into a rate the device refuses would cost a gap and still resample, on every such transition. |
-| S3 | The scheduled cut carries its rate in the plan, and the engine prepares the next source at that rate in advance (BR5.1). | Otherwise the next source is opened again after the reopen and the gap includes its buffering (`tuning.ready_threshold_ms`, 500 ms by default). |
-| S4 | The current plays to the end of its play range (the cue-out with markers on), not to its segue point. | D1 says "to its cue-out"; the segue point exists only to overlap. |
-| S5 | A manual start over the current (Play while playing and Previous) becomes a hard start when it is a rate cut (BR6). | D1 "stops on a manual Next"; Previous crossfades the same way, so it follows the same rule. |
-| S6 | The lock follows the bit-perfect setting the device **runs** with, even when exclusive access was refused (B4). | Predictable for the operator (the checkbox decides), and a later reopen may obtain exclusive access; the BP badge already says when the output is not bit-perfect. |
+| S1 | The model decides a rate cut (BR3) from a new `StreamRate` report, not the engine on its own. | Behaviour lives in `fp-model` (D6); the device's running rate on a bit-perfect device follows the files and is not in `DeviceSettings`, so it needs its own report. The engine keeps the final word only when the moment has changed (BR6 fallback). |
+| S2 | Known refused rates never cause a reopen (BR3.4). | A reopen into a rate the device refuses would cost a gap and still resample, on every such transition. The transition stays hard. |
+| S3 | The scheduled cut carries its rate in the plan, and the engine prepares the next source at that rate in advance (BR6.1). | Otherwise the next source is opened again after the reopen and the gap includes its buffering (`tuning.ready_threshold_ms`, 500 ms by default). |
+| S4 | The current plays to the end of its play range (the cue-out with markers on), never to its MIX point (BR4). | D8; the MIX point exists only to overlap. |
+| S5 | Play while playing, Play on the self-next (O37) and Previous are all hard on a bit-perfect player (BR7). | D8 names Next and Previous; the O37 replay is the same Play button. |
+| S6 | The lock and the hard transitions follow the bit-perfect setting the device **runs** with, even when exclusive access was refused (B4). | Predictable for the operator (the checkbox decides), and a later reopen may obtain exclusive access; the BP badge already says when the output is not bit-perfect. |
 | S7 | One invariant (BF2) resets the fader in every case: bit-perfect on, a route moved onto the device, an audio system change, a new player, a restored session. | One rule, one test, no path forgotten. Every such change applies only while the player is idle (live settings L5, L6) unless the operator forces it (BF8). |
 | S8 | The remote API and OSC **refuse** a locked fader (409 `unavailable`) and accept exactly 100 % (BF12). | It is the existing pattern for operations the model refuses in the current state; silently ignoring would let a remote surface show a level that is not on air. |
 | S9 | A locked MIDI fader is ignored and must pick up again at 100 % after unlocking (BF10). | Soft takeover already exists for this; without it the first touch after unlocking would jump the level. |
 | S10 | No MIDI fader feedback is added (BF11). | Feedback today covers buttons only; there is no fader position output to set to 100 %. |
 | S11 | `tip-volume-dsd` is removed and the O25 fader rule becomes unreachable but stays (§5.5). | A DSD stream needs a bit-perfect device, whose fader is now locked. |
-| S12 | The CUE path and carts are untouched (BF6). | The brief's lock is about the on-air player fader; CUE has its own gain and no fader, and the BP badge follows Main only (B6). |
-| S13 | `PlayerDto::fader_locked` and OSC `volume-locked` are added (BF13). | Remote surfaces must be able to grey their fader as the interface does; both are additive. |
+| S12 | The CUE path and carts are untouched (BF6, BR10); a player's Cue route on a bit-perfect device does not make it a bit-perfect player (BR2). | The lock and D8 are about the on-air player; CUE has its own gain and no fader, and the BP badge follows Main only (B6). |
+| S13 | `PlayerDto::fader_locked` and OSC `volume-locked` are added (BF13) and also stand for "this player starts every track hard" (BR16); no second field is added. | Both hold exactly when BR2 does; one flag keeps the API small. A client that needs to tell the two apart has no case where they differ. |
+| S14 | One predicate, `bit_perfect_player` (BR2), decides both the hard transitions and the lock. | They are the same condition in D3 and D8; two predicates could drift apart. |
+| S15 | At the same rate a scheduled hard transition is the engine's existing hard join (BR6), and a manual one today's hard start (BR8): the current's declick tail (`tuning.declick_ms`, 5 ms by default) may overlap the start of the next, as it does today with automatic mix off. | No new engine path; the tail exists only when the cue-out is inside the file, and it is what keeps the cut click-free. The next track is bit-perfect from the end of that tail. |
+| S16 | A DSD stream on air never takes a rate cut (BR3.6); its transition is still hard. | O25 already decides how a DSD stream ends, with its silence and the rate the device goes back to; two reopen mechanisms on one transition would conflict. This keeps the former BR8. |
+| S17 | The interface shows the mode with three small cues (BR15): the Play/Next tooltip, a dim MIX marker, and a note in Settings → Players. The settings stay editable. | Minimal and enough for the operator to see why nothing mixes; the settings are global and still apply to the other players, so disabling them would be wrong. |
+| S18 | A plan recomputed after the player moves off a bit-perfect device whose segue point has passed runs at once (BR5), as any late plan does today. | No new rule; the move only happens with the player idle unless the operator forces it. |
+| S19 | No new operation and no refusal in MIDI, the remote API or OSC for Next and Previous (BR16). | The start itself happens; only its shape changes. Refusing it would leave a remote client unable to go to the next track. |
 
 ## 12. Answered questions
 
@@ -452,3 +663,6 @@ shows 96 kHz on the second track and the BP badge lights on both.
   an uninterrupted segue resampled over a gap? **No** (D7): the cut and
   its gap are the price of bit-perfect output, and every bit-perfect
   device cuts.
+- **Q2** Should tracks at the same rate still segue and crossfade on a
+  bit-perfect device? **No** (D8, 2026-10-13): a bit-perfect player never
+  crossfades or segues; every transition is hard.
