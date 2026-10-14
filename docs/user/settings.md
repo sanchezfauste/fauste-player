@@ -83,7 +83,7 @@ choosing it again (for example after swapping two devices) keeps them.
 | Cartwall | The cartwall's Main and Cue outputs. Main defaults to the system output. Without a Cue there is no cart pre-listen. |
 | Sample rate: *device* (Advanced) | **Global (...)** uses the sample rate above; a value gives this device its own rate. Only the rates the device reports are offered; a saved rate it no longer reports stays listed with a note that it may not open (the device then falls back to the global rate). The own values apply only to devices an output names, not to the system default output unless one does. |
 | Buffer size: *device* (Advanced) | **Global (...)** uses the buffer size above; a value gives this device its own, with its latency below. A device that does not take its own buffer size falls back to the global one, and to the global rate too when it does not take its own rate either. |
-| Bit-perfect: *device* (Advanced) | A bit-perfect device is opened with exclusive access and follows each file's sample rate while nothing plays on it. The switch is disabled where the device cannot give exclusive access. See [Bit-perfect output](bit-perfect.md). |
+| Bit-perfect: *device* (Advanced) | Off by default. A special mode for audiophile playback, not for mixed programmes: the device is opened with exclusive access and follows each track's sample rate. The players whose Main output is on it never crossfade or mix, a change of rate leaves a short silence between two tracks, and their volume is held at 100 %. The switch is disabled where the device cannot give exclusive access. See [What it costs](bit-perfect.md#what-it-costs). |
 | DSD: *device* (Advanced) | **Convert to PCM** (the default), **DoP** or, on Linux, **Native DSD**. Every device shows it; only the modes the device can take are offered, and a line under it says why the others are not. See [DSD](bit-perfect.md#dsd). |
 | When another source needs a DSD output (Advanced) | **Continue the DSD track as PCM** (the default), or **Keep DSD and mute the other sources**. See [DSD](bit-perfect.md#dsd). |
 | DSD silence (Advanced) | Silence sent before a DSD stream starts, after it ends and on a switch to PCM, so that the converter locks without a click; 200 ms by default, 0 to 2000. |
@@ -109,10 +109,14 @@ the device is reopened when it comes back (see
 | Language | System | Interface language |
 | Number of players | 4 | Columns on the main screen (a player on air cannot be removed) |
 | Default mode | CONT | The mode players start in |
-| Fade time | 1000 ms | Used by Play while on air and by Fade stop |
-| Automatic mix at the MIX point | On | Overlap tracks in continuous mode |
+| Fade time | 1000 ms | Used by Play while on air and by Fade stop. On a player whose Main output is bit-perfect, only by Fade stop |
+| Automatic mix at the MIX point | On | Overlap tracks in continuous mode. Does not apply to a player whose Main output is bit-perfect |
 | Use cue-in and cue-out | On | Off: players play every track from the start to the end of the file; the markers are kept and carts still use theirs. Durations and playlist totals follow the same range |
 | End-of-track warning | 10 s | When the countdown starts blinking red |
+
+While a player's Main output is bit-perfect, a note under **Automatic mix at
+the MIX point** says that such players never mix or crossfade. Both settings
+stay editable: they still apply to the other players. See [What it costs](bit-perfect.md#what-it-costs).
 
 ## Meters
 

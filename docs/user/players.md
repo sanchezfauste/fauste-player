@@ -11,7 +11,7 @@ playlist tabs, transport, volume and outputs.
 |---|---|
 | `P1` … `Pn` | Player number (the number key that plays it) |
 | Status dot and label | **On air** (red), **Paused** (amber), **Stopped** (grey) |
-| **Mixing** / **Fading** badge | A crossfade into the next track, or a fade stop, is running |
+| **Mixing** / **Fading** badge | A crossfade into the next track, or a fade stop, is running. **Mixing** never lights on a player whose Main output is bit-perfect: it does not crossfade (see [What it costs](bit-perfect.md#what-it-costs)) |
 | **Stop after** badge | The player stops when the current track ends |
 | **Repeat** / **Stop after track** badge | The current track repeats, or stops the player when it ends, because of its own mark in the playlist menu. Hover for the full sentence. The player's own **Stop after** button wins: while it is on, only its badge shows |
 | **BP** / **DSD** | **BP** is lit while the current track reaches its Main device unchanged. **DSD** replaces it while a DSD track goes out as DSD, unchanged (see [Bit-perfect output](bit-perfect.md)). **Others muted** shows beside it when that DSD stream keeps other sources off the output |
@@ -86,6 +86,8 @@ playlist tabs, transport, volume and outputs.
       sound system or driver clips it.
 - **Volume fader** (right of the meter, as tall as it): drag it or use the mouse wheel, one step per notch. The
   tooltip shows the level in dB; the top is 0 dB and the bottom is silence.
+  On a player whose Main output is bit-perfect the fader is locked at 100 %
+  and greyed, and its tooltip says why (see [What it costs](bit-perfect.md#what-it-costs)).
 - **Title, artist** and the **next** line, with a green square. While CUE is
   on, the pre-listen position shows in blue.
 
@@ -93,12 +95,12 @@ playlist tabs, transport, volume and outputs.
 
 | Button | Action |
 |---|---|
-| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)). Paused: resume. With the track on air as next, Play restarts that track with the usual fade. |
+| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)). Paused: resume. With the track on air as next, Play restarts that track with the usual fade. On a bit-perfect output it switches at once, without a fade, and its tooltip says so (see [What it costs](bit-perfect.md#what-it-costs)). |
 | **Stop** | Stop at once (with a short de-click ramp) |
 | **Fade stop** | Fade out and stop |
 | **Pause** | Pause or resume; blinks amber while paused |
 | **Stop after** (a play triangle then a square) | Stop when the current track ends, once. In SINGLE mode it is available only while the current track repeats: it ends the repeat when the pass that is playing ends. To stop after a track every time it plays, or to repeat a track, use its menu in the playlist (see [Playlists](playlists.md)) |
-| **Previous** (a bar and two triangles) | While on air: fade back into the track this player played before, as Next does. Press again to keep going back. The track you left becomes the next one. |
+| **Previous** (a bar and two triangles) | While on air: fade back into the track this player played before, as Next does. Press again to keep going back. The track you left becomes the next one. On a bit-perfect output it switches at once, without a fade (see [What it costs](bit-perfect.md#what-it-costs)). |
 | **Restart** (a bar and one triangle) | Back to the start of the current track (its cue-in). A paused player stays paused. |
 
 Buttons that cannot act right now are dimmed: Stop and Restart with nothing
@@ -133,7 +135,8 @@ red.
   down. The intro only shows when it has been set.
 - An orange shaded area at the end marks the **outro**, with its own countdown.
 - A dashed amber line with a **MIX** tag marks where the next track starts in
-  continuous mode. It is dimmed in single mode.
+  continuous mode. It is dimmed in single mode, and on a player whose Main
+  output is bit-perfect, which does not mix (see [What it costs](bit-perfect.md#what-it-costs)).
 - The whole file is drawn. The silent start and end that playback skips (before
   cue-in and after cue-out) are drawn darker, with a thin line where playback
   starts and ends. With **Use cue-in and cue-out** off (Settings → Players)

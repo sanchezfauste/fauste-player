@@ -86,7 +86,7 @@ them here first.
 
 A button that is greyed out on screen is refused remotely too.
 
-A player whose Main output is [bit-perfect](bit-perfect.md) keeps working
+A player whose Main output is [bit-perfect](bit-perfect.md#what-it-costs) keeps working
 remotely, with the same limits as on screen: `play` and `previous` switch
 at once, without a crossfade, and its volume is held at 100 %. A volume
 below 100 % is refused (`409`, with the reason), and exactly 100 % is

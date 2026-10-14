@@ -290,8 +290,9 @@ cannot hang the conductor.
   waits until the player's outgoing sources on the bus (the declick tail)
   have ended, reopens the bus through `prepare_start` and starts the
   current; if the bus kept its rate, the current is opened again at it
-  first. A pause, stop, seek or another start drops the waiting cut; a
-  resume then follows B3.2. At the same rate, with a crossfade, or from
+  first. A pause, stop or seek drops the waiting cut, and a resume then
+  follows B3.2; another start replaces it (and may wait for a cut of its
+  own, `start_current` sets `rate_cut` again). At the same rate, with a crossfade, or from
   silence, the start is unchanged. A rate cut reopens with the settings
   the device runs with and never applies a kept change (BR12).
 - **`PlayerTelemetry::bit_perfect`** is set when all of these hold:
