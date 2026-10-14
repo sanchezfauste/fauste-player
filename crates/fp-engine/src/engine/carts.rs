@@ -47,6 +47,10 @@ pub(super) struct CartwallRuntime {
     cue_src: Option<CartSource>,
     /// Stopped with a de-click ramp; released when the mixer finishes them.
     stopping: Vec<CartSource>,
+    /// Carts fired while the Main bus must change rate for them and its
+    /// device still plays the end of what last sounded there (bit-perfect
+    /// spec BR17): they start, in order, once it has (`run_waiting_carts`).
+    waiting: Vec<CartRequest>,
 }
 
 impl CartwallRuntime {
@@ -62,9 +66,9 @@ impl Engine {
     /// Whether a cart source on `bus` is audible or about to be (carts
     /// never wait idle: they start as soon as they are ready).
     pub(super) fn carts_sounding(&self, bus: &BusKey) -> bool {
-        self.cartwall
-            .as_ref()
-            .is_some_and(|c| c.all().any(|s| &s.bus == bus))
+        self.cartwall.as_ref().is_some_and(|c| {
+            c.all().any(|s| &s.bus == bus) || (&c.main.0 == bus && !c.waiting.is_empty())
+        })
     }
 
     /// Creates the cartwall worker and opens its buses on first use.
@@ -111,6 +115,7 @@ impl Engine {
                 playing: Vec::new(),
                 cue_src: None,
                 stopping: Vec::new(),
+                waiting: Vec::new(),
             });
         }
         let keys: Vec<BusKey> = self
@@ -295,7 +300,7 @@ impl Engine {
             let sources_gone = if cue {
                 c.cue_src.is_none()
             } else {
-                c.playing.is_empty()
+                c.playing.is_empty() && c.waiting.is_empty()
             };
             sources_gone && c.stopping.iter().all(|s| Some(&s.bus) != bus)
         })
@@ -421,9 +426,22 @@ impl Engine {
         }
         // A cart fired again while still on air restarts it.
         self.stop_cart(request.cart);
-        if let Some(main) = self.cartwall.as_ref().map(|c| c.main.0.clone()) {
-            self.prepare_start(&main, request.format);
+        let Some((main, queued)) = self
+            .cartwall
+            .as_ref()
+            .map(|c| (c.main.0.clone(), !c.waiting.is_empty()))
+        else {
+            return;
+        };
+        // BR17: a rate change waits until the device has played the end of
+        // what last sounded; carts fired meanwhile wait behind it.
+        if queued || self.reopen_waits_for_play_out(&main, request.format) {
+            if let Some(c) = self.cartwall.as_mut() {
+                c.waiting.push(request.clone());
+            }
+            return;
         }
+        self.prepare_start(&main, request.format);
         match self.cart_source(request, false) {
             Ok(source) => {
                 if let Some(c) = self.cartwall.as_mut() {
@@ -437,6 +455,9 @@ impl Engine {
     }
 
     pub(super) fn stop_cart(&mut self, cart: CartId) {
+        if let Some(c) = self.cartwall.as_mut() {
+            c.waiting.retain(|w| w.cart != cart);
+        }
         let taken = self.cartwall.as_mut().and_then(|c| {
             c.playing
                 .iter()
@@ -633,8 +654,35 @@ impl Engine {
         }
     }
 
+    /// BR17: carts waiting for their Main bus's device to play the end of
+    /// what last sounded start once it has, as if just fired.
+    pub(super) fn run_waiting_carts(&mut self) {
+        let Some(main) = self
+            .cartwall
+            .as_ref()
+            .filter(|c| !c.waiting.is_empty())
+            .map(|c| c.main.0.clone())
+        else {
+            return;
+        };
+        if !self.played_out(&main) {
+            return;
+        }
+        let waiting = self
+            .cartwall
+            .as_mut()
+            .map(|c| std::mem::take(&mut c.waiting))
+            .unwrap_or_default();
+        let now = self.now;
+        for request in waiting {
+            self.start_cart(&request, now);
+        }
+    }
+
     pub(super) fn unsettled_carts(&self) -> usize {
         self.cartwall.as_ref().map_or(0, |c| {
+            // Carts waiting for a play-out (`waiting`) wait for rendered
+            // frames, not for their files: not counted, like a rate cut.
             c.playing
                 .iter()
                 .chain(c.cue_src.iter())

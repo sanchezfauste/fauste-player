@@ -346,6 +346,9 @@ struct PlayerRuntime {
     /// BR8: a hard start waits to reopen the Main bus at this rate once the
     /// declick of the track it replaced has ended (`run_rate_cuts`).
     rate_cut: Option<u32>,
+    /// The current waiting for `rate_cut` fades in when it starts (a
+    /// resume of a track loaded paused), not a hard start.
+    rate_cut_fade_in: bool,
     /// BR6: the current track (this entry) stopped at a rate cut; the Main
     /// bus reopens and the next starts once the device has played its end
     /// (`run_held_ends`).
@@ -1494,6 +1497,7 @@ impl Engine {
                 continue;
             };
             rt.rate_cut = None;
+            let fade_in = std::mem::take(&mut rt.rate_cut_fade_in);
             let format = rt.current.as_ref().and_then(|c| c.request.format);
             self.prepare_start(&bus, format);
             let stream = self.rate_of(&bus);
@@ -1515,7 +1519,7 @@ impl Engine {
                 .get_mut(&player)
                 .and_then(|rt| rt.current.as_mut())
             {
-                c.start = StartState::WhenReady { fade_in: false };
+                c.start = StartState::WhenReady { fade_in };
             }
         }
     }
@@ -1590,6 +1594,30 @@ impl Engine {
         if changed {
             self.reopen_waiting(bus);
         }
+    }
+
+    /// BR17: whether a start of a file with `format` on `bus` would reopen
+    /// it at another rate (as `prepare_start` does: bit-perfect, not
+    /// carrying DSD, nothing sounding, a rate not refused) while its device
+    /// still plays the end of what last sounded there. Such a start waits
+    /// until the device has played it (`Bus::played_out`).
+    fn reopen_waits_for_play_out(
+        &self,
+        bus: &BusKey,
+        format: Option<fp_model::AudioFormat>,
+    ) -> bool {
+        if !self.device_of(bus).bit_perfect || self.dsd_buses.contains_key(bus) {
+            return false;
+        }
+        let Some(rate) = format.map(|f| f.sample_rate).filter(|r| *r > 0) else {
+            return false;
+        };
+        self.buses.get(bus).is_some_and(|b| {
+            b.sample_rate() != rate
+                && !b.refused_rates().contains(&rate)
+                && !b.played_out()
+                && !self.bus_sounding(bus)
+        })
     }
 
     /// BR6 steps 3–4: `player`'s current track has stopped at the cut. Its
@@ -2166,6 +2194,7 @@ impl Engine {
                 pause_ramp_ends: 0,
                 notify_fade: false,
                 rate_cut: None,
+                rate_cut_fade_in: false,
                 held_end: None,
             },
         );
@@ -2722,6 +2751,7 @@ impl Engine {
         rt.paused = false;
         rt.plan = Plan::None;
         rt.rate_cut = cut;
+        rt.rate_cut_fade_in = false;
         let old = rt.current.replace(next);
         let queued = match (old, crossfade_ms) {
             (Some(old), Some(ms)) => self.fade_out(player, old, f64::from(ms), Curve::EqualPower),
@@ -2836,10 +2866,20 @@ impl Engine {
                     if let Some(rt) = self.players.get_mut(&player) {
                         rt.current = old;
                     }
-                    self.prepare_start(&bus, request.format);
-                    // One prepared for a rate cut (BR8) that the bus did
-                    // not take plays at the bus's rate.
-                    self.fit_current(player);
+                    // BR17: right after something ended at another rate,
+                    // the start waits until the device has played that end
+                    // (`run_rate_cuts` reopens the bus and starts it).
+                    let cut = self.hard_start_cut(player, &bus, request.format);
+                    if let Some(rt) = self.players.get_mut(&player) {
+                        rt.rate_cut = cut;
+                        rt.rate_cut_fade_in = cut.is_some();
+                    }
+                    if cut.is_none() {
+                        self.prepare_start(&bus, request.format);
+                        // One prepared for a rate cut (BR8) that the bus
+                        // did not take plays at the bus's rate.
+                        self.fit_current(player);
+                    }
                 }
             }
         }
@@ -2852,9 +2892,13 @@ impl Engine {
             .iter()
             .map(|p| (p.bus.clone(), p.slot))
             .collect();
+        let cut = rt.rate_cut.is_some();
         if let Some(c) = rt.current.as_mut() {
             if c.start == StartState::Idle {
-                c.start = StartState::WhenReady { fade_in: true };
+                // A rate cut starts it once the bus has reopened.
+                if !cut {
+                    c.start = StartState::WhenReady { fade_in: true };
+                }
             } else {
                 targets.push((c.bus.clone(), c.slot));
             }
@@ -3064,6 +3108,7 @@ impl Engine {
         self.end_dsd_streams();
         self.run_held_ends();
         self.run_rate_cuts();
+        self.run_waiting_carts();
         self.run_kept();
         self.close_orphans();
         self.start_ready_sources();

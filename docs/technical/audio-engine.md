@@ -309,8 +309,10 @@ cannot hang the conductor.
   own, `start_current` sets `rate_cut` again). A start from silence at
   another rate while the device has not yet played the end of what last
   sounded there (a stop's declick, a track's end) waits the same way
-  (`hard_start_cut`). At the same rate, with a crossfade, or from
-  silence that has played out, the start is unchanged.
+  (`hard_start_cut`, BR17), and so does the resume of a track loaded
+  paused (`resume`; `PlayerRuntime::rate_cut_fade_in` keeps its fade-in).
+  At the same rate, with a crossfade, or from silence that has played
+  out, the start is unchanged.
 - **Play-out before a rate change.** Closing a stream discards what the
   driver and the device still hold (on ALSA the PCM is dropped, not
   drained), and the mixer renders that far ahead of what is heard. So a
@@ -322,9 +324,19 @@ cannot hang the conductor.
   `Bus::play_out_frames` more (the stream's `latency_frames`, else two
   blocks, at most `tuning.play_out_max_ms` at the bus's rate:
   `BusTiming::play_out_max`; a bound that applies is logged once per bus,
-  so a bogus measurement cannot hold the output silent). BR6, BR8 and the
-  close of a native DSD stream wait for it without blocking: they look
-  again on the next tick. The gap of a rate cut is that much longer
+  so a bogus measurement cannot hold the output silent). BR6
+  (`run_held_ends`), BR8 and the starts from silence above
+  (`run_rate_cuts`), carts (`run_waiting_carts`) and the close of a native
+  DSD stream (`end_dsd_streams`) wait for it without blocking: they look
+  again on the next tick. A cart fired on the cartwall's Main bus when
+  `reopen_waits_for_play_out` holds (the start would reopen the bus at
+  another rate and its device has not played the last end) is queued in
+  `CartwallRuntime::waiting`, with every cart fired after it, and started
+  in order once the bus has played out; the waiting carts count as
+  sounding there, and `StopCart` removes one. Not covered (BR17's known
+  gaps): CUE starts of players and carts (`start_cue`, `start_cart_cue`
+  call `prepare_start` at once: only the headphones can lose an end), the
+  PCM stream closed by `open_dsd_stream`, and crossfaded starts. The gap of a rate cut is that much longer
   (about 25–35 ms with 512-frame blocks at 44.1 kHz on a USB converter).
   Measured on hardware with `examples/rate_cut_tail.rs` (see
   [testing](testing.md)). A rate cut reopens with the settings
