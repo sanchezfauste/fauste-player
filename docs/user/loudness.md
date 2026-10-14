@@ -143,4 +143,5 @@ normalization" or "Trim +1.5 dB").
 - **Maximum boost.** Keeps a very quiet recording (or a mostly silent one)
   from being raised into noise. 0 dB only turns loud tracks down.
 - **Maximum trim.** How far the per-track trim may go. Lowering it limits
-  trims already set, without changing them.
+  trims already set without changing them, until you next edit that
+  track's loudness: the edit then saves the limited trim.

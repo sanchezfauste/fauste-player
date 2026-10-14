@@ -175,7 +175,7 @@ half applied.
 | `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | Set up a cart; `kind` is `jingle`, `effect` or `spot`. Keeping its track does not stop it; a new track or `null` does (C8) |
 | `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | Set a marker by hand, or with `null` let analysis fill it again; `kind` is `cue-in`, `intro-end`, `outro-start`, `segue-start` or `cue-out` |
 | `POST /tracks/{id}/markers/reset` | — | Drop every manual marker and analyse again |
-| `PUT /tracks/{id}/loudness` | `{"excluded": bool, "trim_db": f32}` | Exclude the track from loudness normalization, or trim its gain (loudness normalization spec N24). Both fields are required; another field or a wrong type is `400`; a trim beyond ± `loudness.max_trim_db` or not a number is `409 unavailable` with the model's reason. Allowed while the track plays: it applies the next time the track is loaded |
+| `PUT /tracks/{id}/loudness` | `{"excluded": bool, "trim_db": f32}` | Exclude the track from loudness normalization, or trim its gain (loudness normalization spec N24). Both fields are required; another field or a wrong type is `400`; a trim beyond ± `loudness.max_trim_db` or not a number is `409 unavailable` with the model's reason, so a client that echoes a stored trim set before the maximum was lowered must limit it first. Allowed while the track plays: it applies the next time the track is loaded |
 
 Names are trimmed and must not be empty.
 
