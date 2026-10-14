@@ -64,7 +64,9 @@ fn settle(conductor: &mut Conductor, now: Instant) {
 /// Before a block is rendered: waits, ticking, until no source waits for its
 /// worker, so the render (far faster than real time) never reaches a source
 /// the worker has not filled yet. The deadline only bounds a hang: going on
-/// unsettled would test something else, so it fails.
+/// unsettled would test something else, so it fails. The tests that use it
+/// check gapless continuity, not how early a preload is asked for: a preload
+/// asked for too late would still pass here.
 fn keep_up(conductor: &mut Conductor, now: Instant) {
     let deadline = Instant::now() + Duration::from_secs(60);
     while conductor.engine().unsettled_sources() > 0 {
@@ -217,7 +219,12 @@ impl Rng {
 }
 
 fn stress(simulated_secs: u64) {
-    let (mut conductor, handle, device, mut now) = offline_conductor(model(8, 30));
+    // Sources start half-decoded here, as in the product, so a slow worker's
+    // underruns mix with the random commands (the other tests start them
+    // whole).
+    let mut state = model(8, 30);
+    state.config.tuning.ready_threshold_ms = fp_model::Config::default().tuning.ready_threshold_ms;
+    let (mut conductor, handle, device, mut now) = offline_conductor(state);
     let players: Vec<PlayerId> = conductor.state().players.iter().map(|p| p.id).collect();
     let e = entries(conductor.state());
     let mut rng = Rng(0x5eed);

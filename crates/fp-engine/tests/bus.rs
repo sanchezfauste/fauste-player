@@ -82,9 +82,16 @@ fn unplugging_switches_to_the_virtual_clock_and_the_timeline_keeps_moving() {
     bus.supervise(t0 + Duration::from_millis(10));
     assert_eq!(bus.health(), BusHealth::Lost);
     let before = bus.now_frame();
+    let started = Instant::now();
     wait_until(
         || bus.now_frame() - before >= 2_400,
         "the virtual clock renders",
+    );
+    // 50 ms of audio; a loose bound still catches a clock that barely runs.
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "the virtual clock ran at {:?} for 50 ms",
+        started.elapsed()
     );
 }
 
