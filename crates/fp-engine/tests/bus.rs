@@ -624,3 +624,53 @@ fn the_play_out_is_bounded_by_the_configured_maximum() {
         "below it, what the stream says"
     );
 }
+
+#[test]
+fn a_zero_maximum_waits_for_nothing_without_a_warning() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.set_latency_frames(1_200);
+    let mut budget = bus.busy_budget(true);
+    assert!(bus.reopen_at(44_100, t0, &mut budget));
+    bus.set_timing(BusTiming {
+        play_out_max: Duration::ZERO,
+        ..TIMING
+    });
+    let (frames, lines) = capture(|| bus.play_out_frames());
+    assert_eq!(frames, 0, "a zero maximum: no play-out wait");
+    assert_eq!(lines.count("play_out_max_ms"), 0, "0 turns the wait off");
+}
+
+#[test]
+fn a_new_maximum_reports_a_bounded_play_out_again() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.set_latency_frames(u32::MAX);
+    let mut budget = bus.busy_budget(true);
+    assert!(bus.reopen_at(44_100, t0, &mut budget));
+    let (_, first) = capture(|| bus.play_out_frames());
+    assert_eq!(first.count("play_out_max_ms"), 1);
+    bus.set_timing(BusTiming {
+        play_out_max: Duration::from_millis(100),
+        ..TIMING
+    });
+    let (_, second) = capture(|| bus.play_out_frames());
+    assert_eq!(
+        second.count("play_out_max_ms"),
+        1,
+        "the new maximum is reported once as well"
+    );
+}
+
+#[test]
+fn a_reopened_stream_has_nothing_old_left_to_play_out() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.set_latency_frames(1_200);
+    let mut budget = bus.busy_budget(true);
+    assert!(bus.reopen_at(44_100, t0, &mut budget));
+    bus.note_sound_end(bus.now_frame() + 100);
+    assert!(!bus.played_out(), "the end is still queued");
+    assert!(bus.reopen_at(48_000, t0, &mut budget));
+    assert!(
+        bus.played_out(),
+        "the reopen discarded the old stream: nothing of the old end is queued"
+    );
+}

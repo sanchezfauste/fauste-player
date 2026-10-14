@@ -188,11 +188,12 @@ pub struct Bus {
     /// The last open failed because the device was not there.
     missing: bool,
     /// The frame at which the last source that finished on this bus ended
-    /// (`note_sound_end`), on this bus's own frame clock: a bus opened
-    /// again starts its clock and this over.
+    /// (`note_sound_end`), on this bus's own frame clock. A successful
+    /// `reopen_with` clears it (the old stream and what it held are gone);
+    /// a bus removed and created again starts its clock and this over.
     sound_end: Option<u64>,
     /// `play_out_frames` was bounded by `BusTiming::play_out_max` and that
-    /// was logged (once per bus).
+    /// was logged (once per bus and maximum: `set_timing` resets it).
     play_out_bounded: AtomicBool,
 }
 
@@ -425,7 +426,8 @@ impl Bus {
         if held <= max {
             return held;
         }
-        if !self.play_out_bounded.swap(true, Ordering::Relaxed) {
+        // A zero maximum turns the wait off: nothing to report.
+        if max > 0 && !self.play_out_bounded.swap(true, Ordering::Relaxed) {
             tracing::warn!(
                 bus = ?self.key,
                 held,
@@ -650,6 +652,9 @@ impl Bus {
         let opened = self.open_retrying_busy(now, shared_fallback, budget);
         if opened.is_ok() {
             tracing::info!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, "stream reopened");
+            // The old stream, and whatever it still held, is gone: nothing
+            // that ended before is left to play out.
+            self.sound_end = None;
             if previous.dsd.is_none() && config.dsd.is_none() {
                 // Back in PCM, at a rate of its own choosing: a fallback to
                 // another rate is forgotten, while a device's own buffer
@@ -862,6 +867,8 @@ impl Bus {
     /// spec §7): the next `supervise` and the next reopen use it.
     pub fn set_timing(&mut self, timing: BusTiming) {
         self.timing = timing;
+        // A new maximum is reported again if the stream exceeds it.
+        self.play_out_bounded.store(false, Ordering::Relaxed);
     }
 
     /// Free places in the command queue.
