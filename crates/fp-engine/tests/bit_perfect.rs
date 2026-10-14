@@ -61,10 +61,12 @@ fn rig(bit_perfect: bool, exclusive_capable: bool) -> Rig {
         }];
     }
     config.tuning.gain_smoothing_ms = 0.0;
-    // Start only with more buffered than a test renders at once, so a test
-    // that renders faster than real time never outruns the worker.
+    // The tests render far faster than real time, and the worker may get
+    // little CPU (parallel tests): a source starts only once its whole file
+    // is decoded (every file here lasts 3 s, under the 4 s ring), so the
+    // render never outruns the worker into an underrun.
     config.tuning.prebuffer_secs = 4.0;
-    config.tuning.ready_threshold_ms = 1_500.0;
+    config.tuning.ready_threshold_ms = 4_000.0;
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
     let mut engine = Engine::new(
         backends,
@@ -116,9 +118,16 @@ impl Rig {
         self.settle();
     }
 
+    /// Waits until no source waits for its worker. The deadline only bounds
+    /// a hang: going on unsettled would test something else, so it fails.
     fn settle(&mut self) {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while self.engine.unsettled_sources() > 0 && Instant::now() < deadline {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while self.engine.unsettled_sources() > 0 {
+            assert!(
+                Instant::now() < deadline,
+                "the sources never settled: {}",
+                self.engine.describe_player(P)
+            );
             self.tick();
             std::thread::sleep(Duration::from_millis(1));
         }

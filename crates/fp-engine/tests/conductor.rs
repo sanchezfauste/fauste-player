@@ -30,6 +30,10 @@ fn model(players: usize, tracks: u64) -> AppState {
     config.players.count = players;
     config.outputs.backend = Some("offline".into());
     config.outputs.buffer_frames = BLOCK as u32;
+    // The tests render far faster than real time, and a worker may get
+    // little CPU (parallel tests): a source is ready only once its whole
+    // track is decoded, so a render never outruns it into an underrun.
+    config.tuning.ready_threshold_ms = TRACK_FRAMES as f64 / 48.0;
     let mut state = AppState::new(config, "Main");
     let playlist = state.playlists.first_id().unwrap();
     let paths = (1..=tracks)
@@ -50,16 +54,25 @@ fn model(players: usize, tracks: u64) -> AppState {
     state
 }
 
-/// Ticks until every source has been filled by its worker (bounded), instead
-/// of sleeping a fixed time.
+/// Ticks until every source has been filled by its worker, instead of
+/// sleeping a fixed time.
 fn settle(conductor: &mut Conductor, now: Instant) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        conductor.tick(now);
-        if conductor.engine().unsettled_sources() == 0 || Instant::now() > deadline {
-            return;
-        }
+    conductor.tick(now);
+    keep_up(conductor, now);
+}
+
+/// Before a block is rendered: waits, ticking, until no source waits for its
+/// worker, so the render (far faster than real time) never reaches a source
+/// the worker has not filled yet. The deadline only bounds a hang: going on
+/// unsettled would test something else, so it fails. The tests that use it
+/// check gapless continuity, not how early a preload is asked for: a preload
+/// asked for too late would still pass here.
+fn keep_up(conductor: &mut Conductor, now: Instant) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while conductor.engine().unsettled_sources() > 0 {
+        assert!(Instant::now() < deadline, "the sources never settled");
         std::thread::sleep(Duration::from_millis(1));
+        conductor.tick(now);
     }
 }
 
@@ -96,9 +109,9 @@ fn continuous_playback_chains_tracks_in_the_model_and_on_air() {
     let mut heard = Vec::new();
     for _ in 0..150 {
         conductor.tick(now);
+        keep_up(&mut conductor, now);
         heard.extend(device.render(BLOCK).unwrap().chunks(2).map(|f| f[0]));
         now += Duration::from_millis(10);
-        std::thread::yield_now();
     }
     let model = handle.model.load();
     let player = model.player(p).unwrap();
@@ -206,7 +219,12 @@ impl Rng {
 }
 
 fn stress(simulated_secs: u64) {
-    let (mut conductor, handle, device, mut now) = offline_conductor(model(8, 30));
+    // Sources start half-decoded here, as in the product, so a slow worker's
+    // underruns mix with the random commands (the other tests start them
+    // whole).
+    let mut state = model(8, 30);
+    state.config.tuning.ready_threshold_ms = fp_model::Config::default().tuning.ready_threshold_ms;
+    let (mut conductor, handle, device, mut now) = offline_conductor(state);
     let players: Vec<PlayerId> = conductor.state().players.iter().map(|p| p.id).collect();
     let e = entries(conductor.state());
     let mut rng = Rng(0x5eed);
@@ -610,9 +628,9 @@ fn a_repeating_entry_restarts_gaplessly_until_repeat_is_turned_off() {
     let run = |conductor: &mut Conductor, heard: &mut Vec<f32>, now: &mut Instant, ticks| {
         for _ in 0..ticks {
             conductor.tick(*now);
+            keep_up(conductor, *now);
             heard.extend(device.render(BLOCK).unwrap().chunks(2).map(|f| f[0]));
             *now += Duration::from_millis(10);
-            std::thread::yield_now();
         }
     };
     run(&mut conductor, &mut heard, &mut now, 350);
@@ -656,10 +674,10 @@ fn next_pressed_just_after_a_repeat_boundary_keeps_the_model_on_the_next_track()
     let mut heard = 0usize;
     while heard + BLOCK < TRACK_FRAMES as usize - BLOCK {
         conductor.tick(now);
+        keep_up(&mut conductor, now);
         device.render(BLOCK).unwrap();
         heard += BLOCK;
         now += Duration::from_millis(10);
-        std::thread::yield_now();
     }
     conductor.tick(now);
     // The mixer crosses the boundary before the conductor looks again...
@@ -671,9 +689,9 @@ fn next_pressed_just_after_a_repeat_boundary_keeps_the_model_on_the_next_track()
     now += Duration::from_millis(30);
     for _ in 0..20 {
         conductor.tick(now);
+        keep_up(&mut conductor, now);
         device.render(BLOCK).unwrap();
         now += Duration::from_millis(10);
-        std::thread::yield_now();
     }
     let model = handle.model.load();
     let player = model.player(p).unwrap();
@@ -696,9 +714,9 @@ fn the_entry_on_air_set_as_next_plays_once_more_gaplessly_and_then_moves_on() {
     let mut heard: Vec<f32> = Vec::new();
     for _ in 0..299 {
         conductor.tick(now);
+        keep_up(&mut conductor, now);
         heard.extend(device.render(BLOCK).unwrap().chunks(2).map(|f| f[0]));
         now += Duration::from_millis(10);
-        std::thread::yield_now();
     }
     // Pass 1 and pass 2 of track 1 are back to back, then track 2 follows,
     // and track 1 never returns.
@@ -743,9 +761,9 @@ fn in_single_mode_the_self_next_stops_the_player_and_play_starts_the_entry_again
     assert!(handle.send(Command::SetNext(p, e[0])));
     for _ in 0..250 {
         conductor.tick(now);
+        keep_up(&mut conductor, now);
         device.render(BLOCK).unwrap();
         now += Duration::from_millis(10);
-        std::thread::yield_now();
     }
     let player = handle.model.load().player(p).unwrap().clone();
     assert_eq!(
@@ -769,9 +787,9 @@ fn in_single_mode_stop_after_current_ends_a_repeat_at_the_end_of_the_pass() {
     assert!(handle.send(Command::ToggleStopAfterCurrent(p)));
     for _ in 0..250 {
         conductor.tick(now);
+        keep_up(&mut conductor, now);
         device.render(BLOCK).unwrap();
         now += Duration::from_millis(10);
-        std::thread::yield_now();
     }
     let player = handle.model.load().player(p).unwrap().clone();
     assert_eq!(player.transport, Transport::Stopped);
@@ -792,10 +810,10 @@ fn play_just_after_a_replay_boundary_keeps_the_model_consistent() {
     let mut heard = 0usize;
     while heard + BLOCK < TRACK_FRAMES as usize - BLOCK {
         conductor.tick(now);
+        keep_up(&mut conductor, now);
         device.render(BLOCK).unwrap();
         heard += BLOCK;
         now += Duration::from_millis(10);
-        std::thread::yield_now();
     }
     conductor.tick(now);
     for _ in 0..3 {
@@ -805,9 +823,9 @@ fn play_just_after_a_replay_boundary_keeps_the_model_consistent() {
     now += Duration::from_millis(30);
     for _ in 0..20 {
         conductor.tick(now);
+        keep_up(&mut conductor, now);
         device.render(BLOCK).unwrap();
         now += Duration::from_millis(10);
-        std::thread::yield_now();
     }
     let model = handle.model.load();
     let player = model.player(p).unwrap();

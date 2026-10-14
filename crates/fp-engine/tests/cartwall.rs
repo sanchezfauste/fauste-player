@@ -102,13 +102,14 @@ impl Rig {
     }
 
     fn settle(&mut self) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(60);
         loop {
             let events = self.engine.tick(self.clock);
             self.events.extend(events);
-            if self.engine.unsettled_sources() == 0 || Instant::now() > deadline {
+            if self.engine.unsettled_sources() == 0 {
                 return;
             }
+            assert!(Instant::now() < deadline, "the sources never settled");
             std::thread::sleep(Duration::from_millis(1));
         }
     }

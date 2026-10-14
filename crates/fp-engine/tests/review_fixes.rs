@@ -91,13 +91,14 @@ impl Rig {
     }
 
     fn settle(&mut self) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(60);
         loop {
             let events = self.engine.tick(self.clock);
             self.events.extend(events);
-            if self.engine.unsettled_sources() == 0 || Instant::now() > deadline {
+            if self.engine.unsettled_sources() == 0 {
                 return;
             }
+            assert!(Instant::now() < deadline, "the sources never settled");
             std::thread::sleep(Duration::from_millis(1));
         }
     }
@@ -211,8 +212,9 @@ fn a_route_to_an_absent_backend_uses_the_default_backend_and_device() {
         },
         now,
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while engine.unsettled_sources() > 0 && Instant::now() < deadline {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while engine.unsettled_sources() > 0 {
+        assert!(Instant::now() < deadline, "the sources never settled");
         engine.tick(now);
         std::thread::sleep(Duration::from_millis(1));
     }

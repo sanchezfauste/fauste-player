@@ -110,13 +110,14 @@ impl Rig {
     /// Waits (bounded) until worker threads have filled every pending
     /// source, ticking meanwhile; no fixed sleeps, so slow CI machines pass.
     fn settle(&mut self) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(60);
         loop {
             let events = self.engine.tick(self.clock);
             self.events.extend(events);
-            if self.engine.unsettled_sources() == 0 || Instant::now() > deadline {
+            if self.engine.unsettled_sources() == 0 {
                 return;
             }
+            assert!(Instant::now() < deadline, "the sources never settled");
             std::thread::sleep(Duration::from_millis(1));
         }
     }
@@ -638,13 +639,26 @@ fn a_route_to_an_unknown_backend_falls_back_to_the_default_backend() {
         },
         now,
     );
-    std::thread::sleep(Duration::from_millis(20));
-    engine.tick(now);
+    settle_engine(&mut engine, now);
     let out = main.render(BLOCK).unwrap();
     assert!(
         out.iter().any(|v| *v != 0.0),
         "the player must not go silent"
     );
+}
+
+/// Ticks `engine` until no source waits for its worker (bounded; a hang
+/// fails), instead of sleeping a fixed time.
+fn settle_engine(engine: &mut Engine, now: Instant) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        engine.tick(now);
+        if engine.unsettled_sources() == 0 {
+            return;
+        }
+        assert!(Instant::now() < deadline, "the sources never settled");
+        std::thread::sleep(Duration::from_millis(1));
+    }
 }
 
 /// An audio system compiled in but not usable here (a JACK server that is
@@ -710,8 +724,7 @@ fn a_route_to_an_unavailable_backend_falls_back_to_the_default_output() {
         },
         now,
     );
-    std::thread::sleep(Duration::from_millis(20));
-    engine.tick(now);
+    settle_engine(&mut engine, now);
     let out = main.render(BLOCK).unwrap();
     assert!(
         out.iter().any(|v| *v != 0.0),

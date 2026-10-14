@@ -118,8 +118,9 @@ impl Rig {
             EngineAction::StartCurrent { player: P, request },
             self.clock,
         );
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while self.engine.unsettled_sources() > 0 && Instant::now() < deadline {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while self.engine.unsettled_sources() > 0 {
+            assert!(Instant::now() < deadline, "the sources never settled");
             self.engine.tick(self.clock);
             std::thread::sleep(Duration::from_millis(1));
         }
