@@ -288,6 +288,7 @@ pub(crate) fn show(
                                     })
                                     .show(ui, |ui| {
                                         ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
+                                        set_body_right(ui);
                                         match st.section {
                                             Section::Outputs => {
                                                 st.load_devices(deps.backends, ctx);
@@ -596,6 +597,33 @@ fn confirm_restore(ctx: &egui::Context, scene: &Scene<'_>, st: &mut SettingsStat
     }
 }
 
+fn body_right_id() -> egui::Id {
+    egui::Id::new("settings-body-right")
+}
+
+/// Notes where the section body ends on the right, before any row is drawn.
+fn set_body_right(ui: &Ui) {
+    let right = ui.max_rect().right();
+    ui.data_mut(|d| d.insert_temp(body_right_id(), right));
+}
+
+/// The width left on the current line up to the body's right edge. A row
+/// whose fixed parts (a slider, the test buttons) run past that edge widens
+/// the body, and the body scrolls sideways; measured against the edge rather
+/// than `available_width`, the rows below are not widened with it and their
+/// lists keep to the column.
+pub(super) fn column_width(ui: &Ui) -> f32 {
+    let available = ui.available_width();
+    // Right to left, the room ends at the cursor, not at the body's edge.
+    if ui.layout().main_dir() == egui::Direction::RightToLeft {
+        return available;
+    }
+    ui.data(|d| d.get_temp::<f32>(body_right_id()))
+        .map_or(available, |right| {
+            available.min(right - ui.cursor().min.x).max(0.0)
+        })
+}
+
 /// The label column of every Settings row (feedback 2 spec O3).
 pub(super) const LABEL_WIDTH: f32 = 180.0;
 
@@ -644,7 +672,7 @@ pub(super) fn labelled_row<R>(
                 )
                 .inner;
             ui.add_space(16.0);
-            let rest = ui.available_width();
+            let rest = column_width(ui);
             ui.allocate_ui_with_layout(
                 vec2(rest, 40.0),
                 Layout::left_to_right(Align::Center),
@@ -656,7 +684,7 @@ pub(super) fn labelled_row<R>(
             .inner
         })
         .inner;
-    let width = ui.available_width();
+    let width = column_width(ui);
     let (r, _) = ui.allocate_exact_size(vec2(width, 1.0), Sense::hover());
     ui.painter()
         .rect_filled(r, 0.0, theme::TEXT.gamma_multiply(0.06));
@@ -666,6 +694,39 @@ pub(super) fn labelled_row<R>(
 /// `labelled_row` for controls that name themselves.
 pub(super) fn row(ui: &mut Ui, label: &str, hint: Option<&str>, control: impl FnOnce(&mut Ui)) {
     labelled_row(ui, label, hint, |ui, _| control(ui));
+}
+
+/// A drop-down that stays inside its column: its usual `width` (`None`:
+/// egui's default) where the column has room, wider for a longer choice,
+/// never past the column; the shown choice is shortened when
+/// the column is narrower, and whole on hover. The open list (`menu`) shows
+/// every choice in full.
+pub(super) fn fitted_combo(
+    ui: &mut Ui,
+    id_salt: impl egui::AsIdSalt,
+    shown: String,
+    width: Option<f32>,
+    menu: impl FnOnce(&mut Ui),
+) -> egui::Response {
+    let room = column_width(ui);
+    let width = width.unwrap_or(ui.spacing().combo_width);
+    let combo = |ui: &mut Ui| {
+        egui::ComboBox::from_id_salt(id_salt)
+            .selected_text(shown.clone())
+            .width(room.min(width))
+            .truncate()
+            .show_ui(ui, menu)
+            .response
+    };
+    // The combo box shortens its choice to the room its `Ui` has: where a
+    // wider row has pushed that room out, give it the column instead.
+    let response = if ui.available_width() > room {
+        let height = ui.spacing().interact_size.y;
+        ui.allocate_ui(vec2(room, height), combo).inner
+    } else {
+        combo(ui)
+    };
+    response.on_hover_text(shown)
 }
 
 /// A small upper-case heading over a group of rows.
@@ -776,59 +837,52 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             .as_deref()
             .map(|id| backend_name(t, id))
             .unwrap_or_else(|| t.tr("settings-default-backend"));
-        // At most 260 points, and never past a narrow window (as the
-        // language list); a shortened name shows whole on hover.
-        egui::ComboBox::from_id_salt("backend")
-            .selected_text(shown.clone())
-            .width(ui.available_width().min(260.0))
-            .truncate()
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(current.is_none(), t.tr("settings-default-backend"))
-                    .clicked()
-                {
-                    update(scene, |c| c.outputs.backend = None);
+        // 260 points (as the language list), never past a narrow window; a
+        // shortened name shows whole on hover.
+        fitted_combo(ui, "backend", shown.clone(), Some(260.0), |ui| {
+            if ui
+                .selectable_label(current.is_none(), t.tr("settings-default-backend"))
+                .clicked()
+            {
+                update(scene, |c| c.outputs.backend = None);
+            }
+            for b in listed_backends(&backends) {
+                let text = match &b.unavailable {
+                    Some(_) => t.tr_args(
+                        "settings-backend-unavailable",
+                        &[("name", backend_name(t, &b.id).into())],
+                    ),
+                    None => backend_name(t, &b.id),
+                };
+                let response = ui.add_enabled(
+                    b.unavailable.is_none(),
+                    egui::Button::selectable(current.as_deref() == Some(b.id.as_str()), text),
+                );
+                let response = match &b.unavailable {
+                    Some(why) => response.on_disabled_hover_text(why),
+                    None => response,
+                };
+                if response.clicked() {
+                    let id = b.id.clone();
+                    update(scene, |c| c.outputs.backend = Some(id));
                 }
-                for b in listed_backends(&backends) {
-                    let text = match &b.unavailable {
-                        Some(_) => t.tr_args(
-                            "settings-backend-unavailable",
-                            &[("name", backend_name(t, &b.id).into())],
-                        ),
-                        None => backend_name(t, &b.id),
-                    };
-                    let response = ui.add_enabled(
-                        b.unavailable.is_none(),
-                        egui::Button::selectable(current.as_deref() == Some(b.id.as_str()), text),
-                    );
-                    let response = match &b.unavailable {
-                        Some(why) => response.on_disabled_hover_text(why),
-                        None => response,
-                    };
-                    if response.clicked() {
-                        let id = b.id.clone();
-                        update(scene, |c| c.outputs.backend = Some(id));
-                    }
-                }
-            })
-            .response
-            .on_hover_text(shown);
+            }
+        });
     });
     let rate = config.outputs.sample_rate;
     let buffer = config.outputs.buffer_frames;
     row(ui, &t.tr("settings-rate"), None, |ui| {
-        egui::ComboBox::from_id_salt("rate")
-            .selected_text(t.tr_args("unit-hz", &[("value", rate.into())]))
-            .show_ui(ui, |ui| {
-                for r in SAMPLE_RATES {
-                    if ui
-                        .selectable_label(r == rate, t.tr_args("unit-hz", &[("value", r.into())]))
-                        .clicked()
-                    {
-                        update(scene, |c| c.outputs.sample_rate = r);
-                    }
+        let shown = t.tr_args("unit-hz", &[("value", rate.into())]);
+        fitted_combo(ui, "rate", shown.clone(), None, |ui| {
+            for r in SAMPLE_RATES {
+                if ui
+                    .selectable_label(r == rate, t.tr_args("unit-hz", &[("value", r.into())]))
+                    .clicked()
+                {
+                    update(scene, |c| c.outputs.sample_rate = r);
                 }
-            });
+            }
+        });
     });
     let latency_ms = f64::from(buffer) / f64::from(rate.max(1)) * 1000.0;
     let latency = t.tr_args(
@@ -836,15 +890,14 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         &[("ms", format!("{latency_ms:.1}").into())],
     );
     row(ui, &t.tr("settings-buffer"), Some(&latency), |ui| {
-        egui::ComboBox::from_id_salt("buffer")
-            .selected_text(buffer.to_string())
-            .show_ui(ui, |ui| {
-                for b in BUFFER_SIZES {
-                    if ui.selectable_label(b == buffer, b.to_string()).clicked() {
-                        update(scene, |c| c.outputs.buffer_frames = b);
-                    }
+        let shown = buffer.to_string();
+        fitted_combo(ui, "buffer", shown.clone(), None, |ui| {
+            for b in BUFFER_SIZES {
+                if ui.selectable_label(b == buffer, b.to_string()).clicked() {
+                    update(scene, |c| c.outputs.buffer_frames = b);
                 }
-            });
+            }
+        });
     });
     ui.add_space(12.0);
     caption(ui, &t.tr("settings-player-routes"));
@@ -997,6 +1050,12 @@ fn set_route(config: &mut Config, owner: Owner, bus: Bus, route: Option<Route>) 
 /// Width of the channel-pair slot, kept empty when a bus has no device, so
 /// that the test buttons line up (feedback 2 spec O3).
 const CHANNELS_WIDTH: f32 = 96.0;
+/// Width of the bus label (MAIN, CUE) in front of a route picker.
+const BUS_LABEL_WIDTH: f32 = 40.0;
+/// The narrowest device picker kept on the bus label's line next to the
+/// channel pair and the test button; a narrower column moves those two to
+/// a line of their own.
+const DEVICE_MIN_WIDTH: f32 = 96.0;
 
 fn route_picker(
     ui: &mut Ui,
@@ -1019,16 +1078,83 @@ fn route_picker(
         })
         .fold(0.0, f32::max)
         + 36.0;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
-        let bus_label = match bus {
+    const GAP: f32 = 8.0;
+    let tail_width = CHANNELS_WIDTH + GAP + test_width;
+    let one_line = BUS_LABEL_WIDTH + GAP + DEVICE_MIN_WIDTH + GAP + tail_width;
+    let none_text = match bus {
+        Bus::Main => t.tr("settings-default-device"),
+        Bus::Cue => t.tr("settings-none"),
+    };
+    let device = |ui: &mut Ui| {
+        device_box(
+            ui,
+            scene,
+            owner,
+            bus,
+            route.as_ref(),
+            backend,
+            devices,
+            &none_text,
+        );
+    };
+    let test = |ui: &mut Ui| {
+        let (label, freq) = match bus {
+            Bus::Main => (t.tr("settings-test-main"), MAIN_TONE_HZ),
+            Bus::Cue => (t.tr("settings-test-cue"), CUE_TONE_HZ),
+        };
+        // Main without a route plays on the default output; Cue needs one.
+        let target = route.clone().or_else(|| {
+            (bus == Bus::Main).then(|| Route {
+                backend: backend.unwrap_or_default().to_owned(),
+                device: String::new(),
+                first_channel: 0,
+            })
+        });
+        if widgets::tile(
+            ui,
+            vec2(test_width, 26.0),
+            &label,
+            target.is_some(),
+            TileStyle::plain(),
+            |p, r, c| {
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    format!("{} {label}", icon::WAVEFORM),
+                    font(12.0),
+                    c,
+                );
+            },
+        )
+        .clicked()
+            && let Some(target) = target
+        {
+            scene.ctl.test_tone(target, freq);
+        }
+    };
+    // The channel pair's slot, kept when there is no pair to show.
+    let channels = |ui: &mut Ui| {
+        let width = CHANNELS_WIDTH.min(column_width(ui));
+        ui.allocate_ui_with_layout(
+            vec2(width, 26.0),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                ui.set_width(width);
+                if let Some(r) = &route {
+                    channel_pair(ui, scene, owner, bus, r, devices);
+                }
+            },
+        );
+    };
+    let bus_label = |ui: &mut Ui| {
+        let text = match bus {
             Bus::Main => t.tr("settings-main"),
             Bus::Cue => t.tr("settings-cue"),
         };
         ui.add_sized(
-            vec2(40.0, 20.0),
+            vec2(BUS_LABEL_WIDTH, 20.0),
             egui::Label::new(
-                RichText::new(bus_label.to_uppercase())
+                RichText::new(text.to_uppercase())
                     .font(widgets::font_semibold(10.0))
                     .color(if bus == Bus::Main {
                         theme::ACCENT_400
@@ -1038,67 +1164,51 @@ fn route_picker(
             )
             .selectable(false),
         );
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+    };
+    let available = column_width(ui);
+    if available >= one_line {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = vec2(GAP, 0.0);
+            bus_label(ui);
             // Right to left: the test button, the channel pair, the device.
-            let (label, freq) = match bus {
-                Bus::Main => (t.tr("settings-test-main"), MAIN_TONE_HZ),
-                Bus::Cue => (t.tr("settings-test-cue"), CUE_TONE_HZ),
-            };
-            // Main without a route plays on the default output; Cue needs one.
-            let target = route.clone().or_else(|| {
-                (bus == Bus::Main).then(|| Route {
-                    backend: backend.unwrap_or_default().to_owned(),
-                    device: String::new(),
-                    first_channel: 0,
-                })
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                test(ui);
+                channels(ui);
+                device(ui);
             });
-            if widgets::tile(
-                ui,
-                vec2(test_width, 26.0),
-                &label,
-                target.is_some(),
-                TileStyle::plain(),
-                |p, r, c| {
-                    p.text(
-                        r.center(),
-                        egui::Align2::CENTER_CENTER,
-                        format!("{} {label}", icon::WAVEFORM),
-                        font(12.0),
-                        c,
-                    );
-                },
-            )
-            .clicked()
-                && let Some(target) = target
-            {
-                scene.ctl.test_tone(target, freq);
-            }
-            ui.allocate_ui_with_layout(
-                vec2(CHANNELS_WIDTH, 26.0),
-                Layout::left_to_right(Align::Center),
-                |ui| {
-                    ui.set_width(CHANNELS_WIDTH);
-                    if let Some(r) = &route {
-                        channel_pair(ui, scene, owner, bus, r, devices);
-                    }
-                },
-            );
-            let none_text = match bus {
-                Bus::Main => t.tr("settings-default-device"),
-                Bus::Cue => t.tr("settings-none"),
-            };
-            device_box(
-                ui,
-                scene,
-                owner,
-                bus,
-                route.as_ref(),
-                backend,
-                devices,
-                &none_text,
-            );
         });
-    });
+        ui.add_space(4.0);
+        return;
+    }
+    // A narrow column: the device picker beside the bus label (or under it,
+    // where both do not fit), then the channel pair and the test button on a
+    // line of their own (right-aligned as above), or one under the other
+    // where even that line does not fit.
+    if available >= BUS_LABEL_WIDTH + GAP + DEVICE_MIN_WIDTH {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = vec2(GAP, 0.0);
+            bus_label(ui);
+            device(ui);
+        });
+    } else {
+        bus_label(ui);
+        device(ui);
+    }
+    ui.add_space(4.0);
+    if available >= tail_width {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = vec2(GAP, 0.0);
+            ui.add_space(available - tail_width);
+            channels(ui);
+            test(ui);
+        });
+    } else {
+        if route.is_some() {
+            channels(ui);
+            ui.add_space(4.0);
+        }
+        test(ui);
+    }
     ui.add_space(4.0);
 }
 
@@ -1124,11 +1234,13 @@ fn channel_pair(
             ],
         )
     };
-    egui::ComboBox::from_id_salt(("channels", owner, bus == Bus::Main))
-        .selected_text(pair(r.first_channel))
-        .width(CHANNELS_WIDTH - 8.0)
-        .truncate()
-        .show_ui(ui, |ui| {
+    let shown = pair(r.first_channel);
+    fitted_combo(
+        ui,
+        ("channels", owner, bus == Bus::Main),
+        shown.clone(),
+        Some(CHANNELS_WIDTH - 8.0),
+        |ui| {
             for first in (0..channels.saturating_sub(1)).step_by(2) {
                 if ui
                     .selectable_label(first == r.first_channel, pair(first))
@@ -1139,7 +1251,8 @@ fn channel_pair(
                     update(scene, |c| set_route(c, owner, bus, Some(changed)));
                 }
             }
-        });
+        },
+    );
 }
 
 // The picker's parts, split for layout only.
@@ -1166,11 +1279,14 @@ fn device_box(
                 .map_or_else(|| d.clone(), |(_, label)| label.clone())
         })
         .unwrap_or_else(|| none_text.to_owned());
-    egui::ComboBox::from_id_salt(("device", owner, bus == Bus::Main))
-        .selected_text(shown)
-        .width(ui.available_width())
-        .truncate()
-        .show_ui(ui, |ui| {
+    // As wide as the room beside the bus label (or the channel pair); a
+    // shortened name shows whole on hover.
+    fitted_combo(
+        ui,
+        ("device", owner, bus == Bus::Main),
+        shown.clone(),
+        Some(f32::INFINITY),
+        |ui| {
             if ui.selectable_label(device.is_none(), none_text).clicked() {
                 update(scene, |c| set_route(c, owner, bus, None));
             }
@@ -1187,7 +1303,8 @@ fn device_box(
                     update(scene, |c| set_route(c, owner, bus, Some(r)));
                 }
             }
-        });
+        },
+    );
 }
 
 fn players(ui: &mut Ui, scene: &Scene<'_>) {
@@ -1310,20 +1427,17 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
             .find(|(tag, _)| current == *tag)
             .map_or(system.as_str(), |(_, n)| *n)
             .to_owned();
-        egui::ComboBox::from_id_salt("language")
-            .selected_text(shown)
-            .width(ui.available_width().min(260.0))
-            .show_ui(ui, |ui| {
-                for (tag, name) in &choices {
-                    let on = current == *tag;
-                    if ui.selectable_label(on, *name).clicked() && configured.as_deref() != *tag {
-                        let tag = tag.map(str::to_owned);
-                        update(scene, |c| c.ui.language = tag);
-                    }
+        fitted_combo(ui, "language", shown.clone(), Some(260.0), |ui| {
+            for (tag, name) in &choices {
+                let on = current == *tag;
+                if ui.selectable_label(on, *name).clicked() && configured.as_deref() != *tag {
+                    let tag = tag.map(str::to_owned);
+                    update(scene, |c| c.ui.language = tag);
                 }
-            })
-            .response
-            .labelled_by(label);
+            }
+        })
+        .labelled_by(label)
+        .on_hover_text(shown);
     });
 }
 
