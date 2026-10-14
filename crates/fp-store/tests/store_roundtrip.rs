@@ -58,6 +58,48 @@ fn saved_state_is_restored_paused_at_its_position() {
     )));
 }
 
+/// I2: a silent file's measurement (no integrated loudness) and the pass
+/// version survive a save and a load of the playlists file.
+#[test]
+fn the_loudness_measurement_round_trips() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    let mut state = AppState::new(Config::default(), "Main");
+    let playlist = state.playlists.first_id().unwrap();
+    let paths = vec![PathBuf::from("/m/silent.flac"), PathBuf::from("/m/b.flac")];
+    apply(
+        &mut state,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths,
+        },
+    )
+    .unwrap();
+    {
+        let mut tracks = state.library.iter_mut();
+        tracks.next().unwrap().apply_loudness(
+            Some(fp_model::LoudnessMeasurement {
+                integrated_lufs: None,
+                true_peak_dbtp: -60.5,
+            }),
+            fp_model::LOUDNESS_VERSION,
+        );
+        tracks.next().unwrap().apply_loudness(
+            Some(fp_model::LoudnessMeasurement {
+                integrated_lufs: Some(-14.25),
+                true_peak_dbtp: -0.5,
+            }),
+            fp_model::LOUDNESS_VERSION,
+        );
+    }
+    s.save_config(&state).unwrap();
+    s.save_playlists(&state).unwrap();
+    let loaded = s.load("Main");
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    assert_eq!(loaded.state.library, state.library);
+}
+
 #[test]
 fn newer_schema_is_not_quarantined() {
     let dir = tempfile::tempdir().unwrap();

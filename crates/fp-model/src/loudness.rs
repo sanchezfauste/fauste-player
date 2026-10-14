@@ -21,6 +21,14 @@ pub struct LoudnessMeasurement {
     pub true_peak_dbtp: f32,
 }
 
+impl LoudnessMeasurement {
+    /// Whether every number is finite. One that is not (a corrupt cache
+    /// entry) is no measurement: JSON cannot hold it.
+    pub fn is_finite(&self) -> bool {
+        self.integrated_lufs.is_none_or(f32::is_finite) && self.true_peak_dbtp.is_finite()
+    }
+}
+
 /// N22: playable tracks with no measurement that the loudness-only pass
 /// (or their first analysis) has not tried yet.
 pub fn loudness_unmeasured(state: &AppState) -> usize {

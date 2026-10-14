@@ -318,6 +318,63 @@ fn an_analysis_without_a_loudness_pass_keeps_the_measurement() {
     assert_eq!(track.loudness_pass, Some(LOUDNESS_VERSION));
 }
 
+/// I2: a measurement that is not a finite number is not kept (JSON cannot
+/// hold it), by either rule.
+#[test]
+fn a_non_finite_measurement_is_dropped() {
+    let bad = [
+        LoudnessMeasurement {
+            integrated_lufs: Some(f32::NAN),
+            true_peak_dbtp: -1.0,
+        },
+        LoudnessMeasurement {
+            integrated_lufs: Some(f32::NEG_INFINITY),
+            true_peak_dbtp: -1.0,
+        },
+        LoudnessMeasurement {
+            integrated_lufs: None,
+            true_peak_dbtp: f32::NAN,
+        },
+    ];
+    for m in bad {
+        let mut state = fixture(1);
+        let t = track_of(&state, 0);
+        apply(
+            &mut state,
+            Command::ApplyLoudness {
+                track: t,
+                loudness: Some(m),
+                version: LOUDNESS_VERSION,
+            },
+        )
+        .unwrap();
+        let track = state.library.get(t).unwrap();
+        assert_eq!(track.loudness, None);
+        assert_eq!(
+            track.loudness_pass,
+            Some(LOUDNESS_VERSION),
+            "the attempt stays"
+        );
+
+        let mut state = fixture(1);
+        let t = track_of(&state, 0);
+        let a = TrackAnalysis {
+            loudness: Some(m),
+            loudness_pass: Some(LOUDNESS_VERSION),
+            ..analysis(200.0)
+        };
+        apply(
+            &mut state,
+            Command::ApplyAnalysis {
+                track: t,
+                analysis: Box::new(a),
+            },
+        )
+        .unwrap();
+        assert_eq!(state.library.get(t).unwrap().loudness, None);
+    }
+}
+
 #[test]
 fn n6_a_track_analysed_before_this_feature_needs_the_loudness_pass() {
     let mut state = fixture(1);

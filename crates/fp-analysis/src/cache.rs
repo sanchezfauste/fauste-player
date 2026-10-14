@@ -141,9 +141,11 @@ impl AnalysisCache {
         match postcard::take_from_bytes::<CachedAnalysis>(&bytes) {
             Ok((cached, rest)) if cached.key == key.0 => {
                 let mut analysis = cached.analysis;
-                // A missing or unreadable tail is "not measured yet"; the
-                // entry itself is fine.
-                if let Ok(tail) = postcard::from_bytes::<LoudnessTail>(rest) {
+                // A missing, unreadable or non-finite tail is "not measured
+                // yet"; the entry itself is fine.
+                if let Ok(tail) = postcard::from_bytes::<LoudnessTail>(rest)
+                    && tail.loudness.is_none_or(|m| m.is_finite())
+                {
                     analysis.analysis.loudness = tail.loudness;
                     analysis.analysis.loudness_pass = Some(tail.pass);
                 }

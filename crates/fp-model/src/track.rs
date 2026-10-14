@@ -406,8 +406,9 @@ impl Track {
     }
 
     /// N6b: a loudness-only result. Only the measurement changes.
+    /// A measurement that is not finite is dropped (the attempt stays).
     pub fn apply_loudness(&mut self, loudness: Option<LoudnessMeasurement>, version: u32) {
-        self.loudness = loudness;
+        self.loudness = loudness.filter(LoudnessMeasurement::is_finite);
         self.loudness_pass = Some(version);
     }
 

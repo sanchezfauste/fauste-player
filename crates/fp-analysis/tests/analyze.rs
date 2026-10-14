@@ -510,6 +510,37 @@ fn a_broken_tail_is_ignored() {
     assert_eq!(back.peaks, a.peaks);
 }
 
+/// I2: a tail whose numbers are not finite (a corrupt entry) is no
+/// measurement: saved as JSON it would make the playlists file unloadable.
+#[test]
+fn a_tail_with_a_non_finite_measurement_is_ignored() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stereo_tone(dir.path(), "tone.wav", -23.0, 1.0);
+    let c = cache(dir.path());
+    for bad in [
+        LoudnessMeasurement {
+            integrated_lufs: Some(f32::NAN),
+            true_peak_dbtp: -1.0,
+        },
+        LoudnessMeasurement {
+            integrated_lufs: None,
+            true_peak_dbtp: f32::INFINITY,
+        },
+    ] {
+        let mut a = analyze_file(&path, &settings(), &limits()).unwrap();
+        a.analysis.loudness = Some(bad);
+        c.store(&path, &settings(), &limits(), &a).unwrap();
+        let back = c
+            .load(&path, &settings(), &limits())
+            .expect("the entry is kept");
+        assert_eq!(
+            (back.analysis.loudness, back.analysis.loudness_pass),
+            (None, None)
+        );
+        assert_eq!(back.peaks, a.peaks);
+    }
+}
+
 /// The one `.bin` entry under the test cache.
 fn only_entry(dir: &Path) -> PathBuf {
     let entries: Vec<PathBuf> = std::fs::read_dir(dir.join("cache"))
