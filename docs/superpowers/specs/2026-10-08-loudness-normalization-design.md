@@ -351,7 +351,8 @@ band) stays a separate value, whatever the normalization target (Q4).
   `fp_model::trim_in_use(config, edit)`: the saved trim within ±
   `max_trim_db`, as N7 computes the gain. When a lowered maximum limits a
   saved trim, this line reads "Trim {trim} dB (saved {saved} dB, limited by
-  the maximum trim)".
+  the maximum trim)", unless both read the same at the precision shown
+  (0.1 dB).
 
 ### 8.2 Per-track controls
 

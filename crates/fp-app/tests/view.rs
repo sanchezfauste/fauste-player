@@ -1120,6 +1120,13 @@ fn n19_the_tooltip_shows_the_trim_in_use_and_the_saved_one() {
     );
     t.loudness_edit.trim_db = f32::NAN;
     assert_eq!(loudness_lines(&t, &c).len(), 1, "no number, no trim");
+    // Limited only below the precision shown: the line would read "+6.0
+    // (saved +6.0)", so it names the trim alone.
+    t.loudness_edit.trim_db = 6.04;
+    assert_eq!(
+        loudness_lines(&t, &c)[1],
+        msg("track-loudness-trim", &[("trim", "+6.0")])
+    );
 }
 
 #[test]
