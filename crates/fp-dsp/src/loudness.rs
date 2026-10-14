@@ -55,10 +55,31 @@ pub struct LoudnessMeter {
     hops: Vec<f64>,
     /// Largest true-peak magnitude so far (linear).
     peak: f32,
+    /// The left sample of a frame split between two pushes.
+    half: Option<f32>,
+}
+
+/// Frames in one gating block at `sample_rate` (0 is taken as 1 Hz): four
+/// hops. Never more than 400 ms, so a programme of 400 ms or more always
+/// holds one block (spec N5).
+pub fn gating_block_frames(sample_rate: u32) -> u64 {
+    hop_frames(sample_rate) * HOPS_PER_BLOCK as u64
+}
+
+/// Frames per 100 ms hop: a tenth of the rate, rounded down to whole frames
+/// (at least one). Rounding down keeps a block within 400 ms where a tenth
+/// of the rate is not a whole number (11 025 Hz: 1 102 frames, 99.95 ms).
+fn hop_frames(sample_rate: u32) -> u64 {
+    (u64::from(sample_rate.max(1)) / 10).max(1)
 }
 
 fn lufs_of(mean_square: f64) -> f64 {
     LOUDNESS_OFFSET + 10.0 * mean_square.log10()
+}
+
+/// The inverse of `lufs_of`.
+fn mean_square_of(lufs: f64) -> f64 {
+    10f64.powf((lufs - LOUDNESS_OFFSET) / 10.0)
 }
 
 impl LoudnessMeter {
@@ -68,32 +89,50 @@ impl LoudnessMeter {
         Self {
             k: [KWeighting::new(rate), KWeighting::new(rate)],
             tp: [TruePeak::default(), TruePeak::default()],
-            hop_frames: ((f64::from(rate) / 10.0).round() as u64).max(1),
+            hop_frames: hop_frames(rate),
             in_hop: 0,
             hop_energy: 0.0,
             hops: Vec::new(),
             peak: 0.0,
+            half: None,
         }
     }
 
-    /// Feeds interleaved stereo samples. A trailing half frame is ignored;
-    /// a sample that is not finite counts as silence.
+    /// Feeds interleaved stereo samples. A push may end mid-frame: the half
+    /// frame is completed by the next push, and one never completed is not
+    /// measured. A sample that is not finite counts as silence.
     pub fn push(&mut self, stereo: &[f32]) {
-        for frame in stereo.as_chunks::<2>().0 {
-            let mut energy = 0.0;
-            for ((x, k), tp) in frame.iter().zip(&mut self.k).zip(&mut self.tp) {
-                let x = if x.is_finite() { *x } else { 0.0 };
-                self.peak = self.peak.max(tp.push(x));
-                let w = k.process(f64::from(x));
-                energy += w * w;
-            }
-            self.hop_energy += energy;
-            self.in_hop += 1;
-            if self.in_hop == self.hop_frames {
-                self.hops.push(self.hop_energy);
-                self.hop_energy = 0.0;
-                self.in_hop = 0;
-            }
+        let mut rest = stereo;
+        if let Some(left) = self.half
+            && let Some((right, tail)) = rest.split_first()
+        {
+            self.half = None;
+            self.frame([left, *right]);
+            rest = tail;
+        }
+        let (frames, tail) = rest.as_chunks::<2>();
+        for frame in frames {
+            self.frame(*frame);
+        }
+        if let Some(left) = tail.first() {
+            self.half = Some(*left);
+        }
+    }
+
+    fn frame(&mut self, frame: [f32; 2]) {
+        let mut energy = 0.0;
+        for ((x, k), tp) in frame.iter().zip(&mut self.k).zip(&mut self.tp) {
+            let x = if x.is_finite() { *x } else { 0.0 };
+            self.peak = self.peak.max(tp.push(x));
+            let w = k.process(f64::from(x));
+            energy += w * w;
+        }
+        self.hop_energy += energy;
+        self.in_hop += 1;
+        if self.in_hop == self.hop_frames {
+            self.hops.push(self.hop_energy);
+            self.hop_energy = 0.0;
+            self.in_hop = 0;
         }
     }
 
@@ -105,25 +144,24 @@ impl LoudnessMeter {
             return None;
         }
         let block_frames = (self.hop_frames * HOPS_PER_BLOCK as u64) as f64;
-        // Mean square per block, summed over the two channels (weight 1.0).
-        let blocks: Vec<f64> = self
-            .hops
-            .windows(HOPS_PER_BLOCK)
-            .map(|w| w.iter().sum::<f64>() / block_frames)
-            .collect();
-        let above = |gate: f64| blocks.iter().copied().filter(move |z| lufs_of(*z) > gate);
-        let mean = |it: &mut dyn Iterator<Item = f64>| {
-            let (sum, n) = it.fold((0.0, 0usize), |(s, n), z| (s + z, n + 1));
+        // The mean square of the blocks louder than `gate` (LUFS), if any.
+        // A block's mean square is summed over the two channels (weight
+        // 1.0); the gate is turned into a mean square once, so no block
+        // needs a logarithm.
+        let mean_above = |gate: f64| {
+            let threshold = mean_square_of(gate);
+            let (sum, n) = self
+                .hops
+                .windows(HOPS_PER_BLOCK)
+                .map(|w| w.iter().sum::<f64>() / block_frames)
+                .filter(|z| *z > threshold)
+                .fold((0.0, 0usize), |(s, n), z| (s + z, n + 1));
             (n > 0).then(|| sum / n as f64)
         };
-        let integrated_lufs = match mean(&mut above(ABSOLUTE_GATE_LUFS)) {
-            None => None,
-            Some(ungated) => {
-                let relative = lufs_of(ungated) + RELATIVE_GATE_LU;
-                let gate = relative.max(ABSOLUTE_GATE_LUFS);
-                mean(&mut above(gate)).map(lufs_of)
-            }
-        };
+        let integrated_lufs = mean_above(ABSOLUTE_GATE_LUFS).and_then(|ungated| {
+            let gate = (lufs_of(ungated) + RELATIVE_GATE_LU).max(ABSOLUTE_GATE_LUFS);
+            mean_above(gate).map(lufs_of)
+        });
         let true_peak_dbtp = if self.peak > 0.0 {
             20.0 * f64::from(self.peak).log10()
         } else {
