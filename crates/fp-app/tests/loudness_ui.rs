@@ -273,6 +273,62 @@ fn a_zero_maximum_trim_still_allows_excluding() {
 }
 
 #[test]
+fn excluding_sends_the_trim_in_use() {
+    // A trim saved above a maximum lowered since: the switch saves the
+    // trim the gain uses (N7), as the slider shows it.
+    let mut s = on_air();
+    s.config.loudness.max_trim_db = 6.0;
+    for t in s.library.iter_mut() {
+        t.loudness_edit.trim_db = 10.0;
+    }
+    let (mut h, fake) = harness(s);
+    h.run_steps(2);
+    open_popup(&mut h);
+    fake.take_sent();
+    h.get_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+        .click();
+    h.run_steps(2);
+    assert_eq!(loudness_edits(&fake.take_sent()), vec![(true, 6.0)]);
+}
+
+#[test]
+fn n20_the_cue_window_waveform_menu_opens_the_popup_for_the_cued_track() {
+    use fp_app::ui::controller::Controller;
+    let s = on_air();
+    let cued = s.players[0].next.unwrap();
+    let track = s.playlists.entry(cued).unwrap().track;
+    let (mut h, fake) = harness(s);
+    fake.send(Command::ToggleCue(fake.player(0)));
+    h.run_steps(2);
+    let wave = h.get_by_label("CUE waveform: click to seek").rect();
+    h.event(Event::PointerMoved(wave.center()));
+    for pressed in [true, false] {
+        h.event(Event::PointerButton {
+            pos: wave.center(),
+            button: PointerButton::Secondary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+    }
+    h.run_steps(2);
+    h.get_by_label("Loudness…").click();
+    h.run_steps(2);
+    fake.take_sent();
+    h.get_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+        .click();
+    h.run_steps(2);
+    let sent: Vec<_> = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::SetTrackLoudness { track, .. } => Some(track),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sent, vec![track], "the cued track, not the one on air");
+}
+
+#[test]
 fn the_popup_keeps_its_track_and_closes_when_the_track_is_gone() {
     let (mut h, fake) = harness(on_air());
     h.run_steps(2);
