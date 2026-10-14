@@ -38,7 +38,7 @@ audio engine that the interface can never block.
 - **About window:** the window's title bar shows "Fauste Player <version>";
   the info button next to Settings opens the copyright and the licence
   notices of the bundled components.
-- **Restore defaults:** Players, Meters, Analysis and Shortcuts can each be
+- **Restore defaults:** Players, Meters, Analysis, Loudness and Shortcuts can each be
   reset to their defaults.
 - **Live settings:** every setting applies while the application runs. A
   change to the outputs waits until nothing plays on what it affects (a
@@ -51,6 +51,12 @@ audio engine that the interface can never block.
   (IEC 60268-10), VU (IEC 60268-17) and K-System (K-20, K-14, K-12), each
   with its own ballistics and scale. Optional true peak and EBU R128
   loudness, and a maximum readout.
+- **Loudness normalization:** off by default. Every track and cart plays at
+  the same integrated loudness (ITU-R BS.1770, EBU R128) with one fixed gain
+  per track, measured in the background, limited by a true-peak ceiling and
+  a maximum boost. A badge in each player header shows the gain on air;
+  any track can be excluded or trimmed. A bit-perfect output is never
+  normalized.
 - **Sample-accurate mixing:** in continuous mode the next track starts
   exactly at the MIX point and overlaps the fading end of the current one.
   How far below the track's own level the MIX point sits, and the maximum
@@ -85,7 +91,7 @@ audio engine that the interface can never block.
   Events) and OSC, off by default and set up in Settings → Remote. A web
   page, a phone app, automation or a control surface can follow the
   players, playlists and cartwall, operate them, and edit playlists, cart
-  pages and markers. A token, origin checks and source allow-lists protect
+  pages, markers and a track's loudness settings. A token, origin checks and source allow-lists protect
   it when it listens on the network.
 - **M3U / M3U8 / PLS import and M3U8 export.**
 - **Bit-perfect output:** a special mode for audiophile playback, off by

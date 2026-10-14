@@ -21,11 +21,12 @@ use support::{harness_sized, state};
 const SCREEN: egui::Vec2 = egui::vec2(1400.0, 900.0);
 /// The window size the spec asks for (`settings::WINDOW_SIZE`).
 const WINDOW: egui::Vec2 = egui::vec2(900.0, 640.0);
-const SECTIONS: [&str; 9] = [
+const SECTIONS: [&str; 10] = [
     "Audio outputs",
     "Players",
     "Meters",
     "Analysis",
+    "Loudness",
     "Playlists",
     "Cartwall",
     "Keyboard shortcuts",

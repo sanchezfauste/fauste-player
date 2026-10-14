@@ -4,8 +4,9 @@
 
 use fp_model::volume::fader_from_gain;
 use fp_model::{
-    AppState, CartId, CartKind, CartPage, CartPageId, EntryId, FileState, Marker, MarkerSource,
-    PlayMode, PlayerId, PlayerState, Playlist, PlaylistId, Track, TrackId, TrackKind, Transport,
+    AppState, CartId, CartKind, CartPage, CartPageId, EntryId, FileState, GainLimit, Marker,
+    MarkerSource, Normalization, NormalizationStatus, PlayMode, PlayerId, PlayerState, Playlist,
+    PlaylistId, Track, TrackId, TrackKind, Transport,
 };
 use serde::Serialize;
 
@@ -41,6 +42,11 @@ pub struct PlayerDto {
     pub cue: Option<CueDto>,
     pub elapsed_secs: Option<f64>,
     pub remaining_secs: Option<f64>,
+    /// The normalization the current entry started with, while the player
+    /// is not stopped (loudness normalization spec N23). It is what the
+    /// model asked the engine for; it does not change while the entry
+    /// plays.
+    pub normalization: Option<NormalizationDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -95,6 +101,33 @@ pub struct TrackDto {
     pub analyzed: bool,
     pub format: Option<FormatDto>,
     pub markers: MarkersDto,
+    /// The measurement; `None` until the analysis measured the file
+    /// (loudness normalization spec N23).
+    pub loudness: Option<LoudnessDto>,
+    /// The operator's per-track setting.
+    pub loudness_edit: LoudnessEditDto,
+}
+
+/// What the analysis measured of a whole file.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LoudnessDto {
+    /// Gated integrated loudness, LUFS; `None` for a silent file.
+    pub integrated_lufs: Option<f32>,
+    pub true_peak_dbtp: f32,
+}
+
+/// A track's loudness edit (`PUT /tracks/{id}/loudness`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LoudnessEditDto {
+    pub excluded: bool,
+    pub trim_db: f32,
+}
+
+/// The fixed gain a source plays with and why (see `normalization_name`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct NormalizationDto {
+    pub gain_db: f32,
+    pub status: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -153,6 +186,8 @@ pub struct PlayingCartDto {
     pub cart: CartId,
     pub elapsed_secs: Option<f64>,
     pub remaining_secs: Option<f64>,
+    /// The normalization the cart was fired with (N23).
+    pub normalization: NormalizationDto,
 }
 
 pub fn state(model: &AppState, playback: &Playback) -> StateDto {
@@ -247,6 +282,7 @@ pub fn cartwall(model: &AppState, playback: &Playback) -> CartwallDto {
                     .zip(elapsed)
                     .filter(|_| known)
                     .map(|(t, e)| (t.cue_out_secs() - e).clamp(0.0, length)),
+                normalization: normalization_dto(&pc.normalization),
             }
         })
         .collect();
@@ -284,6 +320,36 @@ fn player_dto(model: &AppState, playback: &Playback, index: usize, p: &PlayerSta
         remaining_secs: current
             .zip(elapsed)
             .map(|(t, e)| (t.play_range(use_markers).cue_out - e).max(0.0)),
+        normalization: p
+            .on_air
+            .filter(|_| p.transport != Transport::Stopped)
+            .map(|n| normalization_dto(&n)),
+    }
+}
+
+/// N23: a normalization status as the API names it.
+pub fn normalization_name(status: NormalizationStatus) -> &'static str {
+    use NormalizationStatus as S;
+    match status {
+        S::Applied { limited: None } => "applied",
+        S::Applied {
+            limited: Some(GainLimit::TruePeak),
+        } => "limited_true_peak",
+        S::Applied {
+            limited: Some(GainLimit::MaxBoost),
+        } => "limited_max_boost",
+        S::Off => "off",
+        S::Excluded => "excluded",
+        S::NotMeasured => "not_measured",
+        S::Silent => "silent",
+        S::BitPerfect => "bit_perfect",
+    }
+}
+
+fn normalization_dto(n: &Normalization) -> NormalizationDto {
+    NormalizationDto {
+        gain_db: n.gain_db,
+        status: normalization_name(n.status),
     }
 }
 
@@ -347,6 +413,14 @@ fn track_dto(t: &Track) -> TrackDto {
             outro_start: m.outro_start.map(marker_dto),
             segue_start: m.segue_start.map(marker_dto),
             cue_out: m.cue_out.map(marker_dto),
+        },
+        loudness: t.loudness.map(|l| LoudnessDto {
+            integrated_lufs: l.integrated_lufs,
+            true_peak_dbtp: l.true_peak_dbtp,
+        }),
+        loudness_edit: LoudnessEditDto {
+            excluded: t.loudness_edit.excluded,
+            trim_db: t.loudness_edit.trim_db,
         },
     }
 }

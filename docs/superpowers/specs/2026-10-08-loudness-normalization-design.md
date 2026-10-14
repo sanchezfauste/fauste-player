@@ -307,13 +307,21 @@ band) stays a separate value, whatever the normalization target (Q4).
   | `Applied { limited: None }` | "−4.2 dB" (signed, one decimal; "0.0 dB" for a gain under 0.05 dB) | "Normalized to {target} LUFS: measured {lufs} LUFS, trim {trim} dB." |
   | `Applied { limited: Some(_) }` | as above | adds "Limited by the true-peak ceiling ({ceiling} dBTP)." or "Limited by the maximum boost ({max} dB)." |
   | `NotMeasured` | "Not normalized" (amber) | "Loudness not measured yet: this track plays unchanged." |
-  | `BitPerfect` | "Not normalized" (muted) | "Bit-perfect output: tracks play unaltered." |
+  | `BitPerfect` | "Not normalized" (muted), only while `normalize` is on | "Bit-perfect output: tracks play unaltered." |
   | `Excluded` | "Not normalized" (muted) | "This track is excluded from normalization." |
   | `Off`, `Silent` | none | — |
 
   `view::gain_badge(&Normalization, &LoudnessConfig, &Track) -> Option<GainBadge>`
   is a pure function in `crates/fp-app/src/ui/view.rs`; `player.rs` paints it
-  with the existing badge helper.
+  with the existing badge helper. With `normalize` off a bit-perfect player
+  shows no badge: it plays at unity gain either way, and the model reports
+  `BitPerfect` before `Off`. The tooltip names the current settings; when
+  `normalization(config, track, false)` now differs from `on_air` (a change
+  since the source started, N11) it adds "The track started before the last
+  settings change: it keeps this gain." The badge shows what the model
+  asked the engine for; it does not claim more (a re-preload that races a
+  committed transition may leave the engine on the earlier preload's gain
+  for that track, unreported).
 - **N19** The row tooltip of the track tables (`view::track_tooltip`,
   the hover text of a playlist, library or cart row) gains a loudness
   line after the format: "Loudness: {lufs} LUFS, true peak {tp} dBTP" when
@@ -328,9 +336,13 @@ band) stays a separate value, whatever the normalization target (Q4).
   measurement (or "not measured"), an **Exclude from normalization**
   checkbox and a **Trim** slider (−`max_trim_db` ..= +`max_trim_db`, 0.5 dB
   steps, double-click resets to 0). Each change sends `SetTrackLoudness`.
-  The popup reads only the snapshot (rule 8).
+  The popup reads only the snapshot (rule 8). It names the track it edits,
+  keeps editing it when the player moves on, has a Close button, and closes
+  by itself when the track leaves the library.
 - **N21** The cart edit dialog (where a cart's file and properties are
-  edited) shows the same two controls for the cart's track.
+  edited) shows the same two controls for the cart's track, as two rows
+  ("Exclude from normalization", with the measurement as its hint, and
+  "Trim").
 
 ### 8.3 Settings
 
@@ -343,7 +355,8 @@ band) stays a separate value, whatever the normalization target (Q4).
   (`loudness_unmeasured(state)`: playable with `loudness == None` and
   `loudness_pass != Some(LOUDNESS_VERSION)`, i.e. still waiting for the
   pass) saying that the background pass is measuring them, and
-  **Restore defaults** (N2). Slider ranges are those of N1.
+  **Restore defaults** (N2). Slider ranges are those of N1. A note says that
+  a bit-perfect output is never normalized.
 
 ### 8.4 Strings (en-US source; es-ES by hand; the other nine locales AI-translated)
 
@@ -357,7 +370,10 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `settings-normalize-max-boost` | "Maximum boost" |
 | `settings-normalize-max-trim` | "Maximum trim" |
 | `settings-hint-normalize-apply` | "Changes apply to tracks loaded afterwards; what is playing keeps its gain." |
-| `settings-normalize-unmeasured` | "{ $count } tracks not measured yet" |
+| `settings-normalize-unmeasured` | "{ $count } tracks not measured yet" (Fluent plural: "1 track not measured yet") |
+| `settings-hint-normalize-bp` | "A player or cart on a bit-perfect output always plays at unity gain: it is never normalized." |
+| `tip-gain-earlier-settings` | "The track started before the last settings change: it keeps this gain." |
+| `loudness-close` | "Close" |
 | `badge-gain` | "{ $gain } dB" |
 | `badge-not-normalized` | "Not normalized" |
 | `tip-gain-applied` | "Normalized to { $target } LUFS: measured { $lufs } LUFS, trim { $trim } dB." |

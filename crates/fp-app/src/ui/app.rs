@@ -129,6 +129,9 @@ pub(crate) struct ViewState {
     pub outdated_open: bool,
     /// Where each waveform's menu was opened, in seconds.
     pub wave_menu: HashMap<super::wave_view::WaveKey, f64>,
+    /// The track whose Loudness… popup is open (loudness normalization
+    /// spec N20).
+    pub loudness_popup: Option<TrackId>,
     /// When the operator last used each player's table or tabs (scroll,
     /// entry drag, row menu, tab click), in `Scene::time`.
     pub table_touched: HashMap<PlayerId, f64>,
@@ -361,6 +364,8 @@ pub struct AppUi {
     outdated_checked: bool,
     /// How many tracks an earlier version analysed, per model snapshot.
     outdated: crate::services::OutdatedCount,
+    /// Tracks waiting for a loudness measurement (Settings > Loudness).
+    unmeasured: crate::services::UnmeasuredCount,
     /// The egui context, once the first frame has run.
     ctx: Option<egui::Context>,
     /// Imports asked for before the first frame.
@@ -423,6 +428,7 @@ impl AppUi {
             settings_shown: false,
             outdated_checked: false,
             outdated: crate::services::OutdatedCount::default(),
+            unmeasured: crate::services::UnmeasuredCount::default(),
             ctx: None,
             pending_imports: Vec::new(),
             inbox: None,
@@ -703,6 +709,7 @@ impl AppUi {
         ui.allocate_rect(full, Sense::hover());
         // The CUE windows float over the screen; the dialogs below stay on top.
         cue_window::show_all(&ctx, &scene, &mut self.view);
+        super::loudness_edit::popup(&ctx, &scene, &mut self.view);
         // Once, at start-up: tracks an earlier version analysed wait for
         // the operator (they cost the processor for a while to redo).
         if !self.outdated_checked {
@@ -743,6 +750,7 @@ impl AppUi {
                 can_apply: fp_model::has_output_items(&state),
                 pending_tip,
                 outdated: self.outdated.get(&state),
+                unmeasured: self.unmeasured.get(&state),
             };
             let outcome = settings::show(&ctx, &scene, &mut self.settings, &deps);
             self.view.settings_open = outcome.open;

@@ -76,6 +76,7 @@ fn each_section_with_the_button_restores_itself() {
     for (section, expected) in [
         ("Meters", SettingsSection::Meters),
         ("Analysis", SettingsSection::Analysis),
+        ("Loudness", SettingsSection::Loudness),
         ("Keyboard shortcuts", SettingsSection::Shortcuts),
     ] {
         let (mut h, fake) = open(section, state(1, 1));

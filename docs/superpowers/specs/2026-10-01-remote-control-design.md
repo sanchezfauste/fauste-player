@@ -79,7 +79,9 @@ UTF-8), except cover images and the event stream.
   `{entry, track}`), `cue` (`null` or `{entry}`), `elapsed_secs`,
   `remaining_secs` (from the engine's telemetry, computed as the UI does:
   elapsed is the position in track seconds, remaining is cue-out minus it;
-  both `null` when there is no current entry).
+  both `null` when there is no current entry), `normalization` (`null` while
+  stopped, else `{gain_db, status}`: the loudness normalization the current
+  entry started with; loudness normalization spec N23).
 - **Playlist summary:** `id`, `name`, `entry_count`.
 - **Playlist:** the summary plus `entries`: `id`, `track` (Track),
   `repeat`, `stop_after`, `on_air` (player ids playing it), `next_on`
@@ -89,12 +91,14 @@ UTF-8), except cover images and the event stream.
   `missing` | `unreadable`), `analyzed`, `format` (`null` or
   `{sample_rate, channels, bits}`), `markers` (`cue_in`, `intro_end`,
   `outro_start`, `segue_start`, `cue_out`, each `null` or `{secs, source}`
-  with `source` `auto` | `manual`). Whether a cover exists is only known from
+  with `source` `auto` | `manual`), `loudness` (`null` or
+  `{integrated_lufs, true_peak_dbtp}`) and `loudness_edit`
+  (`{excluded, trim_db}`) (loudness normalization spec N23). Whether a cover exists is only known from
   the cache, so it is learnt from `GET /tracks/{id}/cover`. The file path is
   not exposed.
 - **Cartwall:** `shown_page`, `pages` (each `id`, `name`, `rows`, `cols`,
   `carts`), `playing` (in firing order: `cart`, `elapsed_secs`,
-  `remaining_secs`), `cue` (`null` or a cart id).
+  `remaining_secs`, `normalization`), `cue` (`null` or a cart id).
 - **Cart:** `id`, `index` (row-major, 0-based within its page), `name`,
   `kind` (`jingle` | `effect` | `spot`), `looped`, `exclusive`, `track`
   (`null` or Track).
@@ -169,6 +173,7 @@ the UI's clamping rules are not repeated here.
 | `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | `EditCart`, with the file kept, changed (when the track differs) or cleared: one command |
 | `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | `SetMarker` |
 | `POST /tracks/{id}/markers/reset` | — | `ResetMarkers` |
+| `PUT /tracks/{id}/loudness` | `{"excluded": bool, "trim_db": f32}` | `SetTrackLoudness` (loudness normalization spec N24) |
 
 Editing reuses tracks already in the library: inserting an entry and
 setting a cart refer to the same track, with its markers and analysis
@@ -258,8 +263,8 @@ replies.
   - `player` (one player changed);
   - `playlist` (name or entries changed), `playlist-removed {id}`;
   - `cartwall` (pages, carts, page shown, carts playing, cart cue);
-  - `track` (metadata or markers of a track in some playlist or cart changed,
-    for example when analysis completes).
+  - `track` (metadata, markers or loudness of a track in some playlist or
+    cart changed, for example when analysis completes).
 - Every `events.position_interval_ms`, and only while a player or cart plays,
   it publishes `position`: elapsed and remaining for every running player and
   cart.

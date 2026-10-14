@@ -286,6 +286,7 @@ fn edit_markers(
         view_state.wave_menu.insert(key, secs_at(p.x));
     }
     let at = view_state.wave_menu.get(&key).copied();
+    let mut open_loudness = false;
     let open = response.context_menu(|ui| {
         ui.set_min_width(220.0);
         let item = |ui: &mut Ui, key: &str| {
@@ -328,7 +329,15 @@ fn edit_markers(
             scene.ctl.send(Command::ResetMarkers { track });
             ui.close();
         }
+        ui.separator();
+        if item(ui, "wave-loudness") {
+            open_loudness = true;
+            ui.close();
+        }
     });
+    if open_loudness {
+        view_state.loudness_popup = Some(track);
+    }
     // Once the menu is closed, the point it was opened at is forgotten.
     if open.is_none() && !response.secondary_clicked() {
         view_state.wave_menu.remove(&key);

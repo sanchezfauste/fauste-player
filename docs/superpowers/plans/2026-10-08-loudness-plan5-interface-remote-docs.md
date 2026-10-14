@@ -1263,3 +1263,29 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - Spec coverage: N18 → Tasks 1–2; N19 → Tasks 1–2 (ruling: lines under the grid); N20, N21 → Task 3; N22 (and N2's button) → Task 4; §8.4 strings → Tasks 1, 3, 4 (each with its keys in 11 locales); N23, N24 → Task 5; N25 (MIDI nothing) and OSC nothing → no task, stated in the docs (Task 6); §11 docs and §13 spec lines → Task 6.
 - Kittest details (exact `Fake` state mutation, slider keyboard steps, cart selection) are to be matched to the existing tests named in each step; the assertions are the contract.
+
+## Execution notes (2026-10-14)
+
+Executed after the bit-perfect work (PRs #66–#69) and loudness plans 3–4
+(PRs #72–#73); every symbol was checked against that code. Deviations:
+
+- `gain_badge` shows no badge for `BitPerfect` while `normalize` is off (a
+  bit-perfect player plays at unity gain either way, and the model reports
+  `BitPerfect` before `Off`, so every bit-perfect player would otherwise say
+  "Not normalized" with normalization off by default).
+- The badge tooltip adds `tip-gain-earlier-settings` when the settings, the
+  measurement or the edit now give another gain than the one on air (Review
+  Focus 1: the tooltip would otherwise name a target the gain was not worked
+  out for).
+- The exclude control is the design's toggle, moved to `widgets::toggle`;
+  the popup is a title-less window with the track's title and a Close tile
+  (`loudness-close`); `settings-tab-loudness` is added in Task 3.
+- The cart editor has two rows (Exclude, with the measurement as hint; Trim).
+- The trim's double-click is read from the pointer, triple clicks included
+  (the slider's rail senses drags only; a double-click soon after the click
+  that opened the popup is a triple click to egui).
+- Settings → Loudness adds `settings-hint-normalize-bp`; the unmeasured count
+  uses Fluent plurals; `OutdatedCount` and `UnmeasuredCount` share a private
+  `SnapshotCount`.
+- Task 6 adds a guide page, `docs/user/loudness.md`. Screenshots were not
+  regenerated (Settings navigation and the player header changed).

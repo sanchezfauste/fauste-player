@@ -7,7 +7,7 @@ The window has one size (900 × 640, smaller on a small screen) whatever the
 section, and the section scrolls inside it. Every section lines its labels up
 in one column.
 
-The Players, Meters, Analysis and Keyboard shortcuts sections have a
+The Players, Meters, Analysis, Loudness and Keyboard shortcuts sections have a
 **Restore defaults** button in their header. It asks for confirmation and then
 resets only that section (Players keeps the number of players and the
 language; Shortcuts has no other reset button). Audio outputs, Playlists,
@@ -177,6 +177,34 @@ The tracks on the players are brought up to date anyway, as they are
 shown, and so are the tracks of carts that have no recorded format (a cart
 plays bit-perfect only when its format is known). Tracks whose file is
 missing are not counted until the file is back.
+
+The analysis also measures each file's loudness for
+[loudness normalization](loudness.md). Files analysed before loudness was
+measured are measured in the background, when the analysis has nothing
+else to do, whether normalization is on or off; their markers are not
+touched. **Re-analyse** (in the playlist menu) and **Re-analyse all tracks**
+measure again.
+
+## Loudness
+
+Plays every track and cart at the same loudness, with a fixed gain per
+track. [Loudness normalization](loudness.md) explains how the gain is
+worked out, the badge in the player header and the per-track settings.
+
+| Setting | Default | Range | Meaning |
+|---|---|---|---|
+| Normalize loudness | Off | | Normalization on or off |
+| Target | −16 LUFS | −36 … −6 LUFS, 0.5 steps | The integrated loudness every track is brought to |
+| True-peak ceiling | −1 dBTP | −12 … 0 dBTP, 0.1 steps | A boost never takes the track's true peak above this. Cuts are not limited |
+| Maximum boost | 12 dB | 0 … 24 dB | The largest gain a quiet track can get. Cuts are not limited |
+| Maximum trim | 12 dB | 0 … 24 dB | How far each track's own trim can go, up or down |
+
+Changes apply to tracks loaded afterwards: what is playing keeps its gain,
+and the next track waiting on each player is prepared again with the new
+one. A note under the settings says how many tracks are still waiting for
+their measurement; they play unchanged until it is done. A player or cart
+on a bit-perfect output is never normalized. **Restore defaults** resets
+this section only (normalization off).
 
 ## Playlists
 

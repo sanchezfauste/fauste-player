@@ -29,6 +29,54 @@ pub fn font_semibold(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(theme::SEMIBOLD.into()))
 }
 
+/// Translates a view `Message` (its arguments are already formatted text).
+pub fn tr_message(t: &crate::i18n::I18n, m: &crate::ui::view::Message) -> String {
+    let args: Vec<(&str, crate::i18n::Arg)> = m
+        .args
+        .iter()
+        .map(|(k, v)| (*k, crate::i18n::Arg::Text(v.clone())))
+        .collect();
+    t.tr_args(m.key, &args)
+}
+
+/// An on/off switch drawn like the design's toggles.
+pub fn toggle(ui: &mut Ui, on: &mut bool, label: &str) -> bool {
+    let (rect, response) = ui.allocate_exact_size(vec2(36.0, 20.0), Sense::click());
+    let value = *on;
+    let owned = label.to_owned();
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, value, owned.clone())
+    });
+    if response.clicked() {
+        *on = !*on;
+    }
+    let p = ui.painter();
+    p.rect_filled(
+        rect,
+        0.0,
+        if *on {
+            theme::ACCENT
+        } else {
+            theme::NEUTRAL_700
+        },
+    );
+    let knob_x = if *on {
+        rect.right() - 18.0
+    } else {
+        rect.left() + 2.0
+    };
+    p.rect_filled(
+        egui::Rect::from_min_size(egui::pos2(knob_x, rect.top() + 2.0), vec2(16.0, 16.0)),
+        0.0,
+        if *on {
+            theme::NEUTRAL_100
+        } else {
+            theme::NEUTRAL_400
+        },
+    );
+    response.clicked()
+}
+
 /// Colours of a flat, square button.
 #[derive(Debug, Clone, Copy)]
 pub struct TileStyle {

@@ -21,12 +21,13 @@ mod carts;
 mod columns;
 mod devices;
 mod keys;
+mod loudness;
 mod meters;
 mod midi;
 mod remote;
 use super::format;
 use super::theme;
-use super::widgets::{self, TileStyle, font, font_medium};
+use super::widgets::{self, TileStyle, font, font_medium, toggle};
 use crate::i18n::Arg;
 use crate::services::ServiceRequest;
 pub(crate) use keys::RESERVED_KEYS;
@@ -58,6 +59,7 @@ pub(crate) enum Section {
     Players,
     Meters,
     Analysis,
+    Loudness,
     Playlists,
     Cartwall,
     Shortcuts,
@@ -196,6 +198,9 @@ pub(crate) struct SettingsDeps<'a> {
     pub pending_tip: String,
     /// How many tracks an earlier version analysed.
     pub outdated: usize,
+    /// How many tracks wait for a loudness measurement (loudness
+    /// normalization spec N22).
+    pub unmeasured: usize,
 }
 
 /// What the modal asks of the application after a frame.
@@ -291,6 +296,9 @@ pub(crate) fn show(
                                             Section::Players => players(ui, scene),
                                             Section::Meters => meters::section(ui, scene),
                                             Section::Analysis => analysis(ui, scene, deps),
+                                            Section::Loudness => {
+                                                loudness::section(ui, scene, deps.unmeasured)
+                                            }
                                             Section::Playlists => playlists(ui, scene, st),
                                             Section::Cartwall => carts::section(ui, scene, st),
                                             Section::Shortcuts => keys::section(ui, scene, st),
@@ -464,7 +472,7 @@ fn button(ui: &mut Ui, text: &str) -> bool {
 }
 
 /// Every section: its nav glyph and its title.
-const SECTIONS: [(Section, &str, &str); 9] = [
+const SECTIONS: [(Section, &str, &str); 10] = [
     (Section::Outputs, icon::SPEAKER_HIGH, "settings-tab-outputs"),
     (
         Section::Players,
@@ -473,6 +481,11 @@ const SECTIONS: [(Section, &str, &str); 9] = [
     ),
     (Section::Meters, icon::GAUGE, "settings-tab-meters"),
     (Section::Analysis, icon::WAVEFORM, "settings-tab-analysis"),
+    (
+        Section::Loudness,
+        icon::SPEAKER_SIMPLE_HIGH,
+        "settings-tab-loudness",
+    ),
     (Section::Playlists, icon::PLAYLIST, "settings-tab-playlists"),
     (
         Section::Cartwall,
@@ -493,6 +506,7 @@ fn restorable(section: Section) -> Option<SettingsSection> {
         Section::Players => Some(SettingsSection::Players),
         Section::Meters => Some(SettingsSection::Meters),
         Section::Analysis => Some(SettingsSection::Analysis),
+        Section::Loudness => Some(SettingsSection::Loudness),
         Section::Shortcuts => Some(SettingsSection::Shortcuts),
         Section::Outputs
         | Section::Playlists
@@ -1306,44 +1320,6 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
             .response
             .labelled_by(label);
     });
-}
-
-/// An on/off switch drawn like the design's toggles.
-fn toggle(ui: &mut Ui, on: &mut bool, label: &str) -> bool {
-    let (rect, response) = ui.allocate_exact_size(vec2(36.0, 20.0), Sense::click());
-    let value = *on;
-    let owned = label.to_owned();
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, value, owned.clone())
-    });
-    if response.clicked() {
-        *on = !*on;
-    }
-    let p = ui.painter();
-    p.rect_filled(
-        rect,
-        0.0,
-        if *on {
-            theme::ACCENT
-        } else {
-            theme::NEUTRAL_700
-        },
-    );
-    let knob_x = if *on {
-        rect.right() - 18.0
-    } else {
-        rect.left() + 2.0
-    };
-    p.rect_filled(
-        egui::Rect::from_min_size(egui::pos2(knob_x, rect.top() + 2.0), vec2(16.0, 16.0)),
-        0.0,
-        if *on {
-            theme::NEUTRAL_100
-        } else {
-            theme::NEUTRAL_400
-        },
-    );
-    response.clicked()
 }
 
 fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {

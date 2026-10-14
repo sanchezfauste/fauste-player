@@ -11,6 +11,7 @@ pub mod files;
 pub mod format;
 pub mod glyphs;
 pub mod icons;
+mod loudness_edit;
 mod notice;
 pub mod pending;
 mod player;

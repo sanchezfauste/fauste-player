@@ -68,7 +68,10 @@ Go to **Settings → Cartwall**:
   back, for example to share it between studios. Relative file paths are
   resolved against the file's folder.
 - **Carts:** click a cart in the grid, then set its name, file (**Choose…**
-  or **Clear**), type, **Loop** and **Stop other carts when fired**.
+  or **Clear**), type, **Loop** and **Stop other carts when fired**. A cart
+  with a file also has **Exclude from normalization** and **Trim**, its
+  track's [loudness normalization](loudness.md#per-track-exclude-and-trim)
+  settings, with the measurement under the label.
 
 The cartwall's own Main and Cue outputs are in **Settings → Audio outputs**
 (the **Cartwall** row).

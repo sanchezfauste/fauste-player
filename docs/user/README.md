@@ -16,6 +16,7 @@ by themselves.
 | [Cartwall](cartwall.md) | Instant carts: firing, pages, loops, exclusive carts, setup |
 | [Markers and mixing](markers-and-mixing.md) | Cue in/out, the MIX point, intro and outro, automatic analysis |
 | [Settings](settings.md) | Audio outputs, players, analysis, playlists, MIDI, remote control |
+| [Loudness normalization](loudness.md) | Every track and cart at the same loudness with a fixed gain per track: the gain badge, excluding and trimming a track, bit-perfect outputs |
 | [Bit-perfect output](bit-perfect.md) | A special mode: no crossfades, volume at 100 %. Exclusive devices that follow each file's rate, the BP badge, DSD output, checking a chain |
 | [Keyboard](keyboard.md) | Shortcuts |
 | [MIDI control surfaces](midi.md) | Buttons, faders and lights on MIDI controllers |

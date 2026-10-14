@@ -8,6 +8,7 @@
 - [Cartwall](cartwall.md)
 - [Markers and mixing](markers-and-mixing.md)
 - [Settings](settings.md)
+- [Loudness normalization](loudness.md)
 - [Bit-perfect output](bit-perfect.md)
 - [Keyboard](keyboard.md)
 - [MIDI control surfaces](midi.md)

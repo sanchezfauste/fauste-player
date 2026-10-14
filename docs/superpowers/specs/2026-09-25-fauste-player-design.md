@@ -435,7 +435,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
 ### 8.3 Main screen (matches v3)
 
 - **Player column**, one per configured player (min width 380 px; any number of players is laid out in a horizontally scrollable row):
-  - **Header:** `P1`…`Pn`, state dot and label ("On air", "Stopped", "Paused"), fade and stop-after badges, BP badge (inactive until Phase 4), SINGLE|CONT segmented control (one border, the active mode filled), CUE button.
+  - **Header:** `P1`…`Pn`, state dot and label ("On air", "Stopped", "Paused"), fade and stop-after badges, BP badge (inactive until Phase 4), the loudness normalization gain badge left of it (loudness normalization spec N18), SINGLE|CONT segmented control (one border, the active mode filled), CUE button.
   - **Info row:** 64 px cover (placeholder vinyl icon if none), title, artist, and the next line with the green square (plus cue time in blue when cueing). With no current entry (stopped), the cover, title, artist, countdown and waveform show the `next` entry, the one Play starts, at its cue-in (`view::shown_entry`); a position the engine still reports is ignored; a click on the waveform sets where Play starts (rule 3a) and the playhead and countdown show it, a zoom on it does not follow the pinned position, and the intro badge does not blink. The next line keeps naming it.
   - **Meter column** at the right, spanning the info row and the transport: stereo meter between two labelled rulers, with peak hold and nothing drawn over the bars (meters spec M4, operator feedback 4, Q11), vertical volume fader (drag + wheel, dB tooltip).
   - **Transport:**
@@ -478,9 +478,10 @@ A modal window, closed with `Esc` or "Close", with these sections:
   - "Test Main" / "Test Cue" buttons that play a test tone (defaults: 1 kHz / 440 Hz, 1.5 s, −18 dBFS) through the real engine route.
 - **Players:** player count, default mode, `fade_ms`, auto-segue on/off, `end_warning_secs` (`history_len` is set in `config.json`).
 - **Analysis:** every `AnalysisSettings` field (trim threshold and margin, segue drop and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action. Manual markers are kept.
+- **Loudness** (loudness normalization spec N22): normalization on or off, target, true-peak ceiling, maximum boost and maximum trim, and the count of tracks waiting for a measurement.
 - **Playlists:** music folder, and create/rename/delete playlists. The last playlist cannot be deleted, nor a playlist containing a current entry.
 
-Settings has one fixed size (900 × 640, clamped to the window) and its section body scrolls. The Players, Meters, Analysis and Shortcuts sections have **Restore defaults** (with confirmation; Players keeps the player count and the language). Settings that only a restart applies (audio system, sample rate, buffer size, routes, bit-perfect, limits, tuning) show a notice and **Restart now** in the footer, and a "Restart pending" pill in the top bar; the restart goes through the on-air guard when something is on air. *(Replaced by the live settings spec, 2026-10-07: these settings apply while running; a "Settings pending" pill and Apply now replace the restart.)*
+Settings has one fixed size (900 × 640, clamped to the window) and its section body scrolls. The Players, Meters, Analysis, Loudness and Shortcuts sections have **Restore defaults** (with confirmation; Players keeps the player count and the language). Settings that only a restart applies (audio system, sample rate, buffer size, routes, bit-perfect, limits, tuning) show a notice and **Restart now** in the footer, and a "Restart pending" pill in the top bar; the restart goes through the on-air guard when something is on air. *(Replaced by the live settings spec, 2026-10-07: these settings apply while running; a "Settings pending" pill and Apply now replace the restart.)*
 
 The Cartwall and Shortcuts sections, plus M3U import/export and the language selector, come in Phase 2. In Phase 1 the language follows the OS locale.
 
