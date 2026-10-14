@@ -292,7 +292,8 @@ cannot hang the conductor.
   A start meanwhile takes the player over and a stop drops the held end.
   A pause meanwhile keeps the end held: once it has played, the bus
   reopens (`cut_while_paused`, which takes the cut out of the plan) and
-  the next starts on resume. If
+  the next starts on resume; from the cut on, the paused player is quiet
+  for L11 (`player_quiet`). If
   something sounds after all (a cart fired since the plan) or the device
   refuses the rate (B3.4), the bus keeps its rate and `cut_to` opens the
   next again at it: it plays resampled, after a longer gap. Without a cut
@@ -321,13 +322,19 @@ cannot hang the conductor.
   drained), and the mixer renders that far ahead of what is heard. So a
   rate cut never closes the stream as soon as the mixer has rendered the
   last sound: each bus keeps the frame where the last source that
-  finished on it ended (`Bus::note_sound_end`, from `BusEvent::Finished`),
-  on its own frame clock, so a bus closed and opened again starts both
-  over; `Bus::played_out` is true once the bus has rendered
+  finished on it ended (`Bus::note_sound_end`, from `BusEvent::Finished`;
+  for a paused source that `fade_out` releases at once with a cancel, which
+  has no `Finished`, the end of its pause ramp, `pause_ramp_ends`), on its
+  own frame clock. `Bus::reopen_with` keeps the clock and forgets the end
+  once the new stream is open (what the old one held is gone); only a bus
+  removed and created again starts its clock, and its end, over.
+  `Bus::played_out` is true once the bus has rendered
   `Bus::play_out_frames` more (the stream's `latency_frames`, else two
   blocks, at most `tuning.play_out_max_ms` at the bus's rate:
-  `BusTiming::play_out_max`; a bound that applies is logged once per bus,
-  so a bogus measurement cannot hold the output silent). BR6
+  `BusTiming::play_out_max`; a bound that applies is logged once per bus
+  and maximum, `set_timing` resetting it, and a zero maximum, which turns
+  the wait off, is not logged; a bogus measurement cannot hold the output
+  silent). BR6
   (`run_held_ends`), BR8 and the starts from silence above
   (`run_rate_cuts`), carts (`run_waiting_carts`) and the close of a native
   DSD stream (`end_dsd_streams`) wait for it without blocking: they look
@@ -339,7 +346,9 @@ cannot hang the conductor.
   sounding there, and `StopCart` removes one. Not covered (BR17's known
   gaps): CUE starts of players and carts (`start_cue`, `start_cart_cue`
   call `prepare_start` at once: only the headphones can lose an end), the
-  PCM stream closed by `open_dsd_stream`, and crossfaded starts. The gap of a rate cut is that much longer
+  PCM stream closed by `open_dsd_stream`, and crossfaded starts. Sources
+  released with a cancel are not a gap: a paused one ends at its pause
+  ramp (above), the others never sounded on the stream. The gap of a rate cut is that much longer
   (about 25–35 ms with 512-frame blocks at 44.1 kHz on a USB converter).
   Measured on hardware with `examples/rate_cut_tail.rs` (see
   [testing](testing.md)). A rate cut reopens with the settings
@@ -638,7 +647,9 @@ sources; for the audio system, every bus. Quiet means no started, unpaused
 source (current, outgoing, CUE), no cart, no test tone and no DSD silence
 running; paused and waiting sources are quiet, except a current waiting
 for a rate cut under a hard start (`PlayerRuntime::rate_cut`, bit-perfect
-rate and fader spec BR13), so a kept change never runs in the cut's gap.
+rate and fader spec BR13) and a next waiting behind a held BR6 end
+(`PlayerRuntime::held_end`; paused, only until the cut is done), so a kept
+change never runs in the cut's gap.
 A forced action runs at once.
 Each one ends with `EngineEvent::Applied { target, wanted, outcome }`.
 

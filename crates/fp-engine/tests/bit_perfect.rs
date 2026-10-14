@@ -756,6 +756,51 @@ fn br6_a_pause_while_the_device_plays_out_the_end_holds_the_next_until_resume() 
 }
 
 #[test]
+fn br6_a_pause_during_the_held_end_lets_a_device_change_apply_once_the_end_has_played() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    // Until the current has stopped: a block of silence, the end held.
+    let mut trailing = 0;
+    while trailing < BLOCK {
+        for v in r.run(BLOCK) {
+            trailing = if v == 0.0 { trailing + 1 } else { 0 };
+        }
+    }
+    r.act(EngineAction::Pause { player: P });
+    let running = r.engine.running_settings(&dac()).unwrap();
+    r.act(EngineAction::ApplyDevice {
+        device: dac(),
+        settings: fp_model::DeviceSettings {
+            buffer_frames: 960,
+            ..running
+        },
+        force: false,
+    });
+    let applied = |r: &Rig| {
+        r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Applied { .. }))
+    };
+    assert!(!applied(&r), "not while the end plays out");
+    assert!(run_until_rate(&mut r, 48_000, 9_600), "the cut happens");
+    r.run(BLOCK * 4);
+    assert!(
+        applied(&r),
+        "paused and played out: quiet, without waiting for the resume"
+    );
+    assert!(!r.transition_started(2), "still paused");
+    r.act(EngineAction::Resume { player: P });
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(r.transition_started(2), "the next starts on resume");
+    assert!(heard.iter().any(|v| *v != 0.0), "and plays");
+    assert!(r.engine.telemetry(P).bit_perfect, "at its own rate");
+}
+
+#[test]
 fn br8_a_hard_start_reopens_once_the_device_has_played_the_declick() {
     let mut r = rig(true, true);
     r.dac.set_latency_frames(HELD as u32);
@@ -770,6 +815,35 @@ fn br8_a_hard_start_reopens_once_the_device_has_played_the_declick() {
     assert!(silence < HELD + 2 * BLOCK, "{silence} frames: no longer");
     r.settle();
     assert!(bit_perfect_after(&mut r, 4_800));
+}
+
+#[test]
+fn br17_a_start_right_after_a_paused_track_stopped_reopens_once_the_pause_ramp_has_played() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::Pause { player: P });
+    // Past the pause ramp (and the engine's block of margin), well within
+    // what the dac holds.
+    let mut before = 0;
+    while before < BLOCK * 2 {
+        for v in r.run(BLOCK) {
+            before = if v == 0.0 { before + 1 } else { 0 };
+        }
+    }
+    assert!(before < HELD, "{before} frames: the test needs a held ramp");
+    // The paused track is released at once, with no `Finished` event.
+    r.act(EngineAction::StopNow { player: P });
+    r.start(request(2, b, pcm16(48_000)));
+    let silence = before + silence_before_rate(&mut r, 48_000, 44_100);
+    assert!(silence >= HELD, "{silence} frames: the pause ramp was cut");
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays");
+    assert!(r.engine.telemetry(P).bit_perfect, "at its own rate");
 }
 
 #[test]

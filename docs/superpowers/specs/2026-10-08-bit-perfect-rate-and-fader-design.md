@@ -246,7 +246,12 @@ costs. Three things such a station expects and does not get today:
   measured from the driver's delay), else two blocks, but never more than
   `tuning.play_out_max_ms` (default 500 ms, 0–2000; 0 never waits) at the
   bus's rate: a bogus measurement (a saturated timestamp after an xrun)
-  cannot hold the output silent, and the bound is logged once per output.
+  cannot hold the output silent, and the bound is logged once per output
+  and maximum. A source ends where its `Finished` event says; a paused
+  source released at once (a stop or a fade-out while paused, its pause
+  ramp over), which has no `Finished` event, ends where its pause ramp
+  ended. A reopen of the stream forgets the end (nothing the old stream
+  held is left).
   The engine waits without blocking (it looks again every tick). The
   gap of a rate cut grows by about the device's buffer (some 25–35 ms with
   512-frame blocks at 44.1 kHz on a USB converter). The same holds for a
@@ -280,9 +285,9 @@ costs. Three things such a station expects and does not get today:
     a larger change for a rare case;
   - a start with a crossfade, which the model never asks of a bit-perfect
     player (D8);
-  - a source ended with a cancel and not a `Finished` event (an end is
-    known only from `Finished`); no rate-change path ends a source that
-    way.
+  - none for a source ended with a cancel: a paused one ends at its pause
+    ramp (above), and the others released at once (never started, or held
+    silent) had nothing on the stream.
 
 ### 4.6 Live settings
 
@@ -295,7 +300,10 @@ costs. Three things such a station expects and does not get today:
 - **BR13 The engine's quiet guard sees the cut.** A bus whose player is
   between the stop and the start of a rate cut (BR6 steps 2–3, BR8) is not
   quiet for live settings L11: an `ApplyDevice`, `ApplyRoute` or
-  `ApplyAudioSystem` kept by the engine does not run in the gap.
+  `ApplyAudioSystem` kept by the engine does not run in the gap. A pause
+  while a BR6 end is held keeps the gap until the cut is done; the player
+  is then quiet like any paused one, so a kept change runs without
+  waiting for the resume.
 - **BR14 A settings change on a bit-perfect device.** As live settings
   L12: a new configured rate is only where the device starts; bit-perfect
   turned off reopens the device shared at `effective_rate`, the player is
@@ -532,7 +540,7 @@ backend and explicit `now: Instant`; nothing sleeps.
 | BR14 | `fp-engine` `tests/bit_perfect.rs` | bit-perfect off reports `StreamRate` at `effective_rate`; the next manual start is a crossfade again. |
 | BR15 | `fp-app` `tests/` (kittest, player and settings) | a bit-perfect player's Play/Next tooltip is `tip-next-bit-perfect` while on air; its MIX marker is drawn dim; Settings → Players shows `settings-players-bit-perfect-note` only while a bit-perfect player exists. |
 | BR16 | `fp-remote` `tests/api.rs`, `fp-control` `tests/router.rs` | `POST /players/{id}/play` on air and the MIDI Play/Next binding on a bit-perfect player are accepted and give `Command::Play` (the model then starts hard, BR7). |
-| BR17 | `fp-engine` `tests/bit_perfect.rs`, `tests/dsd_output.rs`, `tests/bus.rs`; `fp-backends` | with the Offline device holding three blocks, a scheduled cut, a hard start and a start right after a stop reopen only after at least that much silence was rendered after the last sound, and not much later; a pause while the end is held reopens once it has played and starts the next only on resume; so do a resume of a track loaded paused right after a stop and a cart fired right after a track ended, and a cart stopped while it waits never starts; a bus closed and opened again does not wait for an end on the closed one; one reporting `u32::MAX` waits `tuning.play_out_max_ms` and no longer, and a bus clamps what its stream reports to it at its rate (a new maximum applies at once); a native DSD stream closes after its silence and the three blocks; a bus counts what its stream reports, two blocks when it cannot tell, nothing without a stream; the cpal and native DSD measurements (`held_frames`, `held_words`). On hardware: `examples/rate_cut_tail.rs`. |
+| BR17 | `fp-engine` `tests/bit_perfect.rs`, `tests/dsd_output.rs`, `tests/bus.rs`; `fp-backends` | with the Offline device holding three blocks, a scheduled cut, a hard start and a start right after a stop reopen only after at least that much silence was rendered after the last sound, and not much later; a pause while the end is held reopens once it has played and starts the next only on resume, and a device change kept meanwhile applies once the end has played, without waiting for the resume; a start right after a paused track was stopped reopens only once its pause ramp has played; so do a resume of a track loaded paused right after a stop and a cart fired right after a track ended, and a cart stopped while it waits never starts; a bus removed and created again does not wait for an end on the old one, and a reopened stream has no old end left to play out; one reporting `u32::MAX` waits `tuning.play_out_max_ms` and no longer, and a bus clamps what its stream reports to it at its rate (a new maximum applies at once and is reported again; a zero maximum waits for nothing and reports nothing); a native DSD stream closes after its silence and the three blocks; a bus counts what its stream reports, two blocks when it cannot tell, nothing without a stream; the cpal and native DSD measurements (`held_frames`, `held_words`). On hardware: `examples/rate_cut_tail.rs`. |
 | BF1 | `fp-model` `tests/bit_perfect_rules.rs` | locked exactly when `bit_perfect_player`; unplaced is not locked. |
 | BF2 | `fp-model` `tests/bit_perfect_rules.rs` | `Applied` bit-perfect on, `Placed` on a bit-perfect device and a restored volume of 0.5 each give volume 1.0 and one `SetVolume { 1.0 }`. |
 | BF3 | `fp-model` `tests/bit_perfect_rules.rs` | `SetVolume(p, 0.5)` refused with `FaderLocked`, state unchanged; `SetVolume(p, 1.0)` accepted; `availability(..).fader` false. |

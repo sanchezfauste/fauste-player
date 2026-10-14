@@ -834,7 +834,26 @@ impl Engine {
         if rt.rate_cut.is_some() && rt.current.as_ref().is_some_and(&on) {
             return false;
         }
-        if rt.held_end.is_some() && rt.preload.as_ref().is_some_and(&on) {
+        // BR6: a held end is not quiet until the next has taken over, or,
+        // paused, until the cut is done (`cut_while_paused` took it out of
+        // the plan); then a paused player is quiet like any other.
+        let cut_pending = matches!(
+            rt.plan,
+            Plan::Waiting(TransitionPlan::StartNextAt {
+                rate_cut: Some(_),
+                ..
+            }) | Plan::Dispatched(
+                TransitionPlan::StartNextAt {
+                    rate_cut: Some(_),
+                    ..
+                },
+                _
+            )
+        );
+        if rt.held_end.is_some()
+            && (!rt.paused || cut_pending)
+            && rt.preload.as_ref().is_some_and(&on)
+        {
             return false;
         }
         let main = &rt.main.0;
@@ -2415,6 +2434,21 @@ impl Engine {
             StartState::Requested => p.start_frame <= now,
             _ => false,
         };
+        if silent_paused {
+            // BR17: no `Finished` event follows a cancel, so its last sound,
+            // the end of the pause ramp, is recorded here (the device may
+            // still hold it).
+            let ramp_end = self
+                .players
+                .get(&player)
+                .filter(|rt| rt.main.0 == p.bus)
+                .map(|rt| rt.pause_ramp_ends);
+            if let Some(end) = ramp_end
+                && let Some(bus) = self.buses.get_mut(&p.bus)
+            {
+                bus.note_sound_end(end);
+            }
+        }
         if !audible || silent_paused || p.held {
             self.send(&p.bus, BusCommand::Cancel { slot: p.slot });
             self.release(p);
