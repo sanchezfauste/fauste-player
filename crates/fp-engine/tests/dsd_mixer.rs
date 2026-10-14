@@ -64,6 +64,7 @@ fn attach(h: &mut MixerHandle, slot: usize, source: SourceConsumer, volume: Arc<
             source,
             volume,
             first_channel: 0,
+            gain: 1.0,
         },
     );
 }
@@ -114,6 +115,7 @@ fn in_dsd_mode_other_sources_are_muted_but_advance() {
             source: c2,
             volume: Arc::new(AtomicF32::new(1.0)),
             first_channel: 0,
+            gain: 1.0,
         },
     );
     send(
@@ -863,4 +865,37 @@ fn a_native_stream_in_standby_plays_the_dsd_idle_word() {
     let mut out = vec![0.0f32; 64];
     native.render(&mut out, 2);
     assert!(out.iter().all(|s| *s == silence_sample()));
+}
+
+#[test]
+fn in_dsd_mode_the_normalization_gain_does_not_touch_the_words() {
+    let (mut m, mut h) = Mixer::new(4, CONFIG);
+    let (_p, c, v) = dsd_source(8, 1.0);
+    send(
+        &mut h,
+        BusCommand::Attach {
+            slot: 0,
+            source: c,
+            volume: v,
+            first_channel: 0,
+            gain: 2.0,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::DsdMode {
+            on: true,
+            at_frame: 0,
+        },
+    );
+    send(
+        &mut h,
+        BusCommand::Start {
+            slot: 0,
+            at_frame: 0,
+        },
+    );
+    let out = render(&mut m, 4);
+    assert_eq!(out[0], word_to_sample(0, 1));
+    assert_eq!(out[1], -word_to_sample(0, 1));
 }

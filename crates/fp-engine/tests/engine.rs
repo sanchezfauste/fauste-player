@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_model::{
-    Config, EngineAction, EngineEvent, EntryId, PlayerId, PlayerRoutes, Route, SOURCE_END,
-    SourceRequest, TrackId, TransitionPlan,
+    Config, EngineAction, EngineEvent, EntryId, Normalization, NormalizationStatus, PlayerId,
+    PlayerRoutes, Route, SOURCE_END, SourceRequest, TrackId, TransitionPlan,
 };
 use support::{gated_opener, tagged_opener};
 
@@ -1227,4 +1227,159 @@ fn play_from_a_pending_start_uses_the_preload_made_there() {
         assert!(r.position() >= start_at, "{}", r.position());
         assert!((tag(*r.heard.last().unwrap()).1 as f64 / RATE) >= start_at);
     }
+}
+
+/// `request` with a normalization gain of `gain_db`.
+fn gained(track: u64, from_secs: f64, gain_db: f32) -> SourceRequest {
+    SourceRequest {
+        normalization: Normalization {
+            gain_db,
+            status: NormalizationStatus::Applied { limited: None },
+        },
+        ..request(track, from_secs)
+    }
+}
+
+/// +6.02 dB is a factor of 2 (to 1e-3).
+const DOUBLE_DB: f32 = 6.0206;
+
+/// `heard` divided by 2 is the tagged sample `(track, index)`.
+fn halved(v: f32) -> (u64, u64) {
+    tag((v / 2.0).round())
+}
+
+#[test]
+fn n14_a_source_plays_with_its_normalization_gain() {
+    let mut r = rig(96_000, false);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: gained(1, 0.0, DOUBLE_DB),
+    });
+    r.settle();
+    r.run(2);
+    let first = r.heard.iter().position(|v| *v != 0.0).unwrap();
+    assert_eq!(halved(r.heard[first + 100]), (1, 100));
+}
+
+#[test]
+fn a_nan_gain_db_plays_at_unity() {
+    let mut r = rig(96_000, false);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: gained(1, 0.0, f32::NAN),
+    });
+    r.settle();
+    r.run(2);
+    let first = r.heard.iter().position(|v| *v != 0.0).unwrap();
+    assert_eq!(tag(r.heard[first + 100]), (1, 100));
+}
+
+#[test]
+fn n15_a_seek_keeps_the_gain() {
+    let mut r = rig(96_000, false);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: gained(1, 0.0, DOUBLE_DB),
+    });
+    r.settle();
+    r.run(2);
+    r.act(EngineAction::Seek {
+        player: P,
+        secs: 1.5,
+    });
+    r.settle();
+    r.run(4);
+    let (track, index) = halved(*r.heard.last().unwrap());
+    assert_eq!(track, 1);
+    assert!(index as f64 / RATE >= 1.5, "{index}");
+}
+
+/// Plays track 1 at unity, preloads `next` and schedules it shortly after;
+/// returns the last sample heard once it plays.
+fn scheduled_next(r: &mut Rig, preloads: &[SourceRequest]) -> f32 {
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    for next in preloads {
+        r.act(EngineAction::Preload {
+            player: P,
+            request: Some(next.clone()),
+        });
+        r.settle();
+    }
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: 0.05,
+            fade_current_until_secs: None,
+            rate_cut: None,
+        }),
+    });
+    r.settle();
+    r.run(20);
+    *r.heard.last().unwrap()
+}
+
+#[test]
+fn n14_a_scheduled_next_plays_with_its_own_gain() {
+    let mut r = rig(96_000, false);
+    let v = scheduled_next(&mut r, &[gained(2, 0.0, DOUBLE_DB)]);
+    assert_eq!(halved(v).0, 2, "track 2 at twice its level: {v}");
+}
+
+#[test]
+fn n12_a_re_preload_with_a_new_gain_replaces_the_preload() {
+    let mut r = rig(96_000, false);
+    let v = scheduled_next(&mut r, &[request(2, 0.0), gained(2, 0.0, DOUBLE_DB)]);
+    assert_eq!(halved(v).0, 2, "track 2 at its new gain: {v}");
+}
+
+#[test]
+fn n8_a_re_preload_without_a_gain_drops_the_gained_preload() {
+    // The player was placed on a bit-perfect device: the model preloads
+    // the same entry again at 0 dB, and it must play unaltered.
+    let mut r = rig(96_000, false);
+    let v = scheduled_next(&mut r, &[gained(2, 0.0, DOUBLE_DB), request(2, 0.0)]);
+    assert_eq!(tag(v).0, 2, "track 2 at unity: {v}");
+}
+
+#[test]
+fn n14_a_start_does_not_take_a_preload_with_another_gain() {
+    let mut r = rig(96_000, false);
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(request(2, 0.0)),
+    });
+    r.settle();
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: gained(2, 0.0, DOUBLE_DB),
+    });
+    r.settle();
+    r.run(2);
+    let first = r.heard.iter().position(|v| *v != 0.0).unwrap();
+    assert_eq!(halved(r.heard[first + 100]), (2, 100));
+}
+
+#[test]
+fn n15_a_cue_seek_keeps_the_gain() {
+    let mut r = rig(480_000, true);
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: gained(3, 0.0, DOUBLE_DB),
+    });
+    r.settle();
+    r.run_hearing_cue(4);
+    // 1 s: the tag's frame field overflows past 100 000 frames, and the
+    // Cue device renders twice per `run_hearing_cue` block.
+    r.act(EngineAction::SeekCue {
+        player: P,
+        secs: 1.0,
+    });
+    r.settle();
+    let heard = r.run_hearing_cue(6);
+    let (track, index) = halved(*heard.last().unwrap());
+    assert_eq!(track, 3);
+    assert!(index as f64 / RATE >= 1.0, "{index}");
 }

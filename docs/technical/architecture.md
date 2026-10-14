@@ -74,7 +74,10 @@ or `panic` outside tests.
    settings never wait: the gain of a sounding source is fixed
    (`PlayerState::on_air`, `cue_normalization`, `PlayingCart::normalization`,
    `Cartwall::cue_normalization`, runtime only; N11), and `reconcile`
-   preloads the next again when its normalization changes (N12).
+   preloads the next again when its normalization changes (N12). The
+   engine attaches each source with that gain as a fixed linear factor in
+   its mixer slot, keeps it on every reopen and replaces a preload whose
+   gain no longer matches (N14, N15; see [audio engine](audio-engine.md)).
 
 ## Shutdown
 

@@ -62,7 +62,8 @@ fn attach(
                 slot,
                 source,
                 volume: full_volume(),
-                first_channel
+                first_channel,
+                gain: 1.0,
             })
             .is_ok()
     );
@@ -395,7 +396,8 @@ fn volume_changes_are_smoothed() {
                 slot: 0,
                 source: c,
                 volume: volume.clone(),
-                first_channel: 0
+                first_channel: 0,
+                gain: 1.0,
             })
             .is_ok()
     );
@@ -545,6 +547,7 @@ fn a_gain_below_unity_alters_a_source() {
                 source: c,
                 volume: volume.clone(),
                 first_channel: 0,
+                gain: 1.0,
             })
             .is_ok()
     );
@@ -800,7 +803,8 @@ fn smoothing_rig(
                 slot: 0,
                 source: c,
                 volume: volume.clone(),
-                first_channel: 0
+                first_channel: 0,
+                gain: 1.0,
             })
             .is_ok()
     );
@@ -856,4 +860,90 @@ fn a_tune_sized_for_the_old_rate_is_scaled_when_the_rate_changed_first() {
     volume.store(0.0);
     let out = render(&mut m, 5, 2);
     assert_eq!(left(&out), vec![0.75, 0.5, 0.25, 0.0, 0.0]);
+}
+
+/// As `attach`, with a normalization gain (loudness normalization N14).
+fn attach_with_gain(
+    h: &mut MixerHandle,
+    slot: usize,
+    source: fp_engine::source::SourceConsumer,
+    volume: Arc<AtomicF32>,
+    gain: f32,
+) {
+    assert!(
+        h.commands
+            .push(BusCommand::Attach {
+                slot,
+                source,
+                volume,
+                first_channel: 0,
+                gain,
+            })
+            .is_ok()
+    );
+}
+
+#[test]
+fn n14_a_slot_plays_at_its_gain_and_is_metered_after_it() {
+    let (mut m, mut h) = mixer(2);
+    let (_p, c) = counting_source(16, false);
+    let shared = c.shared.clone();
+    attach_with_gain(&mut h, 0, c, full_volume(), 2.0);
+    start(&mut h, 0);
+    let out = render(&mut m, 4, 2);
+    assert_eq!(left(&out), vec![2.0, 4.0, 6.0, 8.0]);
+    assert_eq!(out[1], -2.0);
+    assert_eq!(
+        shared.peak_l.take(),
+        8.0,
+        "the meter reads the gained level"
+    );
+}
+
+#[test]
+fn n14_a_gain_above_unity_is_not_clamped() {
+    let (mut m, mut h) = mixer(2);
+    let (_p, c) = counting_source(16, false);
+    attach_with_gain(&mut h, 0, c, full_volume(), 4.0);
+    start(&mut h, 0);
+    assert_eq!(left(&render(&mut m, 2, 2)), vec![4.0, 8.0]);
+}
+
+#[test]
+fn n14_a_fader_move_keeps_the_gain() {
+    let (mut m, mut h) = mixer(2);
+    let (_p, c) = counting_source(16, false);
+    let volume = full_volume();
+    attach_with_gain(&mut h, 0, c, volume.clone(), 2.0);
+    start(&mut h, 0);
+    render(&mut m, 2, 2);
+    volume.store(0.5);
+    // `volume_smoothing_frames` is 1 in `CONFIG`: the next frame is there.
+    let out = render(&mut m, 2, 2);
+    assert_eq!(left(&out), vec![3.0, 4.0], "frames 3 and 4 at 0.5 × 2");
+}
+
+#[test]
+fn n16_a_gain_other_than_one_alters_the_source() {
+    let (mut m, mut h) = mixer(2);
+    let (_p, c) = counting_source(64, false);
+    let shared = c.shared.clone();
+    attach_with_gain(&mut h, 0, c, full_volume(), 1.000_1);
+    start(&mut h, 0);
+    render(&mut m, 4, 2);
+    assert!(!shared.unaltered.load(Ordering::Acquire));
+}
+
+#[test]
+fn n16_the_unaltered_check_sees_the_product_of_the_gains() {
+    let (mut m, mut h) = mixer(2);
+    let (_p, c) = counting_source(64, false);
+    let shared = c.shared.clone();
+    attach_with_gain(&mut h, 0, c, Arc::new(AtomicF32::new(0.5)), 2.0);
+    start(&mut h, 0);
+    render(&mut m, 4, 2);
+    assert!(
+        shared.unaltered.load(Ordering::Acquire),
+        "0.5 × 2 is exactly 1"
+    );
 }

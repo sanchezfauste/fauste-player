@@ -18,8 +18,9 @@ use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
 use fp_model::{
-    AudioFormat, CartId, CartRequest, Config, EngineAction, EngineEvent, EntryId, OutputDevice,
-    PlayerId, PlayerRoutes, Route, SourceRequest, TrackId, TransitionPlan,
+    AudioFormat, CartId, CartRequest, Config, EngineAction, EngineEvent, EntryId, Normalization,
+    NormalizationStatus, OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, TrackId,
+    TransitionPlan,
 };
 use support::indexed_wav;
 
@@ -839,4 +840,26 @@ fn br14_bit_perfect_turned_off_reopens_shared_at_the_configured_rate_and_reports
     assert_eq!(r.rate(), 48_000, "effective_rate");
     assert!(!r.dac.config().unwrap().exclusive);
     assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![])));
+}
+
+#[test]
+fn n16_a_normalization_gain_is_not_bit_perfect() {
+    let mut r = rig(true, true);
+    let path = wav(r.dir.path(), "a.wav", 48_000);
+    let mut req = request(1, path, pcm16(48_000));
+    req.normalization = Normalization {
+        gain_db: -3.0,
+        status: NormalizationStatus::Applied { limited: None },
+    };
+    r.start(req);
+    assert!(!bit_perfect_after(&mut r, 2_400));
+}
+
+#[test]
+fn n16_no_gain_stays_bit_perfect() {
+    // `request` carries `Normalization::default()`: 0 dB, a factor of 1.0.
+    let mut r = rig(true, true);
+    let path = wav(r.dir.path(), "a.wav", 48_000);
+    r.start(request(1, path, pcm16(48_000)));
+    assert!(bit_perfect_after(&mut r, 2_400));
 }

@@ -168,11 +168,15 @@ impl Engine {
         };
         let (producer, consumer) = source_pair(ring);
         let shared = consumer.shared.clone();
+        // The cart's fixed normalization gain (N14); a reopen passes the
+        // same request and keeps it (N15).
+        let gain = request.normalization.linear_gain();
         if !bus.send(BusCommand::Attach {
             slot,
             source: consumer,
             volume,
             first_channel: channel,
+            gain,
         }) {
             return Err(AttachError::QueueFull);
         }

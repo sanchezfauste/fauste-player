@@ -240,13 +240,14 @@ For each block the mixer:
 2. For each active slot:
    - pops samples;
    - applies the per-sample gain as a linear ramp in dB-space for fades (equal-power curves for crossfades), multiplied by the player volume (smoothed over `tuning.gain_smoothing_ms`, default 20 ms);
+   - multiplies by the source's fixed normalization gain from its request ([loudness normalization spec](2026-10-08-loudness-normalization-design.md) N14), multiplied with the volume; it never changes while the source exists;
    - accumulates into the output.
 3. On ring underrun, outputs silence for the missing samples and increments the source's underrun counter.
 4. Writes the output to the route's channel pair, adds the heartbeat and emits `BusEvent`s.
 
 `BusCommand` variants (all timestamps in bus frames):
 
-- `Attach { slot, source }`
+- `Attach { slot, source, gain }`
 - `Start { slot, at_frame }`
 - `Ramp { slot, to_gain, over_frames, at_frame }`
 - `StopAt { slot, at_frame }`
