@@ -522,16 +522,13 @@ fn run_loudness(job: &Job, shared: &Shared) -> Result<Option<LoudnessMeasurement
     let cancelled =
         || shared.stop.load(Ordering::Acquire) || !lock(&shared.loudness_book).is_current(job);
     let outcome = (shared.loudness)(&job.path, &cancelled);
-    // A measurement, or a file that cannot be measured, is recorded in the
-    // file's entry so it is not measured again (N6b).
-    let recorded = match &outcome {
-        Ok(m) => Some(*m),
-        Err(AnalysisError::Unreadable(_)) => Some(None),
-        Err(_) => None,
-    };
-    if let (Some(loudness), Some(cache), Some(key)) = (recorded, &shared.cache, &key)
+    // A measurement (or a file too short or too quiet to have one) is
+    // recorded in the file's entry so it is not measured again (N6b). A
+    // failure may be transient (a share that dropped mid-read): only the
+    // model records it, and a Re-analyse measures the file again.
+    if let (Ok(loudness), Some(cache), Some(key)) = (&outcome, &shared.cache, &key)
         && cache.key(&job.path, &settings, &limits).as_ref() == Some(key)
-        && let Err(e) = cache.update_loudness(key, loudness, &limits)
+        && let Err(e) = cache.update_loudness(key, *loudness, &limits)
     {
         tracing::warn!(path = %job.path.display(), "cannot cache the loudness: {e}");
     }

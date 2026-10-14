@@ -544,10 +544,15 @@ impl Track {
         if analysis.format.is_some() {
             self.format = analysis.format;
         }
-        // A result cached before loudness was measured keeps what the
-        // loudness-only pass found (N6).
-        if let Some(version) = analysis.loudness_pass {
-            self.apply_loudness(analysis.loudness, version);
+        // A result cached before loudness was measured carries none, and
+        // the track's own may belong to other content: both are cleared,
+        // so the loudness-only pass measures the file again (N6b).
+        match analysis.loudness_pass {
+            Some(version) => self.apply_loudness(analysis.loudness, version),
+            None => {
+                self.loudness = None;
+                self.loudness_pass = None;
+            }
         }
         self.analysis_version = analysis.version;
         // Title, artist and album come from this analysis; the rest wait for

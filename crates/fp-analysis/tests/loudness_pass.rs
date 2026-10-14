@@ -90,6 +90,57 @@ fn a_loudness_job_measures_and_fills_the_cache_entry_in_place() {
     assert!(analyzer.results().try_recv().is_err(), "no full result");
 }
 
+/// I3: a failure may be transient (a share that dropped mid-read), so it is
+/// not written into the cache; the next job measures the file again.
+#[test]
+fn a_failed_loudness_job_leaves_the_cache_entry_unmeasured() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "a.wav", 1);
+    let cache_dir = dir.path().join("cache");
+    let settings = AnalysisSettings::default();
+    let limits = Limits::default();
+    let old = AnalysisCache::new(cache_dir.clone());
+    let mut a = analyze_file(&path, &settings, &limits).unwrap();
+    a.analysis.loudness = None;
+    a.analysis.loudness_pass = None;
+    old.store(&path, &settings, &limits, &a).unwrap();
+    let failing: LoudnessFn =
+        Arc::new(|_, _| Err(AnalysisError::Unreadable("read error".to_owned())));
+    let analyzer = Analyzer::with_fns(
+        1,
+        settings.clone(),
+        limits.clone(),
+        Some(AnalysisCache::new(cache_dir.clone())),
+        real_analyze(),
+        failing,
+    )
+    .unwrap();
+    analyzer.submit_loudness(TrackId(1), path.clone());
+    let r = analyzer.loudness_results().recv_timeout(WAIT).unwrap();
+    assert!(matches!(r.outcome, Err(AnalysisError::Unreadable(_))));
+    let back = old.load(&path, &settings, &limits).unwrap();
+    assert_eq!(
+        back.analysis.loudness_pass, None,
+        "the failure is not cached"
+    );
+    drop(analyzer);
+    // The next attempt measures the file.
+    let runs = Arc::new(AtomicUsize::new(0));
+    let analyzer = Analyzer::with_fns(
+        1,
+        settings,
+        limits,
+        Some(AnalysisCache::new(cache_dir)),
+        real_analyze(),
+        counting_loudness(&runs),
+    )
+    .unwrap();
+    analyzer.submit_loudness(TrackId(1), path);
+    let r = analyzer.loudness_results().recv_timeout(WAIT).unwrap();
+    assert!(r.outcome.unwrap().is_some());
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+}
+
 #[test]
 fn a_loudness_job_reads_a_measurement_already_cached() {
     // The library lost the value (an older backup restored, say) but the

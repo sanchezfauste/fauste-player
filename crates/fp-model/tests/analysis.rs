@@ -295,9 +295,10 @@ fn n6_an_analysis_stores_the_loudness_measurement() {
 }
 
 #[test]
-fn an_analysis_without_a_loudness_pass_keeps_the_measurement() {
-    // An entry cached before this feature carries no measurement: the one
-    // the loudness-only pass found stays.
+fn an_analysis_without_a_loudness_pass_clears_the_measurement() {
+    // An entry cached before this feature carries no measurement, and the
+    // one the track holds may belong to other content (M1): both go, and
+    // the loudness-only pass measures the file again.
     let mut state = fixture(1);
     let t = track_of(&state, 0);
     state
@@ -314,8 +315,8 @@ fn an_analysis_without_a_loudness_pass_keeps_the_measurement() {
     )
     .unwrap();
     let track = state.library.get(t).unwrap();
-    assert_eq!(track.loudness, Some(measured(-9.0)));
-    assert_eq!(track.loudness_pass, Some(LOUDNESS_VERSION));
+    assert_eq!((track.loudness, track.loudness_pass), (None, None));
+    assert!(track.needs_loudness_pass());
 }
 
 /// I2: a measurement that is not a finite number is not kept (JSON cannot
