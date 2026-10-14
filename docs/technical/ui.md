@@ -368,7 +368,13 @@ the main window minus a margin (never below 320 × 300). It does not change when
 a section is selected. The section header (title and **Restore defaults**) is
 fixed; the body below it sits in `ScrollArea::both`. Rows use
 `labelled_row`, with a label column of `LABEL_WIDTH` (180 px), so every section
-shares one grid. The footer spans the window width and holds the pending notice and **Apply now** while an output change waits (`SettingsDeps::{pending, can_apply}`). A transient notice (`SettingsDeps::notice`) briefly takes the place of the pending text; **Apply now** stays.
+shares one grid. The language and audio system lists are at most 260 px and
+no wider than the column (`ui.available_width().min(260.0)`); the audio
+system list and the DSD mix (whose choices are sentences) truncate the shown
+choice (`ComboBox::truncate`) and give it whole on hover, and the open list
+always shows every choice in full. `tests/settings.rs` checks every list on
+Audio outputs in a 700 px window; below about 620 px some per-device lists
+are wider than the column and the body scrolls horizontally. The footer spans the window width and holds the pending notice and **Apply now** while an output change waits (`SettingsDeps::{pending, can_apply}`). A transient notice (`SettingsDeps::notice`) briefly takes the place of the pending text; **Apply now** stays.
 
 Settings → Remote keeps what is being typed (`RemoteState::drafts` for text,
 `RemoteState::numbers` for the drag values, which do not wait for Enter), so

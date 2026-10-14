@@ -776,9 +776,12 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             .as_deref()
             .map(|id| backend_name(t, id))
             .unwrap_or_else(|| t.tr("settings-default-backend"));
+        // At most 260 points, and never past a narrow window (as the
+        // language list); a shortened name shows whole on hover.
         egui::ComboBox::from_id_salt("backend")
-            .selected_text(shown)
-            .width(260.0)
+            .selected_text(shown.clone())
+            .width(ui.available_width().min(260.0))
+            .truncate()
             .show_ui(ui, |ui| {
                 if ui
                     .selectable_label(current.is_none(), t.tr("settings-default-backend"))
@@ -807,7 +810,9 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                         update(scene, |c| c.outputs.backend = Some(id));
                     }
                 }
-            });
+            })
+            .response
+            .on_hover_text(shown);
     });
     let rate = config.outputs.sample_rate;
     let buffer = config.outputs.buffer_frames;
