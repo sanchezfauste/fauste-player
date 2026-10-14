@@ -87,6 +87,13 @@ duration, as Matroska blocks), and the frames before the target are dropped, so 
 output starts on the target frame whatever the decoder yields first. A seek
 past the end is the end of the stream, as for the other backends.
 
+A seek whose pre-roll reaches the start of the stream (a restart from 0, or
+any target within the first 80 ms of an Opus file) opens the file again and
+drops the pre-skip and the frames before the target by count, as on the first
+play, so a restart is sample-identical to it: Matroska's millisecond
+timestamps would place the pre-skip only to ±24 samples, and symphonia cannot
+seek a Matroska file without cues backwards at all (`tests/opus.rs`).
+
 The Opus decoder goes through 16-bit PCM inside `opus-decoder`: its noise
 (about −96 dBFS) is far below Opus's own coding noise. A decoder without that
 step exists (`opus-pure`), but it uses `unsafe` code, which the formats spec

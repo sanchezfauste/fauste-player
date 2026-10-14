@@ -174,8 +174,21 @@ fn uint(id: u32, v: u64) -> Vec<u8> {
 }
 
 /// A minimal Matroska file holding `packets` of stereo Opus, 20 ms each,
-/// with the pre-skip as `CodecDelay`, the way muxers write it.
+/// with the pre-skip as `CodecDelay`, the way muxers write it, and no
+/// cues (as a live recording leaves it).
 fn matroska(dir: &Path, name: &str, packets: &[Vec<u8>], pre_skip: u16) -> PathBuf {
+    matroska_with(dir, name, packets, pre_skip, false)
+}
+
+/// `matroska`, with a cue point at the start of its one cluster when
+/// `cues` is set, as muxers write a finished file.
+fn matroska_with(
+    dir: &Path,
+    name: &str,
+    packets: &[Vec<u8>],
+    pre_skip: u16,
+    cues: bool,
+) -> PathBuf {
     let mut head = b"OpusHead".to_vec();
     head.extend([1, 2]);
     head.extend(pre_skip.to_le_bytes());
@@ -227,9 +240,29 @@ fn matroska(dir: &Path, name: &str, packets: &[Vec<u8>], pre_skip: u16) -> PathB
         block.extend_from_slice(packet);
         cluster.extend(ebml(0xA3, &block));
     }
+    // The cue's cluster position counts from the segment's data.
+    let cue = |at: usize| {
+        ebml(
+            0x1C53_BB6B,
+            &ebml(
+                0xBB,
+                &[
+                    uint(0xB3, 0),
+                    ebml(0xB7, &[uint(0xF7, 1), uint(0xF1, at as u64)].concat()),
+                ]
+                .concat(),
+            ),
+        )
+    };
+    let cues = if cues {
+        let at = info.len() + tracks.len() + cue(0).len();
+        cue(at)
+    } else {
+        Vec::new()
+    };
     let segment = ebml(
         0x1853_8067,
-        &[info, tracks, ebml(0x1F43_B675, &cluster)].concat(),
+        &[info, tracks, cues, ebml(0x1F43_B675, &cluster)].concat(),
     );
     let path = dir.join(name);
     std::fs::write(&path, [ebml(0x1A45_DFA3, &header), segment].concat()).unwrap();
@@ -356,5 +389,31 @@ fn the_pre_skip_is_dropped_so_audio_stays_in_place() {
             "{name}: the click is at {at}"
         );
         assert!(out.len() / 2 <= RATE, "{name}: {} frames", out.len() / 2);
+    }
+}
+
+/// A restart from 0 after reading plays exactly what the first play did:
+/// the pre-skip is dropped by count again, not placed by timestamps
+/// (Matroska's are whole milliseconds, 48 samples apart).
+#[test]
+fn a_seek_back_to_the_start_replays_the_first_play_exactly() {
+    let dir = tempfile::tempdir().unwrap();
+    let pcm = stereo(1.0, marker);
+    let (packets, pre_skip) = packets(&pcm);
+    for path in [
+        encode(dir.path(), "a.opus", &pcm),
+        matroska_with(dir.path(), "cues.mka", &packets, pre_skip, true),
+        matroska(dir.path(), "a.mka", &packets, pre_skip),
+    ] {
+        let first = decode_all(&path);
+        let mut d = FileDecoder::open(&path).unwrap();
+        let mut out = Vec::new();
+        while out.len() < 2 * RATE / 2 && d.next_block(&mut out).unwrap() {}
+        d.seek(0.0).unwrap();
+        let mut again = Vec::new();
+        while d.next_block(&mut again).unwrap() {}
+        let name = path.file_name().unwrap().to_string_lossy();
+        assert_eq!(again.len(), first.len(), "{name}: length");
+        assert!(again == first, "{name}: the replay differs");
     }
 }

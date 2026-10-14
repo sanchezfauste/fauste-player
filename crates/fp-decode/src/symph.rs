@@ -3,7 +3,7 @@
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -24,6 +24,10 @@ use symphonia::core::units::{Time, TimeBase};
 use crate::downmix;
 
 pub(crate) struct SymphoniaDecoder {
+    /// The file, to open it again for a restart from the start.
+    path: PathBuf,
+    /// Whether the file is probed as unseekable (see `open`).
+    hide_seeking: bool,
     format: Box<dyn FormatReader>,
     decoder: Box<dyn AudioDecoder>,
     track_id: u32,
@@ -56,8 +60,11 @@ pub(crate) struct SymphoniaDecoder {
     /// subtracts its codec delay, so it is 0 there.
     ts_offset_secs: f64,
     /// Frames still to drop from the start of the stream: Opus's pre-skip,
-    /// read from its header so it is exact in every container.
+    /// read from its header so it is exact in every container, plus the
+    /// target of a seek that restarted from the start.
     drop_frames: usize,
+    /// Opus's pre-skip (0 for other codecs).
+    pre_skip: usize,
 }
 
 /// Opus needs this much decoded audio before a seek target (RFC 7845 §4.6).
@@ -68,6 +75,7 @@ const VORBIS_MAX_BLOCK: f64 = 8192.0;
 impl SymphoniaDecoder {
     pub(crate) fn open(path: &Path) -> Result<Self, String> {
         let mut format = probe(path, false)?;
+        let mut hide_seeking = false;
         let length_stored = match stored_length(format.format_info().format) {
             StoredLength::Stored => true,
             StoredLength::MpegLengthFrame if mpeg_length_frame(path) => true,
@@ -78,6 +86,7 @@ impl SymphoniaDecoder {
             // makes no estimate and reads to the end of the stream.
             StoredLength::MpegLengthFrame => {
                 format = probe(path, true)?;
+                hide_seeking = true;
                 false
             }
             StoredLength::Unknown => false,
@@ -122,6 +131,8 @@ impl SymphoniaDecoder {
         };
         let time_base = track.time_base;
         Ok(Self {
+            path: path.to_owned(),
+            hide_seeking,
             format,
             decoder,
             track_id,
@@ -138,6 +149,7 @@ impl SymphoniaDecoder {
             read_any: false,
             ts_offset_secs,
             drop_frames: usize::from(pre_skip),
+            pre_skip: usize::from(pre_skip),
         })
     }
 
@@ -180,7 +192,10 @@ impl SymphoniaDecoder {
         } else {
             0.0
         };
-        let from = (secs - preroll).max(0.0) + self.ts_offset_secs;
+        if secs - preroll <= 0.0 {
+            return self.restart(secs);
+        }
+        let from = secs - preroll + self.ts_offset_secs;
         let time = Time::try_from_secs_f64(from).ok_or("seek position out of range")?;
         match self.format.seek(
             SeekMode::Accurate,
@@ -203,6 +218,22 @@ impl SymphoniaDecoder {
         // nothing for its first packet after a reset still starts on time.
         // Without a time base the landing is taken as the target.
         self.target_secs = self.time_base.map(|_| secs);
+        Ok(())
+    }
+
+    /// Seeks to `secs` when decoding restarts from the start of the stream
+    /// anyway (`secs` within the pre-roll): the file is opened again and
+    /// the frames before `secs` are dropped by count, exactly as on the
+    /// first play. Timestamps would place them only to the container's
+    /// precision (Matroska's are whole milliseconds), and a Matroska file
+    /// without cues cannot seek backwards at all.
+    fn restart(&mut self, secs: f64) -> Result<(), String> {
+        self.format = probe(&self.path, self.hide_seeking)?;
+        self.decoder.reset();
+        self.at_end = false;
+        self.target_secs = None;
+        let rate = f64::from(self.sample_rate);
+        self.drop_frames = self.pre_skip + (secs * rate).round() as usize;
         Ok(())
     }
 
