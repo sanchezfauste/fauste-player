@@ -22,17 +22,19 @@ bit-perfect device plays differently from the others:
   **Play / Next** and **Previous** while a track is on air switch at once,
   with a short click-free stop, instead of fading.
 - **A short silence when the sample rate changes.** Between two tracks whose
-  sample rates differ, the device is reopened at the new rate, which leaves
-  a short silence (usually a few tens of milliseconds, longer on some
-  devices). Tracks at the same rate follow each other with no gap and no
-  overlap.
+  sample rates differ, when nothing else sounds on the device, the device is
+  reopened at the new rate, which leaves a short silence (usually a few tens
+  of milliseconds, longer on some devices). Tracks at the same rate follow
+  each other with no gap and no overlap. When the rate cannot follow (see
+  [What happens on a bit-perfect device](#what-happens-on-a-bit-perfect-device)),
+  the next track starts at once, converted to the device's rate.
 - **The volume is held at 100 %.** The player's volume fader is locked at
   the top: on screen, on [MIDI](midi.md) controllers and over the
   [remote API and OSC](remote-control.md). It goes to 100 % when bit-perfect
   is turned on for the device, and stays there when it is turned off.
 - **What still works:** **Fade stop** (it fades out over the fade time),
   **Pause**, **Stop**, **Restart**, the repeat and stop-after marks, Single
-  and Continuous modes, Cue (pre-listen, whose volume is not locked), carts,
+  and Continuous modes, Cue (pre-listen, which has no fader and is not affected), carts,
   [DSD output](#dsd), and every player whose Main output is on another
   device, which mixes as usual. A cart can play on the same device: while it
   sounds, the player's next track starts at the device's current rate,
@@ -213,8 +215,8 @@ its Main device unchanged. All of these must hold:
   analysed again (the start-up notice, or Settings → Analysis), or as soon
   as a player shows them or a cart holds them;
 - the volume is held at 100 % on a bit-perfect output, no fade runs (Fade
-  stop and the pause and resume ramps are the only fades left on such a
-  player), and nothing else plays on the same outputs.
+  stop, the pause and resume ramps and the short click-free stop of a track
+  are the only fades left on such a player), and nothing else plays on the same outputs.
 
 Some files are never shown as bit-perfect:
 - **Lossy files** (MP3, AAC, Ogg Vorbis, Opus): their decoded samples are not
