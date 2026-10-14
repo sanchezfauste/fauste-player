@@ -644,6 +644,7 @@ impl Engine {
             source: consumer,
             volume,
             first_channel: channel,
+            gain: 1.0,
         }) && bus.send(BusCommand::Start { slot, at_frame: at })
         {
             self.tones.push((key, slot));
@@ -2233,6 +2234,7 @@ impl Engine {
             source: consumer,
             volume,
             first_channel: channel,
+            gain: 1.0,
         }) {
             tracing::error!(?player, "bus command queue full");
             return Err(AttachError::QueueFull);

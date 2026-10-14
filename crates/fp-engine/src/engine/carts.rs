@@ -173,6 +173,7 @@ impl Engine {
             source: consumer,
             volume,
             first_channel: channel,
+            gain: 1.0,
         }) {
             return Err(AttachError::QueueFull);
         }

@@ -162,7 +162,8 @@ fn slots_are_reused_only_after_the_mixer_hands_them_back() {
         slot,
         source: c,
         volume: Arc::new(AtomicF32::new(1.0)),
-        first_channel: 0
+        first_channel: 0,
+        gain: 1.0,
     }));
     assert!(bus.send(BusCommand::Detach { slot }));
     for _ in 0..3 {

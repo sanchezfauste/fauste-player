@@ -890,6 +890,7 @@ fn the_meter_is_per_player_and_never_sees_the_device_sum() {
                     source,
                     volume: Arc::new(AtomicF32::new(1.0)),
                     first_channel: 0,
+                    gain: 1.0,
                 })
                 .is_ok()
         );
@@ -907,7 +908,7 @@ fn the_meter_is_per_player_and_never_sees_the_device_sum() {
 }
 
 #[test]
-fn no_gain_in_the_mixer_exceeds_unity() {
+fn no_fader_gain_exceeds_unity() {
     let (mut m, mut h) = meter_mixer(1);
     assert!(
         h.commands
@@ -916,6 +917,7 @@ fn no_gain_in_the_mixer_exceeds_unity() {
                 source: dc_source(0.5, 4_096),
                 volume: Arc::new(AtomicF32::new(1.0)),
                 first_channel: 0,
+                gain: 1.0,
             })
             .is_ok()
     );
@@ -941,6 +943,7 @@ fn no_gain_in_the_mixer_exceeds_unity() {
                 source: dc_source(0.5, 4_096),
                 volume: volume.clone(),
                 first_channel: 0,
+                gain: 1.0,
             })
             .is_ok()
     );
@@ -956,6 +959,36 @@ fn no_gain_in_the_mixer_exceeds_unity() {
     volume.store(4.0);
     m.render(&mut out, 2);
     assert!(out.iter().all(|v| *v <= 0.5), "unity at most");
+}
+
+#[test]
+fn the_normalization_gain_is_applied_without_allocating() {
+    let (mut m, mut h) = meter_mixer(1);
+    assert!(
+        h.commands
+            .push(BusCommand::Attach {
+                slot: 0,
+                source: dc_source(0.25, 4_096),
+                volume: Arc::new(AtomicF32::new(1.0)),
+                first_channel: 0,
+                gain: 2.0,
+            })
+            .is_ok()
+    );
+    assert!(
+        h.commands
+            .push(BusCommand::Start {
+                slot: 0,
+                at_frame: 0
+            })
+            .is_ok()
+    );
+    let mut out = vec![0.0f32; 512 * 2];
+    assert_no_alloc(|| m.render(&mut out, 2));
+    assert!(
+        out.iter().all(|v| (v - 0.5).abs() < 1e-6),
+        "the only gain above unity is the one asked for"
+    );
 }
 
 #[test]
@@ -1035,6 +1068,7 @@ fn the_renderer_the_device_calls_and_the_sample_writer_never_allocate() {
                 source: dc_source(0.5, 4_096),
                 volume: Arc::new(AtomicF32::new(1.0)),
                 first_channel: 0,
+                gain: 1.0,
             })
             .is_ok()
     );

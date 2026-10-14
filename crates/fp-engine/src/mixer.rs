@@ -25,12 +25,16 @@ const CHUNK_FRAMES: usize = 256;
 /// Work for the mixer. All frame numbers are in bus frames
 /// (`BusShared::frames_rendered` time).
 pub enum BusCommand {
-    /// Puts a source in `slot`, silent until `Start`.
+    /// Puts a source in `slot`, silent until `Start`. `gain` is the
+    /// source's fixed normalization gain (linear; loudness normalization
+    /// spec N14), multiplied with the fader for its whole life; 1.0 leaves
+    /// it bit-exact.
     Attach {
         slot: usize,
         source: SourceConsumer,
         volume: Arc<AtomicF32>,
         first_channel: u16,
+        gain: f32,
     },
     /// Starts playing at `at_frame` (or immediately if it has passed).
     Start { slot: usize, at_frame: u64 },
@@ -292,6 +296,8 @@ pub struct Slot {
     source: SourceConsumer,
     volume: Arc<AtomicF32>,
     volume_now: f32,
+    /// The fixed normalization gain (N14); not clamped (a boost is above 1).
+    gain: f32,
     first_channel: usize,
     start_at: Option<u64>,
     started: bool,
@@ -460,6 +466,7 @@ impl Mixer {
                 source,
                 volume,
                 first_channel,
+                gain,
             } => {
                 let volume_now = volume.load();
                 let rate = self.shared.sample_rate.load(Ordering::Acquire).max(1);
@@ -470,6 +477,7 @@ impl Mixer {
                         source,
                         volume,
                         volume_now,
+                        gain,
                         first_channel: usize::from(first_channel),
                         start_at: None,
                         started: false,
@@ -1023,7 +1031,8 @@ fn render_slot(
                 } else if slot.volume_now > target_volume {
                     slot.volume_now = (slot.volume_now - volume_step).max(target_volume);
                 }
-                let g = slot.fade.next_gain() * slot.pause.next_gain() * slot.volume_now;
+                let g =
+                    slot.fade.next_gain() * slot.pause.next_gain() * slot.volume_now * slot.gain;
                 unity &= g == 1.0;
                 (l * g, r * g)
             };

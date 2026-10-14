@@ -221,7 +221,7 @@ between 0 and 1 (`ramp.rs`, every target sent by the engine is 0.0 or 1.0:
 `engine.rs:1035-1041`, `engine.rs:1826-1854`, `engine.rs:1944-1999`,
 `mixer.rs:394`, `mixer.rs:402`). The volume is clamped to 0..=1 per block
 (`mixer.rs:630`), and the model clamps it too. So no gain in the mixer
-exceeds unity: probe `no_gain_in_the_mixer_exceeds_unity` (a volume of 4.0
+exceeds unity: probe `no_fader_gain_exceeds_unity` (a volume of 4.0
 plays at unity). One latent gap: `Attach` copies the volume unclamped as the
 smoothing start (`mixer.rs:326`), so a volume above 1 at attach time would
 apply for the smoothing time; the model never sends one, so this is not a
@@ -484,7 +484,7 @@ the device's sum: probe `the_meter_is_per_player_and_never_sees_the_device_sum`
 5. Several sources on one output sum above full scale at the device (§3.1),
    but the meter does not show it.
 6. No gain or fader exceeds unity (§3.1): probe
-   `no_gain_in_the_mixer_exceeds_unity`.
+   `no_fader_gain_exceeds_unity`.
 
 **What the device receives** (§4.1): integer formats clip at full scale
 (`dasp_sample-0.11.0/src/conv.rs:534-536`; `exclusive.rs:24-37`), except
@@ -560,7 +560,7 @@ building only if operators report clipping on air. Whatever the choice,
 | A14 | 1.2 Unknown length | A transition planned at `SOURCE_END` (track not analysed yet) starts the next on the engine's next tick: a gap of up to two blocks. | `engine.rs:1876-1878`, `engine.rs:1742-1744`; `tests/engine.rs` `source_end_plans_chain_when_the_file_runs_out` | no change needed | — |
 | A15 | 1.2 Cart loops | A looped cart splices its cue-out to its cue-in sample-adjacent with no crossfade; smoothness depends on the loop points. | `worker.rs:366-374`; `tests/worker.rs` `a_looped_source_repeats_without_gaps` | no change needed | — |
 | A16 | 1.1 Damaged files | symphonia skips corrupt packets (the audio jumps) and ends a truncated file as a normal end; both are the degradation rule 9 asks for. | `symph.rs:201-202`, `symph.rs:211`; probe `a_truncated_wav_ends_as_a_normal_end_not_a_failure` | no change needed | — |
-| A17 | 3.1 Summing | `f32` sum with no clamp; no gain above unity (volume clamped per block, `mixer.rs:630`); `Attach` copies the volume unclamped as the smoothing start (`mixer.rs:326`), unreachable since the model clamps. | probes `no_gain_in_the_mixer_exceeds_unity`, `the_meter_is_per_player_and_never_sees_the_device_sum` | no change needed | — |
+| A17 | 3.1 Summing | `f32` sum with no clamp; no gain above unity (volume clamped per block, `mixer.rs:630`); `Attach` copies the volume unclamped as the smoothing start (`mixer.rs:326`), unreachable since the model clamps. | probes `no_fader_gain_exceeds_unity`, `the_meter_is_per_player_and_never_sees_the_device_sum` | no change needed | — |
 | A18 | 3.1 Downmix | 3.0 and 3.1 files fold the centre in at −3 dB without normalisation (up to +4.6 dB), while 5.x is normalised. | `lib.rs:215-231`; probe `a_three_channel_file_downmixes_above_full_scale` | no change needed | documented in §7 |
 | A19 | 5.3 Device loss | Virtual clock, watchdog, reconnection and the lost-device alert work. | `bus.rs:298-336`; `tests/bus.rs` | no change needed | — |
 | A20 | 5.1 Buffers | Requested size used when the device allows it, else its default; the size in use is reported; oversize callbacks render in pieces. | `cpal_backend.rs:109-159`, `cpal_backend.rs:365-372` and its tests | no change needed | — |
