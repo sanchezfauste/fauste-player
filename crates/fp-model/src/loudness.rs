@@ -4,7 +4,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::{LoudnessConfig, OutputDevice};
+use crate::live::{Holder, configured_route};
 use crate::state::AppState;
+use crate::track::Track;
 
 /// The version of the loudness measurement (N6). Bump it when the
 /// measurement changes: the loudness-only pass then measures every track
@@ -41,4 +44,152 @@ pub fn loudness_unmeasured(state: &AppState) -> usize {
                 && t.loudness_pass != Some(LOUDNESS_VERSION)
         })
         .count()
+}
+
+/// The operator's per-track loudness setting (spec §3).
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LoudnessEdit {
+    /// Plays the track unchanged, whatever its measurement.
+    pub excluded: bool,
+    /// Added to the gain, dB; limited to ± `max_trim_db` (N10).
+    pub trim_db: f32,
+}
+
+/// The bound that limited a boost (N7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GainLimit {
+    TruePeak,
+    MaxBoost,
+}
+
+/// Why a source has the gain it has (spec §3). Every status but `Applied`
+/// has a gain of 0 dB.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NormalizationStatus {
+    Applied { limited: Option<GainLimit> },
+    Off,
+    Excluded,
+    NotMeasured,
+    Silent,
+    BitPerfect,
+}
+
+/// The fixed gain one source gets (spec §3, N7).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Normalization {
+    pub gain_db: f32,
+    pub status: NormalizationStatus,
+}
+
+impl Default for Normalization {
+    /// No gain: what every source had before normalization existed.
+    fn default() -> Self {
+        Self::none(NormalizationStatus::Off)
+    }
+}
+
+impl Normalization {
+    fn none(status: NormalizationStatus) -> Self {
+        Self {
+            gain_db: 0.0,
+            status,
+        }
+    }
+
+    /// The linear factor (`10^(dB/20)`); exactly 1.0 for 0 dB, so an
+    /// unnormalized source stays bit-exact, and 1.0 for anything that is
+    /// not a usable number.
+    pub fn linear_gain(&self) -> f32 {
+        if self.gain_db == 0.0 {
+            return 1.0;
+        }
+        let g = 10f32.powf(self.gain_db / 20.0);
+        if g.is_finite() && g > 0.0 { g } else { 1.0 }
+    }
+}
+
+/// N7: the gain `track` gets under `config` on a device that is
+/// `bit_perfect` or not.
+pub fn normalization(config: &LoudnessConfig, track: &Track, bit_perfect: bool) -> Normalization {
+    use NormalizationStatus as S;
+    if bit_perfect {
+        return Normalization::none(S::BitPerfect);
+    }
+    if !config.normalize {
+        return Normalization::none(S::Off);
+    }
+    if track.loudness_edit.excluded {
+        return Normalization::none(S::Excluded);
+    }
+    let Some(measured) = track.loudness else {
+        return Normalization::none(S::NotMeasured);
+    };
+    let Some(lufs) = measured.integrated_lufs else {
+        return Normalization::none(S::Silent);
+    };
+    // A stored trim beyond the current maximum (lowered since) is limited
+    // by it; one that is not a number counts as none. A maximum that is
+    // not a number or below 0 (a configuration not validated) allows none.
+    let trim = track.loudness_edit.trim_db;
+    let max_trim = config.max_trim_db.max(0.0);
+    let trim = if trim.is_finite() {
+        trim.clamp(-max_trim, max_trim)
+    } else {
+        0.0
+    };
+    let wanted = config.target_lufs - lufs + trim;
+    // The ceiling and the maximum boost only limit boosts (Q2).
+    let (gain, limited) = if wanted <= 0.0 {
+        (wanted, None)
+    } else {
+        let peak_room = (config.true_peak_ceiling_dbtp - measured.true_peak_dbtp).max(0.0);
+        let boost = config.max_boost_db;
+        if peak_room < wanted && peak_room <= boost {
+            (peak_room, Some(GainLimit::TruePeak))
+        } else if boost < wanted {
+            (boost, Some(GainLimit::MaxBoost))
+        } else {
+            (wanted, None)
+        }
+    };
+    let gain_db = (gain * 100.0).round() / 100.0;
+    if !gain_db.is_finite() {
+        return Normalization::none(S::NotMeasured);
+    }
+    Normalization {
+        gain_db,
+        status: S::Applied { limited },
+    }
+}
+
+/// N8: whether `holder` plays on a bit-perfect device: the running
+/// settings of its placement once the engine reported them (live settings
+/// L3), otherwise its configured route (no route: the default output, not
+/// bit-perfect). For a player's Main this agrees with
+/// `bit_perfect_player` whenever the engine has placed it.
+pub fn holder_bit_perfect(state: &AppState, holder: Holder) -> bool {
+    if let Some(running) = state
+        .live
+        .placement
+        .get(&holder)
+        .and_then(|device| state.live.devices.get(device))
+    {
+        return running.bit_perfect;
+    }
+    configured_route(&state.config, holder).is_some_and(|r| {
+        state.config.outputs.bit_perfect.contains(&OutputDevice {
+            backend: r.backend,
+            device: r.device,
+        })
+    })
+}
+
+/// N7 for `track` played by `holder`.
+pub fn normalization_for(state: &AppState, holder: Holder, track: &Track) -> Normalization {
+    normalization(
+        &state.config.loudness,
+        track,
+        holder_bit_perfect(state, holder),
+    )
 }

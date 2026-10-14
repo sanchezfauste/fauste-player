@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::ids::TrackId;
-use crate::loudness::{LOUDNESS_VERSION, LoudnessMeasurement};
+use crate::loudness::{LOUDNESS_VERSION, LoudnessEdit, LoudnessMeasurement};
 
 /// What a track is used for on air.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -303,6 +303,11 @@ pub struct Track {
     /// whatever it found; `None` before any.
     #[serde(default)]
     pub loudness_pass: Option<u32>,
+    /// The operator's loudness edit (N10): exclude from normalization, or a
+    /// trim in dB. Stored with the markers; libraries saved earlier have
+    /// the default (not excluded, 0 dB).
+    #[serde(default)]
+    pub loudness_edit: LoudnessEdit,
 }
 
 /// Where a player plays a track: from `cue_in` to `cue_out`. See
@@ -356,6 +361,7 @@ impl Track {
             tags_read: false,
             loudness: None,
             loudness_pass: None,
+            loudness_edit: LoudnessEdit::default(),
         }
     }
 
