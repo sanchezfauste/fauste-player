@@ -291,9 +291,31 @@ app_gone() {
 # "not measured").
 wait_analysed() {
     local t
-    for t in $(api GET /players | json "' '.join(str(e['track']['id']) for p in d for e in (p['current'], p['next']) if e)"); do
+    for t in $(player_tracks); do
         wait_for 60 track_ready "$t" || die "track $t is not analysed and measured after 60 s"
     done
+}
+
+# The ids of the tracks on the players (current and next).
+player_tracks() {
+    api GET /players | json "' '.join(str(e['track']['id']) for p in d for e in (p['current'], p['next']) if e)"
+}
+
+# saved_measured <track id>...: succeeds when the saved library
+# (data/playlists.json under the home; its "library" is the array of tracks)
+# has a loudness measurement for every given track. A missing or unreadable
+# file is "not yet".
+saved_measured() {
+    python3 - "$home/data/playlists.json" "$@" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        library = json.load(f)["library"]
+    saved = {str(t["id"]): t.get("loudness") for t in library}
+except (OSError, ValueError, KeyError, TypeError):
+    sys.exit(1)
+sys.exit(0 if all(saved.get(t) is not None for t in sys.argv[2:]) else 1)
+PY
 }
 
 # Succeeds when the track is analysed and its loudness measured.
@@ -391,10 +413,12 @@ start_app
 # The players load their tracks when the app starts, before the analysis has
 # measured them, and a track keeps the gain it was loaded with: start again
 # once the measurements are in and the autosave has written them to the
-# state (the restarted app loads the tracks from it with their loudness), so
-# the headers show each track's gain.
+# saved library (the restarted app loads the tracks from it with their
+# loudness), so the headers show each track's gain.
 wait_analysed
-sleep 3 # the autosave (tuning.save_debounce_ms, 1 s by default) writes them
+# shellcheck disable=SC2046 # one argument per track id
+wait_for 30 saved_measured $(player_tracks) \
+    || die "the saved library ($home/data/playlists.json) has no loudness for the players' tracks after 30 s"
 stop_app
 start_app
 log "app on display :$display, API on port $port, home $home"
