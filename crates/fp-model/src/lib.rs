@@ -15,6 +15,7 @@ mod entry_notice;
 pub mod error;
 pub mod ids;
 pub mod live;
+pub mod loudness;
 pub mod midi;
 pub mod on_air;
 mod pending_start;
@@ -67,6 +68,7 @@ pub use live::{
     causes, configured_route, device_causes, device_settings, due, has_output_items, holders,
     interruptions, pending, target_and_wanted,
 };
+pub use loudness::{LOUDNESS_VERSION, LoudnessMeasurement, loudness_unmeasured};
 pub use midi::{MidiAction, MidiBinding, MidiConfig, MidiDevice, MidiTrigger};
 pub use on_air::{OnAir, on_air};
 pub use player::{ColumnWidths, CueState, PlayMode, PlayerState, Transport};

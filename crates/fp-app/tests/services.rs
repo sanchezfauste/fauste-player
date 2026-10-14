@@ -13,7 +13,7 @@ use std::time::{Duration, Instant, SystemTime};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use fp_analysis::analyze_file_cancellable;
-use fp_analysis::analyzer::{AnalyzeFn, Analyzer};
+use fp_analysis::analyzer::{AnalyzeFn, Analyzer, LoudnessFn};
 use fp_app::services::{MediaCache, ServiceRequest, Services, TrackMedia};
 use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::conductor::{Conductor, ConductorHandle};
@@ -47,6 +47,11 @@ struct Rig {
     device: OfflineDevice,
     paths: AppPaths,
     analyses: Arc<AtomicUsize>,
+    /// Loudness-only jobs that started.
+    loudness_runs: Arc<AtomicUsize>,
+    /// How many analyses had returned when the last loudness-only job
+    /// started.
+    seen_finished: Arc<AtomicUsize>,
     now: Instant,
     _dir: tempfile::TempDir,
 }
@@ -55,7 +60,8 @@ fn rig(files: &[PathBuf], dir: tempfile::TempDir) -> Rig {
     rig_slow(files, dir, Duration::ZERO)
 }
 
-/// `delay`: each analysis waits this long first (still cancellable).
+/// `delay`: each analysis and each loudness-only job waits this long first
+/// (still cancellable).
 fn rig_slow(files: &[PathBuf], dir: tempfile::TempDir, delay: Duration) -> Rig {
     rig_with(files, dir, delay, |_| {})
 }
@@ -80,6 +86,20 @@ fn rig_hooked(
     delay: Duration,
     prepare: impl FnOnce(&mut fp_model::AppState),
     after: AfterAnalysis,
+) -> Rig {
+    rig_pool(files, dir, delay, prepare, after, 1, None)
+}
+
+/// As `rig_hooked`, with `threads` workers and, when given, `measure` in
+/// place of the real loudness-only measurement.
+fn rig_pool(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    delay: Duration,
+    prepare: impl FnOnce(&mut fp_model::AppState),
+    after: AfterAnalysis,
+    threads: usize,
+    measure: Option<LoudnessFn>,
 ) -> Rig {
     let paths = AppPaths::under(dir.path());
     let store = Store::new(paths.clone(), Default::default());
@@ -109,23 +129,46 @@ fn rig_hooked(
     let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, now);
     let handle = Arc::new(handle);
     let analyses = Arc::new(AtomicUsize::new(0));
+    let finished = Arc::new(AtomicUsize::new(0));
     let counter = analyses.clone();
+    let done = finished.clone();
     let counting: AnalyzeFn = Arc::new(move |path, settings, limits, cancelled| {
         counter.fetch_add(1, Ordering::SeqCst);
-        let until = Instant::now() + delay;
-        while Instant::now() < until {
-            if cancelled() {
-                return Err(fp_analysis::AnalysisError::Cancelled);
-            }
-            std::thread::sleep(Duration::from_millis(2));
+        if !wait(delay, cancelled) {
+            return Err(fp_analysis::AnalysisError::Cancelled);
         }
         let outcome = analyze_file_cancellable(path, settings, limits, cancelled);
         after(path);
+        done.fetch_add(1, Ordering::SeqCst);
         outcome
     });
-    let analyzer =
-        Analyzer::with_analyze_fn(1, Default::default(), Default::default(), None, counting)
-            .unwrap();
+    let loudness_runs = Arc::new(AtomicUsize::new(0));
+    let seen_finished = Arc::new(AtomicUsize::new(0));
+    let (runs, seen, done) = (
+        loudness_runs.clone(),
+        seen_finished.clone(),
+        finished.clone(),
+    );
+    let loudness: LoudnessFn = Arc::new(move |path, cancelled| {
+        runs.fetch_add(1, Ordering::SeqCst);
+        seen.store(done.load(Ordering::SeqCst), Ordering::SeqCst);
+        if !wait(delay, cancelled) {
+            return Err(fp_analysis::AnalysisError::Cancelled);
+        }
+        match &measure {
+            Some(measure) => measure(path, cancelled),
+            None => fp_analysis::measure_loudness_cancellable(path, cancelled),
+        }
+    });
+    let analyzer = Analyzer::with_fns(
+        threads,
+        Default::default(),
+        Default::default(),
+        None,
+        counting,
+        loudness,
+    )
+    .unwrap();
     let media = MediaCache::default();
     let services = Services::new(handle.clone(), store, analyzer, media.clone());
     Rig {
@@ -136,9 +179,23 @@ fn rig_hooked(
         device,
         paths,
         analyses,
+        loudness_runs,
+        seen_finished,
         now,
         _dir: dir,
     }
+}
+
+/// Waits `delay`; false if cancelled meanwhile.
+fn wait(delay: Duration, cancelled: &dyn Fn() -> bool) -> bool {
+    let until = Instant::now() + delay;
+    while Instant::now() < until {
+        if cancelled() {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    true
 }
 
 impl Rig {
@@ -746,10 +803,12 @@ fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
     let dir = tempfile::tempdir().unwrap();
     let junk = dir.path().join("Band - Junk.wav");
     std::fs::write(&junk, b"this is not audio").unwrap();
-    // Analysed already, with its tags still unread.
+    // Analysed already, with its tags still unread (and its loudness
+    // measured, so the loudness pass sends nothing during the count).
     let mut r = rig_with(&[junk], dir, Duration::ZERO, |state| {
         for track in state.library.iter_mut() {
             track.analyzed = true;
+            track.apply_loudness(None, fp_model::LOUDNESS_VERSION);
             track.format = Some(fp_model::AudioFormat {
                 sample_rate: 44_100,
                 bits: Some(16),
@@ -1286,5 +1345,274 @@ fn new_limits_reach_the_analyzer() {
         r.analyses.load(Ordering::SeqCst),
         analysed,
         "the library is not analysed again"
+    );
+}
+
+/// Points every player at a new, empty playlist, so that no track is on
+/// screen: a track a player shows gets a full analysis for its waveform
+/// (`Services::wanted`), which would measure it before the pass could.
+fn off_screen(state: &mut fp_model::AppState) {
+    fp_model::apply(
+        state,
+        Command::CreatePlaylist {
+            name: "Other".into(),
+        },
+    )
+    .unwrap();
+    let other = state.playlists.iter().last().unwrap().id;
+    for p in &mut state.players {
+        p.playlist = other;
+        p.next = None;
+        p.next_explicit = false;
+    }
+}
+
+/// Marks every track as analysed by the previous release: markers and
+/// length known, no loudness measured yet; no track on screen.
+fn analysed_before_loudness(state: &mut fp_model::AppState) {
+    off_screen(state);
+    for t in state.library.iter_mut() {
+        t.analyzed = true;
+        t.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+        t.tags_read = true;
+        t.duration_secs = 2.0;
+    }
+}
+
+#[test]
+fn n6b_old_tracks_are_measured_once_without_a_full_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 2);
+    let mut r = rig_with(&[a], dir, Duration::ZERO, analysed_before_loudness);
+    r.run_until("the loudness", |r| only_track(r).loudness_pass.is_some());
+    let t = only_track(&r);
+    assert!(t.loudness.and_then(|l| l.integrated_lufs).is_some());
+    assert_eq!(t.loudness_pass, Some(fp_model::LOUDNESS_VERSION));
+    let until = r.now + Duration::from_millis(500);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "no full analysis");
+    assert_eq!(r.loudness_runs.load(Ordering::SeqCst), 1, "measured once");
+}
+
+#[test]
+fn n6b_a_new_file_is_measured_by_its_analysis_not_by_the_pass() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 2);
+    let mut r = rig(&[a], dir);
+    r.run_until("the analysis", |r| only_track(r).analyzed);
+    let until = r.now + Duration::from_millis(500);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert!(only_track(&r).loudness.is_some());
+    assert_eq!(r.loudness_runs.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn the_pass_waits_for_normal_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let old = wav(dir.path(), "old.wav", 1);
+    let new = wav(dir.path(), "new.wav", 1);
+    // `old` was analysed by the previous release, `new` was just added.
+    let old_path = old.clone();
+    let mut r = rig_with(&[old, new], dir, Duration::from_millis(300), move |s| {
+        off_screen(s);
+        for t in s.library.iter_mut().filter(|t| t.path == old_path) {
+            t.analyzed = true;
+            t.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+            t.tags_read = true;
+        }
+    });
+    r.run_until("both measured", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.loudness_pass.is_some())
+    });
+    assert_eq!(r.loudness_runs.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        r.seen_finished.load(Ordering::SeqCst),
+        1,
+        "the loudness job started after the new file's analysis"
+    );
+}
+
+#[test]
+fn n6b_a_short_file_is_recorded_and_not_measured_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("blip.wav");
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 48_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    for i in 0..9_600 {
+        w.write_sample(((i as f32 * 0.05).sin() * 8_000.0) as i16)
+            .unwrap();
+    }
+    w.finalize().unwrap();
+    let mut r = rig_with(&[path], dir, Duration::ZERO, analysed_before_loudness);
+    r.run_until("the attempt", |r| only_track(r).loudness_pass.is_some());
+    assert_eq!(only_track(&r).loudness, None);
+    let until = r.now + Duration::from_millis(500);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(r.loudness_runs.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn n6b_an_unreadable_file_is_recorded_and_not_measured_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let junk = garbage(dir.path(), "junk.wav");
+    let mut r = rig_with(&[junk], dir, Duration::ZERO, analysed_before_loudness);
+    r.run_until("the attempt", |r| only_track(r).loudness_pass.is_some());
+    assert_eq!(only_track(&r).loudness, None);
+    let until = r.now + Duration::from_millis(500);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(r.loudness_runs.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn n6b_a_missing_file_is_marked_missing_not_recorded() {
+    // Gone since its analysis: it is measured when it comes back.
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = rig_with(
+        &[dir.path().join("gone.wav")],
+        dir,
+        Duration::ZERO,
+        analysed_before_loudness,
+    );
+    r.run_until("the file marked missing", |r| {
+        only_track(r).file_state == FileState::Missing
+    });
+    assert_eq!(only_track(&r).loudness_pass, None);
+}
+
+#[test]
+fn n6b_a_newer_loudness_version_measures_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 1);
+    let mut r = rig_with(&[a], dir, Duration::ZERO, |s| {
+        analysed_before_loudness(s);
+        for t in s.library.iter_mut() {
+            t.apply_loudness(None, fp_model::LOUDNESS_VERSION - 1);
+        }
+    });
+    r.run_until("the new pass", |r| {
+        only_track(r).loudness_pass == Some(fp_model::LOUDNESS_VERSION)
+    });
+    assert!(only_track(&r).loudness.is_some());
+    assert_eq!(r.loudness_runs.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_track_removed_while_measured_is_forgotten() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 1);
+    // Each loudness job takes a while: the removal lands while it runs.
+    let mut r = rig_with(
+        &[a],
+        dir,
+        Duration::from_millis(400),
+        analysed_before_loudness,
+    );
+    r.run_until("the job started", |r| {
+        r.loudness_runs.load(Ordering::SeqCst) == 1
+    });
+    let first = r.handle.model.load().playlists.first_id().unwrap();
+    let entry = r.handle.model.load().playlists.get(first).unwrap().entries[0].id;
+    r.handle.send(Command::RemoveEntry(entry));
+    r.run_until("the track gone", |r| {
+        r.handle.model.load().library.is_empty()
+    });
+    let version = r.handle.telemetry.load().model_version;
+    let until = r.now + Duration::from_millis(800);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(
+        r.handle.telemetry.load().model_version,
+        version,
+        "no answer for the gone track"
+    );
+    assert_eq!(r.loudness_runs.load(Ordering::SeqCst), 1);
+}
+
+/// I1: a loudness-only answer that arrives after a Re-analyse of its track
+/// is stale; the analysis's measurement stays.
+#[test]
+fn a_stale_loudness_answer_does_not_overwrite_a_new_analysis() {
+    use std::sync::atomic::AtomicBool;
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 2);
+    // The loudness-only job holds until the test lets it answer (or it is
+    // cancelled), then gives a measurement no analysis would.
+    let gate = Arc::new(AtomicBool::new(false));
+    let returned = Arc::new(AtomicBool::new(false));
+    let (open, back) = (gate.clone(), returned.clone());
+    let measure: LoudnessFn = Arc::new(move |_, cancelled| {
+        loop {
+            if open.load(Ordering::SeqCst) {
+                back.store(true, Ordering::SeqCst);
+                return Ok(Some(fp_model::LoudnessMeasurement {
+                    integrated_lufs: Some(-99.0),
+                    true_peak_dbtp: -99.0,
+                }));
+            }
+            if cancelled() {
+                back.store(true, Ordering::SeqCst);
+                return Err(fp_analysis::AnalysisError::Cancelled);
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    });
+    // Two workers: the analysis runs beside the loudness job.
+    let mut r = rig_pool(
+        &[a],
+        dir,
+        Duration::ZERO,
+        analysed_before_loudness,
+        Arc::new(|_| {}),
+        2,
+        Some(measure),
+    );
+    r.run_until("the loudness job", |r| {
+        r.loudness_runs.load(Ordering::SeqCst) == 1
+    });
+    let track = only_track(&r).id;
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(track))
+        .unwrap();
+    // Until the model holds the analysis, before the services see it.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for the analysis"
+        );
+        r.conductor.tick(r.now);
+        if only_track(&r).loudness_pass.is_some() {
+            break;
+        }
+        r.services.step(r.now);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let measured = only_track(&r).loudness;
+    assert!(measured.and_then(|l| l.integrated_lufs).is_some());
+    // The loudness job answers now (unless it was cancelled).
+    gate.store(true, Ordering::SeqCst);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !returned.load(Ordering::SeqCst) {
+        assert!(Instant::now() < deadline, "the loudness job never returned");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    std::thread::sleep(Duration::from_millis(50));
+    let until = r.now + Duration::from_millis(300);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(
+        only_track(&r).loudness,
+        measured,
+        "the analysis's measurement stays"
     );
 }

@@ -11,7 +11,8 @@ blocks. The result holds:
   `format`: its sample rate, its bits per sample for lossless codecs (`None`
   for lossy ones), and its channel count. The track keeps the format, and source and cart
   requests carry it, so bit-perfect buses can follow the file rate without
-  reading the file;
+  reading the file; and the loudness measurement (`loudness`,
+  `loudness_pass`, see [Loudness](#loudness));
 - `peaks`: one `WavePeak { min, max, rms }` (`i16`, full scale =
   `i16::MAX`) per `analysis.peak_bucket_ms` (10 ms) of the mono sum. The
   waveform draws the peaks dimmed and the RMS level as a solid body, one
@@ -165,6 +166,48 @@ file name is used.
 Its value is seconds (`12.5`) or `m:ss(.f)`. The model's
 `Track::apply_analysis` stores automatic markers without touching manual ones.
 
+## Loudness
+
+The analysis also measures the file's loudness (loudness normalization spec
+N4–N6), in the same decode as the envelope: every decoded block goes to
+`fp_dsp::loudness::LoudnessMeter` too. What is measured is what the players
+play: the stereo downmix `FileDecoder` gives, at the file's own rate, both
+channels weighted 1.0 (ITU-R BS.1770 gated integrated loudness and the true
+peak of both channels). A damaged stretch that ends decoding early is
+measured up to that point. The result is a `LoudnessMeasurement
+{ integrated_lufs, true_peak_dbtp }` (`fp-model/src/loudness.rs`):
+
+- measured: both values;
+- silent (no 400 ms block above the absolute gate): no `integrated_lufs`,
+  the true peak still recorded;
+- under 400 ms: no measurement, without a warning (short effects are
+  expected);
+- a value that is not finite, a true peak above +60 dBTP (a corrupt file),
+  or a panic inside the meter: no measurement and a warning with the path;
+  the rest of the analysis is kept.
+
+Every outcome sets `loudness_pass = Some(LOUDNESS_VERSION)`: the file was
+tried, and is not tried again until the measurement changes.
+`LOUDNESS_VERSION` (1) lives in `fp-model`, because the model decides which
+tracks still need a measurement (`Track::needs_loudness_pass`) and counts
+them (`loudness_unmeasured`); `fp_analysis::cache` re-exports it. It is
+independent of `ANALYSIS_VERSION`, which this feature did not bump (it
+stays 8): no cache entry is outdated because of loudness, and nothing is
+analysed again in full for it.
+
+`Track::apply_analysis` stores the measurement when the result carries a
+`loudness_pass`. A result loaded from an entry cached before loudness was
+measured carries none: it clears the track's `loudness` and `loudness_pass`
+(the measurement the track held may belong to other content), so the
+loudness-only pass measures the file again. `apply_analysis` and
+`Track::apply_loudness` drop a measurement that is not finite (a corrupt
+entry): JSON writes NaN and infinity as `null`, which would make the
+playlists file fail to load.
+
+`measure_loudness_cancellable(path, cancelled)` decodes a file for its
+loudness alone (no envelope, markers, tags or cover): the loudness-only job
+below.
+
 ## Cache (`cache.rs`)
 
 There is one postcard file per track in `<cache>/analysis/`. The key is an
@@ -179,6 +222,22 @@ recomputed. File names are `v<ANALYSIS_VERSION>-<hash>.bin`. Before its first
 job, one pool worker sweeps entries of any other version (they can never match
 a key again) and leftover temporary files (`AnalysisCache::sweep`), so start-up
 never waits on the cache directory.
+
+Each file holds the entry (`CachedAnalysis`) and, after it, an optional
+`LoudnessTail { loudness, pass }`, a second postcard value. Postcard is not
+self-describing: a field added to the entry would make every entry written
+before unreadable, and the whole library would be analysed again. The two
+loudness fields of `TrackAnalysis` are therefore `#[serde(skip)]` (the
+entry's own bytes do not change), `load_key` reads the entry with
+`postcard::take_from_bytes` and the tail from what is left, and
+`store_key` appends the tail when the analysis has a `loudness_pass`. An
+entry with no tail (written before) loads with no measurement; a tail that
+cannot be read, or whose numbers are not finite, is ignored and the entry
+kept. An older build reading a new
+entry ignores the trailing bytes. `update_loudness(key, loudness, limits)`
+rewrites an existing entry with a new tail, with the same atomic replace
+(`Ok(false)` when there is no entry). Keep the tail last if
+`CachedAnalysis` ever changes.
 
 ## Pool (`analyzer.rs`)
 
@@ -196,6 +255,20 @@ from first; `promote` moves a normal job still waiting there. A track a
 player shows gets its waveform ahead of a library being analysed. An
 urgent job already waiting or running is never duplicated, and a job
 whose result was already sent is not promoted again.
+
+Loudness-only jobs (loudness normalization spec N6b) have a third queue,
+which workers take last (`submit_loudness`, `cancel_loudness`,
+`loudness_results`), with their own generations, so a loudness job and an
+analysis of the same track are independent. A job first reads the file's
+cache entry: one that already holds this pass's answer is returned without
+decoding. Otherwise it runs `measure_loudness_cancellable` and records a
+measurement (or a file too short or too quiet to have one) in the entry in
+place (`update_loudness`). A failure is never written: it may be transient
+(a share that dropped mid-read), and a cached failure would survive a
+Re-analyse; only the model records it. With no entry nothing is written,
+and the file's next full analysis writes it. `loudness_share()` is how many may
+run at once: all workers but one, at least one. `Analyzer::with_fns` takes
+both the analysis and the loudness function (tests inject them).
 
 Dropping the analyzer does not wait for queued jobs. A panicking job is
 reported as `Unreadable`.
@@ -272,6 +345,28 @@ analysis version and no cache key: tracks from an earlier version get their
 date, genre and other tags without a re-analysis. The editor's own jobs
 (`ReadSheet`, `WriteSheet`, `LoadCover`) come from the UI; see
 [User interface](ui.md).
+
+A **loudness-only pass** (`Services::loudness_pass`, loudness normalization
+spec N6b) measures the tracks analysed before loudness was measured, or by
+an older `LOUDNESS_VERSION` (`Track::needs_loudness_pass`: analysed,
+playable, `loudness_pass` not the current version). It queues jobs only
+while no normal analysis is in flight (a full analysis measures its track
+anyway) and never more than `Analyzer::loudness_share()` at once. Normal
+and urgent jobs are queued ahead of every loudness job, and one worker is
+kept free when the pool has more than one, so a new file or a track a
+player shows does not wait behind the pass; a loudness job already running
+is not preempted. Each answer
+becomes `Command::ApplyLoudness`, which changes the measurement and nothing
+else (no marker, no tag). Files too short to measure and files that cannot
+be decoded are recorded too, so they are not retried; a file gone since its
+analysis is marked `Missing` instead, and measured when it comes back. A
+job whose track is removed, or whose track no longer needs the pass, is
+cancelled. Queuing or applying a full analysis of a track (a new file,
+Re-analyse, Re-analyse all) cancels that track's loudness job, and an
+answer for a track no longer in flight is dropped, so a stale answer never
+overwrites the analysis's newer measurement. A failure is recorded only in
+the model (`loudness_pass` set, no measurement), never in the cache, so a
+Re-analyse measures the file again. The pass runs whether loudness normalization is on or off.
 
 Results go to the model as `ApplyAnalysis` or `SetFileState`. Peaks and covers
 are kept in the `MediaCache` only for shown tracks. The disk cache brings

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::ids::TrackId;
+use crate::loudness::{LOUDNESS_VERSION, LoudnessMeasurement};
 
 /// What a track is used for on air.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -293,6 +294,15 @@ pub struct Track {
     /// asks for the tag-only pass (`needs_tag_read`).
     #[serde(default)]
     pub tags_read: bool,
+    /// What the analysis measured (loudness normalization spec N6); `None`
+    /// is "not measured". Libraries saved earlier have none until the
+    /// loudness-only pass measures them.
+    #[serde(default)]
+    pub loudness: Option<LoudnessMeasurement>,
+    /// The `LOUDNESS_VERSION` of the pass that last ran on the file,
+    /// whatever it found; `None` before any.
+    #[serde(default)]
+    pub loudness_pass: Option<u32>,
 }
 
 /// Where a player plays a track: from `cue_in` to `cue_out`. See
@@ -344,6 +354,8 @@ impl Track {
             composer: String::new(),
             comment: String::new(),
             tags_read: false,
+            loudness: None,
+            loudness_pass: None,
         }
     }
 
@@ -382,6 +394,22 @@ impl Track {
     /// readable, and not read since the last analysis.
     pub fn needs_tag_read(&self) -> bool {
         self.analyzed && !self.tags_read && self.file_state.is_playable()
+    }
+
+    /// N6b: whether the loudness-only pass should measure this track:
+    /// analysed, playable, and not measured by the current pass version.
+    /// A track not analysed yet gets its measurement from the analysis.
+    pub fn needs_loudness_pass(&self) -> bool {
+        self.analyzed
+            && self.file_state.is_playable()
+            && self.loudness_pass != Some(LOUDNESS_VERSION)
+    }
+
+    /// N6b: a loudness-only result. Only the measurement changes.
+    /// A measurement that is not finite is dropped (the attempt stays).
+    pub fn apply_loudness(&mut self, loudness: Option<LoudnessMeasurement>, version: u32) {
+        self.loudness = loudness.filter(LoudnessMeasurement::is_finite);
+        self.loudness_pass = Some(version);
     }
 
     /// Operator feedback 4, Q1.1: whether the header reader should read
@@ -479,6 +507,14 @@ pub struct TrackAnalysis {
     /// The analysis version that computed this result.
     #[serde(default)]
     pub version: u32,
+    /// The loudness measurement (N6). Not part of the cache entry's own
+    /// bytes: the cache stores it as a tail record (see `fp_analysis::cache`).
+    #[serde(skip)]
+    pub loudness: Option<LoudnessMeasurement>,
+    /// The `LOUDNESS_VERSION` that measured it; `None` for a result cached
+    /// before loudness was measured.
+    #[serde(skip)]
+    pub loudness_pass: Option<u32>,
 }
 
 impl Track {
@@ -507,6 +543,16 @@ impl Track {
             .set_auto(MarkerKind::IntroEnd, analysis.intro_end);
         if analysis.format.is_some() {
             self.format = analysis.format;
+        }
+        // A result cached before loudness was measured carries none, and
+        // the track's own may belong to other content: both are cleared,
+        // so the loudness-only pass measures the file again (N6b).
+        match analysis.loudness_pass {
+            Some(version) => self.apply_loudness(analysis.loudness, version),
+            None => {
+                self.loudness = None;
+                self.loudness_pass = None;
+            }
         }
         self.analysis_version = analysis.version;
         // Title, artist and album come from this analysis; the rest wait for

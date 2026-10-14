@@ -3,6 +3,14 @@
 //! version, the analysis settings and the cover limits. File names start
 //! with the analysis version, so entries of older versions, which can never
 //! be read again, are swept by the analysis pool.
+//!
+//! Each file holds the entry (`CachedAnalysis`) and, after it, an optional
+//! `LoudnessTail`: the loudness measurement is not part of the entry's own
+//! bytes, so entries written before loudness was measured stay valid and
+//! are filled in place by the loudness-only pass (loudness normalization
+//! spec N6). Postcard is not self-describing, so a field added to the entry
+//! would make every older entry unreadable; a tail record does not. Keep
+//! the tail last if `CachedAnalysis` ever changes.
 
 use std::fs;
 use std::io::{self, Write};
@@ -10,7 +18,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
 
-use fp_model::{AnalysisSettings, Limits};
+pub use fp_model::LOUDNESS_VERSION;
+use fp_model::{AnalysisSettings, Limits, LoudnessMeasurement};
 use serde::{Deserialize, Serialize};
 
 use crate::analyze::Analysis;
@@ -24,6 +33,13 @@ pub const ANALYSIS_VERSION: u32 = 8;
 struct CachedAnalysis {
     key: String,
     analysis: Analysis,
+}
+
+/// The loudness measurement stored after the entry.
+#[derive(Serialize, Deserialize)]
+struct LoudnessTail {
+    loudness: Option<LoudnessMeasurement>,
+    pass: u32,
 }
 
 /// Identifies one file state plus the settings it was analysed with.
@@ -122,8 +138,19 @@ impl AnalysisCache {
             return None;
         }
         let bytes = fs::read(&file).ok()?;
-        match postcard::from_bytes::<CachedAnalysis>(&bytes) {
-            Ok(cached) if cached.key == key.0 => Some(cached.analysis),
+        match postcard::take_from_bytes::<CachedAnalysis>(&bytes) {
+            Ok((cached, rest)) if cached.key == key.0 => {
+                let mut analysis = cached.analysis;
+                // A missing, unreadable or non-finite tail is "not measured
+                // yet"; the entry itself is fine.
+                if let Ok(tail) = postcard::from_bytes::<LoudnessTail>(rest)
+                    && tail.loudness.is_none_or(|m| m.is_finite())
+                {
+                    analysis.analysis.loudness = tail.loudness;
+                    analysis.analysis.loudness_pass = Some(tail.pass);
+                }
+                Some(analysis)
+            }
             Ok(_) => None, // a hash collision: another file's entry
             Err(_) => {
                 let _ = fs::remove_file(&file);
@@ -140,11 +167,19 @@ impl AnalysisCache {
         analysis: &Analysis,
         limits: &Limits,
     ) -> io::Result<()> {
-        let bytes = postcard::to_allocvec(&CachedAnalysis {
+        let mut bytes = postcard::to_allocvec(&CachedAnalysis {
             key: key.0.clone(),
             analysis: analysis.clone(),
         })
         .map_err(io::Error::other)?;
+        if let Some(pass) = analysis.analysis.loudness_pass {
+            let tail = postcard::to_allocvec(&LoudnessTail {
+                loudness: analysis.analysis.loudness,
+                pass,
+            })
+            .map_err(io::Error::other)?;
+            bytes.extend_from_slice(&tail);
+        }
         if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limits.max_state_file_bytes {
             return Err(io::Error::other(
                 "analysis larger than the state file limit",
@@ -162,6 +197,25 @@ impl AnalysisCache {
         fs::rename(&tmp, &file).inspect_err(|_| {
             let _ = fs::remove_file(&tmp);
         })
+    }
+
+    /// N6b: records a loudness-only result in the entry under `key`, in
+    /// place (the entry's own bytes are rewritten unchanged, the tail
+    /// replaced) with the same atomic replace as `store_key`. `Ok(false)`
+    /// when there is no entry: the file's full analysis will measure it.
+    pub fn update_loudness(
+        &self,
+        key: &CacheKey,
+        loudness: Option<LoudnessMeasurement>,
+        limits: &Limits,
+    ) -> io::Result<bool> {
+        let Some(mut analysis) = self.load_key(key, limits) else {
+            return Ok(false);
+        };
+        analysis.analysis.loudness = loudness;
+        analysis.analysis.loudness_pass = Some(LOUDNESS_VERSION);
+        self.store_key(key, &analysis, limits)?;
+        Ok(true)
     }
 
     pub fn load(

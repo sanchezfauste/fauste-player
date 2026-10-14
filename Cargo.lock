@@ -1689,6 +1689,7 @@ version = "0.6.0"
 dependencies = [
  "crossbeam-channel",
  "fp-decode",
+ "fp-dsp",
  "fp-model",
  "hound",
  "image",

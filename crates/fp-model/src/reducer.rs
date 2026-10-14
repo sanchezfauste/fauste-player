@@ -169,6 +169,15 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
                 refresh_next(state);
             }
         }
+        Command::ApplyLoudness {
+            track,
+            loudness,
+            version,
+        } => {
+            if let Some(t) = state.library.get_mut(track) {
+                t.apply_loudness(loudness, version);
+            }
+        }
         Command::ApplyTags { track, tags } => {
             if let Some(t) = state.library.get_mut(track) {
                 t.apply_tags(&tags);

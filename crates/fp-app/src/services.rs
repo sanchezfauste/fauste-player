@@ -11,10 +11,12 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime};
 
 use crossbeam_channel::{Receiver, Sender};
-use fp_analysis::analyzer::{AnalysisResult, Analyzer};
+use fp_analysis::analyzer::{AnalysisResult, Analyzer, LoudnessResult};
 use fp_analysis::{AnalysisError, WavePeak};
 use fp_engine::conductor::ConductorHandle;
-use fp_model::{AnalysisSettings, AppState, Command, FileState, PlayerId, TrackId, Transport};
+use fp_model::{
+    AnalysisSettings, AppState, Command, FileState, LOUDNESS_VERSION, PlayerId, TrackId, Transport,
+};
 use fp_store::Store;
 
 use crate::header::HeaderReader;
@@ -371,6 +373,12 @@ pub struct Services {
     /// snapshot does not show it yet. Without it a snapshot taken before the
     /// command lands still says "unread" and the track is read twice.
     tags_answered: HashSet<TrackId>,
+    /// Loudness-only jobs queued and not answered yet (loudness
+    /// normalization spec N6b).
+    loudness_in_flight: HashSet<TrackId>,
+    /// Tracks whose loudness answer was sent to the model but whose
+    /// snapshot does not show it yet: not queued twice meanwhile.
+    loudness_answered: HashSet<TrackId>,
     /// Reads the length of tracks not analysed yet (operator feedback 4,
     /// Q1.1); `None` if its thread could not start.
     header_reader: Option<HeaderReader>,
@@ -434,6 +442,8 @@ impl Services {
                 .ok(),
             tags_in_flight: HashSet::new(),
             tags_answered: HashSet::new(),
+            loudness_in_flight: HashSet::new(),
+            loudness_answered: HashSet::new(),
             header_reader: HeaderReader::spawn()
                 .map_err(|e| {
                     tracing::error!(error = %e, "cannot start the header reader; lengths wait for the analysis");
@@ -570,6 +580,7 @@ impl Services {
         self.submit_new(state);
         self.header_pass(state);
         self.tag_pass(state);
+        self.loudness_pass(state);
         let wanted = Self::wanted(state);
         let results: Vec<AnalysisResult> = self.analyzer.results().try_iter().collect();
         for result in results {
@@ -916,6 +927,118 @@ impl Services {
         }
     }
 
+    /// N6b: tracks analysed before loudness was measured (or by an older
+    /// `LOUDNESS_VERSION`) get a loudness-only measurement, below every
+    /// normal analysis: nothing is queued while a normal job is in flight,
+    /// and never more than the pool's share at once. Failures and files
+    /// too short to measure are recorded too, so they are not retried; a
+    /// file gone since its analysis is marked missing instead, and measured
+    /// when it comes back. It runs whether normalization is on or off.
+    fn loudness_pass(&mut self, state: &AppState) {
+        let answers: Vec<LoudnessResult> = self.analyzer.loudness_results().try_iter().collect();
+        for answer in answers {
+            // A job whose track went to a full analysis meanwhile is stale:
+            // the analysis's measurement must not be overwritten.
+            if !self.loudness_in_flight.remove(&answer.track) {
+                continue;
+            }
+            let Some(track) = state.library.get(answer.track) else {
+                continue; // removed meanwhile: nothing to record
+            };
+            let command = match answer.outcome {
+                Ok(loudness) => Command::ApplyLoudness {
+                    track: answer.track,
+                    loudness,
+                    version: LOUDNESS_VERSION,
+                },
+                Err(AnalysisError::Cancelled) => continue,
+                Err(AnalysisError::Missing) => {
+                    if track.file_state == FileState::Missing {
+                        continue;
+                    }
+                    Command::SetFileState {
+                        track: answer.track,
+                        state: FileState::Missing,
+                    }
+                }
+                Err(AnalysisError::Unreadable(reason)) => {
+                    tracing::warn!(
+                        path = %answer.path.display(),
+                        %reason,
+                        "cannot measure the loudness"
+                    );
+                    Command::ApplyLoudness {
+                        track: answer.track,
+                        loudness: None,
+                        version: LOUDNESS_VERSION,
+                    }
+                }
+            };
+            // If the command is not queued the track still needs the pass,
+            // so a later round measures it again.
+            if self.conductor.send(command) {
+                self.loudness_answered.insert(answer.track);
+            }
+        }
+        let gone: Vec<TrackId> = self
+            .loudness_in_flight
+            .iter()
+            .copied()
+            .filter(|id| {
+                state
+                    .library
+                    .get(*id)
+                    .is_none_or(|t| !t.needs_loudness_pass())
+            })
+            .collect();
+        for id in gone {
+            self.analyzer.cancel_loudness(id);
+            self.loudness_in_flight.remove(&id);
+        }
+        // An answer stays here until a snapshot shows it.
+        self.loudness_answered.retain(|id| {
+            state
+                .library
+                .get(*id)
+                .is_some_and(|t| t.needs_loudness_pass())
+        });
+        // Below every normal job: only once the normal queue is empty (a
+        // full analysis measures its track anyway).
+        if !self.in_flight.is_empty() {
+            return;
+        }
+        let room = self
+            .analyzer
+            .loudness_share()
+            .saturating_sub(self.loudness_in_flight.len());
+        if room == 0 {
+            return;
+        }
+        let todo: Vec<(TrackId, PathBuf)> = state
+            .library
+            .iter()
+            .filter(|t| {
+                t.needs_loudness_pass()
+                    && !self.loudness_in_flight.contains(&t.id)
+                    && !self.loudness_answered.contains(&t.id)
+            })
+            .take(room)
+            .map(|t| (t.id, t.path.clone()))
+            .collect();
+        for (id, path) in todo {
+            self.analyzer.submit_loudness(id, path);
+            self.loudness_in_flight.insert(id);
+        }
+    }
+
+    /// Cancels the loudness-only job of `id`, if any, so that its answer is
+    /// never applied over a full analysis's measurement.
+    fn drop_loudness_job(&mut self, id: TrackId) {
+        if self.loudness_in_flight.remove(&id) {
+            self.analyzer.cancel_loudness(id);
+        }
+    }
+
     /// Operator feedback 4, Q1.1: tracks with no length and no analysis get
     /// the length their file's header declares, read on the header reader,
     /// the ones on a player first. Each track is read once per session; a
@@ -1033,6 +1156,8 @@ impl Services {
             if analyse || show {
                 self.forced.remove(&id);
                 self.in_flight.insert(id);
+                // The analysis measures the loudness too.
+                self.drop_loudness_job(id);
                 // The mark is used up whichever way the track goes urgent.
                 let asked = self.urgent.remove(&id);
                 if wanted.contains(&id) || asked {
@@ -1062,6 +1187,7 @@ impl Services {
         let command = match result.outcome {
             Ok(analysis) => {
                 self.failed.remove(&result.track);
+                self.drop_loudness_job(result.track);
                 if wanted.contains(&result.track) {
                     self.media.insert(
                         result.track,

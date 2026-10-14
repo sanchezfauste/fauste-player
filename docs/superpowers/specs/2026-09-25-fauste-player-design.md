@@ -376,6 +376,7 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
   - `segue_start`: the end of the last RMS window of the body (the windows between `cue_in` and `cue_out`) at or above the body's median RMS − `segue_drop_db` (default 15 dB), clamped to `[cue_out − segue_max_secs, cue_out]` (default `segue_max_secs` = 4) and to `≥ cue_in`. Relative to the track, so loud and quiet masters with the same fade get the same overlap. Tracks shorter than `markers_min_duration_secs` (default 60 s, as in the design) get no segue start.
   - `outro_start`: scanning backwards from `cue_out`, the end of the first window whose RMS ≥ (median track RMS − `outro_drop_db`, default 6 dB), clamped to `≥ cue_out − outro_max_secs` (default 30 s). Tracks shorter than `markers_min_duration_secs` get no outro.
   - `intro_end`: **never automatic.** It is manual only (Phase 2 marker editing, plus the Phase 2 tag convention `INTRO=<seconds>` as TXXX/Vorbis comment). If unset, no intro is shown.
+- **Loudness:** analysis also measures the integrated loudness and true peak of the file (loudness normalization spec N4–N6); tracks without a measurement get a background loudness-only pass below every analysis (N6b).
 - **Marker provenance:** every marker is `Auto` or `Manual`. Manual markers are never overwritten by re-analysis.
 - **Cache:**
   - `postcard`-encoded file per track in the OS cache dir;

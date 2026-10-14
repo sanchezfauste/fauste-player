@@ -115,15 +115,25 @@ band) stays a separate value, whatever the normalization target (Q4).
   - A non-finite result, or a panic inside the meter, gives no measurement
     (`None` in `TrackAnalysis::loudness`) and a `tracing::warn!` with the
     path; the rest of the analysis is kept (CLAUDE.md rule 9).
-- **N6** `TrackAnalysis` gains `#[serde(default)] loudness:
-  Option<LoudnessMeasurement>` and `#[serde(default)] loudness_pass:
+- **N6** `TrackAnalysis` gains `#[serde(skip)] loudness:
+  Option<LoudnessMeasurement>` and `#[serde(skip)] loudness_pass:
   Option<u32>`, the version of the loudness pass that ran on the file
-  (`LOUDNESS_VERSION`, 1), whatever its outcome. **`ANALYSIS_VERSION` is
+  (`LOUDNESS_VERSION`, 1). The cache entry keeps its own bytes unchanged
+  (postcard is not self-describing, so a field added to the entry would
+  break the entries already written); the two fields travel in a
+  separate postcard record **appended** after the entry (the loudness
+  tail). A missing, unreadable or non-finite tail decodes as
+  `loudness = None`, `loudness_pass = None` and leaves the entry itself
+  valid. **`ANALYSIS_VERSION` is
   not bumped** (it stays 8): the measurement is additive, it changes no
   marker or envelope, so no entry becomes outdated and the library is not
   offered a full re-analysis. A cache entry written before this work
-  decodes with `loudness = None` and `loudness_pass = None`, which the
-  loudness-only pass (N6b) fills in place under the same key. A later
+  has no tail, and the loudness-only pass (N6b) appends one in place under
+  the same key. An analysis loaded from such an entry clears the track's
+  `loudness` and `loudness_pass` (the measurement the track held may
+  belong to other content), so the pass measures the file again. A
+  measurement that is not finite is dropped by the model rules
+  (`apply_analysis`, `apply_loudness`): JSON cannot hold it. A later
   change of the measurement algorithm bumps `LOUDNESS_VERSION` only, which
   re-runs the loudness-only pass and nothing else. A full analysis (new
   file, or **Analyse outdated** for a real `ANALYSIS_VERSION` change) also
@@ -148,7 +158,8 @@ band) stays a separate value, whatever the normalization target (Q4).
 - **N6b** The **loudness-only pass** (Q3). When the library is loaded and
   after each import, the services thread lists the playable tracks with
   `loudness_pass != Some(LOUDNESS_VERSION)` and queues them in the analysis
-  pool as `AnalysisJob::LoudnessOnly`:
+  pool's own **loudness lane**, a separate queue below the urgent and the
+  normal ones:
   - Priority: below every normal analysis job (new files, the operator's
     **Analyse**, **Analyse outdated**), so it never delays what the
     operator asked for. It starts only when the normal queue is empty and
@@ -157,21 +168,31 @@ band) stays a separate value, whatever the normalization target (Q4).
     new constant), so the UI and the playback decode path keep their
     headroom. A track that is loaded in a player or started is not
     interrupted by it; a job in progress is cancellable like any analysis.
+    Running loudness jobs are not preempted by a new normal job; the free
+    worker takes it. Queuing or applying a full analysis of a track
+    cancels that track's loudness job, and an answer for a track no longer
+    waiting for one is dropped, so a stale answer never overwrites the
+    analysis's measurement.
   - Work: decode the file once (the same `FileDecoder` and downmix as N4)
     and feed only the `LoudnessMeter`: no envelope, no marker detection,
     no cover or tag work. It never replaces markers or any operator edit.
-  - Storage: the result (a `LoudnessMeasurement`, or none) and
-    `loudness_pass = Some(LOUDNESS_VERSION)` are written into the existing
-    cache entry (same key, atomic replace). A file with no cache entry yet
-    gets a full analysis in the normal queue instead, which includes
-    loudness. The services thread sends the result to the model like an
-    analysis result (`apply_analysis`-style, loudness fields only); the
+  - Storage: the result (a `LoudnessMeasurement`, or none for a file too
+    short or too quiet) and `loudness_pass = Some(LOUDNESS_VERSION)` are
+    written as the tail of the existing cache entry (same key, atomic
+    replace). A file with no cache entry (the cache was cleared, or is
+    off) is measured all the same and the result is recorded only in the
+    model; its next full analysis writes the entry. The services thread
+    sends the result to the model as `Command::ApplyLoudness` (loudness
+    fields only); the
     model stores `Track::loudness` and, by N12, re-preloads the entry
     waiting to play if its normalization changes. A source on air is never
     touched (N11).
-  - A failure or a file shorter than 400 ms is recorded with
+  - A failure or a file shorter than 400 ms is recorded in the model with
     `loudness_pass = Some(..)` and `loudness = None`, so it is not retried
-    on every start; a log line (warn for a failure) names the path.
+    on every start; a log line (warn for a failure) names the path. Only
+    a measurement (or a short or silent file) is written into the cache:
+    a failure may be transient (a share that dropped mid-read), so the
+    cache never records it and a **Re-analyse** measures the file again.
   - The pass does not depend on `normalize`: it runs also while
     normalization is off, so that turning it on finds the library
     measured. It needs no setting of its own: it is cheap, low priority and
