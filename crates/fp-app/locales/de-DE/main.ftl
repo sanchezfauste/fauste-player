@@ -145,6 +145,18 @@ outdated-body = { $count ->
 outdated-now = Jetzt analysieren
 outdated-later = Später
 settings-analyse-outdated = Veraltete Tracks analysieren ({ $count })
+settings-normalize = Lautheit normalisieren
+settings-hint-normalize = Spielt jeden Titel und jedes Cart mit derselben integrierten Lautheit, mit einer festen Verstärkung pro Titel.
+settings-normalize-target = Ziel
+settings-normalize-ceiling = True-Peak-Obergrenze
+settings-normalize-max-boost = Maximale Anhebung
+settings-normalize-max-trim = Maximaler Trim
+settings-hint-normalize-apply = Änderungen gelten für danach geladene Titel; was gerade läuft, behält seine Verstärkung.
+settings-hint-normalize-bp = Ein Player oder Cart an einem Bit-perfect-Ausgang spielt immer mit Einheitsverstärkung: Er wird nie normalisiert.
+settings-normalize-unmeasured = { $count ->
+    [one] { $count } Titel noch nicht gemessen
+   *[other] { $count } Titel noch nicht gemessen
+}
 settings-hint-analyse-outdated = Tracks, die eine ältere Version analysiert hat, behalten diese Analyse, bis eine neue angefordert wird.
 settings-music-dir = Musikordner
 settings-browse = Durchsuchen…

@@ -145,6 +145,18 @@ outdated-body = { $count ->
 outdated-now = Analizza ora
 outdated-later = Più tardi
 settings-analyse-outdated = Analizza i brani obsoleti ({ $count })
+settings-normalize = Normalizza la loudness
+settings-hint-normalize = Riproduce ogni brano e ogni cart alla stessa loudness integrata, con un guadagno fisso per brano.
+settings-normalize-target = Obiettivo
+settings-normalize-ceiling = Tetto di true peak
+settings-normalize-max-boost = Guadagno massimo
+settings-normalize-max-trim = Trim massimo
+settings-hint-normalize-apply = Le modifiche si applicano ai brani caricati in seguito; ciò che è in riproduzione mantiene il suo guadagno.
+settings-hint-normalize-bp = Un player o un cart su un'uscita bit-perfect suona sempre a guadagno unitario: non viene mai normalizzato.
+settings-normalize-unmeasured = { $count ->
+    [one] { $count } brano non ancora misurato
+   *[other] { $count } brani non ancora misurati
+}
 settings-hint-analyse-outdated = I brani analizzati da una versione precedente mantengono quell'analisi finché non ne chiedi una nuova.
 settings-music-dir = Cartella della musica
 settings-browse = Sfoglia…

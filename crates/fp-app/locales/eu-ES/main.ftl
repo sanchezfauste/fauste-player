@@ -145,6 +145,18 @@ outdated-body = { $count ->
 outdated-now = Aztertu orain
 outdated-later = Geroago
 settings-analyse-outdated = Aztertu zaharkitutako pistak ({ $count })
+settings-normalize = Ozentasuna normalizatu
+settings-hint-normalize = Pista eta kartutxo guztiak ozentasun integratu berean erreproduzitzen ditu, pista bakoitzeko irabazi finko batekin.
+settings-normalize-target = Helburua
+settings-normalize-ceiling = True peak sabaia
+settings-normalize-max-boost = Gehieneko igoera
+settings-normalize-max-trim = Gehieneko doikuntza
+settings-hint-normalize-apply = Aldaketak geroago kargatzen diren pistei aplikatzen zaizkie; entzuten ari dena bere irabaziarekin jarraitzen du.
+settings-hint-normalize-bp = Bit perfect irteera batean dagoen erreproduzigailu edo kartutxo batek beti irabazi unitarioarekin jotzen du: ez da inoiz normalizatzen.
+settings-normalize-unmeasured = { $count ->
+    [one] { $count } pista oraindik neurtu gabe
+   *[other] { $count } pista oraindik neurtu gabe
+}
 settings-hint-analyse-outdated = Aurreko bertsio batek aztertutako pistek analisi hori gordetzen dute berri bat eskatu arte.
 settings-music-dir = Musika-karpeta
 settings-browse = Arakatu…

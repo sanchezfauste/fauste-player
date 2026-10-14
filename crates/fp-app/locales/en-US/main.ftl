@@ -145,6 +145,18 @@ outdated-body = { $count ->
 outdated-now = Analyse now
 outdated-later = Later
 settings-analyse-outdated = Analyse outdated tracks ({ $count })
+settings-normalize = Normalize loudness
+settings-hint-normalize = Plays every track and cart at the same integrated loudness with a fixed gain per track.
+settings-normalize-target = Target
+settings-normalize-ceiling = True-peak ceiling
+settings-normalize-max-boost = Maximum boost
+settings-normalize-max-trim = Maximum trim
+settings-hint-normalize-apply = Changes apply to tracks loaded afterwards; what is playing keeps its gain.
+settings-hint-normalize-bp = A player or cart on a bit-perfect output always plays at unity gain: it is never normalized.
+settings-normalize-unmeasured = { $count ->
+    [one] { $count } track not measured yet
+   *[other] { $count } tracks not measured yet
+}
 settings-hint-analyse-outdated = Tracks an earlier version analysed keep that analysis until you ask for a new one.
 settings-music-dir = Music folder
 settings-browse = Browse…

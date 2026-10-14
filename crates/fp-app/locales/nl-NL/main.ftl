@@ -145,6 +145,18 @@ outdated-body = { $count ->
 outdated-now = Nu analyseren
 outdated-later = Later
 settings-analyse-outdated = Verouderde nummers analyseren ({ $count })
+settings-normalize = Loudness normaliseren
+settings-hint-normalize = Speelt elk nummer en elke cart af op dezelfde geïntegreerde loudness, met een vaste versterking per nummer.
+settings-normalize-target = Doel
+settings-normalize-ceiling = True-peakplafond
+settings-normalize-max-boost = Maximale versterking
+settings-normalize-max-trim = Maximale trim
+settings-hint-normalize-apply = Wijzigingen gelden voor nummers die daarna worden geladen; wat speelt, behoudt zijn versterking.
+settings-hint-normalize-bp = Een speler of cart op een bit-perfect uitgang speelt altijd op eenheidsversterking: hij wordt nooit genormaliseerd.
+settings-normalize-unmeasured = { $count ->
+    [one] { $count } nummer nog niet gemeten
+   *[other] { $count } nummers nog niet gemeten
+}
 settings-hint-analyse-outdated = Nummers die een eerdere versie heeft geanalyseerd, houden die analyse tot je om een nieuwe vraagt.
 settings-music-dir = Muziekmap
 settings-browse = Bladeren…

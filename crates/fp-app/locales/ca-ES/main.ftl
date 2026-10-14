@@ -145,6 +145,18 @@ outdated-body = { $count ->
 outdated-now = Analitzar ara
 outdated-later = Més tard
 settings-analyse-outdated = Analitzar les pistes desactualitzades ({ $count })
+settings-normalize = Normalitzar la sonoritat
+settings-hint-normalize = Reprodueix cada pista i cada cartutx a la mateixa sonoritat integrada, amb un guany fix per pista.
+settings-normalize-target = Objectiu
+settings-normalize-ceiling = Sostre de true peak
+settings-normalize-max-boost = Guany màxim
+settings-normalize-max-trim = Ajust màxim
+settings-hint-normalize-apply = Els canvis s'apliquen a les pistes que es carreguin després; el que sona conserva el seu guany.
+settings-hint-normalize-bp = Un reproductor o un cartutx en una sortida bit perfect sempre sona a guany unitari: mai no es normalitza.
+settings-normalize-unmeasured = { $count ->
+    [one] { $count } pista encara sense mesurar
+   *[other] { $count } pistes encara sense mesurar
+}
 settings-hint-analyse-outdated = Les pistes que va analitzar una versió anterior conserven aquella anàlisi fins que en demanis una de nova.
 settings-music-dir = Carpeta de música
 settings-browse = Examinar…

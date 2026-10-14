@@ -149,6 +149,20 @@ outdated-body = { $count ->
 outdated-now = Analizuj teraz
 outdated-later = Później
 settings-analyse-outdated = Analizuj nieaktualne utwory ({ $count })
+settings-normalize = Normalizuj głośność
+settings-hint-normalize = Odtwarza każdy utwór i każdy cart z tą samą głośnością zintegrowaną, ze stałym wzmocnieniem dla każdego utworu.
+settings-normalize-target = Cel
+settings-normalize-ceiling = Pułap true peak
+settings-normalize-max-boost = Maksymalne wzmocnienie
+settings-normalize-max-trim = Maksymalna korekta
+settings-hint-normalize-apply = Zmiany dotyczą utworów wczytanych później; to, co gra, zachowuje swoje wzmocnienie.
+settings-hint-normalize-bp = Odtwarzacz lub cart na wyjściu bit-perfect zawsze gra ze wzmocnieniem jednostkowym: nigdy nie jest normalizowany.
+settings-normalize-unmeasured = { $count ->
+    [one] { $count } utwór jeszcze niezmierzony
+    [few] { $count } utwory jeszcze niezmierzone
+    [many] { $count } utworów jeszcze niezmierzonych
+   *[other] { $count } utworu jeszcze niezmierzonego
+}
 settings-hint-analyse-outdated = Utwory przeanalizowane przez wcześniejszą wersję zachowują tę analizę, dopóki nie zlecisz nowej.
 settings-music-dir = Folder z muzyką
 settings-browse = Przeglądaj…

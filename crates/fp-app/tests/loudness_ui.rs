@@ -379,3 +379,103 @@ fn n21_the_cart_editor_has_the_same_controls() {
         "the trim too"
     );
 }
+
+fn open_loudness_tab(
+    s: AppState,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    std::sync::Arc<support::Fake>,
+) {
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Loudness").click();
+    h.run_steps(2);
+    fake.take_sent();
+    (h, fake)
+}
+
+#[test]
+fn n22_the_toggle_turns_normalization_on() {
+    let (mut h, fake) = open_loudness_tab(state(1, 1));
+    assert!(
+        !fake.state.load().config.loudness.normalize,
+        "off by default"
+    );
+    h.get_by_role_and_label(Role::CheckBox, "Normalize loudness")
+        .click();
+    h.run_steps(2);
+    assert!(fake.state.load().config.loudness.normalize);
+}
+
+#[test]
+fn n22_the_sliders_keep_their_ranges() {
+    let mut s = state(1, 1);
+    s.config.loudness.target_lufs = -6.0;
+    let (mut h, fake) = open_loudness_tab(s);
+    let mut press = |key| {
+        h.get_by_role_and_label(Role::Slider, "Target").focus();
+        h.run_steps(1);
+        h.key_press(key);
+        h.run_steps(2);
+        fake.state.load().config.loudness.target_lufs
+    };
+    assert_eq!(press(egui::Key::ArrowLeft), -6.5, "0.5 LUFS steps");
+    assert_eq!(press(egui::Key::ArrowRight), -6.0);
+    assert_eq!(press(egui::Key::ArrowRight), -6.0, "the top of the range");
+    for label in ["True-peak ceiling", "Maximum boost", "Maximum trim"] {
+        assert!(
+            h.query_by_role_and_label(Role::Slider, label).is_some(),
+            "{label}"
+        );
+    }
+    assert!(
+        h.query_by_label(
+            "Changes apply to tracks loaded afterwards; what is playing keeps its gain."
+        )
+        .is_some()
+    );
+    assert!(
+        h.query_by_label_contains("bit-perfect output always plays at unity gain")
+            .is_some(),
+        "a bit-perfect output is never normalized"
+    );
+}
+
+#[test]
+fn n22_it_counts_the_tracks_still_waiting_for_a_measurement() {
+    let mut s = state(1, 3);
+    for t in s.library.iter_mut() {
+        t.analyzed = true;
+    }
+    let (mut h, _fake) = open_loudness_tab(s);
+    h.run_steps(2);
+    assert!(h.query_by_label("3 tracks not measured yet").is_some());
+}
+
+#[test]
+fn n22_no_count_once_every_track_is_measured() {
+    let mut s = state(1, 1);
+    for t in s.library.iter_mut() {
+        t.loudness_pass = Some(fp_model::LOUDNESS_VERSION);
+    }
+    let (mut h, _fake) = open_loudness_tab(s);
+    h.run_steps(2);
+    assert!(h.query_by_label_contains("not measured yet").is_none());
+}
+
+#[test]
+fn n22_the_unmeasured_count_is_worked_out_once_per_snapshot() {
+    use std::sync::Arc;
+    let first = Arc::new(state(1, 3));
+    let mut count = fp_app::services::UnmeasuredCount::default();
+    for _ in 0..10 {
+        assert_eq!(count.get(&first), 3);
+    }
+    assert_eq!(count.scans(), 1);
+    let mut s = state(1, 3);
+    s.library.iter_mut().next().unwrap().loudness_pass = Some(fp_model::LOUDNESS_VERSION);
+    let second = Arc::new(s);
+    assert_eq!(count.get(&second), 2);
+    assert_eq!(count.scans(), 2);
+}

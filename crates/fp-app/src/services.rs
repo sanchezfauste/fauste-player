@@ -282,13 +282,11 @@ pub fn outdated_tracks(state: &AppState) -> usize {
     state.library.iter().filter(|t| outdated(t)).count()
 }
 
-/// `outdated_tracks`, remembered for the model snapshot it was worked out
-/// on. Counting scans the whole library, which the interface would do on
-/// every frame while the start-up notice or Settings > Analysis is open;
-/// with this it scans once per new snapshot. It never compares libraries:
-/// a new snapshot is a new scan.
+/// A count over the library, remembered for the model snapshot it was
+/// worked out on: it scans once per new snapshot instead of on every frame.
+/// It never compares libraries: a new snapshot is a new scan.
 #[derive(Default)]
-pub struct OutdatedCount {
+struct SnapshotCount {
     /// Kept (not just its address), so that the address cannot be reused
     /// by another snapshot while it is remembered.
     snapshot: Option<Arc<AppState>>,
@@ -296,24 +294,55 @@ pub struct OutdatedCount {
     scans: u32,
 }
 
-impl OutdatedCount {
-    /// How many tracks an earlier version analysed, in `state`.
-    pub fn get(&mut self, state: &Arc<AppState>) -> usize {
+impl SnapshotCount {
+    fn get(&mut self, state: &Arc<AppState>, count: fn(&AppState) -> usize) -> usize {
         if !self
             .snapshot
             .as_ref()
             .is_some_and(|known| Arc::ptr_eq(known, state))
         {
-            self.count = outdated_tracks(state);
+            self.count = count(state);
             self.snapshot = Some(Arc::clone(state));
             self.scans += 1;
         }
         self.count
     }
+}
+
+/// `outdated_tracks`, remembered for the model snapshot it was worked out
+/// on. Counting scans the whole library, which the interface would do on
+/// every frame while the start-up notice or Settings > Analysis is open;
+/// with this it scans once per new snapshot.
+#[derive(Default)]
+pub struct OutdatedCount(SnapshotCount);
+
+impl OutdatedCount {
+    /// How many tracks an earlier version analysed, in `state`.
+    pub fn get(&mut self, state: &Arc<AppState>) -> usize {
+        self.0.get(state, outdated_tracks)
+    }
 
     /// How many times the library was scanned.
     pub fn scans(&self) -> u32 {
-        self.scans
+        self.0.scans
+    }
+}
+
+/// `fp_model::loudness_unmeasured`, remembered for the snapshot it was
+/// worked out on (Settings > Loudness reads it every frame; loudness
+/// normalization spec N22).
+#[derive(Default)]
+pub struct UnmeasuredCount(SnapshotCount);
+
+impl UnmeasuredCount {
+    /// How many playable tracks still wait for a loudness measurement.
+    pub fn get(&mut self, state: &Arc<AppState>) -> usize {
+        self.0.get(state, fp_model::loudness_unmeasured)
+    }
+
+    /// How many times the library was scanned.
+    pub fn scans(&self) -> u32 {
+        self.0.scans
     }
 }
 

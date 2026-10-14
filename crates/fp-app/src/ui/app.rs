@@ -364,6 +364,8 @@ pub struct AppUi {
     outdated_checked: bool,
     /// How many tracks an earlier version analysed, per model snapshot.
     outdated: crate::services::OutdatedCount,
+    /// Tracks waiting for a loudness measurement (Settings > Loudness).
+    unmeasured: crate::services::UnmeasuredCount,
     /// The egui context, once the first frame has run.
     ctx: Option<egui::Context>,
     /// Imports asked for before the first frame.
@@ -426,6 +428,7 @@ impl AppUi {
             settings_shown: false,
             outdated_checked: false,
             outdated: crate::services::OutdatedCount::default(),
+            unmeasured: crate::services::UnmeasuredCount::default(),
             ctx: None,
             pending_imports: Vec::new(),
             inbox: None,
@@ -747,6 +750,7 @@ impl AppUi {
                 can_apply: fp_model::has_output_items(&state),
                 pending_tip,
                 outdated: self.outdated.get(&state),
+                unmeasured: self.unmeasured.get(&state),
             };
             let outcome = settings::show(&ctx, &scene, &mut self.settings, &deps);
             self.view.settings_open = outcome.open;

@@ -21,6 +21,7 @@ mod carts;
 mod columns;
 mod devices;
 mod keys;
+mod loudness;
 mod meters;
 mod midi;
 mod remote;
@@ -58,6 +59,7 @@ pub(crate) enum Section {
     Players,
     Meters,
     Analysis,
+    Loudness,
     Playlists,
     Cartwall,
     Shortcuts,
@@ -196,6 +198,9 @@ pub(crate) struct SettingsDeps<'a> {
     pub pending_tip: String,
     /// How many tracks an earlier version analysed.
     pub outdated: usize,
+    /// How many tracks wait for a loudness measurement (loudness
+    /// normalization spec N22).
+    pub unmeasured: usize,
 }
 
 /// What the modal asks of the application after a frame.
@@ -291,6 +296,9 @@ pub(crate) fn show(
                                             Section::Players => players(ui, scene),
                                             Section::Meters => meters::section(ui, scene),
                                             Section::Analysis => analysis(ui, scene, deps),
+                                            Section::Loudness => {
+                                                loudness::section(ui, scene, deps.unmeasured)
+                                            }
                                             Section::Playlists => playlists(ui, scene, st),
                                             Section::Cartwall => carts::section(ui, scene, st),
                                             Section::Shortcuts => keys::section(ui, scene, st),
@@ -464,7 +472,7 @@ fn button(ui: &mut Ui, text: &str) -> bool {
 }
 
 /// Every section: its nav glyph and its title.
-const SECTIONS: [(Section, &str, &str); 9] = [
+const SECTIONS: [(Section, &str, &str); 10] = [
     (Section::Outputs, icon::SPEAKER_HIGH, "settings-tab-outputs"),
     (
         Section::Players,
@@ -473,6 +481,11 @@ const SECTIONS: [(Section, &str, &str); 9] = [
     ),
     (Section::Meters, icon::GAUGE, "settings-tab-meters"),
     (Section::Analysis, icon::WAVEFORM, "settings-tab-analysis"),
+    (
+        Section::Loudness,
+        icon::SPEAKER_SIMPLE_HIGH,
+        "settings-tab-loudness",
+    ),
     (Section::Playlists, icon::PLAYLIST, "settings-tab-playlists"),
     (
         Section::Cartwall,
@@ -493,6 +506,7 @@ fn restorable(section: Section) -> Option<SettingsSection> {
         Section::Players => Some(SettingsSection::Players),
         Section::Meters => Some(SettingsSection::Meters),
         Section::Analysis => Some(SettingsSection::Analysis),
+        Section::Loudness => Some(SettingsSection::Loudness),
         Section::Shortcuts => Some(SettingsSection::Shortcuts),
         Section::Outputs
         | Section::Playlists

@@ -145,6 +145,18 @@ outdated-body = { $count ->
 outdated-now = Analizar ahora
 outdated-later = Más tarde
 settings-analyse-outdated = Analizar las pistas desactualizadas ({ $count })
+settings-normalize = Normalizar la sonoridad
+settings-hint-normalize = Reproduce cada pista y cada botón a la misma sonoridad integrada, con una ganancia fija por pista.
+settings-normalize-target = Objetivo
+settings-normalize-ceiling = Techo de true peak
+settings-normalize-max-boost = Ganancia máxima
+settings-normalize-max-trim = Ajuste máximo
+settings-hint-normalize-apply = Los cambios se aplican a las pistas que se carguen después; lo que suena conserva su ganancia.
+settings-hint-normalize-bp = Un reproductor o un botón en una salida bit perfect siempre suena a ganancia unitaria: nunca se normaliza.
+settings-normalize-unmeasured = { $count ->
+    [one] { $count } pista aún sin medir
+   *[other] { $count } pistas aún sin medir
+}
 settings-hint-analyse-outdated = Las pistas que analizó una versión anterior conservan ese análisis hasta que pidas uno nuevo.
 settings-music-dir = Carpeta de música
 settings-browse = Examinar…
