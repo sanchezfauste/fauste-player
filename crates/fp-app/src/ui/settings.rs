@@ -719,14 +719,19 @@ pub(super) fn fitted_combo(
             .response
     };
     // The combo box shortens its choice to the room its `Ui` has: where a
-    // wider row has pushed that room out, give it the column instead.
+    // wider row has pushed that room out, give it the column instead. Both
+    // ways go through a child `Ui`, so the combo keeps one id (and an open
+    // list stays open) when a resize switches between them.
     let response = if ui.available_width() > room {
         let height = ui.spacing().interact_size.y;
         ui.allocate_ui(vec2(room, height), combo).inner
     } else {
-        combo(ui)
+        ui.scope(combo).inner
     };
-    response.on_hover_text(shown)
+    // A disabled list (one choice only) still gives its choice whole.
+    response
+        .on_hover_text(shown.clone())
+        .on_disabled_hover_text(shown)
 }
 
 /// A small upper-case heading over a group of rows.
@@ -1436,8 +1441,7 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
                 }
             }
         })
-        .labelled_by(label)
-        .on_hover_text(shown);
+        .labelled_by(label);
     });
 }
 

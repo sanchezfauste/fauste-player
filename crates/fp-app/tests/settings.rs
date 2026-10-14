@@ -1028,6 +1028,7 @@ fn the_language_list_stays_inside_a_narrow_settings_window() {
         rect.right() <= right + 0.5,
         "language {rect:?} past {right}"
     );
+    hover_shows_whole(&mut h, None, "Nederlands");
 }
 
 /// Hovering the list `label` names (or, without one, the list showing
