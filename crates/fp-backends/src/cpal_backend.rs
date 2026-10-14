@@ -3,6 +3,7 @@
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -83,6 +84,8 @@ struct CpalStream {
     fixed_frames: Option<u32>,
     /// The largest block the device has asked for so far.
     called_frames: Arc<AtomicU32>,
+    /// The most frames held at once (`held_frames`), 0 before a callback.
+    held_frames: Arc<AtomicU32>,
     format: SampleFormat,
     _stream: cpal::Stream,
     /// Exclusive access held for the stream's life (Core Audio hog mode),
@@ -109,6 +112,19 @@ impl OutputStream for CpalStream {
     fn dsd(&self) -> Option<DsdStream> {
         self.config.dsd
     }
+
+    fn latency_frames(&self) -> Option<u32> {
+        Some(self.held_frames.load(Ordering::Relaxed)).filter(|f| *f > 0)
+    }
+}
+
+/// The frames a stream holds once a callback has handed over its `block`:
+/// those still queued before it (`queued`, cpal's playback instant minus
+/// its callback instant: the driver's delay, transfers in flight included)
+/// and the block itself, at `rate`. Rounded up; saturates. Real-time safe.
+fn held_frames(queued: Duration, block: u32, rate: u32) -> u32 {
+    let queued = (queued.as_nanos() * u128::from(rate)).div_ceil(1_000_000_000);
+    u32::try_from(queued.saturating_add(u128::from(block))).unwrap_or(u32::MAX)
 }
 
 /// The buffer size a stream runs with: the fixed size it was given, or with
@@ -515,11 +531,13 @@ impl CpalBackend {
                 cpal::BufferSize::Default => None,
             };
             let called_frames = Arc::new(AtomicU32::new(0));
+            let held_frames = Arc::new(AtomicU32::new(0));
             let io = Io {
                 handoff: receiver,
                 errors,
                 scratch_frames,
                 called_frames: called_frames.clone(),
+                held_frames: held_frames.clone(),
             };
             let built = match format {
                 cpal::SampleFormat::I16 => build::<i16>(&dev, cpal_config, io),
@@ -554,6 +572,7 @@ impl CpalBackend {
                         config,
                         fixed_frames,
                         called_frames,
+                        held_frames,
                         format,
                         _stream: stream,
                         _exclusive: held,
@@ -587,6 +606,8 @@ struct Io {
     scratch_frames: usize,
     /// The largest block called back, for `OutputStream::config`.
     called_frames: Arc<AtomicU32>,
+    /// The most frames held, for `OutputStream::latency_frames`.
+    held_frames: Arc<AtomicU32>,
 }
 
 /// Builds an output stream in sample type `T`. The callback renders f32 into
@@ -604,15 +625,20 @@ where
         errors,
         scratch_frames,
         called_frames,
+        held_frames: held,
     } = io;
     let channels = usize::from(config.channels).max(1);
+    let rate = config.sample_rate;
     let mut scratch = vec![0.0f32; scratch_frames.max(1) * channels];
     let mut renderer: Option<Box<dyn Renderer>> = None;
     dev.build_output_stream::<T, _, _>(
         config,
-        move |out: &mut [T], _info: &cpal::OutputCallbackInfo| {
+        move |out: &mut [T], info: &cpal::OutputCallbackInfo| {
             let frames = u32::try_from(out.len() / channels).unwrap_or(u32::MAX);
             called_frames.fetch_max(frames, Ordering::Relaxed);
+            let stamp = info.timestamp();
+            let queued = stamp.playback.duration_since(stamp.callback);
+            held.fetch_max(held_frames(queued, frames, rate), Ordering::Relaxed);
             if renderer.is_none() {
                 renderer = handoff.pop().ok();
             }
@@ -1034,6 +1060,21 @@ mod tests {
             frames_in_use(512, None, 1_024),
             1_024,
             "default, as called back"
+        );
+    }
+
+    #[test]
+    fn a_callback_holds_what_was_queued_before_it_and_its_own_block() {
+        use super::held_frames;
+        use std::time::Duration;
+        // 1 151 frames queued at 44.1 kHz (26.1 ms), then a 512-frame block.
+        let queued = Duration::from_nanos(1_151 * 1_000_000_000 / 44_100);
+        assert_eq!(held_frames(queued, 512, 44_100), 1_151 + 512);
+        assert_eq!(held_frames(Duration::ZERO, 512, 96_000), 512);
+        assert_eq!(
+            held_frames(Duration::from_secs(u64::MAX), 512, 96_000),
+            u32::MAX,
+            "saturates"
         );
     }
 }

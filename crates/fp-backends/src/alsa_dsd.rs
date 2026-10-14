@@ -6,7 +6,7 @@
 //! buffers allocated beforehand.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -79,12 +79,23 @@ pub(crate) fn wait_timeout_ms(device_period: usize, device_rate: u32) -> u32 {
     u32::try_from(ms).unwrap_or(u32::MAX).max(MIN_WAIT_MS)
 }
 
+/// The word frames the stream holds while a period of `words` word frames
+/// waits to be written: the device's `delay` (in its own frames, transfers
+/// in flight included) and that period. Saturates. Real-time safe.
+pub(crate) fn held_words(delay: Frames, format: NativeDsdFormat, words: usize) -> u32 {
+    let device = u128::try_from(delay.max(0)).unwrap_or(0);
+    let held = device * format.bytes() as u128 / 2 + words as u128;
+    u32::try_from(held).unwrap_or(u32::MAX)
+}
+
 fn unsupported(e: impl std::fmt::Display) -> BackendError {
     BackendError::Unsupported(e.to_string())
 }
 
 struct AlsaDsdStream {
     config: StreamConfig,
+    /// The most word frames held (`held_words`), 0 before the first write.
+    held: Arc<AtomicU32>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
@@ -101,6 +112,10 @@ impl OutputStream for AlsaDsdStream {
 
     fn dsd(&self) -> Option<DsdStream> {
         Some(DsdStream::Native)
+    }
+
+    fn latency_frames(&self) -> Option<u32> {
+        Some(self.held.load(Ordering::Relaxed)).filter(|f| *f > 0)
     }
 }
 
@@ -188,6 +203,7 @@ fn run(
     renderer: &mut dyn Renderer,
     errors: &dyn StreamErrorSink,
     stop: &AtomicBool,
+    held: &AtomicU32,
 ) {
     let words_len = words_per_period(opened.format, opened.device_period);
     let mut words = vec![0.0f32; words_len * channels];
@@ -232,7 +248,14 @@ fn run(
                 break;
             };
             match io.writei(rest) {
-                Ok(frames) => done += frames * frame_bytes,
+                Ok(frames) => {
+                    done += frames * frame_bytes;
+                    // What is queued now, and the period not written yet.
+                    if let Ok(delay) = opened.pcm.delay() {
+                        let words = (total - done.min(total)) / (channels * 2);
+                        held.fetch_max(held_words(delay, opened.format, words), Ordering::Relaxed);
+                    }
+                }
                 Err(e) => {
                     if recovered(e) {
                         continue;
@@ -256,6 +279,8 @@ pub(crate) fn open(
     let name = pcm_name.to_owned();
     let stop = Arc::new(AtomicBool::new(false));
     let flag = Arc::clone(&stop);
+    let held = Arc::new(AtomicU32::new(0));
+    let held_by_thread = Arc::clone(&held);
     let (tx, rx) = mpsc::sync_channel::<Result<(), BackendError>>(1);
     let channels = usize::from(config.channels.max(1));
     let thread = std::thread::Builder::new()
@@ -272,7 +297,14 @@ pub(crate) fn open(
                 )
                 .inspect_err(|_| errors.report(StreamErrorKind::RealtimeDenied))
                 .ok();
-                run(&opened, channels, renderer.as_mut(), errors.as_ref(), &flag);
+                run(
+                    &opened,
+                    channels,
+                    renderer.as_mut(),
+                    errors.as_ref(),
+                    &flag,
+                    &held_by_thread,
+                );
                 // Setup and exit are outside the loop: free to stop the PCM.
                 let _ = opened.pcm.drop();
             }
@@ -284,6 +316,7 @@ pub(crate) fn open(
     match rx.recv_timeout(OPEN_TIMEOUT) {
         Ok(Ok(())) => Ok(Box::new(AlsaDsdStream {
             config,
+            held,
             stop,
             thread: Some(thread),
         })),
@@ -341,5 +374,17 @@ mod tests {
         assert_eq!(words_per_period(NativeDsdFormat::U32Be, 512), 1024);
         assert_eq!(words_per_period(NativeDsdFormat::U16Le, 511), 510);
         assert_eq!(words_per_period(NativeDsdFormat::U8, 3), 2);
+    }
+
+    #[test]
+    fn the_frames_held_count_in_word_frames_with_the_period_not_written_yet() {
+        // DSD_U32: one device frame carries two word frames.
+        assert_eq!(held_words(1_599, NativeDsdFormat::U32Be, 512), 3_198 + 512);
+        assert_eq!(
+            held_words(-3, NativeDsdFormat::U8, 2),
+            2,
+            "a negative delay"
+        );
+        assert_eq!(held_words(i64::MAX, NativeDsdFormat::U8, 2), u32::MAX);
     }
 }
