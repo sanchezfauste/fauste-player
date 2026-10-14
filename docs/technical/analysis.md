@@ -195,9 +195,14 @@ independent of `ANALYSIS_VERSION`, which this feature did not bump (it
 stays 8): no cache entry is outdated because of loudness, and nothing is
 analysed again in full for it.
 
-`Track::apply_analysis` stores the measurement only when the result carries
-a `loudness_pass`: a result loaded from an entry cached before loudness was
-measured keeps what the loudness-only pass found.
+`Track::apply_analysis` stores the measurement when the result carries a
+`loudness_pass`. A result loaded from an entry cached before loudness was
+measured carries none: it clears the track's `loudness` and `loudness_pass`
+(the measurement the track held may belong to other content), so the
+loudness-only pass measures the file again. `apply_analysis` and
+`Track::apply_loudness` drop a measurement that is not finite (a corrupt
+entry): JSON writes NaN and infinity as `null`, which would make the
+playlists file fail to load.
 
 `measure_loudness_cancellable(path, cancelled)` decodes a file for its
 loudness alone (no envelope, markers, tags or cover): the loudness-only job
@@ -227,7 +232,8 @@ entry's own bytes do not change), `load_key` reads the entry with
 `postcard::take_from_bytes` and the tail from what is left, and
 `store_key` appends the tail when the analysis has a `loudness_pass`. An
 entry with no tail (written before) loads with no measurement; a tail that
-cannot be read is ignored and the entry kept. An older build reading a new
+cannot be read, or whose numbers are not finite, is ignored and the entry
+kept. An older build reading a new
 entry ignores the trailing bytes. `update_loudness(key, loudness, limits)`
 rewrites an existing entry with a new tail, with the same atomic replace
 (`Ok(false)` when there is no entry). Keep the tail last if
@@ -255,10 +261,12 @@ which workers take last (`submit_loudness`, `cancel_loudness`,
 `loudness_results`), with their own generations, so a loudness job and an
 analysis of the same track are independent. A job first reads the file's
 cache entry: one that already holds this pass's answer is returned without
-decoding. Otherwise it runs `measure_loudness_cancellable` and records the
-outcome in the entry in place (`update_loudness`; an unreadable file is
-recorded as "nothing measured"); with no entry nothing is written, and the
-file's full analysis will measure it. `loudness_share()` is how many may
+decoding. Otherwise it runs `measure_loudness_cancellable` and records a
+measurement (or a file too short or too quiet to have one) in the entry in
+place (`update_loudness`). A failure is never written: it may be transient
+(a share that dropped mid-read), and a cached failure would survive a
+Re-analyse; only the model records it. With no entry nothing is written,
+and the file's next full analysis writes it. `loudness_share()` is how many may
 run at once: all workers but one, at least one. `Analyzer::with_fns` takes
 both the analysis and the loudness function (tests inject them).
 
@@ -343,14 +351,22 @@ spec N6b) measures the tracks analysed before loudness was measured, or by
 an older `LOUDNESS_VERSION` (`Track::needs_loudness_pass`: analysed,
 playable, `loudness_pass` not the current version). It queues jobs only
 while no normal analysis is in flight (a full analysis measures its track
-anyway) and never more than `Analyzer::loudness_share()` at once, so a new
-file or a track a player shows is always analysed first. Each answer
+anyway) and never more than `Analyzer::loudness_share()` at once. Normal
+and urgent jobs are queued ahead of every loudness job, and one worker is
+kept free when the pool has more than one, so a new file or a track a
+player shows does not wait behind the pass; a loudness job already running
+is not preempted. Each answer
 becomes `Command::ApplyLoudness`, which changes the measurement and nothing
 else (no marker, no tag). Files too short to measure and files that cannot
 be decoded are recorded too, so they are not retried; a file gone since its
 analysis is marked `Missing` instead, and measured when it comes back. A
 job whose track is removed, or whose track no longer needs the pass, is
-cancelled. The pass runs whether loudness normalization is on or off.
+cancelled. Queuing or applying a full analysis of a track (a new file,
+Re-analyse, Re-analyse all) cancels that track's loudness job, and an
+answer for a track no longer in flight is dropped, so a stale answer never
+overwrites the analysis's newer measurement. A failure is recorded only in
+the model (`loudness_pass` set, no measurement), never in the cache, so a
+Re-analyse measures the file again. The pass runs whether loudness normalization is on or off.
 
 Results go to the model as `ApplyAnalysis` or `SetFileState`. Peaks and covers
 are kept in the `MediaCache` only for shown tracks. The disk cache brings
