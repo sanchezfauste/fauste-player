@@ -888,3 +888,71 @@ fn an_unplugged_device_says_it_is_not_connected() {
     );
     assert!(h.query_by_label_contains("opened exclusively").is_none());
 }
+
+/// Audio outputs in a `width`-wide main window, with the DSD settings shown
+/// (`dac` is bit-perfect).
+fn narrow_outputs(width: f32) -> egui_kittest::Harness<'static, fp_app::ui::app::AppUi> {
+    let backend = OfflineBackend::new();
+    backend.add_device("dac", 2).set_exclusive_capable(true);
+    backend.add_device("speakers", 2);
+    let mut s = state(1, 1);
+    let route = |device: &str| Route {
+        backend: "offline".into(),
+        device: device.into(),
+        first_channel: 0,
+    };
+    s.config.ui.outputs_view = fp_model::OutputsView::Advanced;
+    s.config.outputs.backend = Some("offline".into());
+    s.config.outputs.bit_perfect = vec![dac()];
+    s.config.outputs.dsd_mix = fp_model::DsdMix::HoldOthers;
+    s.config.outputs.routes = vec![PlayerRoutes {
+        player: s.players[0].id,
+        main: Some(route("dac")),
+        cue: Some(route("speakers")),
+    }];
+    let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
+    let (mut h, _) =
+        support::harness_sized(s, egui::vec2(width, 700.0), |ui| ui.with_backends(backends));
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Audio outputs")
+        .click();
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_all_by_label("Test Main").next().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    h.run_steps(2);
+    h
+}
+
+/// Every list on Audio outputs, the audio system first, stays inside a
+/// narrow Settings window: none runs past the section's right margin.
+#[test]
+fn the_output_lists_stay_inside_a_narrow_settings_window() {
+    let width = 700.0;
+    let h = narrow_outputs(width);
+    // The Settings window is centred, `SCREEN_MARGIN` narrower than the
+    // main window; the section body keeps a 24-point margin on the right.
+    let window = (width - 48.0).min(900.0);
+    let content_right = (width + window) / 2.0 - 24.0;
+    let backend = h.get_by_value("Offline").rect();
+    assert!(
+        backend.right() <= content_right + 0.5,
+        "audio system {backend:?} past {content_right}"
+    );
+    let mix = h.get_by_value("Keep DSD and mute the other sources").rect();
+    assert!(
+        mix.right() <= content_right + 0.5,
+        "DSD mix {mix:?} past {content_right}"
+    );
+    for combo in h.get_all_by_role(Role::ComboBox) {
+        let rect = combo.rect();
+        assert!(
+            rect.right() <= content_right + 0.5,
+            "{combo:?} {rect:?} past {content_right}"
+        );
+    }
+}

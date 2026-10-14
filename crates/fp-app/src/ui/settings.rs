@@ -776,9 +776,12 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             .as_deref()
             .map(|id| backend_name(t, id))
             .unwrap_or_else(|| t.tr("settings-default-backend"));
+        // At most 260 points, and never past a narrow window (as the
+        // language list).
         egui::ComboBox::from_id_salt("backend")
             .selected_text(shown)
-            .width(260.0)
+            .width(ui.available_width().min(260.0))
+            .truncate()
             .show_ui(ui, |ui| {
                 if ui
                     .selectable_label(current.is_none(), t.tr("settings-default-backend"))

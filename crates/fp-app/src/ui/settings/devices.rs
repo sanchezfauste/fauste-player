@@ -269,8 +269,11 @@ fn dsd_settings(ui: &mut Ui, scene: &Scene<'_>) {
         })
     };
     row(ui, &t.tr("settings-dsd-mix"), None, |ui| {
+        // Its choices are sentences: shorten the shown one in a narrow
+        // window rather than run past it.
         egui::ComboBox::from_id_salt("dsd-mix")
             .selected_text(mix_label(mix))
+            .truncate()
             .show_ui(ui, |ui| {
                 for choice in [DsdMix::ConvertToPcm, DsdMix::HoldOthers] {
                     if ui
