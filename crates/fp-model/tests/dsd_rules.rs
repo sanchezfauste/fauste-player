@@ -27,6 +27,7 @@ fn facts() -> DsdFacts {
         mode: DsdOutput::Dop,
         format: dsd(DSD64, 2),
         volume: 1.0,
+        gain: 1.0,
         device_idle: true,
     }
 }
@@ -81,6 +82,17 @@ fn d4_a_volume_below_unity_converts() {
     };
     assert_eq!(dsd_decision(&f), Err(DsdFallback::VolumeNotUnity));
     assert!(DsdFallback::VolumeNotUnity.worth_logging());
+}
+
+#[test]
+fn d4_a_normalization_gain_converts() {
+    // Loudness normalization spec N17: a track that keeps a gain decided
+    // before the device became bit-perfect plays converted, with its gain.
+    for gain in [0.5, 1.5] {
+        let f = DsdFacts { gain, ..facts() };
+        assert_eq!(dsd_decision(&f), Err(DsdFallback::NormalizationGain));
+    }
+    assert!(DsdFallback::NormalizationGain.worth_logging());
 }
 
 #[test]

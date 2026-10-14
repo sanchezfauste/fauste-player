@@ -83,7 +83,9 @@ if it is not bit-perfect, still gets the gain.
 
 A track that is already playing (or paused) when its device is turned
 bit-perfect keeps the gain it started with, and the **BP** badge stays off
-for it. The next track plays at 0 dB and bit-perfect.
+for it. The next track plays at 0 dB and bit-perfect. A DSD track in that
+situation plays converted to PCM with its gain, never as an unchanged DSD
+stream.
 
 ## The gain in the player header
 

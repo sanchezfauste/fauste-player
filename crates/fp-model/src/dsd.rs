@@ -56,6 +56,9 @@ pub struct DsdFacts {
     pub format: Option<AudioFormat>,
     /// The player's volume (linear gain).
     pub volume: f32,
+    /// The source's loudness normalization gain (linear,
+    /// `Normalization::linear_gain`; loudness normalization spec N17).
+    pub gain: f32,
     /// Nothing sounds on the device.
     pub device_idle: bool,
 }
@@ -82,6 +85,9 @@ pub enum DsdFallback {
     NotDsd,
     Multichannel,
     VolumeNotUnity,
+    /// The track keeps a loudness normalization gain (loudness
+    /// normalization spec N17).
+    NormalizationGain,
     DeviceBusy,
     RateRefused(u32),
     /// DoP needs a 24- or 32-bit integer device format.
@@ -105,6 +111,9 @@ impl fmt::Display for DsdFallback {
             DsdFallback::NotDsd => write!(f, "the track is not DSD"),
             DsdFallback::Multichannel => write!(f, "the track has more than two channels"),
             DsdFallback::VolumeNotUnity => write!(f, "the player's volume is not 100 %"),
+            DsdFallback::NormalizationGain => {
+                write!(f, "the track has a loudness normalization gain")
+            }
             DsdFallback::DeviceBusy => write!(f, "something else plays on the device"),
             DsdFallback::RateRefused(rate) => write!(f, "the device refused {rate} Hz"),
             DsdFallback::FormatTooNarrow => {
@@ -135,6 +144,10 @@ pub fn dsd_decision(facts: &DsdFacts) -> Result<DsdTarget, DsdFallback> {
     #[allow(clippy::float_cmp)] // exactly unity: any other gain changes the signal
     if facts.volume != 1.0 {
         return Err(DsdFallback::VolumeNotUnity);
+    }
+    #[allow(clippy::float_cmp)] // exactly unity, as for the volume
+    if facts.gain != 1.0 {
+        return Err(DsdFallback::NormalizationGain);
     }
     if !facts.device_idle {
         return Err(DsdFallback::DeviceBusy);

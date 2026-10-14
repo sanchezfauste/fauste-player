@@ -231,9 +231,10 @@ band) stays a separate value, whatever the normalization target (Q4).
   rate and fader spec's `bit_perfect_player` (BR2) whenever the engine has
   placed it, so a player whose fader is locked always gets exactly 0 dB.
   A native DSD stream only reaches a bit-perfect device
-  (`OutputsConfig::dsd_output_for`), so N7 never gives it a gain and the
-  engine's DSD path (`BusCommand::DsdMode`: no gain touches the words)
-  needs no change.
+  (`OutputsConfig::dsd_output_for`), so N7 never gives a track decided
+  there a gain; the engine's DSD path (`BusCommand::DsdMode`: no gain
+  touches the words) still refuses a request whose gain is not exactly 1.0
+  (N17).
 - **N9** `SourceRequest` and `CartRequest`
   (`crates/fp-model/src/command.rs`) gain `normalization: Normalization`.
   Every place that builds one computes it for the holder that will play
@@ -292,7 +293,11 @@ band) stays a separate value, whatever the normalization target (Q4).
 - **N17** A source paused on a device that becomes bit-perfect meanwhile
   (live settings L12, "Bit-perfect on") keeps its gain (N11): the **BP**
   badge stays off for it, as the unaltered check reports, and the next
-  track plays at 0 dB.
+  track plays at 0 dB. A DSD track in that situation (loaded paused with a
+  gain, then its device turned bit-perfect with DoP or native DSD) plays
+  converted to PCM keeping its gain, with no **BP** or **DSD** badge:
+  `DsdFacts` carries the request's linear gain and `dsd_decision` falls
+  back with `DsdFallback::NormalizationGain` when it is not exactly 1.0.
 
 ## 8. User interface
 
@@ -428,7 +433,7 @@ sleeps.
 | `fp-model` (`tests/analysis.rs`) | N6: `apply_analysis` stores the measurement and keeps the edit and the markers; a track without a measurement is `NotMeasured`; a loudness-only result changes no marker; `ANALYSIS_VERSION` stays 8 and a v8 entry is not outdated. |
 | `fp-dsp` (`tests/loudness.rs`) | N4: EBU Tech 3341 / 3342 cases that apply to a file measurement (1 kHz sine at −23 dBFS reads −23.0 LUFS ±0.1 at 44.1 and 48 kHz; the gating cases); true peak of the BS.1770 test signals; the moved K-weighting keeps its existing tests. N5: silence → `None`; a 200 ms file is not measured (`None`, no warning); non-finite input does not panic. |
 | `fp-analysis` (`tests/analyze.rs`, new `tests/loudness_pass.rs`) | N4–N6: a generated WAV gets a measurement; a cache entry round-trips `loudness` and `loudness_pass`; an old entry without them decodes; a file truncated mid-stream is measured up to the damage. N6b: the pass fills the existing entry in place and leaves markers byte-identical; it runs only when the normal queue is empty and yields to a new normal job; a short file or a failure is recorded and not retried; a `LOUDNESS_VERSION` bump re-queues; it runs with `normalize` off. |
-| `fp-engine` (`tests/mixer.rs`, `audio_path_audit.rs`) | N14: a slot attached with +6 dB outputs twice the amplitude and the meter reads it; a fader move keeps the gain; the audit covers `Attach` with a gain (no allocation on the callback). N15: a seek and a forced rate change keep the gain. N16: gain 1 on a bit-perfect bus stays bit-exact; gain ≠ 1 clears the unaltered flag. |
+| `fp-engine` (`tests/mixer.rs`, `audio_path_audit.rs`) | N14: a slot attached with +6 dB outputs twice the amplitude and the meter reads it; a fader move keeps the gain; the audit covers `Attach` with a gain (no allocation on the callback). N15: a seek and a forced rate change keep the gain. N16: gain 1 on a bit-perfect bus stays bit-exact; gain ≠ 1 clears the unaltered flag. N17 (`tests/dsd_output.rs`, `fp-model/tests/dsd_rules.rs`): a DSD request with a gain on a DoP or native device plays converted, also when loaded paused and resumed; `dsd_decision` falls back with `NormalizationGain`. |
 | `fp-app` kittests (new `tests/loudness_ui.rs`) | N18: each badge and its accessible name; N19: tooltip lines; N20: the Loudness… popup sends `SetTrackLoudness`; N21: the cart dialog does too; N22: the Settings tab updates the config and its sliders keep the ranges. |
 | `fp-remote` (`tests/api.rs`) | N23: the DTO fields for each status; N24: the endpoint, a refused trim and an unknown track. |
 

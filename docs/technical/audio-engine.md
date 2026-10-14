@@ -414,10 +414,13 @@ plus the mixer's DSD mode.
   step).
 - **The decision.** `try_start_dsd` runs in `start_current` and `resume` (a
   track loaded paused), the two places that open the source on air. It builds
-  `DsdFacts` (the device's mode, the track's format, the player's volume, and
-  whether the device is idle) and asks `fp_model::dsd_decision`, which
+  `DsdFacts` (the device's mode, the track's format, the player's volume, the
+  request's normalization gain as a linear factor, and whether the device is
+  idle) and asks `fp_model::dsd_decision`, which
   returns a `DsdTarget` or a `DsdFallback`: `ModeIsPcm`, `NotDsd`,
-  `Multichannel`, `VolumeNotUnity`, `DeviceBusy`, `RateRefused`,
+  `Multichannel`, `VolumeNotUnity`, `NormalizationGain` (a gain other than
+  exactly 1.0: a track that keeps a gain decided before its device became
+  bit-perfect, loudness normalization spec N17), `DeviceBusy`, `RateRefused`,
   `FormatTooNarrow` or `StreamRefused`. Every fallback but the first two is
   logged ("DSD converted to PCM"). A track that falls back plays through the
   PCM path. A preload is never turned into a DSD source (it is PCM); a DSD
