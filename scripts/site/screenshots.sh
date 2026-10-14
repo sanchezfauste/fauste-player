@@ -290,8 +290,10 @@ app_gone() {
 # their loudness is measured (the gain badge in the headers, rather than
 # "not measured").
 wait_analysed() {
-    local t
-    for t in $(player_tracks); do
+    local t tracks
+    tracks=$(player_tracks) || die "cannot read the players' tracks"
+    [[ -n $tracks ]] || die "no tracks on the players"
+    for t in $tracks; do
         wait_for 60 track_ready "$t" || die "track $t is not analysed and measured after 60 s"
     done
 }
@@ -312,7 +314,7 @@ try:
     with open(sys.argv[1]) as f:
         library = json.load(f)["library"]
     saved = {str(t["id"]): t.get("loudness") for t in library}
-except (OSError, ValueError, KeyError, TypeError):
+except Exception:
     sys.exit(1)
 sys.exit(0 if all(saved.get(t) is not None for t in sys.argv[2:]) else 1)
 PY
@@ -416,8 +418,10 @@ start_app
 # saved library (the restarted app loads the tracks from it with their
 # loudness), so the headers show each track's gain.
 wait_analysed
-# shellcheck disable=SC2046 # one argument per track id
-wait_for 30 saved_measured $(player_tracks) \
+tracks=$(player_tracks) || die "cannot read the players' tracks"
+[[ -n $tracks ]] || die "no tracks on the players"
+# shellcheck disable=SC2086 # one argument per track id
+wait_for 30 saved_measured $tracks \
     || die "the saved library ($home/data/playlists.json) has no loudness for the players' tracks after 30 s"
 stop_app
 start_app
