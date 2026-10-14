@@ -11,6 +11,7 @@ publish = false
 
 [workspace.dependencies]
 fp-model = { path = "crates/fp-model" }
+fp-dsp = { path = "crates/fp-dsp" }
 fp-backends = { path = "crates/fp-backends" }
 fp-decode = { path = "crates/fp-decode" }
 fp-analysis = { path = "crates/fp-analysis" }
