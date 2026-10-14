@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use fp_control::feedback::{Feedback, Led, desired};
 use fp_model::{
-    AppState, Command, Config, MidiAction, MidiConfig, MidiDevice, MidiTrigger, ShortcutAction,
-    apply,
+    AppState, Command, Config, EngineEvent, Holder, MidiAction, MidiConfig, MidiDevice,
+    MidiTrigger, OutputDevice, ShortcutAction, apply, device_settings, on_event,
 };
 
 fn state() -> AppState {
@@ -153,4 +153,53 @@ fn give_cue_routes(state: &mut AppState) {
         })
         .collect();
     state.config.outputs.cartwall.cue = Some(phones);
+}
+
+// Bit-perfect rate and fader spec BF11.
+
+fn dac() -> OutputDevice {
+    OutputDevice {
+        backend: "null".into(),
+        device: "dac".into(),
+    }
+}
+
+/// P1's Main placed on `dac`, which runs bit-perfect: its fader is locked.
+fn locked(mut s: AppState) -> AppState {
+    let p = s.players[0].id;
+    let route = fp_model::Route {
+        backend: "null".into(),
+        device: "dac".into(),
+        first_channel: 0,
+    };
+    s.config
+        .outputs
+        .routes
+        .iter_mut()
+        .find(|r| r.player == p)
+        .unwrap()
+        .main = Some(route.clone());
+    s.config.outputs.bit_perfect = vec![dac()];
+    let running = device_settings(&s.config.outputs, &dac());
+    on_event(
+        &mut s,
+        EngineEvent::Placed {
+            holder: Holder::PlayerMain(p),
+            route: Some(route),
+            device: dac(),
+            running,
+        },
+    );
+    assert!(fp_model::fader_locked(&s, p));
+    s
+}
+
+#[test]
+fn bf11_a_locked_players_buttons_light_as_before() {
+    let mut s = state();
+    let p = s.players[0].id;
+    apply(&mut s, Command::Play(p)).unwrap();
+    let before = desired(&config(), &s, true);
+    let s = locked(s);
+    assert_eq!(desired(&config(), &s, true), before);
 }
