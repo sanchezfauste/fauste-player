@@ -55,7 +55,8 @@ impl Router {
 
     /// The command `msg` from `device` stands for, if any: a bound button
     /// that is pressed and whose action makes sense now (R28), or a bound
-    /// fader that has picked up the volume.
+    /// fader that has picked up the volume and whose player's fader is not
+    /// locked (bit-perfect rate and fader spec BF10).
     pub fn on_message(
         &mut self,
         device: &str,
@@ -115,6 +116,17 @@ impl Router {
                     .pickups
                     .entry((device.to_owned(), trigger))
                     .or_default();
+                // BF10: a locked fader (bit-perfect output) moves nothing.
+                // The pickup is forgotten, so once unlocked the control must
+                // reach the volume (100 %) again before it moves anything;
+                // its position and the model's travel are still followed.
+                if fp_model::fader_locked(state, player.id) {
+                    pickup.picked = false;
+                    pickup.last_set = None;
+                    pickup.last_input = Some(position);
+                    pickup.model_seen = Some(travel);
+                    return None;
+                }
                 // Moved by other means since this fader last set it: pick
                 // it up again first. A model that has not caught up with this
                 // fader's own messages yet (unchanged since the last one) is

@@ -460,3 +460,39 @@ fn seek_on_a_stopped_player_follows_the_reducers_rule() {
     fp_model::apply(&mut applied, Command::Seek(p, 30.0)).unwrap();
     assert_eq!(applied.player(p).unwrap().pending_start, Some((next, 30.0)));
 }
+
+// Bit-perfect rate and fader spec BF12, BR16.
+
+#[test]
+fn bf12_a_fader_below_full_on_a_locked_player_is_a_conflict_with_the_reason() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    support::lock_first_player(&mut s);
+    let e = plan(&s, O::SetFader(p, 0.5)).unwrap_err();
+    assert_eq!(e.status(), 409);
+    assert_eq!(e.code(), "unavailable");
+    assert_eq!(
+        e.message(),
+        fp_model::ModelError::FaderLocked(p).to_string()
+    );
+    assert_eq!(
+        plan(&s, O::SetFader(p, 1.0)).unwrap(),
+        vec![Command::SetVolume(p, gain_from_fader(1.0))],
+        "exactly 100 % is accepted"
+    );
+}
+
+#[test]
+fn br16_play_and_previous_on_a_bit_perfect_player_are_accepted() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    support::lock_first_player(&mut s);
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(plan(&s, O::Play(p)).unwrap(), vec![Command::Play(p)]);
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    assert!(!s.player(p).unwrap().fading, "a hard start (BR7)");
+    assert_eq!(
+        plan(&s, O::Previous(p)).unwrap(),
+        vec![Command::Previous(p)]
+    );
+}

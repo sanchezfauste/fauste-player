@@ -156,3 +156,33 @@ pub fn give_cue_routes(state: &mut AppState) {
         .collect();
     state.config.outputs.cartwall.cue = Some(phones);
 }
+
+/// Places player 1's Main on a `dac` that runs bit-perfect (live settings
+/// L3), which locks its fader (bit-perfect rate and fader spec BF1).
+pub fn lock_first_player(s: &mut AppState) {
+    let p = s.players[0].id;
+    let dac = fp_model::OutputDevice {
+        backend: "null".into(),
+        device: "dac".into(),
+    };
+    let route = fp_model::Route {
+        backend: "null".into(),
+        device: "dac".into(),
+        first_channel: 0,
+    };
+    if let Some(r) = s.config.outputs.routes.iter_mut().find(|r| r.player == p) {
+        r.main = Some(route.clone());
+    }
+    s.config.outputs.bit_perfect = vec![dac.clone()];
+    let running = fp_model::device_settings(&s.config.outputs, &dac);
+    fp_model::on_event(
+        s,
+        fp_model::EngineEvent::Placed {
+            holder: fp_model::Holder::PlayerMain(p),
+            route: Some(route),
+            device: dac,
+            running,
+        },
+    );
+    assert!(fp_model::fader_locked(s, p));
+}

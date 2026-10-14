@@ -43,6 +43,7 @@ over HTTP, live events over Server-Sent Events, OSC, and Settings → Remote.
 | `fading`, `stop_after_current` | Booleans |
 | `mode` | `single` or `continuous` |
 | `fader` | Fader travel 0–1 |
+| `fader_locked` | `true` while the fader is held at 100 % because the player's Main output is bit-perfect; such a player also starts every track hard, without a crossfade |
 | `playlist` | Id of the playlist shown in the player |
 | `current`, `next` | `null` or `{entry, track}` |
 | `cue` | `null` or `{entry}` (pre-listening) |
@@ -116,7 +117,7 @@ file is missing, or whose file cannot be decoded, answers `404 not_found`.
 | `PUT /players/{id}/next` | `{"entry": id}` | Choose the next entry. The entry on air is accepted: it plays once more from its cue-in when the current pass ends |
 | `POST /players/{id}/cue-entry` | `{"entry": id}` | Pre-listen an entry |
 | `POST /players/{id}/seek` | `{"secs": f64}` | Seek within the cue range of what is playing; on a stopped player, set where Play starts the next entry (rule 3a), before its cue-out; a start before its cue-in is raised to the cue-in, as on the local wave. `400` outside the range (on a stopped player: at or after the cue-out or not a number); `409` when there is nothing to seek or, on a stopped player, when the next entry's file is missing or unreadable |
-| `PUT /players/{id}/volume` | `{"fader": f32}` | Fader travel 0–1 |
+| `PUT /players/{id}/volume` | `{"fader": f32}` | Fader travel 0–1. On a player whose fader is locked (`fader_locked`), a value below 1 is `409 unavailable` with the model's reason; exactly 1 is accepted and changes nothing |
 | `PUT /players/{id}/mode` | `{"mode": "single" \| "continuous"}` | |
 | `PUT /players/{id}/stop-after-current` | `{"on": bool}` | `409` in single mode unless the current entry repeats |
 | `PUT /players/{id}/playlist` | `{"playlist": id}` | Show that playlist in the player |
@@ -127,6 +128,11 @@ file is missing, or whose file cannot be decoded, answers `404 not_found`.
 | `PUT /carts/{id}/cue` | `{"on": bool}` | Pre-listen a cart |
 | `POST /cartwall/stop-all` | — | |
 | `PUT /cartwall/shown` | `{"page": id}` | Show a cart page |
+
+On a player whose Main output is bit-perfect, `play` and `previous` are
+accepted as usual and start the track hard, without a crossfade
+(bit-perfect rate and fader spec BR16). Neither protocol has a separate
+crossfade operation.
 
 ### Editing
 
@@ -208,7 +214,7 @@ the page shown, `p` a page.
 |---|---|---|
 | `/fauste/player/{n}/play` (also `pause`, `stop`, `fade-stop`, `restart`, `previous`) | none, or a number | Acts with no argument or a number above 0, so a surface that sends 1 on press and 0 on release acts once |
 | `/fauste/player/{n}/cue` | a number or boolean | Cue on (above 0, true) or off |
-| `/fauste/player/{n}/volume` | `f` 0–1 | Fader travel |
+| `/fauste/player/{n}/volume` | `f` 0–1 | Fader travel. Refused below 1 while the player's fader is locked (bit-perfect output), like an unavailable action |
 | `/fauste/cart/{c}/fire` | as `play` | Fire a cart of the page shown |
 | `/fauste/cartwall/page/{p}/cart/{c}/fire` | as `play` | Fire a cart of a given page |
 | `/fauste/cartwall/stop-all` | as `play` | Stop every cart |
@@ -227,6 +233,7 @@ packet is dropped with a log line, at most one per source per second.
 | `/fauste/player/{n}/transport` | `s`: `stopped`, `playing` or `paused` |
 | `/fauste/player/{n}/fading`, `/cueing`, `/stop-after-current` | `i` 0/1 |
 | `/fauste/player/{n}/volume` | `f` fader travel |
+| `/fauste/player/{n}/volume-locked` | `i` 0/1: 1 while the fader is held at 100 % (bit-perfect output) |
 | `/fauste/player/{n}/title`, `/artist` | `s` (empty without a current entry) |
 | `/fauste/player/{n}/elapsed`, `/remaining` | `f` seconds |
 | `/fauste/player/{n}/next/entry` | `h` (int64) entry id, -1 for none |

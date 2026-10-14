@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use fp_control::message::MidiMessage;
 use fp_control::router::Router;
 use fp_model::{
-    AppState, Command, Config, MidiAction, MidiConfig, MidiTrigger, ShortcutAction, apply,
+    AppState, Command, Config, EngineEvent, Holder, MidiAction, MidiConfig, MidiTrigger,
+    OutputDevice, ShortcutAction, apply, device_settings, on_event,
 };
 
 /// Two players on one playlist of three tracks; P1 is playing.
@@ -295,4 +296,126 @@ fn give_cue_routes(state: &mut AppState) {
         })
         .collect();
     state.config.outputs.cartwall.cue = Some(phones);
+}
+
+// Bit-perfect rate and fader spec BF10, BR16.
+
+fn dac() -> OutputDevice {
+    OutputDevice {
+        backend: "null".into(),
+        device: "dac".into(),
+    }
+}
+
+/// P1's Main placed on `dac`, which runs bit-perfect: its fader is locked.
+fn locked(mut s: AppState) -> AppState {
+    let p = s.players[0].id;
+    let route = fp_model::Route {
+        backend: "null".into(),
+        device: "dac".into(),
+        first_channel: 0,
+    };
+    s.config
+        .outputs
+        .routes
+        .iter_mut()
+        .find(|r| r.player == p)
+        .unwrap()
+        .main = Some(route.clone());
+    s.config.outputs.bit_perfect = vec![dac()];
+    let running = device_settings(&s.config.outputs, &dac());
+    on_event(
+        &mut s,
+        EngineEvent::Placed {
+            holder: Holder::PlayerMain(p),
+            route: Some(route),
+            device: dac(),
+            running,
+        },
+    );
+    assert!(fp_model::fader_locked(&s, p));
+    s
+}
+
+/// P1 back on a device that is not bit-perfect: unlocked at 100 % (BF4).
+fn unlocked(mut s: AppState) -> AppState {
+    let p = s.players[0].id;
+    let speakers = OutputDevice {
+        backend: "null".into(),
+        device: "speakers".into(),
+    };
+    let running = device_settings(&s.config.outputs, &speakers);
+    on_event(
+        &mut s,
+        EngineEvent::Placed {
+            holder: Holder::PlayerMain(p),
+            route: None,
+            device: speakers,
+            running,
+        },
+    );
+    assert!(!fp_model::fader_locked(&s, p));
+    s
+}
+
+#[test]
+fn bf10_a_fader_binding_of_a_locked_player_gives_nothing() {
+    let s = locked(at_travel(state(), travel_of(50)));
+    let mut r = volume_router();
+    for v in [0, 50, 100, 127] {
+        assert_eq!(r.on_message("APC", cc_value(7, v), &s), None, "{v}");
+    }
+}
+
+#[test]
+fn bf10_after_unlocking_a_control_below_the_top_waits_for_the_top() {
+    let s = locked(state());
+    let mut r = volume_router();
+    assert_eq!(r.on_message("APC", cc_value(7, 40), &s), None);
+    let s = unlocked(s);
+    for v in [40, 50, 64, 100, 126] {
+        assert_eq!(
+            r.on_message("APC", cc_value(7, v), &s),
+            None,
+            "{v}: not picked up"
+        );
+    }
+    let got = volume_of(r.on_message("APC", cc_value(7, 127), &s)).unwrap();
+    assert!((got - 1.0).abs() < 1e-3, "picked up at the top");
+    assert!(
+        r.on_message("APC", cc_value(7, 100), &s).is_some(),
+        "then it moves the volume"
+    );
+}
+
+#[test]
+fn bf10_a_control_at_the_top_picks_up_at_once_after_unlocking() {
+    let s = locked(state());
+    let mut r = volume_router();
+    assert_eq!(r.on_message("APC", cc_value(7, 127), &s), None);
+    let s = unlocked(s);
+    assert!(r.on_message("APC", cc_value(7, 127), &s).is_some());
+}
+
+#[test]
+fn br16_play_and_previous_bindings_work_on_a_bit_perfect_player() {
+    let s = locked(state());
+    let p1 = s.players[0].id;
+    let mut r = router(&[
+        (note(1), MidiAction::Button(ShortcutAction::PlayPlayer(1))),
+        (
+            note(2),
+            MidiAction::Button(ShortcutAction::PreviousPlayer(1)),
+        ),
+    ]);
+    assert_eq!(
+        r.on_message("APC", on(1), &s),
+        Some(Command::Play(p1)),
+        "accepted"
+    );
+    // After a hard Next there is a history entry to go back to.
+    let mut s = s;
+    apply(&mut s, Command::Play(p1)).unwrap();
+    assert!(!s.player(p1).unwrap().fading, "a hard start (BR7)");
+    assert_eq!(r.on_message("APC", on(2), &s), Some(Command::Previous(p1)));
 }

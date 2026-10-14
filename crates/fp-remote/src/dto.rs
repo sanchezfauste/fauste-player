@@ -30,6 +30,10 @@ pub struct PlayerDto {
     pub stop_after_current: bool,
     /// Fader travel 0–1 (the UI fader's curve).
     pub fader: f32,
+    /// The fader is held at 100 % because the player's output is
+    /// bit-perfect; such a player also starts every track without a
+    /// crossfade (bit-perfect rate and fader spec BF13, BR16).
+    pub fader_locked: bool,
     /// The playlist shown in the player.
     pub playlist: PlaylistId,
     pub current: Option<EntryRefDto>,
@@ -271,6 +275,7 @@ fn player_dto(model: &AppState, playback: &Playback, index: usize, p: &PlayerSta
         mode: mode_name(p.mode),
         stop_after_current: p.stop_after_current,
         fader: fader_from_gain(p.volume),
+        fader_locked: fp_model::fader_locked(model, p.id),
         playlist: p.playlist,
         current: p.current.and_then(|e| entry_ref(model, e)),
         next: p.next.and_then(|e| entry_ref(model, e)),

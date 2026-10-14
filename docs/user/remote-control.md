@@ -84,7 +84,15 @@ Removing what is on air is refused, as it is on screen. Files that are not
 loaded yet cannot be added remotely: they live on this computer, so add
 them here first.
 
-A button that is greyed out on screen is refused remotely too. The full
+A button that is greyed out on screen is refused remotely too.
+
+A player whose Main output is [bit-perfect](bit-perfect.md) keeps working
+remotely, with the same limits as on screen: `play` and `previous` switch
+at once, without a crossfade, and its volume is held at 100 %. A volume
+below 100 % is refused (`409`, with the reason), and exactly 100 % is
+accepted. Each player says whether its volume is held (`fader_locked`).
+
+The full
 reference is in [the technical documentation](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Try it from a terminal:
@@ -130,6 +138,10 @@ to keep receiving:
 
     oscdump 9000 &
     oscsend localhost 7381 /fauste/subscribe i 9000
+
+On a player whose Main output is bit-perfect, `/volume` messages are
+refused (the log notes it) and the player sends `/volume-locked` 1 to
+subscribers (0 otherwise).
 
 A subscriber can name any port of its own address, and up to
 `max_subscribers` are kept. Anyone allowed to send can therefore also
