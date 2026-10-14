@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions, well_known};
+use symphonia::core::codecs::audio::{AudioCodecId, AudioDecoder, AudioDecoderOptions, well_known};
 use symphonia::core::errors::{Error, SeekErrorKind};
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::well_known::{
@@ -19,7 +19,7 @@ use symphonia::core::formats::{
 };
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::units::{Time, TimeBase};
+use symphonia::core::units::{Time, TimeBase, Timestamp};
 
 use crate::downmix;
 
@@ -31,6 +31,8 @@ pub(crate) struct SymphoniaDecoder {
     format: Box<dyn FormatReader>,
     decoder: Box<dyn AudioDecoder>,
     track_id: u32,
+    /// The track's codec, checked when the file is opened again.
+    codec: AudioCodecId,
     sample_rate: u32,
     bits_per_sample: Option<u32>,
     channels: usize,
@@ -52,8 +54,13 @@ pub(crate) struct SymphoniaDecoder {
     /// A seek went past the end: nothing more to play (as for the other
     /// decoders), instead of an error.
     at_end: bool,
-    /// Whether anything was read yet: a seek to 0 before that is a no-op.
-    read_any: bool,
+    /// Whether the reader is still where opening left it (nothing read, no
+    /// seek since): a restart from the start needs no new reader then.
+    at_start: bool,
+    /// The lowest timestamp the reader can still reach by reading on: one
+    /// past the last packet read, or where the last seek landed. A seek
+    /// below it goes backwards. `None` at the start of the stream.
+    resume_ts: Option<Timestamp>,
     /// Seconds the container's timestamps run ahead of the audio: an Ogg
     /// Opus granule counts the pre-skip (RFC 7845 §4), which symphonia
     /// keeps as the track's delay instead of trimming it. Matroska already
@@ -124,6 +131,7 @@ impl SymphoniaDecoder {
         let frames_hint = track.num_frames.map(|n| n.saturating_sub(u64::from(delay)));
         let ts_offset_secs = f64::from(delay) / f64::from(sample_rate.max(1));
         let track_id = track.id;
+        let codec = params.codec;
         let preroll_secs = match params.codec {
             well_known::CODEC_ID_OPUS => OPUS_PREROLL_SECS,
             well_known::CODEC_ID_VORBIS => VORBIS_MAX_BLOCK / f64::from(sample_rate.max(1)),
@@ -136,6 +144,7 @@ impl SymphoniaDecoder {
             format,
             decoder,
             track_id,
+            codec,
             sample_rate,
             bits_per_sample,
             channels,
@@ -146,7 +155,8 @@ impl SymphoniaDecoder {
             target_secs: None,
             preroll_secs,
             at_end: false,
-            read_any: false,
+            at_start: true,
+            resume_ts: None,
             ts_offset_secs,
             drop_frames: usize::from(pre_skip),
             pre_skip: usize::from(pre_skip),
@@ -181,9 +191,6 @@ impl SymphoniaDecoder {
 
     /// Positions the stream so that the next frame produced is at `secs`.
     pub(crate) fn seek(&mut self, secs: f64) -> Result<(), String> {
-        if secs <= 0.0 && !self.read_any && !self.at_end {
-            return Ok(());
-        }
         let secs = secs.max(0.0);
         // The pre-roll is dropped by placing packets in time, which needs
         // the time base; without it, decoding starts at the target.
@@ -199,15 +206,22 @@ impl SymphoniaDecoder {
         let time = Time::try_from_secs_f64(from).ok_or("seek position out of range")?;
         let track_id = Some(self.track_id);
         let to = || SeekTo::Time { time, track_id };
+        self.at_start = false;
         let mut seeked = self.format.seek(SeekMode::Accurate, to());
         // A reader that can only seek forward (Matroska without cues)
-        // lands past a target behind it: seek again from the start.
-        if seeked.as_ref().is_ok_and(|s| s.actual_ts > s.required_ts) {
-            self.format = probe(&self.path, self.hide_seeking)?;
-            seeked = self.format.seek(SeekMode::Accurate, to());
+        // lands past a target behind what it has read: seek again from
+        // the start. Landing past the target is not enough to tell, since
+        // the Matroska reader lands on the first block at or after it.
+        let behind = |s: &symphonia::core::formats::SeekedTo| {
+            s.actual_ts > s.required_ts && self.resume_ts.is_some_and(|r| s.required_ts < r)
+        };
+        if seeked.as_ref().is_ok_and(behind) {
+            let mut format = self.reopen()?;
+            seeked = format.seek(SeekMode::Accurate, to());
+            self.format = format;
         }
         match seeked {
-            Ok(_) => {}
+            Ok(landed) => self.resume_ts = Some(landed.actual_ts),
             Err(Error::SeekError(SeekErrorKind::OutOfRange)) => {
                 self.at_end = true;
                 return Ok(());
@@ -225,19 +239,42 @@ impl SymphoniaDecoder {
     }
 
     /// Seeks to `secs` when decoding restarts from the start of the stream
-    /// anyway (`secs` within the pre-roll): the file is opened again and
-    /// the frames before `secs` are dropped by count, exactly as on the
-    /// first play. Timestamps would place them only to the container's
-    /// precision (Matroska's are whole milliseconds), and a Matroska file
-    /// without cues cannot seek backwards at all.
+    /// anyway (`secs` within the pre-roll): the frames before `secs` are
+    /// dropped by count, exactly as on the first play, from a new reader
+    /// unless this one has not moved yet. Timestamps would place them only
+    /// to the container's precision (Matroska's are whole milliseconds),
+    /// and a Matroska file without cues cannot seek backwards at all.
     fn restart(&mut self, secs: f64) -> Result<(), String> {
-        self.format = probe(&self.path, self.hide_seeking)?;
-        self.decoder.reset();
+        if !self.at_start {
+            self.format = self.reopen()?;
+            self.decoder.reset();
+            self.at_start = true;
+            self.resume_ts = None;
+        }
         self.at_end = false;
         self.target_secs = None;
         let rate = f64::from(self.sample_rate);
         self.drop_frames = self.pre_skip + (secs * rate).round() as usize;
         Ok(())
+    }
+
+    /// Opens the file again, at its start. A file that no longer holds the
+    /// same track (replaced on disk) is an error rather than being read
+    /// with this decoder.
+    fn reopen(&self) -> Result<Box<dyn FormatReader>, String> {
+        let format = probe(&self.path, self.hide_seeking)?;
+        let same = format.default_track(TrackType::Audio).is_some_and(|track| {
+            let params = track.codec_params.as_ref().and_then(|p| p.audio());
+            track.id == self.track_id
+                && params.is_some_and(|p| {
+                    p.codec == self.codec && p.sample_rate == Some(self.sample_rate)
+                })
+        });
+        if same {
+            Ok(format)
+        } else {
+            Err(format!("{}: the file changed", self.path.display()))
+        }
     }
 
     /// Appends the next decoded packet as interleaved stereo. Returns `false`
@@ -246,7 +283,6 @@ impl SymphoniaDecoder {
         if self.at_end {
             return Ok(false);
         }
-        self.read_any = true;
         loop {
             let packet = match self.format.next_packet() {
                 Ok(Some(packet)) => packet,
@@ -258,9 +294,11 @@ impl SymphoniaDecoder {
                 }
                 Err(e) => return Err(e.to_string()),
             };
+            self.at_start = false;
             if packet.track_id != self.track_id {
                 continue;
             }
+            self.resume_ts = Some(Timestamp::new(packet.pts.get().saturating_add(1)));
             let buf = match self.decoder.decode(&packet) {
                 Ok(buf) => buf,
                 Err(Error::DecodeError(_)) => continue,
@@ -309,6 +347,8 @@ impl SymphoniaDecoder {
 /// estimate that needs seeking (see `SymphoniaDecoder::open`); seeking works
 /// afterwards.
 fn probe(path: &Path, hide_seeking: bool) -> Result<Box<dyn FormatReader>, String> {
+    #[cfg(test)]
+    OPENS.with(|n| n.set(n.get() + 1));
     let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let seekable = Arc::new(AtomicBool::new(!hide_seeking));
     let source = ProbeSource {
@@ -471,6 +511,120 @@ fn stored_length(format: FormatId) -> StoredLength {
         StoredLength::MpegLengthFrame
     } else {
         StoredLength::Unknown
+    }
+}
+
+#[cfg(test)]
+#[path = "../tests/support/opus_files.rs"]
+mod opus_files;
+
+#[cfg(test)]
+thread_local! {
+    /// How many times this thread opened a file for symphonia.
+    static OPENS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+mod reopen_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::indexing_slicing)]
+
+    use std::path::{Path, PathBuf};
+
+    use super::opus_files::{RATE, encode, marker, matroska_with, packets, stereo};
+    use super::{OPENS, SymphoniaDecoder};
+
+    fn opens() -> u32 {
+        OPENS.with(std::cell::Cell::get)
+    }
+
+    /// An Ogg Opus file and Matroska files with and without cues, 1 s each.
+    fn files(dir: &Path) -> Vec<PathBuf> {
+        let pcm = stereo(1.0, marker);
+        let (packets, pre_skip) = packets(&pcm);
+        vec![
+            encode(dir, "a.opus", &pcm),
+            matroska_with(dir, "cues.mka", &packets, pre_skip, true),
+            matroska_with(dir, "bare.mka", &packets, pre_skip, false),
+        ]
+    }
+
+    fn rest(d: &mut SymphoniaDecoder) -> Vec<f32> {
+        let mut out = Vec::new();
+        while d.next_block(&mut out).unwrap() {}
+        out
+    }
+
+    /// A fresh decoder seeking forward opens the file once: symphonia's
+    /// Matroska reader lands on the first block at or after the target
+    /// (its blocks have no duration), which is not a seek backwards.
+    #[test]
+    fn a_fresh_forward_seek_does_not_open_the_file_again() {
+        let dir = tempfile::tempdir().unwrap();
+        for path in files(dir.path()) {
+            for secs in [0.37, 0.5] {
+                let before = opens();
+                let mut d = SymphoniaDecoder::open(&path).unwrap();
+                let opened = opens() - before;
+                d.seek(secs).unwrap();
+                let _ = rest(&mut d);
+                assert_eq!(opens() - before, opened, "{}: {secs} s", path.display());
+            }
+        }
+    }
+
+    /// A fresh decoder seeking within the pre-roll drops the frames by
+    /// count from where it already is, without opening the file again.
+    #[test]
+    fn a_fresh_seek_within_the_pre_roll_does_not_open_the_file_again() {
+        let dir = tempfile::tempdir().unwrap();
+        for path in files(dir.path()) {
+            let full = rest(&mut SymphoniaDecoder::open(&path).unwrap());
+            let before = opens();
+            let mut d = SymphoniaDecoder::open(&path).unwrap();
+            let opened = opens() - before;
+            d.seek(0.05).unwrap();
+            let out = rest(&mut d);
+            assert_eq!(opens() - before, opened, "{}", path.display());
+            let skip = 2 * RATE * 5 / 100;
+            assert!(out[..] == full[skip..], "{}", path.display());
+        }
+    }
+
+    /// A seek back still works after a seek forward that read nothing.
+    #[test]
+    fn a_seek_back_after_a_seek_that_read_nothing_lands_right() {
+        let dir = tempfile::tempdir().unwrap();
+        for path in files(dir.path()) {
+            let full = rest(&mut SymphoniaDecoder::open(&path).unwrap());
+            let mut d = SymphoniaDecoder::open(&path).unwrap();
+            d.seek(0.6).unwrap();
+            d.seek(0.0).unwrap();
+            assert!(rest(&mut d) == full, "{}", path.display());
+        }
+    }
+
+    /// A file replaced on disk by one of another kind is not read with the
+    /// decoder of the first one: the seek that opens it again fails.
+    #[test]
+    fn a_file_replaced_by_another_kind_fails_the_reopening_seek() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = files(dir.path()).remove(0);
+        let mut d = SymphoniaDecoder::open(&path).unwrap();
+        let mut out = Vec::new();
+        while out.len() < RATE && d.next_block(&mut out).unwrap() {}
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: 44_100,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for _ in 0..44_100 {
+            w.write_sample(0i16).unwrap();
+        }
+        w.finalize().unwrap();
+        assert!(d.seek(0.0).is_err());
     }
 }
 
