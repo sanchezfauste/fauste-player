@@ -725,6 +725,37 @@ fn br6_a_stop_while_the_device_plays_out_the_end_starts_nothing() {
 }
 
 #[test]
+fn br6_a_pause_while_the_device_plays_out_the_end_holds_the_next_until_resume() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    // Until the current has stopped: a block of silence, the end held.
+    let mut trailing = 0;
+    while trailing < BLOCK {
+        for v in r.run(BLOCK) {
+            trailing = if v == 0.0 { trailing + 1 } else { 0 };
+        }
+    }
+    assert_eq!(r.rate(), 44_100, "still playing out");
+    r.act(EngineAction::Pause { player: P });
+    assert!(
+        run_until_rate(&mut r, 48_000, 9_600),
+        "the cut happens once the end has played"
+    );
+    let heard = r.run(9_600);
+    assert!(heard.iter().all(|v| *v == 0.0), "paused: silence");
+    assert!(!r.transition_started(2), "the next waits for the resume");
+    r.act(EngineAction::Resume { player: P });
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(r.transition_started(2), "the next starts on resume");
+    assert!(heard.iter().any(|v| *v != 0.0), "and plays");
+    assert!(r.engine.telemetry(P).bit_perfect, "at its own rate");
+}
+
+#[test]
 fn br8_a_hard_start_reopens_once_the_device_has_played_the_declick() {
     let mut r = rig(true, true);
     r.dac.set_latency_frames(HELD as u32);

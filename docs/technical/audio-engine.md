@@ -289,7 +289,10 @@ cannot hang the conductor.
   `PlayerRuntime::held_end` and `run_held_ends` looks again every tick),
   then calls `cut_to`, which reopens the bus through `prepare_start` (when
   nothing else sounds there), and starts the next as at any end of stream.
-  A start meanwhile takes the player over and a stop drops the held end. If
+  A start meanwhile takes the player over and a stop drops the held end.
+  A pause meanwhile keeps the end held: once it has played, the bus
+  reopens (`cut_while_paused`, which takes the cut out of the plan) and
+  the next starts on resume. If
   something sounds after all (a cart fired since the plan) or the device
   refuses the rate (B3.4), the bus keeps its rate and `cut_to` opens the
   next again at it: it plays resampled, after a longer gap. Without a cut

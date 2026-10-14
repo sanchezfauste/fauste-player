@@ -3404,7 +3404,8 @@ impl Engine {
     /// BR6: ends held at a rate cut (`end_of_current`) go on once the
     /// device has played them, under the plan in force then. A start
     /// meanwhile (a new current) took the player over, and a stop dropped
-    /// the end (`stop_now`).
+    /// the end (`stop_now`). A pause meanwhile lets the cut happen but
+    /// keeps the end held: the next starts on resume.
     fn run_held_ends(&mut self) {
         let held: Vec<(PlayerId, EntryId)> = self
             .players
@@ -3419,8 +3420,12 @@ impl Engine {
                 rt.held_end = None;
                 continue;
             }
-            let bus = rt.main.0.clone();
+            let (bus, paused) = (rt.main.0.clone(), rt.paused);
             if !self.played_out(&bus) {
+                continue;
+            }
+            if paused {
+                self.cut_while_paused(player);
                 continue;
             }
             let Some(rt) = self.players.get_mut(&player) else {
@@ -3432,6 +3437,23 @@ impl Engine {
                 Plan::None => None,
             };
             self.end_of_current(player, plan, entry);
+        }
+    }
+
+    /// A held BR6 end of a paused `player` whose device has played it: the
+    /// bus reopens now (`cut_to`) and the plan forgets the cut, so the
+    /// resume only starts the next (`run_held_ends`).
+    fn cut_while_paused(&mut self, player: PlayerId) {
+        let Some(rt) = self.players.get_mut(&player) else {
+            return;
+        };
+        let rate = match &mut rt.plan {
+            Plan::Waiting(TransitionPlan::StartNextAt { rate_cut, .. })
+            | Plan::Dispatched(TransitionPlan::StartNextAt { rate_cut, .. }, _) => rate_cut.take(),
+            _ => None,
+        };
+        if let Some(rate) = rate {
+            self.cut_to(player, rate);
         }
     }
 
