@@ -557,7 +557,7 @@ tags-cover-hidden = Esta carátula no se puede mostrar; se conserva tal cual.
 tags-cover-error = No se usó la imagen: { $reason }
 tags-cover-too-large = pesa más de { $limit } MiB
 tags-cover-unsupported = no es una imagen JPEG ni PNG
-tags-cover-undecodable = no se puede leer como una imagen de un tamaño que acepta el player
+tags-cover-undecodable = no se puede leer como una imagen de un tamaño que acepta la aplicación
 tags-error-cover-not-stored = este formato no puede guardar una carátula
 tags-error-cover = la carátula no es una imagen JPEG o PNG utilizable
 

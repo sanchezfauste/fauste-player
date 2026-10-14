@@ -20,7 +20,7 @@ The hop is the file's rate divided by ten, rounded down to whole frames
 hops (`gating_block_frames`), never longer than 400 ms, so a file of
 400 ms or more always holds one. The analysis uses the same function to
 tell a file too short to measure.
-A trailing hop shorter than 100 ms is not measured.
+A trailing part shorter than one hop (100 ms, rounded down to whole frames) is not measured.
 
 A programme shorter than one gating block (400 ms) gives no measurement;
 one with no block above the absolute gate has no integrated loudness. The

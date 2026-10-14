@@ -60,8 +60,8 @@ pub struct LoudnessMeter {
 }
 
 /// Frames in one gating block at `sample_rate` (0 is taken as 1 Hz): four
-/// hops. Never more than 400 ms, so a programme of 400 ms or more always
-/// holds one block (spec N5).
+/// hops. At rates of 10 Hz or more it is never longer than 400 ms, so a
+/// programme of 400 ms or more always holds one block (spec N5).
 pub fn gating_block_frames(sample_rate: u32) -> u64 {
     hop_frames(sample_rate) * HOPS_PER_BLOCK as u64
 }
