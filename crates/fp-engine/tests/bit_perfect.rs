@@ -40,6 +40,8 @@ fn rig(bit_perfect: bool, exclusive_capable: bool) -> Rig {
     let backend = OfflineBackend::new();
     let dac = backend.add_device("dac", 2);
     dac.set_exclusive_capable(exclusive_capable);
+    // An ordinary output to move a player to.
+    backend.add_device("speakers", 2);
     let mut config = Config::default();
     config.outputs.backend = Some("offline".into());
     config.outputs.buffer_frames = BLOCK as u32;
@@ -179,6 +181,42 @@ fn an_idle_bit_perfect_bus_reopens_at_the_file_rate() {
         "one second at 44.1 kHz is one second: {position} (underruns {})",
         r.engine.telemetry(P).underruns
     );
+}
+
+#[test]
+fn br1_a_bus_a_holder_comes_back_to_reports_its_rate_again() {
+    // The model forgets a device's rate when its last holder leaves it; a
+    // holder that comes back before the bus closes must bring it back.
+    let mut r = rig(true, true);
+    let dac = OutputDevice {
+        backend: "offline".into(),
+        device: "dac".into(),
+    };
+    let to = |device: &str| Route {
+        backend: "offline".into(),
+        device: device.into(),
+        first_channel: 0,
+    };
+    r.tick();
+    assert_eq!(r.stream_rates(), vec![(48_000, vec![])], "reported once");
+    r.events.clear();
+    for device in ["speakers", "dac"] {
+        r.act(EngineAction::ApplyRoute {
+            holder: fp_model::Holder::PlayerMain(P),
+            route: Some(to(device)),
+            force: false,
+        });
+    }
+    r.tick();
+    let back = r
+        .events
+        .iter()
+        .rposition(|e| matches!(e, EngineEvent::Placed { device, .. } if *device == dac))
+        .expect("placed on the dac again");
+    let reported = r.events.iter().skip(back).any(
+        |e| matches!(e, EngineEvent::StreamRate { device, rate: 48_000, .. } if *device == dac),
+    );
+    assert!(reported, "{:?}", r.events);
 }
 
 #[test]

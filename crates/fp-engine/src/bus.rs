@@ -167,7 +167,7 @@ pub struct Bus {
     exclusive_granted: bool,
     /// Rates this device refused, not asked for again until it comes back
     /// from a loss (it may be another device by then).
-    refused_rates: std::collections::HashSet<u32>,
+    refused_rates: std::collections::BTreeSet<u32>,
     /// DSD streams (word rate, kind) this device refused, forgotten with
     /// `refused_rates` (feedback 2 spec O25).
     refused_dsd: std::collections::HashSet<(u32, DsdStream)>,
@@ -230,7 +230,7 @@ impl Bus {
             opened_beat: 0,
             unstarted_reported: false,
             exclusive_granted: false,
-            refused_rates: std::collections::HashSet::new(),
+            refused_rates: std::collections::BTreeSet::new(),
             refused_dsd: std::collections::HashSet::new(),
             dsd_lost: false,
             pcm_fallback: None,
@@ -376,9 +376,17 @@ impl Bus {
 
     /// The rates this device refused (Phase 4 spec B3.4), ascending.
     pub fn refused_rates(&self) -> Vec<u32> {
-        let mut rates: Vec<u32> = self.refused_rates.iter().copied().collect();
-        rates.sort_unstable();
-        rates
+        self.refused().collect()
+    }
+
+    /// The rates this device refused, ascending, without a copy.
+    pub fn refused(&self) -> impl Iterator<Item = u32> + '_ {
+        self.refused_rates.iter().copied()
+    }
+
+    /// Whether this device refused `rate`.
+    pub fn refuses(&self, rate: u32) -> bool {
+        self.refused_rates.contains(&rate)
     }
 
     /// Whether the device is open with the exclusive access it asked for.

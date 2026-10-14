@@ -260,13 +260,17 @@ cannot hang the conductor.
   the bus sounds (bit-perfect rate and fader spec BR11).
 - **Stream rates reach the model (BR1).** At the end of every tick
   `report_stream_rates` compares each bus's rate and refused rates
-  (`Bus::refused_rates`, ascending) with what it last reported
-  (`Engine::reported_rates`) and emits `EngineEvent::StreamRate { device,
-  rate, refused }` for each difference. One comparison covers every cause:
-  a bus opened, a B3.2 reopen, a rate cut, a refusal, a live-settings
-  reopen and the watchdog. A bus opened by an action is reported after its
-  `Placed`; a holder that left the bus in the same tick is reported
-  `Unplaced` first, so the model drops a rate for a device no holder uses.
+  (`Bus::refused`, ascending, compared in place) with what it last
+  reported (`Engine::reported_rates`) and emits `EngineEvent::StreamRate {
+  device, rate, refused }` for each difference. One comparison covers every
+  cause: a bus opened, a B3.2 reopen, a rate cut, a refusal, a
+  live-settings reopen and the watchdog. A bus opened by an action is
+  reported after its `Placed`; a holder that left the bus in the same tick
+  is reported `Unplaced` first, so the model drops a rate for a device no
+  holder uses. Every `Placed` (`report_placement`) forgets what was last
+  reported for its bus, so the rate is reported again: the model forgets a
+  device's rate when its last holder leaves, and a holder may come back to
+  the bus before it closes.
 - **Every source knows its rate.** `Playing::rate` is the rate its worker
   decodes to (`open_source_at`): its bus's rate, or the rate of a planned
   cut. A source never starts at a rate other than its bus's: `take_or_open`

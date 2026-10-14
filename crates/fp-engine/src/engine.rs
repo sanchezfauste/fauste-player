@@ -788,15 +788,21 @@ impl Engine {
         }
     }
 
-    /// L3: `holder` holds `route` and plays on `bus`, or has no bus.
+    /// L3: `holder` holds `route` and plays on `bus`, or has no bus. A
+    /// placement also reports `bus`'s stream rate again at the end of the
+    /// tick (BR1): the model forgets a device's rate once no holder is
+    /// placed on it, and a holder may come back before the bus closes.
     fn report_placement(&mut self, holder: Holder, route: Option<Route>, bus: Option<&BusKey>) {
         let event = match bus {
-            Some(bus) => EngineEvent::Placed {
-                holder,
-                route,
-                device: bus.output_device(),
-                running: self.device_of(bus),
-            },
+            Some(bus) => {
+                self.reported_rates.remove(bus);
+                EngineEvent::Placed {
+                    holder,
+                    route,
+                    device: bus.output_device(),
+                    running: self.device_of(bus),
+                }
+            }
             None => EngineEvent::Unplaced { holder, route },
         };
         self.events.push(event);
@@ -811,14 +817,19 @@ impl Engine {
         let buses = &self.buses;
         self.reported_rates.retain(|key, _| buses.contains_key(key));
         for (key, bus) in &self.buses {
-            let now = (bus.sample_rate(), bus.refused_rates());
-            if self.reported_rates.get(key) != Some(&now) {
+            // Compared in place: nothing is allocated unless it changed.
+            let same = self.reported_rates.get(key).is_some_and(|(rate, refused)| {
+                *rate == bus.sample_rate() && refused.iter().copied().eq(bus.refused())
+            });
+            if !same {
+                let refused = bus.refused_rates();
                 self.events.push(EngineEvent::StreamRate {
                     device: key.output_device(),
-                    rate: now.0,
-                    refused: now.1.clone(),
+                    rate: bus.sample_rate(),
+                    refused: refused.clone(),
                 });
-                self.reported_rates.insert(key.clone(), now);
+                self.reported_rates
+                    .insert(key.clone(), (bus.sample_rate(), refused));
             }
         }
     }
@@ -1473,7 +1484,7 @@ impl Engine {
             .map(|f| f.sample_rate)
             .filter(|r| *r > 0)?;
         let running = self.buses.get(bus)?;
-        if running.sample_rate() == rate || running.refused_rates().contains(&rate) {
+        if running.sample_rate() == rate || running.refuses(rate) {
             return None;
         }
         let replaces = self.players.get(&player).is_some_and(|rt| {
@@ -1643,7 +1654,7 @@ impl Engine {
         };
         self.buses.get(bus).is_some_and(|b| {
             b.sample_rate() != rate
-                && !b.refused_rates().contains(&rate)
+                && !b.refuses(rate)
                 && !b.played_out()
                 && !self.bus_sounding(bus)
         })

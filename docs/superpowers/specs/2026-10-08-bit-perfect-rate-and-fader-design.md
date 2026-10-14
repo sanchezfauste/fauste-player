@@ -527,7 +527,7 @@ backend and explicit `now: Instant`; nothing sleeps.
 | Rule | Layer, file | Test |
 |---|---|---|
 | BR1 | `fp-model` `tests/bit_perfect_rules.rs` | `StreamRate` sets `live.stream_rates` and `refused_rates`; `Unplaced` of the last holder forgets them. |
-| BR1 | `fp-engine` `tests/bit_perfect.rs` | a bus open, a B3.2 reopen and a refused rate each report `StreamRate` with the right rate and refused set. |
+| BR1 | `fp-engine` `tests/bit_perfect.rs` | a bus open, a B3.2 reopen and a refused rate each report `StreamRate` with the right rate and refused set; a holder placed again on a bus it left (before the bus closed) has the bus's rate reported again. |
 | BR2 | `fp-model` `tests/bit_perfect_rules.rs` | true for a Main placed on a device running bit-perfect; false for the wanted-but-pending value, for an unplaced player, and for a player whose only Cue route is on the device. |
 | BR3 | `fp-model` `tests/bit_perfect_rules.rs` | one test per condition 1–6: each one false gives `None`; all true gives `Some(r)`. |
 | BR4 | `fp-model` `tests/bit_perfect_rules.rs` | on a bit-perfect player with automatic mix on and a MIX point: a next at the same rate gives `StartNextAt { at: cue-out, fade: None, rate_cut: None }`; a 96 kHz next on a 44.1 kHz device gives `rate_cut: Some(96000)`; Single mode still gives `StopAt`; the same player off bit-perfect gives the segue plan; an R26 repeat and an O37 replay give `rate_cut: None` while the stream runs at the file's rate and `Some(file rate)` when their pass started resampled. |
