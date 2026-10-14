@@ -9,6 +9,10 @@
 //!
 //! Urgent jobs (tracks a player shows, which need their waveform now) have
 //! their own queue, which workers always take from first.
+//!
+//! Loudness-only jobs (loudness normalization spec N6b) have a third queue,
+//! taken last, with their own bookkeeping and results: a loudness job and
+//! an analysis of the same track are independent of each other.
 
 use std::collections::{HashMap, HashSet};
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -20,9 +24,11 @@ use std::time::SystemTime;
 
 use crossbeam_channel::{Receiver, Sender};
 use fp_decode::priority::Priority;
-use fp_model::{AnalysisSettings, Limits, TrackId};
+use fp_model::{AnalysisSettings, LOUDNESS_VERSION, Limits, LoudnessMeasurement, TrackId};
 
-use crate::analyze::{Analysis, AnalysisError, analyze_file_cancellable};
+use crate::analyze::{
+    Analysis, AnalysisError, analyze_file_cancellable, measure_loudness_cancellable,
+};
 use crate::cache::AnalysisCache;
 
 /// The analysis step; injectable for tests. The last argument reports
@@ -32,6 +38,24 @@ pub type AnalyzeFn = Arc<
         + Send
         + Sync,
 >;
+
+/// The loudness-only measurement (N6b); injectable for tests. The last
+/// argument reports whether the job has been cancelled.
+pub type LoudnessFn = Arc<
+    dyn Fn(&Path, &dyn Fn() -> bool) -> Result<Option<LoudnessMeasurement>, AnalysisError>
+        + Send
+        + Sync,
+>;
+
+/// The answer of a loudness-only job.
+#[derive(Debug)]
+pub struct LoudnessResult {
+    pub track: TrackId,
+    pub path: PathBuf,
+    /// `Ok(None)`: the file decoded but nothing could be measured (shorter
+    /// than 400 ms, or a failure inside the meter).
+    pub outcome: Result<Option<LoudnessMeasurement>, AnalysisError>,
+}
 
 #[derive(Debug)]
 pub struct AnalysisResult {
@@ -86,6 +110,9 @@ struct Shared {
     limits: Mutex<Limits>,
     cache: Option<AnalysisCache>,
     analyze: AnalyzeFn,
+    /// The loudness-only jobs' own bookkeeping (N6b).
+    loudness_book: Mutex<Bookkeeping>,
+    loudness: LoudnessFn,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -95,7 +122,11 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 pub struct Analyzer {
     jobs: Option<Sender<Job>>,
     urgent: Option<Sender<Job>>,
+    loudness_jobs: Option<Sender<Job>>,
     results: Receiver<AnalysisResult>,
+    loudness_results: Receiver<LoudnessResult>,
+    /// How many loudness-only jobs may run at once (`loudness_share`).
+    share: usize,
     shared: Arc<Shared>,
     threads: Vec<JoinHandle<()>>,
 }
@@ -117,6 +148,7 @@ impl Analyzer {
         )
     }
 
+    /// A pool running `analyze` and the real loudness-only measurement.
     pub fn with_analyze_fn(
         threads: usize,
         settings: AnalysisSettings,
@@ -124,9 +156,31 @@ impl Analyzer {
         cache: Option<AnalysisCache>,
         analyze: AnalyzeFn,
     ) -> std::io::Result<Self> {
+        Self::with_fns(
+            threads,
+            settings,
+            limits,
+            cache,
+            analyze,
+            Arc::new(measure_loudness_cancellable),
+        )
+    }
+
+    /// A pool running `analyze` for analyses and `loudness` for
+    /// loudness-only jobs.
+    pub fn with_fns(
+        threads: usize,
+        settings: AnalysisSettings,
+        limits: Limits,
+        cache: Option<AnalysisCache>,
+        analyze: AnalyzeFn,
+        loudness: LoudnessFn,
+    ) -> std::io::Result<Self> {
         let (job_tx, job_rx) = crossbeam_channel::unbounded::<Job>();
         let (urgent_tx, urgent_rx) = crossbeam_channel::unbounded::<Job>();
+        let (loudness_tx, loudness_rx) = crossbeam_channel::unbounded::<Job>();
         let (res_tx, res_rx) = crossbeam_channel::unbounded();
+        let (lres_tx, lres_rx) = crossbeam_channel::unbounded();
         let shared = Arc::new(Shared {
             book: Mutex::new(Bookkeeping::default()),
             settings: Mutex::new(settings),
@@ -134,14 +188,18 @@ impl Analyzer {
             limits: Mutex::new(limits),
             cache,
             analyze,
+            loudness_book: Mutex::new(Bookkeeping::default()),
+            loudness,
         });
+        let workers = threads.max(1);
         let mut handles = Vec::new();
-        for n in 0..threads.max(1) {
+        for n in 0..workers {
             let lanes = Lanes {
                 urgent: urgent_rx.clone(),
                 normal: job_rx.clone(),
+                loudness: loudness_rx.clone(),
             };
-            let (tx, shared) = (res_tx.clone(), shared.clone());
+            let (tx, ltx, shared) = (res_tx.clone(), lres_tx.clone(), shared.clone());
             handles.push(
                 std::thread::Builder::new()
                     .name(format!("fp-analysis-{n}"))
@@ -155,14 +213,17 @@ impl Analyzer {
                         {
                             cache.sweep();
                         }
-                        worker(&lanes, &tx, &shared)
+                        worker(&lanes, &tx, &ltx, &shared)
                     })?,
             );
         }
         Ok(Self {
             jobs: Some(job_tx),
             urgent: Some(urgent_tx),
+            loudness_jobs: Some(loudness_tx),
             results: res_rx,
+            loudness_results: lres_rx,
+            share: workers.saturating_sub(1).max(1),
             shared,
             threads: handles,
         })
@@ -242,6 +303,43 @@ impl Analyzer {
     pub fn results(&self) -> &Receiver<AnalysisResult> {
         &self.results
     }
+
+    /// N6b: queues a loudness-only measurement of `path` as `track`,
+    /// behind every analysis job (ignored while one is pending for
+    /// `track`).
+    pub fn submit_loudness(&self, track: TrackId, path: PathBuf) {
+        let generation = {
+            let mut book = lock(&self.shared.loudness_book);
+            if book.latest.contains_key(&track) {
+                return;
+            }
+            book.submit(track)
+        };
+        if let Some(jobs) = &self.loudness_jobs {
+            let _ = jobs.send(Job {
+                track,
+                path,
+                generation,
+            });
+        }
+    }
+
+    /// Cancels a pending or running loudness-only job; no result will be
+    /// delivered for it.
+    pub fn cancel_loudness(&self, track: TrackId) {
+        lock(&self.shared.loudness_book).latest.remove(&track);
+    }
+
+    pub fn loudness_results(&self) -> &Receiver<LoudnessResult> {
+        &self.loudness_results
+    }
+
+    /// How many loudness-only jobs may run at once: all workers but one,
+    /// at least one (N6b), so new files and the operator's requests keep
+    /// a worker. The caller keeps to it.
+    pub fn loudness_share(&self) -> usize {
+        self.share
+    }
 }
 
 impl Drop for Analyzer {
@@ -250,70 +348,96 @@ impl Drop for Analyzer {
         self.shared.stop.store(true, Ordering::Release);
         self.jobs = None;
         self.urgent = None;
+        self.loudness_jobs = None;
         for t in self.threads.drain(..) {
             let _ = t.join();
         }
     }
 }
 
-/// A worker's two queues.
+/// A worker's three queues.
 struct Lanes {
     urgent: Receiver<Job>,
     normal: Receiver<Job>,
+    loudness: Receiver<Job>,
+}
+
+/// Which queue a job came from.
+#[derive(Clone, Copy)]
+enum Lane {
+    Analysis,
+    Loudness,
 }
 
 impl Lanes {
-    /// The next job, urgent ones first; `None` once the analyzer is gone.
-    fn next(&self) -> Option<Job> {
+    /// The next job: urgent first, then normal, then loudness-only (N6b:
+    /// below every analysis job); `None` once the analyzer is gone.
+    fn next(&self) -> Option<(Lane, Job)> {
         if let Ok(job) = self.urgent.try_recv() {
-            return Some(job);
+            return Some((Lane::Analysis, job));
+        }
+        if let Ok(job) = self.normal.try_recv() {
+            return Some((Lane::Analysis, job));
         }
         crossbeam_channel::select_biased! {
-            recv(self.urgent) -> job => job.ok(),
-            recv(self.normal) -> job => job.ok(),
+            recv(self.urgent) -> job => job.ok().map(|j| (Lane::Analysis, j)),
+            recv(self.normal) -> job => job.ok().map(|j| (Lane::Analysis, j)),
+            recv(self.loudness) -> job => job.ok().map(|j| (Lane::Loudness, j)),
         }
     }
 }
 
-fn worker(lanes: &Lanes, results: &Sender<AnalysisResult>, shared: &Shared) {
-    while let Some(job) = lanes.next() {
+fn worker(
+    lanes: &Lanes,
+    results: &Sender<AnalysisResult>,
+    loudness_results: &Sender<LoudnessResult>,
+    shared: &Shared,
+) {
+    while let Some((lane, job)) = lanes.next() {
         if shared.stop.load(Ordering::Acquire) {
             return;
         }
-        {
-            let mut book = lock(&shared.book);
-            if !book.is_current(&job) {
-                continue;
-            }
-            book.urgent.remove(&job.track);
-            book.running.insert(job.track, job.generation);
+        match lane {
+            Lane::Analysis => analysis_job(job, results, shared),
+            Lane::Loudness => loudness_job(job, loudness_results, shared),
         }
-        // Before the analysis: a file that changes while it runs (a copy
-        // that completes) is told apart from what was analysed.
-        let stamp = std::fs::metadata(&job.path)
-            .ok()
-            .and_then(|m| Some((m.len(), m.modified().ok()?)));
-        let outcome = catch_unwind(AssertUnwindSafe(|| run(&job, shared)))
-            .unwrap_or_else(|_| Err(AnalysisError::Unreadable("the analysis crashed".to_owned())));
-        let deliver = {
-            let mut book = lock(&shared.book);
-            if book.running.get(&job.track) == Some(&job.generation) {
-                book.running.remove(&job.track);
-            }
-            let current = book.is_current(&job);
-            if current {
-                book.latest.remove(&job.track);
-            }
-            current
-        };
-        if deliver && !matches!(outcome, Err(AnalysisError::Cancelled)) {
-            let _ = results.send(AnalysisResult {
-                track: job.track,
-                path: job.path,
-                outcome,
-                stamp,
-            });
+    }
+}
+
+fn analysis_job(job: Job, results: &Sender<AnalysisResult>, shared: &Shared) {
+    {
+        let mut book = lock(&shared.book);
+        if !book.is_current(&job) {
+            return;
         }
+        book.urgent.remove(&job.track);
+        book.running.insert(job.track, job.generation);
+    }
+    // Before the analysis: a file that changes while it runs (a copy
+    // that completes) is told apart from what was analysed.
+    let stamp = std::fs::metadata(&job.path)
+        .ok()
+        .and_then(|m| Some((m.len(), m.modified().ok()?)));
+    let outcome = catch_unwind(AssertUnwindSafe(|| run(&job, shared)))
+        .unwrap_or_else(|_| Err(AnalysisError::Unreadable("the analysis crashed".to_owned())));
+    let deliver = {
+        let mut book = lock(&shared.book);
+        if book.running.get(&job.track) == Some(&job.generation) {
+            book.running.remove(&job.track);
+        }
+        let current = book.is_current(&job);
+        if current {
+            book.latest.remove(&job.track);
+        }
+        current
+    };
+    if deliver && !matches!(outcome, Err(AnalysisError::Cancelled)) {
+        let _ = results.send(AnalysisResult {
+            track: job.track,
+            path: job.path,
+            outcome,
+            stamp,
+        });
     }
 }
 
@@ -340,6 +464,76 @@ fn run(job: &Job, shared: &Shared) -> Result<Analysis, AnalysisError> {
         && let Err(e) = cache.store_key(key, analysis, &limits)
     {
         tracing::warn!(path = %job.path.display(), "cannot cache the analysis: {e}");
+    }
+    outcome
+}
+
+fn loudness_job(job: Job, results: &Sender<LoudnessResult>, shared: &Shared) {
+    {
+        let mut book = lock(&shared.loudness_book);
+        if !book.is_current(&job) {
+            return;
+        }
+        book.running.insert(job.track, job.generation);
+    }
+    let outcome =
+        catch_unwind(AssertUnwindSafe(|| run_loudness(&job, shared))).unwrap_or_else(|_| {
+            Err(AnalysisError::Unreadable(
+                "the loudness measurement crashed".to_owned(),
+            ))
+        });
+    let deliver = {
+        let mut book = lock(&shared.loudness_book);
+        if book.running.get(&job.track) == Some(&job.generation) {
+            book.running.remove(&job.track);
+        }
+        let current = book.is_current(&job);
+        if current {
+            book.latest.remove(&job.track);
+        }
+        current
+    };
+    if deliver && !matches!(outcome, Err(AnalysisError::Cancelled)) {
+        let _ = results.send(LoudnessResult {
+            track: job.track,
+            path: job.path,
+            outcome,
+        });
+    }
+}
+
+fn run_loudness(job: &Job, shared: &Shared) -> Result<Option<LoudnessMeasurement>, AnalysisError> {
+    let settings = lock(&shared.settings).clone();
+    let limits = lock(&shared.limits).clone();
+    // The key is taken first: a file that changes meanwhile is not
+    // recorded under its new key.
+    let key = shared
+        .cache
+        .as_ref()
+        .and_then(|c| c.key(&job.path, &settings, &limits));
+    // The entry may already hold this pass's answer (the library lost it,
+    // or the full analysis cached it meanwhile): nothing to decode.
+    if let (Some(cache), Some(key)) = (&shared.cache, &key)
+        && let Some(cached) = cache.load_key(key, &limits)
+        && cached.analysis.loudness_pass == Some(LOUDNESS_VERSION)
+    {
+        return Ok(cached.analysis.loudness);
+    }
+    let cancelled =
+        || shared.stop.load(Ordering::Acquire) || !lock(&shared.loudness_book).is_current(job);
+    let outcome = (shared.loudness)(&job.path, &cancelled);
+    // A measurement, or a file that cannot be measured, is recorded in the
+    // file's entry so it is not measured again (N6b).
+    let recorded = match &outcome {
+        Ok(m) => Some(*m),
+        Err(AnalysisError::Unreadable(_)) => Some(None),
+        Err(_) => None,
+    };
+    if let (Some(loudness), Some(cache), Some(key)) = (recorded, &shared.cache, &key)
+        && cache.key(&job.path, &settings, &limits).as_ref() == Some(key)
+        && let Err(e) = cache.update_loudness(key, loudness, &limits)
+    {
+        tracing::warn!(path = %job.path.display(), "cannot cache the loudness: {e}");
     }
     outcome
 }
