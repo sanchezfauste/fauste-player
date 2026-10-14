@@ -142,6 +142,16 @@ pub fn shown_entry(state: &AppState, player: PlayerId) -> Option<EntryId> {
     p.current.or(p.next)
 }
 
+/// Whether `player`'s MIX marker is drawn solid: in Continuous mode, on a
+/// player that mixes. A bit-perfect player never does (bit-perfect rate
+/// and fader spec BR15): its marker is drawn dim, as in Single mode.
+pub fn mix_active(state: &AppState, player: PlayerId) -> bool {
+    state
+        .player(player)
+        .is_ok_and(|p| p.mode == PlayMode::Continuous)
+        && !fp_model::bit_perfect_player(state, player)
+}
+
 /// What a CUE window shows (feedback 2 spec O12; operator feedback 4, Q7).
 /// A CUE plays the whole file, so its times, markers and badges run to the
 /// end of the file, not to the cue-out.
@@ -168,7 +178,7 @@ pub struct CueWindowView {
     pub intro: Option<f64>,
     /// Seconds from the outro to the end of the file (Q7.5).
     pub outro: Option<f64>,
-    /// The MIX marker looks as on the player: solid in Continuous mode.
+    /// The MIX marker looks as on the player (`mix_active`).
     pub mix_active: bool,
     /// "Set as next" has something to do: the cued entry is not
     /// already the explicit next (the entry on air can be, O37).
@@ -207,7 +217,7 @@ pub fn cue_window_view(
         markers: marker_fractions(track, total.unwrap_or(0.0), elapsed, true),
         intro: intro_left(track, elapsed).map(tenths),
         outro: total.and_then(|end| outro_left(track, elapsed, end)),
-        mix_active: p.mode == PlayMode::Continuous,
+        mix_active: mix_active(state, player),
         can_load_next: !(p.next == Some(cue.entry) && p.next_explicit),
     })
 }

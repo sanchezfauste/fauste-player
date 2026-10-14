@@ -25,6 +25,7 @@ play-caption = PLAY
 next-caption = SEG.
 tip-play = Reproduzir
 tip-next = Fade para a faixa seguinte
+tip-next-bit-perfect = Faixa seguinte, de imediato e sem fade (saída bit-perfect)
 tip-stop = Stop
 tip-fade-stop = Stop com fade
 tip-pause = Pausa

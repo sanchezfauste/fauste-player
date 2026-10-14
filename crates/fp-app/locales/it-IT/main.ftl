@@ -25,6 +25,7 @@ play-caption = PLAY
 next-caption = SUCC.
 tip-play = Riproduci
 tip-next = Dissolvenza al brano successivo
+tip-next-bit-perfect = Brano successivo, subito e senza dissolvenza (uscita bit-perfect)
 tip-stop = Stop
 tip-fade-stop = Stop in dissolvenza
 tip-pause = Pausa

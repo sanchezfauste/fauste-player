@@ -650,10 +650,14 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             ui.spacing_mut().item_spacing = vec2(GAP, GAP);
             let available = fp_model::availability(scene.state, id);
             let playing = pv.status == PlayerStatus::OnAir;
-            let play_label = if playing {
-                t.tr("tip-next")
-            } else {
+            // BR15: on air, a bit-perfect player starts the next track at
+            // once, without a crossfade.
+            let play_label = if !playing {
                 t.tr("tip-play")
+            } else if fp_model::bit_perfect_player(scene.state, id) {
+                t.tr("tip-next-bit-perfect")
+            } else {
+                t.tr("tip-next")
             };
             let caption = if pv.fading {
                 t.tr("badge-fading").to_uppercase()
@@ -856,7 +860,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         media: media.as_ref(),
         total: pv.total,
         markers: pv.markers,
-        mix_active: pv.mode == PlayMode::Continuous,
+        mix_active: view::mix_active(scene.state, id),
         // A stopped player's position is pinned (its cue-in or its pending
         // start, rule 3a): following it would undo a zoom made to prepare
         // the next track.

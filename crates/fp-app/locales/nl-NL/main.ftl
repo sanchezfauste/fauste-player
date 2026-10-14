@@ -25,6 +25,7 @@ play-caption = PLAY
 next-caption = VOLG.
 tip-play = Afspelen
 tip-next = Overfaden naar het volgende nummer
+tip-next-bit-perfect = Volgend nummer, meteen en zonder overfaden (bit-perfect uitgang)
 tip-stop = Stop
 tip-fade-stop = Uitfaden
 tip-pause = Pauze

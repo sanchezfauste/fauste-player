@@ -25,6 +25,7 @@ play-caption = PLAY
 next-caption = SEG.
 tip-play = Reproduir
 tip-next = Fos cap a la pista següent
+tip-next-bit-perfect = Pista següent, a l'instant i sense fos (sortida bit-perfect)
 tip-stop = Stop
 tip-fade-stop = Stop amb fos
 tip-pause = Pausa

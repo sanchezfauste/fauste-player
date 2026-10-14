@@ -25,6 +25,7 @@ play-caption = PLAY
 next-caption = NEXT
 tip-play = Play
 tip-next = Fade into the next track
+tip-next-bit-perfect = Next track, at once and without a crossfade (bit-perfect output)
 tip-stop = Stop
 tip-fade-stop = Fade stop
 tip-pause = Pause

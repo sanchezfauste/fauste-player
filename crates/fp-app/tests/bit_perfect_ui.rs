@@ -10,6 +10,7 @@
 mod support;
 
 use egui_kittest::kittest::Queryable;
+use fp_app::ui::controller::Controller;
 use fp_model::Command;
 use support::{harness, lock_player, state};
 
@@ -98,4 +99,25 @@ fn bf7_an_unlocked_fader_still_moves() {
     wheel_down(&mut h);
     h.run_steps(5);
     assert_eq!(volume_commands(&fake.take_sent()), 1);
+}
+
+#[test]
+fn br15_the_next_tooltip_says_there_is_no_crossfade() {
+    let (mut h, fake) = harness(locked(1));
+    h.run_steps(2);
+    assert!(
+        h.query_all_by_label("Play").next().is_some(),
+        "stopped: the usual Play"
+    );
+    assert!(
+        h.query_by_label_contains("without a crossfade").is_none(),
+        "only on air"
+    );
+    fake.send(Command::Play(fake.player(0)));
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("Next track, at once and without a crossfade (bit-perfect output)")
+            .is_some()
+    );
+    assert!(h.query_by_label("Fade into the next track").is_none());
 }

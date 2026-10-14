@@ -25,6 +25,7 @@ play-caption = PLAY
 next-caption = WEITER
 tip-play = Abspielen
 tip-next = In den nächsten Track überblenden
+tip-next-bit-perfect = Nächster Track, sofort und ohne Überblendung (Bit-perfect-Ausgang)
 tip-stop = Stopp
 tip-fade-stop = Ausblenden
 tip-pause = Pause

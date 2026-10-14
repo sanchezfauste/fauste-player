@@ -25,6 +25,7 @@ play-caption = PLAY
 next-caption = NAST.
 tip-play = Odtwarzaj
 tip-next = Przenikanie do następnego utworu
+tip-next-bit-perfect = Następny utwór, od razu i bez przenikania (wyjście bit-perfect)
 tip-stop = Stop
 tip-fade-stop = Stop z wyciszeniem
 tip-pause = Pauza

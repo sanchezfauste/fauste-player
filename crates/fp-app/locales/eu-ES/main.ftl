@@ -25,6 +25,7 @@ play-caption = PLAY
 next-caption = HURR.
 tip-play = Erreproduzitu
 tip-next = Itzaltzearekin hurrengo pistara
+tip-next-bit-perfect = Hurrengo pista, berehala eta itzaltzerik gabe (bit-perfect irteera)
 tip-stop = Gelditu
 tip-fade-stop = Itzaltzearekin gelditu
 tip-pause = Pausatu
