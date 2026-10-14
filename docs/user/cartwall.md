@@ -63,7 +63,8 @@ Go to **Settings → Cartwall**:
 
 - **Pages:** create, rename, delete (the last page cannot be deleted), and set
   the grid size (rows × columns). A smaller grid is refused if it would drop
-  carts that have a file.
+  carts that have a file. A size typed into the box next to a slider applies
+  when you press Enter or leave the box; Escape cancels it.
 - **Import… / Export…** save a page to a `.cartpage.json` file and load it
   back, for example to share it between studios. Relative file paths are
   resolved against the file's folder.

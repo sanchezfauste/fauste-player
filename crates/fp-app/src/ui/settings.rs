@@ -802,6 +802,24 @@ fn slider<T: egui::emath::Numeric>(
     response.changed()
 }
 
+/// A slider over a count whose every value is applied at once (the number
+/// of players): a number typed into its box applies only when it is
+/// complete (Enter or leaving the box; Escape cancels it), never its first
+/// digit, which would remove the players above it on the way.
+fn count_slider(ui: &mut Ui, value: &mut usize, max: usize, label: &str) -> bool {
+    let old = *value;
+    let response = ui.add(
+        egui::Slider::new(value, 1..=max)
+            .step_by(1.0)
+            .update_while_editing(false),
+    );
+    let owned = label.to_owned();
+    let v = egui::emath::Numeric::to_f64(*value);
+    response.widget_info(|| egui::WidgetInfo::slider(true, v, owned.clone()));
+    // The box reports each keystroke as a change; only a new value is one.
+    response.changed() && *value != old
+}
+
 /// The audio systems the list offers: the real systems in their order, then
 /// `null` as "No output (silent)" (feedback 2 spec O27, which reverses the
 /// hiding part of O5).
@@ -1323,7 +1341,7 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
         &label,
         Some(&t.tr("settings-hint-player-count")),
         |ui| {
-            if slider(ui, &mut count, 1..=max, 1.0, "", &label) {
+            if count_slider(ui, &mut count, max, &label) {
                 scene.ctl.send(Command::SetPlayerCount(count));
             }
         },

@@ -328,6 +328,120 @@ fn a_typed_cart_name_is_kept_when_another_cart_is_selected() {
     assert_eq!(fake.state.load().cartwall.pages[0].carts[0].name, "Typed");
 }
 
+/// Types `text` into the number box of the grid slider labelled `label`,
+/// one character per frame, then presses `end`.
+fn type_grid_size(
+    h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    label: &str,
+    text: &str,
+    end: Key,
+) {
+    h.get_by_role_and_label(Role::Slider, label).scroll_to_me();
+    h.run_steps(3);
+    h.get_by_role_and_label(Role::Slider, label).focus();
+    h.run_steps(1);
+    // Tab moves on to the slider's number box, which selects its text.
+    h.key_press(Key::Tab);
+    h.run_steps(2);
+    for c in text.chars() {
+        h.event(egui::Event::Text(c.to_string()));
+        h.run_steps(1);
+    }
+    h.key_press(end);
+    h.run_steps(3);
+}
+
+fn resizes(fake: &support::Fake) -> Vec<(u16, u16)> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::ResizeCartPage { rows, cols, .. } => Some((rows, cols)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_typed_grid_size_resizes_the_page_once_it_is_complete() {
+    let mut s = with_cart();
+    let page = s.cartwall.pages[0].id;
+    let (rows, cols) = (s.cartwall.pages[0].rows, s.cartwall.pages[0].cols);
+    // A file in the last cart: a one-column page would lose it.
+    let last = usize::from(rows) * usize::from(cols) - 1;
+    fp_model::apply(
+        &mut s,
+        Command::AssignCartFile {
+            page,
+            index: last,
+            path: std::path::PathBuf::from("/carts/last.wav"),
+        },
+    )
+    .unwrap();
+    let (mut h, fake) = harness(s);
+    open_section(&mut h, "Cartwall");
+    fake.take_sent();
+    type_grid_size(&mut h, "Columns", "12", Key::Enter);
+    assert_eq!(resizes(&fake), vec![(rows, 12)]);
+    let p = &fake.state.load().cartwall.pages[0];
+    assert_eq!((p.rows, p.cols), (rows, 12));
+}
+
+#[test]
+fn leaving_the_number_box_applies_the_typed_grid_size() {
+    let (mut h, fake) = harness(with_cart());
+    open_section(&mut h, "Cartwall");
+    let cols = fake.state.load().cartwall.pages[0].cols;
+    fake.take_sent();
+    type_grid_size(&mut h, "Rows", "6", Key::Tab);
+    assert_eq!(resizes(&fake), vec![(6, cols)]);
+}
+
+#[test]
+fn escape_keeps_the_grid_size_being_typed_from_applying() {
+    let (mut h, fake) = harness(with_cart());
+    open_section(&mut h, "Cartwall");
+    let before = {
+        let p = &fake.state.load().cartwall.pages[0];
+        (p.rows, p.cols)
+    };
+    fake.take_sent();
+    type_grid_size(&mut h, "Rows", "6", Key::Escape);
+    assert_eq!(resizes(&fake), Vec::new());
+    let p = &fake.state.load().cartwall.pages[0];
+    assert_eq!((p.rows, p.cols), before);
+}
+
+#[test]
+fn a_typed_player_count_applies_once_it_is_complete() {
+    let (mut h, fake) = harness(state(4, 1));
+    open_section(&mut h, "Players");
+    let kept = fake.state.load().players[1].id;
+    fake.take_sent();
+    h.get_by_role_and_label(Role::Slider, "Number of players")
+        .focus();
+    h.run_steps(1);
+    h.key_press(Key::Tab);
+    h.run_steps(2);
+    for c in "12".chars() {
+        h.event(egui::Event::Text(c.to_string()));
+        h.run_steps(1);
+    }
+    h.key_press(Key::Enter);
+    h.run_steps(3);
+    let counts: Vec<usize> = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::SetPlayerCount(n) => Some(n),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(counts, vec![12]);
+    let state = fake.state.load();
+    assert_eq!(state.players.len(), 12);
+    assert_eq!(state.players[1].id, kept, "the second player is kept");
+}
+
 fn dac() -> fp_model::OutputDevice {
     fp_model::OutputDevice {
         backend: "offline".into(),
