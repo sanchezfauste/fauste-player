@@ -1239,6 +1239,22 @@ fn br17_a_seek_in_the_resume_gap_waits_at_the_files_rate_and_plays_bit_perfect_f
     assert!(r.engine.telemetry(P).bit_perfect, "the badge is lit");
 }
 
+/// `settle` waits for a source that waits idle in the gap as for any
+/// other: after a seek there, its decode is done before the test goes on.
+#[test]
+fn br8_settle_waits_for_the_source_sought_in_the_gap() {
+    let mut r = started_over(hard_start);
+    r.act(seek(1.0));
+    r.settle();
+    let d = r.engine.describe_player(P);
+    let current = d.split("cur [").nth(1).unwrap().split(']').next().unwrap();
+    assert!(current.contains("start Idle"), "still in the gap: {d}");
+    assert!(
+        current.contains("ready true"),
+        "settled before its decode: {d}"
+    );
+}
+
 #[test]
 fn br8_two_seeks_in_the_gap_the_last_one_wins() {
     let mut r = started_over(hard_start);
