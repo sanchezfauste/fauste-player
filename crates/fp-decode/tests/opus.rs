@@ -417,3 +417,26 @@ fn a_seek_back_to_the_start_replays_the_first_play_exactly() {
         assert!(again == first, "{name}: the replay differs");
     }
 }
+
+/// A Matroska file without cues seeks backwards too: it lands where a
+/// fresh decoder seeking forward to the same place lands.
+#[test]
+fn a_matroska_file_without_cues_seeks_backwards() {
+    let dir = tempfile::tempdir().unwrap();
+    let pcm = stereo(1.0, marker);
+    let (packets, pre_skip) = packets(&pcm);
+    let path = matroska(dir.path(), "a.mka", &packets, pre_skip);
+    let after_seek = |d: &mut FileDecoder| {
+        d.seek(0.5).unwrap();
+        let mut out = Vec::new();
+        while d.next_block(&mut out).unwrap() {}
+        out
+    };
+    let fresh = after_seek(&mut FileDecoder::open(&path).unwrap());
+    let mut d = FileDecoder::open(&path).unwrap();
+    let mut out = Vec::new();
+    while out.len() < 2 * RATE * 8 / 10 && d.next_block(&mut out).unwrap() {}
+    let back = after_seek(&mut d);
+    assert_eq!(back.len(), fresh.len(), "length after the seek back");
+    assert!(back == fresh, "the seek back differs");
+}

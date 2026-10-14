@@ -197,13 +197,16 @@ impl SymphoniaDecoder {
         }
         let from = secs - preroll + self.ts_offset_secs;
         let time = Time::try_from_secs_f64(from).ok_or("seek position out of range")?;
-        match self.format.seek(
-            SeekMode::Accurate,
-            SeekTo::Time {
-                time,
-                track_id: Some(self.track_id),
-            },
-        ) {
+        let track_id = Some(self.track_id);
+        let to = || SeekTo::Time { time, track_id };
+        let mut seeked = self.format.seek(SeekMode::Accurate, to());
+        // A reader that can only seek forward (Matroska without cues)
+        // lands past a target behind it: seek again from the start.
+        if seeked.as_ref().is_ok_and(|s| s.actual_ts > s.required_ts) {
+            self.format = probe(&self.path, self.hide_seeking)?;
+            seeked = self.format.seek(SeekMode::Accurate, to());
+        }
+        match seeked {
             Ok(_) => {}
             Err(Error::SeekError(SeekErrorKind::OutOfRange)) => {
                 self.at_end = true;

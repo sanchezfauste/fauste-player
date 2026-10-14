@@ -91,8 +91,10 @@ A seek whose pre-roll reaches the start of the stream (a restart from 0, or
 any target within the first 80 ms of an Opus file) opens the file again and
 drops the pre-skip and the frames before the target by count, as on the first
 play, so a restart is sample-identical to it: Matroska's millisecond
-timestamps would place the pre-skip only to ±24 samples, and symphonia cannot
-seek a Matroska file without cues backwards at all (`tests/opus.rs`).
+timestamps would place the pre-skip only to ±24 samples (`tests/opus.rs`).
+symphonia seeks a Matroska file without cues (a live recording) only
+forward, so a seek that lands past its target opens the file again and
+seeks forward from the start.
 
 The Opus decoder goes through 16-bit PCM inside `opus-decoder`: its noise
 (about −96 dBFS) is far below Opus's own coding noise. A decoder without that
