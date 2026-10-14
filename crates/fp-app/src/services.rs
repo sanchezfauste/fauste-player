@@ -937,7 +937,11 @@ impl Services {
     fn loudness_pass(&mut self, state: &AppState) {
         let answers: Vec<LoudnessResult> = self.analyzer.loudness_results().try_iter().collect();
         for answer in answers {
-            self.loudness_in_flight.remove(&answer.track);
+            // A job whose track went to a full analysis meanwhile is stale:
+            // the analysis's measurement must not be overwritten.
+            if !self.loudness_in_flight.remove(&answer.track) {
+                continue;
+            }
             let Some(track) = state.library.get(answer.track) else {
                 continue; // removed meanwhile: nothing to record
             };
@@ -1024,6 +1028,14 @@ impl Services {
         for (id, path) in todo {
             self.analyzer.submit_loudness(id, path);
             self.loudness_in_flight.insert(id);
+        }
+    }
+
+    /// Cancels the loudness-only job of `id`, if any, so that its answer is
+    /// never applied over a full analysis's measurement.
+    fn drop_loudness_job(&mut self, id: TrackId) {
+        if self.loudness_in_flight.remove(&id) {
+            self.analyzer.cancel_loudness(id);
         }
     }
 
@@ -1144,6 +1156,8 @@ impl Services {
             if analyse || show {
                 self.forced.remove(&id);
                 self.in_flight.insert(id);
+                // The analysis measures the loudness too.
+                self.drop_loudness_job(id);
                 // The mark is used up whichever way the track goes urgent.
                 let asked = self.urgent.remove(&id);
                 if wanted.contains(&id) || asked {
@@ -1173,6 +1187,7 @@ impl Services {
         let command = match result.outcome {
             Ok(analysis) => {
                 self.failed.remove(&result.track);
+                self.drop_loudness_job(result.track);
                 if wanted.contains(&result.track) {
                     self.media.insert(
                         result.track,

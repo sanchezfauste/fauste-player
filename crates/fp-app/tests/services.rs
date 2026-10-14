@@ -87,6 +87,20 @@ fn rig_hooked(
     prepare: impl FnOnce(&mut fp_model::AppState),
     after: AfterAnalysis,
 ) -> Rig {
+    rig_pool(files, dir, delay, prepare, after, 1, None)
+}
+
+/// As `rig_hooked`, with `threads` workers and, when given, `measure` in
+/// place of the real loudness-only measurement.
+fn rig_pool(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    delay: Duration,
+    prepare: impl FnOnce(&mut fp_model::AppState),
+    after: AfterAnalysis,
+    threads: usize,
+    measure: Option<LoudnessFn>,
+) -> Rig {
     let paths = AppPaths::under(dir.path());
     let store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
@@ -141,10 +155,13 @@ fn rig_hooked(
         if !wait(delay, cancelled) {
             return Err(fp_analysis::AnalysisError::Cancelled);
         }
-        fp_analysis::measure_loudness_cancellable(path, cancelled)
+        match &measure {
+            Some(measure) => measure(path, cancelled),
+            None => fp_analysis::measure_loudness_cancellable(path, cancelled),
+        }
     });
     let analyzer = Analyzer::with_fns(
-        1,
+        threads,
         Default::default(),
         Default::default(),
         None,
@@ -1518,4 +1535,84 @@ fn a_track_removed_while_measured_is_forgotten() {
         "no answer for the gone track"
     );
     assert_eq!(r.loudness_runs.load(Ordering::SeqCst), 1);
+}
+
+/// I1: a loudness-only answer that arrives after a Re-analyse of its track
+/// is stale; the analysis's measurement stays.
+#[test]
+fn a_stale_loudness_answer_does_not_overwrite_a_new_analysis() {
+    use std::sync::atomic::AtomicBool;
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 2);
+    // The loudness-only job holds until the test lets it answer (or it is
+    // cancelled), then gives a measurement no analysis would.
+    let gate = Arc::new(AtomicBool::new(false));
+    let returned = Arc::new(AtomicBool::new(false));
+    let (open, back) = (gate.clone(), returned.clone());
+    let measure: LoudnessFn = Arc::new(move |_, cancelled| {
+        loop {
+            if open.load(Ordering::SeqCst) {
+                back.store(true, Ordering::SeqCst);
+                return Ok(Some(fp_model::LoudnessMeasurement {
+                    integrated_lufs: Some(-99.0),
+                    true_peak_dbtp: -99.0,
+                }));
+            }
+            if cancelled() {
+                back.store(true, Ordering::SeqCst);
+                return Err(fp_analysis::AnalysisError::Cancelled);
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    });
+    // Two workers: the analysis runs beside the loudness job.
+    let mut r = rig_pool(
+        &[a],
+        dir,
+        Duration::ZERO,
+        analysed_before_loudness,
+        Arc::new(|_| {}),
+        2,
+        Some(measure),
+    );
+    r.run_until("the loudness job", |r| {
+        r.loudness_runs.load(Ordering::SeqCst) == 1
+    });
+    let track = only_track(&r).id;
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(track))
+        .unwrap();
+    // Until the model holds the analysis, before the services see it.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for the analysis"
+        );
+        r.conductor.tick(r.now);
+        if only_track(&r).loudness_pass.is_some() {
+            break;
+        }
+        r.services.step(r.now);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let measured = only_track(&r).loudness;
+    assert!(measured.and_then(|l| l.integrated_lufs).is_some());
+    // The loudness job answers now (unless it was cancelled).
+    gate.store(true, Ordering::SeqCst);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !returned.load(Ordering::SeqCst) {
+        assert!(Instant::now() < deadline, "the loudness job never returned");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    std::thread::sleep(Duration::from_millis(50));
+    let until = r.now + Duration::from_millis(300);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(
+        only_track(&r).loudness,
+        measured,
+        "the analysis's measurement stays"
+    );
 }
