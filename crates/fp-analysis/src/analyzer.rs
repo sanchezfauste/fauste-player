@@ -115,6 +115,16 @@ struct Shared {
     loudness: LoudnessFn,
 }
 
+/// Books an urgent job for `track`, unless one is already waiting or its
+/// latest job is running; the generation to queue it with.
+fn urgent_generation(book: &mut Bookkeeping, track: TrackId) -> Option<u64> {
+    if book.urgent.contains(&track) || book.is_running(track) {
+        return None;
+    }
+    book.urgent.insert(track);
+    Some(book.submit(track))
+}
+
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -129,6 +139,11 @@ pub struct Analyzer {
     share: usize,
     shared: Arc<Shared>,
     threads: Vec<JoinHandle<()>>,
+    /// Runs inside `promote` once it has looked at the track's job, so a
+    /// test can let that job finish right there. It must stay between the
+    /// look and the send: that is the window the regression test exercises.
+    #[cfg(test)]
+    promote_hook: Option<Box<dyn Fn() + Send + Sync>>,
 }
 
 impl Analyzer {
@@ -226,6 +241,8 @@ impl Analyzer {
             share: workers.saturating_sub(1).max(1),
             shared,
             threads: handles,
+            #[cfg(test)]
+            promote_hook: None,
         })
     }
 
@@ -251,28 +268,41 @@ impl Analyzer {
     /// `track` is superseded (it will be skipped); an urgent or running one
     /// is kept.
     pub fn submit_urgent(&self, track: TrackId, path: PathBuf) {
+        let generation = urgent_generation(&mut lock(&self.shared.book), track);
+        if let Some(generation) = generation {
+            self.send_urgent(track, path, generation);
+        }
+    }
+
+    /// Moves a normal job still waiting for `track` ahead of the queue;
+    /// nothing if no job is waiting (none, or its result already sent).
+    /// The look and the urgent submission are one step under the lock: a
+    /// job that ends meanwhile is never started again.
+    pub fn promote(&self, track: TrackId, path: &Path) {
         let generation = {
             let mut book = lock(&self.shared.book);
-            if book.urgent.contains(&track) || book.is_running(track) {
-                return;
+            if book.latest.contains_key(&track) {
+                urgent_generation(&mut book, track)
+            } else {
+                None
             }
-            book.urgent.insert(track);
-            book.submit(track)
         };
+        #[cfg(test)]
+        if let Some(hook) = &self.promote_hook {
+            hook();
+        }
+        if let Some(generation) = generation {
+            self.send_urgent(track, path.to_path_buf(), generation);
+        }
+    }
+
+    fn send_urgent(&self, track: TrackId, path: PathBuf, generation: u64) {
         if let Some(urgent) = &self.urgent {
             let _ = urgent.send(Job {
                 track,
                 path,
                 generation,
             });
-        }
-    }
-
-    /// Moves a normal job still waiting for `track` ahead of the queue;
-    /// nothing if no job is waiting (none, or its result already sent).
-    pub fn promote(&self, track: TrackId, path: &Path) {
-        if lock(&self.shared.book).latest.contains_key(&track) {
-            self.submit_urgent(track, path.to_path_buf());
         }
     }
 
@@ -533,4 +563,68 @@ fn run_loudness(job: &Job, shared: &Shared) -> Result<Option<LoudnessMeasurement
         tracing::warn!(path = %job.path.display(), "cannot cache the loudness: {e}");
     }
     outcome
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+    use std::time::{Duration, Instant};
+
+    const WAIT: Duration = Duration::from_secs(30);
+
+    /// A job that ends while `promote` looks at it is not started again:
+    /// promote moves a waiting job ahead, it never queues a new analysis
+    /// of a track whose result was just sent.
+    #[test]
+    fn a_job_that_ends_while_it_is_promoted_is_not_analysed_again() {
+        let (a, b) = (PathBuf::from("a.wav"), PathBuf::from("b.wav"));
+        let open = Arc::new(AtomicBool::new(false));
+        let runs_of_a = Arc::new(AtomicUsize::new(0));
+        let (gate, runs, held) = (open.clone(), runs_of_a.clone(), a.clone());
+        // `a` holds until the gate opens; every job fails at once, which
+        // still delivers a result.
+        let analyze: AnalyzeFn = Arc::new(move |path, _, _, cancelled| {
+            if path == held {
+                runs.fetch_add(1, Ordering::SeqCst);
+                while !gate.load(Ordering::SeqCst) && !cancelled() {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+            Err(AnalysisError::Unreadable("test".to_owned()))
+        });
+        let loudness: LoudnessFn = Arc::new(|_, _| Ok(None));
+        let mut analyzer = Analyzer::with_fns(
+            1,
+            AnalysisSettings::default(),
+            Limits::default(),
+            None,
+            analyze,
+            loudness,
+        )
+        .unwrap();
+        analyzer.submit(TrackId(1), a.clone());
+        let deadline = Instant::now() + WAIT;
+        while runs_of_a.load(Ordering::SeqCst) == 0 {
+            assert!(Instant::now() < deadline, "the job never started");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        // While promote looks at the running job, it ends and its result
+        // is sent.
+        let results = analyzer.results().clone();
+        analyzer.promote_hook = Some(Box::new(move || {
+            open.store(true, Ordering::SeqCst);
+            let result = results.recv_timeout(WAIT).expect("the job's result");
+            assert_eq!(result.track, TrackId(1));
+        }));
+        analyzer.promote(TrackId(1), &a);
+        analyzer.promote_hook = None;
+        // One worker, urgent jobs first: a second job of `a` would run
+        // before `b`.
+        analyzer.submit(TrackId(2), b);
+        let next = analyzer.results().recv_timeout(WAIT).expect("b's result");
+        assert_eq!(next.track, TrackId(2), "a was analysed again");
+        assert_eq!(runs_of_a.load(Ordering::SeqCst), 1);
+    }
 }

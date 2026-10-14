@@ -115,14 +115,22 @@ impl Rig {
         self.events.extend(events);
     }
 
-    /// Waits (bounded) for the decode workers, never for audio.
+    /// Waits for the decode workers, never for audio. The deadline only
+    /// bounds a hang: going on unsettled would test something else, so it
+    /// fails.
     fn settle(&mut self) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(60);
         loop {
             self.tick();
-            if self.engine.unsettled_sources() == 0 || Instant::now() > deadline {
+            let unsettled = self.engine.unsettled_sources();
+            if unsettled == 0 {
                 return;
             }
+            assert!(
+                Instant::now() < deadline,
+                "{unsettled} sources never settled: {}",
+                self.engine.describe_player(P)
+            );
             std::thread::sleep(Duration::from_millis(1));
         }
     }

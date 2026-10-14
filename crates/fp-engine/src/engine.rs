@@ -575,8 +575,8 @@ impl Engine {
         self.slot_exhaustions
     }
 
-    /// Sources still waiting for their worker: pending starts, and preloads
-    /// not yet ready. Tests poll this instead of sleeping.
+    /// Sources still waiting for their worker: pending starts, preloads and
+    /// idle sources not yet ready. Tests poll this instead of sleeping.
     pub fn unsettled_sources(&self) -> usize {
         self.players
             .values()
@@ -594,15 +594,18 @@ impl Engine {
                     .iter()
                     .filter(|p| !p.shared.is_ready() && !p.shared.is_failed())
                     .count();
-                // A held CUE source (Idle) still being filled, like a preload.
-                let held_cue = rt
-                    .cue_src
+                // An idle source still being filled, like a preload: a held
+                // CUE source, a track loaded paused, a source waiting in a
+                // bit-perfect rate-cut gap (a seek there, BR8).
+                let idle = rt
+                    .current
                     .iter()
+                    .chain(rt.cue_src.iter())
                     .filter(|p| {
                         p.start == StartState::Idle && !p.shared.is_ready() && !p.shared.is_failed()
                     })
                     .count();
-                waiting + preload + held_cue
+                waiting + preload + idle
             })
             .sum::<usize>()
             + self.unsettled_carts()

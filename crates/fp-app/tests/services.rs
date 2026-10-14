@@ -10,7 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use fp_analysis::analyze_file_cancellable;
 use fp_analysis::analyzer::{AnalyzeFn, Analyzer, LoudnessFn};
@@ -47,6 +48,12 @@ struct Rig {
     device: OfflineDevice,
     paths: AppPaths,
     analyses: Arc<AtomicUsize>,
+    /// The files of the analyses in the order they started.
+    started: Arc<Mutex<Vec<PathBuf>>>,
+    /// While closed, an analysis that started holds there (still
+    /// cancellable): what is queued meanwhile stays queued, so a test can
+    /// look at the queue's order without racing the worker. Open by default.
+    gate: Arc<AtomicBool>,
     /// Loudness-only jobs that started.
     loudness_runs: Arc<AtomicUsize>,
     /// How many analyses had returned when the last loudness-only job
@@ -130,10 +137,20 @@ fn rig_pool(
     let handle = Arc::new(handle);
     let analyses = Arc::new(AtomicUsize::new(0));
     let finished = Arc::new(AtomicUsize::new(0));
+    let started = Arc::new(Mutex::new(Vec::new()));
+    let gate = Arc::new(AtomicBool::new(true));
     let counter = analyses.clone();
     let done = finished.clone();
+    let (order, open) = (started.clone(), gate.clone());
     let counting: AnalyzeFn = Arc::new(move |path, settings, limits, cancelled| {
+        order.lock().unwrap().push(path.to_path_buf());
         counter.fetch_add(1, Ordering::SeqCst);
+        while !open.load(Ordering::SeqCst) {
+            if cancelled() {
+                return Err(fp_analysis::AnalysisError::Cancelled);
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
         if !wait(delay, cancelled) {
             return Err(fp_analysis::AnalysisError::Cancelled);
         }
@@ -179,6 +196,8 @@ fn rig_pool(
         device,
         paths,
         analyses,
+        started,
+        gate,
         loudness_runs,
         seen_finished,
         now,
@@ -200,7 +219,8 @@ fn wait(delay: Duration, cancelled: &dyn Fn() -> bool) -> bool {
 
 impl Rig {
     fn run_until(&mut self, what: &str, mut done: impl FnMut(&Rig) -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(15);
+        // Only bounds a hang: a loaded CI runner can take well over 15 s.
+        let deadline = Instant::now() + Duration::from_secs(60);
         while !done(self) {
             assert!(Instant::now() < deadline, "timed out waiting for {what}");
             self.conductor.tick(self.now);
@@ -706,6 +726,15 @@ fn a_file_is_still_looked_for_after_looks_that_found_nothing() {
     });
 }
 
+/// How many analyses started before the first one of `path`.
+fn started_before(r: &Rig, path: &Path) -> usize {
+    let started = r.started.lock().unwrap();
+    started
+        .iter()
+        .position(|p| p == path)
+        .unwrap_or_else(|| panic!("{} was never analysed: {started:?}", path.display()))
+}
+
 /// A track loaded on a player gets its waveform ahead of the library being
 /// analysed, not after it.
 #[test]
@@ -714,7 +743,7 @@ fn a_track_on_a_player_is_analysed_ahead_of_the_library() {
     let files: Vec<PathBuf> = (1..=12)
         .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
         .collect();
-    let mut r = rig_with(&files, dir, Duration::from_millis(40), |s| {
+    let mut r = rig_with(&files, dir, Duration::ZERO, |s| {
         let p = s.players[0].id;
         let last = s.playlists.iter().next().unwrap().entries[11].id;
         fp_model::apply(s, Command::SetNext(p, last)).unwrap();
@@ -722,12 +751,17 @@ fn a_track_on_a_player_is_analysed_ahead_of_the_library() {
     let model = r.handle.model.load_full();
     let next = model.players[0].next.unwrap();
     let track = model.playlists.entry(next).unwrap().track;
+    // The first round queues the whole library and the loaded track; the
+    // worker holds whatever it took first until everything is queued, so
+    // the order below is the queue's, not the scheduler's.
+    r.gate.store(false, Ordering::SeqCst);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    r.gate.store(true, Ordering::SeqCst);
     r.run_until("peaks for the loaded track", |r| r.media.contains(track));
-    assert!(
-        r.analyses.load(Ordering::SeqCst) <= 3,
-        "{} analyses ran first",
-        r.analyses.load(Ordering::SeqCst)
-    );
+    // At most the job the worker had already taken goes first.
+    let before = started_before(&r, &files[11]);
+    assert!(before <= 1, "{before} analyses started first");
 }
 
 /// A track loaded while it waits in the queue with the library moves ahead.
@@ -737,22 +771,29 @@ fn a_queued_track_loaded_on_a_player_moves_ahead() {
     let files: Vec<PathBuf> = (1..=12)
         .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
         .collect();
-    let mut r = rig_slow(&files, dir, Duration::from_millis(40));
+    let mut r = rig(&files, dir);
+    // The worker holds its first job: the rest of the library stays queued
+    // however slowly the test runs.
+    r.gate.store(false, Ordering::SeqCst);
     r.run_until("the library queued", |r| {
         r.analyses.load(Ordering::SeqCst) >= 1
     });
     let model = r.handle.model.load_full();
+    let player = model.players[0].id;
     let last = model.playlists.iter().next().unwrap().entries[11].clone();
-    r.handle
-        .send(Command::SetNext(model.players[0].id, last.id));
+    r.handle.send(Command::SetNext(player, last.id));
+    r.run_until("the track loaded", |r| {
+        r.handle.model.load().players[0].next == Some(last.id)
+    });
+    // A round that sees it on the player.
+    r.services.step(r.now);
+    r.gate.store(true, Ordering::SeqCst);
     r.run_until("peaks for the loaded track", |r| {
         r.media.contains(last.track)
     });
-    assert!(
-        r.analyses.load(Ordering::SeqCst) <= 4,
-        "{} analyses ran first",
-        r.analyses.load(Ordering::SeqCst)
-    );
+    // Right after the job that was running when it was loaded.
+    let before = started_before(&r, &files[11]);
+    assert_eq!(before, 1, "{before} analyses started first");
 }
 
 /// Gives `path` a title, a genre and a comment, as a tagging tool would.
@@ -1083,16 +1124,20 @@ fn reanalyse_track_analyses_a_failed_file_at_once_whatever_its_state() {
     let bad = garbage(dir.path(), "bad.wav");
     let mut files = vec![bad.clone()];
     files.extend((1..=6).map(|n| wav(dir.path(), &format!("{n}.wav"), 1)));
-    // The analyses in the order they end; each good file takes a while, so
-    // the library is still queued when the operator asks.
+    // The analyses in the order they end. Once the bad file has failed, the
+    // gate closes: the next library job holds and the rest of the library
+    // stays queued until the operator has asked, however slowly the test
+    // runs.
     let order = Arc::new(std::sync::Mutex::new(Vec::<PathBuf>::new()));
-    let seen = order.clone();
-    let slow = bad.clone();
+    let gate = Arc::new(std::sync::OnceLock::<Arc<AtomicBool>>::new());
+    let (seen, close) = (order.clone(), gate.clone());
+    let failing = bad.clone();
     let after: AfterAnalysis = Arc::new(move |path| {
-        if path != slow {
-            std::thread::sleep(Duration::from_millis(150));
+        let mut seen = seen.lock().unwrap();
+        if path == failing && !seen.contains(&failing) {
+            close.get().unwrap().store(false, Ordering::SeqCst);
         }
-        seen.lock().unwrap().push(path.to_path_buf());
+        seen.push(path.to_path_buf());
     });
     let mut r = rig_hooked(
         &files,
@@ -1110,6 +1155,7 @@ fn reanalyse_track_analyses_a_failed_file_at_once_whatever_its_state() {
         },
         after,
     );
+    gate.set(r.gate.clone()).unwrap();
     let track = r
         .handle
         .model
@@ -1134,10 +1180,21 @@ fn reanalyse_track_analyses_a_failed_file_at_once_whatever_its_state() {
         0,
         "the recorded failure is forgotten"
     );
+    r.gate.store(true, Ordering::SeqCst);
     let twice = |order: &[PathBuf]| order.iter().filter(|p| **p == bad).count() == 2;
     r.run_until("a second analysis", |_| twice(&order.lock().unwrap()));
-    let goods = order.lock().unwrap().iter().filter(|p| **p != bad).count();
-    assert!(goods < 6, "{goods} library files were analysed first");
+    // Before the second start: at most the track on the players (urgent,
+    // it may go before the first failure) and the job held at the gate.
+    let started = r.started.lock().unwrap().clone();
+    let second = started
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| **p == bad)
+        .nth(1)
+        .unwrap()
+        .0;
+    let goods = started[..second].iter().filter(|p| **p != bad).count();
+    assert!(goods <= 2, "{goods} library files were analysed first");
     r.run_until("stamped again", |r| r.services.looked_at() == 1);
 }
 

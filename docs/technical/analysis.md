@@ -254,7 +254,9 @@ track. That single rule covers:
 from first; `promote` moves a normal job still waiting there. A track a
 player shows gets its waveform ahead of a library being analysed. An
 urgent job already waiting or running is never duplicated, and a job
-whose result was already sent is not promoted again.
+whose result was already sent is not promoted again: `promote` looks at
+the job and books the urgent one in one step under the pool's lock, so a
+job that ends while it is promoted is not started a second time.
 
 Loudness-only jobs (loudness normalization spec N6b) have a third queue,
 which workers take last (`submit_loudness`, `cancel_loudness`,

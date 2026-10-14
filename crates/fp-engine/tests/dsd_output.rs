@@ -223,10 +223,19 @@ impl Rig {
 
     /// As in `bit_perfect.rs` (waits for the decode worker, never for audio),
     /// keeping what `tick` returns. DSD decoding is slow in debug builds
-    /// with every test of the file running at once: the deadline is long.
+    /// with every test of the file running at once: the deadline is long
+    /// (60 s failed 46 of 276 tests with six copies of the file running at
+    /// once on eight cores).
+    /// It only bounds a hang: going on unsettled would test something else,
+    /// so it fails.
     fn settle(&mut self) {
-        let deadline = Instant::now() + Duration::from_secs(60);
-        while self.engine.unsettled_sources() > 0 && Instant::now() < deadline {
+        let deadline = Instant::now() + Duration::from_secs(300);
+        while self.engine.unsettled_sources() > 0 {
+            assert!(
+                Instant::now() < deadline,
+                "the sources never settled: {}",
+                self.engine.describe_player(P)
+            );
             let events = self.engine.tick(self.clock);
             self.seen.extend(events);
             std::thread::sleep(Duration::from_millis(1));
