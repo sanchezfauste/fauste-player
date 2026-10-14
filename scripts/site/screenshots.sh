@@ -224,6 +224,10 @@ start_app() {
         xvfb_pid=$!
         wait_for 10 x xwininfo -root || die "Xvfb did not start"
     fi
+    # The log line check_silent reads must come from this start, not an
+    # earlier one.
+    local lines_before
+    lines_before=$(audio_lines)
     # Belt and braces: the sound servers are out of reach too. Started with
     # env directly (not through the x function, which would run in a
     # subshell), so app_pid is the app itself and stop_app really stops it.
@@ -237,7 +241,18 @@ start_app() {
     win=$(window_id)
     x xdotool windowmove "$win" 0 0 windowsize "$win" 1920 1080
     sleep 1
+    wait_for 10 audio_lines_above "$lines_before" \
+        || die "this start wrote no 'audio systems' line in the log; refusing to play"
     check_silent
+}
+
+# The number of "audio systems" lines in the logs so far.
+audio_lines() {
+    cat "$home"/logs/fauste-player*.log 2>/dev/null | grep -c "audio systems" || true
+}
+
+audio_lines_above() {
+    (($(audio_lines) > $1))
 }
 
 # Aborts unless the log says that the audio system in use is null.
@@ -259,8 +274,14 @@ check_silent() {
 stop_app() {
     [[ -n $app_pid ]] || return 0
     kill "$app_pid" 2>/dev/null || true
+    # Bounded: an app stuck on shutdown is killed rather than waited for.
+    wait_for 10 app_gone || kill -KILL "$app_pid" 2>/dev/null || true
     wait "$app_pid" 2>/dev/null || true
     app_pid=
+}
+
+app_gone() {
+    ! kill -0 "$app_pid" 2>/dev/null
 }
 
 # ------------------------------------------------------------------ scene
@@ -271,7 +292,7 @@ stop_app() {
 wait_analysed() {
     local t
     for t in $(api GET /players | json "' '.join(str(e['track']['id']) for p in d for e in (p['current'], p['next']) if e)"); do
-        wait_for 60 track_ready "$t" || log "track $t is not analysed and measured yet"
+        wait_for 60 track_ready "$t" || die "track $t is not analysed and measured after 60 s"
     done
 }
 
@@ -369,8 +390,9 @@ write_home
 start_app
 # The players load their tracks when the app starts, before the analysis has
 # measured them, and a track keeps the gain it was loaded with: start again
-# once the measurements are in (the analysis cache keeps them), so the
-# headers show each track's gain.
+# once the measurements are in and the autosave has written them to the
+# state (the restarted app loads the tracks from it with their loudness), so
+# the headers show each track's gain.
 wait_analysed
 sleep 3 # the autosave (tuning.save_debounce_ms, 1 s by default) writes them
 stop_app
