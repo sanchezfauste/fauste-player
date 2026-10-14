@@ -52,3 +52,33 @@ fn a_float_wav_with_nan_and_infinity_decodes_to_silence_there() {
     assert_eq!(out.get(100..103), Some(&[0.0f32, 0.0, 0.0][..]));
     assert_eq!(out.get(99), Some(&0.25));
 }
+
+/// A restart from 0 after reading replays a PCM file exactly (the start of
+/// the stream is restarted by count for every codec, not only Opus).
+#[test]
+fn a_wav_restarted_from_the_start_replays_exactly() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ramp.wav");
+    let spec = hound::WavSpec {
+        channels: 2,
+        sample_rate: 44_100,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    for i in 0..2 * 44_100i32 {
+        w.write_sample(((i * 7) % 30_000) as i16).unwrap();
+    }
+    w.finalize().unwrap();
+    let decode = |d: &mut fp_decode::FileDecoder| {
+        let mut out = Vec::new();
+        while d.next_block(&mut out).unwrap() {}
+        out
+    };
+    let first = decode(&mut fp_decode::FileDecoder::open(&path).unwrap());
+    let mut d = fp_decode::FileDecoder::open(&path).unwrap();
+    let mut out = Vec::new();
+    while out.len() < 44_100 && d.next_block(&mut out).unwrap() {}
+    d.seek(0.0).unwrap();
+    assert!(decode(&mut d) == first);
+}

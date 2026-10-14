@@ -87,6 +87,27 @@ duration, as Matroska blocks), and the frames before the target are dropped, so 
 output starts on the target frame whatever the decoder yields first. A seek
 past the end is the end of the stream, as for the other backends.
 
+A seek whose pre-roll reaches the start of the stream (a restart from 0, a
+target within the first 80 ms of an Opus file or the first 8192 frames of a
+Vorbis file, or exactly 0 for other codecs) drops the pre-skip and the frames
+before the target by count, as on the first play, so a restart is
+sample-identical to it. Timestamps would place them only to the container's
+precision: Matroska's are whole milliseconds and its `CodecDelay` is rounded
+to them, and a test file restarted that way came out 648 frames short. A
+reader that has not moved since it was opened (nothing read, no seek) is used
+as it is; otherwise the file is opened again (`tests/opus.rs`, the unit tests
+in `symph.rs`).
+
+symphonia seeks a Matroska file without cues (a live recording) only forward.
+A seek to a timestamp below what the reader has already read or landed on,
+which such a reader answers by landing past the target, opens the file again
+and seeks forward from the start. A forward seek never opens it again, even
+though the Matroska reader also lands past the target then (on the first
+block at or after it, since its blocks carry no duration). Opening the file
+again checks that it still holds the same track (id, codec and sample rate);
+a file replaced on disk makes the seek fail instead of being read with the
+old decoder.
+
 The Opus decoder goes through 16-bit PCM inside `opus-decoder`: its noise
 (about −96 dBFS) is far below Opus's own coding noise. A decoder without that
 step exists (`opus-pure`), but it uses `unsafe` code, which the formats spec
