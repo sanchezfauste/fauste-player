@@ -442,6 +442,56 @@ fn a_typed_player_count_applies_once_it_is_complete() {
     assert_eq!(state.players[1].id, kept, "the second player is kept");
 }
 
+fn press(h: &egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, pos: egui::Pos2, down: bool) {
+    h.event(egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed: down,
+        modifiers: egui::Modifiers::NONE,
+    });
+}
+
+#[test]
+fn the_player_count_applies_when_the_slider_is_released() {
+    let (mut h, fake) = harness(state(4, 1));
+    open_section(&mut h, "Players");
+    let kept = fake.state.load().players[3].id;
+    fake.take_sent();
+    let rail = h
+        .get_by_role_and_label(Role::Slider, "Number of players")
+        .rect();
+    // Down to one player and back up to the far end, in one drag.
+    let y = rail.center().y;
+    let start = egui::pos2(rail.left() + 2.0, y);
+    h.hover_at(start);
+    h.step();
+    press(&h, start, true);
+    h.step();
+    let mut x = rail.left() + 2.0;
+    while x < rail.right() + 200.0 {
+        x += 20.0;
+        h.event(egui::Event::PointerMoved(egui::pos2(x, y)));
+        h.step();
+    }
+    let counts = |fake: &support::Fake| -> Vec<usize> {
+        fake.take_sent()
+            .into_iter()
+            .filter_map(|c| match c {
+                Command::SetPlayerCount(n) => Some(n),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(counts(&fake), Vec::<usize>::new(), "nothing while dragging");
+    press(&h, egui::pos2(x, y), false);
+    h.run_steps(3);
+    let max = fake.state.load().config.limits.max_players;
+    assert_eq!(counts(&fake), vec![max]);
+    let state = fake.state.load();
+    assert_eq!(state.players.len(), max);
+    assert_eq!(state.players[3].id, kept, "the fourth player is kept");
+}
+
 fn dac() -> fp_model::OutputDevice {
     fp_model::OutputDevice {
         backend: "offline".into(),

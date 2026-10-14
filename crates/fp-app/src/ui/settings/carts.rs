@@ -308,6 +308,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             (&mut rows, limits.max_cart_rows, &rows_label),
             (&mut cols, limits.max_cart_cols, &cols_label),
         ] {
+            let before = *value;
             let response = ui.add(
                 egui::Slider::new(value, 1..=max.max(1))
                     .step_by(1.0)
@@ -316,7 +317,11 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             let v = f64::from(*value);
             let owned = label.clone();
             response.widget_info(|| egui::WidgetInfo::slider(true, v, owned.clone()));
-            if response.drag_stopped() || (response.changed() && !response.dragged()) {
+            // The box reports each keystroke as a change; only a new value
+            // is one.
+            if response.drag_stopped()
+                || (response.changed() && !response.dragged() && *value != before)
+            {
                 commit = true;
             }
         }

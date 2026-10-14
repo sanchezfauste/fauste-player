@@ -401,9 +401,11 @@ carts) and the number of players (`settings::count_slider`,
 `Command::SetPlayerCount`). Their number boxes use
 `Slider::update_while_editing(false)`, so a typed number applies once, on Enter
 or when the box loses focus (Escape cancels it), never its first digit: typing
-12 over 4 would otherwise go through 1. The grid also keeps a draft
-(`CartsState::grid_draft`) while the slider is dragged and resizes on release.
-Each arrow-key step applies at once. The other settings sliders apply every
+12 over 4 would otherwise go through 1. Both also keep a draft while the
+slider is dragged (`CartsState::grid_draft`, `SettingsState::player_count_draft`)
+and send the command once, on release: dragging down to 1 and back would
+otherwise remove the trailing carts or players on the way and bring them back
+empty. Each arrow-key step applies at once. The other settings sliders apply every
 value as it is typed or dragged, which only rewrites the configuration.
 
 ## Loudness normalization
