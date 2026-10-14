@@ -659,6 +659,107 @@ fn br8_a_hard_start_at_another_rate_reopens_after_the_declick() {
     assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![])));
 }
 
+/// What the Offline dac holds in the play-out tests (`latency_frames`):
+/// three blocks, as a device whose driver and transfers hold a few periods.
+const HELD: usize = BLOCK * 3;
+
+/// Renders block by block until the dac runs at `rate`, at most `frames`;
+/// returns the silent frames the old stream rendered after its last sound
+/// before it closed. A close discards what the stream holds, so fewer than
+/// `HELD` would have cut the end of the sound short.
+fn silence_before_rate(r: &mut Rig, rate: u32, frames: usize) -> usize {
+    let mut trailing = 0;
+    for _ in 0..frames.div_ceil(BLOCK) {
+        if r.rate() == rate {
+            return trailing;
+        }
+        for v in r.run(BLOCK) {
+            trailing = if v == 0.0 { trailing + 1 } else { 0 };
+        }
+    }
+    panic!("the dac never reopened at {rate}");
+}
+
+#[test]
+fn br6_a_scheduled_cut_reopens_once_the_device_has_played_the_end() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    let silence = silence_before_rate(&mut r, 48_000, 44_100);
+    assert!(silence >= HELD, "{silence} frames: the end was cut");
+    assert!(silence < HELD + 2 * BLOCK, "{silence} frames: no longer");
+    r.run(4_800);
+    assert!(r.transition_started(2));
+    assert!(bit_perfect_after(&mut r, 4_800));
+}
+
+#[test]
+fn br6_a_stop_while_the_device_plays_out_the_end_starts_nothing() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    // Until the current has stopped: a block of silence, the end held.
+    let mut trailing = 0;
+    while trailing < BLOCK {
+        for v in r.run(BLOCK) {
+            trailing = if v == 0.0 { trailing + 1 } else { 0 };
+        }
+    }
+    assert_eq!(r.rate(), 44_100, "still playing out");
+    r.act(EngineAction::StopNow { player: P });
+    let before = r.events.len();
+    let heard = r.run(9_600);
+    assert!(
+        !r.events[before..]
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ReachedEnd { .. })),
+        "a stopped track does not reach its end afterwards"
+    );
+    assert!(heard.iter().all(|v| *v == 0.0), "silence");
+    assert!(!r.transition_started(2), "the next never starts");
+    assert_eq!(r.rate(), 44_100, "no reopen for a track that will not play");
+}
+
+#[test]
+fn br8_a_hard_start_reopens_once_the_device_has_played_the_declick() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(hard_start(request(2, b, pcm16(48_000))));
+    r.settle();
+    let silence = silence_before_rate(&mut r, 48_000, 44_100);
+    assert!(silence >= HELD, "{silence} frames: the declick was cut");
+    assert!(silence < HELD + 2 * BLOCK, "{silence} frames: no longer");
+    r.settle();
+    assert!(bit_perfect_after(&mut r, 4_800));
+}
+
+#[test]
+fn a_start_right_after_a_stop_reopens_once_the_declick_has_played() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::StopNow { player: P });
+    r.run(BLOCK);
+    r.start(request(2, b, pcm16(48_000)));
+    let silence = silence_before_rate(&mut r, 48_000, 44_100);
+    assert!(silence >= HELD, "{silence} frames: the declick was cut");
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays");
+    assert!(r.engine.telemetry(P).bit_perfect, "at its own rate");
+}
+
 #[test]
 fn br8_at_the_same_rate_the_hard_start_does_not_reopen() {
     let mut r = rig(true, true);

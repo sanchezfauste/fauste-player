@@ -392,6 +392,18 @@ impl Bus {
             .map_or(self.config.buffer_frames, |s| s.config().buffer_frames)
     }
 
+    /// The frames the open stream may hold that the device has not played
+    /// yet, and that closing it would discard: what the backend reports
+    /// (`OutputStream::latency_frames`), else a double buffer of the
+    /// stream's blocks. 0 without a device stream (nothing is queued for
+    /// a device: the virtual clock renders into nothing).
+    pub fn play_out_frames(&self) -> u64 {
+        self.stream.as_ref().map_or(0, |s| {
+            s.latency_frames()
+                .map_or(2 * u64::from(s.config().buffer_frames), u64::from)
+        })
+    }
+
     /// How the open stream carries DSD, if a device stream is open.
     pub fn stream_dsd(&self) -> Option<DsdStream> {
         self.stream.as_ref().and_then(|s| s.dsd())

@@ -22,7 +22,8 @@ bit-perfect device plays differently from the others:
   **Play / Next** and **Previous** while a track is on air switch at once,
   with a short click-free stop, instead of fading.
 - **A short silence when the sample rate changes.** Between two tracks whose
-  sample rates differ, when nothing else sounds on the device, the device is
+  sample rates differ, when nothing else sounds on the device, the device
+  first plays what it still has buffered (the end of the track), then is
   reopened at the new rate, which leaves a short silence (usually a few tens
   of milliseconds, longer on some devices). Tracks at the same rate follow
   each other with no gap and no overlap. When the rate cannot follow (see
@@ -95,8 +96,10 @@ The switch is disabled when the device cannot give exclusive access.
     or at once for **Play / Next** and **Previous**), the device reopens and
     the next track starts. This is the short silence of
     [What it costs](#what-it-costs).
-  - The reopen takes as long as the device needs to start (usually a few
-    tens of milliseconds). The start is that much later.
+  - The device is reopened only once it has played everything it had
+    buffered, so the end of the previous track is never cut short. Then the
+    reopen takes as long as the device needs to start. Together that is
+    usually a few tens of milliseconds; the start is that much later.
 - **When the rate cannot follow.** The device keeps its rate, and a track at
   another rate is converted for its whole length (it is not bit-perfect),
   when:
@@ -173,7 +176,8 @@ silence first (200 ms by default), so that the converter locks without a
 click. The exception is a DSD track that continues a stream of the same kind
 and DSD rate whose silence is still running: the converter is still locked, so
 it starts with no extra silence. A track therefore starts that much later, and a switch to PCM leaves a
-gap of that length. It is **DSD silence** in Settings → Audio outputs, Advanced
+gap of that length (a native DSD device also plays what it has buffered
+before it is reopened as PCM, a few milliseconds more). It is **DSD silence** in Settings → Audio outputs, Advanced
 (0 to 2000 ms).
 
 **When another source needs the device.** **When another source needs a DSD

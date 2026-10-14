@@ -700,6 +700,37 @@ fn native_dsd_reopens_as_pcm_after_the_end() {
     }));
 }
 
+#[test]
+fn native_dsd_closes_once_the_device_has_played_its_silence() {
+    // Three blocks held by the device (`OutputStream::latency_frames`).
+    let held = BLOCK * 3;
+    let mut r = rig_with(
+        DsdOutput::Native,
+        DsdMix::ConvertToPcm,
+        SampleFormat::I24,
+        |dac| {
+            dac.set_native_dsd(true);
+            dac.set_latency_frames(held as u32);
+        },
+    );
+    let (left, right) = pattern();
+    let len = DSD64 as usize / 8 / 10;
+    let path = dsf_file(r.dir.path(), "short.dsf", &left[..len], &right[..len]);
+    r.start(P, request(1, path, dsd64()));
+    let raw = r.run_until_pcm(WORD_RATE as usize);
+    assert_eq!(r.dac.config().unwrap().dsd, None, "reopened as PCM");
+    let idle = [silence_sample(), silence_sample()];
+    let silence = raw.iter().rev().take_while(|f| **f == idle).count();
+    assert!(
+        silence >= SILENCE_FRAMES + held,
+        "{silence} frames: the device closed before it had played the DSD silence"
+    );
+    assert!(
+        silence < SILENCE_FRAMES + held + 3 * BLOCK,
+        "{silence} frames"
+    );
+}
+
 const DSD128: u32 = DSD64 * 2;
 /// The word rate of DSD128 (352.8 kHz): above the PCM rates of
 /// `max_pcm_rig`'s converter.

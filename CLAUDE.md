@@ -71,6 +71,7 @@ scripts/site/localized-screenshots.sh <dir> [lang…]  # the same in English and
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test real_music -- --ignored   # real-music corpus (local only)
 cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
+cargo run -p fp-engine --example rate_cut_tail -- [card] [buffer]   # rate-cut play-out on a real ALSA device (local only; quiet tones)
 ```
 
 Only commit when fmt, clippy and the whole test suite pass, for example:

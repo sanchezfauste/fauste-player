@@ -284,8 +284,12 @@ cannot hang the conductor.
   `dispatch` sends only the stop of the current (`StopAt` and
   `RampOutBeforeCut`, the usual declick) and leaves the preload waiting;
   when the mixer reports the current finished, `current_finished` calls
-  `cut_to`, which reopens the bus through `prepare_start` (when nothing
-  else sounds there) and then starts the next as at any end of stream. If
+  `end_of_current`. That waits until the device has played the end of the
+  track (`played_out`, below; meanwhile the end is held in
+  `PlayerRuntime::held_end` and `run_held_ends` looks again every tick),
+  then calls `cut_to`, which reopens the bus through `prepare_start` (when
+  nothing else sounds there), and starts the next as at any end of stream.
+  A start meanwhile takes the player over and a stop drops the held end. If
   something sounds after all (a cart fired since the plan) or the device
   refuses the rate (B3.4), the bus keeps its rate and `cut_to` opens the
   next again at it: it plays resampled, after a longer gap. Without a cut
@@ -297,12 +301,29 @@ cannot hang the conductor.
   `sounding_besides`): the new current is opened at the file's rate and
   waits idle (`PlayerRuntime::rate_cut`). Once per tick, `run_rate_cuts`
   waits until the player's outgoing sources on the bus (the declick tail)
-  have ended, reopens the bus through `prepare_start` and starts the
+  have ended and the device has played them (`played_out`), reopens the
+  bus through `prepare_start` and starts the
   current; if the bus kept its rate, the current is opened again at it
   first. A pause, stop or seek drops the waiting cut, and a resume then
   follows B3.2; another start replaces it (and may wait for a cut of its
-  own, `start_current` sets `rate_cut` again). At the same rate, with a crossfade, or from
-  silence, the start is unchanged. A rate cut reopens with the settings
+  own, `start_current` sets `rate_cut` again). A start from silence at
+  another rate while the device has not yet played the end of what last
+  sounded there (a stop's declick, a track's end) waits the same way
+  (`hard_start_cut`). At the same rate, with a crossfade, or from
+  silence that has played out, the start is unchanged.
+- **Play-out before a rate change.** Closing a stream discards what the
+  driver and the device still hold (on ALSA the PCM is dropped, not
+  drained), and the mixer renders that far ahead of what is heard. So a
+  rate cut never closes the stream as soon as the mixer has rendered the
+  last sound: `Engine::sound_ends` keeps, per bus, the frame where the last
+  source that finished there ended (`BusEvent::Finished`), and
+  `played_out` is true once the bus has rendered `Bus::play_out_frames`
+  more (the stream's `latency_frames`, else two blocks). BR6, BR8 and the
+  close of a native DSD stream wait for it without blocking: they look
+  again on the next tick. The gap of a rate cut is that much longer
+  (about 25–35 ms with 512-frame blocks at 44.1 kHz on a USB converter).
+  Measured on hardware with `examples/rate_cut_tail.rs` (see
+  [testing](testing.md)). A rate cut reopens with the settings
   the device runs with and never applies a kept change (BR12).
 - **`PlayerTelemetry::bit_perfect`** is set when all of these hold:
   - the current source is on its Main bus, which is bit-perfect, `Ok`, and
@@ -389,7 +410,9 @@ plus the mixer's DSD mode.
   locked); `DsdEnded` is reported for the old entry. At the end of a tail
   (`end_dsd_streams`, from `tick`) a DoP bus leaves DSD mode and a native bus
   is reopened as PCM (`reopen_native_as_pcm`; its stream closes first, so no
-  PCM block reaches it). A device that takes native DSD at a word rate need
+  PCM block reaches it). A native stream closes only once the device has
+  played its silence too (the tail's end plus `Bus::play_out_frames`), so
+  the whole DSD silence reaches the converter, even when it is set to 0. A device that takes native DSD at a word rate need
   not take that rate as PCM (DSD512 never: 1.4112 MHz), so the rate is
   chosen: an idle bus goes back to the PCM configuration it had before the
   DSD (`DsdBus::pcm`, kept by `open_dsd_stream`); a bus with sources on it

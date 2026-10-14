@@ -346,6 +346,10 @@ struct PlayerRuntime {
     /// BR8: a hard start waits to reopen the Main bus at this rate once the
     /// declick of the track it replaced has ended (`run_rate_cuts`).
     rate_cut: Option<u32>,
+    /// BR6: the current track (this entry) stopped at a rate cut; the Main
+    /// bus reopens and the next starts once the device has played its end
+    /// (`run_held_ends`).
+    held_end: Option<EntryId>,
 }
 
 pub struct Engine {
@@ -398,6 +402,10 @@ pub struct Engine {
     /// The stream rate and refused rates last reported for each bus
     /// (bit-perfect rate and fader spec BR1).
     reported_rates: HashMap<BusKey, (u32, Vec<u32>)>,
+    /// The bus frame at which the last source that finished on each bus
+    /// ended (`BusEvent::Finished`). A rate change closes the stream only
+    /// once the device has played up to it (`played_out`).
+    sound_ends: HashMap<BusKey, u64>,
 }
 
 /// The configuration the watchdog falls back to when a device's own rate
@@ -533,6 +541,7 @@ impl Engine {
             kept: BTreeMap::new(),
             orphans: std::collections::BTreeSet::new(),
             reported_rates: HashMap::new(),
+            sound_ends: HashMap::new(),
         };
         // L3: what the engine runs with, before anything is placed. The
         // cartwall has no bus until its first cart.
@@ -823,6 +832,9 @@ impl Engine {
         // BR13: a player between the stop and the start of a rate cut is
         // not quiet on its Main bus.
         if rt.rate_cut.is_some() && rt.current.as_ref().is_some_and(&on) {
+            return false;
+        }
+        if rt.held_end.is_some() && rt.preload.as_ref().is_some_and(&on) {
             return false;
         }
         let main = &rt.main.0;
@@ -1415,8 +1427,9 @@ impl Engine {
     /// its Main bus at, once the replaced track's declick has ended: a
     /// bit-perfect bus not carrying DSD, a PCM file whose known rate is not
     /// the bus's and was not refused, something of this player's own
-    /// sounding there (else it is a start from silence, B3.2), and nothing
-    /// else. `None`: today's hard start.
+    /// sounding there or an end there the device has not played yet (BR16;
+    /// else it is a start from silence, B3.2), and nothing else. `None`:
+    /// today's hard start.
     fn hard_start_cut(
         &self,
         player: PlayerId,
@@ -1440,7 +1453,11 @@ impl Engine {
                 .chain(rt.outgoing.iter())
                 .any(|p| &p.bus == bus && p.start != StartState::Idle)
         });
-        (replaces && !self.sounding_besides(bus, Some(player))).then_some(rate)
+        // A start from silence right after something ended there (a stop's
+        // declick, a track's end) waits as well, until the device has played
+        // that end.
+        let ending = !self.played_out(bus);
+        ((replaces || ending) && !self.sounding_besides(bus, Some(player))).then_some(rate)
     }
 
     /// BR8: hard starts waiting for their bus to change rate. Once the
@@ -1472,6 +1489,13 @@ impl Engine {
             if rt.outgoing.iter().any(|p| p.bus == bus) {
                 continue;
             }
+            // The declick has been rendered; the device still holds it.
+            if !self.played_out(&bus) {
+                continue;
+            }
+            let Some(rt) = self.players.get_mut(&player) else {
+                continue;
+            };
             rt.rate_cut = None;
             let format = rt.current.as_ref().and_then(|c| c.request.format);
             self.prepare_start(&bus, format);
@@ -1835,6 +1859,19 @@ impl Engine {
             .max(1)
     }
 
+    /// Whether `bus`'s device has played everything that sounded on it, up
+    /// to the end of the last source that finished there: closing its
+    /// stream now cuts nothing short. A stream discards what it holds when
+    /// it closes (ALSA drops its buffer), so a rate change waits for this
+    /// (`Bus::play_out_frames` after that end, in the bus's frames).
+    fn played_out(&self, bus: &BusKey) -> bool {
+        let Some(end) = self.sound_ends.get(bus) else {
+            return true;
+        };
+        let held = self.buses.get(bus).map_or(0, Bus::play_out_frames);
+        self.now_frame(bus) >= end.saturating_add(held)
+    }
+
     /// The block size `bus` runs with (`Bus::buffer_frames`), else the one
     /// it will ask its device for.
     fn buffer_of(&self, bus: &BusKey) -> u32 {
@@ -2136,6 +2173,7 @@ impl Engine {
                 pause_ramp_ends: 0,
                 notify_fade: false,
                 rate_cut: None,
+                held_end: None,
             },
         );
         self.ensure_bus(&main.0, now);
@@ -2848,6 +2886,7 @@ impl Engine {
         rt.plan = Plan::None;
         rt.notify_fade = false;
         rt.rate_cut = None;
+        rt.held_end = None;
         let all: Vec<Playing> = rt
             .current
             .take()
@@ -3030,6 +3069,7 @@ impl Engine {
             }
         }
         self.end_dsd_streams();
+        self.run_held_ends();
         self.run_rate_cuts();
         self.run_kept();
         self.close_orphans();
@@ -3112,6 +3152,10 @@ impl Engine {
     }
 
     fn handle_bus_event(&mut self, bus: &BusKey, event: BusEvent) {
+        if let BusEvent::Finished { frame, .. } = event {
+            let end = self.sound_ends.entry(bus.clone()).or_insert(0);
+            *end = (*end).max(frame);
+        }
         if let BusEvent::Finished { slot, .. } = event
             && let Some(i) = self.tones.iter().position(|(b, s)| b == bus && *s == slot)
         {
@@ -3242,13 +3286,27 @@ impl Engine {
                 .push(EngineEvent::SourceFailed { player, entry });
             return;
         }
-        // BR6: a planned rate cut reopens the device now, between the two
-        // tracks; the next then starts as at any end of stream.
+        self.end_of_current(player, plan, entry);
+    }
+
+    /// What follows the end of `player`'s current track `entry` under
+    /// `plan`. BR6: a planned rate cut reopens the device between the two
+    /// tracks, once the device has played the end of this one (until then
+    /// the end is held, `run_held_ends`). Then the next starts as at any end
+    /// of stream, or the end is reported.
+    fn end_of_current(&mut self, player: PlayerId, plan: Option<TransitionPlan>, entry: EntryId) {
         if let Some(TransitionPlan::StartNextAt {
             rate_cut: Some(rate),
             ..
         }) = plan
         {
+            let main = self.players.get(&player).map(|rt| rt.main.0.clone());
+            if main.is_some_and(|bus| !self.played_out(&bus)) {
+                if let Some(rt) = self.players.get_mut(&player) {
+                    rt.held_end = Some(entry);
+                }
+                return;
+            }
             self.cut_to(player, rate);
         }
         let next = match plan {
@@ -3301,6 +3359,40 @@ impl Engine {
                 }
                 self.events.push(EngineEvent::ReachedEnd { player, entry });
             }
+        }
+    }
+
+    /// BR6: ends held at a rate cut (`end_of_current`) go on once the
+    /// device has played them, under the plan in force then. A start
+    /// meanwhile (a new current) took the player over, and a stop dropped
+    /// the end (`stop_now`).
+    fn run_held_ends(&mut self) {
+        let held: Vec<(PlayerId, EntryId)> = self
+            .players
+            .iter()
+            .filter_map(|(id, rt)| rt.held_end.map(|e| (*id, e)))
+            .collect();
+        for (player, entry) in held {
+            let Some(rt) = self.players.get_mut(&player) else {
+                continue;
+            };
+            if rt.current.is_some() {
+                rt.held_end = None;
+                continue;
+            }
+            let bus = rt.main.0.clone();
+            if !self.played_out(&bus) {
+                continue;
+            }
+            let Some(rt) = self.players.get_mut(&player) else {
+                continue;
+            };
+            rt.held_end = None;
+            let plan = match rt.plan {
+                Plan::Waiting(p) | Plan::Dispatched(p, _) => Some(p),
+                Plan::None => None,
+            };
+            self.end_of_current(player, plan, entry);
         }
     }
 
