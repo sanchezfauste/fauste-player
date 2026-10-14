@@ -208,8 +208,10 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   generates stand-in songs and carts with `scripts/site/tones.sh` (pink
   noise and a sine, each with its own envelope, tagged and with a cover),
   writes a scratch `FAUSTE_HOME` (`SHOTS_HOME`; English, the remote API on,
-  every output on the silent `null` backend), runs the app in Xvfb on a
-  free display, checks in the log that the null backend is in use before
+  loudness normalization on, every output on the silent `null` backend),
+  runs the app in Xvfb on a free display, waits for the loudness of the
+  players' tracks and starts the app again (so the headers show each
+  track's gain), checks in the log that the null backend is in use before
   anything plays, builds the scene through the remote API and captures
   with ImageMagick. Needs `xvfb`, `xdotool`, ImageMagick, `ffmpeg`,
   `python3` and `curl`; the songs are kept in `target/screenshots` and

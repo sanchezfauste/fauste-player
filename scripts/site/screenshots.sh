@@ -15,8 +15,11 @@
 # It builds the release binary and the demo_session example, generates
 # stand-in songs and carts (scripts/site/tones.sh), writes a scratch
 # FAUSTE_HOME (the demo session, and a config.json with ui.language (en-US by default),
-# the remote HTTP API on and every output on the silent "null" backend),
-# starts Xvfb on a free display, starts the app there, waits for the API,
+# the remote HTTP API on, loudness normalization on and every output on the
+# silent "null" backend), starts Xvfb on a free display, starts the app
+# there, waits for the API and for the analysis to measure the players'
+# tracks, starts the app again (a track keeps the gain it was loaded with,
+# so the headers show a gain only after a start with the measurements in),
 # builds the scene and captures. Nothing is ever played on a sound card: the
 # script checks in the log that the null backend is the one in use before
 # it sends any play command, and stops otherwise.
@@ -203,6 +206,9 @@ c["outputs"]["routes"] = [{"player": p, "main": null(0), "cue": null(2)} for p i
 c["outputs"]["cartwall"] = {"main": null(0), "cue": null(2)}
 c["outputs"]["bit_perfect"] = []
 c["ui"]["language"] = lang
+# Loudness normalization on (the other loudness settings keep their
+# defaults), so the players' headers show the gain badge.
+c.setdefault("loudness", {})["normalize"] = True
 c["remote"]["http"]["enabled"] = True
 c["remote"]["http"]["bind"] = "127.0.0.1"
 c["remote"]["http"]["port"] = port
@@ -218,8 +224,15 @@ start_app() {
         xvfb_pid=$!
         wait_for 10 x xwininfo -root || die "Xvfb did not start"
     fi
-    # Belt and braces: the sound servers are out of reach too.
-    x FAUSTE_HOME="$home" PULSE_SERVER=unix:/nonexistent PIPEWIRE_REMOTE=fauste-none \
+    # The log line check_silent reads must come from this start, not an
+    # earlier one.
+    local lines_before
+    lines_before=$(audio_lines)
+    # Belt and braces: the sound servers are out of reach too. Started with
+    # env directly (not through the x function, which would run in a
+    # subshell), so app_pid is the app itself and stop_app really stops it.
+    env -u WAYLAND_DISPLAY DISPLAY=":$display" FAUSTE_HOME="$home" \
+        PULSE_SERVER=unix:/nonexistent PIPEWIRE_REMOTE=fauste-none \
         JACK_NO_START_SERVER=1 "$root/target/release/fauste-player" \
         >"$work/app.out" 2>&1 &
     app_pid=$!
@@ -228,7 +241,18 @@ start_app() {
     win=$(window_id)
     x xdotool windowmove "$win" 0 0 windowsize "$win" 1920 1080
     sleep 1
+    wait_for 10 audio_lines_above "$lines_before" \
+        || die "this start wrote no 'audio systems' line in the log; refusing to play"
     check_silent
+}
+
+# The number of "audio systems" lines in the logs so far.
+audio_lines() {
+    cat "$home"/logs/fauste-player*.log 2>/dev/null | grep -c "audio systems" || true
+}
+
+audio_lines_above() {
+    (($(audio_lines) > $1))
 }
 
 # Aborts unless the log says that the audio system in use is null.
@@ -250,19 +274,31 @@ check_silent() {
 stop_app() {
     [[ -n $app_pid ]] || return 0
     kill "$app_pid" 2>/dev/null || true
+    # Bounded: an app stuck on shutdown is killed rather than waited for.
+    wait_for 10 app_gone || kill -KILL "$app_pid" 2>/dev/null || true
     wait "$app_pid" 2>/dev/null || true
     app_pid=
 }
 
+app_gone() {
+    ! kill -0 "$app_pid" 2>/dev/null
+}
+
 # ------------------------------------------------------------------ scene
 
-# Waits until the tracks on the players are analysed (their waveforms).
+# Waits until the tracks on the players are analysed (their waveforms) and
+# their loudness is measured (the gain badge in the headers, rather than
+# "not measured").
 wait_analysed() {
     local t
     for t in $(api GET /players | json "' '.join(str(e['track']['id']) for p in d for e in (p['current'], p['next']) if e)"); do
-        wait_for 60 sh -c "curl -sf http://127.0.0.1:$port/api/v1/tracks/$t | grep -q '\"analyzed\":true'" \
-            || log "track $t is not analysed yet"
+        wait_for 60 track_ready "$t" || die "track $t is not analysed and measured after 60 s"
     done
+}
+
+# Succeeds when the track is analysed and its loudness measured.
+track_ready() {
+    [[ $(api GET "/tracks/$1" | json "d['analyzed'] and d['loudness'] is not None") == True ]]
 }
 
 # The scene (spec O29): players 1 and 2 on air some way into their
@@ -318,8 +354,8 @@ shoot_guide() {
 
     # A track's menu, then its tag editor (player 4, row 2).
     right_click 1560 406
-    capture "$guide/track-menu.png" 470x306+1442+396
-    click 1620 515
+    capture "$guide/track-menu.png" 470x328+1442+396
+    click 1620 537
     park
     sleep 1
     capture "$guide/tag-editor.png" 600x648+660+216
@@ -328,7 +364,7 @@ shoot_guide() {
     # Settings, one capture per section (the list on the left).
     click 1800 17
     n=0
-    for section in outputs players meters analysis playlists cartwall shortcuts midi remote; do
+    for section in outputs players meters analysis loudness playlists cartwall shortcuts midi remote; do
         click 600 $((291 + n * 36))
         park
         capture "$guide/settings-$section.png" 900x640+510+220
@@ -351,6 +387,15 @@ log "building"
 link_media
 port=$(free_port)
 write_home
+start_app
+# The players load their tracks when the app starts, before the analysis has
+# measured them, and a track keeps the gain it was loaded with: start again
+# once the measurements are in and the autosave has written them to the
+# state (the restarted app loads the tracks from it with their loudness), so
+# the headers show each track's gain.
+wait_analysed
+sleep 3 # the autosave (tuning.save_debounce_ms, 1 s by default) writes them
+stop_app
 start_app
 log "app on display :$display, API on port $port, home $home"
 build_scene
