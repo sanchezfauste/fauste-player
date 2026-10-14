@@ -18,7 +18,7 @@
 //! flight to a USB device. If `delay` is larger than the silence at the
 //! end, the difference is sound that the close discarded. It also prints
 //! what the stream reported holding (`OutputStream::latency_frames`), which
-//! the engine waits for before a close (spec BR16), and the bus's xruns.
+//! the engine waits for before a close (spec BR17), and the bus's xruns.
 //!
 //! The wall-clock figures only mean something on bare metal: with the
 //! converter passed through to a virtual machine (QEMU's USB host), the

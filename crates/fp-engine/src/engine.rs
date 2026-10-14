@@ -1424,7 +1424,7 @@ impl Engine {
     /// its Main bus at, once the replaced track's declick has ended: a
     /// bit-perfect bus not carrying DSD, a PCM file whose known rate is not
     /// the bus's and was not refused, something of this player's own
-    /// sounding there or an end there the device has not played yet (BR16;
+    /// sounding there or an end there the device has not played yet (BR17;
     /// else it is a start from silence, B3.2), and nothing else. `None`:
     /// today's hard start.
     fn hard_start_cut(
