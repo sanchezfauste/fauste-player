@@ -185,3 +185,41 @@ pub fn give_cue_routes(state: &mut AppState) {
         .collect();
     state.config.outputs.cartwall.cue = Some(phones);
 }
+
+/// Places player `n`'s (0-based) Main on a `dac` that runs bit-perfect (live
+/// settings L3): its fader locks and it starts every track hard
+/// (bit-perfect rate and fader spec BR2, BF1).
+pub fn lock_player(state: &mut AppState, n: usize) {
+    let p = state.players[n].id;
+    let route = Route {
+        backend: "null".to_owned(),
+        device: "dac".to_owned(),
+        first_channel: 0,
+    };
+    let dac = fp_model::OutputDevice {
+        backend: "null".to_owned(),
+        device: "dac".to_owned(),
+    };
+    if let Some(r) = state
+        .config
+        .outputs
+        .routes
+        .iter_mut()
+        .find(|r| r.player == p)
+    {
+        r.main = Some(route.clone());
+    }
+    if !state.config.outputs.bit_perfect.contains(&dac) {
+        state.config.outputs.bit_perfect.push(dac.clone());
+    }
+    let running = fp_model::device_settings(&state.config.outputs, &dac);
+    fp_model::on_event(
+        state,
+        fp_model::EngineEvent::Placed {
+            holder: fp_model::Holder::PlayerMain(p),
+            route: Some(route),
+            device: dac,
+            running,
+        },
+    );
+}

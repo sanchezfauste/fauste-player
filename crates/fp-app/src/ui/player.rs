@@ -491,12 +491,21 @@ fn meter_column(
         Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),
         None => t.tr("volume-silent"),
     };
-    let tip = if telemetry.dsd {
-        t.tr("tip-volume-dsd")
+    // BF7: a bit-perfect output holds the volume at 100 %; the fader is
+    // drawn at the top (whatever a state not caught up yet says) and
+    // disabled.
+    let locked = fp_model::fader_locked(scene.state, id);
+    let tip = if locked {
+        t.tr("tip-volume-locked")
     } else {
         t.tr_args("tip-volume", &[("db", db.into())])
     };
-    if let Some(pos) = widgets::fader(ui, height, view::fader_from_gain(volume), &tip) {
+    let position = if locked {
+        1.0
+    } else {
+        view::fader_from_gain(volume)
+    };
+    if let Some(pos) = widgets::fader(ui, height, position, &tip, !locked) {
         scene
             .ctl
             .send(Command::SetVolume(id, view::gain_from_fader(pos)));
@@ -641,10 +650,14 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             ui.spacing_mut().item_spacing = vec2(GAP, GAP);
             let available = fp_model::availability(scene.state, id);
             let playing = pv.status == PlayerStatus::OnAir;
-            let play_label = if playing {
-                t.tr("tip-next")
-            } else {
+            // BR15: on air, a bit-perfect player starts the next track at
+            // once, without a crossfade.
+            let play_label = if !playing {
                 t.tr("tip-play")
+            } else if fp_model::bit_perfect_player(scene.state, id) {
+                t.tr("tip-next-bit-perfect")
+            } else {
+                t.tr("tip-next")
             };
             let caption = if pv.fading {
                 t.tr("badge-fading").to_uppercase()
@@ -847,7 +860,7 @@ fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId
         media: media.as_ref(),
         total: pv.total,
         markers: pv.markers,
-        mix_active: pv.mode == PlayMode::Continuous,
+        mix_active: view::mix_active(scene.state, id),
         // A stopped player's position is pinned (its cue-in or its pending
         // start, rule 3a): following it would undo a zoom made to prepare
         // the next track.

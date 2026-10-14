@@ -88,10 +88,14 @@ audio engine that the interface can never block.
   pages and markers. A token, origin checks and source allow-lists protect
   it when it listens on the network.
 - **M3U / M3U8 / PLS import and M3U8 export.**
-- **Bit-perfect output:** a device can be played with exclusive access,
-  following each file's sample rate while idle; at 100 % volume with no fade
-  or overlap the samples reach it unchanged, and a BP badge says so (ALSA
-  `hw:` devices, WASAPI exclusive mode, Core Audio hog mode).
+- **Bit-perfect output:** a special mode for audiophile playback, off by
+  default. A device is played with exclusive access and follows each
+  track's sample rate, with a short silence between two tracks when it
+  changes; the players on it never crossfade (each track plays to its end,
+  then the next starts) and their volume is held at 100 %. With no fade and
+  nothing else on the outputs the samples reach it unchanged, and a BP
+  badge says so (ALSA `hw:` devices, WASAPI exclusive mode, Core Audio hog
+  mode).
 - **DSD output:** on a bit-perfect device, a DSD track can reach the converter
   unchanged, as DoP (every system) or as native DSD (Linux, ALSA `hw:`
   devices whose driver reports a DSD format), with a DSD badge. DoP and native

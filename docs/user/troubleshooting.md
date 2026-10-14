@@ -21,11 +21,21 @@
 ## Bit-perfect
 
 - **The BP badge stays off.** Check each condition in
-  [Bit-perfect output](bit-perfect.md#the-bp-badge): volume at 100 %, no
-  fade, nothing else on the same outputs, a lossless file that has been
+  [Bit-perfect output](bit-perfect.md#the-bp-badge): no fade, nothing else
+  on the same outputs, a lossless file that has been
   analysed, and a device running at the file's rate.
 - **A short silence before a track.** The bit-perfect device reopened at the
-  track's sample rate. Keep the library at one rate to avoid it.
+  track's sample rate. It happens only when the rate changes: tracks at the
+  same rate follow each other with no gap. Keep the library at one rate to
+  avoid it. See [What it costs](bit-perfect.md#what-it-costs).
+- **Tracks do not mix, and Play does not fade.** On a player whose Main
+  output is bit-perfect, each track plays to its end and then the next one
+  starts, and Play / Next and Previous switch at once: there are no
+  crossfades or segues on such a player. Turn bit-perfect off for the
+  device, or move the player to another output, to mix again. See [What it costs](bit-perfect.md#what-it-costs).
+- **The volume fader does not move.** The player's Main output is
+  bit-perfect, which holds the volume at 100 %; the fader's tooltip says so.
+  MIDI faders and the remote API cannot move it either. See [What it costs](bit-perfect.md#what-it-costs).
 - **A track plays resampled, and the log says the device is busy (Linux).**
   To change rate, the application closes the device and opens it again. In
   that moment the sound server (PipeWire) can take the card. The application

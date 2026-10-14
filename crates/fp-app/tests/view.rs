@@ -13,7 +13,7 @@ use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     MarkerFractions, PlayerStatus, RowStatus, TipField, analysis_pending, cue_follow_target,
     cue_window_view, fader_from_gain, file_icon, file_problem, gain_from_fader, intro_left,
-    marker_fractions, outro_left, player_view, playlist_times, row_is_next, row_status,
+    marker_fractions, mix_active, outro_left, player_view, playlist_times, row_is_next, row_status,
     shown_entry, start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
 };
 use fp_model::{
@@ -912,4 +912,30 @@ fn q8_6_a_stopped_player_shows_its_pending_start() {
         0.0,
         "a new next starts at its cue-in"
     );
+}
+
+#[test]
+fn br15_the_mix_marker_is_dim_on_a_bit_perfect_player() {
+    let (mut s, _, p) = state(3);
+    let q = s.players[1].id;
+    assert!(mix_active(&s, p), "Continuous mode");
+    let dac = fp_model::OutputDevice {
+        backend: "null".into(),
+        device: "dac".into(),
+    };
+    s.config.outputs.bit_perfect = vec![dac.clone()];
+    let running = fp_model::device_settings(&s.config.outputs, &dac);
+    fp_model::on_event(
+        &mut s,
+        fp_model::EngineEvent::Placed {
+            holder: fp_model::Holder::PlayerMain(p),
+            route: None,
+            device: dac,
+            running,
+        },
+    );
+    assert!(!mix_active(&s, p), "a bit-perfect player never mixes");
+    assert!(mix_active(&s, q), "the other player still does");
+    apply(&mut s, Command::SetMode(q, PlayMode::Single)).unwrap();
+    assert!(!mix_active(&s, q), "Single mode, as before");
 }

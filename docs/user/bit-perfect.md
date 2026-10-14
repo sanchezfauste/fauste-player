@@ -2,8 +2,47 @@
 
 A **bit-perfect** device receives each file's samples exactly as they are in
 the file: same sample rate, same values, with no resampling, volume change or
-mixing. It is useful for monitoring chains and digital links, where any
-processing on the computer should be avoided.
+mixing.
+
+Bit-perfect output is a **special mode for audiophile playback**: listening
+to an archive, feeding a hi-fi or monitoring chain, checking a digital link,
+anywhere processing on the computer should be avoided. It is off by default
+and it is not meant for a mixed music programme. Read
+[What it costs](#what-it-costs) before you turn it on.
+
+## What it costs
+
+To keep every track untouched, a player whose Main output is on a
+bit-perfect device plays differently from the others:
+
+- **No crossfades and no segues.** Each track plays to its end (its cue-out,
+  or the end of the file with **Use cue-in and cue-out** off), then the next
+  one starts. **Automatic mix at the MIX point** and the MIX point are not
+  used: the MIX marker is drawn dim and the **Mixing** badge never lights.
+  **Play / Next** and **Previous** while a track is on air switch at once,
+  with a short click-free stop, instead of fading.
+- **A short silence when the sample rate changes.** Between two tracks whose
+  sample rates differ, when nothing else sounds on the device, the device is
+  reopened at the new rate, which leaves a short silence (usually a few tens
+  of milliseconds, longer on some devices). Tracks at the same rate follow
+  each other with no gap and no overlap. When the rate cannot follow (see
+  [What happens on a bit-perfect device](#what-happens-on-a-bit-perfect-device)),
+  the next track starts at once, converted to the device's rate.
+- **The volume is held at 100 %.** The player's volume fader is locked at
+  the top: on screen, on [MIDI](midi.md) controllers and over the
+  [remote API and OSC](remote-control.md). It goes to 100 % when bit-perfect
+  is turned on for the device, and stays there when it is turned off.
+- **What still works:** **Fade stop** (it fades out over the fade time),
+  **Pause**, **Stop**, **Restart**, the repeat and stop-after marks, Single
+  and Continuous modes, Cue (pre-listen, which has no fader and is not affected), carts,
+  [DSD output](#dsd), and every player whose Main output is on another
+  device, which mixes as usual. A cart can play on the same device: while it
+  sounds, the player's next track starts at the device's current rate,
+  converted (so it is not bit-perfect), and no silence is inserted.
+- **When to use it.** Turn it on when every track must reach the converter
+  untouched. Keep it off for an on-air programme that needs mixed
+  transitions or level changes. The mode is set per device, so mixed
+  players can stay on another device.
 
 ## Setting a device bit-perfect
 
@@ -42,26 +81,32 @@ The switch is disabled when the device cannot give exclusive access.
 - **Exclusive access.** Nothing else on the computer can play on the device
   while the application uses it. If exclusive access is refused, the device
   still plays, shared, and the BP badge stays off.
-- **The rate follows the file.** When nothing is playing on the device and a
-  track at another sample rate starts, the device is reopened at that rate.
-  - This happens when you play a track, resume one loaded paused, pre-listen,
-    or fire a cart. Tracks that are only waiting (the next track of each
-    player) are prepared again at the new rate.
-  - The reopen takes as long as the device needs to start (usually a few tens
-    of milliseconds). The start is that much later.
-  - While something is playing on the device, the rate never changes. A track
-    at another rate that starts then (for example a 48 kHz track mixed into
-    after a 44.1 kHz one, or a track started while another player or a cart
-    plays on the same device) is converted for its whole length, and is not
-    bit-perfect.
-  - If the device refuses a rate, it keeps the previous one and the track is
-    converted.
+- **The rate follows the file.** The device is reopened at a track's sample
+  rate when the track starts:
+  - **From silence:** you play a track, resume one loaded paused,
+    pre-listen, or fire a cart while nothing plays on the device. Tracks
+    that are only waiting (the next track of each player) are prepared again
+    at the new rate.
+  - **Between two tracks of a player:** the track on air stops (at its end,
+    or at once for **Play / Next** and **Previous**), the device reopens and
+    the next track starts. This is the short silence of
+    [What it costs](#what-it-costs).
+  - The reopen takes as long as the device needs to start (usually a few
+    tens of milliseconds). The start is that much later.
+- **When the rate cannot follow.** The device keeps its rate, and a track at
+  another rate is converted for its whole length (it is not bit-perfect),
+  when:
+  - something else sounds on the device as the track starts: another
+    player (or one paused with a track), a cart, or a pre-listen;
+  - the device refused that rate before; it keeps the previous one;
+  - the track has not been analysed yet, so its rate is not known.
+
+  The change between the two tracks is still without a crossfade.
 - **No processing, when nothing asks for it.** The samples pass unchanged
-  while all of these hold:
-  - the player's volume is at 100 %;
-  - no fade is running;
-  - nothing else plays on the same outputs (another player, a cart, a test
-    tone).
+  while no fade is running (Fade stop, the pause and resume ramps, the short
+  click-free stop of a track) and nothing else plays on the same outputs
+  (another player, a cart, a test tone). The volume is no concern: a
+  bit-perfect output holds it at 100 %.
 
 ## DSD
 
@@ -91,7 +136,6 @@ starts:
   native DSD;
 - the track is DSD (DSF or DFF), mono or stereo, and has been analysed (that
   is how its DSD rate is known);
-- the player's volume is at 100 %;
 - nothing else plays on the device (another player, a cart, a test tone);
 - the device accepts the stream. DoP needs a device rate of the DSD rate
   divided by 16 (176.4 kHz for DSD64, 352.8 kHz for DSD128, 705.6 kHz for
@@ -116,11 +160,8 @@ While DSD goes out unchanged:
 - the header badge reads **DSD** instead of **BP**;
 - the meters show the level of the PCM conversion of the same track, so they
   work as usual;
-- the volume must stay at 100 %: the fader's tooltip says so. Moving it
-  switches the track to PCM (see below);
 - Stop and a fade stop stop the track at once, with no fade, since a DSD
-  stream cannot be faded. Pressing Play on another track while it plays cuts
-  it the same way instead of crossfading;
+  stream cannot be faded;
 - pause and resume also act at once, without a ramp.
 
 **Silence at the edges.** Every start, end and switch to PCM sends DSD
@@ -133,23 +174,20 @@ gap of that length. It is **DSD silence** in Settings → Audio outputs, Advance
 
 **When another source needs the device.** **When another source needs a DSD
 output** in Settings → Audio outputs chooses what happens when another
-player, a cart or a test tone starts on the same device (moving the player's
-own fader is the exception: it always switches the track to PCM):
+player, a cart or a test tone starts on the same device:
 - **Continue the DSD track as PCM** (the default). The stream switches to PCM
   after the DSD silence, and the track goes on, converted, from where it was.
   The same happens to the track that follows by itself (see below).
 - **Keep DSD and mute the other sources.** Nothing interrupts the DSD stream.
   Other sources routed to the device are muted until the DSD track ends, and
   the player shows an **Others muted** badge meanwhile. The player's own next
-  track does not overlap: it starts when the DSD track ends, with no
-  crossfade or segue. A PCM track waits for the DSD silence; a DSD track of
-  the same kind and DSD rate continues the stream without it. Moving the
-  fader still switches the track to PCM.
+  track starts when the DSD track ends: a PCM track after the DSD silence, a
+  DSD track of the same kind and DSD rate at once, continuing the stream.
 
 **An album does not stay DSD under the default setting.** With *Continue the
 DSD track as PCM*, only a DSD track that starts on an idle device goes out as
 DSD. The tracks the player starts by itself afterwards (at the end of a
-track, a segue or a crossfade) start from a preload, which is always PCM, so
+track) start from a preload, which is always PCM, so
 the device switches to PCM and they play converted. A track you start
 yourself (Play, double click) goes out as DSD again when the device is idle
 or the previous DSD stream is still in its silence at the same DSD rate. To
@@ -176,7 +214,9 @@ its Main device unchanged. All of these must hold:
   are known. Tracks an earlier version analysed get their format once
   analysed again (the start-up notice, or Settings → Analysis), or as soon
   as a player shows them or a cart holds them;
-- volume is 100 %, no fade runs, and nothing else plays on the same outputs.
+- the volume is held at 100 % on a bit-perfect output, no fade runs (Fade
+  stop, the pause and resume ramps and the short click-free stop of a track
+  are the only fades left on such a player), and nothing else plays on the same outputs.
 
 Some files are never shown as bit-perfect:
 - **Lossy files** (MP3, AAC, Ogg Vorbis, Opus): their decoded samples are not
@@ -191,11 +231,18 @@ To verify a chain end to end:
 
 1. Connect the device's digital output (S/PDIF, AES or USB loopback) to a
    recorder that captures bit-exact.
-2. Play a lossless test file at 100 % with nothing else playing.
+2. Play a lossless test file with nothing else playing.
 3. Record it.
 4. Compare the recording with the file. For example, with SoX, invert one
    and mix them: `sox -m -v 1 file.wav -v -1 recording.wav diff.wav` after
    aligning their starts. Every sample of the difference must be zero.
+5. Check a rate change: in Continuous mode, with **Automatic mix at the MIX
+   point** on, play a 44.1 kHz track that has a MIX point followed by a
+   96 kHz one. The first plays to its cue-out with no fade; after a short
+   silence the converter shows 96 kHz on the second. The BP badge lights on
+   both.
+6. Then play two tracks at the same rate: the second follows the first with
+   no gap and no overlap.
 
 The project's automated tests check the same property inside the
 application, on a simulated device.
@@ -205,13 +252,13 @@ application, on a simulated device.
 The automated tests check DSD on simulated devices only. DoP and native DSD
 have not been tried on a real converter by the project. To check one:
 1. Set the device to **DoP** (or **Native DSD** on Linux) and play
-   a DSD file at 100 % with nothing else playing. The header must show
+   a DSD file with nothing else playing. The header must show
    **DSD**, and the converter's own display should show the DSD rate (for
    example DSD64) instead of a PCM rate. A converter that shows a PCM rate
    or plays noise does not recognise the stream: go back to **Convert to
    PCM**.
 2. Listen for a click or a burst of noise at the start, at Stop, at the end
-   of the track and when moving the fader. A click means the converter needs
+   of the track. A click means the converter needs
    a longer **DSD silence** (Settings → Audio outputs, Advanced).
 3. Start a cart or another player on the same device, once with each mixing
    setting, and check the behaviour described above.

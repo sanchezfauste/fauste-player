@@ -373,6 +373,11 @@ pub(crate) fn show_confirm(
 ) -> Option<bool> {
     let (t, state) = (scene.i18n, scene.state);
     let interruptions = fp_model::interruptions(state);
+    let faders_reset = fp_model::faders_reset_by(state)
+        .into_iter()
+        .map(|p| t.tr_args("player-label", &[("n", player_number(state, p).into())]))
+        .collect::<Vec<_>>()
+        .join(", ");
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 440.0);
     let mut answer = None;
     let modal = egui::Modal::new(egui::Id::new("apply-now"))
@@ -392,6 +397,18 @@ pub(crate) fn show_confirm(
                     ],
                 );
                 text(ui, line, 12.0, theme::TEXT);
+            }
+            // BF8: the faders Apply now would lock while below 100 %.
+            if !faders_reset.is_empty() {
+                text(
+                    ui,
+                    t.tr_args(
+                        "apply-now-fader-reset",
+                        &[("players", faders_reset.clone().into())],
+                    ),
+                    12.0,
+                    theme::AMBER,
+                );
             }
             ui.add_space(4.0);
             ui.horizontal(|ui| {

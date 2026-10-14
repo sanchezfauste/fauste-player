@@ -1242,6 +1242,21 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
             }
         },
     );
+    // BR15: the two settings above are global; say they do not apply to
+    // the players on a bit-perfect output, which never mix. Both stay
+    // editable for the other players.
+    if scene
+        .state
+        .players
+        .iter()
+        .any(|p| fp_model::bit_perfect_player(scene.state, p.id))
+    {
+        note(
+            ui,
+            &t.tr("settings-players-bit-perfect-note"),
+            theme::NEUTRAL_400,
+        );
+    }
     let mut cue_markers = config.players.use_cue_markers;
     row(
         ui,

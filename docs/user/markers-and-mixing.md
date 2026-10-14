@@ -78,6 +78,10 @@ tracks are analysed again automatically.
 - **Single mode**, or **Stop after**: the player stops at cue-out.
 - **Pressing Play while on air:** the next track starts at once and the
   current one fades out over the *fade time* (1 s by default).
+- **A player whose Main output is bit-perfect** ignores the MIX point and
+  automatic mix: each track plays to its cue-out, then the next one starts,
+  and Play while on air switches at once, without a fade. See
+  [What it costs](bit-perfect.md#what-it-costs).
 - **Use cue-in and cue-out off** (Settings → Players): every player plays
   each track from 0 to the end of the file. Cue-in and cue-out, automatic and
   manual, are kept, and the waveform draws them as dim lines. The MIX point,
