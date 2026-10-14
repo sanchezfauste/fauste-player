@@ -408,6 +408,7 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `wave-loudness` | "Loudness…" |
 | `loudness-exclude` | "Exclude from normalization" |
 | `loudness-trim` | "Trim" |
+| `error-invalid-trim` | "The trim must be a number within the maximum trim." (N10: also for a value that is not finite) |
 
 The existing meter keys `settings-loudness` and `settings-loudness-target`
 keep their meaning (the meter readout); the new keys avoid them.
