@@ -452,8 +452,7 @@ The `test-hooks` feature adds `AppUi::fail_next_frame` and
 - The About window shows `about-machine-translation` only while a `Machine`
   locale is in use (`I18n::machine_translated`). Since it never appears in a
   hand-written locale, it is one short sentence about the translation in use
-  ("This translation was generated with AI and may contain errors.") and
-  names no other language.
+  and names no other language.
 - Plural categories come from CLDR through `fluent-bundle`
   (`intl_pluralrules`): Polish selects `one`, `few`, `many` and `other`.
   Every plural variant shows the number through its placeable
