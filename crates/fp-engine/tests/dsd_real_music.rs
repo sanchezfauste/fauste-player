@@ -162,8 +162,15 @@ impl Rig {
             EngineAction::StartCurrent { player: P, request },
             self.clock,
         );
+        // The deadline only bounds a hang: going on unsettled would test
+        // something else, so it fails.
         let deadline = Instant::now() + Duration::from_secs(120);
-        while self.engine.unsettled_sources() > 0 && Instant::now() < deadline {
+        while self.engine.unsettled_sources() > 0 {
+            assert!(
+                Instant::now() < deadline,
+                "the source never settled: {}",
+                self.engine.describe_player(P)
+            );
             self.engine.tick(self.clock);
             std::thread::sleep(Duration::from_millis(1));
         }
