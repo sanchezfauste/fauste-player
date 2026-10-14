@@ -235,6 +235,7 @@ fn q8_5_restart_the_automatic_advance_and_previous_keep_the_cue_in() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[1],
+            normalization: fp_model::Normalization::default(),
         },
     );
     assert_eq!(s.player(p).unwrap().current, Some(e[1]));

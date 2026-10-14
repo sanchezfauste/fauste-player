@@ -1210,6 +1210,7 @@ fn a_repeat_pass_reports_the_dsd_end_before_the_transition() {
             *e == EngineEvent::TransitionStarted {
                 player: P,
                 entry: EntryId(1),
+                normalization: fp_model::Normalization::default(),
             }
         })
         .expect("TransitionStarted");

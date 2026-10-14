@@ -649,8 +649,16 @@ fn n11_a_seek_sends_no_new_gain() {
     );
 }
 
+/// The normalization `gain_db` the engine reports it started with.
+fn started_with(gain_db: f32) -> Normalization {
+    Normalization {
+        gain_db,
+        status: S::Applied { limited: None },
+    }
+}
+
 #[test]
-fn n11_a_scheduled_transition_takes_the_preloaded_gain() {
+fn n11_a_scheduled_transition_takes_the_gain_the_engine_started_with() {
     let mut s = normalizing(3);
     let (p, e) = (p0(&s), entries(&s));
     apply(&mut s, Command::Play(p)).unwrap();
@@ -667,13 +675,38 @@ fn n11_a_scheduled_transition_takes_the_preloaded_gain() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[1],
+            normalization: started_with(6.0),
         },
     );
     assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(6.0));
 }
 
 #[test]
-fn n11_a_transition_to_another_entry_recomputes_its_gain() {
+fn n11_a_re_preload_racing_a_committed_transition_keeps_the_engines_gain() {
+    // The engine committed the transition with the +6 dB preload; the model
+    // had meanwhile re-preloaded the same entry at +2 dB. The engine plays
+    // +6 dB, and `on_air` must say so.
+    let mut s = normalizing(3);
+    let (p, e) = (p0(&s), entries(&s));
+    apply(&mut s, Command::Play(p)).unwrap();
+    measure(&mut s, e[1], -22.0);
+    apply(&mut s, Command::SetVolume(p, 1.0)).unwrap();
+    measure(&mut s, e[1], -18.0); // the next now wants +2: re-preloaded
+    let pre = apply(&mut s, Command::SetVolume(p, 1.0)).unwrap();
+    assert_eq!(preloads(&pre, p), vec![2.0]);
+    on_event(
+        &mut s,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: e[1],
+            normalization: started_with(6.0),
+        },
+    );
+    assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(6.0));
+}
+
+#[test]
+fn n11_a_transition_to_another_entry_takes_the_engines_gain() {
     let mut s = normalizing(3);
     let (p, e) = (p0(&s), entries(&s));
     apply(&mut s, Command::Play(p)).unwrap();
@@ -684,6 +717,7 @@ fn n11_a_transition_to_another_entry_recomputes_its_gain() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[2],
+            normalization: started_with(8.0),
         },
     );
     assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(8.0));

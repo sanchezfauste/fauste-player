@@ -59,10 +59,8 @@ true-peak ceiling), `limited_max_boost` (held back by the maximum boost),
 `bit_perfect` (the output is bit-perfect, so the source plays at unity
 gain). A source keeps the gain it started with while it plays: a change of
 the settings, the measurement or the edit applies to the next one. The value
-is the gain the model asked the engine for when the source started; in the
-rare case where a new preload races a transition the engine has already
-committed, the engine may play the earlier preload's gain for that one
-track, and the API does not see it. `config.loudness` itself is not
+is the gain the source was started with (for a scheduled transition, the one
+the engine reports having started). `config.loudness` itself is not
 exposed: station configuration stays local.
 
 **Playlist summary:** `id`, `name`, `entry_count`. **Playlist:** the

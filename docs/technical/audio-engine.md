@@ -552,7 +552,10 @@ transition stands: a stop, pause, seek or new start takes the transition
 back and the waiting next goes back to idle, and a transition counts as
 executed only once the next was sent its `Start`.
 
-It turns bus events back into model events: `TransitionStarted`,
+It turns bus events back into model events: `TransitionStarted` (with the
+normalization the started source was opened with, so the model's `on_air`
+follows the engine even when a re-preload of the same entry with another
+gain raced the transition, loudness normalization spec N11),
 `ReachedEnd`, `FadeCompleted`, `SourceFailed`, `PreloadFailed` and
 `CueEnded { entry }`. Stale events (for an entry that is no longer current,
 or no longer the cue) are ignored by the model. A preload that cannot be

@@ -2572,6 +2572,7 @@ impl Engine {
         };
         next.start = StartState::Started;
         let entry = next.entry;
+        let normalization = next.request.normalization;
         let overlapping = matches!(
             rt.plan,
             Plan::Dispatched(
@@ -2590,8 +2591,11 @@ impl Engine {
             rt.outgoing.push(old);
         }
         rt.notify_fade |= overlapping;
-        self.events
-            .push(EngineEvent::TransitionStarted { player, entry });
+        self.events.push(EngineEvent::TransitionStarted {
+            player,
+            entry,
+            normalization,
+        });
     }
 
     fn preload(&mut self, player: PlayerId, request: Option<SourceRequest>) {

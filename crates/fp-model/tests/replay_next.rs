@@ -42,6 +42,7 @@ fn started(s: &mut AppState, p: PlayerId, e: EntryId) -> Vec<EngineAction> {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e,
+            normalization: fp_model::Normalization::default(),
         },
     )
 }

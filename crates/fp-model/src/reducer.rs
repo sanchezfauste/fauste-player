@@ -421,13 +421,14 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                 state.players[i].dsd = None;
             }
         }
-        EngineEvent::TransitionStarted { player, entry } => {
-            // N11: what the engine preloaded, taken before `advance_to`
-            // forgets it.
-            let preloaded = state
-                .player_index(player)
-                .ok()
-                .and_then(|i| state.players[i].preloaded);
+        EngineEvent::TransitionStarted {
+            player,
+            entry,
+            normalization,
+        } => {
+            // N11: the source keeps the gain the engine started it with,
+            // whatever the model preloaded since (a re-preload may race a
+            // transition the engine had already committed).
             // The engine started the entry that is already current: a
             // repeating entry's next pass (R26) or the replay of an entry set
             // as its own next (O37), perhaps committed just before a command
@@ -451,12 +452,11 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                     state.players[i].next = following;
                     state.players[i].next_explicit = false;
                 }
-                let on_air = started_normalization(state, i, entry, preloaded);
                 let p = &mut state.players[i];
                 p.preloaded = None;
                 p.scheduled = None;
                 p.transport = Transport::Playing;
-                p.on_air = on_air;
+                p.on_air = Some(normalization);
             }
             // A transition reported after the player was stopped is stale: the
             // engine has already been told to stop everything.
@@ -473,7 +473,7 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                 );
                 if advance_to(state, i, entry, true).is_some() {
                     state.players[i].fading = overlapping;
-                    state.players[i].on_air = started_normalization(state, i, entry, preloaded);
+                    state.players[i].on_air = Some(normalization);
                 } else {
                     stop_player(state, i);
                     out.push(EngineAction::StopNow { player });
@@ -873,26 +873,6 @@ fn dsd_hold_continue(state: &mut AppState, i: usize) -> Option<SourceRequest> {
     }
     let next = state.players[i].next?;
     advance_to(state, i, next, true)
-}
-
-/// N11: a scheduled transition plays what was preloaded, with the gain it
-/// was preloaded with; an entry that was not the one preloaded gets its
-/// own gain now.
-fn started_normalization(
-    state: &AppState,
-    i: usize,
-    entry: EntryId,
-    preloaded: Option<(EntryId, f64, crate::loudness::Normalization)>,
-) -> Option<crate::loudness::Normalization> {
-    match preloaded {
-        Some((e, _, n)) if e == entry => Some(n),
-        _ => {
-            let holder = Holder::PlayerMain(state.players.get(i)?.id);
-            state
-                .request_from_cue_in(entry, holder)
-                .map(|r| r.normalization)
-        }
-    }
 }
 
 /// Play-while-playing starts: a crossfade, or a hard start that cuts the

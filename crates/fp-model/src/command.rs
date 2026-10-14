@@ -227,7 +227,14 @@ pub enum EngineEvent {
     ReachedEnd { player: PlayerId, entry: EntryId },
     /// The engine started `entry` as scheduled by a `StartNextAt` plan. The
     /// model follows the engine even if the next changed in the meantime.
-    TransitionStarted { player: PlayerId, entry: EntryId },
+    /// `normalization` is the one the started source was opened with
+    /// (loudness normalization N11): a re-preload that raced the transition
+    /// may have asked for another.
+    TransitionStarted {
+        player: PlayerId,
+        entry: EntryId,
+        normalization: crate::loudness::Normalization,
+    },
     /// A source could not be decoded or read.
     SourceFailed { player: PlayerId, entry: EntryId },
     /// The source prepared for what plays next could not be opened; the

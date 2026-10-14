@@ -272,6 +272,7 @@ fn a_pause_after_an_executed_overlap_keeps_playing_and_completes_the_fade() {
         *e == EngineEvent::TransitionStarted {
             player: P,
             entry: EntryId(2),
+            normalization: fp_model::Normalization::default(),
         }
     });
     let faded = r

@@ -776,6 +776,7 @@ fn br12_a_rate_cut_keeps_a_pending_device_change_waiting_until_the_transition() 
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[1],
+            normalization: fp_model::Normalization::default(),
         },
     );
     assert!(

@@ -400,11 +400,9 @@ The interface shows and edits [loudness normalization](../superpowers/specs/2026
   current target, measurement and trim did not give that gain, so they are
   not quoted beside it. `player.rs`
   paints it as a tile left of **BP**, named by its tooltip lines. It shows
-  what the model asked the engine for when the source started; if a
-  re-preload races a transition the engine had already committed, the
-  engine may play the earlier preload's gain for that one track, and
-  neither the badge nor the remote API sees it (no engine report exists
-  for the gain).
+  the gain the source was started with: for a scheduled transition, the
+  one the engine reports in `TransitionStarted`, so a re-preload that
+  races a transition the engine had already committed does not change it.
 - **Loudness… popup (N20).** The waveform menu (`wave_panel::edit_markers`,
   so the player column and the CUE window) sets `ViewState::loudness_popup`
   to the track's id. `loudness_edit::popup` draws a non-modal window for
