@@ -161,7 +161,8 @@ measured") and the track's loudness edit when it is not the default
 (loudness normalization spec N19). The trim shown is the one in use
 (`fp_model::trim_in_use`: the saved trim within ± the current maximum
 trim); when a lowered maximum limits it, the line
-(`track-loudness-trim-limited`) also gives the saved value. The gain badge's
+(`track-loudness-trim-limited`) also gives the saved value, unless both read
+the same at the precision shown (0.1 dB). The gain badge's
 tooltip and the Trim slider show the trim in use too. They are sentences, not label/value
 pairs, so they are plain lines rather than rows of the grid.
 

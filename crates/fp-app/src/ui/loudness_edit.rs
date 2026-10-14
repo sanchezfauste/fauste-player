@@ -48,8 +48,7 @@ fn trim_shown(scene: &Scene<'_>, track: &Track) -> f32 {
 }
 
 fn max_trim(scene: &Scene<'_>) -> f32 {
-    let max = scene.state.config.loudness.max_trim_db;
-    if max.is_finite() { max.max(0.0) } else { 0.0 }
+    fp_model::max_trim_in_use(&scene.state.config.loudness)
 }
 
 /// The Trim slider: −`max_trim_db` ..= +`max_trim_db` in 0.5 dB steps; a
