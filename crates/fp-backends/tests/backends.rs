@@ -147,20 +147,21 @@ fn null_backend_consumes_audio_at_real_time_pace() {
     let stream = backend
         .open_output(&device, STEREO, renderer, Arc::new(Errors::default()))
         .unwrap();
-    std::thread::sleep(Duration::from_millis(250));
+    std::thread::sleep(Duration::from_secs(1));
     drop(stream);
     let elapsed = opened.elapsed().as_secs_f64();
     let rendered = frames.load(Ordering::Relaxed) as f64;
-    // Never faster than real time (one block of lead at most). On a loaded
-    // machine it may fall behind, and deliberately does not catch up, so
-    // only progress is required from below.
+    // Never faster than real time (one block of lead at most). A late
+    // wake-up is made up at the next one, so from below it trails real time
+    // by at most one wake-up's lateness plus the open and the join: a
+    // quarter of a one-second run leaves 250 ms for a busy CI runner.
     let real_time = elapsed * 48_000.0;
     assert!(
         rendered <= real_time + 256.0,
         "rendered {rendered} in {elapsed} s"
     );
     assert!(
-        rendered >= real_time * 0.25,
+        rendered >= real_time * 0.75,
         "rendered {rendered} in {elapsed} s"
     );
     let after = frames.load(Ordering::Relaxed);

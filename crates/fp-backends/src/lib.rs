@@ -18,6 +18,7 @@ pub mod exclusive;
 mod hosts;
 mod null;
 mod offline;
+mod pacer;
 #[cfg(windows)]
 mod wasapi_exclusive;
 
@@ -27,6 +28,7 @@ pub use hosts::{
 };
 pub use null::NullBackend;
 pub use offline::{OfflineBackend, OfflineDevice};
+pub use pacer::Pacer;
 
 /// Stable identifier of a backend, e.g. `"alsa"`, `"wasapi"`, `"null"`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -167,7 +167,10 @@ error, or no block asked for by the device for `tuning.watchdog_timeout_ms`
 `MixerRenderer` bumps on every device callback (rendered or not) and the
 virtual clock never moves. A virtual-clock thread then renders the same
 mixer into a discard buffer at real-time pace, so countdowns, segues and
-chaining continue. The device is reopened every
+chaining continue. It keeps the same absolute schedule as the Null output
+(`fp_backends::Pacer`, see [backends](backends.md)): a late wake-up renders
+the blocks it owes, so the lost device's timeline does not fall behind the
+wall clock. The device is reopened every
 `tuning.reconnect_interval_ms` (2 s). A reopened stream starts in standby
 (`BusShared::standby`): its callback plays idle fill (DSD silence in DSD
 mode, so DoP stays valid) without touching the mixer, and the bus stays
