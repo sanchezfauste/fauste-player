@@ -30,6 +30,11 @@ impl OutputStream for NullStream {
     fn sample_format(&self) -> SampleFormat {
         SampleFormat::F32
     }
+
+    /// Nothing is ever heard, so nothing is cut when it closes.
+    fn latency_frames(&self) -> Option<u32> {
+        Some(0)
+    }
 }
 
 impl Drop for NullStream {

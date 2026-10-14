@@ -33,6 +33,25 @@ buffer size the driver settled on. When WASAPI refuses a period and the
 aligned retry fails too, the error keeps the first refusal (the reason), and
 the bus logs it when it falls back to shared.
 
+`OutputStream::latency_frames()` is the most frames the stream has held
+between the renderer and the device's output: rendered, not played yet.
+Dropping a stream discards them (cpal's ALSA stream and the native DSD
+stream close the PCM, which drops its buffer, transfers to a USB device
+included), so the engine keeps rendering that many frames after the last
+sound before it closes a stream to change its rate. cpal measures it in the
+data callback: the playback instant minus the callback instant (the driver's
+delay) plus the block handed over, the maximum so far (`held_frames`, a
+`fetch_max` on an atomic). The native DSD stream asks ALSA for its delay
+after each write and adds the period not written yet, the maximum so far
+too (`held_words`, in word frames). Both saturate at `u32::MAX`, and a
+maximum over the stream's lifetime keeps one bogus measurement (a bad
+timestamp after an xrun recovery) for good: callers must bound it. Offline
+reports what the test set when the stream opened (`set_latency_frames`,
+default 0: a block is heard when `render` returns), Null 0, and a backend
+that cannot tell `None` (WASAPI exclusive): the bus then counts two blocks.
+The engine bounds the result by `tuning.play_out_max_ms`
+(`Bus::play_out_frames`).
+
 Each device is asked for its own rate and buffer when it has them
 (`outputs.device_overrides`, operator feedback 4, Q12), else for the global
 ones; a backend sees only the resulting `StreamConfig`. A device's own

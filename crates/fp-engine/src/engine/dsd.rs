@@ -548,9 +548,19 @@ impl Engine {
             .iter()
             .filter_map(|(bus, d)| {
                 let now = self.now_frame(bus);
+                // A native stream closes to go back to PCM, discarding what
+                // the device holds: it waits until its silence has played.
+                let held = match d.stream {
+                    DsdStream::Native => self.buses.get(bus).map_or(0, Bus::play_out_frames),
+                    DsdStream::Dop => 0,
+                };
                 match d.state {
-                    DsdState::Tail { until } if now >= until => Some((bus.clone(), false)),
-                    DsdState::Switching { until } if now >= until => Some((bus.clone(), true)),
+                    DsdState::Tail { until } if now >= until.saturating_add(held) => {
+                        Some((bus.clone(), false))
+                    }
+                    DsdState::Switching { until } if now >= until.saturating_add(held) => {
+                        Some((bus.clone(), true))
+                    }
                     _ => None,
                 }
             })

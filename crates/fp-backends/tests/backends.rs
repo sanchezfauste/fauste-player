@@ -76,6 +76,28 @@ fn offline_renders_on_demand_and_stops_when_dropped() {
 }
 
 #[test]
+fn offline_streams_report_the_frames_they_hold() {
+    let backend = OfflineBackend::new();
+    let device = backend.add_device("card", 2);
+    let stream = open(&backend, &device, STEREO).unwrap();
+    assert_eq!(
+        stream.latency_frames(),
+        Some(0),
+        "a rendered block is heard when `render` returns"
+    );
+    drop(stream);
+    device.set_latency_frames(1_440);
+    let stream = open(&backend, &device, STEREO).unwrap();
+    assert_eq!(stream.latency_frames(), Some(1_440));
+}
+
+#[test]
+fn null_streams_hold_nothing_audible() {
+    let stream = open_null(STEREO).unwrap();
+    assert_eq!(stream.latency_frames(), Some(0));
+}
+
+#[test]
 fn offline_unplug_reports_loss_and_refuses_reopen_until_replugged() {
     let backend = OfflineBackend::new();
     let device = backend.add_device("usb", 2);

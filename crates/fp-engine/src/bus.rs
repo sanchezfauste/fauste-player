@@ -66,6 +66,9 @@ pub struct BusTiming {
     /// busy, and how long it waits before each try.
     pub busy_retries: u32,
     pub busy_retry_interval: Duration,
+    /// The most a rate change waits for the device to play what the
+    /// stream holds (`Bus::play_out_frames`), whatever the stream reports.
+    pub play_out_max: Duration,
 }
 
 /// The busy retries one top-level reopen may still spend, each after
@@ -184,6 +187,14 @@ pub struct Bus {
     rate_change: Option<u32>,
     /// The last open failed because the device was not there.
     missing: bool,
+    /// The frame at which the last source that finished on this bus ended
+    /// (`note_sound_end`), on this bus's own frame clock. A successful
+    /// `reopen_with` clears it (the old stream and what it held are gone);
+    /// a bus removed and created again starts its clock and this over.
+    sound_end: Option<u64>,
+    /// `play_out_frames` was bounded by `BusTiming::play_out_max` and that
+    /// was logged (once per bus and maximum: `set_timing` resets it).
+    play_out_bounded: AtomicBool,
 }
 
 impl Bus {
@@ -225,6 +236,8 @@ impl Bus {
             pcm_fallback: None,
             rate_change: None,
             missing: false,
+            sound_end: None,
+            play_out_bounded: AtomicBool::new(false),
         };
         if bus.try_open(now, true).is_err() {
             // The stand-in renders the mixer without DoP encoding or native
@@ -390,6 +403,54 @@ impl Bus {
         self.stream
             .as_ref()
             .map_or(self.config.buffer_frames, |s| s.config().buffer_frames)
+    }
+
+    /// The frames the open stream may hold that the device has not played
+    /// yet, and that closing it would discard: what the backend reports
+    /// (`OutputStream::latency_frames`), else a double buffer of the
+    /// stream's blocks, at most `BusTiming::play_out_max` at the bus's
+    /// rate (a bogus measurement, up to `u32::MAX`, must not hold the
+    /// output silent; logged once). 0 without a device stream (nothing is
+    /// queued for a device: the virtual clock renders into nothing).
+    pub fn play_out_frames(&self) -> u64 {
+        let Some(stream) = self.stream.as_ref() else {
+            return 0;
+        };
+        let held = stream
+            .latency_frames()
+            .map_or(2 * u64::from(stream.config().buffer_frames), u64::from);
+        let max = u64::try_from(
+            self.timing.play_out_max.as_micros() * u128::from(self.config.sample_rate) / 1_000_000,
+        )
+        .unwrap_or(u64::MAX);
+        if held <= max {
+            return held;
+        }
+        // A zero maximum turns the wait off: nothing to report.
+        if max > 0 && !self.play_out_bounded.swap(true, Ordering::Relaxed) {
+            tracing::warn!(
+                bus = ?self.key,
+                held,
+                max,
+                "the stream reports holding more than tuning.play_out_max_ms; waiting at most that"
+            );
+        }
+        max
+    }
+
+    /// A source on this bus ended at bus frame `frame`
+    /// (`BusEvent::Finished`). The latest end counts.
+    pub fn note_sound_end(&mut self, frame: u64) {
+        self.sound_end = Some(self.sound_end.map_or(frame, |end| end.max(frame)));
+    }
+
+    /// Whether the device has played everything that sounded on this bus,
+    /// up to the end of the last source that finished here: closing the
+    /// stream now cuts nothing short (`play_out_frames` rendered after
+    /// that end). True when nothing has ended here.
+    pub fn played_out(&self) -> bool {
+        self.sound_end
+            .is_none_or(|end| self.now_frame() >= end.saturating_add(self.play_out_frames()))
     }
 
     /// How the open stream carries DSD, if a device stream is open.
@@ -591,6 +652,9 @@ impl Bus {
         let opened = self.open_retrying_busy(now, shared_fallback, budget);
         if opened.is_ok() {
             tracing::info!(bus = ?self.key, rate = config.sample_rate, dsd = ?config.dsd, "stream reopened");
+            // The old stream, and whatever it still held, is gone: nothing
+            // that ended before is left to play out.
+            self.sound_end = None;
             if previous.dsd.is_none() && config.dsd.is_none() {
                 // Back in PCM, at a rate of its own choosing: a fallback to
                 // another rate is forgotten, while a device's own buffer
@@ -803,6 +867,8 @@ impl Bus {
     /// spec §7): the next `supervise` and the next reopen use it.
     pub fn set_timing(&mut self, timing: BusTiming) {
         self.timing = timing;
+        // A new maximum is reported again if the stream exceeds it.
+        self.play_out_bounded.store(false, Ordering::Relaxed);
     }
 
     /// Free places in the command queue.

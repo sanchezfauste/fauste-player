@@ -659,6 +659,366 @@ fn br8_a_hard_start_at_another_rate_reopens_after_the_declick() {
     assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![])));
 }
 
+/// What the Offline dac holds in the play-out tests (`latency_frames`):
+/// three blocks, as a device whose driver and transfers hold a few periods.
+const HELD: usize = BLOCK * 3;
+
+/// Renders block by block until the dac runs at `rate`, at most `frames`;
+/// returns the silent frames the old stream rendered after its last sound
+/// before it closed. A close discards what the stream holds, so fewer than
+/// `HELD` would have cut the end of the sound short.
+fn silence_before_rate(r: &mut Rig, rate: u32, frames: usize) -> usize {
+    let mut trailing = 0;
+    for _ in 0..frames.div_ceil(BLOCK) {
+        if r.rate() == rate {
+            return trailing;
+        }
+        for v in r.run(BLOCK) {
+            trailing = if v == 0.0 { trailing + 1 } else { 0 };
+        }
+    }
+    panic!("the dac never reopened at {rate}");
+}
+
+#[test]
+fn br6_a_scheduled_cut_reopens_once_the_device_has_played_the_end() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    let silence = silence_before_rate(&mut r, 48_000, 44_100);
+    assert!(silence >= HELD, "{silence} frames: the end was cut");
+    assert!(silence < HELD + 2 * BLOCK, "{silence} frames: no longer");
+    r.run(4_800);
+    assert!(r.transition_started(2));
+    assert!(bit_perfect_after(&mut r, 4_800));
+}
+
+#[test]
+fn br6_a_stop_while_the_device_plays_out_the_end_starts_nothing() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    // Until the current has stopped: a block of silence, the end held.
+    let mut trailing = 0;
+    while trailing < BLOCK {
+        for v in r.run(BLOCK) {
+            trailing = if v == 0.0 { trailing + 1 } else { 0 };
+        }
+    }
+    assert_eq!(r.rate(), 44_100, "still playing out");
+    r.act(EngineAction::StopNow { player: P });
+    let before = r.events.len();
+    let heard = r.run(9_600);
+    assert!(
+        !r.events[before..]
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ReachedEnd { .. })),
+        "a stopped track does not reach its end afterwards"
+    );
+    assert!(heard.iter().all(|v| *v == 0.0), "silence");
+    assert!(!r.transition_started(2), "the next never starts");
+    assert_eq!(r.rate(), 44_100, "no reopen for a track that will not play");
+}
+
+#[test]
+fn br6_a_pause_while_the_device_plays_out_the_end_holds_the_next_until_resume() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    // Until the current has stopped: a block of silence, the end held.
+    let mut trailing = 0;
+    while trailing < BLOCK {
+        for v in r.run(BLOCK) {
+            trailing = if v == 0.0 { trailing + 1 } else { 0 };
+        }
+    }
+    assert_eq!(r.rate(), 44_100, "still playing out");
+    r.act(EngineAction::Pause { player: P });
+    assert!(
+        run_until_rate(&mut r, 48_000, 9_600),
+        "the cut happens once the end has played"
+    );
+    let heard = r.run(9_600);
+    assert!(heard.iter().all(|v| *v == 0.0), "paused: silence");
+    assert!(!r.transition_started(2), "the next waits for the resume");
+    r.act(EngineAction::Resume { player: P });
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(r.transition_started(2), "the next starts on resume");
+    assert!(heard.iter().any(|v| *v != 0.0), "and plays");
+    assert!(r.engine.telemetry(P).bit_perfect, "at its own rate");
+}
+
+#[test]
+fn br6_a_pause_during_the_held_end_lets_a_device_change_apply_once_the_end_has_played() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    on_air_with_next(&mut r);
+    r.act(cut_plan(0.5, Some(48_000)));
+    r.settle();
+    // Until the current has stopped: a block of silence, the end held.
+    let mut trailing = 0;
+    while trailing < BLOCK {
+        for v in r.run(BLOCK) {
+            trailing = if v == 0.0 { trailing + 1 } else { 0 };
+        }
+    }
+    r.act(EngineAction::Pause { player: P });
+    let running = r.engine.running_settings(&dac()).unwrap();
+    r.act(EngineAction::ApplyDevice {
+        device: dac(),
+        settings: fp_model::DeviceSettings {
+            buffer_frames: 960,
+            ..running
+        },
+        force: false,
+    });
+    let applied = |r: &Rig| {
+        r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::Applied { .. }))
+    };
+    assert!(!applied(&r), "not while the end plays out");
+    assert!(run_until_rate(&mut r, 48_000, 9_600), "the cut happens");
+    r.run(BLOCK * 4);
+    assert!(
+        applied(&r),
+        "paused and played out: quiet, without waiting for the resume"
+    );
+    assert!(!r.transition_started(2), "still paused");
+    r.act(EngineAction::Resume { player: P });
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(r.transition_started(2), "the next starts on resume");
+    assert!(heard.iter().any(|v| *v != 0.0), "and plays");
+    assert!(r.engine.telemetry(P).bit_perfect, "at its own rate");
+}
+
+#[test]
+fn br8_a_hard_start_reopens_once_the_device_has_played_the_declick() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(hard_start(request(2, b, pcm16(48_000))));
+    r.settle();
+    let silence = silence_before_rate(&mut r, 48_000, 44_100);
+    assert!(silence >= HELD, "{silence} frames: the declick was cut");
+    assert!(silence < HELD + 2 * BLOCK, "{silence} frames: no longer");
+    r.settle();
+    assert!(bit_perfect_after(&mut r, 4_800));
+}
+
+#[test]
+fn br17_a_start_right_after_a_paused_track_stopped_reopens_once_the_pause_ramp_has_played() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::Pause { player: P });
+    // Past the pause ramp (and the engine's block of margin), well within
+    // what the dac holds.
+    let mut before = 0;
+    while before < BLOCK * 2 {
+        for v in r.run(BLOCK) {
+            before = if v == 0.0 { before + 1 } else { 0 };
+        }
+    }
+    assert!(before < HELD, "{before} frames: the test needs a held ramp");
+    // The paused track is released at once, with no `Finished` event.
+    r.act(EngineAction::StopNow { player: P });
+    r.start(request(2, b, pcm16(48_000)));
+    let silence = before + silence_before_rate(&mut r, 48_000, 44_100);
+    assert!(silence >= HELD, "{silence} frames: the pause ramp was cut");
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays");
+    assert!(r.engine.telemetry(P).bit_perfect, "at its own rate");
+}
+
+#[test]
+fn a_start_right_after_a_stop_reopens_once_the_declick_has_played() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::StopNow { player: P });
+    r.run(BLOCK);
+    r.start(request(2, b, pcm16(48_000)));
+    let silence = silence_before_rate(&mut r, 48_000, 44_100);
+    assert!(silence >= HELD, "{silence} frames: the declick was cut");
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays");
+    assert!(r.engine.telemetry(P).bit_perfect, "at its own rate");
+}
+
+#[test]
+fn br17_a_bus_opened_again_does_not_wait_for_the_end_on_the_closed_one() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    r.start(request(1, a.clone(), pcm16(44_100)));
+    // The 3 s track plays to its end, far into the old bus's frame clock.
+    r.run(4 * 44_100);
+    assert!(
+        r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ReachedEnd { .. }))
+    );
+    // The output closes with its last holder, and opens again from frame 0.
+    r.act(EngineAction::RemovePlayer { player: P });
+    for _ in 0..4 {
+        r.clock += Duration::from_millis(10);
+        r.tick();
+    }
+    assert!(r.dac.config().is_none(), "the output closed");
+    r.act(EngineAction::AddPlayer { player: P });
+    r.settle();
+    assert_eq!(r.rate(), 48_000, "opened again at the global rate");
+    r.start(request(2, a, pcm16(44_100)));
+    assert_eq!(
+        r.rate(),
+        44_100,
+        "nothing sounded on this stream: the start reopens at once"
+    );
+}
+
+#[test]
+fn br17_a_bogus_hold_waits_at_most_the_configured_play_out() {
+    let mut r = rig(true, true);
+    // A saturated measurement: hours at 44.1 kHz.
+    r.dac.set_latency_frames(u32::MAX);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::StopNow { player: P });
+    r.run(BLOCK);
+    r.start(request(2, b, pcm16(48_000)));
+    // `tuning.play_out_max_ms` is 500 ms by default: 22 050 frames.
+    let silence = silence_before_rate(&mut r, 48_000, 2 * 44_100);
+    assert!(silence >= 22_050, "{silence} frames");
+    assert!(silence < 22_050 + 3 * BLOCK, "{silence} frames: no longer");
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays");
+}
+
+fn cart_at(r: &Rig, rate: u32) -> EngineAction {
+    EngineAction::StartCart(CartRequest {
+        cart: CartId(1),
+        track: TrackId(9),
+        path: wav(r.dir.path(), "j48.wav", rate),
+        from_secs: 0.0,
+        until_secs: f64::INFINITY,
+        looped: false,
+        format: pcm16(rate),
+        normalization: fp_model::Normalization::default(),
+    })
+}
+
+/// Plays a 44.1 kHz track to its end and, as soon as the engine reports
+/// it, does `then`; renders until the dac runs at `rate` (at most 2 s
+/// more). Returns the silent frames rendered after the track's last sound
+/// before the old stream closed.
+fn silence_after_the_end_before_rate(
+    r: &mut Rig,
+    rate: u32,
+    then: impl FnOnce(&mut Rig),
+) -> Option<usize> {
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    r.start(request(1, a, pcm16(44_100)));
+    let mut then = Some(then);
+    let mut trailing = 0;
+    for _ in 0..(5 * 44_100) / BLOCK {
+        if r.rate() == rate {
+            return Some(trailing);
+        }
+        for v in r.run(BLOCK) {
+            trailing = if v == 0.0 { trailing + 1 } else { 0 };
+        }
+        let ended = r
+            .events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ReachedEnd { .. }));
+        if ended && let Some(then) = then.take() {
+            then(r);
+        }
+    }
+    None
+}
+
+#[test]
+fn br17_a_cart_fired_right_after_a_track_ended_reopens_once_the_end_has_played() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let silence = silence_after_the_end_before_rate(&mut r, 48_000, |r| {
+        let cart = cart_at(r, 48_000);
+        r.act(cart);
+    })
+    .expect("the cart's rate is taken");
+    assert!(silence >= HELD, "{silence} frames: the end was cut");
+    assert!(silence < HELD + 3 * BLOCK, "{silence} frames: no longer");
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(heard.iter().any(|v| *v != 0.0), "the cart plays");
+    let (carts, _) = r.engine.cart_telemetry();
+    assert_eq!(carts.len(), 1, "on air");
+}
+
+#[test]
+fn br17_a_cart_stopped_while_the_end_plays_out_never_starts() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let reopened = silence_after_the_end_before_rate(&mut r, 48_000, |r| {
+        let cart = cart_at(r, 48_000);
+        r.act(cart);
+        r.act(EngineAction::StopCart { cart: CartId(1) });
+    });
+    assert_eq!(reopened, None, "no reopen for a cart that will not play");
+    let heard = r.run(9_600);
+    assert!(heard.iter().all(|v| *v == 0.0), "silence");
+    assert!(r.engine.cart_telemetry().0.is_empty());
+}
+
+#[test]
+fn br17_a_track_loaded_paused_and_resumed_after_a_stop_reopens_once_the_declick_has_played() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::StopNow { player: P });
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: request(2, b, pcm16(48_000)),
+    });
+    r.settle();
+    r.run(BLOCK);
+    r.act(EngineAction::Resume { player: P });
+    let silence = silence_before_rate(&mut r, 48_000, 44_100);
+    assert!(silence >= HELD, "{silence} frames: the declick was cut");
+    assert!(silence < HELD + 3 * BLOCK, "{silence} frames: no longer");
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays");
+    assert!(r.engine.telemetry(P).bit_perfect, "at its own rate");
+}
+
 #[test]
 fn br8_at_the_same_rate_the_hard_start_does_not_reopen() {
     let mut r = rig(true, true);

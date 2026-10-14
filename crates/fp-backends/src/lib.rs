@@ -175,6 +175,18 @@ pub trait OutputStream: Send {
     fn dsd(&self) -> Option<dsd::DsdStream> {
         None
     }
+    /// The most frames this stream has held between the renderer and the
+    /// device's output: rendered, but not played yet (the driver's buffer,
+    /// the block being handed over, and what is in flight to the device).
+    /// Dropping the stream discards whatever it holds, so a caller that
+    /// must not cut audio short keeps rendering at least this many frames
+    /// after the last one that matters before dropping it. `None` when the
+    /// backend cannot tell (yet): before its first block, for instance.
+    /// A measurement can be bogus (a bad timestamp after an xrun) and the
+    /// maximum keeps it, up to `u32::MAX`: a caller bounds what it waits.
+    fn latency_frames(&self) -> Option<u32> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

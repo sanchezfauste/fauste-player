@@ -284,8 +284,16 @@ cannot hang the conductor.
   `dispatch` sends only the stop of the current (`StopAt` and
   `RampOutBeforeCut`, the usual declick) and leaves the preload waiting;
   when the mixer reports the current finished, `current_finished` calls
-  `cut_to`, which reopens the bus through `prepare_start` (when nothing
-  else sounds there) and then starts the next as at any end of stream. If
+  `end_of_current`. That waits until the device has played the end of the
+  track (`played_out`, below; meanwhile the end is held in
+  `PlayerRuntime::held_end` and `run_held_ends` looks again every tick),
+  then calls `cut_to`, which reopens the bus through `prepare_start` (when
+  nothing else sounds there), and starts the next as at any end of stream.
+  A start meanwhile takes the player over and a stop drops the held end.
+  A pause meanwhile keeps the end held: once it has played, the bus
+  reopens (`cut_while_paused`, which takes the cut out of the plan) and
+  the next starts on resume; from the cut on, the paused player is quiet
+  for L11 (`player_quiet`). If
   something sounds after all (a cart fired since the plan) or the device
   refuses the rate (B3.4), the bus keeps its rate and `cut_to` opens the
   next again at it: it plays resampled, after a longer gap. Without a cut
@@ -297,12 +305,53 @@ cannot hang the conductor.
   `sounding_besides`): the new current is opened at the file's rate and
   waits idle (`PlayerRuntime::rate_cut`). Once per tick, `run_rate_cuts`
   waits until the player's outgoing sources on the bus (the declick tail)
-  have ended, reopens the bus through `prepare_start` and starts the
+  have ended and the device has played them (`played_out`), reopens the
+  bus through `prepare_start` and starts the
   current; if the bus kept its rate, the current is opened again at it
   first. A pause, stop or seek drops the waiting cut, and a resume then
   follows B3.2; another start replaces it (and may wait for a cut of its
-  own, `start_current` sets `rate_cut` again). At the same rate, with a crossfade, or from
-  silence, the start is unchanged. A rate cut reopens with the settings
+  own, `start_current` sets `rate_cut` again). A start from silence at
+  another rate while the device has not yet played the end of what last
+  sounded there (a stop's declick, a track's end) waits the same way
+  (`hard_start_cut`, BR17), and so does the resume of a track loaded
+  paused (`resume`; `PlayerRuntime::rate_cut_fade_in` keeps its fade-in).
+  At the same rate, with a crossfade, or from silence that has played
+  out, the start is unchanged.
+- **Play-out before a rate change.** Closing a stream discards what the
+  driver and the device still hold (on ALSA the PCM is dropped, not
+  drained), and the mixer renders that far ahead of what is heard. So a
+  rate cut never closes the stream as soon as the mixer has rendered the
+  last sound: each bus keeps the frame where the last source that
+  finished on it ended (`Bus::note_sound_end`, from `BusEvent::Finished`;
+  for a paused source that `fade_out` releases at once with a cancel, which
+  has no `Finished`, the end of its pause ramp, `pause_ramp_ends`), on its
+  own frame clock. `Bus::reopen_with` keeps the clock and forgets the end
+  once the new stream is open (what the old one held is gone); only a bus
+  removed and created again starts its clock, and its end, over.
+  `Bus::played_out` is true once the bus has rendered
+  `Bus::play_out_frames` more (the stream's `latency_frames`, else two
+  blocks, at most `tuning.play_out_max_ms` at the bus's rate:
+  `BusTiming::play_out_max`; a bound that applies is logged once per bus
+  and maximum, `set_timing` resetting it, and a zero maximum, which turns
+  the wait off, is not logged; a bogus measurement cannot hold the output
+  silent). BR6
+  (`run_held_ends`), BR8 and the starts from silence above
+  (`run_rate_cuts`), carts (`run_waiting_carts`) and the close of a native
+  DSD stream (`end_dsd_streams`) wait for it without blocking: they look
+  again on the next tick. A cart fired on the cartwall's Main bus when
+  `reopen_waits_for_play_out` holds (the start would reopen the bus at
+  another rate and its device has not played the last end) is queued in
+  `CartwallRuntime::waiting`, with every cart fired after it, and started
+  in order once the bus has played out; the waiting carts count as
+  sounding there, and `StopCart` removes one. Not covered (BR17's known
+  gaps): CUE starts of players and carts (`start_cue`, `start_cart_cue`
+  call `prepare_start` at once: only the headphones can lose an end), the
+  PCM stream closed by `open_dsd_stream`, and crossfaded starts. Sources
+  released with a cancel are not a gap: a paused one ends at its pause
+  ramp (above), the others never sounded on the stream. The gap of a rate cut is that much longer
+  (about 25–35 ms with 512-frame blocks at 44.1 kHz on a USB converter).
+  Measured on hardware with `examples/rate_cut_tail.rs` (see
+  [testing](testing.md)). A rate cut reopens with the settings
   the device runs with and never applies a kept change (BR12).
 - **`PlayerTelemetry::bit_perfect`** is set when all of these hold:
   - the current source is on its Main bus, which is bit-perfect, `Ok`, and
@@ -389,7 +438,9 @@ plus the mixer's DSD mode.
   locked); `DsdEnded` is reported for the old entry. At the end of a tail
   (`end_dsd_streams`, from `tick`) a DoP bus leaves DSD mode and a native bus
   is reopened as PCM (`reopen_native_as_pcm`; its stream closes first, so no
-  PCM block reaches it). A device that takes native DSD at a word rate need
+  PCM block reaches it). A native stream closes only once the device has
+  played its silence too (the tail's end plus `Bus::play_out_frames`), so
+  the whole DSD silence reaches the converter, even when it is set to 0. A device that takes native DSD at a word rate need
   not take that rate as PCM (DSD512 never: 1.4112 MHz), so the rate is
   chosen: an idle bus goes back to the PCM configuration it had before the
   DSD (`DsdBus::pcm`, kept by `open_dsd_stream`); a bus with sources on it
@@ -596,7 +647,9 @@ sources; for the audio system, every bus. Quiet means no started, unpaused
 source (current, outgoing, CUE), no cart, no test tone and no DSD silence
 running; paused and waiting sources are quiet, except a current waiting
 for a rate cut under a hard start (`PlayerRuntime::rate_cut`, bit-perfect
-rate and fader spec BR13), so a kept change never runs in the cut's gap.
+rate and fader spec BR13) and a next waiting behind a held BR6 end
+(`PlayerRuntime::held_end`; paused, only until the cut is done), so a kept
+change never runs in the cut's gap.
 A forced action runs at once.
 Each one ends with `EngineEvent::Applied { target, wanted, outcome }`.
 

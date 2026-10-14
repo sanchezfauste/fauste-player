@@ -46,6 +46,8 @@ struct DeviceState {
     reported_buffers: Option<(u32, u32)>,
     /// See `set_default_buffer` (`None`: the range's nearest end).
     default_buffer: Option<u32>,
+    /// What streams report as `OutputStream::latency_frames`.
+    latency_frames: u32,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -150,6 +152,14 @@ impl OfflineDevice {
         lock(&self.state).default_buffer = Some(frames);
     }
 
+    /// What streams opened from now on report as their latency
+    /// (`OutputStream::latency_frames`; default 0: a rendered block is
+    /// heard when `render` returns). Nothing is delayed: the test decides
+    /// what the frames held at a close would have been.
+    pub fn set_latency_frames(&self, frames: u32) {
+        lock(&self.state).latency_frames = frames;
+    }
+
     /// How many times a stream was opened, or tried to be, on this device.
     pub fn open_attempts(&self) -> u64 {
         lock(&self.state).open_attempts
@@ -189,6 +199,7 @@ struct OfflineStream {
     generation: u64,
     config: StreamConfig,
     format: SampleFormat,
+    latency_frames: u32,
     state: Arc<Mutex<DeviceState>>,
 }
 
@@ -203,6 +214,10 @@ impl OutputStream for OfflineStream {
 
     fn dsd(&self) -> Option<DsdStream> {
         self.config.dsd
+    }
+
+    fn latency_frames(&self) -> Option<u32> {
+        Some(self.latency_frames)
     }
 }
 
@@ -412,6 +427,7 @@ impl AudioBackend for OfflineBackend {
             generation,
             config,
             format,
+            latency_frames: state.latency_frames,
             state: dev.state.clone(),
         }))
     }

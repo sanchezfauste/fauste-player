@@ -34,6 +34,7 @@ const TIMING: BusTiming = BusTiming {
     startup_grace: Duration::from_secs(5),
     busy_retries: 2,
     busy_retry_interval: Duration::ZERO,
+    play_out_max: Duration::from_millis(500),
 };
 
 fn setup(plugged: bool) -> (OfflineBackend, OfflineDevice, Bus, Instant) {
@@ -515,4 +516,161 @@ fn a_new_timing_applies_at_the_next_supervision() {
     });
     bus.supervise(t0 + Duration::from_millis(50));
     assert_eq!(bus.health(), BusHealth::Lost, "the shorter grace applies");
+}
+
+/// An Offline backend whose streams cannot tell what they hold.
+struct Untold(OfflineBackend);
+
+struct UntoldStream(Box<dyn fp_backends::OutputStream>);
+
+impl fp_backends::OutputStream for UntoldStream {
+    fn config(&self) -> StreamConfig {
+        self.0.config()
+    }
+    fn sample_format(&self) -> fp_backends::SampleFormat {
+        self.0.sample_format()
+    }
+}
+
+impl fp_backends::AudioBackend for Untold {
+    fn id(&self) -> fp_backends::BackendId {
+        self.0.id()
+    }
+    fn availability(&self) -> fp_backends::Availability {
+        self.0.availability()
+    }
+    fn enumerate_devices(&self) -> Result<Vec<fp_backends::DeviceInfo>, fp_backends::BackendError> {
+        self.0.enumerate_devices()
+    }
+    fn default_device(&self) -> Option<fp_backends::DeviceId> {
+        self.0.default_device()
+    }
+    fn open_output(
+        &self,
+        device: &fp_backends::DeviceId,
+        config: StreamConfig,
+        renderer: Box<dyn fp_backends::Renderer>,
+        errors: Arc<dyn fp_backends::StreamErrorSink>,
+    ) -> Result<Box<dyn fp_backends::OutputStream>, fp_backends::BackendError> {
+        let inner = self.0.open_output(device, config, renderer, errors)?;
+        Ok(Box::new(UntoldStream(inner)))
+    }
+}
+
+#[test]
+fn a_bus_plays_out_what_its_stream_holds() {
+    let (_b, device, mut bus, t0) = setup(true);
+    assert_eq!(
+        bus.play_out_frames(),
+        0,
+        "the Offline default: nothing held"
+    );
+    device.set_latency_frames(1_200);
+    let mut budget = bus.busy_budget(true);
+    assert!(bus.reopen_at(44_100, t0, &mut budget));
+    assert_eq!(bus.play_out_frames(), 1_200, "what the stream reports");
+    device.unplug();
+    bus.supervise(t0 + Duration::from_secs(1));
+    assert_eq!(bus.health(), BusHealth::Lost);
+    assert_eq!(bus.play_out_frames(), 0, "no device stream: nothing held");
+}
+
+#[test]
+fn a_stream_that_cannot_tell_is_taken_to_hold_two_blocks() {
+    let backend = OfflineBackend::new();
+    backend.add_device("card", 2);
+    let key = BusKey {
+        backend: "offline".into(),
+        device: "card".into(),
+    };
+    let bus = Bus::open(
+        key,
+        Arc::new(Untold(backend)),
+        CONFIG,
+        4,
+        MIXER,
+        TIMING,
+        Instant::now(),
+    );
+    assert_eq!(bus.play_out_frames(), 2 * 480);
+}
+
+#[test]
+fn the_play_out_is_bounded_by_the_configured_maximum() {
+    let (_b, device, mut bus, t0) = setup(true);
+    // A bogus measurement (a bad timestamp after an xrun) saturates.
+    device.set_latency_frames(u32::MAX);
+    let mut budget = bus.busy_budget(true);
+    assert!(bus.reopen_at(44_100, t0, &mut budget));
+    assert_eq!(
+        bus.play_out_frames(),
+        22_050,
+        "500 ms at the bus's rate, not hours"
+    );
+    bus.set_timing(BusTiming {
+        play_out_max: Duration::from_millis(100),
+        ..TIMING
+    });
+    assert_eq!(
+        bus.play_out_frames(),
+        4_410,
+        "a new maximum applies at once"
+    );
+    device.set_latency_frames(1_200);
+    assert!(bus.reopen_at(48_000, t0, &mut budget));
+    assert_eq!(
+        bus.play_out_frames(),
+        1_200,
+        "below it, what the stream says"
+    );
+}
+
+#[test]
+fn a_zero_maximum_waits_for_nothing_without_a_warning() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.set_latency_frames(1_200);
+    let mut budget = bus.busy_budget(true);
+    assert!(bus.reopen_at(44_100, t0, &mut budget));
+    bus.set_timing(BusTiming {
+        play_out_max: Duration::ZERO,
+        ..TIMING
+    });
+    let (frames, lines) = capture(|| bus.play_out_frames());
+    assert_eq!(frames, 0, "a zero maximum: no play-out wait");
+    assert_eq!(lines.count("play_out_max_ms"), 0, "0 turns the wait off");
+}
+
+#[test]
+fn a_new_maximum_reports_a_bounded_play_out_again() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.set_latency_frames(u32::MAX);
+    let mut budget = bus.busy_budget(true);
+    assert!(bus.reopen_at(44_100, t0, &mut budget));
+    let (_, first) = capture(|| bus.play_out_frames());
+    assert_eq!(first.count("play_out_max_ms"), 1);
+    bus.set_timing(BusTiming {
+        play_out_max: Duration::from_millis(100),
+        ..TIMING
+    });
+    let (_, second) = capture(|| bus.play_out_frames());
+    assert_eq!(
+        second.count("play_out_max_ms"),
+        1,
+        "the new maximum is reported once as well"
+    );
+}
+
+#[test]
+fn a_reopened_stream_has_nothing_old_left_to_play_out() {
+    let (_b, device, mut bus, t0) = setup(true);
+    device.set_latency_frames(1_200);
+    let mut budget = bus.busy_budget(true);
+    assert!(bus.reopen_at(44_100, t0, &mut budget));
+    bus.note_sound_end(bus.now_frame() + 100);
+    assert!(!bus.played_out(), "the end is still queued");
+    assert!(bus.reopen_at(48_000, t0, &mut budget));
+    assert!(
+        bus.played_out(),
+        "the reopen discarded the old stream: nothing of the old end is queued"
+    );
 }

@@ -301,6 +301,7 @@ Every value is read while the application runs (live settings spec §7): a new v
 | `reconnect_interval_ms` | 2000 | device retry period |
 | `device_busy_retries` | 3 | how many more times one rate change (the new rate and the way back together) tries a device that answered busy; only on an idle output (0–5) |
 | `device_busy_retry_ms` | 20 | wait before each of those tries. The conductor waits meanwhile, delaying every output's planned events: at most retries × wait per rate change (60 ms by default, 200 ms at most); keep it below `schedule_lead_ms` (0–40) |
+| `play_out_max_ms` | 500 | the longest a rate change on a bit-perfect output waits for the device to play what its stream still holds before closing it (bit-perfect spec BR17); the wait is what the stream reports, bounded by this so that a bogus measurement cannot hold the output silent (0–2000; 0 never waits) |
 | `gain_smoothing_ms` | 20 | volume smoothing |
 | `save_debounce_ms` | 1000 | autosave delay |
 | `missing_recheck_ms` | 30000 | how often files not found are looked for again |
