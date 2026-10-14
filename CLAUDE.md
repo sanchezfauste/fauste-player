@@ -36,7 +36,7 @@ Windows, macOS). Read [`README.md`](README.md) for the overview and
 6. **Safety lints.**
    - `unsafe_code` is forbidden.
    - `unwrap`, `expect` and `panic` are denied outside tests.
-   - `fp-engine`, `fp-backends`, `fp-decode` and `fp-analysis` deny
+   - `fp-engine`, `fp-backends`, `fp-decode`, `fp-analysis` and `fp-dsp` deny
      `clippy::indexing_slicing` (use `get`); prefer `get` everywhere.
    - Test-only hooks go behind the `test-hooks` feature of `fp-app`.
 7. **Behaviour lives in `fp-model`.** Player rules are pure functions
@@ -152,7 +152,7 @@ hand: release-please writes it from the commits.
 - Conventional Commits: `type(scope)!: summary`. Types: `feat`, `fix`,
   `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `style`,
   `revert`. Scopes are crate or area names (`model`, `store`, `engine`,
-  `backends`, `decode`, `analysis`, `app`, `ui`, `ci`, `docs`).
+  `backends`, `decode`, `dsp`, `analysis`, `app`, `ui`, `ci`, `docs`).
 - The body explains *why*. Agent commits end with the co-author trailer the
   harness provides.
 - SemVer. release-please owns `CHANGELOG.md`, the version in `Cargo.toml` and
@@ -166,6 +166,7 @@ hand: release-please writes it from the commits.
 | `crates/fp-model` | State, commands, reducer (rules), config, sessions |
 | `crates/fp-store` | Persistence, backups, migrations, lenient config |
 | `crates/fp-decode` | File decoding (symphonia, DSD, WavPack, Monkey's Audio, Opus) and downmix |
+| `crates/fp-dsp` | K-weighting, true peak, BS.1770 gating: pure signal processing shared by the engine and the analysis |
 | `crates/fp-backends` | `AudioBackend` trait, cpal, Null, Offline |
 | `crates/fp-engine` | Mixer, sources, buses, workers, engine, conductor |
 | `crates/fp-analysis` | Metadata, signal analysis, cache, pool |

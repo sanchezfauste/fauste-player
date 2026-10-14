@@ -37,6 +37,7 @@
   - **K-weighted mean square** per channel, for loudness (ITU-R BS.1770): the pre-filter (high shelf) and the RLB high-pass, with coefficients derived for the bus rate from the standard's analogue prototypes.
 - **Storage:** sums of squares, rectified sums, K-weighted sums and the frame count accumulate in `SourceShared` atomics. The conductor takes them every tick, so nothing is lost between ticks.
 - **Real-time rules:** filter states live in the slot, coefficients are computed at attach, and nothing is allocated. The true-peak switch is an atomic flag in `BusShared`, set from the configuration.
+- **Code:** the K-weighting and the true-peak interpolator live in the `fp-dsp` crate, shared with the analysis (loudness normalization spec N6).
 
 ## M2. Ballistics and loudness (conductor thread)
 

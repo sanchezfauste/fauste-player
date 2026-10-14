@@ -239,6 +239,7 @@ mode). Without it, the OS locations are used; see
 | [`fp-model`](crates/fp-model) | Pure domain state and player rules: commands in, engine actions out |
 | [`fp-store`](crates/fp-store) | Atomic JSON persistence, backups, migrations |
 | [`fp-decode`](crates/fp-decode) | File decoding (symphonia) to stereo `f32` |
+| [`fp-dsp`](crates/fp-dsp) | Signal processing shared by the meters and the analysis: K-weighting, true peak, BS.1770 loudness |
 | [`fp-backends`](crates/fp-backends) | Audio backends: system through cpal, Null, Offline for tests |
 | [`fp-engine`](crates/fp-engine) | Real-time mixer, buses, decode workers, the conductor thread |
 | [`fp-analysis`](crates/fp-analysis) | Tags, covers, peaks, automatic markers, cache, background pool |
