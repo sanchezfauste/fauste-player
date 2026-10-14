@@ -1,9 +1,3 @@
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    clippy::indexing_slicing
-)]
 //! Hardware check of the bit-perfect rate cut (Phase 4 spec BR6, BR8) and
 //! of the native DSD stop: when the engine closes a device stream to reopen
 //! it at another rate, how much audio is still queued in the driver and
@@ -31,10 +25,12 @@
 //! `cargo run -p fp-engine --example rate_cut_tail -- [card] [buffer frames]`
 //! (`card` is the ALSA card id, `AUDIO` by default; `buffer` 512).
 
+use std::error::Error;
 use std::f64::consts::PI;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use fp_backends::{
@@ -54,6 +50,13 @@ const PCM_AMPLITUDE: f64 = 0.015_85;
 /// −40 dB of the DSD modulation range.
 const DSD_AMPLITUDE: f64 = 0.01;
 const DSD64: u32 = 2_822_400;
+
+type Fallible<T> = Result<T, Box<dyn Error>>;
+
+/// A probe lock; a panicked holder leaves the data usable.
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 /// What a dropped stream left behind.
 #[derive(Debug, Clone)]
@@ -148,7 +151,12 @@ impl Renderer for TapRenderer {
 }
 
 struct TapStream {
+    /// `None` only while it is dropped.
     inner: Option<Box<dyn OutputStream>>,
+    /// The inner stream's, read at its open.
+    config: StreamConfig,
+    format: SampleFormat,
+    dsd: Option<fp_backends::dsd::DsdStream>,
     counters: Arc<Counters>,
     probe: Arc<Probe>,
     proc_dir: PathBuf,
@@ -156,13 +164,17 @@ struct TapStream {
 
 impl OutputStream for TapStream {
     fn config(&self) -> StreamConfig {
-        self.inner.as_ref().unwrap().config()
+        self.config
     }
     fn sample_format(&self) -> SampleFormat {
-        self.inner.as_ref().unwrap().sample_format()
+        self.format
     }
     fn dsd(&self) -> Option<fp_backends::dsd::DsdStream> {
-        self.inner.as_ref().unwrap().dsd()
+        self.dsd
+    }
+    /// What the engine waits for before it closes the stream.
+    fn latency_frames(&self) -> Option<u32> {
+        self.inner.as_ref().and_then(|s| s.latency_frames())
     }
 }
 
@@ -195,11 +207,11 @@ impl Drop for TapStream {
             .map(str::trim)
             .collect::<Vec<_>>()
             .join(", ");
-        let config = self.config();
+        let config = self.config;
         let reported = self.inner.as_ref().and_then(|s| s.latency_frames());
         self.inner = None;
         let report = CloseReport {
-            label: self.probe.label.lock().unwrap().clone(),
+            label: lock(&self.probe.label).clone(),
             config,
             delay: status_field(&status, "delay"),
             hw_ptr: status_field(&status, "hw_ptr"),
@@ -212,7 +224,7 @@ impl Drop for TapStream {
             open_for,
             since_sound,
         };
-        self.probe.reports.lock().unwrap().push(report);
+        lock(&self.probe.reports).push(report);
     }
 }
 
@@ -252,6 +264,9 @@ impl AudioBackend for TapBackend {
             .inner
             .open_output(device, config, Box::new(tap), errors)?;
         Ok(Box::new(TapStream {
+            config: inner.config(),
+            format: inner.sample_format(),
+            dsd: inner.dsd(),
             inner: Some(inner),
             counters,
             probe: self.probe.clone(),
@@ -260,7 +275,7 @@ impl AudioBackend for TapBackend {
     }
 }
 
-fn sine_wav(dir: &Path, name: &str, rate: u32, secs: f64) -> PathBuf {
+fn sine_wav(dir: &Path, name: &str, rate: u32, secs: f64) -> Fallible<PathBuf> {
     let path = dir.join(name);
     let spec = hound::WavSpec {
         channels: 2,
@@ -268,20 +283,20 @@ fn sine_wav(dir: &Path, name: &str, rate: u32, secs: f64) -> PathBuf {
         bits_per_sample: 24,
         sample_format: hound::SampleFormat::Int,
     };
-    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    let mut w = hound::WavWriter::create(&path, spec)?;
     let frames = (secs * f64::from(rate)) as usize;
     for i in 0..frames {
         let v = PCM_AMPLITUDE * (2.0 * PI * 1000.0 * i as f64 / f64::from(rate)).sin();
         let s = (v * 8_388_608.0).round() as i32;
-        w.write_sample(s).unwrap();
-        w.write_sample(s).unwrap();
+        w.write_sample(s)?;
+        w.write_sample(s)?;
     }
-    w.finalize().unwrap();
-    path
+    w.finalize()?;
+    Ok(path)
 }
 
 /// A stereo DSD64 DSF of a quiet 1 kHz tone (second-order modulator).
-fn sine_dsf(dir: &Path, name: &str, secs: f64) -> PathBuf {
+fn sine_dsf(dir: &Path, name: &str, secs: f64) -> Fallible<PathBuf> {
     let bits = (secs * f64::from(DSD64)) as usize / 8 * 8;
     let (mut i1, mut i2, mut y) = (0.0f64, 0.0f64, 0.0f64);
     let mut bytes = Vec::with_capacity(bits / 8);
@@ -304,8 +319,8 @@ fn sine_dsf(dir: &Path, name: &str, secs: f64) -> PathBuf {
     for g in 0..blocks {
         for _ in 0..2 {
             let mut block = vec![0x69u8.reverse_bits(); BLOCK];
-            for (i, b) in bytes.iter().skip(g * BLOCK).take(BLOCK).enumerate() {
-                block[i] = b.reverse_bits();
+            for (slot, b) in block.iter_mut().zip(bytes.iter().skip(g * BLOCK)) {
+                *slot = b.reverse_bits();
             }
             data.extend(block);
         }
@@ -330,8 +345,8 @@ fn sine_dsf(dir: &Path, name: &str, secs: f64) -> PathBuf {
     f.extend((12 + data.len() as u64).to_le_bytes());
     f.extend(data);
     let path = dir.join(name);
-    std::fs::write(&path, f).unwrap();
-    path
+    std::fs::write(&path, f)?;
+    Ok(path)
 }
 
 fn pcm(rate: u32) -> Option<AudioFormat> {
@@ -385,7 +400,7 @@ impl Rig {
     }
 
     fn label(&self, label: &str) {
-        *self.probe.label.lock().unwrap() = label.to_owned();
+        *lock(&self.probe.label) = label.to_owned();
     }
 }
 
@@ -483,7 +498,17 @@ fn print(reports: &[CloseReport]) {
     }
 }
 
-fn main() {
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("rate_cut_tail: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Fallible<()> {
     let buffer: u32 = std::env::args()
         .nth(2)
         .and_then(|b| b.parse().ok())
@@ -494,25 +519,20 @@ fn main() {
     let alsa = fp_backends::system_backends()
         .into_iter()
         .find(|b| b.id().0 == "alsa")
-        .expect("no ALSA host");
-    let devices = alsa.enumerate_devices().unwrap();
+        .ok_or("no ALSA host")?;
+    let devices = alsa.enumerate_devices()?;
     let wanted = format!("hw:CARD={card},DEV=0");
-    let device = devices
-        .iter()
-        .find(|d| d.id.0.ends_with(&wanted))
-        .unwrap_or_else(|| {
-            for d in &devices {
-                eprintln!("  {}", d.id.0);
-            }
-            panic!("no {wanted} device");
-        })
-        .id
-        .0
-        .clone();
+    let Some(found) = devices.iter().find(|d| d.id.0.ends_with(&wanted)) else {
+        for d in &devices {
+            eprintln!("  {}", d.id.0);
+        }
+        return Err(format!("no {wanted} device").into());
+    };
+    let device = found.id.0.clone();
     println!("device {device}, buffer {buffer} frames");
-    let dir = tempfile::tempdir().unwrap();
-    let a = sine_wav(dir.path(), "a.wav", 44_100, 1.2);
-    let b = sine_wav(dir.path(), "b.wav", 96_000, 0.6);
+    let dir = tempfile::tempdir()?;
+    let a = sine_wav(dir.path(), "a.wav", 44_100, 1.2)?;
+    let b = sine_wav(dir.path(), "b.wav", 96_000, 0.6)?;
     let rounds: usize = std::env::var("ROUNDS")
         .ok()
         .and_then(|r| r.parse().ok())
@@ -539,7 +559,7 @@ fn main() {
             println!("  xruns {}", b.counters.xruns);
         }
         drop(r.engine);
-        print(&r.probe.reports.lock().unwrap());
+        print(&lock(&r.probe.reports));
     }
 
     println!("BR8 hard start 44.1 kHz → 96 kHz (declick, then the cut):");
@@ -562,11 +582,11 @@ fn main() {
             println!("  xruns {}", b.counters.xruns);
         }
         drop(r.engine);
-        print(&r.probe.reports.lock().unwrap());
+        print(&lock(&r.probe.reports));
     }
 
     println!("BR6 scheduled cut at the end of the file (no declick):");
-    let short = sine_wav(dir.path(), "short.wav", 44_100, 0.5);
+    let short = sine_wav(dir.path(), "short.wav", 44_100, 0.5)?;
     for _ in 0..rounds {
         let mut r = rig(alsa.clone(), &device, buffer, None);
         r.label("open");
@@ -587,10 +607,10 @@ fn main() {
             println!("  xruns {}", b.counters.xruns);
         }
         drop(r.engine);
-        print(&r.probe.reports.lock().unwrap());
+        print(&lock(&r.probe.reports));
     }
 
-    let tone = sine_dsf(dir.path(), "d.dsf", 0.5);
+    let tone = sine_dsf(dir.path(), "d.dsf", 0.5)?;
     for silence in [fp_model::dsd::DEFAULT_DSD_SILENCE_MS, 0.0] {
         println!("native DSD64 track ending, DSD silence {silence} ms, back to PCM:");
         for _ in 0..rounds.min(3) {
@@ -609,7 +629,8 @@ fn main() {
                 .any(|e| matches!(e, EngineEvent::DsdStarted { .. }));
             drop(r.engine);
             println!("  (DSD carried unchanged: {dsd})");
-            print(&r.probe.reports.lock().unwrap());
+            print(&lock(&r.probe.reports));
         }
     }
+    Ok(())
 }
