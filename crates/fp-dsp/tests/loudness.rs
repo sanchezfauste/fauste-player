@@ -189,3 +189,14 @@ fn a_zero_rate_is_treated_as_one_hertz_without_panicking() {
     // Four frames at 1 Hz are four hops of one frame: one block.
     let _ = m.finish();
 }
+
+#[test]
+fn an_absurd_finite_sample_gives_no_measurement() {
+    // A corrupted float file: one huge but finite sample would read about
+    // +720 LUFS and lead to a cut that silences the track.
+    let mut p = programme(48_000, &[(Some(-20.0), 5.0)]);
+    p[1_000] = 1e38;
+    let mut m = LoudnessMeter::new(48_000);
+    m.push(&p);
+    assert_eq!(m.finish(), None);
+}

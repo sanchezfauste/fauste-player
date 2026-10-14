@@ -22,6 +22,11 @@ const ABSOLUTE_GATE_LUFS: f64 = -70.0;
 const RELATIVE_GATE_LU: f64 = -10.0;
 /// −0.691: the offset that makes a 997 Hz sine read its level.
 const LOUDNESS_OFFSET: f64 = -0.691;
+/// The largest true peak a real programme can have, dBTP. Decoded float
+/// PCM may go over full scale, but never by 60 dB (1000 times): above it
+/// the file is corrupt, and a measurement would lead to a cut that
+/// silences the track. A validity bound, not a setting.
+const MAX_PLAUSIBLE_DBTP: f64 = 60.0;
 /// Hops per gating block: 4 × 100 ms = 400 ms, 75 % overlap.
 const HOPS_PER_BLOCK: usize = 4;
 
@@ -93,7 +98,8 @@ impl LoudnessMeter {
     }
 
     /// The result so far; `None` with fewer than 400 ms pushed (one gating
-    /// block, spec N5) or when a value is not finite.
+    /// block, spec N5), when a value is not finite, or when the true peak is
+    /// beyond any real programme (`MAX_PLAUSIBLE_DBTP`, a corrupt file).
     pub fn finish(&self) -> Option<Loudness> {
         if self.hops.len() < HOPS_PER_BLOCK {
             return None;
@@ -123,8 +129,10 @@ impl LoudnessMeter {
         } else {
             SILENCE_DBTP
         };
-        let finite = integrated_lufs.is_none_or(f64::is_finite) && true_peak_dbtp.is_finite();
-        finite.then_some(Loudness {
+        let valid = integrated_lufs.is_none_or(f64::is_finite)
+            && true_peak_dbtp.is_finite()
+            && true_peak_dbtp <= MAX_PLAUSIBLE_DBTP;
+        valid.then_some(Loudness {
             integrated_lufs,
             true_peak_dbtp,
         })

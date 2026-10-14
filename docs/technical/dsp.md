@@ -23,7 +23,9 @@ A programme shorter than one gating block (400 ms) gives no measurement;
 one with no block above the absolute gate has no integrated loudness. The
 true peak of digital silence is reported as `SILENCE_DBTP` (−200 dBTP)
 so that it is always a finite number. Samples that are not finite count
-as silence, and a trailing half frame is ignored.
+as silence, and a trailing half frame is ignored. A true peak above
++60 dBTP (`MAX_PLAUSIBLE_DBTP`) means a corrupt file, and gives no
+measurement rather than one that would silence the track.
 
 Tests: `crates/fp-dsp/tests/filters.rs` (the standard's coefficients, EBU
 Tech 3341 true-peak cases 15–23) and `crates/fp-dsp/tests/loudness.rs`

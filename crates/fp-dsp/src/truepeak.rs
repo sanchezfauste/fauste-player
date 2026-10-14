@@ -36,6 +36,7 @@ pub struct TruePeak {
 impl TruePeak {
     /// Feeds one sample; returns the largest magnitude among the four
     /// interpolated points it produces.
+    #[inline]
     pub fn push(&mut self, x: f32) -> f32 {
         if let Some(slot) = self.history.get_mut(self.next) {
             *slot = x;
