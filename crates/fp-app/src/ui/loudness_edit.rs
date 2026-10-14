@@ -18,7 +18,7 @@ const WIDTH: f32 = 300.0;
 /// The measurement line of `track` ("Loudness: −14.2 LUFS, true peak …" or
 /// "Loudness: not measured").
 pub(crate) fn measurement(scene: &Scene<'_>, track: &Track) -> String {
-    view::loudness_lines(track)
+    view::loudness_lines(track, &scene.state.config.loudness)
         .first()
         .map(|m| widgets::tr_message(scene.i18n, m))
         .unwrap_or_default()
@@ -41,16 +41,10 @@ pub(crate) fn exclude(ui: &mut Ui, scene: &Scene<'_>, track: &Track) {
     }
 }
 
-/// The trim the slider shows: the stored one within ± `max_trim_db` (as
-/// the gain rule limits it, N10); one that is not a number counts as none.
+/// The trim the slider shows: the one in use (`fp_model::trim_in_use`,
+/// as the gain rule limits it, N7).
 fn trim_shown(scene: &Scene<'_>, track: &Track) -> f32 {
-    let max = max_trim(scene);
-    let trim = track.loudness_edit.trim_db;
-    if trim.is_finite() {
-        trim.clamp(-max, max)
-    } else {
-        0.0
-    }
+    fp_model::trim_in_use(&scene.state.config.loudness, &track.loudness_edit)
 }
 
 fn max_trim(scene: &Scene<'_>) -> f32 {

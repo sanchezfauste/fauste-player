@@ -332,6 +332,12 @@ band) stays a separate value, whatever the normalization target (Q4).
   line after the format: "Loudness: {lufs} LUFS, true peak {tp} dBTP" when
   measured, "Loudness: not measured" otherwise, and "Excluded from
   normalization" or "Trim {trim} dB" when the edit is not the default.
+  Every trim the interface shows (this line, the badge tooltip of N18,
+  the Trim slider of N20 and N21) is the one in use,
+  `fp_model::trim_in_use(config, edit)`: the saved trim within ±
+  `max_trim_db`, as N7 computes the gain. When a lowered maximum limits a
+  saved trim, this line reads "Trim {trim} dB (saved {saved} dB, limited by
+  the maximum trim)".
 
 ### 8.2 Per-track controls
 
@@ -391,6 +397,7 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `track-loudness-unmeasured` | "Loudness: not measured" |
 | `track-loudness-excluded` | "Excluded from normalization" |
 | `track-loudness-trim` | "Trim { $trim } dB" |
+| `track-loudness-trim-limited` | "Trim { $trim } dB (saved { $saved } dB, limited by the maximum trim)" |
 | `wave-loudness` | "Loudness…" |
 | `loudness-exclude` | "Exclude from normalization" |
 | `loudness-trim` | "Trim" |
@@ -434,7 +441,7 @@ sleeps.
 | `fp-dsp` (`tests/loudness.rs`) | N4: EBU Tech 3341 / 3342 cases that apply to a file measurement (1 kHz sine at −23 dBFS reads −23.0 LUFS ±0.1 at 44.1 and 48 kHz; the gating cases); true peak of the BS.1770 test signals; the moved K-weighting keeps its existing tests. N5: silence → `None`; a 200 ms file is not measured (`None`, no warning); non-finite input does not panic. |
 | `fp-analysis` (`tests/analyze.rs`, new `tests/loudness_pass.rs`) | N4–N6: a generated WAV gets a measurement; a cache entry round-trips `loudness` and `loudness_pass`; an old entry without them decodes; a file truncated mid-stream is measured up to the damage. N6b: the pass fills the existing entry in place and leaves markers byte-identical; it runs only when the normal queue is empty and yields to a new normal job; a short file or a failure is recorded and not retried; a `LOUDNESS_VERSION` bump re-queues; it runs with `normalize` off. |
 | `fp-engine` (`tests/mixer.rs`, `audio_path_audit.rs`) | N14: a slot attached with +6 dB outputs twice the amplitude and the meter reads it; a fader move keeps the gain; the audit covers `Attach` with a gain (no allocation on the callback). N15: a seek and a forced rate change keep the gain. N16: gain 1 on a bit-perfect bus stays bit-exact; gain ≠ 1 clears the unaltered flag. N17 (`tests/dsd_output.rs`, `fp-model/tests/dsd_rules.rs`): a DSD request with a gain on a DoP or native device plays converted, also when loaded paused and resumed; `dsd_decision` falls back with `NormalizationGain`. |
-| `fp-app` kittests (new `tests/loudness_ui.rs`) | N18: each badge and its accessible name; N19: tooltip lines; N20: the Loudness… popup sends `SetTrackLoudness`; N21: the cart dialog does too; N22: the Settings tab updates the config and its sliders keep the ranges. |
+| `fp-app` kittests (new `tests/loudness_ui.rs`) | N18: each badge and its accessible name; N19: tooltip lines, the trim in use and the saved one when the maximum limits it; N20: the Loudness… popup sends `SetTrackLoudness`; N21: the cart dialog does too; N22: the Settings tab updates the config and its sliders keep the ranges. |
 | `fp-remote` (`tests/api.rs`) | N23: the DTO fields for each status; N24: the endpoint, a refused trim and an unknown track. |
 
 ## 11. Documentation to update

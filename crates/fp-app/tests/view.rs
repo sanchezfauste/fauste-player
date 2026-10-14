@@ -1072,21 +1072,52 @@ fn n18_a_bit_perfect_player_says_nothing_while_normalization_is_off() {
 #[test]
 fn n19_the_tooltip_has_a_loudness_line() {
     let mut t = measured_track(Some(-14.24), -0.81);
+    let c = normalizing();
     assert_eq!(
-        loudness_lines(&t),
+        loudness_lines(&t, &c),
         vec![msg("track-loudness", &[("lufs", "−14.2"), ("tp", "−0.8")])]
     );
     t.loudness_edit.trim_db = 1.5;
     assert_eq!(
-        loudness_lines(&t)[1],
+        loudness_lines(&t, &c)[1],
         msg("track-loudness-trim", &[("trim", "+1.5")])
     );
     t.loudness_edit.excluded = true;
-    assert_eq!(loudness_lines(&t)[1], msg("track-loudness-excluded", &[]));
+    assert_eq!(
+        loudness_lines(&t, &c)[1],
+        msg("track-loudness-excluded", &[])
+    );
     t.loudness = None;
-    assert_eq!(loudness_lines(&t)[0], msg("track-loudness-unmeasured", &[]));
+    assert_eq!(
+        loudness_lines(&t, &c)[0],
+        msg("track-loudness-unmeasured", &[])
+    );
     let silent = measured_track(None, -90.0);
-    assert_eq!(loudness_lines(&silent)[0].args[0], ("lufs", "—".to_owned()));
+    assert_eq!(
+        loudness_lines(&silent, &c)[0].args[0],
+        ("lufs", "—".to_owned())
+    );
+}
+
+#[test]
+fn n19_the_tooltip_shows_the_trim_in_use_and_the_saved_one() {
+    // A trim saved above the current maximum is limited by it (N7): the
+    // line names what is in use and, beside it, what is saved.
+    let mut t = measured_track(Some(-14.0), -1.0);
+    t.loudness_edit.trim_db = -10.0;
+    let c = fp_model::LoudnessConfig {
+        max_trim_db: 6.0,
+        ..normalizing()
+    };
+    assert_eq!(
+        loudness_lines(&t, &c)[1],
+        msg(
+            "track-loudness-trim-limited",
+            &[("trim", "−6.0"), ("saved", "−10.0")]
+        )
+    );
+    t.loudness_edit.trim_db = f32::NAN;
+    assert_eq!(loudness_lines(&t, &c).len(), 1, "no number, no trim");
 }
 
 #[test]
@@ -1126,6 +1157,7 @@ fn every_message_the_view_returns_exists_in_english() {
         "track-loudness-unmeasured",
         "track-loudness-excluded",
         "track-loudness-trim",
+        "track-loudness-trim-limited",
         "tip-gain-earlier-settings",
     ] {
         assert_ne!(en.tr(key), key, "{key}");
@@ -1144,4 +1176,24 @@ fn n18_a_gain_started_with_earlier_settings_says_so() {
     let b = gain_badge(&applied(4.0, None), &config, &t).unwrap();
     assert_eq!(b.text, msg("badge-gain", &[("gain", "+4.0")]));
     assert_eq!(b.tip.last(), Some(&msg("tip-gain-earlier-settings", &[])));
+}
+
+#[test]
+fn n18_the_badge_tooltip_quotes_the_trim_in_use() {
+    // A trim stored above a maximum lowered since is limited by it (N7):
+    // the tooltip names the trim the gain was computed with.
+    let mut t = measured_track(Some(-20.0), -30.0);
+    t.loudness_edit.trim_db = 10.0;
+    let config = fp_model::LoudnessConfig {
+        max_trim_db: 6.0,
+        ..normalizing()
+    };
+    let b = gain_badge(&applied(10.0, None), &config, &t).unwrap();
+    assert_eq!(
+        b.tip,
+        vec![msg(
+            "tip-gain-applied",
+            &[("target", "−16.0"), ("lufs", "−20.0"), ("trim", "+6.0")]
+        )]
+    );
 }

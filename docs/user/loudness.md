@@ -132,7 +132,11 @@ the next time the track is loaded, like any other change.
 **The track tooltip** of the playlist table shows the measurement
 ("Loudness: −14.2 LUFS, true peak −0.8 dBTP", or "Loudness: not measured")
 and, when it is not the default, the track's setting ("Excluded from
-normalization" or "Trim +1.5 dB").
+normalization" or "Trim +1.5 dB"). The trim shown is the one in use: when a
+lowered **Maximum trim** limits a trim saved earlier, the line also gives
+the saved value ("Trim +6.0 dB (saved +10.0 dB, limited by the maximum
+trim)"). The gain badge's tooltip and the **Trim** slider show the trim in
+use too.
 
 ## Choosing the settings
 

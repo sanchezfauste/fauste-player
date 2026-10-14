@@ -128,16 +128,7 @@ pub fn normalization(config: &LoudnessConfig, track: &Track, bit_perfect: bool) 
     let Some(lufs) = measured.integrated_lufs else {
         return Normalization::none(S::Silent);
     };
-    // A stored trim beyond the current maximum (lowered since) is limited
-    // by it; one that is not a number counts as none. A maximum that is
-    // not a number or below 0 (a configuration not validated) allows none.
-    let trim = track.loudness_edit.trim_db;
-    let max_trim = config.max_trim_db.max(0.0);
-    let trim = if trim.is_finite() {
-        trim.clamp(-max_trim, max_trim)
-    } else {
-        0.0
-    };
+    let trim = trim_in_use(config, &track.loudness_edit);
     let wanted = config.target_lufs - lufs + trim;
     // The ceiling and the maximum boost only limit boosts (Q2).
     let (gain, limited) = if wanted <= 0.0 {
@@ -165,6 +156,23 @@ pub fn normalization(config: &LoudnessConfig, track: &Track, bit_perfect: bool) 
     Normalization {
         gain_db,
         status: S::Applied { limited },
+    }
+}
+
+/// The trim N7 uses for `edit`: the stored one within ± `max_trim_db`
+/// (a maximum lowered since limits it); one that is not a number counts
+/// as none, and a maximum that is not a number or below 0 (a
+/// configuration not validated) allows none.
+pub fn trim_in_use(config: &LoudnessConfig, edit: &LoudnessEdit) -> f32 {
+    let max_trim = if config.max_trim_db.is_finite() {
+        config.max_trim_db.max(0.0)
+    } else {
+        0.0
+    };
+    if edit.trim_db.is_finite() {
+        edit.trim_db.clamp(-max_trim, max_trim)
+    } else {
+        0.0
     }
 }
 

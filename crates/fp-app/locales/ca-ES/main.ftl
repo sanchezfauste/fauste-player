@@ -384,6 +384,7 @@ track-loudness = Sonoritat: { $lufs } LUFS, true peak { $tp } dBTP
 track-loudness-unmeasured = Sonoritat: sense mesurar
 track-loudness-excluded = Exclosa de la normalització
 track-loudness-trim = Ajust { $trim } dB
+track-loudness-trim-limited = Ajust { $trim } dB (desat { $saved } dB, limitat per l'ajust màxim)
 file-missing-tip = No es troba el fitxer: { $path }
 file-unreadable-tip = No es pot llegir el fitxer: { $path }
 file-missing-reason = No es troba el fitxer

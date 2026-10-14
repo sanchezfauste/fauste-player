@@ -647,7 +647,10 @@ pub fn gain_badge(
                 &[
                     ("target", decimal(config.target_lufs)),
                     ("lufs", lufs),
-                    ("trim", signed_db(track.loudness_edit.trim_db)),
+                    (
+                        "trim",
+                        signed_db(fp_model::trim_in_use(config, &track.loudness_edit)),
+                    ),
                 ],
             )];
             match limited {
@@ -676,7 +679,9 @@ pub fn gain_badge(
 }
 
 /// N19: the loudness lines of the track tooltip, drawn under its fields.
-pub fn loudness_lines(track: &Track) -> Vec<Message> {
+/// The trim is the one in use under `config` (N7), with the saved one
+/// beside it when a lowered maximum limits it.
+pub fn loudness_lines(track: &Track, config: &fp_model::LoudnessConfig) -> Vec<Message> {
     let mut lines = vec![match track.loudness {
         Some(m) => Message::new(
             "track-loudness",
@@ -694,10 +699,18 @@ pub fn loudness_lines(track: &Track) -> Vec<Message> {
     if edit.excluded {
         lines.push(Message::new("track-loudness-excluded", &[]));
     } else if edit.trim_db.is_finite() && edit.trim_db != 0.0 {
-        lines.push(Message::new(
-            "track-loudness-trim",
-            &[("trim", signed_db(edit.trim_db))],
-        ));
+        let in_use = fp_model::trim_in_use(config, &edit);
+        lines.push(if in_use == edit.trim_db {
+            Message::new("track-loudness-trim", &[("trim", signed_db(in_use))])
+        } else {
+            Message::new(
+                "track-loudness-trim-limited",
+                &[
+                    ("trim", signed_db(in_use)),
+                    ("saved", signed_db(edit.trim_db)),
+                ],
+            )
+        });
     }
     lines
 }

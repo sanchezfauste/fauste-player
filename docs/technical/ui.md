@@ -158,7 +158,11 @@ extension, then the sample rate and the bit depth when known. Under the
 fields, `view::loudness_lines` adds the loudness measurement ("Loudness:
 −14.2 LUFS, true peak −0.8 dBTP", `—` for a silent file, or "Loudness: not
 measured") and the track's loudness edit when it is not the default
-(loudness normalization spec N19). They are sentences, not label/value
+(loudness normalization spec N19). The trim shown is the one in use
+(`fp_model::trim_in_use`: the saved trim within ± the current maximum
+trim); when a lowered maximum limits it, the line
+(`track-loudness-trim-limited`) also gives the saved value. The gain badge's
+tooltip and the Trim slider show the trim in use too. They are sentences, not label/value
 pairs, so they are plain lines rather than rows of the grid.
 
 **Menu item.** *Edit tags…* is enabled by `view::tag_edit_availability`

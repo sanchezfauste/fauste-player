@@ -384,6 +384,7 @@ track-loudness = Sonoridade: { $lufs } LUFS, true peak { $tp } dBTP
 track-loudness-unmeasured = Sonoridade: sen medir
 track-loudness-excluded = Excluída da normalización
 track-loudness-trim = Axuste { $trim } dB
+track-loudness-trim-limited = Axuste { $trim } dB (gardado { $saved } dB, limitado polo axuste máximo)
 file-missing-tip = Non se atopa o ficheiro: { $path }
 file-unreadable-tip = Non se pode ler o ficheiro: { $path }
 file-missing-reason = Non se atopa o ficheiro
