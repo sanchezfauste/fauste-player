@@ -149,7 +149,12 @@ pub fn normalization(config: &LoudnessConfig, track: &Track, bit_perfect: bool) 
             (wanted, None)
         }
     };
-    let gain_db = (gain * 100.0).round() / 100.0;
+    let mut gain_db = (gain * 100.0).round() / 100.0;
+    // Rounding up must not take a boost the ceiling limits above it: such
+    // a gain rounds down instead.
+    if limited == Some(GainLimit::TruePeak) && gain_db > gain {
+        gain_db = (gain * 100.0).floor() / 100.0;
+    }
     if !gain_db.is_finite() {
         return Normalization::none(S::NotMeasured);
     }

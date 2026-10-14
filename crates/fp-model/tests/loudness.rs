@@ -201,6 +201,30 @@ fn n7_the_gain_is_rounded_to_a_hundredth_of_a_db() {
 }
 
 #[test]
+fn n7_rounding_never_takes_a_boost_above_the_true_peak_ceiling() {
+    // The ceiling leaves +2.006 dB: rounding to the nearest hundredth
+    // (+2.01) would pass it, so a gain the ceiling limits rounds down.
+    let config = on();
+    for tp in [-3.006, -3.009, -2.995, -4.9951] {
+        let t = track(Some(-20.0), tp);
+        let n = normalization(&config, &t, false);
+        assert_eq!(
+            n.status,
+            S::Applied {
+                limited: Some(GainLimit::TruePeak)
+            },
+            "{tp}"
+        );
+        let room = config.true_peak_ceiling_dbtp - tp;
+        assert!(n.gain_db <= room, "{tp}: {} > {room}", n.gain_db);
+        assert!(room - n.gain_db < 0.01, "{tp}: {} too low", n.gain_db);
+    }
+    // A room already on a hundredth keeps it.
+    let t = track(Some(-20.0), -3.01);
+    assert_eq!(normalization(&config, &t, false).gain_db, 2.01);
+}
+
+#[test]
 fn unity_is_exactly_one() {
     assert_eq!(Normalization::default().linear_gain(), 1.0);
     let six = Normalization {
