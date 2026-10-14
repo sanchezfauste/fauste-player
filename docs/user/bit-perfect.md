@@ -28,6 +28,10 @@ bit-perfect device plays differently from the others:
   each other with no gap and no overlap. When the rate cannot follow (see
   [What happens on a bit-perfect device](#what-happens-on-a-bit-perfect-device)),
   the next track starts at once, converted to the device's rate.
+- **No loudness normalization.** A track on a bit-perfect device always
+  plays at unity gain, even with [loudness normalization](loudness.md#bit-perfect-outputs)
+  on: the header says **Not normalized**. Other players and carts are
+  normalized as usual.
 - **The volume is held at 100 %.** The player's volume fader is locked at
   the top: on screen, on [MIDI](midi.md) controllers and over the
   [remote API and OSC](remote-control.md). It goes to 100 % when bit-perfect
@@ -214,6 +218,10 @@ its Main device unchanged. All of these must hold:
   are known. Tracks an earlier version analysed get their format once
   analysed again (the start-up notice, or Settings → Analysis), or as soon
   as a player shows them or a cart holds them;
+- the track plays at unity gain: a bit-perfect output is never
+  normalized, but a track that started with a normalization gain before its
+  device was turned bit-perfect keeps that gain until it stops, and BP stays
+  off for it;
 - the volume is held at 100 % on a bit-perfect output, no fade runs (Fade
   stop, the pause and resume ramps and the short click-free stop of a track
   are the only fades left on such a player), and nothing else plays on the same outputs.

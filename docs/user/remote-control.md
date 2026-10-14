@@ -78,7 +78,8 @@ A client can:
 - edit: create, rename and delete playlists; add a track that is already
   loaded, and remove, move or duplicate entries; create, rename, resize and
   delete cart pages, and set up a cart with a loaded track; set or reset
-  markers.
+  markers; exclude a track from [loudness normalization](loudness.md) or
+  trim it.
 
 Removing what is on air is refused, as it is on screen. Files that are not
 loaded yet cannot be added remotely: they live on this computer, so add
@@ -91,6 +92,18 @@ remotely, with the same limits as on screen: `play` and `previous` switch
 at once, without a crossfade, and its volume is held at 100 %. A volume
 below 100 % is refused (`409`, with the reason), and exactly 100 % is
 accepted. Each player says whether its volume is held (`fader_locked`).
+
+Each track carries its loudness measurement (`loudness`, `null` until it is
+measured) and its setting (`loudness_edit`: `excluded` and `trim_db`). A
+playing or paused player, and each playing cart, says which
+[normalization](loudness.md) gain its track started with and why
+(`normalization`: `gain_db` and a `status` such as `applied`,
+`not_measured` or `bit_perfect`). `PUT /api/v1/tracks/<id>/loudness` with
+`{"excluded": false, "trim_db": -1.5}` changes the setting, as the
+**Loudness…** popup does; a trim beyond the maximum trim is refused (`409`,
+with the reason). The normalization settings themselves (on or off, the
+target, the limits) are only changed on this computer. OSC and MIDI have no
+loudness controls.
 
 The full
 reference is in [the technical documentation](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).

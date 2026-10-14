@@ -48,6 +48,22 @@ over HTTP, live events over Server-Sent Events, OSC, and Settings → Remote.
 | `current`, `next` | `null` or `{entry, track}` |
 | `cue` | `null` or `{entry}` (pre-listening) |
 | `elapsed_secs`, `remaining_secs` | As the countdown computes them: the position in track seconds, and cue-out minus it. `null` without a current entry |
+| `normalization` | `null` while the player is stopped; otherwise `{gain_db, status}`, the loudness normalization the current entry started with (see below) |
+
+**Normalization** (loudness normalization spec N23): `gain_db` is the fixed
+gain in dB (0 for every status but the two `applied`/`limited_*` ones) and
+`status` one of `applied`, `limited_true_peak` (a boost held back by the
+true-peak ceiling), `limited_max_boost` (held back by the maximum boost),
+`off` (normalization is off), `excluded` (the track is excluded),
+`not_measured` (no measurement yet), `silent` (nothing above the gate) or
+`bit_perfect` (the output is bit-perfect, so the source plays at unity
+gain). A source keeps the gain it started with while it plays: a change of
+the settings, the measurement or the edit applies to the next one. The value
+is the gain the model asked the engine for when the source started; in the
+rare case where a new preload races a transition the engine has already
+committed, the engine may play the earlier preload's gain for that one
+track, and the API does not see it. `config.loudness` itself is not
+exposed: station configuration stays local.
 
 **Playlist summary:** `id`, `name`, `entry_count`. **Playlist:** the
 summary plus `entries`, each with `id`, `track`, `repeat`, `stop_after`,
@@ -64,12 +80,14 @@ next) and `cued_on` (players pre-listening it).
 | `analyzed` | Whether background analysis has finished |
 | `format` | `null` or `{sample_rate, channels, bits}` |
 | `markers` | `cue_in`, `intro_end`, `outro_start`, `segue_start`, `cue_out`, each `null` or `{secs, source}` with `source` `auto` or `manual` |
+| `loudness` | `null` until the analysis measured the file; otherwise `{integrated_lufs, true_peak_dbtp}`, with `integrated_lufs` `null` for a silent file |
+| `loudness_edit` | `{excluded, trim_db}`: the operator's per-track setting (`PUT /tracks/{id}/loudness`) |
 
 The file path is never exposed.
 
 **Cartwall:** `shown_page`, `pages` (each `id`, `name`, `rows`, `cols`,
 `carts`), `playing` (in firing order: `cart`, `elapsed_secs`,
-`remaining_secs`) and `cue` (`null` or a cart id). **Cart:** `id`, `index`
+`remaining_secs`, `normalization` as for a Player, never `null`) and `cue` (`null` or a cart id). **Cart:** `id`, `index`
 (row-major, 0-based in its page), `name`, `kind` (`jingle`, `effect` or
 `spot`), `looped`, `exclusive`, `track` (`null` or a Track).
 
@@ -157,6 +175,7 @@ half applied.
 | `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | Set up a cart; `kind` is `jingle`, `effect` or `spot`. Keeping its track does not stop it; a new track or `null` does (C8) |
 | `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | Set a marker by hand, or with `null` let analysis fill it again; `kind` is `cue-in`, `intro-end`, `outro-start`, `segue-start` or `cue-out` |
 | `POST /tracks/{id}/markers/reset` | — | Drop every manual marker and analyse again |
+| `PUT /tracks/{id}/loudness` | `{"excluded": bool, "trim_db": f32}` | Exclude the track from loudness normalization, or trim its gain (loudness normalization spec N24). Both fields are required; another field or a wrong type is `400`; a trim beyond ± `loudness.max_trim_db` or not a number is `409 unavailable` with the model's reason. Allowed while the track plays: it applies the next time the track is loaded |
 
 Names are trimmed and must not be empty.
 
@@ -173,7 +192,7 @@ one line of JSON `data`.
 | `playlist` | A Playlist whose name or entries changed (or a new one) |
 | `playlist-removed` | `{id}` |
 | `cartwall` | The Cartwall, when pages, carts, the page shown, carts playing or the cart cue changed |
-| `track` | A Track of some playlist or cart whose metadata or markers changed (for example when analysis finishes) |
+| `track` | A Track of some playlist or cart whose metadata, markers, loudness measurement or loudness edit changed (for example when analysis finishes) |
 | `position` | `{players: [{id, elapsed_secs, remaining_secs}], carts: [{cart, elapsed_secs, remaining_secs}]}`, every `events.position_interval_ms` while a player or cart plays |
 | `resync` | The whole State again, after the client fell behind |
 
@@ -250,6 +269,10 @@ once (`""`, `0`, `0.0`; `-1` for an entry id) so a surface does not keep
 showing it. A subscription ends after
 `osc.subscription_ttl_secs` unless the client subscribes again, and at most
 `osc.max_subscribers` are kept.
+
+OSC carries nothing of loudness normalization (loudness normalization spec
+N24, N25): the gain is fixed per track and set in the interface or with
+`PUT /tracks/{id}/loudness`. MIDI has no action for it either.
 
 ## Errors
 

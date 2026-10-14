@@ -22,6 +22,8 @@
 | `ui/settings/devices.rs` | Settings → Audio outputs, Advanced view: per routed device the bit-perfect switch, its own rate and buffer (`offered_rates`, `offered_buffers`) and its DSD mode with the reason a mode is missing (`dsd_not_offered`), then the DSD mix and silence; the Basic \| Advanced selector is `view_selector` in `ui/settings.rs` |
 | `ui/settings/columns.rs` | Settings → Playlists → Table columns: `column_rows`, the checkboxes, the arrows (`move_column`) and Default columns; every change goes through `Scene::set_table_columns` |
 | `ui/settings/carts.rs`, `ui/settings/keys.rs` | Settings → Cartwall (pages, grid, cart editor, import and export) and → Keyboard shortcuts (capture, conflicts) |
+| `ui/settings/loudness.rs` | Settings → Loudness (loudness normalization spec N22): the Normalize loudness toggle, the target, true-peak ceiling, maximum boost and maximum trim sliders (ranges of N1), the notes that changes apply to tracks loaded afterwards and that a bit-perfect output is never normalized, and the count of tracks waiting for a measurement (`SettingsDeps::unmeasured`) |
+| `ui/loudness_edit.rs` | The per-track loudness controls (N20, N21): the measurement line, the Exclude from normalization toggle and the Trim slider, each change one `Command::SetTrackLoudness`; and the Loudness… popup (`popup`, drawn by `AppUi` after the CUE windows) |
 | `ui/settings/remote.rs` | Settings → Remote: the HTTP and OSC switches, addresses, token, origins and senders, and each server's state read from the remote thread's status cell |
 | `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall strip, and its pure view model (status, countdown, progress). The bar's "Stop all (n)" button sends `Command::StopAllCarts` and shows `cartwall.playing.len()`; it is the first item of a right-to-left row so it never gives way to the tabs. Button height comes from `cart_view::button_height(available, rows)`: nominal 40 px, minimum 28 px, from the room the grid has (the 60% cap in `AppUi::ui` is unchanged); the grid scrolls only below the minimum. |
 | `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
@@ -29,7 +31,7 @@
 | `ui/exit_guard.rs` | The "Audio is on air" modal: the `ExitIntent`, the list of what is sounding, and the stop commands |
 | `ui/view.rs`, `ui/format.rs` | Pure view model: what to show, how to format it (unit-tested). `mix_active` decides whether a player's MIX marker (on the player and in its CUE window) is solid: Continuous mode and not a bit-perfect player (BR15) |
 | `ui/cue_window.rs` | One non-modal `egui::Window` per running CUE, drawn from the pure `view::cue_window_view`; its waveform is `wave_panel` with `WaveKey::Cue`; icons through `ui/glyphs.rs` |
-| `ui/widgets.rs`, `ui/glyphs.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, segmented control, tabular times, meter, fader, waveform; `fader` takes an `enabled` flag: a disabled fader is greyed and senses hover only, so it takes no drag, click or wheel), drawn icons, the Nocturne theme. `ui/glyphs.rs` maps each transport action (`TransportAction`: play, next, pause, stop, fade stop, stop after, restart, previous, cue) to a Phosphor glyph or a drawn icon; the player, the cartwall and the playlist menu draw their transport icons only through it (`tests/glyphs.rs` guards that), and the CUE window too. The meter's geometry is the pure `meter_layout` (a `Ruler` per side, the `ticks`, the label lines, the bars and the readouts), unit-tested; its width (`meter_width`) follows the scale's widest label, and the player's meter column follows it. Nothing is painted over the bars: `tests/meter_view.rs` reads the painted shapes and accepts in a bar only filled rects in the bar or zone colours |
+| `ui/widgets.rs`, `ui/glyphs.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, the design's on/off `toggle` that Settings and the loudness controls share, segmented control, tabular times, meter, fader, waveform; `fader` takes an `enabled` flag: a disabled fader is greyed and senses hover only, so it takes no drag, click or wheel), drawn icons, the Nocturne theme. `ui/glyphs.rs` maps each transport action (`TransportAction`: play, next, pause, stop, fade stop, stop after, restart, previous, cue) to a Phosphor glyph or a drawn icon; the player, the cartwall and the playlist menu draw their transport icons only through it (`tests/glyphs.rs` guards that), and the CUE window too. The meter's geometry is the pure `meter_layout` (a `Ruler` per side, the `ticks`, the label lines, the bars and the readouts), unit-tested; its width (`meter_width`) follows the scale's widest label, and the player's meter column follows it. Nothing is painted over the bars: `tests/meter_view.rs` reads the painted shapes and accepts in a bar only filled rects in the bar or zone colours |
 | `ui/about.rs` | The About window: version, copyright, bundled notices, and the third-party notices file (located at start-up, opened on a helper thread) |
 | `ui/tag_editor.rs` | The tag editor modal (O23): `TagEditor` with its phases (`Reading`, `Unreadable`, `Ready` with a `Form` holding the sheet as read and the draft), the field boxes, the cover area and the pure checks it shares with `fp-model` |
 | `tags.rs` | The `fp-tags` worker: `TagJob` in, `TagOutcome` out (see below and [Analysis](analysis.md)) |
@@ -152,7 +154,12 @@ inside the list.
 **Tooltip.** The row shows `view::track_tooltip` through `on_hover_ui`, after
 the usual tooltip delay: title, artist, album, date, genre, duration, format
 and path, leaving out what the track lacks. The format is the upper-cased
-extension, then the sample rate and the bit depth when known.
+extension, then the sample rate and the bit depth when known. Under the
+fields, `view::loudness_lines` adds the loudness measurement ("Loudness:
+−14.2 LUFS, true peak −0.8 dBTP", `—` for a silent file, or "Loudness: not
+measured") and the track's loudness edit when it is not the default
+(loudness normalization spec N19). They are sentences, not label/value
+pairs, so they are plain lines rather than rows of the grid.
 
 **Menu item.** *Edit tags…* is enabled by `view::tag_edit_availability`
 (`fp_model::tag_edit_block` plus `fp_analysis::tags::can_write_tags`, judged
@@ -364,6 +371,50 @@ opening another section applies it through `remote::flush`. The count of
 outdated tracks (Settings → Analysis, and the start-up notice) comes from
 `AppUi`'s `services::OutdatedCount`: the library is scanned once per model
 snapshot, not on every frame (`SettingsDeps::outdated`).
+
+## Loudness normalization
+
+The interface shows and edits [loudness normalization](../superpowers/specs/2026-10-08-loudness-normalization-design.md)
+(spec §8) from the snapshot only; the gain itself is the model's
+(`fp_model::loudness`) and the engine's.
+
+- **Messages.** The pure functions in `view.rs` return a `view::Message`
+  (a Fluent key and its arguments, already formatted with
+  `view::signed_db` and one decimal with the true minus sign); the painting
+  code translates them with `widgets::tr_message`. A value that is not a
+  number reads `0.0` (a gain) or `—`.
+- **Gain badge (N18).** `view::gain_badge(&Normalization, &LoudnessConfig,
+  &Track)` gives the badge of the player's `PlayerState::on_air` while the
+  player is not stopped (`PlayerView::gain`): the signed gain (`Applied`,
+  tone `Normal`, with the limit that held a boost back), **Not normalized**
+  amber (`NotMeasured`) or muted (`Excluded`, and `BitPerfect` while
+  `normalize` is on; with it off a bit-perfect player plays at unity gain
+  anyway and shows nothing), and nothing for `Off` and `Silent`. When
+  `fp_model::normalization(config, track, false)` now differs from `on_air`
+  (the settings, the measurement or the edit changed since the track
+  started, N11), the tooltip adds `tip-gain-earlier-settings`. `player.rs`
+  paints it as a tile left of **BP**, named by its tooltip lines. It shows
+  what the model asked the engine for when the source started; if a
+  re-preload races a transition the engine had already committed, the
+  engine may play the earlier preload's gain for that one track, and
+  neither the badge nor the remote API sees it (no engine report exists
+  for the gain).
+- **Loudness… popup (N20).** The waveform menu (`wave_panel::edit_markers`,
+  so the player column and the CUE window) sets `ViewState::loudness_popup`
+  to the track's id. `loudness_edit::popup` draws a non-modal window for
+  that track whatever the players show next, and clears the field when it
+  is closed or the track leaves the library. The trim slider's rail senses
+  drags only, so its double-click (reset to 0) is read from the pointer
+  while the pointer is on it, and egui's triple click counts too (a
+  double-click within 0.6 s of the click that opened the popup).
+- **Cart editor (N21).** Settings → Cartwall draws `loudness_edit::exclude`
+  and `loudness_edit::trim` as two rows of the cart's editor, the
+  measurement as the first row's hint.
+- **Settings → Loudness (N22)** is `settings/loudness.rs`, restorable
+  (`SettingsSection::Loudness`). The count of tracks waiting for a
+  measurement comes from `services::UnmeasuredCount`
+  (`fp_model::loudness_unmeasured`, once per snapshot, as
+  `OutdatedCount`).
 
 ## Panic isolation
 

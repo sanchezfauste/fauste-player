@@ -20,7 +20,9 @@ menu and handles; a change shows in both at once):
 - **Right-click** where you want a marker and choose **Set cue in here**,
   **Set intro end here**, **Set outro start here**, **Set MIX point here** or
   **Set cue out here**. **Reset markers to automatic** removes the markers you
-  placed, and the track is analysed again.
+  placed, and the track is analysed again. **Loudness…** opens the track's
+  [loudness normalization](loudness.md#per-track-exclude-and-trim)
+  settings: exclude it, or trim its gain.
 - **Hold Alt** (Option on macOS): handles appear on the markers. Drag one to
   move it; the time is shown while you drag. A drag never moves the playhead.
 
