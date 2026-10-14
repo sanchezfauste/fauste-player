@@ -99,7 +99,10 @@ The switch is disabled when the device cannot give exclusive access.
   - The device is reopened only once it has played everything it had
     buffered, so the end of the previous track is never cut short. Then the
     reopen takes as long as the device needs to start. Together that is
-    usually a few tens of milliseconds; the start is that much later.
+    usually a few tens of milliseconds; the start is that much later. The
+    wait for the buffer is never longer than half a second
+    (`tuning.play_out_max_ms` in the configuration file, 0 to 2000 ms),
+    whatever the device reports.
 - **When the rate cannot follow.** The device keeps its rate, and a track at
   another rate is converted for its whole length (it is not bit-perfect),
   when:

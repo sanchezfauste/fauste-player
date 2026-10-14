@@ -489,6 +489,8 @@ fn bus_timing(t: &Tuning) -> BusTiming {
         startup_grace: Duration::from_secs_f64(t.watchdog_startup_grace_ms / 1000.0),
         busy_retries: t.device_busy_retries,
         busy_retry_interval: Duration::from_secs_f64(t.device_busy_retry_ms.max(0.0) / 1000.0),
+        play_out_max: Duration::try_from_secs_f64(t.play_out_max_ms / 1000.0)
+            .unwrap_or(Duration::ZERO),
     }
 }
 

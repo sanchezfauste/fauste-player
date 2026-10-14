@@ -795,6 +795,11 @@ pub struct Tuning {
     /// Only an idle bus waits; a sounding one tries each open once.
     pub device_busy_retries: u32,
     pub device_busy_retry_ms: f64,
+    /// The longest a rate change waits for the device to play what its
+    /// stream still holds before closing it (bit-perfect spec BR17). The
+    /// wait is what the stream reports holding; this bounds it, so a bogus
+    /// measurement cannot hold the output silent. 0 never waits.
+    pub play_out_max_ms: f64,
     pub gain_smoothing_ms: f64,
     pub save_debounce_ms: f64,
     /// How often files not found (a drive not mounted yet) are looked for
@@ -818,6 +823,7 @@ impl Default for Tuning {
             reconnect_interval_ms: 2000.0,
             device_busy_retries: 3,
             device_busy_retry_ms: 20.0,
+            play_out_max_ms: 500.0,
             gain_smoothing_ms: 20.0,
             save_debounce_ms: 1000.0,
             missing_recheck_ms: 30_000.0,
@@ -1216,6 +1222,13 @@ impl Config {
             &mut w,
         );
         clamp_to(
+            &mut t.play_out_max_ms,
+            0.0,
+            2_000.0,
+            "tuning.play_out_max_ms",
+            &mut w,
+        );
+        clamp_to(
             &mut t.gain_smoothing_ms,
             1.0,
             500.0,
@@ -1431,6 +1444,23 @@ mod tests {
                 warnings
                     .iter()
                     .any(|w| w.field == "tuning.missing_recheck_ms")
+            );
+        }
+    }
+
+    #[test]
+    fn the_play_out_maximum_has_its_default_and_range() {
+        assert_eq!(Tuning::default().play_out_max_ms, 500.0);
+        let c: Config = serde_json::from_str(r#"{"tuning":{}}"#).unwrap();
+        assert_eq!(c.tuning.play_out_max_ms, 500.0);
+        for (set, kept) in [(-5.0, 0.0), (1e9, 2_000.0), (f64::NAN, 0.0)] {
+            let mut c = Config::default();
+            c.tuning.play_out_max_ms = set;
+            let warnings = c.validate();
+            assert_eq!(c.tuning.play_out_max_ms, kept, "{set}");
+            assert!(
+                warnings.iter().any(|w| w.field == "tuning.play_out_max_ms"),
+                "{set}"
             );
         }
     }

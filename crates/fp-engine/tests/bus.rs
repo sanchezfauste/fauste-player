@@ -34,6 +34,7 @@ const TIMING: BusTiming = BusTiming {
     startup_grace: Duration::from_secs(5),
     busy_retries: 2,
     busy_retry_interval: Duration::ZERO,
+    play_out_max: Duration::from_millis(500),
 };
 
 fn setup(plugged: bool) -> (OfflineBackend, OfflineDevice, Bus, Instant) {
@@ -592,4 +593,34 @@ fn a_stream_that_cannot_tell_is_taken_to_hold_two_blocks() {
         Instant::now(),
     );
     assert_eq!(bus.play_out_frames(), 2 * 480);
+}
+
+#[test]
+fn the_play_out_is_bounded_by_the_configured_maximum() {
+    let (_b, device, mut bus, t0) = setup(true);
+    // A bogus measurement (a bad timestamp after an xrun) saturates.
+    device.set_latency_frames(u32::MAX);
+    let mut budget = bus.busy_budget(true);
+    assert!(bus.reopen_at(44_100, t0, &mut budget));
+    assert_eq!(
+        bus.play_out_frames(),
+        22_050,
+        "500 ms at the bus's rate, not hours"
+    );
+    bus.set_timing(BusTiming {
+        play_out_max: Duration::from_millis(100),
+        ..TIMING
+    });
+    assert_eq!(
+        bus.play_out_frames(),
+        4_410,
+        "a new maximum applies at once"
+    );
+    device.set_latency_frames(1_200);
+    assert!(bus.reopen_at(48_000, t0, &mut budget));
+    assert_eq!(
+        bus.play_out_frames(),
+        1_200,
+        "below it, what the stream says"
+    );
 }

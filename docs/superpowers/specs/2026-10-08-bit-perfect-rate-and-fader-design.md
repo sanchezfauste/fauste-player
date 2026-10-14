@@ -244,8 +244,11 @@ costs. Three things such a station expects and does not get today:
   device has not been played yet) closes only once the bus has rendered,
   after the frame where the last source on it ended, as many frames as the
   stream holds: what the backend reports (`OutputStream::latency_frames`,
-  measured from the driver's delay), else two blocks. The engine waits
-  without blocking (it looks again every tick); nothing is configured. The
+  measured from the driver's delay), else two blocks, but never more than
+  `tuning.play_out_max_ms` (default 500 ms, 0–2000; 0 never waits) at the
+  bus's rate: a bogus measurement (a saturated timestamp after an xrun)
+  cannot hold the output silent, and the bound is logged once per output.
+  The engine waits without blocking (it looks again every tick). The
   gap of a rate cut grows by about the device's buffer (some 25–35 ms with
   512-frame blocks at 44.1 kHz on a USB converter). The same holds for a
   native DSD stream going back to PCM (O25): it closes once its DSD
@@ -497,7 +500,7 @@ backend and explicit `now: Instant`; nothing sleeps.
 | BR12 | `fp-model` `tests/live.rs` | with a rate cut scheduled, a pending buffer change on the player's device is not due at any point up to `TransitionStarted` (the player stays `Playing`, so it stays a cause). |
 | BR13 | `fp-engine` `tests/bit_perfect.rs` | an `ApplyDevice` kept by the guard does not run in the rate cut's gap; it runs once the device is quiet. |
 | BR14 | `fp-engine` `tests/bit_perfect.rs` | bit-perfect off reports `StreamRate` at `effective_rate`; the next manual start is a crossfade again. |
-| BR16 | `fp-engine` `tests/bit_perfect.rs`, `tests/dsd_output.rs`, `tests/bus.rs`; `fp-backends` | with the Offline device holding three blocks, a scheduled cut, a hard start and a start right after a stop reopen only after at least that much silence was rendered after the last sound, and not much later; a native DSD stream closes after its silence and the three blocks; a bus counts what its stream reports, two blocks when it cannot tell, nothing without a stream; the cpal and native DSD measurements (`held_frames`, `held_words`). On hardware: `examples/rate_cut_tail.rs`. |
+| BR16 | `fp-engine` `tests/bit_perfect.rs`, `tests/dsd_output.rs`, `tests/bus.rs`; `fp-backends` | with the Offline device holding three blocks, a scheduled cut, a hard start and a start right after a stop reopen only after at least that much silence was rendered after the last sound, and not much later; one reporting `u32::MAX` waits `tuning.play_out_max_ms` and no longer, and a bus clamps what its stream reports to it at its rate (a new maximum applies at once); a native DSD stream closes after its silence and the three blocks; a bus counts what its stream reports, two blocks when it cannot tell, nothing without a stream; the cpal and native DSD measurements (`held_frames`, `held_words`). On hardware: `examples/rate_cut_tail.rs`. |
 | BR15 | `fp-app` `tests/` (kittest, player and settings) | a bit-perfect player's Play/Next tooltip is `tip-next-bit-perfect` while on air; its MIX marker is drawn dim; Settings → Players shows `settings-players-bit-perfect-note` only while a bit-perfect player exists. |
 | BR16 | `fp-remote` `tests/api.rs`, `fp-control` `tests/router.rs` | `POST /players/{id}/play` on air and the MIDI Play/Next binding on a bit-perfect player are accepted and give `Command::Play` (the model then starts hard, BR7). |
 | BF1 | `fp-model` `tests/bit_perfect_rules.rs` | locked exactly when `bit_perfect_player`; unplaced is not locked. |

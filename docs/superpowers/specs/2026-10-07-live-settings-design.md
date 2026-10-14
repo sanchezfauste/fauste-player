@@ -277,7 +277,7 @@ tick (only the latest matters).
 | `max_commands_per_block` | mixer | `Tune` to every bus |
 | `schedule_lead_ms` | engine when it schedules a transition | next schedule; a `Start` already sent keeps its frame |
 | `conductor_tick_ms` | conductor loop (today fixed at spawn, `main.rs` ~L199) | next tick: the loop reads it from its state |
-| `watchdog_timeout_ms`, `watchdog_startup_grace_ms`, `reconnect_interval_ms`, `device_busy_retries`, `device_busy_retry_ms` | `BusTiming` (conductor thread, not the callback) | at once: `Bus::set_timing` on every bus; the next `supervise` uses them |
+| `watchdog_timeout_ms`, `watchdog_startup_grace_ms`, `reconnect_interval_ms`, `device_busy_retries`, `device_busy_retry_ms`, `play_out_max_ms` | `BusTiming` (conductor thread, not the callback) | at once: `Bus::set_timing` on every bus; the next `supervise` uses them |
 | `gain_smoothing_ms` | mixer `volume_smoothing_frames` | `Tune` to every bus; next volume change |
 | `save_debounce_ms`, `missing_recheck_ms` | services, from `state.config` | already live |
 | `restart_handoff_ms` | the relaunch | removed with the relaunch (§9.4); lenient loading ignores the key |

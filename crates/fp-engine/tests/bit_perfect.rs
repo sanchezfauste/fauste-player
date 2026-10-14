@@ -792,6 +792,27 @@ fn br17_a_bus_opened_again_does_not_wait_for_the_end_on_the_closed_one() {
 }
 
 #[test]
+fn br17_a_bogus_hold_waits_at_most_the_configured_play_out() {
+    let mut r = rig(true, true);
+    // A saturated measurement: hours at 44.1 kHz.
+    r.dac.set_latency_frames(u32::MAX);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::StopNow { player: P });
+    r.run(BLOCK);
+    r.start(request(2, b, pcm16(48_000)));
+    // `tuning.play_out_max_ms` is 500 ms by default: 22 050 frames.
+    let silence = silence_before_rate(&mut r, 48_000, 2 * 44_100);
+    assert!(silence >= 22_050, "{silence} frames");
+    assert!(silence < 22_050 + 3 * BLOCK, "{silence} frames: no longer");
+    r.settle();
+    let heard = r.run(9_600);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays");
+}
+
+#[test]
 fn br8_at_the_same_rate_the_hard_start_does_not_reopen() {
     let mut r = rig(true, true);
     let a = wav(r.dir.path(), "a.wav", 44_100);

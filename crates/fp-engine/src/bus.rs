@@ -66,6 +66,9 @@ pub struct BusTiming {
     /// busy, and how long it waits before each try.
     pub busy_retries: u32,
     pub busy_retry_interval: Duration,
+    /// The most a rate change waits for the device to play what the
+    /// stream holds (`Bus::play_out_frames`), whatever the stream reports.
+    pub play_out_max: Duration,
 }
 
 /// The busy retries one top-level reopen may still spend, each after
@@ -188,6 +191,9 @@ pub struct Bus {
     /// (`note_sound_end`), on this bus's own frame clock: a bus opened
     /// again starts its clock and this over.
     sound_end: Option<u64>,
+    /// `play_out_frames` was bounded by `BusTiming::play_out_max` and that
+    /// was logged (once per bus).
+    play_out_bounded: AtomicBool,
 }
 
 impl Bus {
@@ -230,6 +236,7 @@ impl Bus {
             rate_change: None,
             missing: false,
             sound_end: None,
+            play_out_bounded: AtomicBool::new(false),
         };
         if bus.try_open(now, true).is_err() {
             // The stand-in renders the mixer without DoP encoding or native
@@ -400,13 +407,33 @@ impl Bus {
     /// The frames the open stream may hold that the device has not played
     /// yet, and that closing it would discard: what the backend reports
     /// (`OutputStream::latency_frames`), else a double buffer of the
-    /// stream's blocks. 0 without a device stream (nothing is queued for
-    /// a device: the virtual clock renders into nothing).
+    /// stream's blocks, at most `BusTiming::play_out_max` at the bus's
+    /// rate (a bogus measurement, up to `u32::MAX`, must not hold the
+    /// output silent; logged once). 0 without a device stream (nothing is
+    /// queued for a device: the virtual clock renders into nothing).
     pub fn play_out_frames(&self) -> u64 {
-        self.stream.as_ref().map_or(0, |s| {
-            s.latency_frames()
-                .map_or(2 * u64::from(s.config().buffer_frames), u64::from)
-        })
+        let Some(stream) = self.stream.as_ref() else {
+            return 0;
+        };
+        let held = stream
+            .latency_frames()
+            .map_or(2 * u64::from(stream.config().buffer_frames), u64::from);
+        let max = u64::try_from(
+            self.timing.play_out_max.as_micros() * u128::from(self.config.sample_rate) / 1_000_000,
+        )
+        .unwrap_or(u64::MAX);
+        if held <= max {
+            return held;
+        }
+        if !self.play_out_bounded.swap(true, Ordering::Relaxed) {
+            tracing::warn!(
+                bus = ?self.key,
+                held,
+                max,
+                "the stream reports holding more than tuning.play_out_max_ms; waiting at most that"
+            );
+        }
+        max
     }
 
     /// A source on this bus ended at bus frame `frame`
