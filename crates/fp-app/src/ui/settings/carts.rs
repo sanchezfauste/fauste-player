@@ -12,6 +12,7 @@ use fp_store::playlist_io::{parse_cart_page, read_bounded, write_cart_page};
 use super::super::app::Scene;
 use super::super::cartwall::page_name;
 use super::super::files::AUDIO_EXTENSIONS;
+use super::super::loudness_edit;
 use super::super::theme;
 use super::super::widgets::{self, TileStyle, font};
 use super::{SettingsState, labelled_row, row, toggle};
@@ -550,4 +551,15 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         },
     );
+    // N21: the loudness controls of the cart's track, as in the waveform's
+    // Loudness… popup; the measurement is the hint.
+    if let Some(track) = cart.track.and_then(|id| scene.state.library.get(id)) {
+        let measurement = loudness_edit::measurement(scene, track);
+        row(ui, &t.tr("loudness-exclude"), Some(&measurement), |ui| {
+            loudness_edit::exclude(ui, scene, track)
+        });
+        row(ui, &t.tr("loudness-trim"), None, |ui| {
+            loudness_edit::trim(ui, scene, track);
+        });
+    }
 }

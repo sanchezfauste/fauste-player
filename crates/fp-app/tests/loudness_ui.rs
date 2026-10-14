@@ -10,6 +10,8 @@
 
 mod support;
 
+use egui::accesskit::Role;
+use egui::{Event, Modifiers, PointerButton};
 use egui_kittest::kittest::Queryable;
 use fp_model::{AppState, Command, LoudnessMeasurement, apply};
 use support::{harness, state};
@@ -171,4 +173,209 @@ fn n19_the_row_tooltip_shows_the_edit() {
     h.get_by_label("Song 3").hover();
     h.run_steps(40);
     assert!(h.query_by_label("Excluded from normalization").is_some());
+}
+
+/// Opens the waveform's context menu of player 1 and picks Loudness….
+fn open_popup(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>) {
+    let wave = h.get_by_label("Waveform: click to seek").rect();
+    h.event(Event::PointerMoved(wave.center()));
+    for pressed in [true, false] {
+        h.event(Event::PointerButton {
+            pos: wave.center(),
+            button: PointerButton::Secondary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+    }
+    h.run_steps(2);
+    h.get_by_label("Loudness…").click();
+    h.run_steps(2);
+}
+
+fn loudness_edits(sent: &[Command]) -> Vec<(bool, f32)> {
+    sent.iter()
+        .filter_map(|c| match c {
+            Command::SetTrackLoudness {
+                excluded, trim_db, ..
+            } => Some((*excluded, *trim_db)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn n20_the_popup_shows_the_measurement_and_excludes_the_track() {
+    let (mut h, fake) = harness(on_air());
+    h.run_steps(2);
+    open_popup(&mut h);
+    assert!(
+        h.query_by_label("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+            .is_some()
+    );
+    fake.take_sent();
+    h.get_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+        .click();
+    h.run_steps(2);
+    assert_eq!(loudness_edits(&fake.take_sent()), vec![(true, 0.0)]);
+}
+
+#[test]
+fn n20_the_trim_slider_sends_half_db_steps_and_resets_on_double_click() {
+    let (mut h, fake) = harness(on_air());
+    h.run_steps(2);
+    open_popup(&mut h);
+    fake.take_sent();
+    h.get_by_role_and_label(Role::Slider, "Trim").focus();
+    h.run_steps(1);
+    h.key_press(egui::Key::ArrowRight);
+    h.run_steps(2);
+    assert_eq!(loudness_edits(&fake.take_sent()), vec![(false, 0.5)]);
+    let rect = h.get_by_role_and_label(Role::Slider, "Trim").rect();
+    let at = egui::pos2(rect.left() + 4.0, rect.center().y);
+    h.event(Event::PointerMoved(at));
+    // Two clicks a frame apart, within the double-click delay.
+    for _ in 0..2 {
+        for pressed in [true, false] {
+            h.event(Event::PointerButton {
+                pos: at,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            });
+        }
+        h.run_steps(1);
+    }
+    h.run_steps(2);
+    let sent = fake.take_sent();
+    assert_eq!(loudness_edits(&sent).last(), Some(&(false, 0.0)));
+    assert_eq!(
+        fake.state
+            .load()
+            .library
+            .iter()
+            .next()
+            .unwrap()
+            .loudness_edit
+            .trim_db,
+        0.0
+    );
+}
+
+#[test]
+fn a_zero_maximum_trim_still_allows_excluding() {
+    let mut s = on_air();
+    s.config.loudness.max_trim_db = 0.0;
+    let (mut h, fake) = harness(s);
+    h.run_steps(2);
+    open_popup(&mut h);
+    fake.take_sent();
+    h.get_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+        .click();
+    h.run_steps(2);
+    assert_eq!(loudness_edits(&fake.take_sent()), vec![(true, 0.0)]);
+}
+
+#[test]
+fn the_popup_keeps_its_track_and_closes_when_the_track_is_gone() {
+    let (mut h, fake) = harness(on_air());
+    h.run_steps(2);
+    open_popup(&mut h);
+    let track = fake.state.load().players[0]
+        .current
+        .and_then(|e| fake.state.load().track_for_entry(e).map(|t| t.id))
+        .unwrap();
+    // The player moves on: the popup still edits the track it was opened for.
+    let p = fake.player(0);
+    let other = fake.entries()[1];
+    let mut next = (**fake.state.load()).clone();
+    for c in [
+        Command::Stop(p),
+        Command::SetNext(p, other),
+        Command::Play(p),
+    ] {
+        apply(&mut next, c).unwrap();
+    }
+    assert_ne!(
+        next.players[0]
+            .current
+            .and_then(|e| next.track_for_entry(e))
+            .map(|t| t.id),
+        Some(track)
+    );
+    fake.state.store(std::sync::Arc::new(next));
+    h.run_steps(2);
+    fake.take_sent();
+    h.get_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+        .click();
+    h.run_steps(2);
+    assert!(
+        fake.take_sent().iter().any(|c| matches!(
+            c,
+            Command::SetTrackLoudness { track: t, excluded: true, .. } if *t == track
+        )),
+        "the popup's own track"
+    );
+    let mut next = (**fake.state.load()).clone();
+    next.library.remove(track);
+    fake.state.store(std::sync::Arc::new(next));
+    h.run_steps(2);
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+            .is_none()
+    );
+}
+
+#[test]
+fn the_popup_closes_with_its_button() {
+    let (mut h, _fake) = harness(on_air());
+    h.run_steps(2);
+    open_popup(&mut h);
+    h.get_by_label("Close").click();
+    h.run_steps(2);
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+            .is_none()
+    );
+}
+
+#[test]
+fn n21_the_cart_editor_has_the_same_controls() {
+    let mut s = state(1, 0);
+    let page = s.cartwall.pages[0].id;
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path: "/carts/a.flac".into(),
+        },
+    )
+    .unwrap();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    s.library.get_mut(track).unwrap().loudness = Some(LoudnessMeasurement {
+        integrated_lufs: Some(-12.0),
+        true_peak_dbtp: -1.5,
+    });
+    let (mut h, fake) = harness(s);
+    h.get_by_label("a").click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Edit…").click();
+    h.run_steps(3);
+    assert!(
+        h.query_by_label("Loudness: −12.0 LUFS, true peak −1.5 dBTP")
+            .is_some()
+    );
+    // The editor is below the grid: scroll to it first, as a user would.
+    h.get_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+        .scroll_to_me();
+    h.run_steps(3);
+    fake.take_sent();
+    h.get_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+        .click();
+    h.run_steps(2);
+    assert_eq!(loudness_edits(&fake.take_sent()), vec![(true, 0.0)]);
+    assert!(
+        h.query_by_role_and_label(Role::Slider, "Trim").is_some(),
+        "the trim too"
+    );
 }

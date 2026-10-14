@@ -129,6 +129,9 @@ pub(crate) struct ViewState {
     pub outdated_open: bool,
     /// Where each waveform's menu was opened, in seconds.
     pub wave_menu: HashMap<super::wave_view::WaveKey, f64>,
+    /// The track whose Loudness… popup is open (loudness normalization
+    /// spec N20).
+    pub loudness_popup: Option<TrackId>,
     /// When the operator last used each player's table or tabs (scroll,
     /// entry drag, row menu, tab click), in `Scene::time`.
     pub table_touched: HashMap<PlayerId, f64>,
@@ -703,6 +706,7 @@ impl AppUi {
         ui.allocate_rect(full, Sense::hover());
         // The CUE windows float over the screen; the dialogs below stay on top.
         cue_window::show_all(&ctx, &scene, &mut self.view);
+        super::loudness_edit::popup(&ctx, &scene, &mut self.view);
         // Once, at start-up: tracks an earlier version analysed wait for
         // the operator (they cost the processor for a while to redo).
         if !self.outdated_checked {

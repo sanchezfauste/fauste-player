@@ -26,7 +26,7 @@ mod midi;
 mod remote;
 use super::format;
 use super::theme;
-use super::widgets::{self, TileStyle, font, font_medium};
+use super::widgets::{self, TileStyle, font, font_medium, toggle};
 use crate::i18n::Arg;
 use crate::services::ServiceRequest;
 pub(crate) use keys::RESERVED_KEYS;
@@ -1306,44 +1306,6 @@ fn players(ui: &mut Ui, scene: &Scene<'_>) {
             .response
             .labelled_by(label);
     });
-}
-
-/// An on/off switch drawn like the design's toggles.
-fn toggle(ui: &mut Ui, on: &mut bool, label: &str) -> bool {
-    let (rect, response) = ui.allocate_exact_size(vec2(36.0, 20.0), Sense::click());
-    let value = *on;
-    let owned = label.to_owned();
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, value, owned.clone())
-    });
-    if response.clicked() {
-        *on = !*on;
-    }
-    let p = ui.painter();
-    p.rect_filled(
-        rect,
-        0.0,
-        if *on {
-            theme::ACCENT
-        } else {
-            theme::NEUTRAL_700
-        },
-    );
-    let knob_x = if *on {
-        rect.right() - 18.0
-    } else {
-        rect.left() + 2.0
-    };
-    p.rect_filled(
-        egui::Rect::from_min_size(egui::pos2(knob_x, rect.top() + 2.0), vec2(16.0, 16.0)),
-        0.0,
-        if *on {
-            theme::NEUTRAL_100
-        } else {
-            theme::NEUTRAL_400
-        },
-    );
-    response.clicked()
 }
 
 fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
