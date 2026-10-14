@@ -45,7 +45,12 @@ block it:
    is left is at most `declick_ms` the mixer ramps it to zero over exactly
    those frames, so the end is not a step. A paused slot that has a stop
    frame (a stop while paused) finishes at that frame. The player volume is
-   smoothed over `tuning.gain_smoothing_ms`;
+   smoothed over `tuning.gain_smoothing_ms` and clamped to 0–1. Each slot
+   also keeps the fixed normalization gain its `Attach` carried
+   (`gain`, linear; [loudness normalization spec](../superpowers/specs/2026-10-08-loudness-normalization-design.md)
+   N14), so the per-sample gain is `fade × pause × volume × gain`. The
+   normalization gain is not clamped (a boost is above 1) and never
+   changes while the slot lives; DSD words get no gain at all;
 3. counts underruns (silence is output for missing samples);
 4. emits `Started`, `Finished` and `Failed` events and updates `BusShared`
    (heartbeat, frames rendered, peaks). A `render_seq` seqlock lets readers
@@ -55,7 +60,8 @@ A slot whose channel pair does not fit the device is consumed silently and
 counted (`misrouted`), so it can never leak onto other channels.
 
 After each block the mixer sets `SourceShared::unaltered` for every slot:
-every gain it got in the block was exactly 1.0, and no other slot wrote a
+every gain it got in the block (the product above, normalization gain
+included) was exactly 1.0, and no other slot wrote a
 non-zero sample into an overlapping channel pair. In `f32`, `x * 1.0` and
 `x + 0.0` are exact, so such a source reached the output bit for bit with no
 special path. The check compares slots pairwise and allocates nothing.
@@ -64,8 +70,9 @@ special path. The check compares slots pairwise and allocates nothing.
 
 Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../superpowers/specs/2026-09-27-meters-design.md), whose section M0 lists the documents each part is verified against).
 
-- **The mixer measures** each slot after its gain, on the real-time thread,
-  without allocating.
+- **The mixer measures** each slot after its gain (the normalization gain
+  included, so the meter shows the normalized level), on the real-time
+  thread, without allocating.
   - The peak: the sample peak, or with `BusShared::true_peak` the largest
     of the four phases of the ITU-R BS.1770-5 Annex 2 interpolator
     (`truepeak.rs` in [`fp-dsp`](dsp.md), the published coefficients).
@@ -303,7 +310,9 @@ cannot hang the conductor.
   - the file rate equals the bus rate;
   - the file's bits are known and `SampleFormat::holds_bits` accepts them
     for the stream's format;
-  - the mixer reports the source unaltered.
+  - the mixer reports the source unaltered (a normalization gain other
+    than 1 alters it like the fader does; the model gives a source on a
+    bit-perfect device 0 dB, a factor of exactly 1).
 
   This drives the BP badge.
 - **Tests:** `tests/bit_perfect.rs` plays WAV files through `file_opener` on
@@ -447,7 +456,7 @@ plus the mixer's DSD mode.
 
 | Action | Effect |
 |---|---|
-| `Preload` | ask the worker for a source of the next entry at its cue-in, or at its pending start instead while the player is stopped and the operator chose one (rule 3a, operator feedback 4 Q8.7); `StartCurrent` then asks for the same entry and start, so `take_or_open` uses that preload and Play starts without a gap; attach it idle. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut). The same pair serves O37: a self-next (the entry on air set as next) is preloaded and restarted in the same way, once; the model tells the pass apart from a repeat pass in `on_event` |
+| `Preload` | ask the worker for a source of the next entry at its cue-in, or at its pending start instead while the player is stopped and the operator chose one (rule 3a, operator feedback 4 Q8.7); `StartCurrent` then asks for the same entry and start, so `take_or_open` uses that preload and Play starts without a gap; attach it idle. A preload is reused, and a repeated `Preload` ignored, only when the entry, the start and the normalization gain all match (`Playing::serves`): the model preloads the same entry again when its gain changes (loudness normalization N12), and the new request replaces the preload. Every source is attached with its request's gain, and every reopen (a seek, a forced rate change, a route move, a reconnect) reuses the source's own request, so it keeps the gain (N15); the test tone plays at 1.0. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut). The same pair serves O37: a self-next (the entry on air set as next) is preloaded and restarted in the same way, once; the model tells the pass apart from a repeat pass in `on_event` |
 | `StartCurrent` | start the preloaded source, or open one, once ready |
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs, rate_cut }`) to the mixer as exact frames once it is within `schedule_lead_ms`; a `rate_cut` prepares the preload at that rate and reopens a bit-perfect device between the two tracks (see "Rates and bit-perfect buses") |
