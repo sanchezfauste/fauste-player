@@ -1,9 +1,13 @@
 //! Analysis of one file: decode once, derive envelope and markers, read tags.
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 
 use fp_decode::FileDecoder;
-use fp_model::{AnalysisSettings, AudioFormat, Limits, TrackAnalysis};
+use fp_dsp::loudness::LoudnessMeter;
+use fp_model::{
+    AnalysisSettings, AudioFormat, LOUDNESS_VERSION, Limits, LoudnessMeasurement, TrackAnalysis,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -58,6 +62,7 @@ pub fn analyze_file_cancellable(
         settings.rms_window_ms,
         settings.peak_bucket_ms,
     );
+    let mut meter = Meter::new(decoder.sample_rate());
     let mut block = Vec::new();
     let mut decoded_any = false;
     loop {
@@ -69,6 +74,7 @@ pub fn analyze_file_cancellable(
             Ok(true) => {
                 decoded_any = true;
                 builder.push(&block);
+                meter.push(&block, path);
             }
             Ok(false) => break,
             // A damaged stretch after good audio: keep what decoded (the
@@ -81,6 +87,7 @@ pub fn analyze_file_cancellable(
         }
     }
     let envelope = builder.finish();
+    let loudness = meter.finish(path);
     let markers = detect_markers(&envelope, settings);
     // Tag and image parsers run on untrusted data: a crash there must only
     // cost the metadata, never the (playable) audio.
@@ -112,11 +119,111 @@ pub fn analyze_file_cancellable(
                 dsd_rate: decoder.dsd_rate(),
             }),
             version: crate::cache::ANALYSIS_VERSION,
-            loudness: None,
-            loudness_pass: None,
+            loudness,
+            loudness_pass: Some(LOUDNESS_VERSION),
         },
         peak_bucket_secs: envelope.bucket_secs,
         peaks: envelope.peaks,
         cover_png,
     })
+}
+
+/// Loudness normalization spec N6b: decodes `path` once and measures only
+/// its loudness (no envelope, markers, tags or cover). `Ok(None)` when
+/// nothing could be measured (shorter than 400 ms, or a failure inside
+/// the meter, logged). Like the analysis, a damaged stretch after good
+/// audio ends the measurement there (N4).
+pub fn measure_loudness_cancellable(
+    path: &Path,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<Option<LoudnessMeasurement>, AnalysisError> {
+    match std::fs::metadata(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(AnalysisError::Missing),
+        _ => {}
+    }
+    let mut decoder = FileDecoder::open(path).map_err(AnalysisError::Unreadable)?;
+    let mut meter = Meter::new(decoder.sample_rate());
+    let mut block = Vec::new();
+    let mut decoded_any = false;
+    loop {
+        if cancelled() {
+            return Err(AnalysisError::Cancelled);
+        }
+        block.clear();
+        match decoder.next_block(&mut block) {
+            Ok(true) => {
+                decoded_any = true;
+                meter.push(&block, path);
+            }
+            Ok(false) => break,
+            Err(e) if decoded_any => {
+                tracing::warn!(path = %path.display(), "decoding stopped early: {e}");
+                break;
+            }
+            Err(e) => return Err(AnalysisError::Unreadable(e)),
+        }
+    }
+    Ok(meter.finish(path))
+}
+
+/// The loudness meter of one file, isolated from the rest of the analysis:
+/// a panic inside it costs only the measurement (spec N5).
+struct Meter {
+    meter: Option<LoudnessMeter>,
+    rate: u32,
+    frames: u64,
+}
+
+impl Meter {
+    fn new(rate: u32) -> Self {
+        Self {
+            meter: Some(LoudnessMeter::new(rate)),
+            rate,
+            frames: 0,
+        }
+    }
+
+    /// Feeds one decoded block of interleaved stereo (whole frames: the
+    /// decoder never splits one).
+    fn push(&mut self, stereo: &[f32], path: &Path) {
+        self.frames = self
+            .frames
+            .saturating_add(u64::try_from(stereo.len() / 2).unwrap_or(u64::MAX));
+        if let Some(m) = self.meter.as_mut()
+            && catch_unwind(AssertUnwindSafe(|| m.push(stereo))).is_err()
+        {
+            tracing::warn!(path = %path.display(), "the loudness measurement crashed");
+            self.meter = None;
+        }
+    }
+
+    /// The measurement (N5): `None` for a file under one 400 ms block (no
+    /// warning: short effects are expected), or, with a warning, after a
+    /// crash, for a value that is not finite, or for a true peak no real
+    /// programme has (a corrupt file).
+    fn finish(self, path: &Path) -> Option<LoudnessMeasurement> {
+        let meter = self.meter?;
+        let result = catch_unwind(AssertUnwindSafe(|| meter.finish()))
+            .ok()
+            .flatten();
+        let measurement = result.and_then(|l| {
+            let m = LoudnessMeasurement {
+                integrated_lufs: l.integrated_lufs.map(|v| v as f32),
+                true_peak_dbtp: l.true_peak_dbtp as f32,
+            };
+            let finite =
+                m.integrated_lufs.is_none_or(f32::is_finite) && m.true_peak_dbtp.is_finite();
+            finite.then_some(m)
+        });
+        if measurement.is_none() {
+            // 400 ms is four tenths of the rate in frames.
+            let short = self.frames.saturating_mul(10) < u64::from(self.rate.max(1)) * 4;
+            if short {
+                tracing::debug!(path = %path.display(), "too short to measure its loudness");
+            } else {
+                tracing::warn!(path = %path.display(), "the loudness could not be measured");
+            }
+        }
+        measurement
+    }
 }

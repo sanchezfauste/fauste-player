@@ -9,8 +9,8 @@
 use std::path::{Path, PathBuf};
 
 use fp_analysis::cache::{ANALYSIS_VERSION, AnalysisCache};
-use fp_analysis::{AnalysisError, analyze_file};
-use fp_model::{AnalysisSettings, Limits};
+use fp_analysis::{AnalysisError, analyze_file, measure_loudness_cancellable};
+use fp_model::{AnalysisSettings, LOUDNESS_VERSION, Limits, LoudnessMeasurement};
 
 const RATE: u32 = 8_000;
 
@@ -299,4 +299,224 @@ fn a_vbr_mp3_without_a_length_frame_is_measured_to_its_end() {
         "{} vs {expected}",
         a.analysis.duration_secs
     );
+}
+
+/// A stereo 1 kHz sine at `dbfs` (peak) for `secs`, 48 kHz, 16 bit.
+fn stereo_tone(dir: &Path, name: &str, dbfs: f64, secs: f64) -> PathBuf {
+    let path = dir.join(name);
+    let spec = hound::WavSpec {
+        channels: 2,
+        sample_rate: 48_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    let amp = 10f64.powf(dbfs / 20.0);
+    for i in 0..(secs * 48_000.0) as u64 {
+        let x = amp * (std::f64::consts::TAU * 1_000.0 * i as f64 / 48_000.0).sin();
+        let s = (x * f64::from(i16::MAX)) as i16;
+        w.write_sample(s).unwrap();
+        w.write_sample(s).unwrap();
+    }
+    w.finalize().unwrap();
+    path
+}
+
+fn limits() -> Limits {
+    Limits::default()
+}
+
+#[test]
+fn n4_the_analysis_measures_the_loudness() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stereo_tone(dir.path(), "tone.wav", -23.0, 5.0);
+    let a = analyze_file(&path, &settings(), &limits())
+        .unwrap()
+        .analysis;
+    let l = a.loudness.unwrap();
+    assert!((l.integrated_lufs.unwrap() + 23.0).abs() < 0.2, "{l:?}");
+    assert!((l.true_peak_dbtp + 23.0).abs() < 0.5, "{l:?}");
+    assert_eq!(a.loudness_pass, Some(LOUDNESS_VERSION));
+    assert_eq!(
+        ANALYSIS_VERSION, 8,
+        "N6: the analysis version is not bumped"
+    );
+}
+
+#[test]
+fn n4_the_loudness_only_measurement_matches_the_full_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stereo_tone(dir.path(), "tone.wav", -18.0, 3.0);
+    let full = analyze_file(&path, &settings(), &limits())
+        .unwrap()
+        .analysis;
+    let only = measure_loudness_cancellable(&path, &|| false).unwrap();
+    assert!(only.is_some());
+    assert_eq!(full.loudness, only);
+}
+
+#[test]
+fn n5_silence_is_measured_without_integrated_loudness() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stereo_tone(dir.path(), "silence.wav", -200.0, 2.0);
+    let l = measure_loudness_cancellable(&path, &|| false)
+        .unwrap()
+        .unwrap();
+    assert_eq!(l.integrated_lufs, None);
+}
+
+#[test]
+fn n5_a_file_shorter_than_400_ms_is_not_measured() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stereo_tone(dir.path(), "blip.wav", -10.0, 0.2);
+    let a = analyze_file(&path, &settings(), &limits())
+        .unwrap()
+        .analysis;
+    assert_eq!(a.loudness, None);
+    assert_eq!(
+        a.loudness_pass,
+        Some(LOUDNESS_VERSION),
+        "tried, so not retried"
+    );
+    assert_eq!(
+        measure_loudness_cancellable(&path, &|| false).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn n4_a_file_cut_short_is_measured_up_to_the_damage() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stereo_tone(dir.path(), "cut.wav", -20.0, 4.0);
+    let bytes = std::fs::read(&path).unwrap();
+    // Drop the last quarter of the data: the header still promises 4 s.
+    std::fs::write(&path, &bytes[..bytes.len() * 3 / 4]).unwrap();
+    let l = measure_loudness_cancellable(&path, &|| false)
+        .unwrap()
+        .unwrap();
+    assert!((l.integrated_lufs.unwrap() + 20.0).abs() < 0.2, "{l:?}");
+}
+
+#[test]
+fn the_loudness_measurement_can_be_cancelled() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stereo_tone(dir.path(), "tone.wav", -20.0, 2.0);
+    assert_eq!(
+        measure_loudness_cancellable(&path, &|| true),
+        Err(AnalysisError::Cancelled)
+    );
+}
+
+#[test]
+fn the_loudness_of_a_missing_file_is_reported_as_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        measure_loudness_cancellable(&dir.path().join("gone.wav"), &|| false),
+        Err(AnalysisError::Missing)
+    );
+}
+
+#[test]
+fn n6_the_cache_round_trips_the_loudness() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stereo_tone(dir.path(), "tone.wav", -23.0, 2.0);
+    let a = analyze_file(&path, &settings(), &limits()).unwrap();
+    assert!(a.analysis.loudness.is_some());
+    let c = cache(dir.path());
+    c.store(&path, &settings(), &limits(), &a).unwrap();
+    let back = c.load(&path, &settings(), &limits()).unwrap();
+    assert_eq!(back.analysis.loudness, a.analysis.loudness);
+    assert_eq!(back.analysis.loudness_pass, Some(LOUDNESS_VERSION));
+}
+
+#[test]
+fn an_entry_without_loudness_still_loads() {
+    // What the previous release wrote: the entry with no tail record.
+    let dir = tempfile::tempdir().unwrap();
+    let path = fixture(dir.path(), "a.wav", 5);
+    let mut a = analyze_file(&path, &settings(), &limits()).unwrap();
+    a.analysis.loudness = None;
+    a.analysis.loudness_pass = None;
+    let c = cache(dir.path());
+    c.store(&path, &settings(), &limits(), &a).unwrap();
+    let back = c.load(&path, &settings(), &limits()).unwrap();
+    assert_eq!(back, a, "markers, peaks and cover intact");
+    assert_eq!(
+        (back.analysis.loudness, back.analysis.loudness_pass),
+        (None, None)
+    );
+}
+
+#[test]
+fn n6b_update_loudness_fills_the_entry_in_place() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = fixture(dir.path(), "a.wav", 5);
+    let mut a = analyze_file(&path, &settings(), &limits()).unwrap();
+    a.analysis.loudness = None;
+    a.analysis.loudness_pass = None;
+    let c = cache(dir.path());
+    c.store(&path, &settings(), &limits(), &a).unwrap();
+    let file = only_entry(dir.path());
+    let before = std::fs::read(&file).unwrap();
+    let key = c.key(&path, &settings(), &limits()).unwrap();
+    let m = LoudnessMeasurement {
+        integrated_lufs: Some(-12.5),
+        true_peak_dbtp: -0.7,
+    };
+    assert!(c.update_loudness(&key, Some(m), &limits()).unwrap());
+    let after = std::fs::read(&file).unwrap();
+    assert!(after.len() > before.len());
+    assert!(
+        after.starts_with(&before),
+        "the entry's own bytes do not change"
+    );
+    let back = c.load_key(&key, &limits()).unwrap();
+    assert_eq!(back.analysis.loudness, Some(m));
+    assert_eq!(back.analysis.loudness_pass, Some(LOUDNESS_VERSION));
+    assert_eq!(back.peaks, a.peaks);
+    assert_eq!(back.analysis.cue_in, a.analysis.cue_in);
+}
+
+#[test]
+fn update_loudness_without_an_entry_writes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = fixture(dir.path(), "a.wav", 1);
+    let c = cache(dir.path());
+    let key = c.key(&path, &settings(), &limits()).unwrap();
+    assert!(!c.update_loudness(&key, None, &limits()).unwrap());
+    assert!(c.load_key(&key, &limits()).is_none());
+}
+
+#[test]
+fn a_broken_tail_is_ignored() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stereo_tone(dir.path(), "tone.wav", -23.0, 1.0);
+    let a = analyze_file(&path, &settings(), &limits()).unwrap();
+    assert!(a.analysis.loudness.is_some());
+    let c = cache(dir.path());
+    c.store(&path, &settings(), &limits(), &a).unwrap();
+    let file = only_entry(dir.path());
+    let mut bytes = std::fs::read(&file).unwrap();
+    bytes.truncate(bytes.len() - 2); // cut into the tail
+    bytes.push(0xff);
+    std::fs::write(&file, &bytes).unwrap();
+    let back = c
+        .load(&path, &settings(), &limits())
+        .expect("the entry is kept");
+    assert_eq!(
+        (back.analysis.loudness, back.analysis.loudness_pass),
+        (None, None)
+    );
+    assert_eq!(back.peaks, a.peaks);
+}
+
+/// The one `.bin` entry under the test cache.
+fn only_entry(dir: &Path) -> PathBuf {
+    let entries: Vec<PathBuf> = std::fs::read_dir(dir.join("cache"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "bin"))
+        .collect();
+    assert_eq!(entries.len(), 1);
+    entries[0].clone()
 }
