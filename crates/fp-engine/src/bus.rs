@@ -184,6 +184,10 @@ pub struct Bus {
     rate_change: Option<u32>,
     /// The last open failed because the device was not there.
     missing: bool,
+    /// The frame at which the last source that finished on this bus ended
+    /// (`note_sound_end`), on this bus's own frame clock: a bus opened
+    /// again starts its clock and this over.
+    sound_end: Option<u64>,
 }
 
 impl Bus {
@@ -225,6 +229,7 @@ impl Bus {
             pcm_fallback: None,
             rate_change: None,
             missing: false,
+            sound_end: None,
         };
         if bus.try_open(now, true).is_err() {
             // The stand-in renders the mixer without DoP encoding or native
@@ -402,6 +407,21 @@ impl Bus {
             s.latency_frames()
                 .map_or(2 * u64::from(s.config().buffer_frames), u64::from)
         })
+    }
+
+    /// A source on this bus ended at bus frame `frame`
+    /// (`BusEvent::Finished`). The latest end counts.
+    pub fn note_sound_end(&mut self, frame: u64) {
+        self.sound_end = Some(self.sound_end.map_or(frame, |end| end.max(frame)));
+    }
+
+    /// Whether the device has played everything that sounded on this bus,
+    /// up to the end of the last source that finished here: closing the
+    /// stream now cuts nothing short (`play_out_frames` rendered after
+    /// that end). True when nothing has ended here.
+    pub fn played_out(&self) -> bool {
+        self.sound_end
+            .is_none_or(|end| self.now_frame() >= end.saturating_add(self.play_out_frames()))
     }
 
     /// How the open stream carries DSD, if a device stream is open.

@@ -761,6 +761,37 @@ fn a_start_right_after_a_stop_reopens_once_the_declick_has_played() {
 }
 
 #[test]
+fn br17_a_bus_opened_again_does_not_wait_for_the_end_on_the_closed_one() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    r.start(request(1, a.clone(), pcm16(44_100)));
+    // The 3 s track plays to its end, far into the old bus's frame clock.
+    r.run(4 * 44_100);
+    assert!(
+        r.events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::ReachedEnd { .. }))
+    );
+    // The output closes with its last holder, and opens again from frame 0.
+    r.act(EngineAction::RemovePlayer { player: P });
+    for _ in 0..4 {
+        r.clock += Duration::from_millis(10);
+        r.tick();
+    }
+    assert!(r.dac.config().is_none(), "the output closed");
+    r.act(EngineAction::AddPlayer { player: P });
+    r.settle();
+    assert_eq!(r.rate(), 48_000, "opened again at the global rate");
+    r.start(request(2, a, pcm16(44_100)));
+    assert_eq!(
+        r.rate(),
+        44_100,
+        "nothing sounded on this stream: the start reopens at once"
+    );
+}
+
+#[test]
 fn br8_at_the_same_rate_the_hard_start_does_not_reopen() {
     let mut r = rig(true, true);
     let a = wav(r.dir.path(), "a.wav", 44_100);

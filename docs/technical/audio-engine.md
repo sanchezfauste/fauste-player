@@ -315,10 +315,12 @@ cannot hang the conductor.
   driver and the device still hold (on ALSA the PCM is dropped, not
   drained), and the mixer renders that far ahead of what is heard. So a
   rate cut never closes the stream as soon as the mixer has rendered the
-  last sound: `Engine::sound_ends` keeps, per bus, the frame where the last
-  source that finished there ended (`BusEvent::Finished`), and
-  `played_out` is true once the bus has rendered `Bus::play_out_frames`
-  more (the stream's `latency_frames`, else two blocks). BR6, BR8 and the
+  last sound: each bus keeps the frame where the last source that
+  finished on it ended (`Bus::note_sound_end`, from `BusEvent::Finished`),
+  on its own frame clock, so a bus closed and opened again starts both
+  over; `Bus::played_out` is true once the bus has rendered
+  `Bus::play_out_frames` more (the stream's `latency_frames`, else two
+  blocks). BR6, BR8 and the
   close of a native DSD stream wait for it without blocking: they look
   again on the next tick. The gap of a rate cut is that much longer
   (about 25–35 ms with 512-frame blocks at 44.1 kHz on a USB converter).

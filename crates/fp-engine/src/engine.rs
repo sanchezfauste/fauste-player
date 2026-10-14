@@ -402,10 +402,6 @@ pub struct Engine {
     /// The stream rate and refused rates last reported for each bus
     /// (bit-perfect rate and fader spec BR1).
     reported_rates: HashMap<BusKey, (u32, Vec<u32>)>,
-    /// The bus frame at which the last source that finished on each bus
-    /// ended (`BusEvent::Finished`). A rate change closes the stream only
-    /// once the device has played up to it (`played_out`).
-    sound_ends: HashMap<BusKey, u64>,
 }
 
 /// The configuration the watchdog falls back to when a device's own rate
@@ -541,7 +537,6 @@ impl Engine {
             kept: BTreeMap::new(),
             orphans: std::collections::BTreeSet::new(),
             reported_rates: HashMap::new(),
-            sound_ends: HashMap::new(),
         };
         // L3: what the engine runs with, before anything is placed. The
         // cartwall has no bus until its first cart.
@@ -1863,13 +1858,9 @@ impl Engine {
     /// to the end of the last source that finished there: closing its
     /// stream now cuts nothing short. A stream discards what it holds when
     /// it closes (ALSA drops its buffer), so a rate change waits for this
-    /// (`Bus::play_out_frames` after that end, in the bus's frames).
+    /// (`Bus::played_out`).
     fn played_out(&self, bus: &BusKey) -> bool {
-        let Some(end) = self.sound_ends.get(bus) else {
-            return true;
-        };
-        let held = self.buses.get(bus).map_or(0, Bus::play_out_frames);
-        self.now_frame(bus) >= end.saturating_add(held)
+        self.buses.get(bus).is_none_or(Bus::played_out)
     }
 
     /// The block size `bus` runs with (`Bus::buffer_frames`), else the one
@@ -3152,9 +3143,10 @@ impl Engine {
     }
 
     fn handle_bus_event(&mut self, bus: &BusKey, event: BusEvent) {
-        if let BusEvent::Finished { frame, .. } = event {
-            let end = self.sound_ends.entry(bus.clone()).or_insert(0);
-            *end = (*end).max(frame);
+        if let BusEvent::Finished { frame, .. } = event
+            && let Some(b) = self.buses.get_mut(bus)
+        {
+            b.note_sound_end(frame);
         }
         if let BusEvent::Finished { slot, .. } = event
             && let Some(i) = self.tones.iter().position(|(b, s)| b == bus && *s == slot)
