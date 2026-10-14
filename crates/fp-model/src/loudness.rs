@@ -144,7 +144,12 @@ pub fn normalization(config: &LoudnessConfig, track: &Track, bit_perfect: bool) 
         (wanted, None)
     } else {
         let peak_room = (config.true_peak_ceiling_dbtp - measured.true_peak_dbtp).max(0.0);
-        let boost = config.max_boost_db;
+        // Not a number or below 0 (a configuration not validated): no boost.
+        let boost = if config.max_boost_db.is_finite() {
+            config.max_boost_db.max(0.0)
+        } else {
+            0.0
+        };
         if peak_room < wanted && peak_room <= boost {
             (peak_room, Some(GainLimit::TruePeak))
         } else if boost < wanted {

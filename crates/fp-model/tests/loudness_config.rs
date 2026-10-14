@@ -126,6 +126,12 @@ fn n3_a_loudness_change_only_preloads_and_never_waits() {
             .all(|a| matches!(a, EngineAction::Preload { .. })),
         "{actions:?}"
     );
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, EngineAction::Preload { .. })),
+        "the change reaches the next track: {actions:?}"
+    );
     assert!(pending(&state).is_empty());
     assert!(state.config.loudness.normalize, "applied at once");
 }

@@ -313,6 +313,13 @@ fn n7_a_configuration_that_was_not_validated_never_panics() {
     assert_eq!(gain(normalization(&c, &t, false)).0, 4.0, "no trim allowed");
     c.max_trim_db = -5.0;
     assert_eq!(gain(normalization(&c, &t, false)).0, 4.0);
+    // A maximum boost that is not a number or below 0 allows no boost.
+    let t = track(Some(-30.0), -20.0);
+    let mut c = on();
+    c.max_boost_db = f32::NAN;
+    assert_eq!(gain(normalization(&c, &t, false)).0, 0.0, "NaN boost");
+    c.max_boost_db = -5.0;
+    assert_eq!(gain(normalization(&c, &t, false)).0, 0.0, "negative boost");
 }
 
 fn request_gain(actions: &[EngineAction]) -> Vec<(&'static str, f32)> {

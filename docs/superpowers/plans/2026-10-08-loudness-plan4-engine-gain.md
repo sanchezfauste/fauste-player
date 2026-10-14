@@ -31,6 +31,7 @@
 3. **A CUE seek or a seek on a held (paused) source**: the replacement source is attached with the original request's gain, not 1.0. Test: Task 2, `n15_a_cue_seek_keeps_the_gain`.
 4. **A preloaded next started by a scheduled transition**: it plays with the gain of its preload request, not the current entry's. Test: Task 2, `n14_a_scheduled_next_plays_with_its_own_gain`.
 5. **A non-finite or zero gain reaching the engine** (a model bug): `linear_gain` returns 1.0 for anything unusable (plan 3), and the mixer multiplies whatever it gets without panicking; the engine never computes `powf` on the callback. Test: Task 2, `a_nan_gain_db_plays_at_unity`.
+6. **A re-preload with the same entry and position but a different gain** (N12: a measurement, a loudness setting change, a trim, or the player placed on a bit-perfect device): `Engine::preload` returns early when the entry and start match, and `take_or_open` reuses a preload that matches on entry, start and rate. Both comparisons must include the request's `normalization` (or the slot must keep it), otherwise the stale gain plays — and a bit-perfect player could play its next track with a gain (N8). Test: Task 2, `n12_a_re_preload_with_a_new_gain_replaces_the_preload`.
 
 ---
 
