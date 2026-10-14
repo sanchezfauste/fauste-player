@@ -1505,8 +1505,9 @@ impl Engine {
     /// as B3.2 does when nothing else sounds, and the new current starts;
     /// if it keeps its rate, the current is opened again at it (resampled).
     /// A cut whose player paused, or whose current is no longer the waiting
-    /// source (a stop, a seek, another start), is dropped: a resume follows
-    /// B3.2 itself.
+    /// source (a stop, another start), is dropped: a resume follows B3.2
+    /// itself. A seek keeps it: the source from the seek point waits in
+    /// its place (`seek`).
     fn run_rate_cuts(&mut self) {
         let waiting: Vec<(PlayerId, u32)> = self
             .players
@@ -3011,15 +3012,32 @@ impl Engine {
             return;
         };
         request.from_secs = secs;
+        // BR8, BR17: in the gap of a rate cut the current waits for the bus
+        // to reopen. It is replaced by one from `secs` prepared at the rate
+        // the cut waits for, which waits the same way: the cut is kept. The
+        // current may decode at the old rate (a track loaded paused and
+        // resumed, a device change in the gap); if the bus does not take
+        // the new rate, `run_rate_cuts` fits the source to the bus's.
+        let cut_rate = self.players.get(&player).and_then(|rt| {
+            rt.rate_cut.filter(|_| {
+                rt.current
+                    .as_ref()
+                    .is_some_and(|c| c.start == StartState::Idle)
+            })
+        });
         // A DSD stream's source is replaced by another DSD source on the
         // same stream, which stays in DSD mode (feedback 2 spec O25).
-        let Ok(mut next) = self.open_source(player, false, &request, direct) else {
+        let opened = match cut_rate {
+            Some(rate) => self.open_source_at(player, false, &request, false, Some(rate)),
+            None => self.open_source(player, false, &request, direct),
+        };
+        let Ok(mut next) = opened else {
             return;
         };
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
-        next.start = if rt.paused {
+        next.start = if rt.paused || cut_rate.is_some() {
             StartState::Idle
         } else {
             StartState::WhenReady { fade_in: true }

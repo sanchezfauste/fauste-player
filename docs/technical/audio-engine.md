@@ -315,9 +315,14 @@ cannot hang the conductor.
   device refused the rate, B3.4), `fit_current` opens the current again
   at the stream rate first, so it never plays at the wrong speed. A pause
   or a stop drops the waiting cut, and a resume then follows B3.2. A seek
-  replaces the waiting current with a source at the stream rate, which
-  `run_rate_cuts` takes as the cut dropped: the bus keeps its rate and the
-  track plays on from the seek, resampled. Another start replaces the
+  keeps it: `seek` replaces the waiting current with a source from the
+  seek point at the rate the cut waits for (even when the current was
+  opened at the old rate: a track loaded paused and resumed, BR17, or a
+  device change in the gap), still idle, so `run_rate_cuts`
+  reopens the bus and starts it bit-perfect from there (with the declick
+  ramp in of a start inside the audio); if the bus keeps its rate,
+  `fit_current` opens it again at the stream rate, still from the seek
+  point. Another start replaces the
   waiting current and is decided afresh (`start_current` sets `rate_cut`
   from `hard_start_cut`): at the stream rate it starts at once, at another
   rate it waits for a cut of its own. A start from silence at
