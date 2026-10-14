@@ -15,7 +15,8 @@ use std::time::{Duration, Instant};
 use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_model::{
-    CartId, CartRequest, Config, EngineAction, EngineEvent, Route, SOURCE_END, TrackId,
+    CartId, CartRequest, Config, EngineAction, EngineEvent, Normalization, NormalizationStatus,
+    Route, SOURCE_END, TrackId,
 };
 use support::tagged_opener;
 
@@ -336,4 +337,27 @@ fn a_looped_cart_without_a_known_end_reports_a_wrapped_position() {
     let (carts, _) = r.engine.cart_telemetry();
     let pos = carts[0].1.position_secs;
     assert!((0.0..0.1).contains(&pos), "{pos}");
+}
+
+#[test]
+fn n14_a_cart_plays_with_its_normalization_gain() {
+    let mut r = rig(2, Some(route(0)), None, 48_000);
+    let request = CartRequest {
+        normalization: Normalization {
+            gain_db: -6.0206,
+            status: NormalizationStatus::Applied { limited: None },
+        },
+        ..cart(1, 0.0, 2_400.0 / RATE, false)
+    };
+    r.act(EngineAction::StartCart(request));
+    r.settle();
+    r.run(10);
+    let left = r.channel(0);
+    let first = left.iter().position(|v| *v != 0.0).unwrap();
+    // Track 1, sample 100 is 100 100; at -6.02 dB it is half of that.
+    assert!(
+        (left[first + 100] - 50_050.0).abs() < 50.0,
+        "{}",
+        left[first + 100]
+    );
 }

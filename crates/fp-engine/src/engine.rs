@@ -282,6 +282,19 @@ struct Playing {
     held: bool,
 }
 
+impl Playing {
+    /// Whether this source was opened for `request`'s entry, position and
+    /// normalization gain. The gain is fixed when the source is attached
+    /// (loudness normalization N14), so a request for the same entry with
+    /// another gain needs a new source (N12): a stale gain must never
+    /// play, and a bit-perfect player never plays with one (N8).
+    fn serves(&self, request: &SourceRequest) -> bool {
+        self.entry == request.entry
+            && self.start_secs == request.from_secs
+            && self.request.normalization.linear_gain() == request.normalization.linear_gain()
+    }
+}
+
 /// Why a source could not be created. None of these is a problem with the
 /// file, so none is ever reported to the model as `SourceFailed`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2229,12 +2242,16 @@ impl Engine {
             source_pair(ring)
         };
         let shared = consumer.shared.clone();
+        // The source's fixed normalization gain (loudness normalization
+        // N14), computed here, off the device callback. Every reopen
+        // passes the same request, so it keeps the gain (N15).
+        let gain = request.normalization.linear_gain();
         if !bus.send(BusCommand::Attach {
             slot,
             source: consumer,
             volume,
             first_channel: channel,
-            gain: 1.0,
+            gain,
         }) {
             tracing::error!(?player, "bus command queue full");
             return Err(AttachError::QueueFull);
@@ -2489,8 +2506,7 @@ impl Engine {
             return;
         };
         if let (Some(old), Some(req)) = (rt.preload.as_ref(), request.as_ref())
-            && old.entry == req.entry
-            && old.start_secs == req.from_secs
+            && old.serves(req)
         {
             return;
         }
@@ -2508,7 +2524,7 @@ impl Engine {
         }
     }
 
-    /// Takes the preload if it matches `request` and decodes at `rate`
+    /// Takes the preload if it serves `request` and decodes at `rate`
     /// (the bus's rate when `None`), otherwise opens a new source at it: a
     /// preload opened for a planned cut never plays at another rate.
     fn take_or_open(
@@ -2519,9 +2535,10 @@ impl Engine {
     ) -> Result<Playing, AttachError> {
         let rt = self.players.get(&player).ok_or(AttachError::NoPlayer)?;
         let wanted = rate.unwrap_or_else(|| self.rate_of(&rt.main.0));
-        let matches = rt.preload.as_ref().is_some_and(|p| {
-            p.entry == request.entry && p.start_secs == request.from_secs && p.rate == wanted
-        });
+        let matches = rt
+            .preload
+            .as_ref()
+            .is_some_and(|p| p.serves(request) && p.rate == wanted);
         if matches
             && let Some(p) = self
                 .players
