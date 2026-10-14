@@ -206,7 +206,15 @@ costs. Three things such a station expects and does not get today:
   rate if nothing else sounds, then the source starts. At the same rate the
   start is today's hard start (the current stops with the declick and the
   next starts at once). Starting from silence (Play from stopped or
-  paused, a pre-listen, a cart) keeps B3.2 unchanged.
+  paused, a pre-listen, a cart) keeps B3.2 unchanged. A seek while the
+  start waits (the gap) keeps the reopen (2026-10-14): the waiting track
+  is prepared again from the seek point at the file's rate and waits the
+  same way, so once the bus reopens it starts bit-perfect from where the
+  operator sought (after the usual declick ramp in, BR9); the last seek
+  wins. If the reopen does not happen (a cart sounds, or the device
+  refuses the rate) it plays from the seek point at the stream rate, as
+  any track in the gap does. Seeking stays available throughout; nothing
+  changes in the model or the UI.
 
 ### 4.5 What does not change
 
@@ -534,7 +542,7 @@ backend and explicit `now: Instant`; nothing sleeps.
 | BR5 | `fp-model` `tests/bit_perfect_rules.rs` | a cart starting on the device sends a `Schedule` with `rate_cut: None` and the same `at_secs`; `CartEnded` sends `Some(r)` again; `SetNext` to an entry at another rate and the analysis of the next each send the new entry's `rate_cut`; `Placed` off the device sends the segue plan. |
 | BR6 | `fp-engine` `tests/bit_perfect.rs` | `rate_cut: None`: the next starts on the current's stop frame with no overlapping ramp and the device keeps its rate. `rate_cut: Some(r)`: the preload is opened at `r`; at `at_secs` the current stops, `OfflineDevice::config()` shows `r`, the next starts and is bit-perfect; `TransitionStarted` is reported. A cart fired just before the cut: no reopen, the next plays resampled. A refused rate: B3.4 fallback, the next plays. |
 | BR7 | `fp-model` `tests/bit_perfect_rules.rs` | on a bit-perfect player, Play while playing, Play on the self-next (O37) and Previous emit `StartCurrent` (not `Crossfade`) at the same rate and at another rate (Previous to an entry at another rate included), and `fading` stays false; on another player they emit `Crossfade`. |
-| BR8 | `fp-engine` `tests/bit_perfect.rs` | a `StartCurrent` at another rate replacing a playing source on a bit-perfect bus reopens the bus after the declick; at the same rate it starts at once with no reopen; a `Crossfade` at another rate does not reopen (resampled). In the gap before the reopen: a cart fired or a rate refused keeps the bus's rate and the track plays opened again at it; a seek drops the cut; a second start plays at its own rate (at once at the stream rate, after a cut of its own at another). |
+| BR8 | `fp-engine` `tests/bit_perfect.rs` | a `StartCurrent` at another rate replacing a playing source on a bit-perfect bus reopens the bus after the declick; at the same rate it starts at once with no reopen; a `Crossfade` at another rate does not reopen (resampled). In the gap before the reopen: a cart fired or a rate refused keeps the bus's rate and the track plays opened again at it; a seek keeps the cut and the track starts bit-perfect from the seek point once the bus reopens (two seeks: the last wins; a seek and then a refused rate or a cart: it plays from the seek point at the stream rate; a seek and then a stop: nothing starts); a second start plays at its own rate (at once at the stream rate, after a cut of its own at another). |
 | BR9 | `fp-model` `tests/bit_perfect_rules.rs` | on a bit-perfect player `FadeStop` emits `FadeOutAndStop` with `fade_ms`, and `Pause` and `Restart` emit what they emit on any player. |
 | BR10 | `fp-model` `tests/bit_perfect_rules.rs` | an unknown-format next gets a hard plan with `rate_cut: None`; a DSD next and a DSD stream on air get no rate cut; the O25 hold still gives `StopAt`; another player placed on an ordinary device keeps its segue plan while the bit-perfect one stays hard. |
 | BR11 | `fp-engine` `tests/bit_perfect.rs` | the existing B3.3 test (a source started on a sounding bus is resampled) still passes. |

@@ -1137,23 +1137,133 @@ fn br8_a_rate_refused_in_the_gap_falls_back_and_the_track_plays() {
     assert!(heard.iter().any(|v| *v != 0.0), "it plays, resampled");
 }
 
+fn seek(secs: f64) -> EngineAction {
+    EngineAction::Seek { player: P, secs }
+}
+
+/// Renders until the dac reopens at `rate` (at most `frames`), then
+/// `after` more frames; the left channel heard after the reopen.
+fn heard_after_reopen(r: &mut Rig, rate: u32, frames: usize, after: usize) -> Vec<f32> {
+    for _ in 0..frames.div_ceil(BLOCK) {
+        if r.rate() == rate {
+            break;
+        }
+        r.run(BLOCK);
+        r.settle();
+    }
+    assert_eq!(r.rate(), rate, "the dac reopened");
+    r.run(after)
+}
+
+/// Asserts that `heard` plays an `indexed_wav` file from frame `from` on
+/// (after leading silence): a start inside the audio ramps in over the
+/// declick (`ramp` frames, the first at gain 0), then every sample is the
+/// file's value, bit for bit.
+fn plays_bit_exact_from(heard: &[f32], from: usize, ramp: usize) {
+    let first = heard
+        .iter()
+        .position(|v| *v != 0.0)
+        .expect("the track plays");
+    let start = first - 1;
+    let exact = &heard[start + ramp..];
+    assert!(exact.len() > 1_000, "enough heard after the ramp");
+    for (i, v) in exact.iter().enumerate() {
+        let index = (from + ramp + i) % 20_000;
+        let expected = index as f32 / 32_768.0;
+        assert!(
+            v.to_bits() == expected.to_bits(),
+            "sample {i}: {v} (index {}) is not index {index}",
+            support::index_of(*v),
+        );
+    }
+}
+
+/// The default declick (5 ms) in frames at 48 kHz.
+const RAMP_48K: usize = 240;
+
 #[test]
-fn br8_a_seek_in_the_gap_drops_the_cut_and_plays_from_there() {
+fn br8_a_seek_in_the_gap_keeps_the_cut_and_plays_bit_perfect_from_there() {
     let mut r = started_over(hard_start);
-    r.act(EngineAction::Seek {
-        player: P,
-        secs: 1.0,
-    });
+    r.act(seek(1.0));
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!((position - 1.0).abs() < 1e-9, "the seek point: {position}");
+    r.settle();
+    assert_eq!(
+        decode_rate(&r, "cur ["),
+        Some(48_000),
+        "still prepared for the cut"
+    );
+    let heard = heard_after_reopen(&mut r, 48_000, 9_600, 4_800);
+    assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![])));
+    // Frame 48 000 of the file (1 s at 48 kHz) first, ramped in over the
+    // declick, then bit for bit.
+    plays_bit_exact_from(&heard, 48_000, RAMP_48K);
+    assert!(r.engine.telemetry(P).bit_perfect, "the badge is lit");
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!(position > 1.05, "it plays on from the seek: {position}");
+}
+
+#[test]
+fn br8_two_seeks_in_the_gap_the_last_one_wins() {
+    let mut r = started_over(hard_start);
+    r.act(seek(1.0));
+    r.settle();
+    r.act(seek(2.0));
+    r.settle();
+    let heard = heard_after_reopen(&mut r, 48_000, 9_600, 4_800);
+    plays_bit_exact_from(&heard, 96_000, RAMP_48K);
+    assert!(r.engine.telemetry(P).bit_perfect);
+}
+
+#[test]
+fn br8_a_seek_in_the_gap_then_a_refused_rate_falls_back_and_plays_from_the_seek() {
+    let mut r = started_over(hard_start);
+    r.act(seek(1.0));
+    r.dac.refuse_rate(48_000);
     r.settle();
     r.run(BLOCK);
     r.settle();
-    r.run(4_800);
-    // A seek drops the waiting cut (`run_rate_cuts`): the bus keeps its
-    // rate and the track plays on from the seek, resampled.
-    assert_eq!(r.rate(), 44_100, "the cut is dropped");
-    assert_eq!(decode_rate(&r, "cur ["), Some(44_100), "the right speed");
+    assert_eq!(r.rate(), 44_100, "B3.4: back to the previous rate");
+    assert_eq!(r.stream_rates().last(), Some(&(44_100, vec![48_000])));
+    assert_eq!(decode_rate(&r, "cur ["), Some(44_100), "at the stream rate");
+    let heard = r.run(4_410);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays, resampled");
     let position = r.engine.telemetry(P).position_secs.unwrap();
-    assert!(position > 1.05, "it plays from the seek: {position}");
+    assert!(
+        (1.05..1.5).contains(&position),
+        "it plays from the seek: {position}"
+    );
+}
+
+#[test]
+fn br8_a_cart_fired_after_a_seek_in_the_gap_keeps_the_rate_and_plays_from_the_seek() {
+    let mut r = started_over(hard_start);
+    r.act(seek(1.0));
+    r.settle();
+    let cart = jingle(&r);
+    r.act(cart);
+    r.settle();
+    r.run(BLOCK);
+    r.settle();
+    r.run(4_410);
+    assert_eq!(r.rate(), 44_100, "the cart sounds: no reopen");
+    assert_eq!(decode_rate(&r, "cur ["), Some(44_100));
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!(
+        (1.05..1.5).contains(&position),
+        "it plays from the seek: {position}"
+    );
+}
+
+#[test]
+fn br8_a_stop_after_a_seek_in_the_gap_starts_nothing() {
+    let mut r = started_over(hard_start);
+    r.act(seek(1.0));
+    r.act(EngineAction::StopNow { player: P });
+    r.settle();
+    let heard = r.run(9_600);
+    assert_eq!(r.rate(), 44_100, "no reopen for a track that will not play");
+    assert!(heard.iter().skip(BLOCK * 2).all(|v| *v == 0.0), "silence");
 }
 
 #[test]
