@@ -178,6 +178,23 @@ fn the_ai_translation_notice_has_its_text_in_english_and_spanish() {
     assert!(es.contains("IA"), "{es}");
 }
 
+/// The notice is only shown in an AI-translated language, so it speaks of
+/// that translation alone: short, and naming no other language.
+#[test]
+fn the_ai_translation_notice_is_short_and_speaks_of_this_translation() {
+    let en = fp_app::i18n::I18n::new(Some("en-US")).tr("about-machine-translation");
+    let es = fp_app::i18n::I18n::new(Some("es-ES")).tr("about-machine-translation");
+    assert!(!en.contains("English") && !en.contains("Spanish"), "{en}");
+    assert!(!es.contains("inglés") && !es.contains("español"), "{es}");
+    for l in fp_app::i18n::LOCALES {
+        let text = fp_app::i18n::I18n::new(Some(l.tag)).tr("about-machine-translation");
+        assert!(text.chars().count() <= 70, "{}: {text}", l.tag);
+        if l.translation == fp_app::i18n::Translation::Machine {
+            assert_ne!(text, en, "{} falls back to English", l.tag);
+        }
+    }
+}
+
 #[test]
 fn hand_written_languages_show_no_ai_translation_notice() {
     assert!(!shows_ai_notice("en-US"));
