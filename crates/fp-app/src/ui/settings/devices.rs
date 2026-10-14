@@ -270,7 +270,7 @@ fn dsd_settings(ui: &mut Ui, scene: &Scene<'_>) {
     };
     row(ui, &t.tr("settings-dsd-mix"), None, |ui| {
         // Its choices are sentences: shorten the shown one in a narrow
-        // window rather than run past it.
+        // window rather than run past it, and give it whole on hover.
         egui::ComboBox::from_id_salt("dsd-mix")
             .selected_text(mix_label(mix))
             .truncate()
@@ -283,7 +283,9 @@ fn dsd_settings(ui: &mut Ui, scene: &Scene<'_>) {
                         update(scene, |c| c.outputs.dsd_mix = choice);
                     }
                 }
-            });
+            })
+            .response
+            .on_hover_text(mix_label(mix));
     });
     let mut silence = scene.state.config.outputs.dsd_silence_ms;
     let label = t.tr("settings-dsd-silence");

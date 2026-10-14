@@ -934,8 +934,10 @@ fn narrow_outputs(width: f32) -> egui_kittest::Harness<'static, fp_app::ui::app:
 fn the_output_lists_stay_inside_a_narrow_settings_window() {
     let width = 700.0;
     let h = narrow_outputs(width);
-    // The Settings window is centred, `SCREEN_MARGIN` narrower than the
-    // main window; the section body keeps a 24-point margin on the right.
+    // The Settings window is centred, `SCREEN_MARGIN.x` (48) narrower than
+    // the main window and at most `WINDOW_SIZE.x` (900) wide
+    // (`src/ui/settings.rs`); the section body keeps a 24-point margin on
+    // the right. Valid while the window is wider than the label column.
     let window = (width - 48.0).min(900.0);
     let content_right = (width + window) / 2.0 - 24.0;
     let backend = h.get_by_value("Offline").rect();
@@ -955,4 +957,24 @@ fn the_output_lists_stay_inside_a_narrow_settings_window() {
             "{combo:?} {rect:?} past {content_right}"
         );
     }
+}
+
+/// A shortened choice can still be read whole: hovering the list shows it.
+#[test]
+fn a_shortened_choice_shows_whole_on_hover() {
+    let mut h = narrow_outputs(700.0);
+    let full = "Keep DSD and mute the other sources";
+    assert!(
+        h.query_by_label(full).is_none(),
+        "no tooltip before hovering"
+    );
+    // The list is below the fold: scroll to it first, as a user would.
+    h.get_by_value(full).scroll_to_me();
+    h.run_steps(5);
+    h.get_by_value(full).hover();
+    h.run_steps(40);
+    assert!(
+        h.query_by_label(full).is_some(),
+        "the tooltip gives the whole choice"
+    );
 }
