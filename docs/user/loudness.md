@@ -83,7 +83,9 @@ if it is not bit-perfect, still gets the gain.
 
 A track that is already playing (or paused) when its device is turned
 bit-perfect keeps the gain it started with, and the **BP** badge stays off
-for it. The next track plays at 0 dB and bit-perfect.
+for it. The next track plays at 0 dB and bit-perfect. A DSD track in that
+situation plays converted to PCM with its gain, never as an unchanged DSD
+stream.
 
 ## The gain in the player header
 
@@ -92,7 +94,7 @@ of the track on air. Hover it for the reason.
 
 | Badge | Meaning |
 |---|---|
-| **+4.0 dB**, **−7.0 dB** (blue) | The track is normalized with this gain. The tooltip gives the target, the measured loudness and the track's trim, and says when the true-peak ceiling or the maximum boost held a boost back. When the settings, the measurement or the trim changed after the track started, it also says that the track keeps the gain it started with. |
+| **+4.0 dB**, **−7.0 dB** (blue) | The track is normalized with this gain. The tooltip gives the target, the measured loudness and the track's trim, and says when the true-peak ceiling or the maximum boost held a boost back. When the settings, the measurement or the trim changed after the track was loaded, it says only that the track keeps the gain set when it was loaded. |
 | **Not normalized** (amber) | Normalization is on, but the track has no measurement yet (or is too short to measure): it plays unchanged. |
 | **Not normalized** (grey) | The output is bit-perfect, or the track is excluded from normalization. |
 | No badge | Normalization was off when the track started, the track is silent, or the player is stopped. A bit-perfect player shows none either while normalization is off. |
@@ -130,7 +132,11 @@ the next time the track is loaded, like any other change.
 **The track tooltip** of the playlist table shows the measurement
 ("Loudness: −14.2 LUFS, true peak −0.8 dBTP", or "Loudness: not measured")
 and, when it is not the default, the track's setting ("Excluded from
-normalization" or "Trim +1.5 dB").
+normalization" or "Trim +1.5 dB"). The trim shown is the one in use: when a
+lowered **Maximum trim** limits a trim saved earlier, the line also gives
+the saved value ("Trim +6.0 dB (saved +10.0 dB, limited by the maximum
+trim)"). The gain badge's tooltip and the **Trim** slider show the trim in
+use too.
 
 ## Choosing the settings
 

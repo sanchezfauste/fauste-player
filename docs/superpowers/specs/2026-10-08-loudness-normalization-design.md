@@ -220,7 +220,11 @@ band) stays a separate value, whatever the normalization target (Q4).
   whose own true peak is already above the ceiling gets no boost (0 dB at
   least when `wanted > 0`) and a negative `wanted` is never reduced
   further. `gain_db` is rounded to 0.01 dB so that equal inputs give equal
-  requests.
+  requests; a boost, whatever limited it, steps down to the hundredth at
+  or below the room the ceiling leaves when rounding to the nearest would
+  take it above that room, so the boost never passes
+  `true_peak_ceiling_dbtp`. Both steps allow 0.00001 dB of f32 noise, so
+  a room exactly on a hundredth keeps it.
 - **N8** `bit_perfect` for a holder is whether the device it plays on is
   bit-perfect: the running settings of its placement
   (`live.devices[live.placement[holder]].bit_perfect`) once the engine has
@@ -231,9 +235,10 @@ band) stays a separate value, whatever the normalization target (Q4).
   rate and fader spec's `bit_perfect_player` (BR2) whenever the engine has
   placed it, so a player whose fader is locked always gets exactly 0 dB.
   A native DSD stream only reaches a bit-perfect device
-  (`OutputsConfig::dsd_output_for`), so N7 never gives it a gain and the
-  engine's DSD path (`BusCommand::DsdMode`: no gain touches the words)
-  needs no change.
+  (`OutputsConfig::dsd_output_for`), so N7 never gives a track decided
+  there a gain; the engine's DSD path (`BusCommand::DsdMode`: no gain
+  touches the words) still refuses a request whose gain is not exactly 1.0
+  (N17).
 - **N9** `SourceRequest` and `CartRequest`
   (`crates/fp-model/src/command.rs`) gain `normalization: Normalization`.
   Every place that builds one computes it for the holder that will play
@@ -249,6 +254,9 @@ band) stays a separate value, whatever the normalization target (Q4).
   }` stores the track's loudness edit. It is refused with
   `ModelError::InvalidTrim` when `trim_db` is not finite or
   `|trim_db| > max_trim_db`, and with `UnknownTrack` for an unknown track.
+  Both N7 and N10 use the same maximum (`max_trim_in_use`): a
+  `max_trim_db` that is not a finite number of at least 0 (a configuration
+  not validated) allows no trim.
   It is allowed while the track plays (it changes what loads afterwards,
   N12).
 - **N11** Fixed while it sounds. `PlayerState` gains, runtime only (never
@@ -257,8 +265,13 @@ band) stays a separate value, whatever the normalization target (Q4).
   cartwall's `PlayingCart` and its CUE keep theirs the same way. They are
   set from the request the model sends (`StartCurrent`, `Crossfade`,
   `LoadPaused`, `StartCue`, `StartCart`, `StartCartCue`) or, for a
-  scheduled transition, copied from the preloaded request on
-  `TransitionStarted`, and cleared when the source ends. Nothing else
+  scheduled transition, taken from `EngineEvent::TransitionStarted`, which
+  carries the normalization the engine opened the started source with
+  (a re-preload that raced a transition the engine had already committed
+  may have asked for another gain: the engine plays the earlier one, and
+  `on_air` says so; a preload the engine keeps for a request with the
+  same gain but another status, such as not measured and then off, takes
+  the newer status), and cleared when the source ends. Nothing else
   changes them: not an analysis or loudness-only result, a configuration change, a loudness
   edit, nor a pending device change applied while the track is paused.
 - **N12** Loaded afterwards. `PlayerState::preloaded` becomes `Option<(
@@ -292,7 +305,11 @@ band) stays a separate value, whatever the normalization target (Q4).
 - **N17** A source paused on a device that becomes bit-perfect meanwhile
   (live settings L12, "Bit-perfect on") keeps its gain (N11): the **BP**
   badge stays off for it, as the unaltered check reports, and the next
-  track plays at 0 dB.
+  track plays at 0 dB. A DSD track in that situation (loaded paused with a
+  gain, then its device turned bit-perfect with DoP or native DSD) plays
+  converted to PCM keeping its gain, with no **BP** or **DSD** badge:
+  `DsdFacts` carries the request's linear gain and `dsd_decision` falls
+  back with `DsdFallback::NormalizationGain` when it is not exactly 1.0.
 
 ## 8. User interface
 
@@ -317,16 +334,25 @@ band) stays a separate value, whatever the normalization target (Q4).
   shows no badge: it plays at unity gain either way, and the model reports
   `BitPerfect` before `Off`. The tooltip names the current settings; when
   `normalization(config, track, false)` now differs from `on_air` (a change
-  since the source started, N11) it adds "The track started before the last
-  settings change: it keeps this gain." The badge shows what the model
-  asked the engine for; it does not claim more (a re-preload that races a
-  committed transition may leave the engine on the earlier preload's gain
-  for that track, unreported).
+  since the source started, N11) the tooltip is only "Gain set when the
+  track was loaded. Its loudness settings or measurement have changed
+  since; it keeps this gain until it stops.": the current target,
+  measurement and trim did not give this gain, so it does not quote them
+  beside it. The badge shows what the model
+  asked the engine for, or for a scheduled transition what the engine
+  reports having started (N11).
 - **N19** The row tooltip of the track tables (`view::track_tooltip`,
   the hover text of a playlist, library or cart row) gains a loudness
   line after the format: "Loudness: {lufs} LUFS, true peak {tp} dBTP" when
   measured, "Loudness: not measured" otherwise, and "Excluded from
   normalization" or "Trim {trim} dB" when the edit is not the default.
+  Every trim the interface shows (this line, the badge tooltip of N18,
+  the Trim slider of N20 and N21) is the one in use,
+  `fp_model::trim_in_use(config, edit)`: the saved trim within ±
+  `max_trim_db`, as N7 computes the gain. When a lowered maximum limits a
+  saved trim, this line reads "Trim {trim} dB (saved {saved} dB, limited by
+  the maximum trim)", unless both read the same at the precision shown
+  (0.1 dB).
 
 ### 8.2 Per-track controls
 
@@ -372,7 +398,7 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `settings-hint-normalize-apply` | "Changes apply to tracks loaded afterwards; what is playing keeps its gain." |
 | `settings-normalize-unmeasured` | "{ $count } tracks not measured yet" (Fluent plural: "1 track not measured yet") |
 | `settings-hint-normalize-bp` | "A player or cart on a bit-perfect output always plays at unity gain: it is never normalized." |
-| `tip-gain-earlier-settings` | "The track started before the last settings change: it keeps this gain." |
+| `tip-gain-earlier-settings` | "Gain set when the track was loaded. Its loudness settings or measurement have changed since; it keeps this gain until it stops." |
 | `loudness-close` | "Close" |
 | `badge-gain` | "{ $gain } dB" |
 | `badge-not-normalized` | "Not normalized" |
@@ -386,9 +412,11 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `track-loudness-unmeasured` | "Loudness: not measured" |
 | `track-loudness-excluded` | "Excluded from normalization" |
 | `track-loudness-trim` | "Trim { $trim } dB" |
+| `track-loudness-trim-limited` | "Trim { $trim } dB (saved { $saved } dB, limited by the maximum trim)" |
 | `wave-loudness` | "Loudness…" |
 | `loudness-exclude` | "Exclude from normalization" |
 | `loudness-trim` | "Trim" |
+| `error-invalid-trim` | "The trim must be a number within the maximum trim." (N10: also for a value that is not finite) |
 
 The existing meter keys `settings-loudness` and `settings-loudness-target`
 keep their meaning (the meter readout); the new keys avoid them.
@@ -424,12 +452,12 @@ sleeps.
 | Layer | Tests |
 |---|---|
 | `fp-model` (`tests/restore.rs`, new `tests/loudness_config.rs`) | N1: each field clamped with a warning, non-finite → default, a file without `loudness` loads the defaults. N2: Restore defaults resets the section only. N3: `UpdateConfig` with loudness changes only emits `Preload`s (no pending item, no `UpdateSettings`). |
-| `fp-model` (new `tests/loudness.rs`) | N7: one test per row of the table, the true-peak and max-boost limits (and the tie), a cut not limited by `max_boost_db` nor by the ceiling (a −18 LUFS track with a +0.5 dBTP peak and target −16 gets +0 dB, a −10 LUFS track with a +0.5 dBTP peak keeps its −6 dB), a boost with a peak above the ceiling gets 0 dB, trim added before the limits, rounding. N8: bit-perfect from placement, from the configured route, default output not bit-perfect. N9: every request kind carries the holder's normalization; CUE and cart pre-listen get the same gain as on air (Q6), except on a bit-perfect Cue device (0 dB while Main gets a gain). N10: refused out of range and non-finite; allowed while playing. N11: an analysis result, a config change and an edit leave `on_air` and the engine untouched while playing; `TransitionStarted` copies the preloaded value. N12: each of the four causes re-preloads the next. N13: `LoadPaused` recomputes. |
+| `fp-model` (new `tests/loudness.rs`) | N7: one test per row of the table, the true-peak and max-boost limits (and the tie), a cut not limited by `max_boost_db` nor by the ceiling (a −18 LUFS track with a +0.5 dBTP peak and target −16 gets +0 dB, a −10 LUFS track with a +0.5 dBTP peak keeps its −6 dB), a boost with a peak above the ceiling gets 0 dB, trim added before the limits, rounding, a boost never rounded above the ceiling whatever limited it, and a room on a hundredth kept exactly. N8: bit-perfect from placement, from the configured route, default output not bit-perfect. N9: every request kind carries the holder's normalization; CUE and cart pre-listen get the same gain as on air (Q6), except on a bit-perfect Cue device (0 dB while Main gets a gain). N10: refused out of range and non-finite, and any trim refused under a maximum that is not finite or below 0; allowed while playing. N11: an analysis result, a config change and an edit leave `on_air` and the engine untouched while playing; `TransitionStarted` takes the normalization the engine reports, also when a re-preload of the same entry with another gain raced it (fp-engine `tests/engine.rs`: the report carries the started source's gain, and the latest status when a preload was kept for the same gain). N12: each of the four causes re-preloads the next. N13: `LoadPaused` recomputes. |
 | `fp-model` (`tests/analysis.rs`) | N6: `apply_analysis` stores the measurement and keeps the edit and the markers; a track without a measurement is `NotMeasured`; a loudness-only result changes no marker; `ANALYSIS_VERSION` stays 8 and a v8 entry is not outdated. |
 | `fp-dsp` (`tests/loudness.rs`) | N4: EBU Tech 3341 / 3342 cases that apply to a file measurement (1 kHz sine at −23 dBFS reads −23.0 LUFS ±0.1 at 44.1 and 48 kHz; the gating cases); true peak of the BS.1770 test signals; the moved K-weighting keeps its existing tests. N5: silence → `None`; a 200 ms file is not measured (`None`, no warning); non-finite input does not panic. |
 | `fp-analysis` (`tests/analyze.rs`, new `tests/loudness_pass.rs`) | N4–N6: a generated WAV gets a measurement; a cache entry round-trips `loudness` and `loudness_pass`; an old entry without them decodes; a file truncated mid-stream is measured up to the damage. N6b: the pass fills the existing entry in place and leaves markers byte-identical; it runs only when the normal queue is empty and yields to a new normal job; a short file or a failure is recorded and not retried; a `LOUDNESS_VERSION` bump re-queues; it runs with `normalize` off. |
-| `fp-engine` (`tests/mixer.rs`, `audio_path_audit.rs`) | N14: a slot attached with +6 dB outputs twice the amplitude and the meter reads it; a fader move keeps the gain; the audit covers `Attach` with a gain (no allocation on the callback). N15: a seek and a forced rate change keep the gain. N16: gain 1 on a bit-perfect bus stays bit-exact; gain ≠ 1 clears the unaltered flag. |
-| `fp-app` kittests (new `tests/loudness_ui.rs`) | N18: each badge and its accessible name; N19: tooltip lines; N20: the Loudness… popup sends `SetTrackLoudness`; N21: the cart dialog does too; N22: the Settings tab updates the config and its sliders keep the ranges. |
+| `fp-engine` (`tests/mixer.rs`, `audio_path_audit.rs`) | N14: a slot attached with +6 dB outputs twice the amplitude and the meter reads it; a fader move keeps the gain; the audit covers `Attach` with a gain (no allocation on the callback). N15: a seek and a forced rate change keep the gain. N16: gain 1 on a bit-perfect bus stays bit-exact; gain ≠ 1 clears the unaltered flag. N17 (`tests/dsd_output.rs`, `fp-model/tests/dsd_rules.rs`): a DSD request with a gain on a DoP or native device plays converted, also when loaded paused and resumed; `dsd_decision` falls back with `NormalizationGain`. |
+| `fp-app` kittests (new `tests/loudness_ui.rs`) | N18: each badge and its accessible name; N19: tooltip lines, the trim in use and the saved one when the maximum limits it; N20: the Loudness… popup sends `SetTrackLoudness`; N21: the cart dialog does too; N22: the Settings tab updates the config and its sliders keep the ranges. |
 | `fp-remote` (`tests/api.rs`) | N23: the DTO fields for each status; N24: the endpoint, a refused trim and an unknown track. |
 
 ## 11. Documentation to update

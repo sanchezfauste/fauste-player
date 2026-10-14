@@ -348,7 +348,8 @@ fn a1_the_next_source_at_a_cue_in_ramps_in() {
     assert!(
         r.events.contains(&EngineEvent::TransitionStarted {
             player: P,
-            entry: EntryId(2)
+            entry: EntryId(2),
+            normalization: fp_model::Normalization::default(),
         }),
         "the next started"
     );
@@ -487,7 +488,8 @@ fn a2_a_gapless_join_at_the_end_of_the_file_keeps_the_level() {
     assert!(
         r.events.contains(&EngineEvent::TransitionStarted {
             player: P,
-            entry: EntryId(2)
+            entry: EntryId(2),
+            normalization: fp_model::Normalization::default(),
         }),
         "the next started"
     );
@@ -530,7 +532,8 @@ fn a2_a_hard_cut_inside_the_file_still_ramps_the_outgoing_source_out() {
     assert!(
         r.events.contains(&EngineEvent::TransitionStarted {
             player: P,
-            entry: EntryId(2)
+            entry: EntryId(2),
+            normalization: fp_model::Normalization::default(),
         }),
         "the next started"
     );

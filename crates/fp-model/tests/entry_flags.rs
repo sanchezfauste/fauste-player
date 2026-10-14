@@ -141,6 +141,7 @@ fn r26_each_pass_keeps_the_entry_and_plans_the_next_pass() {
             EngineEvent::TransitionStarted {
                 player: p,
                 entry: a,
+                normalization: fp_model::Normalization::default(),
             },
         );
         let player = s.player(p).unwrap();
@@ -231,6 +232,7 @@ fn r26_two_players_repeat_the_same_entry_independently() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: a,
+            normalization: fp_model::Normalization::default(),
         },
     );
     assert_eq!(preload(&out, p), Some(Some(a)));
@@ -254,6 +256,7 @@ fn r26_turning_repeat_off_at_a_boundary_still_plans_the_next_track() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: a,
+            normalization: fp_model::Normalization::default(),
         },
     );
     assert_eq!(preload(&out, p), Some(Some(b)), "{out:?}");
@@ -275,6 +278,7 @@ fn r26_a_restart_that_beat_a_pause_leaves_the_player_playing() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: a,
+            normalization: fp_model::Normalization::default(),
         },
     );
     assert_eq!(s.player(p).unwrap().transport, Transport::Playing);

@@ -241,6 +241,7 @@ fn fade_stop_works_during_a_segue_overlap() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[1],
+            normalization: fp_model::Normalization::default(),
         },
     );
     assert!(state.player(p).unwrap().fading);
@@ -286,6 +287,7 @@ fn a_transition_follows_what_the_engine_actually_started() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[1],
+            normalization: fp_model::Normalization::default(),
         },
     );
     let player = state.player(p).unwrap();
@@ -336,6 +338,7 @@ fn a_transition_reported_after_stop_does_not_restart_the_player() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[1],
+            normalization: fp_model::Normalization::default(),
         },
     );
     assert_eq!(state.player(p).unwrap().transport, Transport::Stopped);

@@ -158,6 +158,7 @@ impl Engine {
             mode,
             format: request.format,
             volume,
+            gain: request.normalization.linear_gain(),
             device_idle,
         };
         let target = match dsd_decision(&facts) {

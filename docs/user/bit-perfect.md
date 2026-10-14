@@ -147,6 +147,10 @@ starts:
 - the track is DSD (DSF or DFF), mono or stereo, and has been analysed (that
   is how its DSD rate is known);
 - nothing else plays on the device (another player, a cart, a test tone);
+- the track has no [loudness normalization](loudness.md#bit-perfect-outputs)
+  gain: one loaded (for example paused) with a gain before the device was
+  turned bit-perfect keeps it, so it plays converted, without **DSD** or
+  **BP**;
 - the device accepts the stream. DoP needs a device rate of the DSD rate
   divided by 16 (176.4 kHz for DSD64, 352.8 kHz for DSD128, 705.6 kHz for
   DSD256) and a 24- or 32-bit format. Native DSD needs a device that takes

@@ -414,10 +414,13 @@ plus the mixer's DSD mode.
   step).
 - **The decision.** `try_start_dsd` runs in `start_current` and `resume` (a
   track loaded paused), the two places that open the source on air. It builds
-  `DsdFacts` (the device's mode, the track's format, the player's volume, and
-  whether the device is idle) and asks `fp_model::dsd_decision`, which
+  `DsdFacts` (the device's mode, the track's format, the player's volume, the
+  request's normalization gain as a linear factor, and whether the device is
+  idle) and asks `fp_model::dsd_decision`, which
   returns a `DsdTarget` or a `DsdFallback`: `ModeIsPcm`, `NotDsd`,
-  `Multichannel`, `VolumeNotUnity`, `DeviceBusy`, `RateRefused`,
+  `Multichannel`, `VolumeNotUnity`, `NormalizationGain` (a gain other than
+  exactly 1.0: a track that keeps a gain decided before its device became
+  bit-perfect, loudness normalization spec N17), `DeviceBusy`, `RateRefused`,
   `FormatTooNarrow` or `StreamRefused`. Every fallback but the first two is
   logged ("DSD converted to PCM"). A track that falls back plays through the
   PCM path. A preload is never turned into a DSD source (it is PCM); a DSD
@@ -507,7 +510,7 @@ plus the mixer's DSD mode.
 
 | Action | Effect |
 |---|---|
-| `Preload` | ask the worker for a source of the next entry at its cue-in, or at its pending start instead while the player is stopped and the operator chose one (rule 3a, operator feedback 4 Q8.7); `StartCurrent` then asks for the same entry and start, so `take_or_open` uses that preload and Play starts without a gap; attach it idle. A preload is reused, and a repeated `Preload` ignored, only when the entry, the start and the normalization gain all match (`Playing::serves`): the model preloads the same entry again when its gain changes (loudness normalization N12), and the new request replaces the preload. Every source is attached with its request's gain, and every reopen (a seek, a forced rate change, a route move, a reconnect) reuses the source's own request, so it keeps the gain (N15); the test tone plays at 1.0. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut). The same pair serves O37: a self-next (the entry on air set as next) is preloaded and restarted in the same way, once; the model tells the pass apart from a repeat pass in `on_event` |
+| `Preload` | ask the worker for a source of the next entry at its cue-in, or at its pending start instead while the player is stopped and the operator chose one (rule 3a, operator feedback 4 Q8.7); `StartCurrent` then asks for the same entry and start, so `take_or_open` uses that preload and Play starts without a gap; attach it idle. A preload is reused, and a repeated `Preload` ignored, only when the entry, the start and the normalization gain all match (`Playing::serves`): the model preloads the same entry again when its gain changes (loudness normalization N12), and the new request replaces the preload. A preload kept for a request with the same gain takes that request's normalization status (normalization off, not measured, excluded, silent, bit-perfect and an applied gain of 0.00 dB all play at 0 dB), so `TransitionStarted` reports the status the model asked for last. Every source is attached with its request's gain, and every reopen (a seek, a forced rate change, a route move, a reconnect) reuses the source's own request, so it keeps the gain (N15); the test tone plays at 1.0. While an entry repeats (R26) the model preloads that same entry, and its `StartNextAt` at cue-out restarts it gaplessly (the old pass gets the usual de-click ramp at the cut). The same pair serves O37: a self-next (the entry on air set as next) is preloaded and restarted in the same way, once; the model tells the pass apart from a repeat pass in `on_event` |
 | `StartCurrent` | start the preloaded source, or open one, once ready |
 | `Crossfade` | start the next source now and ramp the current one down over `fade_ms` |
 | `Schedule(plan)` | dispatch a `TransitionPlan` (`StopAt` or `StartNextAt { at_secs, fade_current_until_secs, rate_cut }`) to the mixer as exact frames once it is within `schedule_lead_ms`; a `rate_cut` prepares the preload at that rate and reopens a bit-perfect device between the two tracks (see "Rates and bit-perfect buses") |
@@ -549,7 +552,10 @@ transition stands: a stop, pause, seek or new start takes the transition
 back and the waiting next goes back to idle, and a transition counts as
 executed only once the next was sent its `Start`.
 
-It turns bus events back into model events: `TransitionStarted`,
+It turns bus events back into model events: `TransitionStarted` (with the
+normalization the started source was opened with, so the model's `on_air`
+follows the engine even when a re-preload of the same entry with another
+gain raced the transition, loudness normalization spec N11),
 `ReachedEnd`, `FadeCompleted`, `SourceFailed`, `PreloadFailed` and
 `CueEnded { entry }`. Stale events (for an entry that is no longer current,
 or no longer the cue) are ignored by the model. A preload that cannot be

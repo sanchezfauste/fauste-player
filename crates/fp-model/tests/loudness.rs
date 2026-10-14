@@ -201,6 +201,95 @@ fn n7_the_gain_is_rounded_to_a_hundredth_of_a_db() {
 }
 
 #[test]
+fn n7_rounding_never_takes_a_boost_above_the_true_peak_ceiling() {
+    // The ceiling leaves +2.006 dB: rounding to the nearest hundredth
+    // (+2.01) would pass it, so a gain the ceiling limits rounds down.
+    let config = on();
+    for tp in [-3.006, -3.009, -2.995, -4.9951] {
+        let t = track(Some(-20.0), tp);
+        let n = normalization(&config, &t, false);
+        assert_eq!(
+            n.status,
+            S::Applied {
+                limited: Some(GainLimit::TruePeak)
+            },
+            "{tp}"
+        );
+        let room = config.true_peak_ceiling_dbtp - tp;
+        assert!(n.gain_db <= room, "{tp}: {} > {room}", n.gain_db);
+        assert!(room - n.gain_db < 0.01, "{tp}: {} too low", n.gain_db);
+    }
+    // A room already on a hundredth keeps it.
+    let t = track(Some(-20.0), -3.01);
+    assert_eq!(normalization(&config, &t, false).gain_db, 2.01);
+}
+
+#[test]
+fn n7_rounding_never_takes_any_boost_above_the_true_peak_ceiling() {
+    // Unlimited (wanted +2.006, room +2.008) and limited by the maximum
+    // boost (+2.006 allowed, room +2.008): the nearest hundredth (+2.01)
+    // passes the ceiling, so the gain steps down to +2.00.
+    let config = on();
+    let t = track(Some(-18.006), -3.008);
+    let n = normalization(&config, &t, false);
+    assert_eq!(n.status, S::Applied { limited: None });
+    assert_eq!(n.gain_db, 2.0);
+    let config = LoudnessConfig {
+        max_boost_db: 2.006,
+        ..on()
+    };
+    let t = track(Some(-20.0), -3.008);
+    let n = normalization(&config, &t, false);
+    assert_eq!(
+        n.status,
+        S::Applied {
+            limited: Some(GainLimit::MaxBoost)
+        }
+    );
+    assert_eq!(n.gain_db, 2.0);
+}
+
+#[test]
+fn n7_a_room_on_a_hundredth_keeps_it_and_no_boost_passes_the_room() {
+    let config = on();
+    // Every peak on a hundredth leaves a room on a hundredth: the gain the
+    // ceiling limits is exactly that room, never 0.01 dB less.
+    for k in 101..=2000 {
+        let tp = -(k as f32) / 100.0;
+        let n = normalization(&config, &track(Some(-40.0), tp), false);
+        let room = (k - 100) as f32 / 100.0;
+        let expected = if room > config.max_boost_db {
+            config.max_boost_db
+        } else {
+            room
+        };
+        assert_eq!(n.gain_db, expected, "peak {tp}");
+    }
+    // Whatever the peak and the loudness, a boost never passes the room by
+    // more than f32 noise, and never stays a hundredth or more below it when
+    // the ceiling limits it.
+    for i in 0..4000 {
+        let tp = -1.0 - i as f32 * 0.002_7;
+        for lufs in [-40.0, -18.0 - i as f32 * 0.001_3] {
+            let n = normalization(&config, &track(Some(lufs), tp), false);
+            let room = config.true_peak_ceiling_dbtp - tp;
+            assert!(
+                n.gain_db <= room + 1e-4,
+                "{tp} {lufs}: {} > {room}",
+                n.gain_db
+            );
+            if n.status
+                == (S::Applied {
+                    limited: Some(GainLimit::TruePeak),
+                })
+            {
+                assert!(room - n.gain_db < 0.01 + 1e-5, "{tp}: {} low", n.gain_db);
+            }
+        }
+    }
+}
+
+#[test]
 fn unity_is_exactly_one() {
     assert_eq!(Normalization::default().linear_gain(), 1.0);
     let six = Normalization {
@@ -313,6 +402,8 @@ fn n7_a_configuration_that_was_not_validated_never_panics() {
     assert_eq!(gain(normalization(&c, &t, false)).0, 4.0, "no trim allowed");
     c.max_trim_db = -5.0;
     assert_eq!(gain(normalization(&c, &t, false)).0, 4.0);
+    c.max_trim_db = f32::INFINITY;
+    assert_eq!(gain(normalization(&c, &t, false)).0, 4.0, "infinite: none");
     // A maximum boost that is not a number or below 0 allows no boost.
     let t = track(Some(-30.0), -20.0);
     let mut c = on();
@@ -479,6 +570,29 @@ fn n10_a_trim_out_of_range_or_not_a_number_is_refused() {
 }
 
 #[test]
+fn n10_a_maximum_not_validated_allows_the_trim_the_gain_rule_uses() {
+    // The edit is refused exactly when N7 would not use it: a maximum that
+    // is not a number, infinite or below 0 allows no trim at all.
+    for max in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -3.0] {
+        let mut s = normalizing(1);
+        s.config.loudness.max_trim_db = max;
+        let track = s.library.iter().next().unwrap().id;
+        let set = |s: &mut AppState, trim_db| {
+            apply(
+                s,
+                Command::SetTrackLoudness {
+                    track,
+                    excluded: false,
+                    trim_db,
+                },
+            )
+        };
+        assert_eq!(set(&mut s, 3.0), Err(ModelError::InvalidTrim), "{max}");
+        assert!(set(&mut s, 0.0).is_ok(), "{max}");
+    }
+}
+
+#[test]
 fn n10_an_unknown_track_is_refused() {
     let mut s = normalizing(1);
     assert_eq!(
@@ -625,8 +739,16 @@ fn n11_a_seek_sends_no_new_gain() {
     );
 }
 
+/// The normalization `gain_db` the engine reports it started with.
+fn started_with(gain_db: f32) -> Normalization {
+    Normalization {
+        gain_db,
+        status: S::Applied { limited: None },
+    }
+}
+
 #[test]
-fn n11_a_scheduled_transition_takes_the_preloaded_gain() {
+fn n11_a_scheduled_transition_takes_the_gain_the_engine_started_with() {
     let mut s = normalizing(3);
     let (p, e) = (p0(&s), entries(&s));
     apply(&mut s, Command::Play(p)).unwrap();
@@ -643,13 +765,38 @@ fn n11_a_scheduled_transition_takes_the_preloaded_gain() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[1],
+            normalization: started_with(6.0),
         },
     );
     assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(6.0));
 }
 
 #[test]
-fn n11_a_transition_to_another_entry_recomputes_its_gain() {
+fn n11_a_re_preload_racing_a_committed_transition_keeps_the_engines_gain() {
+    // The engine committed the transition with the +6 dB preload; the model
+    // had meanwhile re-preloaded the same entry at +2 dB. The engine plays
+    // +6 dB, and `on_air` must say so.
+    let mut s = normalizing(3);
+    let (p, e) = (p0(&s), entries(&s));
+    apply(&mut s, Command::Play(p)).unwrap();
+    measure(&mut s, e[1], -22.0);
+    apply(&mut s, Command::SetVolume(p, 1.0)).unwrap();
+    measure(&mut s, e[1], -18.0); // the next now wants +2: re-preloaded
+    let pre = apply(&mut s, Command::SetVolume(p, 1.0)).unwrap();
+    assert_eq!(preloads(&pre, p), vec![2.0]);
+    on_event(
+        &mut s,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: e[1],
+            normalization: started_with(6.0),
+        },
+    );
+    assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(6.0));
+}
+
+#[test]
+fn n11_a_transition_to_another_entry_takes_the_engines_gain() {
     let mut s = normalizing(3);
     let (p, e) = (p0(&s), entries(&s));
     apply(&mut s, Command::Play(p)).unwrap();
@@ -660,6 +807,7 @@ fn n11_a_transition_to_another_entry_recomputes_its_gain() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[2],
+            normalization: started_with(8.0),
         },
     );
     assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(8.0));

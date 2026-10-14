@@ -231,6 +231,7 @@ fn a_segue_starts_the_next_on_the_exact_frame_and_overlaps_the_fade() {
         *e == EngineEvent::TransitionStarted {
             player: P,
             entry: EntryId(2),
+            normalization: fp_model::Normalization::default(),
         }
     });
     let faded = r
@@ -263,7 +264,8 @@ fn source_end_plans_chain_when_the_file_runs_out() {
     r.run(40);
     assert!(r.events.contains(&EngineEvent::TransitionStarted {
         player: P,
-        entry: EntryId(2)
+        entry: EntryId(2),
+        normalization: fp_model::Normalization::default(),
     }));
     let last_of_1 = r.heard.iter().rposition(|v| tag(*v).0 == 1).unwrap();
     let first_of_2 = r.heard.iter().position(|v| tag(*v) == (2, 0)).unwrap();
@@ -510,7 +512,8 @@ fn pausing_before_a_dispatched_transition_takes_it_back() {
     r.run(40);
     assert!(r.events.contains(&EngineEvent::TransitionStarted {
         player: P,
-        entry: EntryId(2)
+        entry: EntryId(2),
+        normalization: fp_model::Normalization::default(),
     }));
 }
 
@@ -545,7 +548,8 @@ fn a_transition_that_already_happened_when_pause_arrives_leaves_the_player_playi
     r.run(1);
     assert!(r.events.contains(&EngineEvent::TransitionStarted {
         player: P,
-        entry: EntryId(2)
+        entry: EntryId(2),
+        normalization: fp_model::Normalization::default(),
     }));
     // The model now says "playing track 2": the engine must agree.
     r.act(EngineAction::Seek {
@@ -799,6 +803,7 @@ fn a_transition_to_a_next_not_ready_yet_starts_it_when_ready_without_underruns()
         r.events.contains(&EngineEvent::TransitionStarted {
             player: P,
             entry: EntryId(2),
+            normalization: fp_model::Normalization::default(),
         }),
         "{:?}",
         r.events
@@ -1382,4 +1387,112 @@ fn n15_a_cue_seek_keeps_the_gain() {
     let (track, index) = halved(*heard.last().unwrap());
     assert_eq!(track, 3);
     assert!(index as f64 / RATE >= 1.0, "{index}");
+}
+
+#[test]
+fn n11_transition_started_reports_the_gain_the_engine_started_with() {
+    // The audio passes the transition frame with the +6 dB preload before
+    // the conductor sees it; the model's re-preload of the same entry at
+    // 0 dB arrives then. The engine plays +6 dB and must report it.
+    let mut r = rig(96_000, false);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(gained(2, 0.0, DOUBLE_DB)),
+    });
+    r.settle();
+    r.run(1);
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: 0.2,
+            fade_current_until_secs: None,
+            rate_cut: None,
+        }),
+    });
+    r.run(12); // dispatched
+    for _ in 0..12 {
+        let out = r.main.render(BLOCK).unwrap();
+        r.heard.extend(out.chunks(2).map(|f| f[0]));
+    }
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(request(2, 0.0)),
+    });
+    r.settle();
+    r.run(4);
+    let started: Vec<_> = r
+        .events
+        .iter()
+        .filter_map(|e| match e {
+            EngineEvent::TransitionStarted {
+                entry,
+                normalization,
+                ..
+            } => Some((*entry, normalization.gain_db)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(started, vec![(EntryId(2), DOUBLE_DB)]);
+    assert_eq!(halved(*r.heard.last().unwrap()).0, 2, "track 2 at +6 dB");
+}
+
+#[test]
+fn n11_a_kept_preload_reports_the_status_of_the_latest_request() {
+    // Not measured and normalization off both play at 0 dB: the engine
+    // keeps the source it preloaded, but the transition must report the
+    // status the model asked for last, not the one it opened with.
+    let mut r = rig(96_000, false);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(SourceRequest {
+            normalization: Normalization {
+                gain_db: 0.0,
+                status: NormalizationStatus::NotMeasured,
+            },
+            ..request(2, 0.0)
+        }),
+    });
+    r.settle();
+    r.run(1);
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(SourceRequest {
+            normalization: Normalization {
+                gain_db: 0.0,
+                status: NormalizationStatus::Off,
+            },
+            ..request(2, 0.0)
+        }),
+    });
+    r.settle();
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: 0.2,
+            fade_current_until_secs: None,
+            rate_cut: None,
+        }),
+    });
+    r.run(40);
+    let started: Vec<_> = r
+        .events
+        .iter()
+        .filter_map(|e| match e {
+            EngineEvent::TransitionStarted {
+                entry,
+                normalization,
+                ..
+            } => Some((*entry, normalization.status)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(started, vec![(EntryId(2), NormalizationStatus::Off)]);
 }

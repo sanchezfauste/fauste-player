@@ -1210,6 +1210,7 @@ fn a_repeat_pass_reports_the_dsd_end_before_the_transition() {
             *e == EngineEvent::TransitionStarted {
                 player: P,
                 entry: EntryId(1),
+                normalization: fp_model::Normalization::default(),
             }
         })
         .expect("TransitionStarted");
@@ -1635,4 +1636,71 @@ fn bit_perfect_off_leaves_dsd_and_reopens_shared() {
     );
     let out = r.run_raw(BLOCK * 10);
     assert!(out.iter().all(|f| f[0] == 0.0 && f[1] == 0.0));
+}
+
+/// A request with a normalization gain (loudness normalization spec N17).
+fn with_gain(request: SourceRequest, gain_db: f32) -> SourceRequest {
+    SourceRequest {
+        normalization: fp_model::Normalization {
+            gain_db,
+            status: fp_model::NormalizationStatus::Applied { limited: None },
+        },
+        ..request
+    }
+}
+
+#[test]
+fn a_dsd_track_with_a_normalization_gain_plays_converted_on_dop() {
+    // N17: the gain was decided while the device was not bit-perfect; the
+    // track keeps it, so it cannot go out as raw words.
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let path = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, with_gain(request(1, path, dsd64()), -6.0));
+    assert_eq!(r.rate(), PCM_RATE);
+    assert_eq!(r.dac.config().unwrap().dsd, None);
+    r.run_raw(BLOCK * 4);
+    assert!(!r.engine.telemetry(P).dsd);
+    assert!(!r.engine.telemetry(P).bit_perfect);
+    assert!(
+        !r.events()
+            .iter()
+            .any(|e| matches!(e, EngineEvent::DsdStarted { .. }))
+    );
+}
+
+#[test]
+fn a_dsd_track_loaded_paused_with_a_gain_resumes_converted() {
+    // N17: loaded paused with a gain, resumed on a device set to DoP.
+    let mut r = rig(DsdOutput::Dop, DsdMix::ConvertToPcm, SampleFormat::I24);
+    let (left, right) = pattern();
+    let path = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: with_gain(request(1, path, dsd64()), 3.0),
+    });
+    r.settle();
+    r.act(EngineAction::Resume { player: P });
+    r.settle();
+    let raw = r.run_raw(WORD_RATE as usize / 8);
+    assert_eq!(r.dac.config().unwrap().dsd, None);
+    assert!(not_dop(&raw), "PCM, not DoP");
+    assert!(!r.engine.telemetry(P).dsd);
+    assert!(!r.engine.telemetry(P).bit_perfect);
+}
+
+#[test]
+fn a_dsd_track_with_a_normalization_gain_plays_converted_on_native() {
+    let mut r = rig_with(
+        DsdOutput::Native,
+        DsdMix::ConvertToPcm,
+        SampleFormat::I24,
+        |dac| dac.set_native_dsd(true),
+    );
+    let (left, right) = pattern();
+    let path = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, with_gain(request(1, path, dsd64()), -2.5));
+    assert_eq!(r.dac.config().unwrap().dsd, None);
+    assert_eq!(r.rate(), PCM_RATE);
+    assert!(!r.engine.telemetry(P).dsd);
 }

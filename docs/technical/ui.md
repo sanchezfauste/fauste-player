@@ -158,7 +158,12 @@ extension, then the sample rate and the bit depth when known. Under the
 fields, `view::loudness_lines` adds the loudness measurement ("Loudness:
 −14.2 LUFS, true peak −0.8 dBTP", `—` for a silent file, or "Loudness: not
 measured") and the track's loudness edit when it is not the default
-(loudness normalization spec N19). They are sentences, not label/value
+(loudness normalization spec N19). The trim shown is the one in use
+(`fp_model::trim_in_use`: the saved trim within ± the current maximum
+trim); when a lowered maximum limits it, the line
+(`track-loudness-trim-limited`) also gives the saved value, unless both read
+the same at the precision shown (0.1 dB). The gain badge's
+tooltip and the Trim slider show the trim in use too. They are sentences, not label/value
 pairs, so they are plain lines rather than rows of the grid.
 
 **Menu item.** *Edit tags…* is enabled by `view::tag_edit_availability`
@@ -392,13 +397,13 @@ The interface shows and edits [loudness normalization](../superpowers/specs/2026
   anyway and shows nothing), and nothing for `Off` and `Silent`. When
   `fp_model::normalization(config, track, false)` now differs from `on_air`
   (the settings, the measurement or the edit changed since the track
-  started, N11), the tooltip adds `tip-gain-earlier-settings`. `player.rs`
+  started, N11), the tooltip is `tip-gain-earlier-settings` alone: the
+  current target, measurement and trim did not give that gain, so they are
+  not quoted beside it. `player.rs`
   paints it as a tile left of **BP**, named by its tooltip lines. It shows
-  what the model asked the engine for when the source started; if a
-  re-preload races a transition the engine had already committed, the
-  engine may play the earlier preload's gain for that one track, and
-  neither the badge nor the remote API sees it (no engine report exists
-  for the gain).
+  the gain the source was started with: for a scheduled transition, the
+  one the engine reports in `TransitionStarted`, so a re-preload that
+  races a transition the engine had already committed does not change it.
 - **Loudness… popup (N20).** The waveform menu (`wave_panel::edit_markers`,
   so the player column and the CUE window) sets `ViewState::loudness_popup`
   to the track's id. `loudness_edit::popup` draws a non-modal window for

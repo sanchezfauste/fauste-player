@@ -128,22 +128,13 @@ pub fn normalization(config: &LoudnessConfig, track: &Track, bit_perfect: bool) 
     let Some(lufs) = measured.integrated_lufs else {
         return Normalization::none(S::Silent);
     };
-    // A stored trim beyond the current maximum (lowered since) is limited
-    // by it; one that is not a number counts as none. A maximum that is
-    // not a number or below 0 (a configuration not validated) allows none.
-    let trim = track.loudness_edit.trim_db;
-    let max_trim = config.max_trim_db.max(0.0);
-    let trim = if trim.is_finite() {
-        trim.clamp(-max_trim, max_trim)
-    } else {
-        0.0
-    };
+    let trim = trim_in_use(config, &track.loudness_edit);
     let wanted = config.target_lufs - lufs + trim;
     // The ceiling and the maximum boost only limit boosts (Q2).
+    let peak_room = (config.true_peak_ceiling_dbtp - measured.true_peak_dbtp).max(0.0);
     let (gain, limited) = if wanted <= 0.0 {
         (wanted, None)
     } else {
-        let peak_room = (config.true_peak_ceiling_dbtp - measured.true_peak_dbtp).max(0.0);
         // Not a number or below 0 (a configuration not validated): no boost.
         let boost = if config.max_boost_db.is_finite() {
             config.max_boost_db.max(0.0)
@@ -158,13 +149,48 @@ pub fn normalization(config: &LoudnessConfig, track: &Track, bit_perfect: bool) 
             (wanted, None)
         }
     };
-    let gain_db = (gain * 100.0).round() / 100.0;
+    let mut gain_db = (gain * 100.0).round() / 100.0;
+    // Rounding must not take a boost above the ceiling, whatever limited
+    // it: such a boost steps down to the hundredth at or below the room.
+    // Both steps allow for f32 noise, so a room exactly on a hundredth
+    // keeps it.
+    if gain_db > 0.0 && gain_db > peak_room + ROOM_TOLERANCE_DB {
+        gain_db = ((peak_room + ROOM_TOLERANCE_DB) * 100.0).floor() / 100.0;
+    }
     if !gain_db.is_finite() {
         return Normalization::none(S::NotMeasured);
     }
     Normalization {
         gain_db,
         status: S::Applied { limited },
+    }
+}
+
+/// How far, in dB, f32 arithmetic may put a rounded gain above the room
+/// the true-peak ceiling leaves without that counting as passing it
+/// (N7): far below the hundredth the gain is rounded to.
+const ROOM_TOLERANCE_DB: f32 = 1e-5;
+
+/// The largest trim N7 uses and N10 allows, dB: `max_trim_db`, or none
+/// when it is not a finite number of at least 0 (a configuration not
+/// validated).
+pub fn max_trim_in_use(config: &LoudnessConfig) -> f32 {
+    if config.max_trim_db.is_finite() {
+        config.max_trim_db.max(0.0)
+    } else {
+        0.0
+    }
+}
+
+/// The trim N7 uses for `edit`: the stored one within ± `max_trim_db`
+/// (a maximum lowered since limits it, `max_trim_in_use`); one that is
+/// not a number counts as none.
+pub fn trim_in_use(config: &LoudnessConfig, edit: &LoudnessEdit) -> f32 {
+    let max_trim = max_trim_in_use(config);
+    if edit.trim_db.is_finite() {
+        edit.trim_db.clamp(-max_trim, max_trim)
+    } else {
+        0.0
     }
 }
 

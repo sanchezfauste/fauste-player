@@ -70,7 +70,8 @@ pub use live::{
 };
 pub use loudness::{
     GainLimit, LOUDNESS_VERSION, LoudnessEdit, LoudnessMeasurement, Normalization,
-    NormalizationStatus, holder_bit_perfect, loudness_unmeasured, normalization, normalization_for,
+    NormalizationStatus, holder_bit_perfect, loudness_unmeasured, max_trim_in_use, normalization,
+    normalization_for, trim_in_use,
 };
 pub use midi::{MidiAction, MidiBinding, MidiConfig, MidiDevice, MidiTrigger};
 pub use on_air::{OnAir, on_air};

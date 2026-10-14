@@ -622,7 +622,7 @@ pub fn gain_badge(
     config: &fp_model::LoudnessConfig,
     track: &Track,
 ) -> Option<GainBadge> {
-    use fp_model::{GainLimit, NormalizationStatus as S};
+    use fp_model::NormalizationStatus as S;
     let not_normalized = |tone, tip: &'static str| GainBadge {
         text: Message::new("badge-not-normalized", &[]),
         tone,
@@ -638,34 +638,14 @@ pub fn gain_badge(
             "tip-not-normalized-excluded",
         )),
         S::Applied { limited } => {
-            let lufs = track
-                .loudness
-                .and_then(|m| m.integrated_lufs)
-                .map_or_else(|| "—".to_owned(), decimal);
-            let mut tip = vec![Message::new(
-                "tip-gain-applied",
-                &[
-                    ("target", decimal(config.target_lufs)),
-                    ("lufs", lufs),
-                    ("trim", signed_db(track.loudness_edit.trim_db)),
-                ],
-            )];
-            match limited {
-                Some(GainLimit::TruePeak) => tip.push(Message::new(
-                    "tip-gain-limited-peak",
-                    &[("ceiling", decimal(config.true_peak_ceiling_dbtp))],
-                )),
-                Some(GainLimit::MaxBoost) => tip.push(Message::new(
-                    "tip-gain-limited-boost",
-                    &[("max", decimal(config.max_boost_db))],
-                )),
-                None => {}
-            }
-            // The source keeps the gain it started with (N11): say so when
-            // the settings, the measurement or the edit now give another.
-            if fp_model::normalization(config, track, false) != *n {
-                tip.push(Message::new("tip-gain-earlier-settings", &[]));
-            }
+            // The source keeps the gain it started with (N11). When the
+            // settings, the measurement or the edit now give another, the
+            // current values did not give this gain: say only that.
+            let tip = if fp_model::normalization(config, track, false) != *n {
+                vec![Message::new("tip-gain-earlier-settings", &[])]
+            } else {
+                applied_tip(config, track, limited)
+            };
             Some(GainBadge {
                 text: Message::new("badge-gain", &[("gain", signed_db(n.gain_db))]),
                 tone: BadgeTone::Normal,
@@ -675,8 +655,48 @@ pub fn gain_badge(
     }
 }
 
+/// The tooltip of a gain the current settings give: the target, the
+/// measurement and the trim in use, and the limit that held a boost back.
+fn applied_tip(
+    config: &fp_model::LoudnessConfig,
+    track: &Track,
+    limited: Option<fp_model::GainLimit>,
+) -> Vec<Message> {
+    use fp_model::GainLimit;
+    let lufs = track
+        .loudness
+        .and_then(|m| m.integrated_lufs)
+        .map_or_else(|| "—".to_owned(), decimal);
+    let mut tip = vec![Message::new(
+        "tip-gain-applied",
+        &[
+            ("target", decimal(config.target_lufs)),
+            ("lufs", lufs),
+            (
+                "trim",
+                signed_db(fp_model::trim_in_use(config, &track.loudness_edit)),
+            ),
+        ],
+    )];
+    match limited {
+        Some(GainLimit::TruePeak) => tip.push(Message::new(
+            "tip-gain-limited-peak",
+            &[("ceiling", decimal(config.true_peak_ceiling_dbtp))],
+        )),
+        Some(GainLimit::MaxBoost) => tip.push(Message::new(
+            "tip-gain-limited-boost",
+            &[("max", decimal(config.max_boost_db))],
+        )),
+        None => {}
+    }
+    tip
+}
+
 /// N19: the loudness lines of the track tooltip, drawn under its fields.
-pub fn loudness_lines(track: &Track) -> Vec<Message> {
+/// The trim is the one in use under `config` (N7), with the saved one
+/// beside it when a lowered maximum limits it by more than the precision
+/// shown.
+pub fn loudness_lines(track: &Track, config: &fp_model::LoudnessConfig) -> Vec<Message> {
     let mut lines = vec![match track.loudness {
         Some(m) => Message::new(
             "track-loudness",
@@ -694,10 +714,18 @@ pub fn loudness_lines(track: &Track) -> Vec<Message> {
     if edit.excluded {
         lines.push(Message::new("track-loudness-excluded", &[]));
     } else if edit.trim_db.is_finite() && edit.trim_db != 0.0 {
-        lines.push(Message::new(
-            "track-loudness-trim",
-            &[("trim", signed_db(edit.trim_db))],
-        ));
+        let in_use = signed_db(fp_model::trim_in_use(config, &edit));
+        let saved = signed_db(edit.trim_db);
+        // Compared as shown: a limit below the precision shown is no limit
+        // the operator could read.
+        lines.push(if in_use == saved {
+            Message::new("track-loudness-trim", &[("trim", in_use)])
+        } else {
+            Message::new(
+                "track-loudness-trim-limited",
+                &[("trim", in_use), ("saved", saved)],
+            )
+        });
     }
     lines
 }

@@ -543,6 +543,21 @@ async fn n24_the_loudness_endpoint_refuses_bad_bodies() {
         .await,
         StatusCode::CONFLICT
     );
+    // A number beyond f32 reads as infinite: not finite, so the model
+    // refuses it like any trim out of range (N10).
+    for trim in [1e39, -1e39] {
+        assert_eq!(
+            call(
+                &fake,
+                "PUT",
+                &format!("/api/v1/tracks/{t}/loudness"),
+                Some(json!({"excluded": false, "trim_db": trim}))
+            )
+            .await,
+            StatusCode::CONFLICT,
+            "{trim}"
+        );
+    }
     assert_eq!(
         call(
             &fake,

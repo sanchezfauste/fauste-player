@@ -37,6 +37,7 @@ fn r25_every_advance_records_the_entry_that_was_left() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: c,
+            normalization: fp_model::Normalization::default(),
         },
     );
     assert_eq!(history(&s, p), vec![a, b]);

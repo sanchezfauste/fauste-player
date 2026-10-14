@@ -155,6 +155,7 @@ fn rule11_transition_started_advances_marks_played_and_tracks_the_fade() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[1],
+            normalization: fp_model::Normalization::default(),
         },
     );
     let player = state.player(p).unwrap();
@@ -184,6 +185,7 @@ fn rule11_transition_without_overlap_does_not_mark_fading() {
         EngineEvent::TransitionStarted {
             player: p,
             entry: e[1],
+            normalization: fp_model::Normalization::default(),
         },
     );
     assert!(!state.player(p).unwrap().fading);

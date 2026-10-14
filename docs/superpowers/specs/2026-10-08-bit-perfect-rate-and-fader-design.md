@@ -429,7 +429,8 @@ The O25 rule "the fader leaving unity switches a DSD stream to PCM"
 `EngineAction::LeaveDsd`) can no longer be reached from the fader, since
 a DSD stream only plays on a bit-perfect device (BF1, BF3). It stays as a
 guard and its test stays; the DSD decision's volume check (`DsdFacts`)
-stays too.
+stays too, beside its check of the source's normalization gain (loudness
+normalization spec N17: a track that keeps a gain plays converted).
 
 ## 6. Interface strings
 
