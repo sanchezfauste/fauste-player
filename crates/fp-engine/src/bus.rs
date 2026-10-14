@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use fp_backends::dsd::{DopEncoder, DsdStream};
 use fp_backends::{
-    AudioBackend, BackendError, DeviceId, OutputStream, StreamConfig, StreamErrorSink,
+    AudioBackend, BackendError, DeviceId, OutputStream, Pacer, StreamConfig, StreamErrorSink,
 };
 
 use crate::mixer::{
@@ -108,18 +108,25 @@ impl VirtualClock {
             .name("fp-virtual-clock".to_owned())
             .spawn(move || {
                 let mut buffer = vec![0.0f32; frames * channels];
-                let mut deadline = Instant::now();
+                // The same absolute schedule as the Null output: a late
+                // wake-up renders the blocks it owes, so countdowns keep
+                // real time while the device is lost.
+                let mut pacer = Pacer::new(period, Instant::now());
                 while !flag.load(Ordering::Acquire) {
-                    mixer
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .render(&mut buffer, channels);
-                    deadline += period;
                     let now = Instant::now();
-                    if deadline > now {
-                        std::thread::sleep(deadline - now);
-                    } else {
-                        deadline = now;
+                    let blocks = pacer.blocks_due(now);
+                    if blocks == 0 {
+                        std::thread::sleep(pacer.deadline().saturating_duration_since(now));
+                        continue;
+                    }
+                    for _ in 0..blocks {
+                        if flag.load(Ordering::Acquire) {
+                            break;
+                        }
+                        mixer
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .render(&mut buffer, channels);
                     }
                 }
             })

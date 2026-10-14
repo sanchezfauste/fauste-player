@@ -179,6 +179,18 @@ none.
 
 The Settings list shows `null` last, as "No output (silent)"; `preferred_backend` ranks it after every other system, so it is the default only when nothing else is available.
 
+The Null output renders on its own thread (`fp-null-output`), paced by a
+`Pacer` (`pacer.rs`): an absolute schedule where block `n` is due at
+`start + n × period`. The engine's clock counts the frames a device renders,
+so a thread that wakes up late must make the time up, or the clock runs
+slow (with a timer that wakes up every 23 ms over 5.3 ms blocks, dropping the
+lateness ran it at about a fifth of real time). A late wake-up renders the
+blocks it owes, at most `Pacer::MAX_CATCH_UP` (100 ms of audio) per wake-up;
+further behind than `Pacer::RESYNC_AFTER` (1 s, or one block if longer: a
+suspended machine, a debugger stop) the schedule restarts from now and the
+gap is lost instead of rendered in a burst. It never runs ahead of real time
+by more than one block. The engine's virtual clock uses the same `Pacer`.
+
 `system_backends()` returns one `CpalBackend::for_host` for every host
 compiled into the build (`cpal::ALL_HOSTS`), in the OS preference order.
 Nothing connects to a system until it is first used.

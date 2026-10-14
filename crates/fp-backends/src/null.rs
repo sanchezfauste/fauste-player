@@ -1,5 +1,6 @@
 //! A backend that discards audio at real-time pace. It keeps the engine's
-//! timeline running when no sound card is wanted (and in soak tests).
+//! timeline running when no sound card is wanted (and in soak tests). Its
+//! thread follows a [`Pacer`], so a late wake-up is made up, not lost.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -7,7 +8,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crate::{
-    AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream,
+    AudioBackend, Availability, BackendError, BackendId, DeviceId, DeviceInfo, OutputStream, Pacer,
     Renderer, SampleFormat, StreamConfig, StreamErrorSink,
 };
 
@@ -108,16 +109,21 @@ impl AudioBackend for NullBackend {
             .name("fp-null-output".to_owned())
             .spawn(move || {
                 let mut buffer = vec![0.0f32; frames * channels];
-                let mut deadline = Instant::now();
+                // An absolute schedule: a late wake-up renders the blocks it
+                // owes, so the engine's clock keeps real time.
+                let mut pacer = Pacer::new(period, Instant::now());
                 while !stop_flag.load(Ordering::Acquire) {
-                    renderer.render(&mut buffer, channels);
-                    deadline += period;
                     let now = Instant::now();
-                    if deadline > now {
-                        std::thread::sleep(deadline - now);
-                    } else {
-                        // Fell behind (machine suspended, debugger…): do not try to catch up.
-                        deadline = now;
+                    let blocks = pacer.blocks_due(now);
+                    if blocks == 0 {
+                        std::thread::sleep(pacer.deadline().saturating_duration_since(now));
+                        continue;
+                    }
+                    for _ in 0..blocks {
+                        if stop_flag.load(Ordering::Acquire) {
+                            break;
+                        }
+                        renderer.render(&mut buffer, channels);
                     }
                 }
             })
