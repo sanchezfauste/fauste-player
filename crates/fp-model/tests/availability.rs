@@ -139,6 +139,22 @@ fn command_available_filters_transport_commands_only() {
 }
 
 #[test]
+fn every_player_command_is_unavailable_for_an_unknown_player() {
+    // Like `availability` (all off), whatever the value: the caller checks
+    // the player first to report it as unknown (the remote API: not found).
+    let (s, _) = three();
+    let unknown = PlayerId(9_999);
+    assert_eq!(availability(&s, unknown), Availability::default());
+    assert!(!command_available(&s, &Command::Play(unknown)));
+    for volume in [0.5, 1.0, f32::NAN] {
+        assert!(
+            !command_available(&s, &Command::SetVolume(unknown, volume)),
+            "{volume}"
+        );
+    }
+}
+
+#[test]
 fn an_unplayable_history_entry_does_not_offer_previous() {
     let (mut s, p) = three();
     next(&mut s, p);
