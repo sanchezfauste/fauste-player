@@ -7,4 +7,5 @@
 #![deny(clippy::indexing_slicing)]
 
 pub mod kweight;
+pub mod loudness;
 pub mod truepeak;
