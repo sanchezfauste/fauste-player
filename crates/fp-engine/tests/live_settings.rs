@@ -1193,3 +1193,60 @@ fn l16_a_cue_move_leaves_the_main_carts_declick_tail() {
         "the tail keeps fading, not cut"
     );
 }
+
+/// A normalization gain of +6.02 dB: a factor of 2 (to 1e-3).
+fn doubled() -> fp_model::Normalization {
+    fp_model::Normalization {
+        gain_db: 6.0206,
+        status: fp_model::NormalizationStatus::Applied { limited: None },
+    }
+}
+
+/// The track of a tagged sample played at twice its level.
+fn halved_track(v: f32) -> u64 {
+    ((v / 2.0).round() as u64) / 100_000
+}
+
+/// Forces `main` to 44.1 kHz, which opens every source on it again.
+fn force_new_rate(r: &mut Rig) {
+    let wanted = DeviceSettings {
+        sample_rate: 44_100,
+        ..settings_of(r, "main")
+    };
+    apply_device(r, "main", wanted, true);
+    assert_eq!(r.main.config().unwrap().sample_rate, 44_100);
+    r.settle();
+}
+
+#[test]
+fn n15_a_forced_rate_change_keeps_a_players_gain() {
+    let mut r = rig();
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: SourceRequest {
+            normalization: doubled(),
+            ..request(1, 0.0)
+        },
+    });
+    r.settle();
+    r.run(5);
+    force_new_rate(&mut r);
+    let heard = r.run(10);
+    let last = *heard.last().unwrap();
+    assert_eq!(halved_track(last), 1, "track 1 at twice its level: {last}");
+}
+
+#[test]
+fn n15_a_forced_rate_change_keeps_a_carts_gain() {
+    let mut r = rig();
+    r.act(EngineAction::StartCart(CartRequest {
+        normalization: doubled(),
+        ..cart_request(1)
+    }));
+    r.settle();
+    r.run(5);
+    force_new_rate(&mut r);
+    let heard = r.run(10);
+    let last = *heard.last().unwrap();
+    assert_eq!(halved_track(last), 9, "track 9 at twice its level: {last}");
+}
