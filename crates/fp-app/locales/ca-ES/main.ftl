@@ -581,4 +581,5 @@ pending-running = { $rate } kHz, búfer { $buffer }
 apply-now-title = Aplicar ara?
 apply-now-body = Aplicar ara interromp breument l'àudio a:
 apply-now-line = { $device }: { $causes }
+apply-now-fader-reset = El volum de { $players } passa al 100 % (sortida bit-perfect).
 apply-now-confirm = Interrompre i aplicar

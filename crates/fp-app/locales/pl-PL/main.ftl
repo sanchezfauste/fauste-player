@@ -593,4 +593,5 @@ pending-running = { $rate } kHz, bufor { $buffer }
 apply-now-title = Zastosować teraz?
 apply-now-body = Zastosowanie teraz na chwilę przerwie dźwięk na:
 apply-now-line = { $device }: { $causes }
+apply-now-fader-reset = Głośność { $players } zmienia się na 100 % (wyjście bit-perfect).
 apply-now-confirm = Przerwij i zastosuj

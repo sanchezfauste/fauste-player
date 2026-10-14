@@ -581,4 +581,5 @@ pending-running = { $rate } kHz, Puffer { $buffer }
 apply-now-title = Jetzt anwenden?
 apply-now-body = Jetzt anwenden unterbricht kurz den Ton auf:
 apply-now-line = { $device }: { $causes }
+apply-now-fader-reset = Die Lautstärke von { $players } geht auf 100 % (Bit-perfect-Ausgang).
 apply-now-confirm = Unterbrechen und anwenden

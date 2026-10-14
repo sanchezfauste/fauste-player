@@ -581,4 +581,5 @@ pending-running = { $rate } kHz, bufferra { $buffer }
 apply-now-title = Orain aplikatu?
 apply-now-body = Orain aplikatzeak audioa laburki eteten du hemen:
 apply-now-line = { $device }: { $causes }
+apply-now-fader-reset = { $players }(r)en bolumena % 100era igotzen da (bit-perfect irteera).
 apply-now-confirm = Eten eta aplikatu

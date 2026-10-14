@@ -345,3 +345,36 @@ fn cancel_in_the_confirmation_brings_the_panel_back() {
     );
     assert!(fake.take_sent().is_empty());
 }
+
+/// P1 playing on `null` at `volume`, and bit-perfect wanted for `null`.
+fn bit_perfect_wanted(volume: f32) -> (Harness<'static, AppUi>, std::sync::Arc<Fake>) {
+    let mut s = playing(2);
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::SetVolume(p, volume)).unwrap();
+    let (mut h, fake) = harness(s);
+    let mut config = fake.state.load().config.clone();
+    config.outputs.bit_perfect = vec![null("null")];
+    fake.send(Command::UpdateConfig(Box::new(config)));
+    fake.take_sent();
+    h.run_steps(2);
+    (h, fake)
+}
+
+#[test]
+fn bf8_apply_now_names_the_faders_it_resets() {
+    let (mut h, _fake) = bit_perfect_wanted(0.5);
+    open_settings_and_apply(&mut h);
+    assert!(h.query_by_label(CONFIRM).is_some());
+    assert!(
+        h.query_by_label("The volume of P1 goes to 100 % (bit-perfect output).")
+            .is_some()
+    );
+}
+
+#[test]
+fn bf8_no_fader_line_when_every_fader_is_at_full() {
+    let (mut h, _fake) = bit_perfect_wanted(1.0);
+    open_settings_and_apply(&mut h);
+    assert!(h.query_by_label(CONFIRM).is_some());
+    assert!(h.query_by_label_contains("goes to 100 %").is_none());
+}

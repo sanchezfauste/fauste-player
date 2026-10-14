@@ -581,4 +581,5 @@ pending-running = { $rate } kHz, buffer { $buffer }
 apply-now-title = Nu toepassen?
 apply-now-body = Nu toepassen onderbreekt het geluid kort op:
 apply-now-line = { $device }: { $causes }
+apply-now-fader-reset = Het volume van { $players } gaat naar 100 % (bit-perfect uitgang).
 apply-now-confirm = Onderbreken en toepassen
