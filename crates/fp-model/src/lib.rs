@@ -48,8 +48,8 @@ pub use command::{
 };
 pub use config::{
     AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,
-    DeviceOverride, Limits, LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings,
-    OutputDevice, OutputsConfig, OutputsView, PlayerRoutes, PlayersConfig, Route,
+    DeviceOverride, Limits, LoudnessConfig, LoudnessReadout, MeterBallistics, MeterConfig,
+    MeterSettings, OutputDevice, OutputsConfig, OutputsView, PlayerRoutes, PlayersConfig, Route,
     SAMPLE_RATE_RANGE, Tuning, UiConfig,
 };
 pub use device_offer::{

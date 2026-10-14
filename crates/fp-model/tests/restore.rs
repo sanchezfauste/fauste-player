@@ -5,7 +5,7 @@ mod common;
 
 use common::fixture;
 use fp_model::{
-    AnalysisSettings, Command, Config, MeterBallistics, MeterConfig, PlayersConfig,
+    AnalysisSettings, Command, Config, LoudnessConfig, MeterBallistics, MeterConfig, PlayersConfig,
     SettingsSection, apply, default_shortcuts, restore_defaults,
 };
 
@@ -33,6 +33,8 @@ fn altered() -> Config {
     c.tuning.prebuffer_secs = 10.0;
     c.midi.enabled = true;
     c.remote.http.enabled = true;
+    c.loudness.normalize = true;
+    c.loudness.target_lufs = -20.0;
     c
 }
 
@@ -97,4 +99,14 @@ fn players_restores_the_cue_markers_switch() {
     assert!(!c.players.use_cue_markers);
     restore_defaults(&mut c, SettingsSection::Players);
     assert!(c.players.use_cue_markers);
+}
+
+#[test]
+fn n2_loudness_resets_the_loudness_section_only() {
+    let mut c = altered();
+    restore_defaults(&mut c, SettingsSection::Loudness);
+    assert_eq!(c.loudness, LoudnessConfig::default());
+    let mut expected = altered();
+    expected.loudness = LoudnessConfig::default();
+    assert_eq!(c, expected);
 }
