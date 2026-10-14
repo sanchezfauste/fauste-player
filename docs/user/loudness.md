@@ -94,7 +94,7 @@ of the track on air. Hover it for the reason.
 
 | Badge | Meaning |
 |---|---|
-| **+4.0 dB**, **−7.0 dB** (blue) | The track is normalized with this gain. The tooltip gives the target, the measured loudness and the track's trim, and says when the true-peak ceiling or the maximum boost held a boost back. When the settings, the measurement or the trim changed after the track started, it also says that the track keeps the gain it started with. |
+| **+4.0 dB**, **−7.0 dB** (blue) | The track is normalized with this gain. The tooltip gives the target, the measured loudness and the track's trim, and says when the true-peak ceiling or the maximum boost held a boost back. When the settings, the measurement or the trim changed after the track was loaded, it says only that the track keeps the gain set when it was loaded. |
 | **Not normalized** (amber) | Normalization is on, but the track has no measurement yet (or is too short to measure): it plays unchanged. |
 | **Not normalized** (grey) | The output is bit-perfect, or the track is excluded from normalization. |
 | No badge | Normalization was off when the track started, the track is silent, or the player is stopped. A bit-perfect player shows none either while normalization is off. |

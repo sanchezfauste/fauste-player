@@ -131,16 +131,13 @@ fn n18_a_paused_player_keeps_its_badge_and_gain() {
     apply(&mut s, Command::UpdateConfig(Box::new(config))).unwrap();
     let (mut h, _fake) = harness(s);
     h.run_steps(2);
-    // The source on air keeps +4.0 dB; the tooltip says that it started
-    // with earlier settings, which the next track will not use.
+    // The source on air keeps +4.0 dB; the tooltip says that the gain was
+    // set at load, and quotes none of the new settings beside it.
     assert!(
-        h.query_by_label_contains("Normalized to −10.0 LUFS")
+        h.query_by_label_contains("Gain set when the track was loaded")
             .is_some()
     );
-    assert!(
-        h.query_by_label_contains("started before the last settings change")
-            .is_some()
-    );
+    assert!(h.query_by_label_contains("Normalized to").is_none());
 }
 
 #[test]

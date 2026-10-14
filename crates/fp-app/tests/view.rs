@@ -1009,10 +1009,12 @@ fn n18_a_limited_gain_says_which_limit() {
         peak.tip[1],
         msg("tip-gain-limited-peak", &[("ceiling", "−1.0")])
     );
+    // The gain the current settings give for this quieter track.
+    let quiet = measured_track(Some(-40.0), -30.0);
     let boost = gain_badge(
         &applied(12.0, Some(fp_model::GainLimit::MaxBoost)),
         &config,
-        &t,
+        &quiet,
     )
     .unwrap();
     assert_eq!(
@@ -1175,7 +1177,9 @@ fn n18_a_gain_started_with_earlier_settings_says_so() {
     config.target_lufs = -10.0;
     let b = gain_badge(&applied(4.0, None), &config, &t).unwrap();
     assert_eq!(b.text, msg("badge-gain", &[("gain", "+4.0")]));
-    assert_eq!(b.tip.last(), Some(&msg("tip-gain-earlier-settings", &[])));
+    // The current target, measurement and trim did not give this gain:
+    // the tooltip does not quote them beside it.
+    assert_eq!(b.tip, vec![msg("tip-gain-earlier-settings", &[])]);
 }
 
 #[test]

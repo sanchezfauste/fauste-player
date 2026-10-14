@@ -322,8 +322,11 @@ band) stays a separate value, whatever the normalization target (Q4).
   shows no badge: it plays at unity gain either way, and the model reports
   `BitPerfect` before `Off`. The tooltip names the current settings; when
   `normalization(config, track, false)` now differs from `on_air` (a change
-  since the source started, N11) it adds "The track started before the last
-  settings change: it keeps this gain." The badge shows what the model
+  since the source started, N11) the tooltip is only "Gain set when the
+  track was loaded. Its loudness settings or measurement have changed
+  since; it keeps this gain until it stops.": the current target,
+  measurement and trim did not give this gain, so it does not quote them
+  beside it. The badge shows what the model
   asked the engine for; it does not claim more (a re-preload that races a
   committed transition may leave the engine on the earlier preload's gain
   for that track, unreported).
@@ -383,7 +386,7 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `settings-hint-normalize-apply` | "Changes apply to tracks loaded afterwards; what is playing keeps its gain." |
 | `settings-normalize-unmeasured` | "{ $count } tracks not measured yet" (Fluent plural: "1 track not measured yet") |
 | `settings-hint-normalize-bp` | "A player or cart on a bit-perfect output always plays at unity gain: it is never normalized." |
-| `tip-gain-earlier-settings` | "The track started before the last settings change: it keeps this gain." |
+| `tip-gain-earlier-settings` | "Gain set when the track was loaded. Its loudness settings or measurement have changed since; it keeps this gain until it stops." |
 | `loudness-close` | "Close" |
 | `badge-gain` | "{ $gain } dB" |
 | `badge-not-normalized` | "Not normalized" |

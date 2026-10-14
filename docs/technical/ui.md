@@ -396,7 +396,9 @@ The interface shows and edits [loudness normalization](../superpowers/specs/2026
   anyway and shows nothing), and nothing for `Off` and `Silent`. When
   `fp_model::normalization(config, track, false)` now differs from `on_air`
   (the settings, the measurement or the edit changed since the track
-  started, N11), the tooltip adds `tip-gain-earlier-settings`. `player.rs`
+  started, N11), the tooltip is `tip-gain-earlier-settings` alone: the
+  current target, measurement and trim did not give that gain, so they are
+  not quoted beside it. `player.rs`
   paints it as a tile left of **BP**, named by its tooltip lines. It shows
   what the model asked the engine for when the source started; if a
   re-preload races a transition the engine had already committed, the
