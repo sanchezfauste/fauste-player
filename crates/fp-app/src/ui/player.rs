@@ -362,7 +362,53 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                         );
                     },
                 );
+                // N18: the gain of the source on air, left of the BP badge.
+                if let Some(badge) = &pv.gain {
+                    gain_badge(ui, t, badge);
+                }
             });
+        },
+    );
+}
+
+/// The gain badge of the header (loudness normalization spec N18): a tile
+/// named by its tooltip, as the BP badge.
+fn gain_badge(ui: &mut Ui, t: &crate::i18n::I18n, badge: &view::GainBadge) {
+    let text = widgets::tr_message(t, &badge.text);
+    let tip = badge
+        .tip
+        .iter()
+        .map(|m| widgets::tr_message(t, m))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let content = match badge.tone {
+        view::BadgeTone::Normal => theme::ACCENT,
+        view::BadgeTone::Amber => theme::AMBER,
+        view::BadgeTone::Muted => theme::NEUTRAL_600,
+    };
+    let width = ui
+        .painter()
+        .layout_no_wrap(text.clone(), font_semibold(9.0), content)
+        .size()
+        .x
+        + 12.0;
+    widgets::tile(
+        ui,
+        vec2(width, 20.0),
+        &tip,
+        false,
+        TileStyle {
+            content,
+            ..TileStyle::plain()
+        },
+        |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                &text,
+                font_semibold(9.0),
+                c,
+            );
         },
     );
 }

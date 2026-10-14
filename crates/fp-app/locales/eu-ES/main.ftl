@@ -19,6 +19,7 @@ badge-not-normalized = Normalizatu gabe
 tip-gain-applied = { $target } LUFS-era normalizatua: neurtua { $lufs } LUFS, doikuntza { $trim } dB.
 tip-gain-limited-peak = True peak sabaiak mugatua ({ $ceiling } dBTP).
 tip-gain-limited-boost = Gehieneko igoerak mugatua ({ $max } dB).
+tip-gain-earlier-settings = Pista azken ezarpen-aldaketaren aurretik hasi zen: irabazi hau mantentzen du.
 tip-not-measured = Ozentasuna oraindik neurtu gabe: pista hau aldaketarik gabe entzuten da.
 tip-not-normalized-bp = Bit perfect irteera: pistak aldatu gabe entzuten dira.
 tip-not-normalized-excluded = Pista hau normalizaziotik kanpo dago.

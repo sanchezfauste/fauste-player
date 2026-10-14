@@ -19,6 +19,7 @@ badge-not-normalized = Niet genormaliseerd
 tip-gain-applied = Genormaliseerd naar { $target } LUFS: gemeten { $lufs } LUFS, trim { $trim } dB.
 tip-gain-limited-peak = Begrensd door het true-peakplafond ({ $ceiling } dBTP).
 tip-gain-limited-boost = Begrensd door de maximale versterking ({ $max } dB).
+tip-gain-earlier-settings = Het nummer begon vóór de laatste wijziging van de instellingen: het behoudt deze versterking.
 tip-not-measured = Loudness nog niet gemeten: dit nummer speelt ongewijzigd.
 tip-not-normalized-bp = Bit-perfect uitvoer: nummers spelen ongewijzigd.
 tip-not-normalized-excluded = Dit nummer is uitgesloten van normalisatie.

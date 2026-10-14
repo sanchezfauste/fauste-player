@@ -29,6 +29,16 @@ pub fn font_semibold(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(theme::SEMIBOLD.into()))
 }
 
+/// Translates a view `Message` (its arguments are already formatted text).
+pub fn tr_message(t: &crate::i18n::I18n, m: &crate::ui::view::Message) -> String {
+    let args: Vec<(&str, crate::i18n::Arg)> = m
+        .args
+        .iter()
+        .map(|(k, v)| (*k, crate::i18n::Arg::Text(v.clone())))
+        .collect();
+    t.tr_args(m.key, &args)
+}
+
 /// Colours of a flat, square button.
 #[derive(Debug, Clone, Copy)]
 pub struct TileStyle {

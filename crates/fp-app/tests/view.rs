@@ -1126,7 +1126,22 @@ fn every_message_the_view_returns_exists_in_english() {
         "track-loudness-unmeasured",
         "track-loudness-excluded",
         "track-loudness-trim",
+        "tip-gain-earlier-settings",
     ] {
         assert_ne!(en.tr(key), key, "{key}");
     }
+}
+
+#[test]
+fn n18_a_gain_started_with_earlier_settings_says_so() {
+    // The source keeps the gain it started with (N11); the settings now
+    // give another one, which only the next track will get.
+    let t = measured_track(Some(-20.0), -10.0);
+    let mut config = normalizing();
+    let b = gain_badge(&applied(4.0, None), &config, &t).unwrap();
+    assert_eq!(b.tip.len(), 1, "the settings still give +4.0 dB");
+    config.target_lufs = -10.0;
+    let b = gain_badge(&applied(4.0, None), &config, &t).unwrap();
+    assert_eq!(b.text, msg("badge-gain", &[("gain", "+4.0")]));
+    assert_eq!(b.tip.last(), Some(&msg("tip-gain-earlier-settings", &[])));
 }

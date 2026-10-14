@@ -19,6 +19,7 @@ badge-not-normalized = Sen normalizar
 tip-gain-applied = Normalizada a { $target } LUFS: medida { $lufs } LUFS, axuste { $trim } dB.
 tip-gain-limited-peak = Limitada polo teito de true peak ({ $ceiling } dBTP).
 tip-gain-limited-boost = Limitada pola ganancia máxima ({ $max } dB).
+tip-gain-earlier-settings = A pista comezou antes do último cambio de configuración: conserva esta ganancia.
 tip-not-measured = Sonoridade aínda sen medir: esta pista soa sen cambios.
 tip-not-normalized-bp = Saída bit perfect: as pistas soan inalteradas.
 tip-not-normalized-excluded = Esta pista está excluída da normalización.

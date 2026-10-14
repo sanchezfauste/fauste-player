@@ -19,6 +19,7 @@ badge-not-normalized = Non normalisé
 tip-gain-applied = Normalisé à { $target } LUFS : mesuré { $lufs } LUFS, ajustement { $trim } dB.
 tip-gain-limited-peak = Limité par le plafond de true peak ({ $ceiling } dBTP).
 tip-gain-limited-boost = Limité par le gain maximal ({ $max } dB).
+tip-gain-earlier-settings = Le titre a commencé avant la dernière modification des paramètres : il garde ce gain.
 tip-not-measured = Loudness pas encore mesuré : ce titre est joué tel quel.
 tip-not-normalized-bp = Sortie bit-perfect : les titres sont joués sans altération.
 tip-not-normalized-excluded = Ce titre est exclu de la normalisation.

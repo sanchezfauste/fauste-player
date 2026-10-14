@@ -661,6 +661,11 @@ pub fn gain_badge(
                 )),
                 None => {}
             }
+            // The source keeps the gain it started with (N11): say so when
+            // the settings, the measurement or the edit now give another.
+            if fp_model::normalization(config, track, false) != *n {
+                tip.push(Message::new("tip-gain-earlier-settings", &[]));
+            }
             Some(GainBadge {
                 text: Message::new("badge-gain", &[("gain", signed_db(n.gain_db))]),
                 tone: BadgeTone::Normal,

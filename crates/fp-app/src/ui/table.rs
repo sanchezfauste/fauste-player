@@ -1078,6 +1078,18 @@ fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
             );
         });
     }
+    // N19: the loudness lines, under the fields.
+    ui.add_space(4.0);
+    for line in view::loudness_lines(track) {
+        ui.add(
+            egui::Label::new(
+                RichText::new(widgets::tr_message(t, &line))
+                    .font(font(11.0))
+                    .color(theme::NEUTRAL_400),
+            )
+            .wrap(),
+        );
+    }
 }
 
 #[cfg(test)]
