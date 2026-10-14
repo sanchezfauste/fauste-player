@@ -555,8 +555,8 @@ backend and explicit `now: Instant`; nothing sleeps.
 | BF9 | `fp-app` i18n test | every locale has the new keys (§6) and no `tip-volume-dsd` (the existing key-parity test). |
 | BF10 | `fp-control` `tests/router.rs` | a fader message for a locked player gives nothing; after unlocking, a control at 50 % gives nothing until it reaches the top. |
 | BF11 | `fp-control` `tests/feedback.rs` | feedback for a locked player's buttons is unchanged. |
-| BF12 | `fp-remote` `tests/api.rs`, `tests/osc_server.rs` | fader 0.5 on a locked player → 409 `unavailable` with the model's message; fader 1 → 202 Accepted; the OSC message is refused and noted. |
-| BF13 | `fp-remote` `tests/dto.rs`, `tests/osc.rs` | `fader_locked` and `volume-locked` follow the lock. |
+| BF12 | `fp-remote` `tests/api.rs`, `tests/osc_refusal_log.rs` | fader 0.5 on a locked player → 409 `unavailable` with the model's message; fader 1 → 202 Accepted; the OSC message queues nothing and one "remote input refused" line with `unavailable` is logged (its own test binary: it installs the global log subscriber). |
+| BF13 | `fp-remote` `tests/dto.rs`, `tests/osc.rs`, `tests/events.rs` | `fader_locked` and `volume-locked` follow the lock; a lock alone (the volume already at 100 %) sends a `player` event. |
 
 The manual loopback check of the bit-perfect docs gains two steps: play a
 44.1 kHz track followed by a 96 kHz one in continuous mode, with automatic

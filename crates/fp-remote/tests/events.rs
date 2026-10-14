@@ -33,6 +33,23 @@ fn playing_changes_the_player_and_its_playlist() {
 }
 
 #[test]
+fn a_fader_lock_alone_is_a_player_change() {
+    // Bit-perfect spec BF13: the volume is already at 100 %, so only
+    // `fader_locked` changes when the player lands on a bit-perfect output.
+    let old = demo_state();
+    let p = old.players[0].id;
+    assert!((old.players[0].volume - 1.0).abs() < f32::EPSILON);
+    let mut new = old.clone();
+    support::lock_first_player(&mut new);
+    let events = diff(&old, &new, &Playback::default());
+    let Some(Event::Player(dto)) = events.iter().find(|e| e.name() == "player") else {
+        panic!("{events:?}")
+    };
+    assert_eq!(dto.id, p);
+    assert!(dto.fader_locked);
+}
+
+#[test]
 fn a_moving_position_alone_is_not_a_player_change() {
     let mut old = demo_state();
     let p = old.players[0].id;
