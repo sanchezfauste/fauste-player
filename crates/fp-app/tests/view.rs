@@ -11,10 +11,11 @@ use std::path::PathBuf;
 
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
-    MarkerFractions, PlayerStatus, RowStatus, TipField, analysis_pending, cue_follow_target,
-    cue_window_view, fader_from_gain, file_icon, file_problem, gain_from_fader, intro_left,
-    marker_fractions, mix_active, outro_left, player_view, playlist_times, row_is_next, row_status,
-    shown_entry, start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
+    BadgeTone, MarkerFractions, Message, PlayerStatus, RowStatus, TipField, analysis_pending,
+    cue_follow_target, cue_window_view, fader_from_gain, file_icon, file_problem, gain_badge,
+    gain_from_fader, intro_left, loudness_lines, marker_fractions, mix_active, outro_left,
+    player_view, playlist_times, row_is_next, row_status, shown_entry, signed_db,
+    start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayMode, PlayerId,
@@ -938,4 +939,194 @@ fn br15_the_mix_marker_is_dim_on_a_bit_perfect_player() {
     assert!(mix_active(&s, q), "the other player still does");
     apply(&mut s, Command::SetMode(q, PlayMode::Single)).unwrap();
     assert!(!mix_active(&s, q), "Single mode, as before");
+}
+
+fn measured_track(lufs: Option<f32>, tp: f32) -> Track {
+    let mut t = Track::new(fp_model::TrackId(7), PathBuf::from("/m/a.flac"));
+    t.loudness = Some(fp_model::LoudnessMeasurement {
+        integrated_lufs: lufs,
+        true_peak_dbtp: tp,
+    });
+    t
+}
+
+fn msg(key: &'static str, args: &[(&'static str, &str)]) -> Message {
+    Message {
+        key,
+        args: args.iter().map(|(k, v)| (*k, (*v).to_owned())).collect(),
+    }
+}
+
+fn applied(gain_db: f32, limited: Option<fp_model::GainLimit>) -> fp_model::Normalization {
+    fp_model::Normalization {
+        gain_db,
+        status: fp_model::NormalizationStatus::Applied { limited },
+    }
+}
+
+fn normalizing() -> fp_model::LoudnessConfig {
+    fp_model::LoudnessConfig {
+        normalize: true,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn signed_db_has_one_decimal_a_sign_and_a_true_minus() {
+    assert_eq!(signed_db(4.0), "+4.0");
+    assert_eq!(signed_db(-4.24), "−4.2");
+    assert_eq!(signed_db(0.04), "0.0");
+    assert_eq!(signed_db(-0.04), "0.0");
+    assert_eq!(signed_db(f32::NAN), "0.0", "not a number shows no gain");
+}
+
+#[test]
+fn n18_an_applied_gain_shows_its_value_and_why() {
+    let t = measured_track(Some(-20.0), -10.0);
+    let b = gain_badge(&applied(4.0, None), &normalizing(), &t).unwrap();
+    assert_eq!(b.text, msg("badge-gain", &[("gain", "+4.0")]));
+    assert_eq!(b.tone, BadgeTone::Normal);
+    assert_eq!(
+        b.tip,
+        vec![msg(
+            "tip-gain-applied",
+            &[("target", "−16.0"), ("lufs", "−20.0"), ("trim", "0.0")]
+        )]
+    );
+}
+
+#[test]
+fn n18_a_limited_gain_says_which_limit() {
+    let t = measured_track(Some(-20.0), -3.0);
+    let config = normalizing();
+    let peak = gain_badge(
+        &applied(2.0, Some(fp_model::GainLimit::TruePeak)),
+        &config,
+        &t,
+    )
+    .unwrap();
+    assert_eq!(
+        peak.tip[1],
+        msg("tip-gain-limited-peak", &[("ceiling", "−1.0")])
+    );
+    let boost = gain_badge(
+        &applied(12.0, Some(fp_model::GainLimit::MaxBoost)),
+        &config,
+        &t,
+    )
+    .unwrap();
+    assert_eq!(
+        boost.tip[1],
+        msg("tip-gain-limited-boost", &[("max", "12.0")])
+    );
+}
+
+#[test]
+fn n18_the_other_statuses() {
+    use fp_model::NormalizationStatus as S;
+    let t = measured_track(Some(-20.0), -10.0);
+    let c = normalizing();
+    let of = |status| fp_model::Normalization {
+        gain_db: 0.0,
+        status,
+    };
+    let not = gain_badge(&of(S::NotMeasured), &c, &t).unwrap();
+    assert_eq!(
+        (not.text.key, not.tone),
+        ("badge-not-normalized", BadgeTone::Amber)
+    );
+    assert_eq!(not.tip, vec![msg("tip-not-measured", &[])]);
+    let bp = gain_badge(&of(S::BitPerfect), &c, &t).unwrap();
+    assert_eq!(
+        (bp.text.key, bp.tone, bp.tip[0].key),
+        (
+            "badge-not-normalized",
+            BadgeTone::Muted,
+            "tip-not-normalized-bp"
+        )
+    );
+    let ex = gain_badge(&of(S::Excluded), &c, &t).unwrap();
+    assert_eq!(
+        (ex.tone, ex.tip[0].key),
+        (BadgeTone::Muted, "tip-not-normalized-excluded")
+    );
+    assert_eq!(gain_badge(&of(S::Off), &c, &t), None);
+    assert_eq!(gain_badge(&of(S::Silent), &c, &t), None);
+}
+
+#[test]
+fn n18_a_bit_perfect_player_says_nothing_while_normalization_is_off() {
+    // Normalization is off by default: a bit-perfect player plays at unity
+    // gain either way, and "Not normalized" would only be noise.
+    let t = measured_track(Some(-20.0), -10.0);
+    let bp = fp_model::Normalization {
+        gain_db: 0.0,
+        status: fp_model::NormalizationStatus::BitPerfect,
+    };
+    assert_eq!(
+        gain_badge(&bp, &fp_model::LoudnessConfig::default(), &t),
+        None
+    );
+}
+
+#[test]
+fn n19_the_tooltip_has_a_loudness_line() {
+    let mut t = measured_track(Some(-14.24), -0.81);
+    assert_eq!(
+        loudness_lines(&t),
+        vec![msg("track-loudness", &[("lufs", "−14.2"), ("tp", "−0.8")])]
+    );
+    t.loudness_edit.trim_db = 1.5;
+    assert_eq!(
+        loudness_lines(&t)[1],
+        msg("track-loudness-trim", &[("trim", "+1.5")])
+    );
+    t.loudness_edit.excluded = true;
+    assert_eq!(loudness_lines(&t)[1], msg("track-loudness-excluded", &[]));
+    t.loudness = None;
+    assert_eq!(loudness_lines(&t)[0], msg("track-loudness-unmeasured", &[]));
+    let silent = measured_track(None, -90.0);
+    assert_eq!(loudness_lines(&silent)[0].args[0], ("lufs", "—".to_owned()));
+}
+
+#[test]
+fn n18_the_player_view_shows_the_gain_on_air_only_while_not_stopped() {
+    let (mut s, _entries, p) = state(2);
+    s.config.loudness.normalize = true;
+    for t in s.library.iter_mut() {
+        t.loudness = Some(fp_model::LoudnessMeasurement {
+            integrated_lufs: Some(-20.0),
+            true_peak_dbtp: -10.0,
+        });
+    }
+    assert_eq!(player_view(&s, p, None, 0.0).unwrap().gain, None, "stopped");
+    apply(&mut s, Command::Play(p)).unwrap();
+    let v = player_view(&s, p, Some(1.0), 0.0).unwrap();
+    assert_eq!(v.gain.unwrap().text, msg("badge-gain", &[("gain", "+4.0")]));
+    apply(&mut s, Command::Pause(p)).unwrap();
+    let v = player_view(&s, p, Some(1.0), 0.0).unwrap();
+    assert!(v.gain.is_some(), "a paused player keeps its badge");
+    apply(&mut s, Command::Stop(p)).unwrap();
+    assert_eq!(player_view(&s, p, None, 0.0).unwrap().gain, None);
+}
+
+#[test]
+fn every_message_the_view_returns_exists_in_english() {
+    let en = fp_app::i18n::I18n::new(Some("en-US"));
+    for key in [
+        "badge-gain",
+        "badge-not-normalized",
+        "tip-gain-applied",
+        "tip-gain-limited-peak",
+        "tip-gain-limited-boost",
+        "tip-not-measured",
+        "tip-not-normalized-bp",
+        "tip-not-normalized-excluded",
+        "track-loudness",
+        "track-loudness-unmeasured",
+        "track-loudness-excluded",
+        "track-loudness-trim",
+    ] {
+        assert_ne!(en.tr(key), key, "{key}");
+    }
 }

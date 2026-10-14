@@ -74,6 +74,10 @@ pub struct PlayerView {
     pub dsd: bool,
     /// DSD holds the other sources off its output: they are muted.
     pub dsd_holds_others: bool,
+    /// The gain badge of the source on air, while the player is not
+    /// stopped (loudness normalization spec N18). It shows what the model
+    /// asked the engine for when the source started.
+    pub gain: Option<GainBadge>,
 }
 
 fn fraction(value: Option<f64>, total: f64) -> Option<f32> {
@@ -291,7 +295,14 @@ pub fn player_view(
         bit_perfect: false,
         dsd: false,
         dsd_holds_others: fp_model::dsd_holds_others(state, player),
+        gain: None,
     };
+    if p.transport != Transport::Stopped
+        && let (Some(n), Some(on_air)) =
+            (p.on_air, p.current.and_then(|e| state.track_for_entry(e)))
+    {
+        view.gain = gain_badge(&n, &state.config.loudness, on_air);
+    }
     let Some(track) = current else {
         return Some(view);
     };
@@ -541,6 +552,148 @@ pub fn track_tooltip(track: &Track, problem: Option<&str>) -> Vec<(TipField, Str
     }
     text(TipField::Format, &format_line(track));
     text(TipField::Path, &track.path.display().to_string());
+    lines
+}
+
+/// A Fluent message and its arguments, already formatted; translated where
+/// it is painted, so the view stays a pure function.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Message {
+    pub key: &'static str,
+    pub args: Vec<(&'static str, String)>,
+}
+
+impl Message {
+    fn new(key: &'static str, args: &[(&'static str, String)]) -> Self {
+        Self {
+            key,
+            args: args.to_vec(),
+        }
+    }
+}
+
+/// How the gain badge is coloured (loudness normalization spec N18).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BadgeTone {
+    Normal,
+    Amber,
+    Muted,
+}
+
+/// The gain badge of a player header and its tooltip lines (N18).
+#[derive(Debug, Clone, PartialEq)]
+pub struct GainBadge {
+    pub text: Message,
+    pub tone: BadgeTone,
+    pub tip: Vec<Message>,
+}
+
+/// One decimal with the true minus sign; `−0.0` is shown as `0.0` and a
+/// value that is not a number as `—`.
+fn decimal(value: f32) -> String {
+    if !value.is_finite() {
+        return "—".to_owned();
+    }
+    let text = format!("{:.1}", value.abs());
+    if value < 0.0 && text != "0.0" {
+        format!("−{text}")
+    } else {
+        text
+    }
+}
+
+/// A gain in dB as the badge shows it: signed, one decimal, "0.0" under
+/// 0.05 dB (and for a value that is not a number).
+pub fn signed_db(db: f32) -> String {
+    if !db.is_finite() || db.abs() < 0.05 {
+        "0.0".to_owned()
+    } else if db > 0.0 {
+        format!("+{}", decimal(db))
+    } else {
+        decimal(db)
+    }
+}
+
+/// N18: the badge for the normalization of the source on air. A
+/// bit-perfect player always plays at unity gain; it says so only while
+/// normalization is on (with it off nothing is normalized anywhere).
+pub fn gain_badge(
+    n: &fp_model::Normalization,
+    config: &fp_model::LoudnessConfig,
+    track: &Track,
+) -> Option<GainBadge> {
+    use fp_model::{GainLimit, NormalizationStatus as S};
+    let not_normalized = |tone, tip: &'static str| GainBadge {
+        text: Message::new("badge-not-normalized", &[]),
+        tone,
+        tip: vec![Message::new(tip, &[])],
+    };
+    match n.status {
+        S::Off | S::Silent => None,
+        S::BitPerfect if !config.normalize => None,
+        S::BitPerfect => Some(not_normalized(BadgeTone::Muted, "tip-not-normalized-bp")),
+        S::NotMeasured => Some(not_normalized(BadgeTone::Amber, "tip-not-measured")),
+        S::Excluded => Some(not_normalized(
+            BadgeTone::Muted,
+            "tip-not-normalized-excluded",
+        )),
+        S::Applied { limited } => {
+            let lufs = track
+                .loudness
+                .and_then(|m| m.integrated_lufs)
+                .map_or_else(|| "—".to_owned(), decimal);
+            let mut tip = vec![Message::new(
+                "tip-gain-applied",
+                &[
+                    ("target", decimal(config.target_lufs)),
+                    ("lufs", lufs),
+                    ("trim", signed_db(track.loudness_edit.trim_db)),
+                ],
+            )];
+            match limited {
+                Some(GainLimit::TruePeak) => tip.push(Message::new(
+                    "tip-gain-limited-peak",
+                    &[("ceiling", decimal(config.true_peak_ceiling_dbtp))],
+                )),
+                Some(GainLimit::MaxBoost) => tip.push(Message::new(
+                    "tip-gain-limited-boost",
+                    &[("max", decimal(config.max_boost_db))],
+                )),
+                None => {}
+            }
+            Some(GainBadge {
+                text: Message::new("badge-gain", &[("gain", signed_db(n.gain_db))]),
+                tone: BadgeTone::Normal,
+                tip,
+            })
+        }
+    }
+}
+
+/// N19: the loudness lines of the track tooltip, drawn under its fields.
+pub fn loudness_lines(track: &Track) -> Vec<Message> {
+    let mut lines = vec![match track.loudness {
+        Some(m) => Message::new(
+            "track-loudness",
+            &[
+                (
+                    "lufs",
+                    m.integrated_lufs.map_or_else(|| "—".to_owned(), decimal),
+                ),
+                ("tp", decimal(m.true_peak_dbtp)),
+            ],
+        ),
+        None => Message::new("track-loudness-unmeasured", &[]),
+    }];
+    let edit = track.loudness_edit;
+    if edit.excluded {
+        lines.push(Message::new("track-loudness-excluded", &[]));
+    } else if edit.trim_db.is_finite() && edit.trim_db != 0.0 {
+        lines.push(Message::new(
+            "track-loudness-trim",
+            &[("trim", signed_db(edit.trim_db))],
+        ));
+    }
     lines
 }
 
