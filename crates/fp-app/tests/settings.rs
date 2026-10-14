@@ -959,6 +959,114 @@ fn the_output_lists_stay_inside_a_narrow_settings_window() {
     }
 }
 
+/// The Settings window in a `width`-wide main window is centred,
+/// `SCREEN_MARGIN.x` (48) narrower than the main window and at most
+/// `WINDOW_SIZE.x` (900) wide (`src/ui/settings.rs`).
+fn settings_window(width: f32) -> f32 {
+    (width - 48.0).min(900.0)
+}
+
+/// The right edge of the section body: the body keeps a 24-point margin on
+/// the right.
+fn content_right(width: f32) -> f32 {
+    (width + settings_window(width)) / 2.0 - 24.0
+}
+
+/// The left edge of the rows' control column: past the 200-point section
+/// list and its 1-point line, the body's 24-point margin, the 180-point
+/// label column and its 8 + 16 points of space.
+fn control_left(width: f32) -> f32 {
+    (width - settings_window(width)) / 2.0 + 201.0 + 24.0 + 180.0 + 24.0
+}
+
+/// A narrow main window whose Settings rows still leave the control column
+/// some room (59 points beside the label column and the section list).
+/// Narrower, down to the 420-point minimum, the label column itself no
+/// longer fits and the body scrolls sideways.
+const NARROW: f32 = 560.0;
+
+/// Every list on Audio outputs (the audio system, the rate and buffer, the
+/// device pickers and their channel pairs, the per-device rate, buffer and
+/// DSD mode, the DSD mix) stays inside the control column: none runs past
+/// the body's right margin, and none starts over the label column.
+fn assert_lists_inside(width: f32) {
+    let h = narrow_outputs(width);
+    let (left, right) = (control_left(width), content_right(width));
+    for label in ["Sample rate: dac", "Buffer size: dac", "DSD: dac"] {
+        h.get_by_role_and_label(Role::ComboBox, label);
+    }
+    for combo in h.get_all_by_role(Role::ComboBox) {
+        let rect = combo.rect();
+        assert!(
+            rect.left() >= left - 0.5 && rect.right() <= right + 0.5,
+            "{width}: {combo:?} {rect:?} outside {left}..{right}"
+        );
+    }
+}
+
+#[test]
+fn the_output_lists_stay_inside_the_column_of_a_narrow_window() {
+    assert_lists_inside(700.0);
+}
+
+#[test]
+fn the_output_lists_stay_inside_the_column_of_the_narrowest_window() {
+    assert_lists_inside(NARROW);
+}
+
+/// The language list, set to a long name, stays inside the narrowest
+/// window that still has a control column.
+#[test]
+fn the_language_list_stays_inside_a_narrow_settings_window() {
+    let mut s = state(1, 0);
+    s.config.ui.language = Some("nl-NL".to_owned());
+    let (mut h, _) = support::harness_sized(s, egui::vec2(NARROW, 700.0), |ui| ui);
+    open_section(&mut h, "Players");
+    let right = content_right(NARROW);
+    let rect = h.get_by_value("Nederlands").rect();
+    assert!(
+        rect.right() <= right + 0.5,
+        "language {rect:?} past {right}"
+    );
+    hover_shows_whole(&mut h, None, "Nederlands");
+}
+
+/// Hovering the list `label` names (or, without one, the list showing
+/// `value`) adds one more `value` on screen: the tooltip with the whole
+/// choice.
+fn hover_shows_whole(
+    h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    label: Option<&str>,
+    value: &str,
+) {
+    let list = || {
+        let by = egui_kittest::kittest::by()
+            .role(Role::ComboBox)
+            .value(value);
+        match label {
+            Some(label) => by.label(label),
+            None => by,
+        }
+    };
+    let before = h.query_all_by_label(value).count();
+    h.get(list()).scroll_to_me();
+    h.run_steps(5);
+    h.get(list()).hover();
+    h.run_steps(40);
+    let after = h.query_all_by_label(value).count();
+    assert_eq!(after, before + 1, "hovering {value} shows it whole");
+}
+
+/// A device picker and a per-device list shortened in a narrow window
+/// can still be read whole on hover.
+#[test]
+fn shortened_device_choices_show_whole_on_hover() {
+    let mut h = narrow_outputs(NARROW);
+    hover_shows_whole(&mut h, None, "speakers");
+    let mut h = narrow_outputs(NARROW);
+    hover_shows_whole(&mut h, Some("Sample rate: dac"), "Global (48000 Hz)");
+}
+
 /// A shortened choice can still be read whole: hovering the list shows it.
 #[test]
 fn a_shortened_choice_shows_whole_on_hover() {

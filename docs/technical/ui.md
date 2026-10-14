@@ -368,13 +368,25 @@ the main window minus a margin (never below 320 × 300). It does not change when
 a section is selected. The section header (title and **Restore defaults**) is
 fixed; the body below it sits in `ScrollArea::both`. Rows use
 `labelled_row`, with a label column of `LABEL_WIDTH` (180 px), so every section
-shares one grid. The language and audio system lists are at most 260 px and
-no wider than the column (`ui.available_width().min(260.0)`); the audio
-system list and the DSD mix (whose choices are sentences) truncate the shown
-choice (`ComboBox::truncate`) and give it whole on hover, and the open list
-always shows every choice in full. `tests/settings.rs` checks every list on
-Audio outputs in a 700 px window; below about 620 px some per-device lists
-are wider than the column and the body scrolls horizontally. The footer spans the window width and holds the pending notice and **Apply now** while an output change waits (`SettingsDeps::{pending, can_apply}`). A transient notice (`SettingsDeps::notice`) briefly takes the place of the pending text; **Apply now** stays.
+shares one grid. Every drop-down goes through `settings::fitted_combo`: it is
+at least its usual width (260 px for the language and audio system lists,
+egui's default for the others, the room beside the bus label for a device
+picker) and wider for a longer choice, but never wider than the column; a
+narrower column truncates the shown choice (`ComboBox::truncate`), the hover
+text gives it whole, and the open list always shows every choice in full.
+The column is measured against the body's right edge (`column_width`, noted
+by `set_body_right` before the rows), not `available_width`: a row whose
+fixed parts run past the edge (a slider, the test buttons) makes the body
+scroll sideways but does not widen the lists of the other rows. A route
+picker keeps the bus label, device picker, channel pair and test button on
+one line while the device picker gets at least `DEVICE_MIN_WIDTH`; a
+narrower column moves the channel pair and test button to a line of their
+own, and one under the other when even that does not fit, so the device
+picker never runs over the label column. `tests/settings.rs` checks every
+list on Audio outputs in 700 and 560 px windows and the language list at
+560 px; below about 560 px the label column itself leaves the control
+column almost no room, and at the 420 px minimum window it no longer fits.
+The footer spans the window width and holds the pending notice and **Apply now** while an output change waits (`SettingsDeps::{pending, can_apply}`). A transient notice (`SettingsDeps::notice`) briefly takes the place of the pending text; **Apply now** stays.
 
 Settings → Remote keeps what is being typed (`RemoteState::drafts` for text,
 `RemoteState::numbers` for the drag values, which do not wait for Enter), so

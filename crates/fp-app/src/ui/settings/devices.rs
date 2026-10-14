@@ -7,8 +7,8 @@ use fp_backends::DeviceInfo;
 use fp_model::{DsdCaps, DsdDevice, DsdMix, DsdNotOffered, DsdOutput, OutputDevice};
 
 use super::{
-    BUFFER_SIZES, BackendChoice, SAMPLE_RATES, caption, labelled_row, note, row, slider, toggle,
-    update,
+    BUFFER_SIZES, BackendChoice, SAMPLE_RATES, caption, fitted_combo, labelled_row, note, row,
+    slider, toggle, update,
 };
 use crate::ui::app::Scene;
 use crate::ui::theme;
@@ -102,22 +102,19 @@ fn device_rows(
     labelled_row(ui, &rate_label, None, |ui, label| {
         let shown = own_rate.map_or_else(|| global_rate.clone(), hz);
         let id = ("device-rate", &device.backend, &device.device);
-        let response = egui::ComboBox::from_id_salt(id)
-            .selected_text(shown)
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(own_rate.is_none(), &global_rate)
-                    .clicked()
-                {
-                    set_rate(scene, device, None);
+        let response = fitted_combo(ui, id, shown.clone(), None, |ui| {
+            if ui
+                .selectable_label(own_rate.is_none(), &global_rate)
+                .clicked()
+            {
+                set_rate(scene, device, None);
+            }
+            for r in rates {
+                if ui.selectable_label(own_rate == Some(r), hz(r)).clicked() {
+                    set_rate(scene, device, Some(r));
                 }
-                for r in rates {
-                    if ui.selectable_label(own_rate == Some(r), hz(r)).clicked() {
-                        set_rate(scene, device, Some(r));
-                    }
-                }
-            })
-            .response;
+            }
+        });
         response.labelled_by(label);
     });
     if let (Some(info), Some(r)) = (info, own_rate)
@@ -146,25 +143,22 @@ fn device_rows(
     labelled_row(ui, &buffer_label, Some(&latency), |ui, label| {
         let shown = own_buffer.map_or_else(|| global_buffer.clone(), |b| b.to_string());
         let id = ("device-buffer", &device.backend, &device.device);
-        let response = egui::ComboBox::from_id_salt(id)
-            .selected_text(shown)
-            .show_ui(ui, |ui| {
+        let response = fitted_combo(ui, id, shown.clone(), None, |ui| {
+            if ui
+                .selectable_label(own_buffer.is_none(), &global_buffer)
+                .clicked()
+            {
+                set_buffer(scene, device, None);
+            }
+            for b in buffers {
                 if ui
-                    .selectable_label(own_buffer.is_none(), &global_buffer)
+                    .selectable_label(own_buffer == Some(b), b.to_string())
                     .clicked()
                 {
-                    set_buffer(scene, device, None);
+                    set_buffer(scene, device, Some(b));
                 }
-                for b in buffers {
-                    if ui
-                        .selectable_label(own_buffer == Some(b), b.to_string())
-                        .clicked()
-                    {
-                        set_buffer(scene, device, Some(b));
-                    }
-                }
-            })
-            .response;
+            }
+        });
         response.labelled_by(label);
     });
 
@@ -197,19 +191,17 @@ fn device_rows(
     labelled_row(ui, &dsd_label, Some(&default_hint), |ui, label| {
         ui.add_enabled_ui(modes.len() > 1, |ui| {
             let id = ("dsd-mode", &device.backend, &device.device);
-            let response = egui::ComboBox::from_id_salt(id)
-                .selected_text(dsd_mode_label(t, current))
-                .show_ui(ui, |ui| {
-                    for mode in modes {
-                        if ui
-                            .selectable_label(mode == current, dsd_mode_label(t, mode))
-                            .clicked()
-                        {
-                            set_dsd_mode(scene, device, mode);
-                        }
+            let shown = dsd_mode_label(t, current);
+            let response = fitted_combo(ui, id, shown.clone(), None, |ui| {
+                for mode in modes {
+                    if ui
+                        .selectable_label(mode == current, dsd_mode_label(t, mode))
+                        .clicked()
+                    {
+                        set_dsd_mode(scene, device, mode);
                     }
-                })
-                .response;
+                }
+            });
             response.labelled_by(label);
         });
     });
@@ -271,21 +263,16 @@ fn dsd_settings(ui: &mut Ui, scene: &Scene<'_>) {
     row(ui, &t.tr("settings-dsd-mix"), None, |ui| {
         // Its choices are sentences: shorten the shown one in a narrow
         // window rather than run past it, and give it whole on hover.
-        egui::ComboBox::from_id_salt("dsd-mix")
-            .selected_text(mix_label(mix))
-            .truncate()
-            .show_ui(ui, |ui| {
-                for choice in [DsdMix::ConvertToPcm, DsdMix::HoldOthers] {
-                    if ui
-                        .selectable_label(choice == mix, mix_label(choice))
-                        .clicked()
-                    {
-                        update(scene, |c| c.outputs.dsd_mix = choice);
-                    }
+        fitted_combo(ui, "dsd-mix", mix_label(mix), None, |ui| {
+            for choice in [DsdMix::ConvertToPcm, DsdMix::HoldOthers] {
+                if ui
+                    .selectable_label(choice == mix, mix_label(choice))
+                    .clicked()
+                {
+                    update(scene, |c| c.outputs.dsd_mix = choice);
                 }
-            })
-            .response
-            .on_hover_text(mix_label(mix));
+            }
+        });
     });
     let mut silence = scene.state.config.outputs.dsd_silence_ms;
     let label = t.tr("settings-dsd-silence");
