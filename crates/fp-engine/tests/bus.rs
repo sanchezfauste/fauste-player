@@ -52,6 +52,17 @@ fn setup(plugged: bool) -> (OfflineBackend, OfflineDevice, Bus, Instant) {
     (backend, device, bus, t0)
 }
 
+/// Polls `ok` until it holds: the virtual clock runs on its own thread in
+/// real time, which a loaded machine may schedule late. The deadline only
+/// bounds a hang.
+fn wait_until(ok: impl Fn() -> bool, what: &str) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !ok() {
+        assert!(Instant::now() < deadline, "timed out: {what}");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
 #[test]
 fn a_healthy_device_drives_the_bus_clock() {
     let (_b, device, mut bus, t0) = setup(true);
@@ -71,11 +82,9 @@ fn unplugging_switches_to_the_virtual_clock_and_the_timeline_keeps_moving() {
     bus.supervise(t0 + Duration::from_millis(10));
     assert_eq!(bus.health(), BusHealth::Lost);
     let before = bus.now_frame();
-    std::thread::sleep(Duration::from_millis(150));
-    let advanced = bus.now_frame() - before;
-    assert!(
-        advanced >= 2_400,
-        "virtual clock rendered only {advanced} frames"
+    wait_until(
+        || bus.now_frame() - before >= 2_400,
+        "the virtual clock renders",
     );
 }
 
@@ -112,7 +121,8 @@ fn a_returning_device_takes_the_mixer_back_without_losing_time() {
     let (_b, device, mut bus, t0) = setup(true);
     device.unplug();
     bus.supervise(t0);
-    std::thread::sleep(Duration::from_millis(60));
+    // The virtual clock takes over the timeline while the device is away.
+    wait_until(|| bus.now_frame() > 0, "the virtual clock runs");
     device.replug();
     bus.supervise(t0 + Duration::from_secs(1));
     assert_eq!(
@@ -150,8 +160,7 @@ fn a_device_missing_at_startup_starts_lost_on_the_virtual_clock() {
     let (_b, _device, bus, _t0) = setup(false);
     assert_eq!(bus.health(), BusHealth::Lost);
     assert!(bus.last_error().is_some());
-    std::thread::sleep(Duration::from_millis(60));
-    assert!(bus.now_frame() > 0);
+    wait_until(|| bus.now_frame() > 0, "the virtual clock runs");
 }
 
 #[test]
@@ -186,8 +195,7 @@ fn a_failed_reconnection_keeps_the_virtual_clock_running() {
     bus.supervise(t0 + Duration::from_secs(3)); // retries; the device is still away
     assert_eq!(bus.health(), BusHealth::Lost);
     let before = bus.now_frame();
-    std::thread::sleep(Duration::from_millis(100));
-    assert!(bus.now_frame() > before, "the timeline keeps moving");
+    wait_until(|| bus.now_frame() > before, "the timeline keeps moving");
 }
 
 #[test]

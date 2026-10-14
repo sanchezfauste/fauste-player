@@ -163,13 +163,14 @@ impl Rig {
     }
 
     fn settle(&mut self) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(60);
         loop {
             let events = self.engine.tick(self.clock);
             self.events.extend(events);
-            if self.engine.unsettled_sources() == 0 || Instant::now() > deadline {
+            if self.engine.unsettled_sources() == 0 {
                 return;
             }
+            assert!(Instant::now() < deadline, "the sources never settled");
             std::thread::sleep(Duration::from_millis(1));
         }
     }
@@ -389,8 +390,9 @@ fn a1_a_cue_inside_the_file_ramps_in() {
         },
         clock,
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while engine.unsettled_sources() > 0 && Instant::now() < deadline {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while engine.unsettled_sources() > 0 {
+        assert!(Instant::now() < deadline, "the sources never settled");
         engine.tick(clock);
         std::thread::sleep(Duration::from_millis(1));
     }
@@ -439,8 +441,9 @@ fn a1_a_cart_inside_the_file_ramps_in_and_one_at_the_start_does_not() {
             }),
             clock,
         );
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while engine.unsettled_sources() > 0 && Instant::now() < deadline {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while engine.unsettled_sources() > 0 {
+            assert!(Instant::now() < deadline, "the sources never settled");
             engine.tick(clock);
             std::thread::sleep(Duration::from_millis(1));
         }
@@ -596,8 +599,9 @@ fn a3_a_cart_ends_at_its_cue_out_without_a_step() {
         }),
         clock,
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while engine.unsettled_sources() > 0 && Instant::now() < deadline {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while engine.unsettled_sources() > 0 {
+        assert!(Instant::now() < deadline, "the sources never settled");
         engine.tick(clock);
         std::thread::sleep(Duration::from_millis(1));
     }
