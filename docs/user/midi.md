@@ -47,6 +47,12 @@ binding.
   volume (soft takeover); if the volume is changed on screen, the fader has
   to catch it up again. Nothing changes until you move a control: starting
   the program never sends anything on air.
+- A volume binding of a player whose Main output is
+  [bit-perfect](bit-perfect.md) does nothing: its volume is held at 100 %.
+  Once the output is no longer bit-perfect, move the control to the top to
+  pick the volume up again.
+- Play/Next and Previous on such a player switch at once, without a
+  crossfade. Their lights work as usual.
 - With **Light the buttons (LED feedback)** on, bound buttons light up:
   Play while the player is on air, Pause blinking while paused, CUE while
   pre-listening, and Stop, Fade stop, Restart and Previous while they can
