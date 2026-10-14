@@ -229,7 +229,10 @@ band) stays a separate value, whatever the normalization target (Q4).
   reported it (live settings L3); before that, or without the live
   settings work, whether the holder's configured route names a device in
   `config.outputs.bit_perfect` (no route: the default output, not
-  bit-perfect). A native DSD stream only reaches a bit-perfect device
+  bit-perfect). For a player's Main this agrees with the bit-perfect
+  rate and fader spec's `bit_perfect_player` (BR2) whenever the engine has
+  placed it, so a player whose fader is locked always gets exactly 0 dB.
+  A native DSD stream only reaches a bit-perfect device
   (`OutputsConfig::dsd_output_for`), so N7 never gives it a gain and the
   engine's DSD path (`BusCommand::DsdMode`: no gain touches the words)
   needs no change.

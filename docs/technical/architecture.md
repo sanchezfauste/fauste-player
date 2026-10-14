@@ -65,6 +65,17 @@ or `panic` outside tests.
    affects is playing, and the engine applies it once its buses are quiet
    and answers with `Applied`.
 
+6. Loudness normalization (loudness normalization spec §6): every
+   `SourceRequest` and `CartRequest` carries its `Normalization`, decided
+   by `fp_model::loudness::normalization` (N7) for the holder that plays
+   it: `holder_bit_perfect` (N8) is the running settings of its placement
+   once the engine reported them, else its configured route, so a
+   bit-perfect player gets exactly 0 dB. Unlike output settings, loudness
+   settings never wait: the gain of a sounding source is fixed
+   (`PlayerState::on_air`, `cue_normalization`, `PlayingCart::normalization`,
+   `Cartwall::cue_normalization`, runtime only; N11), and `reconcile`
+   preloads the next again when its normalization changes (N12).
+
 ## Shutdown
 
 When the window closes, `run` stops everything that can send commands first
