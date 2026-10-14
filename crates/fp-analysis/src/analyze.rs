@@ -4,7 +4,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 
 use fp_decode::FileDecoder;
-use fp_dsp::loudness::LoudnessMeter;
+use fp_dsp::loudness::{LoudnessMeter, gating_block_frames};
 use fp_model::{
     AnalysisSettings, AudioFormat, LOUDNESS_VERSION, Limits, LoudnessMeasurement, TrackAnalysis,
 };
@@ -216,8 +216,8 @@ impl Meter {
             finite.then_some(m)
         });
         if measurement.is_none() {
-            // 400 ms is four tenths of the rate in frames.
-            let short = self.frames.saturating_mul(10) < u64::from(self.rate.max(1)) * 4;
+            // The meter's own gating block, so both agree on "too short".
+            let short = self.frames < gating_block_frames(self.rate);
             if short {
                 tracing::debug!(path = %path.display(), "too short to measure its loudness");
             } else {

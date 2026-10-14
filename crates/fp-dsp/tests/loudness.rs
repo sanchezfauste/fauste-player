@@ -175,11 +175,12 @@ fn non_finite_samples_count_as_silence() {
 
 #[test]
 fn a_trailing_half_frame_is_ignored() {
-    let mut m = LoudnessMeter::new(48_000);
+    // A half frame never completed by a later push is not measured.
     let p = programme(48_000, &[(Some(-23.0), 1.0)]);
-    m.push(&p[..p.len() - 1]);
+    let mut m = LoudnessMeter::new(48_000);
+    m.push(&p);
     m.push(&[0.5]);
-    assert!(m.finish().is_some());
+    assert_eq!(m.finish(), measure(48_000, &p, 4_096));
 }
 
 #[test]
@@ -187,7 +188,55 @@ fn a_zero_rate_is_treated_as_one_hertz_without_panicking() {
     let mut m = LoudnessMeter::new(0);
     m.push(&[0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.4]);
     // Four frames at 1 Hz are four hops of one frame: one block.
-    let _ = m.finish();
+    let l = m.finish().expect("one gating block is measured");
+    assert!(l.true_peak_dbtp.is_finite());
+}
+
+/// Left and right channels that differ: a 1 kHz sine at −20 dBFS on the
+/// left, a 3 kHz one at −30 dBFS on the right.
+fn asymmetric(rate: u32, secs: f64) -> Vec<f32> {
+    let mut out = Vec::new();
+    for n in 0..(secs * f64::from(rate)).round() as usize {
+        let t = n as f64 / f64::from(rate);
+        let l = 0.1 * (std::f64::consts::TAU * 1_000.0 * t).sin();
+        let r = 0.031_6 * (std::f64::consts::TAU * 3_000.0 * t).sin();
+        out.extend_from_slice(&[l as f32, r as f32]);
+    }
+    out
+}
+
+#[test]
+fn a_push_that_ends_mid_frame_keeps_the_channels_in_place() {
+    // A caller may split a frame between two pushes: the half frame is
+    // carried to the next push, so the result does not depend on it.
+    let p = asymmetric(48_000, 2.0);
+    let whole = measure(48_000, &p, 4_096).unwrap();
+    for odd in [1, 3, 4_097] {
+        let mut m = LoudnessMeter::new(48_000);
+        for chunk in p.chunks(odd) {
+            m.push(chunk);
+        }
+        assert_eq!(m.finish(), Some(whole), "pushes of {odd} samples");
+    }
+}
+
+#[test]
+fn exactly_one_gating_block_is_measured_at_every_rate() {
+    // 400 ms is one block, even where a tenth of the rate is not a whole
+    // number of frames (11 025 Hz: 4 410 frames).
+    for rate in [8_000, 11_025, 22_050, 44_100, 48_000, 96_000, 7_350, 37_800] {
+        let frames = (u64::from(rate) * 4).div_ceil(10);
+        assert!(
+            fp_dsp::loudness::gating_block_frames(rate) <= frames,
+            "{rate} Hz"
+        );
+        let p = programme(rate, &[(Some(-20.0), frames as f64 / f64::from(rate))]);
+        assert_eq!(p.len() as u64, frames * 2, "{rate} Hz");
+        assert!(measure(rate, &p, 512).is_some(), "{rate} Hz");
+        let short =
+            &p[..p.len() - 2 * (frames - fp_dsp::loudness::gating_block_frames(rate) + 1) as usize];
+        assert_eq!(measure(rate, short, 512), None, "{rate} Hz");
+    }
 }
 
 #[test]

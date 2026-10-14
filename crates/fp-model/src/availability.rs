@@ -56,7 +56,9 @@ pub fn availability(state: &AppState, player: PlayerId) -> Availability {
 /// False for a transport command that `availability` marks unavailable,
 /// for a `SetVolume` that a locked fader refuses (BF3),
 /// and for a CUE of an entry or a cart pre-listen that has no Cue output
-/// apart from Main (spec §4.6); true for every other command.
+/// apart from Main (spec §4.6); true for every other command. For an
+/// unknown player every one of these is false, as `availability` is all
+/// off: a caller that reports an unknown player checks it first.
 pub fn command_available(state: &AppState, command: &Command) -> bool {
     let a = |id: &PlayerId| availability(state, *id);
     match command {
@@ -70,7 +72,9 @@ pub fn command_available(state: &AppState, command: &Command) -> bool {
         Command::ToggleCue(id) => a(id).cue,
         // BF3: a locked fader takes only exactly 100 % (a NaN is ignored).
         #[allow(clippy::float_cmp)]
-        Command::SetVolume(id, v) => a(id).fader || *v == 1.0 || v.is_nan(),
+        Command::SetVolume(id, v) => {
+            state.player(*id).is_ok() && (a(id).fader || *v == 1.0 || v.is_nan())
+        }
         Command::CueEntry(id, _) => state.config.outputs.player_has_cue(*id),
         // A running cart pre-listen can always be stopped.
         Command::CueCart(cart) => {

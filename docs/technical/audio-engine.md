@@ -260,13 +260,17 @@ cannot hang the conductor.
   the bus sounds (bit-perfect rate and fader spec BR11).
 - **Stream rates reach the model (BR1).** At the end of every tick
   `report_stream_rates` compares each bus's rate and refused rates
-  (`Bus::refused_rates`, ascending) with what it last reported
-  (`Engine::reported_rates`) and emits `EngineEvent::StreamRate { device,
-  rate, refused }` for each difference. One comparison covers every cause:
-  a bus opened, a B3.2 reopen, a rate cut, a refusal, a live-settings
-  reopen and the watchdog. A bus opened by an action is reported after its
-  `Placed`; a holder that left the bus in the same tick is reported
-  `Unplaced` first, so the model drops a rate for a device no holder uses.
+  (`Bus::refused`, ascending, compared in place) with what it last
+  reported (`Engine::reported_rates`) and emits `EngineEvent::StreamRate {
+  device, rate, refused }` for each difference. One comparison covers every
+  cause: a bus opened, a B3.2 reopen, a rate cut, a refusal, a
+  live-settings reopen and the watchdog. A bus opened by an action is
+  reported after its `Placed`; a holder that left the bus in the same tick
+  is reported `Unplaced` first, so the model drops a rate for a device no
+  holder uses. Every `Placed` (`report_placement`) forgets what was last
+  reported for its bus, so the rate is reported again: the model forgets a
+  device's rate when its last holder leaves, and a holder may come back to
+  the bus before it closes.
 - **Every source knows its rate.** `Playing::rate` is the rate its worker
   decodes to (`open_source_at`): its bus's rate, or the rate of a planned
   cut. A source never starts at a rate other than its bus's: `take_or_open`
@@ -307,10 +311,16 @@ cannot hang the conductor.
   waits until the player's outgoing sources on the bus (the declick tail)
   have ended and the device has played them (`played_out`), reopens the
   bus through `prepare_start` and starts the
-  current; if the bus kept its rate, the current is opened again at it
-  first. A pause, stop or seek drops the waiting cut, and a resume then
-  follows B3.2; another start replaces it (and may wait for a cut of its
-  own, `start_current` sets `rate_cut` again). A start from silence at
+  current; if the bus kept its rate (a cart fired in the gap, or the
+  device refused the rate, B3.4), `fit_current` opens the current again
+  at the stream rate first, so it never plays at the wrong speed. A pause
+  or a stop drops the waiting cut, and a resume then follows B3.2. A seek
+  replaces the waiting current with a source at the stream rate, which
+  `run_rate_cuts` takes as the cut dropped: the bus keeps its rate and the
+  track plays on from the seek, resampled. Another start replaces the
+  waiting current and is decided afresh (`start_current` sets `rate_cut`
+  from `hard_start_cut`): at the stream rate it starts at once, at another
+  rate it waits for a cut of its own. A start from silence at
   another rate while the device has not yet played the end of what last
   sounded there (a stop's declick, a track's end) waits the same way
   (`hard_start_cut`, BR17), and so does the resume of a track loaded

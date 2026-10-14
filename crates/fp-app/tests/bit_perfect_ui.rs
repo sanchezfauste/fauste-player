@@ -72,6 +72,32 @@ fn bf7_a_locked_fader_takes_no_drag_and_no_wheel() {
     );
 }
 
+/// The top of the fader knob painted inside `fader` (the fader's rect): the
+/// filled rect two points narrower than the fader and six high
+/// (`widgets::fader`), found among the shapes of the last frame.
+fn knob_top(h: &egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, fader: egui::Rect) -> f32 {
+    fn rects(shape: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+        match shape {
+            egui::Shape::Rect(r) => out.push(r.clone()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| rects(s, out)),
+            _ => {}
+        }
+    }
+    let mut all = Vec::new();
+    for clipped in &h.output().shapes {
+        rects(&clipped.shape, &mut all);
+    }
+    let near = |a: f32, b: f32| (a - b).abs() < 0.5;
+    let knobs: Vec<_> = all
+        .iter()
+        .filter(|r| r.fill != egui::Color32::TRANSPARENT)
+        .filter(|r| fader.expand(0.5).contains_rect(r.rect))
+        .filter(|r| near(r.rect.width(), fader.width() - 2.0) && near(r.rect.height(), 6.0))
+        .collect();
+    assert_eq!(knobs.len(), 1, "one knob in {fader:?}: {knobs:?}");
+    knobs[0].rect.top()
+}
+
 #[test]
 fn bf7_a_locked_fader_is_drawn_at_the_top() {
     let mut s = locked(1);
@@ -79,14 +105,20 @@ fn bf7_a_locked_fader_is_drawn_at_the_top() {
     s.players[0].volume = 0.5;
     let (mut h, _fake) = harness(s);
     h.run_steps(2);
-    // Pixels cannot be read here: the fader is the locked widget, with the
-    // same geometry as an unlocked one, and `meter_column` paints it at
-    // travel 1.0 whatever the volume says.
     let locked_rect = h.get_by_label(LOCKED).rect();
-    let (mut h2, _) = harness(state(1, 3));
+    assert!(
+        (knob_top(&h, locked_rect) - locked_rect.top()).abs() < 0.5,
+        "the knob at the top, whatever the volume says"
+    );
+    // The same volume on a free fader puts the knob lower: the probe reads
+    // the knob's position.
+    let mut free = state(1, 3);
+    free.players[0].volume = 0.5;
+    let (mut h2, _) = harness(free);
     h2.run_steps(2);
     let free_rect = h2.get_by_label_contains("Volume").rect();
     assert_eq!(locked_rect.size(), free_rect.size());
+    assert!(knob_top(&h2, free_rect) > free_rect.top() + 6.0);
 }
 
 #[test]

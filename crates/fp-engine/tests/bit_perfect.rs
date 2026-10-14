@@ -40,6 +40,8 @@ fn rig(bit_perfect: bool, exclusive_capable: bool) -> Rig {
     let backend = OfflineBackend::new();
     let dac = backend.add_device("dac", 2);
     dac.set_exclusive_capable(exclusive_capable);
+    // An ordinary output to move a player to.
+    backend.add_device("speakers", 2);
     let mut config = Config::default();
     config.outputs.backend = Some("offline".into());
     config.outputs.buffer_frames = BLOCK as u32;
@@ -179,6 +181,42 @@ fn an_idle_bit_perfect_bus_reopens_at_the_file_rate() {
         "one second at 44.1 kHz is one second: {position} (underruns {})",
         r.engine.telemetry(P).underruns
     );
+}
+
+#[test]
+fn br1_a_bus_a_holder_comes_back_to_reports_its_rate_again() {
+    // The model forgets a device's rate when its last holder leaves it; a
+    // holder that comes back before the bus closes must bring it back.
+    let mut r = rig(true, true);
+    let dac = OutputDevice {
+        backend: "offline".into(),
+        device: "dac".into(),
+    };
+    let to = |device: &str| Route {
+        backend: "offline".into(),
+        device: device.into(),
+        first_channel: 0,
+    };
+    r.tick();
+    assert_eq!(r.stream_rates(), vec![(48_000, vec![])], "reported once");
+    r.events.clear();
+    for device in ["speakers", "dac"] {
+        r.act(EngineAction::ApplyRoute {
+            holder: fp_model::Holder::PlayerMain(P),
+            route: Some(to(device)),
+            force: false,
+        });
+    }
+    r.tick();
+    let back = r
+        .events
+        .iter()
+        .rposition(|e| matches!(e, EngineEvent::Placed { device, .. } if *device == dac))
+        .expect("placed on the dac again");
+    let reported = r.events.iter().skip(back).any(
+        |e| matches!(e, EngineEvent::StreamRate { device, rate: 48_000, .. } if *device == dac),
+    );
+    assert!(reported, "{:?}", r.events);
 }
 
 #[test]
@@ -1050,6 +1088,80 @@ fn br8_stop_in_the_gap_starts_nothing() {
     let heard = r.run(9_600);
     assert_eq!(r.rate(), 44_100, "no reopen for a track that will not play");
     assert!(heard.iter().skip(BLOCK * 2).all(|v| *v == 0.0), "silence");
+}
+
+#[test]
+fn br8_a_cart_fired_in_the_gap_keeps_the_rate_and_the_track_plays_at_it() {
+    let mut r = started_over(hard_start);
+    assert_eq!(
+        decode_rate(&r, "cur ["),
+        Some(48_000),
+        "prepared for the cut"
+    );
+    let cart = jingle(&r);
+    r.act(cart);
+    r.settle();
+    r.run(BLOCK);
+    r.settle();
+    r.run(4_410);
+    assert_eq!(r.rate(), 44_100, "the cart sounds: no reopen");
+    assert_eq!(
+        decode_rate(&r, "cur ["),
+        Some(44_100),
+        "opened again at the stream rate, never played at the wrong speed"
+    );
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!(position > 0.05, "it plays: {position}");
+}
+
+#[test]
+fn br8_a_rate_refused_in_the_gap_falls_back_and_the_track_plays() {
+    let mut r = started_over(hard_start);
+    r.dac.refuse_rate(48_000);
+    r.settle();
+    r.run(BLOCK);
+    r.settle();
+    assert_eq!(r.rate(), 44_100, "B3.4: back to the previous rate");
+    assert_eq!(r.stream_rates().last(), Some(&(44_100, vec![48_000])));
+    assert_eq!(decode_rate(&r, "cur ["), Some(44_100), "at the stream rate");
+    let heard = r.run(4_410);
+    assert!(heard.iter().any(|v| *v != 0.0), "it plays, resampled");
+}
+
+#[test]
+fn br8_a_seek_in_the_gap_drops_the_cut_and_plays_from_there() {
+    let mut r = started_over(hard_start);
+    r.act(EngineAction::Seek {
+        player: P,
+        secs: 1.0,
+    });
+    r.settle();
+    r.run(BLOCK);
+    r.settle();
+    r.run(4_800);
+    // A seek drops the waiting cut (`run_rate_cuts`): the bus keeps its
+    // rate and the track plays on from the seek, resampled.
+    assert_eq!(r.rate(), 44_100, "the cut is dropped");
+    assert_eq!(decode_rate(&r, "cur ["), Some(44_100), "the right speed");
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!(position > 1.05, "it plays from the seek: {position}");
+}
+
+#[test]
+fn br8_a_second_start_in_the_gap_replaces_the_first() {
+    // At the stream rate it starts at once; at another rate it waits for a
+    // cut of its own. Either way it plays at its own rate.
+    for rate in [44_100, 96_000] {
+        let mut r = started_over(hard_start);
+        let c = wav(r.dir.path(), "c.wav", rate);
+        r.act(hard_start(request(3, c, pcm16(rate))));
+        r.settle();
+        r.run(BLOCK);
+        r.settle();
+        assert_eq!(r.rate(), rate, "the second start's own rate");
+        assert_eq!(decode_rate(&r, "cur ["), Some(rate));
+        assert!(bit_perfect_after(&mut r, 4_800), "{rate}");
+    }
 }
 
 #[test]

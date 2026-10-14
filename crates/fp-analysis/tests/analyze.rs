@@ -385,6 +385,29 @@ fn n5_a_file_shorter_than_400_ms_is_not_measured() {
 }
 
 #[test]
+fn n5_a_file_of_exactly_400_ms_is_measured_at_11025_hz() {
+    // 4 410 frames: a tenth of the rate is not a whole number of frames.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("block.wav");
+    let spec = hound::WavSpec {
+        channels: 2,
+        sample_rate: 11_025,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    for i in 0..4_410u32 {
+        let x = 0.1 * (std::f64::consts::TAU * 1_000.0 * f64::from(i) / 11_025.0).sin();
+        let s = (x * f64::from(i16::MAX)) as i16;
+        w.write_sample(s).unwrap();
+        w.write_sample(s).unwrap();
+    }
+    w.finalize().unwrap();
+    let l = measure_loudness_cancellable(&path, &|| false).unwrap();
+    assert!(l.and_then(|l| l.integrated_lufs).is_some(), "{l:?}");
+}
+
+#[test]
 fn n4_a_file_cut_short_is_measured_up_to_the_damage() {
     let dir = tempfile::tempdir().unwrap();
     let path = stereo_tone(dir.path(), "cut.wav", -20.0, 4.0);

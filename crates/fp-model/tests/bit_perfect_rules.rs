@@ -368,6 +368,33 @@ fn br5_a_refused_rate_drops_the_cut() {
 }
 
 #[test]
+fn br5_a_next_entry_changed_to_another_rate_brings_its_rate_cut() {
+    let (mut s, p, [_, _, c]) = on_air();
+    set_track_rates(&mut s, &[44_100, 44_100, 96_000]);
+    apply(&mut s, Command::SetMode(p, PlayMode::Continuous)).unwrap();
+    assert_eq!(plan(&s, p), hard(None), "the next is at the stream rate");
+    let out = apply(&mut s, Command::SetNext(p, c)).unwrap();
+    assert_eq!(scheduled(&out, p), Some(hard(Some(96_000))), "{out:?}");
+}
+
+#[test]
+fn br4_a_repeat_or_replay_reopens_only_when_its_pass_started_resampled() {
+    // The pass on air plays at its own rate: the same file again keeps it.
+    let (mut s, p, [a, _, _]) = on_air();
+    apply(&mut s, Command::ToggleEntryRepeat(a)).unwrap();
+    assert_eq!(plan(&s, p), hard(None), "R26 repeat at its own rate");
+    // The pass started resampled (a cart held the device at 48 kHz): the
+    // next pass reopens at the file's rate.
+    report_stream_rate(&mut s, 48_000, vec![]);
+    assert_eq!(plan(&s, p), hard(Some(44_100)), "R26 repeat");
+    apply(&mut s, Command::ToggleEntryRepeat(a)).unwrap();
+    apply(&mut s, Command::SetNext(p, a)).unwrap();
+    assert_eq!(plan(&s, p), hard(Some(44_100)), "O37 replay");
+    report_stream_rate(&mut s, 44_100, vec![]);
+    assert_eq!(plan(&s, p), hard(None), "O37 replay at its own rate");
+}
+
+#[test]
 fn br5_moved_off_the_device_gives_back_the_segue() {
     let (mut s, p, _) = on_air();
     with_segue(&mut s);
@@ -423,11 +450,27 @@ fn br10_dsd_next_or_dsd_on_air_takes_no_cut_and_the_hold_still_stops() {
 
 #[test]
 fn br10_another_player_on_an_ordinary_device_keeps_its_segue() {
-    let (mut s, _, _) = on_air();
+    let (mut s, p, _) = on_air();
     with_segue(&mut s);
     let q = s.players[1].id;
+    let speakers = fp_model::OutputDevice {
+        backend: "null".into(),
+        device: "speakers".into(),
+    };
+    let running = fp_model::device_settings(&s.config.outputs, &speakers);
+    on_event(
+        &mut s,
+        EngineEvent::Placed {
+            holder: Holder::PlayerMain(q),
+            route: None,
+            device: speakers,
+            running,
+        },
+    );
     apply(&mut s, Command::Play(q)).unwrap();
+    assert!(!bit_perfect_player(&s, q), "placed on an ordinary device");
     assert_eq!(plan(&s, q), SEGUE);
+    assert_eq!(plan(&s, p), hard(None), "p on dac stays hard");
 }
 
 #[test]
@@ -494,7 +537,8 @@ fn start_of(out: &[EngineAction], p: PlayerId) -> Option<Result<EntryId, EntryId
 fn br7_play_while_playing_and_previous_start_hard_at_any_rate() {
     for next_rate in [44_100, 96_000] {
         let (mut s, p, [a, b, _]) = on_air();
-        rates(&mut s, next_rate);
+        // Previous goes back to `a`: at another rate than the stream too.
+        set_track_rates(&mut s, &[next_rate, next_rate, 44_100]);
         let out = apply(&mut s, Command::Play(p)).unwrap();
         assert_eq!(start_of(&out, p), Some(Ok(b)), "{next_rate}");
         assert!(!s.player(p).unwrap().fading, "no Mixing badge");
