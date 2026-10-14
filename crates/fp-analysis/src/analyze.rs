@@ -112,6 +112,8 @@ pub fn analyze_file_cancellable(
                 dsd_rate: decoder.dsd_rate(),
             }),
             version: crate::cache::ANALYSIS_VERSION,
+            loudness: None,
+            loudness_pass: None,
         },
         peak_bucket_secs: envelope.bucket_secs,
         peaks: envelope.peaks,

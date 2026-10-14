@@ -5,8 +5,8 @@ mod common;
 
 use common::{entries, fixture, p0};
 use fp_model::{
-    AudioFormat, Command, EngineAction, FileState, MarkerKind, MarkerSource, TrackAnalysis,
-    TrackId, TransitionPlan, apply,
+    AudioFormat, Command, EngineAction, FileState, LOUDNESS_VERSION, LoudnessMeasurement,
+    MarkerKind, MarkerSource, TrackAnalysis, TrackId, TransitionPlan, apply, loudness_unmeasured,
 };
 
 fn analysis(duration: f64) -> TrackAnalysis {
@@ -27,6 +27,8 @@ fn analysis(duration: f64) -> TrackAnalysis {
             dsd_rate: None,
         }),
         version: 1,
+        loudness: None,
+        loudness_pass: None,
     }
 }
 
@@ -257,4 +259,202 @@ fn a_library_without_formats_loads() {
     )
     .unwrap();
     assert_eq!(track.format, None);
+}
+
+fn measured(lufs: f32) -> LoudnessMeasurement {
+    LoudnessMeasurement {
+        integrated_lufs: Some(lufs),
+        true_peak_dbtp: -1.5,
+    }
+}
+
+fn with_loudness(duration: f64, lufs: Option<f32>) -> TrackAnalysis {
+    TrackAnalysis {
+        loudness: lufs.map(measured),
+        loudness_pass: Some(LOUDNESS_VERSION),
+        ..analysis(duration)
+    }
+}
+
+#[test]
+fn n6_an_analysis_stores_the_loudness_measurement() {
+    let mut state = fixture(1);
+    let t = track_of(&state, 0);
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(with_loudness(200.0, Some(-11.0))),
+        },
+    )
+    .unwrap();
+    let track = state.library.get(t).unwrap();
+    assert_eq!(track.loudness, Some(measured(-11.0)));
+    assert_eq!(track.loudness_pass, Some(LOUDNESS_VERSION));
+    assert!(!track.needs_loudness_pass());
+}
+
+#[test]
+fn an_analysis_without_a_loudness_pass_keeps_the_measurement() {
+    // An entry cached before this feature carries no measurement: the one
+    // the loudness-only pass found stays.
+    let mut state = fixture(1);
+    let t = track_of(&state, 0);
+    state
+        .library
+        .get_mut(t)
+        .unwrap()
+        .apply_loudness(Some(measured(-9.0)), LOUDNESS_VERSION);
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(analysis(200.0)),
+        },
+    )
+    .unwrap();
+    let track = state.library.get(t).unwrap();
+    assert_eq!(track.loudness, Some(measured(-9.0)));
+    assert_eq!(track.loudness_pass, Some(LOUDNESS_VERSION));
+}
+
+#[test]
+fn n6_a_track_analysed_before_this_feature_needs_the_loudness_pass() {
+    let mut state = fixture(1);
+    let t = track_of(&state, 0);
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(analysis(200.0)),
+        },
+    )
+    .unwrap();
+    let track = state.library.get(t).unwrap();
+    assert_eq!((track.loudness, track.loudness_pass), (None, None));
+    assert!(track.needs_loudness_pass());
+}
+
+#[test]
+fn n6b_a_loudness_only_result_changes_no_marker() {
+    let mut state = fixture(1);
+    let t = track_of(&state, 0);
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(analysis(200.0)),
+        },
+    )
+    .unwrap();
+    apply(
+        &mut state,
+        Command::SetMarker {
+            track: t,
+            kind: MarkerKind::IntroEnd,
+            secs: Some(12.0),
+        },
+    )
+    .unwrap();
+    let before = state.library.get(t).unwrap().clone();
+    apply(
+        &mut state,
+        Command::ApplyLoudness {
+            track: t,
+            loudness: Some(measured(-14.0)),
+            version: LOUDNESS_VERSION,
+        },
+    )
+    .unwrap();
+    let after = state.library.get(t).unwrap();
+    assert_eq!(after.markers, before.markers);
+    assert_eq!(
+        (after.title.as_str(), after.duration_secs),
+        (before.title.as_str(), before.duration_secs)
+    );
+    assert_eq!(after.loudness, Some(measured(-14.0)));
+    assert!(!after.needs_loudness_pass());
+}
+
+#[test]
+fn n6b_a_failed_or_short_measurement_is_recorded_and_not_asked_again() {
+    let mut state = fixture(1);
+    let t = track_of(&state, 0);
+    apply(
+        &mut state,
+        Command::ApplyAnalysis {
+            track: t,
+            analysis: Box::new(analysis(200.0)),
+        },
+    )
+    .unwrap();
+    apply(
+        &mut state,
+        Command::ApplyLoudness {
+            track: t,
+            loudness: None,
+            version: LOUDNESS_VERSION,
+        },
+    )
+    .unwrap();
+    let track = state.library.get(t).unwrap();
+    assert_eq!(track.loudness, None);
+    assert!(!track.needs_loudness_pass());
+}
+
+#[test]
+fn n6b_a_newer_loudness_version_asks_for_the_pass_again() {
+    let mut state = fixture(1);
+    let t = track_of(&state, 0);
+    let track = state.library.get_mut(t).unwrap();
+    track.analyzed = true;
+    track.apply_loudness(Some(measured(-14.0)), LOUDNESS_VERSION - 1);
+    assert!(track.needs_loudness_pass());
+}
+
+#[test]
+fn a_loudness_result_for_a_gone_track_is_ignored() {
+    let mut state = fixture(1);
+    let before = state.clone();
+    apply(
+        &mut state,
+        Command::ApplyLoudness {
+            track: TrackId(999),
+            loudness: Some(measured(-14.0)),
+            version: LOUDNESS_VERSION,
+        },
+    )
+    .unwrap();
+    assert_eq!(state.library, before.library);
+}
+
+#[test]
+fn n22_tracks_waiting_for_a_measurement_are_counted() {
+    let mut state = fixture(3);
+    let ids: Vec<TrackId> = (0..3).map(|n| track_of(&state, n)).collect();
+    // One measured, one tried and failed, one never tried.
+    state
+        .library
+        .get_mut(ids[0])
+        .unwrap()
+        .apply_loudness(Some(measured(-14.0)), LOUDNESS_VERSION);
+    state
+        .library
+        .get_mut(ids[1])
+        .unwrap()
+        .apply_loudness(None, LOUDNESS_VERSION);
+    assert_eq!(loudness_unmeasured(&state), 1);
+    // A missing file is not waiting for anything.
+    state.library.get_mut(ids[2]).unwrap().file_state = FileState::Missing;
+    assert_eq!(loudness_unmeasured(&state), 0);
+}
+
+#[test]
+fn n6_a_library_saved_before_loudness_loads_without_it() {
+    let json = r#"[{"id":1,"path":"/a.flac","title":"A","artist":"","album":"",
+        "duration_secs":10.0,"kind":"Music","file_state":"Ok","markers":{},
+        "analyzed":true}]"#;
+    let lib: fp_model::Library = serde_json::from_str(json).unwrap();
+    let t = lib.get(TrackId(1)).unwrap();
+    assert_eq!((t.loudness, t.loudness_pass), (None, None));
 }

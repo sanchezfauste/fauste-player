@@ -62,6 +62,14 @@ pub enum Command {
         track: TrackId,
         analysis: Box<TrackAnalysis>,
     },
+    /// Loudness normalization spec N6b: the loudness-only pass measured a
+    /// track (`None`: nothing could be measured; it is not tried again
+    /// until `version` changes). Ignored if the track is gone.
+    ApplyLoudness {
+        track: TrackId,
+        loudness: Option<crate::loudness::LoudnessMeasurement>,
+        version: u32,
+    },
     /// Feedback 2 spec O23: the file's tags as read after the tag-only pass
     /// or written by the tag editor (ignored if the track is gone).
     ApplyTags {
