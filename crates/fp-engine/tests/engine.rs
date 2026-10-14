@@ -1439,3 +1439,60 @@ fn n11_transition_started_reports_the_gain_the_engine_started_with() {
     assert_eq!(started, vec![(EntryId(2), DOUBLE_DB)]);
     assert_eq!(halved(*r.heard.last().unwrap()).0, 2, "track 2 at +6 dB");
 }
+
+#[test]
+fn n11_a_kept_preload_reports_the_status_of_the_latest_request() {
+    // Not measured and normalization off both play at 0 dB: the engine
+    // keeps the source it preloaded, but the transition must report the
+    // status the model asked for last, not the one it opened with.
+    let mut r = rig(96_000, false);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(SourceRequest {
+            normalization: Normalization {
+                gain_db: 0.0,
+                status: NormalizationStatus::NotMeasured,
+            },
+            ..request(2, 0.0)
+        }),
+    });
+    r.settle();
+    r.run(1);
+    r.act(EngineAction::Preload {
+        player: P,
+        request: Some(SourceRequest {
+            normalization: Normalization {
+                gain_db: 0.0,
+                status: NormalizationStatus::Off,
+            },
+            ..request(2, 0.0)
+        }),
+    });
+    r.settle();
+    r.act(EngineAction::Schedule {
+        player: P,
+        plan: Some(TransitionPlan::StartNextAt {
+            at_secs: 0.2,
+            fade_current_until_secs: None,
+            rate_cut: None,
+        }),
+    });
+    r.run(40);
+    let started: Vec<_> = r
+        .events
+        .iter()
+        .filter_map(|e| match e {
+            EngineEvent::TransitionStarted {
+                entry,
+                normalization,
+                ..
+            } => Some((*entry, normalization.status)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(started, vec![(EntryId(2), NormalizationStatus::Off)]);
+}

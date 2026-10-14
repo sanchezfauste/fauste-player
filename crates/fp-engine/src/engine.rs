@@ -293,6 +293,16 @@ impl Playing {
             && self.start_secs == request.from_secs
             && self.request.normalization.linear_gain() == request.normalization.linear_gain()
     }
+
+    /// Takes the normalization of `request`, which this source `serves`:
+    /// the same gain, but perhaps another status (normalization off, not
+    /// measured and excluded all play at 0 dB), and the latest request's
+    /// status is the one a later `TransitionStarted` must report. Only the
+    /// normalization is taken: the rest of the request describes how the
+    /// source was opened.
+    fn adopt_normalization(&mut self, request: &SourceRequest) {
+        self.request.normalization = request.normalization;
+    }
 }
 
 /// Why a source could not be created. None of these is a problem with the
@@ -2603,9 +2613,10 @@ impl Engine {
         let Some(rt) = self.players.get_mut(&player) else {
             return;
         };
-        if let (Some(old), Some(req)) = (rt.preload.as_ref(), request.as_ref())
+        if let (Some(old), Some(req)) = (rt.preload.as_mut(), request.as_ref())
             && old.serves(req)
         {
+            old.adopt_normalization(req);
             return;
         }
         if let Some(old) = rt.preload.take() {
@@ -2638,11 +2649,12 @@ impl Engine {
             .as_ref()
             .is_some_and(|p| p.serves(request) && p.rate == wanted);
         if matches
-            && let Some(p) = self
+            && let Some(mut p) = self
                 .players
                 .get_mut(&player)
                 .and_then(|rt| rt.preload.take())
         {
+            p.adopt_normalization(request);
             return Ok(p);
         }
         self.open_source_at(player, false, request, false, Some(wanted))
