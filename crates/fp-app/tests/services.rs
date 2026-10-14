@@ -219,7 +219,8 @@ fn wait(delay: Duration, cancelled: &dyn Fn() -> bool) -> bool {
 
 impl Rig {
     fn run_until(&mut self, what: &str, mut done: impl FnMut(&Rig) -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(15);
+        // Only bounds a hang: a loaded CI runner can take well over 15 s.
+        let deadline = Instant::now() + Duration::from_secs(60);
         while !done(self) {
             assert!(Instant::now() < deadline, "timed out waiting for {what}");
             self.conductor.tick(self.now);

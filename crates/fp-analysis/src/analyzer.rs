@@ -140,7 +140,8 @@ pub struct Analyzer {
     shared: Arc<Shared>,
     threads: Vec<JoinHandle<()>>,
     /// Runs inside `promote` once it has looked at the track's job, so a
-    /// test can let that job finish right there.
+    /// test can let that job finish right there. It must stay between the
+    /// look and the send: that is the window the regression test exercises.
     #[cfg(test)]
     promote_hook: Option<Box<dyn Fn() + Send + Sync>>,
 }
@@ -584,10 +585,10 @@ mod tests {
         let (gate, runs, held) = (open.clone(), runs_of_a.clone(), a.clone());
         // `a` holds until the gate opens; every job fails at once, which
         // still delivers a result.
-        let analyze: AnalyzeFn = Arc::new(move |path, _, _, _| {
+        let analyze: AnalyzeFn = Arc::new(move |path, _, _, cancelled| {
             if path == held {
                 runs.fetch_add(1, Ordering::SeqCst);
-                while !gate.load(Ordering::SeqCst) {
+                while !gate.load(Ordering::SeqCst) && !cancelled() {
                     std::thread::sleep(Duration::from_millis(1));
                 }
             }
