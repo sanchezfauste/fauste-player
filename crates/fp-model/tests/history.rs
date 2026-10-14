@@ -75,7 +75,10 @@ fn r25_a_zero_length_history_records_nothing() {
 fn r23_restart_seeks_to_cue_in_while_playing() {
     let (mut s, p, [a, _, _]) = three();
     next(&mut s, p);
-    let cue_in = s.request_from_cue_in(a).unwrap().from_secs;
+    let cue_in = s
+        .request_from_cue_in(a, fp_model::Holder::PlayerMain(p))
+        .unwrap()
+        .from_secs;
     let out = apply(&mut s, Command::Restart(p)).unwrap();
     assert_eq!(
         out,

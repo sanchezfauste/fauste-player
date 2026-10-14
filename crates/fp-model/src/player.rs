@@ -128,9 +128,11 @@ pub struct PlayerState {
     /// entry from Stopped, when the operator chose it with a seek. Only
     /// while the player is stopped and the entry is its next.
     pub pending_start: Option<(EntryId, f64)>,
-    /// Entry and start position the engine was last asked to preload (the
-    /// position changes when analysis finds the real cue-in).
-    pub(crate) preloaded: Option<(EntryId, f64)>,
+    /// Entry, start position and normalization the engine was last asked
+    /// to preload (the position changes when analysis finds the real
+    /// cue-in; a new normalization is a new preload, loudness
+    /// normalization spec N12).
+    pub(crate) preloaded: Option<(EntryId, f64, crate::loudness::Normalization)>,
     /// Transition plan the engine was last given.
     pub(crate) scheduled: Option<TransitionPlan>,
     /// A fade stop is running: no transition may start.
@@ -138,6 +140,11 @@ pub struct PlayerState {
     /// The DSD stream the engine reported for the entry on air (spec O25);
     /// runtime only, never saved.
     pub dsd: Option<crate::dsd::DsdOnAir>,
+    /// The normalization of the current entry's source, fixed while it
+    /// sounds (loudness normalization spec N11); runtime only, never saved.
+    pub on_air: Option<crate::loudness::Normalization>,
+    /// The same for the CUE source.
+    pub cue_normalization: Option<crate::loudness::Normalization>,
 }
 
 impl PlayerState {
@@ -166,6 +173,8 @@ impl PlayerState {
             scheduled: None,
             fade_stop_pending: false,
             dsd: None,
+            on_air: None,
+            cue_normalization: None,
         }
     }
 }

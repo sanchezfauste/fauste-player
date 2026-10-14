@@ -188,6 +188,7 @@ error-last-cart-page = Non se pode eliminar a última páxina de cartuchos.
 error-carts-would-be-lost = A grella máis pequena quitaría cartuchos que teñen ficheiro. Baleiraos primeiro.
 error-cart-grid = Ese tamaño de grella está fóra do rango permitido.
 error-invalid-marker = O cue-in debe quedar antes do cue-out.
+error-invalid-trim = O axuste de ganancia supera o máximo permitido.
 cartwall-title = CARTUCHEIRA
 cartwall-hint = Clic para disparar · outro clic para parar
 cartwall-stop-all = Paralo todo

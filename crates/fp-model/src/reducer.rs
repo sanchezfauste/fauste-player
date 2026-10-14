@@ -11,6 +11,7 @@ use crate::config::Config;
 use crate::dsd::DsdOnAir;
 use crate::error::ModelError;
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
+use crate::live::Holder;
 use crate::player::{CueState, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, PlaylistEntry};
 use crate::shortcuts::{Shortcut, default_shortcuts};
@@ -31,7 +32,9 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             // A fade stop has already taken the source: nothing to seek.
             if player.transport != Transport::Stopped
                 && !player.fade_stopping()
-                && let Some(request) = player.current.and_then(|c| state.request_from_cue_in(c))
+                && let Some(request) = player
+                    .current
+                    .and_then(|c| state.request_from_cue_in(c, Holder::PlayerMain(id)))
             {
                 out.push(EngineAction::Seek {
                     player: id,
@@ -141,10 +144,18 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
                 if let Some(next) = player.next
                     && secs.is_finite()
                 {
-                    let at = crate::pending_start::pending_start_at(state, next, secs);
+                    let at = crate::pending_start::pending_start_at(
+                        state,
+                        next,
+                        secs,
+                        Holder::PlayerMain(id),
+                    );
                     state.players[i].pending_start = at;
                 }
-            } else if let Some(request) = player.current.and_then(|c| state.request_at(c, secs)) {
+            } else if let Some(request) = player
+                .current
+                .and_then(|c| state.request_at(c, secs, Holder::PlayerMain(id)))
+            {
                 out.push(EngineAction::Seek {
                     player: id,
                     secs: request.from_secs,
@@ -347,6 +358,22 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             t.analyzed = false;
             refresh_next(state);
         }
+        Command::SetTrackLoudness {
+            track,
+            excluded,
+            trim_db,
+        } => {
+            // A maximum that is not a number allows no trim.
+            let max = state.config.loudness.max_trim_db.max(0.0);
+            let t = state
+                .library
+                .get_mut(track)
+                .ok_or(ModelError::UnknownTrack(track))?;
+            if !trim_db.is_finite() || trim_db.abs() > max {
+                return Err(ModelError::InvalidTrim);
+            }
+            t.loudness_edit = crate::loudness::LoudnessEdit { excluded, trim_db };
+        }
     }
     fill_empty_next(state);
     reconcile(state, &mut out);
@@ -395,6 +422,12 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             }
         }
         EngineEvent::TransitionStarted { player, entry } => {
+            // N11: what the engine preloaded, taken before `advance_to`
+            // forgets it.
+            let preloaded = state
+                .player_index(player)
+                .ok()
+                .and_then(|i| state.players[i].preloaded);
             // The engine started the entry that is already current: a
             // repeating entry's next pass (R26) or the replay of an entry set
             // as its own next (O37), perhaps committed just before a command
@@ -418,10 +451,12 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                     state.players[i].next = following;
                     state.players[i].next_explicit = false;
                 }
+                let on_air = started_normalization(state, i, entry, preloaded);
                 let p = &mut state.players[i];
                 p.preloaded = None;
                 p.scheduled = None;
                 p.transport = Transport::Playing;
+                p.on_air = on_air;
             }
             // A transition reported after the player was stopped is stale: the
             // engine has already been told to stop everything.
@@ -438,6 +473,7 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                 );
                 if advance_to(state, i, entry, true).is_some() {
                     state.players[i].fading = overlapping;
+                    state.players[i].on_air = started_normalization(state, i, entry, preloaded);
                 } else {
                     stop_player(state, i);
                     out.push(EngineAction::StopNow { player });
@@ -499,7 +535,12 @@ fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Resu
             // Q8.3: the pending start is used by this start, once.
             let pending = state.players[i].pending_start.take();
             if let Some(request) = advance(state, i) {
-                let request = crate::pending_start::start_request(state, pending, request);
+                let request = crate::pending_start::start_request(
+                    state,
+                    pending,
+                    request,
+                    Holder::PlayerMain(id),
+                );
                 out.push(EngineAction::StartCurrent {
                     player: id,
                     request,
@@ -538,7 +579,11 @@ fn previous(
         let Some(entry) = state.players[i].history.pop() else {
             return Ok(());
         };
-        if Some(entry) != left && state.playable_request(entry).is_some() {
+        if Some(entry) != left
+            && state
+                .playable_request(entry, Holder::PlayerMain(id))
+                .is_some()
+        {
             break entry;
         }
     };
@@ -818,14 +863,36 @@ fn dsd_hold_continue(state: &mut AppState, i: usize) -> Option<SourceRequest> {
     let current = state.players[i].current?;
     if repeating(state, &state.players[i]) {
         // R26: another pass of the same entry, not a new play.
-        let request = state.request_from_cue_in(current)?;
+        let holder = Holder::PlayerMain(state.players[i].id);
+        let request = state.request_from_cue_in(current, holder)?;
         let p = &mut state.players[i];
         p.preloaded = None;
         p.scheduled = None;
+        p.on_air = Some(request.normalization);
         return Some(request);
     }
     let next = state.players[i].next?;
     advance_to(state, i, next, true)
+}
+
+/// N11: a scheduled transition plays what was preloaded, with the gain it
+/// was preloaded with; an entry that was not the one preloaded gets its
+/// own gain now.
+fn started_normalization(
+    state: &AppState,
+    i: usize,
+    entry: EntryId,
+    preloaded: Option<(EntryId, f64, crate::loudness::Normalization)>,
+) -> Option<crate::loudness::Normalization> {
+    match preloaded {
+        Some((e, _, n)) if e == entry => Some(n),
+        _ => {
+            let holder = Holder::PlayerMain(state.players.get(i)?.id);
+            state
+                .request_from_cue_in(entry, holder)
+                .map(|r| r.normalization)
+        }
+    }
 }
 
 /// Play-while-playing starts: a crossfade, or a hard start that cuts the
@@ -942,12 +1009,13 @@ fn cue_entry(
         return Ok(());
     }
     let request = state
-        .request_from_cue_in(entry)
+        .request_from_cue_in(entry, Holder::PlayerCue(id))
         .ok_or(ModelError::UnknownEntry(entry))?;
     state.players[i].cue = Some(CueState {
         entry,
         paused: false,
     });
+    state.players[i].cue_normalization = Some(request.normalization);
     out.push(EngineAction::StartCue {
         player: id,
         request,
@@ -966,7 +1034,11 @@ fn follow_cue(
 ) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
     let moves = state.players[i].cue.is_some_and(|c| c.entry != entry);
-    if moves && state.playable_request(entry).is_some() {
+    if moves
+        && state
+            .playable_request(entry, Holder::PlayerCue(id))
+            .is_some()
+    {
         cue_entry(state, id, entry, out)?;
     }
     Ok(())
@@ -987,7 +1059,7 @@ fn seek_cue(
     if !secs.is_finite() {
         return Ok(());
     }
-    if let Some(request) = state.request_at(cue.entry, secs) {
+    if let Some(request) = state.request_at(cue.entry, secs, Holder::PlayerCue(id)) {
         out.push(EngineAction::SeekCue {
             player: id,
             secs: request.from_secs,
@@ -1241,7 +1313,8 @@ pub(crate) fn advance_to(
     target: EntryId,
     record: bool,
 ) -> Option<SourceRequest> {
-    let request = state.request_from_cue_in(target)?;
+    let holder = Holder::PlayerMain(state.players[i].id);
+    let request = state.request_from_cue_in(target, holder)?;
     if let Some(current) = state.players[i].current {
         let player = state.players[i].id;
         state.playlists.mark_played(current, player);
@@ -1263,6 +1336,7 @@ pub(crate) fn advance_to(
     player.preloaded = None;
     player.scheduled = None;
     player.dsd = None;
+    player.on_air = Some(request.normalization);
     Some(request)
 }
 
@@ -1286,6 +1360,7 @@ pub(crate) fn stop_player(state: &mut AppState, i: usize) {
     player.fade_stop_pending = false;
     player.stop_after_current = false;
     player.dsd = None;
+    player.on_air = None;
 }
 
 /// After playlist edits: a player with a current entry and a derived next
@@ -1385,6 +1460,18 @@ pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
     // Rule 3a (Q8.4): a pending start lives only while its player is
     // stopped with that entry next, inside the entry's play range.
     crate::pending_start::settle(state);
+    // N11: a gain record lives as long as its source.
+    for p in &mut state.players {
+        if p.current.is_none() {
+            p.on_air = None;
+        }
+        if p.cue.is_none() {
+            p.cue_normalization = None;
+        }
+    }
+    if state.cartwall.cue.is_none() {
+        state.cartwall.cue_normalization = None;
+    }
     // O38: in Single mode the flag lives only while the current entry
     // repeats (it may have stopped applying: repeat off, a stop-after mark,
     // Next into another entry, a file that cannot be read).
@@ -1412,13 +1499,17 @@ pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
             )
         })
         .filter(|(i, request)| {
-            let wanted = request.as_ref().map(|r| (r.entry, r.from_secs));
+            let wanted = request
+                .as_ref()
+                .map(|r| (r.entry, r.from_secs, r.normalization));
             state.players[*i].preloaded != wanted
         })
         .collect();
     for (i, request) in preloads {
         let player = &mut state.players[i];
-        player.preloaded = request.as_ref().map(|r| (r.entry, r.from_secs));
+        player.preloaded = request
+            .as_ref()
+            .map(|r| (r.entry, r.from_secs, r.normalization));
         out.push(EngineAction::Preload {
             player: player.id,
             request,

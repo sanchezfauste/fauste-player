@@ -165,6 +165,7 @@ fn request(n: u64, path: PathBuf, format: Option<AudioFormat>) -> SourceRequest 
         path,
         from_secs: 0.0,
         format,
+        normalization: fp_model::Normalization::default(),
     }
 }
 
@@ -887,6 +888,7 @@ fn a_cart_over_native_dsd_on_a_refused_word_rate_plays_from_its_start() {
         until_secs: f64::INFINITY,
         looped: false,
         format: pcm16(CONFIGURED_RATE),
+        normalization: fp_model::Normalization::default(),
     }));
     r.settle();
     let mut raw = r.run_until_pcm(WORD_RATE_128 as usize / 20);
@@ -1451,6 +1453,7 @@ fn a_cart_over_a_dsd_stream_switches_it_to_pcm() {
         until_secs: f64::INFINITY,
         looped: false,
         format: pcm16(WORD_RATE),
+        normalization: fp_model::Normalization::default(),
     }));
     r.settle();
     let raw = r.run_raw(WORD_RATE as usize / 4);

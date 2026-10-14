@@ -188,6 +188,7 @@ error-last-cart-page = Non si può eliminare l'ultima pagina di cart.
 error-carts-would-be-lost = La griglia più piccola eliminerebbe dei cart che hanno un file. Svuotali prima.
 error-cart-grid = Questa dimensione della griglia è fuori dall'intervallo consentito.
 error-invalid-marker = Il cue-in deve restare prima del cue-out.
+error-invalid-trim = La regolazione del guadagno supera il massimo consentito.
 cartwall-title = CARTWALL
 cartwall-hint = Clic per lanciare · clic di nuovo per fermare
 cartwall-stop-all = Ferma tutto

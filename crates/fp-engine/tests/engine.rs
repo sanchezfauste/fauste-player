@@ -59,6 +59,7 @@ fn request(track: u64, from_secs: f64) -> SourceRequest {
         path: PathBuf::from(format!("track{track}")),
         from_secs,
         format: None,
+        normalization: fp_model::Normalization::default(),
     }
 }
 

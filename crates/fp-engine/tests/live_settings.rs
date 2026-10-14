@@ -67,6 +67,7 @@ fn request(track: u64, from_secs: f64) -> SourceRequest {
         path: PathBuf::from(format!("track{track}")),
         from_secs,
         format: None,
+        normalization: fp_model::Normalization::default(),
     }
 }
 
@@ -192,6 +193,7 @@ fn l3_the_first_cart_places_the_cartwall_and_a_removed_player_is_gone() {
         until_secs: SOURCE_END,
         looped: false,
         format: None,
+        normalization: fp_model::Normalization::default(),
     }));
     r.tick();
     let events = r.take_events();
@@ -1015,6 +1017,7 @@ fn cart_request(cart: u64) -> CartRequest {
         until_secs: SOURCE_END,
         looped: false,
         format: None,
+        normalization: fp_model::Normalization::default(),
     }
 }
 

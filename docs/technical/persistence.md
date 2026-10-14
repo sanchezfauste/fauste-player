@@ -5,7 +5,7 @@
 | File | Document | Content |
 |---|---|---|
 | `config/config.json` | `ConfigDoc` | `schema_version`, `config` |
-| `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers and the `analysis_version` of their automatic ones; an older version is analysed again when the operator asks), `playlists` (entries with `played_by`: the players that played each one, and `repeat` / `stop_after` when set), `ids`. Tracks also hold the tags the library shows: `date`, `genre`, `album_artist`, `composer`, `comment` and `tags_read`, all optional on load (a library from an earlier version loads with them empty and the tag-only pass fills them in). Tracks also hold `loudness` (`{ "integrated_lufs": number|null, "true_peak_dbtp": number }`, absent when not measured) and `loudness_pass` (the `LOUDNESS_VERSION` of the last loudness measurement tried, whatever it found), both optional on load: a library from an earlier version loads without them and the loudness-only pass measures its tracks (loudness normalization spec N6, N6b). The editor's tag sheet is never persisted: it reads the file each time. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
+| `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers and the `analysis_version` of their automatic ones; an older version is analysed again when the operator asks), `playlists` (entries with `played_by`: the players that played each one, and `repeat` / `stop_after` when set), `ids`. Tracks also hold the tags the library shows: `date`, `genre`, `album_artist`, `composer`, `comment` and `tags_read`, all optional on load (a library from an earlier version loads with them empty and the tag-only pass fills them in). Tracks also hold `loudness` (`{ "integrated_lufs": number|null, "true_peak_dbtp": number }`, absent when not measured) and `loudness_pass` (the `LOUDNESS_VERSION` of the last loudness measurement tried, whatever it found), both optional on load: a library from an earlier version loads without them and the loudness-only pass measures its tracks (loudness normalization spec N6, N6b). Each track also holds the operator's `loudness_edit` (`{ "excluded": bool, "trim_db": number }`, default not excluded and 0 dB, absent in older files): exclude it from normalization, or trim its gain within ± `loudness.max_trim_db` (N10). The editor's tag sheet is never persisted: it reads the file each time. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
 | `data/carts.json` | `CartsDoc` | `schema_version`, `pages[]` (id, name, rows, cols, `carts[]` with id, name, track, kind, looped, exclusive); cart files are tracks of the `playlists.json` library |
 | `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns (`ColumnWidths`: fractions keyed by column name, for example `{"fractions": {"title": 0.5, "artist": 0.4, "duration": 0.1}}`; the old `[#, Title, Artist, Duration]` array converts, anything else loads as the default layout, unknown names are dropped), history: the entries the player left, oldest first — loaded leniently: an unparsable history is empty, pending_start: `[entry, secs]`, where Play starts the next entry of a stopped player (rule 3a); kept only while that entry is still the next, loaded leniently (anything that does not parse is none, and the load reports a warning that is logged)), `cartwall` (open, page shown) |
 
@@ -237,6 +237,26 @@ carts).
 | `events.position_interval_ms` | 250 | 50 … 5000 |
 
 See [Remote control API](remote-api.md).
+
+### `loudness` (applied to sources loaded afterwards)
+
+Loudness normalization (loudness normalization spec §4): one fixed gain
+per track, decided when it is loaded. A change never touches what is
+sounding and never waits: the next source loaded (the preload of each
+player's next is sent again) carries the new gain. A file without the
+section loads the defaults; a value that is not a number takes its
+default, and one out of range is clamped, each with a warning.
+
+| Field | Default | Range | Meaning |
+|---|---|---|---|
+| `normalize` | false | | normalization on or off; off by default, so an upgrade changes nothing on air |
+| `target_lufs` | −16 | −36 … −6 | integrated loudness every track is brought to |
+| `true_peak_ceiling_dbtp` | −1 | −12 … 0 | a boost may not take the measured true peak above this; it never cuts a track |
+| `max_boost_db` | 12 | 0 … 24 | the largest gain a track may get; cuts are not limited |
+| `max_trim_db` | 12 | 0 … 24 | the per-track trim is refused beyond ± this, and a stored trim beyond it (the maximum lowered since) is limited to it |
+
+A source on a bit-perfect device gets no gain (N8). The meter's own
+`meter.loudness_target_lufs` is a separate value.
 
 ### `limits` (config file only)
 

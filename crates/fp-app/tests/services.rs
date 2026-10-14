@@ -1507,6 +1507,19 @@ fn n6b_a_newer_loudness_version_measures_again() {
 }
 
 #[test]
+fn n6b_the_pass_runs_with_normalization_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 1);
+    let mut r = rig_with(&[a], dir, Duration::ZERO, |s| {
+        analysed_before_loudness(s);
+        s.config.loudness.normalize = false;
+    });
+    r.run_until("the loudness", |r| only_track(r).loudness_pass.is_some());
+    assert!(only_track(&r).loudness.is_some());
+    assert!(!r.handle.model.load().config.loudness.normalize);
+}
+
+#[test]
 fn a_track_removed_while_measured_is_forgotten() {
     let dir = tempfile::tempdir().unwrap();
     let a = wav(dir.path(), "a.wav", 1);

@@ -11,11 +11,12 @@ pub enum SettingsSection {
     Players,
     Meters,
     Analysis,
+    Loudness,
     Shortcuts,
 }
 
 /// Resets the whole configuration group behind `section` (`players`,
-/// `meter`, `analysis` or `shortcuts`), including fields the section does
+/// `meter`, `analysis`, `loudness` or `shortcuts`), including fields the section does
 /// not show, such as `players.history_len`. In Players, the player count is
 /// kept (it adds or removes players, which is the show's layout, not a
 /// preference). The interface language lives in `ui`, which no section
@@ -31,6 +32,7 @@ pub fn restore_defaults(config: &mut Config, section: SettingsSection) {
         }
         SettingsSection::Meters => config.meter = defaults.meter,
         SettingsSection::Analysis => config.analysis = defaults.analysis,
+        SettingsSection::Loudness => config.loudness = defaults.loudness,
         SettingsSection::Shortcuts => config.shortcuts = defaults.shortcuts,
     }
 }

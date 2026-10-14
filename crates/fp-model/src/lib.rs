@@ -48,8 +48,8 @@ pub use command::{
 };
 pub use config::{
     AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,
-    DeviceOverride, Limits, LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings,
-    OutputDevice, OutputsConfig, OutputsView, PlayerRoutes, PlayersConfig, Route,
+    DeviceOverride, Limits, LoudnessConfig, LoudnessReadout, MeterBallistics, MeterConfig,
+    MeterSettings, OutputDevice, OutputsConfig, OutputsView, PlayerRoutes, PlayersConfig, Route,
     SAMPLE_RATE_RANGE, Tuning, UiConfig,
 };
 pub use device_offer::{
@@ -68,7 +68,10 @@ pub use live::{
     causes, configured_route, device_causes, device_settings, due, has_output_items, holders,
     interruptions, pending, target_and_wanted,
 };
-pub use loudness::{LOUDNESS_VERSION, LoudnessMeasurement, loudness_unmeasured};
+pub use loudness::{
+    GainLimit, LOUDNESS_VERSION, LoudnessEdit, LoudnessMeasurement, Normalization,
+    NormalizationStatus, holder_bit_perfect, loudness_unmeasured, normalization, normalization_for,
+};
 pub use midi::{MidiAction, MidiBinding, MidiConfig, MidiDevice, MidiTrigger};
 pub use on_air::{OnAir, on_air};
 pub use player::{ColumnWidths, CueState, PlayMode, PlayerState, Transport};

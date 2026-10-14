@@ -95,10 +95,13 @@ impl CartPage {
 }
 
 /// A cart that is on air.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PlayingCart {
     pub cart: CartId,
     pub looped: bool,
+    /// The cart's normalization, fixed while it sounds (loudness
+    /// normalization spec N11); runtime only.
+    pub normalization: crate::loudness::Normalization,
 }
 
 /// A cart page read from a file, before its files become library tracks.
@@ -118,6 +121,8 @@ pub struct Cartwall {
     pub playing: Vec<PlayingCart>,
     /// The cart pre-listening on the cartwall Cue route (C9).
     pub cue: Option<CartId>,
+    /// The pre-listen's normalization (N11); runtime only.
+    pub cue_normalization: Option<crate::loudness::Normalization>,
     /// The page on screen (`None`: the first one). Shortcuts that fire
     /// "cart n" use it.
     pub shown: Option<CartPageId>,
@@ -131,6 +136,7 @@ impl Default for Cartwall {
             pages: Vec::new(),
             playing: Vec::new(),
             cue: None,
+            cue_normalization: None,
             shown: None,
             open: true,
         }

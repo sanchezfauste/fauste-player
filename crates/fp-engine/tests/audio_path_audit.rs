@@ -107,6 +107,7 @@ fn request(name: &str, entry: u64, from_secs: f64) -> SourceRequest {
         path: PathBuf::from(name),
         from_secs,
         format: None,
+        normalization: fp_model::Normalization::default(),
     }
 }
 
@@ -433,6 +434,7 @@ fn a1_a_cart_inside_the_file_ramps_in_and_one_at_the_start_does_not() {
                 until_secs: 5.0,
                 looped: false,
                 format: None,
+                normalization: fp_model::Normalization::default(),
             }),
             clock,
         );
@@ -587,6 +589,7 @@ fn a3_a_cart_ends_at_its_cue_out_without_a_step() {
             until_secs: 0.5,
             looped: false,
             format: None,
+            normalization: fp_model::Normalization::default(),
         }),
         clock,
     );

@@ -30,6 +30,9 @@ pub struct Config {
     pub midi: crate::midi::MidiConfig,
     /// Remote control over the network (remote control spec).
     pub remote: crate::remote::RemoteConfig,
+    /// Loudness normalization (loudness normalization spec §4). Changes
+    /// apply to sources loaded afterwards (N3).
+    pub loudness: LoudnessConfig,
 }
 
 impl Default for Config {
@@ -46,6 +49,7 @@ impl Default for Config {
             meter: MeterConfig::default(),
             midi: crate::midi::MidiConfig::default(),
             remote: crate::remote::RemoteConfig::default(),
+            loudness: LoudnessConfig::default(),
         }
     }
 }
@@ -205,6 +209,89 @@ impl Default for MeterConfig {
             loudness: LoudnessReadout::ShortTerm,
             loudness_target_lufs: -23.0,
         }
+    }
+}
+
+/// Loudness normalization (loudness normalization spec §4): one fixed gain
+/// per track, decided when it is loaded.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LoudnessConfig {
+    /// Normalization on or off. Off by default: an upgrade changes nothing
+    /// on air until the operator turns it on (D11).
+    pub normalize: bool,
+    /// Integrated loudness every track is brought to, LUFS (−36 ..= −6).
+    pub target_lufs: f32,
+    /// A boost may not take the measured true peak above this, dBTP
+    /// (−12 ..= 0); it never cuts a track (N7).
+    pub true_peak_ceiling_dbtp: f32,
+    /// The largest gain normalization may give, dB (0 ..= 24); cuts are
+    /// not limited.
+    pub max_boost_db: f32,
+    /// The per-track trim is limited to ± this, dB (0 ..= 24).
+    pub max_trim_db: f32,
+}
+
+impl Default for LoudnessConfig {
+    fn default() -> Self {
+        Self {
+            normalize: false,
+            target_lufs: -16.0,
+            true_peak_ceiling_dbtp: -1.0,
+            max_boost_db: 12.0,
+            max_trim_db: 12.0,
+        }
+    }
+}
+
+impl LoudnessConfig {
+    /// N1: every value into its range; one that is not finite takes its
+    /// default.
+    fn validate(&mut self, w: &mut Vec<ConfigWarning>) {
+        let d = Self::default();
+        clamp_finite(
+            &mut self.target_lufs,
+            (-36.0, -6.0, d.target_lufs),
+            "loudness.target_lufs",
+            w,
+        );
+        clamp_finite(
+            &mut self.true_peak_ceiling_dbtp,
+            (-12.0, 0.0, d.true_peak_ceiling_dbtp),
+            "loudness.true_peak_ceiling_dbtp",
+            w,
+        );
+        clamp_finite(
+            &mut self.max_boost_db,
+            (0.0, 24.0, d.max_boost_db),
+            "loudness.max_boost_db",
+            w,
+        );
+        clamp_finite(
+            &mut self.max_trim_db,
+            (0.0, 24.0, d.max_trim_db),
+            "loudness.max_trim_db",
+            w,
+        );
+    }
+}
+
+/// `clamp_to` into `min..=max`, except that a value that is not finite
+/// takes `default`.
+fn clamp_finite(
+    value: &mut f32,
+    (min, max, default): (f32, f32, f32),
+    field: &'static str,
+    out: &mut Vec<ConfigWarning>,
+) {
+    if value.is_finite() {
+        clamp_to(value, min, max, field, out);
+    } else {
+        out.push(ConfigWarning {
+            field,
+            message: format!("{value} is not a number; using {default}"),
+        });
+        *value = default;
     }
 }
 
@@ -1240,6 +1327,7 @@ impl Config {
         );
         self.midi.validate(&mut w);
         self.remote.validate(&mut w);
+        self.loudness.validate(&mut w);
 
         w
     }

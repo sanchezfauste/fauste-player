@@ -32,6 +32,7 @@ fn playing_carts_are_on_air_after_the_players() {
     s.cartwall.playing.push(PlayingCart {
         cart,
         looped: false,
+        normalization: fp_model::Normalization::default(),
     });
     apply(&mut s, Command::Play(p)).unwrap();
     let entry = s.players[0].current;

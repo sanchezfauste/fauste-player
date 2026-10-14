@@ -90,6 +90,7 @@ fn request(n: u64, path: PathBuf, format: Option<AudioFormat>) -> SourceRequest 
         path,
         from_secs: 0.0,
         format,
+        normalization: fp_model::Normalization::default(),
     }
 }
 
@@ -293,6 +294,7 @@ fn an_overlapping_source_is_not_bit_perfect() {
         until_secs: f64::INFINITY,
         looped: false,
         format: pcm16(48_000),
+        normalization: fp_model::Normalization::default(),
     }));
     r.settle();
     assert!(!bit_perfect_after(&mut r, 2_400), "a cart plays over it");
@@ -530,6 +532,7 @@ fn jingle(r: &Rig) -> EngineAction {
         until_secs: f64::INFINITY,
         looped: false,
         format: pcm16(44_100),
+        normalization: fp_model::Normalization::default(),
     })
 }
 

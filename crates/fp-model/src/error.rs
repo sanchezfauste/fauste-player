@@ -29,6 +29,8 @@ pub enum ModelError {
     UnknownTrack(TrackId),
     #[error("the marker would put cue-in at or after cue-out")]
     InvalidMarker,
+    #[error("the loudness trim must be a number within the maximum trim")]
+    InvalidTrim,
     #[error("unknown cart {0:?}")]
     UnknownCart(CartId),
     #[error("unknown cart page {0:?}")]

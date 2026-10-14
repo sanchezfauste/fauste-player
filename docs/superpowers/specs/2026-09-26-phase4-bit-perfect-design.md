@@ -26,6 +26,8 @@
 
   *The fader of a bit-perfect player is now held at 100 % ([bit-perfect rate and fader spec](2026-10-08-bit-perfect-rate-and-fader-design.md) BF1–BF3), so the volume can no longer alter such a source.*
 
+  *Loudness normalization is off on a bit-perfect device ([loudness normalization spec](2026-10-08-loudness-normalization-design.md) N7, N8): such a source gets no gain.*
+
 ## B2. File format
 
 - **Analysis records the format:** `TrackAnalysis` gains `format: Option<AudioFormat>`, holding:

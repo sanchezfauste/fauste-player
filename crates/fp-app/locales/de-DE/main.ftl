@@ -188,6 +188,7 @@ error-last-cart-page = Die letzte Cart-Seite kann nicht gelöscht werden.
 error-carts-would-be-lost = Das kleinere Raster würde Carts mit Datei verwerfen. Zuerst leeren.
 error-cart-grid = Diese Rastergröße liegt außerhalb des erlaubten Bereichs.
 error-invalid-marker = Cue-in muss vor Cue-out liegen.
+error-invalid-trim = Die Pegelanpassung überschreitet das erlaubte Maximum.
 cartwall-title = CARTWALL
 cartwall-hint = Klicken zum Starten · erneut klicken zum Stoppen
 cartwall-stop-all = Alle stoppen

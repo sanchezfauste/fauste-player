@@ -31,10 +31,12 @@ pub fn availability(state: &AppState, player: PlayerId) -> Availability {
     };
     let playing = p.transport == Transport::Playing;
     let paused = p.transport == Transport::Paused;
-    let has_previous = p
-        .history
-        .iter()
-        .any(|e| Some(*e) != p.current && state.playable_request(*e).is_some());
+    let has_previous = p.history.iter().any(|e| {
+        Some(*e) != p.current
+            && state
+                .playable_request(*e, crate::live::Holder::PlayerMain(p.id))
+                .is_some()
+    });
     Availability {
         play: (paused && p.current.is_some()) || (p.next.is_some() && !p.fading),
         pause: (playing && !p.fading) || paused,

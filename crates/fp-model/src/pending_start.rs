@@ -4,6 +4,7 @@
 
 use crate::command::SourceRequest;
 use crate::ids::EntryId;
+use crate::live::Holder;
 use crate::player::{PlayerState, Transport};
 use crate::state::AppState;
 
@@ -15,11 +16,12 @@ pub(crate) fn pending_start_at(
     state: &AppState,
     entry: EntryId,
     secs: f64,
+    holder: Holder,
 ) -> Option<(EntryId, f64)> {
     if !secs.is_finite() {
         return None;
     }
-    state.playable_request(entry)?;
+    state.playable_request(entry, holder)?;
     let track = state.track_for_entry(entry)?;
     let range = track.play_range(state.config.players.use_cue_markers);
     let at = secs.max(range.cue_in);
@@ -39,7 +41,7 @@ pub(crate) fn settle(state: &mut AppState) {
         .map(|p| {
             let (entry, secs) = p.pending_start?;
             if p.transport == Transport::Stopped && p.next == Some(entry) {
-                pending_start_at(state, entry, secs)
+                pending_start_at(state, entry, secs, Holder::PlayerMain(p.id))
             } else {
                 None
             }
@@ -56,26 +58,29 @@ pub(crate) fn start_request(
     state: &AppState,
     pending: Option<(EntryId, f64)>,
     request: SourceRequest,
+    holder: Holder,
 ) -> SourceRequest {
     match pending {
         Some((entry, secs)) if entry == request.entry => {
-            state.request_at(entry, secs).unwrap_or(request)
+            state.request_at(entry, secs, holder).unwrap_or(request)
         }
         _ => request,
     }
 }
 
 /// Q8.7: where the engine preloads `entry` for `player`: at the pending
-/// start while the player is stopped with one for it, else at the cue-in.
+/// start while the player is stopped with one for it, else at the cue-in,
+/// with the normalization of the player's Main (N9).
 pub(crate) fn preload_request(
     state: &AppState,
     player: &PlayerState,
     entry: EntryId,
 ) -> Option<SourceRequest> {
+    let holder = Holder::PlayerMain(player.id);
     match player.pending_start {
         Some((e, secs)) if e == entry && player.transport == Transport::Stopped => {
-            state.request_at(e, secs)
+            state.request_at(e, secs, holder)
         }
-        _ => state.request_from_cue_in(entry),
+        _ => state.request_from_cue_in(entry, holder),
     }
 }

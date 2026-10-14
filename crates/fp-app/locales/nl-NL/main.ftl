@@ -188,6 +188,7 @@ error-last-cart-page = De laatste cartpagina kan niet worden verwijderd.
 error-carts-would-be-lost = Het kleinere raster zou carts met een bestand laten vallen. Maak ze eerst leeg.
 error-cart-grid = Die rastergrootte valt buiten het toegestane bereik.
 error-invalid-marker = Cue-in moet voor cue-out blijven.
+error-invalid-trim = De gain-aanpassing overschrijdt het toegestane maximum.
 cartwall-title = CARTWALL
 cartwall-hint = Klik om te starten · klik opnieuw om te stoppen
 cartwall-stop-all = Alles stoppen

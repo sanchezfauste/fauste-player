@@ -243,6 +243,7 @@ fn put_on_a_playing_cart(state: &mut AppState, track: fp_model::TrackId) {
     state.cartwall.playing.push(fp_model::PlayingCart {
         cart,
         looped: false,
+        normalization: fp_model::Normalization::default(),
     });
 }
 
