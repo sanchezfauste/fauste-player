@@ -308,6 +308,12 @@ pub enum Edit {
         secs: Option<f64>,
     },
     ResetMarkers(TrackId),
+    /// Loudness normalization spec N24: exclude the track or trim it.
+    SetTrackLoudness {
+        track: TrackId,
+        excluded: bool,
+        trim_db: f32,
+    },
 }
 
 /// The commands for `edit` in `state`, already known to be accepted by it.
@@ -468,6 +474,19 @@ fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError>
         Edit::ResetMarkers(t) => {
             track(t)?;
             vec![Command::ResetMarkers { track: t }]
+        }
+        Edit::SetTrackLoudness {
+            track: t,
+            excluded,
+            trim_db,
+        } => {
+            track(t)?;
+            // The model refuses a trim out of range with its reason (N24).
+            vec![Command::SetTrackLoudness {
+                track: t,
+                excluded,
+                trim_db,
+            }]
         }
     })
 }

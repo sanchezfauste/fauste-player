@@ -146,6 +146,7 @@ pub fn router(ctx: Ctx) -> Router {
         .route("/cartwall/pages/{id}/carts/{index}", put(h::set_cart))
         .route("/tracks/{id}/markers/{kind}", put(h::set_marker))
         .route("/tracks/{id}/markers/reset", post(h::reset_markers))
+        .route("/tracks/{id}/loudness", put(h::set_loudness))
         .route("/entries/{id}/repeat", put(h::entry_repeat))
         .route("/entries/{id}/stop-after", put(h::entry_stop_after))
         .route("/tracks/{id}", get(h::track))

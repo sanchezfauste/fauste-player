@@ -376,6 +376,13 @@ pub struct MarkerBody {
     secs: Option<f64>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LoudnessBody {
+    excluded: bool,
+    trim_db: f32,
+}
+
 pub async fn create_playlist(State(ctx): State<Ctx>, JsonBody(b): JsonBody<Name>) -> Reply {
     run_edit(&ctx, Edit::CreatePlaylist(b.name))
 }
@@ -490,6 +497,20 @@ pub async fn set_marker(
             track: TrackId(id(&raw)?),
             kind,
             secs: b.secs,
+        },
+    )
+}
+pub async fn set_loudness(
+    State(ctx): State<Ctx>,
+    Path(raw): Path<String>,
+    JsonBody(b): JsonBody<LoudnessBody>,
+) -> Reply {
+    run_edit(
+        &ctx,
+        Edit::SetTrackLoudness {
+            track: TrackId(id(&raw)?),
+            excluded: b.excluded,
+            trim_db: b.trim_db,
         },
     )
 }

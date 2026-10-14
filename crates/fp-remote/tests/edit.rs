@@ -389,6 +389,11 @@ async fn every_editing_route_answers() {
             Some(json!({"secs": null})),
         ),
         ("POST", format!("/api/v1/tracks/{t}/markers/reset"), None),
+        (
+            "PUT",
+            format!("/api/v1/tracks/{t}/loudness"),
+            Some(json!({"excluded": true, "trim_db": 1.5})),
+        ),
         ("DELETE", format!("/api/v1/playlists/{night}"), None),
     ];
     for (method, uri, body) in accepted {
@@ -458,4 +463,95 @@ async fn a_page_edit_is_queued_whole_or_not_at_all() {
         StatusCode::SERVICE_UNAVAILABLE
     );
     assert!(fake.take_sent().is_empty());
+}
+
+#[test]
+fn n24_the_loudness_edit_is_planned_and_refused_out_of_range() {
+    let s = demo_state();
+    let t = s.playlists.iter().next().unwrap().entries[0].track;
+    assert_eq!(
+        plan_edit(
+            &s,
+            Edit::SetTrackLoudness {
+                track: t,
+                excluded: true,
+                trim_db: -3.0
+            }
+        )
+        .unwrap(),
+        vec![Command::SetTrackLoudness {
+            track: t,
+            excluded: true,
+            trim_db: -3.0
+        }]
+    );
+    let refused = plan_edit(
+        &s,
+        Edit::SetTrackLoudness {
+            track: t,
+            excluded: false,
+            trim_db: 40.0,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(refused.status(), 409);
+    assert!(refused.message().contains("trim"), "{}", refused.message());
+    assert_eq!(
+        plan_edit(
+            &s,
+            Edit::SetTrackLoudness {
+                track: TrackId(9_999),
+                excluded: false,
+                trim_db: 0.0
+            }
+        )
+        .unwrap_err(),
+        ApiError::NotFound
+    );
+}
+
+#[tokio::test]
+async fn n24_the_loudness_endpoint_refuses_bad_bodies() {
+    let s = demo_state();
+    let t = s.playlists.iter().next().unwrap().entries[0].track.0;
+    let fake = FakeControl::new(s);
+    for body in [
+        json!({"excluded": true}),
+        json!({"excluded": "yes", "trim_db": 0.0}),
+        json!({"excluded": false, "trim_db": "1"}),
+        json!({"excluded": false, "trim_db": 0.0, "gain": 3}),
+    ] {
+        assert_eq!(
+            call(
+                &fake,
+                "PUT",
+                &format!("/api/v1/tracks/{t}/loudness"),
+                Some(body.clone())
+            )
+            .await,
+            StatusCode::BAD_REQUEST,
+            "{body}"
+        );
+    }
+    assert_eq!(
+        call(
+            &fake,
+            "PUT",
+            &format!("/api/v1/tracks/{t}/loudness"),
+            Some(json!({"excluded": false, "trim_db": 99.0}))
+        )
+        .await,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        call(
+            &fake,
+            "PUT",
+            "/api/v1/tracks/99999/loudness",
+            Some(json!({"excluded": false, "trim_db": 0.0}))
+        )
+        .await,
+        StatusCode::NOT_FOUND
+    );
+    assert!(fake.take_sent().is_empty(), "nothing refused was sent");
 }

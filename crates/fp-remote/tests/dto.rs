@@ -213,3 +213,147 @@ fn bf13_a_player_says_whether_its_fader_is_locked() {
     let json = serde_json::to_value(&out).unwrap();
     assert_eq!(json["fader_locked"], serde_json::Value::Bool(true));
 }
+
+#[test]
+fn n23_a_track_carries_its_loudness_and_edit() {
+    let mut s = demo_state();
+    let id = s.playlists.iter().next().unwrap().entries[0].track;
+    let fresh = dto::track(&s, id).unwrap();
+    assert_eq!(fresh.loudness, None, "not measured yet");
+    assert_eq!(
+        fresh.loudness_edit,
+        dto::LoudnessEditDto {
+            excluded: false,
+            trim_db: 0.0
+        }
+    );
+    s.library.get_mut(id).unwrap().loudness = Some(fp_model::LoudnessMeasurement {
+        integrated_lufs: Some(-14.5),
+        true_peak_dbtp: -0.5,
+    });
+    fp_model::apply(
+        &mut s,
+        Command::SetTrackLoudness {
+            track: id,
+            excluded: true,
+            trim_db: 1.5,
+        },
+    )
+    .unwrap();
+    let out = dto::track(&s, id).unwrap();
+    assert_eq!(
+        out.loudness,
+        Some(dto::LoudnessDto {
+            integrated_lufs: Some(-14.5),
+            true_peak_dbtp: -0.5
+        })
+    );
+    assert_eq!(
+        out.loudness_edit,
+        dto::LoudnessEditDto {
+            excluded: true,
+            trim_db: 1.5
+        }
+    );
+    let json = serde_json::to_value(&out).unwrap();
+    assert_eq!(json["loudness_edit"]["excluded"], true);
+    assert_eq!(json["loudness"]["integrated_lufs"], -14.5);
+}
+
+#[test]
+fn n23_status_names() {
+    use fp_model::{GainLimit, NormalizationStatus as S};
+    for (status, name) in [
+        (S::Applied { limited: None }, "applied"),
+        (
+            S::Applied {
+                limited: Some(GainLimit::TruePeak),
+            },
+            "limited_true_peak",
+        ),
+        (
+            S::Applied {
+                limited: Some(GainLimit::MaxBoost),
+            },
+            "limited_max_boost",
+        ),
+        (S::Off, "off"),
+        (S::Excluded, "excluded"),
+        (S::NotMeasured, "not_measured"),
+        (S::Silent, "silent"),
+        (S::BitPerfect, "bit_perfect"),
+    ] {
+        assert_eq!(dto::normalization_name(status), name);
+    }
+}
+
+fn normalizing() -> fp_model::AppState {
+    let mut s = demo_state();
+    s.config.loudness.normalize = true;
+    for t in s.library.iter_mut() {
+        t.loudness = Some(fp_model::LoudnessMeasurement {
+            integrated_lufs: Some(-20.0),
+            true_peak_dbtp: -10.0,
+        });
+    }
+    s
+}
+
+#[test]
+fn n23_the_player_reports_the_gain_on_air() {
+    let mut s = normalizing();
+    let p = s.players[0].id;
+    let stopped = dto::player(&s, &Playback::default(), p).unwrap();
+    assert_eq!(stopped.normalization, None);
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    let out = dto::player(&s, &Playback::default(), p).unwrap();
+    assert_eq!(
+        out.normalization,
+        Some(dto::NormalizationDto {
+            gain_db: 4.0,
+            status: "applied"
+        })
+    );
+    let json = serde_json::to_value(&out).unwrap();
+    assert_eq!(json["normalization"]["status"], "applied");
+    fp_model::apply(&mut s, Command::Pause(p)).unwrap();
+    assert!(
+        dto::player(&s, &Playback::default(), p)
+            .unwrap()
+            .normalization
+            .is_some(),
+        "paused keeps it"
+    );
+}
+
+#[test]
+fn n23_a_bit_perfect_player_reports_unity_gain() {
+    let mut s = normalizing();
+    support::lock_first_player(&mut s);
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(
+        dto::player(&s, &Playback::default(), p)
+            .unwrap()
+            .normalization,
+        Some(dto::NormalizationDto {
+            gain_db: 0.0,
+            status: "bit_perfect"
+        })
+    );
+}
+
+#[test]
+fn n23_a_playing_cart_reports_its_gain() {
+    let mut s = normalizing();
+    let cart = s.cartwall.pages[0].carts[0].id;
+    fp_model::apply(&mut s, Command::FireCart(cart)).unwrap();
+    let wall = dto::cartwall(&s, &Playback::default());
+    assert_eq!(
+        wall.playing[0].normalization,
+        dto::NormalizationDto {
+            gain_db: 4.0,
+            status: "applied"
+        }
+    );
+}
