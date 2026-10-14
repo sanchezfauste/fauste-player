@@ -18,7 +18,6 @@ badge-dsd = DSD
 tip-dsd-on = El DSD llega al dispositivo sin cambios
 badge-dsd-hold = Otras silenciadas
 tip-dsd-hold = Suena DSD en esta salida: las demás fuentes dirigidas a ella están silenciadas hasta que acabe la pista.
-tip-volume-dsd = El DSD suena al 100 %. Si mueves el fader, la pista sigue en PCM.
 mode-single = SINGLE
 mode-cont = CONT
 cue = CUE

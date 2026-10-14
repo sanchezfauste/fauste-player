@@ -4,7 +4,7 @@
     clippy::panic,
     clippy::indexing_slicing
 )]
-//! The DSD badge, the "others muted" notice and the fader's tooltip (O25).
+//! The DSD badge and the "others muted" notice (O25).
 
 mod support;
 
@@ -48,16 +48,6 @@ fn the_badge_says_dsd_while_dsd_reaches_the_device() {
             .is_some()
     );
     assert!(h.query_by_label("Bit-perfect: on").is_none());
-}
-
-#[test]
-fn the_fader_says_dsd_plays_at_full_volume() {
-    let (mut h, fake) = harness(state(1, 1));
-    h.run_steps(2);
-    assert!(h.query_by_label_contains("DSD plays at 100 %").is_none());
-    publish(&fake, true, true);
-    h.run_steps(2);
-    assert!(h.query_by_label_contains("DSD plays at 100 %").is_some());
 }
 
 #[test]

@@ -862,7 +862,7 @@ fn the_meter_and_fader_fill_the_height_they_are_given() {
                 &MeterConfig::default(),
                 &labels,
             );
-            fp_app::ui::widgets::fader(ui, 120.0, 0.5, "Volume");
+            fp_app::ui::widgets::fader(ui, 120.0, 0.5, "Volume", true);
         });
     });
     h.run();

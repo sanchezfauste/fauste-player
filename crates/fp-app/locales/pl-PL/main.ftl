@@ -18,7 +18,6 @@ badge-dsd = DSD
 tip-dsd-on = DSD trafia do urządzenia bez zmian
 badge-dsd-hold = Inne wyciszone
 tip-dsd-hold = Na tym wyjściu gra DSD: inne źródła skierowane na nie są wyciszone do końca utworu.
-tip-volume-dsd = DSD gra na 100 %. Poruszenie suwaka sprawia, że utwór gra dalej jako PCM.
 mode-single = SINGLE
 mode-cont = CONT
 cue = CUE

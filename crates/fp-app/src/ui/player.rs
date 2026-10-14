@@ -491,12 +491,21 @@ fn meter_column(
         Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),
         None => t.tr("volume-silent"),
     };
-    let tip = if telemetry.dsd {
-        t.tr("tip-volume-dsd")
+    // BF7: a bit-perfect output holds the volume at 100 %; the fader is
+    // drawn at the top (whatever a state not caught up yet says) and
+    // disabled.
+    let locked = fp_model::fader_locked(scene.state, id);
+    let tip = if locked {
+        t.tr("tip-volume-locked")
     } else {
         t.tr_args("tip-volume", &[("db", db.into())])
     };
-    if let Some(pos) = widgets::fader(ui, height, view::fader_from_gain(volume), &tip) {
+    let position = if locked {
+        1.0
+    } else {
+        view::fader_from_gain(volume)
+    };
+    if let Some(pos) = widgets::fader(ui, height, position, &tip, !locked) {
         scene
             .ctl
             .send(Command::SetVolume(id, view::gain_from_fader(pos)));

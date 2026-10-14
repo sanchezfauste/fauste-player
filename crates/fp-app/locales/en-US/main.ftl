@@ -18,7 +18,6 @@ badge-dsd = DSD
 tip-dsd-on = DSD reaches the device unchanged
 badge-dsd-hold = Others muted
 tip-dsd-hold = DSD plays on this output: other sources routed to it are muted until the track ends.
-tip-volume-dsd = DSD plays at 100 %. Moving the fader continues the track as PCM.
 mode-single = SINGLE
 mode-cont = CONT
 cue = CUE

@@ -18,7 +18,6 @@ badge-dsd = DSD
 tip-dsd-on = DSD bereikt het apparaat ongewijzigd
 badge-dsd-hold = Andere gedempt
 tip-dsd-hold = Op deze uitgang speelt DSD: andere bronnen die ernaartoe gaan, zijn gedempt tot het nummer afgelopen is.
-tip-volume-dsd = DSD speelt op 100 %. Verschuif je de fader, dan gaat het nummer verder als PCM.
 mode-single = SINGLE
 mode-cont = CONT
 cue = CUE

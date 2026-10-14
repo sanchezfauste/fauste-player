@@ -18,7 +18,6 @@ badge-dsd = DSD
 tip-dsd-on = Le DSD arrive intact au périphérique
 badge-dsd-hold = Autres coupées
 tip-dsd-hold = Du DSD est diffusé sur cette sortie : les autres sources qui y sont routées restent coupées jusqu'à la fin de la piste.
-tip-volume-dsd = Le DSD est diffusé à 100 %. Bouger le fader poursuit la piste en PCM.
 mode-single = SINGLE
 mode-cont = CONT
 cue = CUE

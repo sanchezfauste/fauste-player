@@ -1247,20 +1247,28 @@ pub const FADER_WIDTH: f32 = 22.0;
 /// Fader travel moved by one mouse-wheel event (3 dB near the top).
 const FADER_WHEEL_STEP: f32 = 0.05;
 
-/// Vertical volume fader (drag or wheel). Returns the new fader position
-/// (0 bottom … 1 top) when the user moved it.
-pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str) -> Option<f32> {
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(FADER_WIDTH, height), Sense::click_and_drag());
+/// Vertical volume fader (drag or wheel); `position` is its travel (0
+/// bottom … 1 top). Returns the new position when the user moved it. A
+/// fader that is not `enabled` (a bit-perfect output holds the volume at 100 %,
+/// bit-perfect rate and fader spec BF7) is drawn greyed and takes no drag,
+/// click or wheel.
+pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool) -> Option<f32> {
+    let sense = if enabled {
+        Sense::click_and_drag()
+    } else {
+        Sense::hover()
+    };
+    let (rect, response) = ui.allocate_exact_size(vec2(FADER_WIDTH, height), sense);
     let owned = label.to_owned();
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Slider, true, owned.clone()));
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Slider, enabled, owned.clone()));
     let mut changed = None;
-    if (response.dragged() || response.clicked())
+    if enabled
+        && (response.dragged() || response.clicked())
         && let Some(p) = response.interact_pointer_pos()
     {
         changed = Some((1.0 - (p.y - rect.top()) / rect.height()).clamp(0.0, 1.0));
     }
-    if response.hovered() {
+    if enabled && response.hovered() {
         // One fixed step per wheel event: the smoothed scroll delta spreads a
         // notch over many frames and would add up to a huge jump.
         let steps: f32 = ui.input(|i| {
@@ -1289,13 +1297,18 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str) -> Option<f32
             pos2(track.left(), track.bottom() - shown * rect.height()),
             track.right_bottom(),
         );
-        painter.rect_filled(level, 0.0, theme::NEUTRAL_300);
+        let (level_colour, knob_colour) = if enabled {
+            (theme::NEUTRAL_300, theme::NEUTRAL_100)
+        } else {
+            (theme::NEUTRAL_600, theme::NEUTRAL_600)
+        };
+        painter.rect_filled(level, 0.0, level_colour);
         let knob_bottom = rect.bottom() - shown * (rect.height() - 6.0);
         let knob = Rect::from_min_max(
             pos2(rect.left() + 1.0, knob_bottom - 6.0),
             pos2(rect.right() - 1.0, knob_bottom),
         );
-        painter.rect_filled(knob, 0.0, theme::NEUTRAL_100);
+        painter.rect_filled(knob, 0.0, knob_colour);
         painter.rect_stroke(
             knob,
             0.0,

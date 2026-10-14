@@ -18,7 +18,6 @@ badge-dsd = DSD
 tip-dsd-on = DSDa aldaketarik gabe iristen da gailura
 badge-dsd-hold = Besteak isilik
 tip-dsd-hold = DSDa entzuten da irteera honetan: hara bideratutako beste iturriak isilarazita daude pista amaitu arte.
-tip-volume-dsd = DSDa % 100ean entzuten da. Faderra mugitzen baduzu, pistak PCM gisa jarraitzen du.
 mode-single = SINGLE
 mode-cont = CONT
 cue = CUE
