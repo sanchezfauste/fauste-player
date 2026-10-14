@@ -121,3 +121,55 @@ fn br15_the_next_tooltip_says_there_is_no_crossfade() {
     );
     assert!(h.query_by_label("Fade into the next track").is_none());
 }
+
+const NOTE: &str = "Players on a bit-perfect output never mix or crossfade";
+
+fn open_players(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>) {
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Players")
+        .click();
+    h.run_steps(2);
+}
+
+#[test]
+fn br15_the_players_note_shows_only_while_a_bit_perfect_player_exists() {
+    let (mut h, _) = harness(state(2, 3));
+    open_players(&mut h);
+    assert!(h.query_by_label_contains(NOTE).is_none());
+    let (mut h, fake) = harness(locked(2));
+    open_players(&mut h);
+    assert!(
+        h.query_by_label_contains(NOTE).is_some(),
+        "P1 is idle but bit-perfect"
+    );
+    // The settings it explains stay editable.
+    assert!(
+        h.query_by_role_and_label(egui::accesskit::Role::Slider, "Fade time")
+            .is_some()
+    );
+    // Bit-perfect turned off for the device.
+    let mut s = (**fake.state.load()).clone();
+    let dac = fp_model::OutputDevice {
+        backend: "null".into(),
+        device: "dac".into(),
+    };
+    s.live.devices.get_mut(&dac).unwrap().bit_perfect = false;
+    fake.state.store(std::sync::Arc::new(s));
+    h.run_steps(2);
+    assert!(h.query_by_label_contains(NOTE).is_none());
+}
+
+#[test]
+fn bf9_the_bit_perfect_hint_says_what_it_costs() {
+    let i18n = fp_app::i18n::I18n::new(Some("en-US"));
+    let hint = i18n.tr("settings-bit-perfect-hint");
+    for phrase in [
+        "A special mode",
+        "never crossfade or mix",
+        "short silence",
+        "held at 100 %",
+    ] {
+        assert!(hint.contains(phrase), "{phrase:?} missing from {hint:?}");
+    }
+}
