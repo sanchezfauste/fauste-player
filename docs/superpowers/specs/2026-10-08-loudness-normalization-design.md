@@ -220,9 +220,11 @@ band) stays a separate value, whatever the normalization target (Q4).
   whose own true peak is already above the ceiling gets no boost (0 dB at
   least when `wanted > 0`) and a negative `wanted` is never reduced
   further. `gain_db` is rounded to 0.01 dB so that equal inputs give equal
-  requests; a gain the ceiling limits (`TruePeak`) rounds down when
-  rounding to the nearest would take it above the ceiling, so the boost
-  never passes `true_peak_ceiling_dbtp`.
+  requests; a boost, whatever limited it, steps down to the hundredth at
+  or below the room the ceiling leaves when rounding to the nearest would
+  take it above that room, so the boost never passes
+  `true_peak_ceiling_dbtp`. Both steps allow 0.00001 dB of f32 noise, so
+  a room exactly on a hundredth keeps it.
 - **N8** `bit_perfect` for a holder is whether the device it plays on is
   bit-perfect: the running settings of its placement
   (`live.devices[live.placement[holder]].bit_perfect`) once the engine has
@@ -252,6 +254,9 @@ band) stays a separate value, whatever the normalization target (Q4).
   }` stores the track's loudness edit. It is refused with
   `ModelError::InvalidTrim` when `trim_db` is not finite or
   `|trim_db| > max_trim_db`, and with `UnknownTrack` for an unknown track.
+  Both N7 and N10 use the same maximum (`max_trim_in_use`): a
+  `max_trim_db` that is not a finite number of at least 0 (a configuration
+  not validated) allows no trim.
   It is allowed while the track plays (it changes what loads afterwards,
   N12).
 - **N11** Fixed while it sounds. `PlayerState` gains, runtime only (never
@@ -446,7 +451,7 @@ sleeps.
 | Layer | Tests |
 |---|---|
 | `fp-model` (`tests/restore.rs`, new `tests/loudness_config.rs`) | N1: each field clamped with a warning, non-finite → default, a file without `loudness` loads the defaults. N2: Restore defaults resets the section only. N3: `UpdateConfig` with loudness changes only emits `Preload`s (no pending item, no `UpdateSettings`). |
-| `fp-model` (new `tests/loudness.rs`) | N7: one test per row of the table, the true-peak and max-boost limits (and the tie), a cut not limited by `max_boost_db` nor by the ceiling (a −18 LUFS track with a +0.5 dBTP peak and target −16 gets +0 dB, a −10 LUFS track with a +0.5 dBTP peak keeps its −6 dB), a boost with a peak above the ceiling gets 0 dB, trim added before the limits, rounding, and a boost the ceiling limits never rounded above it. N8: bit-perfect from placement, from the configured route, default output not bit-perfect. N9: every request kind carries the holder's normalization; CUE and cart pre-listen get the same gain as on air (Q6), except on a bit-perfect Cue device (0 dB while Main gets a gain). N10: refused out of range and non-finite; allowed while playing. N11: an analysis result, a config change and an edit leave `on_air` and the engine untouched while playing; `TransitionStarted` takes the normalization the engine reports, also when a re-preload of the same entry with another gain raced it (fp-engine `tests/engine.rs`: the report carries the started source's gain, and the latest status when a preload was kept for the same gain). N12: each of the four causes re-preloads the next. N13: `LoadPaused` recomputes. |
+| `fp-model` (new `tests/loudness.rs`) | N7: one test per row of the table, the true-peak and max-boost limits (and the tie), a cut not limited by `max_boost_db` nor by the ceiling (a −18 LUFS track with a +0.5 dBTP peak and target −16 gets +0 dB, a −10 LUFS track with a +0.5 dBTP peak keeps its −6 dB), a boost with a peak above the ceiling gets 0 dB, trim added before the limits, rounding, a boost never rounded above the ceiling whatever limited it, and a room on a hundredth kept exactly. N8: bit-perfect from placement, from the configured route, default output not bit-perfect. N9: every request kind carries the holder's normalization; CUE and cart pre-listen get the same gain as on air (Q6), except on a bit-perfect Cue device (0 dB while Main gets a gain). N10: refused out of range and non-finite, and any trim refused under a maximum that is not finite or below 0; allowed while playing. N11: an analysis result, a config change and an edit leave `on_air` and the engine untouched while playing; `TransitionStarted` takes the normalization the engine reports, also when a re-preload of the same entry with another gain raced it (fp-engine `tests/engine.rs`: the report carries the started source's gain, and the latest status when a preload was kept for the same gain). N12: each of the four causes re-preloads the next. N13: `LoadPaused` recomputes. |
 | `fp-model` (`tests/analysis.rs`) | N6: `apply_analysis` stores the measurement and keeps the edit and the markers; a track without a measurement is `NotMeasured`; a loudness-only result changes no marker; `ANALYSIS_VERSION` stays 8 and a v8 entry is not outdated. |
 | `fp-dsp` (`tests/loudness.rs`) | N4: EBU Tech 3341 / 3342 cases that apply to a file measurement (1 kHz sine at −23 dBFS reads −23.0 LUFS ±0.1 at 44.1 and 48 kHz; the gating cases); true peak of the BS.1770 test signals; the moved K-weighting keeps its existing tests. N5: silence → `None`; a 200 ms file is not measured (`None`, no warning); non-finite input does not panic. |
 | `fp-analysis` (`tests/analyze.rs`, new `tests/loudness_pass.rs`) | N4–N6: a generated WAV gets a measurement; a cache entry round-trips `loudness` and `loudness_pass`; an old entry without them decodes; a file truncated mid-stream is measured up to the damage. N6b: the pass fills the existing entry in place and leaves markers byte-identical; it runs only when the normal queue is empty and yields to a new normal job; a short file or a failure is recorded and not retried; a `LOUDNESS_VERSION` bump re-queues; it runs with `normalize` off. |

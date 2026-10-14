@@ -363,8 +363,8 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             excluded,
             trim_db,
         } => {
-            // A maximum that is not a number allows no trim.
-            let max = state.config.loudness.max_trim_db.max(0.0);
+            // The same maximum the gain rule uses (N7).
+            let max = crate::loudness::max_trim_in_use(&state.config.loudness);
             let t = state
                 .library
                 .get_mut(track)
