@@ -188,6 +188,7 @@ error-last-cart-page = No se puede eliminar la última página de cartuchos.
 error-carts-would-be-lost = La rejilla más pequeña quitaría cartuchos con archivo. Vacíalos primero.
 error-cart-grid = Ese tamaño de rejilla está fuera del rango permitido.
 error-invalid-marker = El inicio debe quedar antes del final.
+error-invalid-trim = El ajuste de ganancia supera el máximo permitido.
 cartwall-title = CARTUCHERA
 cartwall-hint = Clic para disparar · otro clic para parar
 cartwall-stop-all = Parar todo

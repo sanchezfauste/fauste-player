@@ -7,12 +7,12 @@ mod common;
 
 use std::path::PathBuf;
 
-use common::{fixture, p0, place_on_dac};
+use common::{entries, fixture, p0, place_on_dac};
 use fp_model::{
     AppState, Command, DeviceSettings, EngineAction, EngineEvent, GainLimit, Holder,
-    LoudnessConfig, LoudnessMeasurement, Normalization, NormalizationStatus as S, OutputDevice,
-    Route, Track, TrackId, apply, bit_perfect_player, device_settings, holder_bit_perfect,
-    normalization, normalization_for, on_event,
+    LoudnessConfig, LoudnessEdit, LoudnessMeasurement, ModelError, Normalization,
+    NormalizationStatus as S, OutputDevice, Route, Track, TrackId, apply, bit_perfect_player,
+    device_settings, holder_bit_perfect, normalization, normalization_for, on_event,
 };
 
 fn on() -> LoudnessConfig {
@@ -415,4 +415,114 @@ fn n9_with_normalization_off_every_request_is_at_0_db() {
     let p = p0(&s);
     let start = apply(&mut s, Command::Play(p)).unwrap();
     assert!(request_gain(&start).iter().all(|(_, g)| *g == 0.0));
+}
+
+#[test]
+fn n10_the_edit_is_stored_with_the_track() {
+    let mut s = normalizing(1);
+    let track = s.library.iter().next().unwrap().id;
+    apply(
+        &mut s,
+        Command::SetTrackLoudness {
+            track,
+            excluded: true,
+            trim_db: -2.5,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        s.library.get(track).unwrap().loudness_edit,
+        LoudnessEdit {
+            excluded: true,
+            trim_db: -2.5
+        }
+    );
+}
+
+#[test]
+fn n10_a_trim_out_of_range_or_not_a_number_is_refused() {
+    let mut s = normalizing(1);
+    let track = s.library.iter().next().unwrap().id;
+    for trim_db in [12.5, -12.5, f32::NAN, f32::INFINITY] {
+        let before = s.clone();
+        assert_eq!(
+            apply(
+                &mut s,
+                Command::SetTrackLoudness {
+                    track,
+                    excluded: false,
+                    trim_db
+                }
+            ),
+            Err(ModelError::InvalidTrim),
+            "{trim_db}"
+        );
+        assert_eq!(s, before, "a refused command changes nothing");
+    }
+    // The limits themselves are allowed.
+    apply(
+        &mut s,
+        Command::SetTrackLoudness {
+            track,
+            excluded: false,
+            trim_db: 12.0,
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn n10_an_unknown_track_is_refused() {
+    let mut s = normalizing(1);
+    assert_eq!(
+        apply(
+            &mut s,
+            Command::SetTrackLoudness {
+                track: TrackId(999),
+                excluded: true,
+                trim_db: 0.0
+            }
+        ),
+        Err(ModelError::UnknownTrack(TrackId(999)))
+    );
+}
+
+#[test]
+fn n10_the_track_on_air_can_be_edited() {
+    let mut s = normalizing(2);
+    let p = p0(&s);
+    apply(&mut s, Command::Play(p)).unwrap();
+    let track = s.playlists.entry(entries(&s)[0]).unwrap().track;
+    assert!(
+        apply(
+            &mut s,
+            Command::SetTrackLoudness {
+                track,
+                excluded: true,
+                trim_db: 0.0
+            }
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn n10_the_edit_survives_a_library_round_trip() {
+    let mut s = normalizing(1);
+    let track = s.library.iter().next().unwrap().id;
+    apply(
+        &mut s,
+        Command::SetTrackLoudness {
+            track,
+            excluded: true,
+            trim_db: 1.5,
+        },
+    )
+    .unwrap();
+    let json = serde_json::to_string(&s.library).unwrap();
+    let back: fp_model::Library = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+        back.get(track).unwrap().loudness_edit,
+        s.library.get(track).unwrap().loudness_edit
+    );
 }

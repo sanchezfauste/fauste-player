@@ -195,6 +195,14 @@ pub enum Command {
     ResetMarkers {
         track: TrackId,
     },
+    /// Loudness normalization spec N10: excludes a track from
+    /// normalization or trims its gain. Allowed while it plays: it changes
+    /// what loads afterwards.
+    SetTrackLoudness {
+        track: TrackId,
+        excluded: bool,
+        trim_db: f32,
+    },
     /// Binds `chord` to `action` (taking it from any other action), or with
     /// `None` unbinds the action.
     SetShortcut {

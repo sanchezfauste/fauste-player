@@ -358,6 +358,22 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             t.analyzed = false;
             refresh_next(state);
         }
+        Command::SetTrackLoudness {
+            track,
+            excluded,
+            trim_db,
+        } => {
+            // A maximum that is not a number allows no trim.
+            let max = state.config.loudness.max_trim_db.max(0.0);
+            let t = state
+                .library
+                .get_mut(track)
+                .ok_or(ModelError::UnknownTrack(track))?;
+            if !trim_db.is_finite() || trim_db.abs() > max {
+                return Err(ModelError::InvalidTrim);
+            }
+            t.loudness_edit = crate::loudness::LoudnessEdit { excluded, trim_db };
+        }
     }
     fill_empty_next(state);
     reconcile(state, &mut out);
