@@ -430,7 +430,7 @@ sounding bus (BR11). Every reopen runs on the conductor thread through
 | `MixerRenderer::render` (`mixer.rs:777-790`) | none | `try_lock` only; on contention it outputs silence and counts a miss | none | a poisoned lock is recovered |
 | `Mixer::render`, `apply` (`mixer.rs:318-508`) | none: memory leaves through `Retired` (`mixer.rs:300-312`), a full queue leaks and counts instead of freeing | none | none | `get`/`get_mut`; subtractions guarded (`mixer.rs:646`, `650-662`) |
 | `render_slot`, `finish`, `mark_unaltered`, `MeterMode` (`mixer.rs:522-767`) | none (a stack chunk, `mixer.rs:634`) | none | none | `get`, `as_chunks` |
-| `TruePeak::push`, `KWeighting::process` (`truepeak.rs:39-62`, `kweight.rs:58-96`) | fixed arrays | none | none | `get` |
+| `TruePeak::push`, `KWeighting::process` (`crates/fp-dsp/src/truepeak.rs:39-62`, `crates/fp-dsp/src/kweight.rs:58-96`) | fixed arrays | none | none | `get` |
 | `BusShared::report` (error callback, `mixer.rs:187-196`) | none | none | none | none |
 | WASAPI exclusive render loop (`wasapi_exclusive.rs:174-203`) | buffers allocated before the loop (`wasapi_exclusive.rs:153-155`) | none of ours | the device calls themselves | `get_mut` |
 | `write_samples` (`exclusive.rs:21-45`) | none | none | none | `as_chunks_mut` |
@@ -460,7 +460,7 @@ Verdict: **no change needed** (A22).
 sources on air, current and fading out, after their gain
 (`take_meter_input`, `engine.rs:440-473`; the samples are measured after
 `l * g` at `mixer.rs:689-704`). It reads the sample peak, or the true peak
-when it is on (`mixer.rs:693-697`, `truepeak.rs:36-62`). It never measures
+when it is on (`mixer.rs:693-697`, `crates/fp-dsp/src/truepeak.rs:36-62`). It never measures
 the device's sum: probe `the_meter_is_per_player_and_never_sees_the_device_sum`
 (two sources at 0.7 on one output: each reads −3.1 dBFS, the device gets
 +2.9 dBFS). The pre-listen is taken and dropped (`engine.rs:447-449`).
@@ -476,7 +476,7 @@ the device's sum: probe `the_meter_is_per_player_and_never_sees_the_device_sum`
    `resampling_creates_inter_sample_overs` (a sine whose samples are all at
    0 dBFS reads +3.01 dBFS after 44.1 → 48 kHz).
 3. True-peak mode reads the peaks between samples, up to about 3 dB above
-   the sample peak: `tests/metering.rs`
+   the sample peak: `crates/fp-dsp/tests/filters.rs`
    `true_peak_meets_ebu_tech_3341_cases_15_to_19` (case 19: samples at
    0 dBFS read +3 dBTP).
 4. The downmix of a 3.0 or 3.1 file (§3.1): probe

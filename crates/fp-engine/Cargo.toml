@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 fp-model.workspace = true
+fp-dsp.workspace = true
 fp-backends.workspace = true
 fp-decode.workspace = true
 thiserror.workspace = true

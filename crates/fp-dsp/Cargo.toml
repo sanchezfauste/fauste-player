@@ -1,0 +1,12 @@
+[package]
+name = "fp-dsp"
+description = "Signal processing shared by the engine and the analysis: K-weighting, true peak, BS.1770 loudness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

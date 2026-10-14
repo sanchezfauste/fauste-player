@@ -22,7 +22,7 @@
 | `test`, `ci`, `style`, `chore` | tests, CI, formatting, maintenance | hidden |
 
 Scopes are crate or area names: `model`, `store`, `engine`, `backends`,
-`decode`, `analysis`, `app`, `ui`, `ci`, `docs`. A breaking change adds `!`
+`decode`, `dsp`, `analysis`, `app`, `ui`, `ci`, `docs`. A breaking change adds `!`
 after the type or scope, or a `BREAKING CHANGE:` footer.
 
 Enable the local hook once per clone:

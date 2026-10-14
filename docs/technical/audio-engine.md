@@ -68,15 +68,16 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   without allocating.
   - The peak: the sample peak, or with `BusShared::true_peak` the largest
     of the four phases of the ITU-R BS.1770-5 Annex 2 interpolator
-    (`truepeak.rs`, the published coefficients).
+    (`truepeak.rs` in [`fp-dsp`](dsp.md), the published coefficients).
   - For programme meters, the peak goes through a two-stage rectifier
     integrator (`BusShared::ppm_tau1_ms`/`ppm_tau2_ms`, fall
     `fall_db_per_sec`), fitted so that 5 kHz bursts meet EBU Tech 3205
     table 2.
   - Sums of squares, rectified sums (for the VU), and K-weighted sums of
-    squares (`kweight.rs`, the ITU-R BS.1770 filters derived for the bus
-    rate, `BusShared::sample_rate`). Filter states are flushed below
-    1e-20, so silence never runs on subnormal numbers.
+    squares (`kweight.rs` in [`fp-dsp`](dsp.md), the ITU-R BS.1770
+    filters derived for the bus rate, `BusShared::sample_rate`). Filter
+    states are flushed below 1e-20, so silence never runs on subnormal
+    numbers.
   - All of it accumulates in `SourceShared` atomics.
 - **The conductor meters.**
   - Every tick, `Engine::take_meter_input` takes a player's measurement
@@ -139,7 +140,8 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   3 px gap to the ticks. Nothing is drawn over the bars or between them.
   The tick colours are the
   `METER_TICK*` and `METER_ALIGNMENT_TICK` constants in `ui/theme.rs`.
-- **Tests** (`tests/metering.rs`, `tests/mixer.rs`):
+- **Tests** (`tests/metering.rs`, `tests/mixer.rs`, and
+  `crates/fp-dsp/tests/filters.rs` for the filters):
   - the BS.1770 coefficients and the 1 kHz gain at every rate;
   - EBU Tech 3341 cases 1, 2, 9, 11, 12 and 14 (loudness) and 15–23
     (true peak);

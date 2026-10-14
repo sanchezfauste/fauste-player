@@ -55,6 +55,7 @@ struct State {
 }
 
 impl State {
+    #[inline]
     fn process(&mut self, f: &Biquad, x: f64) -> f64 {
         let mut y = f.b0 * x + f.b1 * self.x1 + f.b2 * self.x2 - f.a1 * self.y1 - f.a2 * self.y2;
         // During silence the recursion decays into subnormal numbers, slow
@@ -90,6 +91,7 @@ impl KWeighting {
         }
     }
 
+    #[inline]
     pub fn process(&mut self, x: f64) -> f64 {
         let y = self.s1.process(&self.shelf, x);
         self.s2.process(&self.highpass, y)

@@ -9,12 +9,12 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use fp_backends::{Renderer, StreamErrorKind, StreamErrorSink};
 
 use fp_backends::dsd::{DopEncoder, silence_sample};
+use fp_dsp::kweight::KWeighting;
+use fp_dsp::truepeak::TruePeak;
 
 use crate::atomic::AtomicF32;
-use crate::kweight::KWeighting;
 use crate::ramp::{Curve, Ramp};
 use crate::source::{SOURCE_CHANNELS, SourceConsumer};
-use crate::truepeak::TruePeak;
 
 /// Switches the mixer keeps pending (no allocation on the render thread).
 const PENDING_DSD: usize = 4;

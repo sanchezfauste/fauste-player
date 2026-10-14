@@ -7,8 +7,9 @@
 | `fp-model` | Domain types and the **pure** state machine: player rules (spec §3, with the bit-perfect players' hard transitions and locked fader in `bit_perfect`), cartwall rules (Phase 2 spec P2.3), markers, shortcuts. Commands in, new state and `EngineAction`s out. No I/O, no threads. | — |
 | `fp-store` | Crash-safe persistence: atomic writes, rotating backups, quarantine of corrupt files, versioned JSON documents and migrations, lenient config loading; M3U/M3U8/PLS and cart page files | `fp-model` |
 | `fp-decode` | File decoding to interleaved stereo `f32` (downmix per ITU-R BS.775): symphonia, plus DSD, WavPack, Monkey's Audio and Opus backends ([Decoding](decoding.md)) | — |
+| `fp-dsp` | Signal processing shared by the level meters and the analysis: the ITU-R BS.1770 K-weighting, the true-peak interpolator and the gated integrated-loudness meter ([Shared signal processing](dsp.md)). No I/O, no threads. | — |
 | `fp-backends` | The `AudioBackend` trait; `CpalBackend` (ALSA, WASAPI shared, Core Audio), `NullBackend`, `OfflineBackend` | — |
-| `fp-engine` | Real-time mixer, buses with watchdog and virtual clock, per-player decode workers, resampling, the `Engine` and the `Conductor` thread | `fp-model`, `fp-backends`, `fp-decode` |
+| `fp-engine` | Real-time mixer, buses with watchdog and virtual clock, per-player decode workers, resampling, the `Engine` and the `Conductor` thread | `fp-model`, `fp-backends`, `fp-decode`, `fp-dsp` |
 | `fp-analysis` | Tags and covers (lofty, image), waveform peaks, automatic markers, the analysis cache and the background pool | `fp-model`, `fp-decode` |
 | `fp-control` | Control surfaces: MIDI parsing, bindings to commands (edge detection, soft takeover, availability), LED feedback, learn, and the MIDI service thread over `midir` (ALSA, CoreMIDI, WinMM) | `fp-model` |
 | `fp-remote` | Remote control over the network: the HTTP/JSON API with SSE events (axum on a tokio current-thread runtime), OSC over UDP (rosc), the security guard and the remote thread; reaches the application through the `RemoteControl` trait ([Remote control API](remote-api.md)) | `fp-model` |
@@ -16,7 +17,8 @@
 
 ```
 fp-app ──► fp-engine ──► fp-backends
-   │            │  └────► fp-decode
+   │            │  ├────► fp-decode
+   │            │  └────► fp-dsp
    │            └───────► fp-model
    ├──► fp-analysis ──► fp-decode, fp-model
    ├──► fp-control ───► fp-model
@@ -25,7 +27,7 @@ fp-app ──► fp-engine ──► fp-backends
 ```
 
 All crates forbid `unsafe_code` through the workspace lints. `fp-engine`,
-`fp-backends`, `fp-decode` and `fp-analysis` also deny
+`fp-backends`, `fp-decode`, `fp-analysis` and `fp-dsp` also deny
 `clippy::indexing_slicing`. No crate may `unwrap`, `expect`
 or `panic` outside tests.
 
