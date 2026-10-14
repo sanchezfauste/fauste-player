@@ -57,6 +57,7 @@ fn cart(n: u64, from_secs: f64, until_secs: f64, looped: bool) -> CartRequest {
         until_secs,
         looped,
         format: None,
+        normalization: fp_model::Normalization::default(),
     }
 }
 

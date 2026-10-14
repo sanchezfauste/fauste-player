@@ -30,6 +30,7 @@ fn request(name: &str, n: u64, from_secs: f64) -> SourceRequest {
         path: PathBuf::from(format!("{name}{n}")),
         from_secs,
         format: None,
+        normalization: fp_model::Normalization::default(),
     }
 }
 

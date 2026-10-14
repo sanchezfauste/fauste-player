@@ -296,6 +296,9 @@ pub struct SourceRequest {
     pub from_secs: f64,
     /// The file's format, once analysed (bit-perfect buses follow its rate).
     pub format: Option<AudioFormat>,
+    /// The fixed gain of this source (loudness normalization spec N9),
+    /// decided for the holder that plays it.
+    pub normalization: crate::loudness::Normalization,
 }
 
 /// Transition point meaning "the natural end of the decoded source". Used
@@ -447,4 +450,7 @@ pub struct CartRequest {
     pub looped: bool,
     /// The file's format, once analysed.
     pub format: Option<AudioFormat>,
+    /// The fixed gain of this cart (loudness normalization spec N9),
+    /// decided for the holder that plays it.
+    pub normalization: crate::loudness::Normalization,
 }

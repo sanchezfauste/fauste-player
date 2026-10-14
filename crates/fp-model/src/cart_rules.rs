@@ -6,11 +6,12 @@ use crate::cartwall::{Cart, CartEdit, CartFileChange, CartPage, CartPageImport, 
 use crate::command::{CartRequest, EngineAction, SOURCE_END};
 use crate::error::ModelError;
 use crate::ids::{CartId, CartPageId, TrackId};
+use crate::live::Holder;
 use crate::state::AppState;
 use crate::track::{FileState, Track};
 
 /// What the engine needs to play `cart`, if it has a playable file.
-fn request(state: &AppState, cart: &Cart, looped: bool) -> Option<CartRequest> {
+fn request(state: &AppState, cart: &Cart, looped: bool, holder: Holder) -> Option<CartRequest> {
     let track = state.library.get(cart.track?)?;
     if !track.file_state.is_playable() {
         return None;
@@ -23,6 +24,7 @@ fn request(state: &AppState, cart: &Cart, looped: bool) -> Option<CartRequest> {
         until_secs: track.known_cue_out_secs().unwrap_or(SOURCE_END),
         looped,
         format: track.format,
+        normalization: crate::loudness::normalization_for(state, holder, track),
     })
 }
 
@@ -54,7 +56,7 @@ pub(crate) fn fire(
         stop_playing(state, id, out);
         return Ok(());
     }
-    let Some(request) = request(state, &cart, cart.looped) else {
+    let Some(request) = request(state, &cart, cart.looped, Holder::CartwallMain) else {
         return Ok(());
     };
     if cart.exclusive {
@@ -109,7 +111,7 @@ pub(crate) fn cue(
     if was == Some(id) || !state.config.outputs.cartwall_has_cue() {
         return Ok(());
     }
-    if let Some(request) = request(state, &cart, false) {
+    if let Some(request) = request(state, &cart, false, Holder::CartwallCue) {
         state.cartwall.cue = Some(id);
         out.push(EngineAction::StartCartCue(request));
     }

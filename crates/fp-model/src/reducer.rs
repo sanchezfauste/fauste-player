@@ -11,6 +11,7 @@ use crate::config::Config;
 use crate::dsd::DsdOnAir;
 use crate::error::ModelError;
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
+use crate::live::Holder;
 use crate::player::{CueState, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, PlaylistEntry};
 use crate::shortcuts::{Shortcut, default_shortcuts};
@@ -31,7 +32,9 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             // A fade stop has already taken the source: nothing to seek.
             if player.transport != Transport::Stopped
                 && !player.fade_stopping()
-                && let Some(request) = player.current.and_then(|c| state.request_from_cue_in(c))
+                && let Some(request) = player
+                    .current
+                    .and_then(|c| state.request_from_cue_in(c, Holder::PlayerMain(id)))
             {
                 out.push(EngineAction::Seek {
                     player: id,
@@ -141,10 +144,18 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
                 if let Some(next) = player.next
                     && secs.is_finite()
                 {
-                    let at = crate::pending_start::pending_start_at(state, next, secs);
+                    let at = crate::pending_start::pending_start_at(
+                        state,
+                        next,
+                        secs,
+                        Holder::PlayerMain(id),
+                    );
                     state.players[i].pending_start = at;
                 }
-            } else if let Some(request) = player.current.and_then(|c| state.request_at(c, secs)) {
+            } else if let Some(request) = player
+                .current
+                .and_then(|c| state.request_at(c, secs, Holder::PlayerMain(id)))
+            {
                 out.push(EngineAction::Seek {
                     player: id,
                     secs: request.from_secs,
@@ -499,7 +510,12 @@ fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Resu
             // Q8.3: the pending start is used by this start, once.
             let pending = state.players[i].pending_start.take();
             if let Some(request) = advance(state, i) {
-                let request = crate::pending_start::start_request(state, pending, request);
+                let request = crate::pending_start::start_request(
+                    state,
+                    pending,
+                    request,
+                    Holder::PlayerMain(id),
+                );
                 out.push(EngineAction::StartCurrent {
                     player: id,
                     request,
@@ -538,7 +554,11 @@ fn previous(
         let Some(entry) = state.players[i].history.pop() else {
             return Ok(());
         };
-        if Some(entry) != left && state.playable_request(entry).is_some() {
+        if Some(entry) != left
+            && state
+                .playable_request(entry, Holder::PlayerMain(id))
+                .is_some()
+        {
             break entry;
         }
     };
@@ -818,7 +838,8 @@ fn dsd_hold_continue(state: &mut AppState, i: usize) -> Option<SourceRequest> {
     let current = state.players[i].current?;
     if repeating(state, &state.players[i]) {
         // R26: another pass of the same entry, not a new play.
-        let request = state.request_from_cue_in(current)?;
+        let holder = Holder::PlayerMain(state.players[i].id);
+        let request = state.request_from_cue_in(current, holder)?;
         let p = &mut state.players[i];
         p.preloaded = None;
         p.scheduled = None;
@@ -942,7 +963,7 @@ fn cue_entry(
         return Ok(());
     }
     let request = state
-        .request_from_cue_in(entry)
+        .request_from_cue_in(entry, Holder::PlayerCue(id))
         .ok_or(ModelError::UnknownEntry(entry))?;
     state.players[i].cue = Some(CueState {
         entry,
@@ -966,7 +987,11 @@ fn follow_cue(
 ) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
     let moves = state.players[i].cue.is_some_and(|c| c.entry != entry);
-    if moves && state.playable_request(entry).is_some() {
+    if moves
+        && state
+            .playable_request(entry, Holder::PlayerCue(id))
+            .is_some()
+    {
         cue_entry(state, id, entry, out)?;
     }
     Ok(())
@@ -987,7 +1012,7 @@ fn seek_cue(
     if !secs.is_finite() {
         return Ok(());
     }
-    if let Some(request) = state.request_at(cue.entry, secs) {
+    if let Some(request) = state.request_at(cue.entry, secs, Holder::PlayerCue(id)) {
         out.push(EngineAction::SeekCue {
             player: id,
             secs: request.from_secs,
@@ -1241,7 +1266,8 @@ pub(crate) fn advance_to(
     target: EntryId,
     record: bool,
 ) -> Option<SourceRequest> {
-    let request = state.request_from_cue_in(target)?;
+    let holder = Holder::PlayerMain(state.players[i].id);
+    let request = state.request_from_cue_in(target, holder)?;
     if let Some(current) = state.players[i].current {
         let player = state.players[i].id;
         state.playlists.mark_played(current, player);

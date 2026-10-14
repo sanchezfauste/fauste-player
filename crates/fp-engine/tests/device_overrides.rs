@@ -106,6 +106,7 @@ fn request(path: PathBuf, format: Option<AudioFormat>) -> SourceRequest {
         path,
         from_secs: 0.0,
         format,
+        normalization: fp_model::Normalization::default(),
     }
 }
 

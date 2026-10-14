@@ -9,10 +9,10 @@ use std::path::PathBuf;
 
 use common::{fixture, p0, place_on_dac};
 use fp_model::{
-    AppState, Command, DeviceSettings, EngineEvent, GainLimit, Holder, LoudnessConfig,
-    LoudnessMeasurement, Normalization, NormalizationStatus as S, OutputDevice, Route, Track,
-    TrackId, apply, bit_perfect_player, device_settings, holder_bit_perfect, normalization,
-    normalization_for, on_event,
+    AppState, Command, DeviceSettings, EngineAction, EngineEvent, GainLimit, Holder,
+    LoudnessConfig, LoudnessMeasurement, Normalization, NormalizationStatus as S, OutputDevice,
+    Route, Track, TrackId, apply, bit_perfect_player, device_settings, holder_bit_perfect,
+    normalization, normalization_for, on_event,
 };
 
 fn on() -> LoudnessConfig {
@@ -313,4 +313,106 @@ fn n7_a_configuration_that_was_not_validated_never_panics() {
     assert_eq!(gain(normalization(&c, &t, false)).0, 4.0, "no trim allowed");
     c.max_trim_db = -5.0;
     assert_eq!(gain(normalization(&c, &t, false)).0, 4.0);
+}
+
+fn request_gain(actions: &[EngineAction]) -> Vec<(&'static str, f32)> {
+    actions
+        .iter()
+        .filter_map(|a| match a {
+            EngineAction::Preload {
+                request: Some(r), ..
+            } => Some(("preload", r.normalization.gain_db)),
+            EngineAction::StartCurrent { request, .. } => {
+                Some(("start", request.normalization.gain_db))
+            }
+            EngineAction::Crossfade { request, .. } => {
+                Some(("crossfade", request.normalization.gain_db))
+            }
+            EngineAction::StartCue { request, .. } => Some(("cue", request.normalization.gain_db)),
+            EngineAction::LoadPaused { request, .. } => {
+                Some(("load", request.normalization.gain_db))
+            }
+            EngineAction::StartCart(r) => Some(("cart", r.normalization.gain_db)),
+            EngineAction::StartCartCue(r) => Some(("cart-cue", r.normalization.gain_db)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn n9_player_requests_carry_the_main_gain() {
+    let mut s = normalizing(3);
+    let p = p0(&s);
+    let start = apply(&mut s, Command::Play(p)).unwrap();
+    assert!(request_gain(&start).contains(&("start", 4.0)), "{start:?}");
+    assert!(
+        request_gain(&start).contains(&("preload", 4.0)),
+        "{start:?}"
+    );
+    let fade = apply(&mut s, Command::Play(p)).unwrap();
+    assert!(
+        request_gain(&fade).contains(&("crossfade", 4.0)),
+        "{fade:?}"
+    );
+}
+
+#[test]
+fn n9_the_cue_is_normalized_like_on_air() {
+    let mut s = normalizing(3);
+    let p = p0(&s);
+    let cue = apply(&mut s, Command::ToggleCue(p)).unwrap();
+    assert_eq!(request_gain(&cue), vec![("cue", 4.0)]);
+}
+
+#[test]
+fn n9_a_bit_perfect_cue_device_gets_no_gain_while_main_does() {
+    let mut s = normalizing(3);
+    let p = p0(&s);
+    s.config.outputs.bit_perfect.push(device("phones"));
+    let cue = apply(&mut s, Command::ToggleCue(p)).unwrap();
+    assert_eq!(request_gain(&cue), vec![("cue", 0.0)]);
+    let start = apply(&mut s, Command::Play(p)).unwrap();
+    assert!(request_gain(&start).contains(&("start", 4.0)));
+}
+
+/// Gives the first cart of the first page the file `path`, measured like
+/// the others (+4 dB).
+fn with_cart(s: &mut AppState) -> fp_model::CartId {
+    let page = s.cartwall.pages[0].id;
+    apply(
+        s,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path: PathBuf::from("/carts/jingle.flac"),
+        },
+    )
+    .unwrap();
+    let cart = s.cartwall.pages[0].carts[0].clone();
+    let t = s.library.get_mut(cart.track.unwrap()).unwrap();
+    t.analyzed = true;
+    t.loudness = Some(LoudnessMeasurement {
+        integrated_lufs: Some(-20.0),
+        true_peak_dbtp: -10.0,
+    });
+    cart.id
+}
+
+#[test]
+fn n9_carts_and_their_pre_listen_carry_the_gain() {
+    let mut s = normalizing(1);
+    let cart = with_cart(&mut s);
+    let fire = apply(&mut s, Command::FireCart(cart)).unwrap();
+    assert_eq!(request_gain(&fire), vec![("cart", 4.0)]);
+    let cue = apply(&mut s, Command::CueCart(cart)).unwrap();
+    assert_eq!(request_gain(&cue), vec![("cart-cue", 4.0)]);
+}
+
+#[test]
+fn n9_with_normalization_off_every_request_is_at_0_db() {
+    let mut s = normalizing(3);
+    s.config.loudness.normalize = false;
+    let p = p0(&s);
+    let start = apply(&mut s, Command::Play(p)).unwrap();
+    assert!(request_gain(&start).iter().all(|(_, g)| *g == 0.0));
 }

@@ -156,6 +156,7 @@ impl Rig {
             path: path.to_owned(),
             from_secs: 0.0,
             format: Some(format),
+            normalization: fp_model::Normalization::default(),
         };
         self.engine.execute(
             EngineAction::StartCurrent { player: P, request },

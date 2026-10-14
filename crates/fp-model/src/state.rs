@@ -3,6 +3,7 @@ use crate::command::SourceRequest;
 use crate::config::Config;
 use crate::error::ModelError;
 use crate::ids::{EntryId, IdGen, PlayerId};
+use crate::live::Holder;
 use crate::player::PlayerState;
 use crate::playlist::{Playlist, Playlists};
 use crate::track::{Library, Track};
@@ -73,17 +74,18 @@ impl AppState {
 
     /// As `request_from_cue_in`, only for an entry whose file is not known
     /// to be missing or unreadable.
-    pub fn playable_request(&self, entry: EntryId) -> Option<SourceRequest> {
+    pub fn playable_request(&self, entry: EntryId, holder: Holder) -> Option<SourceRequest> {
         let track = self.track_for_entry(entry)?;
         if !track.file_state.is_playable() {
             return None;
         }
-        self.request_from_cue_in(entry)
+        self.request_from_cue_in(entry, holder)
     }
 
     /// A request that starts the entry at the start of its play range: its
-    /// cue-in, or 0 when players ignore cue markers.
-    pub fn request_from_cue_in(&self, entry: EntryId) -> Option<SourceRequest> {
+    /// cue-in, or 0 when players ignore cue markers. `holder` is who plays
+    /// it: the request carries its normalization (N9).
+    pub fn request_from_cue_in(&self, entry: EntryId, holder: Holder) -> Option<SourceRequest> {
         let track = self.track_for_entry(entry)?;
         let range = track.play_range(self.config.players.use_cue_markers);
         Some(SourceRequest {
@@ -92,12 +94,14 @@ impl AppState {
             path: track.path.clone(),
             from_secs: range.cue_in,
             format: track.format,
+            normalization: crate::loudness::normalization_for(self, holder, track),
         })
     }
 
     /// A request that starts the entry at `secs`, clamped to the file when its
     /// duration is known; a non-finite `secs` falls back to cue-in.
-    pub fn request_at(&self, entry: EntryId, secs: f64) -> Option<SourceRequest> {
+    /// `holder` is who plays it: the request carries its normalization (N9).
+    pub fn request_at(&self, entry: EntryId, secs: f64, holder: Holder) -> Option<SourceRequest> {
         let track = self.track_for_entry(entry)?;
         let from_secs = if secs.is_finite() {
             let end = if track.duration_secs > 0.0 {
@@ -115,6 +119,7 @@ impl AppState {
             path: track.path.clone(),
             from_secs,
             format: track.format,
+            normalization: crate::loudness::normalization_for(self, holder, track),
         })
     }
 

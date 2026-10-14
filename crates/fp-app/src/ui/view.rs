@@ -232,7 +232,9 @@ pub fn cue_follow_target(state: &AppState, player: PlayerId, clicked: EntryId) -
     let cue = state.player(player).ok()?.cue?;
     (cue.entry != clicked
         && state.config.outputs.player_has_cue(player)
-        && state.playable_request(clicked).is_some())
+        && state
+            .playable_request(clicked, fp_model::Holder::PlayerCue(player))
+            .is_some())
     .then_some(clicked)
 }
 

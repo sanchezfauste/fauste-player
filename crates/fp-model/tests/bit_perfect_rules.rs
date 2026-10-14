@@ -93,7 +93,8 @@ fn on_air() -> (AppState, PlayerId, [EntryId; 3]) {
 
 /// The request P1 preloads for `entry`, at its cue-in.
 fn next_request(s: &AppState, entry: EntryId) -> SourceRequest {
-    s.request_from_cue_in(entry).unwrap()
+    s.request_from_cue_in(entry, Holder::PlayerMain(p0(s)))
+        .unwrap()
 }
 
 fn rates(s: &mut AppState, next: u32) {

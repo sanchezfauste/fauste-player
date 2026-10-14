@@ -224,7 +224,9 @@ impl AppState {
                     }
                     None => saved,
                 };
-                if let Some(request) = state.request_at(current, position) {
+                if let Some(request) =
+                    state.request_at(current, position, crate::live::Holder::PlayerMain(p.id))
+                {
                     out.push(EngineAction::LoadPaused {
                         player: p.id,
                         request,
