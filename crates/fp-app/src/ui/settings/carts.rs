@@ -291,8 +291,11 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         });
     }
     let limits = &scene.state.config.limits;
-    // The grid changes when the slider is released: resizing through
-    // smaller sizes on the way would drop the settings of trailing carts.
+    // The grid changes when the slider is released, or when a size typed
+    // into its number box is complete (Enter or leaving the box; Escape
+    // cancels it): resizing through smaller sizes on the way, or through
+    // the first digit of a two-digit size, would drop the settings of
+    // trailing carts.
     let (mut rows, mut cols) = match c.grid_draft {
         Some((id, r, k)) if id == page_id => (r, k),
         _ => (page.rows, page.cols),
@@ -305,11 +308,20 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             (&mut rows, limits.max_cart_rows, &rows_label),
             (&mut cols, limits.max_cart_cols, &cols_label),
         ] {
-            let response = ui.add(egui::Slider::new(value, 1..=max.max(1)).step_by(1.0));
+            let before = *value;
+            let response = ui.add(
+                egui::Slider::new(value, 1..=max.max(1))
+                    .step_by(1.0)
+                    .update_while_editing(false),
+            );
             let v = f64::from(*value);
             let owned = label.clone();
             response.widget_info(|| egui::WidgetInfo::slider(true, v, owned.clone()));
-            if response.drag_stopped() || (response.changed() && !response.dragged()) {
+            // The box reports each keystroke as a change; only a new value
+            // is one.
+            if response.drag_stopped()
+                || (response.changed() && !response.dragged() && *value != before)
+            {
                 commit = true;
             }
         }

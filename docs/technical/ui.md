@@ -395,6 +395,19 @@ outdated tracks (Settings → Analysis, and the start-up notice) comes from
 `AppUi`'s `services::OutdatedCount`: the library is scanned once per model
 snapshot, not on every frame (`SettingsDeps::outdated`).
 
+Two sliders apply sizes that remove things on the way down: the cart page grid
+(Settings → Cartwall, `Command::ResizeCartPage`, which truncates the trailing
+carts) and the number of players (`settings::count_slider`,
+`Command::SetPlayerCount`). Their number boxes use
+`Slider::update_while_editing(false)`, so a typed number applies once, on Enter
+or when the box loses focus (Escape cancels it), never its first digit: typing
+12 over 4 would otherwise go through 1. Both also keep a draft while the
+slider is dragged (`CartsState::grid_draft`, `SettingsState::player_count_draft`)
+and send the command once, on release: dragging down to 1 and back would
+otherwise remove the trailing carts or players on the way and bring them back
+empty. Each arrow-key step applies at once. The other settings sliders apply every
+value as it is typed or dragged, which only rewrites the configuration.
+
 ## Loudness normalization
 
 The interface shows and edits [loudness normalization](../superpowers/specs/2026-10-08-loudness-normalization-design.md)

@@ -107,7 +107,7 @@ the device is reopened when it comes back (see
 | Setting | Default | Meaning |
 |---|---|---|
 | Language | System | Interface language |
-| Number of players | 4 | Columns on the main screen (a player on air cannot be removed) |
+| Number of players | 4 | Columns on the main screen (a player on air cannot be removed). The number applies when you release the slider; a number typed into the box applies when you press Enter or leave the box, and Escape cancels it |
 | Default mode | CONT | The mode players start in |
 | Fade time | 1000 ms | Used by Play while on air and by Fade stop. On a player whose Main output is bit-perfect, only by Fade stop |
 | Automatic mix at the MIX point | On | Overlap tracks in continuous mode. Does not apply to a player whose Main output is bit-perfect |

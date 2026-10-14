@@ -91,6 +91,8 @@ pub(crate) struct SettingsState {
     new_name: String,
     /// A folder dialog is open; it answers `None` when cancelled.
     folder: Option<Receiver<Option<PathBuf>>>,
+    /// Number of players being dragged, sent on release.
+    player_count_draft: Option<usize>,
 }
 
 impl SettingsState {
@@ -294,7 +296,7 @@ pub(crate) fn show(
                                                 st.load_devices(deps.backends, ctx);
                                                 outputs(ui, scene, st);
                                             }
-                                            Section::Players => players(ui, scene),
+                                            Section::Players => players(ui, scene, st),
                                             Section::Meters => meters::section(ui, scene),
                                             Section::Analysis => analysis(ui, scene, deps),
                                             Section::Loudness => {
@@ -800,6 +802,42 @@ fn slider<T: egui::emath::Numeric>(
     let v = value.to_f64();
     response.widget_info(|| egui::WidgetInfo::slider(true, v, owned.clone()));
     response.changed()
+}
+
+/// The Number of players slider. Every count it sends removes or adds
+/// players, so it sends one only when the count is settled: when the slider
+/// is released (the count being dragged is kept in `draft` and shown), or
+/// when a number typed into its box is complete (Enter or leaving the box;
+/// Escape cancels it). Dragging through smaller counts, or typing the first
+/// digit of a two-digit count, would otherwise remove the players above it
+/// on the way. Returns the count to send.
+fn count_slider(
+    ui: &mut Ui,
+    draft: &mut Option<usize>,
+    current: usize,
+    max: usize,
+    label: &str,
+) -> Option<usize> {
+    let mut value = draft.unwrap_or(current);
+    let before = value;
+    let response = ui.add(
+        egui::Slider::new(&mut value, 1..=max)
+            .step_by(1.0)
+            .update_while_editing(false),
+    );
+    let owned = label.to_owned();
+    let v = egui::emath::Numeric::to_f64(value);
+    response.widget_info(|| egui::WidgetInfo::slider(true, v, owned.clone()));
+    if response.dragged() {
+        *draft = Some(value);
+        return None;
+    }
+    // The box reports each keystroke as a change; only a new value is one.
+    if response.drag_stopped() || (response.changed() && value != before) {
+        *draft = None;
+        return (value != current).then_some(value);
+    }
+    None
 }
 
 /// The audio systems the list offers: the real systems in their order, then
@@ -1312,19 +1350,19 @@ fn device_box(
     );
 }
 
-fn players(ui: &mut Ui, scene: &Scene<'_>) {
+fn players(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let config = &scene.state.config;
     let max = config.limits.max_players;
-    let mut count = scene.state.players.len();
+    let count = scene.state.players.len();
     let label = t.tr("settings-player-count");
     row(
         ui,
         &label,
         Some(&t.tr("settings-hint-player-count")),
         |ui| {
-            if slider(ui, &mut count, 1..=max, 1.0, "", &label) {
-                scene.ctl.send(Command::SetPlayerCount(count));
+            if let Some(n) = count_slider(ui, &mut st.player_count_draft, count, max, &label) {
+                scene.ctl.send(Command::SetPlayerCount(n));
             }
         },
     );
