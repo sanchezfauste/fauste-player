@@ -187,6 +187,8 @@ measure again.
 
 ## Loudness
 
+![Settings, Loudness: normalization on, with the target, the true-peak ceiling, the maximum boost and the maximum trim at their defaults](../images/guide/settings-loudness.png)
+
 Plays every track and cart at the same loudness, with a fixed gain per
 track. [Loudness normalization](loudness.md) explains how the gain is
 worked out, the badge in the player header and the per-track settings.

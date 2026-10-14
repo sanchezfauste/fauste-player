@@ -3,7 +3,7 @@
 Each column is one player. Players are independent: each has its own
 playlist tabs, transport, volume and outputs.
 
-![Player 1 on air: its header, cover, title, next track, transport, countdown, meter, fader and waveform](../images/guide/player.png)
+![Player 1 on air: its header with the loudness gain, cover, title, next track, transport, countdown, meter, fader and waveform](../images/guide/player.png)
 
 ## Header
 

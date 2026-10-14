@@ -9,6 +9,8 @@ to the next.
 It is **off by default**. Turn it on in
 [Settings → Loudness](settings.md#loudness).
 
+![Settings, Loudness: normalization on, with the target, the true-peak ceiling, the maximum boost and the maximum trim at their defaults](../images/guide/settings-loudness.png)
+
 ## How it works
 
 **A fixed gain per track.** Each track gets one gain, in dB, decided when
