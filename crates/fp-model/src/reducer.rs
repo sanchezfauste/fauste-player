@@ -422,6 +422,12 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
             }
         }
         EngineEvent::TransitionStarted { player, entry } => {
+            // N11: what the engine preloaded, taken before `advance_to`
+            // forgets it.
+            let preloaded = state
+                .player_index(player)
+                .ok()
+                .and_then(|i| state.players[i].preloaded);
             // The engine started the entry that is already current: a
             // repeating entry's next pass (R26) or the replay of an entry set
             // as its own next (O37), perhaps committed just before a command
@@ -445,10 +451,12 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                     state.players[i].next = following;
                     state.players[i].next_explicit = false;
                 }
+                let on_air = started_normalization(state, i, entry, preloaded);
                 let p = &mut state.players[i];
                 p.preloaded = None;
                 p.scheduled = None;
                 p.transport = Transport::Playing;
+                p.on_air = on_air;
             }
             // A transition reported after the player was stopped is stale: the
             // engine has already been told to stop everything.
@@ -465,6 +473,7 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                 );
                 if advance_to(state, i, entry, true).is_some() {
                     state.players[i].fading = overlapping;
+                    state.players[i].on_air = started_normalization(state, i, entry, preloaded);
                 } else {
                     stop_player(state, i);
                     out.push(EngineAction::StopNow { player });
@@ -859,10 +868,31 @@ fn dsd_hold_continue(state: &mut AppState, i: usize) -> Option<SourceRequest> {
         let p = &mut state.players[i];
         p.preloaded = None;
         p.scheduled = None;
+        p.on_air = Some(request.normalization);
         return Some(request);
     }
     let next = state.players[i].next?;
     advance_to(state, i, next, true)
+}
+
+/// N11: a scheduled transition plays what was preloaded, with the gain it
+/// was preloaded with; an entry that was not the one preloaded gets its
+/// own gain now.
+fn started_normalization(
+    state: &AppState,
+    i: usize,
+    entry: EntryId,
+    preloaded: Option<(EntryId, f64, crate::loudness::Normalization)>,
+) -> Option<crate::loudness::Normalization> {
+    match preloaded {
+        Some((e, _, n)) if e == entry => Some(n),
+        _ => {
+            let holder = Holder::PlayerMain(state.players.get(i)?.id);
+            state
+                .request_from_cue_in(entry, holder)
+                .map(|r| r.normalization)
+        }
+    }
 }
 
 /// Play-while-playing starts: a crossfade, or a hard start that cuts the
@@ -985,6 +1015,7 @@ fn cue_entry(
         entry,
         paused: false,
     });
+    state.players[i].cue_normalization = Some(request.normalization);
     out.push(EngineAction::StartCue {
         player: id,
         request,
@@ -1305,6 +1336,7 @@ pub(crate) fn advance_to(
     player.preloaded = None;
     player.scheduled = None;
     player.dsd = None;
+    player.on_air = Some(request.normalization);
     Some(request)
 }
 
@@ -1328,6 +1360,7 @@ pub(crate) fn stop_player(state: &mut AppState, i: usize) {
     player.fade_stop_pending = false;
     player.stop_after_current = false;
     player.dsd = None;
+    player.on_air = None;
 }
 
 /// After playlist edits: a player with a current entry and a derived next
@@ -1427,6 +1460,18 @@ pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
     // Rule 3a (Q8.4): a pending start lives only while its player is
     // stopped with that entry next, inside the entry's play range.
     crate::pending_start::settle(state);
+    // N11: a gain record lives as long as its source.
+    for p in &mut state.players {
+        if p.current.is_none() {
+            p.on_air = None;
+        }
+        if p.cue.is_none() {
+            p.cue_normalization = None;
+        }
+    }
+    if state.cartwall.cue.is_none() {
+        state.cartwall.cue_normalization = None;
+    }
     // O38: in Single mode the flag lives only while the current entry
     // repeats (it may have stopped applying: repeat off, a stop-after mark,
     // Next into another entry, a file that cannot be read).
@@ -1454,13 +1499,17 @@ pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
             )
         })
         .filter(|(i, request)| {
-            let wanted = request.as_ref().map(|r| (r.entry, r.from_secs));
+            let wanted = request
+                .as_ref()
+                .map(|r| (r.entry, r.from_secs, r.normalization));
             state.players[*i].preloaded != wanted
         })
         .collect();
     for (i, request) in preloads {
         let player = &mut state.players[i];
-        player.preloaded = request.as_ref().map(|r| (r.entry, r.from_secs));
+        player.preloaded = request
+            .as_ref()
+            .map(|r| (r.entry, r.from_secs, r.normalization));
         out.push(EngineAction::Preload {
             player: player.id,
             request,

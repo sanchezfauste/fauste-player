@@ -526,3 +526,310 @@ fn n10_the_edit_survives_a_library_round_trip() {
         s.library.get(track).unwrap().loudness_edit
     );
 }
+
+fn measure(s: &mut AppState, entry: fp_model::EntryId, lufs: f32) {
+    let track = s.playlists.entry(entry).unwrap().track;
+    s.library.get_mut(track).unwrap().loudness = Some(LoudnessMeasurement {
+        integrated_lufs: Some(lufs),
+        true_peak_dbtp: -20.0,
+    });
+}
+
+/// The gains of the preloads sent to `player` (every player shows the same
+/// playlist, so the stopped ones preload too).
+fn preloads(actions: &[EngineAction], player: fp_model::PlayerId) -> Vec<f32> {
+    actions
+        .iter()
+        .filter_map(|a| match a {
+            EngineAction::Preload {
+                player: to,
+                request: Some(r),
+            } if *to == player => Some(r.normalization.gain_db),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Only `Preload`s: nothing reaches what is sounding.
+fn only_preloads(actions: &[EngineAction]) -> bool {
+    actions
+        .iter()
+        .all(|a| matches!(a, EngineAction::Preload { .. }))
+}
+
+#[test]
+fn n11_the_gain_on_air_is_recorded_and_kept() {
+    let mut s = normalizing(3);
+    let (p, e) = (p0(&s), entries(&s));
+    apply(&mut s, Command::Play(p)).unwrap();
+    assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(4.0));
+    // An analysis result, a loudness-only result, a configuration change
+    // and an edit of the track on air: nothing on air changes.
+    let track = s.playlists.entry(e[0]).unwrap().track;
+    let a = apply(
+        &mut s,
+        Command::ApplyLoudness {
+            track,
+            loudness: Some(LoudnessMeasurement {
+                integrated_lufs: Some(-30.0),
+                true_peak_dbtp: -20.0,
+            }),
+            version: fp_model::LOUDNESS_VERSION,
+        },
+    )
+    .unwrap();
+    let mut config = s.config.clone();
+    config.loudness.target_lufs = -12.0;
+    let b = apply(&mut s, Command::UpdateConfig(Box::new(config))).unwrap();
+    let c = apply(
+        &mut s,
+        Command::SetTrackLoudness {
+            track,
+            excluded: true,
+            trim_db: 0.0,
+        },
+    )
+    .unwrap();
+    for actions in [&a, &b, &c] {
+        assert!(only_preloads(actions), "{actions:?}");
+    }
+    assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(4.0));
+}
+
+#[test]
+fn n11_a_seek_sends_no_new_gain() {
+    let mut s = normalizing(3);
+    let p = p0(&s);
+    apply(&mut s, Command::Play(p)).unwrap();
+    s.config.loudness.target_lufs = -10.0;
+    let seek = apply(&mut s, Command::Seek(p, 30.0)).unwrap();
+    assert!(seek.iter().any(|a| matches!(a, EngineAction::Seek { .. })));
+    assert!(
+        request_gain(&seek)
+            .iter()
+            .all(|(kind, _)| *kind == "preload")
+    );
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let cue_seek = apply(&mut s, Command::SeekCue(p, 10.0)).unwrap();
+    assert!(
+        request_gain(&cue_seek)
+            .iter()
+            .all(|(kind, _)| *kind == "preload")
+    );
+}
+
+#[test]
+fn n11_a_scheduled_transition_takes_the_preloaded_gain() {
+    let mut s = normalizing(3);
+    let (p, e) = (p0(&s), entries(&s));
+    apply(&mut s, Command::Play(p)).unwrap();
+    measure(&mut s, e[1], -22.0); // the next now wants +6
+    let pre = apply(&mut s, Command::SetVolume(p, 1.0)).unwrap();
+    assert_eq!(preloads(&pre, p), vec![6.0]);
+    // The model changes its mind after the engine already started it.
+    s.library
+        .get_mut(s.playlists.entry(e[1]).unwrap().track)
+        .unwrap()
+        .loudness = None;
+    on_event(
+        &mut s,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: e[1],
+        },
+    );
+    assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(6.0));
+}
+
+#[test]
+fn n11_a_transition_to_another_entry_recomputes_its_gain() {
+    let mut s = normalizing(3);
+    let (p, e) = (p0(&s), entries(&s));
+    apply(&mut s, Command::Play(p)).unwrap();
+    measure(&mut s, e[2], -24.0);
+    // The engine reports an entry that was not the one preloaded.
+    on_event(
+        &mut s,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: e[2],
+        },
+    );
+    assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(8.0));
+}
+
+#[test]
+fn n11_the_record_is_cleared_when_the_source_ends() {
+    let mut s = normalizing(3);
+    let p = p0(&s);
+    apply(&mut s, Command::Play(p)).unwrap();
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    assert!(s.player(p).unwrap().cue_normalization.is_some());
+    apply(&mut s, Command::Stop(p)).unwrap();
+    apply(&mut s, Command::ToggleCue(p)).unwrap();
+    let player = s.player(p).unwrap();
+    assert_eq!((player.on_air, player.cue_normalization), (None, None));
+}
+
+#[test]
+fn n11_carts_keep_their_gain() {
+    let mut s = normalizing(1);
+    let cart = with_cart(&mut s);
+    apply(&mut s, Command::FireCart(cart)).unwrap();
+    apply(&mut s, Command::CueCart(cart)).unwrap();
+    assert_eq!(s.cartwall.playing[0].normalization.gain_db, 4.0);
+    assert_eq!(s.cartwall.cue_normalization.map(|n| n.gain_db), Some(4.0));
+    s.config.loudness.target_lufs = -10.0;
+    let p = p0(&s);
+    apply(&mut s, Command::SetVolume(p, 1.0)).unwrap();
+    assert_eq!(s.cartwall.playing[0].normalization.gain_db, 4.0);
+    apply(&mut s, Command::CueCart(cart)).unwrap();
+    assert_eq!(s.cartwall.cue_normalization, None);
+}
+
+#[test]
+fn n12_a_measurement_of_the_next_preloads_it_again() {
+    let mut s = normalizing(3);
+    let (p, e) = (p0(&s), entries(&s));
+    apply(&mut s, Command::Play(p)).unwrap();
+    let track = s.playlists.entry(e[1]).unwrap().track;
+    let a = apply(
+        &mut s,
+        Command::ApplyLoudness {
+            track,
+            loudness: Some(LoudnessMeasurement {
+                integrated_lufs: Some(-18.0),
+                true_peak_dbtp: -20.0,
+            }),
+            version: fp_model::LOUDNESS_VERSION,
+        },
+    )
+    .unwrap();
+    assert_eq!(preloads(&a, p), vec![2.0]);
+}
+
+#[test]
+fn n12_a_configuration_change_preloads_the_next_again() {
+    let mut s = normalizing(3);
+    let p = p0(&s);
+    apply(&mut s, Command::Play(p)).unwrap();
+    let mut config = s.config.clone();
+    config.loudness.target_lufs = -18.0;
+    let a = apply(&mut s, Command::UpdateConfig(Box::new(config))).unwrap();
+    assert_eq!(preloads(&a, p), vec![2.0]);
+    // Unchanged settings preload nothing.
+    let same = s.config.clone();
+    assert!(
+        preloads(
+            &apply(&mut s, Command::UpdateConfig(Box::new(same))).unwrap(),
+            p
+        )
+        .is_empty()
+    );
+}
+
+#[test]
+fn n12_an_edit_of_the_next_preloads_it_again() {
+    let mut s = normalizing(3);
+    let (p, e) = (p0(&s), entries(&s));
+    apply(&mut s, Command::Play(p)).unwrap();
+    let track = s.playlists.entry(e[1]).unwrap().track;
+    let a = apply(
+        &mut s,
+        Command::SetTrackLoudness {
+            track,
+            excluded: false,
+            trim_db: -1.5,
+        },
+    )
+    .unwrap();
+    assert_eq!(preloads(&a, p), vec![2.5]);
+}
+
+#[test]
+fn n12_a_placement_on_a_bit_perfect_device_preloads_the_next_again() {
+    let mut s = normalizing(3);
+    let p = p0(&s);
+    apply(&mut s, Command::Play(p)).unwrap();
+    let mut running = device_settings(&s.config.outputs, &device("dac"));
+    running.bit_perfect = true;
+    let a = on_event(
+        &mut s,
+        EngineEvent::Placed {
+            holder: Holder::PlayerMain(p),
+            route: Some(route("dac")),
+            device: device("dac"),
+            running,
+        },
+    );
+    assert_eq!(preloads(&a, p), vec![0.0]);
+    assert_eq!(
+        s.player(p).unwrap().on_air.map(|n| n.gain_db),
+        Some(4.0),
+        "N17"
+    );
+}
+
+#[test]
+fn n12_a_repeating_entry_takes_the_new_gain_on_its_next_pass() {
+    let mut s = normalizing(3);
+    let (p, e) = (p0(&s), entries(&s));
+    apply(&mut s, Command::SetEntryRepeat(e[0], true)).unwrap();
+    apply(&mut s, Command::Play(p)).unwrap();
+    let mut config = s.config.clone();
+    config.loudness.target_lufs = -14.0;
+    let a = apply(&mut s, Command::UpdateConfig(Box::new(config))).unwrap();
+    assert_eq!(
+        preloads(&a, p),
+        vec![6.0],
+        "the repeat pass is preloaded again"
+    );
+    assert_eq!(s.player(p).unwrap().on_air.map(|n| n.gain_db), Some(4.0));
+}
+
+#[test]
+fn n13_crash_recovery_computes_the_gain_again() {
+    let mut s = normalizing(3);
+    let p = p0(&s);
+    apply(&mut s, Command::Play(p)).unwrap();
+    s.config.loudness.target_lufs = -14.0;
+    let parts = fp_model::RestoreParts {
+        config: s.config.clone(),
+        library: s.library.clone(),
+        playlists: s.playlists.clone(),
+        cart_pages: s.cartwall.pages.clone(),
+        cartwall_session: s.cartwall.session(),
+        ids: s.ids.clone(),
+    };
+    let (restored, actions) = AppState::restore(parts, &s.sessions(|_| 20.0), "Main");
+    assert!(
+        request_gain(&actions).contains(&("load", 6.0)),
+        "{actions:?}"
+    );
+    assert_eq!(
+        restored.player(p).unwrap().on_air.map(|n| n.gain_db),
+        Some(6.0)
+    );
+    assert!(
+        !actions.iter().any(|a| matches!(
+            a,
+            EngineAction::StartCurrent { .. } | EngineAction::Resume { .. }
+        )),
+        "nothing goes on air by itself"
+    );
+}
+
+#[test]
+fn n9_a_bit_perfect_player_sends_unity_gain() {
+    let mut s = normalizing(3);
+    let p = p0(&s);
+    place_on_dac(&mut s, Holder::PlayerMain(p));
+    let start = apply(&mut s, Command::Play(p)).unwrap();
+    let gains = request_gain(&start);
+    assert!(gains.contains(&("start", 0.0)), "{start:?}");
+    assert!(gains.iter().all(|(_, g)| *g == 0.0), "{gains:?}");
+    assert_eq!(
+        s.player(p).unwrap().on_air.map(|n| n.status),
+        Some(S::BitPerfect)
+    );
+}

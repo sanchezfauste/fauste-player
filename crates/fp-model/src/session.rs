@@ -199,6 +199,9 @@ impl AppState {
             };
             state.players.push(player);
         }
+        // N13: the gain of each source loaded paused, computed now from the
+        // current configuration and track.
+        let mut loaded = Vec::new();
         for p in &state.players {
             // The engine starts every player at full volume; send the restored one.
             out.push(EngineAction::SetVolume {
@@ -227,11 +230,17 @@ impl AppState {
                 if let Some(request) =
                     state.request_at(current, position, crate::live::Holder::PlayerMain(p.id))
                 {
+                    loaded.push((p.id, request.normalization));
                     out.push(EngineAction::LoadPaused {
                         player: p.id,
                         request,
                     });
                 }
+            }
+        }
+        for (id, normalization) in loaded {
+            if let Ok(i) = state.player_index(id) {
+                state.players[i].on_air = Some(normalization);
             }
         }
         state.normalize_played_marks();

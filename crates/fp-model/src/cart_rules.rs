@@ -68,6 +68,7 @@ pub(crate) fn fire(
     state.cartwall.playing.push(PlayingCart {
         cart: id,
         looped: cart.looped,
+        normalization: request.normalization,
     });
     out.push(EngineAction::StartCart(request));
     Ok(())
@@ -113,6 +114,7 @@ pub(crate) fn cue(
     }
     if let Some(request) = request(state, &cart, false, Holder::CartwallCue) {
         state.cartwall.cue = Some(id);
+        state.cartwall.cue_normalization = Some(request.normalization);
         out.push(EngineAction::StartCartCue(request));
     }
     Ok(())

@@ -100,6 +100,7 @@ fn stop_and_close_stops_players_and_carts_then_closes() {
     s.cartwall.playing.push(PlayingCart {
         cart,
         looped: false,
+        normalization: fp_model::Normalization::default(),
     });
     let p = s.players[0].id;
     let (mut h, fake) = harness(s);
@@ -242,6 +243,7 @@ fn carts_show_their_number_on_the_page() {
         s.cartwall.playing.push(PlayingCart {
             cart,
             looped: false,
+            normalization: fp_model::Normalization::default(),
         });
     }
     let (mut h, _) = harness(s);
