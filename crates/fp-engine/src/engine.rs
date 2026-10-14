@@ -3012,16 +3012,18 @@ impl Engine {
             return;
         };
         request.from_secs = secs;
-        // BR8: in the gap of a rate cut the current waits for the bus to
-        // reopen. It is replaced by one from `secs` prepared at the same
-        // (new) rate that waits the same way: the cut is kept.
+        // BR8, BR17: in the gap of a rate cut the current waits for the bus
+        // to reopen. It is replaced by one from `secs` prepared at the rate
+        // the cut waits for, which waits the same way: the cut is kept. The
+        // current may decode at the old rate (a track loaded paused and
+        // resumed, a device change in the gap); if the bus does not take
+        // the new rate, `run_rate_cuts` fits the source to the bus's.
         let cut_rate = self.players.get(&player).and_then(|rt| {
-            rt.rate_cut.and(
+            rt.rate_cut.filter(|_| {
                 rt.current
                     .as_ref()
-                    .filter(|c| c.start == StartState::Idle)
-                    .map(|c| c.rate),
-            )
+                    .is_some_and(|c| c.start == StartState::Idle)
+            })
         });
         // A DSD stream's source is replaced by another DSD source on the
         // same stream, which stays in DSD mode (feedback 2 spec O25).

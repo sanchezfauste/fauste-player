@@ -1164,6 +1164,10 @@ fn plays_bit_exact_from(heard: &[f32], from: usize, ramp: usize) {
         .iter()
         .position(|v| *v != 0.0)
         .expect("the track plays");
+    assert!(
+        first > 0,
+        "the ramp starts at gain 0, so the first heard sample cannot be the first one"
+    );
     let start = first - 1;
     let exact = &heard[start + ramp..];
     assert!(exact.len() > 1_000, "enough heard after the ramp");
@@ -1201,6 +1205,38 @@ fn br8_a_seek_in_the_gap_keeps_the_cut_and_plays_bit_perfect_from_there() {
     assert!(r.engine.telemetry(P).bit_perfect, "the badge is lit");
     let position = r.engine.telemetry(P).position_secs.unwrap();
     assert!(position > 1.05, "it plays on from the seek: {position}");
+}
+
+#[test]
+fn br17_a_seek_in_the_resume_gap_waits_at_the_files_rate_and_plays_bit_perfect_from_there() {
+    let mut r = rig(true, true);
+    r.dac.set_latency_frames(HELD as u32);
+    let a = wav(r.dir.path(), "a.wav", 44_100);
+    let b = wav(r.dir.path(), "b.wav", 48_000);
+    r.start(request(1, a, pcm16(44_100)));
+    r.run(4_410);
+    r.act(EngineAction::StopNow { player: P });
+    r.act(EngineAction::LoadPaused {
+        player: P,
+        request: request(2, b, pcm16(48_000)),
+    });
+    r.settle();
+    r.run(BLOCK);
+    r.act(EngineAction::Resume { player: P });
+    // Loaded paused at the bus's old rate; the resume waits for the
+    // declick to play out before the dac reopens at the file's rate.
+    r.act(seek(1.0));
+    r.settle();
+    assert_eq!(r.rate(), 44_100, "still in the gap");
+    assert_eq!(
+        decode_rate(&r, "cur ["),
+        Some(48_000),
+        "the source from the seek waits at the rate of the cut"
+    );
+    let heard = heard_after_reopen(&mut r, 48_000, 44_100, 4_800);
+    assert_eq!(r.stream_rates().last(), Some(&(48_000, vec![])));
+    plays_bit_exact_from(&heard, 48_000, RAMP_48K);
+    assert!(r.engine.telemetry(P).bit_perfect, "the badge is lit");
 }
 
 #[test]
