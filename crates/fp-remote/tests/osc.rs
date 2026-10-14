@@ -341,3 +341,20 @@ fn a_reset_still_clears_what_disappeared() {
         "a full dump, plus the cleared address"
     );
 }
+
+#[test]
+fn bf13_osc_values_follow_the_lock() {
+    let mut s = demo_state();
+    let get = |s: &fp_model::AppState, a: &str| {
+        values(s, &Playback::default())
+            .into_iter()
+            .find(|(addr, _)| addr == a)
+            .map(|(_, v)| v)
+            .unwrap()
+    };
+    assert_eq!(get(&s, "/fauste/player/1/volume-locked"), OscType::Int(0));
+    support::lock_first_player(&mut s);
+    assert_eq!(get(&s, "/fauste/player/1/volume-locked"), OscType::Int(1));
+    assert_eq!(get(&s, "/fauste/player/1/volume"), OscType::Float(1.0));
+    assert_eq!(get(&s, "/fauste/player/2/volume-locked"), OscType::Int(0));
+}

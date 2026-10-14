@@ -477,3 +477,26 @@ async fn peaks_can_be_reduced_to_a_number_of_buckets() {
     let (status, _, _) = call(ctx(&fake), "GET", &uri, None).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
+
+// Bit-perfect rate and fader spec BF12.
+
+#[tokio::test]
+async fn bf12_full_volume_is_accepted_over_http_and_less_is_a_conflict() {
+    let mut s = demo_state();
+    support::lock_first_player(&mut s);
+    let p = s.players[0].id;
+    let fake = FakeControl::new(s);
+    let uri = format!("/api/v1/players/{}/volume", p.0);
+    let (status, out, _) = call(ctx(&fake), "PUT", &uri, Some(json!({"fader": 0.5}))).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(out["error"], "unavailable", "{out}");
+    assert!(out.to_string().contains("held at 100 %"), "{out}");
+    assert!(fake.take_sent().is_empty());
+    let (status, _, _) = call(ctx(&fake), "PUT", &uri, Some(json!({"fader": 1.0}))).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert_eq!(
+        fake.take_sent(),
+        vec![Command::SetVolume(p, 1.0)],
+        "queued, and exactly unity"
+    );
+}

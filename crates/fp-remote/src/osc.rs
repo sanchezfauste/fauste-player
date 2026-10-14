@@ -247,6 +247,7 @@ pub fn values(model: &AppState, playback: &Playback) -> Vec<(String, OscType)> {
         out.push((at("cueing"), flag(p.cue.is_some())));
         out.push((at("stop-after-current"), flag(p.stop_after_current)));
         out.push((at("volume"), OscType::Float(p.fader)));
+        out.push((at("volume-locked"), flag(p.fader_locked)));
         out.push((at("title"), text(current.map(|t| t.title.as_str()))));
         out.push((at("artist"), text(current.map(|t| t.artist.as_str()))));
         out.push((

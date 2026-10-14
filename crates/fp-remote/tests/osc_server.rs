@@ -229,3 +229,27 @@ fn fewer_players_clear_the_addresses_of_the_removed_ones() {
     }
     drop(handle);
 }
+
+#[test]
+fn bf12_an_osc_volume_on_a_locked_player_is_refused_and_play_still_works() {
+    let mut s = demo_state();
+    support::lock_first_player(&mut s);
+    let fake = FakeControl::new(s);
+    enabled(&fake);
+    let handle = spawn(fake.clone()).unwrap();
+    let to = osc_addr(&handle);
+    let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+    send(
+        &sock,
+        to,
+        "/fauste/player/1/volume",
+        vec![OscType::Float(0.5)],
+    );
+    send(&sock, to, "/fauste/player/1/play", vec![]);
+    let p = fake.state.load().players[0].id;
+    assert_eq!(
+        wait_sent(&fake, 1),
+        vec![Command::Play(p)],
+        "the volume queued nothing"
+    );
+}

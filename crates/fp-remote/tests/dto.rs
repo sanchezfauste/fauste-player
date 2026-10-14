@@ -199,3 +199,17 @@ fn a_player_reports_its_remaining_time_to_the_play_range() {
         Some(150.0)
     );
 }
+
+#[test]
+fn bf13_a_player_says_whether_its_fader_is_locked() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    let playback = Playback::default();
+    assert!(!dto::player(&s, &playback, p).unwrap().fader_locked);
+    support::lock_first_player(&mut s);
+    let out = dto::player(&s, &playback, p).unwrap();
+    assert!(out.fader_locked);
+    assert!((out.fader - 1.0).abs() < 1e-6);
+    let json = serde_json::to_value(&out).unwrap();
+    assert_eq!(json["fader_locked"], serde_json::Value::Bool(true));
+}
