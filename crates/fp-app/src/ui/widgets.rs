@@ -106,6 +106,16 @@ impl TileStyle {
     }
 }
 
+/// The colour of the mix (segue) marker on the waveform: violet while the
+/// mix is the next thing to happen, dim grey otherwise.
+pub fn mix_marker_color(active: bool) -> Color32 {
+    if active {
+        theme::MIX_LINE
+    } else {
+        theme::NEUTRAL_600.gamma_multiply(0.6)
+    }
+}
+
 /// The least space between a button's text and its border, on each side.
 pub const SETTINGS_BUTTON_PAD: f32 = 12.0;
 /// The height of every text button of the Settings window.
@@ -1777,11 +1787,7 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
     }
     if let Some(f) = m.segue_start {
         let mx = x_of(f);
-        let color = if input.mix_active {
-            theme::AMBER
-        } else {
-            theme::NEUTRAL_600.gamma_multiply(0.6)
-        };
+        let color = mix_marker_color(input.mix_active);
         let mut y = inner.top();
         while y < inner.bottom() {
             painter.rect_filled(Rect::from_min_size(pos2(mx, y), vec2(1.0, 2.0)), 0.0, color);

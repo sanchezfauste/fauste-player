@@ -135,7 +135,8 @@ red.
 - A blue shaded area at the start marks the **intro**, and a badge counts it
   down. The intro only shows when it has been set.
 - An orange shaded area at the end marks the **outro**, with its own countdown.
-- A dashed amber line with a **MIX** tag marks where the next track starts in
+- A dashed violet line (the colour of the **Mixing** badge, so it is not mistaken
+  for the orange outro) with a **MIX** tag marks where the next track starts in
   continuous mode. It is dimmed in single mode, and on a player whose Main
   output is bit-perfect, which does not mix (see [What it costs](bit-perfect.md#what-it-costs)).
 - The whole file is drawn. The silent start and end that playback skips (before

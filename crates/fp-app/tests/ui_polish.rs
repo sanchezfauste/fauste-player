@@ -61,3 +61,18 @@ fn a_settings_button_clears_its_text_by_the_padding_with_and_without_a_glyph() {
         }
     }
 }
+
+use fp_app::ui::widgets::mix_marker_color;
+
+#[test]
+fn the_active_mix_marker_is_violet_and_not_like_the_outro_marker() {
+    assert_eq!(mix_marker_color(true), theme::MIX_LINE);
+    assert_eq!(theme::MIX_LINE, theme::ACCENT, "the MIXING badge's colour");
+    assert_ne!(theme::MIX_LINE, theme::OUTRO_LINE);
+    assert_ne!(mix_marker_color(true), theme::AMBER);
+    // Inactive: the dim grey it always had.
+    assert_eq!(
+        mix_marker_color(false),
+        theme::NEUTRAL_600.gamma_multiply(0.6)
+    );
+}
