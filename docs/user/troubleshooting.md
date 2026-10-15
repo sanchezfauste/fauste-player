@@ -143,6 +143,15 @@ interface**. Please report it with the logs.
 ## Logs and crash reports
 
 See [Data and backups](data-and-backups.md) for the log folder. There is one
-log file per day, and the last 14 are kept. Crash reports are saved as
-`crash-<time>.txt`. Set `RUST_LOG=debug` in the environment for more detail.
+log file per day. Identical lines that repeat one after another are written
+once, followed by a line such as `previous message repeated 12 times`. The
+PulseAudio client's routine connection messages are left out by default.
+Set `RUST_LOG=debug` in the environment for more detail (it replaces the
+default filter, `info,pulseaudio=warn`).
+
+The log cannot fill the disk: a day's file stops growing at 10 MiB (its last
+line says so) and the last 14 files are kept. Change both in the config file
+with `limits.max_log_file_mb` (1 to 1024) and `limits.max_log_files` (1 to
+365); they apply at the next start. Crash reports are saved as
+`crash-<time>.txt`.
 Attach both files when reporting a bug.
