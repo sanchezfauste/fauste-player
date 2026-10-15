@@ -633,6 +633,7 @@ apply-now-confirm = Interrompre et appliquer
 # Pre-listen on an on-air output
 cue-on-air-title = Pré-écoute à l'antenne ?
 cue-on-air-body = Cette pré-écoute sortirait sur la sortie antenne, où { $sounding }. Elle s'entendrait à l'antenne.
+cue-on-air-and = { $first } et { $last }
 cue-on-air-confirm = Pré-écouter quand même
 cue-on-air-player-playing = le lecteur { $n } joue
 cue-on-air-player-paused = le lecteur { $n } est en pause

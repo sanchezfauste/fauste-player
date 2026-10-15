@@ -23,7 +23,10 @@ over HTTP, live events over Server-Sent Events, OSC, and Settings → Remote.
   `404` (an unknown id) or `409` with the model's reason, and nothing is
   queued. A refusal is still possible if another operator changes the state
   between the snapshot and the conductor applying the command. The interface
-  then shows its usual notice.
+  then shows its usual notice. The same race applies to `cue_on_air`: if
+  something starts on the on-air output after the check, the command reaches
+  the model, which asks on the console instead (nothing goes on air); the
+  remote client has already been answered `202`. MIDI has the same window.
 - **Desired values.** On/off settings take the value wanted (`{"on": true}`).
   If it is already in that state, nothing is sent and the answer is still
   `202`. Otherwise an idempotent model command (`SetCue`, …) is sent. It is
