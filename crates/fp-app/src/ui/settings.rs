@@ -1028,7 +1028,7 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
 fn cue_equals_main_note(ui: &mut Ui, scene: &Scene<'_>) {
     ui.add(
         egui::Label::new(
-            RichText::new(scene.i18n.tr("settings-cue-equals-main"))
+            RichText::new(scene.i18n.tr("settings-cue-on-air"))
                 .font(font(11.0))
                 .color(theme::AMBER_TEXT),
         )

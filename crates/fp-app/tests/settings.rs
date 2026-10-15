@@ -943,7 +943,7 @@ fn the_basic_view_says_when_advanced_settings_are_in_use() {
     assert!(h.query_by_label_contains(note).is_some());
 }
 
-const CUE_EQUALS_MAIN: &str = "The Cue output is the same as the Main output";
+const CUE_EQUALS_MAIN: &str = "This Cue output shares an on-air output";
 
 #[test]
 fn a_cue_output_equal_to_main_is_warned_about() {
