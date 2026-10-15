@@ -1685,7 +1685,7 @@ checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
 name = "fp-analysis"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "crossbeam-channel",
  "fp-decode",
@@ -1706,7 +1706,7 @@ dependencies = [
 
 [[package]]
 name = "fp-app"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "arc-swap",
  "chrono",
@@ -1748,7 +1748,7 @@ dependencies = [
 
 [[package]]
 name = "fp-backends"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "alsa",
  "audio_thread_priority",
@@ -1763,7 +1763,7 @@ dependencies = [
 
 [[package]]
 name = "fp-control"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "arc-swap",
  "crossbeam-channel",
@@ -1774,7 +1774,7 @@ dependencies = [
 
 [[package]]
 name = "fp-decode"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ape-decoder",
  "hound",
@@ -1789,11 +1789,11 @@ dependencies = [
 
 [[package]]
 name = "fp-dsp"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "fp-engine"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "arc-swap",
  "assert_no_alloc",
@@ -1815,7 +1815,7 @@ dependencies = [
 
 [[package]]
 name = "fp-model"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "proptest",
  "serde",
@@ -1825,7 +1825,7 @@ dependencies = [
 
 [[package]]
 name = "fp-remote"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "arc-swap",
  "axum",
@@ -1844,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "fp-store"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "directories",
  "fp-model",
