@@ -734,3 +734,33 @@ fn ca5_each_notice_is_new() {
     apply(&mut s, Command::Play(p2)).unwrap();
     assert!(s.cue_on_air.notice.unwrap().id > first.id);
 }
+
+/// CA7: an on-air pre-listen on a bit-perfect device is a source like any
+/// other: BR3.5 already keeps the device's rate while it sounds.
+#[test]
+fn ca7_an_on_air_cue_on_a_bit_perfect_device_keeps_the_rate() {
+    let mut s = fixture(4);
+    let (p1, p2) = (s.players[0].id, s.players[1].id);
+    common::set_track_rates(&mut s, &[48_000, 44_100, 44_100, 44_100]);
+    common::place_on_dac(&mut s, Holder::PlayerMain(p2));
+    common::place_on_dac(&mut s, Holder::PlayerCue(p1));
+    common::report_stream_rate(&mut s, 48_000, Vec::new());
+    apply(&mut s, Command::Play(p2)).unwrap();
+    let following = entries(&s)[1];
+    let request = s
+        .request_from_cue_in(following, Holder::PlayerMain(p2))
+        .unwrap();
+    assert_eq!(fp_model::rate_cut(&s, p2, &request), Some(44_100), "quiet");
+    let entry = next(&s, p1);
+    apply(
+        &mut s,
+        Command::ForceCue(CueStart::Entry { player: p1, entry }),
+    )
+    .unwrap();
+    assert!(s.player(p1).unwrap().cue.is_some());
+    assert_eq!(
+        fp_model::rate_cut(&s, p2, &request),
+        None,
+        "the on-air pre-listen sounds on the device"
+    );
+}
