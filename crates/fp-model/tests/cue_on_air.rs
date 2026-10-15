@@ -8,7 +8,8 @@ use std::path::PathBuf;
 
 use common::{entries, fixture};
 use fp_model::cue_on_air::{
-    HolderOutput, cue_is_on_air, holder_output, needs_confirmation, outputs_overlap, sounding_on,
+    CueStopped, HolderOutput, cue_is_on_air, holder_output, needs_confirmation, outputs_overlap,
+    sounding_on,
 };
 use fp_model::{
     AppState, CartId, Command, CueStart, EngineAction, EngineEvent, EntryId, Holder, OutputDevice,
@@ -546,4 +547,190 @@ fn ca6_needs_confirmation_for_a_cart() {
     assert!(needs_confirmation(&s, &Command::CueCart(cart)));
     assert!(needs_confirmation(&s, &Command::SetCartCue(cart, true)));
     assert!(!needs_confirmation(&s, &Command::SetCartCue(cart, false)));
+}
+
+fn notice(s: &AppState) -> Option<(Holder, Holder)> {
+    s.cue_on_air.notice.map(|n| (n.cue, n.by))
+}
+
+#[test]
+fn ca5_play_stops_an_unconfirmed_cue_first() {
+    let (mut s, p1, p2) = shared();
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    let actions = apply(&mut s, Command::Play(p2)).unwrap();
+    assert_eq!(
+        actions.first(),
+        Some(&EngineAction::StopCue { player: p1 }),
+        "the pre-listen stops before the track starts: {actions:?}"
+    );
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, EngineAction::StartCurrent { player, .. } if *player == p2))
+    );
+    assert!(s.player(p1).unwrap().cue.is_none());
+    assert_eq!(
+        notice(&s),
+        Some((Holder::PlayerCue(p1), Holder::PlayerMain(p2)))
+    );
+}
+
+#[test]
+fn ca5_a_confirmed_cue_keeps_playing() {
+    let (mut s, p1, p2) = shared();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    let entry = next(&s, p1);
+    apply(
+        &mut s,
+        Command::ForceCue(CueStart::Entry { player: p1, entry }),
+    )
+    .unwrap();
+    apply(&mut s, Command::Stop(p2)).unwrap();
+    let actions = apply(&mut s, Command::Play(p2)).unwrap();
+    assert!(
+        !actions.contains(&EngineAction::StopCue { player: p1 }),
+        "{actions:?}"
+    );
+    assert!(s.player(p1).unwrap().cue.is_some());
+    assert_eq!(s.cue_on_air.notice, None);
+}
+
+/// Review Focus 5.
+#[test]
+fn ca5_a_confirmation_ends_with_its_cue() {
+    let (mut s, p1, p2) = shared();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    let entry = next(&s, p1);
+    apply(
+        &mut s,
+        Command::ForceCue(CueStart::Entry { player: p1, entry }),
+    )
+    .unwrap();
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    assert!(s.cue_on_air.confirmed.is_empty());
+    apply(&mut s, Command::Stop(p2)).unwrap();
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    assert!(s.player(p1).unwrap().cue.is_none(), "unconfirmed again");
+}
+
+#[test]
+fn ca5_the_players_own_play_stops_its_cue_on_one_card() {
+    let mut s = fixture(4);
+    let p1 = s.players[0].id;
+    on_desk(&mut s, Holder::PlayerMain(p1), 0);
+    on_desk(&mut s, Holder::PlayerCue(p1), 0);
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    let actions = apply(&mut s, Command::Play(p1)).unwrap();
+    assert_eq!(actions.first(), Some(&EngineAction::StopCue { player: p1 }));
+    assert_eq!(
+        notice(&s),
+        Some((Holder::PlayerCue(p1), Holder::PlayerMain(p1)))
+    );
+}
+
+#[test]
+fn ca5_a_paused_player_resuming_stops_it() {
+    let (mut s, p1, p2) = shared();
+    place(
+        &mut s,
+        Holder::PlayerMain(p2),
+        Some(route("speakers", 2)),
+        "speakers",
+    );
+    apply(&mut s, Command::Play(p2)).unwrap();
+    apply(&mut s, Command::Pause(p2)).unwrap();
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    assert!(s.player(p1).unwrap().cue.is_some(), "desk is quiet");
+    // The paused player moves onto the desk (live settings L16): paused, it
+    // sounds but starts nothing.
+    on_desk(&mut s, Holder::PlayerMain(p2), 0);
+    assert!(s.player(p1).unwrap().cue.is_some());
+    let actions = apply(&mut s, Command::Play(p2)).unwrap();
+    assert_eq!(actions.first(), Some(&EngineAction::StopCue { player: p1 }));
+    assert_eq!(
+        notice(&s),
+        Some((Holder::PlayerCue(p1), Holder::PlayerMain(p2)))
+    );
+}
+
+/// Review Focus 1.
+#[test]
+fn ca5_the_cartwalls_first_cart_stops_it_once_placed() {
+    let (mut s, p1, _) = shared();
+    let cart = cart_with_file(&mut s);
+    s.config.outputs.cartwall.main = None;
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    apply(&mut s, Command::FireCart(cart)).unwrap();
+    assert!(
+        s.player(p1).unwrap().cue.is_some(),
+        "the cartwall is not placed yet"
+    );
+    let actions = place(&mut s, Holder::CartwallMain, None, "desk");
+    assert_eq!(actions.first(), Some(&EngineAction::StopCue { player: p1 }));
+    assert_eq!(
+        notice(&s),
+        Some((Holder::PlayerCue(p1), Holder::CartwallMain))
+    );
+}
+
+#[test]
+fn ca5_a_cart_pre_listen_stops_when_a_player_starts() {
+    let (mut s, _, p2) = shared();
+    let cart = cart_with_file(&mut s);
+    on_desk(&mut s, Holder::CartwallCue, 0);
+    apply(&mut s, Command::CueCart(cart)).unwrap();
+    assert_eq!(s.cartwall.cue, Some(cart));
+    let actions = apply(&mut s, Command::Play(p2)).unwrap();
+    assert_eq!(actions.first(), Some(&EngineAction::StopCartCue));
+    assert_eq!(s.cartwall.cue, None);
+    assert_eq!(
+        notice(&s),
+        Some((Holder::CartwallCue, Holder::PlayerMain(p2)))
+    );
+}
+
+#[test]
+fn ca5_another_pre_listen_does_not_stop_it() {
+    let (mut s, p1, _) = shared();
+    let p3 = s.players[2].id;
+    on_desk(&mut s, Holder::PlayerCue(p3), 0);
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    let entry = next(&s, p3);
+    apply(
+        &mut s,
+        Command::ForceCue(CueStart::Entry { player: p3, entry }),
+    )
+    .unwrap();
+    assert!(s.player(p1).unwrap().cue.is_some());
+    assert!(s.player(p3).unwrap().cue.is_some());
+}
+
+#[test]
+fn ca5_a_cue_off_air_is_never_stopped() {
+    let mut s = fixture(4);
+    let (p1, p2) = (s.players[0].id, s.players[1].id);
+    on_desk(&mut s, Holder::PlayerMain(p2), 0);
+    place(
+        &mut s,
+        Holder::PlayerCue(p1),
+        Some(route("phones", 0)),
+        "phones",
+    );
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    let actions = apply(&mut s, Command::Play(p2)).unwrap();
+    assert!(!actions.contains(&EngineAction::StopCue { player: p1 }));
+    assert_eq!(s.cue_on_air.notice, None);
+}
+
+#[test]
+fn ca5_each_notice_is_new() {
+    let (mut s, p1, p2) = shared();
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    let first: CueStopped = s.cue_on_air.notice.unwrap();
+    apply(&mut s, Command::Stop(p2)).unwrap();
+    apply(&mut s, Command::ToggleCue(p1)).unwrap();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    assert!(s.cue_on_air.notice.unwrap().id > first.id);
 }
