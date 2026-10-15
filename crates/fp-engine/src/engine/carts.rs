@@ -329,7 +329,7 @@ impl Engine {
             .as_ref()
             .map(|c| (c.main.clone(), c.cue_route.clone(), c.cue.clone()))
         else {
-            self.events.push(EngineEvent::Unplaced { holder, route });
+            self.report_cartwall_route(holder, route);
             return Some(Ok(()));
         };
         match holder {

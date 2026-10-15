@@ -554,19 +554,15 @@ impl Engine {
             reported_rates: HashMap::new(),
         };
         // L3: what the engine runs with, before anything is placed. The
-        // cartwall has no bus until its first cart.
+        // cartwall has no bus until its first cart, but it is placed from
+        // the start (`report_cartwall_route`): the model must know where
+        // its pre-listen would sound before the first one (CA3).
         engine.events.push(EngineEvent::AudioSystemInUse {
             configured: engine.audio_system.clone(),
             in_use: engine.backend_in_use.clone(),
         });
-        engine.events.push(EngineEvent::Unplaced {
-            holder: Holder::CartwallMain,
-            route: cartwall_routes.main,
-        });
-        engine.events.push(EngineEvent::Unplaced {
-            holder: Holder::CartwallCue,
-            route: cartwall_routes.cue,
-        });
+        engine.report_cartwall_route(Holder::CartwallMain, cartwall_routes.main);
+        engine.report_cartwall_route(Holder::CartwallCue, cartwall_routes.cue);
         engine
     }
 
@@ -745,14 +741,8 @@ impl Engine {
         // (L3, L13).
         if self.cartwall.is_none() && self.settings.cartwall_routes != cartwall_before {
             let routes = self.settings.cartwall_routes.clone();
-            self.events.push(EngineEvent::Unplaced {
-                holder: Holder::CartwallMain,
-                route: routes.main,
-            });
-            self.events.push(EngineEvent::Unplaced {
-                holder: Holder::CartwallCue,
-                route: routes.cue,
-            });
+            self.report_cartwall_route(Holder::CartwallMain, routes.main);
+            self.report_cartwall_route(Holder::CartwallCue, routes.cue);
         }
         if !retune {
             return;
@@ -809,6 +799,21 @@ impl Engine {
             None => EngineEvent::Unplaced { holder, route },
         };
         self.events.push(event);
+    }
+
+    /// L3: reports where a cartwall holder plays from its `route`, as
+    /// `ensure_cartwall` and `move_cartwall` will place it, without opening
+    /// a stream or creating a worker (both stay lazy). Main without a route
+    /// goes to the default output; a Cue without a usable route has no bus.
+    fn report_cartwall_route(&mut self, holder: Holder, route: Option<Route>) {
+        let target = match holder {
+            Holder::CartwallCue => route.as_ref().and_then(|r| self.cue_target(r)),
+            _ => Some(match &route {
+                Some(r) => self.route_target(r),
+                None => (self.default_output(), 0),
+            }),
+        };
+        self.report_placement(holder, route, target.as_ref().map(|t| &t.0));
     }
 
     /// BR1: reports each bus whose stream rate or refused rates changed
@@ -973,11 +978,16 @@ impl Engine {
             .map(|(id, rt)| (*id, rt.main_route.clone()))
             .collect();
         let cartwall = self.cartwall_main_route().filter(|route| on_default(route));
+        // Not opened yet: its default output may have moved (L3).
+        let unopened = (self.cartwall.is_none() && on_default(&self.settings.cartwall_routes.main))
+            .then(|| self.settings.cartwall_routes.main.clone());
         for (player, route) in players {
             self.move_player_main(player, route, true);
         }
         if let Some(route) = cartwall {
             self.move_cartwall(Holder::CartwallMain, route, true);
+        } else if let Some(route) = unopened {
+            self.report_cartwall_route(Holder::CartwallMain, route);
         }
         self.events.push(EngineEvent::AudioSystemInUse {
             configured: backend.clone(),
@@ -1176,8 +1186,8 @@ impl Engine {
         };
         let cue = cue_route.as_ref().and_then(|r| self.cue_target(r));
         let cue_changes = cue != cue_now;
-        // A Cue that changes with Main (it equals the new Main, or comes
-        // back) is a Cue change too: it waits for a pre-listen (L11, L20).
+        // A Cue that changes with Main (its backend became unavailable or
+        // available again) is a Cue change too: it waits for a pre-listen (L11, L20).
         if cue_changes && !force && !self.holder_quiet(Holder::PlayerCue(player)) {
             return None;
         }
