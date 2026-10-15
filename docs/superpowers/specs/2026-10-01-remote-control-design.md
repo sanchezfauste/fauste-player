@@ -478,3 +478,7 @@ Each plan reaches `master` through its own pull request.
 - `CLAUDE.md`: the crate in "Where things are"; in "Testing notes", that
   screenshots of the running app need `xdotool` (to find and click the window)
   and that the remote API can drive it with `curl`.
+
+Amended by the [on-air pre-listen spec](2026-10-15-cue-on-air-output-design.md):
+a CUE that would need a confirmation is refused with `409 cue_on_air`;
+`"force": true` starts it anyway (CA6, CA4).

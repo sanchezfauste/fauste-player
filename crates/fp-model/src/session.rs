@@ -178,6 +178,7 @@ impl AppState {
             cartwall,
             ids,
             live: crate::live::LiveSettings::default(),
+            cue_on_air: crate::cue_on_air::CueOnAir::default(),
         };
         // Tracks nothing references (left by an interrupted save) are dropped.
         let orphans: Vec<_> = state

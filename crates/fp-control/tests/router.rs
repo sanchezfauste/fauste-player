@@ -279,7 +279,8 @@ fn a_control_already_up_when_first_heard_does_not_fire() {
 }
 
 /// A Cue output (headphones) for every player and the cartwall, with Main on
-/// the default output: a CUE needs a Cue output apart from Main (spec §4.6).
+/// the default output: a CUE needs a Cue route (spec §4.6), and one off the
+/// on-air output never asks first (on-air pre-listen spec CA3).
 fn give_cue_routes(state: &mut AppState) {
     let phones = fp_model::Route {
         backend: "null".to_owned(),
@@ -418,4 +419,69 @@ fn br16_play_and_previous_bindings_work_on_a_bit_perfect_player() {
     apply(&mut s, Command::Play(p1)).unwrap();
     assert!(!s.player(p1).unwrap().fading, "a hard start (BR7)");
     assert_eq!(r.on_message("APC", on(2), &s), Some(Command::Previous(p1)));
+}
+
+/// P1 (playing) and P2's Cue share `desk` (on-air pre-listen spec §2): a
+/// pre-listen of P2 would be heard on air.
+fn p2_cue_on_air(mut s: AppState) -> AppState {
+    let desk = fp_model::Route {
+        backend: "null".into(),
+        device: "desk".into(),
+        first_channel: 0,
+    };
+    let device = OutputDevice {
+        backend: "null".into(),
+        device: "desk".into(),
+    };
+    let (p1, p2) = (s.players[0].id, s.players[1].id);
+    for r in &mut s.config.outputs.routes {
+        if r.player == p1 {
+            r.main = Some(desk.clone());
+        }
+        if r.player == p2 {
+            r.cue = Some(desk.clone());
+        }
+    }
+    let running = device_settings(&s.config.outputs, &device);
+    for holder in [Holder::PlayerMain(p1), Holder::PlayerCue(p2)] {
+        on_event(
+            &mut s,
+            EngineEvent::Placed {
+                holder,
+                route: Some(desk.clone()),
+                device: device.clone(),
+                running,
+            },
+        );
+    }
+    s
+}
+
+/// CA6, Review Focus 4.
+#[test]
+fn ca6_a_cue_button_that_would_ask_does_nothing() {
+    let s = p2_cue_on_air(state());
+    let (p1, p2) = (s.players[0].id, s.players[1].id);
+    let mut r = router(&[(note(1), MidiAction::Button(ShortcutAction::CuePlayer(2)))]);
+    assert_eq!(r.on_message("APC", on(1), &s), None, "MIDI cannot confirm");
+    let mut quiet = s.clone();
+    apply(&mut quiet, Command::Stop(p1)).unwrap();
+    assert_eq!(
+        r.on_message("APC", on(1), &quiet),
+        Some(Command::ToggleCue(p2))
+    );
+    // A running pre-listen on the sounding output can always be stopped.
+    let mut running = quiet.clone();
+    apply(&mut running, Command::ToggleCue(p2)).unwrap();
+    let entry = running.player(p2).unwrap().cue.unwrap().entry;
+    apply(
+        &mut running,
+        Command::ForceCue(fp_model::CueStart::Entry { player: p2, entry }),
+    )
+    .unwrap();
+    apply(&mut running, Command::Play(p1)).unwrap();
+    assert_eq!(
+        r.on_message("APC", on(1), &running),
+        Some(Command::ToggleCue(p2))
+    );
 }

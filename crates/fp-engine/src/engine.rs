@@ -554,19 +554,15 @@ impl Engine {
             reported_rates: HashMap::new(),
         };
         // L3: what the engine runs with, before anything is placed. The
-        // cartwall has no bus until its first cart.
+        // cartwall has no bus until its first cart, but it is placed from
+        // the start (`report_cartwall_route`): the model must know where
+        // its pre-listen would sound before the first one (CA3).
         engine.events.push(EngineEvent::AudioSystemInUse {
             configured: engine.audio_system.clone(),
             in_use: engine.backend_in_use.clone(),
         });
-        engine.events.push(EngineEvent::Unplaced {
-            holder: Holder::CartwallMain,
-            route: cartwall_routes.main,
-        });
-        engine.events.push(EngineEvent::Unplaced {
-            holder: Holder::CartwallCue,
-            route: cartwall_routes.cue,
-        });
+        engine.report_cartwall_route(Holder::CartwallMain, cartwall_routes.main);
+        engine.report_cartwall_route(Holder::CartwallCue, cartwall_routes.cue);
         engine
     }
 
@@ -745,14 +741,8 @@ impl Engine {
         // (L3, L13).
         if self.cartwall.is_none() && self.settings.cartwall_routes != cartwall_before {
             let routes = self.settings.cartwall_routes.clone();
-            self.events.push(EngineEvent::Unplaced {
-                holder: Holder::CartwallMain,
-                route: routes.main,
-            });
-            self.events.push(EngineEvent::Unplaced {
-                holder: Holder::CartwallCue,
-                route: routes.cue,
-            });
+            self.report_cartwall_route(Holder::CartwallMain, routes.main);
+            self.report_cartwall_route(Holder::CartwallCue, routes.cue);
         }
         if !retune {
             return;
@@ -809,6 +799,21 @@ impl Engine {
             None => EngineEvent::Unplaced { holder, route },
         };
         self.events.push(event);
+    }
+
+    /// L3: reports where a cartwall holder plays from its `route`, as
+    /// `ensure_cartwall` and `move_cartwall` will place it, without opening
+    /// a stream or creating a worker (both stay lazy). Main without a route
+    /// goes to the default output; a Cue without a usable route has no bus.
+    fn report_cartwall_route(&mut self, holder: Holder, route: Option<Route>) {
+        let target = match holder {
+            Holder::CartwallCue => route.as_ref().and_then(|r| self.cue_target(r)),
+            _ => Some(match &route {
+                Some(r) => self.route_target(r),
+                None => (self.default_output(), 0),
+            }),
+        };
+        self.report_placement(holder, route, target.as_ref().map(|t| &t.0));
     }
 
     /// BR1: reports each bus whose stream rate or refused rates changed
@@ -973,11 +978,16 @@ impl Engine {
             .map(|(id, rt)| (*id, rt.main_route.clone()))
             .collect();
         let cartwall = self.cartwall_main_route().filter(|route| on_default(route));
+        // Not opened yet: its default output may have moved (L3).
+        let unopened = (self.cartwall.is_none() && on_default(&self.settings.cartwall_routes.main))
+            .then(|| self.settings.cartwall_routes.main.clone());
         for (player, route) in players {
             self.move_player_main(player, route, true);
         }
         if let Some(route) = cartwall {
             self.move_cartwall(Holder::CartwallMain, route, true);
+        } else if let Some(route) = unopened {
+            self.report_cartwall_route(Holder::CartwallMain, route);
         }
         self.events.push(EngineEvent::AudioSystemInUse {
             configured: backend.clone(),
@@ -1155,8 +1165,8 @@ impl Engine {
 
     /// L16: `player`'s Main goes to `route` (the default output without
     /// one). Its sources are opened again on the new bus at their position:
-    /// paused stays paused, waiting stays waiting. A Cue route equal to the
-    /// new Main is dropped; one that differed again comes back.
+    /// paused stays paused, waiting stays waiting. Its Cue stays where its
+    /// route goes (CA8).
     fn move_player_main(
         &mut self,
         player: PlayerId,
@@ -1174,10 +1184,10 @@ impl Engine {
         else {
             return Some(Ok(()));
         };
-        let cue = cue_route.as_ref().and_then(|r| self.cue_target(r, &target));
+        let cue = cue_route.as_ref().and_then(|r| self.cue_target(r));
         let cue_changes = cue != cue_now;
-        // A Cue that changes with Main (it equals the new Main, or comes
-        // back) is a Cue change too: it waits for a pre-listen (L11, L20).
+        // A Cue that changes with Main (its backend became unavailable or
+        // available again) is a Cue change too: it waits for a pre-listen (L11, L20).
         if cue_changes && !force && !self.holder_quiet(Holder::PlayerCue(player)) {
             return None;
         }
@@ -1206,18 +1216,17 @@ impl Engine {
         Some(outcome)
     }
 
-    /// L16: `player`'s Cue goes to `route` (no Cue without one, or when it
-    /// equals Main).
+    /// L16: `player`'s Cue goes to `route` (no Cue without one, CA1).
     fn move_player_cue(
         &mut self,
         player: PlayerId,
         route: Option<Route>,
         force: bool,
     ) -> Option<Result<(), String>> {
-        let Some(main) = self.players.get(&player).map(|rt| rt.main.clone()) else {
+        if !self.players.contains_key(&player) {
             return Some(Ok(()));
-        };
-        let cue = route.as_ref().and_then(|r| self.cue_target(r, &main));
+        }
+        let cue = route.as_ref().and_then(|r| self.cue_target(r));
         let outcome = match &cue {
             Some(target) => self.make_room(target, force)?,
             None => Ok(()),
@@ -1445,6 +1454,15 @@ impl Engine {
     /// count: they are reopened when the rate changes.
     fn bus_sounding(&self, bus: &BusKey) -> bool {
         self.sounding_besides(bus, None)
+    }
+
+    /// On-air pre-listen spec §2, CA7: a pre-listen on `cue` (bus, first
+    /// channel) shares a channel with a player's or the cartwall's Main.
+    /// Such a pre-listen never reopens its bus at its file's rate.
+    pub(super) fn cue_on_air(&self, cue: &(BusKey, u16)) -> bool {
+        let overlaps = |main: &(BusKey, u16)| main.0 == cue.0 && main.1.abs_diff(cue.1) < 2;
+        self.players.values().any(|rt| overlaps(&rt.main))
+            || self.cartwall.as_ref().is_some_and(|c| overlaps(&c.main))
     }
 
     /// As `bus_sounding`, not counting `player`'s current and outgoing
@@ -2005,25 +2023,22 @@ impl Engine {
     }
 
     /// Where a Cue route really goes. Unlike Main, a Cue never falls back to
-    /// the default output (that is where Main plays): a route to a backend
-    /// this machine does not have, or one identical to Main, means no cue.
-    fn cue_target(&self, route: &Route, main: &(BusKey, u16)) -> Option<(BusKey, u16)> {
+    /// the default output: a route to a backend this machine does not have
+    /// means no cue. A Cue on the Main output is placed there like any
+    /// holder (on-air pre-listen spec CA8); the model decides when it may
+    /// sound (CA3-CA5).
+    fn cue_target(&self, route: &Route) -> Option<(BusKey, u16)> {
         let Some(backend) = self.route_backend(&route.backend) else {
             tracing::warn!(backend = %route.backend, "cue route to an unavailable backend; no cue");
             return None;
         };
-        let target = (
+        Some((
             BusKey {
                 backend: backend.id().0,
                 device: route.device.clone(),
             },
             route.first_channel,
-        );
-        if &target == main {
-            tracing::warn!("cue route equals the main route; no cue");
-            return None;
-        }
-        Some(target)
+        ))
     }
 
     /// Resolves the (bus, first channel) of a player's Main and Cue outputs.
@@ -2035,7 +2050,7 @@ impl Engine {
         };
         let cue = routes
             .and_then(|r| r.cue.as_ref())
-            .and_then(|route| self.cue_target(route, &main));
+            .and_then(|route| self.cue_target(route));
         (main, cue)
     }
 
@@ -3070,13 +3085,15 @@ impl Engine {
         {
             self.stop_quick_and_release(player, old);
         }
+        // B3.2 follows the file's rate on an idle bit-perfect bus, but an
+        // on-air pre-listen never moves the rate (CA7).
         if let Some(cue) = self
             .players
             .get(&player)
-            .and_then(|rt| rt.cue.as_ref())
-            .map(|c| c.0.clone())
+            .and_then(|rt| rt.cue.clone())
+            .filter(|cue| !self.cue_on_air(cue))
         {
-            self.prepare_start(&cue, request.format);
+            self.prepare_start(&cue.0, request.format);
         }
         match self.new_source(player, true, request) {
             Ok(mut cue) => {

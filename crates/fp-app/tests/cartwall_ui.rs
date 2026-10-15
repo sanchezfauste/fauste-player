@@ -194,7 +194,7 @@ fn the_cart_menu_pre_listens_on_cue() {
 #[test]
 fn without_a_cartwall_cue_output_the_pre_listen_item_is_dimmed_with_the_reason() {
     let mut s = with_cart();
-    s.config.outputs.cartwall.main = s.config.outputs.cartwall.cue.clone();
+    s.config.outputs.cartwall.cue = None;
     let (mut h, fake) = harness(s);
     h.get_by_label("Station ID").click_secondary();
     h.run_steps(2);

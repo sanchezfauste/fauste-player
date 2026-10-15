@@ -115,7 +115,15 @@ pub fn parse(msg: &OscMessage, state: &AppState) -> Result<OscRequest, &'static 
         ["player", n, action] => {
             let p = player_at(state, n)?;
             match *action {
-                "cue" => return Ok(OscRequest::Op(Operation::SetCue(p, switch(args)?))),
+                // OSC has no force (on-air pre-listen spec CA6): a CUE the
+                // console would ask about is refused with `cue_on_air`.
+                "cue" => {
+                    return Ok(OscRequest::Op(Operation::SetCue {
+                        player: p,
+                        on: switch(args)?,
+                        force: false,
+                    }));
+                }
                 "volume" => {
                     let v = number(args).ok_or("volume needs a number")?;
                     return Ok(OscRequest::Op(Operation::SetFader(p, v as f32)));

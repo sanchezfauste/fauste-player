@@ -37,7 +37,7 @@ pub(super) struct CartSource {
 
 pub(super) struct CartwallRuntime {
     worker: PlayerWorker,
-    main: (BusKey, u16),
+    pub(super) main: (BusKey, u16),
     cue: Option<(BusKey, u16)>,
     /// The routes the engine holds for the cartwall (L3, L16).
     main_route: Option<Route>,
@@ -80,10 +80,7 @@ impl Engine {
                 Some(route) => self.route_target(route),
                 None => (self.default_output(), 0),
             };
-            let cue = routes
-                .cue
-                .as_ref()
-                .and_then(|route| self.cue_target(route, &main));
+            let cue = routes.cue.as_ref().and_then(|route| self.cue_target(route));
             let ready = self
                 .settings
                 .frames(self.settings.tuning.ready_threshold_ms) as usize;
@@ -332,7 +329,7 @@ impl Engine {
             .as_ref()
             .map(|c| (c.main.clone(), c.cue_route.clone(), c.cue.clone()))
         else {
-            self.events.push(EngineEvent::Unplaced { holder, route });
+            self.report_cartwall_route(holder, route);
             return Some(Ok(()));
         };
         match holder {
@@ -341,7 +338,7 @@ impl Engine {
                     Some(r) => self.route_target(r),
                     None => (self.default_output(), 0),
                 };
-                let cue = cue_route.as_ref().and_then(|r| self.cue_target(r, &target));
+                let cue = cue_route.as_ref().and_then(|r| self.cue_target(r));
                 let cue_changes = cue != cue_now;
                 // A Cue that changes with Main waits for a pre-listen
                 // (L11, L20).
@@ -369,7 +366,7 @@ impl Engine {
                 Some(outcome)
             }
             Holder::CartwallCue => {
-                let cue = route.as_ref().and_then(|r| self.cue_target(r, &main));
+                let cue = route.as_ref().and_then(|r| self.cue_target(r));
                 let outcome = match &cue {
                     Some(target) => self.make_room(target, force)?,
                     None => Ok(()),
@@ -479,10 +476,10 @@ impl Engine {
         if let Some(cue) = self
             .cartwall
             .as_ref()
-            .and_then(|c| c.cue.as_ref())
-            .map(|c| c.0.clone())
+            .and_then(|c| c.cue.clone())
+            .filter(|cue| !self.cue_on_air(cue))
         {
-            self.prepare_start(&cue, request.format);
+            self.prepare_start(&cue.0, request.format);
         }
         match self.cart_source(request, true) {
             Ok(source) => {

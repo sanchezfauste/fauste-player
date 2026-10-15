@@ -296,16 +296,28 @@ fn a_cue_route_to_a_missing_backend_never_plays_on_main() {
     assert_eq!(audible(&r.channel(0)), 0);
 }
 
+/// CA8 (on-air pre-listen spec): a cart pre-listen on the cartwall's Main
+/// pair plays there; the model decides whether it may (CA3).
 #[test]
-fn a_cue_route_equal_to_main_is_refused() {
+fn ca8_a_cart_cue_on_the_main_pair_plays_there() {
     let mut r = rig(2, Some(route(0)), Some(route(0)), 48_000);
     r.act(EngineAction::StartCartCue(cart(1, 0.0, SOURCE_END, false)));
+    r.settle();
     r.run(5);
     assert!(
+        !r.events
+            .contains(&EngineEvent::CartCueEnded { cart: CartId(1) }),
+        "{:?}",
         r.events
-            .contains(&EngineEvent::CartCueEnded { cart: CartId(1) })
     );
-    assert_eq!(audible(&r.channel(0)), 0);
+    assert!(audible(&r.channel(0)) > 0);
+    assert!(r.events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Placed {
+            holder: fp_model::Holder::CartwallCue,
+            ..
+        }
+    )));
 }
 
 #[test]

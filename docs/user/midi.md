@@ -42,6 +42,9 @@ binding.
 - A button acts when it is pressed (a key or pad going down, or a control
   change going up through the middle of its range), exactly like the
   player's button on screen. A button that is dimmed on screen does nothing.
+  A **CUE** button also does nothing when its pre-listen would be heard on
+  air while something plays there: MIDI cannot answer the question the
+  screen asks. Stopping a pre-listen always works.
 - A fader moves the volume on the same scale as the on-screen fader. To
   avoid jumps, it only takes over when it reaches or passes the current
   volume (soft takeover); if the volume is changed on screen, the fader has

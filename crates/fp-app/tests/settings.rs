@@ -943,19 +943,24 @@ fn the_basic_view_says_when_advanced_settings_are_in_use() {
     assert!(h.query_by_label_contains(note).is_some());
 }
 
-const CUE_EQUALS_MAIN: &str = "The Cue output is the same as the Main output";
+const CUE_ON_AIR: &str = "This Cue output shares an on-air output";
 
 #[test]
-fn a_cue_output_equal_to_main_is_warned_about() {
+fn a_cue_output_on_an_on_air_output_is_noted() {
     let count = |cue, cartwall| {
         let (h, _fake) = outputs_routed(Vec::new(), cue, cartwall);
-        h.query_all_by_label_contains(CUE_EQUALS_MAIN).count()
+        h.query_all_by_label_contains(CUE_ON_AIR).count()
     };
     assert_eq!(count("speakers", None), 0, "separate outputs");
     assert_eq!(count("dac", None), 1, "a player's Cue on its Main");
     assert_eq!(count("speakers", Some(("dac", "dac"))), 1, "the cartwall's");
     assert_eq!(count("dac", Some(("dac", "dac"))), 2, "both");
     assert_eq!(count("speakers", Some(("dac", "speakers"))), 0);
+    assert_eq!(
+        count("speakers", Some(("speakers", "dac"))),
+        2,
+        "each Cue on the other's Main"
+    );
 }
 
 /// `dac` reports only 44.1 to 48 kHz and 64 to 1024 frames, and the

@@ -36,7 +36,20 @@ struct Rig {
     events: Vec<EngineEvent>,
 }
 
+fn dac_route(first_channel: u16) -> Route {
+    Route {
+        backend: "offline".into(),
+        device: "dac".into(),
+        first_channel,
+    }
+}
+
 fn rig(bit_perfect: bool, exclusive_capable: bool) -> Rig {
+    rig_routed(bit_perfect, exclusive_capable, dac_route(0), None)
+}
+
+/// As `rig`, with P's Main on `main` and its Cue on `cue`.
+fn rig_routed(bit_perfect: bool, exclusive_capable: bool, main: Route, cue: Option<Route>) -> Rig {
     let backend = OfflineBackend::new();
     let dac = backend.add_device("dac", 2);
     dac.set_exclusive_capable(exclusive_capable);
@@ -47,12 +60,8 @@ fn rig(bit_perfect: bool, exclusive_capable: bool) -> Rig {
     config.outputs.buffer_frames = BLOCK as u32;
     config.outputs.routes = vec![PlayerRoutes {
         player: P,
-        main: Some(Route {
-            backend: "offline".into(),
-            device: "dac".into(),
-            first_channel: 0,
-        }),
-        cue: None,
+        main: Some(main),
+        cue,
     }];
     if bit_perfect {
         config.outputs.bit_perfect = vec![OutputDevice {
@@ -111,6 +120,11 @@ fn pcm16(rate: u32) -> Option<AudioFormat> {
 impl Rig {
     fn act(&mut self, action: EngineAction) {
         self.engine.execute(action, self.clock);
+    }
+
+    fn cue(&mut self, request: SourceRequest) {
+        self.act(EngineAction::StartCue { player: P, request });
+        self.settle();
     }
 
     fn start(&mut self, request: SourceRequest) {
@@ -1505,4 +1519,54 @@ fn n16_no_gain_stays_bit_perfect() {
     let path = wav(r.dir.path(), "a.wav", 48_000);
     r.start(request(1, path, pcm16(48_000)));
     assert!(bit_perfect_after(&mut r, 2_400));
+}
+
+/// CA7: a pre-listen on the on-air pair of an idle bit-perfect device is
+/// resampled to the running rate; it never moves the rate.
+#[test]
+fn ca7_an_on_air_cue_plays_at_the_running_rate() {
+    let mut r = rig_routed(true, true, dac_route(0), Some(dac_route(0)));
+    assert_eq!(r.rate(), 48_000);
+    let path = wav(r.dir.path(), "cue.wav", 44_100);
+    r.cue(request(1, path, pcm16(44_100)));
+    assert_eq!(r.rate(), 48_000, "the pre-listen never moves the rate");
+    let heard = r.run(4_800);
+    assert!(heard.iter().any(|v| *v != 0.0), "it is heard, resampled");
+}
+
+/// A pre-listen alone on a bit-perfect device (Main elsewhere) still
+/// follows its file's rate (B3.2).
+#[test]
+fn a_cue_alone_on_a_bit_perfect_device_still_follows_its_file() {
+    let speakers = Route {
+        backend: "offline".into(),
+        device: "speakers".into(),
+        first_channel: 0,
+    };
+    let mut r = rig_routed(true, true, speakers, Some(dac_route(0)));
+    let path = wav(r.dir.path(), "cue.wav", 44_100);
+    r.cue(request(1, path, pcm16(44_100)));
+    assert_eq!(r.rate(), 44_100);
+}
+
+/// CA5 in the engine: the model sends the pre-listen's stop and the track's
+/// start in one batch; the track starts and plays at real-time speed,
+/// whatever rate the bus keeps under the CUE's tail.
+#[test]
+fn ca5_a_track_started_as_its_pre_listen_stops_plays() {
+    let mut r = rig_routed(true, true, dac_route(0), Some(dac_route(0)));
+    let cue = wav(r.dir.path(), "cue.wav", 48_000);
+    r.cue(request(1, cue, pcm16(48_000)));
+    r.run(4_800);
+    let track = wav(r.dir.path(), "track.wav", 44_100);
+    r.act(EngineAction::StopCue { player: P });
+    r.start(request(2, track, pcm16(44_100)));
+    let rate = r.rate();
+    let heard = r.run(rate as usize);
+    assert!(heard.iter().any(|v| *v != 0.0), "the track is heard");
+    let position = r.engine.telemetry(P).position_secs.unwrap();
+    assert!(
+        (position - 1.0).abs() < 0.05,
+        "one second plays as one second at {rate} Hz: {position}"
+    );
 }

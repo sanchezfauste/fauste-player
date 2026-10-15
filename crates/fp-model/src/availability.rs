@@ -46,8 +46,8 @@ pub fn availability(state: &AppState, player: PlayerId) -> Availability {
         previous: playing && !p.fading && has_previous,
         stop_after_current: p.mode == PlayMode::Continuous
             || crate::reducer::repeat_entry(state, p),
-        // A running CUE can always be stopped; a new one needs a Cue output
-        // that is not the Main output (spec §4.6).
+        // A running CUE can always be stopped; a new one needs a Cue route
+        // (spec §4.6, on-air pre-listen spec CA1).
         cue: (p.next.is_some() && state.config.outputs.player_has_cue(player)) || p.cue.is_some(),
         fader: !crate::bit_perfect::fader_locked(state, player),
     }
@@ -55,8 +55,8 @@ pub fn availability(state: &AppState, player: PlayerId) -> Availability {
 
 /// False for a transport command that `availability` marks unavailable,
 /// for a `SetVolume` that a locked fader refuses (BF3),
-/// and for a CUE of an entry or a cart pre-listen that has no Cue output
-/// apart from Main (spec §4.6); true for every other command. For an
+/// and for a CUE of an entry or a cart pre-listen without a Cue route
+/// (spec §4.6, CA1); true for every other command. For an
 /// unknown player every one of these is false, as `availability` is all
 /// off: a caller that reports an unknown player checks it first.
 pub fn command_available(state: &AppState, command: &Command) -> bool {

@@ -88,6 +88,9 @@ so analysis, file state and cue-in/cue-out apply to them unchanged.
   one cart pre-listens at a time, and it never reaches Main: without a
   cartwall Cue route apart from its Main route (main spec §4.6) a new
   pre-listen starts nothing, and a running one can still be stopped.
+  Amended by the [on-air pre-listen spec](2026-10-15-cue-on-air-output-design.md):
+  a cartwall Cue route on its Main output is usable, and a pre-listen on a
+  sounding on-air output asks first (CA1, CA3).
 - **C10. Stop all.** `StopAllCarts` stops every playing cart, and the cue.
 - **C11. Atomic edits.** `EditCartPage` (name and grid) and `EditCart` (a
   cart's fields and its file: keep, another library track, or none) check
