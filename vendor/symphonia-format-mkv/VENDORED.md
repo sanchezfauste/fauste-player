@@ -19,12 +19,17 @@ the source.
   `MatroskaTicks::into_segment_ticks` (`src/segment.rs`) is no longer used.
 - `src/demuxer.rs`, `seek_track_by_ts`: the seek read from the last cue
   point at or before the target. In a file with video, cue points index the
-  video's keyframes, which also start the clusters, and the audio frame
-  that holds the target can start in the cluster before: the seek landed on
-  the cued cluster's first audio frame, up to a frame late. It now reads
-  from the later of the last cue point of the sought track and the cue
-  point before the last one (one extra cluster at most).
-- `src/demuxer.rs`, `seek_track_by_ts_forward`: a frame with no duration
+  video's frames (often every keyframe, several per cluster), whose
+  keyframes also start the clusters, and the audio frame that holds the
+  target can start in a cluster before, even several clusters before when
+  clusters are shorter than an audio frame: the seek landed on the cued
+  cluster's first audio frame, up to a frame late. The clusters of the cue
+  points at or before the target, from the last cue point of the sought
+  track (or the first cue point) on, are now tried from the last back until
+  one reaches a frame of the track at or before the target (or skips one):
+  usually the cued cluster or the one before it.
+- `src/demuxer.rs`, `seek_track_by_ts_forward` (which now also tells
+  whether it skipped a frame of the track, `Landing`): a frame with no duration
   (no `BlockDuration`, no `DefaultDuration`, as muxers write audio) counted
   as ending where it starts, so the seek landed on the first block starting
   at or after the target, up to a block late. The frames of the last block

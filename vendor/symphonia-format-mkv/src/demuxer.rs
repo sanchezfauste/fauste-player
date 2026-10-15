@@ -21,7 +21,9 @@ use symphonia_core::units::TimeBase;
 use log::{info, warn};
 
 use crate::codecs::make_track_codec_params;
-use crate::ebml::{EbmlElementInfo, EbmlError, EbmlIterator, EbmlSchema, ReadEbml};
+use crate::ebml::{
+    EbmlElementInfo, EbmlError, EbmlIterator, EbmlIteratorState, EbmlSchema, ReadEbml,
+};
 use crate::lacing::{Frame, extract_frames};
 use crate::schema::{MkvElement, MkvSchema};
 use crate::segment::{
@@ -342,7 +344,12 @@ impl<'s> MkvReader<'s> {
         })
     }
 
-    fn seek_track_by_ts_forward(&mut self, track_id: u32, ts: Timestamp) -> Result<SeekedTo> {
+    // VENDORED CHANGE: returns, besides where the seek landed, whether any frame of the track was
+    // skipped (see `Landing`).
+    fn seek_track_by_ts_forward(&mut self, track_id: u32, ts: Timestamp) -> Result<Landing> {
+        // VENDORED CHANGE: whether a frame of the track was skipped.
+        let mut skipped_any = false;
+
         // VENDORED CHANGE: the last frames of the track skipped so far, those of one block (laced
         // frames with no duration share its timestamp). A frame with no duration (no
         // BlockDuration, no DefaultDuration, as muxers write audio) is only known to end where the
@@ -373,6 +380,7 @@ impl<'s> MkvReader<'s> {
                 }
                 else if let Some(frame) = self.frames.pop_front() {
                     if frame.track_num == track_id {
+                        skipped_any = true;
                         if skipped.last().is_some_and(|p| p.pts != frame.pts) {
                             skipped.clear();
                         }
@@ -402,11 +410,52 @@ impl<'s> MkvReader<'s> {
                 }
 
                 // There are no more elements.
-                return Err(Error::SeekError(SeekErrorKind::OutOfRange));
+                return Ok(Landing::End { skipped_any });
             }
         };
 
-        Ok(SeekedTo { track_id, required_ts: ts, actual_ts })
+        Ok(Landing::Landed { seeked: SeekedTo { track_id, required_ts: ts, actual_ts }, skipped_any })
+    }
+
+    // VENDORED CHANGE: moves to the start of the cluster at `cluster_pos` (from the segment's
+    // data), to read it from there. Its timestamp is read from its Timestamp element, so the
+    // cluster is read from its start, not from a cue's relative position (which skips that
+    // element). A cue's time is not the cluster's timestamp: it is the time of the cued block, in
+    // Segment ticks, and was divided once more by the timestamp scale, which made the cluster's
+    // timestamp 0 and the seek skip the whole cluster. `segment` keeps the iterator's state at the
+    // segment level for a later call, since a forward seek may leave the segment (at its end).
+    fn seek_to_cluster(
+        &mut self,
+        cluster_pos: u64,
+        segment: &mut Option<EbmlIteratorState<MkvSchema>>,
+    ) -> Result<()> {
+        // Ascend back to the segment element.
+        match segment.take() {
+            Some(state) => self.iter.restore_state(state)?,
+            None => self.iter.pop_elements_upto(MkvElement::Segment)?,
+        }
+        *segment = Some(self.iter.save_state());
+
+        // Seek to the specific cluster element.
+        self.iter.seek_to_child(cluster_pos)?;
+
+        // Resume iteration.
+        let cluster = match self.iter.next_header()? {
+            // The seeked element is a cluster.
+            Some(header) if header.element_type() == MkvElement::Cluster => header,
+            // The seeked element is not a cluster or there were no more elements at the cue
+            // position. The cue point was malformed.
+            _ => return seek_error(SeekErrorKind::Unseekable),
+        };
+
+        self.current_cluster = Some(ClusterState { timestamp: None, start: cluster.pos() });
+
+        // Frames buffered before the seek belong to another place in the stream.
+        self.frames.clear();
+
+        // Descend into the cluster element.
+        self.iter.push_element()?;
+        Ok(())
     }
 
     fn seek_track_by_ts_atomic(
@@ -435,94 +484,66 @@ impl<'s> MkvReader<'s> {
 
         // If cues exist, seek to the nearest cue point.
         if let Some(cues) = &self.cues {
-            let mut target_cue_point = None;
-
             // Cue points store timestamps in Matroska ticks while the timestamp being seeked to is
             // in signed Track ticks. Convert to unsigned Matroska ticks for iterating the cue
             // points. If the timestamp is negative, then this is an error because cue points only
             // contain unsigned Matroska ticks.
-            let ts = SignedTrackTicks::from(ts)
+            let cue_ts = SignedTrackTicks::from(ts)
                 .try_into_matroska_ticks(tb)
                 .ok_or(Error::SeekError(SeekErrorKind::OutOfRange))?;
 
-            // VENDORED CHANGE: the last cue point at or before the target may index another track
-            // (a video's keyframes, which also start the clusters): the sought track's frame that
-            // holds the target can then start before that cue's cluster. Read from the later of the
-            // last cue point of the sought track (whose frame starts at or before the target) and
-            // the cue point before the last one; only one cue point at or before the target is used
-            // as it is.
-            let mut last_of_track = None;
-            let mut before_last = None;
+            // VENDORED CHANGE: the cue points at or before the target may index another track (a
+            // video's frames, whose keyframes also start the clusters): the sought track's frame
+            // that holds the target can then start in a cluster before the last cue point's. The
+            // clusters of the cue points at or before the target, from the last cue point of the
+            // sought track (whose frame starts at or before the target) or else the first one, are
+            // tried from the last back, until one reaches a frame of the track at or before the
+            // target.
+            let mut clusters: Vec<u64> = Vec::new();
 
             for cue_point in &cues.points {
-                if cue_point.time > ts {
+                if cue_point.time > cue_ts {
                     break;
                 }
                 if cue_point.positions.track.get() == u64::from(id) {
-                    last_of_track = Some(cue_point);
+                    clusters.clear();
                 }
-                before_last = target_cue_point;
-                target_cue_point = Some(cue_point);
+                if clusters.last() != Some(&cue_point.positions.cluster_pos) {
+                    clusters.push(cue_point.positions.cluster_pos);
+                }
             }
 
-            let target_cue_point = match target_cue_point {
-                Some(last) if last.positions.track.get() == u64::from(id) => last,
-                Some(last) => {
-                    match (last_of_track, before_last) {
-                        (Some(a), Some(b)) => {
-                            if a.time >= b.time {
-                                a
-                            }
-                            else {
-                                b
-                            }
-                        }
-                        (Some(a), None) => a,
-                        (None, Some(b)) => b,
-                        (None, None) => last,
+            let mut segment = None;
+
+            while let Some(cluster_pos) = clusters.pop() {
+                log::debug!("seeking from the cluster at seg_pos={cluster_pos}");
+
+                self.seek_to_cluster(cluster_pos, &mut segment)?;
+
+                let earlier = !clusters.is_empty();
+                match self.seek_track_by_ts_forward(id, ts)? {
+                    Landing::Landed { seeked, skipped_any }
+                        if !earlier || skipped_any || seeked.actual_ts <= ts =>
+                    {
+                        return Ok(seeked);
                     }
+                    Landing::End { skipped_any } if !earlier || skipped_any => {
+                        return seek_error(SeekErrorKind::OutOfRange);
+                    }
+                    // Nothing of the track at or before the target in this cluster or after it:
+                    // try the one before.
+                    _ => (),
                 }
-                None => return seek_error(SeekErrorKind::OutOfRange),
-            };
+            }
 
-            log::debug!(
-                "found cue point: track_id={}, ts={}, seg_pos={}",
-                target_cue_point.positions.track.get(),
-                target_cue_point.time,
-                target_cue_point.positions.cluster_pos
-            );
-
-            // Ascend back to the segment element.
-            self.iter.pop_elements_upto(MkvElement::Segment)?;
-
-            // Seek to the specific cluster element.
-            self.iter.seek_to_child(target_cue_point.positions.cluster_pos)?;
-
-            // Resume iteration.
-            let cluster = match self.iter.next_header()? {
-                // The seeked element is a cluster.
-                Some(header) if header.element_type() == MkvElement::Cluster => header,
-                // The seeked element is not a cluster or there were no more elements at the cue
-                // position. The cue point was malformed.
-                _ => return seek_error(SeekErrorKind::Unseekable),
-            };
-
-            // VENDORED CHANGE: the cluster's timestamp is read from its Timestamp element, so the
-            // cluster is read from its start, not from the cue's relative position (which skips that
-            // element). The cue's time is not the cluster's timestamp: it is the time of the cued
-            // block, in Segment ticks, and was divided once more by the timestamp scale, which made
-            // the cluster's timestamp 0 and the seek skip the whole cluster.
-            self.current_cluster = Some(ClusterState { timestamp: None, start: cluster.pos() });
-
-            // Frames buffered before the seek belong to another place in the stream.
-            self.frames.clear();
-
-            // Descend into the cluster element.
-            self.iter.push_element()?;
+            return seek_error(SeekErrorKind::OutOfRange);
         }
 
         // Seek to exact block.
-        self.seek_track_by_ts_forward(id, ts)
+        match self.seek_track_by_ts_forward(id, ts)? {
+            Landing::Landed { seeked, .. } => Ok(seeked),
+            Landing::End { .. } => seek_error(SeekErrorKind::OutOfRange),
+        }
     }
 
     fn next_element(&mut self) -> Result<bool> {
@@ -760,4 +781,12 @@ impl From<EbmlError> for Error {
         };
         Error::DecodeError(msg)
     }
+}
+
+// VENDORED CHANGE: where a forward seek ended, and whether it skipped any frame of the track: a
+// seek that skipped none and landed past the target (or reached the end) may have started past the
+// frame that holds the target.
+enum Landing {
+    Landed { seeked: SeekedTo, skipped_any: bool },
+    End { skipped_any: bool },
 }

@@ -98,9 +98,11 @@ fn a_seek_into_the_block_read_last_lands_on_the_target_frame() {
 }
 
 /// In a file with video, the cues and the clusters follow the video's
-/// keyframes, and the audio block that holds a target can start before the
+/// frames, and the audio block that holds a target can start before the
 /// cued cluster: the seek still lands on it, not on the cluster's first
-/// audio block.
+/// audio block. Clusters at the keyframes with a cue each, with a cue on
+/// every frame (several cues per cluster), and a cluster and a cue on every
+/// frame (clusters shorter than an audio block).
 #[test]
 fn a_seek_through_cues_of_another_track_lands_on_the_target_frame() {
     let dir = tempfile::tempdir().unwrap();
@@ -116,21 +118,26 @@ fn a_seek_through_cues_of_another_track_lands_on_the_target_frame() {
             data,
         })
         .collect();
-    // 25 frames a second.
-    blocks.extend((0..100).map(|i| Block {
+    // 25 frames a second, on to 4.36 s, past the audio's end: the last
+    // cluster holds no audio.
+    blocks.extend((0..110).map(|i| Block {
         track: 2,
         ts: i * 40,
         data: &video,
     }));
     blocks.sort_by_key(|b| (b.ts, b.track));
-    // Keyframes at 0, 1.04, 2.04 and 3.04 s: each starts a cluster and has a
-    // cue; the audio block from 1.0 s lies in the cluster before.
-    let keyframes: Vec<usize> = blocks
-        .iter()
-        .enumerate()
-        .filter(|(_, b)| b.track == 2 && (b.ts == 0 || b.ts % 1000 == 40))
-        .map(|(i, _)| i)
-        .collect();
+    // The video frames, and its keyframes at 0, 1.04, 2.04 and 3.04 s: the
+    // audio block from 1.0 s lies in the cluster before the one at 1.04 s,
+    // and in the one at 0.96 s when every frame starts a cluster; at 1.09 s
+    // the last two cues lie in one cluster.
+    let frames = |keyframes: bool| -> Vec<usize> {
+        blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.track == 2 && (!keyframes || b.ts == 0 || b.ts % 1000 == 40))
+            .map(|(i, _)| i)
+            .collect()
+    };
     let tracks = [
         [uint(0x83, 2), pcm_track(block, false)].concat(),
         [
@@ -140,24 +147,25 @@ fn a_seek_through_cues_of_another_track_lands_on_the_target_frame() {
         ]
         .concat(),
     ];
-    let path = matroska_tracks(
-        dir.path(),
-        "av.mkv",
-        &tracks,
-        &blocks,
-        &keyframes,
-        &keyframes,
-        false,
-    );
-    let mut d = FileDecoder::open(&path).unwrap();
-    assert!(rest(&mut d) == samples, "the audio decodes whole");
-    for secs in [0.5, 1.05, 2.01, 3.07] {
+    for (name, clusters, cues) in [
+        ("keyframes.mkv", frames(true), frames(true)),
+        ("every-frame-cued.mkv", frames(true), frames(false)),
+        ("every-frame-a-cluster.mkv", frames(false), frames(false)),
+    ] {
+        let path = matroska_tracks(dir.path(), name, &tracks, &blocks, &clusters, &cues, false);
         let mut d = FileDecoder::open(&path).unwrap();
-        d.seek(secs).unwrap();
-        let out = rest(&mut d);
-        let at = (secs * f64::from(d.sample_rate())).round() as usize * 2;
-        assert_eq!(out.len(), samples.len() - at, "{secs} s: length");
-        assert!(out[..] == samples[at..], "{secs} s: the audio differs");
+        assert!(rest(&mut d) == samples, "{name}: the audio decodes whole");
+        for secs in [0.5, 1.05, 1.09, 2.01, 3.07, 4.5] {
+            let mut d = FileDecoder::open(&path).unwrap();
+            d.seek(secs).unwrap();
+            let out = rest(&mut d);
+            let at = ((secs * f64::from(d.sample_rate())).round() as usize * 2).min(samples.len());
+            assert_eq!(out.len(), samples.len() - at, "{name}: {secs} s: length");
+            assert!(
+                out[..] == samples[at..],
+                "{name}: {secs} s: the audio differs"
+            );
+        }
     }
 }
 
