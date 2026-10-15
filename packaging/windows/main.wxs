@@ -57,6 +57,14 @@
                             <File Id='thirdparty' Name='THIRD-PARTY.html' DiskId='1'
                                 Source='dist\staging\THIRD-PARTY.html' KeyPath='yes'/>
                         </Component>
+                        <Component Id='gpllicense' Guid='*'>
+                            <File Id='gpllicense' Name='LICENSE' DiskId='1'
+                                Source='LICENSE' KeyPath='yes'/>
+                        </Component>
+                        <Component Id='noticefile' Guid='*'>
+                            <File Id='noticefile' Name='NOTICE' DiskId='1'
+                                Source='NOTICE' KeyPath='yes'/>
+                        </Component>
                         <Component Id='fontlicense' Guid='*'>
                             <File Id='fontlicense' Name='Inter-OFL.txt' DiskId='1'
                                 Source='crates\fp-app\assets\fonts\OFL.txt' KeyPath='yes'/>
@@ -99,6 +107,8 @@
             Absent='disallow'>
             <ComponentRef Id='binary0'/>
             <ComponentRef Id='notices'/>
+            <ComponentRef Id='gpllicense'/>
+            <ComponentRef Id='noticefile'/>
             <ComponentRef Id='fontlicense'/>
             <ComponentRef Id='iconlicense'/>
             <ComponentRef Id='shortcut'/>

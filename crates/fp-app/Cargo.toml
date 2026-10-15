@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [[bin]]
 name = "fauste-player"
@@ -94,6 +95,8 @@ assets = [
     ["../../packaging/icons/fauste-player-256.png", "usr/share/icons/hicolor/256x256/apps/org.fauste.FaustePlayer.png", "644"],
     ["../../packaging/icons/fauste-player-512.png", "usr/share/icons/hicolor/512x512/apps/org.fauste.FaustePlayer.png", "644"],
     ["../../README.md", "usr/share/doc/fauste-player/", "644"],
+    ["../../LICENSE", "usr/share/doc/fauste-player/", "644"],
+    ["../../NOTICE", "usr/share/doc/fauste-player/", "644"],
     ["../../dist/staging/THIRD-PARTY.html", "usr/share/doc/fauste-player/", "644"],
     ["assets/fonts/OFL.txt", "usr/share/doc/fauste-player/Inter-OFL.txt", "644"],
     ["assets/licenses/Phosphor-MIT.txt", "usr/share/doc/fauste-player/Phosphor-MIT.txt", "644"],
@@ -102,7 +105,7 @@ assets = [
 [package.metadata.generate-rpm]
 name = "fauste-player"
 summary = "Radio playout with several players and a cartwall"
-license = "LicenseRef-proprietary"
+license = "GPL-3.0-or-later"
 url = "https://github.com/sanchezfauste/fauste-player"
 assets = [
     { source = "target/release/fauste-player", dest = "/usr/bin/fauste-player", mode = "755" },
@@ -117,6 +120,8 @@ assets = [
     { source = "../../packaging/icons/fauste-player-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/org.fauste.FaustePlayer.png", mode = "644" },
     { source = "../../packaging/icons/fauste-player-512.png", dest = "/usr/share/icons/hicolor/512x512/apps/org.fauste.FaustePlayer.png", mode = "644" },
     { source = "../../README.md", dest = "/usr/share/doc/fauste-player/README.md", mode = "644", doc = true },
+    { source = "../../LICENSE", dest = "/usr/share/doc/fauste-player/LICENSE", mode = "644", doc = true },
+    { source = "../../NOTICE", dest = "/usr/share/doc/fauste-player/NOTICE", mode = "644", doc = true },
     { source = "../../dist/staging/THIRD-PARTY.html", dest = "/usr/share/doc/fauste-player/THIRD-PARTY.html", mode = "644", doc = true },
     { source = "assets/fonts/OFL.txt", dest = "/usr/share/doc/fauste-player/Inter-OFL.txt", mode = "644", doc = true },
     { source = "assets/licenses/Phosphor-MIT.txt", dest = "/usr/share/doc/fauste-player/Phosphor-MIT.txt", mode = "644", doc = true },

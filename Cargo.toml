@@ -8,6 +8,7 @@ version = "0.6.0"
 edition = "2024"
 rust-version = "1.98"
 publish = false
+license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
 fp-model = { path = "crates/fp-model" }

@@ -378,9 +378,20 @@ connections and sends no telemetry.
 
 ## Licence
 
-No licence has been chosen for Fauste Player yet: until one is added, all
-rights are reserved by the author. Bundled third-party components keep
-their own licences:
+Fauste Player is free software, released under the
+[GNU General Public License](LICENSE) version 3 or (at your option) any later
+version (`GPL-3.0-or-later`). Copyright (C) 2026 Marc Sánchez Fauste.
+
+[`NOTICE`](NOTICE) adds one term, under section 7(b) of the licence: anyone
+who conveys the program, modified or not, must keep this attribution, with
+its link, in the program's About window (or the equivalent screen that shows
+credits to users):
+
+> Based on [Fauste Player](https://github.com/sanchezfauste/fauste-player) by Marc Sánchez Fauste
+
+The name and the logo may be used freely.
+
+Bundled third-party components keep their own licences:
 
 - the Inter font: SIL Open Font License 1.1,
   [`OFL.txt`](crates/fp-app/assets/fonts/OFL.txt);
@@ -389,5 +400,6 @@ their own licences:
 - every Rust dependency: listed in `licenses/THIRD-PARTY.html` inside each
   release archive.
 
-The About window (the info button in the top bar) shows the version, the copyright, both
-bundled notices and a button that opens the installed `THIRD-PARTY.html`.
+The About window (the info button in the top bar) shows the version, the
+copyright, the licence, both bundled notices and a button that opens the
+installed `THIRD-PARTY.html`.

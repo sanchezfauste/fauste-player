@@ -41,6 +41,13 @@ has the full rules, which apply to people and agents alike.
   commits.
 - Update `docs/user` and `docs/technical` when behaviour changes.
 
+## Licence of contributions
+
+Fauste Player is licensed under the GNU General Public License version 3 or
+(at your option) any later version, with the attribution term in
+[`NOTICE`](NOTICE). By submitting a contribution you agree that it is
+distributed under the same licence.
+
 ## Releases
 
 Maintainers merge the release PR maintained by release-please; see

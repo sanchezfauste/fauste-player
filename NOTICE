@@ -1,0 +1,34 @@
+Fauste Player
+Copyright (C) 2026 Marc Sánchez Fauste
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details. The full text is in the LICENSE file and at
+<https://www.gnu.org/licenses/>.
+
+Additional term under section 7(b) of the GNU General Public License
+-------------------------------------------------------------------
+
+Anyone who conveys this program, modified or not, must preserve, in the
+program's About window (or the equivalent "about" or credits screen shown to
+its users), this reasonable author attribution, with its link:
+
+    Based on Fauste Player by Marc Sánchez Fauste
+    https://github.com/sanchezfauste/fauste-player
+
+This is the only additional term. The name and the logo of Fauste Player may
+be used freely.
+
+Third-party components
+----------------------
+
+The program bundles the Inter font (SIL Open Font License 1.1) and the
+Phosphor icons (MIT), and is built with open-source Rust libraries, each
+under its own licence. Their notices are in the licenses folder of every
+release and in the program's About window.
