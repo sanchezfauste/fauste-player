@@ -85,7 +85,9 @@ overlap. Each decoded packet is then placed by its timestamp (its frames end
 where `pts + dur` ends, or start at `pts` when the container gives no
 duration, as Matroska blocks), and the frames before the target are dropped, so the
 output starts on the target frame whatever the decoder yields first. A seek
-past the end is the end of the stream, as for the other backends.
+past the end is the end of the stream, as for the other backends, also in a
+Matroska file written to a pipe (no cues, segment size unknown), where the
+reader looks for the target by reading on and runs into the end of the file.
 
 A seek whose pre-roll reaches the start of the stream (a restart from 0, a
 target within the first 80 ms of an Opus file or the first 8192 frames of a

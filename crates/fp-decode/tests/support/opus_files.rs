@@ -1,6 +1,6 @@
-//! Opus files built for the tests: Ogg Opus through a pure-Rust encoder,
-//! and minimal Matroska files around its packets. Shared by `tests/opus.rs`
-//! and the unit tests of `symph.rs`.
+//! Files built for the tests: Ogg Opus through a pure-Rust encoder, and
+//! minimal Matroska files around its packets or around 16-bit PCM. Shared
+//! by `tests/opus.rs` and the unit tests of `symph.rs`.
 
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #![allow(clippy::indexing_slicing)]
@@ -99,6 +99,60 @@ pub fn matroska_with(
     head.extend(pre_skip.to_le_bytes());
     head.extend(48_000u32.to_le_bytes());
     head.extend([0, 0, 0]); // gain 0, mapping family 0
+    let track = [
+        ebml(0x86, b"A_OPUS"),
+        ebml(0x63A2, &head),
+        uint(0x56AA, u64::from(pre_skip) * 1_000_000_000 / 48_000),
+        uint(0x56BB, 80_000_000),
+        audio(48_000.0, 2, None),
+    ]
+    .concat();
+    let blocks: Vec<(u64, &[u8])> = packets
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (i as u64 * 20, p.as_slice()))
+        .collect();
+    let layout = Layout {
+        blocks_per_cluster: usize::MAX,
+        cues,
+        unknown_segment_size: false,
+    };
+    matroska_file(dir, name, &track, &blocks, layout)
+}
+
+/// How a test Matroska file is laid out.
+#[derive(Debug, Clone, Copy)]
+pub struct Layout {
+    /// Blocks per cluster.
+    pub blocks_per_cluster: usize,
+    /// A cue point per cluster, with the position of its first block
+    /// (`CueRelativePosition`), as muxers write a finished file.
+    pub cues: bool,
+    /// The segment's size left unknown, as a muxer writing to a pipe
+    /// leaves it.
+    pub unknown_segment_size: bool,
+}
+
+/// The `Audio` element of a track.
+pub fn audio(rate: f64, channels: u64, bit_depth: Option<u64>) -> Vec<u8> {
+    let mut body = [ebml(0xB5, &rate.to_be_bytes()), uint(0x9F, channels)].concat();
+    if let Some(bits) = bit_depth {
+        body.extend(uint(0x6264, bits));
+    }
+    ebml(0xE1, &body)
+}
+
+/// A Matroska file with one audio track (track number 1, 1 ms ticks) whose
+/// `TrackEntry` holds `track` after its number, UID and type, and whose
+/// blocks are `blocks` (timestamp in ms, frame), with no duration (no
+/// `BlockDuration`, no `DefaultDuration`), as muxers write audio.
+pub fn matroska_file(
+    dir: &Path,
+    name: &str,
+    track: &[u8],
+    blocks: &[(u64, &[u8])],
+    layout: Layout,
+) -> PathBuf {
     let header = [
         uint(0x4286, 1),
         uint(0x42F7, 1),
@@ -118,58 +172,115 @@ pub fn matroska_with(
         ]
         .concat(),
     );
-    let audio = ebml(
-        0xE1,
-        &[ebml(0xB5, &48_000f64.to_be_bytes()), uint(0x9F, 2)].concat(),
-    );
-    let track = ebml(
-        0xAE,
-        &[
-            uint(0xD7, 1),
-            uint(0x73C5, 1),
-            uint(0x83, 2),
-            ebml(0x86, b"A_OPUS"),
-            ebml(0x63A2, &head),
-            uint(0x56AA, u64::from(pre_skip) * 1_000_000_000 / 48_000),
-            uint(0x56BB, 80_000_000),
-            audio,
-        ]
-        .concat(),
-    );
-    let tracks = ebml(0x1654_AE6B, &track);
-    let mut cluster = uint(0xE7, 0);
-    for (i, packet) in packets.iter().enumerate() {
-        let mut block = vec![0x81];
-        block.extend(((i * 20) as i16).to_be_bytes());
-        block.push(0x80);
-        block.extend_from_slice(packet);
-        cluster.extend(ebml(0xA3, &block));
-    }
-    // The cue's cluster position counts from the segment's data.
-    let cue = |at: usize| {
-        ebml(
-            0x1C53_BB6B,
-            &ebml(
-                0xBB,
-                &[
-                    uint(0xB3, 0),
-                    ebml(0xB7, &[uint(0xF7, 1), uint(0xF1, at as u64)].concat()),
-                ]
-                .concat(),
-            ),
-        )
+    let entry = [
+        uint(0xD7, 1),
+        uint(0x73C5, 1),
+        uint(0x83, 2),
+        track.to_vec(),
+    ]
+    .concat();
+    let tracks = ebml(0x1654_AE6B, &ebml(0xAE, &entry));
+    // Each cluster, with its timestamp and the offset of its first block
+    // in its data.
+    let clusters: Vec<(u64, usize, Vec<u8>)> = blocks
+        .chunks(layout.blocks_per_cluster.max(1))
+        .map(|chunk| {
+            let at = chunk.first().map_or(0, |b| b.0);
+            let mut body = uint(0xE7, at);
+            let first = body.len();
+            for (ts, frame) in chunk {
+                let mut block = vec![0x81];
+                block.extend(((ts - at) as i16).to_be_bytes());
+                block.push(0x80);
+                block.extend_from_slice(frame);
+                body.extend(ebml(0xA3, &block));
+            }
+            (at, first, ebml(0x1F43_B675, &body))
+        })
+        .collect();
+    // Cue positions count from the segment's data. Every number is written
+    // with 8 bytes, so the cues' length does not depend on them.
+    let cues_at = |offset: usize| {
+        let mut pos = offset;
+        let points: Vec<u8> = clusters
+            .iter()
+            .flat_map(|(at, first, cluster)| {
+                let point = ebml(
+                    0xBB,
+                    &[
+                        uint(0xB3, *at),
+                        ebml(
+                            0xB7,
+                            &[
+                                uint(0xF7, 1),
+                                uint(0xF1, pos as u64),
+                                uint(0xF0, *first as u64),
+                            ]
+                            .concat(),
+                        ),
+                    ]
+                    .concat(),
+                );
+                pos += cluster.len();
+                point
+            })
+            .collect();
+        ebml(0x1C53_BB6B, &points)
     };
-    let cues = if cues {
-        let at = info.len() + tracks.len() + cue(0).len();
-        cue(at)
+    let cues = if layout.cues {
+        let before = info.len() + tracks.len();
+        cues_at(before + cues_at(0).len())
     } else {
         Vec::new()
     };
-    let segment = ebml(
-        0x1853_8067,
-        &[info, tracks, cues, ebml(0x1F43_B675, &cluster)].concat(),
-    );
+    let mut body = [info, tracks, cues].concat();
+    for (_, _, cluster) in &clusters {
+        body.extend_from_slice(cluster);
+    }
+    let segment = if layout.unknown_segment_size {
+        [
+            &[
+                0x18, 0x53, 0x80, 0x67, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            ][..],
+            &body,
+        ]
+        .concat()
+    } else {
+        ebml(0x1853_8067, &body)
+    };
     let path = dir.join(name);
     std::fs::write(&path, [ebml(0x1A45_DFA3, &header), segment].concat()).unwrap();
     path
+}
+
+/// A Matroska file of 16-bit stereo PCM (`A_PCM/INT/LIT`) at `RATE`, in
+/// blocks of `block` frames (a whole number of milliseconds), and the
+/// samples it holds as `f32`, the way the decoder yields them.
+pub fn pcm_matroska(
+    dir: &Path,
+    name: &str,
+    secs: f64,
+    block: usize,
+    layout: Layout,
+) -> (PathBuf, Vec<f32>) {
+    assert_eq!(block * 1000 % RATE, 0, "blocks must be whole milliseconds");
+    let pcm: Vec<i16> = stereo(secs, marker)
+        .iter()
+        .map(|v| (v * 32_767.0).round() as i16)
+        .collect();
+    let bytes: Vec<u8> = pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
+    let frames: Vec<&[u8]> = bytes.chunks(block * 4).collect();
+    let blocks: Vec<(u64, &[u8])> = frames
+        .iter()
+        .enumerate()
+        .map(|(i, f)| ((i * block * 1000 / RATE) as u64, *f))
+        .collect();
+    let track = [
+        ebml(0x86, b"A_PCM/INT/LIT"),
+        audio(RATE as f64, 2, Some(16)),
+    ]
+    .concat();
+    let path = matroska_file(dir, name, &track, &blocks, layout);
+    let samples = pcm.iter().map(|s| f32::from(*s) / 32_768.0).collect();
+    (path, samples)
 }

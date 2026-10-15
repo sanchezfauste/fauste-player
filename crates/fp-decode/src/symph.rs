@@ -226,6 +226,13 @@ impl SymphoniaDecoder {
                 self.at_end = true;
                 return Ok(());
             }
+            // A reader that seeks by reading on (Matroska without cues)
+            // runs into the end of a file whose size it does not know (a
+            // segment written to a pipe) when the target lies past it.
+            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                self.at_end = true;
+                return Ok(());
+            }
             Err(e) => return Err(e.to_string()),
         }
         self.at_end = false;
