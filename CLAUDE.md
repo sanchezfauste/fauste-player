@@ -65,6 +65,7 @@ cargo run -p fp-app                           # run the app (FAUSTE_HOME=<dir> f
 FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music dir> [cart dir]
 scripts/package-release.sh <target>           # release archive for one target
 scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows: windows.sh, macOS: macos.sh)
+scripts/package/icons.sh                      # regenerate the PNG and .ico icons from packaging/icons/fauste-player.svg (inkscape, magick)
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
 scripts/site/build.sh [out]                   # website: landing page + mdBook guide (default target/site; needs gh or FAUSTE_RELEASE_JSON for the download links)
 scripts/site/check-links.sh <out>             # dead links in the built site
