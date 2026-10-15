@@ -186,3 +186,47 @@ pub fn lock_first_player(s: &mut AppState) {
     );
     assert!(fp_model::fader_locked(s, p));
 }
+
+/// `demo_state`, with player 1's Cue, player 2's Main and the cartwall's
+/// Cue placed on one `desk` output (on-air pre-listen spec §2) and player 2
+/// playing: a pre-listen of player 1 or of a cart would be heard on air.
+pub fn on_air_cue_state() -> AppState {
+    let mut s = demo_state();
+    let (p1, p2) = (s.players[0].id, s.players[1].id);
+    let desk = fp_model::Route {
+        backend: "null".into(),
+        device: "desk".into(),
+        first_channel: 0,
+    };
+    let device = fp_model::OutputDevice {
+        backend: "null".into(),
+        device: "desk".into(),
+    };
+    for r in &mut s.config.outputs.routes {
+        if r.player == p1 {
+            r.cue = Some(desk.clone());
+        }
+        if r.player == p2 {
+            r.main = Some(desk.clone());
+        }
+    }
+    s.config.outputs.cartwall.cue = Some(desk.clone());
+    let running = fp_model::device_settings(&s.config.outputs, &device);
+    for holder in [
+        fp_model::Holder::PlayerCue(p1),
+        fp_model::Holder::PlayerMain(p2),
+        fp_model::Holder::CartwallCue,
+    ] {
+        fp_model::on_event(
+            &mut s,
+            fp_model::EngineEvent::Placed {
+                holder,
+                route: Some(desk.clone()),
+                device: device.clone(),
+                running,
+            },
+        );
+    }
+    fp_model::apply(&mut s, Command::Play(p2)).unwrap();
+    s
+}

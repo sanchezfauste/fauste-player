@@ -49,11 +49,19 @@ fn cue_and_volume_take_values() {
     let p = s.players[0].id;
     assert_eq!(
         parse(&msg("/fauste/player/1/cue", vec![OscType::Bool(true)]), &s),
-        Ok(OscRequest::Op(O::SetCue(p, true)))
+        Ok(OscRequest::Op(O::SetCue {
+            player: p,
+            on: true,
+            force: false
+        }))
     );
     assert_eq!(
         parse(&msg("/fauste/player/1/cue", vec![OscType::Int(0)]), &s),
-        Ok(OscRequest::Op(O::SetCue(p, false)))
+        Ok(OscRequest::Op(O::SetCue {
+            player: p,
+            on: false,
+            force: false
+        }))
     );
     assert_eq!(
         parse(

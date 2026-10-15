@@ -161,6 +161,25 @@ pub struct On {
     on: bool,
 }
 
+/// `{"on": bool}` with an optional `"force": bool` (on-air pre-listen spec
+/// CA4).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CueOn {
+    on: bool,
+    #[serde(default)]
+    force: bool,
+}
+
+/// `{"entry": id}` with an optional `"force": bool`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CueEntryBody {
+    entry: u64,
+    #[serde(default)]
+    force: bool,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
@@ -207,9 +226,16 @@ pub struct PageRef {
 pub async fn set_cue(
     State(ctx): State<Ctx>,
     Path(raw): Path<String>,
-    JsonBody(b): JsonBody<On>,
+    JsonBody(b): JsonBody<CueOn>,
 ) -> Reply {
-    run(&ctx, Operation::SetCue(PlayerId(id(&raw)?), b.on))
+    run(
+        &ctx,
+        Operation::SetCue {
+            player: PlayerId(id(&raw)?),
+            on: b.on,
+            force: b.force,
+        },
+    )
 }
 
 pub async fn set_next(
@@ -226,11 +252,15 @@ pub async fn set_next(
 pub async fn cue_entry(
     State(ctx): State<Ctx>,
     Path(raw): Path<String>,
-    JsonBody(b): JsonBody<Entry>,
+    JsonBody(b): JsonBody<CueEntryBody>,
 ) -> Reply {
     run(
         &ctx,
-        Operation::CueEntry(PlayerId(id(&raw)?), EntryId(b.entry)),
+        Operation::CueEntry {
+            player: PlayerId(id(&raw)?),
+            entry: EntryId(b.entry),
+            force: b.force,
+        },
     )
 }
 
@@ -311,9 +341,16 @@ pub async fn stop_cart(State(ctx): State<Ctx>, Path(raw): Path<String>) -> Reply
 pub async fn cart_cue(
     State(ctx): State<Ctx>,
     Path(raw): Path<String>,
-    JsonBody(b): JsonBody<On>,
+    JsonBody(b): JsonBody<CueOn>,
 ) -> Reply {
-    run(&ctx, Operation::SetCartCue(CartId(id(&raw)?), b.on))
+    run(
+        &ctx,
+        Operation::SetCartCue {
+            cart: CartId(id(&raw)?),
+            on: b.on,
+            force: b.force,
+        },
+    )
 }
 
 pub async fn stop_all_carts(State(ctx): State<Ctx>) -> Reply {
