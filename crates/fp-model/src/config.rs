@@ -501,12 +501,6 @@ impl OutputsConfig {
             .is_some_and(|r| cue_is_usable(r.cue.as_ref()))
     }
 
-    /// Whether `player`'s Cue route is the same as its Main route.
-    pub fn player_cue_equals_main(&self, player: PlayerId) -> bool {
-        self.player_routes(player)
-            .is_some_and(|r| cue_equals_main(r.main.as_ref(), r.cue.as_ref()))
-    }
-
     /// Whether the cartwall has a Cue output a cart pre-listen can be heard on.
     pub fn cartwall_has_cue(&self) -> bool {
         cue_is_usable(self.cartwall.cue.as_ref())
@@ -532,11 +526,6 @@ impl OutputsConfig {
             .filter_map(|r| r.main.as_ref())
             .chain(self.cartwall.main.as_ref())
             .any(|main| routes_overlap(main, route))
-    }
-
-    /// Whether the cartwall's Cue route is the same as its Main route.
-    pub fn cartwall_cue_equals_main(&self) -> bool {
-        cue_equals_main(self.cartwall.main.as_ref(), self.cartwall.cue.as_ref())
     }
 
     /// The DSD mode of a device: its configured mode when it is bit-perfect,
@@ -712,12 +701,6 @@ pub fn cue_is_usable(cue: Option<&Route>) -> bool {
 /// less than two channels apart.
 pub fn routes_overlap(a: &Route, b: &Route) -> bool {
     a.backend == b.backend && a.device == b.device && a.first_channel.abs_diff(b.first_channel) < 2
-}
-
-/// Whether a Cue route is configured and is the same as the Main route: the
-/// case [`cue_is_usable`] refuses that the operator can fix in Settings.
-pub fn cue_equals_main(main: Option<&Route>, cue: Option<&Route>) -> bool {
-    cue.is_some() && main == cue
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

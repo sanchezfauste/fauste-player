@@ -17,7 +17,7 @@ use crate::i18n::I18n;
 /// Names a device as the Settings pickers do; an unknown id as is.
 pub(crate) type DeviceNames<'a> = &'a dyn Fn(&OutputDevice) -> String;
 
-fn player_number(state: &AppState, id: PlayerId) -> usize {
+pub(crate) fn player_number(state: &AppState, id: PlayerId) -> usize {
     state
         .players
         .iter()

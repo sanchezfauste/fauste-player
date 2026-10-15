@@ -11,7 +11,7 @@ use fp_model::Holder;
 use fp_model::{
     AppState, CartwallRoutes, Command, EngineAction, PlayerId, PlayerRoutes, Route, TrackAnalysis,
     apply, availability, command_available,
-    config::{cue_equals_main, cue_is_usable, routes_overlap},
+    config::{cue_is_usable, routes_overlap},
 };
 
 fn route(device: &str, first_channel: u16) -> Route {
@@ -44,16 +44,6 @@ fn ca1_any_cue_route_is_usable_even_the_main_one() {
         assert!(cue_is_usable(Some(&route("desk", 0))), "{main:?}");
     }
     assert!(!cue_is_usable(None));
-}
-
-#[test]
-fn equal_routes_are_still_recognised_until_settings_says_otherwise() {
-    assert!(cue_equals_main(
-        Some(&route("desk", 0)),
-        Some(&route("desk", 0))
-    ));
-    assert!(!cue_equals_main(None, Some(&route("desk", 0))));
-    assert!(!cue_equals_main(Some(&route("desk", 0)), None));
 }
 
 #[test]
