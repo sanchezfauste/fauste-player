@@ -280,7 +280,10 @@ the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
 
 **Shared metadata** lives in `packaging/`, with one application id,
 `org.fauste.FaustePlayer`:
-- the icons (SVG, PNG sizes, `.ico`);
+- the icons (SVG, PNG sizes, `.ico`). `fauste-player.svg` is the source: after
+  changing it, run `scripts/package/icons.sh` (inkscape and ImageMagick) and
+  commit the regenerated PNGs and `.ico`. The window icon, the packages, the
+  `.icns` and the website favicon all read these files;
 - the desktop entry;
 - the AppStream metainfo. It carries no version: `scripts/package/metainfo.sh`
   adds the one being packaged;
