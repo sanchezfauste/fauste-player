@@ -20,8 +20,9 @@ use crate::track::{FileState, MarkerKind, Track};
 
 /// Applies a user command. On `Err` the state is unchanged.
 pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>, ModelError> {
+    let before = crate::cue_on_air::before_step(state);
     let mut out = apply_command(state, command)?;
-    crate::cue_on_air::after_step(state, &mut out);
+    crate::cue_on_air::after_step(state, &before, &mut out);
     Ok(out)
 }
 
@@ -399,8 +400,9 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
 /// Applies an engine observation. Events about unknown players are ignored
 /// (the player may have been removed while the event was in flight).
 pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
+    let before = crate::cue_on_air::before_step(state);
     let mut out = on_engine_event(state, event);
-    crate::cue_on_air::after_step(state, &mut out);
+    crate::cue_on_air::after_step(state, &before, &mut out);
     out
 }
 

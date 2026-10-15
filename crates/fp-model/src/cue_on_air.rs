@@ -240,11 +240,71 @@ pub(crate) fn cancel(state: &mut AppState, id: u64) {
     }
 }
 
-/// Closes every `apply` and `on_event`: the confirmed list keeps only
-/// running pre-listens, and the request goes once its output no longer
-/// sounds (or its holder already runs a pre-listen) or else names what
-/// sounds now (CA3).
-pub(crate) fn after_step(state: &mut AppState, _out: &mut Vec<EngineAction>) {
+/// What CA5 compares a step against: each running pre-listen that is not
+/// confirmed, with the Main holders audible on its output before the step.
+pub(crate) struct Before(Vec<(Holder, Vec<Holder>)>);
+
+/// The Main holders other than `cue` audible on `cue`'s output.
+fn audible_mains(state: &AppState, cue: Holder) -> Vec<Holder> {
+    sharing(state, cue)
+        .into_iter()
+        .filter(|h| is_main(*h) && audible(state, *h))
+        .collect()
+}
+
+/// Opens every `apply` and `on_event` (CA5).
+pub(crate) fn before_step(state: &AppState) -> Before {
+    Before(
+        holders(state)
+            .into_iter()
+            .filter(|h| matches!(h, Holder::PlayerCue(_) | Holder::CartwallCue))
+            .filter(|h| audible(state, *h) && !state.cue_on_air.confirmed.contains(h))
+            .map(|h| (h, audible_mains(state, h)))
+            .collect(),
+    )
+}
+
+/// Stops the pre-listen on `cue`.
+fn stop(state: &mut AppState, cue: Holder, out: &mut Vec<EngineAction>) {
+    match cue {
+        Holder::PlayerCue(player) => {
+            if let Ok(i) = state.player_index(player)
+                && state.players[i].cue.take().is_some()
+            {
+                out.push(EngineAction::StopCue { player });
+            }
+        }
+        Holder::CartwallCue => {
+            if state.cartwall.cue.take().is_some() {
+                out.push(EngineAction::StopCartCue);
+            }
+        }
+        Holder::PlayerMain(_) | Holder::CartwallMain => {}
+    }
+}
+
+/// Closes every `apply` and `on_event`. CA5: a pre-listen that was running
+/// unconfirmed before the step stops when a Main holder became audible on
+/// its output during it; the stop goes first in `out`, and a notice names
+/// that holder. Then the confirmed list keeps only running pre-listens, and
+/// the request goes once its output no longer sounds (or its holder already
+/// runs a pre-listen) or else names what sounds now (CA3).
+pub(crate) fn after_step(state: &mut AppState, before: &Before, out: &mut Vec<EngineAction>) {
+    let mut stops = Vec::new();
+    for (cue, was) in &before.0 {
+        if !audible(state, *cue) || state.cue_on_air.confirmed.contains(cue) {
+            continue;
+        }
+        let Some(by) = audible_mains(state, *cue)
+            .into_iter()
+            .find(|h| !was.contains(h))
+        else {
+            continue;
+        };
+        stop(state, *cue, &mut stops);
+        let id = state.cue_on_air.next_id();
+        state.cue_on_air.notice = Some(CueStopped { id, cue: *cue, by });
+    }
     let confirmed: Vec<Holder> = state
         .cue_on_air
         .confirmed
@@ -253,16 +313,20 @@ pub(crate) fn after_step(state: &mut AppState, _out: &mut Vec<EngineAction>) {
         .filter(|h| audible(state, *h))
         .collect();
     state.cue_on_air.confirmed = confirmed;
-    let Some(holder) = state.cue_on_air.request.as_ref().map(|r| r.holder) else {
-        return;
-    };
-    let sounding = if audible(state, holder) {
-        Vec::new()
-    } else {
-        sounding_on(state, holder)
-    };
-    match state.cue_on_air.request.as_mut() {
-        Some(request) if !sounding.is_empty() => request.sounding = sounding,
-        _ => state.cue_on_air.request = None,
+    if let Some(holder) = state.cue_on_air.request.as_ref().map(|r| r.holder) {
+        let sounding = if audible(state, holder) {
+            Vec::new()
+        } else {
+            sounding_on(state, holder)
+        };
+        match state.cue_on_air.request.as_mut() {
+            Some(request) if !sounding.is_empty() => request.sounding = sounding,
+            _ => state.cue_on_air.request = None,
+        }
+    }
+    if !stops.is_empty() {
+        out.splice(0..0, stops);
+        // A stopped pre-listen may free an output change (live settings L8).
+        crate::live::dispatch_due(state, out);
     }
 }
