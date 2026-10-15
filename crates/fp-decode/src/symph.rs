@@ -19,7 +19,7 @@ use symphonia::core::formats::{
 };
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::units::{Time, TimeBase, Timestamp};
+use symphonia::core::units::{Duration, Time, TimeBase, Timestamp};
 
 use crate::downmix;
 
@@ -57,8 +57,8 @@ pub(crate) struct SymphoniaDecoder {
     /// Whether the reader is still where opening left it (nothing read, no
     /// seek since): a restart from the start needs no new reader then.
     at_start: bool,
-    /// The lowest timestamp the reader can still reach by reading on: one
-    /// past the last packet read, or where the last seek landed. A seek
+    /// The lowest timestamp the reader can still reach by reading on: the
+    /// end of the last packet read, or where the last seek landed. A seek
     /// below it goes backwards. `None` at the start of the stream.
     resume_ts: Option<Timestamp>,
     /// Seconds the container's timestamps run ahead of the audio: an Ogg
@@ -226,6 +226,13 @@ impl SymphoniaDecoder {
                 self.at_end = true;
                 return Ok(());
             }
+            // A reader that seeks by reading on (Matroska without cues)
+            // runs into the end of a file whose size it does not know (a
+            // segment written to a pipe) when the target lies past it.
+            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                self.at_end = true;
+                return Ok(());
+            }
             Err(e) => return Err(e.to_string()),
         }
         self.at_end = false;
@@ -298,7 +305,14 @@ impl SymphoniaDecoder {
             if packet.track_id != self.track_id {
                 continue;
             }
-            self.resume_ts = Some(Timestamp::new(packet.pts.get().saturating_add(1)));
+            // Reading on reaches no frame before the packet's end: a target
+            // inside it lies behind. Without a duration, the end is found
+            // from the frames it decodes to.
+            self.resume_ts = Some(if packet.dur.get() > 0 {
+                packet.pts.saturating_add(packet.dur)
+            } else {
+                packet.pts.saturating_add(Duration::new(1))
+            });
             let buf = match self.decoder.decode(&packet) {
                 Ok(buf) => buf,
                 Err(Error::DecodeError(_)) => continue,
@@ -306,6 +320,17 @@ impl SymphoniaDecoder {
             };
             let channels = buf.spec().channels().count().max(1);
             let frames = buf.frames();
+            if packet.dur.get() == 0
+                && let Some(tb) = self.time_base
+            {
+                // Rounded up: a target in the block's last fraction of a
+                // tick lies behind too (a later one only opens the file
+                // again needlessly).
+                let ticks = (frames as u128 * u128::from(tb.denom.get()))
+                    .div_ceil(u128::from(self.sample_rate.max(1)) * u128::from(tb.numer.get()));
+                let len = u64::try_from(ticks).unwrap_or(u64::MAX).max(1);
+                self.resume_ts = Some(packet.pts.saturating_add(Duration::new(len)));
+            }
             self.scratch.resize(frames * channels, 0.0);
             buf.copy_to_slice_interleaved(self.scratch.as_mut_slice());
             let skip = match (self.target_secs, self.time_base) {
@@ -531,7 +556,9 @@ mod reopen_tests {
 
     use std::path::{Path, PathBuf};
 
-    use super::opus_files::{RATE, encode, marker, matroska_with, packets, stereo};
+    use super::opus_files::{
+        Layout, RATE, encode, marker, matroska_with, packets, pcm_matroska, stereo,
+    };
     use super::{OPENS, SymphoniaDecoder};
 
     fn opens() -> u32 {
@@ -588,6 +615,28 @@ mod reopen_tests {
             assert_eq!(opens() - before, opened, "{}", path.display());
             let skip = 2 * RATE * 5 / 100;
             assert!(out[..] == full[skip..], "{}", path.display());
+        }
+    }
+
+    /// A seek forward from the end of the block read last, or past it, does
+    /// not open the file again: only a target inside or before that block
+    /// lies behind.
+    #[test]
+    fn a_seek_forward_after_reading_does_not_open_the_file_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = Layout::BARE;
+        // 100 ms blocks.
+        let (path, _) = pcm_matroska(dir.path(), "bare.mka", 1.0, 4800, layout);
+        for secs in [0.3, 0.35] {
+            let mut d = SymphoniaDecoder::open(&path).unwrap();
+            let mut out = Vec::new();
+            for _ in 0..3 {
+                assert!(d.next_block(&mut out).unwrap());
+            }
+            let before = opens();
+            d.seek(secs).unwrap();
+            let _ = rest(&mut d);
+            assert_eq!(opens(), before, "{secs} s");
         }
     }
 

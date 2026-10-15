@@ -85,7 +85,9 @@ overlap. Each decoded packet is then placed by its timestamp (its frames end
 where `pts + dur` ends, or start at `pts` when the container gives no
 duration, as Matroska blocks), and the frames before the target are dropped, so the
 output starts on the target frame whatever the decoder yields first. A seek
-past the end is the end of the stream, as for the other backends.
+past the end is the end of the stream, as for the other backends, also in a
+Matroska file written to a pipe (no cues, segment size unknown), where the
+reader looks for the target by reading on and runs into the end of the file.
 
 A seek whose pre-roll reaches the start of the stream (a restart from 0, a
 target within the first 80 ms of an Opus file or the first 8192 frames of a
@@ -99,14 +101,36 @@ as it is; otherwise the file is opened again (`tests/opus.rs`, the unit tests
 in `symph.rs`).
 
 symphonia seeks a Matroska file without cues (a live recording) only forward.
-A seek to a timestamp below what the reader has already read or landed on,
-which such a reader answers by landing past the target, opens the file again
-and seeks forward from the start. A forward seek never opens it again, even
-though the Matroska reader also lands past the target then (on the first
-block at or after it, since its blocks carry no duration). Opening the file
-again checks that it still holds the same track (id, codec and sample rate);
-a file replaced on disk makes the seek fail instead of being read with the
-old decoder.
+A seek to a timestamp below what the reader has already read or landed on
+(the end of the last block read: its duration, or the frames it decoded to,
+rounded up to the next tick, when it has none), which such a reader answers by landing past the target,
+opens the file again and seeks forward from the start, so a target inside the
+block read last is not missed. A forward seek never opens it again. Opening
+the file again checks that it still holds the same track (id, codec and sample
+rate); a file replaced on disk makes the seek fail instead of being read with
+the old decoder.
+
+symphonia's Matroska reader is vendored (`vendor/symphonia-format-mkv`,
+through `[patch.crates-io]`) with two seeking fixes
+(`vendor/symphonia-format-mkv/VENDORED.md`). Version 0.6.1 took a cue
+point's time, divided once too often, as its cluster's timestamp, so a seek
+through any cue but the first skipped the whole cluster and landed on the next
+one (a FLAC file muxed with 5 s clusters came out about 4.7 s late at 10 s);
+the cluster's timestamp is now read from the cluster. And its blocks carry no
+duration (muxers write neither `BlockDuration` nor `DefaultDuration` for
+audio), so the seek landed on the first block starting at or after the target,
+up to a block late for a codec without pre-roll (FLAC, PCM); it now lands on
+the block that holds the target. In a file with video, whose cues index the
+video's frames (often several per cluster) and whose clusters start at its
+keyframes, the audio block that holds the target can start in a cluster
+before the cued one, several before when clusters are shorter than an audio
+block. So the clusters of the cues at or before the target (from the audio
+track's own last cue, if any) are tried from the last back, until one reaches
+an audio block at or before the target: usually the cued cluster or the one
+before it, and never a reopening of the file. The frames before the target are then dropped
+by timestamp, to the container's precision: Matroska's timestamps are whole
+milliseconds, so a seek in a 44.1 kHz FLAC or PCM file lands within about 22
+frames of the target (`tests/matroska.rs`, with PCM files built in the test).
 
 The Opus decoder goes through 16-bit PCM inside `opus-decoder`: its noise
 (about −96 dBFS) is far below Opus's own coding noise. A decoder without that

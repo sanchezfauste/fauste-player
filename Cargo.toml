@@ -94,6 +94,12 @@ panic = "unwind"
 # `opus-decoder` 0.1.1 computes its CELT FFT as an O(n²) DFT: 5.5 ms per
 # 20 ms packet. The vendored copy replaces it with a mixed-radix FFT, still
 # without `unsafe` (see vendor/opus-decoder/VENDORED.md).
+#
+# `symphonia-format-mkv` 0.6.1 seeks through a cue past the first cluster
+# with that cluster's timestamp read as 0, and lands after the target when
+# blocks carry no duration. The vendored copy fixes both (see
+# vendor/symphonia-format-mkv/VENDORED.md).
 [patch.crates-io]
 opus-decoder = { path = "vendor/opus-decoder" }
+symphonia-format-mkv = { path = "vendor/symphonia-format-mkv" }
 
