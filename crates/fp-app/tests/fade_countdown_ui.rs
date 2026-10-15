@@ -70,3 +70,49 @@ fn the_button_draws_the_line_only_while_fading_and_it_drains() {
         "draining: {first} {later}"
     );
 }
+
+#[test]
+fn a_segue_overlap_drains_over_its_own_length() {
+    use fp_app::ui::controller::Controller;
+    let (mut h, fake) = support::harness(support::state(1, 3));
+    let p = fake.player(0);
+    fake.send(Command::Play(p));
+    h.run_steps(3);
+    let button = h.get_by_label("Fade stop").rect();
+    // The engine started the next track with a 10 s overlap (the configured
+    // fade is 1 s).
+    let mut s = (**fake.state.load()).clone();
+    s.players[0].fading = true;
+    s.players[0].fade_ms = 10_000;
+    s.players[0].fade_seq += 1;
+    fake.state.store(std::sync::Arc::new(s));
+    h.run_steps(2);
+    h.run_steps(25);
+    let left = bar_width(&h, button);
+    assert!(
+        left > button.width() * 0.9,
+        "half a second into 10 s is still nearly full: {left}"
+    );
+}
+
+#[test]
+fn a_fade_stop_during_a_crossfade_restarts_the_bar() {
+    use fp_app::ui::controller::Controller;
+    let (mut h, fake) = support::harness(support::state(1, 3));
+    let p = fake.player(0);
+    fake.send(Command::Play(p));
+    h.run_steps(3);
+    let button = h.get_by_label("Fade stop").rect();
+    fake.send(Command::Play(p)); // crossfade
+    h.run_steps(2);
+    h.run_steps(30);
+    let draining = bar_width(&h, button);
+    assert!(draining < button.width() * 0.7, "draining: {draining}");
+    fake.send(Command::FadeStop(p));
+    h.run_steps(2);
+    let restarted = bar_width(&h, button);
+    assert!(
+        restarted > button.width() * 0.9,
+        "full again for the new fade: {restarted}"
+    );
+}

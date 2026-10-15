@@ -67,6 +67,11 @@ pub struct PlayerView {
     /// The current entry repeats or stops after itself (spec O8).
     pub entry_notice: Option<fp_model::EntryNotice>,
     pub fading: bool,
+    /// Length in milliseconds of the running fade (a crossfade or fade stop:
+    /// the configured fade; a segue overlap: the overlap).
+    pub fade_ms: u32,
+    /// Numbers the player's fades: a new value is a new fade.
+    pub fade_seq: u64,
     pub cueing: bool,
     /// The current source reaches its device unchanged (the BP badge).
     pub bit_perfect: bool,
@@ -291,6 +296,8 @@ pub fn player_view(
         stop_after_current: p.stop_after_current,
         entry_notice: fp_model::entry_notice(state, player),
         fading: p.fading,
+        fade_ms: p.fade_ms,
+        fade_seq: p.fade_seq,
         cueing: p.cue.is_some(),
         bit_perfect: false,
         dsd: false,
@@ -471,9 +478,9 @@ pub fn volume_db(gain: f32) -> Option<f32> {
 
 /// How much of a fade is left, from 1 (just started) to 0 (done): the line
 /// the Fade stop button drains, as the carts drain theirs. `started` and
-/// `now` are UI clock seconds, `fade_ms` the configured fade length. The
+/// `now` are UI clock seconds, `fade_ms` the running fade's length. The
 /// engine does not report a fade's progress, so the UI times it from the
-/// frame that first showed the player fading.
+/// frame that first showed the fade.
 pub fn fade_remaining_fraction(started: f64, now: f64, fade_ms: u32) -> f32 {
     if fade_ms == 0 || !started.is_finite() || !now.is_finite() {
         return 0.0;

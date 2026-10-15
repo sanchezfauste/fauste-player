@@ -27,7 +27,7 @@ const HINTS: [(&str, &str); 7] = [
     ),
     (
         "Maximum mix length",
-        "The longest overlap between two tracks: the MIX point is never earlier than this before the end.",
+        "The longest overlap between two tracks: the MIX point is never more than this before the end.",
     ),
     (
         "Outro level drop",

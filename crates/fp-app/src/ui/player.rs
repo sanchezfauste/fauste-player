@@ -27,6 +27,8 @@ const WAVE_HEIGHT: f32 = 56.0;
 const TABS_HEIGHT: f32 = 30.0;
 /// Width of the "+" (new playlist) button at the right end of the tabs.
 const ADD_TAB_WIDTH: f32 = 30.0;
+/// Width of the new-playlist popup.
+const NEW_PLAYLIST_POPUP_WIDTH: f32 = 220.0;
 const FOOTER_HEIGHT: f32 = 24.0;
 
 pub(crate) fn column(
@@ -796,18 +798,23 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             };
             // While a fade runs, the Fade stop button drains a line like a
             // playing cart's, from full to empty over the fade (the UI times
-            // it from the frame that first showed the fade).
+            // it from the frame that first showed the fade; a new fade (a
+            // fade stop pressed during a crossfade) restarts it).
             let fade_key = egui::Id::new(("fade-started", id.0));
             let fade_left = if pv.fading {
-                let started =
-                    ui.data_mut(|d| *d.get_temp_mut_or_insert_with(fade_key, || scene.time));
+                let (_, started) = ui.data_mut(|d| {
+                    let entry =
+                        d.get_temp_mut_or_insert_with(fade_key, || (pv.fade_seq, scene.time));
+                    if entry.0 != pv.fade_seq {
+                        *entry = (pv.fade_seq, scene.time);
+                    }
+                    *entry
+                });
                 Some(view::fade_remaining_fraction(
-                    started,
-                    scene.time,
-                    scene.state.config.players.fade_ms,
+                    started, scene.time, pv.fade_ms,
                 ))
             } else {
-                ui.data_mut(|d| d.remove_temp::<f64>(fade_key));
+                ui.data_mut(|d| d.remove_temp::<(u64, f64)>(fade_key));
                 None
             };
             let fade_button: PaintFn = Box::new(move |p, r, c| {
@@ -1225,45 +1232,31 @@ fn new_playlist_button(
     egui::Popup::from_toggle_button_response(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
-            ui.set_width(220.0);
+            ui.set_width(NEW_PLAYLIST_POPUP_WIDTH);
             let edit = ui.add(
                 egui::TextEdit::singleline(name)
                     .hint_text(hint)
                     .desired_width(f32::INFINITY),
             );
-            if opening {
+            let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            // Keep the focus on the name while the popup is open, so the
+            // app's shortcuts do not fire under what the operator types (and
+            // Escape, which closes the popup, is not read as the app's own).
+            let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+            if opening || (!escape && ui.memory(|m| m.focused().is_none())) {
                 edit.request_focus();
             }
             let trimmed = name.trim().to_owned();
-            let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            let width = ui
-                .painter()
-                .layout_no_wrap(create.clone(), font(12.0), theme::TEXT)
-                .size()
-                .x
-                + 36.0;
-            let clicked = widgets::tile(
-                ui,
-                vec2(width, 28.0),
-                &create,
-                !trimmed.is_empty(),
-                TileStyle::plain(),
-                |p, r, c| {
-                    p.text(
-                        r.center(),
-                        egui::Align2::CENTER_CENTER,
-                        &create,
-                        font(12.0),
-                        c,
-                    );
-                },
-            )
-            .clicked();
+            let clicked =
+                widgets::text_button(ui, None, &create, !trimmed.is_empty(), TileStyle::plain())
+                    .clicked();
             if (enter || clicked) && !trimmed.is_empty() {
                 scene.ctl.send(Command::CreatePlaylistIn {
                     name: trimmed,
                     player: id,
                 });
+                // Like a tab click: follow-current leaves the new playlist be.
+                view_state.table_touched.insert(id, scene.time);
                 name.clear();
                 ui.close();
             }
