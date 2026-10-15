@@ -633,6 +633,7 @@ apply-now-confirm = Eten eta aplikatu
 # Pre-listen on an on-air output
 cue-on-air-title = Aurrez entzun airean?
 cue-on-air-body = Aurrez entzute hau aireko irteeratik aterako litzateke; bertan: { $sounding }. Airean entzungo litzateke.
+cue-on-air-and = { $first } eta { $last }
 cue-on-air-confirm = Aurrez entzun hala ere
 cue-on-air-player-playing = { $n }. erreproduzitzailea jotzen ari da
 cue-on-air-player-paused = { $n }. erreproduzitzailea pausan dago

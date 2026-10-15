@@ -53,12 +53,20 @@ pub(crate) fn show(
     request: &CueConfirmation,
 ) -> Option<bool> {
     let (t, state) = (scene.i18n, scene.state);
-    let sounding = request
+    let mut names: Vec<String> = request
         .sounding
         .iter()
         .map(|h| sounding_text(t, state, *h))
-        .collect::<Vec<_>>()
-        .join(", ");
+        .collect();
+    // "A, B and C": the last two joined by the locale's "and".
+    let sounding = match names.pop() {
+        Some(last) if !names.is_empty() => t.tr_args(
+            "cue-on-air-and",
+            &[("first", names.join(", ").into()), ("last", last.into())],
+        ),
+        Some(last) => last,
+        None => String::new(),
+    };
     let body = t.tr_args("cue-on-air-body", &[("sounding", sounding.into())]);
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 440.0);
     let mut answer = None;

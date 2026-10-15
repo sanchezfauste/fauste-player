@@ -138,7 +138,8 @@ pub fn demo_state() -> AppState {
 }
 
 /// A Cue output (headphones) for every player and the cartwall, with Main on
-/// the default output: a CUE needs a Cue output apart from Main (spec §4.6).
+/// the default output: a CUE needs a Cue route (spec §4.6), and one off the
+/// on-air output never asks first (on-air pre-listen spec CA3).
 pub fn give_cue_routes(state: &mut AppState) {
     let phones = fp_model::Route {
         backend: "null".to_owned(),

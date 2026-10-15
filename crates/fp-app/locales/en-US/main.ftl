@@ -633,6 +633,7 @@ apply-now-confirm = Interrupt and apply
 # Pre-listen on an on-air output
 cue-on-air-title = Pre-listen on air?
 cue-on-air-body = This pre-listen would go out on the on-air output, where { $sounding }. It would be heard on air.
+cue-on-air-and = { $first } and { $last }
 cue-on-air-confirm = Pre-listen anyway
 cue-on-air-player-playing = Player { $n } is playing
 cue-on-air-player-paused = Player { $n } is paused

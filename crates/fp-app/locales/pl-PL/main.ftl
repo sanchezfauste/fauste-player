@@ -647,6 +647,7 @@ apply-now-confirm = Przerwij i zastosuj
 # Pre-listen on an on-air output
 cue-on-air-title = Odsłuch wstępny na antenie?
 cue-on-air-body = Ten odsłuch wstępny wyszedłby wyjściem antenowym, gdzie { $sounding }. Byłby słyszalny na antenie.
+cue-on-air-and = { $first } i { $last }
 cue-on-air-confirm = Odsłuchaj mimo to
 cue-on-air-player-playing = odtwarzacz { $n } gra
 cue-on-air-player-paused = odtwarzacz { $n } jest wstrzymany

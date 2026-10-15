@@ -288,7 +288,8 @@ fn stop(state: &mut AppState, cue: Holder, out: &mut Vec<EngineAction>) {
 /// its output during it; the stop goes first in `out`, and a notice names
 /// that holder. Then the confirmed list keeps only running pre-listens, and
 /// the request goes once its output no longer sounds (or its holder already
-/// runs a pre-listen) or else names what sounds now (CA3).
+/// runs a pre-listen, or what it asks for can no longer start) or else
+/// names what sounds now (CA3).
 pub(crate) fn after_step(state: &mut AppState, before: &Before, out: &mut Vec<EngineAction>) {
     let mut stops = Vec::new();
     for (cue, was) in &before.0 {
@@ -313,8 +314,15 @@ pub(crate) fn after_step(state: &mut AppState, before: &Before, out: &mut Vec<En
         .filter(|h| audible(state, *h))
         .collect();
     state.cue_on_air.confirmed = confirmed;
-    if let Some(holder) = state.cue_on_air.request.as_ref().map(|r| r.holder) {
-        let sounding = if audible(state, holder) {
+    if let Some((holder, start)) = state
+        .cue_on_air
+        .request
+        .as_ref()
+        .map(|r| (r.holder, r.start))
+    {
+        // What it asks for can no longer start (its entry or cart went, or
+        // its holder lost the Cue output): nothing is left to confirm.
+        let sounding = if audible(state, holder) || !starts_fresh(state, start) {
             Vec::new()
         } else {
             sounding_on(state, holder)

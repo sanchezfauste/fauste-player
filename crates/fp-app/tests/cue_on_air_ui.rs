@@ -167,3 +167,30 @@ fn a_pre_listen_stopped_by_a_start_says_why() {
     assert!(h.query_by_label(STOPPED_P2).is_some());
     assert!(!cueing(&fake, 0));
 }
+
+/// The question names everything that sounds as a list ("A and B").
+#[test]
+fn the_question_lists_what_sounds_with_and() {
+    let mut s = state(3, 4);
+    let (p1, p2, p3) = (s.players[0].id, s.players[1].id, s.players[2].id);
+    on_desk(
+        &mut s,
+        &[
+            Holder::PlayerCue(p1),
+            Holder::PlayerMain(p2),
+            Holder::PlayerMain(p3),
+        ],
+    );
+    fp_model::apply(&mut s, Command::Play(p2)).unwrap();
+    fp_model::apply(&mut s, Command::Play(p3)).unwrap();
+    let (mut h, _fake) = harness(s);
+    h.get_by_label(ON_AIR_TIP).click();
+    h.run_steps(4);
+    assert!(
+        h.query_by_label(
+            "This pre-listen would go out on the on-air output, where Player 2 is playing \
+             and Player 3 is playing. It would be heard on air."
+        )
+        .is_some()
+    );
+}

@@ -633,6 +633,7 @@ apply-now-confirm = Onderbreken en toepassen
 # Pre-listen on an on-air output
 cue-on-air-title = Voorbeluisteren on air?
 cue-on-air-body = Dit voorbeluisteren zou via de on-air-uitgang gaan, waar { $sounding }. Het zou on air te horen zijn.
+cue-on-air-and = { $first } en { $last }
 cue-on-air-confirm = Toch voorbeluisteren
 cue-on-air-player-playing = speler { $n } speelt
 cue-on-air-player-paused = speler { $n } is gepauzeerd
