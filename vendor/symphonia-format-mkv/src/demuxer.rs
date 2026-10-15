@@ -445,15 +445,45 @@ impl<'s> MkvReader<'s> {
                 .try_into_matroska_ticks(tb)
                 .ok_or(Error::SeekError(SeekErrorKind::OutOfRange))?;
 
+            // VENDORED CHANGE: the last cue point at or before the target may index another track
+            // (a video's keyframes, which also start the clusters): the sought track's frame that
+            // holds the target can then start before that cue's cluster. Read from the later of the
+            // last cue point of the sought track (whose frame starts at or before the target) and
+            // the cue point before the last one; only one cue point at or before the target is used
+            // as it is.
+            let mut last_of_track = None;
+            let mut before_last = None;
+
             for cue_point in &cues.points {
                 if cue_point.time > ts {
                     break;
                 }
+                if cue_point.positions.track.get() == u64::from(id) {
+                    last_of_track = Some(cue_point);
+                }
+                before_last = target_cue_point;
                 target_cue_point = Some(cue_point);
             }
 
-            let target_cue_point =
-                target_cue_point.ok_or(Error::SeekError(SeekErrorKind::OutOfRange))?;
+            let target_cue_point = match target_cue_point {
+                Some(last) if last.positions.track.get() == u64::from(id) => last,
+                Some(last) => {
+                    match (last_of_track, before_last) {
+                        (Some(a), Some(b)) => {
+                            if a.time >= b.time {
+                                a
+                            }
+                            else {
+                                b
+                            }
+                        }
+                        (Some(a), None) => a,
+                        (None, Some(b)) => b,
+                        (None, None) => last,
+                    }
+                }
+                None => return seek_error(SeekErrorKind::OutOfRange),
+            };
 
             log::debug!(
                 "found cue point: track_id={}, ts={}, seg_pos={}",

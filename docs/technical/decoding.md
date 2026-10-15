@@ -120,7 +120,11 @@ the cluster's timestamp is now read from the cluster. And its blocks carry no
 duration (muxers write neither `BlockDuration` nor `DefaultDuration` for
 audio), so the seek landed on the first block starting at or after the target,
 up to a block late for a codec without pre-roll (FLAC, PCM); it now lands on
-the block that holds the target. The frames before the target are then dropped
+the block that holds the target. In a file with video, whose cues index the
+video's keyframes and whose clusters start at them, the audio block that
+holds the target can start in the cluster before the cued one, so a cue of
+another track is not followed directly: reading starts from the later of the
+last cue of the audio track and the cue before the last one. The frames before the target are then dropped
 by timestamp, to the container's precision: Matroska's timestamps are whole
 milliseconds, so a seek in a 44.1 kHz FLAC or PCM file lands within about 22
 frames of the target (`tests/matroska.rs`, with PCM files built in the test).

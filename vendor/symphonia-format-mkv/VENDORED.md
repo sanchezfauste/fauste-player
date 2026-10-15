@@ -17,6 +17,13 @@ the source.
   so its timestamp comes from its own element (the cue's time is the cued
   block's, not the cluster's), and clears the frames buffered before it.
   `MatroskaTicks::into_segment_ticks` (`src/segment.rs`) is no longer used.
+- `src/demuxer.rs`, `seek_track_by_ts`: the seek read from the last cue
+  point at or before the target. In a file with video, cue points index the
+  video's keyframes, which also start the clusters, and the audio frame
+  that holds the target can start in the cluster before: the seek landed on
+  the cued cluster's first audio frame, up to a frame late. It now reads
+  from the later of the last cue point of the sought track and the cue
+  point before the last one (one extra cluster at most).
 - `src/demuxer.rs`, `seek_track_by_ts_forward`: a frame with no duration
   (no `BlockDuration`, no `DefaultDuration`, as muxers write audio) counted
   as ending where it starts, so the seek landed on the first block starting

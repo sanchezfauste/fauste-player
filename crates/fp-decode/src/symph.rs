@@ -622,11 +622,7 @@ mod reopen_tests {
     #[test]
     fn a_seek_forward_after_reading_does_not_open_the_file_again() {
         let dir = tempfile::tempdir().unwrap();
-        let layout = Layout {
-            blocks_per_cluster: 10,
-            cues: false,
-            unknown_segment_size: false,
-        };
+        let layout = Layout::BARE;
         // 100 ms blocks.
         let (path, _) = pcm_matroska(dir.path(), "bare.mka", 1.0, 4800, layout);
         for secs in [0.3, 0.35] {

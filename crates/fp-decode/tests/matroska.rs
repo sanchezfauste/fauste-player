@@ -9,7 +9,7 @@
 mod opus_files;
 
 use fp_decode::FileDecoder;
-use opus_files::{Layout, pcm_matroska};
+use opus_files::{Block, Layout, RATE, ebml, matroska_tracks, pcm, pcm_matroska, pcm_track, uint};
 
 fn rest(d: &mut FileDecoder) -> Vec<f32> {
     let mut out = Vec::new();
@@ -26,6 +26,7 @@ fn a_seek_past_the_end_of_a_piped_file_ends_the_stream() {
         blocks_per_cluster: 10,
         cues: false,
         unknown_segment_size: true,
+        default_duration: false,
     };
     let (path, pcm) = pcm_matroska(dir.path(), "pipe.mka", 1.0, 4800, layout);
     let mut d = FileDecoder::open(&path).unwrap();
@@ -54,6 +55,7 @@ fn a_seek_lands_on_the_target_frame() {
             blocks_per_cluster: 10,
             cues,
             unknown_segment_size,
+            default_duration: false,
         };
         // 100 ms blocks, 1 s clusters.
         let (path, pcm) = pcm_matroska(dir.path(), name, 4.0, 4800, layout);
@@ -73,11 +75,7 @@ fn a_seek_lands_on_the_target_frame() {
 #[test]
 fn a_seek_into_the_block_read_last_lands_on_the_target_frame() {
     let dir = tempfile::tempdir().unwrap();
-    let layout = Layout {
-        blocks_per_cluster: 10,
-        cues: false,
-        unknown_segment_size: false,
-    };
+    let layout = Layout::BARE;
     // 100 ms blocks.
     let (path, pcm) = pcm_matroska(dir.path(), "bare.mka", 1.0, 4800, layout);
     let mut d = FileDecoder::open(&path).unwrap();
@@ -91,4 +89,68 @@ fn a_seek_into_the_block_read_last_lands_on_the_target_frame() {
     let at = 12_000 * 2;
     assert_eq!(out.len(), pcm.len() - at, "length");
     assert!(out[..] == pcm[at..], "the audio differs");
+}
+
+/// In a file with video, the cues and the clusters follow the video's
+/// keyframes, and the audio block that holds a target can start before the
+/// cued cluster: the seek still lands on it, not on the cluster's first
+/// audio block.
+#[test]
+fn a_seek_through_cues_of_another_track_lands_on_the_target_frame() {
+    let dir = tempfile::tempdir().unwrap();
+    let block = 4800; // 100 ms
+    let (bytes, samples) = pcm(4.0);
+    let video = [0u8; 16];
+    let mut blocks: Vec<Block> = bytes
+        .chunks(block * 4)
+        .enumerate()
+        .map(|(i, data)| Block {
+            track: 1,
+            ts: (i * block * 1000 / RATE) as u64,
+            data,
+        })
+        .collect();
+    // 25 frames a second.
+    blocks.extend((0..100).map(|i| Block {
+        track: 2,
+        ts: i * 40,
+        data: &video,
+    }));
+    blocks.sort_by_key(|b| (b.ts, b.track));
+    // Keyframes at 0, 1.04, 2.04 and 3.04 s: each starts a cluster and has a
+    // cue; the audio block from 1.0 s lies in the cluster before.
+    let keyframes: Vec<usize> = blocks
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| b.track == 2 && (b.ts == 0 || b.ts % 1000 == 40))
+        .map(|(i, _)| i)
+        .collect();
+    let tracks = [
+        [uint(0x83, 2), pcm_track(block, false)].concat(),
+        [
+            uint(0x83, 1),
+            ebml(0x86, b"V_MPEG4/ISO/SP"),
+            ebml(0xE0, &[uint(0xB0, 320), uint(0xBA, 240)].concat()),
+        ]
+        .concat(),
+    ];
+    let path = matroska_tracks(
+        dir.path(),
+        "av.mkv",
+        &tracks,
+        &blocks,
+        &keyframes,
+        &keyframes,
+        false,
+    );
+    let mut d = FileDecoder::open(&path).unwrap();
+    assert!(rest(&mut d) == samples, "the audio decodes whole");
+    for secs in [0.5, 1.05, 2.01, 3.07] {
+        let mut d = FileDecoder::open(&path).unwrap();
+        d.seek(secs).unwrap();
+        let out = rest(&mut d);
+        let at = (secs * f64::from(d.sample_rate())).round() as usize * 2;
+        assert_eq!(out.len(), samples.len() - at, "{secs} s: length");
+        assert!(out[..] == samples[at..], "{secs} s: the audio differs");
+    }
 }
