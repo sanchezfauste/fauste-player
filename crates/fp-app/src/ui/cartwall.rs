@@ -290,6 +290,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                     hover_content: theme::TEXT,
                     active_fill: theme::NEUTRAL_700,
                     border_width: 1.0,
+                    dim_when_disabled: true,
                 };
                 let kind = kind_label(scene, view.kind);
                 let response =

@@ -87,6 +87,8 @@ pub struct TileStyle {
     pub hover_fill: Color32,
     pub hover_content: Color32,
     pub active_fill: Color32,
+    /// Whether a disabled tile is painted at 45 % strength (the default).
+    pub dim_when_disabled: bool,
 }
 
 impl TileStyle {
@@ -99,6 +101,88 @@ impl TileStyle {
             hover_fill: theme::NEUTRAL_900,
             hover_content: theme::TEXT,
             active_fill: theme::NEUTRAL_800,
+            dim_when_disabled: true,
+        }
+    }
+}
+
+/// The colour of the mix (segue) marker on the waveform: violet while the
+/// mix is the next thing to happen, dim grey otherwise.
+pub fn mix_marker_color(active: bool) -> Color32 {
+    if active {
+        theme::MIX_LINE
+    } else {
+        theme::NEUTRAL_600.gamma_multiply(0.6)
+    }
+}
+
+/// The least space between a button's text and its border, on each side.
+pub const SETTINGS_BUTTON_PAD: f32 = 12.0;
+/// The height of every text button of the Settings window.
+pub const SETTINGS_BUTTON_HEIGHT: f32 = 28.0;
+
+/// The width of a text button whose text is `text_width` wide.
+pub fn padded_button_width(text_width: f32) -> f32 {
+    text_width + 2.0 * SETTINGS_BUTTON_PAD
+}
+
+/// A text button (with an optional leading glyph) of the Settings window:
+/// as wide as its painted text plus [`SETTINGS_BUTTON_PAD`] on each side and
+/// [`SETTINGS_BUTTON_HEIGHT`] high. `label` is its accessible name and
+/// tooltip.
+pub fn text_button(
+    ui: &mut Ui,
+    glyph: Option<&str>,
+    label: &str,
+    enabled: bool,
+    style: TileStyle,
+) -> Response {
+    text_button_at_least(ui, glyph, label, enabled, style, 0.0)
+}
+
+/// [`text_button`] at least `min_width` wide, for buttons that share a
+/// column width.
+pub fn text_button_at_least(
+    ui: &mut Ui,
+    glyph: Option<&str>,
+    label: &str,
+    enabled: bool,
+    style: TileStyle,
+    min_width: f32,
+) -> Response {
+    let shown = match glyph {
+        Some(g) => format!("{g} {label}"),
+        None => label.to_owned(),
+    };
+    let text_width = ui
+        .painter()
+        .layout_no_wrap(shown.clone(), font(12.0), theme::TEXT)
+        .size()
+        .x;
+    let size = vec2(
+        padded_button_width(text_width).max(min_width),
+        SETTINGS_BUTTON_HEIGHT,
+    );
+    tile(ui, size, label, enabled, style, |p, r, c| {
+        p.text(r.center(), Align2::CENTER_CENTER, &shown, font(12.0), c);
+    })
+}
+
+/// The look of the bit-perfect badge: green border and text when it is on,
+/// dim grey when it is off.
+pub fn bp_tile_style(on: bool) -> TileStyle {
+    if on {
+        // A read-out, not a button: it is drawn disabled but at full strength.
+        TileStyle {
+            border: theme::PLAY_BORDER,
+            content: theme::PLAY_HOVER,
+            dim_when_disabled: false,
+            ..TileStyle::plain()
+        }
+    } else {
+        TileStyle {
+            content: theme::NEUTRAL_600,
+            ..TileStyle::plain()
         }
     }
 }
@@ -137,6 +221,19 @@ pub fn tile(
     style: TileStyle,
     paint: impl FnOnce(&Painter, Rect, Color32),
 ) -> Response {
+    tile_without_tooltip(ui, size, label, enabled, style, paint).on_hover_text(label)
+}
+
+/// [`tile`] without its tooltip, for a caller that shows a different one.
+/// Adding a second `on_hover_text` to a [`tile`] stacks two tooltips.
+pub fn tile_without_tooltip(
+    ui: &mut Ui,
+    size: Vec2,
+    label: &str,
+    enabled: bool,
+    style: TileStyle,
+    paint: impl FnOnce(&Painter, Rect, Color32),
+) -> Response {
     let sense = if enabled {
         Sense::click()
     } else {
@@ -146,8 +243,14 @@ pub fn tile(
     let owned = label.to_owned();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, owned.clone()));
     if ui.is_rect_visible(rect) {
+        let dim = !enabled && style.dim_when_disabled;
         let (fill, content) = if !enabled {
-            (style.fill, style.content.gamma_multiply(0.45))
+            let content = if dim {
+                style.content.gamma_multiply(0.45)
+            } else {
+                style.content
+            };
+            (style.fill, content)
         } else if response.is_pointer_button_down_on() {
             (style.active_fill, style.hover_content)
         } else if response.hovered() {
@@ -157,7 +260,7 @@ pub fn tile(
         };
         let painter = ui.painter();
         painter.rect_filled(rect, 0.0, fill);
-        let border = if enabled {
+        let border = if !dim {
             style.border
         } else {
             style.border.gamma_multiply(0.45)
@@ -170,7 +273,7 @@ pub fn tile(
         );
         paint(painter, rect, content);
     }
-    response.on_hover_text(label)
+    response
 }
 
 /// One option of a [`segmented`] control: its visible text and its
@@ -1684,11 +1787,7 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
     }
     if let Some(f) = m.segue_start {
         let mx = x_of(f);
-        let color = if input.mix_active {
-            theme::AMBER
-        } else {
-            theme::NEUTRAL_600.gamma_multiply(0.6)
-        };
+        let color = mix_marker_color(input.mix_active);
         let mut y = inner.top();
         while y < inner.bottom() {
             painter.rect_filled(Rect::from_min_size(pos2(mx, y), vec2(1.0, 2.0)), 0.0, color);

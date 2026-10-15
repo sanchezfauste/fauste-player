@@ -105,29 +105,7 @@ fn pressed_chord(ui: &Ui) -> Option<KeyChord> {
 }
 
 fn small(ui: &mut Ui, label: &str, glyph: &str) -> bool {
-    let width = ui
-        .painter()
-        .layout_no_wrap(label.to_owned(), font(12.0), theme::TEXT)
-        .size()
-        .x
-        + 34.0;
-    widgets::tile(
-        ui,
-        vec2(width, 26.0),
-        label,
-        true,
-        TileStyle::plain(),
-        |p, r, c| {
-            p.text(
-                r.center(),
-                egui::Align2::CENTER_CENTER,
-                format!("{glyph} {label}"),
-                font(12.0),
-                c,
-            );
-        },
-    )
-    .clicked()
+    widgets::text_button(ui, Some(glyph), label, true, TileStyle::plain()).clicked()
 }
 
 pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {

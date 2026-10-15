@@ -360,15 +360,22 @@ pub(crate) fn show(
                             border: theme::AMBER,
                             ..TileStyle::plain()
                         };
-                        if widgets::tile(ui, vec2(width, 30.0), &label, true, style, |p, r, c| {
-                            p.text(
-                                r.center(),
-                                egui::Align2::CENTER_CENTER,
-                                &label,
-                                font_medium(13.0),
-                                c,
-                            );
-                        })
+                        if widgets::tile_without_tooltip(
+                            ui,
+                            vec2(width, 30.0),
+                            &label,
+                            true,
+                            style,
+                            |p, r, c| {
+                                p.text(
+                                    r.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    &label,
+                                    font_medium(13.0),
+                                    c,
+                                );
+                            },
+                        )
                         .on_hover_text(&deps.pending_tip)
                         .clicked()
                         {
@@ -455,23 +462,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
 
 /// A plain Settings button, as wide as its label; true when clicked.
 fn button(ui: &mut Ui, text: &str) -> bool {
-    let w = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), font(12.0), theme::TEXT)
-        .size()
-        .x
-        + 20.0;
-    widgets::tile(
-        ui,
-        vec2(w, 24.0),
-        text,
-        true,
-        TileStyle::plain(),
-        |p, r, c| {
-            p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(12.0), c);
-        },
-    )
-    .clicked()
+    widgets::text_button(ui, None, text, true, TileStyle::plain()).clicked()
 }
 
 /// Every section: its nav glyph and its title.
@@ -1115,12 +1106,12 @@ fn route_picker(
         .into_iter()
         .map(|l| {
             ui.painter()
-                .layout_no_wrap(l, font(12.0), theme::TEXT)
+                .layout_no_wrap(format!("{} {l}", icon::WAVEFORM), font(12.0), theme::TEXT)
                 .size()
                 .x
         })
-        .fold(0.0, f32::max)
-        + 36.0;
+        .fold(0.0, f32::max);
+    let test_width = widgets::padded_button_width(test_width);
     const GAP: f32 = 8.0;
     let tail_width = CHANNELS_WIDTH + GAP + test_width;
     let one_line = BUS_LABEL_WIDTH + GAP + DEVICE_MIN_WIDTH + GAP + tail_width;
@@ -1153,21 +1144,13 @@ fn route_picker(
                 first_channel: 0,
             })
         });
-        if widgets::tile(
+        if widgets::text_button_at_least(
             ui,
-            vec2(test_width, 26.0),
+            Some(icon::WAVEFORM),
             &label,
             target.is_some(),
             TileStyle::plain(),
-            |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    format!("{} {label}", icon::WAVEFORM),
-                    font(12.0),
-                    c,
-                );
-            },
+            test_width,
         )
         .clicked()
             && let Some(target) = target
@@ -1566,28 +1549,13 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
     }
     let label = t.tr("settings-reanalyse");
     row(ui, &label, Some(&t.tr("settings-hint-reanalyse")), |ui| {
-        let width = ui
-            .painter()
-            .layout_no_wrap(label.clone(), font(12.0), theme::TEXT)
-            .size()
-            .x
-            + 36.0;
         let enabled = deps.services.is_some();
-        if widgets::tile(
+        if widgets::text_button(
             ui,
-            vec2(width, 30.0),
+            Some(icon::ARROWS_CLOCKWISE),
             &label,
             enabled,
             TileStyle::plain(),
-            |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    format!("{} {label}", icon::ARROWS_CLOCKWISE),
-                    font(12.0),
-                    c,
-                );
-            },
         )
         .clicked()
             && let Some(services) = deps.services
@@ -1604,28 +1572,13 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
         &label,
         Some(&t.tr("settings-hint-analyse-outdated")),
         |ui| {
-            let width = ui
-                .painter()
-                .layout_no_wrap(label.clone(), font(12.0), theme::TEXT)
-                .size()
-                .x
-                + 36.0;
             let enabled = deps.services.is_some() && outdated > 0;
-            if widgets::tile(
+            if widgets::text_button(
                 ui,
-                vec2(width, 30.0),
+                Some(icon::ARROWS_CLOCKWISE),
                 &label,
                 enabled,
                 TileStyle::plain(),
-                |p, r, c| {
-                    p.text(
-                        r.center(),
-                        egui::Align2::CENTER_CENTER,
-                        format!("{} {label}", icon::ARROWS_CLOCKWISE),
-                        font(12.0),
-                        c,
-                    );
-                },
             )
             .clicked()
                 && let Some(services) = deps.services
@@ -1657,27 +1610,12 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             .truncate(),
         );
         let browse = t.tr("settings-browse");
-        let width = ui
-            .painter()
-            .layout_no_wrap(browse.clone(), font(12.0), theme::TEXT)
-            .size()
-            .x
-            + 36.0;
-        if widgets::tile(
+        if widgets::text_button(
             ui,
-            vec2(width, 28.0),
+            Some(icon::FOLDER_OPEN),
             &browse,
             st.folder.is_none(),
             TileStyle::plain(),
-            |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    format!("{} {browse}", icon::FOLDER_OPEN),
-                    font(12.0),
-                    c,
-                );
-            },
         )
         .clicked()
         {
@@ -1693,28 +1631,13 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 .desired_width(240.0),
         );
         let label = t.tr("settings-new-playlist");
-        let width = ui
-            .painter()
-            .layout_no_wrap(label.clone(), font(12.0), theme::TEXT)
-            .size()
-            .x
-            + 36.0;
         let name = st.new_name.trim().to_owned();
-        if widgets::tile(
+        if widgets::text_button(
             ui,
-            vec2(width, 28.0),
+            Some(icon::PLUS),
             &label,
             !name.is_empty(),
             TileStyle::plain(),
-            |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    format!("{} {label}", icon::PLUS),
-                    font(12.0),
-                    c,
-                );
-            },
         )
         .clicked()
         {
@@ -1722,27 +1645,12 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             st.new_name.clear();
         }
         let import = t.tr("settings-import-playlist");
-        let width = ui
-            .painter()
-            .layout_no_wrap(import.clone(), font(12.0), theme::TEXT)
-            .size()
-            .x
-            + 36.0;
-        if widgets::tile(
+        if widgets::text_button(
             ui,
-            vec2(width, 28.0),
+            Some(icon::DOWNLOAD_SIMPLE),
             &import,
             true,
             TileStyle::plain(),
-            |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    format!("{} {import}", icon::DOWNLOAD_SIMPLE),
-                    font(12.0),
-                    c,
-                );
-            },
         )
         .clicked()
         {

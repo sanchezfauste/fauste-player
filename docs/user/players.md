@@ -129,13 +129,16 @@ red.
 ## Waveform
 
 - The part already played is drawn in the waveform colour; the rest is dimmer.
+  With a violet waveform colour, the violet MIX line stands out less; pick
+  another waveform colour if you need to tell them apart.
 - The outline shows the peaks, faint; the solid body inside it is the average
   (RMS) level. On a loud track the peaks fill the height, and the body still
   shows where the track is quieter or louder.
 - A blue shaded area at the start marks the **intro**, and a badge counts it
   down. The intro only shows when it has been set.
 - An orange shaded area at the end marks the **outro**, with its own countdown.
-- A dashed amber line with a **MIX** tag marks where the next track starts in
+- A dashed violet line (the colour of the **Mixing** badge, so it is not mistaken
+  for the orange outro) with a **MIX** tag marks where the next track starts in
   continuous mode. It is dimmed in single mode, and on a player whose Main
   output is bit-perfect, which does not mix (see [What it costs](bit-perfect.md#what-it-costs)).
 - The whole file is drawn. The silent start and end that playback skips (before

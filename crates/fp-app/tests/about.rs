@@ -271,3 +271,13 @@ fn no_language_carries_a_separate_machine_translation_notice() {
         assert!(!l.source.contains("about-machine-translation"), "{}", l.tag);
     }
 }
+
+#[test]
+fn hovering_the_info_button_shows_its_tooltip_once() {
+    let (mut h, _) = harness(state(1, 1));
+    h.get_by_label(ABOUT).hover();
+    h.run_steps(40);
+    // The button itself and one tooltip carry the text; a second tooltip
+    // stacked over the first would make three.
+    assert_eq!(h.query_all_by_label(ABOUT).count(), 2);
+}

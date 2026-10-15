@@ -195,7 +195,7 @@ fn outputs_test_buttons_line_up_in_columns() {
     }
     let main = h.get_all_by_label("Test Main").next().unwrap().rect();
     let cue = h.get_all_by_label("Test Cue").next().unwrap().rect();
-    assert!((main.left() - cue.left()).abs() < 0.5);
+    assert!((main.left() - cue.left()).abs() < 0.5, "{main:?} {cue:?}");
     assert!((main.right() - cue.right()).abs() < 0.5);
 }
 

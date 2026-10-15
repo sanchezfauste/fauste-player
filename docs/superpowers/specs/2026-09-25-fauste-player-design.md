@@ -443,7 +443,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - a 3×2 grid, 6 px gaps, all equal size: Previous, Stop, Pause on top; Restart, Fade stop, Stop-after-current below. Buttons whose action is unavailable (rule 26) are dimmed and inert, the Play button and the header's CUE included;
     - big countdown with tenths.
   - **Waveform:**
-    - played/unplayed colours, intro/outro shading, dashed amber MIX marker, playhead;
+    - played/unplayed colours, intro/outro shading, dashed MIX marker (violet, ACCENT like the MIXING badge, when active; dim grey otherwise), playhead;
     - drawn continuously, one column per pixel, as audio editors draw it: the peak envelope in the colour dimmed, and the RMS level of the same span as a solid body inside it. On a loud master the peaks fill the height but the body still shows the track's dynamics. Both are linear in amplitude and symmetric about the centre line; a column's peak is the largest of its buckets, its RMS the root of their mean square;
     - the trimmed head and tail (before `cue_in`, after `cue_out`) dimmed, with 1 px lines at the cue points;
     - hover time tooltip, click to seek; press-and-drag previews and seeks on release inside (outside or Esc cancels; Alt-drag edits markers) (operator feedback 2, O10, replaced this: a click seeks and a drag pans a zoomed view, with no preview);

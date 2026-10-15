@@ -11,6 +11,14 @@ use crate::ui::app::Scene;
 use crate::ui::theme;
 use crate::ui::widgets::{self, TileStyle, font};
 
+/// The room a checkbox takes besides its text: the box, its spacing and
+/// the button padding on both sides, as egui lays it out, and the gap to
+/// the arrows.
+fn checkbox_room(ui: &Ui) -> f32 {
+    let s = ui.spacing();
+    s.icon_width + s.icon_spacing + 2.0 * s.button_padding.x + s.item_spacing.x
+}
+
 /// A small arrow button; `label` is its accessible name and tooltip.
 fn arrow(ui: &mut Ui, label: &str, glyph: &str, enabled: bool) -> bool {
     widgets::tile(
@@ -35,17 +43,33 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
         |ui| {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
-                for (column, shown) in rows {
-                    let name = t.tr(&format!("column-name-{}", column.name()));
+                let names: Vec<(fp_model::TableColumn, bool, String)> = rows
+                    .into_iter()
+                    .map(|(c, shown)| (c, shown, t.tr(&format!("column-name-{}", c.name()))))
+                    .collect();
+                // One label column, as wide as the widest name, so the arrows
+                // line up in every row.
+                let label_width = names
+                    .iter()
+                    .map(|(_, _, name)| {
+                        ui.painter()
+                            .layout_no_wrap(name.clone(), font(12.0), theme::TEXT)
+                            .size()
+                            .x
+                    })
+                    .fold(0.0, f32::max)
+                    + checkbox_room(ui);
+                for (column, shown, name) in names {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
                         let mut on = shown;
                         let text = RichText::new(&name).font(font(12.0)).color(theme::TEXT);
                         let changed = ui
                             .allocate_ui_with_layout(
-                                vec2(220.0, 24.0),
+                                vec2(label_width, 24.0),
                                 Layout::left_to_right(Align::Center),
                                 |ui| {
+                                    ui.set_min_width(label_width);
                                     let check = ui.add_enabled(
                                         !column.is_required(),
                                         egui::Checkbox::new(&mut on, text),
@@ -88,30 +112,8 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
                 }
                 ui.add_space(6.0);
                 let label = t.tr("settings-columns-default");
-                let width = ui
-                    .painter()
-                    .layout_no_wrap(label.clone(), font(12.0), theme::TEXT)
-                    .size()
-                    .x
-                    + 20.0;
                 let is_default = list == default_columns();
-                if widgets::tile(
-                    ui,
-                    vec2(width, 24.0),
-                    &label,
-                    !is_default,
-                    TileStyle::plain(),
-                    |p, r, c| {
-                        p.text(
-                            r.center(),
-                            egui::Align2::CENTER_CENTER,
-                            &label,
-                            font(12.0),
-                            c,
-                        );
-                    },
-                )
-                .clicked()
+                if widgets::text_button(ui, None, &label, !is_default, TileStyle::plain()).clicked()
                 {
                     scene.set_table_columns(default_columns());
                 }

@@ -64,29 +64,7 @@ fn background<T: Send + 'static>(
 }
 
 fn button(ui: &mut Ui, label: &str, glyph: &str, enabled: bool) -> bool {
-    let width = ui
-        .painter()
-        .layout_no_wrap(label.to_owned(), font(12.0), theme::TEXT)
-        .size()
-        .x
-        + 36.0;
-    widgets::tile(
-        ui,
-        vec2(width, 28.0),
-        label,
-        enabled,
-        TileStyle::plain(),
-        |p, r, c| {
-            p.text(
-                r.center(),
-                egui::Align2::CENTER_CENTER,
-                format!("{glyph} {label}"),
-                font(12.0),
-                c,
-            );
-        },
-    )
-    .clicked()
+    widgets::text_button(ui, Some(glyph), label, enabled, TileStyle::plain()).clicked()
 }
 
 /// A labelled single-line text field; the label names the field for

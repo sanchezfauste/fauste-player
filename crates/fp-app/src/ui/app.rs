@@ -1639,7 +1639,6 @@ fn top_bar(
                 c,
             );
         })
-        .on_hover_text(&about)
         .clicked()
         {
             view_state.about_open = true;
@@ -1664,15 +1663,22 @@ fn top_bar(
                 hover_fill: theme::NEUTRAL_800,
                 ..TileStyle::plain()
             };
-            if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    format!("{} {label}", egui_phosphor::regular::HOURGLASS),
-                    font(12.0),
-                    c,
-                );
-            })
+            if widgets::tile_without_tooltip(
+                ui,
+                vec2(width, 24.0),
+                &label,
+                true,
+                style,
+                |p, r, c| {
+                    p.text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        format!("{} {label}", egui_phosphor::regular::HOURGLASS),
+                        font(12.0),
+                        c,
+                    );
+                },
+            )
             .on_hover_text(tip)
             .clicked()
             {
@@ -1725,6 +1731,17 @@ fn players_row(
                 }
             });
         });
+}
+
+/// The status bar's legend: each swatch colour and the message naming it.
+/// The MIX swatch is the colour of the lit mix marker on the waveform.
+pub fn status_legend() -> [(Color32, &'static str); 4] {
+    [
+        (widgets::mix_marker_color(true), "legend-mix"),
+        (theme::INTRO, "legend-intro"),
+        (theme::NEXT_ROW, "legend-next"),
+        (theme::ON_AIR_ROW, "legend-on-air"),
+    ]
 }
 
 fn legend(ui: &mut Ui, color: Color32, label: &str) {
@@ -1787,10 +1804,9 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
             )
             .selectable(false),
         );
-        legend(ui, theme::AMBER, &t.tr("legend-mix"));
-        legend(ui, theme::INTRO, &t.tr("legend-intro"));
-        legend(ui, theme::NEXT_ROW, &t.tr("legend-next"));
-        legend(ui, theme::ON_AIR_ROW, &t.tr("legend-on-air"));
+        for (color, key) in status_legend() {
+            legend(ui, color, &t.tr(key));
+        }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             let (text, color) = if let Some(alert) = alerts.first() {
                 (alert.clone(), theme::ON_AIR_TEXT)

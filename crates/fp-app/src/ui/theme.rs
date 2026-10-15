@@ -199,7 +199,12 @@ pub const INTRO_BADGE_BLINK: Color32 = Color32::from_rgb(0x00, 0x50, 0x73);
 pub const INTRO_BADGE_TEXT: Color32 = Color32::from_rgb(0xb6, 0xe6, 0xff);
 pub const OUTRO_BADGE_BG: Color32 = Color32::from_rgb(0x35, 0x1e, 0x08);
 pub const OUTRO_BADGE_TEXT: Color32 = Color32::from_rgb(0xff, 0xd5, 0xa4);
-pub const MIX_TEXT: Color32 = Color32::from_rgb(0x1b, 0x15, 0x0b);
+/// The active mix (segue) marker on the waveform: violet like the MIXING
+/// badge, so it cannot be taken for the orange outro marker.
+pub const MIX_LINE: Color32 = ACCENT;
+/// The MIX tag's text, dark for contrast on the violet (and on the grey of an
+/// inactive marker).
+pub const MIX_TEXT: Color32 = Color32::from_rgb(0x14, 0x12, 0x20);
 
 /// Opacity of the cue-in and cue-out lines on the waveform while players
 /// ignore cue markers (feedback 2 spec O15).
