@@ -54,6 +54,7 @@ pub use config::{
     MeterSettings, OutputDevice, OutputsConfig, OutputsView, PlayerRoutes, PlayersConfig, Route,
     SAMPLE_RATE_RANGE, Tuning, UiConfig,
 };
+pub use cue_on_air::{CueConfirmation, CueOnAir, CueStopped, needs_confirmation};
 pub use device_offer::{
     DsdCaps, DsdNotOffered, buffer_is_reported, dsd_not_offered, effective_dsd_mode,
     offered_buffers, offered_dsd_modes, offered_rates, rate_is_reported,

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::cart_rules;
 use crate::command::{
-    Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
+    Command, CueStart, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
 };
 use crate::config::Config;
 use crate::dsd::DsdOnAir;
@@ -20,6 +20,13 @@ use crate::track::{FileState, MarkerKind, Track};
 
 /// Applies a user command. On `Err` the state is unchanged.
 pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>, ModelError> {
+    let mut out = apply_command(state, command)?;
+    crate::cue_on_air::after_step(state, &mut out);
+    Ok(out)
+}
+
+/// `apply`, without the on-air pre-listen upkeep that closes every step.
+fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>, ModelError> {
     let mut out = Vec::new();
     match command {
         Command::Play(id) => play(state, id, &mut out)?,
@@ -99,7 +106,7 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
                 out.extend(apply(state, Command::ToggleStopAfterCurrent(id))?);
             }
         }
-        Command::CueEntry(id, entry) => cue_entry(state, id, entry, &mut out)?,
+        Command::CueEntry(id, entry) => cue_entry(state, id, entry, false, &mut out)?,
         Command::SeekCue(id, secs) => seek_cue(state, id, secs, &mut out)?,
         Command::SetCuePaused(id, paused) => set_cue_paused(state, id, paused, &mut out)?,
         Command::CueToNext(id) => {
@@ -108,6 +115,8 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
                 set_next(state, id, cue.entry)?;
             }
         }
+        Command::ForceCue(start) => force_cue(state, start, &mut out)?,
+        Command::CancelCueOnAir(id) => crate::cue_on_air::cancel(state, id),
         Command::SetVolume(id, volume) => {
             let i = state.player_index(id)?;
             // A broken value never silences what is on air: it is ignored.
@@ -297,14 +306,14 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
         Command::FireCart(cart) => cart_rules::fire(state, cart, &mut out)?,
         Command::StopCart(cart) => cart_rules::stop(state, cart, &mut out)?,
         Command::StopAllCarts => cart_rules::stop_all(state, &mut out),
-        Command::CueCart(cart) => cart_rules::cue(state, cart, &mut out)?,
+        Command::CueCart(cart) => cart_rules::cue(state, cart, false, &mut out)?,
         Command::SetCartCue(cart, on) => {
             state
                 .cartwall
                 .cart(cart)
                 .ok_or(ModelError::UnknownCart(cart))?;
             if (state.cartwall.cue == Some(cart)) != on {
-                cart_rules::cue(state, cart, &mut out)?;
+                cart_rules::cue(state, cart, false, &mut out)?;
             }
         }
         Command::CreateCartPage { name } => cart_rules::create_page(state, name),
@@ -390,6 +399,13 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
 /// Applies an engine observation. Events about unknown players are ignored
 /// (the player may have been removed while the event was in flight).
 pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
+    let mut out = on_engine_event(state, event);
+    crate::cue_on_air::after_step(state, &mut out);
+    out
+}
+
+/// `on_event`, without the on-air pre-listen upkeep that closes every step.
+fn on_engine_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
     let mut out = Vec::new();
     match event {
         EngineEvent::FadeCompleted { player } => {
@@ -986,26 +1002,36 @@ fn toggle_cue(
     if state.players[i].cue.take().is_some() {
         out.push(EngineAction::StopCue { player: id });
     } else if let Some(entry) = state.players[i].next {
-        cue_entry(state, id, entry, out)?;
+        cue_entry(state, id, entry, false, out)?;
     }
     Ok(())
 }
 
+/// Starts (or moves) `id`'s CUE on `entry`. A CUE that starts from nothing
+/// on a sounding on-air output records a confirmation request instead,
+/// unless it is `force`d (on-air pre-listen spec CA3, CA4); a running one
+/// moves without asking.
 fn cue_entry(
     state: &mut AppState,
     id: PlayerId,
     entry: EntryId,
+    force: bool,
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
-    // Spec §4.6: without a Cue output apart from Main nothing could be
-    // heard (the engine never pre-listens on air), so no CUE starts.
+    // Spec §4.6, CA1: without a Cue route nothing could be heard.
     if !state.config.outputs.player_has_cue(id) {
         return Ok(());
     }
     let request = state
         .request_from_cue_in(entry, Holder::PlayerCue(id))
         .ok_or(ModelError::UnknownEntry(entry))?;
+    if state.players[i].cue.is_none()
+        && !force
+        && crate::cue_on_air::ask(state, CueStart::Entry { player: id, entry })
+    {
+        return Ok(());
+    }
     state.players[i].cue = Some(CueState {
         entry,
         paused: false,
@@ -1015,6 +1041,34 @@ fn cue_entry(
         player: id,
         request,
     });
+    Ok(())
+}
+
+/// On-air pre-listen spec CA4: starts `start` even on a sounding on-air
+/// output, or only confirms it when it already runs.
+fn force_cue(
+    state: &mut AppState,
+    start: CueStart,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    match start {
+        CueStart::Entry { player, entry } => {
+            let i = state.player_index(player)?;
+            if state.players[i].cue.is_none_or(|c| c.entry != entry) {
+                cue_entry(state, player, entry, true, out)?;
+            }
+        }
+        CueStart::Cart(cart) => {
+            state
+                .cartwall
+                .cart(cart)
+                .ok_or(ModelError::UnknownCart(cart))?;
+            if state.cartwall.cue != Some(cart) {
+                cart_rules::cue(state, cart, true, out)?;
+            }
+        }
+    }
+    crate::cue_on_air::forced(state, start.holder());
     Ok(())
 }
 
@@ -1034,7 +1088,7 @@ fn follow_cue(
             .playable_request(entry, Holder::PlayerCue(id))
             .is_some()
     {
-        cue_entry(state, id, entry, out)?;
+        cue_entry(state, id, entry, false, out)?;
     }
     Ok(())
 }
