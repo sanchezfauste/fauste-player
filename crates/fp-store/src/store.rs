@@ -306,3 +306,43 @@ fn write_doc<T: Serialize>(path: &Path, doc: &T, backups: usize) -> Result<(), S
     write_atomic(path, &bytes, backups)?;
     Ok(())
 }
+
+/// The log limits of the saved configuration, read before logging starts
+/// (the full load reports problems through the log, so it comes after).
+/// Read-only and silent: a missing, oversized or unreadable file gives the
+/// defaults, and values are clamped like `Config::validate` does.
+pub fn peek_log_limits(paths: &AppPaths) -> (u64, usize) {
+    let defaults = Limits::default();
+    let file = paths.config_file();
+    let read = std::fs::metadata(&file)
+        .ok()
+        .filter(|m| m.len() <= defaults.max_state_file_bytes)
+        .and_then(|_| std::fs::read(&file).ok());
+    let mut config = read
+        .and_then(|bytes| parse_config(&bytes).ok())
+        .map(|(config, _)| config)
+        .unwrap_or_default();
+    let _ = config.validate();
+    (config.limits.max_log_file_mb, config.limits.max_log_files)
+}
+
+#[cfg(test)]
+mod peek_tests {
+    use super::*;
+
+    #[test]
+    fn log_limits_come_from_the_saved_config_clamped_or_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = AppPaths::under(dir.path());
+        assert_eq!(peek_log_limits(&paths), (10, 14), "no file");
+        std::fs::create_dir_all(paths.config_file().parent().unwrap()).unwrap();
+        std::fs::write(
+            paths.config_file(),
+            r#"{"schema_version":1,"config":{"limits":{"max_log_file_mb":50,"max_log_files":9999}}}"#,
+        )
+        .unwrap();
+        assert_eq!(peek_log_limits(&paths), (50, 365));
+        std::fs::write(paths.config_file(), "not json").unwrap();
+        assert_eq!(peek_log_limits(&paths), (10, 14), "corrupt file");
+    }
+}
