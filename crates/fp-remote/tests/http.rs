@@ -11,7 +11,7 @@ use fp_remote::control::{Playback, WaveformData};
 use fp_remote::http::{Ctx, router};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
-use support::{FakeControl, demo_state};
+use support::{FakeControl, demo_state, on_air_cue_state};
 use tower::ServiceExt;
 
 pub fn ctx(fake: &Arc<FakeControl>) -> Ctx {
@@ -499,4 +499,50 @@ async fn bf12_full_volume_is_accepted_over_http_and_less_is_a_conflict() {
         vec![Command::SetVolume(p, 1.0)],
         "queued, and exactly unity"
     );
+}
+
+#[tokio::test]
+async fn ca6_a_cue_on_a_sounding_on_air_output_is_409_and_force_starts_it() {
+    let s = on_air_cue_state();
+    let p = s.players[0].id.0;
+    let fake = FakeControl::new(s);
+    let uri = format!("/api/v1/players/{p}/cue");
+    let (status, body, _) = call(ctx(&fake), "PUT", &uri, Some(json!({"on": true}))).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["error"], "cue_on_air");
+    assert!(fake.take_sent().is_empty());
+    let (status, _, _) = call(
+        ctx(&fake),
+        "PUT",
+        &uri,
+        Some(json!({"on": true, "force": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert!(matches!(
+        fake.take_sent().as_slice(),
+        [Command::ForceCue(_)]
+    ));
+}
+
+/// Review Focus 3.
+#[tokio::test]
+async fn force_must_be_a_boolean() {
+    let s = on_air_cue_state();
+    let p = s.players[0].id.0;
+    let fake = FakeControl::new(s);
+    for body in [
+        json!({"on": true, "force": "yes"}),
+        json!({"on": true, "forced": true}),
+    ] {
+        let (status, _, _) = call(
+            ctx(&fake),
+            "PUT",
+            &format!("/api/v1/players/{p}/cue"),
+            Some(body.clone()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    }
+    assert!(fake.take_sent().is_empty());
 }
