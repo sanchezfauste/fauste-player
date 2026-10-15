@@ -419,3 +419,19 @@ fn the_table_follows_a_change_made_in_settings() {
     h.run_steps(3);
     assert!(h.query_by_label("DATE").is_some());
 }
+
+#[test]
+fn the_column_arrows_line_up_whatever_the_label_width() {
+    let (mut h, _) = harness(state(1, 3));
+    open_settings(&mut h);
+    for dir in ["up", "down"] {
+        let lefts: Vec<f32> = ["Number (#)", "Title", "Artist", "Duration", "Album", "Date"]
+            .iter()
+            .map(|c| h.get_by_label(&format!("Move {c} {dir}")).rect().left())
+            .collect();
+        assert!(
+            lefts.iter().all(|x| (x - lefts[0]).abs() < 0.5),
+            "{dir}: {lefts:?}"
+        );
+    }
+}
