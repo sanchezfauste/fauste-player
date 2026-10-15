@@ -10,6 +10,7 @@ use std::path::Path;
 
 mod ape;
 mod dsd;
+mod encoded;
 mod opus;
 pub mod priority;
 mod symph;
@@ -97,6 +98,44 @@ fn read_up_to(file: &mut std::fs::File, buf: &mut [u8]) -> std::io::Result<usize
     Ok(filled)
 }
 
+/// Refuses a 16-bit stereo PCM file whose samples are an encoded bitstream
+/// (a DTS-CD rip stored as WAV or FLAC): it would play as loud noise. Only
+/// the first `SNIFF_FRAMES` frames are read, then the decoder goes back to
+/// the start. A read error here is left for playback to report.
+fn refuse_encoded_pcm(decoder: &mut SymphoniaDecoder, path: &Path) -> Result<(), String> {
+    if decoder.bits_per_sample() != Some(16) || decoder.channels() != 2 {
+        return Ok(());
+    }
+    let mut block = Vec::new();
+    while block.len() < encoded::SNIFF_FRAMES * 2 {
+        match decoder.next_block(&mut block) {
+            Ok(true) => {}
+            _ => break,
+        }
+    }
+    // 16-bit samples are exact in f32: scaling back gives the file's words.
+    let words: Vec<i16> = block
+        .iter()
+        .map(|s| (s * 32768.0).round().clamp(-32768.0, 32767.0) as i16)
+        .collect();
+    let found = encoded::detect(&words);
+    decoder.seek(0.0)?;
+    match found {
+        Some(kind) => {
+            let name = kind.name();
+            tracing::warn!(
+                file = %path.display(),
+                "the PCM samples are an encoded {name} bitstream; the file is refused"
+            );
+            Err(format!(
+                "{}: encoded bitstream ({name}) stored as PCM; not supported",
+                path.display()
+            ))
+        }
+        None => Ok(()),
+    }
+}
+
 /// Seconds of `frames` frames at `rate`: `None` when the count is unknown
 /// or zero, or the rate is zero (operator feedback 4, Q1).
 pub fn duration_from_frames(frames: Option<u64>, rate: u32) -> Option<f64> {
@@ -155,7 +194,11 @@ impl FileDecoder {
                     extension.unwrap_or_default()
                 ));
             }
-            Kind::Symphonia => Backend::Symphonia(Box::new(SymphoniaDecoder::open(path)?)),
+            Kind::Symphonia => {
+                let mut decoder = SymphoniaDecoder::open(path)?;
+                refuse_encoded_pcm(&mut decoder, path)?;
+                Backend::Symphonia(Box::new(decoder))
+            }
         };
         Ok(Self {
             backend,

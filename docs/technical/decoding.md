@@ -202,6 +202,21 @@ refused, since `wavicle` does not decode them.
 says. Before this backend, symphonia could take an APE file for an MPEG
 stream and play noise.
 
+## Encoded bitstreams stored as PCM
+
+A DTS-CD rip is a DTS stream written into the samples of a 16-bit stereo PCM
+file (WAV, FLAC, AIFF); played as PCM it is loud noise. When symphonia opens
+a lossless 16-bit stereo file, `FileDecoder::open` decodes its first 32768
+frames (128 KiB of samples), gives them to `encoded::detect` and seeks back
+to the start. `detect` looks for the DTS core sync words (16- and 14-bit,
+big- and little-endian; the 14-bit ones with the bits that follow) and for
+the IEC 61937 preamble (`0xF872 0x4E1F`, in both byte orders) in the
+interleaved sample words. It needs three syncs at one exact spacing, so a
+single accidental word in real music never matches. A match fails the open
+with `encoded bitstream (DTS) stored as PCM; not supported` (or `IEC 61937`)
+and one warning in the log, so analysis, the track tooltip and playback all
+refuse the file with that reason. Decoding DTS or AC-3 is out of scope.
+
 ## Not supported
 
 Musepack, TTA, WMA and AC-3: no pure-Rust decoder could be verified. These

@@ -23,6 +23,8 @@ Every added crate is MIT or Apache-2.0 licensed. A GPL WavPack codec was rejecte
 
 **Not supported yet:** Musepack, TTA, WMA and AC-3. The only pure-Rust decoders are at version 0.0.x and cannot be verified here (there are no encoders or reference files). They show as unreadable files, as today.
 
+**Encoded bitstreams stored as PCM.** A 16-bit stereo PCM file (WAV, FLAC, AIFF) whose first 128 KiB of samples carry at least three DTS core syncs or IEC 61937 bursts at one spacing is refused when opened, with the reason "encoded bitstream (DTS) stored as PCM; not supported" and one log line. DTS and AC-3 decoding is out of scope.
+
 ## F2. Architecture (`fp-decode`)
 
 - **`FileDecoder` fronts several backends.** Each backend exposes the same interface: open, sample rate, bits per sample, channels, frames hint, `seek(secs)`, and `next_block` (interleaved stereo `f32`, downmixed as today).
