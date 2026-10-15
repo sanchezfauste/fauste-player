@@ -144,14 +144,20 @@ interface**. Please report it with the logs.
 
 See [Data and backups](data-and-backups.md) for the log folder. There is one
 log file per day. Identical lines that repeat one after another are written
-once, followed by a line such as `previous message repeated 12 times`. The
+once, followed by a line such as `previous message repeated 12 times`
+(during a long run of repeats that line is written every minute). Lines
+that differ, for example because they carry a counter, are not collapsed.
+The
 PulseAudio client's routine connection messages are left out by default.
 Set `RUST_LOG=debug` in the environment for more detail (it replaces the
 default filter, `info,pulseaudio=warn`).
 
-The log cannot fill the disk: a day's file stops growing at 10 MiB (its last
-line says so) and the last 14 files are kept. Change both in the config file
-with `limits.max_log_file_mb` (1 to 1024) and `limits.max_log_files` (1 to
-365); they apply at the next start. Crash reports are saved as
-`crash-<time>.txt`.
+The log is bounded: a day's file stops growing at 10 MiB (its last line
+says so; the rest of that day is not logged, which is what a flood of
+differing lines leads to) and the last 14 files are kept. Change them in the
+config file with `limits.max_log_file_mb` (1 to 1024), `limits.max_log_files`
+(2 to 365) and `limits.log_repeat_summary_secs` (1 to 3600, default 60, how
+often a long run of repeats is reported); they apply at the next start.
+Crash reports are saved as `crash-<time>.txt` in the same folder and are
+limited separately (`limits.max_crash_reports` per run).
 Attach both files when reporting a bug.
