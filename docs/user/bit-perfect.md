@@ -216,7 +216,8 @@ example without exclusive access), the track goes on as PCM.
 ## The BP badge
 
 The **BP** badge in the player header lights up (green border and text; dim
-grey when off) while the current track reaches its Main device unchanged. All of these must hold:
+grey when off) while the current track reaches its Main device unchanged.
+All of these must hold:
 
 - the device is bit-perfect and open with exclusive access;
 - the device runs at the track's sample rate;

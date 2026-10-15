@@ -129,6 +129,8 @@ red.
 ## Waveform
 
 - The part already played is drawn in the waveform colour; the rest is dimmer.
+  With a violet waveform colour, the violet MIX line stands out less; pick
+  another waveform colour if you need to tell them apart.
 - The outline shows the peaks, faint; the solid body inside it is the average
   (RMS) level. On a loud track the peaks fill the height, and the body still
   shows where the track is quieter or louder.
