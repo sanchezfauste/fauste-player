@@ -393,8 +393,10 @@ file-unreadable-reason = Kan het bestand niet lezen
 # About window
 tip-about = Over Fauste Player
 about-version = Versie { $version }
-about-copyright = Copyright © Marc Sánchez Fauste. Alle rechten voorbehouden.
-about-machine-translation = Deze vertaling is met AI gemaakt en kan fouten bevatten.
+about-copyright = Copyright © 2026 Marc Sánchez Fauste.
+about-license = Gelicentieerd onder de GNU General Public License, versie 3 of later.
+about-license-link = Lees de licentie online
+about-disclaimer = Ontwikkeld met hulp van AI en geleverd zoals het is, zonder enige garantie. Gebruik is volledig op eigen risico; de auteur aanvaardt geen aansprakelijkheid voor enige schade.
 about-bundled = Dit programma bevat de volgende onderdelen onder hun eigen licenties:
 about-inter = Lettertype Inter — SIL Open Font License 1.1
 about-phosphor = Phosphor Icons — MIT-licentie

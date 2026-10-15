@@ -16,7 +16,8 @@ Windows, macOS). Read [`README.md`](README.md) for the overview and
    - Answer the maintainer in the language they write in (usually Spanish).
    - UI strings are Fluent messages; `crates/fp-app/locales/en-US/main.ftl`
      is the source. Every new or changed string goes into every locale file
-     (en-US and es-ES written by hand, the others AI-translated).
+     (en-US and es-ES written with each change, the others translated in
+     bulk with AI).
 2. **Confidentiality.** Never mention other playout or radio-automation
    products (commercial or open source) anywhere: code, comments, docs,
    specs, plans, commit messages, issues, PRs. Describe behaviour in its own
@@ -48,6 +49,9 @@ Windows, macOS). Read [`README.md`](README.md) for the overview and
 9. **Never crash on bad data.** Untrusted inputs (audio, tags, covers,
    state files) degrade to "not available" with a log line.
 10. **Nothing goes on air by itself** after a start, restart or crash.
+11. **Licence.** The project is `GPL-3.0-or-later` plus the attribution term
+    in `NOTICE` (section 7(b)): the About window must keep showing the author
+    attribution with its link. New crates inherit `license.workspace = true`.
 
 ## Commands
 
@@ -141,9 +145,9 @@ A change is not done until everything that describes it says the same:
 - the spec in `docs/superpowers/specs/` when behaviour changes, and the plan;
 - this file (and `AGENTS.md` if the pointer changes) when the workflow,
   commands or layout change;
-- UI strings in every locale file (en-US and es-ES by hand, the rest
-  AI-translated); a new locale is one `locales/<tag>/main.ftl` plus one
-  entry in `i18n::LOCALES` (see `docs/technical/ui.md`).
+- UI strings in every locale file (en-US and es-ES written with each
+  change, the rest translated in bulk with AI); a new locale is one
+  `locales/<tag>/main.ftl` plus one entry in `i18n::LOCALES` (see `docs/technical/ui.md`).
 
 The PR template has a checklist for it. `CHANGELOG.md` is never edited by
 hand: release-please writes it from the commits.
@@ -152,7 +156,7 @@ hand: release-please writes it from the commits.
 
 - Conventional Commits: `type(scope)!: summary`. Types: `feat`, `fix`,
   `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `style`,
-  `revert`. Scopes are crate or area names (`model`, `store`, `engine`,
+  `revert`. Scopes are crate or area names (`deps`, `model`, `store`, `engine`,
   `backends`, `decode`, `dsp`, `analysis`, `app`, `ui`, `ci`, `docs`).
 - The body explains *why*. Agent commits end with the co-author trailer the
   harness provides.
@@ -182,7 +186,7 @@ hand: release-please writes it from the commits.
 | `vendor/symphonia-format-mkv` | A patched copy of symphonia's Matroska reader (seeking through cues, blocks without duration), used the same way. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
 | `site/`, `scripts/site/` | The landing page and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
-| `.github/workflows` | CI, release-please, release builds and packages, GitHub Pages, commit checks |
+| `.github/workflows` | CI, Dependabot (`dependabot.yml`), release-please, release builds and packages, GitHub Pages, commit checks |
 
 ## Design source
 

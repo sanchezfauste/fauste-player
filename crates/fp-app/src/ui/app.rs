@@ -17,7 +17,7 @@ use fp_model::{
     AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, ShortcutAction, TrackId,
 };
 
-use super::about::{self, NoticeOpener};
+use super::about::{self, Opener};
 use super::cartwall;
 use super::controller::Controller;
 use super::cue_window;
@@ -378,7 +378,7 @@ pub struct AppUi {
     service_faults: Option<Arc<std::sync::atomic::AtomicU64>>,
     /// The installed third-party notices, found at start-up.
     notices: Option<PathBuf>,
-    opener: NoticeOpener,
+    opener: Opener,
     /// The MIDI service's handle (Settings > MIDI), when it started.
     midi: Option<fp_control::service::MidiHandle>,
     /// The remote servers' state (Settings > Remote), when they started.
@@ -488,7 +488,7 @@ impl AppUi {
     }
 
     /// How the About window opens the notices file.
-    pub fn with_notice_opener(mut self, opener: NoticeOpener) -> Self {
+    pub fn with_notice_opener(mut self, opener: Opener) -> Self {
         self.opener = opener;
         self
     }

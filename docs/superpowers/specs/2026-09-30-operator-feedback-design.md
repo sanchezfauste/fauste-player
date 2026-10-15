@@ -191,8 +191,12 @@ presentation, not a second source of rules.
     (`CARGO_PKG_VERSION`, dimmed). Clicking the name or the version opens the
     About window.
   - The About window is modal, closes with Esc, and shows:
-    - the name, the version and "Copyright © Marc Sánchez Fauste. All rights
-      reserved.";
+    - the name, the version, the author attribution "Fauste Player by Marc
+      Sánchez Fauste" (not translated, the term in `NOTICE`) with a link to the
+      project, "Copyright © 2026 Marc Sánchez Fauste.", the licence (GNU GPL
+      version 3 or later, with a button that opens its text online) and a
+      short disclaimer (AI-assisted development, provided as is, at the user's
+      own risk), the same in every language;
     - the notices that the bundled components' licences require: the Inter font
       (SIL Open Font License 1.1, with its copyright line and the OFL text,
       embedded from `assets/fonts/OFL.txt`) and Phosphor Icons (MIT, with its

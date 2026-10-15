@@ -19,7 +19,7 @@
 | **Monkey's Audio** | `ape` | `ape-decoder` (pure Rust, `deny(unsafe_code)`) | frame-accurate seek |
 | **DSD** | `dsf`, `dff` | our own reader and DSD-to-PCM converter | DSD64 to DSD512; DST-compressed DFF is refused |
 
-Every added crate is MIT or Apache-2.0 licensed. A GPL WavPack codec was rejected, because the project has no licence yet and `cargo deny` allows none.
+Every added crate is MIT or Apache-2.0 licensed. A GPL WavPack codec was rejected, because `cargo deny` allows only permissive licences for dependencies.
 
 **Not supported yet:** Musepack, TTA, WMA and AC-3. The only pure-Rust decoders are at version 0.0.x and cannot be verified here (there are no encoders or reference files). They show as unreadable files, as today.
 

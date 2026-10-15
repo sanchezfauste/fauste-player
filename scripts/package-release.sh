@@ -33,7 +33,7 @@ cp "${root}/target/${target}/release/${exe}" "${stage}/"
 cp "${root}/README.md" "${root}/CHANGELOG.md" "${stage}/"
 cp "${root}/crates/fp-app/assets/fonts/OFL.txt" "${stage}/licenses/Inter-OFL.txt"
 cp "${root}/crates/fp-app/assets/licenses/Phosphor-MIT.txt" "${stage}/licenses/Phosphor-MIT.txt"
-[ -f "${root}/LICENSE" ] && cp "${root}/LICENSE" "${stage}/"
+cp "${root}/LICENSE" "${root}/NOTICE" "${stage}/"
 if command -v cargo-about >/dev/null; then
   # The notices cover exactly the crates this build links.
   cargo about generate --locked -m "${root}/crates/fp-app/Cargo.toml" -c "${root}/about.toml" \

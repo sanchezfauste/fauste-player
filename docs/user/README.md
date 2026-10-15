@@ -6,6 +6,11 @@ transport. Players can chain tracks with overlapping mixes, pre-listen on a
 separate **CUE** output and survive crashes without putting anything on air
 by themselves.
 
+> **Built with AI assistance, provided as is.** Fauste Player, this guide and
+> its translations were developed with substantial help from AI tools. It
+> comes without any warranty and you use it at your own risk: see the
+> [Disclaimer](https://github.com/sanchezfauste/fauste-player#disclaimer).
+
 ![Main screen](../images/main-screen.png)
 
 | Guide | What it covers |
@@ -26,10 +31,9 @@ by themselves.
 
 The interface is available in English, Spanish, Catalan, Dutch, French,
 Galician, German, Italian, Basque, Polish and Portuguese. It follows the
-language of the operating system unless you choose one in Settings. English and
-Spanish are written by hand; the other nine were generated with AI and may
-contain errors. If you speak one of them, corrections are welcome as issues or
-pull requests.
+language of the operating system unless you choose one in Settings. The interface in
+every language, English and Spanish included, was produced with AI and may
+contain errors. Corrections are welcome as issues or pull requests.
 
 The guide is also available in other languages, translated with AI
 from this English guide: in the [online guide](https://sanchezfauste.com/fauste-player/guide/),

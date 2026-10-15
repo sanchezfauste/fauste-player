@@ -8,15 +8,6 @@
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use unic_langid::LanguageIdentifier;
 
-/// How a locale's strings were written.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Translation {
-    /// Written and reviewed by hand (en-US, es-ES).
-    Manual,
-    /// Generated with AI: the About window says it may contain errors.
-    Machine,
-}
-
 /// A language the interface is available in.
 #[derive(Debug)]
 pub struct Locale {
@@ -24,7 +15,6 @@ pub struct Locale {
     pub tag: &'static str,
     /// The language's name in that language, as the selector shows it.
     pub name: &'static str,
-    pub translation: Translation,
     /// The embedded `main.ftl`.
     pub source: &'static str,
 }
@@ -33,7 +23,6 @@ pub struct Locale {
 const ENGLISH: Locale = Locale {
     tag: "en-US",
     name: "English",
-    translation: Translation::Manual,
     source: include_str!("../locales/en-US/main.ftl"),
 };
 
@@ -44,61 +33,51 @@ pub const LOCALES: &[Locale] = &[
     Locale {
         tag: "ca-ES",
         name: "Català",
-        translation: Translation::Machine,
         source: include_str!("../locales/ca-ES/main.ftl"),
     },
     Locale {
         tag: "de-DE",
         name: "Deutsch",
-        translation: Translation::Machine,
         source: include_str!("../locales/de-DE/main.ftl"),
     },
     Locale {
         tag: "es-ES",
         name: "Español",
-        translation: Translation::Manual,
         source: include_str!("../locales/es-ES/main.ftl"),
     },
     Locale {
         tag: "eu-ES",
         name: "Euskara",
-        translation: Translation::Machine,
         source: include_str!("../locales/eu-ES/main.ftl"),
     },
     Locale {
         tag: "fr-FR",
         name: "Français",
-        translation: Translation::Machine,
         source: include_str!("../locales/fr-FR/main.ftl"),
     },
     Locale {
         tag: "gl-ES",
         name: "Galego",
-        translation: Translation::Machine,
         source: include_str!("../locales/gl-ES/main.ftl"),
     },
     Locale {
         tag: "it-IT",
         name: "Italiano",
-        translation: Translation::Machine,
         source: include_str!("../locales/it-IT/main.ftl"),
     },
     Locale {
         tag: "nl-NL",
         name: "Nederlands",
-        translation: Translation::Machine,
         source: include_str!("../locales/nl-NL/main.ftl"),
     },
     Locale {
         tag: "pl-PL",
         name: "Polski",
-        translation: Translation::Machine,
         source: include_str!("../locales/pl-PL/main.ftl"),
     },
     Locale {
         tag: "pt-PT",
         name: "Português",
-        translation: Translation::Machine,
         source: include_str!("../locales/pt-PT/main.ftl"),
     },
 ];
@@ -216,11 +195,6 @@ impl I18n {
     /// The tag of the locale in use.
     pub fn lang(&self) -> &'static str {
         self.locale.tag
-    }
-
-    /// Whether the strings in use were generated with AI.
-    pub fn machine_translated(&self) -> bool {
-        self.locale.translation == Translation::Machine
     }
 
     pub fn tr(&self, key: &str) -> String {

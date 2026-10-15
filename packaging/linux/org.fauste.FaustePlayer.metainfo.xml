@@ -2,7 +2,7 @@
 <component type="desktop-application">
   <id>org.fauste.FaustePlayer</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>LicenseRef-proprietary</project_license>
+  <project_license>GPL-3.0-or-later</project_license>
   <name>Fauste Player</name>
   <summary>Radio playout with several players and a cartwall</summary>
   <summary xml:lang="es">Emisión de radio con varios reproductores y una cartuchera</summary>

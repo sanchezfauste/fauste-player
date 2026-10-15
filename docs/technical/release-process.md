@@ -22,7 +22,7 @@
 | `test`, `ci`, `style`, `chore` | tests, CI, formatting, maintenance | hidden |
 
 Scopes are crate or area names: `model`, `store`, `engine`, `backends`,
-`decode`, `dsp`, `analysis`, `app`, `ui`, `ci`, `docs`. A breaking change adds `!`
+`decode`, `dsp`, `analysis`, `app`, `ui`, `ci`, `docs`, and `deps` for dependency updates. A breaking change adds `!`
 after the type or scope, or a `BREAKING CHANGE:` footer.
 
 Enable the local hook once per clone:
@@ -49,6 +49,27 @@ so squash before pushing.
 - CI also runs `scripts/check-release-bump.sh` on every push: it applies
   release-please's own updater to a scratch copy and checks that `Cargo.lock`
   stays consistent for `--locked` builds.
+
+## Dependency updates
+
+Dependabot (`.github/dependabot.yml`) opens weekly pull requests for the Cargo
+dependencies and for the GitHub Actions. Their titles are `build(deps): bump …`
+and `ci(deps): bump …`, which the commit checks and release-please accept.
+
+- The egui crates (`egui*`, `eframe`, `epaint`, `emath`, `ecolor`) update
+  together in one pull request, whatever the update type: they must move in
+  step.
+- Patch updates of every other crate arrive in one pull request.
+- Every minor and major update of every other crate has its own pull request,
+  because before 1.0 a minor release may break the API.
+- The GitHub Actions update in one pull request.
+
+Like any pull request they merge once CI is green on every OS. `opus-decoder`,
+`symphonia`, `symphonia-*` (the wildcard includes `symphonia-format-mkv`) are
+ignored: they are replaced by the patched copies in `vendor/`
+(`[patch.crates-io]`), so they are updated by hand together with the copy.
+Ignored crates get no Dependabot security pull requests either; `cargo deny
+check` in CI still reports their advisories.
 
 ## How a release happens
 
