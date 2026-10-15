@@ -378,3 +378,29 @@ fn bf8_no_fader_line_when_every_fader_is_at_full() {
     assert!(h.query_by_label(CONFIRM).is_some());
     assert!(h.query_by_label_contains("goes to 100 %").is_none());
 }
+
+#[test]
+fn the_pending_pill_shows_one_tooltip_with_the_list() {
+    let (mut h, fake) = harness(playing(1));
+    set_buffer(&mut h, &fake, 1024);
+    h.get_by_label(PILL).hover();
+    h.run_steps(40);
+    // The button, and no tooltip repeating its label.
+    assert_eq!(h.query_all_by_label(PILL).count(), 1);
+    assert_eq!(
+        h.query_all_by_label_contains("null: buffer 512 → 1024")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn the_apply_now_button_shows_one_tooltip_with_the_list() {
+    let (mut h, fake) = harness(playing(1));
+    set_buffer(&mut h, &fake, 1024);
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_label("Apply now").hover();
+    h.run_steps(40);
+    assert_eq!(h.query_all_by_label("Apply now").count(), 1);
+}

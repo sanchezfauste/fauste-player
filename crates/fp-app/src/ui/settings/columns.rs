@@ -11,8 +11,13 @@ use crate::ui::app::Scene;
 use crate::ui::theme;
 use crate::ui::widgets::{self, TileStyle, font};
 
-/// The room a column's checkbox and its gap take before the name.
-const CHECKBOX_ROOM: f32 = 30.0;
+/// The room a checkbox takes besides its text: the box, its spacing and
+/// the button padding on both sides, as egui lays it out, and the gap to
+/// the arrows.
+fn checkbox_room(ui: &Ui) -> f32 {
+    let s = ui.spacing();
+    s.icon_width + s.icon_spacing + 2.0 * s.button_padding.x + s.item_spacing.x
+}
 
 /// A small arrow button; `label` is its accessible name and tooltip.
 fn arrow(ui: &mut Ui, label: &str, glyph: &str, enabled: bool) -> bool {
@@ -38,24 +43,23 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
         |ui| {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
+                let names: Vec<(fp_model::TableColumn, bool, String)> = rows
+                    .into_iter()
+                    .map(|(c, shown)| (c, shown, t.tr(&format!("column-name-{}", c.name()))))
+                    .collect();
                 // One label column, as wide as the widest name, so the arrows
                 // line up in every row.
-                let label_width = rows
+                let label_width = names
                     .iter()
-                    .map(|(c, _)| {
+                    .map(|(_, _, name)| {
                         ui.painter()
-                            .layout_no_wrap(
-                                t.tr(&format!("column-name-{}", c.name())),
-                                font(12.0),
-                                theme::TEXT,
-                            )
+                            .layout_no_wrap(name.clone(), font(12.0), theme::TEXT)
                             .size()
                             .x
                     })
                     .fold(0.0, f32::max)
-                    + CHECKBOX_ROOM;
-                for (column, shown) in rows {
-                    let name = t.tr(&format!("column-name-{}", column.name()));
+                    + checkbox_room(ui);
+                for (column, shown, name) in names {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
                         let mut on = shown;

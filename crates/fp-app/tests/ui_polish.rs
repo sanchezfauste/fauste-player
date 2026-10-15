@@ -7,8 +7,18 @@
 //! Itr05 UI polish: the BP badge, the settings buttons, the column arrows,
 //! the mix marker colour.
 
+use egui::{Color32, Shape};
+use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
+use fp_app::ui::app::status_legend;
 use fp_app::ui::theme;
-use fp_app::ui::widgets::bp_tile_style;
+use fp_app::ui::widgets::{
+    SETTINGS_BUTTON_HEIGHT, SETTINGS_BUTTON_PAD, TileStyle, bp_tile_style, font, mix_marker_color,
+    padded_button_width, text_button,
+};
+
+mod support;
+use support::{harness, state};
 
 #[test]
 fn the_bp_badge_is_green_on_and_grey_off() {
@@ -20,12 +30,6 @@ fn the_bp_badge_is_green_on_and_grey_off() {
     assert_eq!(off.border, theme::NEUTRAL_700);
     assert_eq!(off.content, theme::NEUTRAL_600);
 }
-
-use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
-use fp_app::ui::widgets::{
-    SETTINGS_BUTTON_HEIGHT, SETTINGS_BUTTON_PAD, TileStyle, font, padded_button_width, text_button,
-};
 
 #[test]
 fn a_button_is_its_text_plus_the_padding_on_both_sides() {
@@ -62,8 +66,6 @@ fn a_settings_button_clears_its_text_by_the_padding_with_and_without_a_glyph() {
     }
 }
 
-use fp_app::ui::widgets::mix_marker_color;
-
 #[test]
 fn the_active_mix_marker_is_violet_and_not_like_the_outro_marker() {
     assert_eq!(mix_marker_color(true), theme::MIX_LINE);
@@ -75,4 +77,80 @@ fn the_active_mix_marker_is_violet_and_not_like_the_outro_marker() {
         mix_marker_color(false),
         theme::NEUTRAL_600.gamma_multiply(0.6)
     );
+}
+
+#[test]
+fn the_status_bar_legend_uses_the_mix_marker_colour() {
+    let legend = status_legend();
+    let (colour, key) = legend[0];
+    assert_eq!(key, "legend-mix");
+    assert_eq!(colour, mix_marker_color(true));
+}
+
+/// Every leaf shape of the last frame.
+fn leaves(shapes: &[egui::epaint::ClippedShape]) -> Vec<Shape> {
+    fn walk(s: &Shape, out: &mut Vec<Shape>) {
+        match s {
+            Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            other => out.push(other.clone()),
+        }
+    }
+    let mut out = Vec::new();
+    shapes.iter().for_each(|c| walk(&c.shape, &mut out));
+    out
+}
+
+/// The border colour of the rectangle painted exactly at `rect`, and the
+/// colour of the "BP" text inside it.
+fn badge_paint(h: &Harness<'_, fp_app::ui::app::AppUi>, label: &str) -> (Color32, Color32) {
+    let rect = h.get_by_label(label).rect();
+    let shapes = leaves(&h.output().shapes);
+    let border = shapes
+        .iter()
+        .find_map(|s| match s {
+            Shape::Rect(r)
+                if (r.rect.center() - rect.center()).length() < 0.5
+                    && r.stroke.width > 0.0
+                    && (r.rect.width() - rect.width()).abs() < 0.5 =>
+            {
+                Some(r.stroke.color)
+            }
+            _ => None,
+        })
+        .expect("the badge border");
+    let text = shapes
+        .iter()
+        .find_map(|s| match s {
+            Shape::Text(t) if t.galley.text() == "BP" => {
+                t.galley.job.sections.first().map(|sec| sec.format.color)
+            }
+            _ => None,
+        })
+        .expect("the BP text");
+    (border, text)
+}
+
+#[test]
+fn the_player_paints_the_bp_badge_green_when_on_and_grey_off() {
+    let (mut h, fake) = harness(state(1, 1));
+    h.run_steps(2);
+    let (border, text) = badge_paint(&h, "Bit-perfect: off");
+    assert_eq!(border, theme::NEUTRAL_700.gamma_multiply(0.45));
+    assert_eq!(text, theme::NEUTRAL_600.gamma_multiply(0.45));
+    let player = fake.player(0);
+    fake.telemetry
+        .store(std::sync::Arc::new(fp_engine::conductor::Telemetry {
+            players: vec![(
+                player,
+                fp_engine::engine::PlayerTelemetry {
+                    bit_perfect: true,
+                    ..Default::default()
+                },
+            )],
+            ..Default::default()
+        }));
+    h.run_steps(2);
+    let (border, text) = badge_paint(&h, "Bit-perfect: on");
+    assert_eq!(border, theme::PLAY_BORDER, "not dimmed");
+    assert_eq!(text, theme::PLAY_HOVER, "not dimmed");
 }
