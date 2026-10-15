@@ -395,6 +395,7 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
         EngineEvent::FadeCompleted { player } => {
             if let Ok(i) = state.player_index(player) {
                 state.players[i].fading = false;
+                state.players[i].fade_ms = 0;
             }
         }
         EngineEvent::ReachedEnd { player, entry } => {
@@ -470,15 +471,22 @@ pub fn on_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction> {
                 && state.players[i].current != Some(entry)
                 && state.players[i].transport != Transport::Stopped
             {
-                let overlapping = matches!(
-                    state.players[i].scheduled,
+                let overlap_ms = match state.players[i].scheduled {
                     Some(TransitionPlan::StartNextAt {
-                        fade_current_until_secs: Some(_),
+                        at_secs,
+                        fade_current_until_secs: Some(end),
                         ..
-                    })
-                );
+                    }) => Some(((end - at_secs).max(0.0) * 1000.0).round() as u32),
+                    _ => None,
+                };
                 if advance_to(state, i, entry, true).is_some() {
-                    state.players[i].fading = overlapping;
+                    match overlap_ms {
+                        Some(ms) => state.players[i].begin_fade(ms),
+                        None => {
+                            state.players[i].fading = false;
+                            state.players[i].fade_ms = 0;
+                        }
+                    }
                     state.players[i].on_air = Some(normalization);
                 } else {
                     stop_player(state, i);
@@ -654,7 +662,7 @@ fn fade_stop(
     // Allowed during a crossfade or segue overlap too: the engine fades every
     // Main source of the player. Only a fade stop already in progress blocks it.
     if player.transport == Transport::Playing && !player.fade_stop_pending {
-        player.fading = true;
+        player.begin_fade(fade_ms);
         player.fade_stop_pending = true;
         out.push(EngineAction::FadeOutAndStop {
             player: id,
@@ -897,12 +905,13 @@ fn start_or_crossfade(
         out.push(EngineAction::StartCurrent { player, request });
         return;
     }
+    let fade_ms = state.config.players.fade_ms;
     out.push(EngineAction::Crossfade {
         player,
         request,
-        fade_ms: state.config.players.fade_ms,
+        fade_ms,
     });
-    state.players[i].fading = true;
+    state.players[i].begin_fade(fade_ms);
 }
 
 /// Rules 9–11: what the engine must do when the current track ends. Returns
@@ -1343,6 +1352,7 @@ pub(crate) fn stop_player(state: &mut AppState, i: usize) {
     player.current = None;
     player.transport = Transport::Stopped;
     player.fading = false;
+    player.fade_ms = 0;
     player.fade_stop_pending = false;
     player.stop_after_current = false;
     player.dsd = None;

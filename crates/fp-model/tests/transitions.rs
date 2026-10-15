@@ -176,6 +176,29 @@ fn rule11_transition_started_advances_marks_played_and_tracks_the_fade() {
 }
 
 #[test]
+fn rule11_a_segue_overlap_fades_for_the_overlap_not_the_configured_fade() {
+    let mut state = fixture(3);
+    with_segue(&mut state, 172.0);
+    let (e, p) = (entries(&state), p0(&state));
+    apply(&mut state, Command::Play(p)).unwrap();
+    let before = state.player(p).unwrap().fade_seq;
+    on_event(
+        &mut state,
+        EngineEvent::TransitionStarted {
+            player: p,
+            entry: e[1],
+            normalization: fp_model::Normalization::default(),
+        },
+    );
+    let player = state.player(p).unwrap();
+    assert_eq!(player.fade_ms, 8000, "180 s end minus the 172 s start");
+    assert_ne!(player.fade_ms, state.config.players.fade_ms);
+    assert_ne!(player.fade_seq, before, "a new fade is numbered");
+    on_event(&mut state, EngineEvent::FadeCompleted { player: p });
+    assert_eq!(state.player(p).unwrap().fade_ms, 0);
+}
+
+#[test]
 fn rule11_transition_without_overlap_does_not_mark_fading() {
     let mut state = fixture(3);
     let (e, p) = (entries(&state), p0(&state));
