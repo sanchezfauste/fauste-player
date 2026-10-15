@@ -110,6 +110,24 @@ fn rule6_pause_toggles_and_is_ignored_during_a_fade() {
 }
 
 #[test]
+fn rule8_a_crossfade_and_a_fade_stop_during_it_are_numbered_fades() {
+    let mut state = fixture(3);
+    let p = p0(&state);
+    apply(&mut state, Command::Play(p)).unwrap();
+    assert!(!state.player(p).unwrap().fading);
+    apply(&mut state, Command::Play(p)).unwrap(); // crossfade
+    let crossfade = state.player(p).unwrap().clone();
+    assert!(crossfade.fading);
+    assert_eq!(crossfade.fade_ms, state.config.players.fade_ms);
+    state.config.players.fade_ms = 2500;
+    apply(&mut state, Command::FadeStop(p)).unwrap();
+    let stopping = state.player(p).unwrap();
+    assert!(stopping.fading);
+    assert_eq!(stopping.fade_ms, 2500, "the fade stop's own length");
+    assert_ne!(stopping.fade_seq, crossfade.fade_seq, "a new fade");
+}
+
+#[test]
 fn rule7_stop_marks_played_and_keeps_the_green_next() {
     let mut state = fixture(3);
     let (e, p) = (entries(&state), p0(&state));

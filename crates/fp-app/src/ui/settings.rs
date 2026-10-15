@@ -1471,6 +1471,7 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
     let a = scene.state.config.analysis.clone();
     type Field = (
         &'static str,
+        &'static str,
         f64,
         std::ops::RangeInclusive<f64>,
         f64,
@@ -1479,6 +1480,7 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
     let fields: [Field; 7] = [
         (
             "settings-trim-threshold",
+            "settings-hint-trim-threshold",
             a.trim_threshold_db,
             -120.0..=-20.0,
             1.0,
@@ -1486,6 +1488,7 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
         ),
         (
             "settings-trim-margin",
+            "settings-hint-trim-margin",
             f64::from(a.trim_margin_ms),
             0.0..=1000.0,
             5.0,
@@ -1493,6 +1496,7 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
         ),
         (
             "settings-segue-drop",
+            "settings-hint-segue-drop",
             a.segue_drop_db,
             3.0..=40.0,
             1.0,
@@ -1500,6 +1504,7 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
         ),
         (
             "settings-segue-max",
+            "settings-hint-segue-max",
             a.segue_max_secs,
             0.0..=60.0,
             0.5,
@@ -1507,6 +1512,7 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
         ),
         (
             "settings-outro-drop",
+            "settings-hint-outro-drop",
             a.outro_drop_db,
             0.0..=40.0,
             1.0,
@@ -1514,6 +1520,7 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
         ),
         (
             "settings-outro-max",
+            "settings-hint-outro-max",
             a.outro_max_secs,
             0.0..=300.0,
             1.0,
@@ -1521,16 +1528,17 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
         ),
         (
             "settings-min-duration",
+            "settings-hint-min-duration",
             a.markers_min_duration_secs,
             0.0..=3600.0,
             5.0,
             " s",
         ),
     ];
-    for (i, (key, value, range, step, suffix)) in fields.into_iter().enumerate() {
+    for (i, (key, hint, value, range, step, suffix)) in fields.into_iter().enumerate() {
         let mut v = value;
         let label = t.tr(key);
-        row(ui, &label, None, |ui| {
+        row(ui, &label, Some(&t.tr(hint)), |ui| {
             if slider(ui, &mut v, range, step, suffix, &label) {
                 update(scene, |c| {
                     let a = &mut c.analysis;

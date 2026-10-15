@@ -67,6 +67,11 @@ pub struct PlayerView {
     /// The current entry repeats or stops after itself (spec O8).
     pub entry_notice: Option<fp_model::EntryNotice>,
     pub fading: bool,
+    /// Length in milliseconds of the running fade (a crossfade or fade stop:
+    /// the configured fade; a segue overlap: the overlap).
+    pub fade_ms: u32,
+    /// Numbers the player's fades: a new value is a new fade.
+    pub fade_seq: u64,
     pub cueing: bool,
     /// The current source reaches its device unchanged (the BP badge).
     pub bit_perfect: bool,
@@ -291,6 +296,8 @@ pub fn player_view(
         stop_after_current: p.stop_after_current,
         entry_notice: fp_model::entry_notice(state, player),
         fading: p.fading,
+        fade_ms: p.fade_ms,
+        fade_seq: p.fade_seq,
         cueing: p.cue.is_some(),
         bit_perfect: false,
         dsd: false,
@@ -467,6 +474,30 @@ pub use fp_model::volume::{fader_from_gain, gain_from_fader};
 /// Gain in dB; `None` for silence (shown as −∞ by the UI).
 pub fn volume_db(gain: f32) -> Option<f32> {
     (gain > 0.0 && !gain.is_nan()).then(|| 20.0 * gain.log10())
+}
+
+/// How much of a fade is left, from 1 (just started) to 0 (done): the line
+/// the Fade stop button drains, as the carts drain theirs. `started` and
+/// `now` are UI clock seconds, `fade_ms` the running fade's length. The
+/// engine does not report a fade's progress, so the UI times it from the
+/// frame that first showed the fade.
+pub fn fade_remaining_fraction(started: f64, now: f64, fade_ms: u32) -> f32 {
+    if fade_ms == 0 || !started.is_finite() || !now.is_finite() {
+        return 0.0;
+    }
+    let elapsed_ms = (now - started) * 1000.0;
+    (1.0 - elapsed_ms / f64::from(fade_ms)).clamp(0.0, 1.0) as f32
+}
+
+/// The level shown under the volume fader: dB with one decimal ("0.0",
+/// "-6.5"); `None` for silence, which the UI shows as −∞.
+pub fn volume_readout(gain: f32) -> Option<String> {
+    let tenths = (volume_db(gain)? * 10.0).round();
+    Some(if tenths == 0.0 {
+        "0.0".to_owned()
+    } else {
+        format!("{:.1}", tenths / 10.0)
+    })
 }
 
 /// Something on screen moves on its own (a meter, a countdown, a blinking

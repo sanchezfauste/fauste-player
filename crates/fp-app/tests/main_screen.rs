@@ -630,7 +630,10 @@ fn the_meter_and_fader_form_a_column_right_of_the_transport() {
     );
     assert!(meter.left() > countdown.right(), "{meter:?} {countdown:?}");
     assert!(fader.left() >= meter.right());
-    assert!((fader.bottom() - meter.bottom()).abs() <= 1.0);
+    // The level readout takes the meter's bottom row under the fader.
+    assert!(
+        (fader.bottom() + fp_app::ui::widgets::FADER_READOUT_HEIGHT - meter.bottom()).abs() <= 1.0
+    );
     // The waveform keeps the player's full width.
     assert!(wave.right() >= fader.right() - 1.0, "{wave:?} {fader:?}");
     // Elapsed / total sits under the waveform, right-aligned.
