@@ -96,6 +96,12 @@ output only through an explicit confirmation.
   same device as the Cue route.
 - Stopping a CUE under CA5 is an ordinary plan step; nothing new runs on
   the device callback.
+- **CA9. Metering.** A meter shows only its own source: a player's or the
+  cartwall's meters and loudness readout never include an on-air CUE or
+  anything else that sounds on the same output.
+- **CA10. DSD.** A confirmed CUE on a device carrying a DSD stream mixes
+  like a cart and follows the device's DSD mix policy (with the default
+  policy the stream switches to PCM while the CUE sounds).
 
 ## 5. Interface (`fp-app`)
 
