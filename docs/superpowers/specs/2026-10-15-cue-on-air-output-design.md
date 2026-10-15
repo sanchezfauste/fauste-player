@@ -1,7 +1,7 @@
 # Pre-listen on an on-air output — Design Spec
 
 - **Date:** 2026-10-15.
-- **Status:** Draft, awaiting the maintainer's review.
+- **Status:** Approved (2026-10-15).
 - **Amends:** [the main spec](2026-09-25-fauste-player-design.md) §4.6
   ("a pre-listen never goes on air"; a Cue route equal to Main means no
   CUE) and rule 26 (Cue availability),
