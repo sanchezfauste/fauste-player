@@ -233,7 +233,7 @@ Nothing connects to a system until it is first used.
   applied without reopening it.
 - **Routes:** the engine notes which backends were unavailable when it
   started. A Main route to one plays on the default output, and a Cue route
-  to one means no cue, as for a backend this build does not have. A backend
+  to one means no cue, as for a backend this build does not have. A Cue route on the Main output is placed there (on-air pre-listen spec CA8). A backend
   that was available and is lost later keeps its routes, and the watchdog
   retries it.
 
