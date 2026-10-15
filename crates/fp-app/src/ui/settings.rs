@@ -360,15 +360,22 @@ pub(crate) fn show(
                             border: theme::AMBER,
                             ..TileStyle::plain()
                         };
-                        if widgets::tile(ui, vec2(width, 30.0), &label, true, style, |p, r, c| {
-                            p.text(
-                                r.center(),
-                                egui::Align2::CENTER_CENTER,
-                                &label,
-                                font_medium(13.0),
-                                c,
-                            );
-                        })
+                        if widgets::tile_without_tooltip(
+                            ui,
+                            vec2(width, 30.0),
+                            &label,
+                            true,
+                            style,
+                            |p, r, c| {
+                                p.text(
+                                    r.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    &label,
+                                    font_medium(13.0),
+                                    c,
+                                );
+                            },
+                        )
                         .on_hover_text(&deps.pending_tip)
                         .clicked()
                         {

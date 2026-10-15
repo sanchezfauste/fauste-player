@@ -87,6 +87,8 @@ pub struct TileStyle {
     pub hover_fill: Color32,
     pub hover_content: Color32,
     pub active_fill: Color32,
+    /// Whether a disabled tile is painted at 45 % strength (the default).
+    pub dim_when_disabled: bool,
 }
 
 impl TileStyle {
@@ -99,6 +101,26 @@ impl TileStyle {
             hover_fill: theme::NEUTRAL_900,
             hover_content: theme::TEXT,
             active_fill: theme::NEUTRAL_800,
+            dim_when_disabled: true,
+        }
+    }
+}
+
+/// The look of the bit-perfect badge: green border and text when it is on,
+/// dim grey when it is off.
+pub fn bp_tile_style(on: bool) -> TileStyle {
+    if on {
+        // A read-out, not a button: it is drawn disabled but at full strength.
+        TileStyle {
+            border: theme::PLAY_BORDER,
+            content: theme::PLAY_HOVER,
+            dim_when_disabled: false,
+            ..TileStyle::plain()
+        }
+    } else {
+        TileStyle {
+            content: theme::NEUTRAL_600,
+            ..TileStyle::plain()
         }
     }
 }
@@ -137,6 +159,19 @@ pub fn tile(
     style: TileStyle,
     paint: impl FnOnce(&Painter, Rect, Color32),
 ) -> Response {
+    tile_without_tooltip(ui, size, label, enabled, style, paint).on_hover_text(label)
+}
+
+/// [`tile`] without its tooltip, for a caller that shows a different one.
+/// Adding a second `on_hover_text` to a [`tile`] stacks two tooltips.
+pub fn tile_without_tooltip(
+    ui: &mut Ui,
+    size: Vec2,
+    label: &str,
+    enabled: bool,
+    style: TileStyle,
+    paint: impl FnOnce(&Painter, Rect, Color32),
+) -> Response {
     let sense = if enabled {
         Sense::click()
     } else {
@@ -146,8 +181,14 @@ pub fn tile(
     let owned = label.to_owned();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, owned.clone()));
     if ui.is_rect_visible(rect) {
+        let dim = !enabled && style.dim_when_disabled;
         let (fill, content) = if !enabled {
-            (style.fill, style.content.gamma_multiply(0.45))
+            let content = if dim {
+                style.content.gamma_multiply(0.45)
+            } else {
+                style.content
+            };
+            (style.fill, content)
         } else if response.is_pointer_button_down_on() {
             (style.active_fill, style.hover_content)
         } else if response.hovered() {
@@ -157,7 +198,7 @@ pub fn tile(
         };
         let painter = ui.painter();
         painter.rect_filled(rect, 0.0, fill);
-        let border = if enabled {
+        let border = if !dim {
             style.border
         } else {
             style.border.gamma_multiply(0.45)
@@ -170,7 +211,7 @@ pub fn tile(
         );
         paint(painter, rect, content);
     }
-    response.on_hover_text(label)
+    response
 }
 
 /// One option of a [`segmented`] control: its visible text and its

@@ -334,24 +334,17 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                 {
                     scene.ctl.send(Command::SetMode(id, mode));
                 }
-                let (bp, tip, content) = match fp_model::bp_badge(pv.bit_perfect, pv.dsd) {
-                    fp_model::BpBadge::Off => {
-                        (t.tr("badge-bp"), t.tr("tip-bp-off"), theme::NEUTRAL_600)
-                    }
-                    fp_model::BpBadge::Pcm => (t.tr("badge-bp"), t.tr("tip-bp-on"), theme::ACCENT),
-                    fp_model::BpBadge::Dsd => {
-                        (t.tr("badge-dsd"), t.tr("tip-dsd-on"), theme::ACCENT)
-                    }
+                let (bp, tip, on) = match fp_model::bp_badge(pv.bit_perfect, pv.dsd) {
+                    fp_model::BpBadge::Off => (t.tr("badge-bp"), t.tr("tip-bp-off"), false),
+                    fp_model::BpBadge::Pcm => (t.tr("badge-bp"), t.tr("tip-bp-on"), true),
+                    fp_model::BpBadge::Dsd => (t.tr("badge-dsd"), t.tr("tip-dsd-on"), true),
                 };
                 widgets::tile(
                     ui,
                     vec2(28.0, 20.0),
                     &tip,
                     false,
-                    TileStyle {
-                        content,
-                        ..TileStyle::plain()
-                    },
+                    widgets::bp_tile_style(on),
                     |p, r, c| {
                         p.text(
                             r.center(),
@@ -720,6 +713,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 hover_fill: theme::PLAY_HOVER_BG,
                 hover_content: theme::PLAY_HOVER,
                 active_fill: theme::PLAY_ACTIVE_BG,
+                dim_when_disabled: true,
             };
             let play_action = if playing {
                 TransportAction::Next

@@ -1639,7 +1639,6 @@ fn top_bar(
                 c,
             );
         })
-        .on_hover_text(&about)
         .clicked()
         {
             view_state.about_open = true;
@@ -1664,15 +1663,22 @@ fn top_bar(
                 hover_fill: theme::NEUTRAL_800,
                 ..TileStyle::plain()
             };
-            if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    format!("{} {label}", egui_phosphor::regular::HOURGLASS),
-                    font(12.0),
-                    c,
-                );
-            })
+            if widgets::tile_without_tooltip(
+                ui,
+                vec2(width, 24.0),
+                &label,
+                true,
+                style,
+                |p, r, c| {
+                    p.text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        format!("{} {label}", egui_phosphor::regular::HOURGLASS),
+                        font(12.0),
+                        c,
+                    );
+                },
+            )
             .on_hover_text(tip)
             .clicked()
             {
