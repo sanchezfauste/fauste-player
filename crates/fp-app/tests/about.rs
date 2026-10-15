@@ -13,15 +13,15 @@ use std::sync::{Arc, Mutex};
 
 use egui::Key;
 use egui_kittest::kittest::Queryable;
-use fp_app::ui::about::{self, NoticeOpener, find_notices, notice_candidates};
+use fp_app::ui::about::{self, Opener, find_notices, notice_candidates};
 use support::{harness, harness_from, state};
 
 const ABOUT: &str = "About Fauste Player";
 
-fn recorder() -> (NoticeOpener, Arc<Mutex<Vec<PathBuf>>>) {
+fn recorder() -> (Opener, Arc<Mutex<Vec<PathBuf>>>) {
     let opened = Arc::new(Mutex::new(Vec::new()));
     let seen = opened.clone();
-    let opener: NoticeOpener = Arc::new(move |p: &Path| seen.lock().unwrap().push(p.to_owned()));
+    let opener: Opener = Arc::new(move |p: &Path| seen.lock().unwrap().push(p.to_owned()));
     (opener, opened)
 }
 
@@ -91,14 +91,26 @@ fn player_shortcuts_do_nothing_while_about_is_open() {
 fn the_bundled_licences_can_be_read() {
     let (mut h, _) = harness(state(1, 1));
     h.get_by_label(ABOUT).click();
-    h.run_steps(2);
+    // The scrolling body needs a few frames to settle before a click lands.
+    h.run_steps(6);
     h.get_by_label("Inter font — SIL Open Font License 1.1")
         .click();
+    h.run_steps(2);
+    // The whole window scrolls: bring the heading, and the text under it, up.
+    h.get_by_label("Inter font — SIL Open Font License 1.1")
+        .scroll_to_me();
     h.run_steps(2);
     assert!(
         h.query_by_label_contains("SIL OPEN FONT LICENSE Version 1.1")
             .is_some()
     );
+    // Fold the long text so the next heading is not scrolled out of view.
+    h.get_by_label("Inter font — SIL Open Font License 1.1")
+        .click();
+    h.run_steps(2);
+    h.get_by_label("Phosphor Icons — MIT License")
+        .scroll_to_me();
+    h.run_steps(2);
     h.get_by_label("Phosphor Icons — MIT License").click();
     h.run_steps(2);
     assert!(
@@ -198,7 +210,7 @@ fn about_names_the_licence_and_opens_its_text_online() {
     assert_eq!(*opened.lock().unwrap(), vec![PathBuf::from(GPL_TEXT)]);
 }
 
-/// Opens About in `tag` and returns the disclaimer's text if it is shown.
+/// Opens About in `tag` and says whether it shows the disclaimer.
 fn shows_disclaimer(tag: &str) -> bool {
     let t = fp_app::i18n::I18n::new(Some(tag));
     let (mut h, fake) = harness(state(1, 1));
@@ -225,6 +237,31 @@ fn the_disclaimer_is_in_english_and_says_as_is_and_own_risk() {
 fn every_language_shows_the_disclaimer() {
     for l in fp_app::i18n::LOCALES {
         assert!(shows_disclaimer(l.tag), "{}", l.tag);
+    }
+}
+
+#[test]
+fn every_language_shows_the_untranslated_attribution_and_the_project_link() {
+    for l in fp_app::i18n::LOCALES {
+        let t = fp_app::i18n::I18n::new(Some(l.tag));
+        let (mut h, fake) = harness(state(1, 1));
+        let mut st = (**fake.state.load()).clone();
+        st.config.ui.language = Some(l.tag.to_owned());
+        fake.state.store(Arc::new(st));
+        h.run_steps(2);
+        h.get_by_label(&t.tr("tip-about")).click();
+        h.run_steps(2);
+        assert!(h.query_by_label(about::ATTRIBUTION).is_some(), "{}", l.tag);
+        assert!(h.query_by_label(about::REPO_URL).is_some(), "{}", l.tag);
+    }
+}
+
+#[test]
+fn every_translation_of_the_disclaimer_differs_from_english() {
+    let en = fp_app::i18n::I18n::new(Some("en-US")).tr("about-disclaimer");
+    for l in fp_app::i18n::LOCALES.iter().filter(|l| l.tag != "en-US") {
+        let text = fp_app::i18n::I18n::new(Some(l.tag)).tr("about-disclaimer");
+        assert_ne!(text, en, "{} falls back to English", l.tag);
     }
 }
 

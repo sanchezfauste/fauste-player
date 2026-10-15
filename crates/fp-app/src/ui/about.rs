@@ -22,6 +22,8 @@ const PHOSPHOR_MIT: &str = include_str!("../../assets/licenses/Phosphor-MIT.txt"
 /// The name of the third-party notices file release builds install.
 const NOTICES_FILE: &str = "THIRD-PARTY.html";
 
+/// The author attribution the licence requires (see `NOTICE`); never translated.
+pub const ATTRIBUTION: &str = "Fauste Player by Marc Sánchez Fauste";
 /// The project page, the target of the attribution link.
 pub const REPO_URL: &str = "https://github.com/sanchezfauste/fauste-player";
 /// The text of the licence, read online.
@@ -29,7 +31,7 @@ pub const LICENSE_URL: &str = "https://www.gnu.org/licenses/gpl-3.0.html";
 
 /// Opens a file or a web address (the notices file, the links). The default
 /// hands it to the system on a helper thread; tests record the call.
-pub type NoticeOpener = Arc<dyn Fn(&Path) + Send + Sync>;
+pub type Opener = Arc<dyn Fn(&Path) + Send + Sync>;
 
 /// Where the release packages install the notices, relative to the
 /// directory of the executable.
@@ -59,7 +61,7 @@ pub fn find_notices(exe: &Path) -> Option<PathBuf> {
 
 /// Opens a file with the system's default application on a helper thread,
 /// so the interface never waits for it.
-pub fn system_opener() -> NoticeOpener {
+pub fn system_opener() -> Opener {
     Arc::new(|path: &Path| {
         let path = path.to_owned();
         let spawned = std::thread::Builder::new()
@@ -134,7 +136,7 @@ pub(crate) fn show(
     ctx: &egui::Context,
     scene: &Scene<'_>,
     notices: Option<&Path>,
-    opener: &NoticeOpener,
+    opener: &Opener,
 ) -> bool {
     let t = scene.i18n;
     let mut open = true;
@@ -147,52 +149,54 @@ pub(crate) fn show(
         .show(ctx, |ui| {
             ui.set_width(width);
             ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
-            ui.add(
-                egui::Label::new(
-                    RichText::new(t.tr("app-name"))
-                        .font(font_medium(18.0))
-                        .color(theme::TEXT),
-                )
-                .selectable(false),
-            );
-            text(
-                ui,
-                t.tr_args("about-version", &[("version", VERSION.into())]),
-                12.0,
-                theme::NEUTRAL_400,
-            );
-            text(ui, t.tr("about-attribution"), 12.0, theme::NEUTRAL_300);
-            if button(ui, REPO_URL, true) {
-                opener(Path::new(REPO_URL));
-            }
-            text(ui, t.tr("about-copyright"), 12.0, theme::NEUTRAL_300);
-            text(ui, t.tr("about-license"), 12.0, theme::NEUTRAL_300);
-            if button(ui, &t.tr("about-license-link"), true) {
-                opener(Path::new(LICENSE_URL));
-            }
-            text(ui, t.tr("about-disclaimer"), 12.0, theme::NEUTRAL_400);
-            ui.separator();
-            text(ui, t.tr("about-bundled"), 12.0, theme::NEUTRAL_300);
+            // The whole body scrolls, so the window fits the smallest height;
+            // Close stays below it.
             ScrollArea::vertical()
-                .max_height((height - 380.0).max(80.0))
+                .max_height((height - 60.0).max(120.0))
                 .show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(t.tr("app-name"))
+                                .font(font_medium(18.0))
+                                .color(theme::TEXT),
+                        )
+                        .selectable(false),
+                    );
+                    text(
+                        ui,
+                        t.tr_args("about-version", &[("version", VERSION.into())]),
+                        12.0,
+                        theme::NEUTRAL_400,
+                    );
+                    text(ui, ATTRIBUTION.to_owned(), 12.0, theme::NEUTRAL_300);
+                    if button(ui, REPO_URL, true) {
+                        opener(Path::new(REPO_URL));
+                    }
+                    text(ui, t.tr("about-copyright"), 12.0, theme::NEUTRAL_300);
+                    text(ui, t.tr("about-license"), 12.0, theme::NEUTRAL_300);
+                    if button(ui, &t.tr("about-license-link"), true) {
+                        opener(Path::new(LICENSE_URL));
+                    }
+                    text(ui, t.tr("about-disclaimer"), 12.0, theme::NEUTRAL_400);
+                    ui.separator();
+                    text(ui, t.tr("about-bundled"), 12.0, theme::NEUTRAL_300);
                     notice(ui, &t.tr("about-inter"), INTER_OFL);
                     notice(ui, &t.tr("about-phosphor"), PHOSPHOR_MIT);
+                    text(ui, t.tr("about-crates"), 12.0, theme::NEUTRAL_300);
+                    ui.horizontal(|ui| {
+                        let clicked = button(ui, &t.tr("about-third-party"), notices.is_some());
+                        match notices {
+                            Some(path) if clicked => opener(path),
+                            Some(_) => {}
+                            None => text(
+                                ui,
+                                t.tr("about-third-party-missing"),
+                                11.0,
+                                theme::NEUTRAL_500,
+                            ),
+                        }
+                    });
                 });
-            text(ui, t.tr("about-crates"), 12.0, theme::NEUTRAL_300);
-            ui.horizontal(|ui| {
-                let clicked = button(ui, &t.tr("about-third-party"), notices.is_some());
-                match notices {
-                    Some(path) if clicked => opener(path),
-                    Some(_) => {}
-                    None => text(
-                        ui,
-                        t.tr("about-third-party-missing"),
-                        11.0,
-                        theme::NEUTRAL_500,
-                    ),
-                }
-            });
             ui.add_space(4.0);
             if button(ui, &t.tr("about-close"), true) {
                 open = false;

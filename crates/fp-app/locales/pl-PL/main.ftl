@@ -404,7 +404,6 @@ file-unreadable-reason = Nie można odczytać pliku
 tip-about = O programie Fauste Player
 about-version = Wersja { $version }
 about-copyright = Copyright © 2026 Marc Sánchez Fauste.
-about-attribution = Fauste Player autorstwa Marca Sáncheza Fauste
 about-license = Na licencji GNU General Public License, wersja 3 lub nowsza.
 about-license-link = Przeczytaj licencję online
 about-disclaimer = Opracowany z pomocą AI i udostępniany w stanie, w jakim jest, bez jakiejkolwiek gwarancji. Używasz go na własne ryzyko; autor nie ponosi odpowiedzialności za żadne szkody.

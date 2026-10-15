@@ -394,7 +394,6 @@ file-unreadable-reason = Cannot read the file
 tip-about = About Fauste Player
 about-version = Version { $version }
 about-copyright = Copyright © 2026 Marc Sánchez Fauste.
-about-attribution = Fauste Player by Marc Sánchez Fauste
 about-license = Licensed under the GNU General Public License, version 3 or later.
 about-license-link = Read the licence online
 about-disclaimer = Developed with AI assistance and provided as is, without any warranty. You use it at your own risk; the author accepts no liability for any damage.
