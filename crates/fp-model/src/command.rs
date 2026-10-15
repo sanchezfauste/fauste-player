@@ -223,6 +223,25 @@ pub enum Command {
     ApplySettingsNow,
 }
 
+/// What a pre-listen plays (on-air pre-listen spec CA3, CA4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CueStart {
+    /// `entry` on `player`'s Cue.
+    Entry { player: PlayerId, entry: EntryId },
+    /// A cart on the cartwall's Cue.
+    Cart(CartId),
+}
+
+impl CueStart {
+    /// The Cue holder it plays on.
+    pub fn holder(self) -> Holder {
+        match self {
+            Self::Entry { player, .. } => Holder::PlayerCue(player),
+            Self::Cart(_) => Holder::CartwallCue,
+        }
+    }
+}
+
 /// Something the audio engine observed.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EngineEvent {
