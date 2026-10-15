@@ -103,12 +103,25 @@ in `symph.rs`).
 symphonia seeks a Matroska file without cues (a live recording) only forward.
 A seek to a timestamp below what the reader has already read or landed on,
 which such a reader answers by landing past the target, opens the file again
-and seeks forward from the start. A forward seek never opens it again, even
-though the Matroska reader also lands past the target then (on the first
-block at or after it, since its blocks carry no duration). Opening the file
-again checks that it still holds the same track (id, codec and sample rate);
-a file replaced on disk makes the seek fail instead of being read with the
-old decoder.
+and seeks forward from the start. A forward seek never opens it again. Opening
+the file again checks that it still holds the same track (id, codec and sample
+rate); a file replaced on disk makes the seek fail instead of being read with
+the old decoder.
+
+symphonia's Matroska reader is vendored (`vendor/symphonia-format-mkv`,
+through `[patch.crates-io]`) with two seeking fixes
+(`vendor/symphonia-format-mkv/VENDORED.md`). Version 0.6.1 took a cue
+point's time, divided once too often, as its cluster's timestamp, so a seek
+through any cue but the first skipped the whole cluster and landed on the next
+one (a FLAC file muxed with 5 s clusters came out about 4.7 s late at 10 s);
+the cluster's timestamp is now read from the cluster. And its blocks carry no
+duration (muxers write neither `BlockDuration` nor `DefaultDuration` for
+audio), so the seek landed on the first block starting at or after the target,
+up to a block late for a codec without pre-roll (FLAC, PCM); it now lands on
+the block that holds the target. The frames before the target are then dropped
+by timestamp, to the container's precision: Matroska's timestamps are whole
+milliseconds, so a seek in a 44.1 kHz FLAC or PCM file lands within about 22
+frames of the target (`tests/matroska.rs`, with PCM files built in the test).
 
 The Opus decoder goes through 16-bit PCM inside `opus-decoder`: its noise
 (about −96 dBFS) is far below Opus's own coding noise. A decoder without that
