@@ -1288,3 +1288,67 @@ fn n15_a_forced_rate_change_keeps_a_carts_gain() {
     let last = *heard.last().unwrap();
     assert_eq!(halved_track(last), 9, "track 9 at twice its level: {last}");
 }
+
+/// What P's meter measured over `blocks` blocks of its current track, with
+/// or without a pre-listen of the same track on the Main pair.
+fn player_meter_with(cue_on_main: bool) -> fp_engine::meter::MeterInput {
+    let mut c = config();
+    if cue_on_main {
+        c.outputs.routes[0].cue = Some(route("main"));
+    }
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: request(1, 0.0),
+    });
+    r.settle();
+    if cue_on_main {
+        r.act(EngineAction::StartCue {
+            player: P,
+            request: request(1, 0.0),
+        });
+        r.settle();
+    }
+    r.run(2);
+    r.engine.take_meter_input(P);
+    r.run(5);
+    r.engine.take_meter_input(P)
+}
+
+/// CA9: a player's meter and loudness input show only its own track, never
+/// a pre-listen that sounds on the same output.
+#[test]
+fn ca9_a_player_meter_never_includes_a_pre_listen_on_its_output() {
+    let alone = player_meter_with(false);
+    let with_cue = player_meter_with(true);
+    assert!(alone.frames > 0 && alone.peak[0] > 0.0);
+    assert_eq!(with_cue.frames, alone.frames);
+    assert_eq!(with_cue.peak, alone.peak);
+    assert_eq!(with_cue.sum_sq, alone.sum_sq);
+    assert_eq!(with_cue.k_sum, alone.k_sum);
+}
+
+/// CA9: the cartwall's telemetry lists the carts on air, not the cart
+/// pre-listening on the same pair.
+#[test]
+fn ca9_the_cartwall_meter_never_includes_a_pre_listen_on_its_output() {
+    let mut c = config();
+    c.outputs.cartwall.cue = Some(route("main"));
+    let mut r = rig_with(&c);
+    r.act(EngineAction::StartCart(cart_request(1)));
+    r.act(EngineAction::StartCartCue(cart_request(2)));
+    r.settle();
+    r.run(5);
+    let (carts, cue) = r.engine.cart_telemetry();
+    assert_eq!(
+        carts.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+        vec![CartId(1)]
+    );
+    assert_eq!(cue.map(|(id, _)| id), Some(CartId(2)));
+    // A pre-listen alone leaves the cartwall's meter at rest.
+    r.act(EngineAction::StopCart { cart: CartId(1) });
+    r.run(20);
+    let (carts, cue) = r.engine.cart_telemetry();
+    assert!(carts.is_empty(), "{carts:?}");
+    assert!(cue.is_some());
+}

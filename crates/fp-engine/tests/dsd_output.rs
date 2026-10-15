@@ -1713,3 +1713,70 @@ fn a_dsd_track_with_a_normalization_gain_plays_converted_on_native() {
     assert_eq!(r.rate(), PCM_RATE);
     assert!(!r.engine.telemetry(P).dsd);
 }
+
+/// A rig whose player P has its Cue on the same pair as its Main (on-air
+/// pre-listen spec CA8).
+fn rig_with_on_air_cue(mix: DsdMix) -> Rig {
+    rig_edited(
+        DsdOutput::Dop,
+        mix,
+        SampleFormat::I24,
+        |_| {},
+        |config| {
+            if let Some(routes) = config.outputs.routes.first_mut() {
+                routes.cue = routes.main.clone();
+            }
+        },
+    )
+}
+
+fn start_cue_wav(r: &mut Rig) {
+    let jingle = indexed_wav(r.dir.path(), "cue.wav", WORD_RATE, 2, WORD_RATE as usize);
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: request(7, jingle, pcm16(WORD_RATE)),
+    });
+    r.settle();
+}
+
+/// CA10: an on-air pre-listen over a DSD stream mixes like a cart: with the
+/// default policy the stream switches to PCM while it sounds.
+#[test]
+fn ca10_an_on_air_cue_over_a_dsd_stream_switches_it_to_pcm() {
+    let mut r = rig_with_on_air_cue(DsdMix::ConvertToPcm);
+    let (left, right) = pattern();
+    let a = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, request(1, a, dsd64()));
+    // Paused, so that the first PCM frames are the pre-listen's alone.
+    r.act(EngineAction::Pause { player: P });
+    r.run_raw(BLOCK * 8);
+    assert!(r.engine.telemetry(P).dsd);
+    start_cue_wav(&mut r);
+    let raw = r.run_raw(WORD_RATE as usize / 4);
+    let pcm_at = end_of_idle(&raw, 0);
+    assert!(pcm_at >= SILENCE_FRAMES, "the DSD silence comes first");
+    assert_head(&raw, pcm_at, 200);
+    assert!(!r.engine.telemetry(P).dsd);
+    assert!(r.events().contains(&EngineEvent::DsdEnded {
+        player: P,
+        entry: EntryId(1)
+    }));
+}
+
+/// CA10 with the other policy: the stream goes on untouched and the
+/// pre-listen is muted until it ends, as a cart would be.
+#[test]
+fn ca10_an_on_air_cue_over_a_dsd_stream_holds_with_hold_others() {
+    let mut r = rig_with_on_air_cue(DsdMix::HoldOthers);
+    let (left, right) = pattern();
+    let a = dsf_file(r.dir.path(), "a.dsf", &left, &right);
+    r.start(P, request(1, a, dsd64()));
+    let mut all = r.run_dop(WORD_RATE as usize / 20);
+    start_cue_wav(&mut r);
+    all.extend(r.run_dop(WORD_RATE as usize / 10));
+    assert_valid_dop(&all);
+    let first = first_data(&all);
+    let words = assert_words(&all, first, &left, &right, 0);
+    assert_eq!(first + words, all.len(), "the DSD stream is untouched");
+    assert!(r.engine.telemetry(P).dsd);
+}
