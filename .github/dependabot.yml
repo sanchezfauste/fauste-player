@@ -15,11 +15,19 @@ updates:
       prefix: build
       include: scope
     groups:
-      # Minor and patch updates arrive together in one pull request; every
-      # major update gets its own, so a breaking change is reviewed alone.
-      cargo-minor-patch:
+      # Before 1.0 a minor release may break the API, and the egui crates must
+      # move together: they update in one pull request, first in this list.
+      egui:
+        patterns:
+          - "egui*"
+          - "eframe"
+          - "epaint"
+          - "emath"
+          - "ecolor"
+      # Patch releases only fix bugs, so they arrive together. Every minor and
+      # major update gets its own pull request.
+      cargo-patch:
         update-types:
-          - minor
           - patch
     ignore:
       # These crates are replaced by the patched copies in `vendor/`
