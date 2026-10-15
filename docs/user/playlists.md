@@ -16,8 +16,11 @@ player shows, is brought into view.
 Switching tabs never changes what is on air or what is next. When a track
 ends, the player continues in the playlist that contains that track.
 
-Playlists are created, renamed and deleted in [Settings](settings.md). The
-last playlist, and a playlist with a track on air, cannot be deleted.
+The **+** at the right end of the row makes a new playlist: type a name and
+press Enter or **Create** (Escape or a click outside cancels). The new
+playlist appears at once in that player's tabs and the player shows it.
+Playlists can also be created, and are renamed and deleted, in
+[Settings](settings.md). The last playlist, and a playlist with a track on air, cannot be deleted.
 
 ## The track table
 

@@ -279,6 +279,12 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
             let id = state.ids.playlist();
             state.playlists.add(Playlist::new(id, name));
         }
+        Command::CreatePlaylistIn { name, player } => {
+            let i = state.player_index(player)?;
+            let id = state.ids.playlist();
+            state.playlists.add(Playlist::new(id, name));
+            state.players[i].playlist = id;
+        }
         Command::CreatePlaylistFromPaths { name, paths } => {
             let id = state.ids.playlist();
             state.playlists.add(Playlist::new(id, name));

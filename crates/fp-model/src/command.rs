@@ -108,6 +108,12 @@ pub enum Command {
     CreatePlaylist {
         name: String,
     },
+    /// Rule 29: a new empty playlist, shown in `player` at once. An unknown
+    /// player is refused and nothing is created.
+    CreatePlaylistIn {
+        name: String,
+        player: PlayerId,
+    },
     /// A new playlist filled with `paths` (playlist file import).
     CreatePlaylistFromPaths {
         name: String,

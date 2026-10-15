@@ -25,6 +25,8 @@ const PLAY_SIZE: f32 = 64.0;
 const GAP: f32 = 6.0;
 const WAVE_HEIGHT: f32 = 56.0;
 const TABS_HEIGHT: f32 = 30.0;
+/// Width of the "+" (new playlist) button at the right end of the tabs.
+const ADD_TAB_WIDTH: f32 = 30.0;
 const FOOTER_HEIGHT: f32 = 24.0;
 
 pub(crate) fn column(
@@ -957,7 +959,15 @@ fn tabs(
         ui.allocate_exact_size(vec2(ui.available_width(), TABS_HEIGHT), Sense::hover());
     ui.painter().rect_filled(strip, 0.0, theme::NEUTRAL_900);
     let count = scene.state.playlists.len();
-    let l = tab_strip::layout(strip.width(), count);
+    // The tabs and their arrows share the strip with the "+" at its end.
+    let tabs_area = Rect::from_min_max(
+        strip.min,
+        pos2(
+            (strip.right() - ADD_TAB_WIDTH).max(strip.left()),
+            strip.bottom(),
+        ),
+    );
+    let l = tab_strip::layout(tabs_area.width(), count);
     let left_gap = if l.overflow {
         tab_strip::ARROW_WIDTH
     } else {
@@ -975,7 +985,7 @@ fn tabs(
         }
         st.revealed = Some(key);
     }
-    if l.overflow && ui.rect_contains_pointer(strip) {
+    if l.overflow && ui.rect_contains_pointer(tabs_area) {
         let delta = ui.input(|i| i.smooth_scroll_delta);
         if delta != egui::Vec2::ZERO {
             st.offset -= delta.x + delta.y;
@@ -995,7 +1005,7 @@ fn tabs(
             (-1, strip.left(), icon::CARET_LEFT, "tip-tabs-scroll-left"),
             (
                 1,
-                strip.right() - tab_strip::ARROW_WIDTH,
+                tabs_area.right() - tab_strip::ARROW_WIDTH,
                 icon::CARET_RIGHT,
                 "tip-tabs-scroll-right",
             ),
@@ -1138,11 +1148,103 @@ fn tabs(
             .with_clip_rect(text_rect.intersect(view))
             .galley(text_rect.min, galley, color);
     }
+    new_playlist_button(ui, scene, view_state, id, strip);
     let bottom = Rect::from_min_size(
         pos2(strip.left(), strip.bottom() - 1.0),
         vec2(strip.width(), 1.0),
     );
     ui.painter().rect_filled(bottom, 0.0, theme::NEUTRAL_800);
+}
+
+/// The "+" at the right end of the tab `strip` and its popup: a name, then
+/// Create (or Enter) makes a playlist and shows it in this player (rule 29);
+/// Escape or a click outside cancels.
+fn new_playlist_button(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    id: PlayerId,
+    strip: Rect,
+) {
+    let t = scene.i18n;
+    let area = Rect::from_min_max(pos2(strip.right() - ADD_TAB_WIDTH, strip.top()), strip.max);
+    let label = t.tr("tip-new-playlist");
+    let response = ui
+        .scope_builder(UiBuilder::new().max_rect(area), |ui| {
+            widgets::tile(
+                ui,
+                area.size(),
+                &label,
+                true,
+                TileStyle {
+                    border_width: 0.0,
+                    ..TileStyle::plain()
+                },
+                |p, r, c| {
+                    p.text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        icon::PLUS,
+                        font(12.0),
+                        c,
+                    );
+                },
+            )
+        })
+        .inner;
+    let opening = response.clicked();
+    if opening {
+        view_state.new_playlist.insert(id, String::new());
+    }
+    let name = view_state.new_playlist.entry(id).or_default();
+    let hint = t.tr("new-playlist-name");
+    let create = t.tr("new-playlist-create");
+    egui::Popup::from_toggle_button_response(&response)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            ui.set_width(220.0);
+            let edit = ui.add(
+                egui::TextEdit::singleline(name)
+                    .hint_text(hint)
+                    .desired_width(f32::INFINITY),
+            );
+            if opening {
+                edit.request_focus();
+            }
+            let trimmed = name.trim().to_owned();
+            let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            let width = ui
+                .painter()
+                .layout_no_wrap(create.clone(), font(12.0), theme::TEXT)
+                .size()
+                .x
+                + 36.0;
+            let clicked = widgets::tile(
+                ui,
+                vec2(width, 28.0),
+                &create,
+                !trimmed.is_empty(),
+                TileStyle::plain(),
+                |p, r, c| {
+                    p.text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        &create,
+                        font(12.0),
+                        c,
+                    );
+                },
+            )
+            .clicked();
+            if (enter || clicked) && !trimmed.is_empty() {
+                scene.ctl.send(Command::CreatePlaylistIn {
+                    name: trimmed,
+                    player: id,
+                });
+                name.clear();
+                ui.close();
+            }
+        });
 }
 
 fn footer(

@@ -170,6 +170,8 @@ pub(crate) struct ViewState {
     /// How far each player's playlist tabs are scrolled (feedback 2 spec
     /// O35).
     pub tab_scroll: HashMap<PlayerId, TabScroll>,
+    /// The name being typed in each player's "new playlist" popup.
+    pub new_playlist: HashMap<PlayerId, String>,
     notice: Option<(String, f64)>,
     /// Dropouts the engine counted, as the status bar alerts show them.
     dropouts: Dropouts,
