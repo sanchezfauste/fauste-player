@@ -1,7 +1,7 @@
 # Cart colour and waveform — Design Spec
 
 - **Date:** 2026-10-15.
-- **Status:** Draft, awaiting the maintainer's review.
+- **Status:** Approved (2026-10-15).
 - **Amends:** [the cartwall spec](2026-09-26-phase2-cartwall-settings-design.md)
   (the cart's fields, `CartEdit`, C11, the cart page file) and
   [the remote control spec](2026-10-01-remote-control-design.md) (the cart
