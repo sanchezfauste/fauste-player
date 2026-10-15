@@ -4,8 +4,8 @@
     clippy::panic,
     clippy::indexing_slicing
 )]
-//! Spec §4.6 and rule 26: a player whose Cue output is its Main output (or
-//! that has none) has no CUE, and the interface says why.
+//! Spec §4.6, rule 26 and CA1: a player without a Cue route has no CUE, and
+//! the interface says why.
 
 mod support;
 
@@ -16,18 +16,18 @@ use support::{harness, state};
 const NO_OUTPUT: &str = "This player has no Cue output";
 const CUE_TIP: &str = "Pre-listen (PFL) the next track";
 
-/// One player whose Cue route is the same as its Main route.
-fn cue_on_main() -> AppState {
+/// One player without a Cue route.
+fn no_cue_route() -> AppState {
     let mut s = state(1, 3);
     for r in &mut s.config.outputs.routes {
-        r.main = r.cue.clone();
+        r.cue = None;
     }
     s
 }
 
 #[test]
 fn the_cue_button_is_dimmed_and_says_why() {
-    let (h, _) = harness(cue_on_main());
+    let (h, _) = harness(no_cue_route());
     let button = h.get_by_label_contains(NO_OUTPUT);
     assert!(button.accesskit_node().is_disabled());
     assert!(h.query_by_label(CUE_TIP).is_none());
@@ -42,7 +42,7 @@ fn with_a_cue_output_the_cue_button_keeps_its_tooltip() {
 
 #[test]
 fn the_row_menu_pre_listen_is_dimmed_and_says_why() {
-    let (mut h, fake) = harness(cue_on_main());
+    let (mut h, fake) = harness(no_cue_route());
     h.get_all_by_label("Song 2")
         .max_by(|a, b| a.rect().min.y.total_cmp(&b.rect().min.y))
         .unwrap()

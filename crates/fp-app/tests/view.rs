@@ -599,7 +599,7 @@ fn a_click_moves_a_running_cue_to_a_playable_other_row() {
 }
 
 #[test]
-fn a_click_leaves_a_cue_whose_output_became_the_main_output() {
+fn a_click_leaves_a_cue_whose_cue_route_was_removed() {
     let (mut s, e, p) = state(3);
     apply(&mut s, Command::ToggleCue(p)).unwrap();
     let routes = s
@@ -609,7 +609,7 @@ fn a_click_leaves_a_cue_whose_output_became_the_main_output() {
         .iter_mut()
         .find(|r| r.player == p)
         .unwrap();
-    routes.main = routes.cue.clone();
+    routes.cue = None;
     assert_eq!(cue_follow_target(&s, p, e[2]), None);
 }
 

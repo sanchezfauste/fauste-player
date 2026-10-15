@@ -498,7 +498,7 @@ impl OutputsConfig {
     /// [`cue_is_usable`]).
     pub fn player_has_cue(&self, player: PlayerId) -> bool {
         self.player_routes(player)
-            .is_some_and(|r| cue_is_usable(r.main.as_ref(), r.cue.as_ref()))
+            .is_some_and(|r| cue_is_usable(r.cue.as_ref()))
     }
 
     /// Whether `player`'s Cue route is the same as its Main route.
@@ -509,7 +509,29 @@ impl OutputsConfig {
 
     /// Whether the cartwall has a Cue output a cart pre-listen can be heard on.
     pub fn cartwall_has_cue(&self) -> bool {
-        cue_is_usable(self.cartwall.main.as_ref(), self.cartwall.cue.as_ref())
+        cue_is_usable(self.cartwall.cue.as_ref())
+    }
+
+    /// On-air pre-listen spec: whether `cue`'s configured route overlaps
+    /// a configured Main route (any player's or the cartwall's). A missing
+    /// Main route goes to the default output, which only the engine
+    /// resolves: it is not counted here (`cue_on_air::cue_is_on_air` sees
+    /// it once placed). False for a holder that is not a Cue.
+    pub fn cue_shares_main(&self, cue: crate::live::Holder) -> bool {
+        use crate::live::Holder;
+        let route = match cue {
+            Holder::PlayerCue(p) => self.player_routes(p).and_then(|r| r.cue.as_ref()),
+            Holder::CartwallCue => self.cartwall.cue.as_ref(),
+            Holder::PlayerMain(_) | Holder::CartwallMain => None,
+        };
+        let Some(route) = route else {
+            return false;
+        };
+        self.routes
+            .iter()
+            .filter_map(|r| r.main.as_ref())
+            .chain(self.cartwall.main.as_ref())
+            .any(|main| routes_overlap(main, route))
     }
 
     /// Whether the cartwall's Cue route is the same as its Main route.
@@ -676,16 +698,20 @@ impl OutputsConfig {
     }
 }
 
-/// Whether a Cue route can be heard (spec §4.6): there is one, and it is not
-/// the Main route (same backend, device and first channel). The engine never
-/// sends a pre-listen to the Main output, since that would put it on air.
-///
-/// Only what the configuration says is decided here. A missing Main route
-/// goes to the default output, and a route to a backend this machine does
-/// not have is dropped; both are only known to the running engine, so a Cue
-/// route next to a missing Main route counts as usable.
-pub fn cue_is_usable(main: Option<&Route>, cue: Option<&Route>) -> bool {
-    cue.is_some_and(|cue| main != Some(cue))
+/// Whether a Cue route can be heard (spec §4.6 as amended by the on-air
+/// pre-listen spec CA1): there is one. A Cue route on the Main output is
+/// usable; the model asks before a pre-listen goes out on a sounding
+/// on-air output (`cue_on_air`). A route to a backend this machine does not
+/// have is only known to the running engine, which drops it.
+pub fn cue_is_usable(cue: Option<&Route>) -> bool {
+    cue.is_some()
+}
+
+/// Whether two routes share a channel of one device (on-air pre-listen
+/// spec section 2): same backend and device, and channel pairs that start
+/// less than two channels apart.
+pub fn routes_overlap(a: &Route, b: &Route) -> bool {
+    a.backend == b.backend && a.device == b.device && a.first_channel.abs_diff(b.first_channel) < 2
 }
 
 /// Whether a Cue route is configured and is the same as the Main route: the
