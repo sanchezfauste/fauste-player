@@ -1,8 +1,25 @@
-# Fauste Player
+<p align="center">
+  <img src="packaging/icons/fauste-player-128.png" alt="Fauste Player icon" width="128" height="128">
+</p>
 
-[![CI](https://github.com/sanchezfauste/fauste-player/actions/workflows/ci.yml/badge.svg)](https://github.com/sanchezfauste/fauste-player/actions/workflows/ci.yml)
-[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196.svg)](https://www.conventionalcommits.org/en/v1.0.0/)
-[![SemVer](https://img.shields.io/badge/versioning-SemVer%202.0.0-blue.svg)](https://semver.org/spec/v2.0.0.html)
+<h1 align="center">Fauste Player</h1>
+
+<p align="center"><strong>Radio playout for the desktop: several players, a cartwall and sample-accurate mixes.</strong></p>
+
+<p align="center">
+  <a href="https://github.com/sanchezfauste/fauste-player/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/sanchezfauste/fauste-player?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/sanchezfauste/fauste-player/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sanchezfauste/fauste-player/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="Licence: GPL-3.0-or-later" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-blue.svg"></a>
+  <img alt="Platforms: Linux, Windows, macOS" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg">
+</p>
+
+<p align="center">
+  <a href="https://github.com/sanchezfauste/fauste-player/releases/latest"><strong>Download</strong></a>
+  &middot;
+  <a href="https://sanchezfauste.com/fauste-player/"><strong>Website</strong></a>
+  &middot;
+  <a href="https://sanchezfauste.com/fauste-player/guide/"><strong>User guide</strong></a>
+</p>
 
 **Fauste Player** is a desktop radio playout application for Linux, Windows
 and macOS, written in Rust. It runs any number of independent players side
@@ -10,23 +27,18 @@ by side, each with its own playlists, transport and outputs, with
 sample-accurate overlapping mixes, a separate pre-listen (CUE) output, and an
 audio engine that the interface can never block.
 
-**[Website](https://sanchezfauste.com/fauste-player/)** · **[User guide](https://sanchezfauste.com/fauste-player/guide/)** (English, with AI translations into Català, Deutsch, Español, Euskara, Français, Galego, Italiano, Nederlands, Polski and Português)
+The user guide is in English, with AI translations into Català, Deutsch, Español, Euskara, Français, Galego, Italiano, Nederlands, Polski and Português.
+
+> **Built with AI assistance, provided as is.** Fauste Player, its
+> documentation and its translations were developed with substantial help from
+> AI tools. It comes without any warranty and you use it at your own risk: see
+> the [Disclaimer](#disclaimer).
 
 ![Main screen](docs/images/main-screen.png)
 
 ## Contents
 
-- [Features](#features)
-- [Platform support](#platform-support)
-- [Install](#install)
-- [Build from source](#build-from-source)
-- [Develop](#develop)
-- [How it is built](#how-it-is-built)
-- [Working with AI agents](#working-with-ai-agents)
-- [Versioning and releases](#versioning-and-releases)
-- [Roadmap](#roadmap)
-- [Documentation](#documentation)
-- [Contributing](#contributing) · [Security](#security) · [Licence](#licence)
+[Features](#features) · [Platform support](#platform-support) · [Install](#install) · [Build from source](#build-from-source) · [Develop](#develop) · [How it is built](#how-it-is-built) · [Versioning and releases](#versioning-and-releases) · [Roadmap](#roadmap) · [Documentation](#documentation) · [Working with AI agents](#working-with-ai-agents) · [Contributing](#contributing) · [Security](#security) · [Disclaimer](#disclaimer) · [Licence](#licence)
 
 ## Features
 
@@ -36,8 +48,9 @@ audio engine that the interface can never block.
   its own playlist tabs (they shrink, cut long names and scroll). Times keep
   a fixed width as they count.
 - **About window:** the window's title bar shows "Fauste Player <version>";
-  the info button next to Settings opens the copyright and the licence
-  notices of the bundled components.
+  the info button next to Settings opens the author, the copyright, the
+  licence, a short disclaimer and the licence notices of the bundled
+  components.
 - **Restore defaults:** Players, Meters, Analysis, Loudness and Shortcuts can each be
   reset to their defaults.
 - **Live settings:** every setting applies while the application runs. A
@@ -126,9 +139,9 @@ audio engine that the interface can never block.
   shortcuts.
 - **Eleven-language** interface (Fluent): English, Spanish, Catalan, Dutch,
   French, Galician, German, Italian, Basque, Polish and Portuguese. It follows
-  the OS language or the language chosen in Settings. English and Spanish are
-  written by hand; the other nine are AI-generated and may contain errors.
-  Corrections from native speakers are welcome as issues or pull requests.
+  the OS language or the language chosen in Settings. The interface in every
+  language, English and Spanish included, was produced with AI and may contain
+  errors. Corrections are welcome as issues or pull requests.
 
 ## Platform support
 
@@ -307,31 +320,6 @@ In short:
 
 Details are in the [technical documentation](docs/technical/README.md).
 
-## Working with AI agents
-
-The project is developed with Claude Code and the **superpowers** skills.
-[`CLAUDE.md`](CLAUDE.md) is the canonical guide for agents (rules, commands,
-invariants, workflow). [`AGENTS.md`](AGENTS.md) points other agents to it.
-
-Install the skills from the official plugin marketplace inside Claude Code
-(`/plugin` → *superpowers*). Use them as follows:
-
-| Situation | Skill | How |
-|---|---|---|
-| A new feature or phase | `superpowers:brainstorming` | Explore the idea, agree the design, update the spec |
-| A spec is agreed | `superpowers:writing-plans` | Write `docs/superpowers/plans/<date>-<phase>-<plan>.md` with tasks, interfaces and a review focus |
-| Implementing a plan | `superpowers:executing-plans` (inline) or `superpowers:subagent-driven-development` | Task by task, with a ledger in `.superpowers/sdd/` |
-| Writing any code | `superpowers:test-driven-development` | Red, green, refactor; never skip the failing run |
-| A bug or a failing test | `superpowers:systematic-debugging` | Find the cause before changing code |
-| Before claiming done | `superpowers:verification-before-completion` | Run the checks and read the output |
-| After a plan | `superpowers:requesting-code-review` | A fresh reviewer on the most capable model reviews the whole branch |
-| Handling review findings | `superpowers:receiving-code-review` | Verify each finding, then fix it test-first |
-| Finishing | `superpowers:finishing-a-development-branch` | Green suite, then merge or PR |
-| Isolated work | `superpowers:using-git-worktrees` | One worktree per branch |
-
-The UI design lives in a Claude Design project, which agents can read through
-the `claude_design` MCP server (see `CLAUDE.md`).
-
 ## Versioning and releases
 
 - [Semantic Versioning](https://semver.org/spec/v2.0.0.html) and
@@ -367,6 +355,31 @@ See [Release process](docs/technical/release-process.md).
 - [Design spec](docs/superpowers/specs/2026-09-25-fauste-player-design.md) and [implementation plans](docs/superpowers/plans)
 - [Changelog](CHANGELOG.md)
 
+## Working with AI agents
+
+The project is developed with Claude Code and the **superpowers** skills.
+[`CLAUDE.md`](CLAUDE.md) is the canonical guide for agents (rules, commands,
+invariants, workflow). [`AGENTS.md`](AGENTS.md) points other agents to it.
+
+Install the skills from the official plugin marketplace inside Claude Code
+(`/plugin` → *superpowers*). Use them as follows:
+
+| Situation | Skill | How |
+|---|---|---|
+| A new feature or phase | `superpowers:brainstorming` | Explore the idea, agree the design, update the spec |
+| A spec is agreed | `superpowers:writing-plans` | Write `docs/superpowers/plans/<date>-<phase>-<plan>.md` with tasks, interfaces and a review focus |
+| Implementing a plan | `superpowers:executing-plans` (inline) or `superpowers:subagent-driven-development` | Task by task, with a ledger in `.superpowers/sdd/` |
+| Writing any code | `superpowers:test-driven-development` | Red, green, refactor; never skip the failing run |
+| A bug or a failing test | `superpowers:systematic-debugging` | Find the cause before changing code |
+| Before claiming done | `superpowers:verification-before-completion` | Run the checks and read the output |
+| After a plan | `superpowers:requesting-code-review` | A fresh reviewer on the most capable model reviews the whole branch |
+| Handling review findings | `superpowers:receiving-code-review` | Verify each finding, then fix it test-first |
+| Finishing | `superpowers:finishing-a-development-branch` | Green suite, then merge or PR |
+| Isolated work | `superpowers:using-git-worktrees` | One worktree per branch |
+
+The UI design lives in a Claude Design project, which agents can read through
+the `claude_design` MCP server (see `CLAUDE.md`).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -375,6 +388,28 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 See [SECURITY.md](SECURITY.md). The application makes no network
 connections and sends no telemetry.
+
+## Disclaimer
+
+Fauste Player, its documentation and all its interface texts and translations
+(English and Spanish included) were developed with substantial help from AI
+tools and may contain errors.
+
+The program is provided "AS IS", without warranty of any kind, express or
+implied, including the warranties of merchantability, fitness for a
+particular purpose and non-infringement. You use it entirely at your own
+risk. To the maximum extent permitted by applicable law, the author and the
+contributors are not liable for any damages of any kind, whether direct,
+indirect, incidental or consequential, including dead air, interrupted or
+wrong broadcasts, loss of data, loss of revenue or audience, regulatory fines
+or sanctions, and damage to equipment or hearing caused by audio levels.
+
+The operator is solely responsible for checking that the program is fit for
+their use, for supervising their broadcast, and for holding the rights and
+licences for the content they play.
+
+Sections 15 and 16 of the [GNU General Public License](LICENSE) (disclaimer of
+warranty and limitation of liability) govern this notice.
 
 ## Licence
 

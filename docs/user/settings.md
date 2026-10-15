@@ -231,10 +231,9 @@ Portuguese), and English otherwise. A language in the settings file that
 the interface does not have shows as **System** and follows the operating
 system.
 
-English and Spanish are written by hand. The other translations were
-generated with AI and may contain errors; when one of them is in use,
-**About** says so. Corrections from native speakers are welcome as issues
-or pull requests.
+The interface in every language, English and Spanish included, was produced
+with AI and may contain errors. **About** carries a general disclaimer that
+covers all of them. Corrections are welcome as issues or pull requests.
 
 ## Cartwall
 
