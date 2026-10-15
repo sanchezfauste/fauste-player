@@ -1053,77 +1053,107 @@ fn cue_ended(events: &[EngineEvent]) -> bool {
     })
 }
 
-/// L11, L16, L20: a Main moved onto the Cue's pair drops the Cue, which is
-/// a Cue change: it waits for the pre-listen unless forced.
+/// L11, L16 with CA8: a Main moved onto the Cue's pair leaves the Cue where
+/// it is, so the move waits only for Main's own sources (quiet here) and
+/// the pre-listen goes on.
 #[test]
-fn l16_a_main_moved_onto_the_cue_pair_waits_for_the_pre_listen() {
-    let mut r = pfl_rig();
-    r.act(EngineAction::ApplyRoute {
-        holder: Holder::PlayerMain(P),
-        route: Some(route("other")),
-        force: false,
-    });
-    r.run(3);
-    assert!(!cue_ended(&r.events), "the pre-listen is not cut");
-    assert!(!route_applied(&r.events, Holder::PlayerMain(P)));
-    r.act(EngineAction::StopCue { player: P });
-    r.run(5);
-    assert!(route_applied(&r.events, Holder::PlayerMain(P)));
+fn l16_a_main_moved_onto_the_cue_pair_keeps_the_pre_listen() {
+    for force in [false, true] {
+        let mut r = pfl_rig();
+        r.act(EngineAction::ApplyRoute {
+            holder: Holder::PlayerMain(P),
+            route: Some(route("other")),
+            force,
+        });
+        r.run(3);
+        assert!(
+            route_applied(&r.events, Holder::PlayerMain(P)),
+            "force {force}"
+        );
+        assert!(
+            !cue_ended(&r.events),
+            "force {force}: the pre-listen is not cut"
+        );
+    }
 }
 
 #[test]
-fn l16_a_forced_main_move_onto_the_cue_pair_applies_at_once() {
-    let mut r = pfl_rig();
-    r.act(EngineAction::ApplyRoute {
-        holder: Holder::PlayerMain(P),
-        route: Some(route("other")),
-        force: true,
-    });
-    r.tick();
-    assert!(route_applied(&r.events, Holder::PlayerMain(P)));
-    assert!(cue_ended(&r.events));
+fn l16_a_cartwall_main_moved_onto_the_cue_pair_keeps_the_pre_listen() {
+    for force in [false, true] {
+        let mut c = config();
+        c.outputs.cartwall.cue = Some(route("other"));
+        let mut r = rig_with(&c);
+        r.act(EngineAction::StartCartCue(cart_request(1)));
+        r.settle();
+        r.run(2);
+        r.take_events();
+        r.act(EngineAction::ApplyRoute {
+            holder: Holder::CartwallMain,
+            route: Some(route("other")),
+            force,
+        });
+        r.run(3);
+        assert!(
+            route_applied(&r.events, Holder::CartwallMain),
+            "force {force}"
+        );
+        assert!(
+            !cue_ended(&r.events),
+            "force {force}: the pre-listen is not cut"
+        );
+    }
 }
 
+/// CA8: a Cue route equal to Main is placed on the Main device and reported.
 #[test]
-fn l16_a_cartwall_main_moved_onto_the_cue_pair_waits_for_the_pre_listen() {
+fn ca8_a_cue_route_equal_to_main_is_placed_there() {
     let mut c = config();
-    c.outputs.cartwall.cue = Some(route("other"));
+    c.outputs.routes[0].cue = Some(route("main"));
     let mut r = rig_with(&c);
-    r.act(EngineAction::StartCartCue(cart_request(1)));
-    r.settle();
-    r.run(2);
-    r.take_events();
-    let apply = |force| EngineAction::ApplyRoute {
-        holder: Holder::CartwallMain,
-        route: Some(route("other")),
-        force,
+    r.tick();
+    let events = r.take_events();
+    assert!(events.contains(&EngineEvent::Placed {
+        holder: Holder::PlayerCue(P),
+        route: Some(route("main")),
+        device: out("main"),
+        running: device_settings(&c.outputs, &out("main")),
+    }));
+}
+
+/// CA8, the default-output case of §4.6: a missing Main route resolves to
+/// the device the Cue route names; both are placed there.
+#[test]
+fn ca8_a_cue_on_the_default_output_main_resolves_to_is_placed_there() {
+    let mut c = config();
+    c.outputs.routes[0].main = None;
+    c.outputs.routes[0].cue = Some(route("main"));
+    let mut r = rig_with(&c);
+    r.tick();
+    let events = r.take_events();
+    let placed_on_main = |holder: Holder| {
+        events.iter().any(|e| {
+            matches!(e, EngineEvent::Placed { holder: h, device, .. }
+                if *h == holder && *device == out("main"))
+        })
     };
-    r.act(apply(false));
-    r.run(3);
-    assert!(!cue_ended(&r.events), "the pre-listen is not cut");
-    assert!(!route_applied(&r.events, Holder::CartwallMain));
-    r.act(EngineAction::StopCartCue);
-    r.run(5);
-    assert!(route_applied(&r.events, Holder::CartwallMain));
+    assert!(placed_on_main(Holder::PlayerMain(P)), "{events:?}");
+    assert!(placed_on_main(Holder::PlayerCue(P)), "{events:?}");
 }
 
+/// CA8: the pre-listen on the Main pair is heard there.
 #[test]
-fn l16_a_forced_cartwall_main_move_onto_the_cue_pair_applies_at_once() {
+fn ca8_a_pre_listen_on_the_main_pair_is_heard_there() {
     let mut c = config();
-    c.outputs.cartwall.cue = Some(route("other"));
+    c.outputs.routes[0].cue = Some(route("main"));
     let mut r = rig_with(&c);
-    r.act(EngineAction::StartCartCue(cart_request(1)));
-    r.settle();
-    r.run(2);
-    r.take_events();
-    r.act(EngineAction::ApplyRoute {
-        holder: Holder::CartwallMain,
-        route: Some(route("other")),
-        force: true,
+    r.act(EngineAction::StartCue {
+        player: P,
+        request: request(2, 0.0),
     });
-    r.tick();
-    assert!(route_applied(&r.events, Holder::CartwallMain));
-    assert!(cue_ended(&r.events));
+    r.settle();
+    let heard = r.run(5);
+    assert!(!cue_ended(&r.events), "{:?}", r.events);
+    assert!(heard.iter().any(|v| *v != 0.0), "nothing heard on main");
 }
 
 /// A device that cannot open more channels than it has open: the route is

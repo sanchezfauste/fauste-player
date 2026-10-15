@@ -1155,8 +1155,8 @@ impl Engine {
 
     /// L16: `player`'s Main goes to `route` (the default output without
     /// one). Its sources are opened again on the new bus at their position:
-    /// paused stays paused, waiting stays waiting. A Cue route equal to the
-    /// new Main is dropped; one that differed again comes back.
+    /// paused stays paused, waiting stays waiting. Its Cue stays where its
+    /// route goes (CA8).
     fn move_player_main(
         &mut self,
         player: PlayerId,
@@ -1174,7 +1174,7 @@ impl Engine {
         else {
             return Some(Ok(()));
         };
-        let cue = cue_route.as_ref().and_then(|r| self.cue_target(r, &target));
+        let cue = cue_route.as_ref().and_then(|r| self.cue_target(r));
         let cue_changes = cue != cue_now;
         // A Cue that changes with Main (it equals the new Main, or comes
         // back) is a Cue change too: it waits for a pre-listen (L11, L20).
@@ -1206,18 +1206,17 @@ impl Engine {
         Some(outcome)
     }
 
-    /// L16: `player`'s Cue goes to `route` (no Cue without one, or when it
-    /// equals Main).
+    /// L16: `player`'s Cue goes to `route` (no Cue without one, CA1).
     fn move_player_cue(
         &mut self,
         player: PlayerId,
         route: Option<Route>,
         force: bool,
     ) -> Option<Result<(), String>> {
-        let Some(main) = self.players.get(&player).map(|rt| rt.main.clone()) else {
+        if !self.players.contains_key(&player) {
             return Some(Ok(()));
-        };
-        let cue = route.as_ref().and_then(|r| self.cue_target(r, &main));
+        }
+        let cue = route.as_ref().and_then(|r| self.cue_target(r));
         let outcome = match &cue {
             Some(target) => self.make_room(target, force)?,
             None => Ok(()),
@@ -2005,25 +2004,22 @@ impl Engine {
     }
 
     /// Where a Cue route really goes. Unlike Main, a Cue never falls back to
-    /// the default output (that is where Main plays): a route to a backend
-    /// this machine does not have, or one identical to Main, means no cue.
-    fn cue_target(&self, route: &Route, main: &(BusKey, u16)) -> Option<(BusKey, u16)> {
+    /// the default output: a route to a backend this machine does not have
+    /// means no cue. A Cue on the Main output is placed there like any
+    /// holder (on-air pre-listen spec CA8); the model decides when it may
+    /// sound (CA3-CA5).
+    fn cue_target(&self, route: &Route) -> Option<(BusKey, u16)> {
         let Some(backend) = self.route_backend(&route.backend) else {
             tracing::warn!(backend = %route.backend, "cue route to an unavailable backend; no cue");
             return None;
         };
-        let target = (
+        Some((
             BusKey {
                 backend: backend.id().0,
                 device: route.device.clone(),
             },
             route.first_channel,
-        );
-        if &target == main {
-            tracing::warn!("cue route equals the main route; no cue");
-            return None;
-        }
-        Some(target)
+        ))
     }
 
     /// Resolves the (bus, first channel) of a player's Main and Cue outputs.
@@ -2035,7 +2031,7 @@ impl Engine {
         };
         let cue = routes
             .and_then(|r| r.cue.as_ref())
-            .and_then(|route| self.cue_target(route, &main));
+            .and_then(|route| self.cue_target(route));
         (main, cue)
     }
 
