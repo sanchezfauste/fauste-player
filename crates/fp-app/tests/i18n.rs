@@ -12,7 +12,7 @@ use std::path::Path;
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 use fluent_syntax::ast::{Entry, Expression, InlineExpression, Pattern, PatternElement};
-use fp_app::i18n::{I18n, LOCALES, Locale, Translation, bundle_from, locale, negotiate, resolve};
+use fp_app::i18n::{I18n, LOCALES, Locale, bundle_from, locale, negotiate, resolve};
 
 /// The variables a pattern uses, selectors included.
 fn pattern_vars(pattern: &Pattern<&str>, out: &mut BTreeSet<String>) {
@@ -168,16 +168,6 @@ fn the_registry_lists_english_first_then_by_own_name() {
     assert_eq!(names, sorted);
     assert_eq!(locale("en-US").map(|l| l.name), Some("English"));
     assert_eq!(locale("es-ES").map(|l| l.name), Some("Español"));
-}
-
-#[test]
-fn only_english_and_spanish_are_written_by_hand() {
-    for l in LOCALES {
-        let by_hand = matches!(l.tag, "en-US" | "es-ES");
-        assert_eq!(l.translation == Translation::Manual, by_hand, "{}", l.tag);
-    }
-    assert!(!I18n::new(Some("es-ES")).machine_translated());
-    assert!(!I18n::new(Some("en-US")).machine_translated());
 }
 
 #[test]

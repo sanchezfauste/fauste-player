@@ -32,7 +32,7 @@
 | `ui/view.rs`, `ui/format.rs` | Pure view model: what to show, how to format it (unit-tested). `mix_active` decides whether a player's MIX marker (on the player and in its CUE window) is solid: Continuous mode and not a bit-perfect player (BR15) |
 | `ui/cue_window.rs` | One non-modal `egui::Window` per running CUE, drawn from the pure `view::cue_window_view`; its waveform is `wave_panel` with `WaveKey::Cue`; icons through `ui/glyphs.rs` |
 | `ui/widgets.rs`, `ui/glyphs.rs`, `ui/icons.rs`, `ui/theme.rs` | Painted widgets (tiles, the design's on/off `toggle` that Settings and the loudness controls share, segmented control, tabular times, meter, fader, waveform; `fader` takes an `enabled` flag: a disabled fader is greyed and senses hover only, so it takes no drag, click or wheel), drawn icons, the Nocturne theme. `ui/glyphs.rs` maps each transport action (`TransportAction`: play, next, pause, stop, fade stop, stop after, restart, previous, cue) to a Phosphor glyph or a drawn icon; the player, the cartwall and the playlist menu draw their transport icons only through it (`tests/glyphs.rs` guards that), and the CUE window too. The meter's geometry is the pure `meter_layout` (a `Ruler` per side, the `ticks`, the label lines, the bars and the readouts), unit-tested; its width (`meter_width`) follows the scale's widest label, and the player's meter column follows it. Nothing is painted over the bars: `tests/meter_view.rs` reads the painted shapes and accepts in a bar only filled rects in the bar or zone colours |
-| `ui/about.rs` | The About window: version, copyright, bundled notices, and the third-party notices file (located at start-up, opened on a helper thread) |
+| `ui/about.rs` | The About window: version, the author attribution required by `NOTICE`, copyright, licence (links open on a helper thread), the disclaimer, bundled notices, and the third-party notices file (located at start-up) |
 | `ui/tag_editor.rs` | The tag editor modal (O23): `TagEditor` with its phases (`Reading`, `Unreadable`, `Ready` with a `Form` holding the sheet as read and the draft), the field boxes, the cover area and the pure checks it shares with `fp-model` |
 | `tags.rs` | The `fp-tags` worker: `TagJob` in, `TagOutcome` out (see below and [Analysis](analysis.md)) |
 | `ui/controller.rs` | The `Controller` trait between the UI and the rest |
@@ -462,13 +462,12 @@ The `test-hooks` feature adds `AppUi::fail_next_frame` and
 ## Internationalisation
 
 - Every visible string is a Fluent message in `locales/en-US/main.ftl` (the
-  source) and in every other `locales/<tag>/main.ftl`. en-US and es-ES are
-  written by hand; the other locales are generated with AI. A new or changed
+  source) and in every other `locales/<tag>/main.ftl`. Every locale,
+  English and Spanish included, was produced with AI. A new or changed
   string goes into every locale file in the same change.
 - `i18n::LOCALES` is the registry: one `Locale` per embedded file, with its
   BCP-47 `tag`, its `name` in its own language (what the Settings drop-down
-  shows), its `translation` (`Manual` or `Machine`) and its `source`
-  (`include_str!`). en-US comes first, the rest are ordered by `name`; the
+  shows) and its `source` (`include_str!`). en-US comes first, the rest are ordered by `name`; the
   Settings drop-down lists "System" and then the registry in that order.
 - `resolve` picks the locale: the configured tag when it negotiates to a
   registered locale, else the OS locale (`sys-locale`), else en-US; an
@@ -480,10 +479,9 @@ The `test-hooks` feature adds `AppUi::fail_next_frame` and
   `ca-ES`); `C`, `POSIX` and an empty tag match nothing. A message missing
   from a locale falls back to en-US. A file with a syntax error keeps its
   valid messages and logs a warning (`bundle_from`).
-- The About window shows `about-machine-translation` only while a `Machine`
-  locale is in use (`I18n::machine_translated`). Since it never appears in a
-  hand-written locale, it is one short sentence about the translation in use
-  and names no other language.
+- The About window shows the same disclaimer (`about-disclaimer`) in every
+  locale: it covers the AI-assisted development, the "as is" provision and the
+  use at one's own risk, so no per-language translation notice exists.
 - Plural categories come from CLDR through `fluent-bundle`
   (`intl_pluralrules`): Polish selects `one`, `few`, `many` and `other`.
   Every plural variant shows the number through its placeable
@@ -501,6 +499,5 @@ The `test-hooks` feature adds `AppUi::fail_next_frame` and
   European languages.
 - Arguments use `tr_args(key, &[("name", value.into())])`.
 - To add a language: add `locales/<tag>/main.ftl` with every en-US message
-  translated, and one `Locale` entry in `LOCALES` at its place by name, with
-  `translation: Translation::Machine` unless it is written by hand. Nothing
+  translated, and one `Locale` entry in `LOCALES` at its place by name,. Nothing
   else changes: Settings, negotiation and About follow the registry.

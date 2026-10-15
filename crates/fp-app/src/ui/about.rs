@@ -1,5 +1,6 @@
-//! The About window (feedback spec §3.1, F21): the version, the copyright
-//! and the notices the licences of the bundled components require.
+//! The About window (feedback spec §3.1, F21): the version, the author
+//! attribution the licence's section 7(b) term requires, the licence, the
+//! disclaimer and the notices the licences of the bundled components require.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -21,8 +22,13 @@ const PHOSPHOR_MIT: &str = include_str!("../../assets/licenses/Phosphor-MIT.txt"
 /// The name of the third-party notices file release builds install.
 const NOTICES_FILE: &str = "THIRD-PARTY.html";
 
-/// Opens the third-party notices file. The default hands it to the system
-/// on a helper thread; tests record the call.
+/// The project page, the target of the attribution link.
+pub const REPO_URL: &str = "https://github.com/sanchezfauste/fauste-player";
+/// The text of the licence, read online.
+pub const LICENSE_URL: &str = "https://www.gnu.org/licenses/gpl-3.0.html";
+
+/// Opens a file or a web address (the notices file, the links). The default
+/// hands it to the system on a helper thread; tests record the call.
 pub type NoticeOpener = Arc<dyn Fn(&Path) + Send + Sync>;
 
 /// Where the release packages install the notices, relative to the
@@ -57,14 +63,14 @@ pub fn system_opener() -> NoticeOpener {
     Arc::new(|path: &Path| {
         let path = path.to_owned();
         let spawned = std::thread::Builder::new()
-            .name("fp-open-notices".to_owned())
+            .name("fp-open".to_owned())
             .spawn(move || {
                 if let Err(error) = open::that_detached(&path) {
-                    tracing::warn!(%error, path = %path.display(), "could not open the licence notices");
+                    tracing::warn!(%error, path = %path.display(), "could not open the file or link");
                 }
             });
         if let Err(error) = spawned {
-            tracing::warn!(%error, "could not start the notices opener");
+            tracing::warn!(%error, "could not start the opener");
         }
     })
 }
@@ -75,6 +81,33 @@ fn text(ui: &mut Ui, value: String, size: f32, color: egui::Color32) {
             .selectable(false)
             .wrap(),
     );
+}
+
+/// A plain text tile; true when it was clicked.
+fn button(ui: &mut Ui, label: &str, enabled: bool) -> bool {
+    let w = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font(12.0), theme::NEUTRAL_300)
+        .size()
+        .x
+        + 24.0;
+    widgets::tile(
+        ui,
+        vec2(w, 24.0),
+        label,
+        enabled,
+        TileStyle::plain(),
+        |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                label,
+                font(12.0),
+                c,
+            );
+        },
+    )
+    .clicked()
 }
 
 fn notice(ui: &mut Ui, title: &str, body: &str) {
@@ -128,50 +161,27 @@ pub(crate) fn show(
                 12.0,
                 theme::NEUTRAL_400,
             );
-            text(ui, t.tr("about-copyright"), 12.0, theme::NEUTRAL_300);
-            // Only the AI-translated languages carry the warning.
-            if t.machine_translated() {
-                text(
-                    ui,
-                    t.tr("about-machine-translation"),
-                    12.0,
-                    theme::NEUTRAL_400,
-                );
+            text(ui, t.tr("about-attribution"), 12.0, theme::NEUTRAL_300);
+            if button(ui, REPO_URL, true) {
+                opener(Path::new(REPO_URL));
             }
+            text(ui, t.tr("about-copyright"), 12.0, theme::NEUTRAL_300);
+            text(ui, t.tr("about-license"), 12.0, theme::NEUTRAL_300);
+            if button(ui, &t.tr("about-license-link"), true) {
+                opener(Path::new(LICENSE_URL));
+            }
+            text(ui, t.tr("about-disclaimer"), 12.0, theme::NEUTRAL_400);
             ui.separator();
             text(ui, t.tr("about-bundled"), 12.0, theme::NEUTRAL_300);
             ScrollArea::vertical()
-                .max_height((height - 220.0).max(80.0))
+                .max_height((height - 380.0).max(80.0))
                 .show(ui, |ui| {
                     notice(ui, &t.tr("about-inter"), INTER_OFL);
                     notice(ui, &t.tr("about-phosphor"), PHOSPHOR_MIT);
                 });
             text(ui, t.tr("about-crates"), 12.0, theme::NEUTRAL_300);
             ui.horizontal(|ui| {
-                let label = t.tr("about-third-party");
-                let w = ui
-                    .painter()
-                    .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
-                    .size()
-                    .x
-                    + 24.0;
-                let clicked = widgets::tile(
-                    ui,
-                    vec2(w, 24.0),
-                    &label,
-                    notices.is_some(),
-                    TileStyle::plain(),
-                    |p, r, c| {
-                        p.text(
-                            r.center(),
-                            egui::Align2::CENTER_CENTER,
-                            &label,
-                            font(12.0),
-                            c,
-                        );
-                    },
-                )
-                .clicked();
+                let clicked = button(ui, &t.tr("about-third-party"), notices.is_some());
                 match notices {
                     Some(path) if clicked => opener(path),
                     Some(_) => {}
@@ -184,31 +194,7 @@ pub(crate) fn show(
                 }
             });
             ui.add_space(4.0);
-            let close = t.tr("about-close");
-            let w = ui
-                .painter()
-                .layout_no_wrap(close.clone(), font(12.0), theme::NEUTRAL_300)
-                .size()
-                .x
-                + 24.0;
-            if widgets::tile(
-                ui,
-                vec2(w, 24.0),
-                &close,
-                true,
-                TileStyle::plain(),
-                |p, r, c| {
-                    p.text(
-                        r.center(),
-                        egui::Align2::CENTER_CENTER,
-                        &close,
-                        font(12.0),
-                        c,
-                    );
-                },
-            )
-            .clicked()
-            {
+            if button(ui, &t.tr("about-close"), true) {
                 open = false;
             }
         });

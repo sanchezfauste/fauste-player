@@ -81,10 +81,11 @@ one computer), give each its own folder with `FAUSTE_HOME`.
 
 `fauste-player --version` prints the version. The window's title bar shows
 the name and the version, and the **About** button (an info icon, left of
-**Settings**) opens **About**, with the copyright and the
-licence notices (**Third-party licences** opens the notices file installed
-with release packages). In a language translated with AI, About also says
-that the translation may contain errors. Close it with **Close** or `Esc`. `fauste-player --help` lists
+**Settings**) opens **About**, with the author, the copyright, the licence
+(GNU GPL version 3 or later; **Read the licence online** opens its text), a
+short disclaimer and the licence notices (**Third-party licences** opens the
+notices file installed with release packages). Close it with **Close** or
+`Esc`. `fauste-player --help` lists
 the options. Playlist files given as arguments are imported as new
 playlists.
 

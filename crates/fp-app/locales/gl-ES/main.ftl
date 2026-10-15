@@ -393,8 +393,11 @@ file-unreadable-reason = Non se pode ler o ficheiro
 # About window
 tip-about = Acerca de Fauste Player
 about-version = Versión { $version }
-about-copyright = Copyright © Marc Sánchez Fauste. Todos os dereitos reservados.
-about-machine-translation = Esta tradución xerouse con IA e pode conter erros.
+about-copyright = Copyright © 2026 Marc Sánchez Fauste.
+about-attribution = Fauste Player, de Marc Sánchez Fauste
+about-license = Licenciado baixo a Licenza Pública Xeral de GNU, versión 3 ou posterior.
+about-license-link = Ler a licenza en liña
+about-disclaimer = Desenvolvido con axuda da IA e ofrecido tal cal, sen ningunha garantía. Úsalo baixo a túa propia responsabilidade; o autor non acepta responsabilidade ningunha por ningún dano.
 about-bundled = Este programa inclúe os seguintes compoñentes baixo as súas propias licenzas:
 about-inter = Fonte Inter — SIL Open Font License 1.1
 about-phosphor = Phosphor Icons — Licenza MIT
