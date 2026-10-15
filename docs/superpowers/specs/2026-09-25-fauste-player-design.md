@@ -503,7 +503,7 @@ The engine and conductor are unaffected. `panic = "unwind"` is required in all p
 
 - Libraries use `thiserror` enums; the binary uses `anyhow` at the edges.
 - No `unwrap`/`expect` in production paths. Clippy enforces `unwrap_used`, `expect_used`, `panic`, `indexing_slicing` in `fp-engine` and `fp-backends`.
-- `tracing` with `tracing-appender` (non-blocking, daily rotation, 14 files kept) in the OS log dir, plus stderr in debug builds.
+- `tracing` with `tracing-appender` (non-blocking, daily rotation) in the OS log dir, plus stderr in debug builds. The default filter is `info,pulseaudio=warn` (`RUST_LOG` overrides). Identical consecutive lines are written once and followed by `previous message repeated N times` (also every `limits.log_repeat_summary_secs`, default 60, during a long run). Disk use is bounded: a daily file stops at `limits.max_log_file_mb` (default 10; one closing line says so) and `limits.max_log_files` files (default 14, range 2 to 365) are kept, both config-file only and read at start.
 - RT threads never log. They increment atomic counters, and the conductor turns counter deltas into log lines and UI alerts.
 - A global panic hook writes a crash report (message, backtrace, version, OS) to the log dir.
 

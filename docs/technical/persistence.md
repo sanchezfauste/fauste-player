@@ -279,6 +279,9 @@ grid limits are read at start only. The others are read where they are used.
 | `max_playlist_file_bytes` | 10 MiB |
 | `backup_count` | 3 |
 | `max_crash_reports` | 20 (crash reports written per run) |
+| `max_log_file_mb` | 10 (range 1 … 1024; a day's log file takes no more lines once it holds this, after one closing line; read at start only, before the rest of the configuration, by `peek_log_limits`) |
+| `max_log_files` | 14 (range 2 … 365, because the appender prunes to `max - 1` files at start and 1 would delete today's earlier file; daily log files kept; read at start only) |
+| `log_repeat_summary_secs` | 60 (range 1 … 3600; a long run of identical log lines gets its "repeated N times" line at least this often; read at start only by `peek_log_limits`) |
 | `max_cart_rows` | 8 |
 | `max_cart_cols` | 16 |
 

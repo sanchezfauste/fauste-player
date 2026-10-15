@@ -6,7 +6,7 @@
 |---|---|
 | `main.rs` | Wiring: paths, logging, crash hook, store, engine, conductor, analyzer, services, eframe |
 | `bootstrap.rs` | `AppPaths` from `FAUSTE_HOME` or the OS directories |
-| `logging.rs` | tracing to a daily-rotated file (14 kept) via a non-blocking writer; stderr in debug builds; `RUST_LOG` overrides |
+| `logging.rs` | tracing to a daily-rotated file via a non-blocking writer, with identical consecutive lines collapsed (`Collapse`) and a per-file size cap (`Capped`), both on the log thread; `limits.max_log_file_mb`, `limits.max_log_files` and `limits.log_repeat_summary_secs` are read by `fp_store::peek_log_limits` before logging starts; the default filter is `info,pulseaudio=warn`; stderr in debug builds; `RUST_LOG` overrides |
 | `crash.rs` | Panic hook writing `crash-<nanos>.txt` (message, location, backtrace, version, OS), then chaining |
 | `i18n.rs` | The locale registry (`LOCALES`), language negotiation, Fluent bundles with per-key fallback to `en-US` |
 | `services.rs` | The services thread (analysis and autosave; see [Persistence](persistence.md) and [Analysis](analysis.md)) |
