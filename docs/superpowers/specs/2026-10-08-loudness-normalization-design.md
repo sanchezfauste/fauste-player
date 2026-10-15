@@ -384,7 +384,7 @@ band) stays a separate value, whatever the normalization target (Q4).
   **Restore defaults** (N2). Slider ranges are those of N1. A note says that
   a bit-perfect output is never normalized.
 
-### 8.4 Strings (en-US source; es-ES by hand; the other nine locales AI-translated)
+### 8.4 Strings (en-US source; es-ES written with the change; the other nine locales AI-translated)
 
 | Key (indicative) | Text |
 |---|---|

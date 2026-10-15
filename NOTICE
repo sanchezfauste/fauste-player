@@ -19,8 +19,11 @@ Anyone who conveys this program, modified or not, must preserve, in the
 program's About window (or the equivalent "about" or credits screen shown to
 its users), this reasonable author attribution, with its link:
 
-    Based on Fauste Player by Marc Sánchez Fauste
+    Fauste Player by Marc Sánchez Fauste
     https://github.com/sanchezfauste/fauste-player
+
+A modified version may present it as "Based on Fauste Player by Marc Sánchez
+Fauste".
 
 This is the only additional term. The name and the logo of Fauste Player may
 be used freely.
@@ -30,5 +33,5 @@ Third-party components
 
 The program bundles the Inter font (SIL Open Font License 1.1) and the
 Phosphor icons (MIT), and is built with open-source Rust libraries, each
-under its own licence. Their notices are in the licenses folder of every
-release and in the program's About window.
+under its own licence. Their notices are installed with every
+release and reachable from the program's About window.

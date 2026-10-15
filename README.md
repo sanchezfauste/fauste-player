@@ -408,8 +408,9 @@ The operator is solely responsible for checking that the program is fit for
 their use, for supervising their broadcast, and for holding the rights and
 licences for the content they play.
 
-Sections 15 and 16 of the [GNU General Public License](LICENSE) (disclaimer of
-warranty and limitation of liability) govern this notice.
+This notice summarises, and does not replace, sections 15 and 16 of the
+[GNU General Public License](LICENSE) (disclaimer of warranty and limitation
+of liability).
 
 ## Licence
 
@@ -422,7 +423,10 @@ who conveys the program, modified or not, must keep this attribution, with
 its link, in the program's About window (or the equivalent screen that shows
 credits to users):
 
-> Based on [Fauste Player](https://github.com/sanchezfauste/fauste-player) by Marc Sánchez Fauste
+> [Fauste Player](https://github.com/sanchezfauste/fauste-player) by Marc Sánchez Fauste
+
+A modified version may present it as "Based on Fauste Player by Marc Sánchez
+Fauste".
 
 The name and the logo may be used freely.
 
@@ -436,5 +440,6 @@ Bundled third-party components keep their own licences:
   release archive.
 
 The About window (the info button in the top bar) shows the version, the
-copyright, the licence, both bundled notices and a button that opens the
-installed `THIRD-PARTY.html`.
+author attribution with the project link, the copyright, the licence, the
+disclaimer, both bundled notices and a button that opens the installed
+`THIRD-PARTY.html`.

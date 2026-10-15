@@ -100,6 +100,7 @@ if want appimage; then
   done
   cp "${root}/packaging/icons/fauste-player-256.png" "${appdir}/${app_id}.png"
   cp -r "${stage}/licenses/." "${appdir}/usr/share/doc/fauste-player/"
+  cp "${stage}/LICENSE" "${stage}/NOTICE" "${appdir}/usr/share/doc/fauste-player/"
   cat > "${appdir}/AppRun" <<'RUN'
 #!/bin/sh
 here="$(dirname "$(readlink -f "$0")")"

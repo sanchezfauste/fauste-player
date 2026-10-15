@@ -186,7 +186,7 @@ hand: release-please writes it from the commits.
 | `vendor/symphonia-format-mkv` | A patched copy of symphonia's Matroska reader (seeking through cues, blocks without duration), used the same way. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
 | `site/`, `scripts/site/` | The landing page and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
-| `.github/workflows` | CI, release-please, release builds and packages, GitHub Pages, commit checks |
+| `.github/workflows` | CI, Dependabot (`dependabot.yml`), release-please, release builds and packages, GitHub Pages, commit checks |
 
 ## Design source
 

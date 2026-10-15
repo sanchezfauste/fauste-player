@@ -56,6 +56,7 @@ for n in 16 32 128 256 512; do
   cp "${root}/packaging/icons/fauste-player-${double}.png" "${iconset}/icon_${n}x${n}@2x.png"
 done
 iconutil -c icns -o "${app}/Contents/Resources/fauste-player.icns" "${iconset}"
+cp "${root}/LICENSE" "${root}/NOTICE" "${app}/Contents/Resources/licenses/"
 cp "${root}/crates/fp-app/assets/fonts/OFL.txt" "${app}/Contents/Resources/licenses/Inter-OFL.txt"
 cp "${root}/crates/fp-app/assets/licenses/Phosphor-MIT.txt" "${app}/Contents/Resources/licenses/Phosphor-MIT.txt"
 if command -v cargo-about >/dev/null; then
