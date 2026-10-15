@@ -503,7 +503,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b1b4a0adbf971420cca66a75361a1190f34a6762d66361e5cde03dda35d1ed3"
 dependencies = [
  "cfg-if",
- "dbus",
+ "dbus 0.6.5",
+ "libc",
+ "log",
+ "mach2 0.4.3",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "audio_thread_priority"
+version = "0.38.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0b30b2f3d2da482d0faeaafd8f88a38fbc62abb58d3b402cfa195793f4c92ab"
+dependencies = [
+ "cfg-if",
+ "dbus 0.9.12",
  "libc",
  "log",
  "mach2 0.4.3",
@@ -1024,7 +1038,7 @@ dependencies = [
  "alsa",
  "alsa-sys",
  "asio-sys",
- "audio_thread_priority",
+ "audio_thread_priority 0.35.1",
  "block2 0.6.2",
  "coreaudio-rs",
  "dasp_sample",
@@ -1119,6 +1133,17 @@ checksum = "48b5f0f36f1eebe901b0e6bee369a77ed3396334bf3f09abd46454a576f71819"
 dependencies = [
  "libc",
  "libdbus-sys",
+]
+
+[[package]]
+name = "dbus"
+version = "0.9.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ab69f03cc8c4340c9c8e315114e1658e6775a9b16a04357973aa21cec22b32e"
+dependencies = [
+ "libc",
+ "libdbus-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1751,7 +1776,7 @@ name = "fp-backends"
 version = "0.7.0"
 dependencies = [
  "alsa",
- "audio_thread_priority",
+ "audio_thread_priority 0.38.0",
  "coreaudio-rs",
  "cpal",
  "crossbeam-channel",
