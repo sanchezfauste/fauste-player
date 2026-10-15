@@ -206,16 +206,23 @@ stream and play noise.
 
 A DTS-CD rip is a DTS stream written into the samples of a 16-bit stereo PCM
 file (WAV, FLAC, AIFF); played as PCM it is loud noise. When symphonia opens
-a lossless 16-bit stereo file, `FileDecoder::open` decodes its first 32768
-frames (128 KiB of samples), gives them to `encoded::detect` and seeks back
+a lossless 16-bit stereo file, `FileDecoder::open` decodes the first 65536
+frames after any leading digital silence (up to 262144 frames of it are
+skipped; 256 KiB of samples), gives them to `encoded::detect` and seeks back
 to the start. `detect` looks for the DTS core sync words (16- and 14-bit,
-big- and little-endian; the 14-bit ones with the bits that follow) and for
-the IEC 61937 preamble (`0xF872 0x4E1F`, in both byte orders) in the
-interleaved sample words. It needs three syncs at one exact spacing, so a
-single accidental word in real music never matches. A match fails the open
+big- and little-endian) and for the IEC 61937 preamble (`0xF872 0x4E1F`, in
+both byte orders) in the interleaved sample words, and validates the header
+after each: for DTS, FTYPE = 1, SHORT = 31, at least 5 blocks and FSIZE (the
+frame size, converted to words for the 14-bit packed forms); for IEC 61937, a
+known Pc data type and a Pd length. It needs three valid syncs at one exact
+spacing no shorter than the frame, so neither an accidental word nor a
+periodic waveform that happens to contain the sync words matches.
+`FileDecoder::open_header` skips the sniff for callers that only read the
+length. A match fails the open
 with `encoded bitstream (DTS) stored as PCM; not supported` (or `IEC 61937`)
-and one warning in the log, so analysis, the track tooltip and playback all
-refuse the file with that reason. Decoding DTS or AC-3 is out of scope.
+and one warning in the log, so analysis and playback refuse the file; the
+track shows as unreadable and only the log says why (`FileState::Unreadable`
+carries no text). Decoding DTS or AC-3 is out of scope.
 
 ## Not supported
 

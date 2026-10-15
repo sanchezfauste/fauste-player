@@ -27,7 +27,9 @@ use crate::analyze::Analysis;
 /// Bump when the analysis algorithm or output format changes.
 /// 7: `AudioFormat::dsd_rate` (feedback 2 O25).
 /// 8: VBR MPEG streams without a length frame decode to their end.
-pub const ANALYSIS_VERSION: u32 = 8;
+/// 9: encoded bitstreams stored as PCM (DTS-CD rips) are refused, so
+///    files analysed as noise before are read again.
+pub const ANALYSIS_VERSION: u32 = 9;
 
 #[derive(Serialize, Deserialize)]
 struct CachedAnalysis {

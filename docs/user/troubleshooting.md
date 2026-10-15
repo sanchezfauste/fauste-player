@@ -118,6 +118,11 @@ changed, for example when a copy finishes. To check it at once use
 **Re-analyse** in its row menu, or **Settings → Analysis → Re-analyse all
 tracks** for the whole library.
 
+A WAV or FLAC that shows as unreadable, or would play as loud noise, may
+be a DTS-CD rip: the file holds a DTS bitstream instead of audio. The
+application refuses it (the log says "encoded bitstream stored as PCM") and
+does not decode DTS. Convert it to ordinary PCM with another tool first.
+
 ## Audio dropouts
 
 The status bar warns for 5 seconds after each dropout the application

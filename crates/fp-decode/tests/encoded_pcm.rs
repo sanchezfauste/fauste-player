@@ -10,9 +10,37 @@ use std::path::Path;
 
 use fp_decode::FileDecoder;
 
+/// The header words of a DTS core frame of 4096 bytes in one stream form.
+fn dts_head(packed14: bool, little: bool) -> Vec<u16> {
+    let fsize = 4095u16;
+    let be = [
+        0x7FFEu16,
+        0x8001,
+        0xFC00 | (15 << 2) | (fsize >> 12),
+        (fsize << 4) | 2,
+    ];
+    let mut out: Vec<u16> = if packed14 {
+        let bits = be.iter().fold(0u128, |a, w| a << 16 | u128::from(*w)) << 6;
+        (0..5)
+            .map(|i| {
+                let v = ((bits >> (70 - 14 * (i + 1))) & 0x3FFF) as u16;
+                if v & 0x2000 != 0 { v | 0xC000 } else { v }
+            })
+            .collect()
+    } else {
+        be.to_vec()
+    };
+    if little {
+        for w in &mut out {
+            *w = w.swap_bytes();
+        }
+    }
+    out
+}
+
 /// Words of a stereo payload with `sync` every `period` words over
 /// pseudo-random filler.
-fn payload(sync: [u16; 3], period: usize, count: usize) -> Vec<i16> {
+fn payload(sync: &[u16], period: usize, count: usize) -> Vec<i16> {
     let mut x = 99u32;
     let mut v: Vec<i16> = (0..period * count + 64)
         .map(|_| {
@@ -70,13 +98,13 @@ fn write_aiff(path: &Path, words: &[i16]) {
 fn a_dts_bitstream_in_a_wav_is_refused_with_a_reason() {
     let dir = tempfile::tempdir().unwrap();
     for (name, sync) in [
-        ("be16", [0x7FFE, 0x8001, 0xFC00]),
-        ("le16", [0xFE7F, 0x0180, 0x00FC]),
-        ("be14", [0x1FFF, 0xE800, 0x07F1]),
-        ("le14", [0xFF1F, 0x00E8, 0xF107]),
+        ("be16", dts_head(false, false)),
+        ("le16", dts_head(false, true)),
+        ("be14", dts_head(true, false)),
+        ("le14", dts_head(true, true)),
     ] {
         let path = dir.path().join(format!("{name}.wav"));
-        write_wav(&path, &payload(sync, 2048, 12));
+        write_wav(&path, &payload(&sync, 2400, 12));
         let err = FileDecoder::open(&path).err().unwrap_or_default();
         assert!(
             err.contains("encoded bitstream (DTS) stored as PCM"),
@@ -89,7 +117,7 @@ fn a_dts_bitstream_in_a_wav_is_refused_with_a_reason() {
 fn an_iec_61937_burst_stream_in_a_wav_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("iec.wav");
-    write_wav(&path, &payload([0xF872, 0x4E1F, 0x0001], 3072, 8));
+    write_wav(&path, &payload(&[0xF872, 0x4E1F, 0x0001, 24576], 3072, 8));
     let err = FileDecoder::open(&path).err().unwrap_or_default();
     assert!(err.contains("IEC 61937"), "{err:?}");
 }
@@ -98,7 +126,7 @@ fn an_iec_61937_burst_stream_in_a_wav_is_refused() {
 fn a_dts_bitstream_in_an_aiff_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("dts.aiff");
-    write_aiff(&path, &payload([0x7FFE, 0x8001, 0xFC00], 2048, 12));
+    write_aiff(&path, &payload(&dts_head(false, false), 2048, 12));
     let err = FileDecoder::open(&path).err().unwrap_or_default();
     assert!(err.contains("DTS"), "{err:?}");
 }
@@ -114,9 +142,52 @@ fn ordinary_pcm_still_opens_and_plays_from_its_start() {
     let mut d = FileDecoder::open(&path).unwrap();
     let mut out = Vec::new();
     while d.next_block(&mut out).unwrap() {}
-    // The sniff did not consume anything: every frame is still there.
+    // The sniff did not consume anything: every frame is still there and
+    // equal to the file's.
     assert_eq!(out.len(), words.len());
-    assert!((out[2] - words[2] as f32 / 32768.0).abs() < 1e-6);
+    for (got, want) in out.iter().zip(&words) {
+        assert!((got - *want as f32 / 32768.0).abs() < 1e-6);
+    }
+}
+
+#[test]
+fn a_square_wave_that_looks_like_a_dts_sync_opens() {
+    // L = R, +384 / -385, 100 frames per period: each falling-to-rising
+    // edge reads FE7F 0180 at an exact period.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("square.wav");
+    let words: Vec<i16> = (0..40_000)
+        .flat_map(|n| {
+            let s: i16 = if n % 100 < 50 { 384 } else { -385 };
+            [s, s]
+        })
+        .collect();
+    write_wav(&path, &words);
+    assert!(FileDecoder::open(&path).is_ok());
+}
+
+#[test]
+fn a_dts_bitstream_after_leading_silence_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("late.wav");
+    // Two seconds of digital zeros, then the payload.
+    let mut words = vec![0i16; 2 * 88_200];
+    words.extend(payload(&dts_head(true, false), 2400, 12));
+    write_wav(&path, &words);
+    let err = FileDecoder::open(&path).err().unwrap_or_default();
+    assert!(err.contains("DTS"), "{err:?}");
+    // Only silence stays a (silent) file.
+    write_wav(&path, &vec![0i16; 2 * 400_000]);
+    assert!(FileDecoder::open(&path).is_ok());
+}
+
+#[test]
+fn open_header_does_not_sniff() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("dts.wav");
+    write_wav(&path, &payload(&dts_head(false, false), 2048, 12));
+    assert!(FileDecoder::open(&path).is_err());
+    assert!(FileDecoder::open_header(&path).is_ok());
 }
 
 #[test]
@@ -125,8 +196,15 @@ fn a_short_or_empty_wav_opens_without_panicking() {
     let path = dir.path().join("short.wav");
     write_wav(&path, &[1, 2]);
     assert!(FileDecoder::open(&path).is_ok());
+    // An empty file is either opened or refused with a message, never a panic.
     write_wav(&path, &[]);
-    let _ = FileDecoder::open(&path);
+    match FileDecoder::open(&path) {
+        Ok(mut d) => {
+            let mut out = Vec::new();
+            assert!(!d.next_block(&mut out).unwrap_or(false) || out.is_empty());
+        }
+        Err(e) => assert!(!e.is_empty()),
+    }
 }
 
 /// Local only: `test-music/` (or `FAUSTE_TEST_MUSIC`) holds a DTS-CD rip as
@@ -145,6 +223,9 @@ fn real_music_dts_is_refused_and_the_rest_opens() {
     for e in entries.flatten() {
         let path = e.path();
         let name = path.file_name().unwrap().to_string_lossy().to_lowercase();
+        // A file named "dts" may be a genuine DTS rip under another name than
+        // the one asserted below, or one that is meant to be refused: only
+        // the named rip is asserted, so skip the others.
         if name.ends_with(".md") || name.contains("dts") {
             continue;
         }

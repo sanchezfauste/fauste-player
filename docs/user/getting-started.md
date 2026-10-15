@@ -127,7 +127,9 @@ DSD files play converted to PCM at their rate divided by 32 (88.2 kHz for
 DSD64), or unchanged as DoP or native DSD on a bit-perfect device set to do
 so (see [Bit-perfect output](bit-perfect.md#dsd)). Opus always plays at 48 kHz. WavPack files must be lossless and mono
 or stereo; hybrid and multichannel WavPack show as unreadable, as do
-DST-compressed DFF files. A WAV or FLAC that holds a DTS (or other encoded surround) bitstream instead of audio, as some DTS-CD rips do, also shows as unreadable, with that reason in its tooltip: convert it to ordinary PCM first.
+DST-compressed DFF files. A WAV or FLAC that holds a DTS (or other encoded
+surround) bitstream instead of audio, as some DTS-CD rips do, also shows as
+unreadable (the log says why): convert it to ordinary PCM first.
 
 Each file is analysed in the background. The analysis reads the title,
 artist, album and cover art, draws the waveform, and finds where the sound
