@@ -1727,7 +1727,7 @@ dependencies = [
  "fp-model",
  "fp-remote",
  "fp-store",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "hound",
  "image",
  "lofty",
