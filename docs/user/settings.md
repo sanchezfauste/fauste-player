@@ -165,7 +165,8 @@ channels:
 
 ![Settings, Analysis: the thresholds of the automatic markers](../images/guide/settings-analysis.png)
 
-The thresholds described in [Markers and mixing](markers-and-mixing.md).
+The thresholds described in [Markers and mixing](markers-and-mixing.md); each
+row has a one-line hint under its name saying what the value does.
 **Re-analyse all tracks** runs the analysis again for the whole library;
 manual markers are kept.
 
