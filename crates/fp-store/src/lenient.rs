@@ -145,6 +145,18 @@ mod tests {
     }
 
     #[test]
+    fn a_bad_log_limit_falls_back_and_keeps_the_others() {
+        let user: serde_json::Value =
+            serde_json::from_str(r#"{"limits":{"max_log_file_mb":"big","max_log_files":30}}"#)
+                .unwrap();
+        let mut warnings = Vec::new();
+        let c = config_from_value(&user, &mut warnings);
+        assert_eq!(c.limits.max_log_file_mb, 10);
+        assert_eq!(c.limits.max_log_files, 30);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+    }
+
+    #[test]
     fn a_bad_remote_port_keeps_the_other_remote_fields() {
         let user: serde_json::Value =
             serde_json::from_str(r#"{"remote":{"http":{"enabled":true,"port":"x"}}}"#).unwrap();

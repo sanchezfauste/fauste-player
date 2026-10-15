@@ -741,6 +741,12 @@ pub struct Limits {
     /// Crash reports written per run (a contained, repeating panic is logged
     /// but does not fill the disk).
     pub max_crash_reports: usize,
+    /// Largest size of one day's log file, in MiB. Once it is reached the
+    /// day's file takes no more lines (one closing line says so), so the
+    /// log directory stays under `max_log_files` times this.
+    pub max_log_file_mb: u64,
+    /// Daily log files kept; older ones are deleted when a new day starts.
+    pub max_log_files: usize,
     /// Largest cart page grid.
     pub max_cart_rows: u16,
     pub max_cart_cols: u16,
@@ -761,6 +767,8 @@ impl Default for Limits {
             max_playlist_file_bytes: 10 * MIB,
             backup_count: 3,
             max_crash_reports: 20,
+            max_log_file_mb: 10,
+            max_log_files: 14,
             max_cart_rows: 8,
             max_cart_cols: 16,
             max_tag_chars: 2000,
@@ -976,6 +984,14 @@ impl Config {
             "limits.max_crash_reports",
             &mut w,
         );
+        clamp_to(
+            &mut l.max_log_file_mb,
+            1,
+            1024,
+            "limits.max_log_file_mb",
+            &mut w,
+        );
+        clamp_to(&mut l.max_log_files, 1, 365, "limits.max_log_files", &mut w);
 
         clamp_to(&mut l.max_cart_rows, 1, 64, "limits.max_cart_rows", &mut w);
         clamp_to(&mut l.max_cart_cols, 1, 64, "limits.max_cart_cols", &mut w);
@@ -1403,6 +1419,19 @@ mod tests {
         assert_eq!(c.analysis.segue_drop_db, 15.0);
         assert_eq!(c.analysis.segue_max_secs, 4.0);
         assert_eq!(c.limits.max_players, 16);
+    }
+
+    #[test]
+    fn log_limits_default_and_are_clamped() {
+        let mut c = Config::default();
+        assert_eq!(c.limits.max_log_file_mb, 10);
+        assert_eq!(c.limits.max_log_files, 14);
+        c.limits.max_log_file_mb = 0;
+        c.limits.max_log_files = 100_000;
+        let warnings = c.validate();
+        assert_eq!(c.limits.max_log_file_mb, 1);
+        assert_eq!(c.limits.max_log_files, 365);
+        assert_eq!(warnings.len(), 2);
     }
 
     #[test]
