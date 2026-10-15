@@ -14,7 +14,7 @@ use fp_model::TrackId;
 /// The length `path`'s header declares, in seconds. `None` when the file
 /// cannot be opened or its container does not say.
 pub fn header_duration(path: &Path) -> Option<f64> {
-    FileDecoder::open(path).ok()?.duration_hint_secs()
+    FileDecoder::open_header(path).ok()?.duration_hint_secs()
 }
 
 /// The reader thread's handle.

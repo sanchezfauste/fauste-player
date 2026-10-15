@@ -10,6 +10,7 @@ use std::path::Path;
 
 mod ape;
 mod dsd;
+mod encoded;
 mod opus;
 pub mod priority;
 mod symph;
@@ -97,6 +98,59 @@ fn read_up_to(file: &mut std::fs::File, buf: &mut [u8]) -> std::io::Result<usize
     Ok(filled)
 }
 
+/// Refuses a 16-bit stereo PCM file whose samples are an encoded bitstream
+/// (a DTS-CD rip stored as WAV or FLAC): it would play as loud noise. The
+/// first `SNIFF_FRAMES` frames after any leading digital silence (up to
+/// `MAX_LEADING_SILENCE_FRAMES` of it) are examined. When the file is not
+/// refused the decoder goes back to the start; a failed rewind is then the
+/// error. A read error while sniffing is left for playback to report.
+fn refuse_encoded_pcm(decoder: &mut SymphoniaDecoder, path: &Path) -> Result<(), String> {
+    if decoder.bits_per_sample() != Some(16) || decoder.channels() != 2 {
+        return Ok(());
+    }
+    let mut words: Vec<i16> = Vec::new();
+    let mut silent_frames = 0usize;
+    let mut block = Vec::new();
+    while words.len() < encoded::SNIFF_FRAMES * 2 {
+        block.clear();
+        match decoder.next_block(&mut block) {
+            Ok(true) => {}
+            _ => break,
+        }
+        // 16-bit samples are exact in f32: scaling back gives the file's words.
+        let chunk = block
+            .iter()
+            .map(|s| (s * 32768.0).round().clamp(-32768.0, 32767.0) as i16);
+        if words.is_empty() {
+            // Leading digital silence does not count toward the window.
+            let all: Vec<i16> = chunk.collect();
+            let first = all.iter().position(|w| *w != 0).unwrap_or(all.len());
+            let skip = first - first % 2;
+            silent_frames += skip / 2;
+            words.extend(all.get(skip..).unwrap_or_default());
+            if words.is_empty() && silent_frames > encoded::MAX_LEADING_SILENCE_FRAMES {
+                break;
+            }
+        } else {
+            words.extend(chunk);
+        }
+    }
+    match encoded::detect(&words) {
+        Some(kind) => {
+            let name = kind.name();
+            tracing::warn!(
+                file = %path.display(),
+                "the PCM samples are an encoded {name} bitstream; the file is refused"
+            );
+            Err(format!(
+                "{}: encoded bitstream ({name}) stored as PCM; not supported",
+                path.display()
+            ))
+        }
+        None => decoder.seek(0.0),
+    }
+}
+
 /// Seconds of `frames` frames at `rate`: `None` when the count is unknown
 /// or zero, or the rate is zero (operator feedback 4, Q1).
 pub fn duration_from_frames(frames: Option<u64>, rate: u32) -> Option<f64> {
@@ -126,6 +180,17 @@ pub struct FileDecoder {
 
 impl FileDecoder {
     pub fn open(path: &Path) -> Result<Self, String> {
+        Self::open_with(path, true)
+    }
+
+    /// Opens a file to read its header (length, format) only: like `open`
+    /// but without examining the samples, so an encoded bitstream stored as
+    /// PCM is not refused. Not for playback or analysis.
+    pub fn open_header(path: &Path) -> Result<Self, String> {
+        Self::open_with(path, false)
+    }
+
+    fn open_with(path: &Path, sniff: bool) -> Result<Self, String> {
         let io = |e: std::io::Error| format!("{}: {e}", path.display());
         let mut file = std::fs::File::open(path).map_err(io)?;
         let mut head = [0u8; 16];
@@ -155,7 +220,13 @@ impl FileDecoder {
                     extension.unwrap_or_default()
                 ));
             }
-            Kind::Symphonia => Backend::Symphonia(Box::new(SymphoniaDecoder::open(path)?)),
+            Kind::Symphonia => {
+                let mut decoder = SymphoniaDecoder::open(path)?;
+                if sniff {
+                    refuse_encoded_pcm(&mut decoder, path)?;
+                }
+                Backend::Symphonia(Box::new(decoder))
+            }
         };
         Ok(Self {
             backend,
