@@ -9,6 +9,7 @@ pub mod cartwall;
 pub mod columns;
 pub mod command;
 pub mod config;
+pub mod cue_on_air;
 pub mod device_offer;
 pub mod dsd;
 mod entry_notice;
@@ -44,7 +45,8 @@ pub use columns::{
     with_column_shown,
 };
 pub use command::{
-    CartRequest, Command, EngineAction, EngineEvent, SOURCE_END, SourceRequest, TransitionPlan,
+    CartRequest, Command, CueStart, EngineAction, EngineEvent, SOURCE_END, SourceRequest,
+    TransitionPlan,
 };
 pub use config::{
     AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,
