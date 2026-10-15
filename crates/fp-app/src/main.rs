@@ -86,7 +86,10 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let _log = logging::init(&paths.log_dir);
+    // Read before logging starts; the full load below reports its problems
+    // through the log.
+    let (log_mb, log_files) = fp_store::peek_log_limits(&paths);
+    let _log = logging::init(&paths.log_dir, log_mb, log_files);
     let report_cap = crash::install_panic_hook(
         paths.log_dir.clone(),
         fp_model::Limits::default().max_crash_reports,
