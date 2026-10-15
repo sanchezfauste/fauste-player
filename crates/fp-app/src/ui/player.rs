@@ -794,6 +794,29 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 t.tr("tip-stop-after")
             };
+            // While a fade runs, the Fade stop button drains a line like a
+            // playing cart's, from full to empty over the fade (the UI times
+            // it from the frame that first showed the fade).
+            let fade_key = egui::Id::new(("fade-started", id.0));
+            let fade_left = if pv.fading {
+                let started =
+                    ui.data_mut(|d| *d.get_temp_mut_or_insert_with(fade_key, || scene.time));
+                Some(view::fade_remaining_fraction(
+                    started,
+                    scene.time,
+                    scene.state.config.players.fade_ms,
+                ))
+            } else {
+                ui.data_mut(|d| d.remove_temp::<f64>(fade_key));
+                None
+            };
+            let fade_button: PaintFn = Box::new(move |p, r, c| {
+                if let Some(left) = fade_left {
+                    let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
+                    p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
+                }
+                glyphs::paint(p, r, TransportAction::FadeStop, 13.0, c);
+            });
             let button = |action: TransportAction| -> PaintFn {
                 Box::new(move |p, r, c| glyphs::paint(p, r, action, 13.0, c))
             };
@@ -835,7 +858,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                         t.tr("tip-fade-stop"),
                         available.fade_stop,
                         fade_style,
-                        button(TransportAction::FadeStop),
+                        fade_button,
                         Command::FadeStop(id),
                     ),
                     GridButton::new(

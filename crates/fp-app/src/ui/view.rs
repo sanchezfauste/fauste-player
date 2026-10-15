@@ -469,6 +469,19 @@ pub fn volume_db(gain: f32) -> Option<f32> {
     (gain > 0.0 && !gain.is_nan()).then(|| 20.0 * gain.log10())
 }
 
+/// How much of a fade is left, from 1 (just started) to 0 (done): the line
+/// the Fade stop button drains, as the carts drain theirs. `started` and
+/// `now` are UI clock seconds, `fade_ms` the configured fade length. The
+/// engine does not report a fade's progress, so the UI times it from the
+/// frame that first showed the player fading.
+pub fn fade_remaining_fraction(started: f64, now: f64, fade_ms: u32) -> f32 {
+    if fade_ms == 0 || !started.is_finite() || !now.is_finite() {
+        return 0.0;
+    }
+    let elapsed_ms = (now - started) * 1000.0;
+    (1.0 - elapsed_ms / f64::from(fade_ms)).clamp(0.0, 1.0) as f32
+}
+
 /// The level shown under the volume fader: dB with one decimal ("0.0",
 /// "-6.5"); `None` for silence, which the UI shows as −∞.
 pub fn volume_readout(gain: f32) -> Option<String> {

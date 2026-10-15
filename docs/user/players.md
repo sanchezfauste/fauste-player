@@ -100,7 +100,7 @@ playlist tabs, transport, volume and outputs.
 |---|---|
 | **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)). Paused: resume. With the track on air as next, Play restarts that track with the usual fade. On a bit-perfect output it switches at once, without a fade, and its tooltip says so (see [What it costs](bit-perfect.md#what-it-costs)). |
 | **Stop** | Stop at once (with a short de-click ramp) |
-| **Fade stop** | Fade out and stop |
+| **Fade stop** | Fade out and stop. While a fade runs, a violet bar drains across the button from full to empty over the fade length, like a playing cart's |
 | **Pause** | Pause or resume; blinks amber while paused |
 | **Stop after** (a play triangle then a square) | Stop when the current track ends, once. In SINGLE mode it is available only while the current track repeats: it ends the repeat when the pass that is playing ends. To stop after a track every time it plays, or to repeat a track, use its menu in the playlist (see [Playlists](playlists.md)) |
 | **Previous** (a bar and two triangles) | While on air: fade back into the track this player played before, as Next does. Press again to keep going back. The track you left becomes the next one. On a bit-perfect output it switches at once, without a fade (see [What it costs](bit-perfect.md#what-it-costs)). |

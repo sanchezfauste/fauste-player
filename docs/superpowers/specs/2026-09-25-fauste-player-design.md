@@ -441,6 +441,7 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
   - **Meter column** at the right, spanning the info row and the transport: stereo meter between two labelled rulers, with peak hold and nothing drawn over the bars (meters spec M4, operator feedback 4, Q11), vertical volume fader (drag + wheel, dB tooltip) with its level in dB written under it (one decimal, −∞ for silence, a dimmed 0.0 when locked), on the row of the meter's loudness line.
   - **Transport:**
     - Play/NEXT button spanning 2 rows;
+    - while the player is fading (a crossfade or a fade stop), the Fade stop button drains a violet bar from full to empty over `fade_ms`, as a playing cart drains its remaining time; the UI times it from the first frame that shows the fade (`view::fade_remaining_fraction`), since the engine reports no progress;
     - a 3×2 grid, 6 px gaps, all equal size: Previous, Stop, Pause on top; Restart, Fade stop, Stop-after-current below. Buttons whose action is unavailable (rule 26) are dimmed and inert, the Play button and the header's CUE included;
     - big countdown with tenths.
   - **Waveform:**
