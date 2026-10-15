@@ -4,7 +4,7 @@
 //! functions of `AppState`; the outputs are the ones the engine reported
 //! (`live.placement`, `live.routes`).
 
-use crate::command::CueStart;
+use crate::command::{Command, CueStart, EngineAction};
 use crate::config::OutputDevice;
 use crate::live::{Holder, causes, configured_route, holders};
 use crate::player::Transport;
@@ -49,6 +49,16 @@ pub struct CueOnAir {
     pub notice: Option<CueStopped>,
     /// Cue holders whose running pre-listen was forced (CA4).
     pub confirmed: Vec<Holder>,
+    /// Numbers the requests and notices.
+    seq: u64,
+}
+
+impl CueOnAir {
+    /// The id of the next request or notice.
+    pub(crate) fn next_id(&mut self) -> u64 {
+        self.seq += 1;
+        self.seq
+    }
 }
 
 /// §2: the device the engine placed `holder` on and the first channel of
@@ -132,4 +142,127 @@ pub fn sounding_on(state: &AppState, cue: Holder) -> Vec<Holder> {
         .into_iter()
         .filter(|h| audible(state, *h) || paused_with_track(state, *h))
         .collect()
+}
+
+/// CA6: the pre-listen `command` would start from nothing: the next of a
+/// player without a running CUE (`ToggleCue`, `SetCue(_, true)`), an entry
+/// (`CueEntry`), a cart not pre-listened (`CueCart`,
+/// `SetCartCue(_, true)`). `None` for anything else, `ForceCue` included.
+pub fn cue_start(state: &AppState, command: &Command) -> Option<CueStart> {
+    match command {
+        Command::ToggleCue(p) | Command::SetCue(p, true) => {
+            let player = state.player(*p).ok()?;
+            if player.cue.is_some() {
+                return None;
+            }
+            player
+                .next
+                .map(|entry| CueStart::Entry { player: *p, entry })
+        }
+        Command::CueEntry(p, entry) => Some(CueStart::Entry {
+            player: *p,
+            entry: *entry,
+        }),
+        Command::CueCart(cart) | Command::SetCartCue(cart, true) => {
+            (state.cartwall.cue != Some(*cart)).then_some(CueStart::Cart(*cart))
+        }
+        _ => None,
+    }
+}
+
+/// `start` begins a pre-listen from nothing: its holder has no running
+/// one, a Cue route, and something it can play.
+fn starts_fresh(state: &AppState, start: CueStart) -> bool {
+    match start {
+        CueStart::Entry { player, entry } => {
+            state.player(player).is_ok_and(|p| p.cue.is_none())
+                && state.config.outputs.player_has_cue(player)
+                && state
+                    .request_from_cue_in(entry, Holder::PlayerCue(player))
+                    .is_some()
+        }
+        CueStart::Cart(cart) => {
+            state.cartwall.cue.is_none()
+                && state.config.outputs.cartwall_has_cue()
+                && crate::cart_rules::cue_request(state, cart).is_some()
+        }
+    }
+}
+
+/// CA6: `apply(command)` would record a confirmation request instead of
+/// starting a pre-listen (its on-air output sounds). The remote API and
+/// MIDI cannot answer one, so they refuse such a command.
+pub fn needs_confirmation(state: &AppState, command: &Command) -> bool {
+    cue_start(state, command).is_some_and(|start| {
+        starts_fresh(state, start) && !sounding_on(state, start.holder()).is_empty()
+    })
+}
+
+/// CA3: records the request for `start`, replacing any other, and returns
+/// true when its on-air output sounds; false (nothing recorded) otherwise.
+pub(crate) fn ask(state: &mut AppState, start: CueStart) -> bool {
+    let holder = start.holder();
+    let sounding = sounding_on(state, holder);
+    if sounding.is_empty() {
+        return false;
+    }
+    let id = state.cue_on_air.next_id();
+    state.cue_on_air.request = Some(CueConfirmation {
+        id,
+        holder,
+        start,
+        sounding,
+    });
+    true
+}
+
+/// CA4: a forced pre-listen on `holder` answers its request and, once it
+/// runs, is confirmed.
+pub(crate) fn forced(state: &mut AppState, holder: Holder) {
+    let on_air = &mut state.cue_on_air;
+    if on_air.request.as_ref().is_some_and(|r| r.holder == holder) {
+        on_air.request = None;
+    }
+    if audible(state, holder) && !state.cue_on_air.confirmed.contains(&holder) {
+        state.cue_on_air.confirmed.push(holder);
+    }
+}
+
+/// CA3: the operator cancelled request `id`.
+pub(crate) fn cancel(state: &mut AppState, id: u64) {
+    if state
+        .cue_on_air
+        .request
+        .as_ref()
+        .is_some_and(|r| r.id == id)
+    {
+        state.cue_on_air.request = None;
+    }
+}
+
+/// Closes every `apply` and `on_event`: the confirmed list keeps only
+/// running pre-listens, and the request goes once its output no longer
+/// sounds (or its holder already runs a pre-listen) or else names what
+/// sounds now (CA3).
+pub(crate) fn after_step(state: &mut AppState, _out: &mut Vec<EngineAction>) {
+    let confirmed: Vec<Holder> = state
+        .cue_on_air
+        .confirmed
+        .iter()
+        .copied()
+        .filter(|h| audible(state, *h))
+        .collect();
+    state.cue_on_air.confirmed = confirmed;
+    let Some(holder) = state.cue_on_air.request.as_ref().map(|r| r.holder) else {
+        return;
+    };
+    let sounding = if audible(state, holder) {
+        Vec::new()
+    } else {
+        sounding_on(state, holder)
+    };
+    match state.cue_on_air.request.as_mut() {
+        Some(request) if !sounding.is_empty() => request.sounding = sounding,
+        _ => state.cue_on_air.request = None,
+    }
 }
