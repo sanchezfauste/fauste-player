@@ -101,9 +101,11 @@ as it is; otherwise the file is opened again (`tests/opus.rs`, the unit tests
 in `symph.rs`).
 
 symphonia seeks a Matroska file without cues (a live recording) only forward.
-A seek to a timestamp below what the reader has already read or landed on,
-which such a reader answers by landing past the target, opens the file again
-and seeks forward from the start. A forward seek never opens it again. Opening
+A seek to a timestamp below what the reader has already read or landed on
+(the end of the last block read: its duration, or the frames it decoded to
+when it has none), which such a reader answers by landing past the target,
+opens the file again and seeks forward from the start, so a target inside the
+block read last is not missed. A forward seek never opens it again. Opening
 the file again checks that it still holds the same track (id, codec and sample
 rate); a file replaced on disk makes the seek fail instead of being read with
 the old decoder.

@@ -67,3 +67,28 @@ fn a_seek_lands_on_the_target_frame() {
         }
     }
 }
+
+/// A seek into the middle of the block read last goes back into it: it
+/// lands where a fresh decoder lands, not on the next block.
+#[test]
+fn a_seek_into_the_block_read_last_lands_on_the_target_frame() {
+    let dir = tempfile::tempdir().unwrap();
+    let layout = Layout {
+        blocks_per_cluster: 10,
+        cues: false,
+        unknown_segment_size: false,
+    };
+    // 100 ms blocks.
+    let (path, pcm) = pcm_matroska(dir.path(), "bare.mka", 1.0, 4800, layout);
+    let mut d = FileDecoder::open(&path).unwrap();
+    let mut out = Vec::new();
+    for _ in 0..3 {
+        assert!(d.next_block(&mut out).unwrap());
+    }
+    assert_eq!(out.len(), 3 * 4800 * 2, "three blocks read");
+    d.seek(0.25).unwrap();
+    let out = rest(&mut d);
+    let at = 12_000 * 2;
+    assert_eq!(out.len(), pcm.len() - at, "length");
+    assert!(out[..] == pcm[at..], "the audio differs");
+}

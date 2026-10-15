@@ -19,7 +19,7 @@ use symphonia::core::formats::{
 };
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::units::{Time, TimeBase, Timestamp};
+use symphonia::core::units::{Duration, Time, TimeBase, Timestamp};
 
 use crate::downmix;
 
@@ -57,8 +57,8 @@ pub(crate) struct SymphoniaDecoder {
     /// Whether the reader is still where opening left it (nothing read, no
     /// seek since): a restart from the start needs no new reader then.
     at_start: bool,
-    /// The lowest timestamp the reader can still reach by reading on: one
-    /// past the last packet read, or where the last seek landed. A seek
+    /// The lowest timestamp the reader can still reach by reading on: the
+    /// end of the last packet read, or where the last seek landed. A seek
     /// below it goes backwards. `None` at the start of the stream.
     resume_ts: Option<Timestamp>,
     /// Seconds the container's timestamps run ahead of the audio: an Ogg
@@ -305,7 +305,14 @@ impl SymphoniaDecoder {
             if packet.track_id != self.track_id {
                 continue;
             }
-            self.resume_ts = Some(Timestamp::new(packet.pts.get().saturating_add(1)));
+            // Reading on reaches no frame before the packet's end: a target
+            // inside it lies behind. Without a duration, the end is found
+            // from the frames it decodes to.
+            self.resume_ts = Some(if packet.dur.get() > 0 {
+                packet.pts.saturating_add(packet.dur)
+            } else {
+                packet.pts.saturating_add(Duration::new(1))
+            });
             let buf = match self.decoder.decode(&packet) {
                 Ok(buf) => buf,
                 Err(Error::DecodeError(_)) => continue,
@@ -313,6 +320,15 @@ impl SymphoniaDecoder {
             };
             let channels = buf.spec().channels().count().max(1);
             let frames = buf.frames();
+            if packet.dur.get() == 0 {
+                let rate = f64::from(self.sample_rate.max(1));
+                let len = self.time_base.and_then(|tb| {
+                    tb.calc_timestamp(Time::try_from_secs_f64(frames as f64 / rate)?)
+                });
+                if let Some(len) = len.and_then(|l| u64::try_from(l.get()).ok()) {
+                    self.resume_ts = Some(packet.pts.saturating_add(Duration::new(len.max(1))));
+                }
+            }
             self.scratch.resize(frames * channels, 0.0);
             buf.copy_to_slice_interleaved(self.scratch.as_mut_slice());
             let skip = match (self.target_secs, self.time_base) {
@@ -538,7 +554,9 @@ mod reopen_tests {
 
     use std::path::{Path, PathBuf};
 
-    use super::opus_files::{RATE, encode, marker, matroska_with, packets, stereo};
+    use super::opus_files::{
+        Layout, RATE, encode, marker, matroska_with, packets, pcm_matroska, stereo,
+    };
     use super::{OPENS, SymphoniaDecoder};
 
     fn opens() -> u32 {
@@ -595,6 +613,32 @@ mod reopen_tests {
             assert_eq!(opens() - before, opened, "{}", path.display());
             let skip = 2 * RATE * 5 / 100;
             assert!(out[..] == full[skip..], "{}", path.display());
+        }
+    }
+
+    /// A seek forward from the end of the block read last, or past it, does
+    /// not open the file again: only a target inside or before that block
+    /// lies behind.
+    #[test]
+    fn a_seek_forward_after_reading_does_not_open_the_file_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = Layout {
+            blocks_per_cluster: 10,
+            cues: false,
+            unknown_segment_size: false,
+        };
+        // 100 ms blocks.
+        let (path, _) = pcm_matroska(dir.path(), "bare.mka", 1.0, 4800, layout);
+        for secs in [0.3, 0.35] {
+            let mut d = SymphoniaDecoder::open(&path).unwrap();
+            let mut out = Vec::new();
+            for _ in 0..3 {
+                assert!(d.next_block(&mut out).unwrap());
+            }
+            let before = opens();
+            d.seek(secs).unwrap();
+            let _ = rest(&mut d);
+            assert_eq!(opens(), before, "{secs} s");
         }
     }
 
