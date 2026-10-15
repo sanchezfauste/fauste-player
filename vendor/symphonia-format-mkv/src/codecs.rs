@@ -339,7 +339,10 @@ fn get_codec_id(track: &TrackElement) -> Option<CodecId> {
 
         // Other Codecs
         _ => {
-            log::info!("unknown codec: {}", track.codec_id);
+            // VENDORED CHANGE: the codec ID is not logged (a value read from the track element,
+            // which also holds the track's UID); a track with an unknown codec has no codec
+            // parameters, which the caller sees.
+            log::info!("unknown codec");
             return None;
         }
     };

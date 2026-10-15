@@ -30,6 +30,12 @@ the source.
   at or after the target, up to a block late. The frames of the last block
   of the track skipped are kept, and when the next one starts past the
   target (or the stream ends) the seek lands on them instead.
+- `src/codecs.rs`, `get_codec_id`: an unknown codec was logged with its
+  codec ID, a value of the track element, which also holds the track's UID;
+  code scanning flags it as clear-text logging of the UID. The line now
+  logs a constant message. The other log lines of the crate print element
+  types, byte counts, track numbers and timestamps, nothing read from a
+  track element's text or UID.
 
 Tested in `crates/fp-decode/tests/matroska.rs` with PCM files built in the
 test. Drop this copy once a release upstream fixes both (still present on
