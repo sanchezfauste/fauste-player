@@ -172,12 +172,26 @@ red.
 ## CUE (pre-listen)
 
 Pressing **CUE** (or **Pre-listen on CUE** in a track's menu) plays the track
-on the player's CUE output, for example headphones, without touching the
-on-air output, and opens a small **CUE window** for that player. Several
+on the player's CUE output, for example headphones, and opens a small **CUE window** for that player. Several
 windows can be open, one per player. See [Settings](settings.md) to choose
-the CUE device. A player needs a Cue output that is not its Main output:
-without one, **CUE** and **Pre-listen on CUE** are dimmed, and hovering them
-says so.
+the CUE device. A player needs a Cue output: without one, **CUE** and
+**Pre-listen on CUE** are dimmed, and hovering them says so.
+
+With one sound card, the Cue output can be the on-air output itself (or
+share it with another player or the cartwall). A pre-listen there is heard
+on air, so:
+
+- while nothing plays on that output, CUE starts at once;
+- while something plays there (a player playing or paused, a cart, another
+  pre-listen), CUE asks first: **Pre-listen anyway** or **Cancel** (Cancel
+  is the default: Esc and Enter cancel). The same question comes from the
+  track menu, the CUE window and the cartwall;
+- when something starts on that output while a pre-listen you did not
+  confirm plays there, the pre-listen stops and the status bar says why. A
+  pre-listen you confirmed keeps playing.
+
+The CUE button's tooltip says when its pre-listen goes out on the on-air
+output.
 
 ![The CUE window of player 4, pre-listening its next track](../images/guide/cue-window.png)
 

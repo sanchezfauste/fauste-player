@@ -78,9 +78,9 @@ choosing it again (for example after swapping two devices) keeps them.
 | Audio system | The last choice, **No output (silent)**, plays nothing: timelines run at real-time pace with no sound card (for a machine without one, or to rehearse). Linux: PipeWire (in builds that include it), PulseAudio, JACK or ALSA. Windows: WASAPI, ASIO (in builds that include it) or JACK. macOS: Core Audio or JACK. Systems missing on this computer, or with no output device (a JACK server that is not running), are shown as unavailable. "System default" uses the first available one in that order. |
 | Sample rate | The rate every output runs at unless a device has its own (Advanced); files are converted to it with high-quality resampling. Bit-perfect devices start at their rate and then follow the files. |
 | Buffer size | Frames per audio block, unless a device has its own; the resulting latency is shown below it |
-| Outputs per player | For each player, a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. A sound card that offers several output profiles (ALSA lists front, surround, direct hardware…) shows each as *card — profile*; two entries that would still read the same get their device id in brackets. Multichannel interfaces can carry several players on different pairs. |
+| Outputs per player | For each player, a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. A sound card that offers several output profiles (ALSA lists front, surround, direct hardware…) shows each as *card — profile*; two entries that would still read the same get their device id in brackets. Multichannel interfaces can carry several players on different pairs. A Cue output that shares an on-air output (any player's Main or the cartwall's) is allowed: a note under it says its pre-listen is heard on air and asks first while something plays there. |
 | Test Main / Test Cue | Plays a short tone (1 kHz on Main, 440 Hz on Cue, 1.5 s, −18 dBFS) on the chosen output, so you can check the wiring before going on air |
-| Cartwall | The cartwall's Main and Cue outputs. Main defaults to the system output. Without a Cue there is no cart pre-listen. |
+| Cartwall | The cartwall's Main and Cue outputs. Main defaults to the system output. Without a Cue there is no cart pre-listen; a Cue on an on-air output works as for players. |
 | Sample rate: *device* (Advanced) | **Global (...)** uses the sample rate above; a value gives this device its own rate. Only the rates the device reports are offered; a saved rate it no longer reports stays listed with a note that it may not open (the device then falls back to the global rate). The own values apply only to devices an output names, not to the system default output unless one does. |
 | Buffer size: *device* (Advanced) | **Global (...)** uses the buffer size above; a value gives this device its own, with its latency below. A device that does not take its own buffer size falls back to the global one, and to the global rate too when it does not take its own rate either. |
 | Bit-perfect: *device* (Advanced) | Off by default. A special mode for audiophile playback, not for mixed programmes: the device is opened with exclusive access and follows each track's sample rate. The players whose Main output is on it never crossfade or mix, a change of rate leaves a short silence between two tracks, and their volume is held at 100 %. The switch is disabled where the device cannot give exclusive access. See [What it costs](bit-perfect.md#what-it-costs). |
@@ -88,13 +88,14 @@ choosing it again (for example after swapping two devices) keeps them.
 | When another source needs a DSD output (Advanced) | **Continue the DSD track as PCM** (the default), or **Keep DSD and mute the other sources**. See [DSD](bit-perfect.md#dsd). |
 | DSD silence (Advanced) | Silence sent before a DSD stream starts, after it ends and on a switch to PCM, so that the converter locks without a click; 200 ms by default, 0 to 2000. |
 
-A Cue output never falls back to the output Main uses, so that pre-listening
-never goes on air. A Cue that names a device on an audio system this
-computer does not have, or the same output (device and channels) as Main,
-means "no cue". When a Cue output is the same as its Main output, a warning
-under it says so. A player with no Cue output, or with its Cue on its Main
-output, has its **CUE** button dimmed; hovering it tells you to choose a Cue
-output here. The same goes for the cartwall's **Pre-listen on CUE**.
+A Cue output never falls back to the output Main uses. A Cue that names a
+device on an audio system this computer does not have means "no cue". A
+Cue on an on-air output (the same device and channels as a Main, or
+overlapping them) is allowed: a note under it says that its pre-listen is
+heard on air and that it asks first while something plays there. A player
+with no Cue output has its **CUE** button dimmed; hovering it tells you to
+choose a Cue output here. The same goes for the cartwall's **Pre-listen on
+CUE**.
 
 If a device disappears while playing, the players keep their timelines, and
 the device is reopened when it comes back (see

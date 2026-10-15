@@ -18,7 +18,7 @@ over HTTP, live events over Server-Sent Events, OSC, and Settings → Remote.
 - **Same rules as the console.** Every request becomes the commands the
   interface would send. A transport action whose button is greyed out
   (availability, R28) is refused with `409`, and so is a player CUE, a
-  `cue-entry` or a cart cue without a Cue output apart from Main. The commands are then applied to
+  `cue-entry` or a cart cue without a Cue route; one that would start a pre-listen on a sounding on-air output (the console would ask, on-air pre-listen spec CA6) is refused with `409 cue_on_air` unless the body says `"force": true`. The commands are then applied to
   a copy of the current snapshot (a dry run): a refusal there is answered
   `404` (an unknown id) or `409` with the model's reason, and nothing is
   queued. A refusal is still possible if another operator changes the state
@@ -129,9 +129,9 @@ file is missing, or whose file cannot be decoded, answers `404 not_found`.
 | `POST /players/{id}/fade-stop` | — | Fade stop |
 | `POST /players/{id}/restart` | — | Back to the current entry's cue-in (R23) |
 | `POST /players/{id}/previous` | — | Back to the previous entry (R24) |
-| `PUT /players/{id}/cue` | `{"on": bool}` | Pre-listen the next entry, or stop pre-listening |
+| `PUT /players/{id}/cue` | `{"on": bool, "force": bool?}` | Pre-listen the next entry, or stop pre-listening. `force` (default false) starts it even on a sounding on-air output; the pre-listen is then confirmed and is not stopped when something starts there |
 | `PUT /players/{id}/next` | `{"entry": id}` | Choose the next entry. The entry on air is accepted: it plays once more from its cue-in when the current pass ends |
-| `POST /players/{id}/cue-entry` | `{"entry": id}` | Pre-listen an entry |
+| `POST /players/{id}/cue-entry` | `{"entry": id, "force": bool?}` | Pre-listen an entry; `force` as for `cue` |
 | `POST /players/{id}/seek` | `{"secs": f64}` | Seek within the cue range of what is playing; on a stopped player, set where Play starts the next entry (rule 3a), before its cue-out; a start before its cue-in is raised to the cue-in, as on the local wave. `400` outside the range (on a stopped player: at or after the cue-out or not a number); `409` when there is nothing to seek or, on a stopped player, when the next entry's file is missing or unreadable |
 | `PUT /players/{id}/volume` | `{"fader": f32}` | Fader travel 0–1. On a player whose fader is locked (`fader_locked`), a value below 1 is `409 unavailable` with the model's reason; exactly 1 is accepted and changes nothing |
 | `PUT /players/{id}/mode` | `{"mode": "single" \| "continuous"}` | |
@@ -141,7 +141,7 @@ file is missing, or whose file cannot be decoded, answers `404 not_found`.
 | `PUT /entries/{id}/stop-after` | `{"on": bool}` | R27 |
 | `POST /carts/{id}/fire` | — | As the cart button: fires it, or stops it if it plays |
 | `POST /carts/{id}/stop` | — | |
-| `PUT /carts/{id}/cue` | `{"on": bool}` | Pre-listen a cart |
+| `PUT /carts/{id}/cue` | `{"on": bool, "force": bool?}` | Pre-listen a cart; `force` as for a player's `cue` |
 | `POST /cartwall/stop-all` | — | |
 | `PUT /cartwall/shown` | `{"page": id}` | Show a cart page |
 
@@ -230,7 +230,7 @@ the page shown, `p` a page.
 | Address | Arguments | Effect |
 |---|---|---|
 | `/fauste/player/{n}/play` (also `pause`, `stop`, `fade-stop`, `restart`, `previous`) | none, or a number | Acts with no argument or a number above 0, so a surface that sends 1 on press and 0 on release acts once |
-| `/fauste/player/{n}/cue` | a number or boolean | Cue on (above 0, true) or off |
+| `/fauste/player/{n}/cue` | a number or boolean | Cue on (above 0, true) or off. There is no force: a CUE that would ask is refused (logged as `cue_on_air`) |
 | `/fauste/player/{n}/volume` | `f` 0–1 | Fader travel. Refused below 1 while the player's fader is locked (bit-perfect output), like an unavailable action |
 | `/fauste/cart/{c}/fire` | as `play` | Fire a cart of the page shown |
 | `/fauste/cartwall/page/{p}/cart/{c}/fire` | as `play` | Fire a cart of a given page |
@@ -286,6 +286,7 @@ Errors carry `{"error": code, "message": text}`.
 | 405 | `method_not_allowed` | A route that exists with another method |
 | 408 | (empty) | The request took longer than `request_timeout_ms` |
 | 409 | `unavailable` | The action is not available now, or the model refuses it |
+| 409 | `cue_on_air` | A pre-listen would be heard on air while something plays there; send `"force": true` to start it anyway |
 | 413 | `payload_too_large` | Body over `max_body_bytes` |
 | 415 | `unsupported_media_type` | A body that is not `application/json` |
 | 503 | `busy` | The command queue is full |
