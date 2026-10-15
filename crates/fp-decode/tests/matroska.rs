@@ -160,3 +160,27 @@ fn a_seek_through_cues_of_another_track_lands_on_the_target_frame() {
         assert!(out[..] == samples[at..], "{secs} s: the audio differs");
     }
 }
+
+/// A seek into the last fraction of a millisecond of the block read last
+/// still goes back into it: its end is not rounded down to the timestamp
+/// before it. Blocks of 5015 frames (104.48 ms) at timestamps rounded to
+/// whole milliseconds, as muxers write them: the second block starts at
+/// 104 ms and the third at 209 ms.
+#[test]
+fn a_seek_into_the_end_of_the_block_read_last_lands_like_a_fresh_seek() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, _) = pcm_matroska(dir.path(), "bare.mka", 1.0, 5015, Layout::BARE);
+    let secs = 0.2082;
+    let mut fresh = FileDecoder::open(&path).unwrap();
+    fresh.seek(secs).unwrap();
+    let fresh = rest(&mut fresh);
+    let mut d = FileDecoder::open(&path).unwrap();
+    let mut out = Vec::new();
+    for _ in 0..2 {
+        assert!(d.next_block(&mut out).unwrap());
+    }
+    d.seek(secs).unwrap();
+    let out = rest(&mut d);
+    assert_eq!(out.len(), fresh.len(), "length");
+    assert!(out == fresh, "the audio differs");
+}

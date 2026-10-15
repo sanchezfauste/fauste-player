@@ -320,14 +320,16 @@ impl SymphoniaDecoder {
             };
             let channels = buf.spec().channels().count().max(1);
             let frames = buf.frames();
-            if packet.dur.get() == 0 {
-                let rate = f64::from(self.sample_rate.max(1));
-                let len = self.time_base.and_then(|tb| {
-                    tb.calc_timestamp(Time::try_from_secs_f64(frames as f64 / rate)?)
-                });
-                if let Some(len) = len.and_then(|l| u64::try_from(l.get()).ok()) {
-                    self.resume_ts = Some(packet.pts.saturating_add(Duration::new(len.max(1))));
-                }
+            if packet.dur.get() == 0
+                && let Some(tb) = self.time_base
+            {
+                // Rounded up: a target in the block's last fraction of a
+                // tick lies behind too (a later one only opens the file
+                // again needlessly).
+                let ticks = (frames as u128 * u128::from(tb.denom.get()))
+                    .div_ceil(u128::from(self.sample_rate.max(1)) * u128::from(tb.numer.get()));
+                let len = u64::try_from(ticks).unwrap_or(u64::MAX).max(1);
+                self.resume_ts = Some(packet.pts.saturating_add(Duration::new(len)));
             }
             self.scratch.resize(frames * channels, 0.0);
             buf.copy_to_slice_interleaved(self.scratch.as_mut_slice());

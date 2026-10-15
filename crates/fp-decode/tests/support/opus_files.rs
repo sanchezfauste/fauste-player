@@ -344,8 +344,10 @@ pub fn pcm_track(block: usize, default_duration: bool) -> Vec<u8> {
 }
 
 /// A Matroska file of 16-bit stereo PCM (`A_PCM/INT/LIT`) at `RATE`, in
-/// blocks of `block` frames (a whole number of milliseconds), and the
-/// samples it holds as `f32`, the way the decoder yields them.
+/// blocks of `block` frames, and the samples it holds as `f32`, the way the
+/// decoder yields them. Block timestamps are rounded to whole milliseconds,
+/// as muxers write them, so they are exact only for blocks of whole
+/// milliseconds.
 pub fn pcm_matroska(
     dir: &Path,
     name: &str,
@@ -353,13 +355,12 @@ pub fn pcm_matroska(
     block: usize,
     layout: Layout,
 ) -> (PathBuf, Vec<f32>) {
-    assert_eq!(block * 1000 % RATE, 0, "blocks must be whole milliseconds");
     let (bytes, samples) = pcm(secs);
     let frames: Vec<&[u8]> = bytes.chunks(block * 4).collect();
     let blocks: Vec<(u64, &[u8])> = frames
         .iter()
         .enumerate()
-        .map(|(i, f)| ((i * block * 1000 / RATE) as u64, *f))
+        .map(|(i, f)| (((i * block * 1000 + RATE / 2) / RATE) as u64, *f))
         .collect();
     let track = pcm_track(block, layout.default_duration);
     let path = matroska_file(dir, name, &track, &blocks, layout);
