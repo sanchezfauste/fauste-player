@@ -37,7 +37,7 @@ pub(super) struct CartSource {
 
 pub(super) struct CartwallRuntime {
     worker: PlayerWorker,
-    main: (BusKey, u16),
+    pub(super) main: (BusKey, u16),
     cue: Option<(BusKey, u16)>,
     /// The routes the engine holds for the cartwall (L3, L16).
     main_route: Option<Route>,
@@ -476,10 +476,10 @@ impl Engine {
         if let Some(cue) = self
             .cartwall
             .as_ref()
-            .and_then(|c| c.cue.as_ref())
-            .map(|c| c.0.clone())
+            .and_then(|c| c.cue.clone())
+            .filter(|cue| !self.cue_on_air(cue))
         {
-            self.prepare_start(&cue, request.format);
+            self.prepare_start(&cue.0, request.format);
         }
         match self.cart_source(request, true) {
             Ok(source) => {

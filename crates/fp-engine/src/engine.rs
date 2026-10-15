@@ -1446,6 +1446,15 @@ impl Engine {
         self.sounding_besides(bus, None)
     }
 
+    /// On-air pre-listen spec §2, CA7: a pre-listen on `cue` (bus, first
+    /// channel) shares a channel with a player's or the cartwall's Main.
+    /// Such a pre-listen never reopens its bus at its file's rate.
+    pub(super) fn cue_on_air(&self, cue: &(BusKey, u16)) -> bool {
+        let overlaps = |main: &(BusKey, u16)| main.0 == cue.0 && main.1.abs_diff(cue.1) < 2;
+        self.players.values().any(|rt| overlaps(&rt.main))
+            || self.cartwall.as_ref().is_some_and(|c| overlaps(&c.main))
+    }
+
     /// As `bus_sounding`, not counting `player`'s current and outgoing
     /// sources (the track a hard start replaces and its declick tail, BR8).
     /// Its own CUE and preload still count.
@@ -3066,13 +3075,15 @@ impl Engine {
         {
             self.stop_quick_and_release(player, old);
         }
+        // B3.2 follows the file's rate on an idle bit-perfect bus, but an
+        // on-air pre-listen never moves the rate (CA7).
         if let Some(cue) = self
             .players
             .get(&player)
-            .and_then(|rt| rt.cue.as_ref())
-            .map(|c| c.0.clone())
+            .and_then(|rt| rt.cue.clone())
+            .filter(|cue| !self.cue_on_air(cue))
         {
-            self.prepare_start(&cue, request.format);
+            self.prepare_start(&cue.0, request.format);
         }
         match self.new_source(player, true, request) {
             Ok(mut cue) => {
