@@ -223,3 +223,47 @@ pub fn lock_player(state: &mut AppState, n: usize) {
         },
     );
 }
+
+/// Routes `holders` to one `desk` output (channels 1–2) and reports the
+/// engine placing them there (live settings L3): a Cue among them is on
+/// air next to a Main among them (on-air pre-listen spec §2).
+pub fn on_desk(state: &mut AppState, holders: &[fp_model::Holder]) {
+    use fp_model::Holder;
+    let desk = Route {
+        backend: "null".to_owned(),
+        device: "desk".to_owned(),
+        first_channel: 0,
+    };
+    let device = fp_model::OutputDevice {
+        backend: "null".to_owned(),
+        device: "desk".to_owned(),
+    };
+    for holder in holders {
+        let outputs = &mut state.config.outputs;
+        match *holder {
+            Holder::PlayerMain(p) | Holder::PlayerCue(p) => {
+                if let Some(r) = outputs.routes.iter_mut().find(|r| r.player == p) {
+                    if matches!(holder, Holder::PlayerMain(_)) {
+                        r.main = Some(desk.clone());
+                    } else {
+                        r.cue = Some(desk.clone());
+                    }
+                }
+            }
+            Holder::CartwallMain => outputs.cartwall.main = Some(desk.clone()),
+            Holder::CartwallCue => outputs.cartwall.cue = Some(desk.clone()),
+        }
+    }
+    let running = fp_model::device_settings(&state.config.outputs, &device);
+    for holder in holders {
+        fp_model::on_event(
+            state,
+            fp_model::EngineEvent::Placed {
+                holder: *holder,
+                route: Some(desk.clone()),
+                device: device.clone(),
+                running,
+            },
+        );
+    }
+}

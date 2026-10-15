@@ -286,9 +286,14 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
                     }
                 };
                 let cue_label = t.tr("cue");
-                // Without a Cue output apart from Main the CUE is dimmed
-                // (spec §4.6); its tooltip says how to get one.
-                let cue_tip = if pv.cueing || scene.state.config.outputs.player_has_cue(id) {
+                // Without a Cue route the CUE is dimmed (spec §4.6, CA1);
+                // on an on-air output its tooltip says where it goes (§5).
+                let cue_tip = if fp_model::cue_on_air::cue_is_on_air(
+                    scene.state,
+                    fp_model::Holder::PlayerCue(id),
+                ) {
+                    t.tr("tip-cue-on-air")
+                } else if pv.cueing || scene.state.config.outputs.player_has_cue(id) {
                     t.tr("tip-cue")
                 } else {
                     t.tr("tip-cue-no-output")

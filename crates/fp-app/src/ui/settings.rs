@@ -975,8 +975,11 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                     backend_id.as_deref(),
                     &devices,
                 );
-                if config.outputs.player_cue_equals_main(player.id) {
-                    cue_equals_main_note(ui, scene);
+                let cue = fp_model::Holder::PlayerCue(player.id);
+                if config.outputs.cue_shares_main(cue)
+                    || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
+                {
+                    cue_on_air_note(ui, scene);
                 }
             });
         });
@@ -1002,8 +1005,11 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 backend_id.as_deref(),
                 &devices,
             );
-            if config.outputs.cartwall_cue_equals_main() {
-                cue_equals_main_note(ui, scene);
+            let cue = fp_model::Holder::CartwallCue;
+            if config.outputs.cue_shares_main(cue)
+                || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
+            {
+                cue_on_air_note(ui, scene);
             }
         });
     });
@@ -1022,10 +1028,10 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     }
 }
 
-/// Spec §4.6: a Cue route equal to Main is refused by the engine (a
-/// pre-listen must never go on air), so the CUE is not available; say so where
-/// the route is chosen.
-fn cue_equals_main_note(ui: &mut Ui, scene: &Scene<'_>) {
+/// On-air pre-listen spec §5: a Cue route that shares an on-air output is
+/// usable; say that its pre-listen is heard on air and asks first while
+/// something plays there.
+fn cue_on_air_note(ui: &mut Ui, scene: &Scene<'_>) {
     ui.add(
         egui::Label::new(
             RichText::new(scene.i18n.tr("settings-cue-on-air"))
