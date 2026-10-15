@@ -80,10 +80,7 @@ impl Engine {
                 Some(route) => self.route_target(route),
                 None => (self.default_output(), 0),
             };
-            let cue = routes
-                .cue
-                .as_ref()
-                .and_then(|route| self.cue_target(route, &main));
+            let cue = routes.cue.as_ref().and_then(|route| self.cue_target(route));
             let ready = self
                 .settings
                 .frames(self.settings.tuning.ready_threshold_ms) as usize;
@@ -341,7 +338,7 @@ impl Engine {
                     Some(r) => self.route_target(r),
                     None => (self.default_output(), 0),
                 };
-                let cue = cue_route.as_ref().and_then(|r| self.cue_target(r, &target));
+                let cue = cue_route.as_ref().and_then(|r| self.cue_target(r));
                 let cue_changes = cue != cue_now;
                 // A Cue that changes with Main waits for a pre-listen
                 // (L11, L20).
@@ -369,7 +366,7 @@ impl Engine {
                 Some(outcome)
             }
             Holder::CartwallCue => {
-                let cue = route.as_ref().and_then(|r| self.cue_target(r, &main));
+                let cue = route.as_ref().and_then(|r| self.cue_target(r));
                 let outcome = match &cue {
                     Some(target) => self.make_room(target, force)?,
                     None => Ok(()),
