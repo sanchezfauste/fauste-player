@@ -205,6 +205,7 @@ error-not-found = Elementu hori ez dago jada.
 error-no-playlists = Ez dago zerrendarik.
 placeholder-none = —
 volume-silent = -∞ dB
+volume-readout-silent = −∞
 unit-hz = { $value } Hz
 error-last-cart-page = Ezin da kartutxoen azken orria ezabatu.
 error-carts-would-be-lost = Sareta txikiagoak fitxategia duten kartutxoak galduko lituzke. Hustu itzazu lehenik.

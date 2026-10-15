@@ -544,11 +544,30 @@ fn meter_column(
     } else {
         view::fader_from_gain(volume)
     };
-    if let Some(pos) = widgets::fader(ui, height, position, &tip, !locked) {
-        scene
-            .ctl
-            .send(Command::SetVolume(id, view::gain_from_fader(pos)));
+    // The level in dB under the fader, on the row of the meter's loudness
+    // line; a locked fader shows 0.0, dimmed.
+    let readout = if locked {
+        view::volume_readout(1.0)
+    } else {
+        view::volume_readout(volume)
     }
+    .unwrap_or_else(|| t.tr("volume-readout-silent"));
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+        let moved = widgets::fader(
+            ui,
+            (height - widgets::FADER_READOUT_HEIGHT).max(0.0),
+            position,
+            &tip,
+            !locked,
+        );
+        widgets::fader_readout(ui, &readout, !locked);
+        if let Some(pos) = moved {
+            scene
+                .ctl
+                .send(Command::SetVolume(id, view::gain_from_fader(pos)));
+        }
+    });
 }
 
 /// `elapsed / total` under the waveform, right-aligned, close to it.

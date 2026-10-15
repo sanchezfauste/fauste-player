@@ -211,6 +211,7 @@ error-not-found = Ten element już nie istnieje.
 error-no-playlists = Brak playlist.
 placeholder-none = —
 volume-silent = -∞ dB
+volume-readout-silent = −∞
 unit-hz = { $value } Hz
 error-last-cart-page = Nie można usunąć ostatniej strony cartów.
 error-carts-would-be-lost = Mniejsza siatka usunęłaby carty z przypisanym plikiem. Najpierw je wyczyść.

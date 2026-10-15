@@ -205,6 +205,7 @@ error-not-found = Aquest element ja no existeix.
 error-no-playlists = No hi ha cap llista.
 placeholder-none = —
 volume-silent = -∞ dB
+volume-readout-silent = −∞
 unit-hz = { $value } Hz
 error-last-cart-page = No es pot eliminar l'última pàgina de cartutxos.
 error-carts-would-be-lost = La graella més petita trauria cartutxos que tenen fitxer. Buida'ls primer.

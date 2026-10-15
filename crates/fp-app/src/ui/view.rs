@@ -469,6 +469,17 @@ pub fn volume_db(gain: f32) -> Option<f32> {
     (gain > 0.0 && !gain.is_nan()).then(|| 20.0 * gain.log10())
 }
 
+/// The level shown under the volume fader: dB with one decimal ("0.0",
+/// "-6.5"); `None` for silence, which the UI shows as −∞.
+pub fn volume_readout(gain: f32) -> Option<String> {
+    let tenths = (volume_db(gain)? * 10.0).round();
+    Some(if tenths == 0.0 {
+        "0.0".to_owned()
+    } else {
+        format!("{:.1}", tenths / 10.0)
+    })
+}
+
 /// Something on screen moves on its own (a meter, a countdown, a blinking
 /// Pause button): the interface repaints every frame instead of at the idle
 /// rate. A paused CUE still has its `cue`, so its window keeps blinking.

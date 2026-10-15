@@ -1392,8 +1392,36 @@ fn zone_start(zone: Zone, c: &MeterConfig) -> f32 {
     }
 }
 
-/// Width of the volume fader.
+/// Width of the volume fader. The level readout under it is centred on it
+/// and may overhang by a few points ("-60.0" is 27 px wide) rather than
+/// widen the column, which the countdown shares with the meter.
 pub const FADER_WIDTH: f32 = 22.0;
+
+/// Height of the level readout under the volume fader: the row of the
+/// meter's loudness line.
+pub const FADER_READOUT_HEIGHT: f32 = LOUDNESS_LINE_HEIGHT;
+
+/// The level readout under the volume fader, in the small style of the
+/// meter's numbers; dimmed when the fader is not `enabled` (locked).
+pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(FADER_WIDTH, FADER_READOUT_HEIGHT), Sense::hover());
+    let owned = text.to_owned();
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, enabled, owned.clone()));
+    if ui.is_rect_visible(rect) {
+        ui.painter().text(
+            rect.center_bottom(),
+            Align2::CENTER_BOTTOM,
+            text,
+            FontId::monospace(9.0),
+            if enabled {
+                theme::NEUTRAL_400
+            } else {
+                theme::NEUTRAL_600
+            },
+        );
+    }
+}
 
 /// Fader travel moved by one mouse-wheel event (3 dB near the top).
 const FADER_WHEEL_STEP: f32 = 0.05;

@@ -205,6 +205,7 @@ error-not-found = That item no longer exists.
 error-no-playlists = There are no playlists.
 placeholder-none = —
 volume-silent = -∞ dB
+volume-readout-silent = −∞
 unit-hz = { $value } Hz
 error-last-cart-page = The last cart page cannot be deleted.
 error-carts-would-be-lost = The smaller grid would drop carts that have a file. Clear them first.

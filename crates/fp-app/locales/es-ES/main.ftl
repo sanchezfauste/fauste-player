@@ -205,6 +205,7 @@ error-not-found = Ese elemento ya no existe.
 error-no-playlists = No hay playlists.
 placeholder-none = —
 volume-silent = -∞ dB
+volume-readout-silent = −∞
 unit-hz = { $value } Hz
 error-last-cart-page = No se puede eliminar la última página de cartuchos.
 error-carts-would-be-lost = La rejilla más pequeña quitaría cartuchos con archivo. Vacíalos primero.

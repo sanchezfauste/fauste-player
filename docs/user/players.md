@@ -86,9 +86,11 @@ playlist tabs, transport, volume and outputs.
       at full scale; a float device receives the level as it is and the
       sound system or driver clips it.
 - **Volume fader** (right of the meter, as tall as it): drag it or use the mouse wheel, one step per notch. The
-  tooltip shows the level in dB; the top is 0 dB and the bottom is silence.
+  The level in dB (one decimal, or −∞ for silence) is written under the
+  fader, on the same row as the meter's loudness line, and the tooltip shows it too;
+  the top is 0 dB and the bottom is silence.
   On a player whose Main output is bit-perfect the fader is locked at 100 %
-  and greyed, and its tooltip says why (see [What it costs](bit-perfect.md#what-it-costs)).
+  and greyed, it reads a dimmed 0.0, and its tooltip says why (see [What it costs](bit-perfect.md#what-it-costs)).
 - **Title, artist** and the **next** line, with a green square. While CUE is
   on, the pre-listen position shows in blue.
 
