@@ -66,7 +66,7 @@ jobs:
             os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
       - name: Install Linux system packages
@@ -128,7 +128,7 @@ jobs:
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
       - name: Keep the macOS binary for the universal disk image
         if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-binary-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/fauste-player
@@ -154,12 +154,12 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
       - name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: macos-binary-*
           path: prebuilt
@@ -191,10 +191,10 @@ jobs:
     name: Flatpak cargo sources
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Generate cargo-sources.json from Cargo.lock
@@ -205,7 +205,7 @@ jobs:
             https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/41c20aa10819cdb2a4f3ca171758a96d1955c018/cargo/flatpak-cargo-generator.py
           echo "0a2db6be87d75910facef28ab46d4d6460802e8419ab850d0caa6a364d26b380  flatpak-cargo-generator.py" | sha256sum -c -
           python3 flatpak-cargo-generator.py Cargo.lock -o packaging/flatpak/cargo-sources.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cargo-sources
           path: packaging/flatpak/cargo-sources.json
@@ -218,10 +218,10 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: cargo-sources
           path: packaging/flatpak
@@ -230,7 +230,7 @@ jobs:
           bundle: fauste-player.flatpak
           manifest-path: packaging/flatpak/org.fauste.FaustePlayer.yml
           upload-artifact: false
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: flatpak-bundle
           path: fauste-player.flatpak
@@ -241,7 +241,7 @@ jobs:
     if: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: flatpak-bundle
       - name: Upload to the release
