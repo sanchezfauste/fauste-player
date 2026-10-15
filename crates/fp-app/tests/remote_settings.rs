@@ -327,8 +327,8 @@ fn escape_cancels_a_draft_whatever_else_closes() {
     assert!(sent_configs(&fake).is_empty());
 }
 
-/// The token buttons are the Settings buttons MIDI uses: 24 px tall and
-/// as wide as their 12 px label plus 20 px.
+/// The token buttons are the Settings buttons MIDI uses: the shared height
+/// and as wide as their 12 px label plus the shared padding.
 #[test]
 fn the_token_buttons_are_settings_buttons() {
     let (h, _) = opened(state(1, 0));
@@ -343,9 +343,12 @@ fn the_token_buttons_are_settings_buttons() {
             .size()
             .x
         });
-        assert!((r.height() - 24.0).abs() < 0.5, "{label}: {r:?}");
         assert!(
-            (r.width() - (text + 20.0)).abs() < 0.5,
+            (r.height() - fp_app::ui::widgets::SETTINGS_BUTTON_HEIGHT).abs() < 0.5,
+            "{label}: {r:?}"
+        );
+        assert!(
+            (r.width() - fp_app::ui::widgets::padded_button_width(text)).abs() < 0.5,
             "{label}: {r:?} text {text}"
         );
     }

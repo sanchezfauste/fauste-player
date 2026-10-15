@@ -106,6 +106,58 @@ impl TileStyle {
     }
 }
 
+/// The least space between a button's text and its border, on each side.
+pub const SETTINGS_BUTTON_PAD: f32 = 12.0;
+/// The height of every text button of the Settings window.
+pub const SETTINGS_BUTTON_HEIGHT: f32 = 28.0;
+
+/// The width of a text button whose text is `text_width` wide.
+pub fn padded_button_width(text_width: f32) -> f32 {
+    text_width + 2.0 * SETTINGS_BUTTON_PAD
+}
+
+/// A text button (with an optional leading glyph) of the Settings window:
+/// as wide as its painted text plus [`SETTINGS_BUTTON_PAD`] on each side and
+/// [`SETTINGS_BUTTON_HEIGHT`] high. `label` is its accessible name and
+/// tooltip.
+pub fn text_button(
+    ui: &mut Ui,
+    glyph: Option<&str>,
+    label: &str,
+    enabled: bool,
+    style: TileStyle,
+) -> Response {
+    text_button_at_least(ui, glyph, label, enabled, style, 0.0)
+}
+
+/// [`text_button`] at least `min_width` wide, for buttons that share a
+/// column width.
+pub fn text_button_at_least(
+    ui: &mut Ui,
+    glyph: Option<&str>,
+    label: &str,
+    enabled: bool,
+    style: TileStyle,
+    min_width: f32,
+) -> Response {
+    let shown = match glyph {
+        Some(g) => format!("{g} {label}"),
+        None => label.to_owned(),
+    };
+    let text_width = ui
+        .painter()
+        .layout_no_wrap(shown.clone(), font(12.0), theme::TEXT)
+        .size()
+        .x;
+    let size = vec2(
+        padded_button_width(text_width).max(min_width),
+        SETTINGS_BUTTON_HEIGHT,
+    );
+    tile(ui, size, label, enabled, style, |p, r, c| {
+        p.text(r.center(), Align2::CENTER_CENTER, &shown, font(12.0), c);
+    })
+}
+
 /// The look of the bit-perfect badge: green border and text when it is on,
 /// dim grey when it is off.
 pub fn bp_tile_style(on: bool) -> TileStyle {
