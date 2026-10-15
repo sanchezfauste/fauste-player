@@ -1,0 +1,47 @@
+# Dependabot version updates. Titles follow Conventional Commits
+# (`build(deps): bump …`, `ci(deps): bump …`), so the commit checks and
+# release-please accept them.
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      # Minor and patch updates arrive together in one pull request; every
+      # major update gets its own, so a breaking change is reviewed alone.
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # These crates are replaced by the patched copies in `vendor/`
+      # (`[patch.crates-io]` in the workspace Cargo.toml). A newer release
+      # from crates.io would no longer match the copy, so they are updated by
+      # hand together with it (see `vendor/*/VENDORED.md`).
+      - dependency-name: opus-decoder
+      - dependency-name: symphonia-format-mkv
+      # The patched Matroska reader must match the symphonia version.
+      - dependency-name: symphonia
+      - dependency-name: symphonia-*
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      github-actions:
+        patterns:
+          - "*"
