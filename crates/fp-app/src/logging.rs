@@ -5,12 +5,13 @@
 //! The disk use is bounded three ways: the default filter keeps the
 //! PulseAudio client quiet (it logs every connection it makes); identical
 //! consecutive lines are written once and followed by a "repeated N times"
-//! line; and each daily file stops at `limits.max_log_file_mb`, with at most
+//! line (also written every `limits.log_repeat_summary_secs` during a long
+//! run of repeats); and each daily file stops at `limits.max_log_file_mb`, with at most
 //! `limits.max_log_files` files kept.
 
 use std::io::{self, Write};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
@@ -30,22 +31,39 @@ const DEFAULT_FILTER: &str = "info,pulseaudio=warn";
 /// Writes a line once when it repeats: the lines that follow it with the
 /// same text (everything after the leading timestamp) are counted, and a
 /// single "previous message repeated N times" line replaces them when a
-/// different line arrives or the writer is dropped (the end of the run).
-/// It runs on the log thread, behind the non-blocking queue.
+/// different line arrives, the run has gone `interval` seconds without a
+/// report, or the writer is dropped (the end of the run). It runs on the log thread, behind the non-blocking queue.
 struct Collapse<W: Write> {
     inner: W,
     last_key: Vec<u8>,
     last_stamp: Vec<u8>,
     repeats: u64,
+    interval: u64,
+    /// Seconds (on `clock`) when the line was first written or its repeats
+    /// were last reported.
+    run_start: u64,
+    clock: Box<dyn Fn() -> u64 + Send>,
 }
 
+/// The target the writer's own lines carry, like the fmt layer's lines.
+const SELF_TARGET: &str = "fp_app::logging";
+
 impl<W: Write> Collapse<W> {
-    fn new(inner: W) -> Self {
+    /// `interval_secs` is `limits.log_repeat_summary_secs`.
+    fn new(inner: W, interval_secs: u64) -> Self {
+        let start = Instant::now();
+        Self::with_clock(inner, interval_secs, move || start.elapsed().as_secs())
+    }
+
+    fn with_clock(inner: W, interval_secs: u64, clock: impl Fn() -> u64 + Send + 'static) -> Self {
         Self {
             inner,
             last_key: Vec::new(),
             last_stamp: Vec::new(),
             repeats: 0,
+            interval: interval_secs,
+            run_start: 0,
+            clock: Box::new(clock),
         }
     }
 
@@ -59,7 +77,7 @@ impl<W: Write> Collapse<W> {
         let times = if n == 1 { "time" } else { "times" };
         writeln!(
             self.inner,
-            "{stamp}  INFO previous message repeated {n} {times}"
+            "{stamp}  INFO {SELF_TARGET}: previous message repeated {n} {times}"
         )
     }
 }
@@ -80,11 +98,17 @@ impl<W: Write> Write for Collapse<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let (stamp, key) = split_stamp(buf);
         if !self.last_key.is_empty() && key == self.last_key.as_slice() {
+            let now = (self.clock)();
             self.repeats += 1;
             self.last_stamp = stamp.to_vec();
+            if now.saturating_sub(self.run_start) >= self.interval {
+                self.summary()?;
+                self.run_start = now;
+            }
             return Ok(buf.len());
         }
         self.summary()?;
+        self.run_start = (self.clock)();
         self.last_key = key.to_vec();
         self.last_stamp = stamp.to_vec();
         self.inner.write_all(buf)?;
@@ -160,11 +184,12 @@ impl<W: Write> Write for Capped<W> {
             self.full = true;
             let (stamp, _) = split_stamp(buf);
             let stamp = String::from_utf8_lossy(stamp).into_owned();
-            writeln!(
-                self.inner,
-                "{stamp}  WARN log file size cap reached ({} MiB); no more lines are written to this file today",
+            let closing = format!(
+                "{stamp}  WARN {SELF_TARGET}: log file size cap reached ({} MiB); no more lines are written to this file today\n",
                 self.cap / MIB
-            )?;
+            );
+            self.inner.write_all(closing.as_bytes())?;
+            self.written += closing.len() as u64;
             return Ok(buf.len());
         }
         self.inner.write_all(buf)?;
@@ -177,37 +202,39 @@ impl<W: Write> Write for Capped<W> {
     }
 }
 
-/// Bytes in the log files modified today (a run earlier in the day wrote
-/// them), so that a restart does not get a fresh allowance.
+/// The name the daily rotation gives the file of a UTC day number:
+/// `<prefix>.<YYYY-MM-DD>.<suffix>`.
+fn today_file_name(day: u64) -> String {
+    // Civil date from days since 1970-01-01 (proleptic Gregorian).
+    let z = day as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{FILE_PREFIX}.{y:04}-{m:02}-{d:02}.{FILE_SUFFIX}")
+}
+
+/// Bytes in today's log file (a run earlier in the day wrote them), so that
+/// a restart does not get a fresh allowance.
 fn written_today(dir: &Path) -> u64 {
-    let today = utc_day();
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return 0;
-    };
-    entries
-        .flatten()
-        .filter(|e| {
-            let name = e.file_name();
-            let name = name.to_string_lossy();
-            name.starts_with(FILE_PREFIX) && name.ends_with(FILE_SUFFIX)
-        })
-        .filter_map(|e| e.metadata().ok())
-        .filter(|m| {
-            m.modified()
-                .ok()
-                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                .is_some_and(|d| d.as_secs() / 86_400 == today)
-        })
-        .map(|m| m.len())
-        .max()
-        .unwrap_or(0)
+    std::fs::metadata(dir.join(today_file_name(utc_day()))).map_or(0, |m| m.len())
 }
 
 /// Starts logging. Keep the returned guard alive for the whole run: dropping
 /// it flushes the file. Returns `None` if the log file cannot be created
 /// (the app still runs, logging to stderr only). `max_file_mb` and
-/// `max_files` are `limits.max_log_file_mb` and `limits.max_log_files`.
-pub fn init(log_dir: &Path, max_file_mb: u64, max_files: usize) -> Option<WorkerGuard> {
+/// `max_files` and `repeat_secs` are `limits.max_log_file_mb`,
+/// `limits.max_log_files` and `limits.log_repeat_summary_secs`.
+pub fn init(
+    log_dir: &Path,
+    max_file_mb: u64,
+    max_files: usize,
+    repeat_secs: u64,
+) -> Option<WorkerGuard> {
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));
     let file = RollingFileAppender::builder()
@@ -223,7 +250,8 @@ pub fn init(log_dir: &Path, max_file_mb: u64, max_files: usize) -> Option<Worker
                 max_file_mb.saturating_mul(MIB),
                 written_today(log_dir),
             );
-            let (writer, guard) = tracing_appender::non_blocking(Collapse::new(capped));
+            let (writer, guard) =
+                tracing_appender::non_blocking(Collapse::new(capped, repeat_secs));
             (
                 Some(
                     tracing_subscriber::fmt::layer()
@@ -282,7 +310,7 @@ mod tests {
     #[test]
     fn identical_consecutive_lines_are_written_once_then_summarised() {
         let sink = Sink::default();
-        let mut w = Collapse::new(sink.clone());
+        let mut w = Collapse::new(sink.clone(), 60);
         for t in ["t1", "t2", "t3", "t4"] {
             w.write_all(&line(t, "connecting")).unwrap();
         }
@@ -291,7 +319,7 @@ mod tests {
         assert_eq!(
             sink.text(),
             "t1  INFO app: connecting\n\
-             t4  INFO previous message repeated 3 times\n\
+             t4  INFO fp_app::logging: previous message repeated 3 times\n\
              t5  INFO app: other\n"
         );
     }
@@ -299,14 +327,14 @@ mod tests {
     #[test]
     fn a_pending_summary_is_written_when_the_writer_is_dropped() {
         let sink = Sink::default();
-        let mut w = Collapse::new(sink.clone());
+        let mut w = Collapse::new(sink.clone(), 60);
         w.write_all(&line("t1", "a")).unwrap();
         w.write_all(&line("t2", "b")).unwrap();
         w.write_all(&line("t3", "b")).unwrap();
         drop(w);
         assert!(
             sink.text()
-                .ends_with("t3  INFO previous message repeated 1 time\n")
+                .ends_with("t3  INFO fp_app::logging: previous message repeated 1 time\n")
         );
     }
 
@@ -324,7 +352,7 @@ mod tests {
         let after_cap = sink.text();
         assert!(after_cap.contains("t1"));
         assert!(!after_cap.contains("second line"));
-        assert!(after_cap.contains("log file size cap reached"));
+        assert!(after_cap.contains("t2  WARN fp_app::logging: log file size cap reached"));
         w.write_all(&line("t3", "more")).unwrap();
         assert_eq!(sink.text(), after_cap, "nothing more is written");
     }
@@ -347,9 +375,107 @@ mod tests {
     }
 
     #[test]
+    fn a_long_run_of_repeats_is_summarised_periodically() {
+        let sink = Sink::default();
+        let now = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let mut w = Collapse::with_clock(sink.clone(), 60, {
+            let now = Arc::clone(&now);
+            move || now.load(std::sync::atomic::Ordering::Relaxed)
+        });
+        w.write_all(&line("t0", "lost")).unwrap();
+        for (secs, t) in [(10, "t10"), (30, "t30"), (59, "t59")] {
+            now.store(secs, std::sync::atomic::Ordering::Relaxed);
+            w.write_all(&line(t, "lost")).unwrap();
+        }
+        assert_eq!(sink.text(), "t0  INFO app: lost\n", "inside the interval");
+        now.store(61, std::sync::atomic::Ordering::Relaxed);
+        w.write_all(&line("t61", "lost")).unwrap();
+        assert_eq!(
+            sink.text(),
+            "t0  INFO app: lost\n\
+             t61  INFO fp_app::logging: previous message repeated 4 times\n"
+        );
+        now.store(130, std::sync::atomic::Ordering::Relaxed);
+        w.write_all(&line("t130", "lost")).unwrap();
+        w.write_all(&line("t131", "lost")).unwrap();
+        now.store(125, std::sync::atomic::Ordering::Relaxed);
+        w.write_all(&line("t132", "lost")).unwrap();
+        drop(w);
+        assert!(
+            sink.text()
+                .ends_with("t132  INFO fp_app::logging: previous message repeated 2 times\n"),
+            "{}",
+            sink.text()
+        );
+    }
+
+    #[test]
+    fn the_cap_counts_its_closing_line() {
+        let sink = Sink::default();
+        let mut w = Capped::new(sink.clone(), 10_000, 9_950);
+        w.write_all(&line("t1", &"x".repeat(100))).unwrap();
+        assert_eq!(w.written, 9_950 + sink.text().len() as u64);
+    }
+
+    #[test]
+    fn today_file_is_named_like_the_daily_rotation() {
+        assert_eq!(today_file_name(20_000), "fauste-player.2024-10-04.log");
+        assert_eq!(today_file_name(0), "fauste-player.1970-01-01.log");
+    }
+
+    #[test]
+    fn written_today_measures_only_todays_file_by_name() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(today_file_name(utc_day())), vec![b'x'; 70]).unwrap();
+        std::fs::write(
+            dir.path().join("fauste-player.1999-01-01.log"),
+            vec![b'x'; 500],
+        )
+        .unwrap();
+        assert_eq!(written_today(dir.path()), 70);
+    }
+
+    /// Captures what the fmt layer writes.
+    #[derive(Clone)]
+    struct CaptureWriter(Sink);
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for CaptureWriter {
+        type Writer = Sink;
+        fn make_writer(&'a self) -> Sink {
+            self.0.clone()
+        }
+    }
+
+    #[test]
     fn the_default_filter_quiets_the_pulseaudio_client() {
-        assert_eq!(DEFAULT_FILTER, "info,pulseaudio=warn");
-        let f = EnvFilter::new(DEFAULT_FILTER);
-        assert!(f.to_string().contains("pulseaudio=warn"));
+        let sink = Sink::default();
+        let subscriber = tracing_subscriber::registry()
+            .with(EnvFilter::new(DEFAULT_FILTER))
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(CaptureWriter(sink.clone())),
+            );
+        tracing::subscriber::with_default(subscriber, || {
+            // The pulseaudio crate logs through `log`, bridged by tracing-log.
+            for (level, text) in [
+                (log::Level::Info, "routine connection"),
+                (log::Level::Warn, "connection lost"),
+            ] {
+                tracing_log::format_trace(
+                    &log::Record::builder()
+                        .args(format_args!("{text}"))
+                        .level(level)
+                        .target("pulseaudio::client")
+                        .build(),
+                )
+                .unwrap();
+            }
+            tracing::info!("from the app");
+        });
+        let out = sink.text();
+        assert!(!out.contains("routine connection"), "{out}");
+        assert!(out.contains("connection lost"), "{out}");
+        assert!(out.contains("from the app"), "{out}");
     }
 }

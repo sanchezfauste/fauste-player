@@ -311,7 +311,7 @@ fn write_doc<T: Serialize>(path: &Path, doc: &T, backups: usize) -> Result<(), S
 /// (the full load reports problems through the log, so it comes after).
 /// Read-only and silent: a missing, oversized or unreadable file gives the
 /// defaults, and values are clamped like `Config::validate` does.
-pub fn peek_log_limits(paths: &AppPaths) -> (u64, usize) {
+pub fn peek_log_limits(paths: &AppPaths) -> (u64, usize, u64) {
     let defaults = Limits::default();
     let file = paths.config_file();
     let read = std::fs::metadata(&file)
@@ -323,7 +323,11 @@ pub fn peek_log_limits(paths: &AppPaths) -> (u64, usize) {
         .map(|(config, _)| config)
         .unwrap_or_default();
     let _ = config.validate();
-    (config.limits.max_log_file_mb, config.limits.max_log_files)
+    (
+        config.limits.max_log_file_mb,
+        config.limits.max_log_files,
+        config.limits.log_repeat_summary_secs,
+    )
 }
 
 #[cfg(test)]
@@ -334,15 +338,15 @@ mod peek_tests {
     fn log_limits_come_from_the_saved_config_clamped_or_default() {
         let dir = tempfile::tempdir().unwrap();
         let paths = AppPaths::under(dir.path());
-        assert_eq!(peek_log_limits(&paths), (10, 14), "no file");
+        assert_eq!(peek_log_limits(&paths), (10, 14, 60), "no file");
         std::fs::create_dir_all(paths.config_file().parent().unwrap()).unwrap();
         std::fs::write(
             paths.config_file(),
-            r#"{"schema_version":1,"config":{"limits":{"max_log_file_mb":50,"max_log_files":9999}}}"#,
+            r#"{"schema_version":1,"config":{"limits":{"max_log_file_mb":50,"max_log_files":9999,"log_repeat_summary_secs":5}}}"#,
         )
         .unwrap();
-        assert_eq!(peek_log_limits(&paths), (50, 365));
+        assert_eq!(peek_log_limits(&paths), (50, 365, 5));
         std::fs::write(paths.config_file(), "not json").unwrap();
-        assert_eq!(peek_log_limits(&paths), (10, 14), "corrupt file");
+        assert_eq!(peek_log_limits(&paths), (10, 14, 60), "corrupt file");
     }
 }

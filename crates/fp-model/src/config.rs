@@ -747,6 +747,10 @@ pub struct Limits {
     pub max_log_file_mb: u64,
     /// Daily log files kept; older ones are deleted when a new day starts.
     pub max_log_files: usize,
+    /// Longest time, in seconds, that a run of repeated log lines goes
+    /// unreported: the "repeated N times" line is written at least this
+    /// often during a long flood.
+    pub log_repeat_summary_secs: u64,
     /// Largest cart page grid.
     pub max_cart_rows: u16,
     pub max_cart_cols: u16,
@@ -769,6 +773,7 @@ impl Default for Limits {
             max_crash_reports: 20,
             max_log_file_mb: 10,
             max_log_files: 14,
+            log_repeat_summary_secs: 60,
             max_cart_rows: 8,
             max_cart_cols: 16,
             max_tag_chars: 2000,
@@ -991,7 +996,16 @@ impl Config {
             "limits.max_log_file_mb",
             &mut w,
         );
-        clamp_to(&mut l.max_log_files, 1, 365, "limits.max_log_files", &mut w);
+        // At least 2: the appender prunes to `max - 1` files when it starts,
+        // so 1 would delete today's earlier file on every restart.
+        clamp_to(&mut l.max_log_files, 2, 365, "limits.max_log_files", &mut w);
+        clamp_to(
+            &mut l.log_repeat_summary_secs,
+            1,
+            3600,
+            "limits.log_repeat_summary_secs",
+            &mut w,
+        );
 
         clamp_to(&mut l.max_cart_rows, 1, 64, "limits.max_cart_rows", &mut w);
         clamp_to(&mut l.max_cart_cols, 1, 64, "limits.max_cart_cols", &mut w);
@@ -1428,10 +1442,18 @@ mod tests {
         assert_eq!(c.limits.max_log_files, 14);
         c.limits.max_log_file_mb = 0;
         c.limits.max_log_files = 100_000;
+        assert_eq!(c.limits.log_repeat_summary_secs, 60);
+        c.limits.log_repeat_summary_secs = 0;
         let warnings = c.validate();
         assert_eq!(c.limits.max_log_file_mb, 1);
         assert_eq!(c.limits.max_log_files, 365);
-        assert_eq!(warnings.len(), 2);
+        assert_eq!(c.limits.log_repeat_summary_secs, 1);
+        assert_eq!(warnings.len(), 3);
+        c.limits.max_log_files = 1;
+        c.limits.log_repeat_summary_secs = 99_999;
+        let _ = c.validate();
+        assert_eq!(c.limits.max_log_files, 2);
+        assert_eq!(c.limits.log_repeat_summary_secs, 3600);
     }
 
     #[test]
