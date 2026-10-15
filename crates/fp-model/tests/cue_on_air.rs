@@ -654,24 +654,40 @@ fn ca5_a_paused_player_resuming_stops_it() {
     );
 }
 
-/// Review Focus 1.
+/// Review Focus 1. The engine places the cartwall from the start (before
+/// any cart), so the very first cart stops the pre-listen in the same step.
 #[test]
-fn ca5_the_cartwalls_first_cart_stops_it_once_placed() {
+fn ca5_the_cartwalls_first_cart_stops_it_in_the_same_step() {
     let (mut s, p1, _) = shared();
     let cart = cart_with_file(&mut s);
-    s.config.outputs.cartwall.main = None;
+    place(&mut s, Holder::CartwallMain, None, "desk");
     apply(&mut s, Command::ToggleCue(p1)).unwrap();
-    apply(&mut s, Command::FireCart(cart)).unwrap();
-    assert!(
-        s.player(p1).unwrap().cue.is_some(),
-        "the cartwall is not placed yet"
+    let actions = apply(&mut s, Command::FireCart(cart)).unwrap();
+    assert_eq!(
+        actions.first(),
+        Some(&EngineAction::StopCue { player: p1 }),
+        "{actions:?}"
     );
-    let actions = place(&mut s, Holder::CartwallMain, None, "desk");
-    assert_eq!(actions.first(), Some(&EngineAction::StopCue { player: p1 }));
+    assert!(s.player(p1).unwrap().cue.is_none());
     assert_eq!(
         notice(&s),
         Some((Holder::PlayerCue(p1), Holder::CartwallMain))
     );
+}
+
+/// C1: the cartwall Cue is placed from the start, so the very first cart
+/// pre-listen after start-up asks while Player 2 plays on its output.
+#[test]
+fn ca3_the_first_cart_pre_listen_after_start_asks() {
+    let (mut s, _, p2) = shared();
+    let cart = cart_with_file(&mut s);
+    place(&mut s, Holder::CartwallMain, None, "speakers");
+    on_desk(&mut s, Holder::CartwallCue, 0);
+    apply(&mut s, Command::Play(p2)).unwrap();
+    let actions = apply(&mut s, Command::CueCart(cart)).unwrap();
+    assert!(actions.is_empty(), "{actions:?}");
+    assert_eq!(s.cartwall.cue, None);
+    assert!(s.cue_on_air.request.is_some());
 }
 
 #[test]
@@ -763,4 +779,17 @@ fn ca7_an_on_air_cue_on_a_bit_perfect_device_keeps_the_rate() {
         None,
         "the on-air pre-listen sounds on the device"
     );
+}
+
+/// A request whose entry is removed while it waits is dropped: *Pre-listen
+/// anyway* would otherwise send a start for an entry that is gone.
+#[test]
+fn ca3_a_request_whose_entry_is_removed_is_dropped() {
+    let (mut s, p1, p2) = shared();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    let entry = *entries(&s).last().unwrap();
+    apply(&mut s, Command::CueEntry(p1, entry)).unwrap();
+    assert!(s.cue_on_air.request.is_some());
+    apply(&mut s, Command::RemoveEntry(entry)).unwrap();
+    assert!(s.cue_on_air.request.is_none());
 }

@@ -627,10 +627,14 @@ The engine tells the model what it runs with (live settings spec, L3). At
 start, `Engine::new` reports `AudioSystemInUse { configured, in_use }`: the
 configured `outputs.backend` and the backend it chose for the default output
 (`choose_default_backend`, the same OS preference and availability list
-`main` used before), and `Unplaced` for the cartwall's Main and Cue (no bus
-before the first cart). Adding a player reports `Placed` for its Main and
-`Placed` or `Unplaced` for its Cue; the cartwall's first cart reports its
-two holders; removing a player reports `Gone` for both. `Placed` carries the
+`main` used before), and where the cartwall's Main and Cue would play
+(`Placed`, or `Unplaced` for a Cue without a usable route) although it has
+no bus before the first cart: the model needs it to ask before the very
+first cart pre-listen on a sounding on-air output, and to stop an
+unconfirmed pre-listen when the first cart fires (on-air pre-listen spec
+CA3, CA5). Adding a player reports `Placed` for its Main and `Placed` or
+`Unplaced` for its Cue; the cartwall's first cart reports its two holders
+again; removing a player reports `Gone` for both. `Placed` carries the
 route the engine holds, the device and the device's running settings
 (`DeviceSettings`).
 
@@ -650,8 +654,10 @@ with each `LoadOptions`, so a source keeps the one it was opened with);
 `Bus::set_timing` and a `BusCommand::Tune` with the mixer lengths at its
 running rate (a full command queue is tried again next tick); the conductor
 reads `conductor_tick_ms` before every sleep. While the cartwall has no bus
-yet, a changed cartwall route is reported at once as `Unplaced { route }`
-for both its holders, so the model never shows a pending route change for a
+yet, a changed cartwall route is reported at once for both its holders
+(`Placed` where the route resolves, without opening it; `Unplaced` for a
+Cue without a usable route), and so is a moved default output for a Main
+without a route, so the model never shows a pending route change for a
 holder that has nothing to move.
 
 `Tune` names the rate its lengths were sized for (`at_rate`). The mixer

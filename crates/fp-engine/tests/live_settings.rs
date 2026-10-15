@@ -177,8 +177,15 @@ fn l3_the_engine_reports_its_audio_system_and_where_each_holder_plays() {
         holder: Holder::PlayerCue(P),
         route: None,
     }));
-    assert!(events.contains(&EngineEvent::Unplaced {
+    // The cartwall is placed from the start, before any cart (CA3).
+    assert!(events.contains(&EngineEvent::Placed {
         holder: Holder::CartwallMain,
+        route: None,
+        device: out("main"),
+        running: device_settings(&c.outputs, &out("main")),
+    }));
+    assert!(events.contains(&EngineEvent::Unplaced {
+        holder: Holder::CartwallCue,
         route: None,
     }));
     assert_eq!(
@@ -770,10 +777,11 @@ fn l16_the_cartwall_before_its_first_cart_only_takes_the_route() {
     });
     r.tick();
     let events = r.take_events();
-    assert!(events.contains(&EngineEvent::Unplaced {
-        holder: Holder::CartwallMain,
-        route: Some(route("other"))
-    }));
+    assert!(events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Placed { holder: Holder::CartwallMain, route: Some(r), device, .. }
+            if *r == route("other") && *device == out("other")
+    )));
     assert!(route_applied(&events, Holder::CartwallMain));
     assert!(!r.other.is_open());
 }
@@ -800,11 +808,11 @@ fn l16_a_route_to_channels_the_open_device_lacks_reopens_it_with_more() {
     assert!(route_applied(&r.events, Holder::PlayerCue(P)));
 }
 
-/// L3, L13: the cartwall has no bus before its first cart, so its holder is
-/// `Unplaced` with the route the engine holds. A new cartwall route must be
-/// reported at once: the model would show a false pending change otherwise.
+/// L3, L13: the cartwall has no bus before its first cart, but its holders
+/// are placed where the routes resolve. A new cartwall route must be reported
+/// at once: the model would show a false pending change otherwise.
 #[test]
-fn l3_a_cartwall_route_changed_before_its_first_cart_is_reported_unplaced_with_it() {
+fn l3_a_cartwall_route_changed_before_its_first_cart_is_reported_placed_with_it() {
     let mut r = rig();
     r.tick();
     r.take_events();
@@ -813,10 +821,11 @@ fn l3_a_cartwall_route_changed_before_its_first_cart_is_reported_unplaced_with_i
     r.act(EngineAction::UpdateSettings(Box::new(c)));
     r.tick();
     let events = r.take_events();
-    assert!(events.contains(&EngineEvent::Unplaced {
-        holder: Holder::CartwallMain,
-        route: Some(route("other")),
-    }));
+    assert!(events.iter().any(|e| matches!(
+        e,
+        EngineEvent::Placed { holder: Holder::CartwallMain, route: Some(r), device, .. }
+            if *r == route("other") && *device == out("other")
+    )));
     assert!(events.contains(&EngineEvent::Unplaced {
         holder: Holder::CartwallCue,
         route: None,
@@ -829,9 +838,13 @@ fn l3_a_cartwall_route_changed_before_its_first_cart_is_reported_unplaced_with_i
     r.act(EngineAction::UpdateSettings(Box::new(c)));
     r.tick();
     assert!(
-        !r.take_events()
-            .iter()
-            .any(|e| matches!(e, EngineEvent::Unplaced { .. })),
+        !r.take_events().iter().any(|e| matches!(
+            e,
+            EngineEvent::Placed {
+                holder: Holder::CartwallMain | Holder::CartwallCue,
+                ..
+            } | EngineEvent::Unplaced { .. }
+        )),
         "unchanged routes are not reported again"
     );
 }
@@ -1351,4 +1364,28 @@ fn ca9_the_cartwall_meter_never_includes_a_pre_listen_on_its_output() {
     let (carts, cue) = r.engine.cart_telemetry();
     assert!(carts.is_empty(), "{carts:?}");
     assert!(cue.is_some());
+}
+
+/// CA3: the cartwall is placed from the start, Main and Cue, with no cart
+/// fired and without opening a stream: the model needs it to ask before the
+/// very first cart pre-listen on a sounding on-air output.
+#[test]
+fn ca3_the_cartwall_is_placed_at_start_before_any_cart_without_opening_a_stream() {
+    let mut c = config();
+    c.outputs.cartwall.main = Some(route("other"));
+    c.outputs.cartwall.cue = Some(route("other"));
+    let mut r = rig_with(&c);
+    r.tick();
+    let events = r.take_events();
+    for holder in [Holder::CartwallMain, Holder::CartwallCue] {
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::Placed { holder: h, device, .. }
+                    if *h == holder && *device == out("other")
+            )),
+            "{holder:?} is placed at start"
+        );
+    }
+    assert!(!r.other.is_open(), "nothing opens before the first cart");
 }
