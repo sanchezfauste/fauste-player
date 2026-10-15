@@ -38,5 +38,28 @@ the source.
   track element's text or UID.
 
 Tested in `crates/fp-decode/tests/matroska.rs` with PCM files built in the
-test. Drop this copy once a release upstream fixes both (still present on
-its `dev-0.6` branch on 2026-10-15).
+test. Drop this copy once a release upstream fixes the seeking defects
+(still present on its `dev-0.6` branch on 2026-10-15).
+
+## Keeping the patch applied
+
+`[patch.crates-io]` replaces only the version it matches: when symphonia is
+updated to a release that requires a newer `symphonia-format-mkv` (say
+`^0.6.2`), cargo uses the registry crate and only warns that the patch is
+unused. The version is not pinned (that would take a direct dependency
+fp-decode does not use). Watch for that warning when updating symphonia:
+`tests/matroska.rs` fails without these changes, so the suite catches a
+dropped patch; then port the changes to the new version or drop the copy.
+
+## Known, not changed
+
+- The cue lookup converts the target to cue time with the track time
+  base's numerator only (`SignedTrackTicks::try_into_matroska_ticks`),
+  which is right for the usual timestamp scales (1 ms ticks reduce to a
+  numerator of 1) but not for an unusual `TimestampScale` or
+  `TrackTimestampScale`. The cue time is also typed `MatroskaTicks`
+  (nanoseconds) though it holds Segment ticks; the changes above no longer
+  use it as a cluster timestamp, and the type is left as it is.
+- A malformed file whose blocks all share one timestamp and carry no
+  duration makes a seek keep every skipped frame of that timestamp: memory
+  bounded by the file's size, during the seek only.
