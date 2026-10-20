@@ -1392,11 +1392,10 @@ fn zone_start(zone: Zone, c: &MeterConfig) -> f32 {
     }
 }
 
-/// Width of the volume fader. The level readout under it is centred on it
-/// and may overhang by a few points ("-60.0", the widest, is 27 px wide;
-/// below -100 dB it drops the tenths, "-114") rather than
-/// widen the column, which the countdown shares with the meter.
-pub const FADER_WIDTH: f32 = 22.0;
+/// Width of the volume fader: the knob next to the meter and the scale
+/// marks on its right. The level readout under it is centred on it ("-60.0",
+/// the widest, is 27 px wide; below -100 dB it drops the tenths, "-114").
+pub const FADER_WIDTH: f32 = 30.0;
 
 /// Height of the level readout under the volume fader: the row of the
 /// meter's loudness line.
@@ -1454,8 +1453,8 @@ const FADER_TRACK_WIDTH: f32 = 4.0;
 /// Font size of the scale marks, a little smaller than the level readout.
 const FADER_MARK_FONT: f32 = 7.0;
 
-/// Length of a scale tick.
-const FADER_TICK: f32 = 3.0;
+/// How far a scale notch reaches from the track's centre on each side.
+const FADER_NOTCH_REACH: f32 = 7.0;
 
 /// How far above or below the knob a double click still counts as on it.
 const FADER_KNOB_SLOP: f32 = 6.0;
@@ -1492,7 +1491,8 @@ fn fader_mark_label(db: f32) -> String {
 /// double click on the knob returns the fader to 0 dB (travel 1). A fader that is not
 /// `enabled` (a bit-perfect output holds the volume at 100 %, bit-perfect
 /// rate and fader spec BF7) is drawn greyed and takes no drag, click or
-/// wheel. The scale marks sit left of the track, inside the fader's width.
+/// wheel. A notch crosses the track at each scale mark, with the level on
+/// its right, away from the meter's own scale.
 pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool) -> Option<f32> {
     let sense = if enabled {
         Sense::click_and_drag()
@@ -1620,9 +1620,9 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
         } else {
             (theme::NEUTRAL_600, theme::NEUTRAL_600, theme::NEUTRAL_600)
         };
-        // The track sits at the right of the fader, leaving room for the
-        // scale marks on its left.
-        let centre_x = rect.right() - FADER_KNOB_WIDTH / 2.0 - 1.0;
+        // The track sits at the left of the fader, next to the meter; the
+        // scale marks are on its right, away from the meter's own scale.
+        let centre_x = rect.left() + FADER_KNOB_WIDTH / 2.0 + 1.0;
         let track = Rect::from_center_size(
             pos2(centre_x, rect.center().y),
             vec2(FADER_TRACK_WIDTH, rect.height()),
@@ -1633,17 +1633,22 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
             track.right_bottom(),
         );
         painter.rect_filled(level, 0.0, level_colour);
-        // The marks, on the knob's centre line for each level.
-        let tick_right = track.left();
+        // The marks, on the knob's centre line for each level: a notch
+        // across the slot and the level on its right.
         for (db, t) in FADER_MARKS_DB.into_iter().zip(fader_mark_travels()) {
             let y = rect.bottom() - FADER_KNOB_HEIGHT / 2.0 - t * travel_px;
-            painter.line_segment(
-                [pos2(tick_right - FADER_TICK, y), pos2(tick_right, y)],
-                Stroke::new(1.0, mark_colour),
-            );
+            for side in [-1.0, 1.0] {
+                painter.line_segment(
+                    [
+                        pos2(centre_x + side * (FADER_TRACK_WIDTH / 2.0 + 1.0), y),
+                        pos2(centre_x + side * FADER_NOTCH_REACH, y),
+                    ],
+                    Stroke::new(1.0, mark_colour),
+                );
+            }
             painter.text(
-                pos2(tick_right - FADER_TICK - 1.5, y),
-                Align2::RIGHT_CENTER,
+                pos2(centre_x + FADER_NOTCH_REACH + 2.0, y),
+                Align2::LEFT_CENTER,
                 fader_mark_label(db),
                 FontId::monospace(FADER_MARK_FONT),
                 mark_colour,
