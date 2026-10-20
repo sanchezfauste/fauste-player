@@ -885,16 +885,30 @@ impl Services {
         }
     }
 
-    /// Tracks the screen draws: current, next and cue entries of the players.
+    /// Tracks the screen draws: current, next and cue entries of the
+    /// players, and the carts of the page shown (cart colour spec CC8).
     fn wanted(state: &AppState) -> HashSet<TrackId> {
-        state
+        let players = state
             .players
             .iter()
             .flat_map(|p| [p.current, p.next, p.cue.map(|c| c.entry)])
             .flatten()
             .filter_map(|e| state.playlists.entry(e))
-            .map(|e| e.track)
-            .collect()
+            .map(|e| e.track);
+        let carts = state
+            .cartwall
+            .shown_page()
+            .into_iter()
+            .flat_map(|page| page.carts.iter())
+            .filter_map(|cart| cart.track)
+            // A cart that cannot play draws no waveform: no peaks for it.
+            .filter(|t| {
+                state
+                    .library
+                    .get(*t)
+                    .is_some_and(|t| t.file_state.is_playable())
+            });
+        players.chain(carts).collect()
     }
 
     /// Tracks assigned to a cart.
@@ -1154,7 +1168,8 @@ impl Services {
                 self.failed.remove(&track.id);
             }
         }
-        // Peaks and covers are kept only for what the players show; the
+        // Peaks and covers are kept only for what the screen shows (the players
+        // and the cart page shown); the
         // analysis cache brings them back when a track is shown again.
         let wanted = Self::wanted(state);
         self.media.retain(|id| wanted.contains(&id));

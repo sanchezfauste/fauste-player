@@ -144,12 +144,25 @@ pub fn harness_sized(
     size: egui::Vec2,
     build: impl FnOnce(AppUi) -> AppUi,
 ) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    harness_built(state, size, MediaCache::default(), build)
+}
+
+/// As `harness`, with `media` as the peaks and covers the interface draws.
+pub fn harness_with_media(
+    state: AppState,
+    media: MediaCache,
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    harness_built(state, egui::vec2(1000.0, 700.0), media, |ui| ui)
+}
+
+fn harness_built(
+    state: AppState,
+    size: egui::Vec2,
+    media: MediaCache,
+    build: impl FnOnce(AppUi) -> AppUi,
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let fake = Fake::new(state);
-    let ui = build(AppUi::new(
-        fake.clone(),
-        I18n::new(Some("en-US")),
-        MediaCache::default(),
-    ));
+    let ui = build(AppUi::new(fake.clone(), I18n::new(Some("en-US")), media));
     // Short frames, so that two clicks fall within the double-click delay.
     let mut harness = Harness::builder()
         .with_size(size)

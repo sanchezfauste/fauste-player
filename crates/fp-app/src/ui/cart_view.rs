@@ -48,6 +48,10 @@ pub struct CartView {
     pub cueing: bool,
     /// The cart's colour (cart colour spec CC1).
     pub color: Option<CartColor>,
+    /// The play range the waveform spans, `(start_secs, span_secs)` (cart
+    /// colour spec CC8): only for an idle or playing cart whose length is
+    /// known.
+    pub wave_range: Option<(f64, f64)>,
 }
 
 pub fn cart_view(state: &AppState, telemetry: &Telemetry, id: CartId) -> Option<CartView> {
@@ -70,6 +74,7 @@ pub fn cart_view(state: &AppState, telemetry: &Telemetry, id: CartId) -> Option<
         exclusive: cart.exclusive,
         cueing: state.cartwall.cue == Some(id),
         color: cart.color,
+        wave_range: None,
     };
     let Some(track) = track else {
         return Some(view);
@@ -79,6 +84,9 @@ pub fn cart_view(state: &AppState, telemetry: &Telemetry, id: CartId) -> Option<
     }
     let length = track.play_length_secs();
     let known = track.duration_secs > 0.0 && length > 0.0;
+    if known && matches!(status, CartStatus::Idle | CartStatus::Playing) {
+        view.wave_range = Some((track.cue_in_secs(), length));
+    }
     if status == CartStatus::Playing {
         let position = telemetry
             .carts

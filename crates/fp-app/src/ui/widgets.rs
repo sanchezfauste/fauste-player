@@ -1823,6 +1823,33 @@ pub fn memo_columns_in(
     reduced
 }
 
+/// Paints `columns` across `rect`, one column per pixel from its left edge,
+/// in one mesh: the peaks as a faint outline and the RMS level as the body,
+/// in `color` (the cart waveform, cart colour spec CC8).
+pub fn paint_wave_columns(painter: &Painter, rect: Rect, columns: &[WaveColumn], color: Color32) {
+    let mid = rect.center().y;
+    let amp = (rect.height() / 2.0 - 1.0).max(1.0);
+    let mut mesh = egui::Mesh::default();
+    for (i, column) in columns.iter().enumerate() {
+        let px = rect.left() + i as f32;
+        for (level, tone) in [
+            (column.peak, color.gamma_multiply(WAVE_PEAK_ALPHA)),
+            (column.rms, color),
+        ] {
+            let h = level * amp;
+            if h > 0.0 {
+                mesh.add_colored_rect(
+                    Rect::from_min_max(pos2(px, mid - h), pos2(px + 1.0, mid + h)),
+                    tone,
+                );
+            }
+        }
+    }
+    if !mesh.is_empty() {
+        painter.add(mesh);
+    }
+}
+
 /// What the waveform shows.
 pub struct WaveInput<'a> {
     /// Stable per player: keys the memoised columns.

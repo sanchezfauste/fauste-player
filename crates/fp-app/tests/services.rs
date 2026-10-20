@@ -542,8 +542,9 @@ fn a_cart_track_without_a_format_is_analysed_even_when_the_operator_said_later()
     );
 }
 
-/// A cart track that already has its format, or whose file is gone, is not
-/// analysed again, and nothing loops.
+/// A cart track that already has its format is analysed again only for the
+/// peaks of the page shown (once), and one whose file is gone is not
+/// analysed; nothing loops.
 #[test]
 fn a_cart_track_that_has_its_format_is_left_alone() {
     let dir = tempfile::tempdir().unwrap();
@@ -578,7 +579,8 @@ fn a_cart_track_that_has_its_format_is_left_alone() {
         r.now += Duration::from_millis(10);
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+    // Only the read that brings the peaks of the cart page shown (CC8), once.
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
 }
 
 #[test]
@@ -1685,4 +1687,42 @@ fn a_stale_loudness_answer_does_not_overwrite_a_new_analysis() {
         measured,
         "the analysis's measurement stays"
     );
+}
+
+/// Cart colour spec CC8: the carts of the page shown are what the screen
+/// draws, so their peaks are kept; another page's are let go.
+#[test]
+fn peaks_are_kept_for_the_carts_of_the_page_shown() {
+    let dir = tempfile::tempdir().unwrap();
+    let song = wav(dir.path(), "song.wav", 1);
+    let jingle = wav(dir.path(), "jingle.wav", 1);
+    let mut r = rig_with(&[song], dir, Duration::ZERO, |state| {
+        let page = state.cartwall.pages.first().unwrap().id;
+        fp_model::apply(
+            state,
+            Command::AssignCartFile {
+                page,
+                index: 0,
+                path: jingle.clone(),
+            },
+        )
+        .unwrap();
+    });
+    let cart_track = r.handle.model.load().cartwall.pages[0].carts[0]
+        .track
+        .unwrap();
+    r.run_until("peaks for the cart of the page shown", |r| {
+        r.media.contains(cart_track)
+    });
+    r.handle.send(Command::CreateCartPage {
+        name: "Other".into(),
+    });
+    r.run_until("the second page", |r| {
+        r.handle.model.load().cartwall.pages.len() == 2
+    });
+    let other = r.handle.model.load().cartwall.pages[1].id;
+    r.handle.send(Command::ShowCartPage(other));
+    r.run_until("the first page's peaks let go", |r| {
+        !r.media.contains(cart_track)
+    });
 }

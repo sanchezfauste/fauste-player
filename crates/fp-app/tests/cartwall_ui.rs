@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use egui::{Color32, Rect};
 use egui_kittest::kittest::{NodeT, Queryable};
+use fp_app::services::{MediaCache, TrackMedia};
 use fp_app::ui::cart_view::{
     BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, button_height, cart_look, cart_view,
     page_on_air,
@@ -21,7 +22,7 @@ use fp_app::ui::theme;
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::CartTelemetry;
 use fp_model::{AppState, CartColor, CartEdit, CartKind, Command, FileState, TrackAnalysis, apply};
-use support::{Fake, harness, state};
+use support::{Fake, harness, harness_with_media, state};
 
 /// A state whose first page has "Station ID" (10 s, cue 0.5–9.5) in cell 0.
 fn with_cart() -> AppState {
@@ -698,4 +699,133 @@ fn cc7_a_playing_cart_without_a_colour_is_red_as_before() {
     let (fill, border, _) = button_paint(&h, "Station ID", theme::ACCENT);
     assert_eq!((fill, border), (theme::NEUTRAL_900, theme::ON_AIR_TEXT));
     assert!(progress_width(&h, "Station ID", theme::ON_AIR_ROW.gamma_multiply(0.5)) > 0.0);
+}
+
+/// Peaks for cart `index`'s track: 100 buckets of 0.1 s (the 10 s file of
+/// `with_cart`/`give_file`), each at half scale with its RMS at a quarter.
+fn peaks_for(s: &AppState, index: usize) -> MediaCache {
+    let media = MediaCache::default();
+    let track = s.cartwall.pages[0].carts[index].track.unwrap();
+    media.seed(
+        track,
+        TrackMedia {
+            peaks: vec![
+                fp_analysis::WavePeak {
+                    min: -16_000,
+                    max: 16_000,
+                    rms: 8_000,
+                };
+                100
+            ],
+            peak_bucket_secs: 0.1,
+            cover_png: None,
+        },
+    );
+    media
+}
+
+/// How many one-pixel columns in `color` the meshes painted on `label`'s
+/// button hold.
+fn wave_columns_on(h: &H, label: &str, color: Color32) -> usize {
+    let button = h.get_by_label(label).rect();
+    let mut quads = 0;
+    for clipped in &h.output().shapes {
+        if let egui::Shape::Mesh(mesh) = &clipped.shape
+            && button.expand(0.5).contains_rect(mesh.calc_bounds())
+        {
+            quads += mesh.vertices.iter().filter(|v| v.color == color).count() / 4;
+        }
+    }
+    quads
+}
+
+/// CC8 (view side): the play range, only for a cart that can play.
+#[test]
+fn cc8_the_waveform_spans_the_play_range_of_an_idle_or_playing_cart() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    let view = |s: &AppState, id| cart_view(s, &Telemetry::default(), id).unwrap();
+    assert_eq!(view(&s, id).wave_range, Some((0.5, 9.0)), "cue-in, length");
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    assert_eq!(view(&s, id).wave_range, Some((0.5, 9.0)), "playing too");
+    let empty = s.cartwall.pages[0].carts[1].id;
+    assert_eq!(view(&s, empty).wave_range, None);
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: FileState::Unreadable,
+        },
+    )
+    .unwrap();
+    assert_eq!(view(&s, id).wave_range, None, "unavailable");
+    // No usable play range: nothing to span.
+    let mut s = with_cart();
+    s.library.get_mut(track).unwrap().duration_secs = 0.0;
+    assert_eq!(view(&s, id).wave_range, None, "length unknown");
+    let mut s = with_cart();
+    apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(TrackAnalysis {
+                duration_secs: 10.0,
+                cue_in: Some(4.0),
+                cue_out: Some(4.0),
+                ..TrackAnalysis::default()
+            }),
+        },
+    )
+    .unwrap();
+    assert_eq!(view(&s, id).wave_range, None, "cue-in at cue-out");
+}
+
+/// CC8: in the cart's colour at 13 % idle, one column per pixel.
+#[test]
+fn cc8_a_cart_with_peaks_draws_its_waveform_in_its_colour() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let media = peaks_for(&s, 0);
+    let (mut h, _fake) = harness_with_media(s, media);
+    h.run_steps(2);
+    let button = h.get_by_label("Station ID").rect();
+    let wave = cart_look(Some(CartColor::Teal), false).wave;
+    assert_eq!(
+        wave_columns_on(&h, "Station ID", wave),
+        (button.width() - 2.0) as usize,
+        "one RMS column per pixel inside the border"
+    );
+}
+
+#[test]
+fn cc8_without_a_colour_it_is_light_grey_and_stronger_while_playing() {
+    let mut s = with_cart();
+    let media = peaks_for(&s, 0);
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (mut h, _fake) = harness_with_media(s, media);
+    h.run_steps(2);
+    let playing = cart_look(None, true).wave;
+    assert_eq!(playing, theme::CART_WAVE_PLAIN.gamma_multiply(0.22));
+    assert!(wave_columns_on(&h, "Station ID", playing) > 0);
+    assert_eq!(
+        wave_columns_on(&h, "Station ID", cart_look(None, false).wave),
+        0,
+        "not the idle strength"
+    );
+}
+
+#[test]
+fn cc8_without_peaks_nothing_is_drawn() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let (mut h, _fake) = harness(s);
+    h.run_steps(2);
+    let wave = cart_look(Some(CartColor::Teal), false).wave;
+    assert_eq!(
+        wave_columns_on(&h, "Station ID", wave),
+        0,
+        "not analysed yet"
+    );
 }
