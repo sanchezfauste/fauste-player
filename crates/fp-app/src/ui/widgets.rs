@@ -1423,14 +1423,67 @@ pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
     }
 }
 
-/// Fader travel moved by one mouse-wheel event (3 dB near the top).
-const FADER_WHEEL_STEP: f32 = 0.05;
+/// The levels marked beside the fader, in dB from the top; the last, `-inf`,
+/// is silence.
+pub const FADER_MARKS_DB: [f32; 6] = [0.0, -5.0, -10.0, -20.0, -30.0, f32::NEG_INFINITY];
 
-/// Vertical volume fader (drag or wheel); `position` is its travel (0
-/// bottom … 1 top). Returns the new position when the user moved it. A
-/// fader that is not `enabled` (a bit-perfect output holds the volume at 100 %,
-/// bit-perfect rate and fader spec BF7) is drawn greyed and takes no drag,
-/// click or wheel.
+/// The fader travel (0 bottom … 1 top) of each of [`FADER_MARKS_DB`], on the
+/// fader's curve.
+pub fn fader_mark_travels() -> [f32; 6] {
+    FADER_MARKS_DB.map(fp_model::volume::db_to_travel)
+}
+
+/// Fader travel moved by one mouse-wheel event. On the fader's curve (24 dB
+/// per unit of travel at the top) it is 0.6 dB near 0 dB; it grows towards the
+/// bottom, where the curve steepens.
+const FADER_WHEEL_STEP: f32 = 0.025;
+
+/// The factor of drag and wheel while Ctrl or Shift is held (fine adjust).
+const FADER_FINE: f32 = 0.1;
+
+/// Height of the knob, in points.
+const FADER_KNOB_HEIGHT: f32 = 6.0;
+
+/// Width of the knob; the track is as wide as [`FADER_TRACK_WIDTH`].
+const FADER_KNOB_WIDTH: f32 = 12.0;
+
+/// Width of the fader's track.
+const FADER_TRACK_WIDTH: f32 = 4.0;
+
+/// Font size of the scale marks, a little smaller than the level readout.
+const FADER_MARK_FONT: f32 = 7.0;
+
+/// Length of a scale tick.
+const FADER_TICK: f32 = 3.0;
+
+/// What a drag on the fader remembers between frames.
+#[derive(Clone, Copy)]
+struct FaderDrag {
+    /// The travel the drag has reached (it starts at the fader's own).
+    travel: f32,
+    /// The pointer's height on the previous frame.
+    last_y: f32,
+}
+
+/// The label of a scale mark: `0`, `-5`, … and `\u{2212}\u{221e}` for silence.
+fn fader_mark_label(db: f32) -> String {
+    if db.is_finite() {
+        format!("{db:.0}")
+    } else {
+        "\u{2212}\u{221e}".to_owned()
+    }
+}
+
+/// Vertical volume fader; `position` is its travel (0 bottom … 1 top).
+/// Returns the new position when the user moved it.
+///
+/// A drag moves the fader by the pointer's movement from where the fader is
+/// (no jump on grab), a click alone changes nothing, Ctrl or Shift make drag
+/// and wheel ten times finer, the wheel moves a fixed step per event and a
+/// double click returns the fader to 0 dB (travel 1). A fader that is not
+/// `enabled` (a bit-perfect output holds the volume at 100 %, bit-perfect
+/// rate and fader spec BF7) is drawn greyed and takes no drag, click or
+/// wheel. The scale marks sit left of the track, inside the fader's width.
 pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool) -> Option<f32> {
     let sense = if enabled {
         Sense::click_and_drag()
@@ -1440,12 +1493,41 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
     let (rect, response) = ui.allocate_exact_size(vec2(FADER_WIDTH, height), sense);
     let owned = label.to_owned();
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Slider, enabled, owned.clone()));
+    let travel_px = (rect.height() - FADER_KNOB_HEIGHT).max(1.0);
+    let fine = ui.input(|i| i.modifiers.ctrl || i.modifiers.shift);
+    let factor = if fine { FADER_FINE } else { 1.0 };
     let mut changed = None;
-    if enabled
-        && (response.dragged() || response.clicked())
-        && let Some(p) = response.interact_pointer_pos()
-    {
-        changed = Some((1.0 - (p.y - rect.top()) / rect.height()).clamp(0.0, 1.0));
+    let mut dragging = None;
+    if enabled {
+        let id = response.id;
+        if response.drag_started() {
+            let origin = ui
+                .input(|i| i.pointer.press_origin())
+                .or_else(|| response.interact_pointer_pos());
+            if let Some(origin) = origin {
+                let drag = FaderDrag {
+                    travel: position,
+                    last_y: origin.y,
+                };
+                ui.data_mut(|d| d.insert_temp(id, drag));
+            }
+        }
+        if response.dragged()
+            && let Some(p) = ui.input(|i| i.pointer.latest_pos())
+            && let Some(mut drag) = ui.data(|d| d.get_temp::<FaderDrag>(id))
+        {
+            let dy = p.y - drag.last_y;
+            if dy != 0.0 {
+                drag.travel = (drag.travel - dy * factor / travel_px).clamp(0.0, 1.0);
+                changed = Some(drag.travel);
+            }
+            drag.last_y = p.y;
+            ui.data_mut(|d| d.insert_temp(id, drag));
+            dragging = Some(drag.travel);
+        }
+        if response.double_clicked() {
+            changed = Some(1.0);
+        }
     }
     if enabled && response.hovered() {
         // One fixed step per wheel event: the smoothed scroll delta spreads a
@@ -1454,38 +1536,65 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
             i.events
                 .iter()
                 .filter_map(|e| match e {
-                    egui::Event::MouseWheel { delta, .. } if delta.y != 0.0 => {
-                        Some(delta.y.signum())
+                    egui::Event::MouseWheel { delta, .. } => {
+                        // Some systems turn Shift + wheel into a horizontal scroll.
+                        let d = if delta.y != 0.0 { delta.y } else { delta.x };
+                        (d != 0.0).then(|| d.signum())
                     }
                     _ => None,
                 })
                 .sum()
         });
         if steps != 0.0 {
-            changed = Some((position + steps * FADER_WHEEL_STEP).clamp(0.0, 1.0));
+            changed = Some((position + steps * FADER_WHEEL_STEP * factor).clamp(0.0, 1.0));
         }
     }
     // Holding the knob still must not resend the same volume every frame.
     let changed = changed.filter(|v| (v - position).abs() > f32::EPSILON);
-    let shown = changed.unwrap_or(position);
+    let shown = dragging.or(changed).unwrap_or(position);
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        let track = Rect::from_center_size(rect.center(), vec2(4.0, rect.height()));
+        let (level_colour, knob_colour, mark_colour) = if enabled {
+            (theme::NEUTRAL_300, theme::NEUTRAL_100, theme::NEUTRAL_400)
+        } else {
+            (theme::NEUTRAL_600, theme::NEUTRAL_600, theme::NEUTRAL_600)
+        };
+        // The track sits at the right of the fader, leaving room for the
+        // scale marks on its left.
+        let centre_x = rect.right() - FADER_KNOB_WIDTH / 2.0 - 1.0;
+        let track = Rect::from_center_size(
+            pos2(centre_x, rect.center().y),
+            vec2(FADER_TRACK_WIDTH, rect.height()),
+        );
         painter.rect_filled(track, 0.0, theme::NEUTRAL_800);
         let level = Rect::from_min_max(
             pos2(track.left(), track.bottom() - shown * rect.height()),
             track.right_bottom(),
         );
-        let (level_colour, knob_colour) = if enabled {
-            (theme::NEUTRAL_300, theme::NEUTRAL_100)
-        } else {
-            (theme::NEUTRAL_600, theme::NEUTRAL_600)
-        };
         painter.rect_filled(level, 0.0, level_colour);
-        let knob_bottom = rect.bottom() - shown * (rect.height() - 6.0);
+        // The marks, on the knob's centre line for each level.
+        let tick_right = track.left();
+        for (db, t) in FADER_MARKS_DB.into_iter().zip(fader_mark_travels()) {
+            let y = rect.bottom() - FADER_KNOB_HEIGHT / 2.0 - t * travel_px;
+            painter.line_segment(
+                [pos2(tick_right - FADER_TICK, y), pos2(tick_right, y)],
+                Stroke::new(1.0, mark_colour),
+            );
+            painter.text(
+                pos2(tick_right - FADER_TICK - 1.5, y),
+                Align2::RIGHT_CENTER,
+                fader_mark_label(db),
+                FontId::monospace(FADER_MARK_FONT),
+                mark_colour,
+            );
+        }
+        let knob_bottom = rect.bottom() - shown * travel_px;
         let knob = Rect::from_min_max(
-            pos2(rect.left() + 1.0, knob_bottom - 6.0),
-            pos2(rect.right() - 1.0, knob_bottom),
+            pos2(
+                centre_x - FADER_KNOB_WIDTH / 2.0,
+                knob_bottom - FADER_KNOB_HEIGHT,
+            ),
+            pos2(centre_x + FADER_KNOB_WIDTH / 2.0, knob_bottom),
         );
         painter.rect_filled(knob, 0.0, knob_colour);
         painter.rect_stroke(

@@ -73,8 +73,7 @@ fn bf7_a_locked_fader_takes_no_drag_and_no_wheel() {
 }
 
 /// The top of the fader knob painted inside `fader` (the fader's rect): the
-/// filled rect two points narrower than the fader and six high
-/// (`widgets::fader`), found among the shapes of the last frame.
+/// filled rect twelve points wide and six high (`widgets::fader`), found among the shapes of the last frame.
 fn knob_top(h: &egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, fader: egui::Rect) -> f32 {
     fn rects(shape: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
         match shape {
@@ -92,7 +91,7 @@ fn knob_top(h: &egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, fader: e
         .iter()
         .filter(|r| r.fill != egui::Color32::TRANSPARENT)
         .filter(|r| fader.expand(0.5).contains_rect(r.rect))
-        .filter(|r| near(r.rect.width(), fader.width() - 2.0) && near(r.rect.height(), 6.0))
+        .filter(|r| near(r.rect.width(), 12.0) && near(r.rect.height(), 6.0))
         .collect();
     assert_eq!(knobs.len(), 1, "one knob in {fader:?}: {knobs:?}");
     knobs[0].rect.top()
