@@ -511,6 +511,7 @@ pub fn parse_cart_page(
                 kind: kind_from(&c.kind),
                 looped: c.looped,
                 exclusive: c.exclusive,
+                color: None,
             };
             (position, edit, path)
         })

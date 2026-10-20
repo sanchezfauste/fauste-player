@@ -97,7 +97,7 @@ proptest! {
                     let _ = apply(&mut state, Command::ClearCartFile { page, index });
                 },
                 Op::Edit { pick, looped, exclusive } => if let Some((page, index, _)) = cart(pick) {
-                    let edit = CartEdit { name: format!("c{n}"), kind: CartKind::Effect, looped, exclusive };
+                    let edit = CartEdit { name: format!("c{n}"), kind: CartKind::Effect, looped, exclusive, color: None };
                     let _ = apply(&mut state, Command::SetCart { page, index, edit });
                 },
                 Op::Resize { rows, cols } => {

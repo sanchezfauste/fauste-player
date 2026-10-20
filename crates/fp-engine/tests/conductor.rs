@@ -365,6 +365,7 @@ fn firing_an_exclusive_cart_stops_the_others_on_air() {
         kind: fp_model::CartKind::Jingle,
         looped: false,
         exclusive: true,
+        color: None,
     };
     fp_model::apply(
         &mut state,

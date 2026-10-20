@@ -504,6 +504,7 @@ pub async fn set_cart(
         kind,
         looped: b.looped,
         exclusive: b.exclusive,
+        color: None,
     };
     run_edit(
         &ctx,

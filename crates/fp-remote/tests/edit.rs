@@ -186,6 +186,7 @@ fn a_cart_edit_keeping_its_track_does_not_reassign_it() {
         kind: CartKind::Spot,
         looped: false,
         exclusive: true,
+        color: None,
     };
     assert_eq!(
         plan_edit(

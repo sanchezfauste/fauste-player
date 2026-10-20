@@ -53,6 +53,7 @@ fn with_cart() -> AppState {
         kind: CartKind::Jingle,
         looped: false,
         exclusive: false,
+        color: None,
     };
     apply(
         &mut s,

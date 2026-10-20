@@ -201,6 +201,7 @@ fn page_state() -> AppState {
         kind: CartKind::Jingle,
         looped: false,
         exclusive: true,
+        color: None,
     };
     apply(
         &mut state,
@@ -216,6 +217,7 @@ fn page_state() -> AppState {
         kind: CartKind::Effect,
         looped: true,
         exclusive: false,
+        color: None,
     };
     apply(
         &mut state,
@@ -246,7 +248,8 @@ fn cart_page_round_trips() {
             name: "Station ID".into(),
             kind: CartKind::Jingle,
             looped: false,
-            exclusive: true
+            exclusive: true,
+            color: None,
         }
     );
     assert_eq!(id.2, Some(PathBuf::from("/carts/id.wav")));

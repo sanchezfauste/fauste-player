@@ -394,6 +394,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         kind: cart.kind,
         looped: cart.looped,
         exclusive: cart.exclusive,
+        color: cart.color,
     };
     let index = c.index;
     let send_edit = |edit: CartEdit| {
@@ -417,6 +418,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                     kind: old.kind,
                     looped: old.looped,
                     exclusive: old.exclusive,
+                    color: old.color,
                 },
             });
         }

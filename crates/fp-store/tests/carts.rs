@@ -35,6 +35,7 @@ fn edited_state() -> AppState {
         kind: CartKind::Effect,
         looped: true,
         exclusive: true,
+        color: None,
     };
     apply(
         &mut state,

@@ -267,6 +267,7 @@ pub(crate) fn set_cart(
     cart.kind = edit.kind;
     cart.looped = edit.looped;
     cart.exclusive = edit.exclusive;
+    cart.color = edit.color;
     Ok(())
 }
 
@@ -389,6 +390,7 @@ pub(crate) fn import_page(state: &mut AppState, import: CartPageImport) -> Resul
             cart.kind = edit.kind;
             cart.looped = edit.looped;
             cart.exclusive = edit.exclusive;
+            cart.color = edit.color;
             cart.track = track;
         } else if let Some(track) = track {
             // Outside the grid: do not keep an orphan track.
