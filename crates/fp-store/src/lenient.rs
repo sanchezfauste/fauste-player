@@ -116,6 +116,17 @@ fn candidates(value: &Value, default: Option<&Value>) -> Vec<Value> {
     }
 }
 
+/// `value` as JSON for a load note, cut to its first 40 characters: a note
+/// quotes what was wrong without copying a huge value into the log.
+pub fn quoted(value: &Value) -> String {
+    const MAX_CHARS: usize = 40;
+    let text = value.to_string();
+    match text.char_indices().nth(MAX_CHARS) {
+        Some((cut, _)) => format!("{}…", &text[..cut]),
+        None => text,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::config_from_value;

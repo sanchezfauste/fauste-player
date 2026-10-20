@@ -398,6 +398,27 @@ fn cc4_cart_page_colours_are_read_leniently() {
     assert!(notes[1].ends_with("colour 3; it has none"), "{notes:?}");
 }
 
+/// A huge value in `color` is quoted short in its note, not copied whole
+/// into the log.
+#[test]
+fn cc4_a_huge_unknown_colour_is_quoted_short() {
+    let huge = "x".repeat(100_000);
+    let text = format!(
+        r#"{{"format":"fauste-cart-page","version":1,"name":"X","rows":1,"cols":1,
+        "carts":[{{"position":1,"name":"A","color":"{huge}"}}]}}"#
+    );
+    let mut notes = Vec::new();
+    parse_cart_page_noting(
+        text.as_bytes(),
+        Path::new("/x.cartpage.json"),
+        &limits(),
+        &mut notes,
+    )
+    .unwrap();
+    assert_eq!(notes.len(), 1);
+    assert!(notes[0].len() < 200, "{} bytes", notes[0].len());
+}
+
 #[test]
 fn cc4_an_empty_cart_with_only_a_colour_is_exported() {
     let mut state = page_state();

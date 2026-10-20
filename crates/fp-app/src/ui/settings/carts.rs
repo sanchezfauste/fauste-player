@@ -24,6 +24,10 @@ pub(crate) struct CartsState {
     /// Name being edited, and for which cart.
     name: String,
     name_for: Option<(CartPageId, usize)>,
+    /// The name last sent for the cart edited, until the snapshot shows it:
+    /// an edit sent meanwhile (a colour, a kind) carries it instead of the
+    /// old name.
+    renamed: Option<String>,
     page_name: String,
     page_name_for: Option<CartPageId>,
     file: Option<Receiver<Option<PathBuf>>>,
@@ -395,13 +399,6 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         )
         .selectable(false),
     );
-    let edit_base = CartEdit {
-        name: cart.name.clone(),
-        kind: cart.kind,
-        looped: cart.looped,
-        exclusive: cart.exclusive,
-        color: cart.color,
-    };
     let index = c.index;
     let send_edit = |edit: CartEdit| {
         scene.ctl.send(Command::SetCart {
@@ -430,7 +427,18 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         }
         c.name = cart.name.clone();
         c.name_for = Some((page_id, c.index));
+        c.renamed = None;
     }
+    if c.renamed.as_deref() == Some(cart.name.as_str()) {
+        c.renamed = None;
+    }
+    let edit_base = CartEdit {
+        name: c.renamed.clone().unwrap_or_else(|| cart.name.clone()),
+        kind: cart.kind,
+        looped: cart.looped,
+        exclusive: cart.exclusive,
+        color: cart.color,
+    };
     let name_label = t.tr("settings-cart-name");
     let mut rename = None;
     let response = text_row(ui, &name_label, &mut c.name);
@@ -439,6 +447,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         rename = Some(c.name.clone());
     }
     if let Some(name) = rename {
+        c.renamed = Some(name.clone());
         send_edit(CartEdit {
             name,
             ..edit_base.clone()

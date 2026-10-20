@@ -798,6 +798,65 @@ fn cc8_a_cart_with_peaks_draws_its_waveform_in_its_colour() {
     );
 }
 
+/// The heights of the one-pixel columns in `color` painted on `label`'s
+/// button.
+fn wave_heights_on(h: &H, label: &str, color: Color32) -> Vec<f32> {
+    let button = h.get_by_label(label).rect();
+    let mut heights = Vec::new();
+    for clipped in &h.output().shapes {
+        if let egui::Shape::Mesh(mesh) = &clipped.shape
+            && button.expand(0.5).contains_rect(mesh.calc_bounds())
+        {
+            let ys: Vec<f32> = mesh
+                .vertices
+                .iter()
+                .filter(|v| v.color == color)
+                .map(|v| v.pos.y)
+                .collect();
+            for quad in ys.chunks(4) {
+                let top = quad.iter().copied().fold(f32::INFINITY, f32::min);
+                let bottom = quad.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+                heights.push(bottom - top);
+            }
+        }
+    }
+    heights
+}
+
+/// CC8: the waveform starts at the cue-in. Before it (the first 0.5 s) the
+/// file is loud, after it even: every column drawn is the same height.
+#[test]
+fn cc8_the_waveform_drawn_starts_at_the_cue_in() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let media = MediaCache::default();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    let peak = |level: i16| fp_analysis::WavePeak {
+        min: -level,
+        max: level,
+        rms: level / 2,
+    };
+    let mut peaks = vec![peak(32_000); 5];
+    peaks.extend(vec![peak(8_000); 95]);
+    media.seed(
+        track,
+        TrackMedia {
+            peaks,
+            peak_bucket_secs: 0.1,
+            cover_png: None,
+        },
+    );
+    let (mut h, _fake) = harness_with_media(s, media);
+    h.run_steps(2);
+    let wave = cart_look(Some(CartColor::Teal), false).wave;
+    let heights = wave_heights_on(&h, "Station ID", wave);
+    assert!(!heights.is_empty());
+    let (low, high) = heights
+        .iter()
+        .fold((f32::INFINITY, 0.0f32), |(l, h), &x| (l.min(x), h.max(x)));
+    assert!(high - low < 0.5, "columns from {low} to {high} px tall");
+}
+
 #[test]
 fn cc8_without_a_colour_it_is_light_grey_and_stronger_while_playing() {
     let mut s = with_cart();

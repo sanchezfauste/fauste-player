@@ -527,8 +527,9 @@ pub fn parse_cart_page_noting(
                     let known = raw.as_str().and_then(CartColor::from_name);
                     if known.is_none() {
                         notes.push(format!(
-                            "cart page: cart {} has an unknown colour {raw}; it has none",
-                            c.position
+                            "cart page: cart {} has an unknown colour {}; it has none",
+                            c.position,
+                            crate::lenient::quoted(&raw)
                         ));
                     }
                     known

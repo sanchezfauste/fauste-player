@@ -122,8 +122,11 @@ fn unknown_cart_colors(value: &serde_json::Value) -> Vec<String> {
             known.is_none().then(|| {
                 let id = cart
                     .get("id")
-                    .map_or_else(|| "?".to_owned(), ToString::to_string);
-                format!("carts: cart {id} has an unknown colour {raw}; it has none")
+                    .map_or_else(|| "?".to_owned(), crate::lenient::quoted);
+                format!(
+                    "carts: cart {id} has an unknown colour {}; it has none",
+                    crate::lenient::quoted(raw)
+                )
             })
         })
         .collect()
