@@ -1,9 +1,10 @@
 //! What each cartwall button shows (Phase 2 spec P2.9). Pure functions.
 
+use egui::Color32;
 use fp_engine::conductor::Telemetry;
-use fp_model::{AppState, CartId, CartKind, CartPageId};
+use fp_model::{AppState, CartColor, CartId, CartKind, CartPageId};
 
-use super::format;
+use super::{format, theme};
 
 /// Height of a cart button when there is room (feedback 2 spec O31).
 pub const BUTTON_HEIGHT: f32 = 40.0;
@@ -45,6 +46,8 @@ pub struct CartView {
     pub looped: bool,
     pub exclusive: bool,
     pub cueing: bool,
+    /// The cart's colour (cart colour spec CC1).
+    pub color: Option<CartColor>,
 }
 
 pub fn cart_view(state: &AppState, telemetry: &Telemetry, id: CartId) -> Option<CartView> {
@@ -66,6 +69,7 @@ pub fn cart_view(state: &AppState, telemetry: &Telemetry, id: CartId) -> Option<
         looped: cart.looped,
         exclusive: cart.exclusive,
         cueing: state.cartwall.cue == Some(id),
+        color: cart.color,
     };
     let Some(track) = track else {
         return Some(view);
@@ -100,4 +104,59 @@ pub fn page_on_air(state: &AppState, page: CartPageId) -> bool {
         .cartwall
         .page(page)
         .is_some_and(|p| p.carts.iter().any(|c| state.cartwall.is_playing(c.id)))
+}
+
+/// The colours of a cart button (cart colour spec CC6–CC8).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CartLook {
+    pub fill: Color32,
+    pub hover_fill: Color32,
+    pub active_fill: Color32,
+    pub border: Color32,
+    /// The remaining-time fill while it plays.
+    pub progress: Color32,
+    /// The kind marker of an idle or playing cart; `None`: the kind's own.
+    pub marker: Option<Color32>,
+    /// The waveform behind the text.
+    pub wave: Color32,
+}
+
+pub fn cart_look(color: Option<CartColor>, playing: bool) -> CartLook {
+    let wave_alpha = if playing {
+        theme::CART_WAVE_PLAYING_ALPHA
+    } else {
+        theme::CART_WAVE_IDLE_ALPHA
+    };
+    match color {
+        None => CartLook {
+            fill: theme::NEUTRAL_900,
+            hover_fill: theme::NEUTRAL_800,
+            active_fill: theme::NEUTRAL_700,
+            border: if playing {
+                theme::ON_AIR_TEXT
+            } else {
+                theme::NEUTRAL_800
+            },
+            progress: theme::ON_AIR_ROW.gamma_multiply(0.5),
+            marker: None,
+            wave: theme::CART_WAVE_PLAIN.gamma_multiply(wave_alpha),
+        },
+        Some(color) => {
+            let tone = theme::cart_color(color);
+            let wash = if playing {
+                theme::CART_WASH_PLAYING
+            } else {
+                theme::CART_WASH_IDLE
+            };
+            CartLook {
+                fill: theme::NEUTRAL_900.lerp_to_gamma(tone, wash),
+                hover_fill: theme::NEUTRAL_800.lerp_to_gamma(tone, wash),
+                active_fill: theme::NEUTRAL_700.lerp_to_gamma(tone, wash),
+                border: tone,
+                progress: tone.gamma_multiply(theme::CART_PROGRESS_ALPHA),
+                marker: Some(tone),
+                wave: tone.gamma_multiply(wave_alpha),
+            }
+        }
+    }
 }

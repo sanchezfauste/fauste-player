@@ -5,7 +5,9 @@ use egui_phosphor::regular as icon;
 use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
-use super::cart_view::{BUTTON_HEIGHT, CartStatus, GAP, button_height, cart_view, page_on_air};
+use super::cart_view::{
+    BUTTON_HEIGHT, CartStatus, GAP, button_height, cart_look, cart_view, page_on_air,
+};
 use super::glyphs::{self, TransportAction};
 use super::theme;
 use super::view;
@@ -278,17 +280,14 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                     label.clone()
                 };
                 let playing = view.status == CartStatus::Playing;
+                let look = cart_look(view.color, playing);
                 let style = TileStyle {
-                    fill: theme::NEUTRAL_900,
-                    border: if playing {
-                        theme::ON_AIR_TEXT
-                    } else {
-                        theme::NEUTRAL_800
-                    },
+                    fill: look.fill,
+                    border: look.border,
                     content: theme::TEXT,
-                    hover_fill: theme::NEUTRAL_800,
+                    hover_fill: look.hover_fill,
                     hover_content: theme::TEXT,
-                    active_fill: theme::NEUTRAL_700,
+                    active_fill: look.active_fill,
                     border_width: 1.0,
                     dim_when_disabled: true,
                 };
@@ -300,13 +299,13 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                                 r.min,
                                 vec2(r.width() * view.remaining_fraction, r.height()),
                             );
-                            p.rect_filled(bar, 0.0, theme::ON_AIR_ROW.gamma_multiply(0.5));
+                            p.rect_filled(bar, 0.0, look.progress);
                         }
                         let inner = r.shrink2(vec2(8.0, 4.0));
                         let dot = match view.status {
                             CartStatus::Empty => theme::NEUTRAL_700,
                             CartStatus::Unavailable => theme::AMBER,
-                            _ => kind_color(view.kind),
+                            _ => look.marker.unwrap_or_else(|| kind_color(view.kind)),
                         };
                         p.rect_filled(
                             Rect::from_min_size(

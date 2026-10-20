@@ -11,13 +11,16 @@ mod support;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use egui::{Color32, Rect};
 use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::cart_view::{
-    BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, button_height, cart_view, page_on_air,
+    BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, button_height, cart_look, cart_view,
+    page_on_air,
 };
+use fp_app::ui::theme;
 use fp_engine::conductor::Telemetry;
 use fp_engine::engine::CartTelemetry;
-use fp_model::{AppState, CartEdit, CartKind, Command, FileState, TrackAnalysis, apply};
+use fp_model::{AppState, CartColor, CartEdit, CartKind, Command, FileState, TrackAnalysis, apply};
 use support::{Fake, harness, state};
 
 /// A state whose first page has "Station ID" (10 s, cue 0.5–9.5) in cell 0.
@@ -515,4 +518,184 @@ fn rows_are_exactly_one_gap_apart() {
         (step - (first.height() + GAP)).abs() < 0.01,
         "{step} {first:?} {last:?}"
     );
+}
+
+type H = egui_kittest::Harness<'static, fp_app::ui::app::AppUi>;
+
+/// Gives cart `index` of the first page `color`, keeping its other fields.
+fn paint_cart(s: &mut AppState, index: usize, color: Option<CartColor>) {
+    let page = s.cartwall.pages[0].id;
+    let c = s.cartwall.pages[0].carts[index].clone();
+    let edit = CartEdit {
+        name: c.name,
+        kind: c.kind,
+        looped: c.looped,
+        exclusive: c.exclusive,
+        color,
+    };
+    apply(s, Command::SetCart { page, index, edit }).unwrap();
+}
+
+/// Every filled or stroked rectangle painted inside `area` in the last frame.
+fn rects_in(h: &H, area: Rect) -> Vec<egui::epaint::RectShape> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+        match shape {
+            egui::Shape::Rect(r) => out.push(r.clone()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut all = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, &mut all);
+    }
+    all.retain(|r| area.expand(0.5).contains_rect(r.rect));
+    all
+}
+
+fn same(a: Rect, b: Rect) -> bool {
+    (a.min - b.min).length() < 0.5 && (a.max - b.max).length() < 0.5
+}
+
+/// The button's background, its border and whether a 6×6 marker in
+/// `marker` is drawn on it.
+fn button_paint(h: &H, label: &str, marker: Color32) -> (Color32, Color32, bool) {
+    let button = h.get_by_label(label).rect();
+    let rects = rects_in(h, button);
+    let fill = rects
+        .iter()
+        .find(|r| same(r.rect, button) && r.fill != Color32::TRANSPARENT)
+        .map(|r| r.fill)
+        .unwrap_or_else(|| panic!("no background for {label}"));
+    let border = rects
+        .iter()
+        .find(|r| same(r.rect, button) && r.stroke.width > 0.0)
+        .map(|r| r.stroke.color)
+        .unwrap_or_else(|| panic!("no border for {label}"));
+    let has_marker = rects.iter().any(|r| {
+        (r.rect.width() - 6.0).abs() < 0.5
+            && (r.rect.height() - 6.0).abs() < 0.5
+            && r.fill == marker
+    });
+    (fill, border, has_marker)
+}
+
+/// The width of the remaining-time fill in `progress` on the button.
+fn progress_width(h: &H, label: &str, progress: Color32) -> f32 {
+    let button = h.get_by_label(label).rect();
+    rects_in(h, button)
+        .iter()
+        .filter(|r| r.fill == progress)
+        .map(|r| r.rect.width())
+        .fold(0.0, f32::max)
+}
+
+/// The spec's strengths (CC6, CC7), and a cart without a colour as before.
+#[test]
+fn cart_looks_follow_the_spec() {
+    let red = theme::cart_color(CartColor::Red);
+    let idle = cart_look(Some(CartColor::Red), false);
+    assert_eq!(idle.border, red);
+    assert_eq!(idle.fill, theme::NEUTRAL_900.lerp_to_gamma(red, 0.07));
+    assert_eq!(idle.hover_fill, theme::NEUTRAL_800.lerp_to_gamma(red, 0.07));
+    assert_eq!(
+        idle.active_fill,
+        theme::NEUTRAL_700.lerp_to_gamma(red, 0.07)
+    );
+    assert_eq!(idle.marker, Some(red));
+    let playing = cart_look(Some(CartColor::Red), true);
+    assert_eq!(playing.border, red);
+    assert_eq!(playing.fill, theme::NEUTRAL_900.lerp_to_gamma(red, 0.16));
+    assert_eq!(playing.progress, red.gamma_multiply(0.38));
+    let plain = cart_look(None, false);
+    assert_eq!(
+        (
+            plain.fill,
+            plain.hover_fill,
+            plain.active_fill,
+            plain.border,
+            plain.marker
+        ),
+        (
+            theme::NEUTRAL_900,
+            theme::NEUTRAL_800,
+            theme::NEUTRAL_700,
+            theme::NEUTRAL_800,
+            None
+        )
+    );
+    let plain_playing = cart_look(None, true);
+    assert_eq!(plain_playing.border, theme::ON_AIR_TEXT);
+    assert_eq!(plain_playing.fill, theme::NEUTRAL_900);
+    assert_eq!(
+        plain_playing.progress,
+        theme::ON_AIR_ROW.gamma_multiply(0.5)
+    );
+}
+
+#[test]
+fn a_cart_view_carries_its_colour() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let id = s.cartwall.pages[0].carts[0].id;
+    assert_eq!(
+        cart_view(&s, &Telemetry::default(), id).unwrap().color,
+        Some(CartColor::Teal)
+    );
+}
+
+/// CC6.
+#[test]
+fn cc6_an_idle_cart_with_a_colour_has_its_border_wash_and_marker() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let (h, _fake) = harness(s);
+    let look = cart_look(Some(CartColor::Teal), false);
+    let teal = theme::cart_color(CartColor::Teal);
+    assert_eq!(
+        button_paint(&h, "Station ID", teal),
+        (look.fill, teal, true)
+    );
+}
+
+#[test]
+fn cc6_a_cart_without_a_colour_is_drawn_as_before() {
+    let (h, _fake) = harness(with_cart());
+    // A jingle's marker is the accent violet.
+    assert_eq!(
+        button_paint(&h, "Station ID", theme::ACCENT),
+        (theme::NEUTRAL_900, theme::NEUTRAL_800, true)
+    );
+}
+
+/// CC7.
+#[test]
+fn cc7_a_playing_cart_with_a_colour_keeps_it_and_its_countdown_shows() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Amber));
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (h, _fake) = harness(s);
+    let look = cart_look(Some(CartColor::Amber), true);
+    let amber = theme::cart_color(CartColor::Amber);
+    assert_eq!(
+        button_paint(&h, "Station ID", amber),
+        (look.fill, amber, true)
+    );
+    let button = h.get_by_label("Station ID").rect();
+    assert!(
+        (progress_width(&h, "Station ID", look.progress) - button.width()).abs() < 1.0,
+        "the whole play range is still to play"
+    );
+}
+
+#[test]
+fn cc7_a_playing_cart_without_a_colour_is_red_as_before() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (h, _fake) = harness(s);
+    let (fill, border, _) = button_paint(&h, "Station ID", theme::ACCENT);
+    assert_eq!((fill, border), (theme::NEUTRAL_900, theme::ON_AIR_TEXT));
+    assert!(progress_width(&h, "Station ID", theme::ON_AIR_ROW.gamma_multiply(0.5)) > 0.0);
 }
