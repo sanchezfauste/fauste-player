@@ -222,20 +222,25 @@ fn the_marks_follow_the_curve() {
         FADER_MARKS_DB,
         [
             0.0,
-            -3.0,
-            -5.0,
+            -2.0,
+            -4.0,
+            -6.0,
+            -8.0,
             -10.0,
+            -12.0,
             -15.0,
             -20.0,
+            -25.0,
             -30.0,
             -40.0,
+            -50.0,
             f32::NEG_INFINITY
         ]
     );
     let t = fader_mark_travels();
     assert_eq!(t[0], 1.0);
-    assert_eq!(t[8], 0.0);
-    assert!((20.0 * gain_from_fader(t[3]).log10() + 10.0).abs() < 0.01);
+    assert_eq!(t[13], 0.0);
+    assert!((20.0 * gain_from_fader(t[5]).log10() + 10.0).abs() < 0.01);
     assert!(t.windows(2).all(|w| w[0] > w[1]));
 }
 
@@ -270,13 +275,18 @@ fn the_scale_marks_are_painted_and_dimmed_when_locked() {
         let texts = painted(&h);
         for label in [
             "0",
-            "-3",
-            "-5",
+            "-2",
+            "-4",
+            "-6",
+            "-8",
             "-10",
+            "-12",
             "-15",
             "-20",
+            "-25",
             "-30",
             "-40",
+            "-50",
             "\u{2212}\u{221e}",
         ] {
             let found: Vec<_> = texts.iter().filter(|(t, _)| t == label).collect();

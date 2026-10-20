@@ -89,8 +89,8 @@ playlist tabs, transport, volume and outputs.
   mixing-desk law: it is fine near the top and steeper towards the bottom,
   so lowering it a little lowers the level a little (90 % of the travel is
   about −2.5 dB, 50 % about −15.9 dB, 10 % about −48 dB). The top is 0 dB and
-  the bottom is silence. Notches across the fader mark 0, −3, −5, −10, −15,
-  −20, −30, −40 and −∞ dB, with the level written on their right.
+  the bottom is silence. Notches across the fader mark 0, −2, −4, −6, −8,
+  −10, −12, −15, −20, −25, −30, −40, −50 and −∞ dB, with the level written on their right.
   - Drag it: the fader moves by as much as the pointer does, from where it
     is, so grabbing it never makes it jump; a click without moving changes
     nothing.
