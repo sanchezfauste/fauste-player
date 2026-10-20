@@ -6,7 +6,8 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use fp_model::{
-    CartEdit, CartFileChange, CartKind, Command, HttpRemoteConfig, MarkerKind, TrackId,
+    AppState, CartColor, CartEdit, CartFileChange, CartKind, Command, HttpRemoteConfig, MarkerKind,
+    TrackId,
 };
 use fp_remote::api::{ApiError, Edit, plan_edit};
 use fp_remote::http::{Ctx, router};
@@ -195,7 +196,8 @@ fn a_cart_edit_keeping_its_track_does_not_reassign_it() {
                 page,
                 index: 0,
                 edit: edit.clone(),
-                track: Some(t)
+                track: Some(t),
+                color: None
             }
         )
         .unwrap(),
@@ -214,7 +216,8 @@ fn a_cart_edit_keeping_its_track_does_not_reassign_it() {
                 page,
                 index: 0,
                 edit: edit.clone(),
-                track: Some(other)
+                track: Some(other),
+                color: None
             }
         )
         .unwrap(),
@@ -232,7 +235,8 @@ fn a_cart_edit_keeping_its_track_does_not_reassign_it() {
                 page,
                 index: 0,
                 edit: edit.clone(),
-                track: None
+                track: None,
+                color: None
             }
         )
         .unwrap(),
@@ -250,7 +254,8 @@ fn a_cart_edit_keeping_its_track_does_not_reassign_it() {
                 page,
                 index: 999,
                 edit,
-                track: None
+                track: None,
+                color: None
             }
         )
         .unwrap_err(),
@@ -570,4 +575,104 @@ async fn n24_the_loudness_endpoint_refuses_bad_bodies() {
         StatusCode::NOT_FOUND
     );
     assert!(fake.take_sent().is_empty(), "nothing refused was sent");
+}
+
+/// CC9: the edit sets, clears or (omitted) keeps the colour.
+#[test]
+fn cc9_a_cart_edit_sets_clears_or_keeps_the_colour() {
+    let mut s = demo_state();
+    let page = s.cartwall.pages[0].id;
+    let t = s.cartwall.pages[0].carts[0].track.unwrap();
+    let edit = CartEdit {
+        name: "Top".into(),
+        kind: CartKind::Spot,
+        looped: false,
+        exclusive: false,
+        color: None,
+    };
+    let planned = |s: &AppState, color: Option<Option<CartColor>>| {
+        let commands = plan_edit(
+            s,
+            Edit::SetCart {
+                page,
+                index: 0,
+                edit: edit.clone(),
+                track: Some(t),
+                color,
+            },
+        )
+        .unwrap();
+        match commands.as_slice() {
+            [Command::EditCart { edit, .. }] => edit.color,
+            other => panic!("{other:?}"),
+        }
+    };
+    assert_eq!(
+        planned(&s, Some(Some(CartColor::Teal))),
+        Some(CartColor::Teal)
+    );
+    fp_model::apply(
+        &mut s,
+        Command::SetCart {
+            page,
+            index: 0,
+            edit: CartEdit {
+                color: Some(CartColor::Red),
+                ..edit.clone()
+            },
+        },
+    )
+    .unwrap();
+    assert_eq!(planned(&s, None), Some(CartColor::Red), "omitted keeps it");
+    assert_eq!(planned(&s, Some(None)), None, "null clears it");
+}
+
+#[tokio::test]
+async fn cc9_the_cart_route_takes_a_lower_case_colour_or_null() {
+    let mut s = demo_state();
+    let page = s.cartwall.pages[0].id;
+    let t = s.cartwall.pages[0].carts[0].track.unwrap().0;
+    fp_model::apply(
+        &mut s,
+        Command::SetCart {
+            page,
+            index: 0,
+            edit: CartEdit {
+                name: "ID".into(),
+                kind: CartKind::Jingle,
+                looped: false,
+                exclusive: false,
+                color: Some(CartColor::Red),
+            },
+        },
+    )
+    .unwrap();
+    let fake = FakeControl::new(s);
+    let uri = format!("/api/v1/cartwall/pages/{}/carts/0", page.0);
+    let body = |color: Option<Value>| {
+        let mut b = json!({"name": "ID", "kind": "jingle", "looped": false,
+                           "exclusive": false, "track": t});
+        if let Some(c) = color {
+            b["color"] = c;
+        }
+        b
+    };
+    let sent_color = |fake: &Arc<FakeControl>| match fake.take_sent().as_slice() {
+        [Command::EditCart { edit, .. }] => edit.color,
+        other => panic!("{other:?}"),
+    };
+    for bad in [json!("Teal"), json!("magenta"), json!(3), json!(true)] {
+        let status = call(&fake, "PUT", &uri, Some(body(Some(bad.clone())))).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+        assert!(fake.take_sent().is_empty(), "{bad}: nothing queued");
+    }
+    let status = call(&fake, "PUT", &uri, Some(body(Some(json!("teal"))))).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert_eq!(sent_color(&fake), Some(CartColor::Teal));
+    let status = call(&fake, "PUT", &uri, Some(body(Some(Value::Null)))).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert_eq!(sent_color(&fake), None, "null clears");
+    let status = call(&fake, "PUT", &uri, Some(body(None))).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    assert_eq!(sent_color(&fake), Some(CartColor::Red), "omitted keeps");
 }

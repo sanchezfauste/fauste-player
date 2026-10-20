@@ -178,6 +178,8 @@ pub struct CartDto {
     pub kind: &'static str,
     pub looped: bool,
     pub exclusive: bool,
+    /// Cart colour spec CC9: the colour's lower-case name, or `null`.
+    pub color: Option<&'static str>,
     pub track: Option<TrackDto>,
 }
 
@@ -385,6 +387,7 @@ fn page_dto(model: &AppState, page: &CartPage) -> CartPageDto {
                 kind: cart_kind_name(c.kind),
                 looped: c.looped,
                 exclusive: c.exclusive,
+                color: c.color.map(fp_model::CartColor::name),
                 track: c.track.and_then(|t| model.library.get(t)).map(track_dto),
             })
             .collect(),

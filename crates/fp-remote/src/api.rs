@@ -6,8 +6,8 @@
 
 use fp_model::volume::gain_from_fader;
 use fp_model::{
-    AppState, CartEdit, CartFileChange, CartId, CartPageId, Command, EntryId, MarkerKind,
-    ModelError, PlayMode, PlayerId, PlaylistId, TrackId, Transport, command_available,
+    AppState, CartColor, CartEdit, CartFileChange, CartId, CartPageId, Command, EntryId,
+    MarkerKind, ModelError, PlayMode, PlayerId, PlaylistId, TrackId, Transport, command_available,
 };
 
 /// One action of a remote client.
@@ -343,6 +343,9 @@ pub enum Edit {
         index: usize,
         edit: CartEdit,
         track: Option<TrackId>,
+        /// CC9: `None` keeps the cart's colour; `Some` sets it (`Some(None)`
+        /// clears it). It replaces `edit.color`.
+        color: Option<Option<CartColor>>,
     },
     SetMarker {
         track: TrackId,
@@ -476,8 +479,13 @@ fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError>
             index,
             edit,
             track: wanted,
+            color,
         } => {
             let cart = page(id)?.carts.get(index).ok_or(ApiError::NotFound)?;
+            let edit = CartEdit {
+                color: color.unwrap_or(cart.color),
+                ..edit
+            };
             let file = match wanted {
                 Some(t) if cart.track != Some(t) => {
                     track(t)?;
