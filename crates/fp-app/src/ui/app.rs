@@ -20,6 +20,7 @@ use fp_model::{
 use super::about::{self, Opener};
 use super::cartwall;
 use super::controller::Controller;
+use super::cue_on_air;
 use super::cue_window;
 use super::exit_guard::{self, ExitIntent};
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
@@ -125,6 +126,13 @@ pub(crate) struct ViewState {
     pub apply_now_requested: bool,
     /// Apply now's confirmation is open (§9.3).
     pub confirm_apply_now: bool,
+    /// The on-air pre-listen request the operator answered (its id): not
+    /// shown again while the snapshot still holds it (on-air pre-listen
+    /// spec §5).
+    pub cue_answered: Option<u64>,
+    /// The id of the last on-air pre-listen notice (CA5) put in the status
+    /// bar.
+    pub cue_notice_seen: Option<u64>,
     /// The notice about tracks an earlier version analysed is open.
     pub outdated_open: bool,
     /// Where each waveform's menu was opened, in seconds.
@@ -606,6 +614,14 @@ impl AppUi {
         while let Some(error) = self.ctl.take_rejection() {
             self.view.notice = Some((error_text(&self.i18n, &error), time + NOTICE_SECS));
         }
+        // On-air pre-listen spec §5: CA5's notice, once per notice.
+        if let Some(stopped) = state.cue_on_air.notice
+            && self.view.cue_notice_seen != Some(stopped.id)
+        {
+            self.view.cue_notice_seen = Some(stopped.id);
+            let text = cue_on_air::notice_text(&self.i18n, &state, &stopped);
+            self.view.notice = Some((text, time + NOTICE_SECS));
+        }
         // Paths arrive already filtered (and folders expanded) off this thread.
         if self.ctx.is_none() {
             self.ctx = Some(ctx.clone());
@@ -912,6 +928,20 @@ impl AppUi {
                 }
             }
         }
+        // On-air pre-listen spec §5: a CA3 request asks the operator.
+        if let Some(request) = self.cue_question(&state).cloned() {
+            match cue_on_air::show(&ctx, &scene, &request) {
+                Some(true) => {
+                    self.view.cue_answered = Some(request.id);
+                    scene.ctl.send(Command::ForceCue(request.start));
+                }
+                Some(false) => {
+                    self.view.cue_answered = Some(request.id);
+                    scene.ctl.send(Command::CancelCueOnAir(request.id));
+                }
+                None => {}
+            }
+        }
         // The guard takes precedence over Settings and About: drawn last, it
         // is the top modal.
         if let Some(intent) = self.view.exit_guard {
@@ -1134,6 +1164,15 @@ impl AppUi {
         self.view.exit_guard = Some(ExitIntent::Close);
     }
 
+    /// The pending on-air pre-listen request the operator has not answered.
+    fn cue_question<'a>(&self, state: &'a AppState) -> Option<&'a fp_model::CueConfirmation> {
+        state
+            .cue_on_air
+            .request
+            .as_ref()
+            .filter(|r| self.view.cue_answered != Some(r.id))
+    }
+
     fn keyboard(&mut self, ctx: &egui::Context, state: &AppState) {
         // The close guard owns the keyboard while it is open, even over a
         // focused text field: Esc cancels it and no shortcut acts. (Esc is
@@ -1153,6 +1192,19 @@ impl AppUi {
             });
             if escape {
                 self.view.exit_guard = None;
+            }
+            return;
+        }
+        // On-air pre-listen spec §5: the question owns the keyboard; Esc
+        // and Enter cancel (Cancel is the default), and no shortcut acts.
+        if let Some(id) = self.cue_question(state).map(|r| r.id) {
+            let cancel = ctx.input_mut(|i| {
+                i.consume_key(egui::Modifiers::NONE, Key::Escape)
+                    | i.consume_key(egui::Modifiers::NONE, Key::Enter)
+            });
+            if cancel {
+                self.view.cue_answered = Some(id);
+                self.ctl.send(Command::CancelCueOnAir(id));
             }
             return;
         }

@@ -106,7 +106,17 @@ impl Router {
                     return None;
                 }
                 let command = player_command(state, action)?;
-                command_available(state, &command).then_some(command)
+                if !command_available(state, &command) {
+                    return None;
+                }
+                // On-air pre-listen spec CA6: MIDI cannot answer the
+                // question a pre-listen on a sounding on-air output asks,
+                // and has no force: such a CUE does nothing.
+                if fp_model::cue_on_air::needs_confirmation(state, &command) {
+                    tracing::info!("MIDI CUE refused: it would be heard on air (cue_on_air)");
+                    return None;
+                }
+                Some(command)
             }
             MidiAction::Volume(n) => {
                 let position = position?;

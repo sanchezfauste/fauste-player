@@ -23,7 +23,7 @@ their own outputs, independently of the players.
 
 | Item | Action |
 |---|---|
-| Pre-listen on CUE | Play it on the cartwall's CUE output (dimmed when the cartwall has no Cue output apart from its Main one) |
+| Pre-listen on CUE | Play it on the cartwall's CUE output (dimmed when the cartwall has no Cue output). On the on-air output it asks first while something plays there (see [CUE](players.md#cue-pre-listen)) |
 | Stop | Stop it |
 | Edit… | Open it in Settings |
 

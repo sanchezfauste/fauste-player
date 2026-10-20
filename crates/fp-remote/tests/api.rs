@@ -2,7 +2,7 @@
 mod support;
 
 use fp_model::volume::gain_from_fader;
-use fp_model::{CartId, Command, EntryId, PlayMode, PlayerId, PlaylistId};
+use fp_model::{CartId, Command, CueStart, EntryId, PlayMode, PlayerId, PlaylistId};
 use fp_remote::api::{ApiError, Edit, Operation as O, plan, plan_edit};
 use support::demo_state;
 
@@ -53,9 +53,28 @@ fn toggles_take_the_desired_value() {
         plan(&s, O::SetStopAfterCurrent(p, true)).unwrap(),
         vec![Command::SetStopAfterCurrent(p, true)]
     );
-    assert_eq!(plan(&s, O::SetCue(p, false)).unwrap(), vec![]);
     assert_eq!(
-        plan(&s, O::SetCue(p, true)).unwrap(),
+        plan(
+            &s,
+            O::SetCue {
+                player: p,
+                on: false,
+                force: false
+            }
+        )
+        .unwrap(),
+        vec![]
+    );
+    assert_eq!(
+        plan(
+            &s,
+            O::SetCue {
+                player: p,
+                on: true,
+                force: false
+            }
+        )
+        .unwrap(),
         vec![Command::SetCue(p, true)]
     );
     let e = s.playlists.iter().next().unwrap().entries[0].id;
@@ -148,7 +167,15 @@ fn next_and_cue_entry_need_known_ids() {
         vec![Command::SetNext(p, e)]
     );
     assert_eq!(
-        plan(&s, O::CueEntry(p, e)).unwrap(),
+        plan(
+            &s,
+            O::CueEntry {
+                player: p,
+                entry: e,
+                force: false
+            }
+        )
+        .unwrap(),
         vec![Command::CueEntry(p, e)]
     );
     assert_eq!(
@@ -200,9 +227,28 @@ fn carts_fire_stop_and_cue_by_id() {
         plan(&s, O::StopCart(c)).unwrap(),
         vec![Command::StopCart(c)]
     );
-    assert_eq!(plan(&s, O::SetCartCue(c, false)).unwrap(), vec![]);
     assert_eq!(
-        plan(&s, O::SetCartCue(c, true)).unwrap(),
+        plan(
+            &s,
+            O::SetCartCue {
+                cart: c,
+                on: false,
+                force: false
+            }
+        )
+        .unwrap(),
+        vec![]
+    );
+    assert_eq!(
+        plan(
+            &s,
+            O::SetCartCue {
+                cart: c,
+                on: true,
+                force: false
+            }
+        )
+        .unwrap(),
         vec![Command::SetCartCue(c, true)]
     );
     assert_eq!(
@@ -254,10 +300,18 @@ fn a_desired_value_planned_twice_from_one_snapshot_stays_set() {
     let c = s.cartwall.pages[0].carts[0].id;
     let mut applied = s.clone();
     for op in [
-        O::SetCue(p, true),
+        O::SetCue {
+            player: p,
+            on: true,
+            force: false,
+        },
         O::SetStopAfterCurrent(p, true),
         O::SetEntryRepeat(e, true),
-        O::SetCartCue(c, true),
+        O::SetCartCue {
+            cart: c,
+            on: true,
+            force: false,
+        },
     ] {
         let first = plan(&s, op).unwrap();
         let second = plan(&s, op).unwrap();
@@ -356,28 +410,62 @@ fn seek_bounds_follow_the_play_range() {
     );
 }
 
-/// Spec §4.6: a CUE needs a Cue output apart from Main; without one every
+/// Spec §4.6 and CA1: a CUE needs a Cue route; without one every
 /// way to start a CUE is unavailable, as the console dims it.
 #[test]
-fn a_cue_without_a_cue_output_apart_from_main_is_a_conflict() {
+fn a_cue_without_a_cue_route_is_a_conflict() {
     let mut s = demo_state();
     let p = s.players[0].id;
     let e = s.playlists.iter().next().unwrap().entries[2].id;
     let c = s.cartwall.pages[0].carts[0].id;
     for r in &mut s.config.outputs.routes {
-        r.main = r.cue.clone();
+        r.cue = None;
     }
-    s.config.outputs.cartwall.main = s.config.outputs.cartwall.cue.clone();
+    s.config.outputs.cartwall.cue = None;
     for op in [
-        O::SetCue(p, true),
-        O::CueEntry(p, e),
-        O::SetCartCue(c, true),
+        O::SetCue {
+            player: p,
+            on: true,
+            force: false,
+        },
+        O::CueEntry {
+            player: p,
+            entry: e,
+            force: false,
+        },
+        O::SetCartCue {
+            cart: c,
+            on: true,
+            force: false,
+        },
     ] {
         let err = plan(&s, op).unwrap_err();
         assert_eq!(err.code(), "unavailable", "{op:?}");
     }
-    assert_eq!(plan(&s, O::SetCue(p, false)).unwrap(), vec![]);
-    assert_eq!(plan(&s, O::SetCartCue(c, false)).unwrap(), vec![]);
+    assert_eq!(
+        plan(
+            &s,
+            O::SetCue {
+                player: p,
+                on: false,
+                force: false
+            }
+        )
+        .unwrap(),
+        vec![]
+    );
+    assert_eq!(
+        plan(
+            &s,
+            O::SetCartCue {
+                cart: c,
+                on: false,
+                force: false
+            }
+        )
+        .unwrap(),
+        vec![]
+    );
 }
 
 /// The reducer raises a stopped player's seek before the cue-in to the
@@ -494,5 +582,129 @@ fn br16_play_and_previous_on_a_bit_perfect_player_are_accepted() {
     assert_eq!(
         plan(&s, O::Previous(p)).unwrap(),
         vec![Command::Previous(p)]
+    );
+}
+
+#[test]
+fn ca6_a_cue_that_would_ask_is_a_cue_on_air_conflict() {
+    let s = support::on_air_cue_state();
+    let p = s.players[0].id;
+    let e = s.playlists.iter().next().unwrap().entries[2].id;
+    let c = s.cartwall.pages[0].carts[0].id;
+    for op in [
+        O::SetCue {
+            player: p,
+            on: true,
+            force: false,
+        },
+        O::CueEntry {
+            player: p,
+            entry: e,
+            force: false,
+        },
+        O::SetCartCue {
+            cart: c,
+            on: true,
+            force: false,
+        },
+    ] {
+        let err = plan(&s, op).unwrap_err();
+        assert_eq!(err.status(), 409, "{op:?}");
+        assert_eq!(err.code(), "cue_on_air", "{op:?}");
+    }
+}
+
+#[test]
+fn ca4_force_starts_it_anyway() {
+    let s = support::on_air_cue_state();
+    let p = s.players[0].id;
+    let next = s.player(p).unwrap().next.unwrap();
+    let e = s.playlists.iter().next().unwrap().entries[2].id;
+    let c = s.cartwall.pages[0].carts[0].id;
+    assert_eq!(
+        plan(
+            &s,
+            O::SetCue {
+                player: p,
+                on: true,
+                force: true
+            }
+        )
+        .unwrap(),
+        vec![Command::ForceCue(CueStart::Entry {
+            player: p,
+            entry: next
+        })]
+    );
+    assert_eq!(
+        plan(
+            &s,
+            O::CueEntry {
+                player: p,
+                entry: e,
+                force: true
+            }
+        )
+        .unwrap(),
+        vec![Command::ForceCue(CueStart::Entry {
+            player: p,
+            entry: e
+        })]
+    );
+    assert_eq!(
+        plan(
+            &s,
+            O::SetCartCue {
+                cart: c,
+                on: true,
+                force: true
+            }
+        )
+        .unwrap(),
+        vec![Command::ForceCue(CueStart::Cart(c))]
+    );
+}
+
+#[test]
+fn ca6_a_quiet_on_air_output_needs_no_force_and_a_stop_never_does() {
+    let mut s = support::on_air_cue_state();
+    let (p1, p2) = (s.players[0].id, s.players[1].id);
+    fp_model::apply(&mut s, Command::Stop(p2)).unwrap();
+    assert_eq!(
+        plan(
+            &s,
+            O::SetCue {
+                player: p1,
+                on: true,
+                force: false
+            }
+        )
+        .unwrap(),
+        vec![Command::SetCue(p1, true)]
+    );
+    fp_model::apply(&mut s, Command::SetCue(p1, true)).unwrap();
+    fp_model::apply(&mut s, Command::Play(p2)).unwrap();
+    // Play stopped the unconfirmed pre-listen (CA5): start it forced, then
+    // stop it without force.
+    let next = s.player(p1).unwrap().next.unwrap();
+    fp_model::apply(
+        &mut s,
+        Command::ForceCue(CueStart::Entry {
+            player: p1,
+            entry: next,
+        }),
+    )
+    .unwrap();
+    assert_eq!(
+        plan(
+            &s,
+            O::SetCue {
+                player: p1,
+                on: false,
+                force: false
+            }
+        )
+        .unwrap(),
+        vec![Command::SetCue(p1, false)]
     );
 }

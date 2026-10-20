@@ -95,10 +95,20 @@ pub(crate) fn stop_all(state: &mut AppState, out: &mut Vec<EngineAction>) {
     stop_cue(state, out);
 }
 
-/// C9.
+/// The request a pre-listen of `id` would send, if the cart exists and can
+/// play (on-air pre-listen spec CA6).
+pub(crate) fn cue_request(state: &AppState, id: CartId) -> Option<CartRequest> {
+    let cart = state.cartwall.cart(id)?;
+    request(state, cart, false, Holder::CartwallCue)
+}
+
+/// C9, as amended by the on-air pre-listen spec: a pre-listen that starts
+/// from nothing on a sounding on-air output asks first (CA3) unless it is
+/// `force`d (CA4); one that replaces another cart's keeps going.
 pub(crate) fn cue(
     state: &mut AppState,
     id: CartId,
+    force: bool,
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
     let cart = state
@@ -108,11 +118,17 @@ pub(crate) fn cue(
         .ok_or(ModelError::UnknownCart(id))?;
     let was = state.cartwall.cue;
     stop_cue(state, out);
-    // Spec §4.6: a pre-listen needs a cartwall Cue output apart from Main.
+    // Spec §4.6, CA1: a pre-listen needs a cartwall Cue route.
     if was == Some(id) || !state.config.outputs.cartwall_has_cue() {
         return Ok(());
     }
     if let Some(request) = request(state, &cart, false, Holder::CartwallCue) {
+        if was.is_none()
+            && !force
+            && crate::cue_on_air::ask(state, crate::command::CueStart::Cart(id))
+        {
+            return Ok(());
+        }
         state.cartwall.cue = Some(id);
         state.cartwall.cue_normalization = Some(request.normalization);
         out.push(EngineAction::StartCartCue(request));

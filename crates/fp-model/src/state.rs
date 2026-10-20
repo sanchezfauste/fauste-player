@@ -20,6 +20,10 @@ pub struct AppState {
     pub ids: IdGen,
     /// What the engine runs with (live settings spec); runtime only.
     pub live: crate::live::LiveSettings,
+    /// Pre-listen on an on-air output: the confirmation request, the
+    /// notice and the confirmed pre-listens (on-air pre-listen spec CA3-CA5);
+    /// runtime only.
+    pub cue_on_air: crate::cue_on_air::CueOnAir,
 }
 
 impl AppState {
@@ -50,6 +54,7 @@ impl AppState {
             },
             ids,
             live: crate::live::LiveSettings::default(),
+            cue_on_air: crate::cue_on_air::CueOnAir::default(),
         }
     }
 

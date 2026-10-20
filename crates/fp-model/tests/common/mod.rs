@@ -9,7 +9,8 @@ use fp_model::{
 
 /// Default config (4 players), one playlist named "Main" with `tracks`
 /// entries of 180 s each. Every player shows that playlist. Every player
-/// and the cartwall have a Cue output apart from Main (see `with_cue_routes`).
+/// and the cartwall have a Cue output off the on-air output (see
+/// `with_cue_routes`).
 pub fn fixture(tracks: usize) -> AppState {
     let mut state = AppState::new(Config::default(), "Main");
     with_cue_routes(&mut state);

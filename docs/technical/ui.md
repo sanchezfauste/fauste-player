@@ -52,10 +52,17 @@ Each frame, `AppUi::ui`:
    whose command `fp_model::command_available` rejects (R28) is dropped;
 4. draws the screen and sends `Command`s through `ctl.send`. Transport
    buttons take `enabled` from `fp_model::availability`, so unavailable ones
-   are dimmed and inert. A CUE dimmed for want of a Cue output apart from
-   Main (`OutputsConfig::player_has_cue`) takes `tip-cue-no-output` as its
+   are dimmed and inert. A CUE dimmed for want of a Cue route
+   (`OutputsConfig::player_has_cue`) takes `tip-cue-no-output` as its
    tooltip, and the row and cart menus' *Pre-listen on CUE* items say the
-   same when disabled;
+   same when disabled; an on-air Cue
+   (`fp_model::cue_on_air::cue_is_on_air`) takes `tip-cue-on-air`. The
+   model's on-air pre-listen request (`AppState::cue_on_air.request`) opens
+   `ui::cue_on_air::show`, a modal whose answer is `Command::ForceCue` or
+   `Command::CancelCueOnAir`; `ViewState::cue_answered` hides it until the
+   snapshot drops it, and `AppUi::keyboard` gives Esc and Enter to Cancel.
+   CA5's notice (`AppState::cue_on_air.notice`) goes to the status bar once
+   per id (`ViewState::cue_notice_seen`);
 5. requests a repaint: continuously while anything plays, fades or cues
    (`view::animating`, which includes a paused CUE so that its Pause blinks),
    otherwise every 100 ms for the clock. `widgets::{blink, paused_style}` give

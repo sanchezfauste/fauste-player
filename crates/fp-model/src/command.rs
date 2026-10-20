@@ -53,6 +53,14 @@ pub enum Command {
     /// explicit next and the CUE keeps running. Without a CUE it does
     /// nothing.
     CueToNext(PlayerId),
+    /// On-air pre-listen spec CA4: starts `start` even on a sounding
+    /// on-air output; the pre-listen is confirmed (CA5 does not stop it).
+    /// On a pre-listen already running for that entry or cart it only
+    /// confirms it. Answers a confirmation request for the same holder.
+    ForceCue(CueStart),
+    /// CA3: the operator cancelled the confirmation request `id`; a newer
+    /// request stays.
+    CancelCueOnAir(u64),
     SetVolume(PlayerId, f32),
     Seek(PlayerId, f64),
     ShowPlaylist(PlayerId, PlaylistId),
@@ -221,6 +229,25 @@ pub enum Command {
     /// Live settings spec L20: every pending output change now, forced,
     /// even where it briefly interrupts the audio on a device.
     ApplySettingsNow,
+}
+
+/// What a pre-listen plays (on-air pre-listen spec CA3, CA4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CueStart {
+    /// `entry` on `player`'s Cue.
+    Entry { player: PlayerId, entry: EntryId },
+    /// A cart on the cartwall's Cue.
+    Cart(CartId),
+}
+
+impl CueStart {
+    /// The Cue holder it plays on.
+    pub fn holder(self) -> Holder {
+        match self {
+            Self::Entry { player, .. } => Holder::PlayerCue(player),
+            Self::Cart(_) => Holder::CartwallCue,
+        }
+    }
 }
 
 /// Something the audio engine observed.

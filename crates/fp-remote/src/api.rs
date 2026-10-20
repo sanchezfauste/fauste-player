@@ -19,9 +19,20 @@ pub enum Operation {
     FadeStop(PlayerId),
     Restart(PlayerId),
     Previous(PlayerId),
-    SetCue(PlayerId, bool),
+    /// Pre-listen the next entry, or stop. `force` starts it even on a
+    /// sounding on-air output (on-air pre-listen spec CA4).
+    SetCue {
+        player: PlayerId,
+        on: bool,
+        force: bool,
+    },
     SetNext(PlayerId, EntryId),
-    CueEntry(PlayerId, EntryId),
+    /// Pre-listen an entry; `force` as for `SetCue`.
+    CueEntry {
+        player: PlayerId,
+        entry: EntryId,
+        force: bool,
+    },
     Seek(PlayerId, f64),
     /// Fader travel 0–1.
     SetFader(PlayerId, f32),
@@ -32,7 +43,12 @@ pub enum Operation {
     SetEntryStopAfter(EntryId, bool),
     FireCart(CartId),
     StopCart(CartId),
-    SetCartCue(CartId, bool),
+    /// Pre-listen a cart, or stop; `force` as for `SetCue`.
+    SetCartCue {
+        cart: CartId,
+        on: bool,
+        force: bool,
+    },
     StopAllCarts,
     ShowCartPage(CartPageId),
 }
@@ -46,6 +62,9 @@ pub enum ApiError {
     NotFound,
     NotAnalyzed,
     Unavailable(String),
+    /// A pre-listen that would be heard on air while something plays there
+    /// (on-air pre-listen spec CA6).
+    CueOnAir,
     PayloadTooLarge,
     UnsupportedMediaType,
     MethodNotAllowed,
@@ -60,7 +79,7 @@ impl ApiError {
             Self::ForbiddenOrigin => 403,
             Self::NotFound | Self::NotAnalyzed => 404,
             Self::MethodNotAllowed => 405,
-            Self::Unavailable(_) => 409,
+            Self::Unavailable(_) | Self::CueOnAir => 409,
             Self::PayloadTooLarge => 413,
             Self::UnsupportedMediaType => 415,
             Self::Busy => 503,
@@ -75,6 +94,7 @@ impl ApiError {
             Self::NotFound => "not_found",
             Self::NotAnalyzed => "not_analyzed",
             Self::Unavailable(_) => "unavailable",
+            Self::CueOnAir => "cue_on_air",
             Self::PayloadTooLarge => "payload_too_large",
             Self::UnsupportedMediaType => "unsupported_media_type",
             Self::MethodNotAllowed => "method_not_allowed",
@@ -85,6 +105,7 @@ impl ApiError {
     pub fn message(&self) -> String {
         match self {
             Self::BadRequest(m) | Self::Unavailable(m) => m.clone(),
+            Self::CueOnAir => "the pre-listen would be heard on air, where something plays now; send \"force\": true to pre-listen anyway".to_owned(),
             Self::Unauthorized => "a valid token is required".to_owned(),
             Self::ForbiddenOrigin => "this origin or host is not allowed".to_owned(),
             Self::NotFound => "no such resource".to_owned(),
@@ -141,12 +162,17 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
         O::FadeStop(p) => player(p).and_then(|_| available(state, Command::FadeStop(p))),
         O::Restart(p) => player(p).and_then(|_| available(state, Command::Restart(p))),
         O::Previous(p) => player(p).and_then(|_| available(state, Command::Previous(p))),
-        O::SetCue(p, on) => toggle(
-            player(p)?.cue.is_some(),
+        O::SetCue {
+            player: p,
             on,
-            Command::ToggleCue(p),
-            Command::SetCue(p, on),
-        ),
+            force,
+        } => {
+            if player(p)?.cue.is_some() == on {
+                return Ok(Vec::new());
+            }
+            available(state, Command::ToggleCue(p))?;
+            cue_on(state, Command::SetCue(p, on), force)
+        }
         O::SetStopAfterCurrent(p, on) => toggle(
             player(p)?.stop_after_current,
             on,
@@ -158,10 +184,15 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
             entry(e)?;
             Ok(vec![Command::SetNext(p, e)])
         }
-        O::CueEntry(p, e) => {
+        O::CueEntry {
+            player: p,
+            entry: e,
+            force,
+        } => {
             player(p)?;
             entry(e)?;
-            available(state, Command::CueEntry(p, e))
+            available(state, Command::CueEntry(p, e))?;
+            cue_on(state, Command::CueEntry(p, e), force)
         }
         O::Seek(p, secs) => {
             let pl = player(p)?;
@@ -232,14 +263,13 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
         ),
         O::FireCart(c) => cart(c).map(|_| vec![Command::FireCart(c)]),
         O::StopCart(c) => cart(c).map(|_| vec![Command::StopCart(c)]),
-        O::SetCartCue(c, on) => {
+        O::SetCartCue { cart: c, on, force } => {
             cart(c)?;
-            toggle(
-                state.cartwall.cue == Some(c),
-                on,
-                Command::CueCart(c),
-                Command::SetCartCue(c, on),
-            )
+            if (state.cartwall.cue == Some(c)) == on {
+                return Ok(Vec::new());
+            }
+            available(state, Command::CueCart(c))?;
+            cue_on(state, Command::SetCartCue(c, on), force)
         }
         O::StopAllCarts => Ok(vec![Command::StopAllCarts]),
         O::ShowCartPage(page) => {
@@ -255,6 +285,18 @@ fn available(state: &AppState, command: Command) -> Result<Vec<Command>, ApiErro
         Ok(vec![command])
     } else {
         Err(ApiError::Unavailable("not available now".to_owned()))
+    }
+}
+
+/// On-air pre-listen spec CA4, CA6: `command` as is, unless it starts a
+/// pre-listen. With `force` it becomes `ForceCue` (confirmed); without, a
+/// start the console would ask about (its on-air output sounds) is
+/// refused, since a remote client cannot answer the question.
+fn cue_on(state: &AppState, command: Command, force: bool) -> Result<Vec<Command>, ApiError> {
+    match fp_model::cue_on_air::cue_start(state, &command) {
+        Some(start) if force => Ok(vec![Command::ForceCue(start)]),
+        _ if fp_model::cue_on_air::needs_confirmation(state, &command) => Err(ApiError::CueOnAir),
+        _ => Ok(vec![command]),
     }
 }
 
