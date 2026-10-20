@@ -85,10 +85,25 @@ playlist tabs, transport, volume and outputs.
     - Nothing in the player adds gain above 100 %. An integer device clips
       at full scale; a float device receives the level as it is and the
       sound system or driver clips it.
-- **Volume fader** (right of the meter, as tall as it): drag it or use the mouse wheel, one step per notch. The
+- **Volume fader** (right of the meter, as tall as it). It follows a
+  mixing-desk law: it is fine near the top and steeper towards the bottom,
+  so lowering it a little lowers the level a little (90 % of the travel is
+  about −2.5 dB, 50 % about −15.9 dB, 10 % about −48 dB). The top is 0 dB and
+  the bottom is silence. Notches across the fader mark 0, −2, −4, −6, −8,
+  −10, −12, −15, −20, −25, −30, −40, −50 and −∞ dB, with the level written on their right.
+  - Drag it: the fader moves by as much as the pointer does, from where it
+    is, so grabbing it never makes it jump; a click without moving changes
+    nothing.
+  - Use the mouse wheel: one step per notch (about 0.6 dB near 0 dB).
+  - Hold **Ctrl** or **Shift** while dragging or using the wheel to move it
+    ten times finer.
+  - Double-click the knob to return to 0 dB (a double click elsewhere on
+    the fader does nothing).
+
   The level in dB (one decimal, or −∞ for silence) is written under the
-  fader, on the same row as the meter's loudness line, and the tooltip shows it too;
-  the top is 0 dB and the bottom is silence.
+  fader, on the same row as the meter's loudness line, and the tooltip shows it too.
+  A session saved before this law keeps each player's level; only the
+  position of the fader changes.
   On a player whose Main output is bit-perfect the fader is locked at 100 %
   and greyed, it reads a dimmed 0.0, and its tooltip says why (see [What it costs](bit-perfect.md#what-it-costs)).
 - **Title, artist** and the **next** line, with a green square. While CUE is

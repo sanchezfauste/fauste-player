@@ -32,7 +32,11 @@ over HTTP, live events over Server-Sent Events, OSC, and Settings → Remote.
   `202`. Otherwise an idempotent model command (`SetCue`, …) is sent. It is
   resolved when the conductor applies it, so a retried request, or two
   clients asking for the same value at once, never undo each other.
-- **Volume** is fader travel `0.0`–`1.0`, with the on-screen fader's curve.
+- **Volume** is fader travel `0.0`–`1.0`, with the on-screen fader's curve:
+  `dB = 192 × (travel^(1/8) − 1)`, 0 dB at `1.0` and silence at `0.0` (`0.9`
+  is about −2.5 dB, `0.5` about −15.9 dB, `0.1` about −48 dB). Before
+  version 0.8 the curve was linear in dB over 60 dB, so a client that
+  computes dB from a travel must use the new law.
 
 ## Resources
 

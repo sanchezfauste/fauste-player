@@ -128,6 +128,23 @@ fn stop_after_current_in_single_mode_is_accepted_while_the_entry_repeats() {
 }
 
 #[test]
+fn the_fader_travel_is_on_the_mixing_desk_curve() {
+    let s = demo_state();
+    let p = s.players[0].id;
+    let commands = plan(&s, O::SetFader(p, 0.5)).unwrap();
+    let gains: Vec<f32> = commands
+        .iter()
+        .filter_map(|c| match c {
+            Command::SetVolume(_, gain) => Some(*gain),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(gains.len(), 1, "{commands:?}");
+    let db = 20.0 * gains[0].log10();
+    assert!((db + 15.9).abs() < 0.06, "{db}");
+}
+
+#[test]
 fn the_fader_maps_through_the_ui_curve_and_must_be_in_range() {
     let s = demo_state();
     let p = s.players[0].id;

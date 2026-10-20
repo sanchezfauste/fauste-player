@@ -44,7 +44,8 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
 
 - **Independent players:** four by default, any number configurable. Each
   has Play/Next, Stop, Fade stop, Pause and Stop-after-current, SINGLE and
-  CONT modes, a countdown with tenths, a stereo meter, a volume fader and
+  CONT modes, a countdown with tenths, a stereo meter, a mixing-desk volume fader
+  (fine near 0 dB, with fine adjust and a scale) and
   its own playlist tabs (they shrink, cut long names and scroll). Times keep
   a fixed width as they count.
 - **About window:** the window's title bar shows "Fauste Player <version>";

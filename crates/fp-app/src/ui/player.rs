@@ -470,10 +470,10 @@ fn meter_column_width(c: &fp_model::MeterConfig) -> f32 {
 const METER_COLUMN_GAP: f32 = 6.0;
 /// Vertical gap between the info row and the transport.
 const ROW_GAP: f32 = 8.0;
-/// The countdown shrinks to fit down to this share of its size (38 → 13 px:
+/// The countdown shrinks to fit down to this share of its size (38 → 11 px:
 /// a ten-hour time in a player at its minimum width, beside the widest
-/// meter, EBU's, with its two rulers).
-const COUNTDOWN_MIN_SCALE: f32 = 13.0 / 38.0;
+/// meter, EBU's, with its two rulers, and the fader with its scale).
+const COUNTDOWN_MIN_SCALE: f32 = 11.0 / 38.0;
 
 /// The info row and the transport on the left, the meter and fader column
 /// on the right spanning both (feedback spec §3.2).

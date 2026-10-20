@@ -45,7 +45,7 @@ binding.
   A **CUE** button also does nothing when its pre-listen would be heard on
   air while something plays there: MIDI cannot answer the question the
   screen asks. Stopping a pre-listen always works.
-- A fader moves the volume on the same scale as the on-screen fader. To
+- A fader moves the volume on the same scale (the same mixing-desk law) as the on-screen fader. To
   avoid jumps, it only takes over when it reaches or passes the current
   volume (soft takeover); if the volume is changed on screen, the fader has
   to catch it up again. Nothing changes until you move a control: starting

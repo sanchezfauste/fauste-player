@@ -156,7 +156,7 @@ fn one_wheel_notch_moves_the_fader_one_step() {
     h.run_steps(20);
     let volume = fake.state.load().players[0].volume;
     let pos = fp_app::ui::view::fader_from_gain(volume);
-    assert!((0.94..0.96).contains(&pos), "fader at {pos}");
+    assert!((0.97..0.98).contains(&pos), "fader at {pos}");
 }
 
 #[derive(Debug)]

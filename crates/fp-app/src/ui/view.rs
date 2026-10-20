@@ -490,11 +490,15 @@ pub fn fade_remaining_fraction(started: f64, now: f64, fade_ms: u32) -> f32 {
 }
 
 /// The level shown under the volume fader: dB with one decimal ("0.0",
-/// "-6.5"); `None` for silence, which the UI shows as −∞.
+/// "-6.5"), whole dB from -100 dB down ("-114"); `None` for silence, which
+/// the UI shows as −∞.
 pub fn volume_readout(gain: f32) -> Option<String> {
     let tenths = (volume_db(gain)? * 10.0).round();
     Some(if tenths == 0.0 {
         "0.0".to_owned()
+    } else if tenths <= -1000.0 {
+        // No tenths from -100 dB down: the readout stays as narrow as "-60.0".
+        format!("{:.0}", tenths / 10.0)
     } else {
         format!("{:.1}", tenths / 10.0)
     })
