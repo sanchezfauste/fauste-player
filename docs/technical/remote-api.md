@@ -94,7 +94,8 @@ The file path is never exposed.
 `carts`), `playing` (in firing order: `cart`, `elapsed_secs`,
 `remaining_secs`, `normalization` as for a Player, never `null`) and `cue` (`null` or a cart id). **Cart:** `id`, `index`
 (row-major, 0-based in its page), `name`, `kind` (`jingle`, `effect` or
-`spot`), `looped`, `exclusive`, `track` (`null` or a Track).
+`spot`), `looped`, `exclusive`, `color` (`null` or `red`, `orange`, `amber`,
+`green`, `teal`, `blue`, `violet`, `pink`), `track` (`null` or a Track).
 
 **State:** `revision`, `players`, `playlists` (summaries) and `cartwall`.
 
@@ -177,7 +178,7 @@ half applied.
 | `POST /cartwall/pages` | `{"name"}` | Create a cart page |
 | `PATCH /cartwall/pages/{id}` | `{"name"?, "rows"?, "cols"?}` | Rename or resize it, within `limits.max_cart_rows` and `limits.max_cart_cols` |
 | `DELETE /cartwall/pages/{id}` | — | Delete it |
-| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null}` | Set up a cart; `kind` is `jingle`, `effect` or `spot`. Keeping its track does not stop it; a new track or `null` does (C8) |
+| `PUT /cartwall/pages/{id}/carts/{index}` | `{name, kind, looped, exclusive, track: id \| null, color?: name \| null}` | Set up a cart; `kind` is `jingle`, `effect` or `spot`. Keeping its track does not stop it; a new track or `null` does (C8). `color` is one of the Cart's colour names; `null` removes the colour and leaving it out keeps it; another value (an upper-case name included) is `400` (cart colour spec CC9) |
 | `PUT /tracks/{id}/markers/{kind}` | `{"secs": f64 \| null}` | Set a marker by hand, or with `null` let analysis fill it again; `kind` is `cue-in`, `intro-end`, `outro-start`, `segue-start` or `cue-out` |
 | `POST /tracks/{id}/markers/reset` | — | Drop every manual marker and analyse again |
 | `PUT /tracks/{id}/loudness` | `{"excluded": bool, "trim_db": f32}` | Exclude the track from loudness normalization, or trim its gain (loudness normalization spec N24). Both fields are required; another field or a wrong type is `400`; a trim beyond ± `loudness.max_trim_db` or not a number is `409 unavailable` with the model's reason, so a client that echoes a stored trim set before the maximum was lowered must limit it first. Allowed while the track plays: it applies the next time the track is loaded |

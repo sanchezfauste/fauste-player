@@ -290,7 +290,8 @@ The services thread submits tracks when either:
   exception is a track on a cart that has no format recorded: the cart bus
   opens bit-perfect only for a known format, so it is analysed at once
   (`Services::cart_tracks`); or
-- they are **shown** (current, next or cue on any player) and their peaks are
+- they are **shown** (current, next or cue on any player, or a playable cart of
+  the cart page shown) and their peaks are
   not in memory. Shown tracks go on the urgent queue, and one already
   queued with the library is promoted.
 - their file was not found (`Missing`) and the probe thread
@@ -371,7 +372,7 @@ the model (`loudness_pass` set, no measurement), never in the cache, so a
 Re-analyse measures the file again. The pass runs whether loudness normalization is on or off.
 
 Results go to the model as `ApplyAnalysis` or `SetFileState`. Peaks and covers
-are kept in the `MediaCache` only for shown tracks. The disk cache brings
+are kept in the `MediaCache` only for shown tracks (`Services::wanted`). The disk cache brings
 them back cheaply when a track is shown again.
 
 Before its analysis a track has no length. `Command::SetDuration` stores

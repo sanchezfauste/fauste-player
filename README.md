@@ -84,7 +84,8 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
 - **Cartwall:** pages of instant carts (jingles, effects, spots), each with a
   configurable grid. Carts overlap by default; they can loop gaplessly or stop
   the others, and a **Stop all** button stops every playing cart. They have
-  their own Main and Cue outputs. The configured rows always fit the window
+  their own Main and Cue outputs. Each cart can take one of eight colours and
+  shows its waveform faintly behind its name. The configured rows always fit the window
   (the buttons shrink to a minimum before the area scrolls). Pages can be imported and exported.
 - **Tag editor and track tooltip:** hover a track for its tags, format and
   path; edit the common tag fields (title, artist, album, date, track and

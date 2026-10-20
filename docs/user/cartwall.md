@@ -13,7 +13,11 @@ their own outputs, independently of the players.
   every page. Its label shows how many are playing, as in **Stop all (2)**;
   with none playing it is dimmed and shows no count.
 - While a cart plays, its border turns red, a red bar shrinks as it plays,
-  and its time counts down.
+  and its time counts down. A cart with a [colour](#setting-up-carts) keeps
+  it: the border and the bar take the cart's colour instead of red.
+- Once a cart's file has been analysed, its waveform shows faintly behind
+  its name, so you can tell a sound that hits at once from one that fades
+  in. It covers what the cart plays, from its cue-in to its cue-out.
 - Carts **overlap** by default: firing a second one does not stop the first.
   A cart set to **Stop other carts when fired** stops every other cart on air
   first, on any page.
@@ -41,6 +45,7 @@ An empty cart's menu has **Edit…** only, to choose its file.
 | Violet dot | Jingle |
 | Amber dot | Effect |
 | Grey dot | Spot (commercial) |
+| Coloured border, tint and dot | The cart's colour, chosen in Settings: the dot takes the colour instead of the type's |
 | ↻ after the type | Loops |
 | ✋ after the type | Stops the other carts when fired |
 | File with a cross / warning sign | The file is missing / cannot be decoded; hover the cart for the reason and the path. A missing file is looked for again every 30 s (`tuning.missing_recheck_ms`). |
@@ -67,9 +72,14 @@ Go to **Settings → Cartwall**:
   when you press Enter or leave the box; Escape cancels it.
 - **Import… / Export…** save a page to a `.cartpage.json` file and load it
   back, for example to share it between studios. Relative file paths are
-  resolved against the file's folder.
+  resolved against the file's folder. Colours travel with the page; a file
+  from an older version imports without them.
 - **Carts:** click a cart in the grid, then set its name, file (**Choose…**
-  or **Clear**), type, **Loop** and **Stop other carts when fired**. A cart
+  or **Clear**), type, **Colour**, **Loop** and **Stop other carts when
+  fired**. **Colour** offers no colour and eight colours (red, orange,
+  amber, green, teal, blue, violet, pink): give all the spots one colour
+  and the station IDs another to find them at a glance. An empty cart
+  keeps its colour, and clearing a cart's file does not remove it. A cart
   with a file also has **Exclude from normalization** and **Trim**, its
   track's [loudness normalization](loudness.md#per-track-exclude-and-trim)
   settings, with the measurement under the label.

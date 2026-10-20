@@ -1,7 +1,8 @@
 # Cart colour and waveform — Design Spec
 
 - **Date:** 2026-10-15.
-- **Status:** Approved (2026-10-15).
+- **Status:** Approved (2026-10-15); implemented (plan
+  [`2026-10-21-itr05-p7-cart-colour-waveform.md`](../plans/2026-10-21-itr05-p7-cart-colour-waveform.md)).
 - **Amends:** [the cartwall spec](2026-09-26-phase2-cartwall-settings-design.md)
   (the cart's fields, `CartEdit`, C11, the cart page file) and
   [the remote control spec](2026-10-01-remote-control-design.md) (the cart
