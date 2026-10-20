@@ -229,6 +229,10 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   writes `main-screen.png` and `guide/*.png` there instead of `docs/images`.
   The crops follow the default 1920×1080 layout: after a
   layout change, check every PNG and adjust the positions in the script.
+  Windows and menus whose size depends on the language (About, the tag
+  editor, the CUE window, the track menu) and the top bar's buttons are
+  found on the screen (`scripts/site/window_box.py`), so check a long
+  language too (`--lang de-DE`).
 
   On a GNOME Wayland desktop, `xdotool` clicks into XWayland windows need
   the "remote interaction" permission every session; Xvfb avoids that.

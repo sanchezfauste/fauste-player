@@ -147,6 +147,49 @@ capture() {
     log "captured ${file#"$root"/} ($(du -k "$file" | cut -f1) KB)"
 }
 
+# The centres (x) of the bordered buttons at the right end of the top bar,
+# left to right: About, then Settings. Their places depend on the length of
+# the Settings label in the interface language, so they are found on the
+# screen: the first row from the top with long runs of a colour other than
+# the bar's is the buttons' top border.
+topbar_buttons() {
+    local raw=$work/bar.png
+    x import -window "$win" "$raw"
+    convert "$raw" -crop 960x16+960+0 +repage -depth 8 txt:- | python3 -c '
+import re, sys
+rows = {}
+for line in sys.stdin:
+    m = re.match(r"(\d+),(\d+):.*(#[0-9A-Fa-f]{6})", line)
+    if m:
+        rows.setdefault(int(m[2]), []).append(m[3])
+for y in sorted(rows):
+    row, bar, runs, start = rows[y], rows[y][0], [], None
+    for x, colour in enumerate(row + [bar]):
+        if colour != bar and start is None:
+            start = x
+        elif colour == bar and start is not None:
+            if x - start >= 10:
+                runs.append((start + x - 1) // 2 + 960)
+            start = None
+    if len(runs) >= 2:
+        print(*runs[-2:])
+        break
+'
+}
+
+# capture_window <file> <x> <y> <radius> [left top right bottom]: the window
+# that covers the point (x, y), an empty part of it, found on the screen
+# (scripts/site/window_box.py), widened by the margins. A window's size depends on the language of its
+# text, so a fixed rectangle would cut it in some languages.
+capture_window() {
+    local file=$1 box raw=$work/window.png
+    shift
+    x import -window "$win" "$raw"
+    box=$(python3 "$root/scripts/site/window_box.py" "$raw" "$@") \
+        || die "cannot find the window at $1,$2 for $file"
+    capture "$file" "$box"
+}
+
 # The pointer moves first and rests, so that the UI sees it hover before
 # the press (a click in the same frame as the move can be lost).
 click() { x xdotool mousemove --window "$win" "$1" "$2"; sleep 0.3; x xdotool click 1; sleep 0.8; }
@@ -359,9 +402,11 @@ shoot_main() {
 }
 
 # The guide's screenshots (spec O28), each cropped to its subject. The
-# positions are those of the default 1920x1080 layout with four players.
+# positions are those of the default 1920x1080 layout with four players;
+# the windows and menus, whose size depends on the language, and the top
+# bar's buttons are found on the screen.
 shoot_guide() {
-    local p4 n section
+    local p4 n section about_x settings_x
     # From the scene, while the cart still plays.
     capture "$guide/player.png" 472x262+7+41
     capture "$guide/playlist.png" 472x614+7+309
@@ -372,21 +417,28 @@ shoot_guide() {
     api PUT "/players/$p4/cue" '{"on": true}' >/dev/null
     park
     sleep 1.5
-    capture "$guide/cue-window.png" 406x222+164+204
+    # The empty header between the title and the close button.
+    capture_window "$guide/cue-window.png" 414 234 10
     api PUT "/players/$p4/cue" '{"on": false}' >/dev/null
     sleep 0.5
 
     # A track's menu, then its tag editor (player 4, row 2).
     right_click 1560 406
-    capture "$guide/track-menu.png" 470x328+1442+396
+    # The menu with the rows it opened over on its left.
+    capture_window "$guide/track-menu.png" 1640 440 40 118 10 12 12
     click 1620 537
     park
     sleep 1
-    capture "$guide/tag-editor.png" 600x648+660+216
+    # Right of the Save and Cancel buttons.
+    capture_window "$guide/tag-editor.png" 1110 836 10
     key Escape
 
+    # The About and Settings buttons, wherever the language puts them.
+    read -r about_x settings_x < <(topbar_buttons) \
+        || die "cannot find the About and Settings buttons in the top bar"
+
     # Settings, one capture per section (the list on the left).
-    click 1800 17
+    click "$settings_x" 17
     n=0
     for section in outputs players meters analysis loudness playlists cartwall shortcuts midi remote; do
         click 600 $((291 + n * 36))
@@ -397,9 +449,9 @@ shoot_guide() {
     key Escape
 
     # About (the info button left of Settings).
-    click 1736 17
+    click "$about_x" 17
     park
-    capture "$guide/about.png" 600x315+660+383
+    capture_window "$guide/about.png" 960 540 40
     key Escape
 }
 

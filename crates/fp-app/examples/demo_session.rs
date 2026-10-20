@@ -10,7 +10,7 @@ use std::process::ExitCode;
 
 use fp_app::bootstrap;
 use fp_app::ui::files::audio_paths;
-use fp_model::{AppState, CartEdit, CartKind, Command, Config, Limits, PlaylistId};
+use fp_model::{AppState, CartColor, CartEdit, CartKind, Command, Config, Limits, PlaylistId};
 use fp_store::Store;
 
 fn main() -> ExitCode {
@@ -94,6 +94,16 @@ fn main() -> ExitCode {
         },
     );
     let kinds = [CartKind::Jingle, CartKind::Effect, CartKind::Spot];
+    // A colour for most carts, so the screenshots show them (cart colour
+    // spec CC6, CC7); the plain ones keep the default look.
+    let colors = [
+        Some(CartColor::Teal),
+        None,
+        Some(CartColor::Amber),
+        Some(CartColor::Teal),
+        None,
+        Some(CartColor::Violet),
+    ];
     for (index, path) in short.iter().take(6).enumerate() {
         let _ = fp_model::apply(
             &mut state,
@@ -112,7 +122,7 @@ fn main() -> ExitCode {
             kind: kinds[index % kinds.len()],
             looped: index == 5,
             exclusive: index == 0,
-            color: None,
+            color: colors.get(index).copied().flatten(),
         };
         let _ = fp_model::apply(&mut state, Command::SetCart { page, index, edit });
     }
