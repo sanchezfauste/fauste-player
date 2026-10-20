@@ -12,6 +12,13 @@ ignore = [
   # It parses the font of the Wayland title bar, through winit's sctk-adwaita
   # (ab_glyph), on Linux only. Revisit when sctk-adwaita moves to another parser.
   { id = "RUSTSEC-2026-0192", reason = "unmaintained notice; title-bar font via winit's sctk-adwaita" },
+  # `zvariant`, `zvariant_derive` and `zbus_names` are unmaintained notices
+  # (no vulnerability): they were merged into `zbus` 6. They come only
+  # through eframe's accessibility on Linux (accesskit_unix, atspi); there is
+  # no upgrade until accesskit moves to zbus 6. Revisit with each egui update.
+  { id = "RUSTSEC-2026-0370", reason = "unmaintained notice; zvariant via eframe's accesskit (atspi) on Linux" },
+  { id = "RUSTSEC-2026-0371", reason = "unmaintained notice; zbus_names via eframe's accesskit (atspi) on Linux" },
+  { id = "RUSTSEC-2026-0372", reason = "unmaintained notice; zvariant_derive via eframe's accesskit (atspi) on Linux" },
 ]
 
 [licenses]
