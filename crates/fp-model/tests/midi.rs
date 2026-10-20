@@ -111,4 +111,6 @@ fn the_fader_curve_is_shared() {
     assert_eq!(volume::gain_from_fader(0.0), 0.0);
     let g = volume::gain_from_fader(0.5);
     assert!((volume::fader_from_gain(g) - 0.5).abs() < 1e-5);
+    // The mixing-desk law: half the travel is about -15.9 dB.
+    assert!((20.0 * g.log10() + 15.9).abs() < 0.06);
 }

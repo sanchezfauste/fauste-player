@@ -357,3 +357,13 @@ fn n23_a_playing_cart_reports_its_gain() {
         }
     );
 }
+
+#[test]
+fn the_reported_fader_is_the_travel_on_the_mixing_desk_curve() {
+    let mut s = demo_state();
+    let p = s.players[0].id;
+    // -15.9 dB is half the travel.
+    s.players[0].volume = 10f32.powf(-15.9 / 20.0);
+    let out = dto::player(&s, &Playback::default(), p).unwrap();
+    assert!((out.fader - 0.5).abs() < 0.005, "{}", out.fader);
+}
