@@ -418,6 +418,22 @@ pub struct DeviceOverride {
     pub buffer_frames: Option<u32>,
 }
 
+/// The window system the window opens on, on Linux; ignored elsewhere.
+/// Read at start.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum WindowSystem {
+    /// X11 when it is there (natively or through XWayland), else Wayland:
+    /// files dropped from a file manager reach the application only
+    /// through X11.
+    #[default]
+    Auto,
+    /// X11 when it is there.
+    X11,
+    /// Wayland when it is there: sharper on scaled displays, but files
+    /// cannot be dropped on the window.
+    Wayland,
+}
+
 /// What Settings → Audio outputs shows (operator feedback 4, Q12.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum OutputsView {
@@ -722,6 +738,9 @@ pub struct UiConfig {
     /// feedback 4, Q12.1; `Basic` by default). It only hides rows; it
     /// changes no output.
     pub outputs_view: OutputsView,
+    /// The window system on Linux (`Auto` by default); read at start.
+    /// Edited only in the config file.
+    pub window_system: WindowSystem,
 }
 
 impl Default for UiConfig {
@@ -733,6 +752,7 @@ impl Default for UiConfig {
             follow_current_grace_secs: 10.0,
             table_columns: default_columns(),
             outputs_view: OutputsView::Basic,
+            window_system: WindowSystem::Auto,
         }
     }
 }

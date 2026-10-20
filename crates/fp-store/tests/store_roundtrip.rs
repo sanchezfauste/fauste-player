@@ -208,6 +208,25 @@ fn hand_edited_values_of_the_wrong_type_are_repaired_not_discarded() {
 }
 
 #[test]
+fn an_unknown_window_system_loads_as_auto_with_a_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    write_config(
+        &s,
+        r#"{"schema_version":1,"config":{"ui":{"window_system":"Mir","wave_color":"cyan"}}}"#,
+    );
+    let loaded = s.load("Main");
+    let c = &loaded.state.config;
+    assert_eq!(c.ui.window_system, fp_model::WindowSystem::Auto);
+    assert_eq!(c.ui.wave_color, "cyan");
+    assert!(
+        loaded.warnings.iter().any(|w| w.contains("window_system")),
+        "{:?}",
+        loaded.warnings
+    );
+}
+
+#[test]
 fn a_newer_file_is_preserved_beyond_backup_rotation() {
     let dir = tempfile::tempdir().unwrap();
     let s = store(&dir);

@@ -197,6 +197,7 @@ fn run(
     }
     let options = eframe::NativeOptions {
         viewport,
+        event_loop_builder: event_loop_hook(config.ui.window_system),
         ..Default::default()
     };
     let result = eframe::run_native(
@@ -217,6 +218,31 @@ fn run(
     stop_engine(handle);
     result.map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Opens the window on the window system the configuration asks for
+/// (Linux; see `fp_app::window_system`).
+#[cfg(target_os = "linux")]
+fn event_loop_hook(setting: fp_model::WindowSystem) -> Option<eframe::EventLoopBuilderHook> {
+    use fp_app::window_system::Choice;
+    use winit::platform::wayland::EventLoopBuilderExtWayland;
+    use winit::platform::x11::EventLoopBuilderExtX11;
+    let choice = fp_app::window_system::from_env(setting);
+    tracing::info!(?setting, ?choice, "window system");
+    Some(Box::new(move |builder| match choice {
+        Some(Choice::X11) => {
+            builder.with_x11();
+        }
+        Some(Choice::Wayland) => {
+            builder.with_wayland();
+        }
+        None => {}
+    }))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn event_loop_hook(_setting: fp_model::WindowSystem) -> Option<eframe::EventLoopBuilderHook> {
+    None
 }
 
 /// Stops the conductor and the engine, closing the output streams, now.

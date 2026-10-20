@@ -325,6 +325,17 @@ client, and without that feature winit draws a bare fallback frame with
 non-standard buttons. With it, the title bar has the usual minimise, maximise
 and close buttons. Windows and macOS use their native frames.
 
+## Window system (Linux)
+
+winit 0.30 reports files dragged from a file manager (`HoveredFile`,
+`DroppedFile`) on X11, Windows and macOS, but not on Wayland. So on Linux
+`main` passes eframe an `event_loop_builder` hook that picks the window
+system from `ui.window_system` (`fp_app::window_system::choose`): `Auto`, the
+default, takes X11 whenever `DISPLAY` is set, which on a Wayland desktop means
+XWayland; `Wayland` keeps the native Wayland window (sharper on fractionally
+scaled displays, no file drops). A choice that is not available leaves it to
+winit. The choice is logged at start.
+
 ## Exit guard
 
 `fp_model::on_air` decides what is on air: players that are playing or paused
