@@ -39,6 +39,16 @@ fn the_readout_has_one_decimal_and_no_negative_zero() {
     assert_eq!(volume_readout(0.4732).as_deref(), Some("-6.5"));
     assert_eq!(volume_readout(0.9999).as_deref(), Some("0.0"));
     assert_eq!(volume_readout(0.0), None);
+    // From -100 dB down the tenths go, so the readout stays as narrow as
+    // "-60.0" (the bottom of the fader's travel reaches there).
+    assert_eq!(
+        volume_readout(10f32.powf(-114.2 / 20.0)).as_deref(),
+        Some("-114")
+    );
+    assert_eq!(
+        volume_readout(10f32.powf(-99.9 / 20.0)).as_deref(),
+        Some("-99.9")
+    );
     assert_eq!(volume_readout(f32::NAN), None);
 }
 

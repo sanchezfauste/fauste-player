@@ -97,7 +97,8 @@ playlist tabs, transport, volume and outputs.
   - Use the mouse wheel: one step per notch (about 0.6 dB near 0 dB).
   - Hold **Ctrl** or **Shift** while dragging or using the wheel to move it
     ten times finer.
-  - Double-click it to return to 0 dB.
+  - Double-click the knob to return to 0 dB (a double click elsewhere on
+    the fader does nothing).
 
   The level in dB (one decimal, or −∞ for silence) is written under the
   fader, on the same row as the meter's loudness line, and the tooltip shows it too.

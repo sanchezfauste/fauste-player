@@ -73,7 +73,8 @@ fn bf7_a_locked_fader_takes_no_drag_and_no_wheel() {
 }
 
 /// The top of the fader knob painted inside `fader` (the fader's rect): the
-/// filled rect twelve points wide and six high (`widgets::fader`), found among the shapes of the last frame.
+/// filled rect twelve points wide and six high (`widgets::fader`), found
+/// among the shapes of the last frame.
 fn knob_top(h: &egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, fader: egui::Rect) -> f32 {
     fn rects(shape: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
         match shape {

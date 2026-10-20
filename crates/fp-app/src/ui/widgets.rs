@@ -1393,7 +1393,8 @@ fn zone_start(zone: Zone, c: &MeterConfig) -> f32 {
 }
 
 /// Width of the volume fader. The level readout under it is centred on it
-/// and may overhang by a few points ("-60.0" is 27 px wide) rather than
+/// and may overhang by a few points ("-60.0", the widest, is 27 px wide;
+/// below -100 dB it drops the tenths, "-114") rather than
 /// widen the column, which the countdown shares with the meter.
 pub const FADER_WIDTH: f32 = 22.0;
 
@@ -1433,7 +1434,7 @@ pub fn fader_mark_travels() -> [f32; 6] {
     FADER_MARKS_DB.map(fp_model::volume::db_to_travel)
 }
 
-/// Fader travel moved by one mouse-wheel event. On the fader's curve (24 dB
+/// Fader travel moved by one mouse-wheel notch. On the fader's curve (24 dB
 /// per unit of travel at the top) it is 0.6 dB near 0 dB; it grows towards the
 /// bottom, where the curve steepens.
 const FADER_WHEEL_STEP: f32 = 0.025;
@@ -1455,6 +1456,14 @@ const FADER_MARK_FONT: f32 = 7.0;
 
 /// Length of a scale tick.
 const FADER_TICK: f32 = 3.0;
+
+/// How far above or below the knob a double click still counts as on it.
+const FADER_KNOB_SLOP: f32 = 6.0;
+
+/// The part of a wheel notch not turned into a step yet (trackpads send
+/// many small deltas).
+#[derive(Clone, Copy, Default)]
+struct FaderWheel(f32);
 
 /// What a drag on the fader remembers between frames.
 #[derive(Clone, Copy)]
@@ -1479,8 +1488,8 @@ fn fader_mark_label(db: f32) -> String {
 ///
 /// A drag moves the fader by the pointer's movement from where the fader is
 /// (no jump on grab), a click alone changes nothing, Ctrl or Shift make drag
-/// and wheel ten times finer, the wheel moves a fixed step per event and a
-/// double click returns the fader to 0 dB (travel 1). A fader that is not
+/// and wheel ten times finer, the wheel moves a fixed step per notch and a
+/// double click on the knob returns the fader to 0 dB (travel 1). A fader that is not
 /// `enabled` (a bit-perfect output holds the volume at 100 %, bit-perfect
 /// rate and fader spec BF7) is drawn greyed and takes no drag, click or
 /// wheel. The scale marks sit left of the track, inside the fader's width.
@@ -1498,8 +1507,8 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
     let factor = if fine { FADER_FINE } else { 1.0 };
     let mut changed = None;
     let mut dragging = None;
+    let id = response.id;
     if enabled {
-        let id = response.id;
         if response.drag_started() {
             let origin = ui
                 .input(|i| i.pointer.press_origin())
@@ -1514,8 +1523,15 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
         }
         if response.dragged()
             && let Some(p) = ui.input(|i| i.pointer.latest_pos())
-            && let Some(mut drag) = ui.data(|d| d.get_temp::<FaderDrag>(id))
         {
+            // A drag that went on through a lock, or whose start this fader
+            // never saw, starts here, from the fader's own position.
+            let mut drag = ui
+                .data(|d| d.get_temp::<FaderDrag>(id))
+                .unwrap_or(FaderDrag {
+                    travel: position,
+                    last_y: p.y,
+                });
             let dy = p.y - drag.last_y;
             if dy != 0.0 {
                 drag.travel = (drag.travel - dy * factor / travel_px).clamp(0.0, 1.0);
@@ -1525,29 +1541,74 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
             ui.data_mut(|d| d.insert_temp(id, drag));
             dragging = Some(drag.travel);
         }
-        if response.double_clicked() {
-            changed = Some(1.0);
+        // Only on the knob: two quick taps elsewhere on the track are not
+        // a reason to jump to 0 dB on air.
+        if response.double_clicked()
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            let knob_bottom = rect.bottom() - position * travel_px;
+            let knob_y = (knob_bottom - FADER_KNOB_HEIGHT - FADER_KNOB_SLOP)
+                ..=(knob_bottom + FADER_KNOB_SLOP);
+            if knob_y.contains(&p.y) {
+                changed = Some(1.0);
+            }
         }
     }
+    if response.drag_stopped() || !enabled {
+        ui.data_mut(|d| d.remove::<FaderDrag>(id));
+    }
     if enabled && response.hovered() {
-        // One fixed step per wheel event: the smoothed scroll delta spreads a
-        // notch over many frames and would add up to a huge jump.
-        let steps: f32 = ui.input(|i| {
+        let line = ui.ctx().options(|o| o.input_options.line_scroll_speed);
+        let notches: f32 = ui.input(|i| {
             i.events
                 .iter()
                 .filter_map(|e| match e {
-                    egui::Event::MouseWheel { delta, .. } => {
-                        // Some systems turn Shift + wheel into a horizontal scroll.
-                        let d = if delta.y != 0.0 { delta.y } else { delta.x };
-                        (d != 0.0).then(|| d.signum())
+                    egui::Event::MouseWheel {
+                        unit,
+                        delta,
+                        modifiers,
+                        ..
+                    } => {
+                        // Some systems send Shift + wheel as a sideways
+                        // scroll; any other sideways scroll is not for the
+                        // fader.
+                        let d = if delta.y == 0.0 && modifiers.shift {
+                            delta.x
+                        } else {
+                            delta.y
+                        };
+                        Some(match unit {
+                            egui::MouseWheelUnit::Line => d,
+                            egui::MouseWheelUnit::Point => d / line.max(1.0),
+                            egui::MouseWheelUnit::Page => d.signum(),
+                        })
                     }
                     _ => None,
                 })
                 .sum()
         });
-        if steps != 0.0 {
-            changed = Some((position + steps * FADER_WHEEL_STEP * factor).clamp(0.0, 1.0));
+        // A fixed step per whole notch: a trackpad's small deltas add up
+        // (the remainder is kept), and the smoothed scroll delta, which
+        // spreads a notch over many frames, is not used.
+        let mut held = ui
+            .data(|d| d.get_temp::<FaderWheel>(id))
+            .unwrap_or_default();
+        if notches != 0.0 {
+            if held.0 * notches < 0.0 {
+                held.0 = 0.0;
+            }
+            held.0 += notches;
+            let steps = held.0.trunc();
+            held.0 -= steps;
+            ui.data_mut(|d| d.insert_temp(id, held));
+            if steps != 0.0 {
+                changed = Some((position + steps * FADER_WHEEL_STEP * factor).clamp(0.0, 1.0));
+            }
         }
+        // The wheel belongs to the fader: the players' row must not scroll
+        // under the pointer (Shift + wheel scrolls it sideways), or the
+        // next notches would move another player's fader.
+        ui.input_mut(|i| i.smooth_scroll_delta = Vec2::ZERO);
     }
     // Holding the knob still must not resend the same volume every frame.
     let changed = changed.filter(|v| (v - position).abs() > f32::EPSILON);

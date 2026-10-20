@@ -93,6 +93,12 @@ at once, without a crossfade, and its volume is held at 100 %. A volume
 below 100 % is refused (`409`, with the reason), and exactly 100 % is
 accepted. Each player says whether its volume is held (`fader_locked`).
 
+A volume sent as a fader position (the API's `fader`, OSC `/volume`) is a
+position on the on-screen fader's own scale, from 0 (silence) to 1
+(0 dB): 0.9 is about −2.5 dB, 0.8 about −5.3 dB and 0.5 about −16 dB.
+Earlier versions used another scale (0.8 was −12 dB, 0.5 was −30 dB), so a
+script written for them now sets louder levels: check its values.
+
 Each track carries its loudness measurement (`loudness`, `null` until it is
 measured) and its setting (`loudness_edit`: `excluded` and `trim_db`). A
 playing or paused player, and each playing cart, says which

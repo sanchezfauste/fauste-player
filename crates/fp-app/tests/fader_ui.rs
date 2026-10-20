@@ -11,6 +11,7 @@ mod support;
 
 use egui::{Event, Modifiers, MouseWheelUnit, PointerButton, TouchPhase, pos2};
 use egui_kittest::kittest::Queryable;
+use fp_app::ui::controller::Controller;
 use fp_app::ui::widgets::{FADER_MARKS_DB, fader_mark_travels};
 use fp_model::Command;
 use fp_model::volume::{fader_from_gain, gain_from_fader};
@@ -31,7 +32,10 @@ fn at(travel: f32, locked: bool) -> (H, std::sync::Arc<Fake>) {
 }
 
 fn fader_rect(h: &H) -> egui::Rect {
-    h.get_by_label_contains("Volume").rect()
+    h.query_all_by_label_contains("Volume")
+        .next()
+        .expect("a fader")
+        .rect()
 }
 
 /// The pixels the knob travels over the whole fader.
@@ -80,16 +84,29 @@ fn click(h: &mut H, at: egui::Pos2) {
 }
 
 fn wheel(h: &mut H, delta: f32, modifiers: Modifiers) {
+    wheel_events(
+        h,
+        &[egui::vec2(0.0, delta)],
+        MouseWheelUnit::Line,
+        modifiers,
+    );
+}
+
+/// Wheel events over the first fader, one per frame.
+fn wheel_events(h: &mut H, deltas: &[egui::Vec2], unit: MouseWheelUnit, modifiers: Modifiers) {
     let at = fader_rect(h).center();
     h.event(Event::PointerMoved(at));
     h.run_steps(1);
     h.event(Event::ModifiersChanged(modifiers));
-    h.event(Event::MouseWheel {
-        unit: MouseWheelUnit::Line,
-        delta: egui::vec2(0.0, delta),
-        phase: TouchPhase::Move,
-        modifiers,
-    });
+    for &delta in deltas {
+        h.event(Event::MouseWheel {
+            unit,
+            delta,
+            phase: TouchPhase::Move,
+            modifiers,
+        });
+        h.run_steps(1);
+    }
     h.run_steps(20);
     h.event(Event::ModifiersChanged(Modifiers::NONE));
     h.run_steps(1);
@@ -241,10 +258,93 @@ fn the_scale_marks_are_painted_and_dimmed_when_locked() {
     ] {
         let (h, _) = at(0.5, locked);
         let texts = painted(&h);
-        for label in ["-5", "-10", "-20", "-30", "\u{2212}\u{221e}"] {
+        for label in ["0", "-5", "-10", "-20", "-30", "\u{2212}\u{221e}"] {
             let found: Vec<_> = texts.iter().filter(|(t, _)| t == label).collect();
             assert_eq!(found.len(), 1, "{label} in {texts:?}");
             assert_eq!(found[0].1, colour, "{label}");
+        }
+    }
+}
+
+#[test]
+fn a_double_click_away_from_the_knob_changes_nothing() {
+    let (mut h, fake) = at(0.5, false);
+    let r = fader_rect(&h);
+    let p = pos2(r.center().x, r.top() + 4.0);
+    click(&mut h, p);
+    click(&mut h, p);
+    assert!(set_volumes(&fake).is_empty());
+}
+
+#[test]
+fn a_second_drag_starts_from_a_volume_set_elsewhere() {
+    let (mut h, fake) = at(0.5, false);
+    let r = fader_rect(&h);
+    let from = pos2(r.center().x, r.top() + 4.0);
+    drag(&mut h, from, from + egui::vec2(0.0, 20.0), Modifiers::NONE);
+    // MIDI or the remote API moves the volume between the two drags.
+    fake.send(Command::SetVolume(fake.player(0), gain_from_fader(0.8)));
+    h.run_steps(2);
+    drag(&mut h, from, from + egui::vec2(0.0, -20.0), Modifiers::NONE);
+    let expected = 0.8 + 20.0 / travel_px(&h);
+    assert!((travel(&fake) - expected).abs() < 0.01, "{}", travel(&fake));
+}
+
+#[test]
+fn a_sideways_scroll_without_shift_leaves_the_volume_alone() {
+    let (mut h, fake) = at(0.5, false);
+    wheel_events(
+        &mut h,
+        &[egui::vec2(1.0, 0.0)],
+        MouseWheelUnit::Line,
+        Modifiers::NONE,
+    );
+    assert!(set_volumes(&fake).is_empty());
+}
+
+#[test]
+fn a_shift_wheel_that_arrives_sideways_is_a_fine_step() {
+    let (mut h, fake) = at(0.5, false);
+    wheel_events(
+        &mut h,
+        &[egui::vec2(1.0, 0.0)],
+        MouseWheelUnit::Line,
+        Modifiers::SHIFT,
+    );
+    assert!((travel(&fake) - 0.5).abs() > 1e-4, "it moved");
+    assert!((travel(&fake) - 0.5).abs() < 0.003, "{}", travel(&fake));
+}
+
+#[test]
+fn trackpad_scrolling_adds_up_to_whole_steps() {
+    let (mut h, fake) = at(0.5, false);
+    // Ten small trackpad deltas, 50 points in all: one line's worth
+    // (40 points) and a remainder.
+    wheel_events(
+        &mut h,
+        &[egui::vec2(0.0, 5.0); 10],
+        MouseWheelUnit::Point,
+        Modifiers::NONE,
+    );
+    assert!((travel(&fake) - 0.525).abs() < 1e-3, "{}", travel(&fake));
+}
+
+#[test]
+fn a_shift_wheel_on_a_fader_does_not_scroll_the_players_row() {
+    let (mut h, fake) = harness(state(8, 1));
+    h.run_steps(2);
+    let before = fader_rect(&h);
+    wheel_events(
+        &mut h,
+        &[egui::vec2(0.0, -1.0); 6],
+        MouseWheelUnit::Line,
+        Modifiers::SHIFT,
+    );
+    assert_eq!(fader_rect(&h), before, "the row stayed put");
+    let p1 = fake.player(0);
+    for c in fake.take_sent() {
+        if let Command::SetVolume(p, _) = c {
+            assert_eq!(p, p1, "only player 1's fader moved");
         }
     }
 }
