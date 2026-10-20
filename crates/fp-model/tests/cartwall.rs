@@ -7,8 +7,9 @@ use std::path::PathBuf;
 
 use common::{entries, fixture};
 use fp_model::{
-    AppState, CartEdit, CartFileChange, CartId, CartKind, CartPageId, CartRequest, Command,
-    EngineAction, EngineEvent, FileState, ModelError, SOURCE_END, TrackAnalysis, apply, on_event,
+    AppState, Cart, CartColor, CartEdit, CartFileChange, CartId, CartKind, CartPageId, CartRequest,
+    Command, EngineAction, EngineEvent, FileState, ModelError, SOURCE_END, TrackAnalysis, apply,
+    on_event,
 };
 
 fn page(state: &AppState) -> CartPageId {
@@ -57,6 +58,7 @@ fn edit(state: &mut AppState, index: usize, f: impl FnOnce(&mut CartEdit)) {
         kind: c.kind,
         looped: c.looped,
         exclusive: c.exclusive,
+        color: c.color,
     };
     f(&mut e);
     let p = page(state);
@@ -484,6 +486,7 @@ fn importing_duplicate_positions_keeps_no_orphan_track() {
         kind: CartKind::Jingle,
         looped: false,
         exclusive: false,
+        color: None,
     };
     let import = fp_model::CartPageImport {
         name: "Imported".into(),
@@ -508,6 +511,7 @@ fn plain(name: &str) -> CartEdit {
         kind: CartKind::Jingle,
         looped: false,
         exclusive: false,
+        color: None,
     }
 }
 
@@ -640,4 +644,171 @@ fn carts_keep_their_markers_when_players_ignore_them() {
     let request = requests.first().unwrap();
     assert_eq!(request.from_secs, 0.5, "the cart cue-in is kept");
     assert_eq!(request.until_secs, 9.5, "the cart cue-out is kept");
+}
+
+/// Cart colour spec CC1.
+#[test]
+fn cc1_a_cart_has_no_colour_by_default() {
+    let s = fixture(0);
+    assert!(s.cartwall.pages[0].carts.iter().all(|c| c.color.is_none()));
+}
+
+#[test]
+fn cc1_every_colour_has_a_stable_lower_case_name() {
+    let names: Vec<&str> = CartColor::ALL.iter().map(|c| c.name()).collect();
+    assert_eq!(
+        names,
+        [
+            "red", "orange", "amber", "green", "teal", "blue", "violet", "pink"
+        ]
+    );
+    for c in CartColor::ALL {
+        assert_eq!(CartColor::from_name(c.name()), Some(c));
+        assert_eq!(serde_json::to_value(c).unwrap(), c.name());
+    }
+    assert_eq!(CartColor::from_name("Red"), None, "names are lower case");
+    assert_eq!(CartColor::from_name("magenta"), None);
+}
+
+#[test]
+fn cc1_the_state_stores_the_name_and_leaves_out_no_colour() {
+    let mut s = fixture(0);
+    edit(&mut s, 0, |e| e.color = Some(CartColor::Teal));
+    let coloured = serde_json::to_value(&s.cartwall.pages[0].carts[0]).unwrap();
+    assert_eq!(coloured["color"], "teal");
+    let plain = serde_json::to_value(&s.cartwall.pages[0].carts[1]).unwrap();
+    assert!(plain.get("color").is_none(), "no colour, no field: {plain}");
+}
+
+/// CC2: `SetCart` and `EditCart` set it with the other fields.
+#[test]
+fn cc2_set_cart_and_edit_cart_set_the_colour() {
+    let mut s = fixture(1);
+    load(&mut s, 0, 30.0);
+    edit(&mut s, 0, |e| {
+        e.name = "ID".into();
+        e.color = Some(CartColor::Amber);
+    });
+    let c = &s.cartwall.pages[0].carts[0];
+    assert_eq!((c.name.as_str(), c.color), ("ID", Some(CartColor::Amber)));
+    let p = page(&s);
+    apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 0,
+            edit: CartEdit {
+                color: Some(CartColor::Blue),
+                ..plain("ID")
+            },
+            file: CartFileChange::Keep,
+        },
+    )
+    .unwrap();
+    assert_eq!(s.cartwall.pages[0].carts[0].color, Some(CartColor::Blue));
+    edit(&mut s, 0, |e| e.color = None);
+    assert_eq!(s.cartwall.pages[0].carts[0].color, None, "cleared");
+}
+
+/// CC2 with C11: a refused edit changes nothing, the colour included.
+#[test]
+fn cc2_a_refused_cart_edit_keeps_the_old_colour() {
+    let mut s = fixture(1);
+    load(&mut s, 0, 30.0);
+    edit(&mut s, 0, |e| e.color = Some(CartColor::Green));
+    let p = page(&s);
+    let unknown = fp_model::TrackId(9_999);
+    let e = apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 0,
+            edit: CartEdit {
+                color: Some(CartColor::Red),
+                ..plain("X")
+            },
+            file: CartFileChange::Track(unknown),
+        },
+    );
+    assert_eq!(e, Err(ModelError::UnknownTrack(unknown)));
+    assert_eq!(s.cartwall.pages[0].carts[0].color, Some(CartColor::Green));
+}
+
+#[test]
+fn cc2_an_empty_cart_keeps_its_colour_and_clearing_the_file_does_not_clear_it() {
+    let mut s = fixture(0);
+    let p = page(&s);
+    edit(&mut s, 3, |e| e.color = Some(CartColor::Pink));
+    assert_eq!(s.cartwall.pages[0].carts[3].track, None, "still empty");
+    assert_eq!(s.cartwall.pages[0].carts[3].color, Some(CartColor::Pink));
+    load(&mut s, 3, 30.0);
+    assert_eq!(
+        s.cartwall.pages[0].carts[3].color,
+        Some(CartColor::Pink),
+        "a file does not change it"
+    );
+    apply(&mut s, Command::ClearCartFile { page: p, index: 3 }).unwrap();
+    assert_eq!(s.cartwall.pages[0].carts[3].color, Some(CartColor::Pink));
+    load(&mut s, 3, 30.0);
+    apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 3,
+            edit: CartEdit {
+                color: Some(CartColor::Pink),
+                ..plain("Cleared")
+            },
+            file: CartFileChange::Clear,
+        },
+    )
+    .unwrap();
+    let c = &s.cartwall.pages[0].carts[3];
+    assert_eq!((c.track, c.color), (None, Some(CartColor::Pink)));
+}
+
+/// CC3: a missing field or an unknown name loads as no colour; the rest
+/// of the cart loads as usual.
+#[test]
+fn cc3_a_missing_or_unknown_colour_loads_as_none() {
+    let missing: Cart = serde_json::from_str(r#"{"id":5,"name":"A"}"#).unwrap();
+    assert_eq!(missing.color, None);
+    for raw in [r#""magenta""#, r#""Red""#, "7", "[]", "{}", "null"] {
+        let json = format!(r#"{{"id":5,"name":"A","kind":"Spot","looped":true,"color":{raw}}}"#);
+        let c: Cart = serde_json::from_str(&json).unwrap_or_else(|e| panic!("{raw}: {e}"));
+        assert_eq!(c.color, None, "{raw}");
+        assert_eq!(
+            (c.name.as_str(), c.kind, c.looped),
+            ("A", CartKind::Spot, true),
+            "{raw}"
+        );
+    }
+    let teal: Cart = serde_json::from_str(r#"{"id":5,"color":"teal"}"#).unwrap();
+    assert_eq!(teal.color, Some(CartColor::Teal));
+}
+
+/// CC4 (model side): an imported page keeps each cart's colour.
+#[test]
+fn cc4_an_imported_page_keeps_each_carts_colour() {
+    let mut s = fixture(0);
+    let import = fp_model::CartPageImport {
+        name: "Imported".into(),
+        rows: 1,
+        cols: 2,
+        carts: vec![
+            (
+                0,
+                CartEdit {
+                    color: Some(CartColor::Violet),
+                    ..plain("a")
+                },
+                None,
+            ),
+            (1, plain("b"), None),
+        ],
+    };
+    apply(&mut s, Command::ImportCartPage(Box::new(import))).unwrap();
+    let page = s.cartwall.pages.last().unwrap();
+    assert_eq!(page.carts[0].color, Some(CartColor::Violet));
+    assert_eq!(page.carts[1].color, None);
 }

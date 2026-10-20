@@ -5,8 +5,8 @@ use axum::extract::{Path, RawQuery, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use fp_model::{
-    CartEdit, CartId, CartKind, CartPageId, EntryId, MarkerKind, PlayMode, PlayerId, PlaylistId,
-    TrackId,
+    CartColor, CartEdit, CartId, CartKind, CartPageId, EntryId, MarkerKind, PlayMode, PlayerId,
+    PlaylistId, TrackId,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -405,6 +405,20 @@ pub struct CartBody {
     looped: bool,
     exclusive: bool,
     track: Option<u64>,
+    /// CC9: absent keeps the colour, `null` clears it, a lower-case name
+    /// sets it; anything else is `400`.
+    #[serde(default, deserialize_with = "present")]
+    color: Option<Option<CartColor>>,
+}
+
+/// A field that may be absent (`None`, through `default`), `null`
+/// (`Some(None)`) or a value (`Some(Some(v))`).
+fn present<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(d).map(Some)
 }
 
 #[derive(Deserialize)]
@@ -504,6 +518,7 @@ pub async fn set_cart(
         kind,
         looped: b.looped,
         exclusive: b.exclusive,
+        color: None,
     };
     run_edit(
         &ctx,
@@ -512,6 +527,7 @@ pub async fn set_cart(
             index,
             edit,
             track: b.track.map(TrackId),
+            color: b.color,
         },
     )
 }

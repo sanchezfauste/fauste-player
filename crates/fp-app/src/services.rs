@@ -355,6 +355,10 @@ pub struct Services {
     request_tx: Sender<ServiceRequest>,
     /// Tracks submitted and not answered yet.
     in_flight: HashSet<TrackId>,
+    /// Of `in_flight`, analysed tracks submitted only for the peaks of the
+    /// cart page shown: their result fills the media cache and is not
+    /// applied to the model again.
+    peaks_only: HashSet<TrackId>,
     /// Tracks whose result reached the model since the last reset.
     done: HashSet<TrackId>,
     /// Tracks whose file could not be analysed since the last reset.
@@ -449,6 +453,7 @@ impl Services {
             requests,
             request_tx,
             in_flight: HashSet::new(),
+            peaks_only: HashSet::new(),
             done: HashSet::new(),
             failed: HashSet::new(),
             forced: HashSet::new(),
@@ -699,6 +704,7 @@ impl Services {
         for id in self.in_flight.drain() {
             self.analyzer.cancel(id);
         }
+        self.peaks_only.clear();
         self.done.clear();
         self.failed.clear();
         self.retried.clear();
@@ -717,6 +723,7 @@ impl Services {
         if self.in_flight.remove(&id) {
             self.analyzer.cancel(id);
         }
+        self.peaks_only.remove(&id);
         self.done.remove(&id);
         self.failed.remove(&id);
         self.retried.remove(&id);
@@ -885,8 +892,16 @@ impl Services {
         }
     }
 
-    /// Tracks the screen draws: current, next and cue entries of the players.
+    /// Tracks the screen draws: the players' tracks and the carts of the
+    /// page shown (cart colour spec CC8).
     fn wanted(state: &AppState) -> HashSet<TrackId> {
+        let mut wanted = Self::on_players(state);
+        wanted.extend(Self::cart_waveforms(state, true));
+        wanted
+    }
+
+    /// The current, next and cue entries' tracks of the players.
+    fn on_players(state: &AppState) -> HashSet<TrackId> {
         state
             .players
             .iter()
@@ -894,6 +909,33 @@ impl Services {
             .flatten()
             .filter_map(|e| state.playlists.entry(e))
             .map(|e| e.track)
+            .collect()
+    }
+
+    /// The playable carts' tracks that draw a waveform: those of the page
+    /// shown on an expanded cartwall (`shown_only`), or of every page.
+    fn cart_waveforms(state: &AppState, shown_only: bool) -> HashSet<TrackId> {
+        let pages: Vec<&fp_model::CartPage> = if shown_only {
+            state
+                .cartwall
+                .shown_page()
+                .filter(|_| state.cartwall.open)
+                .into_iter()
+                .collect()
+        } else {
+            state.cartwall.pages.iter().collect()
+        };
+        pages
+            .into_iter()
+            .flat_map(|page| page.carts.iter())
+            .filter_map(|cart| cart.track)
+            // A cart that cannot play draws no waveform: no peaks for it.
+            .filter(|t| {
+                state
+                    .library
+                    .get(*t)
+                    .is_some_and(|t| t.file_state.is_playable())
+            })
             .collect()
     }
 
@@ -1154,46 +1196,75 @@ impl Services {
                 self.failed.remove(&track.id);
             }
         }
-        // Peaks and covers are kept only for what the players show; the
-        // analysis cache brings them back when a track is shown again.
+        // Peaks and covers are kept for what the screen shows (the players and
+        // the cart page shown) and for every cart, so going back to a page
+        // reads nothing again; the analysis cache brings a player's back
+        // when its track is shown again.
+        let on_players = Self::on_players(state);
         let wanted = Self::wanted(state);
-        self.media.retain(|id| wanted.contains(&id));
+        let carts_drawn = Self::cart_waveforms(state, false);
+        self.media
+            .retain(|id| wanted.contains(&id) || carts_drawn.contains(&id));
         let on_carts = Self::cart_tracks(state);
-        for track in state.library.iter() {
-            let id = track.id;
-            if self.in_flight.contains(&id) {
-                // Loaded on a player while queued with the library: its
-                // waveform is needed now.
-                if wanted.contains(&id) {
-                    self.analyzer.promote(id, &track.path);
+        // The players' tracks first: a page of carts asked for at once does
+        // not hold back a player's waveform.
+        for players_pass in [true, false] {
+            for track in state.library.iter() {
+                if on_players.contains(&track.id) == players_pass {
+                    self.consider(track, &wanted, &on_players, &on_carts);
                 }
-                continue;
             }
-            // Tracks an earlier version analysed are analysed again, once,
-            // when the operator asks; the ones on screen are anyway (`show`).
-            // A cart's track without a format is analysed at once: the cart
-            // bus opens bit-perfect only for a known format, and a cart must
-            // not wait for the operator's answer to play without resampling.
-            let stale = outdated(track)
-                && (self.analyse_outdated || (track.format.is_none() && on_carts.contains(&id)));
-            let analyse = self.forced.contains(&id)
-                || ((!track.analyzed || stale)
-                    && !self.done.contains(&id)
-                    && !self.failed.contains(&id));
-            let show =
-                wanted.contains(&id) && !self.media.contains(id) && !self.failed.contains(&id);
-            if analyse || show {
-                self.forced.remove(&id);
-                self.in_flight.insert(id);
+        }
+    }
+
+    /// Submits `track` to the analysis when it needs one, or when the screen
+    /// draws it and its peaks are not in the media cache.
+    fn consider(
+        &mut self,
+        track: &fp_model::Track,
+        wanted: &HashSet<TrackId>,
+        on_players: &HashSet<TrackId>,
+        on_carts: &HashSet<TrackId>,
+    ) {
+        let id = track.id;
+        if self.in_flight.contains(&id) {
+            // Loaded on a player while queued with the library: its
+            // waveform is needed now.
+            if wanted.contains(&id) {
+                self.analyzer.promote(id, &track.path);
+            }
+            return;
+        }
+        // Tracks an earlier version analysed are analysed again, once,
+        // when the operator asks; the ones on screen are anyway (`show`).
+        // A cart's track without a format is analysed at once: the cart
+        // bus opens bit-perfect only for a known format, and a cart must
+        // not wait for the operator's answer to play without resampling.
+        let stale = outdated(track)
+            && (self.analyse_outdated || (track.format.is_none() && on_carts.contains(&id)));
+        let analyse = self.forced.contains(&id)
+            || ((!track.analyzed || stale)
+                && !self.done.contains(&id)
+                && !self.failed.contains(&id));
+        let show = wanted.contains(&id) && !self.media.contains(id) && !self.failed.contains(&id);
+        if analyse || show {
+            self.forced.remove(&id);
+            self.in_flight.insert(id);
+            // A cart's analysed track read only for its waveform: the
+            // model already has its analysis.
+            if !analyse && track.analyzed && !on_players.contains(&id) {
+                self.peaks_only.insert(id);
+            } else {
+                self.peaks_only.remove(&id);
                 // The analysis measures the loudness too.
                 self.drop_loudness_job(id);
-                // The mark is used up whichever way the track goes urgent.
-                let asked = self.urgent.remove(&id);
-                if wanted.contains(&id) || asked {
-                    self.analyzer.submit_urgent(id, track.path.clone());
-                } else {
-                    self.analyzer.submit(id, track.path.clone());
-                }
+            }
+            // The mark is used up whichever way the track goes urgent.
+            let asked = self.urgent.remove(&id);
+            if wanted.contains(&id) || asked {
+                self.analyzer.submit_urgent(id, track.path.clone());
+            } else {
+                self.analyzer.submit(id, track.path.clone());
             }
         }
     }
@@ -1211,6 +1282,21 @@ impl Services {
             }
         }
         self.in_flight.remove(&result.track);
+        let peaks_only = self.peaks_only.remove(&result.track)
+            && state.library.get(result.track).is_some_and(|t| t.analyzed);
+        if peaks_only && let Ok(analysis) = &result.outcome {
+            if wanted.contains(&result.track) {
+                self.media.insert(
+                    result.track,
+                    TrackMedia {
+                        peaks: analysis.peaks.clone(),
+                        peak_bucket_secs: analysis.peak_bucket_secs,
+                        cover_png: analysis.cover_png.clone().map(Arc::from),
+                    },
+                );
+            }
+            return;
+        }
         self.done.insert(result.track);
         self.failed_at.remove(&result.track);
         let command = match result.outcome {

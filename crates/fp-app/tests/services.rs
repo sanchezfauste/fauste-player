@@ -515,6 +515,8 @@ fn a_cart_track_without_a_format_is_analysed_even_when_the_operator_said_later()
             track.format = None;
             track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
         }
+        // Not on screen: only the format rule can analyse it.
+        state.cartwall.open = false;
     });
     let cart_track = r.handle.model.load().cartwall.pages[0].carts[0]
         .track
@@ -571,6 +573,8 @@ fn a_cart_track_that_has_its_format_is_left_alone() {
             });
             track.analysis_version = 0;
         }
+        // Not on screen: no read for the waveform either.
+        state.cartwall.open = false;
     });
     for _ in 0..100 {
         r.conductor.tick(r.now);
@@ -1685,4 +1689,96 @@ fn a_stale_loudness_answer_does_not_overwrite_a_new_analysis() {
         measured,
         "the analysis's measurement stays"
     );
+}
+
+/// A rig with one analysed, tag-read jingle on cart 1 of the first page and
+/// an empty second page; `open` is whether the cartwall is expanded.
+fn cart_rig(
+    open: bool,
+) -> (
+    Rig,
+    fp_model::TrackId,
+    fp_model::CartPageId,
+    fp_model::CartPageId,
+) {
+    let dir = tempfile::tempdir().unwrap();
+    let jingle = wav(dir.path(), "jingle.wav", 1);
+    let r = rig_with(&[], dir, Duration::ZERO, |state| {
+        let page = state.cartwall.pages.first().unwrap().id;
+        fp_model::apply(
+            state,
+            Command::AssignCartFile {
+                page,
+                index: 0,
+                path: jingle.clone(),
+            },
+        )
+        .unwrap();
+        fp_model::apply(
+            state,
+            Command::CreateCartPage {
+                name: "Other".into(),
+            },
+        )
+        .unwrap();
+        for track in state.library.iter_mut() {
+            track.analyzed = true;
+            track.duration_secs = 1.0;
+            track.format = Some(fp_model::AudioFormat {
+                sample_rate: 48_000,
+                bits: Some(16),
+                channels: 1,
+                dsd_rate: None,
+            });
+            track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+            track.tags_read = true;
+        }
+        state.cartwall.open = open;
+    });
+    let s = r.handle.model.load();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    let (first, second) = (s.cartwall.pages[0].id, s.cartwall.pages[1].id);
+    (r, track, first, second)
+}
+
+/// Cart colour spec CC8: the carts of the page shown get their peaks once;
+/// going to another page and back reads nothing again, and fetching the
+/// peaks of an analysed track does not apply its analysis again (no tag
+/// re-read, no new model version).
+#[test]
+fn the_carts_of_the_page_shown_get_their_peaks_once() {
+    let (mut r, track, first, second) = cart_rig(true);
+    r.run_until("peaks for the cart of the page shown", |r| {
+        r.media.contains(track)
+    });
+    for page in [second, first, second, first] {
+        r.handle.send(Command::ShowCartPage(page));
+        for _ in 0..20 {
+            r.conductor.tick(r.now);
+            r.services.step(r.now);
+            r.now += Duration::from_millis(10);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+    assert!(r.media.contains(track), "the peaks are kept");
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+    let model = r.handle.model.load();
+    assert!(
+        model.library.get(track).is_some_and(|t| t.tags_read),
+        "the analysis is not applied again"
+    );
+}
+
+/// A collapsed cartwall draws no waveform: no read for its peaks.
+#[test]
+fn a_collapsed_cartwall_reads_no_peaks() {
+    let (mut r, track, _, _) = cart_rig(false);
+    for _ in 0..100 {
+        r.conductor.tick(r.now);
+        r.services.step(r.now);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+    assert!(!r.media.contains(track));
 }

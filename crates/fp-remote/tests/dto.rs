@@ -367,3 +367,36 @@ fn the_reported_fader_is_the_travel_on_the_mixing_desk_curve() {
     let out = dto::player(&s, &Playback::default(), p).unwrap();
     assert!((out.fader - 0.5).abs() < 0.005, "{}", out.fader);
 }
+
+/// Cart colour spec CC9: the cart DTO has the colour's name, or `null`.
+#[test]
+fn cc9_a_cart_has_its_colour_name_or_null() {
+    let mut s = demo_state();
+    let page = s.cartwall.pages[0].id;
+    let c = s.cartwall.pages[0].carts[0].clone();
+    fp_model::apply(
+        &mut s,
+        Command::SetCart {
+            page,
+            index: 0,
+            edit: fp_model::CartEdit {
+                name: c.name,
+                kind: c.kind,
+                looped: c.looped,
+                exclusive: c.exclusive,
+                color: Some(fp_model::CartColor::Violet),
+            },
+        },
+    )
+    .unwrap();
+    let out = dto::cartwall(&s, &Playback::default());
+    assert_eq!(out.pages[0].carts[0].color, Some("violet"));
+    assert_eq!(out.pages[0].carts[1].color, None);
+    let json = serde_json::to_value(&out).unwrap();
+    assert_eq!(json["pages"][0]["carts"][0]["color"], "violet");
+    let plain = &json["pages"][0]["carts"][1];
+    assert!(
+        plain.get("color").is_some_and(serde_json::Value::is_null),
+        "{plain}"
+    );
+}

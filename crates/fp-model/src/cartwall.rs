@@ -18,6 +18,69 @@ pub enum CartKind {
     Spot,
 }
 
+/// A cart's colour (cart colour spec CC1). The state stores its name; the
+/// interface's theme gives each one its tone, so the tones can change
+/// without touching saved data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CartColor {
+    Red,
+    Orange,
+    Amber,
+    Green,
+    Teal,
+    Blue,
+    Violet,
+    Pink,
+}
+
+impl CartColor {
+    /// Every colour, in the picker's order.
+    pub const ALL: [CartColor; 8] = [
+        CartColor::Red,
+        CartColor::Orange,
+        CartColor::Amber,
+        CartColor::Green,
+        CartColor::Teal,
+        CartColor::Blue,
+        CartColor::Violet,
+        CartColor::Pink,
+    ];
+
+    /// The stable lower-case name, as files and the remote API write it.
+    pub fn name(self) -> &'static str {
+        match self {
+            CartColor::Red => "red",
+            CartColor::Orange => "orange",
+            CartColor::Amber => "amber",
+            CartColor::Green => "green",
+            CartColor::Teal => "teal",
+            CartColor::Blue => "blue",
+            CartColor::Violet => "violet",
+            CartColor::Pink => "pink",
+        }
+    }
+
+    /// The colour called `name` (lower case), if there is one.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.name() == name)
+    }
+}
+
+/// CC3: a colour that does not parse loads as none (the store reports it).
+fn lenient_color<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<CartColor>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Lenient {
+        Valid(Option<CartColor>),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Lenient::deserialize(d)? {
+        Lenient::Valid(color) => color,
+        Lenient::Other(_) => None,
+    })
+}
+
 /// One button of the cartwall.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cart {
@@ -35,6 +98,13 @@ pub struct Cart {
     /// Stops every other cart when fired (C3).
     #[serde(default)]
     pub exclusive: bool,
+    /// CC1: `None` is no colour. Left out of the file when there is none.
+    #[serde(
+        default,
+        deserialize_with = "lenient_color",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub color: Option<CartColor>,
 }
 
 impl Cart {
@@ -46,6 +116,7 @@ impl Cart {
             kind: CartKind::default(),
             looped: false,
             exclusive: false,
+            color: None,
         }
     }
 }
@@ -57,6 +128,8 @@ pub struct CartEdit {
     pub kind: CartKind,
     pub looped: bool,
     pub exclusive: bool,
+    /// CC2: set with the other fields.
+    pub color: Option<CartColor>,
 }
 
 /// What an `EditCart` does to the cart's file (phase 2 spec C11).

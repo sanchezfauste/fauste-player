@@ -3,6 +3,7 @@
 #![allow(dead_code, clippy::unwrap_used)]
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
@@ -21,6 +22,9 @@ pub struct Fake {
     pub rejected: Mutex<Vec<ModelError>>,
     pub tones: Mutex<Vec<(Route, f32)>>,
     pub meter_resets: Mutex<Vec<PlayerId>>,
+    /// While set, commands are recorded but not applied: the snapshot lags
+    /// behind, as it can for a frame in the app.
+    pub hold: AtomicBool,
 }
 
 impl Fake {
@@ -32,6 +36,7 @@ impl Fake {
             rejected: Mutex::new(Vec::new()),
             tones: Mutex::new(Vec::new()),
             meter_resets: Mutex::new(Vec::new()),
+            hold: AtomicBool::new(false),
         })
     }
 
@@ -65,6 +70,9 @@ impl Controller for Fake {
     }
     fn send(&self, command: Command) -> bool {
         self.sent.lock().unwrap().push(command.clone());
+        if self.hold.load(Ordering::SeqCst) {
+            return true;
+        }
         let mut next = (**self.state.load()).clone();
         match fp_model::apply(&mut next, command) {
             Ok(_) => self.state.store(Arc::new(next)),
@@ -144,12 +152,25 @@ pub fn harness_sized(
     size: egui::Vec2,
     build: impl FnOnce(AppUi) -> AppUi,
 ) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    harness_built(state, size, MediaCache::default(), build)
+}
+
+/// As `harness`, with `media` as the peaks and covers the interface draws.
+pub fn harness_with_media(
+    state: AppState,
+    media: MediaCache,
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    harness_built(state, egui::vec2(1000.0, 700.0), media, |ui| ui)
+}
+
+fn harness_built(
+    state: AppState,
+    size: egui::Vec2,
+    media: MediaCache,
+    build: impl FnOnce(AppUi) -> AppUi,
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let fake = Fake::new(state);
-    let ui = build(AppUi::new(
-        fake.clone(),
-        I18n::new(Some("en-US")),
-        MediaCache::default(),
-    ));
+    let ui = build(AppUi::new(fake.clone(), I18n::new(Some("en-US")), media));
     // Short frames, so that two clicks fall within the double-click delay.
     let mut harness = Harness::builder()
         .with_size(size)

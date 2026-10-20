@@ -3,10 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-use fp_model::{AppState, CartEdit, CartKind, Command, Config, Limits, apply};
+use fp_model::{AppState, CartColor, CartEdit, CartKind, Command, Config, Limits, apply};
 use fp_store::playlist_io::{
-    CartPageFileError, ExportEntry, PlaylistFileError, parse_cart_page, parse_playlist,
-    read_bounded, write_cart_page, write_m3u8,
+    CartPageFileError, ExportEntry, PlaylistFileError, parse_cart_page, parse_cart_page_noting,
+    parse_playlist, read_bounded, write_cart_page, write_m3u8,
 };
 
 fn limits() -> Limits {
@@ -201,6 +201,7 @@ fn page_state() -> AppState {
         kind: CartKind::Jingle,
         looped: false,
         exclusive: true,
+        color: Some(CartColor::Amber),
     };
     apply(
         &mut state,
@@ -216,6 +217,7 @@ fn page_state() -> AppState {
         kind: CartKind::Effect,
         looped: true,
         exclusive: false,
+        color: None,
     };
     apply(
         &mut state,
@@ -246,7 +248,8 @@ fn cart_page_round_trips() {
             name: "Station ID".into(),
             kind: CartKind::Jingle,
             looped: false,
-            exclusive: true
+            exclusive: true,
+            color: Some(CartColor::Amber),
         }
     );
     assert_eq!(id.2, Some(PathBuf::from("/carts/id.wav")));
@@ -371,4 +374,80 @@ fn an_exported_path_starting_with_a_hash_is_not_read_back_as_a_comment() {
     let list = parse_playlist(text.as_bytes(), Path::new("/lists/a.m3u8"), &limits()).unwrap();
     let paths: Vec<_> = list.entries.iter().map(|e| e.path.clone()).collect();
     assert_eq!(paths, vec![PathBuf::from("/lists/#1 hit.mp3")]);
+}
+
+/// Cart colour spec CC4: a page file's colours are read with CC3's
+/// leniency; a file without colours imports as before.
+#[test]
+fn cc4_cart_page_colours_are_read_leniently() {
+    let text = br#"{"format":"fauste-cart-page","version":1,"name":"X","rows":1,"cols":5,
+        "carts":[{"position":1,"name":"A","color":"teal"},
+                 {"position":2,"name":"B","color":"magenta"},
+                 {"position":3,"name":"C","color":3},
+                 {"position":4,"name":"D","color":null},
+                 {"position":5,"name":"E"}]}"#;
+    let mut notes = Vec::new();
+    let import =
+        parse_cart_page_noting(text, Path::new("/x.cartpage.json"), &limits(), &mut notes).unwrap();
+    let colors: Vec<_> = import.carts.iter().map(|c| c.1.color).collect();
+    assert_eq!(colors, [Some(CartColor::Teal), None, None, None, None]);
+    let names: Vec<_> = import.carts.iter().map(|c| c.1.name.as_str()).collect();
+    assert_eq!(names, ["A", "B", "C", "D", "E"], "every cart is read");
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    assert!(notes[0].contains("\"magenta\""), "{notes:?}");
+    assert!(notes[1].ends_with("colour 3; it has none"), "{notes:?}");
+}
+
+/// A huge value in `color` is quoted short in its note, not copied whole
+/// into the log.
+#[test]
+fn cc4_a_huge_unknown_colour_is_quoted_short() {
+    let huge = "x".repeat(100_000);
+    let text = format!(
+        r#"{{"format":"fauste-cart-page","version":1,"name":"X","rows":1,"cols":1,
+        "carts":[{{"position":1,"name":"A","color":"{huge}"}}]}}"#
+    );
+    let mut notes = Vec::new();
+    parse_cart_page_noting(
+        text.as_bytes(),
+        Path::new("/x.cartpage.json"),
+        &limits(),
+        &mut notes,
+    )
+    .unwrap();
+    assert_eq!(notes.len(), 1);
+    assert!(notes[0].len() < 200, "{} bytes", notes[0].len());
+}
+
+#[test]
+fn cc4_an_empty_cart_with_only_a_colour_is_exported() {
+    let mut state = page_state();
+    let page = state.cartwall.pages[0].id;
+    apply(
+        &mut state,
+        Command::SetCart {
+            page,
+            index: 7,
+            edit: CartEdit {
+                name: String::new(),
+                kind: CartKind::Jingle,
+                looped: false,
+                exclusive: false,
+                color: Some(CartColor::Green),
+            },
+        },
+    )
+    .unwrap();
+    let text = write_cart_page(&state.cartwall.pages[0], &state.library);
+    let import =
+        parse_cart_page(text.as_bytes(), Path::new("/x/p.cartpage.json"), &limits()).unwrap();
+    let empty = import.carts.iter().find(|c| c.0 == 7).expect("exported");
+    assert_eq!((empty.1.color, &empty.2), (Some(CartColor::Green), &None));
+    let plain = import.carts.iter().find(|c| c.0 == 5).unwrap();
+    assert_eq!(plain.1.color, None);
+    assert_eq!(
+        text.matches("\"color\"").count(),
+        2,
+        "no field for a cart without a colour: {text}"
+    );
 }

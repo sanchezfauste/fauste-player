@@ -358,6 +358,7 @@ fn tag_edit_block_refuses_a_track_on_a_playing_cart() {
         kind: CartKind::Jingle,
         looped: false,
         exclusive: false,
+        color: None,
     };
     apply(
         &mut s,

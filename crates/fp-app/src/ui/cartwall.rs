@@ -5,11 +5,13 @@ use egui_phosphor::regular as icon;
 use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
-use super::cart_view::{BUTTON_HEIGHT, CartStatus, GAP, button_height, cart_view, page_on_air};
+use super::cart_view::{
+    BUTTON_HEIGHT, CartStatus, GAP, button_height, cart_look, cart_view, page_on_air,
+};
 use super::glyphs::{self, TransportAction};
 use super::theme;
 use super::view;
-use super::widgets::{self, TileStyle, font, font_medium};
+use super::widgets::{self, TileStyle, WaveMemo, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
 const MIN_BUTTON_WIDTH: f32 = 56.0;
@@ -278,20 +280,43 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                     label.clone()
                 };
                 let playing = view.status == CartStatus::Playing;
+                let look = cart_look(view.color, playing);
                 let style = TileStyle {
-                    fill: theme::NEUTRAL_900,
-                    border: if playing {
-                        theme::ON_AIR_TEXT
-                    } else {
-                        theme::NEUTRAL_800
-                    },
+                    fill: look.fill,
+                    border: look.border,
                     content: theme::TEXT,
-                    hover_fill: theme::NEUTRAL_800,
+                    hover_fill: look.hover_fill,
                     hover_content: theme::TEXT,
-                    active_fill: theme::NEUTRAL_700,
+                    active_fill: look.active_fill,
                     border_width: 1.0,
                     dim_when_disabled: true,
                 };
+                // CC8: the play range's waveform, from the peaks the
+                // services thread keeps for the page shown, reduced once
+                // per width and remembered per cart.
+                let memo_id = egui::Id::new(("cart-wave", cart.id));
+                let wave = view.wave_range.and_then(|(start, span)| {
+                    let media = cart
+                        .track
+                        .and_then(|t| scene.media.get(t))
+                        .filter(|m| !m.peaks.is_empty())?;
+                    let mut memo = ui
+                        .data(|d| d.get_temp::<Option<WaveMemo>>(memo_id))
+                        .flatten();
+                    let columns = widgets::memo_columns_in(
+                        &mut memo,
+                        &media,
+                        start,
+                        span,
+                        (width - 2.0).max(0.0) as usize,
+                    );
+                    ui.data_mut(|d| d.insert_temp(memo_id, memo));
+                    Some(columns)
+                });
+                if wave.is_none() {
+                    // Let go of the last file's peaks.
+                    ui.data_mut(|d| d.remove_temp::<Option<WaveMemo>>(memo_id));
+                }
                 let kind = kind_label(scene, view.kind);
                 let response =
                     widgets::tile(ui, vec2(width, button), &label, !empty, style, |p, r, c| {
@@ -300,13 +325,22 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                                 r.min,
                                 vec2(r.width() * view.remaining_fraction, r.height()),
                             );
-                            p.rect_filled(bar, 0.0, theme::ON_AIR_ROW.gamma_multiply(0.5));
+                            p.rect_filled(bar, 0.0, look.progress);
+                        }
+                        if let Some(columns) = &wave {
+                            let area = r.shrink(1.0);
+                            widgets::paint_wave_columns(
+                                &p.with_clip_rect(area),
+                                area,
+                                columns,
+                                look.wave,
+                            );
                         }
                         let inner = r.shrink2(vec2(8.0, 4.0));
                         let dot = match view.status {
                             CartStatus::Empty => theme::NEUTRAL_700,
                             CartStatus::Unavailable => theme::AMBER,
-                            _ => kind_color(view.kind),
+                            _ => look.marker.unwrap_or_else(|| kind_color(view.kind)),
                         };
                         p.rect_filled(
                             Rect::from_min_size(

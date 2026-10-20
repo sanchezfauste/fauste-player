@@ -77,7 +77,7 @@ A client can:
 - fire, stop and pre-listen carts, and change the cart page shown;
 - edit: create, rename and delete playlists; add a track that is already
   loaded, and remove, move or duplicate entries; create, rename, resize and
-  delete cart pages, and set up a cart with a loaded track; set or reset
+  delete cart pages, and set up a cart (name, type, colour, loop, exclusive) with a loaded track; set or reset
   markers; exclude a track from [loudness normalization](loudness.md) or
   trim it.
 

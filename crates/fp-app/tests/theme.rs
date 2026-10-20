@@ -178,3 +178,27 @@ fn inter_covers_every_character_of_every_locale_file() {
         assert_eq!(missing_from_inter(&shown), Vec::new(), "{}", l.tag);
     }
 }
+
+/// Cart colour spec §3: the palette's tones.
+#[test]
+fn every_cart_colour_has_its_tone() {
+    use fp_model::CartColor::*;
+    let tones = [
+        (Red, 0xd8646a),
+        (Orange, 0xe8925a),
+        (Amber, 0xd9b45a),
+        (Green, 0x7fb08a),
+        (Teal, 0x4fb3a9),
+        (Blue, 0x5b9fe0),
+        (Violet, 0x9184d9),
+        (Pink, 0xd27fb4),
+    ];
+    for (color, hex) in tones {
+        let [_, r, g, b] = u32::to_be_bytes(hex);
+        assert_eq!(
+            theme::cart_color(color),
+            Color32::from_rgb(r, g, b),
+            "{color:?}"
+        );
+    }
+}

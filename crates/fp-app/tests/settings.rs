@@ -10,7 +10,7 @@ mod support;
 
 use egui::Key;
 use egui::accesskit::Role;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use std::sync::Arc;
 
 use fp_backends::{AudioBackend, OfflineBackend};
@@ -1253,5 +1253,102 @@ fn a_shortened_choice_shows_whole_on_hover() {
     assert!(
         h.query_by_label(full).is_some(),
         "the tooltip gives the whole choice"
+    );
+}
+
+/// A colour chosen right after a rename, before the snapshot shows the new
+/// name, keeps the new name.
+#[test]
+fn a_colour_chosen_right_after_a_rename_keeps_the_new_name() {
+    let (mut h, fake) = harness(with_cart());
+    open_section(&mut h, "Cartwall");
+    h.get_by_role_and_label(Role::Button, "Cart 1").click();
+    h.run_steps(2);
+    h.get_all_by_role(Role::TextInput)
+        .nth(1)
+        .unwrap()
+        .scroll_to_me();
+    h.run_steps(3);
+    fake.hold.store(true, std::sync::atomic::Ordering::SeqCst);
+    h.get_all_by_role(Role::TextInput).nth(1).unwrap().focus();
+    h.run_steps(1);
+    h.get_all_by_role(Role::TextInput)
+        .nth(1)
+        .unwrap()
+        .type_text("Station ID");
+    h.run_steps(1);
+    h.key_press(Key::Enter);
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::RadioButton, "Pink")
+        .scroll_to_me();
+    h.run_steps(3);
+    h.get_by_role_and_label(Role::RadioButton, "Teal").click();
+    h.run_steps(3);
+    let last = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::SetCart { edit, .. } => Some(edit),
+            _ => None,
+        })
+        .next_back()
+        .unwrap();
+    assert_eq!(last.color, Some(fp_model::CartColor::Teal));
+    assert_eq!(last.name, "Station ID");
+}
+
+/// Cart colour spec CC5: nine swatches, the chosen one marked.
+#[test]
+fn cc5_the_colour_row_sets_and_clears_the_cart_colour() {
+    use egui::accesskit::Toggled;
+    use fp_model::CartColor;
+    let (mut h, fake) = harness(with_cart());
+    open_section(&mut h, "Cartwall");
+    h.get_by_role_and_label(Role::Button, "Cart 1").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::RadioButton, "Pink")
+        .scroll_to_me();
+    h.run_steps(3);
+    let toggled = |h: &egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, name: &str| {
+        h.get_by_role_and_label(Role::RadioButton, name)
+            .accesskit_node()
+            .toggled()
+    };
+    for name in [
+        "No colour",
+        "Red",
+        "Orange",
+        "Amber",
+        "Green",
+        "Teal",
+        "Blue",
+        "Violet",
+        "Pink",
+    ] {
+        let expected = if name == "No colour" {
+            Toggled::True
+        } else {
+            Toggled::False
+        };
+        assert_eq!(toggled(&h, name), Some(expected), "{name}");
+    }
+    h.get_by_role_and_label(Role::RadioButton, "Teal").click();
+    h.run_steps(3);
+    assert_eq!(
+        fake.state.load().cartwall.pages[0].carts[0].color,
+        Some(CartColor::Teal)
+    );
+    assert_eq!(toggled(&h, "Teal"), Some(Toggled::True));
+    assert_eq!(toggled(&h, "No colour"), Some(Toggled::False));
+    h.get_by_role_and_label(Role::RadioButton, "No colour")
+        .click();
+    h.run_steps(3);
+    assert_eq!(fake.state.load().cartwall.pages[0].carts[0].color, None);
+    // Each swatch says its name on hover too.
+    h.get_by_role_and_label(Role::RadioButton, "Violet").hover();
+    h.run_steps(40);
+    assert!(
+        h.query_all_by_label("Violet").count() >= 2,
+        "the tooltip repeats the name"
     );
 }

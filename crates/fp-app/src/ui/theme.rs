@@ -2,6 +2,7 @@
 //! in the design as oklch are converted to sRGB here once.
 
 use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Theme};
+use fp_model::CartColor;
 
 pub const BG: Color32 = Color32::from_rgb(0x16, 0x18, 0x26);
 pub const SURFACE: Color32 = Color32::from_rgb(0x23, 0x25, 0x32);
@@ -209,3 +210,30 @@ pub const MIX_TEXT: Color32 = Color32::from_rgb(0x14, 0x12, 0x20);
 /// Opacity of the cue-in and cue-out lines on the waveform while players
 /// ignore cue markers (feedback 2 spec O15).
 pub const CUE_EDGE_IGNORED_ALPHA: f32 = 0.35;
+
+/// Cart colours (cart colour spec §3): the tone of each `CartColor`. The
+/// state stores the name; only this table knows the tones.
+pub fn cart_color(color: CartColor) -> Color32 {
+    match color {
+        CartColor::Red => Color32::from_rgb(0xd8, 0x64, 0x6a),
+        CartColor::Orange => Color32::from_rgb(0xe8, 0x92, 0x5a),
+        CartColor::Amber => Color32::from_rgb(0xd9, 0xb4, 0x5a),
+        CartColor::Green => Color32::from_rgb(0x7f, 0xb0, 0x8a),
+        CartColor::Teal => Color32::from_rgb(0x4f, 0xb3, 0xa9),
+        CartColor::Blue => Color32::from_rgb(0x5b, 0x9f, 0xe0),
+        CartColor::Violet => Color32::from_rgb(0x91, 0x84, 0xd9),
+        CartColor::Pink => Color32::from_rgb(0xd2, 0x7f, 0xb4),
+    }
+}
+
+/// How strongly a cart's colour washes its button, idle (CC6) and playing
+/// (CC7).
+pub const CART_WASH_IDLE: f32 = 0.07;
+pub const CART_WASH_PLAYING: f32 = 0.16;
+/// The remaining-time fill of a playing cart with a colour (CC7).
+pub const CART_PROGRESS_ALPHA: f32 = 0.38;
+/// The waveform behind a cart's text, idle and playing (CC8).
+pub const CART_WAVE_IDLE_ALPHA: f32 = 0.13;
+pub const CART_WAVE_PLAYING_ALPHA: f32 = 0.22;
+/// The waveform of a cart without a colour: light grey (CC8).
+pub const CART_WAVE_PLAIN: Color32 = NEUTRAL_300;

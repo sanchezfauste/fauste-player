@@ -112,6 +112,7 @@ fn main() -> ExitCode {
             kind: kinds[index % kinds.len()],
             looped: index == 5,
             exclusive: index == 0,
+            color: None,
         };
         let _ = fp_model::apply(&mut state, Command::SetCart { page, index, edit });
     }

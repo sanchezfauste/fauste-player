@@ -6,7 +6,7 @@
 |---|---|---|
 | `config/config.json` | `ConfigDoc` | `schema_version`, `config` |
 | `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers and the `analysis_version` of their automatic ones; an older version is analysed again when the operator asks), `playlists` (entries with `played_by`: the players that played each one, and `repeat` / `stop_after` when set), `ids`. Tracks also hold the tags the library shows: `date`, `genre`, `album_artist`, `composer`, `comment` and `tags_read`, all optional on load (a library from an earlier version loads with them empty and the tag-only pass fills them in). Tracks also hold `loudness` (`{ "integrated_lufs": number|null, "true_peak_dbtp": number }`, absent when not measured) and `loudness_pass` (the `LOUDNESS_VERSION` of the last loudness measurement tried, whatever it found), both optional on load: a library from an earlier version loads without them and the loudness-only pass measures its tracks (loudness normalization spec N6, N6b). Each track also holds the operator's `loudness_edit` (`{ "excluded": bool, "trim_db": number }`, default not excluded and 0 dB, absent in older files): exclude it from normalization, or trim its gain within ± `loudness.max_trim_db` (N10). The editor's tag sheet is never persisted: it reads the file each time. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
-| `data/carts.json` | `CartsDoc` | `schema_version`, `pages[]` (id, name, rows, cols, `carts[]` with id, name, track, kind, looped, exclusive); cart files are tracks of the `playlists.json` library |
+| `data/carts.json` | `CartsDoc` | `schema_version`, `pages[]` (id, name, rows, cols, `carts[]` with id, name, track, kind, looped, exclusive and `color`, a lower-case name left out when the cart has none; one that does not parse loads as none with a load warning, `store::parse_carts`); cart files are tracks of the `playlists.json` library |
 | `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns (`ColumnWidths`: fractions keyed by column name, for example `{"fractions": {"title": 0.5, "artist": 0.4, "duration": 0.1}}`; the old `[#, Title, Artist, Duration]` array converts, anything else loads as the default layout, unknown names are dropped), history: the entries the player left, oldest first — loaded leniently: an unparsable history is empty, pending_start: `[entry, secs]`, where Play starts the next entry of a stopped player (rule 3a); kept only while that entry is still the next, loaded leniently (anything that does not parse is none, and the load reports a warning that is logged)), `cartwall` (open, page shown) |
 
 The paths come from `AppPaths::system()` (`directories::ProjectDirs` for
@@ -85,7 +85,10 @@ warnings, which are logged.
   comment.
 - Cart pages use a versioned JSON format (`"format": "fauste-cart-page"`,
   `"version": 1`), with 1-based positions, relative files resolved against
-  the file's folder, and the grid clamped to the limits.
+  the file's folder, and the grid clamped to the limits. Each cart may carry
+  `color` (a lower-case name, written only when set; an unknown one imports as
+  none, reported through `parse_cart_page_noting`'s notes, which the import
+  logs). The version stays 1: older readers ignore the field.
 - All parsers are fuzzed (see [Testing](testing.md)).
 
 ## Migrations

@@ -4,10 +4,10 @@ use std::path::PathBuf;
 
 use super::super::playlist_files::FileError;
 use crossbeam_channel::Receiver;
-use egui::{Color32, RichText, Ui, vec2};
+use egui::{Color32, RichText, Stroke, StrokeKind, Ui, vec2};
 use egui_phosphor::regular as icon;
-use fp_model::{CartEdit, CartKind, CartPageId, CartPageImport, Command};
-use fp_store::playlist_io::{parse_cart_page, read_bounded, write_cart_page};
+use fp_model::{CartColor, CartEdit, CartKind, CartPageId, CartPageImport, Command};
+use fp_store::playlist_io::{parse_cart_page_noting, read_bounded, write_cart_page};
 
 use super::super::app::Scene;
 use super::super::cartwall::page_name;
@@ -24,6 +24,10 @@ pub(crate) struct CartsState {
     /// Name being edited, and for which cart.
     name: String,
     name_for: Option<(CartPageId, usize)>,
+    /// The name last sent for the cart edited, until the snapshot shows it:
+    /// an edit sent meanwhile (a colour, a kind) carries it instead of the
+    /// old name.
+    renamed: Option<String>,
     page_name: String,
     page_name_for: Option<CartPageId>,
     file: Option<Receiver<Option<PathBuf>>>,
@@ -202,7 +206,13 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                     read_bounded(&path, limits.max_playlist_file_bytes)
                         .map_err(FileError::from)
                         .and_then(|bytes| {
-                            parse_cart_page(&bytes, &path, &limits).map_err(FileError::from)
+                            let mut notes = Vec::new();
+                            let import = parse_cart_page_noting(&bytes, &path, &limits, &mut notes)
+                                .map_err(FileError::from);
+                            for note in &notes {
+                                tracing::warn!(%note, "while importing a cart page");
+                            }
+                            import
                         }),
                 )
             });
@@ -389,12 +399,6 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         )
         .selectable(false),
     );
-    let edit_base = CartEdit {
-        name: cart.name.clone(),
-        kind: cart.kind,
-        looped: cart.looped,
-        exclusive: cart.exclusive,
-    };
     let index = c.index;
     let send_edit = |edit: CartEdit| {
         scene.ctl.send(Command::SetCart {
@@ -417,12 +421,24 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                     kind: old.kind,
                     looped: old.looped,
                     exclusive: old.exclusive,
+                    color: old.color,
                 },
             });
         }
         c.name = cart.name.clone();
         c.name_for = Some((page_id, c.index));
+        c.renamed = None;
     }
+    if c.renamed.as_deref() == Some(cart.name.as_str()) {
+        c.renamed = None;
+    }
+    let edit_base = CartEdit {
+        name: c.renamed.clone().unwrap_or_else(|| cart.name.clone()),
+        kind: cart.kind,
+        looped: cart.looped,
+        exclusive: cart.exclusive,
+        color: cart.color,
+    };
     let name_label = t.tr("settings-cart-name");
     let mut rename = None;
     let response = text_row(ui, &name_label, &mut c.name);
@@ -431,6 +447,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         rename = Some(c.name.clone());
     }
     if let Some(name) = rename {
+        c.renamed = Some(name.clone());
         send_edit(CartEdit {
             name,
             ..edit_base.clone()
@@ -516,6 +533,20 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         }
     });
+    // CC5: no colour, then the palette.
+    row(ui, &t.tr("settings-cart-color"), None, |ui| {
+        ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
+        let choices = std::iter::once(None).chain(CartColor::ALL.into_iter().map(Some));
+        for choice in choices {
+            let name = t.tr(color_key(choice));
+            if swatch(ui, choice, cart.color == choice, &name) && cart.color != choice {
+                send_edit(CartEdit {
+                    color: choice,
+                    ..edit_base.clone()
+                });
+            }
+        }
+    });
     let mut looped = cart.looped;
     let loop_label = t.tr("settings-cart-loop");
     row(ui, &loop_label, None, |ui| {
@@ -552,4 +583,56 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             loudness_edit::trim(ui, scene, track);
         });
     }
+}
+
+fn color_key(color: Option<CartColor>) -> &'static str {
+    match color {
+        None => "cart-color-none",
+        Some(CartColor::Red) => "cart-color-red",
+        Some(CartColor::Orange) => "cart-color-orange",
+        Some(CartColor::Amber) => "cart-color-amber",
+        Some(CartColor::Green) => "cart-color-green",
+        Some(CartColor::Teal) => "cart-color-teal",
+        Some(CartColor::Blue) => "cart-color-blue",
+        Some(CartColor::Violet) => "cart-color-violet",
+        Some(CartColor::Pink) => "cart-color-pink",
+    }
+}
+
+/// One swatch of the colour row (CC5): a square of the colour, or a
+/// crossed-out square for no colour; the chosen one is outlined. Its name
+/// is the tooltip and the accessible label. Returns whether it was clicked.
+fn swatch(ui: &mut Ui, color: Option<CartColor>, chosen: bool, name: &str) -> bool {
+    const SIZE: f32 = 22.0;
+    let (rect, response) = ui.allocate_exact_size(vec2(SIZE, SIZE), egui::Sense::click());
+    let label = name.to_owned();
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, chosen, label.clone())
+    });
+    let response = response.on_hover_text(name);
+    if ui.is_rect_visible(rect) {
+        let p = ui.painter();
+        let inner = rect.shrink(3.0);
+        match color {
+            Some(c) => {
+                p.rect_filled(inner, 0.0, theme::cart_color(c));
+            }
+            None => {
+                p.rect_filled(inner, 0.0, theme::NEUTRAL_900);
+                p.line_segment(
+                    [inner.left_bottom(), inner.right_top()],
+                    Stroke::new(1.0, theme::NEUTRAL_500),
+                );
+            }
+        }
+        let outline = if chosen {
+            Stroke::new(2.0, theme::TEXT)
+        } else if response.hovered() {
+            Stroke::new(1.0, theme::NEUTRAL_500)
+        } else {
+            Stroke::new(1.0, theme::NEUTRAL_700)
+        };
+        p.rect_stroke(rect, 0.0, outline, StrokeKind::Inside);
+    }
+    response.clicked()
 }
