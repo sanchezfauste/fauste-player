@@ -98,6 +98,45 @@ fn load_doc<T: DeserializeOwned>(
     })
 }
 
+/// Parses `carts.json`. A cart colour that does not parse loads as none
+/// (the model decides how, cart colour spec CC3); each one is reported.
+fn parse_carts(bytes: &[u8]) -> Result<(CartsDoc, Vec<String>), ParseError> {
+    let value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
+    let value = upgrade(value, CARTS_SCHEMA, CARTS_MIGRATIONS)?;
+    let notes = unknown_cart_colors(&value);
+    let doc: CartsDoc =
+        serde_json::from_value(value).map_err(|e| ParseError::Corrupt(e.to_string()))?;
+    Ok((doc, notes))
+}
+
+/// One note per cart whose `color` is present, not `null` and not a known
+/// name.
+fn unknown_cart_colors(value: &serde_json::Value) -> Vec<String> {
+    items(value.get("pages"))
+        .iter()
+        .flat_map(|page| items(page.get("carts")))
+        .filter_map(|cart| {
+            let raw = cart.get("color").filter(|c| !c.is_null())?;
+            let known = raw.as_str().and_then(fp_model::CartColor::from_name);
+            known.is_none().then(|| {
+                let id = cart
+                    .get("id")
+                    .map_or_else(|| "?".to_owned(), ToString::to_string);
+                format!("carts: cart {id} has an unknown colour {raw}; it has none")
+            })
+        })
+        .collect()
+}
+
+/// The elements of a JSON array, or none.
+fn items(value: Option<&serde_json::Value>) -> &[serde_json::Value] {
+    value
+        .and_then(serde_json::Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+}
+
 /// Runs `bytes` through every document parser and the restore, as loading
 /// does. For the fuzz targets only.
 #[doc(hidden)]
@@ -106,7 +145,7 @@ pub fn fuzz_documents(bytes: &[u8]) {
     let _ = config.validate();
     let lists: Option<PlaylistsDoc> = parse_doc(bytes, PLAYLISTS_SCHEMA, PLAYLISTS_MIGRATIONS).ok();
     let session: Option<SessionDoc> = parse_session(bytes).ok().map(|(d, _)| d);
-    let carts: Option<CartsDoc> = parse_doc(bytes, CARTS_SCHEMA, CARTS_MIGRATIONS).ok();
+    let carts: Option<CartsDoc> = parse_carts(bytes).ok().map(|(d, _)| d);
     let (library, playlists, ids) = lists
         .map(|d| (d.library, d.playlists, d.ids))
         .unwrap_or_default();
@@ -179,14 +218,17 @@ impl Store {
             source: session.source,
             warnings: Vec::new(),
         };
-        let carts: Loaded<CartsDoc> = load_doc(
+        let carts: Loaded<(CartsDoc, Vec<String>)> = load_with_fallback(
             &self.paths.carts_file(),
             limits.backup_count,
             limits.max_state_file_bytes,
-            CARTS_SCHEMA,
-            CARTS_MIGRATIONS,
+            parse_carts,
         );
         warnings.extend(carts.warnings);
+        let carts_doc = carts.value.map(|(doc, notes)| {
+            warnings.extend(notes);
+            doc
+        });
 
         let (library, playlists, ids) = lists
             .value
@@ -198,7 +240,7 @@ impl Store {
             .value
             .map(|d| (d.players, d.cartwall))
             .unwrap_or_default();
-        let cart_pages = carts.value.map(|d| d.pages).unwrap_or_default();
+        let cart_pages = carts_doc.map(|d| d.pages).unwrap_or_default();
         // Report what the restore will repair in the cart pages (the restore
         // itself applies the same normalisation).
         {

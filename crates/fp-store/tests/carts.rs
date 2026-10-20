@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use fp_model::{AppState, CartEdit, CartKind, Command, Config, apply};
+use fp_model::{AppState, CartColor, CartEdit, CartKind, Command, Config, apply};
 use fp_store::{AppPaths, Store};
 
 fn store(dir: &tempfile::TempDir) -> Store {
@@ -35,7 +35,7 @@ fn edited_state() -> AppState {
         kind: CartKind::Effect,
         looped: true,
         exclusive: true,
-        color: None,
+        color: Some(CartColor::Teal),
     };
     apply(
         &mut state,
@@ -158,4 +158,40 @@ fn carts_pointing_at_unknown_tracks_become_empty() {
         "{:?}",
         loaded.warnings
     );
+}
+
+/// Cart colour spec CC3: a hand edit that breaks a colour costs only that
+/// colour, with a warning; the cart and the rest of the file load.
+#[test]
+fn cc3_an_unknown_colour_in_carts_json_loads_as_none_with_a_warning() {
+    for bad in [r#""magenta""#, "7"] {
+        let dir = tempfile::tempdir().unwrap();
+        let s = store(&dir);
+        let state = edited_state();
+        save_all(&s, &state);
+        let file = s.paths().carts_file();
+        let text = fs::read_to_string(&file).unwrap();
+        assert_eq!(
+            text.matches("\"color\"").count(),
+            1,
+            "only the coloured cart: {text}"
+        );
+        fs::write(&file, text.replace(r#""teal""#, bad)).unwrap();
+        let loaded = s.load("Main");
+        let cart = &loaded.state.cartwall.pages[1].carts[3];
+        assert_eq!(cart.color, None, "{bad}");
+        assert_eq!(
+            (cart.name.as_str(), cart.kind, cart.looped, cart.exclusive),
+            ("Applause", CartKind::Effect, true, true),
+            "{bad}"
+        );
+        assert!(cart.track.is_some(), "{bad}: the file is kept");
+        let notes: Vec<&String> = loaded
+            .warnings
+            .iter()
+            .filter(|w| w.contains("colour"))
+            .collect();
+        assert_eq!(notes.len(), 1, "{bad}: {:?}", loaded.warnings);
+        assert!(notes[0].contains(bad), "{bad}: {}", notes[0]);
+    }
 }
