@@ -220,12 +220,22 @@ fn a_locked_fader_ignores_drag_wheel_and_double_click() {
 fn the_marks_follow_the_curve() {
     assert_eq!(
         FADER_MARKS_DB,
-        [0.0, -5.0, -10.0, -20.0, -30.0, f32::NEG_INFINITY]
+        [
+            0.0,
+            -3.0,
+            -5.0,
+            -10.0,
+            -15.0,
+            -20.0,
+            -30.0,
+            -40.0,
+            f32::NEG_INFINITY
+        ]
     );
     let t = fader_mark_travels();
     assert_eq!(t[0], 1.0);
-    assert_eq!(t[5], 0.0);
-    assert!((20.0 * gain_from_fader(t[2]).log10() + 10.0).abs() < 0.01);
+    assert_eq!(t[8], 0.0);
+    assert!((20.0 * gain_from_fader(t[3]).log10() + 10.0).abs() < 0.01);
     assert!(t.windows(2).all(|w| w[0] > w[1]));
 }
 
@@ -258,7 +268,17 @@ fn the_scale_marks_are_painted_and_dimmed_when_locked() {
     ] {
         let (h, _) = at(0.5, locked);
         let texts = painted(&h);
-        for label in ["0", "-5", "-10", "-20", "-30", "\u{2212}\u{221e}"] {
+        for label in [
+            "0",
+            "-3",
+            "-5",
+            "-10",
+            "-15",
+            "-20",
+            "-30",
+            "-40",
+            "\u{2212}\u{221e}",
+        ] {
             let found: Vec<_> = texts.iter().filter(|(t, _)| t == label).collect();
             assert_eq!(found.len(), 1, "{label} in {texts:?}");
             assert_eq!(found[0].1, colour, "{label}");
@@ -346,5 +366,29 @@ fn a_shift_wheel_on_a_fader_does_not_scroll_the_players_row() {
         if let Command::SetVolume(p, _) = c {
             assert_eq!(p, p1, "only player 1's fader moved");
         }
+    }
+}
+
+#[test]
+fn the_scale_labels_do_not_overlap() {
+    let (h, _) = at(0.5, false);
+    let mut rects: Vec<egui::Rect> = Vec::new();
+    fn walk(shape: &egui::Shape, out: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Text(t) if t.galley.job.sections[0].format.font_id.size == 7.0 => {
+                out.push(t.visual_bounding_rect())
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    for c in &h.output().shapes {
+        walk(&c.shape, &mut rects);
+    }
+    assert_eq!(rects.len(), FADER_MARKS_DB.len());
+    rects.sort_by(|a, b| a.top().total_cmp(&b.top()));
+    for w in rects.windows(2) {
+        // The glyphs' ink, with a clear pixel between two labels.
+        assert!(w[0].bottom() + 1.0 <= w[1].top(), "{:?} {:?}", w[0], w[1]);
     }
 }

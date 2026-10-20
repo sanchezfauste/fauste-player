@@ -1424,12 +1424,23 @@ pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
 }
 
 /// The levels marked beside the fader, in dB from the top; the last, `-inf`,
-/// is silence.
-pub const FADER_MARKS_DB: [f32; 6] = [0.0, -5.0, -10.0, -20.0, -30.0, f32::NEG_INFINITY];
+/// is silence. At the player's fader height the labels keep a clear pixel
+/// between them on the fader's curve (`tests/fader_ui.rs`).
+pub const FADER_MARKS_DB: [f32; 9] = [
+    0.0,
+    -3.0,
+    -5.0,
+    -10.0,
+    -15.0,
+    -20.0,
+    -30.0,
+    -40.0,
+    f32::NEG_INFINITY,
+];
 
 /// The fader travel (0 bottom … 1 top) of each of [`FADER_MARKS_DB`], on the
 /// fader's curve.
-pub fn fader_mark_travels() -> [f32; 6] {
+pub fn fader_mark_travels() -> [f32; 9] {
     FADER_MARKS_DB.map(fp_model::volume::db_to_travel)
 }
 
