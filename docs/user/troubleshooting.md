@@ -140,6 +140,15 @@ xruns (PulseAudio does not; Windows exclusive mode does not).
   limit also works.
 - Avoid network drives for music that plays on air.
 
+## Files cannot be dropped on Linux
+
+The window takes files dragged from a file manager only when it runs on X11.
+By default it does, also on a Wayland desktop (through XWayland, which every
+desktop has). If `ui.window_system` in `config.json` is set to `"Wayland"`,
+the window is a native Wayland one, which can look sharper with fractional
+display scaling, but files cannot be dropped on it: use **+ Add** instead.
+Set it back to `"Auto"` (the default) or `"X11"` and restart Fauste Player.
+
 ## "The interface hit an error"
 
 A drawing error was caught. Audio is not affected. Press **Restart

@@ -51,6 +51,22 @@ fn the_outputs_view_is_basic_by_default_and_is_kept() {
 }
 
 #[test]
+fn the_window_system_is_auto_by_default_and_is_kept() {
+    use fp_model::WindowSystem;
+    let c: Config = serde_json::from_str(r#"{"ui":{}}"#).unwrap();
+    assert_eq!(c.ui.window_system, WindowSystem::Auto);
+    for (text, expected) in [
+        ("Auto", WindowSystem::Auto),
+        ("X11", WindowSystem::X11),
+        ("Wayland", WindowSystem::Wayland),
+    ] {
+        let json = format!(r#"{{"ui":{{"window_system":"{text}"}}}}"#);
+        let c: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(c.ui.window_system, expected);
+    }
+}
+
+#[test]
 fn by_default_no_device_has_its_own_values() {
     let mut c = Config::default();
     assert!(c.outputs.device_overrides.is_empty());
