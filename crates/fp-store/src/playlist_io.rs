@@ -13,7 +13,7 @@ use std::path::{Component, Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use fp_model::{CartEdit, CartKind, CartPage, CartPageImport, Library, Limits};
+use fp_model::{CartColor, CartEdit, CartKind, CartPage, CartPageImport, Library, Limits};
 
 /// One entry read from a playlist file.
 #[derive(Debug, Clone, PartialEq)]
@@ -447,6 +447,9 @@ struct CartFile {
     looped: bool,
     #[serde(default)]
     exclusive: bool,
+    /// Cart colour spec CC4: the colour's name; left out when there is none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    color: Option<serde_json::Value>,
 }
 
 fn kind_name(kind: CartKind) -> &'static str {
@@ -472,6 +475,18 @@ pub fn parse_cart_page(
     bytes: &[u8],
     source: &Path,
     limits: &Limits,
+) -> Result<CartPageImport, CartPageFileError> {
+    parse_cart_page_noting(bytes, source, limits, &mut Vec::new())
+}
+
+/// As [`parse_cart_page`]; what it reads leniently (a cart colour that is
+/// not a known name loads as none, cart colour spec CC4) is added to
+/// `notes`.
+pub fn parse_cart_page_noting(
+    bytes: &[u8],
+    source: &Path,
+    limits: &Limits,
+    notes: &mut Vec<String>,
 ) -> Result<CartPageImport, CartPageFileError> {
     if bytes.len() as u64 > limits.max_playlist_file_bytes {
         return Err(CartPageFileError::TooLarge {
@@ -506,12 +521,25 @@ pub fn parse_cart_page(
                 _ => None,
             });
             let position = usize::try_from(c.position - 1).unwrap_or(usize::MAX);
+            let color = match c.color {
+                None | Some(serde_json::Value::Null) => None,
+                Some(raw) => {
+                    let known = raw.as_str().and_then(CartColor::from_name);
+                    if known.is_none() {
+                        notes.push(format!(
+                            "cart page: cart {} has an unknown colour {raw}; it has none",
+                            c.position
+                        ));
+                    }
+                    known
+                }
+            };
             let edit = CartEdit {
                 name: c.name,
                 kind: kind_from(&c.kind),
                 looped: c.looped,
                 exclusive: c.exclusive,
-                color: None,
+                color,
             };
             (position, edit, path)
         })
@@ -531,7 +559,9 @@ pub fn write_cart_page(page: &CartPage, library: &Library) -> String {
         .carts
         .iter()
         .enumerate()
-        .filter(|(_, c)| c.track.is_some() || !c.name.is_empty() || c.looped || c.exclusive)
+        .filter(|(_, c)| {
+            c.track.is_some() || !c.name.is_empty() || c.looped || c.exclusive || c.color.is_some()
+        })
         .map(|(i, c)| CartFile {
             position: i as u64 + 1,
             name: c.name.clone(),
@@ -542,6 +572,7 @@ pub fn write_cart_page(page: &CartPage, library: &Library) -> String {
                 .map(|t| t.path.to_string_lossy().into_owned()),
             looped: c.looped,
             exclusive: c.exclusive,
+            color: c.color.map(|k| serde_json::Value::from(k.name())),
         })
         .collect();
     let file = CartPageFile {

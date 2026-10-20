@@ -7,7 +7,7 @@ use crossbeam_channel::Receiver;
 use egui::{Color32, RichText, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::{CartEdit, CartKind, CartPageId, CartPageImport, Command};
-use fp_store::playlist_io::{parse_cart_page, read_bounded, write_cart_page};
+use fp_store::playlist_io::{parse_cart_page_noting, read_bounded, write_cart_page};
 
 use super::super::app::Scene;
 use super::super::cartwall::page_name;
@@ -202,7 +202,13 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                     read_bounded(&path, limits.max_playlist_file_bytes)
                         .map_err(FileError::from)
                         .and_then(|bytes| {
-                            parse_cart_page(&bytes, &path, &limits).map_err(FileError::from)
+                            let mut notes = Vec::new();
+                            let import = parse_cart_page_noting(&bytes, &path, &limits, &mut notes)
+                                .map_err(FileError::from);
+                            for note in &notes {
+                                tracing::warn!(%note, "while importing a cart page");
+                            }
+                            import
                         }),
                 )
             });
