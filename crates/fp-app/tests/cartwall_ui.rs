@@ -426,7 +426,8 @@ fn stop_all_sits_at_the_right_end_of_the_bar() {
     let stop = h.get_by_label("Stop all (2)").rect();
     let title = h.get_by_label("CARTWALL").rect();
     assert!(stop.left() > title.right(), "after the collapse control");
-    assert!(stop.right() > 1000.0 - 60.0, "at the right end: {stop:?}");
+    // Left of the panel's Hide and Maximize buttons.
+    assert!(stop.right() > 1000.0 - 110.0, "at the right end: {stop:?}");
 }
 
 #[test]
@@ -445,7 +446,7 @@ fn stop_all_stays_at_the_right_end_in_a_narrow_window() {
     h.run_steps(3);
     let stop = h.get_by_label("Stop all (2)").rect();
     assert!(stop.right() <= 420.0 + 0.5, "inside the window: {stop:?}");
-    assert!(stop.right() > 420.0 - 60.0, "at the right end: {stop:?}");
+    assert!(stop.right() > 420.0 - 110.0, "at the right end: {stop:?}");
     assert!(stop.width() > 40.0, "not squeezed: {stop:?}");
     assert!(h.query_by_label("CARTWALL").is_some(), "title kept");
     assert!(h.query_by_label("Carts 1").is_some(), "a page tab kept");

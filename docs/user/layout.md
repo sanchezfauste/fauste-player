@@ -74,8 +74,13 @@ it does nothing.
 
 ## Maximize a panel
 
-Right-click the background of a player's header, or of the cartwall's
-header (not one of their buttons), for its menu:
+Every player's header, and the cartwall's, ends with two small buttons:
+**Hide** (a minus) and **Maximize** (corners pointing out; **Restore**,
+corners pointing in, on the maximized panel). Hover for the name. They are
+dimmed while the layout is locked, **Hide** on the last shown panel, and
+**Maximize** with one panel shown and on a collapsed cartwall. The same
+two actions are in the menu of a right click on the background of the
+header (not one of its buttons):
 
 - **Maximize** gives that panel all the room: the other panels shrink to
   their smallest. It is only for the moment and is not saved. **Restore**

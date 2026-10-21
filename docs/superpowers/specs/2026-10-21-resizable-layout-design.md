@@ -191,7 +191,8 @@ for the interface's notice, if one ever reaches it.
     each language (`Cartwall`). A lit tile is a shown panel; a click hides
     or shows it (RL7). The last lit tile is disabled. The tiles never run
     into the clock and the buttons on the right: when they do not fit,
-    they scroll sideways, and the layout button stays in view.
+    they scroll sideways, and the layout button stays in view. Every
+    tile and button of the top bar has the same height and centre line.
   - **On-air dot.** The tile of a hidden panel that is on air shows a red
     dot. For a player, that is a current entry that is not stopped. For
     the cartwall, any cart playing.
@@ -208,6 +209,15 @@ for the interface's notice, if one ever reaches it.
   - **Menu.** A right click on the background of a player's header or of
     the cartwall's header opens a menu with `Maximize` (or `Restore`) and
     `Hide`. The tiles in the headers keep their own clicks.
+  - **Header buttons.** Each player's header and the cartwall's header end
+    with two small icon buttons, in this order: `Hide` (a minus; the same
+    command as the menu's `Hide`) and `Maximize` (corners out), which is
+    `Restore` (corners in) on the maximized panel. Each has a tooltip and
+    an accessible name. They follow the menu's rules: both are disabled
+    while the layout is locked, `Hide` for the last shown panel, `Maximize`
+    with one panel shown and for a collapsed cartwall. In a player's
+    header they belong to the right group that never collapses; the
+    cartwall's collapse caret stays, and so does the menu.
   - **Maximized.** The panel takes all the free space, and every other
     shown panel shrinks to its minimum (RL8). That includes the cartwall
     on a side, and the players' height at the bottom.

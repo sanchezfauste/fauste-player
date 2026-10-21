@@ -258,7 +258,7 @@ fn header(
     const SPACING: f32 = 6.0;
     const CUE_WIDTH: f32 = 50.0;
     const BP_WIDTH: f32 = 28.0;
-    const STATUS_MIN_WIDTH: f32 = 40.0;
+    const STATUS_MIN_WIDTH: f32 = 30.0;
     // A point of slack, so rounding never lets two items touch.
     const SLACK: f32 = 1.0;
     let t = scene.i18n;
@@ -334,7 +334,11 @@ fn header(
         .gain
         .as_ref()
         .map(|badge| GainBadgeLayout::new(ui, t, badge));
-    let mut right_widths = vec![CUE_WIDTH, widgets::segmented_width(ui, &segments)];
+    let mut right_widths = vec![
+        super::panels::HEADER_BUTTONS_WIDTH,
+        CUE_WIDTH,
+        widgets::segmented_width(ui, &segments),
+    ];
     if show_bp {
         right_widths.push(BP_WIDTH);
     }
@@ -408,6 +412,10 @@ fn header(
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing = vec2(SPACING, 0.0);
+                // The panel's buttons: at the right end, never collapsed.
+                ui.scope(|ui| {
+                    super::panels::header_buttons(ui, scene, view_state, Panel::Player(id))
+                });
                 let cue_style = if pv.cueing {
                     TileStyle {
                         fill: theme::CUE_BG,

@@ -5,7 +5,8 @@
 
 use std::collections::HashMap;
 
-use egui::{Align, Layout, Rect, Sense, TextureHandle, Ui, UiBuilder, pos2, vec2};
+use egui::{Align, Align2, Color32, Layout, Rect, Sense, TextureHandle, Ui, UiBuilder, pos2, vec2};
+use egui_phosphor::regular as icon;
 use fp_model::layout::{DEFAULT_SIDE_SHARE, Dock, Panel};
 use fp_model::{AppState, Command, PlayerId, TrackId};
 
@@ -232,7 +233,16 @@ const LAYOUT_BUTTON_ROOM: f32 = 4.0 + 4.0 + 24.0;
 /// the right begin): past it they scroll sideways, and the layout button
 /// stays outside the scroll, always reachable.
 pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>, right: f32) {
-    ui.scope(|ui| {
+    // Centred on the bar's middle line, as the buttons on the right: the
+    // tiles are not placed at the cursor's top.
+    let bar = ui.max_rect();
+    let area = Rect::from_min_max(pos2(ui.cursor().left(), bar.top()), bar.right_bottom());
+    let mut centred = ui.new_child(
+        UiBuilder::new()
+            .max_rect(area)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    centred.scope(|ui| {
         ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
         let t = scene.i18n;
         let players = scene.state.player_ids();
@@ -247,7 +257,7 @@ pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>, right: f32) {
             .max_width(room)
             .auto_shrink([true, true])
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
                     for (n, id) in players.iter().enumerate() {
                         let name = t.tr_args("player-label", &[("n", (n + 1).into())]);
@@ -418,10 +428,136 @@ pub(crate) fn settle_view(view_state: &mut ViewState, state: &AppState) {
     }
 }
 
+/// Whether `panel` can be maximised (RL16): not while the layout is locked,
+/// not with one panel shown, not a collapsed cartwall (RL14).
+fn can_maximise(scene: &Scene<'_>, panel: Panel) -> bool {
+    let layout = &scene.state.layout;
+    let collapsed = panel == Panel::Cartwall && !scene.state.cartwall.open;
+    !layout.locked && layout.shown_panels(&scene.state.player_ids()) > 1 && !collapsed
+}
+
+/// Whether `panel` can be hidden: not while the layout is locked and not
+/// the last shown panel.
+fn can_hide(scene: &Scene<'_>, panel: Panel) -> bool {
+    let layout = &scene.state.layout;
+    !layout.locked && !layout.is_last_shown(&scene.state.player_ids(), panel)
+}
+
+fn is_maximised(view_state: &ViewState, panel: Panel) -> bool {
+    view_state
+        .maximised
+        .as_ref()
+        .is_some_and(|m| m.panel == panel)
+}
+
+/// Maximises `panel`, or restores it when it is the maximised one: the
+/// action of the menu entry and of the header button.
+fn toggle_maximise(scene: &Scene<'_>, view_state: &mut ViewState, panel: Panel) {
+    view_state.maximised = if is_maximised(view_state, panel) {
+        None
+    } else {
+        Some(Maximised::new(panel, scene.state))
+    };
+}
+
+fn hide_panel(scene: &Scene<'_>, panel: Panel) {
+    scene.ctl.send(Command::SetPanelHidden {
+        panel,
+        hidden: true,
+    });
+}
+
+/// The side of a header button, a square (small: a player header at its
+/// least width has little room to spare).
+const HEADER_BUTTON_SIZE: f32 = 18.0;
+/// The gap between the two header buttons.
+const HEADER_BUTTONS_SPACING: f32 = 2.0;
+
+/// The width of the two header buttons and the gap between them.
+pub(crate) const HEADER_BUTTONS_WIDTH: f32 = 2.0 * HEADER_BUTTON_SIZE + HEADER_BUTTONS_SPACING;
+
+/// The two icon buttons at the right end of a panel's header: Hide, then
+/// Maximize (Restore on the maximised panel). To be drawn in a right-to-left
+/// layout, first of the header's items. Same actions and same disabled rules
+/// as the header menu (RL16); a disabled button's tooltip says why when the
+/// layout is locked or the panel is the last shown.
+pub(crate) fn header_buttons(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    panel: Panel,
+) {
+    ui.spacing_mut().item_spacing = vec2(HEADER_BUTTONS_SPACING, 0.0);
+    let t = scene.i18n;
+    let locked = scene.state.layout.locked;
+    let style = TileStyle {
+        border: Color32::TRANSPARENT,
+        content: theme::NEUTRAL_400,
+        hover_fill: theme::NEUTRAL_800,
+        ..TileStyle::plain()
+    };
+    let size = vec2(HEADER_BUTTON_SIZE, HEADER_BUTTON_SIZE);
+    let maximised = is_maximised(view_state, panel);
+    let (label, glyph) = if maximised {
+        (t.tr("layout-restore"), icon::CORNERS_IN)
+    } else {
+        (t.tr("layout-maximise"), icon::CORNERS_OUT)
+    };
+    // A restore is allowed while the layout is unlocked only, as the menu.
+    let enabled = maximised && !locked || can_maximise(scene, panel);
+    let tip = if locked {
+        t.tr("error-layout-locked")
+    } else {
+        label.clone()
+    };
+    if widgets::tile_without_tooltip(ui, size, &label, enabled, style, |p, r, c| {
+        p.text(r.center(), Align2::CENTER_CENTER, glyph, font(12.0), c);
+    })
+    .on_hover_text(tip)
+    .clicked()
+    {
+        toggle_maximise(scene, view_state, panel);
+    }
+    let label = t.tr("layout-hide");
+    let last = scene
+        .state
+        .layout
+        .is_last_shown(&scene.state.player_ids(), panel);
+    let tip = if locked {
+        t.tr("error-layout-locked")
+    } else if last {
+        t.tr("error-last-panel")
+    } else {
+        label.clone()
+    };
+    if widgets::tile_without_tooltip(
+        ui,
+        size,
+        &label,
+        can_hide(scene, panel),
+        style,
+        |p, r, c| {
+            p.text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                icon::MINUS,
+                font(12.0),
+                c,
+            );
+        },
+    )
+    .on_hover_text(tip)
+    .clicked()
+    {
+        hide_panel(scene, panel);
+    }
+}
+
 /// RL16: the menu of a panel header's background (right click): Maximize,
 /// or Restore on the maximised panel, and Hide. Both are disabled while the
 /// layout is locked; Maximize also with one panel shown and on a collapsed
-/// cartwall (RL14), Hide on the last shown panel.
+/// cartwall (RL14), Hide on the last shown panel. The header buttons do the
+/// same.
 pub(crate) fn header_menu(
     response: &egui::Response,
     scene: &Scene<'_>,
@@ -430,37 +566,27 @@ pub(crate) fn header_menu(
 ) {
     response.context_menu(|ui| {
         let t = scene.i18n;
-        let layout = &scene.state.layout;
-        let players = scene.state.player_ids();
         ui.set_min_width(160.0);
-        let maximised = view_state
-            .maximised
-            .as_ref()
-            .is_some_and(|m| m.panel == panel);
-        if maximised {
+        if is_maximised(view_state, panel) {
             if ui.button(t.tr("layout-restore")).clicked() {
-                view_state.maximised = None;
+                toggle_maximise(scene, view_state, panel);
                 ui.close();
             }
         } else {
-            // RL14: a collapsed cartwall has nothing to fill the room with.
-            let collapsed = panel == Panel::Cartwall && !scene.state.cartwall.open;
-            let can = !layout.locked && layout.shown_panels(&players) > 1 && !collapsed;
             let item = egui::Button::new(t.tr("layout-maximise"));
-            if ui.add_enabled(can, item).clicked() {
-                view_state.maximised = Some(Maximised::new(panel, scene.state));
+            if ui.add_enabled(can_maximise(scene, panel), item).clicked() {
+                toggle_maximise(scene, view_state, panel);
                 ui.close();
             }
         }
-        let can_hide = !layout.locked && !layout.is_last_shown(&players, panel);
         if ui
-            .add_enabled(can_hide, egui::Button::new(t.tr("layout-hide")))
+            .add_enabled(
+                can_hide(scene, panel),
+                egui::Button::new(t.tr("layout-hide")),
+            )
             .clicked()
         {
-            scene.ctl.send(Command::SetPanelHidden {
-                panel,
-                hidden: true,
-            });
+            hide_panel(scene, panel);
             ui.close();
         }
     });
