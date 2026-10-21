@@ -1826,10 +1826,17 @@ fn a_second_reanalyse_all_while_the_pass_runs_cancels_nothing() {
         .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
         .collect();
     let mut r = rig(&files, dir);
-    r.run_until("analysed", |r| r.analyses.load(Ordering::SeqCst) == 3);
-    idle_for(&mut r, 100);
+    // Every first analysis applied and nothing in flight: the analysis
+    // count goes up when a job starts, and a result routed after the
+    // request below would count in the pass.
+    r.run_until("analysed and idle", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+            && !r.services.activity().load().is_busy()
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
     assert_eq!(r.services.activity().load().pass, None);
-    // The pass's first job holds at the gate.
+    // The pass's first job holds at the gate, so no job of it can end
+    // before the gate opens.
     r.gate.store(false, Ordering::SeqCst);
     let requests = r.services.requests();
     requests.send(ServiceRequest::ReanalyseAll).unwrap();
