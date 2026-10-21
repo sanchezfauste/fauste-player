@@ -257,10 +257,10 @@ default, and one out of range is clamped, each with a warning.
 | Field | Default | Range | Meaning |
 |---|---|---|---|
 | `normalize` | false | | normalization on or off; off by default, so an upgrade changes nothing on air |
-| `target_lufs` | −16 | −36 … −6 | integrated loudness every track is brought to |
-| `true_peak_ceiling_dbtp` | −1 | −12 … 0 | a boost may not take the measured true peak above this; it never cuts a track |
-| `max_boost_db` | 12 | 0 … 24 | the largest gain a track may get; cuts are not limited |
-| `max_trim_db` | 12 | 0 … 24 | the per-track trim is refused beyond ± this, and a stored trim beyond it (the maximum lowered since) is limited to it |
+| `target_lufs` | −16 | −36 … −6 | integrated loudness every track is brought to; −16 follows the AES streaming recommendations (TD1004.1.15-10: −16 to −20 LUFS), not broadcast (R128 −23, A/85 −24) |
+| `true_peak_ceiling_dbtp` | −1 | −12 … 0 | a boost may not take the measured true peak above this; it never cuts a track; −1 is the EBU R128 maximum true peak, also used by AES (−2 for low-bit-rate encoders) |
+| `max_boost_db` | 12 | 0 … 24 | the largest gain a track may get; cuts are not limited; a product choice, no standard |
+| `max_trim_db` | 12 | 0 … 24 | the per-track trim is refused beyond ± this, and a stored trim beyond it (the maximum lowered since) is limited to it; a product choice, no standard |
 
 A source on a bit-perfect device gets no gain (N8). The meter's own
 `meter.loudness_target_lufs` is a separate value.
