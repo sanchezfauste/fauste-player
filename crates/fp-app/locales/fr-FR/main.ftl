@@ -226,6 +226,8 @@ error-invalid-trim = L'ajustement doit être un nombre compris dans l'ajustement
 error-bad-layout = Cette modification de la disposition n'est pas possible.
 error-last-panel = Au moins un panneau doit rester affiché.
 error-layout-locked = La disposition est verrouillée.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartouches
 cartwall-title = CARTOUCHES
 cartwall-hint = Cliquer pour lancer · cliquer à nouveau pour arrêter
 cartwall-stop-all = Tout arrêter
@@ -657,7 +659,7 @@ cue-on-air-stopped-player = Pré-écoute arrêtée : le lecteur { $n } a démarr
 cue-on-air-stopped-cartwall = Pré-écoute arrêtée : une cartouche a démarré sur la même sortie.
 
 ## Resizable layout: the top bar's panel tiles and layout menu
-layout-panel-carts = Cartouches
+layout-panel-carts = { -cartwall }
 tip-layout-hide = Masquer { $panel }
 tip-layout-show = Afficher { $panel }
 tip-layout-show-on-air = Afficher { $panel } (à l'antenne)

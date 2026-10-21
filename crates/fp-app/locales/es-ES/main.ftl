@@ -226,6 +226,8 @@ error-invalid-trim = El ajuste debe ser un número dentro del ajuste máximo.
 error-bad-layout = Ese cambio de distribución no es posible.
 error-last-panel = Al menos un panel debe seguir visible.
 error-layout-locked = La distribución está bloqueada.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartuchera
 cartwall-title = CARTUCHERA
 cartwall-hint = Clic para disparar · otro clic para parar
 cartwall-stop-all = Parar todo
@@ -657,7 +659,7 @@ cue-on-air-stopped-player = Preescucha detenida: el player { $n } ha empezado en
 cue-on-air-stopped-cartwall = Preescucha detenida: un cartucho ha empezado en la misma salida.
 
 ## Resizable layout: the top bar's panel tiles and layout menu
-layout-panel-carts = Cartuchos
+layout-panel-carts = { -cartwall }
 tip-layout-hide = Ocultar { $panel }
 tip-layout-show = Mostrar { $panel }
 tip-layout-show-on-air = Mostrar { $panel } (sonando)

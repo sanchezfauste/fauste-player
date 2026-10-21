@@ -226,6 +226,8 @@ error-invalid-trim = The trim must be a number within the maximum trim.
 error-bad-layout = That layout change is not possible.
 error-last-panel = At least one panel must stay shown.
 error-layout-locked = The layout is locked.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartwall
 cartwall-title = CARTWALL
 cartwall-hint = Click to fire · click again to stop
 cartwall-stop-all = Stop all
@@ -657,7 +659,7 @@ cue-on-air-stopped-player = Pre-listen stopped: Player { $n } started on the sam
 cue-on-air-stopped-cartwall = Pre-listen stopped: a cart started on the same output.
 
 ## Resizable layout: the top bar's panel tiles and layout menu
-layout-panel-carts = Carts
+layout-panel-carts = { -cartwall }
 tip-layout-hide = Hide { $panel }
 tip-layout-show = Show { $panel }
 tip-layout-show-on-air = Show { $panel } (on air)
@@ -668,7 +670,7 @@ layout-dock-right = Cartwall on the right
 layout-lock = Lock layout
 layout-equal-widths = Equal player widths
 layout-reset = Reset layout
-layout-maximise = Maximise
+layout-maximise = Maximize
 layout-restore = Restore
 layout-hide = Hide
 notice-drop-no-player = No player is shown: show one to drop files on it.

@@ -226,6 +226,8 @@ error-invalid-trim = L'ajust ha de ser un nombre dins de l'ajust màxim.
 error-bad-layout = Aquest canvi de disposició no és possible.
 error-last-panel = Com a mínim un panell ha de quedar visible.
 error-layout-locked = La disposició està bloquejada.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartutxera
 cartwall-title = CARTUTXERA
 cartwall-hint = Clic per disparar · un altre clic per aturar
 cartwall-stop-all = Aturar-ho tot
@@ -657,7 +659,7 @@ cue-on-air-stopped-player = Preescolta aturada: el reproductor { $n } ha començ
 cue-on-air-stopped-cartwall = Preescolta aturada: un cartutx ha començat a la mateixa sortida.
 
 ## Resizable layout: the top bar's panel tiles and layout menu
-layout-panel-carts = Cartutxos
+layout-panel-carts = { -cartwall }
 tip-layout-hide = Amagar { $panel }
 tip-layout-show = Mostrar { $panel }
 tip-layout-show-on-air = Mostrar { $panel } (en antena)

@@ -226,6 +226,8 @@ error-invalid-trim = De trim moet een getal binnen de maximale trim zijn.
 error-bad-layout = Die indelingswijziging is niet mogelijk.
 error-last-panel = Er moet minstens één paneel zichtbaar blijven.
 error-layout-locked = De indeling is vergrendeld.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartwall
 cartwall-title = CARTWALL
 cartwall-hint = Klik om te starten · klik opnieuw om te stoppen
 cartwall-stop-all = Alles stoppen
@@ -657,7 +659,7 @@ cue-on-air-stopped-player = Voorbeluisteren gestopt: speler { $n } is op dezelfd
 cue-on-air-stopped-cartwall = Voorbeluisteren gestopt: een cart is op dezelfde uitgang gestart.
 
 ## Resizable layout: the top bar's panel tiles and layout menu
-layout-panel-carts = Carts
+layout-panel-carts = { -cartwall }
 tip-layout-hide = { $panel } verbergen
 tip-layout-show = { $panel } tonen
 tip-layout-show-on-air = { $panel } tonen (on air)

@@ -431,10 +431,10 @@ fn rl15_a_tile_hides_and_shows_its_player() {
 #[test]
 fn rl15_the_carts_tile_hides_and_shows_the_cartwall() {
     let (mut h, _) = harness(state(2, 3));
-    h.get_by_label("Hide Carts").click();
+    h.get_by_label("Hide Cartwall").click();
     h.run_steps(2);
     assert_eq!(h.state().cartwall_rect(), None);
-    h.get_by_label("Show Carts").click();
+    h.get_by_label("Show Cartwall").click();
     h.run_steps(2);
     assert!(h.state().cartwall_rect().is_some());
 }
@@ -445,7 +445,7 @@ fn rl15_the_last_lit_tile_is_disabled() {
     s.layout.cartwall.hidden = true;
     let (mut h, fake) = harness(s);
     assert!(disabled(&h, "Hide P1"));
-    assert!(!disabled(&h, "Show Carts"));
+    assert!(!disabled(&h, "Show Cartwall"));
     h.get_by_label("Hide P1").click();
     h.run_steps(2);
     assert!(hidden_commands(&fake).is_empty());
@@ -539,7 +539,7 @@ fn rl15_a_locked_layout_disables_the_tiles_and_the_menu() {
     let mut s = state(2, 3);
     s.layout.locked = true;
     let (mut h, fake) = harness(s);
-    for tile in ["Hide P1", "Hide P2", "Hide Carts"] {
+    for tile in ["Hide P1", "Hide P2", "Hide Cartwall"] {
         assert!(disabled(&h, tile), "{tile}");
     }
     open_layout_menu(&mut h);
@@ -657,7 +657,7 @@ fn layout_commands(fake: &Fake) -> Vec<Command> {
 
 fn maximise(h: &mut Harness<'_, AppUi>, at: Pos2) {
     right_click(h, at);
-    h.get_by_label("Maximise").click();
+    h.get_by_label("Maximize").click();
     h.run_steps(2);
 }
 
@@ -778,7 +778,7 @@ fn rl16_a_locked_layout_disables_the_header_menu() {
     let (mut h, fake) = harness(s);
     let at = header_point(&h, fake.player(0));
     right_click(&mut h, at);
-    assert!(disabled(&h, "Maximise"));
+    assert!(disabled(&h, "Maximize"));
     assert!(disabled(&h, "Hide"));
 }
 
@@ -789,7 +789,7 @@ fn rl16_with_one_panel_shown_maximise_is_disabled() {
     let (mut h, fake) = harness(s);
     let at = header_point(&h, fake.player(0));
     right_click(&mut h, at);
-    assert!(disabled(&h, "Maximise"));
+    assert!(disabled(&h, "Maximize"));
     assert!(disabled(&h, "Hide"), "the last shown panel");
 }
 

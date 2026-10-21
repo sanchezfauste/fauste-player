@@ -226,6 +226,8 @@ error-invalid-trim = Doikuntzak gehieneko doikuntzaren barruko zenbaki bat izan 
 error-bad-layout = Diseinu-aldaketa hori ezin da egin.
 error-last-panel = Gutxienez panel batek ikusgai egon behar du.
 error-layout-locked = Diseinua blokeatuta dago.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Kartutxoak
 cartwall-title = KARTUTXOAK
 cartwall-hint = Klik jaurtitzeko · beste klik bat gelditzeko
 cartwall-stop-all = Gelditu dena
@@ -657,7 +659,7 @@ cue-on-air-stopped-player = Aurrez entzutea geldituta: { $n }. erreproduzitzaile
 cue-on-air-stopped-cartwall = Aurrez entzutea geldituta: kartutxo bat irteera berean hasi da.
 
 ## Resizable layout: the top bar's panel tiles and layout menu
-layout-panel-carts = Kartutxoak
+layout-panel-carts = { -cartwall }
 tip-layout-hide = Ezkutatu { $panel }
 tip-layout-show = Erakutsi { $panel }
 tip-layout-show-on-air = Erakutsi { $panel } (airean)
