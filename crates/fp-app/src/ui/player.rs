@@ -939,9 +939,9 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 |p, r, c| {
                     if let Some(left) = next_left {
                         let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
-                        // Dimmed with the tile when Next is unavailable.
-                        let strength = if available.play { 0.5 } else { 0.5 * 0.45 };
-                        p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(strength));
+                        // Full strength even though Next is unavailable during a
+                        // fade: the countdown must stay visible.
+                        p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
                     }
                     glyphs::paint(p, r.translate(vec2(0.0, -6.0)), play_action, 28.0, c);
                     p.text(
