@@ -338,7 +338,7 @@ fn n4_the_analysis_measures_the_loudness() {
     assert!((l.true_peak_dbtp + 23.0).abs() < 0.5, "{l:?}");
     assert_eq!(a.loudness_pass, Some(LOUDNESS_VERSION));
     assert_eq!(
-        ANALYSIS_VERSION, 9,
+        ANALYSIS_VERSION, 10,
         "the loudness tail did not bump the analysis version again"
     );
 }
@@ -573,4 +573,60 @@ fn only_entry(dir: &Path) -> PathBuf {
         .collect();
     assert_eq!(entries.len(), 1);
     entries[0].clone()
+}
+
+/// A 16-bit 7.1 `WAVE_FORMAT_EXTENSIBLE` file (FL FR FC LFE BL BR SL SR)
+/// with a 1 kHz tone at −6 dBFS in channel `loud` only.
+fn seven_one(dir: &Path, name: &str, loud: usize) -> PathBuf {
+    let (channels, rate, secs) = (8u16, 48_000u32, 5u32);
+    let block = channels * 2;
+    let data_len = rate * secs * u32::from(block);
+    let mut b = Vec::new();
+    b.extend_from_slice(b"RIFF");
+    b.extend_from_slice(&(4 + 8 + 40 + 8 + data_len).to_le_bytes());
+    b.extend_from_slice(b"WAVEfmt ");
+    b.extend_from_slice(&40u32.to_le_bytes());
+    b.extend_from_slice(&0xFFFEu16.to_le_bytes());
+    b.extend_from_slice(&channels.to_le_bytes());
+    b.extend_from_slice(&rate.to_le_bytes());
+    b.extend_from_slice(&(rate * u32::from(block)).to_le_bytes());
+    b.extend_from_slice(&block.to_le_bytes());
+    b.extend_from_slice(&16u16.to_le_bytes());
+    b.extend_from_slice(&22u16.to_le_bytes());
+    b.extend_from_slice(&16u16.to_le_bytes());
+    b.extend_from_slice(&0x63Fu32.to_le_bytes());
+    b.extend_from_slice(&[
+        1, 0, 0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0xAA, 0, 0x38, 0x9B, 0x71,
+    ]);
+    b.extend_from_slice(b"data");
+    b.extend_from_slice(&data_len.to_le_bytes());
+    for i in 0..rate * secs {
+        let t = f64::from(i) / f64::from(rate);
+        let v = ((t * 1_000.0 * std::f64::consts::TAU).sin() * 16_384.0) as i16;
+        for c in 0..usize::from(channels) {
+            b.extend_from_slice(&(if c == loud { v } else { 0 }).to_le_bytes());
+        }
+    }
+    let path = dir.join(name);
+    std::fs::write(&path, b).unwrap();
+    path
+}
+
+#[test]
+fn the_side_channels_of_a_7_1_file_count_in_its_loudness() {
+    let dir = tempfile::tempdir().unwrap();
+    let lufs = |name: &str, loud: usize| {
+        let path = seven_one(dir.path(), name, loud);
+        analyze_file(&path, &settings(), &limits())
+            .unwrap()
+            .analysis
+            .loudness
+            .unwrap()
+            .integrated_lufs
+    };
+    let front = lufs("fl.wav", 0).expect("the front left is loud");
+    let side = lufs("sl.wav", 6).expect("the side left is not silent");
+    // The side channel reaches the left at -3 dB, like the centre.
+    assert!((front - side - 3.01).abs() < 0.2, "{front} {side}");
+    assert_eq!(lufs("lfe.wav", 3), None, "the LFE is dropped");
 }

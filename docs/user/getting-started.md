@@ -131,6 +131,12 @@ DST-compressed DFF files. A WAV or FLAC that holds a DTS (or other encoded
 surround) bitstream instead of audio, as some DTS-CD rips do, also shows as
 unreadable (the log says why): convert it to ordinary PCM first.
 
+Surround files (quad, 5.1, 6.1, 7.1 and other layouts of up to eight channels)
+play mixed down to stereo by the position of each channel: front left and
+right stay on their side, the centre and the back centre go to both sides, the
+side and rear channels go to their side, and the LFE (subwoofer) channel is
+dropped. Multichannel Opus and AAC files cannot be read and show as unreadable.
+
 Each file is analysed in the background. The analysis reads the title,
 artist, album and cover art, draws the waveform, and finds where the sound
 starts and ends and where to mix into the next track. You can play a track

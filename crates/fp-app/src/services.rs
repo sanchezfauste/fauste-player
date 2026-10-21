@@ -272,7 +272,9 @@ pub enum ServiceRequest {
 pub fn outdated(track: &fp_model::Track) -> bool {
     track.analyzed
         && track.file_state.is_playable()
-        && (track.format.is_none() || track.analysis_version < fp_analysis::cache::ANALYSIS_VERSION)
+        && track.format.is_none_or(|f| {
+            !fp_analysis::cache::analysis_is_current(track.analysis_version, f.channels)
+        })
 }
 
 /// How many tracks an earlier version analysed. They keep that analysis,

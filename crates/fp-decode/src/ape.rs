@@ -8,8 +8,9 @@ use std::path::Path;
 
 use ape_decoder::ApeDecoder;
 
-/// Most channels accepted (the downmix folds up to 5.1 and keeps the front
-/// pair of anything wider).
+use crate::downmix::Downmix;
+
+/// Most channels accepted (the downmix knows the usual layouts up to this).
 const MAX_CHANNELS: u16 = 8;
 
 pub(crate) struct ApeFileDecoder {
@@ -19,6 +20,7 @@ pub(crate) struct ApeFileDecoder {
     channels: usize,
     bytes_per_sample: usize,
     frame: Vec<f32>,
+    mix: Downmix,
 }
 
 fn err(e: ape_decoder::ApeError) -> String {
@@ -50,6 +52,7 @@ impl ApeFileDecoder {
             channels,
             bytes_per_sample,
             frame: vec![0.0; channels],
+            mix: Downmix::for_count(channels),
         })
     }
 
@@ -124,7 +127,7 @@ impl ApeFileDecoder {
                     *slot = value;
                 }
             }
-            let (l, r) = crate::downmix(&self.frame);
+            let (l, r) = self.mix.apply(&self.frame);
             out.push(l);
             out.push(r);
         }

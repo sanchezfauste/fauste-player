@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use symphonia::core::audio::Channels;
 use symphonia::core::codecs::audio::{AudioCodecId, AudioDecoder, AudioDecoderOptions, well_known};
 use symphonia::core::errors::{Error, SeekErrorKind};
 use symphonia::core::formats::probe::Hint;
@@ -21,7 +22,7 @@ use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Duration, Time, TimeBase, Timestamp};
 
-use crate::downmix;
+use crate::downmix::Downmix;
 
 pub(crate) struct SymphoniaDecoder {
     /// The file, to open it again for a restart from the start.
@@ -41,6 +42,9 @@ pub(crate) struct SymphoniaDecoder {
     /// estimate, if any).
     length_stored: bool,
     scratch: Vec<f32>,
+    /// The downmix for the channels the decoder last reported, rebuilt only
+    /// when they change.
+    mix: Option<(Channels, usize, Downmix)>,
     /// The track's time base, to place each decoded packet in time.
     time_base: Option<TimeBase>,
     /// After a seek, the time (seconds) the output must start at: frames of
@@ -151,6 +155,7 @@ impl SymphoniaDecoder {
             frames_hint,
             length_stored,
             scratch: Vec::new(),
+            mix: None,
             time_base,
             target_secs: None,
             preroll_secs,
@@ -357,8 +362,24 @@ impl SymphoniaDecoder {
             };
             let skip = skip.max(self.drop_frames.min(frames));
             self.drop_frames = self.drop_frames.saturating_sub(frames);
+            let spec_channels = buf.spec().channels();
+            if !self
+                .mix
+                .as_ref()
+                .is_some_and(|(c, n, _)| c == spec_channels && *n == channels)
+            {
+                self.mix = Some((
+                    spec_channels.clone(),
+                    channels,
+                    Downmix::for_channels(spec_channels, channels),
+                ));
+            }
+            let mix = self
+                .mix
+                .as_ref()
+                .map_or_else(|| Downmix::for_count(channels), |(_, _, m)| *m);
             for frame in self.scratch.chunks_exact(channels).skip(skip) {
-                let (l, r) = downmix(frame);
+                let (l, r) = mix.apply(frame);
                 out.push(l);
                 out.push(r);
             }

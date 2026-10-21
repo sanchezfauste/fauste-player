@@ -1,5 +1,5 @@
 //! File decoding. Output is interleaved stereo `f32` at the file's own rate:
-//! mono is duplicated, more channels are downmixed with ITU-R BS.775
+//! mono is duplicated, more channels are downmixed by position with ITU-R BS.775
 //! coefficients. symphonia decodes most formats; DSD, WavPack and Monkey's
 //! Audio have backends of their own (audio formats spec F2).
 
@@ -9,6 +9,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 mod ape;
+mod downmix;
 mod dsd;
 mod encoded;
 mod opus;
@@ -347,36 +348,14 @@ fn silence_non_finite(samples: &mut [f32]) -> bool {
     found
 }
 
-/// Stereo from any channel count. Order follows the WAV/SMPTE convention
-/// (L, R, C, LFE, Ls, Rs, …); the LFE channel is dropped.
-pub(crate) fn downmix(frame: &[f32]) -> (f32, f32) {
-    match *frame {
-        [m] => (m, m),
-        [l, r] => (l, r),
-        [l, r, c] => (l + MINUS_3DB * c, r + MINUS_3DB * c),
-        [l, r, c, _lfe] => (l + MINUS_3DB * c, r + MINUS_3DB * c),
-        // 5.0: L R C Ls Rs.
-        [l, r, c, ls, rs] => {
-            let norm = 1.0 / (1.0 + 2.0 * MINUS_3DB);
-            (
-                (l + MINUS_3DB * (c + ls)) * norm,
-                (r + MINUS_3DB * (c + rs)) * norm,
-            )
-        }
-        [l, r, c, _lfe, ls, rs, ..] => {
-            let norm = 1.0 / (1.0 + 2.0 * MINUS_3DB);
-            (
-                (l + MINUS_3DB * (c + ls)) * norm,
-                (r + MINUS_3DB * (c + rs)) * norm,
-            )
-        }
-        [] => (0.0, 0.0),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{downmix, silence_non_finite};
+    use super::silence_non_finite;
+    use crate::downmix::Downmix;
+
+    fn downmix(frame: &[f32]) -> (f32, f32) {
+        Downmix::for_count(frame.len()).apply(frame)
+    }
 
     #[test]
     fn non_finite_samples_become_silence_and_are_reported() {
