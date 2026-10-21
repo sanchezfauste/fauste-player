@@ -177,8 +177,15 @@ pub fn page_on_air(state: &AppState, page: CartPageId) -> bool {
 /// of in the steps of whatever snapshot happened to arrive. It never moves
 /// backwards, except when the snapshot itself does (a loop pass, a restart):
 /// a snapshot a little behind what was drawn holds the line for a moment
-/// instead of stepping it back. The extrapolation past the last snapshot is
-/// capped, so an engine that stops reporting does not run the line to the end.
+/// instead of stepping it back.
+///
+/// The position moves in the steps of the audio device's buffer (often 10 to
+/// 50 ms), not on every telemetry tick. The sweep measures the time between
+/// snapshots whose position actually changed (smoothed) and extrapolates at
+/// most twice that step past the last one, never less than a floor the caller
+/// derives from the conductor tick: a device's buffer steps are smoothed out,
+/// and an engine that stops reporting holds the line within about two steps
+/// instead of running it to the end.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CartSweep {
     /// The last position the engine reported.
@@ -187,6 +194,11 @@ pub struct CartSweep {
     since: f64,
     /// The position drawn on the previous frame.
     shown: f64,
+    /// The smoothed time between snapshots that changed; 0 until two changes
+    /// have been seen (the first interval starts at an arbitrary moment).
+    step: f64,
+    /// Whether the snapshot has changed since the sweep began.
+    changed: bool,
 }
 
 impl CartSweep {
@@ -195,22 +207,34 @@ impl CartSweep {
             snapshot: position,
             since: now,
             shown: position,
+            step: 0.0,
+            changed: false,
         }
     }
 
     /// The position to draw at frame time `now`, given the engine's latest
     /// `position` and the cart's `end` (seconds); never past `end`, and never
-    /// more than `max_ahead` seconds past the snapshot.
-    pub fn advance(&mut self, position: f64, now: f64, end: f64, max_ahead: f64) -> f64 {
+    /// more than twice the observed step (at least `floor`) past the snapshot.
+    pub fn advance(&mut self, position: f64, now: f64, end: f64, floor: f64) -> f64 {
         if position < self.snapshot {
             *self = Self::new(position, now);
             return position;
         }
         if position > self.snapshot {
+            if self.changed {
+                let seen = (now - self.since).max(0.0);
+                self.step = if self.step > 0.0 {
+                    0.5 * (self.step + seen)
+                } else {
+                    seen
+                };
+            }
+            self.changed = true;
             self.snapshot = position;
             self.since = now;
         }
-        let ahead = self.snapshot + (now - self.since).clamp(0.0, max_ahead.max(0.0));
+        let cap = (2.0 * self.step).max(floor.max(0.0));
+        let ahead = self.snapshot + (now - self.since).clamp(0.0, cap);
         let shown = ahead.max(self.shown).min(end).max(position);
         self.shown = shown;
         shown

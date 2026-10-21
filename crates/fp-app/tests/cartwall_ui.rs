@@ -1051,3 +1051,50 @@ fn i22_the_played_edge_advances_between_snapshots_and_holds_at_the_cap() {
     let held = progress_width(&h, "Station ID", look.progress);
     assert!(held - second < 1.0, "holds at the cap: {second} {held}");
 }
+
+#[test]
+fn i22_the_floor_applies_before_any_step_is_observed() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(2.0, 50.0);
+    let a = sweep.advance(2.0, 50.005, 9.0, 0.01);
+    assert!((a - 2.005).abs() < 1e-9, "{a}");
+    let b = sweep.advance(2.0, 60.0, 9.0, 0.01);
+    assert!((b - 2.01).abs() < 1e-9, "{b}");
+}
+
+/// The simulated engine: the position advances 40 ms every 40 ms, the
+/// interface draws every 16 ms.
+fn run_steps_of_40ms(sweep: &mut fp_app::ui::cart_view::CartSweep, frames: usize) -> Vec<f64> {
+    (1..=frames)
+        .map(|f| {
+            let t = f as f64 * 0.016;
+            let position = 1.0 + (t / 0.04).floor() * 0.04;
+            sweep.advance(position, 100.0 + t, 90.0, 0.01)
+        })
+        .collect()
+}
+
+#[test]
+fn i22_buffer_steps_are_smoothed_without_a_hold_between_them() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(1.0, 100.0);
+    let shown = run_steps_of_40ms(&mut sweep, 60);
+    // After the first steps the line moves on every frame.
+    let tail = &shown[20..];
+    assert!(tail.windows(2).all(|w| w[1] > w[0]), "{tail:?}");
+}
+
+#[test]
+fn i22_a_stalled_engine_holds_the_line_within_about_two_steps() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(1.0, 100.0);
+    run_steps_of_40ms(&mut sweep, 60);
+    // The engine stops: the same position from now on.
+    let stuck = 1.0 + (60.0 * 0.016 / 0.04_f64).floor() * 0.04;
+    let mut at = 0.0;
+    for f in 61..400 {
+        at = sweep.advance(stuck, 100.0 + f as f64 * 0.016, 90.0, 0.01);
+    }
+    assert!(at <= stuck + 0.085, "held: {at} vs {stuck}");
+    assert!(at >= stuck, "{at}");
+}

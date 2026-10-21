@@ -499,8 +499,9 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                         let mut sweep = ui
                             .data(|d| d.get_temp::<CartSweep>(sweep_id))
                             .unwrap_or_else(|| CartSweep::new(reported, scene.time));
-                        // At most two telemetry intervals past the snapshot, so
-                        // a stalled engine does not run the line to the end.
+                        // The floor of the extrapolation past a snapshot: two
+                        // conductor ticks (the sweep widens it to twice the
+                        // step it observes).
                         let max_ahead =
                             2.0 * scene.state.config.tuning.conductor_tick_ms.max(1.0) / 1000.0;
                         let at = sweep.advance(reported, scene.time, start + span, max_ahead);
