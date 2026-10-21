@@ -1,5 +1,152 @@
 # Changelog
 
+## [0.8.0](https://github.com/sanchezfauste/fauste-player/compare/v0.7.0...v0.8.0) (2026-10-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **model:** the `fader` travel of the remote API (HTTP and OSC) and the travel a MIDI fader stands for map to gain on the new curve, so the same travel is a different level than before; clients that convert a travel to dB must use dB = 192 * (travel^(1/8) - 1).
+* **model:** a Cue route on the Main output is usable
+
+### Features
+
+* **analysis:** report pool activity, fresh jobs, drop stale jobs ([91c1bef](https://github.com/sanchezfauste/fauste-player/commit/91c1bef422d5f130c574ead376ae82dd97e2a466))
+* **app:** guard re-analyse requests, publish analysis activity ([8106bcf](https://github.com/sanchezfauste/fauste-player/commit/8106bcf645248058f138c37c27904091e424fd92))
+* cart colour and waveform ([9ec71d9](https://github.com/sanchezfauste/fauste-player/commit/9ec71d90bc1a304288d0db9d9f70cbc03ec93569))
+* **control:** a MIDI CUE that would be heard on air does nothing ([c30859c](https://github.com/sanchezfauste/fauste-player/commit/c30859c228eb5bc7c8ba2da6e88d757905a25d6f))
+* **engine:** an on-air pre-listen never moves a bit-perfect rate ([91986c5](https://github.com/sanchezfauste/fauste-player/commit/91986c5cd07c983e8eee0130f80a13441fbed233))
+* **engine:** place a Cue route on the Main output like any holder ([a271e9a](https://github.com/sanchezfauste/fauste-player/commit/a271e9ae9cf1378da25e108783fa32a8247d91fc))
+* **model:** a Cue route on the Main output is usable ([0d922eb](https://github.com/sanchezfauste/fauste-player/commit/0d922eb42c3d05c5aaab6569d12fc3f72c55fcc8))
+* **model:** ask before a pre-listen goes out on a sounding on-air output ([37c1d4e](https://github.com/sanchezfauste/fauste-player/commit/37c1d4ecfca541d8709c8afc141b344f9e42ca8e))
+* **model:** cart colour ([1c7bff4](https://github.com/sanchezfauste/fauste-player/commit/1c7bff4d462b3b8e987aa2bdad575a409b52eaf5))
+* **model:** cartwall dock and size, hidden panels, layout lock and reset ([08674d7](https://github.com/sanchezfauste/fauste-player/commit/08674d7c0319bacee8d672e0cf6b77230597fefd))
+* **model:** give the volume fader a mixing-desk law ([3551e2d](https://github.com/sanchezfauste/fauste-player/commit/3551e2df082ae9e011e2333208d0ca88b0e28460))
+* **model:** removed players leave the layout, new ones are shown ([e98d74a](https://github.com/sanchezfauste/fauste-player/commit/e98d74a765d6a55ec62757fa83068aa24f739c8d))
+* **model:** resize two neighbouring players and equal widths ([5ee4ae7](https://github.com/sanchezfauste/fauste-player/commit/5ee4ae7a3ad1dffd3028814de291cc595e953e93))
+* **model:** stop an unconfirmed pre-listen when something starts on its output ([70893d2](https://github.com/sanchezfauste/fauste-player/commit/70893d26144a0bcc54022c42090de51dc0f405cb))
+* **model:** the layout comes back after a restart, repaired ([f6d4450](https://github.com/sanchezfauste/fauste-player/commit/f6d4450701ecad767b829a0471e0b18219d54674))
+* **model:** the main window's layout and its share rules ([c9b5861](https://github.com/sanchezfauste/fauste-player/commit/c9b586133067651700d1ea318802d23cf3ba7a6e))
+* **model:** where a holder plays and what sounds on an on-air output ([6a6ec69](https://github.com/sanchezfauste/fauste-player/commit/6a6ec6910b78be4a9f9511b3a019d3aab666187c))
+* pre-listen on an on-air output ([009255b](https://github.com/sanchezfauste/fauste-player/commit/009255b96b389a92a5315a31aae3466be885fce8))
+* **remote:** cart colour in the cart DTO and the cart edit ([5c15ee4](https://github.com/sanchezfauste/fauste-player/commit/5c15ee4674272cc1b7c39584b7480ed62900c9c7))
+* **remote:** refuse a pre-listen that would ask, accept force ([83b5915](https://github.com/sanchezfauste/fauste-player/commit/83b5915ce77d16e73714555fe273ba78592ada45))
+* resizable main window layout ([44cebc8](https://github.com/sanchezfauste/fauste-player/commit/44cebc8c60c58fc85913e23c12597732d8afd971))
+* show analysis activity, guard re-analyse requests and re-read edited files ([0d1db5b](https://github.com/sanchezfauste/fauste-player/commit/0d1db5b6825ae9b9dd26aba12f8c97f3ec16c301))
+* **store:** cart colours in cart page files ([7151c58](https://github.com/sanchezfauste/fauste-player/commit/7151c58e6b8454be2aba1a62303034647137310d))
+* **store:** report an unknown cart colour in carts.json ([00f5f3c](https://github.com/sanchezfauste/fauste-player/commit/00f5f3c633f4829489e7cabe592cf96b1ca19904))
+* **store:** save the layout in the session and report its repairs ([5fdbfef](https://github.com/sanchezfauste/fauste-player/commit/5fdbfef1f5b12e09a4fba391202124b21c210a93))
+* **ui:** a collapsed side cartwall becomes a narrow strip ([ff8f0eb](https://github.com/sanchezfauste/fauste-player/commit/ff8f0ebe543d214dd76e1f9faa1364ddf9991891))
+* **ui:** a hint for each loudness setting ([a07aeaa](https://github.com/sanchezfauste/fauste-player/commit/a07aeaa80ce963e93ba15b16132e269f845f6149))
+* **ui:** ask before a pre-listen goes out on a sounding on-air output ([d96bbba](https://github.com/sanchezfauste/fauste-player/commit/d96bbbaf5f4a7cbbcc9d0a973c3b2f8012634b14))
+* **ui:** cart buttons grow with the cartwall ([1a745db](https://github.com/sanchezfauste/fauste-player/commit/1a745db1086016aa60f76bfb6e7db16297b82d66))
+* **ui:** choose a cart's colour in the cart editor ([541c8c0](https://github.com/sanchezfauste/fauste-player/commit/541c8c0b0c563666665501908eda7420ce79974e))
+* **ui:** dock the cartwall on the left or the right ([f532c18](https://github.com/sanchezfauste/fauste-player/commit/f532c1891ebc049704b5bc90519be7ff573d847f))
+* **ui:** draw a cart in its colour ([2428120](https://github.com/sanchezfauste/fauste-player/commit/2428120bb1ae61f0162248465d521c3f41f7d90a))
+* **ui:** draw each cart's waveform behind its text ([70ee9fa](https://github.com/sanchezfauste/fauste-player/commit/70ee9faa92a58919ec717c94e2bd4660331f62b1))
+* **ui:** draw the players and the cartwall from the layout ([160a307](https://github.com/sanchezfauste/fauste-player/commit/160a30784299007f673aa5693bef14a1623d27ba))
+* **ui:** hidden players keep no selection and take no drops ([7ddfc1b](https://github.com/sanchezfauste/fauste-player/commit/7ddfc1b485d29595fa0b55bdfd267c3c226d595a))
+* **ui:** Loudness… in the playlist row menu ([d6d3f8a](https://github.com/sanchezfauste/fauste-player/commit/d6d3f8a824c24c539b48cc2143c799220ad570b5))
+* **ui:** mark more levels on the fader's scale ([414df27](https://github.com/sanchezfauste/fauste-player/commit/414df27ee10cc463148cc961b5cddf8a9e8a7437))
+* **ui:** mark the fader's scale every 2 dB near the top ([98a0f7b](https://github.com/sanchezfauste/fauste-player/commit/98a0f7be27a68e847e6655fd52464182ab824000))
+* **ui:** maximise a panel from its header ([6e72168](https://github.com/sanchezfauste/fauste-player/commit/6e721686203b120b38d89c32fd32f12ad93fea0f))
+* **ui:** panel tiles and the layout menu in the top bar ([0d77222](https://github.com/sanchezfauste/fauste-player/commit/0d77222f960ecfac61f5e6e8a3ec4e1169123cd6))
+* **ui:** relative drag, fine adjust, double click and a scale on the fader ([4e11f71](https://github.com/sanchezfauste/fauste-player/commit/4e11f7127aab168a8a23283800de0b6028654335))
+* **ui:** resize the cartwall with a splitter on every dock ([64c0eb2](https://github.com/sanchezfauste/fauste-player/commit/64c0eb2911eb0da81db5b6be1e3ff6c1aa302538))
+* **ui:** resize the players with splitters ([557b23b](https://github.com/sanchezfauste/fauste-player/commit/557b23ba00f7599d29657f5d160936405d66c8b0))
+* **ui:** show analysis activity in the status bar, rows and settings ([739cdaa](https://github.com/sanchezfauste/fauste-player/commit/739cdaa7e475b0b58ffbf81f62c3b2c8031942b3))
+* **ui:** show the automatic and trimmed gain in the loudness editors ([9f60987](https://github.com/sanchezfauste/fauste-player/commit/9f6098787b234c359d2390e43f9e4a8f4b8c89d7))
+* **ui:** show the automatic and trimmed gain in the loudness editors; document the loudness defaults ([47333a2](https://github.com/sanchezfauste/fauste-player/commit/47333a2711796d4f2004532e4ada8c6eba6ce432))
+* **ui:** strings for pre-listen on an on-air output ([6ffffcc](https://github.com/sanchezfauste/fauste-player/commit/6ffffcc6253d4fa4dba43a0b7bd6d6d5abd2de82))
+* **ui:** the main window's pixel pass ([6eaef8e](https://github.com/sanchezfauste/fauste-player/commit/6eaef8ea45d320a1cea9b3d42bf697210c21a3a2))
+
+
+### Bug Fixes
+
+* **analysis:** keep the fresh mark through promote, version the bookkeeping ([c40a247](https://github.com/sanchezfauste/fauste-player/commit/c40a247545fd96850add153c4c32931b424df534))
+* **app:** keep a restarted pass fresh, leave waveform reads out of activity ([c696afe](https://github.com/sanchezfauste/fauste-player/commit/c696afe7f84e56b58d78faa01d19d5305e14e29f))
+* **app:** open the window on X11 on Linux so files can be dropped ([37538c4](https://github.com/sanchezfauste/fauste-player/commit/37538c46bbdeefd1466e6a28c3c04cdbe0a7400d))
+* **app:** open the window on X11 on Linux so files can be dropped ([098275a](https://github.com/sanchezfauste/fauste-player/commit/098275ae066fa53bde1c559c266c6ff755421210))
+* **app:** read cart peaks once, without applying the analysis again ([d2c8e31](https://github.com/sanchezfauste/fauste-player/commit/d2c8e31e8975606bc0d0e0c2f8efe8a9171efa15))
+* **decode:** distrust invented positions, build the downmix once, narrow re-analysis ([214641a](https://github.com/sanchezfauste/fauste-player/commit/214641ad5bfd043c7ed8596ca9b29a73b90dab9b))
+* **decode:** downmix every surround layout by its channel positions ([586d8c8](https://github.com/sanchezfauste/fauste-player/commit/586d8c8f2c168712eec10aa6a3544bb47ec8bd81))
+* **decode:** downmix every surround layout by its channel positions ([3639999](https://github.com/sanchezfauste/fauste-player/commit/3639999a6b2e18210f8d00830ac92fdab91a76ec))
+* **docs:** crop the guide's screenshots right in every language ([32218a9](https://github.com/sanchezfauste/fauste-player/commit/32218a9587969073a7c4f16962866ff0a8b83ed6))
+* **docs:** find the guide's windows on the screen in every language ([96fc47d](https://github.com/sanchezfauste/fauste-player/commit/96fc47d8674f77a7fdb4885d47caddd1be061963))
+* **engine:** place the cartwall from the start, before its first cart ([4be3422](https://github.com/sanchezfauste/fauste-player/commit/4be34222bdd948c0e0a0b69bb80d9f95210502c3))
+* **model:** keep tiny player shares on restore ([912d31e](https://github.com/sanchezfauste/fauste-player/commit/912d31e7c5e0e13a7a95d928145254a5c6812f8e))
+* **model:** rescale extreme layout shares and clarify repair notes ([17001b4](https://github.com/sanchezfauste/fauste-player/commit/17001b4da4d16863d7d474673917ecc9e915b7cd))
+* **ui:** budget the status bar so alerts stay readable, legend gives way in order ([aae6f12](https://github.com/sanchezfauste/fauste-player/commit/aae6f129397f636e6ddde31c3d169ddd72f1ee9a))
+* **ui:** centre the fader readout on the knob axis ([0580a1f](https://github.com/sanchezfauste/fauste-player/commit/0580a1f1609cee42a59f496db670c91c379d50f1))
+* **ui:** cut a cart name with an ellipsis instead of splitting a word ([0e6a22d](https://github.com/sanchezfauste/fauste-player/commit/0e6a22de8dd10843758af862accfd4a34cd8b53e))
+* **ui:** draw the BP badge only on a bit-perfect device ([58868a0](https://github.com/sanchezfauste/fauste-player/commit/58868a03a9004805b3611af8eaa9d0a04d29eb84))
+* **ui:** draw the Next countdown bar at full strength ([7d38302](https://github.com/sanchezfauste/fauste-player/commit/7d38302d89b00a94b3ae7f65c356808cab7f36a7))
+* **ui:** fade countdown on the button that started the fade ([68a034f](https://github.com/sanchezfauste/fauste-player/commit/68a034fe2372d767334d4a4da11c5baa1665bbc2))
+* **ui:** gain badge at full strength, tooltip states the gain ([de712cd](https://github.com/sanchezfauste/fauste-player/commit/de712cdc871798231aeaa57680ee69db994f7d9f))
+* **ui:** header review fixes: state text kept, pending BP tests, stricter overlap test ([0132c3a](https://github.com/sanchezfauste/fauste-player/commit/0132c3aaad36c73b57663710f791e39836a23139))
+* **ui:** keep a new cart name when a colour follows at once ([99fb01d](https://github.com/sanchezfauste/fauste-player/commit/99fb01d94457c3edab5ae7d782f5c07bfc34c493))
+* **ui:** keep the cart file buttons inside Settings for a long path ([e0c2ddc](https://github.com/sanchezfauste/fauste-player/commit/e0c2ddcf1389d2c2654e2f74f0bdb08e8cf9f4c1))
+* **ui:** keep the cartwall's range and drag within the size's shares ([14abdcb](https://github.com/sanchezfauste/fauste-player/commit/14abdcb5dc097d40087f525b2806b310bbdc05f5))
+* **ui:** keep the fader's wheel and double click from surprising the operator ([d18a4de](https://github.com/sanchezfauste/fauste-player/commit/d18a4dee0e91607cca28ff61211e3c2a5610e296))
+* **ui:** keep the top-bar tiles clear of the clock and tidy the splitters ([59a3ce8](https://github.com/sanchezfauste/fauste-player/commit/59a3ce8348c24f0bcef8db386a322de20b06ce3f))
+* **ui:** loudness editors know bit-perfect, sounding tracks and the trim's role ([ba21e05](https://github.com/sanchezfauste/fauste-player/commit/ba21e0529847124902da8af58ced12a4625fe864))
+* **ui:** loudness hints, outro legend, fader readout, cart path, row loudness menu and gain badge ([b189979](https://github.com/sanchezfauste/fauste-player/commit/b189979490f82f212adbbe0ca59ec8edc6dcf403))
+* **ui:** name the cartwall's tile as the cartwall and spell Maximize ([947ec73](https://github.com/sanchezfauste/fauste-player/commit/947ec732c1e4f2101ba63aeafb47a7ac7d0e38fb))
+* **ui:** Outro in the status-bar legend, swatch before its label ([b2f7187](https://github.com/sanchezfauste/fauste-player/commit/b2f7187ed282f383216f58a3bc74eb0b970287c3))
+* **ui:** player header never overlaps, 0.0 dB when not normalized, BP badge only on bit-perfect devices, fade countdown on the button that started it ([9e95053](https://github.com/sanchezfauste/fauste-player/commit/9e95053774ccdcda11627ea28d19e139ca978709))
+* **ui:** put the fader's scale on its right, as notches with the level ([a4ea6a4](https://github.com/sanchezfauste/fauste-player/commit/a4ea6a4417819cf7112bfae0ae50966dd836231e))
+* **ui:** the player header never overlaps; 0.0 dB when not normalized ([896b893](https://github.com/sanchezfauste/fauste-player/commit/896b893cc0019460ba1838a1150e141076f263cf))
+* **ui:** tidy the on-air pre-listen question and drop stale requests ([7fa135c](https://github.com/sanchezfauste/fauste-player/commit/7fa135cd035be3e12c986232f12a1bb44d381f9b))
+
+
+### Code Refactoring
+
+* **model:** wanted_gain_db; shorter loudness hints, review fixes ([9e98c4c](https://github.com/sanchezfauste/fauste-player/commit/9e98c4c1f6eb401cf90d0d62139ce22217d5290a))
+
+
+### Documentation
+
+* cart colour and waveform ([b505711](https://github.com/sanchezfauste/fauste-player/commit/b505711fc834bd4e5ffee2402d44d15fc3e5a531))
+* describe the fader's mixing-desk law and controls ([2cb6bc7](https://github.com/sanchezfauste/fauste-player/commit/2cb6bc702c4497eeaa0d9ce3e9fd5d4008362573))
+* **engine:** a Cue on the Main output and the on-air pre-listen rate ([6c2b21c](https://github.com/sanchezfauste/fauste-player/commit/6c2b21c0b123c45484c6d165d9a43621fcfa2a21))
+* fix layout wording and add a layout to the session fuzz seed ([e28255f](https://github.com/sanchezfauste/fauste-player/commit/e28255f0c1d5623110b5537df680b61f3ca964e0))
+* guide the analysis activity and the re-analyse guards ([a6e069f](https://github.com/sanchezfauste/fauste-player/commit/a6e069fe2f56d59865fa0e03c44fa667497af75a))
+* loudness defaults and their standards ([52b9e2e](https://github.com/sanchezfauste/fauste-player/commit/52b9e2e7f062507eff535a3547d5aa7a64d3bc23))
+* **model:** on-air pre-listen in the model and the amended specs ([c8eedd9](https://github.com/sanchezfauste/fauste-player/commit/c8eedd96490d3aea49f6096e7ff624c004483717))
+* new screenshots with cart colours and the new fader ([749e944](https://github.com/sanchezfauste/fauste-player/commit/749e944638790c176a1d61917d04fbc3ae478571))
+* note how the screenshot script finds its windows ([7cb8d76](https://github.com/sanchezfauste/fauste-player/commit/7cb8d767885fac87f72b7c665ef7504cfd344ae6))
+* plan itr06 B, player header ([0392753](https://github.com/sanchezfauste/fauste-player/commit/0392753ca76d52fde89c057875d2a164896f040c))
+* plan itr06-a, UI quick fixes ([fb164cd](https://github.com/sanchezfauste/fauste-player/commit/fb164cdc914f857998d89bf96221f20d547cd463))
+* plan itr06-C, loudness clarity ([8ca6212](https://github.com/sanchezfauste/fauste-player/commit/8ca6212e81563f314aed9929fdfc6096b56562e8))
+* plan itr06-D, multichannel downmix ([57cb793](https://github.com/sanchezfauste/fauste-player/commit/57cb7934a8f7544f000561e5ed359a2d9e101151))
+* **plan:** cart colour and waveform ([aa8eb71](https://github.com/sanchezfauste/fauste-player/commit/aa8eb71c52ea63b9072486b596e8e9b439d5e78e))
+* **plan:** on-air pre-listen plans ([58b256b](https://github.com/sanchezfauste/fauste-player/commit/58b256b020b529484a9b6b7b9210901e3f323f7f))
+* plans for the resizable layout ([606e00a](https://github.com/sanchezfauste/fauste-player/commit/606e00abb4bb8ce14379bb2dfbe3a7f4691a73d0))
+* pre-listen on an on-air output ([81b7163](https://github.com/sanchezfauste/fauste-player/commit/81b71632aaf5a25ae8682e0e7f1e00f2fa18db92))
+* resizable layout spec ([6c6b738](https://github.com/sanchezfauste/fauste-player/commit/6c6b73875a0383a0f305516430d55f6edacb3805))
+* resizable layout spec and plans ([8febb76](https://github.com/sanchezfauste/fauste-player/commit/8febb76e15f65240b7ab967a3a2ba8dca9c667c1))
+* resolve the layout spec review ([debb3ef](https://github.com/sanchezfauste/fauste-player/commit/debb3ef5608e38c58f9a4054e33c942ebac544ae))
+* retake the screenshots with the layout controls ([e5a9a81](https://github.com/sanchezfauste/fauste-player/commit/e5a9a81a16787385894017b13846aacb16d4efd3))
+* spec and plan itr06-E, analysis queue feedback ([12515cc](https://github.com/sanchezfauste/fauste-player/commit/12515ccf0156407d9b1d2794328a8b861329ce64))
+* **spec:** cart colour and waveform ([b24bc0c](https://github.com/sanchezfauste/fauste-player/commit/b24bc0cdab664adfe051d6b0ff7e0ff9fc9d2e18))
+* **spec:** mark the cart colour spec approved ([edb5a6d](https://github.com/sanchezfauste/fauste-player/commit/edb5a6db764955bf6a0a8620d9b9f3835cc1e7c6))
+* **spec:** mark the on-air pre-listen spec approved ([b69576f](https://github.com/sanchezfauste/fauste-player/commit/b69576fa1010e87d0f963765985324d0b5453fb3))
+* **spec:** on-air pre-listen metering and DSD ([c665ca2](https://github.com/sanchezfauste/fauste-player/commit/c665ca217cab5957a0290bc62b03a142b443ff8c))
+* **spec:** pre-listen on an on-air output ([7db6ebe](https://github.com/sanchezfauste/fauste-player/commit/7db6ebe6c492cdb546da2a9de4f003c1f13de475))
+* the cartwall's dock, splitter and scaling ([d151326](https://github.com/sanchezfauste/fauste-player/commit/d151326d2f719e4a952a61403af9fc9d29f32316))
+* the cartwall's range, cut cart names and its fitted height ([a7cf41e](https://github.com/sanchezfauste/fauste-player/commit/a7cf41ed3ceb578ade8eeaa4e00c0e7c43e2990b))
+
+
+### Build System
+
+* **deps:** Bump getrandom from 0.3.4 to 0.4.3 ([642b0af](https://github.com/sanchezfauste/fauste-player/commit/642b0aff578faf21f2b0b504186e3b04f97a69e3))
+* **deps:** Bump getrandom from 0.3.4 to 0.4.3 ([f8067d2](https://github.com/sanchezfauste/fauste-player/commit/f8067d2ae6ef5b1d09a9341026e2aa311ca2f5de))
+* **deps:** Bump pollster from 0.4.0 to 1.0.1 ([345348b](https://github.com/sanchezfauste/fauste-player/commit/345348b0331b200b30c701935947b41384d7c53b))
+* **deps:** Bump pollster from 0.4.0 to 1.0.1 ([2c59050](https://github.com/sanchezfauste/fauste-player/commit/2c59050a3ec931f056b91f939f29e74d2e785c8e))
+* **deps:** Bump proptest from 1.11.0 to 1.12.0 ([c4c5a0a](https://github.com/sanchezfauste/fauste-player/commit/c4c5a0a553d222c929d353a50c5c1fce4c14ff98))
+* **deps:** Bump proptest from 1.11.0 to 1.12.0 ([c39b35c](https://github.com/sanchezfauste/fauste-player/commit/c39b35c8ecbc62aff0757e9470fc9cd91015b7b2))
+* **deps:** Bump the cargo-patch group across 1 directory with 5 updates ([d80e495](https://github.com/sanchezfauste/fauste-player/commit/d80e495df13ff0a573b1eb32876f45c7427a91c4))
+* **deps:** Bump the cargo-patch group across 1 directory with 5 updates ([1b19bfd](https://github.com/sanchezfauste/fauste-player/commit/1b19bfdb085aff5f6cd3dea30fb1a703e6621921))
+
 ## [0.7.0](https://github.com/sanchezfauste/fauste-player/compare/v0.6.0...v0.7.0) (2026-10-15)
 
 
