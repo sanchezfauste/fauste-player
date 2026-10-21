@@ -16,9 +16,10 @@ tip-bp-on = Bit perfect: aktibo
 tip-bp-off = Bit perfect: inaktibo
 badge-gain = { $gain } dB
 badge-not-normalized = Normalizatu gabe
-tip-gain-applied = { $target } LUFS-era normalizatua: neurtua { $lufs } LUFS, doikuntza { $trim } dB.
-tip-gain-limited-peak = True peak sabaiak mugatua ({ $ceiling } dBTP).
-tip-gain-limited-boost = Gehieneko igoerak mugatua ({ $max } dB).
+tip-gain-applied = Irabazia { $gain } dB: neurtutako { $lufs } LUFS { $target } LUFS helburura eramaten ditu.
+tip-gain-trim = Pista honen { $trim } dB-ko doikuntza barne hartzen du.
+tip-gain-limited-peak = True peak mugak mugatua ({ $ceiling } dBTP): { $wanted } dB nahi ziren.
+tip-gain-limited-boost = Gehieneko irabaziak mugatua ({ $max } dB): { $wanted } dB nahi ziren.
 tip-gain-earlier-settings = Pista kargatzean ezarritako irabazia. Ozentasun-ezarpenak edo neurketa aldatu egin dira geroztik; irabazi hau mantentzen du gelditu arte.
 tip-not-measured = Ozentasuna oraindik neurtu gabe: pista hau aldaketarik gabe entzuten da.
 tip-not-normalized-bp = Bit perfect irteera: pistak aldatu gabe entzuten dira.
@@ -98,6 +99,7 @@ legend-on-air = Airean
 legend-next = Hurrengoa
 legend-intro = Intro
 legend-mix = Nahasketa
+legend-outro = Outro
 alert-device-lost = Irteera galdu da: { $device } (denbora-lerroak aurrera jarraitzen du)
 alert-underruns = { $player }: audio-etenak ({ $count })
 alert-xruns = { $device }: audio-gailuaren etenak ({ $count })
@@ -161,6 +163,10 @@ settings-normalize-max-boost = Gehieneko igoera
 settings-normalize-max-trim = Gehieneko doikuntza
 settings-hint-normalize-apply = Aldaketak geroago kargatzen diren pistei aplikatzen zaizkie; entzuten ari dena bere irabaziarekin jarraitzen du.
 settings-hint-normalize-bp = Bit perfect irteera batean dagoen erreproduzigailu edo kartutxo batek beti irabazi unitarioarekin jotzen du: ez da inoiz normalizatzen.
+settings-hint-normalize-target = Pista guztiak eramaten diren ozentasuna.
+settings-hint-normalize-ceiling = Igoerak ez du true peak hau gainditzen.
+settings-hint-normalize-max-boost = Pista baxu bat gehienez zenbat igotzen den.
+settings-hint-normalize-max-trim = Pista baten doikuntzaren muga.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } pista oraindik neurtu gabe
    *[other] { $count } pista oraindik neurtu gabe
@@ -498,6 +504,7 @@ settings-restore-confirm = Leheneratu
 
 
 menu-edit-tags = Editatu etiketak…
+menu-loudness = Ozentasuna…
 menu-edit-tags-file = Fitxategia falta da edo ezin da irakurri
 menu-edit-tags-format = Formatu honek ez du etiketak idazteko aukerarik
 menu-edit-tags-unread = Etiketak ez dira oraindik irakurri

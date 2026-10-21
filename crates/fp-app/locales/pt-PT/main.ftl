@@ -16,9 +16,10 @@ tip-bp-on = Bit-perfect: ativo
 tip-bp-off = Bit-perfect: inativo
 badge-gain = { $gain } dB
 badge-not-normalized = Não normalizado
-tip-gain-applied = Normalizado para { $target } LUFS: medido { $lufs } LUFS, ajuste { $trim } dB.
-tip-gain-limited-peak = Limitado pelo teto de true peak ({ $ceiling } dBTP).
-tip-gain-limited-boost = Limitado pelo ganho máximo ({ $max } dB).
+tip-gain-applied = Ganho { $gain } dB: leva os { $lufs } LUFS medidos ao alvo de { $target } LUFS.
+tip-gain-trim = Inclui o ajuste desta faixa de { $trim } dB.
+tip-gain-limited-peak = Limitado pelo teto de true peak ({ $ceiling } dBTP): queriam-se { $wanted } dB.
+tip-gain-limited-boost = Limitado pelo ganho máximo ({ $max } dB): queriam-se { $wanted } dB.
 tip-gain-earlier-settings = Ganho fixado ao carregar a faixa. As definições de sonoridade ou a medição mudaram desde então; mantém este ganho até parar.
 tip-not-measured = Loudness ainda não medido: esta faixa toca sem alterações.
 tip-not-normalized-bp = Saída bit-perfect: as faixas tocam inalteradas.
@@ -98,6 +99,7 @@ legend-on-air = No ar
 legend-next = Seguinte
 legend-intro = Intro
 legend-mix = Mistura
+legend-outro = Outro
 alert-device-lost = Saída perdida: { $device } (a linha temporal continua)
 alert-underruns = { $player }: cortes de áudio ({ $count })
 alert-xruns = { $device }: cortes do dispositivo de áudio ({ $count })
@@ -161,6 +163,10 @@ settings-normalize-max-boost = Ganho máximo
 settings-normalize-max-trim = Ajuste máximo
 settings-hint-normalize-apply = As alterações aplicam-se às faixas carregadas depois; o que está a tocar mantém o seu ganho.
 settings-hint-normalize-bp = Um leitor ou cartucho numa saída bit-perfect toca sempre com ganho unitário: nunca é normalizado.
+settings-hint-normalize-target = A sonoridade a que cada faixa é levada.
+settings-hint-normalize-ceiling = Um aumento nunca passa este true peak.
+settings-hint-normalize-max-boost = O máximo que uma faixa baixa é aumentada.
+settings-hint-normalize-max-trim = Até onde vai o ajuste de uma faixa.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } faixa ainda não medida
    *[other] { $count } faixas ainda não medidas
@@ -498,6 +504,7 @@ settings-restore-confirm = Repor
 
 
 menu-edit-tags = Editar etiquetas…
+menu-loudness = Loudness…
 menu-edit-tags-file = O ficheiro não existe ou não pode ser lido
 menu-edit-tags-format = Este formato não tem etiquetas graváveis
 menu-edit-tags-unread = As etiquetas ainda não foram lidas

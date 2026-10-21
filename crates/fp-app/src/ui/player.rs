@@ -414,6 +414,7 @@ fn gain_badge(ui: &mut Ui, t: &crate::i18n::I18n, badge: &view::GainBadge) {
         false,
         TileStyle {
             content,
+            dim_when_disabled: false,
             ..TileStyle::plain()
         },
         |p, r, c| {

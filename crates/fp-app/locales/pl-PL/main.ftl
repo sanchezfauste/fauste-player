@@ -16,9 +16,10 @@ tip-bp-on = Bit-perfect: wł.
 tip-bp-off = Bit-perfect: wył.
 badge-gain = { $gain } dB
 badge-not-normalized = Bez normalizacji
-tip-gain-applied = Znormalizowano do { $target } LUFS: zmierzono { $lufs } LUFS, korekta { $trim } dB.
-tip-gain-limited-peak = Ograniczone przez pułap true peak ({ $ceiling } dBTP).
-tip-gain-limited-boost = Ograniczone przez maksymalne wzmocnienie ({ $max } dB).
+tip-gain-applied = Wzmocnienie { $gain } dB: sprowadza zmierzone { $lufs } LUFS do celu { $target } LUFS.
+tip-gain-trim = Obejmuje korektę tego utworu o { $trim } dB.
+tip-gain-limited-peak = Ograniczone pułapem szczytu rzeczywistego ({ $ceiling } dBTP): chciano { $wanted } dB.
+tip-gain-limited-boost = Ograniczone maksymalnym podbiciem ({ $max } dB): chciano { $wanted } dB.
 tip-gain-earlier-settings = Wzmocnienie ustalone przy wczytaniu utworu. Ustawienia głośności lub pomiar zmieniły się od tego czasu; utwór zachowuje to wzmocnienie, dopóki się nie zatrzyma.
 tip-not-measured = Głośność jeszcze niezmierzona: ten utwór gra bez zmian.
 tip-not-normalized-bp = Wyjście bit-perfect: utwory grają bez zmian.
@@ -100,6 +101,7 @@ legend-on-air = Na antenie
 legend-next = Następny
 legend-intro = Intro
 legend-mix = Miks
+legend-outro = Outro
 alert-device-lost = Utracono wyjście: { $device } (oś czasu biegnie dalej)
 alert-underruns = { $player }: przerwy w dźwięku ({ $count })
 alert-xruns = { $device }: przerwy urządzenia audio ({ $count })
@@ -165,6 +167,10 @@ settings-normalize-max-boost = Maksymalne wzmocnienie
 settings-normalize-max-trim = Maksymalna korekta
 settings-hint-normalize-apply = Zmiany dotyczą utworów wczytanych później; to, co gra, zachowuje swoje wzmocnienie.
 settings-hint-normalize-bp = Odtwarzacz lub cart na wyjściu bit-perfect zawsze gra ze wzmocnieniem jednostkowym: nigdy nie jest normalizowany.
+settings-hint-normalize-target = Głośność, do której sprowadzany jest każdy utwór.
+settings-hint-normalize-ceiling = Podbicie nigdy nie przekracza tego szczytu rzeczywistego.
+settings-hint-normalize-max-boost = Maksymalne podbicie cichego utworu.
+settings-hint-normalize-max-trim = Jak daleko sięga korekta utworu.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } utwór jeszcze niezmierzony
     [few] { $count } utwory jeszcze niezmierzone
@@ -508,6 +514,7 @@ settings-restore-confirm = Przywróć
 
 
 menu-edit-tags = Edytuj tagi…
+menu-loudness = Głośność…
 menu-edit-tags-file = Brak pliku lub nie można go odczytać
 menu-edit-tags-format = Ten format nie ma zapisywalnych tagów
 menu-edit-tags-unread = Tagi nie zostały jeszcze odczytane

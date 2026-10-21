@@ -257,3 +257,26 @@ fn controls_start_at_the_same_x_in_every_section() {
     assert!((players - cartwall).abs() < 0.5, "{players} vs {cartwall}");
     assert!((players - remote).abs() < 0.5, "{players} vs {remote}");
 }
+
+#[test]
+fn a_long_cart_path_leaves_room_for_its_buttons() {
+    let mut s = state(1, 0);
+    let page = s.cartwall.pages[0].id;
+    let path = format!("/carts/{}.wav", "very-long-folder-name/".repeat(20));
+    fp_model::apply(
+        &mut s,
+        fp_model::Command::AssignCartFile {
+            page,
+            index: 0,
+            path: std::path::PathBuf::from(path),
+        },
+    )
+    .unwrap();
+    let mut h = open_settings(SCREEN, s);
+    open(&mut h, "Cartwall");
+    let choose = h.get_by_role_and_label(Role::Button, "Choose…").rect();
+    let clear = h.get_by_role_and_label(Role::Button, "Clear").rect();
+    let window_right = (SCREEN.x + WINDOW.x) / 2.0;
+    assert!(choose.right() <= clear.left() + 0.5, "{choose:?} {clear:?}");
+    assert!(clear.right() <= window_right, "{clear:?} vs {window_right}");
+}

@@ -10,9 +10,10 @@ use super::{note, row, slider, toggle, update};
 use crate::ui::app::Scene;
 use crate::ui::theme;
 
-/// One slider row: its title, the value, its range (N1), the step, the
+/// One slider row: its title, its hint, the value, its range (N1), the step, the
 /// unit and where the value goes.
 type Field = (
+    &'static str,
     &'static str,
     f32,
     std::ops::RangeInclusive<f32>,
@@ -34,6 +35,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, unmeasured: usize) {
     let fields: [Field; 4] = [
         (
             "settings-normalize-target",
+            "settings-hint-normalize-target",
             l.target_lufs,
             -36.0..=-6.0,
             0.5,
@@ -42,6 +44,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, unmeasured: usize) {
         ),
         (
             "settings-normalize-ceiling",
+            "settings-hint-normalize-ceiling",
             l.true_peak_ceiling_dbtp,
             -12.0..=0.0,
             0.1,
@@ -50,6 +53,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, unmeasured: usize) {
         ),
         (
             "settings-normalize-max-boost",
+            "settings-hint-normalize-max-boost",
             l.max_boost_db,
             0.0..=24.0,
             0.5,
@@ -58,6 +62,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, unmeasured: usize) {
         ),
         (
             "settings-normalize-max-trim",
+            "settings-hint-normalize-max-trim",
             l.max_trim_db,
             0.0..=24.0,
             0.5,
@@ -65,10 +70,10 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, unmeasured: usize) {
             |c, v| c.loudness.max_trim_db = v,
         ),
     ];
-    for (key, value, range, step, suffix, set) in fields {
+    for (key, hint, value, range, step, suffix, set) in fields {
         let mut v = value;
         let label = t.tr(key);
-        row(ui, &label, None, |ui| {
+        row(ui, &label, Some(&t.tr(hint)), |ui| {
             if slider(ui, &mut v, range, step, suffix, &label) {
                 update(scene, |c| set(c, v));
             }

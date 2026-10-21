@@ -321,8 +321,8 @@ band) stays a separate value, whatever the normalization target (Q4).
 
   | Status | Badge | Tooltip |
   |---|---|---|
-  | `Applied { limited: None }` | "−4.2 dB" (signed, one decimal; "0.0 dB" for a gain under 0.05 dB) | "Normalized to {target} LUFS: measured {lufs} LUFS, trim {trim} dB." |
-  | `Applied { limited: Some(_) }` | as above | adds "Limited by the true-peak ceiling ({ceiling} dBTP)." or "Limited by the maximum boost ({max} dB)." |
+  | `Applied { limited: None }` | "−4.2 dB" (signed, one decimal; "0.0 dB" for a gain under 0.05 dB) | "Gain {gain} dB: brings the measured {lufs} LUFS to the {target} LUFS target.", plus "Includes this track's trim of {trim} dB." only when the trim in use is not 0 |
+  | `Applied { limited: Some(_) }` | as above | adds "Limited by the true-peak ceiling ({ceiling} dBTP): {wanted} dB were wanted." or "Limited by the maximum boost ({max} dB): {wanted} dB were wanted." |
   | `NotMeasured` | "Not normalized" (amber) | "Loudness not measured yet: this track plays unchanged." |
   | `BitPerfect` | "Not normalized" (muted), only while `normalize` is on | "Bit-perfect output: tracks play unaltered." |
   | `Excluded` | "Not normalized" (muted) | "This track is excluded from normalization." |
@@ -330,7 +330,7 @@ band) stays a separate value, whatever the normalization target (Q4).
 
   `view::gain_badge(&Normalization, &LoudnessConfig, &Track) -> Option<GainBadge>`
   is a pure function in `crates/fp-app/src/ui/view.rs`; `player.rs` paints it
-  with the existing badge helper. With `normalize` off a bit-perfect player
+  with the existing badge helper, at full strength (never dimmed). With `normalize` off a bit-perfect player
   shows no badge: it plays at unity gain either way, and the model reports
   `BitPerfect` before `Off`. The tooltip names the current settings; when
   `normalization(config, track, false)` now differs from `on_air` (a change
@@ -362,6 +362,8 @@ band) stays a separate value, whatever the normalization target (Q4).
   measurement (or "not measured"), an **Exclude from normalization**
   checkbox and a **Trim** slider (−`max_trim_db` ..= +`max_trim_db`, 0.5 dB
   steps, double-click resets to 0). Each change sends `SetTrackLoudness`.
+  A playlist row's context menu has the same **Loudness…** item, for that
+  row's track.
   The popup reads only the snapshot (rule 8). It names the track it edits,
   keeps editing it when the player moves on, has a Close button, and closes
   by itself when the track leaves the library.
@@ -376,7 +378,7 @@ band) stays a separate value, whatever the normalization target (Q4).
   (`crates/fp-app/src/ui/settings/loudness.rs`) with: **Normalize
   loudness** (toggle), **Target** (slider, LUFS), **True-peak ceiling**
   (slider, dBTP), **Maximum boost** (slider, dB), **Maximum trim**
-  (slider, dB), a hint "Changes apply to tracks loaded afterwards; what is
+  (slider, dB), each with a short one-clause hint (the loudness every track is brought to; a boost never takes a true peak above the ceiling; the most a quiet track is turned up; how far a track's trim may go), a hint "Changes apply to tracks loaded afterwards; what is
   playing keeps its gain.", a line counting tracks not measured
   (`loudness_unmeasured(state)`: playable with `loudness == None` and
   `loudness_pass != Some(LOUDNESS_VERSION)`, i.e. still waiting for the

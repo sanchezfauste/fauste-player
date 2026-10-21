@@ -59,7 +59,7 @@ fn n18_the_header_shows_the_gain_and_says_why() {
     h.run_steps(2);
     // The tile's accessible name is its tooltip, as for the BP badge.
     assert!(
-        h.query_by_label("Normalized to −16.0 LUFS: measured −20.0 LUFS, trim 0.0 dB.")
+        h.query_by_label("Gain +4.0 dB: brings the measured −20.0 LUFS to the −16.0 LUFS target.")
             .is_some()
     );
     assert!(
@@ -93,7 +93,7 @@ fn n18_no_badge_when_stopped_or_off() {
     apply(&mut s, Command::Stop(p)).unwrap();
     let (mut h, _fake) = harness(s);
     h.run_steps(2);
-    assert!(h.query_by_label_contains("Normalized to").is_none());
+    assert!(h.query_by_label_contains("brings the measured").is_none());
 
     let mut s = on_air();
     s.config.loudness.normalize = false;
@@ -101,7 +101,7 @@ fn n18_no_badge_when_stopped_or_off() {
     apply(&mut s, Command::Play(p)).unwrap();
     let (mut h, _fake) = harness(s);
     h.run_steps(2);
-    assert!(h.query_by_label_contains("Normalized to").is_none());
+    assert!(h.query_by_label_contains("brings the measured").is_none());
     assert!(h.query_by_label_contains("not measured").is_none());
 }
 
@@ -118,7 +118,7 @@ fn n18_a_bit_perfect_player_plays_at_unity_gain_and_says_so() {
         h.query_by_label("Bit-perfect output: tracks play unaltered.")
             .is_some()
     );
-    assert!(h.query_by_label_contains("Normalized to").is_none());
+    assert!(h.query_by_label_contains("brings the measured").is_none());
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn n18_a_paused_player_keeps_its_badge_and_gain() {
         h.query_by_label_contains("Gain set when the track was loaded")
             .is_some()
     );
-    assert!(h.query_by_label_contains("Normalized to").is_none());
+    assert!(h.query_by_label_contains("brings the measured").is_none());
 }
 
 #[test]
@@ -531,4 +531,55 @@ fn n22_the_unmeasured_count_is_worked_out_once_per_snapshot() {
     let second = Arc::new(s);
     assert_eq!(count.get(&second), 2);
     assert_eq!(count.scans(), 2);
+}
+
+#[test]
+fn n20_the_row_menu_opens_the_popup_of_that_track() {
+    let (mut h, fake) = harness(on_air());
+    h.run_steps(2);
+    let track = fake.state.load().playlists.iter().next().unwrap().entries[1].track;
+    h.get_all_by_label("Song 2")
+        .last()
+        .unwrap()
+        .click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Loudness…").click();
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+            .is_some()
+    );
+    fake.take_sent();
+    h.get_by_role_and_label(Role::Slider, "Trim").focus();
+    h.run_steps(1);
+    h.key_press(egui::Key::ArrowRight);
+    h.run_steps(2);
+    let sent = fake.take_sent();
+    assert!(
+        sent.iter().any(|c| matches!(
+            c,
+            Command::SetTrackLoudness { track: t, trim_db, .. } if *t == track && *trim_db == 0.5
+        )),
+        "{sent:?}"
+    );
+}
+
+#[test]
+fn n18_the_gain_badge_is_painted_at_full_strength() {
+    fn find(shape: &egui::Shape, out: &mut Vec<egui::Color32>) {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text() == "+4.0 dB" => {
+                out.push(t.galley.job.sections[0].format.color);
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| find(s, out)),
+            _ => {}
+        }
+    }
+    let (mut h, _fake) = harness(on_air());
+    h.run_steps(2);
+    let mut found = Vec::new();
+    for clipped in &h.output().shapes {
+        find(&clipped.shape, &mut found);
+    }
+    assert_eq!(found, vec![fp_app::ui::theme::ACCENT]);
 }

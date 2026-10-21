@@ -679,7 +679,7 @@ pub fn gain_badge(
             let tip = if fp_model::normalization(config, track, false) != *n {
                 vec![Message::new("tip-gain-earlier-settings", &[])]
             } else {
-                applied_tip(config, track, limited)
+                applied_tip(config, track, n.gain_db, limited)
             };
             Some(GainBadge {
                 text: Message::new("badge-gain", &[("gain", signed_db(n.gain_db))]),
@@ -690,11 +690,13 @@ pub fn gain_badge(
     }
 }
 
-/// The tooltip of a gain the current settings give: the target, the
-/// measurement and the trim in use, and the limit that held a boost back.
+/// The tooltip of a gain the current settings give: the gain, how it brings
+/// the measurement to the target, the trim in use when it is not 0, and the
+/// limit that held a boost back with the gain that was wanted.
 fn applied_tip(
     config: &fp_model::LoudnessConfig,
     track: &Track,
+    gain_db: f32,
     limited: Option<fp_model::GainLimit>,
 ) -> Vec<Message> {
     use fp_model::GainLimit;
@@ -702,25 +704,35 @@ fn applied_tip(
         .loudness
         .and_then(|m| m.integrated_lufs)
         .map_or_else(|| "—".to_owned(), decimal);
+    let trim = fp_model::trim_in_use(config, &track.loudness_edit);
+    let measured = track.loudness.and_then(|m| m.integrated_lufs);
+    let wanted = signed_db(fp_model::wanted_gain_db(
+        config,
+        measured.unwrap_or(config.target_lufs),
+        trim,
+    ));
     let mut tip = vec![Message::new(
         "tip-gain-applied",
         &[
+            ("gain", signed_db(gain_db)),
             ("target", decimal(config.target_lufs)),
             ("lufs", lufs),
-            (
-                "trim",
-                signed_db(fp_model::trim_in_use(config, &track.loudness_edit)),
-            ),
         ],
     )];
+    if trim != 0.0 {
+        tip.push(Message::new("tip-gain-trim", &[("trim", signed_db(trim))]));
+    }
     match limited {
         Some(GainLimit::TruePeak) => tip.push(Message::new(
             "tip-gain-limited-peak",
-            &[("ceiling", decimal(config.true_peak_ceiling_dbtp))],
+            &[
+                ("ceiling", decimal(config.true_peak_ceiling_dbtp)),
+                ("wanted", wanted),
+            ],
         )),
         Some(GainLimit::MaxBoost) => tip.push(Message::new(
             "tip-gain-limited-boost",
-            &[("max", decimal(config.max_boost_db))],
+            &[("max", decimal(config.max_boost_db)), ("wanted", wanted)],
         )),
         None => {}
     }

@@ -16,9 +16,10 @@ tip-bp-on = Bit-perfect: aan
 tip-bp-off = Bit-perfect: uit
 badge-gain = { $gain } dB
 badge-not-normalized = Niet genormaliseerd
-tip-gain-applied = Genormaliseerd naar { $target } LUFS: gemeten { $lufs } LUFS, trim { $trim } dB.
-tip-gain-limited-peak = Begrensd door het true-peakplafond ({ $ceiling } dBTP).
-tip-gain-limited-boost = Begrensd door de maximale versterking ({ $max } dB).
+tip-gain-applied = Versterking { $gain } dB: brengt de gemeten { $lufs } LUFS naar het doel van { $target } LUFS.
+tip-gain-trim = Bevat de correctie van dit nummer van { $trim } dB.
+tip-gain-limited-peak = Beperkt door het true-peak-plafond ({ $ceiling } dBTP): { $wanted } dB was gewenst.
+tip-gain-limited-boost = Beperkt door de maximale versterking ({ $max } dB): { $wanted } dB was gewenst.
 tip-gain-earlier-settings = Versterking vastgelegd bij het laden van het nummer. De luidheidsinstellingen of de meting zijn sindsdien gewijzigd; het behoudt deze versterking tot het stopt.
 tip-not-measured = Loudness nog niet gemeten: dit nummer speelt ongewijzigd.
 tip-not-normalized-bp = Bit-perfect uitvoer: nummers spelen ongewijzigd.
@@ -98,6 +99,7 @@ legend-on-air = On air
 legend-next = Volgende
 legend-intro = Intro
 legend-mix = Mix
+legend-outro = Outro
 alert-device-lost = Uitgang kwijt: { $device } (de tijdlijn loopt door)
 alert-underruns = { $player }: audio-onderbrekingen ({ $count })
 alert-xruns = { $device }: onderbrekingen van het audioapparaat ({ $count })
@@ -161,6 +163,10 @@ settings-normalize-max-boost = Maximale versterking
 settings-normalize-max-trim = Maximale trim
 settings-hint-normalize-apply = Wijzigingen gelden voor nummers die daarna worden geladen; wat speelt, behoudt zijn versterking.
 settings-hint-normalize-bp = Een speler of cart op een bit-perfect uitgang speelt altijd op eenheidsversterking: hij wordt nooit genormaliseerd.
+settings-hint-normalize-target = De luidheid waarop elk nummer wordt gebracht.
+settings-hint-normalize-ceiling = Een versterking komt nooit boven deze true peak.
+settings-hint-normalize-max-boost = De maximale versterking van een zacht nummer.
+settings-hint-normalize-max-trim = Hoe ver de correctie van een nummer mag gaan.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } nummer nog niet gemeten
    *[other] { $count } nummers nog niet gemeten
@@ -498,6 +504,7 @@ settings-restore-confirm = Herstellen
 
 
 menu-edit-tags = Tags bewerken…
+menu-loudness = Loudness…
 menu-edit-tags-file = Het bestand ontbreekt of kan niet worden gelezen
 menu-edit-tags-format = Dit formaat heeft geen schrijfbare tags
 menu-edit-tags-unread = De tags zijn nog niet gelezen

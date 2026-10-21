@@ -87,6 +87,36 @@ fn the_status_bar_legend_uses_the_mix_marker_colour() {
     assert_eq!(colour, mix_marker_color(true));
 }
 
+#[test]
+fn the_status_bar_legend_names_the_outro() {
+    let legend = status_legend();
+    assert!(
+        legend.contains(&(theme::OUTRO_LINE, "legend-outro")),
+        "{legend:?}"
+    );
+}
+
+#[test]
+fn the_legend_swatch_lies_left_of_its_label() {
+    let (mut h, _) = harness(state(1, 1));
+    h.run_steps(2);
+    let label = h.get_by_label("Outro").rect();
+    let swatch = leaves(&h.output().shapes)
+        .into_iter()
+        .find_map(|s| match s {
+            Shape::Rect(r)
+                if r.fill == theme::OUTRO_LINE
+                    && (r.rect.width() - 8.0).abs() < 0.01
+                    && (r.rect.center().y - label.center().y).abs() < 4.0 =>
+            {
+                Some(r.rect)
+            }
+            _ => None,
+        })
+        .expect("the outro swatch");
+    assert!(swatch.right() <= label.left() + 0.5, "{swatch:?} {label:?}");
+}
+
 /// Every leaf shape of the last frame.
 fn leaves(shapes: &[egui::epaint::ClippedShape]) -> Vec<Shape> {
     fn walk(s: &Shape, out: &mut Vec<Shape>) {

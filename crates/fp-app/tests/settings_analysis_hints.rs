@@ -55,3 +55,26 @@ fn every_analysis_value_has_a_one_line_hint() {
         h.get_by_label(hint);
     }
 }
+
+const LOUDNESS_HINTS: [(&str, &str); 4] = [
+    ("Target", "The loudness every track is brought to."),
+    (
+        "True-peak ceiling",
+        "A boost never takes a true peak above this.",
+    ),
+    ("Maximum boost", "The most a quiet track is turned up."),
+    ("Maximum trim", "How far a track's trim may go."),
+];
+
+#[test]
+fn every_loudness_value_has_a_hint() {
+    let (mut h, _) = harness(state(1, 1));
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Loudness").click();
+    h.run_steps(2);
+    for (label, hint) in LOUDNESS_HINTS {
+        assert!(h.query_all_by_label(label).next().is_some(), "{label}");
+        h.get_by_label(hint);
+    }
+}

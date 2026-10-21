@@ -16,9 +16,10 @@ tip-bp-on = Bit-perfect: on
 tip-bp-off = Bit-perfect: off
 badge-gain = { $gain } dB
 badge-not-normalized = Not normalized
-tip-gain-applied = Normalized to { $target } LUFS: measured { $lufs } LUFS, trim { $trim } dB.
-tip-gain-limited-peak = Limited by the true-peak ceiling ({ $ceiling } dBTP).
-tip-gain-limited-boost = Limited by the maximum boost ({ $max } dB).
+tip-gain-applied = Gain { $gain } dB: brings the measured { $lufs } LUFS to the { $target } LUFS target.
+tip-gain-trim = Includes this track's trim of { $trim } dB.
+tip-gain-limited-peak = Limited by the true-peak ceiling ({ $ceiling } dBTP): { $wanted } dB were wanted.
+tip-gain-limited-boost = Limited by the maximum boost ({ $max } dB): { $wanted } dB were wanted.
 tip-gain-earlier-settings = Gain set when the track was loaded. Its loudness settings or measurement have changed since; it keeps this gain until it stops.
 tip-not-measured = Loudness not measured yet: this track plays unchanged.
 tip-not-normalized-bp = Bit-perfect output: tracks play unaltered.
@@ -98,6 +99,7 @@ legend-on-air = On air
 legend-next = Next
 legend-intro = Intro
 legend-mix = Mix
+legend-outro = Outro
 alert-device-lost = Output lost: { $device } (the timeline keeps running)
 alert-underruns = { $player }: audio dropouts ({ $count })
 alert-xruns = { $device }: audio device dropouts ({ $count })
@@ -161,6 +163,10 @@ settings-normalize-max-boost = Maximum boost
 settings-normalize-max-trim = Maximum trim
 settings-hint-normalize-apply = Changes apply to tracks loaded afterwards; what is playing keeps its gain.
 settings-hint-normalize-bp = A player or cart on a bit-perfect output always plays at unity gain: it is never normalized.
+settings-hint-normalize-target = The loudness every track is brought to.
+settings-hint-normalize-ceiling = A boost never takes a true peak above this.
+settings-hint-normalize-max-boost = The most a quiet track is turned up.
+settings-hint-normalize-max-trim = How far a track's trim may go.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } track not measured yet
    *[other] { $count } tracks not measured yet
@@ -498,6 +504,7 @@ settings-restore-confirm = Restore
 
 
 menu-edit-tags = Edit tags…
+menu-loudness = Loudness…
 menu-edit-tags-file = The file is missing or cannot be read
 menu-edit-tags-format = This format has no writable tags
 menu-edit-tags-unread = The tags have not been read yet

@@ -16,9 +16,10 @@ tip-bp-on = Bit-perfect: an
 tip-bp-off = Bit-perfect: aus
 badge-gain = { $gain } dB
 badge-not-normalized = Nicht normalisiert
-tip-gain-applied = Normalisiert auf { $target } LUFS: gemessen { $lufs } LUFS, Trim { $trim } dB.
-tip-gain-limited-peak = Begrenzt durch die True-Peak-Obergrenze ({ $ceiling } dBTP).
-tip-gain-limited-boost = Begrenzt durch die maximale Anhebung ({ $max } dB).
+tip-gain-applied = Verstärkung { $gain } dB: bringt die gemessenen { $lufs } LUFS auf das Ziel von { $target } LUFS.
+tip-gain-trim = Enthält die Anpassung dieses Tracks von { $trim } dB.
+tip-gain-limited-peak = Begrenzt durch die True-Peak-Obergrenze ({ $ceiling } dBTP): gewünscht waren { $wanted } dB.
+tip-gain-limited-boost = Begrenzt durch die maximale Anhebung ({ $max } dB): gewünscht waren { $wanted } dB.
 tip-gain-earlier-settings = Verstärkung beim Laden des Titels festgelegt. Seine Lautheitseinstellungen oder Messung haben sich seitdem geändert; er behält diese Verstärkung, bis er stoppt.
 tip-not-measured = Lautheit noch nicht gemessen: Dieser Titel wird unverändert gespielt.
 tip-not-normalized-bp = Bit-perfect-Ausgabe: Titel werden unverändert gespielt.
@@ -98,6 +99,7 @@ legend-on-air = On Air
 legend-next = Nächster
 legend-intro = Intro
 legend-mix = Mix
+legend-outro = Outro
 alert-device-lost = Ausgang verloren: { $device } (die Zeitachse läuft weiter)
 alert-underruns = { $player }: Audioaussetzer ({ $count })
 alert-xruns = { $device }: Aussetzer des Audiogeräts ({ $count })
@@ -161,6 +163,10 @@ settings-normalize-max-boost = Maximale Anhebung
 settings-normalize-max-trim = Maximaler Trim
 settings-hint-normalize-apply = Änderungen gelten für danach geladene Titel; was gerade läuft, behält seine Verstärkung.
 settings-hint-normalize-bp = Ein Player oder Cart an einem Bit-perfect-Ausgang spielt immer mit Einheitsverstärkung: Er wird nie normalisiert.
+settings-hint-normalize-target = Die Lautheit, auf die jeder Titel gebracht wird.
+settings-hint-normalize-ceiling = Eine Anhebung überschreitet nie diesen True Peak.
+settings-hint-normalize-max-boost = Maximale Anhebung eines leisen Titels.
+settings-hint-normalize-max-trim = Maximale Anpassung pro Titel.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } Titel noch nicht gemessen
    *[other] { $count } Titel noch nicht gemessen
@@ -498,6 +504,7 @@ settings-restore-confirm = Wiederherstellen
 
 
 menu-edit-tags = Tags bearbeiten…
+menu-loudness = Lautheit…
 menu-edit-tags-file = Die Datei fehlt oder kann nicht gelesen werden
 menu-edit-tags-format = Dieses Format hat keine beschreibbaren Tags
 menu-edit-tags-unread = Die Tags wurden noch nicht gelesen

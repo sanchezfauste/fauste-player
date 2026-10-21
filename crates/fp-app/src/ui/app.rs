@@ -1835,10 +1835,12 @@ fn top_bar_right(
 }
 
 /// The status bar's legend: each swatch colour and the message naming it.
-/// The MIX swatch is the colour of the lit mix marker on the waveform.
-pub fn status_legend() -> [(Color32, &'static str); 4] {
+/// The MIX swatch is the colour of the lit mix marker on the waveform and the
+/// Outro swatch the colour of the outro line.
+pub fn status_legend() -> [(Color32, &'static str); 5] {
     [
         (widgets::mix_marker_color(true), "legend-mix"),
+        (theme::OUTRO_LINE, "legend-outro"),
         (theme::INTRO, "legend-intro"),
         (theme::NEXT_ROW, "legend-next"),
         (theme::ON_AIR_ROW, "legend-on-air"),
@@ -1848,16 +1850,29 @@ pub fn status_legend() -> [(Color32, &'static str); 4] {
 fn legend(ui: &mut Ui, color: Color32, label: &str) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
-        let (r, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
-        ui.painter().rect_filled(r, 0.0, color);
-        ui.add(
-            egui::Label::new(
-                RichText::new(label)
-                    .font(font(11.0))
-                    .color(theme::NEUTRAL_500),
-            )
-            .selectable(false),
-        );
+        let text = |ui: &mut Ui| {
+            ui.add(
+                egui::Label::new(
+                    RichText::new(label)
+                        .font(font(11.0))
+                        .color(theme::NEUTRAL_500),
+                )
+                .selectable(false),
+            );
+        };
+        let swatch = |ui: &mut Ui| {
+            let (r, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
+            ui.painter().rect_filled(r, 0.0, color);
+        };
+        // The swatch comes first in reading order: in a right-to-left bar
+        // (which this row inherits) the first widget is the rightmost.
+        if ui.layout().prefer_right_to_left() {
+            text(ui);
+            swatch(ui);
+        } else {
+            swatch(ui);
+            text(ui);
+        }
     });
 }
 

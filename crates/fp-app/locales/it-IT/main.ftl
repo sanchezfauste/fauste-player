@@ -16,9 +16,10 @@ tip-bp-on = Bit-perfect: attivo
 tip-bp-off = Bit-perfect: disattivo
 badge-gain = { $gain } dB
 badge-not-normalized = Non normalizzato
-tip-gain-applied = Normalizzato a { $target } LUFS: misurato { $lufs } LUFS, trim { $trim } dB.
-tip-gain-limited-peak = Limitato dal tetto di true peak ({ $ceiling } dBTP).
-tip-gain-limited-boost = Limitato dal guadagno massimo ({ $max } dB).
+tip-gain-applied = Guadagno { $gain } dB: porta i { $lufs } LUFS misurati all'obiettivo di { $target } LUFS.
+tip-gain-trim = Include la regolazione di questa traccia di { $trim } dB.
+tip-gain-limited-peak = Limitato dal tetto di true peak ({ $ceiling } dBTP): si volevano { $wanted } dB.
+tip-gain-limited-boost = Limitato dall'aumento massimo ({ $max } dB): si volevano { $wanted } dB.
 tip-gain-earlier-settings = Guadagno fissato al caricamento del brano. Le impostazioni di loudness o la misura sono cambiate da allora; mantiene questo guadagno finché non si ferma.
 tip-not-measured = Loudness non ancora misurata: questo brano suona invariato.
 tip-not-normalized-bp = Uscita bit-perfect: i brani suonano inalterati.
@@ -98,6 +99,7 @@ legend-on-air = In onda
 legend-next = Successivo
 legend-intro = Intro
 legend-mix = Mix
+legend-outro = Outro
 alert-device-lost = Uscita persa: { $device } (il tempo continua a scorrere)
 alert-underruns = { $player }: interruzioni audio ({ $count })
 alert-xruns = { $device }: interruzioni del dispositivo audio ({ $count })
@@ -161,6 +163,10 @@ settings-normalize-max-boost = Guadagno massimo
 settings-normalize-max-trim = Trim massimo
 settings-hint-normalize-apply = Le modifiche si applicano ai brani caricati in seguito; ciò che è in riproduzione mantiene il suo guadagno.
 settings-hint-normalize-bp = Un player o un cart su un'uscita bit-perfect suona sempre a guadagno unitario: non viene mai normalizzato.
+settings-hint-normalize-target = La sonorità a cui viene portata ogni traccia.
+settings-hint-normalize-ceiling = Un aumento non supera mai questo true peak.
+settings-hint-normalize-max-boost = Il massimo aumento di una traccia bassa.
+settings-hint-normalize-max-trim = Fin dove arriva la regolazione di una traccia.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } brano non ancora misurato
    *[other] { $count } brani non ancora misurati
@@ -498,6 +504,7 @@ settings-restore-confirm = Ripristina
 
 
 menu-edit-tags = Modifica i tag…
+menu-loudness = Loudness…
 menu-edit-tags-file = Il file manca o non si può leggere
 menu-edit-tags-format = Questo formato non ha tag scrivibili
 menu-edit-tags-unread = I tag non sono ancora stati letti

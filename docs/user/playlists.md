@@ -120,6 +120,7 @@ Row colours:
 | Pre-listen on CUE | Play it on the CUE output (it opens the CUE window). Dimmed when the player has no Cue output. On the on-air output it asks first while something plays there (see [CUE](players.md#cue-pre-listen)) |
 | Edit tags… | Open the tag editor for this track. **Save** writes the changes into the audio file; **Cancel** (or Esc, when no save is running) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |
 | Re-analyse | Analyse this track again now, whatever its state. A fixed file that was unreadable is also picked up by itself (see [Troubleshooting](troubleshooting.md)). Manual markers are kept |
+| Loudness… | Open the loudness popup of this track (trim and exclusion; see [Loudness](loudness.md)) |
 | Add tracks below… | Pick files to insert after this track |
 | Duplicate | Insert an unplayed copy below (with its repeat and stop-after marks) |
 | Repeat this track | Tick to play it again and again, without a gap, until you press Play (next), Previous, Stop or Fade stop, or turn on Stop after. Pause keeps it repeating. A repeat icon shows before the title |

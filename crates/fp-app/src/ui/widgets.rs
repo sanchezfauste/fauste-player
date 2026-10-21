@@ -1393,7 +1393,7 @@ fn zone_start(zone: Zone, c: &MeterConfig) -> f32 {
 }
 
 /// Width of the volume fader: the knob next to the meter and the scale
-/// marks on its right. The level readout under it is centred on it ("-60.0",
+/// marks on its right. The level readout under it is centred on its axis ("-60.0",
 /// the widest, is 27 px wide; below -100 dB it drops the tenths, "-114").
 pub const FADER_WIDTH: f32 = 30.0;
 
@@ -1410,7 +1410,7 @@ pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, enabled, owned.clone()));
     if ui.is_rect_visible(rect) {
         ui.painter().text(
-            rect.center_bottom(),
+            pos2(fader_axis_x(rect), rect.bottom()),
             Align2::CENTER_BOTTOM,
             text,
             FontId::monospace(9.0),
@@ -1421,6 +1421,13 @@ pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
             },
         );
     }
+}
+
+/// The x of the fader's axis (the knob and the track) in a column `rect`.
+/// The level readout is centred on it; 2 px of padding keep "-60.0"
+/// (27 px wide) within the gap before the meter.
+pub fn fader_axis_x(rect: Rect) -> f32 {
+    rect.left() + FADER_KNOB_WIDTH / 2.0 + 2.0
 }
 
 /// The levels marked beside the fader, in dB from the top; the last, `-inf`,
@@ -1638,7 +1645,7 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
         };
         // The track sits at the left of the fader, next to the meter; the
         // scale marks are on its right, away from the meter's own scale.
-        let centre_x = rect.left() + FADER_KNOB_WIDTH / 2.0 + 1.0;
+        let centre_x = fader_axis_x(rect);
         let track = Rect::from_center_size(
             pos2(centre_x, rect.center().y),
             vec2(FADER_TRACK_WIDTH, rect.height()),

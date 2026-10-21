@@ -13,6 +13,7 @@ use fp_model::{
     LoudnessConfig, LoudnessEdit, LoudnessMeasurement, ModelError, Normalization,
     NormalizationStatus as S, OutputDevice, Route, Track, TrackId, apply, bit_perfect_player,
     device_settings, holder_bit_perfect, normalization, normalization_for, on_event,
+    wanted_gain_db,
 };
 
 fn on() -> LoudnessConfig {
@@ -988,4 +989,10 @@ fn n9_a_bit_perfect_player_sends_unity_gain() {
         s.player(p).unwrap().on_air.map(|n| n.status),
         Some(S::BitPerfect)
     );
+}
+
+#[test]
+fn n7_the_wanted_gain_is_the_target_minus_the_measurement_plus_the_trim() {
+    assert_eq!(wanted_gain_db(&on(), -20.0, 0.0), 4.0);
+    assert_eq!(wanted_gain_db(&on(), -10.0, 1.5), -4.5);
 }

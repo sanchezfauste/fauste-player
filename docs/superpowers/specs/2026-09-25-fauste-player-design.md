@@ -471,10 +471,10 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
   - **Footer:** "+ Add" (native file dialog via `rfd`, defaulting to the music folder), entry count, playlist times (§3, rule 20).
 - **Interactions:**
   - single click selects, double click sets next;
-  - context menu: Play now, Set as next, Pre-listen on CUE, Re-analyse (operator feedback 4, Q10), Add tracks below…, Duplicate, Move to ▸, Remove from playlist;
+  - context menu: Play now, Set as next, Pre-listen on CUE, Re-analyse (operator feedback 4, Q10), Edit tags…, Loudness…, Add tracks below…, Duplicate, Move to ▸, Remove from playlist;
   - drag & drop within a list, to another player's list and onto tabs, with a violet drop indicator line at the row boundary under the pointer, drawn only in the table under the pointer (operator feedback 4, Q4);
   - OS file drops onto a list insert at the drop position.
-- **Status bar:** shortcut hints, legend (On air, Next, Intro, Segue), backend/OS label, bus alerts.
+- **Status bar:** shortcut hints, legend (On air, Next, Intro, Outro, Mix), backend/OS label, bus alerts.
 - **Cartwall:** Phase 2 (hidden in Phase 1).
 
 ### 8.4 Settings (Phase 1 subset)

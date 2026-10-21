@@ -286,6 +286,8 @@ pub(crate) fn track_table(
     let mut cue_follow: Option<EntryId> = None;
     // O23: the track whose tags the operator asked to edit.
     let mut edit_tags: Option<fp_model::TrackId> = None;
+    // N20: the track whose Loudness… popup the operator asked for.
+    let mut loudness: Option<fp_model::TrackId> = None;
     let mut dragged: Option<EntryId> = None;
     let drag_offset = drag_scroll_offset(
         ui,
@@ -631,8 +633,10 @@ pub(crate) fn track_table(
                 response.context_menu(|ui| {
                     menu_open = true;
                     clicked = Some(entry.id);
-                    if context_menu(ui, scene, player, playlist, entry.id, i, track).is_some() {
-                        edit_tags = Some(track.id);
+                    match context_menu(ui, scene, player, playlist, entry.id, i, track) {
+                        Some(RowMenuOutcome::EditTags(id)) => edit_tags = Some(id),
+                        Some(RowMenuOutcome::Loudness(id)) => loudness = Some(id),
+                        None => {}
                     }
                 });
             });
@@ -648,6 +652,9 @@ pub(crate) fn track_table(
     }
     if edit_tags.is_some() {
         view_state.edit_tags = edit_tags;
+    }
+    if loudness.is_some() {
+        view_state.loudness_popup = loudness;
     }
     // Q4: the drop target comes from the pointer and the body's geometry,
     // never from the widget under it, and belongs to this table alone: it is
@@ -833,6 +840,12 @@ fn header_menu(ui: &mut Ui, scene: &Scene<'_>, columns: &[TableColumn]) {
     }
 }
 
+/// What a row's context menu asks the table to open.
+enum RowMenuOutcome {
+    EditTags(fp_model::TrackId),
+    Loudness(fp_model::TrackId),
+}
+
 fn context_menu(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -841,9 +854,9 @@ fn context_menu(
     entry: EntryId,
     index: usize,
     track: &fp_model::Track,
-) -> Option<fp_model::TrackId> {
+) -> Option<RowMenuOutcome> {
     let t = scene.i18n;
-    let mut edit_tags = None;
+    let mut outcome = None;
     ui.set_min_width(240.0);
     ui.add(
         egui::Label::new(
@@ -930,7 +943,11 @@ fn context_menu(
         None => edit,
     };
     if edit.clicked() {
-        edit_tags = Some(track.id);
+        outcome = Some(RowMenuOutcome::EditTags(track.id));
+        ui.close();
+    }
+    if labelled(ui, icon::SPEAKER_HIGH, "menu-loudness", true).clicked() {
+        outcome = Some(RowMenuOutcome::Loudness(track.id));
         ui.close();
     }
     ui.separator();
@@ -993,7 +1010,7 @@ fn context_menu(
         scene.ctl.send(Command::RemoveEntry(entry));
         ui.close();
     }
-    edit_tags
+    outcome
 }
 
 /// A small flag icon with `label` as its accessible name and tooltip.

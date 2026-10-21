@@ -16,9 +16,10 @@ tip-bp-on = Bit-perfect: activo
 tip-bp-off = Bit-perfect: inactivo
 badge-gain = { $gain } dB
 badge-not-normalized = Sin normalizar
-tip-gain-applied = Normalizada a { $target } LUFS: medida { $lufs } LUFS, ajuste { $trim } dB.
-tip-gain-limited-peak = Limitada por el techo de true peak ({ $ceiling } dBTP).
-tip-gain-limited-boost = Limitada por la ganancia máxima ({ $max } dB).
+tip-gain-applied = Ganancia { $gain } dB: lleva los { $lufs } LUFS medidos al objetivo de { $target } LUFS.
+tip-gain-trim = Incluye el ajuste de esta pista de { $trim } dB.
+tip-gain-limited-peak = Limitada por el techo de true peak ({ $ceiling } dBTP): se querían { $wanted } dB.
+tip-gain-limited-boost = Limitada por la ganancia máxima ({ $max } dB): se querían { $wanted } dB.
 tip-gain-earlier-settings = Ganancia fijada al cargar la pista. Sus ajustes de sonoridad o su medición han cambiado desde entonces; conserva esta ganancia hasta que se detenga.
 tip-not-measured = Sonoridad aún sin medir: esta pista suena sin cambios.
 tip-not-normalized-bp = Salida bit-perfect: las pistas suenan inalteradas.
@@ -98,6 +99,7 @@ legend-on-air = Sonando
 legend-next = Siguiente
 legend-intro = Intro
 legend-mix = Mezcla
+legend-outro = Outro
 alert-device-lost = Salida perdida: { $device } (la programación sigue su curso)
 alert-underruns = { $player }: cortes de audio ({ $count })
 alert-xruns = { $device }: cortes del dispositivo de audio ({ $count })
@@ -161,6 +163,10 @@ settings-normalize-max-boost = Ganancia máxima
 settings-normalize-max-trim = Ajuste máximo
 settings-hint-normalize-apply = Los cambios se aplican a las pistas que se carguen después; lo que suena conserva su ganancia.
 settings-hint-normalize-bp = Un player o un botón en una salida bit-perfect siempre suena a ganancia unitaria: nunca se normaliza.
+settings-hint-normalize-target = La sonoridad a la que se lleva cada pista.
+settings-hint-normalize-ceiling = Una subida nunca lleva el true peak por encima.
+settings-hint-normalize-max-boost = Lo máximo que se sube una pista baja.
+settings-hint-normalize-max-trim = Hasta dónde puede llegar el ajuste de una pista.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } pista aún sin medir
    *[other] { $count } pistas aún sin medir
@@ -498,6 +504,7 @@ settings-restore-confirm = Restaurar
 
 
 menu-edit-tags = Editar etiquetas…
+menu-loudness = Sonoridad…
 menu-edit-tags-file = El archivo no existe o no se puede leer
 menu-edit-tags-format = Este formato no admite escribir etiquetas
 menu-edit-tags-unread = Aún no se han leído las etiquetas
