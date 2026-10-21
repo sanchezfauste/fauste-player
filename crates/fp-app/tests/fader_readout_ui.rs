@@ -81,3 +81,37 @@ fn a_locked_fader_shows_zero_dimmed() {
     h.get_by_label("0.0");
     assert_eq!(text_colour(&h, "0.0"), fp_app::ui::theme::NEUTRAL_600);
 }
+
+/// The x of the centre of the text `text` and of the fader's knob on the
+/// last frame.
+fn readout_and_knob_x(h: &H, text: &str) -> (f32, f32) {
+    fn walk(shape: &egui::Shape, text: &str, readout: &mut Vec<f32>, knobs: &mut Vec<f32>) {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text() == text => {
+                readout.push(t.pos.x + t.galley.size().x / 2.0);
+            }
+            egui::Shape::Rect(r) if (r.rect.width() - 12.0).abs() < 0.01 => {
+                knobs.push(r.rect.center().x);
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, text, readout, knobs)),
+            _ => {}
+        }
+    }
+    let (mut readout, mut knobs) = (Vec::new(), Vec::new());
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, text, &mut readout, &mut knobs);
+    }
+    assert_eq!(readout.len(), 1, "one {text:?}: {readout:?}");
+    assert!(!knobs.is_empty(), "a knob");
+    (readout[0], knobs[0])
+}
+
+#[test]
+fn the_readout_is_centred_on_the_knob() {
+    let mut s = state(1, 1);
+    s.players[0].volume = 0.4732;
+    let (mut h, _) = harness(s);
+    h.run_steps(2);
+    let (readout, knob) = readout_and_knob_x(&h, "-6.5");
+    assert!((readout - knob).abs() <= 0.5, "{readout} vs {knob}");
+}
