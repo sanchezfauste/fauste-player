@@ -52,7 +52,7 @@ egui_kittest = "0.36.2"
 rfd = "0.17.2"
 open = "5.4.4"
 midir = "0.11.0"
-pollster = "0.4.0"
+pollster = "1.0.1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 fluent-bundle = "0.16.0"
 fluent-syntax = "0.12.0"
