@@ -25,6 +25,7 @@ fn analysis(duration: f64) -> TrackAnalysis {
             bits: Some(16),
             channels: 2,
             dsd_rate: None,
+            bitrate: None,
         }),
         version: 1,
         loudness: None,
@@ -237,6 +238,7 @@ fn requests_carry_the_track_format() {
             bits: Some(16),
             channels: 2,
             dsd_rate: None,
+            bitrate: None,
         })
     );
     let actions = apply(&mut state, Command::Play(p)).unwrap();

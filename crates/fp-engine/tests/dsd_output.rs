@@ -122,6 +122,7 @@ fn dsd64() -> Option<AudioFormat> {
         bits: None,
         channels: 2,
         dsd_rate: Some(DSD64),
+        bitrate: None,
     })
 }
 
@@ -131,6 +132,7 @@ fn pcm16(rate: u32) -> Option<AudioFormat> {
         bits: Some(16),
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     })
 }
 
@@ -755,6 +757,7 @@ fn dsd128() -> Option<AudioFormat> {
         bits: None,
         channels: 2,
         dsd_rate: Some(DSD128),
+        bitrate: None,
     })
 }
 

@@ -92,6 +92,7 @@ fn info(path: &Path) -> Info {
             bits: None,
             channels: decoder.channels() as u32,
             dsd_rate: Some(dsd_rate),
+            bitrate: None,
         },
         dsd_rate,
         duration: frames as f64 / f64::from(rate),

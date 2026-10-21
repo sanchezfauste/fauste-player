@@ -19,6 +19,7 @@ fn dsd(rate: u32, channels: u32) -> Option<AudioFormat> {
         bits: None,
         channels,
         dsd_rate: Some(rate),
+        bitrate: None,
     })
 }
 
@@ -51,6 +52,7 @@ fn d2_a_pcm_file_is_not_dsd() {
             bits: Some(24),
             channels: 2,
             dsd_rate: None,
+            bitrate: None,
         }),
     ] {
         let f = DsdFacts { format, ..facts() };

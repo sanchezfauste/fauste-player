@@ -117,6 +117,13 @@ pub fn analyze_file_cancellable(
                 bits: decoder.bits_per_sample(),
                 channels: u32::try_from(decoder.channels()).unwrap_or(0),
                 dsd_rate: decoder.dsd_rate(),
+                bitrate: if decoder.dsd_rate().is_some() {
+                    None
+                } else {
+                    std::panic::catch_unwind(|| crate::metadata::read_bitrate(path))
+                        .ok()
+                        .flatten()
+                },
             }),
             version: crate::cache::ANALYSIS_VERSION,
             loudness,

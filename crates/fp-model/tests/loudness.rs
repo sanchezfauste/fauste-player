@@ -46,7 +46,14 @@ fn n7_bit_perfect_wins() {
 fn n7_off_gives_no_gain() {
     let t = track(Some(-20.0), -10.0);
     assert_eq!(
-        gain(normalization(&LoudnessConfig::default(), &t, false)),
+        gain(normalization(
+            &LoudnessConfig {
+                normalize: false,
+                ..LoudnessConfig::default()
+            },
+            &t,
+            false
+        )),
         (0.0, S::Off)
     );
 }

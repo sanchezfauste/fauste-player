@@ -13,9 +13,9 @@ use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     BadgeTone, MarkerFractions, Message, PlayerStatus, RowStatus, TipField, analysis_pending,
     cue_follow_target, cue_window_view, fader_from_gain, file_icon, file_problem, gain_badge,
-    gain_from_fader, gain_lines, intro_left, loudness_lines, marker_fractions, mix_active,
-    outro_left, player_view, playlist_times, row_is_next, row_status, shown_entry, signed_db,
-    start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
+    gain_from_fader, gain_lines, intro_left, loudness_facts, loudness_lines, marker_fractions,
+    mix_active, outro_left, player_view, playlist_times, row_is_next, row_status, shown_entry,
+    signed_db, start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayMode, PlayerId,
@@ -645,6 +645,7 @@ fn tip_track() -> Track {
         bits: Some(16),
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     });
     t
 }
@@ -671,6 +672,29 @@ fn the_tooltip_lists_what_the_track_has_in_order() {
     assert_eq!(value(TipField::Duration), "03:20");
     assert_eq!(value(TipField::Format), "FLAC · 44.1 kHz · 16 bit");
     assert_eq!(value(TipField::Path), "/m/Artist - Song.flac");
+}
+
+#[test]
+fn the_format_line_ends_with_the_bit_rate_in_whole_kbps() {
+    let mut t = tip_track();
+    t.path = PathBuf::from("/m/Artist - Song.mp3");
+    t.format = Some(AudioFormat {
+        sample_rate: 44_100,
+        bits: None,
+        channels: 2,
+        dsd_rate: None,
+        bitrate: Some(319_600),
+    });
+    let line = |t: &Track| {
+        track_tooltip(t, None)
+            .into_iter()
+            .find(|(f, _)| *f == TipField::Format)
+            .unwrap()
+            .1
+    };
+    assert_eq!(line(&t), "MP3 · 44.1 kHz · 320 kbps");
+    t.format = t.format.map(|f| AudioFormat { bitrate: None, ..f });
+    assert_eq!(line(&t), "MP3 · 44.1 kHz", "unknown: left out");
 }
 
 #[test]
@@ -702,6 +726,7 @@ fn the_format_line_leaves_out_what_is_unknown() {
         bits: None,
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     });
     let line = track_tooltip(&t, None)
         .into_iter()
@@ -989,10 +1014,10 @@ fn n18_an_applied_gain_shows_its_value_and_why() {
     assert_eq!(b.tone, BadgeTone::Normal);
     assert_eq!(
         b.tip,
-        vec![msg(
-            "tip-gain-applied",
-            &[("gain", "+4.0"), ("target", "−16.0"), ("lufs", "−20.0")]
-        )]
+        vec![
+            msg("track-loudness", &[("lufs", "−20.0"), ("tp", "−10.0")]),
+            msg("loudness-auto-gain", &[("gain", "+4.0")]),
+        ]
     );
 }
 
@@ -1007,7 +1032,7 @@ fn n18_a_limited_gain_says_which_limit() {
     )
     .unwrap();
     assert_eq!(
-        peak.tip[1],
+        peak.tip[2],
         msg(
             "tip-gain-limited-peak",
             &[("ceiling", "−1.0"), ("wanted", "+4.0")]
@@ -1022,7 +1047,7 @@ fn n18_a_limited_gain_says_which_limit() {
     )
     .unwrap();
     assert_eq!(
-        boost.tip[1],
+        boost.tip[2],
         msg(
             "tip-gain-limited-boost",
             &[("max", "12.0"), ("wanted", "+24.0")]
@@ -1039,40 +1064,52 @@ fn n18_the_other_statuses() {
         gain_db: 0.0,
         status,
     };
-    let not = gain_badge(&of(S::NotMeasured), &c, &t).unwrap();
+    // Each amber state shows what the loudness editor shows, with the true
+    // peak whenever the track was measured.
+    let tp = msg("track-loudness", &[("lufs", "−20.0"), ("tp", "−10.0")]);
+    let mut unmeasured = measured_track(None, 0.0);
+    unmeasured.loudness = None;
+    let not = gain_badge(&of(S::NotMeasured), &c, &unmeasured).unwrap();
     assert_eq!(not.text, msg("badge-gain", &[("gain", "0.0")]));
     assert_eq!(not.tone, BadgeTone::Amber);
-    assert_eq!(not.tip, vec![msg("tip-not-measured", &[])]);
+    assert_eq!(not.tip, loudness_facts(&unmeasured, &c, false));
+    assert_eq!(not.tip[1], msg("loudness-no-gain-unmeasured", &[]));
     let bp = gain_badge(&of(S::BitPerfect), &c, &t).unwrap();
     assert_eq!(bp.text, msg("badge-gain", &[("gain", "0.0")]));
-    assert_eq!(
-        (bp.tone, bp.tip[0].key),
-        (BadgeTone::Amber, "tip-not-normalized-bp")
-    );
-    let ex = gain_badge(&of(S::Excluded), &c, &t).unwrap();
-    assert_eq!(
-        (ex.text, ex.tone, ex.tip[0].key),
-        (
-            msg("badge-gain", &[("gain", "0.0")]),
-            BadgeTone::Amber,
-            "tip-not-normalized-excluded"
-        )
-    );
+    assert_eq!(bp.tone, BadgeTone::Amber);
+    assert_eq!(bp.tip, loudness_facts(&t, &c, true));
+    assert_eq!(bp.tip[0], tp);
+    assert_eq!(bp.tip[1], msg("loudness-no-gain-bit-perfect", &[]));
+    let mut excluded = t.clone();
+    excluded.loudness_edit.excluded = true;
+    let ex = gain_badge(&of(S::Excluded), &c, &excluded).unwrap();
+    assert_eq!(ex.text, msg("badge-gain", &[("gain", "0.0")]));
+    assert_eq!(ex.tone, BadgeTone::Amber);
+    assert_eq!(ex.tip, loudness_facts(&excluded, &c, false));
+    assert_eq!(ex.tip[0], tp);
+    assert_eq!(ex.tip[1], msg("loudness-no-gain-excluded", &[]));
     assert_eq!(gain_badge(&of(S::Off), &c, &t), None);
     assert_eq!(gain_badge(&of(S::Silent), &c, &t), None);
 }
 
 #[test]
 fn n18_a_bit_perfect_player_says_nothing_while_normalization_is_off() {
-    // Normalization is off by default: a bit-perfect player plays at unity
-    // gain either way, and "Not normalized" would only be noise.
+    // A bit-perfect player plays at unity gain either way, and "Not
+    // normalized" would only be noise while normalization is off.
     let t = measured_track(Some(-20.0), -10.0);
     let bp = fp_model::Normalization {
         gain_db: 0.0,
         status: fp_model::NormalizationStatus::BitPerfect,
     };
     assert_eq!(
-        gain_badge(&bp, &fp_model::LoudnessConfig::default(), &t),
+        gain_badge(
+            &bp,
+            &fp_model::LoudnessConfig {
+                normalize: false,
+                ..Default::default()
+            },
+            &t
+        ),
         None
     );
 }
@@ -1161,13 +1198,13 @@ fn every_message_the_view_returns_exists_in_english() {
     let en = fp_app::i18n::I18n::new(Some("en-US"));
     for key in [
         "badge-gain",
-        "tip-gain-applied",
-        "tip-gain-trim",
+        "loudness-auto-gain",
+        "loudness-trimmed-gain",
         "tip-gain-limited-peak",
         "tip-gain-limited-boost",
-        "tip-not-measured",
-        "tip-not-normalized-bp",
-        "tip-not-normalized-excluded",
+        "loudness-no-gain-bit-perfect",
+        "loudness-no-gain-excluded",
+        "loudness-no-gain-unmeasured",
         "track-loudness",
         "track-loudness-unmeasured",
         "track-loudness-excluded",
@@ -1186,13 +1223,33 @@ fn n18_a_gain_started_with_earlier_settings_says_so() {
     let t = measured_track(Some(-20.0), -10.0);
     let mut config = normalizing();
     let b = gain_badge(&applied(4.0, None), &config, &t).unwrap();
-    assert_eq!(b.tip.len(), 1, "the settings still give +4.0 dB");
+    assert!(
+        !b.tip.contains(&msg("tip-gain-earlier-settings", &[])),
+        "the settings still give +4.0 dB"
+    );
     config.target_lufs = -10.0;
     let b = gain_badge(&applied(4.0, None), &config, &t).unwrap();
     assert_eq!(b.text, msg("badge-gain", &[("gain", "+4.0")]));
     // The current target, measurement and trim did not give this gain:
     // the tooltip does not quote them beside it.
     assert_eq!(b.tip, vec![msg("tip-gain-earlier-settings", &[])]);
+}
+
+#[test]
+fn i26_the_badge_tooltip_and_the_editor_list_the_same_facts() {
+    let mut t = measured_track(Some(-20.0), -3.0);
+    t.loudness_edit.trim_db = 2.0;
+    let config = normalizing();
+    let n = fp_model::normalization(&config, &t, false);
+    let b = gain_badge(&n, &config, &t).unwrap();
+    let facts = loudness_facts(&t, &config, false);
+    assert_eq!(b.tip, facts);
+    assert_eq!(
+        facts[0],
+        msg("track-loudness", &[("lufs", "−20.0"), ("tp", "−3.0")]),
+        "the true peak is among them"
+    );
+    assert_eq!(facts[1..], gain_lines(&t, &config, false)[..]);
 }
 
 #[test]
@@ -1209,11 +1266,9 @@ fn n18_the_badge_tooltip_quotes_the_trim_in_use() {
     assert_eq!(
         b.tip,
         vec![
-            msg(
-                "tip-gain-applied",
-                &[("gain", "+10.0"), ("target", "−16.0"), ("lufs", "−20.0")]
-            ),
-            msg("tip-gain-trim", &[("trim", "+6.0")]),
+            msg("track-loudness", &[("lufs", "−20.0"), ("tp", "−30.0")]),
+            msg("loudness-auto-gain", &[("gain", "+4.0")]),
+            msg("loudness-trimmed-gain", &[("gain", "+10.0")]),
         ]
     );
 }

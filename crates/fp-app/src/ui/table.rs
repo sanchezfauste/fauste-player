@@ -41,9 +41,23 @@ pub(crate) struct TableScroll {
 }
 
 impl TableScroll {
+    /// Where to scroll row `index` so that it is fully visible: the top when
+    /// it is above the body, the bottom when it is below, `None` when it
+    /// already shows.
+    pub(crate) fn reveal_align(&self, index: usize) -> Option<Align> {
+        let top = index as f32 * ROW_HEIGHT;
+        if top < self.offset {
+            Some(Align::Min)
+        } else if top + ROW_HEIGHT > self.offset + self.body.height() {
+            Some(Align::Max)
+        } else {
+            None
+        }
+    }
+
     /// This geometry if the last pass or the one before left it, `None` if
     /// it is older: a table not drawn for a while may have moved since.
-    fn current(self, pass: u64) -> Option<Self> {
+    pub(crate) fn current(self, pass: u64) -> Option<Self> {
         (pass.saturating_sub(self.pass) <= 1).then_some(self)
     }
 }

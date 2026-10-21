@@ -683,25 +683,26 @@ pub fn gain_badge(
     track: &Track,
 ) -> Option<GainBadge> {
     use fp_model::NormalizationStatus as S;
-    let not_normalized = |tip: &'static str| GainBadge {
+    // The amber states say what the loudness editor says: the measurement
+    // (with its true peak, when measured) and why there is no gain.
+    let not_normalized = |bit_perfect: bool| GainBadge {
         text: Message::new("badge-gain", &[("gain", signed_db(0.0))]),
         tone: BadgeTone::Amber,
-        tip: vec![Message::new(tip, &[])],
+        tip: loudness_facts(track, config, bit_perfect),
     };
     match n.status {
         S::Off | S::Silent => None,
         S::BitPerfect if !config.normalize => None,
-        S::BitPerfect => Some(not_normalized("tip-not-normalized-bp")),
-        S::NotMeasured => Some(not_normalized("tip-not-measured")),
-        S::Excluded => Some(not_normalized("tip-not-normalized-excluded")),
-        S::Applied { limited } => {
+        S::BitPerfect => Some(not_normalized(true)),
+        S::NotMeasured | S::Excluded => Some(not_normalized(false)),
+        S::Applied { .. } => {
             // The source keeps the gain it started with (N11). When the
             // settings, the measurement or the edit now give another, the
             // current values did not give this gain: say only that.
             let tip = if fp_model::normalization(config, track, false) != *n {
                 vec![Message::new("tip-gain-earlier-settings", &[])]
             } else {
-                applied_tip(config, track, n.gain_db, limited)
+                loudness_facts(track, config, false)
             };
             Some(GainBadge {
                 text: Message::new("badge-gain", &[("gain", signed_db(n.gain_db))]),
@@ -712,53 +713,17 @@ pub fn gain_badge(
     }
 }
 
-/// The tooltip of a gain the current settings give: the gain, how it brings
-/// the measurement to the target, the trim in use when it is not 0, and the
-/// limit that held a boost back with the gain that was wanted.
-fn applied_tip(
-    config: &fp_model::LoudnessConfig,
+/// The loudness facts of `track`: the measurement (integrated loudness and
+/// true peak) then the gain lines. The gain badge tooltip and the loudness
+/// editor both show these, so they cannot drift apart.
+pub fn loudness_facts(
     track: &Track,
-    gain_db: f32,
-    limited: Option<fp_model::GainLimit>,
+    config: &fp_model::LoudnessConfig,
+    bit_perfect: bool,
 ) -> Vec<Message> {
-    use fp_model::GainLimit;
-    let lufs = track
-        .loudness
-        .and_then(|m| m.integrated_lufs)
-        .map_or_else(|| "—".to_owned(), decimal);
-    let trim = fp_model::trim_in_use(config, &track.loudness_edit);
-    let measured = track.loudness.and_then(|m| m.integrated_lufs);
-    let wanted = signed_db(fp_model::wanted_gain_db(
-        config,
-        measured.unwrap_or(config.target_lufs),
-        trim,
-    ));
-    let mut tip = vec![Message::new(
-        "tip-gain-applied",
-        &[
-            ("gain", signed_db(gain_db)),
-            ("target", decimal(config.target_lufs)),
-            ("lufs", lufs),
-        ],
-    )];
-    if trim != 0.0 {
-        tip.push(Message::new("tip-gain-trim", &[("trim", signed_db(trim))]));
-    }
-    match limited {
-        Some(GainLimit::TruePeak) => tip.push(Message::new(
-            "tip-gain-limited-peak",
-            &[
-                ("ceiling", decimal(config.true_peak_ceiling_dbtp)),
-                ("wanted", wanted),
-            ],
-        )),
-        Some(GainLimit::MaxBoost) => tip.push(Message::new(
-            "tip-gain-limited-boost",
-            &[("max", decimal(config.max_boost_db)), ("wanted", wanted)],
-        )),
-        None => {}
-    }
-    tip
+    let mut lines: Vec<Message> = loudness_lines(track, config).into_iter().take(1).collect();
+    lines.extend(gain_lines(track, config, bit_perfect));
+    lines
 }
 
 /// N20, N21: the gain lines of the loudness editors. The slider is a trim
@@ -874,7 +839,7 @@ pub fn loudness_lines(track: &Track, config: &fp_model::LoudnessConfig) -> Vec<M
     lines
 }
 
-/// `FLAC · 44.1 kHz · 16 bit`: the codec is the file extension, in capitals.
+/// `FLAC · 44.1 kHz · 16 bit`, `MP3 · 44.1 kHz · 320 kbps`: the codec is the file extension, in capitals.
 fn format_line(track: &Track) -> String {
     let mut parts = Vec::new();
     if let Some(ext) = track.path.extension().and_then(|e| e.to_str()) {
@@ -892,6 +857,9 @@ fn format_line(track: &Track) -> String {
         }
         if let Some(bits) = f.bits {
             parts.push(format!("{bits} bit"));
+        }
+        if let Some(bitrate) = f.bitrate.filter(|b| *b > 0) {
+            parts.push(format!("{} kbps", (f64::from(bitrate) / 1000.0).round()));
         }
     }
     parts.join(" · ")

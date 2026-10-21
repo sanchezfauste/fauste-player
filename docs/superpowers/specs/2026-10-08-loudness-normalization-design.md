@@ -41,7 +41,7 @@ automatic gain control and no compressor or limiter.
 | D8 | Bit-perfect and native DSD win: no normalization on such a device, and the interface says so. |
 | D9 | The player shows the applied gain; Settings has a Loudness section; the per-track controls. Remote API and MIDI follow the existing patterns (a state readout at least). Every new string in all 11 locales. |
 | D10 | Rejected: writing normalized copies of files; live AGC. |
-| D11 | `normalize` is off by default (§14, Q1). |
+| D11 | `normalize` is on for new installations (§14, Q1, revised in itr06 I27); an existing configuration keeps its current setting (every saved config already stores the value). No migration. |
 | D12 | A background loudness-only pass (N6b) measures tracks with no loudness measurement, with no full re-analysis; `ANALYSIS_VERSION` is not bumped (N6). |
 | D13 | The shared K-weighting and true-peak code moves to a new crate `fp-dsp` (N6). |
 | D14 | CUE and pre-listen (player and cart) are normalized exactly like on air (N9). |
@@ -323,9 +323,9 @@ band) stays a separate value, whatever the normalization target (Q4).
   |---|---|---|
   | `Applied { limited: None }` | "−4.2 dB" (signed, one decimal; "0.0 dB" for a gain under 0.05 dB) | "Gain {gain} dB: brings the measured {lufs} LUFS to the {target} LUFS target.", plus "Includes this track's trim of {trim} dB." only when the trim in use is not 0 |
   | `Applied { limited: Some(_) }` | as above | adds "Limited by the true-peak ceiling ({ceiling} dBTP): {wanted} dB were wanted." or "Limited by the maximum boost ({max} dB): {wanted} dB were wanted." |
-  | `NotMeasured` | "0.0 dB" (amber) | "Loudness not measured yet: this track plays unchanged." |
-  | `BitPerfect` | "0.0 dB" (amber), only while `normalize` is on | "Bit-perfect output: tracks play unaltered." |
-  | `Excluded` | "0.0 dB" (amber) | "This track is excluded from normalization." |
+  | `NotMeasured` | "0.0 dB" (amber) | the loudness editor's lines (itr06 I26) |
+  | `BitPerfect` | "0.0 dB" (amber), only while `normalize` is on | the loudness editor's lines |
+  | `Excluded` | "0.0 dB" (amber) | the loudness editor's lines |
   | `Off`, `Silent` | none | — |
 
   *Amendment 2026-10-21 (itr06 I12).* Every not-normalized status shows the
@@ -416,12 +416,9 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `tip-gain-earlier-settings` | "Gain set when the track was loaded. Its loudness settings or measurement have changed since; it keeps this gain until it stops." |
 | `loudness-close` | "Close" |
 | `badge-gain` | "{ $gain } dB" |
-| `tip-gain-applied` | "Normalized to { $target } LUFS: measured { $lufs } LUFS, trim { $trim } dB." |
+| `tip-gain-applied` | (removed in itr06 I26: the tooltip of an applied gain lists `view::loudness_facts`, the lines of the loudness editor: the measurement with its true peak, then the gain lines) |
 | `tip-gain-limited-peak` | "Limited by the true-peak ceiling ({ $ceiling } dBTP)." |
 | `tip-gain-limited-boost` | "Limited by the maximum boost ({ $max } dB)." |
-| `tip-not-measured` | "Loudness not measured yet: this track plays unchanged." |
-| `tip-not-normalized-bp` | "Bit-perfect output: tracks play unaltered." |
-| `tip-not-normalized-excluded` | "This track is excluded from normalization." |
 | `track-loudness` | "Loudness: { $lufs } LUFS, true peak { $tp } dBTP" |
 | `track-loudness-unmeasured` | "Loudness: not measured" |
 | `track-loudness-excluded` | "Excluded from normalization" |
@@ -527,8 +524,10 @@ sleeps.
 
 Answers to the questions raised while writing the spec; binding.
 
-- **Q1** `normalize` defaults to **off**: an upgrade changes nothing on air
-  until the operator turns it on (§4).
+- **Q1** `normalize` defaulted to off so that an upgrade changed nothing on
+  air (§4). Revised (itr06 I27): it is **on for new installations**; an
+  existing configuration keeps its current setting (every saved config already
+  stores the value). No migration.
 - **Q2** The true-peak ceiling **only limits boosts**: it never cuts a
   track below `target − measured + trim`, and a negative gain is never
   reduced further by it (N7).

@@ -400,3 +400,18 @@ fn cc9_a_cart_has_its_colour_name_or_null() {
         "{plain}"
     );
 }
+
+#[test]
+fn a_track_reports_its_bit_rate_in_bit_per_second() {
+    let mut s = demo_state();
+    let id = s.library.iter().next().unwrap().id;
+    s.library.get_mut(id).unwrap().format = Some(fp_model::AudioFormat {
+        sample_rate: 44_100,
+        bits: None,
+        channels: 2,
+        dsd_rate: None,
+        bitrate: Some(320_000),
+    });
+    let t = dto::track(&s, id).unwrap();
+    assert_eq!(t.format.unwrap().bitrate, Some(320_000));
+}

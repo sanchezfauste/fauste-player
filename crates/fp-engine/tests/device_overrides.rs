@@ -96,6 +96,7 @@ fn pcm16(rate: u32) -> Option<AudioFormat> {
         bits: Some(16),
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     })
 }
 

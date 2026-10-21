@@ -182,7 +182,7 @@ A player has:
     - it stops at the end of the track or on toggle;
     - it shows elapsed cue time in blue;
     - it never affects the Main output.
-16. **Keyboard.** Keys `1`–`9` press Play on players 1–9 (shortcuts become remappable in Phase 2). `Delete`/`Backspace` removes the selected entry, subject to rule 13. `Esc` closes menus and dialogs.
+16. **Keyboard.** Keys `1`–`9` press Play on players 1–9 (shortcuts become remappable in Phase 2). `Delete`/`Backspace` removes the selected entry, subject to rule 13. `Esc` closes menus and dialogs. `Up`/`Down` move the selection of the active player's playlist and `Enter` sets the selected entry as next; a second `Enter` on the same entry within egui's double-click delay plays it (the Play action). Another key, a click or a change of selection between the presses, or a longer wait, makes it a first `Enter` again; text fields, modals and user shortcuts on those keys win.
 17. **Countdown** shows `-remaining` to `cue_out`, with tenths, and `elapsed / total` on the row under the waveform. During the last `end_warning_secs` (default 10) the countdown turns red.
 18. **Intro indicator.**
     - Shown only if the track has a manual `intro_end`.

@@ -18,7 +18,7 @@ const WIDTH: f32 = 300.0;
 /// The measurement line of `track` ("Loudness: −14.2 LUFS, true peak …" or
 /// "Loudness: not measured").
 pub(crate) fn measurement(scene: &Scene<'_>, track: &Track) -> String {
-    view::loudness_lines(track, &scene.state.config.loudness)
+    view::loudness_facts(track, &scene.state.config.loudness, false)
         .first()
         .map(|m| widgets::tr_message(scene.i18n, m))
         .unwrap_or_default()
@@ -32,8 +32,9 @@ pub(crate) fn gain_text(
     holder: Option<fp_model::Holder>,
 ) -> String {
     let bit_perfect = holder.is_some_and(|h| fp_model::holder_bit_perfect(scene.state, h));
-    view::gain_lines(track, &scene.state.config.loudness, bit_perfect)
+    view::loudness_facts(track, &scene.state.config.loudness, bit_perfect)
         .iter()
+        .skip(1)
         .map(|m| widgets::tr_message(scene.i18n, m))
         .collect::<Vec<_>>()
         .join("\n")

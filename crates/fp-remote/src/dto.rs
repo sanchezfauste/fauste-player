@@ -135,6 +135,8 @@ pub struct FormatDto {
     pub sample_rate: u32,
     pub channels: u32,
     pub bits: Option<u32>,
+    /// Average bit rate in bit/s; `null` when unknown and for DSD.
+    pub bitrate: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -409,6 +411,7 @@ fn track_dto(t: &Track) -> TrackDto {
             sample_rate: f.sample_rate,
             channels: f.channels,
             bits: f.bits,
+            bitrate: f.bitrate,
         }),
         markers: MarkersDto {
             cue_in: m.cue_in.map(marker_dto),

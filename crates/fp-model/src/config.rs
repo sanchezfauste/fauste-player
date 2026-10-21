@@ -217,8 +217,8 @@ impl Default for MeterConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LoudnessConfig {
-    /// Normalization on or off. Off by default: an upgrade changes nothing
-    /// on air until the operator turns it on (D11).
+    /// Normalization on or off. On by default; a saved config that says
+    /// `false` keeps it off (D11).
     pub normalize: bool,
     /// Integrated loudness every track is brought to, LUFS (−36 ..= −6).
     pub target_lufs: f32,
@@ -235,7 +235,7 @@ pub struct LoudnessConfig {
 impl Default for LoudnessConfig {
     fn default() -> Self {
         Self {
-            normalize: false,
+            normalize: true,
             target_lufs: -16.0,
             true_peak_ceiling_dbtp: -1.0,
             max_boost_db: 12.0,

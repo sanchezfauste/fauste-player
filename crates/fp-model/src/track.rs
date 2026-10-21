@@ -160,6 +160,11 @@ pub struct AudioFormat {
     /// `sample_rate` is then the rate of its PCM conversion (DSD rate ÷ 32).
     #[serde(default)]
     pub dsd_rate: Option<u32>,
+    /// The file's average bit rate in bit/s, as its container or codec
+    /// reports it; `None` when unknown and for DSD. Older cached analyses
+    /// have none until the track is re-analysed.
+    #[serde(default)]
+    pub bitrate: Option<u32>,
 }
 
 /// The text tags of a file as the player shows and edits them (feedback 2

@@ -188,6 +188,8 @@ fn the_analysis_records_the_rate_and_bits() {
             bits: Some(16),
             channels: 1,
             dsd_rate: None,
+            // 8 kHz x 16 bit x 1 channel, in whole kbps as lofty reports it.
+            bitrate: Some(128_000),
         })
     );
 }

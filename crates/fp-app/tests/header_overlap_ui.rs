@@ -75,7 +75,7 @@ fn header_rects_of(
         t.tr("tip-single"),
         t.tr("tip-cont"),
         t.tr("tip-bp-off"),
-        t.tr("tip-not-normalized-bp"),
+        bp_tip(t),
         t.tr("layout-hide"),
         t.tr("layout-maximise"),
     ];
@@ -150,7 +150,7 @@ fn the_header_never_overlaps_at_the_least_width() {
                 t.tr("tip-single"),
                 t.tr("tip-cont"),
                 t.tr("tip-bp-off"),
-                t.tr("tip-not-normalized-bp"),
+                bp_tip(&t),
                 t.tr("layout-hide"),
                 t.tr("layout-maximise"),
             ];
@@ -226,7 +226,7 @@ fn a_not_normalized_track_reads_0_0_db_in_amber_and_the_reason_is_its_name() {
         vec![fp_app::ui::theme::AMBER]
     );
     assert!(
-        h.query_by_label("Bit-perfect output: tracks play unaltered.")
+        h.query_by_label_contains("No automatic gain: bit-perfect output plays tracks unaltered")
             .is_some()
     );
     assert!(h.query_by_label("Not normalized").is_none());
@@ -258,7 +258,7 @@ fn the_gain_badge_keeps_its_width_whatever_the_gain() {
         h.query_by_label_contains(label).unwrap().rect().width()
     };
     let a = width(&applied, "+4.0 dB");
-    let b = width(&unmeasured, "Loudness not measured");
+    let b = width(&unmeasured, "Loudness: not measured");
     assert!((a - b).abs() < 0.5, "{a} vs {b}");
 }
 
@@ -383,4 +383,14 @@ fn ten_players_keep_the_header_clear_at_the_least_width() {
     let rects = header_rects_of(&h, &t, "P10");
     assert!(rects.iter().any(|(n, r)| n == "P10" && r.is_some()));
     assert_no_overlap(&rects, "ten players");
+}
+
+/// The bit-perfect gain badge's tooltip for an unmeasured track: the lines
+/// of the loudness editor, joined as the badge joins them.
+fn bp_tip(t: &fp_app::i18n::I18n) -> String {
+    format!(
+        "{} {}",
+        t.tr("track-loudness-unmeasured"),
+        t.tr("loudness-no-gain-bit-perfect")
+    )
 }
