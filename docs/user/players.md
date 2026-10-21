@@ -101,7 +101,9 @@ the same two are in the menu of a right click on the header's background
   −10, −12, −15, −20, −25, −30, −40, −50 and −∞ dB, with the level written on their right.
   - Drag it: the fader moves by as much as the pointer does, from where it
     is, so grabbing it never makes it jump; a click without moving changes
-    nothing.
+    nothing. Pulling past the top or bottom and back leaves the knob at the
+    end until the pointer returns to where it reached it, so the knob never
+    ends up away from the pointer.
   - Use the mouse wheel: one step per notch (about 0.6 dB near 0 dB).
   - Hold **Ctrl** or **Shift** while dragging or using the wheel to move it
     ten times finer.
