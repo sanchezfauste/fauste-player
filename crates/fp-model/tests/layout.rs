@@ -669,3 +669,77 @@ fn rl19_a_layout_that_is_not_an_object_loads_as_the_default() {
         assert_eq!(doc.layout, Layout::default(), "{json}");
     }
 }
+
+#[test]
+fn rl19_settle_rescales_huge_or_tiny_shares_and_a_drag_still_works() {
+    let mut s = fixture(0);
+    let ids = s.player_ids();
+    let layout = Layout {
+        player_shares: vec![(ids[0], f32::MAX), (ids[1], f32::MAX)],
+        ..Layout::default()
+    };
+    let mut settled = layout.clone();
+    let notes = settle_layout(&mut settled, &ids);
+    assert!(notes.iter().any(|n| n.starts_with("layout:")), "{notes:?}");
+    assert!(
+        settle_layout(&mut settled, &ids).is_empty(),
+        "settling twice changes nothing"
+    );
+    s.layout = settled;
+    apply(
+        &mut s,
+        Command::SetPlayerShares {
+            left: (ids[0], 1.5),
+            right: (ids[1], 0.5),
+        },
+    )
+    .unwrap();
+
+    let mut tiny = Layout {
+        player_shares: vec![(ids[0], 1e-45), (ids[1], 3e-45)],
+        ..Layout::default()
+    };
+    assert!(!settle_layout(&mut tiny, &ids).is_empty());
+    assert!(settle_layout(&mut tiny, &ids).is_empty());
+    let (a, b) = (tiny.player_shares[0].1, tiny.player_shares[1].1);
+    assert!(close(a + b, 2.0) && close(b / a, 2.0), "{a} {b}");
+}
+
+#[test]
+fn rl3_player_count_changes_while_locked() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    apply(
+        &mut s,
+        Command::SetPlayerShares {
+            left: (p[2], 1.5),
+            right: (p[3], 0.5),
+        },
+    )
+    .unwrap();
+    hide(&mut s, Panel::Player(p[3]), true).unwrap();
+    s.layout.locked = true;
+    apply(&mut s, Command::SetPlayerCount(3)).unwrap();
+    assert!(s.layout.hidden_players.is_empty());
+    assert!(
+        s.layout
+            .player_shares
+            .iter()
+            .all(|(id, _)| p[..3].contains(id))
+    );
+    apply(&mut s, Command::SetPlayerCount(5)).unwrap();
+    let now = s.player_ids();
+    assert!(s.layout.shown_players(&now).contains(&now[4]));
+    let mut config = s.config.clone();
+    config.limits.max_players = 2;
+    apply(&mut s, Command::UpdateConfig(Box::new(config))).unwrap();
+    let now = s.player_ids();
+    assert_eq!(now, p[..2].to_vec());
+    assert!(
+        s.layout
+            .player_shares
+            .iter()
+            .all(|(id, _)| now.contains(id))
+    );
+    assert!(s.layout.locked);
+}

@@ -237,6 +237,11 @@ fn usable_share(share: f32) -> bool {
     share.is_finite() && share > 0.0
 }
 
+/// Shares above this make a drag overflow `f32`: settle rescales them.
+const SHARE_MAX: f32 = 1e6;
+/// Shares below this can underflow to 0 in a drag: settle rescales them.
+const SHARE_MIN: f32 = 1e-6;
+
 /// Every player of `players` with its RL2 share, in display order.
 fn resolved_shares(layout: &Layout, players: &[PlayerId]) -> Vec<(PlayerId, f32)> {
     players
@@ -344,10 +349,49 @@ pub(crate) fn reset_layout(state: &mut AppState) -> Result<(), ModelError> {
     Ok(())
 }
 
+/// Rescales the kept shares to a mean of 1 when they are extreme (maths in
+/// `f64`), then drops those that fall below [`SHARE_MIN`] anyway.
+fn rescale_extreme_shares(layout: &mut Layout, notes: &mut Vec<String>) {
+    let (min, max) = layout
+        .player_shares
+        .iter()
+        .fold((f32::MAX, 0.0_f32), |(lo, hi), (_, s)| {
+            (lo.min(*s), hi.max(*s))
+        });
+    if layout.player_shares.is_empty() || (max <= SHARE_MAX && min >= SHARE_MIN) {
+        return;
+    }
+    let count = layout.player_shares.len() as f64;
+    let mean = layout
+        .player_shares
+        .iter()
+        .map(|(_, s)| f64::from(*s))
+        .sum::<f64>()
+        / count;
+    for (_, share) in &mut layout.player_shares {
+        *share = (f64::from(*share) / mean) as f32;
+    }
+    notes.push("layout: the players' shares were extreme; they were rescaled".to_owned());
+    layout.player_shares.retain(|(id, share)| {
+        let keep = usable_share(*share) && *share >= SHARE_MIN;
+        if !keep {
+            notes.push(format!(
+                "layout: the share of player {} became negligible after the rescale; it was dropped",
+                id.0
+            ));
+        }
+        keep
+    });
+}
+
 /// RL3 and RL19's repairs, for `players` (`AppState::player_ids`): drops
 /// the shares and hidden flags of players that are not in `players`, a
-/// second share or flag of the same player (the first wins) and shares
-/// that are not finite and above 0; shows every panel when none is shown;
+/// second share or flag of the same player (for shares, the first valid
+/// one wins: an unusable first share does not hide a usable second one)
+/// and shares that are not finite and above 0; rescales all shares to a
+/// mean of 1 when the largest is above [`SHARE_MAX`] or the smallest below
+/// [`SHARE_MIN`] (ratios kept, so a drag cannot overflow or underflow),
+/// dropping the ones that are still below [`SHARE_MIN`]; shows every panel when none is shown;
 /// fits the cartwall's size to its dock (`CartwallLayout::share`).
 /// Returns one note per repair, for the load warnings. Idempotent.
 pub fn settle_layout(layout: &mut Layout, players: &[PlayerId]) -> Vec<String> {
@@ -368,7 +412,7 @@ pub fn settle_layout(layout: &mut Layout, players: &[PlayerId]) -> Vec<String> {
             false
         } else if !usable_share(*share) {
             notes.push(format!(
-                "layout: the share {share} of player {} is not above 0; it was dropped",
+                "layout: the share {share} of player {} is not a positive finite number; it was dropped",
                 id.0
             ));
             false
@@ -380,6 +424,7 @@ pub fn settle_layout(layout: &mut Layout, players: &[PlayerId]) -> Vec<String> {
         }
         keep
     });
+    rescale_extreme_shares(layout, &mut notes);
     let mut seen = Vec::new();
     layout.hidden_players.retain(|id| {
         let keep = if !players.contains(id) {
@@ -406,9 +451,14 @@ pub fn settle_layout(layout: &mut Layout, players: &[PlayerId]) -> Vec<String> {
     }
     let fitted = layout.cartwall.share();
     if fitted.map(f32::to_bits) != layout.cartwall.size.map(f32::to_bits) {
+        let show = |size: Option<f32>| match size {
+            Some(size) => size.to_string(),
+            None => "fit the content".to_owned(),
+        };
         notes.push(format!(
-            "layout: the cartwall's size {:?} does not fit its dock; it is now {fitted:?}",
-            layout.cartwall.size
+            "layout: the cartwall's size ({}) does not fit its dock; it is now {}",
+            show(layout.cartwall.size),
+            show(fitted)
         ));
         layout.cartwall.size = fitted;
     }
