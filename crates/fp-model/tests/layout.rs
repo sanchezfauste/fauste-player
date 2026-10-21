@@ -4,9 +4,10 @@
 
 mod common;
 
-use common::fixture;
+use common::{fixture, p0};
 use fp_model::{
-    AppState, CartwallLayout, Command, Config, Dock, Layout, ModelError, Panel, PlayerId, apply,
+    AppState, CartwallLayout, Command, Config, DEFAULT_SIDE_SHARE, Dock, Layout,
+    MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE, ModelError, Panel, PlayerId, Transport, apply,
 };
 
 fn close(a: f32, b: f32) -> bool {
@@ -244,4 +245,210 @@ fn rl5_equal_widths_gives_every_player_the_same_share() {
     assert!(all_close(&shares(&s), &[1.0; 4]));
     assert!(all_close(&fractions(&s), &[1.0 / 3.0; 3]));
     assert_eq!(s.layout.hidden_players, vec![p[2]], "it shows nothing");
+}
+
+fn hide(s: &mut AppState, panel: Panel, hidden: bool) -> Result<(), ModelError> {
+    apply(s, Command::SetPanelHidden { panel, hidden }).map(|_| ())
+}
+
+#[test]
+fn rl6_a_side_dock_gets_the_default_share_and_the_bottom_fits_the_content() {
+    let mut s = fixture(0);
+    apply(&mut s, Command::SetCartwallDock(Dock::Left)).unwrap();
+    assert_eq!(s.layout.cartwall.dock, Dock::Left);
+    assert_eq!(s.layout.cartwall.size, Some(DEFAULT_SIDE_SHARE));
+    apply(&mut s, Command::SetCartwallSize(Some(0.5))).unwrap();
+    apply(&mut s, Command::SetCartwallDock(Dock::Right)).unwrap();
+    assert_eq!(
+        s.layout.cartwall.size,
+        Some(DEFAULT_SIDE_SHARE),
+        "a dock change resets the size"
+    );
+    apply(&mut s, Command::SetCartwallDock(Dock::Bottom)).unwrap();
+    assert_eq!(s.layout.cartwall.size, None);
+}
+
+#[test]
+fn rl6_docking_where_it_already_is_keeps_the_size() {
+    let mut s = fixture(0);
+    apply(&mut s, Command::SetCartwallSize(Some(0.4))).unwrap();
+    apply(&mut s, Command::SetCartwallDock(Dock::Bottom)).unwrap();
+    assert_eq!(s.layout.cartwall.size, Some(0.4));
+}
+
+#[test]
+fn rl6_the_size_is_clamped() {
+    let mut s = fixture(0);
+    apply(&mut s, Command::SetCartwallSize(Some(0.0))).unwrap();
+    assert_eq!(s.layout.cartwall.size, Some(MIN_CARTWALL_SHARE));
+    apply(&mut s, Command::SetCartwallSize(Some(2.0))).unwrap();
+    assert_eq!(s.layout.cartwall.size, Some(MAX_CARTWALL_SHARE));
+    apply(&mut s, Command::SetCartwallSize(None)).unwrap();
+    assert_eq!(
+        s.layout.cartwall.size, None,
+        "fit the content at the bottom"
+    );
+    apply(&mut s, Command::SetCartwallDock(Dock::Left)).unwrap();
+    apply(&mut s, Command::SetCartwallSize(None)).unwrap();
+    assert_eq!(
+        s.layout.cartwall.size,
+        Some(DEFAULT_SIDE_SHARE),
+        "a side has no content size"
+    );
+    let before = s.clone();
+    for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let err = apply(&mut s, Command::SetCartwallSize(Some(bad))).unwrap_err();
+        assert_eq!(err, ModelError::BadLayout);
+        assert_eq!(s, before);
+    }
+}
+
+#[test]
+fn rl6_the_cartwall_share_is_usable_on_every_dock() {
+    let at = |dock, size| {
+        CartwallLayout {
+            dock,
+            size,
+            hidden: false,
+        }
+        .share()
+    };
+    assert_eq!(at(Dock::Bottom, None), None);
+    assert_eq!(at(Dock::Bottom, Some(0.4)), Some(0.4));
+    assert_eq!(at(Dock::Bottom, Some(f32::NAN)), None);
+    assert_eq!(at(Dock::Left, None), Some(DEFAULT_SIDE_SHARE));
+    assert_eq!(at(Dock::Right, Some(5.0)), Some(MAX_CARTWALL_SHARE));
+    assert_eq!(at(Dock::Left, Some(-1.0)), Some(MIN_CARTWALL_SHARE));
+}
+
+#[test]
+fn rl7_hiding_and_showing_a_panel() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    hide(&mut s, Panel::Player(p[1]), true).unwrap();
+    hide(&mut s, Panel::Player(p[1]), true).unwrap();
+    assert_eq!(
+        s.layout.hidden_players,
+        vec![p[1]],
+        "hiding twice is hiding once"
+    );
+    hide(&mut s, Panel::Cartwall, true).unwrap();
+    assert!(s.layout.cartwall.hidden);
+    hide(&mut s, Panel::Player(p[1]), false).unwrap();
+    hide(&mut s, Panel::Cartwall, false).unwrap();
+    assert_eq!(s.layout, Layout::default());
+}
+
+#[test]
+fn rl7_the_last_shown_panel_cannot_be_hidden() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    for panel in [
+        Panel::Cartwall,
+        Panel::Player(p[0]),
+        Panel::Player(p[1]),
+        Panel::Player(p[2]),
+    ] {
+        hide(&mut s, panel, true).unwrap();
+    }
+    let before = s.clone();
+    assert_eq!(
+        hide(&mut s, Panel::Player(p[3]), true).unwrap_err(),
+        ModelError::LastPanel
+    );
+    assert_eq!(s, before);
+    hide(&mut s, Panel::Cartwall, false).unwrap();
+    hide(&mut s, Panel::Player(p[3]), true).unwrap();
+}
+
+#[test]
+fn rl7_hiding_a_player_that_does_not_exist_is_refused() {
+    let mut s = fixture(0);
+    let stranger = PlayerId(999_999);
+    assert_eq!(
+        hide(&mut s, Panel::Player(stranger), true).unwrap_err(),
+        ModelError::UnknownPlayer(stranger)
+    );
+}
+
+#[test]
+fn rl7_a_hidden_player_keeps_playing() {
+    let mut s = fixture(3);
+    let p = p0(&s);
+    apply(&mut s, Command::Play(p)).unwrap();
+    let actions = apply(
+        &mut s,
+        Command::SetPanelHidden {
+            panel: Panel::Player(p),
+            hidden: true,
+        },
+    )
+    .unwrap();
+    assert!(actions.is_empty(), "{actions:?}");
+    assert_eq!(s.player(p).unwrap().transport, Transport::Playing);
+    let actions = apply(&mut s, Command::Stop(p)).unwrap();
+    assert!(!actions.is_empty(), "commands still reach a hidden player");
+    assert_eq!(s.player(p).unwrap().transport, Transport::Stopped);
+}
+
+#[test]
+fn rl7_collapsing_the_cartwall_works_while_locked() {
+    let mut s = fixture(0);
+    apply(&mut s, Command::SetLayoutLocked(true)).unwrap();
+    apply(&mut s, Command::SetCartwallOpen(false)).unwrap();
+    assert!(!s.cartwall.open);
+}
+
+#[test]
+fn rl9_a_locked_layout_rejects_every_layout_command() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    apply(&mut s, Command::SetLayoutLocked(true)).unwrap();
+    assert!(s.layout.locked);
+    let before = s.clone();
+    for command in [
+        Command::SetPlayerShares {
+            left: (p[0], 1.5),
+            right: (p[1], 0.5),
+        },
+        Command::SetPlayerShares {
+            left: (PlayerId(999_999), 1.0),
+            right: (p[1], 1.0),
+        },
+        Command::EqualPlayerWidths,
+        Command::SetCartwallDock(Dock::Left),
+        Command::SetCartwallSize(Some(0.4)),
+        Command::SetPanelHidden {
+            panel: Panel::Cartwall,
+            hidden: true,
+        },
+        Command::ResetLayout,
+    ] {
+        let err = apply(&mut s, command.clone()).unwrap_err();
+        assert_eq!(err, ModelError::LayoutLocked, "{command:?}");
+        assert_eq!(s, before);
+    }
+    apply(&mut s, Command::SetLayoutLocked(true)).unwrap();
+    apply(&mut s, Command::SetLayoutLocked(false)).unwrap();
+    apply(&mut s, Command::SetCartwallDock(Dock::Left)).unwrap();
+}
+
+#[test]
+fn rl10_reset_gives_the_default_layout() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    apply(
+        &mut s,
+        Command::SetPlayerShares {
+            left: (p[0], 1.5),
+            right: (p[1], 0.5),
+        },
+    )
+    .unwrap();
+    hide(&mut s, Panel::Player(p[2]), true).unwrap();
+    apply(&mut s, Command::SetCartwallDock(Dock::Right)).unwrap();
+    hide(&mut s, Panel::Cartwall, true).unwrap();
+    apply(&mut s, Command::ResetLayout).unwrap();
+    assert_eq!(s.layout, Layout::default());
+    assert!(!s.layout.locked);
 }

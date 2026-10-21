@@ -187,6 +187,13 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             crate::layout::set_player_shares(state, left, right)?
         }
         Command::EqualPlayerWidths => crate::layout::equal_player_widths(state)?,
+        Command::SetCartwallDock(dock) => crate::layout::set_cartwall_dock(state, dock)?,
+        Command::SetCartwallSize(size) => crate::layout::set_cartwall_size(state, size)?,
+        Command::SetPanelHidden { panel, hidden } => {
+            crate::layout::set_panel_hidden(state, panel, hidden)?
+        }
+        Command::SetLayoutLocked(locked) => state.layout.locked = locked,
+        Command::ResetLayout => crate::layout::reset_layout(state)?,
         Command::ApplyAnalysis { track, analysis } => {
             // Analysis may finish after the track was removed: nothing to do.
             if let Some(t) = state.library.get_mut(track) {

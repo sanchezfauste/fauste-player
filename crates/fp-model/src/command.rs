@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::cartwall::{CartEdit, CartFileChange, CartPageImport};
 use crate::config::{Config, OutputDevice, Route};
 use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
+use crate::layout::{Dock, Panel};
 use crate::live::{DeviceSettings, Holder, Target, Wanted};
 use crate::player::{ColumnWidths, PlayMode};
 use crate::shortcuts::{KeyChord, ShortcutAction};
@@ -75,6 +76,23 @@ pub enum Command {
     },
     /// RL5: every player gets the same share.
     EqualPlayerWidths,
+    /// RL6: moves the cartwall. A new dock resets its size: fit the content
+    /// at the bottom, the default side share on a side. The same dock
+    /// changes nothing.
+    SetCartwallDock(Dock),
+    /// RL6: the cartwall's share of the middle area, clamped to
+    /// `MIN_CARTWALL_SHARE ..= MAX_CARTWALL_SHARE`; `None` fits the content
+    /// at the bottom and is the default share on a side.
+    SetCartwallSize(Option<f32>),
+    /// RL7: hides or shows a panel. Never touches playback.
+    SetPanelHidden {
+        panel: Panel,
+        hidden: bool,
+    },
+    /// RL9: while locked, every other layout command is refused.
+    SetLayoutLocked(bool),
+    /// RL10: back to the default layout (unlocked only).
+    ResetLayout,
     /// Stores an analysis result for a track (ignored if the track is gone).
     ApplyAnalysis {
         track: TrackId,

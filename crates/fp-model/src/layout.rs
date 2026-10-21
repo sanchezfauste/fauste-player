@@ -242,3 +242,58 @@ pub(crate) fn equal_player_widths(state: &mut AppState) -> Result<(), ModelError
     state.layout.player_shares = state.players.iter().map(|p| (p.id, 1.0)).collect();
     Ok(())
 }
+
+/// RL6: a new dock resets the size.
+pub(crate) fn set_cartwall_dock(state: &mut AppState, dock: Dock) -> Result<(), ModelError> {
+    unlocked(state)?;
+    let cartwall = &mut state.layout.cartwall;
+    if cartwall.dock != dock {
+        cartwall.dock = dock;
+        cartwall.size = dock.is_side().then_some(DEFAULT_SIDE_SHARE);
+    }
+    Ok(())
+}
+
+/// RL6: the size, clamped; `None` is the default share on a side.
+pub(crate) fn set_cartwall_size(state: &mut AppState, size: Option<f32>) -> Result<(), ModelError> {
+    unlocked(state)?;
+    if size.is_some_and(|s| !s.is_finite()) {
+        return Err(ModelError::BadLayout);
+    }
+    let cartwall = &mut state.layout.cartwall;
+    cartwall.size = CartwallLayout { size, ..*cartwall }.share();
+    Ok(())
+}
+
+/// RL7: hides or shows `panel`; the last shown panel stays.
+pub(crate) fn set_panel_hidden(
+    state: &mut AppState,
+    panel: Panel,
+    hidden: bool,
+) -> Result<(), ModelError> {
+    unlocked(state)?;
+    if let Panel::Player(id) = panel {
+        state.player(id)?;
+    }
+    let players = state.player_ids();
+    let layout = &mut state.layout;
+    if layout.is_hidden(panel) == hidden {
+        return Ok(());
+    }
+    if hidden && layout.is_last_shown(&players, panel) {
+        return Err(ModelError::LastPanel);
+    }
+    match panel {
+        Panel::Player(id) if hidden => layout.hidden_players.push(id),
+        Panel::Player(id) => layout.hidden_players.retain(|p| *p != id),
+        Panel::Cartwall => layout.cartwall.hidden = hidden,
+    }
+    Ok(())
+}
+
+/// RL10: the default layout, unlocked.
+pub(crate) fn reset_layout(state: &mut AppState) -> Result<(), ModelError> {
+    unlocked(state)?;
+    state.layout = Layout::default();
+    Ok(())
+}
