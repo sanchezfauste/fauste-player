@@ -671,3 +671,4 @@ layout-reset = Reimposta il layout
 layout-maximise = Ingrandisci
 layout-restore = Ripristina
 layout-hide = Nascondi
+notice-drop-no-player = Nessun lettore è visibile: mostrane uno per rilasciarvi i file.

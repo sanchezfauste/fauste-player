@@ -358,7 +358,9 @@ fn layout_menu(ui: &mut Ui, scene: &Scene<'_>) {
 }
 
 /// Brings the view state in line with the model before the frame's input
-/// is handled: a maximised panel ends when the arrangement changed (RL16).
+/// is handled: a maximised panel ends when the arrangement changed (RL16);
+/// a hidden player keeps no selection and is not the last player used, so
+/// Delete cannot remove an entry the operator cannot see (RL17).
 pub(crate) fn settle_view(view_state: &mut ViewState, state: &AppState) {
     if view_state
         .maximised
@@ -366,6 +368,16 @@ pub(crate) fn settle_view(view_state: &mut ViewState, state: &AppState) {
         .is_some_and(|m| !m.holds(state))
     {
         view_state.maximised = None;
+    }
+    let hidden = &state.layout.hidden_players;
+    view_state
+        .selection
+        .retain(|player, _| !hidden.contains(player));
+    if view_state
+        .active_player
+        .is_some_and(|player| hidden.contains(&player))
+    {
+        view_state.active_player = None;
     }
 }
 

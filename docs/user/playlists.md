@@ -212,7 +212,10 @@ shortcut acts, and files dropped on the application window are ignored.
 - Drop files or folders from the file manager onto a list to insert them at
   the drop position. Over the header, a column edge, the scroll bar or a
   window that covers the list nothing is inserted. If the system does not
-  report the position, they go to the end of the list shown.
+  report the position, they go to the end of the list shown by the last
+  player you used, or by the first shown player; with every player hidden
+  nothing is inserted and the status bar says so (see
+  [Layout](layout.md#show-and-hide-panels)).
   On Linux, dropping files needs the window to run on X11, which it does by
   default, also on a Wayland desktop (see
   [Troubleshooting](troubleshooting.md#files-cannot-be-dropped-on-linux)).

@@ -671,3 +671,4 @@ layout-reset = Reset layout
 layout-maximise = Maximise
 layout-restore = Restore
 layout-hide = Hide
+notice-drop-no-player = No player is shown: show one to drop files on it.

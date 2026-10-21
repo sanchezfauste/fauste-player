@@ -18,6 +18,11 @@ and its number key, MIDI, the remote API, its CUE window and automation
 still control it. While a hidden panel is on air its tile shows a red dot:
 a player that is playing or paused, or the cartwall while a cart plays.
 
+Hiding a player clears its selected track, so **Delete** cannot remove a
+track you cannot see. Files dropped on the window away from a list go to
+the last player you used, or to the first shown player; with every player
+hidden they are refused, and the status bar says so.
+
 At least one panel stays shown: the last lit tile cannot be clicked.
 While the cartwall is hidden, the shortcut that collapses or expands it
 does nothing; click **Carts** to show it.

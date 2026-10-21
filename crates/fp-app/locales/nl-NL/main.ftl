@@ -671,3 +671,4 @@ layout-reset = Indeling terugzetten
 layout-maximise = Maximaliseren
 layout-restore = Herstellen
 layout-hide = Verbergen
+notice-drop-no-player = Er is geen speler zichtbaar: toon er een om er bestanden op neer te zetten.

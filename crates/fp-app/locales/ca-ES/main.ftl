@@ -671,3 +671,4 @@ layout-reset = Restablir la disposició
 layout-maximise = Maximitzar
 layout-restore = Restaurar
 layout-hide = Amagar
+notice-drop-no-player = No es veu cap reproductor: mostra'n un per deixar-hi anar fitxers.

@@ -671,3 +671,4 @@ layout-reset = Layout zurücksetzen
 layout-maximise = Maximieren
 layout-restore = Wiederherstellen
 layout-hide = Ausblenden
+notice-drop-no-player = Kein Player ist sichtbar: einen einblenden, um Dateien darauf abzulegen.

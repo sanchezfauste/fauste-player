@@ -671,3 +671,4 @@ layout-reset = Berrezarri diseinua
 layout-maximise = Maximizatu
 layout-restore = Leheneratu
 layout-hide = Ezkutatu
+notice-drop-no-player = Ez da erreproduzitzailerik ikusten: erakutsi bat fitxategiak bertan jaregiteko.

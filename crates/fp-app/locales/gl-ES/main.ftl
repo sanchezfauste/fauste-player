@@ -671,3 +671,4 @@ layout-reset = Restablecer a disposición
 layout-maximise = Maximizar
 layout-restore = Restaurar
 layout-hide = Ocultar
+notice-drop-no-player = Non se ve ningún reprodutor: mostra un para soltar ficheiros nel.

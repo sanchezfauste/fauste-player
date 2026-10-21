@@ -671,3 +671,4 @@ layout-reset = Repor a disposição
 layout-maximise = Maximizar
 layout-restore = Restaurar
 layout-hide = Ocultar
+notice-drop-no-player = Nenhum leitor está visível: mostre um para largar ficheiros nele.

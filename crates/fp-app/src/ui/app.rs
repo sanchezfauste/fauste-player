@@ -1495,13 +1495,16 @@ impl AppUi {
         }
         // Pointer positions are not reported during an OS drag on every
         // platform: without one, the files go to the end of the list shown
-        // by the last player used (or the first player).
+        // by the last player used, or else by the first shown player
+        // (resizable layout spec RL18).
+        let shown = state.layout.shown_players(&state.player_ids());
         let fallback = || {
-            let player = self
+            let id = self
                 .view
                 .active_player
-                .and_then(|id| state.player(id).ok())
-                .or_else(|| state.players.first())?;
+                .filter(|p| shown.contains(p))
+                .or_else(|| shown.first().copied())?;
+            let player = state.player(id).ok()?;
             let list = state.playlists.get(player.playlist)?;
             Some(DropTarget {
                 player: player.id,
@@ -1510,6 +1513,11 @@ impl AppUi {
             })
         };
         let Some(target) = self.view.file_drop.or_else(fallback) else {
+            if shown.is_empty() {
+                // RL18: no player is shown to take the files.
+                let until = ctx.input(|i| i.time) + NOTICE_SECS;
+                self.view.notice = Some((self.i18n.tr("notice-drop-no-player"), until));
+            }
             return;
         };
         // Reading folders can be slow (network shares, sleeping disks): it

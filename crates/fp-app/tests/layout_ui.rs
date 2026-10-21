@@ -792,3 +792,130 @@ fn rl16_with_one_panel_shown_maximise_is_disabled() {
     assert!(disabled(&h, "Maximise"));
     assert!(disabled(&h, "Hide"), "the last shown panel");
 }
+
+// --- hidden players (RL17, RL18)
+
+#[derive(Debug)]
+struct Dropped(std::path::PathBuf);
+
+impl egui::DroppedFile for Dropped {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
+}
+
+/// Drops `path` with no pointer position, as some systems do.
+fn drop_file(h: &mut Harness<'static, AppUi>, path: &std::path::Path) {
+    h.remove_cursor();
+    h.step();
+    h.input_mut()
+        .dropped_files
+        .push(std::sync::Arc::new(Dropped(path.to_path_buf())));
+    // Dropped paths are read on a helper thread: give it time to answer.
+    for _ in 0..40 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+/// Clicks the table row `title` in `player`'s column.
+fn click_row(h: &mut Harness<'_, AppUi>, player: PlayerId, title: &str) {
+    let col = column(h, player);
+    h.get_all_by_label(title)
+        .find(|n| {
+            let r = n.rect();
+            col.contains(r.center()) && r.center().y > col.top() + 300.0
+        })
+        .expect("the row is shown")
+        .click();
+    h.run_steps(2);
+}
+
+fn removals(fake: &Fake) -> usize {
+    fake.take_sent()
+        .iter()
+        .filter(|c| matches!(c, Command::RemoveEntry(_)))
+        .count()
+}
+
+#[test]
+fn rl17_hiding_a_player_clears_its_selection() {
+    let (mut h, fake) = harness(state(2, 3));
+    let (p1, p2) = (fake.player(0), fake.player(1));
+    click_row(&mut h, p2, "Song 2");
+    h.get_by_label("Hide P2").click();
+    h.run_steps(2);
+    h.key_press(Key::Delete);
+    h.run_steps(2);
+    assert_eq!(
+        removals(&fake),
+        0,
+        "Delete removes nothing the operator cannot see"
+    );
+    h.get_by_label("Show P2").click();
+    h.run_steps(2);
+    h.key_press(Key::Delete);
+    h.run_steps(2);
+    assert_eq!(removals(&fake), 0, "shown again, it has no selection");
+    // Control: a shown player's selection still works.
+    click_row(&mut h, p1, "Song 3");
+    h.key_press(Key::Delete);
+    h.run_steps(2);
+    assert_eq!(removals(&fake), 1);
+}
+
+#[test]
+fn rl18_a_drop_goes_to_the_first_shown_player_when_the_last_used_is_hidden() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("new.wav");
+    std::fs::write(&file, b"x").unwrap();
+    let mut s = state(2, 3);
+    let p = s.player_ids();
+    fp_model::apply(
+        &mut s,
+        Command::CreatePlaylistIn {
+            name: "Second".into(),
+            player: p[1],
+        },
+    )
+    .unwrap();
+    let second = s.player(p[1]).unwrap().playlist;
+    let (mut h, fake) = harness(s);
+    click_row(&mut h, p[0], "Song 2");
+    h.get_by_label("Hide P1").click();
+    h.run_steps(2);
+    fake.take_sent();
+    drop_file(&mut h, &file);
+    let sent = fake.take_sent();
+    assert!(
+        sent.iter().any(|c| matches!(
+            c,
+            Command::InsertPaths { playlist, index: 0, .. } if *playlist == second
+        )),
+        "{sent:?}"
+    );
+}
+
+#[test]
+fn rl18_with_no_player_shown_a_drop_is_refused_with_a_notice() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("new.wav");
+    std::fs::write(&file, b"x").unwrap();
+    let mut s = state(2, 3);
+    s.layout.hidden_players = s.player_ids();
+    let (mut h, fake) = harness(s);
+    drop_file(&mut h, &file);
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::InsertPaths { .. }))
+    );
+    assert!(
+        h.query_by_label("No player is shown: show one to drop files on it.")
+            .is_some()
+    );
+}

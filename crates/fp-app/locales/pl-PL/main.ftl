@@ -685,3 +685,4 @@ layout-reset = Resetuj układ
 layout-maximise = Maksymalizuj
 layout-restore = Przywróć
 layout-hide = Ukryj
+notice-drop-no-player = Żaden odtwarzacz nie jest widoczny: pokaż jeden, aby upuścić na niego pliki.

@@ -111,6 +111,14 @@ second time, `normal`, while a panel is maximised). The headers' background
 tiles keep their clicks) opens `panels::header_menu`: Maximise or Restore,
 and Hide; both disabled while locked, Maximise also with one panel shown.
 
+**Hidden players** (RL17, RL18). `panels::settle_view` also drops the
+`ViewState::selection` of every hidden player and clears `active_player`
+when it is hidden, before `AppUi::keyboard` runs, so Delete never removes
+an entry the operator cannot see, whatever hid the player. `file_drops`'s
+fallback (no pointer position) is the last player used if shown, else the
+first shown player; with none shown the audio files are refused with
+`notice-drop-no-player` (playlist files are still imported).
+
 ## Data flow
 
 Each frame, `AppUi::ui`:

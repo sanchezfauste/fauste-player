@@ -671,3 +671,4 @@ layout-reset = Restablecer la distribución
 layout-maximise = Maximizar
 layout-restore = Restaurar
 layout-hide = Ocultar
+notice-drop-no-player = No se ve ningún player: muestra uno para soltar archivos en él.

@@ -671,3 +671,4 @@ layout-reset = Réinitialiser la disposition
 layout-maximise = Agrandir
 layout-restore = Restaurer
 layout-hide = Masquer
+notice-drop-no-player = Aucun lecteur n'est affiché : affichez-en un pour y déposer des fichiers.
