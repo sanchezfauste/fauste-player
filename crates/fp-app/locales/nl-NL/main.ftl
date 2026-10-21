@@ -98,6 +98,7 @@ legend-on-air = On air
 legend-next = Volgende
 legend-intro = Intro
 legend-mix = Mix
+legend-outro = Outro
 alert-device-lost = Uitgang kwijt: { $device } (de tijdlijn loopt door)
 alert-underruns = { $player }: audio-onderbrekingen ({ $count })
 alert-xruns = { $device }: onderbrekingen van het audioapparaat ({ $count })

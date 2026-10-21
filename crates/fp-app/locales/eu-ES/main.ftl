@@ -98,6 +98,7 @@ legend-on-air = Airean
 legend-next = Hurrengoa
 legend-intro = Intro
 legend-mix = Nahasketa
+legend-outro = Outro
 alert-device-lost = Irteera galdu da: { $device } (denbora-lerroak aurrera jarraitzen du)
 alert-underruns = { $player }: audio-etenak ({ $count })
 alert-xruns = { $device }: audio-gailuaren etenak ({ $count })

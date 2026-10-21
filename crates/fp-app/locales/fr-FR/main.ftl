@@ -98,6 +98,7 @@ legend-on-air = À l'antenne
 legend-next = Suivante
 legend-intro = Intro
 legend-mix = Mix
+legend-outro = Outro
 alert-device-lost = Sortie perdue : { $device } (le temps continue de s'écouler)
 alert-underruns = { $player } : coupures audio ({ $count })
 alert-xruns = { $device } : coupures du périphérique audio ({ $count })

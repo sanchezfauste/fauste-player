@@ -98,6 +98,7 @@ legend-on-air = On air
 legend-next = Next
 legend-intro = Intro
 legend-mix = Mix
+legend-outro = Outro
 alert-device-lost = Output lost: { $device } (the timeline keeps running)
 alert-underruns = { $player }: audio dropouts ({ $count })
 alert-xruns = { $device }: audio device dropouts ({ $count })

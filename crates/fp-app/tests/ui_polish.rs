@@ -87,6 +87,15 @@ fn the_status_bar_legend_uses_the_mix_marker_colour() {
     assert_eq!(colour, mix_marker_color(true));
 }
 
+#[test]
+fn the_status_bar_legend_names_the_outro() {
+    let legend = status_legend();
+    assert!(
+        legend.contains(&(theme::OUTRO_LINE, "legend-outro")),
+        "{legend:?}"
+    );
+}
+
 /// Every leaf shape of the last frame.
 fn leaves(shapes: &[egui::epaint::ClippedShape]) -> Vec<Shape> {
     fn walk(s: &Shape, out: &mut Vec<Shape>) {
