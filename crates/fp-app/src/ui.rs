@@ -14,6 +14,7 @@ pub mod glyphs;
 pub mod icons;
 mod loudness_edit;
 mod notice;
+pub mod panel_layout;
 pub mod pending;
 mod player;
 pub mod playlist_files;
