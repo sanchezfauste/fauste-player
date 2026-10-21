@@ -130,6 +130,8 @@ for the interface's notice, if one ever reaches it.
      side, a share of the width. That size is clamped between the
      cartwall's minimum and what leaves the players their minimum
      (RL8).
+     At the bottom with `None`, the size is RL13's "fit the content",
+     exactly today's, and is not clamped further.
   2. **The players.** The shown players split the rest. Each first gets
      its minimum width; what is left over is split by share.
   3. **Too small a window.** Only when the minimums alone do not fit

@@ -25,8 +25,9 @@ use super::cue_window;
 use super::exit_guard::{self, ExitIntent};
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::notice;
+use super::panel_layout;
+use super::panels;
 use super::pending;
-use super::player;
 use super::playlist_files::{self, FileOutcome};
 use super::reset_played;
 use super::settings::{self, SettingsDeps, SettingsState};
@@ -37,7 +38,6 @@ use crate::i18n::I18n;
 use crate::services::{MediaCache, ServiceRequest};
 use crate::tags::{TagJob, TagOutcome, TagWorker};
 
-const MIN_COLUMN_WIDTH: f32 = 380.0;
 const TOP_BAR_HEIGHT: f32 = 34.0;
 const STATUS_BAR_HEIGHT: f32 = 24.0;
 const NOTICE_SECS: f64 = 5.0;
@@ -180,6 +180,11 @@ pub(crate) struct ViewState {
     pub tab_scroll: HashMap<PlayerId, TabScroll>,
     /// The name being typed in each player's "new playlist" popup.
     pub new_playlist: HashMap<PlayerId, String>,
+    /// The shown players' columns in the last frame (resizable layout spec
+    /// RL11), for tests.
+    pub(crate) player_rects: Vec<(PlayerId, Rect)>,
+    /// The cartwall's rectangle in the last frame; `None` while hidden.
+    pub(crate) cartwall_rect: Option<Rect>,
     notice: Option<(String, f64)>,
     /// Dropouts the engine counted, as the status bar alerts show them.
     dropouts: Dropouts,
@@ -561,6 +566,18 @@ impl AppUi {
         self.view.widths.get(&player).cloned()
     }
 
+    /// The shown players' column rectangles in the last frame, in display
+    /// order (resizable layout spec RL11).
+    pub fn player_rects(&self) -> Vec<(PlayerId, Rect)> {
+        self.view.player_rects.clone()
+    }
+
+    /// The cartwall's rectangle in the last frame; `None` while it is
+    /// hidden.
+    pub fn cartwall_rect(&self) -> Option<Rect> {
+        self.view.cartwall_rect
+    }
+
     pub fn ui(&mut self, ui: &mut Ui) {
         #[cfg(feature = "test-hooks")]
         if std::mem::take(&mut self.fail_next_frame) {
@@ -689,31 +706,47 @@ impl AppUi {
         top_bar(&mut top_ui, &scene, &mut self.view, &pending, &|d| {
             self.settings.device_label(d)
         });
-        // The cartwall strip takes the bottom of the middle area.
+        // The middle area (resizable layout spec RL11): the pixel pass turns
+        // the layout into the players' row and the cartwall's rectangle.
         let inner = middle.shrink(8.0);
-        let cart_height = cartwall::height(&scene).min(inner.height() * 0.6);
-        let players_rect = Rect::from_min_max(
-            inner.min,
-            egui::pos2(inner.right(), inner.bottom() - cart_height - 8.0),
-        );
-        let cart_rect = Rect::from_min_max(
-            egui::pos2(inner.left(), inner.bottom() - cart_height),
-            inner.max,
-        );
-        let mut players_ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(players_rect)
-                .layout(Layout::left_to_right(Align::Min)),
-        );
-        players_row(&mut players_ui, &scene, &mut self.view, &mut self.covers);
-        let mut cart_ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(cart_rect)
-                .id_salt("cartwall")
-                .layout(Layout::top_down(Align::Min)),
-        );
-        cart_ui.set_clip_rect(cart_rect);
-        cartwall::strip(&mut cart_ui, &scene, &mut self.view);
+        let ids = state.player_ids();
+        let sizes = cartwall::sizes(&scene);
+        let pass = |maximised: Option<fp_model::layout::Panel>| {
+            panel_layout::arrange(&panel_layout::PassInput {
+                players: &ids,
+                layout: &state.layout,
+                area: inner,
+                cartwall: sizes,
+                maximised,
+            })
+        };
+        let arranged = pass(None);
+        self.view.player_rects.clear();
+        if !arranged.widths.is_empty() {
+            let mut players_ui = ui.new_child(
+                UiBuilder::new()
+                    .max_rect(arranged.players_area)
+                    .layout(Layout::left_to_right(Align::Min)),
+            );
+            panels::players_row(
+                &mut players_ui,
+                &scene,
+                &mut self.view,
+                &mut self.covers,
+                &arranged,
+            );
+        }
+        self.view.cartwall_rect = arranged.cartwall;
+        if let Some(cart_rect) = arranged.cartwall {
+            let mut cart_ui = ui.new_child(
+                UiBuilder::new()
+                    .max_rect(cart_rect)
+                    .id_salt("cartwall")
+                    .layout(Layout::top_down(Align::Min)),
+            );
+            cart_ui.set_clip_rect(cart_rect);
+            cartwall::strip(&mut cart_ui, &scene, &mut self.view);
+        }
         let mut status_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(status)
@@ -1743,51 +1776,6 @@ fn top_bar(
             }
         }
     });
-}
-
-fn players_row(
-    ui: &mut Ui,
-    scene: &Scene<'_>,
-    view_state: &mut ViewState,
-    covers: &mut HashMap<TrackId, TextureHandle>,
-) {
-    let count = scene.state.players.len();
-    if count == 0 {
-        return;
-    }
-    let gap = 8.0;
-    let available = ui.available_width();
-    let width = ((available - gap * (count as f32 - 1.0)) / count as f32).max(MIN_COLUMN_WIDTH);
-    let overflow = width * count as f32 + gap * (count as f32 - 1.0) > available + 0.5;
-    // The horizontal scroll bar gets its own strip instead of covering the footers.
-    let bar = if overflow {
-        ui.spacing().scroll.bar_width + ui.spacing().scroll.bar_inner_margin + 2.0
-    } else {
-        0.0
-    };
-    let height = ui.available_height() - bar;
-    egui::ScrollArea::horizontal()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.horizontal_top(|ui| {
-                ui.spacing_mut().item_spacing = vec2(gap, 0.0);
-                for index in 0..count {
-                    let (rect, _) =
-                        ui.allocate_exact_size(vec2(width, height - 2.0), Sense::hover());
-                    if !ui.is_rect_visible(rect) {
-                        continue;
-                    }
-                    let mut column_ui = ui.new_child(
-                        UiBuilder::new()
-                            .max_rect(rect)
-                            .id_salt(("player", index))
-                            .layout(Layout::top_down(Align::Min)),
-                    );
-                    column_ui.set_clip_rect(rect.intersect(ui.clip_rect()));
-                    player::column(&mut column_ui, scene, view_state, covers, index);
-                }
-            });
-        });
 }
 
 /// The status bar's legend: each swatch colour and the message naming it.

@@ -18,6 +18,7 @@
 | `ui/tab_strip.rs` | The pure layout of the playlist tabs (O35; the "+" new-playlist button takes the end of the strip, so the tabs and arrows are laid out in the strip less `ADD_TAB_WIDTH`; its popup sends `Command::CreatePlaylistIn`, rule 29): `layout` (tab width, overflow, view width), `clamp_offset`, `reveal`, `step`; unit-tested. `tabs` in `player.rs` draws them clipped to the view, with arrows and the wheel; the scroll lives in `ViewState::tab_scroll` per player, and the shown tab is revealed again only when the key (shown playlist, tab count, view width) changes, so the operator's scrolling is not undone every frame |
 | `ui/table_layout.rs` | The pure widths of the table's columns: `column_min`, `fit`, `column_px`, `resize_px`, `fractions_of`, and the drop geometry of an entry drag (operator feedback 4, Q4): `drop_index` (pointer, the scroll area's visible rect, its scroll offset, `ROW_HEIGHT` and the entry count give the boundary index, or `None` over the header, a column resize grab zone, the scroll bar, outside the body), `boundary_y` (the boundary's y, `None` outside the view) and `on_column_edge`; and the edge scroll of a drag, `drag_scroll_speed` (points per second, negative up: zero outside the body and outside the edge zones, `DRAG_SCROLL_EDGE` = 36 points or a third of a shorter body, ramping linearly up to `DRAG_SCROLL_MAX_SPEED` = 900 points per second at the edge); unit-tested |
 | `ui/panel_layout.rs` | The main window's pure pixel pass (resizable layout spec RL11): RL8's interface constants (`MIN_PLAYER_WIDTH`, `MIN_PLAYER_HEIGHT`, `PANEL_GAP`, `CONTENT_HEIGHT_CAP`) and `arrange`, which turns a `PassInput` (the players, the model's layout, the middle area, the cartwall's `CartwallSizes`, the maximised panel) into an `Arrangement` (the players' row, each shown player's width, the overflow, the cartwall's rectangle); see [Main window layout](#main-window-layout); unit-tested |
+| `ui/panels.rs` | The main window's panels (resizable layout spec): `players_row` draws the shown players at the pass's widths, each column keyed by its `PlayerId`; see [Main window layout](#main-window-layout) |
 | `ui/reset_played.rs` | The Reset played question (O22): `show` returns `Some(true)`, `Some(false)` or `None`; the footer button in `player.rs` sets `ViewState::confirm_reset`, `AppUi` draws it below the close guard and sends `Command::ResetPlayed`; Esc and a deleted playlist close it; no shortcut or file drop acts under it |
 | `ui/settings.rs` | The Settings modal (its text buttons all come from `widgets::text_button`: the painted text plus `SETTINGS_BUTTON_PAD` on each side, `SETTINGS_BUTTON_HEIGHT` high; `text_button_at_least` for buttons sharing a column width) (outputs, players and language, analysis, playlists and their table columns). Players shows `settings-players-bit-perfect-note` under the fade time and automatic mix while any player is a bit-perfect player; both settings stay editable (BR15) |
 | `ui/settings/devices.rs` | Settings → Audio outputs, Advanced view: per routed device the bit-perfect switch, its own rate and buffer (`offered_rates`, `offered_buffers`) and its DSD mode with the reason a mode is missing (`dsd_not_offered`), then the DSD mix and silence; the Basic \| Advanced selector is `view_selector` in `ui/settings.rs` |
@@ -26,7 +27,7 @@
 | `ui/settings/loudness.rs` | Settings → Loudness (loudness normalization spec N22): the Normalize loudness toggle, the target, true-peak ceiling, maximum boost and maximum trim sliders (ranges of N1), the notes that changes apply to tracks loaded afterwards and that a bit-perfect output is never normalized, and the count of tracks waiting for a measurement (`SettingsDeps::unmeasured`) |
 | `ui/loudness_edit.rs` | The per-track loudness controls (N20, N21): the measurement line, the Exclude from normalization toggle and the Trim slider, each change one `Command::SetTrackLoudness`; and the Loudness… popup (`popup`, drawn by `AppUi` after the CUE windows) |
 | `ui/settings/remote.rs` | Settings → Remote: the HTTP and OSC switches, addresses, token, origins and senders, and each server's state read from the remote thread's status cell |
-| `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall strip, and its pure view model (status, countdown, progress). The bar's "Stop all (n)" button sends `Command::StopAllCarts` and shows `cartwall.playing.len()`; it is the first item of a right-to-left row so it never gives way to the tabs. Button height comes from `cart_view::button_height(available, rows)`: nominal 40 px, minimum 28 px, from the room the grid has (the 60% cap in `AppUi::ui` is unchanged); the grid scrolls only below the minimum. A button's colours come from the pure `cart_view::cart_look(color, playing)` (`CartLook`: fill, hover and pressed fills, border, remaining-time fill, kind marker, waveform), with the palette in `theme::cart_color` and the strengths in `theme::CART_*`. The waveform behind the text spans `CartView::wave_range` (the play range, idle and playing carts only), reduced with `widgets::memo_columns_in` into a memo kept in egui temp data per cart (`("cart-wave", cart id)`) and drawn by `widgets::paint_wave_columns`. The cart editor's colour row (`settings/carts.rs`, `swatch`) exposes each swatch as a selected/unselected radio button. |
+| `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall strip, and its pure view model (status, countdown, progress). The bar's "Stop all (n)" button sends `Command::StopAllCarts` and shows `cartwall.playing.len()`; it is the first item of a right-to-left row so it never gives way to the tabs. Button height comes from `cart_view::button_height(available, rows)`: nominal 40 px, minimum 28 px, from the room the grid has (the 60 % cap of a cartwall that fits its content is `panel_layout::CONTENT_HEIGHT_CAP`; `cartwall::sizes` gives the pass its content and least heights); the grid scrolls only below the minimum. A button's colours come from the pure `cart_view::cart_look(color, playing)` (`CartLook`: fill, hover and pressed fills, border, remaining-time fill, kind marker, waveform), with the palette in `theme::cart_color` and the strengths in `theme::CART_*`. The waveform behind the text spans `CartView::wave_range` (the play range, idle and playing carts only), reduced with `widgets::memo_columns_in` into a memo kept in egui temp data per cart (`("cart-wave", cart id)`) and drawn by `widgets::paint_wave_columns`. The cart editor's colour row (`settings/carts.rs`, `swatch`) exposes each swatch as a selected/unselected radio button. |
 | `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
 | `ui/shell.rs` | Panic isolation around each frame, and the close check in `Shell::logic` |
 | `ui/exit_guard.rs` | The "Audio is on air" modal: the `ExitIntent`, the list of what is sounding, and the stop commands |
@@ -38,6 +39,33 @@
 | `tags.rs` | The `fp-tags` worker: `TagJob` in, `TagOutcome` out (see below and [Analysis](analysis.md)) |
 | `ui/controller.rs` | The `Controller` trait between the UI and the rest |
 | `ui/files.rs` | Accepted audio extensions and folder expansion |
+
+## Main window layout
+
+Resizable layout spec RL8, RL11. `AppUi::ui` splits the window into the
+top bar (`TOP_BAR_HEIGHT`), the status bar and the middle area, and the
+middle area (inside an 8-point margin) goes through the pure pixel pass
+`panel_layout::arrange`. Its `PassInput` is every player id in display
+order, the model's `Layout`, the area, the cartwall's `CartwallSizes`
+(`cartwall::sizes`: its content height and its least height, the rows at
+`MIN_BUTTON_HEIGHT`) and the maximised panel; its `Arrangement` is the
+players' row, each shown player's width, whether the row overflows, and
+the cartwall's rectangle (`None` while it is hidden).
+
+- **The cartwall** (at the bottom): with `size: None` it fits its content
+  as before, at most `CONTENT_HEIGHT_CAP` (60 %) of the area; a share is
+  clamped between its least height and what leaves the players
+  `MIN_PLAYER_HEIGHT`. With no player shown it takes the whole area. The
+  side docks are laid out at the bottom for now.
+- **The players** each get `MIN_PLAYER_WIDTH` first; the spare room is
+  split by `Layout::shown_fractions`. When the minimums alone do not fit
+  (by more than half a point) every column is at its minimum and the row
+  scrolls horizontally (`panels::players_row`).
+- A column's egui id is `("player", PlayerId)`, so hiding a player never
+  hands its table's scroll or its popups to its neighbour; its label is
+  still `P<n>` from its place among all players.
+- `AppUi::player_rects` and `AppUi::cartwall_rect` give the last frame's
+  rectangles (tests).
 
 ## Data flow
 

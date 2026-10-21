@@ -6,9 +6,11 @@ use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
 use super::cart_view::{
-    BUTTON_HEIGHT, CartStatus, GAP, button_height, cart_look, cart_view, page_on_air,
+    BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, button_height, cart_look, cart_view,
+    page_on_air,
 };
 use super::glyphs::{self, TransportAction};
+use super::panel_layout::CartwallSizes;
 use super::theme;
 use super::view;
 use super::widgets::{self, TileStyle, WaveMemo, font, font_medium};
@@ -24,6 +26,26 @@ pub(crate) fn height(scene: &Scene<'_>) -> f32 {
         HEADER_HEIGHT + GAP + f32::from(rows) * BUTTON_HEIGHT + f32::from(rows - 1) * GAP
     } else {
         HEADER_HEIGHT
+    }
+}
+
+/// RL8: the least height of the cartwall at the bottom: its header, or its
+/// header and the shown page's rows at `MIN_BUTTON_HEIGHT`.
+pub(crate) fn min_height(scene: &Scene<'_>) -> f32 {
+    let wall = &scene.state.cartwall;
+    let rows = wall.shown_page().map_or(0, |p| p.rows);
+    if wall.open && rows > 0 {
+        HEADER_HEIGHT + GAP + f32::from(rows) * MIN_BUTTON_HEIGHT + f32::from(rows - 1) * GAP
+    } else {
+        HEADER_HEIGHT
+    }
+}
+
+/// The heights the pixel pass needs (RL11).
+pub(crate) fn sizes(scene: &Scene<'_>) -> CartwallSizes {
+    CartwallSizes {
+        content_height: height(scene),
+        min_height: min_height(scene),
     }
 }
 
