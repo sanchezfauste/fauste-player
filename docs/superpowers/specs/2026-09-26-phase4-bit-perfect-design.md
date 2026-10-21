@@ -86,6 +86,8 @@ Rules for a bit-perfect bus:
 
 The badge in the player header uses it. It was inactive since Phase 1.
 
+*Amendment 2026-10-21 (itr06 I13).* The badge is drawn only while the player's Main device runs bit-perfect (`bit_perfect_player`), or the telemetry still says `bit_perfect` or `dsd` (a frame of lag, or a change that waits for the device to be quiet). On any other player it would never light, so it is not shown.
+
 ## B6. Settings
 
 - **Settings → Audio outputs**, in its Advanced view (operator feedback 4, Q12), lists the devices the routes use, each with a **Bit-perfect** checkbox, its own rate and buffer, and its DSD mode.

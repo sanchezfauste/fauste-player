@@ -612,7 +612,6 @@ impl Message {
 pub enum BadgeTone {
     Normal,
     Amber,
-    Muted,
 }
 
 /// The gain badge of a player header and its tooltip lines (N18).
@@ -649,29 +648,27 @@ pub fn signed_db(db: f32) -> String {
     }
 }
 
-/// N18: the badge for the normalization of the source on air. A
-/// bit-perfect player always plays at unity gain; it says so only while
-/// normalization is on (with it off nothing is normalized anywhere).
+/// N18: the badge for the normalization of the source on air. Every source
+/// that plays unchanged reads "0.0 dB" in amber and says why only in the
+/// tooltip. A bit-perfect player always plays at unity gain; it says so only
+/// while normalization is on (with it off nothing is normalized anywhere).
 pub fn gain_badge(
     n: &fp_model::Normalization,
     config: &fp_model::LoudnessConfig,
     track: &Track,
 ) -> Option<GainBadge> {
     use fp_model::NormalizationStatus as S;
-    let not_normalized = |tone, tip: &'static str| GainBadge {
-        text: Message::new("badge-not-normalized", &[]),
-        tone,
+    let not_normalized = |tip: &'static str| GainBadge {
+        text: Message::new("badge-gain", &[("gain", signed_db(0.0))]),
+        tone: BadgeTone::Amber,
         tip: vec![Message::new(tip, &[])],
     };
     match n.status {
         S::Off | S::Silent => None,
         S::BitPerfect if !config.normalize => None,
-        S::BitPerfect => Some(not_normalized(BadgeTone::Muted, "tip-not-normalized-bp")),
-        S::NotMeasured => Some(not_normalized(BadgeTone::Amber, "tip-not-measured")),
-        S::Excluded => Some(not_normalized(
-            BadgeTone::Muted,
-            "tip-not-normalized-excluded",
-        )),
+        S::BitPerfect => Some(not_normalized("tip-not-normalized-bp")),
+        S::NotMeasured => Some(not_normalized("tip-not-measured")),
+        S::Excluded => Some(not_normalized("tip-not-normalized-excluded")),
         S::Applied { limited } => {
             // The source keeps the gain it started with (N11). When the
             // settings, the measurement or the edit now give another, the

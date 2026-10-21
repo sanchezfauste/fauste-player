@@ -162,7 +162,10 @@ fn badge_paint(h: &Harness<'_, fp_app::ui::app::AppUi>, label: &str) -> (Color32
 
 #[test]
 fn the_player_paints_the_bp_badge_green_when_on_and_grey_off() {
-    let (mut h, fake) = harness(state(1, 1));
+    // The badge exists on a bit-perfect device only.
+    let mut s = state(1, 1);
+    support::lock_player(&mut s, 0);
+    let (mut h, fake) = harness(s);
     h.run_steps(2);
     let (border, text) = badge_paint(&h, "Bit-perfect: off");
     assert_eq!(border, theme::NEUTRAL_700.gamma_multiply(0.45));

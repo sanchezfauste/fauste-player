@@ -424,7 +424,10 @@ fn a_rebound_key_plays_the_new_target() {
 #[test]
 fn the_bp_badge_follows_telemetry() {
     let (mut h, fake) = harness(state(1, 1));
-    assert!(h.query_by_label("Bit-perfect: off").is_some());
+    assert!(
+        h.query_by_label("Bit-perfect: off").is_none(),
+        "a device that is not bit-perfect has no badge"
+    );
     let player = fake.player(0);
     fake.telemetry
         .store(std::sync::Arc::new(fp_engine::conductor::Telemetry {

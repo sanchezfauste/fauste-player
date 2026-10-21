@@ -15,7 +15,6 @@ badge-bp = BP
 tip-bp-on = Bit-perfect: aan
 tip-bp-off = Bit-perfect: uit
 badge-gain = { $gain } dB
-badge-not-normalized = Niet genormaliseerd
 tip-gain-applied = Versterking { $gain } dB: brengt de gemeten { $lufs } LUFS naar het doel van { $target } LUFS.
 tip-gain-trim = Bevat de correctie van dit nummer van { $trim } dB.
 tip-gain-limited-peak = Beperkt door het true-peak-plafond ({ $ceiling } dBTP): { $wanted } dB was gewenst.

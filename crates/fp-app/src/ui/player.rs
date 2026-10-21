@@ -14,6 +14,7 @@ use fp_model::{Command, PlayMode, PlayerId, PlaylistId, TrackId};
 use super::app::{DragEntry, FollowScroll, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
+use super::header_layout;
 use super::tab_strip;
 use super::table;
 use super::theme;
@@ -198,13 +199,52 @@ fn outlined_with_tip(ui: &mut Ui, text: &str, tip: Option<&str>, border: Color32
         galley,
         color,
     );
+    // A badge is named by its sentence when it has one, else by its text.
+    let name = tip.unwrap_or(text).to_owned();
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, name.clone()));
     if let Some(tip) = tip {
-        let owned = tip.to_owned();
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, owned.clone())
-        });
         response.on_hover_text(tip);
     }
+}
+
+/// The items of the header's left group, in drawing order. Their `rank` for
+/// `header_layout::fit` is the order in which they collapse when the column
+/// is narrow: the entry notice first, then "stop after", the fade badge
+/// (the Next caption says it too), the DSD hold notice (nothing else shows
+/// it), the state text (truncated before it goes) and the dot; the player's
+/// number never.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LeftItem {
+    Number,
+    Dot,
+    Status,
+    Fading,
+    StopAfter,
+    EntryNotice,
+    DsdHold,
+}
+
+impl LeftItem {
+    fn rank(self) -> u8 {
+        match self {
+            Self::Number => 0,
+            Self::Dot => 1,
+            Self::Status => 2,
+            Self::DsdHold => 3,
+            Self::Fading => 4,
+            Self::StopAfter => 5,
+            Self::EntryNotice => 6,
+        }
+    }
+}
+
+/// The width `outlined` takes for `text`.
+fn outlined_width(ui: &Ui, text: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(text.to_uppercase(), font(10.0), theme::NEUTRAL_200)
+        .size()
+        .x
+        + 12.0
 }
 
 fn header(
@@ -215,75 +255,159 @@ fn header(
     index: usize,
     pv: &PlayerView,
 ) {
+    const SPACING: f32 = 6.0;
+    const CUE_WIDTH: f32 = 50.0;
+    const BP_WIDTH: f32 = 28.0;
+    const STATUS_MIN_WIDTH: f32 = 40.0;
+    // A point of slack, so rounding never lets two items touch.
+    const SLACK: f32 = 1.0;
     let t = scene.i18n;
     // RL16: a right click on the header's background opens the panel menu;
     // the tiles, added after it, keep their own clicks. It is no Tab stop.
     let row = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 20.0));
     let background = ui.interact(row, egui::Id::new(("player-header", id.0)), Sense::CLICK);
+
+    // What the header shows, measured before anything is drawn, so that no
+    // two items overlap (the row fits them; the lowest priority collapses).
+    let number = t.tr_args("player-label", &[("n", (index + 1).into())]);
+    let (dot, status) = match pv.status {
+        PlayerStatus::OnAir => (theme::ON_AIR_TEXT, t.tr("status-on-air")),
+        PlayerStatus::Paused => (theme::AMBER, t.tr("status-paused")),
+        PlayerStatus::Stopped => (theme::NEUTRAL_700, t.tr("status-stopped")),
+    };
+    let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
+    let fade_text = t.tr(if fade_stopping {
+        "badge-fading"
+    } else {
+        "badge-mixing"
+    });
+    let stop_after_text = t.tr("badge-stop-after");
+    let notice = pv.entry_notice.map(|notice| match notice {
+        fp_model::EntryNotice::Repeats => (t.tr("badge-entry-repeat"), t.tr("tip-entry-repeat")),
+        fp_model::EntryNotice::StopsAfter => (t.tr("badge-entry-stop"), t.tr("tip-entry-stop")),
+    });
+    let dsd_hold_text = t.tr("badge-dsd-hold");
+    let status_text = small_caps(&status, theme::NEUTRAL_400);
+    let status_width = ui
+        .painter()
+        .layout_no_wrap(status.to_uppercase(), font(10.0), theme::NEUTRAL_400)
+        .size()
+        .x;
+    let mut left: Vec<(LeftItem, f32)> = vec![
+        (LeftItem::Number, outlined_width(ui, &number)),
+        (LeftItem::Dot, 7.0),
+        // The status text truncates down to a least width before it goes.
+        (LeftItem::Status, status_width.min(STATUS_MIN_WIDTH)),
+    ];
+    if pv.fading {
+        left.push((LeftItem::Fading, outlined_width(ui, &fade_text)));
+    }
+    if pv.stop_after_current {
+        left.push((LeftItem::StopAfter, outlined_width(ui, &stop_after_text)));
+    }
+    if let Some((text, _)) = &notice {
+        left.push((LeftItem::EntryNotice, outlined_width(ui, text)));
+    }
+    if pv.dsd_holds_others {
+        left.push((LeftItem::DsdHold, outlined_width(ui, &dsd_hold_text)));
+    }
+
+    let single_text = t.tr("mode-single");
+    let cont_text = t.tr("mode-cont");
+    let single_tip = t.tr("tip-single");
+    let cont_tip = t.tr("tip-cont");
+    let segments = [
+        widgets::Segment {
+            text: &single_text,
+            label: &single_tip,
+        },
+        widgets::Segment {
+            text: &cont_text,
+            label: &cont_tip,
+        },
+    ];
+    // B5: the BP badge exists only where the player can be bit-perfect: its
+    // Main device runs bit-perfect (the telemetry terms cover a frame of lag
+    // after the device changes).
+    let show_bp = fp_model::bit_perfect_player(scene.state, id) || pv.bit_perfect || pv.dsd;
+    let gain = pv
+        .gain
+        .as_ref()
+        .map(|badge| GainBadgeLayout::new(ui, t, badge));
+    let mut right_widths = vec![CUE_WIDTH, widgets::segmented_width(ui, &segments)];
+    if show_bp {
+        right_widths.push(BP_WIDTH);
+    }
+    if let Some(gain) = &gain {
+        right_widths.push(gain.width);
+    }
+    let right_width =
+        right_widths.iter().sum::<f32>() + SPACING * (right_widths.len() as f32 - 1.0);
+    let items: Vec<header_layout::Item> = left
+        .iter()
+        .map(|(kind, width)| header_layout::Item {
+            width: *width,
+            rank: kind.rank(),
+        })
+        .collect();
+    let room = row.width() - right_width - SPACING - SLACK;
+    let shown = header_layout::fit(&items, room, SPACING);
+    // What the shown items leave over goes to the status text.
+    let used: f32 = items
+        .iter()
+        .zip(&shown)
+        .filter(|(_, shown)| **shown)
+        .map(|(item, _)| item.width + SPACING)
+        .sum::<f32>()
+        - SPACING;
+    let status_room = (STATUS_MIN_WIDTH + (room - used).max(0.0)).min(status_width);
+    let has = |wanted: LeftItem| {
+        left.iter()
+            .zip(&shown)
+            .any(|((kind, _), shown)| *kind == wanted && *shown)
+    };
+
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), 20.0),
         Layout::left_to_right(Align::Center),
         |ui| {
-            ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
-            outlined(
-                ui,
-                &t.tr_args("player-label", &[("n", (index + 1).into())]),
-                theme::NEUTRAL_700,
-                theme::NEUTRAL_200,
-            );
-            let (dot, label) = match pv.status {
-                PlayerStatus::OnAir => (theme::ON_AIR_TEXT, t.tr("status-on-air")),
-                PlayerStatus::Paused => (theme::AMBER, t.tr("status-paused")),
-                PlayerStatus::Stopped => (theme::NEUTRAL_700, t.tr("status-stopped")),
-            };
-            let (r, _) = ui.allocate_exact_size(vec2(7.0, 7.0), Sense::hover());
-            ui.painter().rect_filled(r, 0.0, dot);
-            ui.add(
-                egui::Label::new(small_caps(&label, theme::NEUTRAL_400))
-                    .selectable(false)
-                    .truncate(),
-            );
-            if pv.fading {
-                let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
-                let key = if fade_stopping {
-                    "badge-fading"
-                } else {
-                    "badge-mixing"
-                };
-                outlined(ui, &t.tr(key), theme::ACCENT, theme::ACCENT_300);
+            ui.spacing_mut().item_spacing = vec2(SPACING, 0.0);
+            outlined(ui, &number, theme::NEUTRAL_700, theme::NEUTRAL_200);
+            if has(LeftItem::Dot) {
+                let (r, _) = ui.allocate_exact_size(vec2(7.0, 7.0), Sense::hover());
+                ui.painter().rect_filled(r, 0.0, dot);
             }
-            if pv.stop_after_current {
-                outlined(
-                    ui,
-                    &t.tr("badge-stop-after"),
-                    theme::AMBER,
-                    theme::AMBER_TEXT,
+            if has(LeftItem::Status) {
+                ui.allocate_ui_with_layout(
+                    vec2(status_room, 20.0),
+                    Layout::left_to_right(Align::Center),
+                    |ui| {
+                        ui.add(egui::Label::new(status_text).selectable(false).truncate());
+                    },
                 );
             }
-            if let Some(notice) = pv.entry_notice {
-                let (text, tip) = match notice {
-                    fp_model::EntryNotice::Repeats => ("badge-entry-repeat", "tip-entry-repeat"),
-                    fp_model::EntryNotice::StopsAfter => ("badge-entry-stop", "tip-entry-stop"),
-                };
-                outlined_with_tip(
-                    ui,
-                    &t.tr(text),
-                    Some(&t.tr(tip)),
-                    theme::AMBER,
-                    theme::AMBER_TEXT,
-                );
+            if has(LeftItem::Fading) {
+                outlined(ui, &fade_text, theme::ACCENT, theme::ACCENT_300);
             }
-            if pv.dsd_holds_others {
+            if has(LeftItem::StopAfter) {
+                outlined(ui, &stop_after_text, theme::AMBER, theme::AMBER_TEXT);
+            }
+            if let Some((text, tip)) = &notice
+                && has(LeftItem::EntryNotice)
+            {
+                outlined_with_tip(ui, text, Some(tip), theme::AMBER, theme::AMBER_TEXT);
+            }
+            if has(LeftItem::DsdHold) {
                 outlined_with_tip(
                     ui,
-                    &t.tr("badge-dsd-hold"),
+                    &dsd_hold_text,
                     Some(&t.tr("tip-dsd-hold")),
                     theme::AMBER,
                     theme::AMBER_TEXT,
                 );
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+                ui.spacing_mut().item_spacing = vec2(SPACING, 0.0);
                 let cue_style = if pv.cueing {
                     TileStyle {
                         fill: theme::CUE_BG,
@@ -312,7 +436,7 @@ fn header(
                 };
                 if widgets::tile(
                     ui,
-                    vec2(50.0, 20.0),
+                    vec2(CUE_WIDTH, 20.0),
                     &cue_tip,
                     fp_model::availability(scene.state, id).cue,
                     cue_style,
@@ -330,55 +454,40 @@ fn header(
                 {
                     scene.ctl.send(Command::ToggleCue(id));
                 }
-                let single_text = t.tr("mode-single");
-                let cont_text = t.tr("mode-cont");
-                let single_tip = t.tr("tip-single");
-                let cont_tip = t.tr("tip-cont");
                 let modes = [PlayMode::Single, PlayMode::Continuous];
                 let selected = usize::from(pv.mode == PlayMode::Continuous);
-                if let Some(mode) = widgets::segmented(
-                    ui,
-                    egui::Id::new(("play-mode", id)),
-                    &[
-                        widgets::Segment {
-                            text: &single_text,
-                            label: &single_tip,
-                        },
-                        widgets::Segment {
-                            text: &cont_text,
-                            label: &cont_tip,
-                        },
-                    ],
-                    selected,
-                )
-                .and_then(|i| modes.get(i).copied())
+                if let Some(mode) =
+                    widgets::segmented(ui, egui::Id::new(("play-mode", id)), &segments, selected)
+                        .and_then(|i| modes.get(i).copied())
                 {
                     scene.ctl.send(Command::SetMode(id, mode));
                 }
-                let (bp, tip, on) = match fp_model::bp_badge(pv.bit_perfect, pv.dsd) {
-                    fp_model::BpBadge::Off => (t.tr("badge-bp"), t.tr("tip-bp-off"), false),
-                    fp_model::BpBadge::Pcm => (t.tr("badge-bp"), t.tr("tip-bp-on"), true),
-                    fp_model::BpBadge::Dsd => (t.tr("badge-dsd"), t.tr("tip-dsd-on"), true),
-                };
-                widgets::tile(
-                    ui,
-                    vec2(28.0, 20.0),
-                    &tip,
-                    false,
-                    widgets::bp_tile_style(on),
-                    |p, r, c| {
-                        p.text(
-                            r.center(),
-                            egui::Align2::CENTER_CENTER,
-                            &bp,
-                            font_semibold(9.0),
-                            c,
-                        );
-                    },
-                );
+                if show_bp {
+                    let (bp, tip, on) = match fp_model::bp_badge(pv.bit_perfect, pv.dsd) {
+                        fp_model::BpBadge::Off => (t.tr("badge-bp"), t.tr("tip-bp-off"), false),
+                        fp_model::BpBadge::Pcm => (t.tr("badge-bp"), t.tr("tip-bp-on"), true),
+                        fp_model::BpBadge::Dsd => (t.tr("badge-dsd"), t.tr("tip-dsd-on"), true),
+                    };
+                    widgets::tile(
+                        ui,
+                        vec2(BP_WIDTH, 20.0),
+                        &tip,
+                        false,
+                        widgets::bp_tile_style(on),
+                        |p, r, c| {
+                            p.text(
+                                r.center(),
+                                egui::Align2::CENTER_CENTER,
+                                &bp,
+                                font_semibold(9.0),
+                                c,
+                            );
+                        },
+                    );
+                }
                 // N18: the gain of the source on air, left of the BP badge.
-                if let Some(badge) = &pv.gain {
-                    gain_badge(ui, t, badge);
+                if let Some(gain) = &gain {
+                    gain.draw(ui);
                 }
             });
         },
@@ -386,47 +495,74 @@ fn header(
     super::panels::header_menu(&background, scene, view_state, Panel::Player(id));
 }
 
-/// The gain badge of the header (loudness normalization spec N18): a tile
-/// named by its tooltip, as the BP badge.
-fn gain_badge(ui: &mut Ui, t: &crate::i18n::I18n, badge: &view::GainBadge) {
-    let text = widgets::tr_message(t, &badge.text);
-    let tip = badge
-        .tip
-        .iter()
-        .map(|m| widgets::tr_message(t, m))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let content = match badge.tone {
-        view::BadgeTone::Normal => theme::ACCENT,
-        view::BadgeTone::Amber => theme::AMBER,
-        view::BadgeTone::Muted => theme::NEUTRAL_600,
-    };
-    let width = ui
-        .painter()
-        .layout_no_wrap(text.clone(), font_semibold(9.0), content)
-        .size()
-        .x
-        + 12.0;
-    widgets::tile(
-        ui,
-        vec2(width, 20.0),
-        &tip,
-        false,
-        TileStyle {
+/// The gain badge of the header (loudness normalization spec N18), measured:
+/// a tile named by its tooltip, as the BP badge, with a border in its tone.
+/// Its width is that of the widest gain ("-00.0 dB"), so the header does not
+/// shift when the gain changes.
+struct GainBadgeLayout {
+    text: String,
+    tip: String,
+    content: Color32,
+    width: f32,
+}
+
+impl GainBadgeLayout {
+    fn new(ui: &Ui, t: &crate::i18n::I18n, badge: &view::GainBadge) -> Self {
+        let text = widgets::tr_message(t, &badge.text);
+        let tip = badge
+            .tip
+            .iter()
+            .map(|m| widgets::tr_message(t, m))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let content = match badge.tone {
+            view::BadgeTone::Normal => theme::ACCENT,
+            view::BadgeTone::Amber => theme::AMBER,
+        };
+        let measure = |text: &str| {
+            ui.painter()
+                .layout_no_wrap(text.to_owned(), font_semibold(9.0), content)
+                .size()
+                .x
+        };
+        let widest = widgets::tr_message(
+            t,
+            &view::Message {
+                key: "badge-gain",
+                args: vec![("gain", "\u{2212}00.0".to_owned())],
+            },
+        );
+        Self {
+            width: measure(&text).max(measure(&widest)) + 12.0,
+            text,
+            tip,
             content,
-            dim_when_disabled: false,
-            ..TileStyle::plain()
-        },
-        |p, r, c| {
-            p.text(
-                r.center(),
-                egui::Align2::CENTER_CENTER,
-                &text,
-                font_semibold(9.0),
-                c,
-            );
-        },
-    );
+        }
+    }
+
+    fn draw(&self, ui: &mut Ui) {
+        widgets::tile(
+            ui,
+            vec2(self.width, 20.0),
+            &self.tip,
+            false,
+            TileStyle {
+                border: self.content,
+                content: self.content,
+                dim_when_disabled: false,
+                ..TileStyle::plain()
+            },
+            |p, r, c| {
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    &self.text,
+                    font_semibold(9.0),
+                    c,
+                );
+            },
+        );
+    }
 }
 
 fn cover(
@@ -740,13 +876,45 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 t.tr("tip-next")
             };
+            let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
             let caption = if pv.fading {
-                t.tr("badge-fading").to_uppercase()
+                // As the header's badge: a fade stop fades, a crossfade mixes.
+                t.tr(if fade_stopping {
+                    "badge-fading"
+                } else {
+                    "badge-mixing"
+                })
+                .to_uppercase()
             } else if playing {
                 t.tr("next-caption")
             } else {
                 t.tr("play-caption")
             };
+            // While a fade runs, the button that started it drains a line like
+            // a playing cart's, from full to empty over the fade: Fade stop
+            // for a fade stop, Next/Play for a crossfade or a segue overlap
+            // (the UI times it from the frame that first showed the fade; a
+            // new fade (a fade stop pressed during a crossfade) restarts it,
+            // on Fade stop).
+            let fade_key = egui::Id::new(("fade-started", id.0));
+            let fade_left = if pv.fading {
+                let (_, started) = ui.data_mut(|d| {
+                    let entry =
+                        d.get_temp_mut_or_insert_with(fade_key, || (pv.fade_seq, scene.time));
+                    if entry.0 != pv.fade_seq {
+                        *entry = (pv.fade_seq, scene.time);
+                    }
+                    *entry
+                });
+                Some(view::fade_remaining_fraction(
+                    started, scene.time, pv.fade_ms,
+                ))
+            } else {
+                ui.data_mut(|d| d.remove_temp::<(u64, f64)>(fade_key));
+                None
+            };
+            let stop_left = fade_left.filter(|_| fade_stopping);
+            let next_left = fade_left.filter(|_| !fade_stopping);
             let play_style = TileStyle {
                 fill: Color32::TRANSPARENT,
                 border: theme::PLAY_BORDER,
@@ -769,6 +937,12 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 available.play,
                 play_style,
                 |p, r, c| {
+                    if let Some(left) = next_left {
+                        let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
+                        // Full strength even though Next is unavailable during a
+                        // fade: the countdown must stay visible.
+                        p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
+                    }
                     glyphs::paint(p, r.translate(vec2(0.0, -6.0)), play_action, 28.0, c);
                     p.text(
                         pos2(r.center().x, r.bottom() - 12.0),
@@ -790,7 +964,6 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 TileStyle::plain()
             };
-            let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
             let fade_style = if fade_stopping {
                 TileStyle {
                     fill: theme::NEUTRAL_800,
@@ -815,29 +988,8 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 t.tr("tip-stop-after")
             };
-            // While a fade runs, the Fade stop button drains a line like a
-            // playing cart's, from full to empty over the fade (the UI times
-            // it from the frame that first showed the fade; a new fade (a
-            // fade stop pressed during a crossfade) restarts it).
-            let fade_key = egui::Id::new(("fade-started", id.0));
-            let fade_left = if pv.fading {
-                let (_, started) = ui.data_mut(|d| {
-                    let entry =
-                        d.get_temp_mut_or_insert_with(fade_key, || (pv.fade_seq, scene.time));
-                    if entry.0 != pv.fade_seq {
-                        *entry = (pv.fade_seq, scene.time);
-                    }
-                    *entry
-                });
-                Some(view::fade_remaining_fraction(
-                    started, scene.time, pv.fade_ms,
-                ))
-            } else {
-                ui.data_mut(|d| d.remove_temp::<(u64, f64)>(fade_key));
-                None
-            };
             let fade_button: PaintFn = Box::new(move |p, r, c| {
-                if let Some(left) = fade_left {
+                if let Some(left) = stop_left {
                     let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
                     p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
                 }

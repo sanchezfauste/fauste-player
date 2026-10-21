@@ -31,7 +31,8 @@ bit-perfect device plays differently from the others:
   the next track starts at once, converted to the device's rate.
 - **No loudness normalization.** A track on a bit-perfect device always
   plays at unity gain, even with [loudness normalization](loudness.md#bit-perfect-outputs)
-  on: the header says **Not normalized**. Other players and carts are
+  on: the header
+  reads **0.0 dB** in amber, and its tooltip says why. Other players and carts are
   normalized as usual.
 - **The volume is held at 100 %.** The player's volume fader is locked at
   the top: on screen, on [MIDI](midi.md) controllers and over the
@@ -215,8 +216,9 @@ example without exclusive access), the track goes on as PCM.
 
 ## The BP badge
 
-The **BP** badge in the player header lights up (green border and text; dim
-grey when off) while the current track reaches its Main device unchanged.
+The **BP** badge in the player header exists only on a player whose Main
+device runs bit-perfect. It
+lights up (green border and text; dim grey when off) while the current track reaches its Main device unchanged.
 All of these must hold:
 
 - the device is bit-perfect and open with exclusive access;
