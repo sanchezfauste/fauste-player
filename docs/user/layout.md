@@ -44,7 +44,8 @@ The cartwall sits under the players, or on the left or the right of the
 window at its full height: choose **Cartwall at the bottom**, **Cartwall on
 the left** or **Cartwall on the right** in [the layout menu](#the-layout-menu).
 Under the players it is as tall as its rows need, at most six tenths of the
-window; beside them it takes three tenths of the width at first.
+height between the top bar and the status bar; beside them it takes three
+tenths of the width at first.
 
 The cartwall is never narrower than its header (**Stop all**, its title and
 a page tab) or than its columns of buttons at their smallest. When the
@@ -60,8 +61,10 @@ the cartwall starts it again at its starting size.
 
 Once you resize the cartwall, or while it sits beside the players, its
 buttons grow to fill it; the names and times keep their size, in the middle
-of each button. When the cartwall is smaller than its rows and columns need
-at the smallest buttons, it scrolls.
+of each button. A name wraps between its words; a word too long for its
+button ends in an ellipsis (…) instead of breaking across lines. When the
+cartwall is smaller than its rows and columns need at the smallest buttons,
+it scrolls.
 
 Click **CARTWALL** to collapse the cartwall. Under the players only its
 header stays; beside them it becomes a narrow strip the height of the

@@ -27,7 +27,7 @@
 | `ui/settings/loudness.rs` | Settings → Loudness (loudness normalization spec N22): the Normalize loudness toggle, the target, true-peak ceiling, maximum boost and maximum trim sliders (ranges of N1), the notes that changes apply to tracks loaded afterwards and that a bit-perfect output is never normalized, and the count of tracks waiting for a measurement (`SettingsDeps::unmeasured`) |
 | `ui/loudness_edit.rs` | The per-track loudness controls (N20, N21): the measurement line, the Exclude from normalization toggle and the Trim slider, each change one `Command::SetTrackLoudness`; and the Loudness… popup (`popup`, drawn by `AppUi` after the CUE windows) |
 | `ui/settings/remote.rs` | Settings → Remote: the HTTP and OSC switches, addresses, token, origins and senders, and each server's state read from the remote thread's status cell |
-| `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall panel (at the bottom or on a side, and its collapsed side strip, `collapsed_strip`), and its pure view model (status, countdown, progress). The bar's "Stop all (n)" button sends `Command::StopAllCarts` and shows `cartwall.playing.len()`; it is the first item of a right-to-left row so it never gives way to the tabs. Button height comes from `cart_view::button_height(available, rows)` (nominal 40 px, minimum 28 px) while the cartwall fits its content (`Arrangement::fit_content`; the 60 % cap is `panel_layout::CONTENT_HEIGHT_CAP`), and from `cart_view::filled_button_height` (minimum 28 px, no upper clamp) otherwise (RL13); widths fill the panel, never under `cart_view::MIN_BUTTON_WIDTH`; the grid scrolls only below the minimums. `cartwall::sizes` gives the pass its content and least heights, its least width (`min_width`: the header's fixed parts or the columns, whichever is larger) and its collapsed thickness. A button's colours come from the pure `cart_view::cart_look(color, playing)` (`CartLook`: fill, hover and pressed fills, border, remaining-time fill, kind marker, waveform), with the palette in `theme::cart_color` and the strengths in `theme::CART_*`. The waveform behind the text spans `CartView::wave_range` (the play range, idle and playing carts only), reduced with `widgets::memo_columns_in` into a memo kept in egui temp data per cart (`("cart-wave", cart id)`) and drawn by `widgets::paint_wave_columns`. The cart editor's colour row (`settings/carts.rs`, `swatch`) exposes each swatch as a selected/unselected radio button. |
+| `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall panel (at the bottom or on a side, and its collapsed side strip, `collapsed_strip`), and its pure view model (status, countdown, progress). The bar's "Stop all (n)" button sends `Command::StopAllCarts` and shows `cartwall.playing.len()`; it is the first item of a right-to-left row so it never gives way to the tabs. Button height comes from `cart_view::button_height(available, rows)` (nominal 40 px, minimum 28 px) while the cartwall fits its content (`Arrangement::fit_content`; the 60 % cap is `panel_layout::CONTENT_HEIGHT_CAP`), and from `cart_view::filled_button_height` (minimum 28 px, no upper clamp) otherwise (RL13); widths fill the panel, never under `cart_view::MIN_BUTTON_WIDTH`; the grid scrolls only below the minimums. A cart's name is laid out by the pure `cart_view::fit_name`: its words wrap at their boundaries, and a word too wide for the button is cut with an ellipsis and ends the name, never split across lines. `cartwall::sizes` gives the pass its content and least heights, its least width (`min_width`: the header's fixed parts or the columns, whichever is larger) and its collapsed thickness. A button's colours come from the pure `cart_view::cart_look(color, playing)` (`CartLook`: fill, hover and pressed fills, border, remaining-time fill, kind marker, waveform), with the palette in `theme::cart_color` and the strengths in `theme::CART_*`. The waveform behind the text spans `CartView::wave_range` (the play range, idle and playing carts only), reduced with `widgets::memo_columns_in` into a memo kept in egui temp data per cart (`("cart-wave", cart id)`) and drawn by `widgets::paint_wave_columns`. The cart editor's colour row (`settings/carts.rs`, `swatch`) exposes each swatch as a selected/unselected radio button. |
 | `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
 | `ui/shell.rs` | Panic isolation around each frame, and the close check in `Shell::logic` |
 | `ui/exit_guard.rs` | The "Audio is on air" modal: the `ExitIntent`, the list of what is sounding, and the stop commands |
@@ -61,8 +61,10 @@ splitter beside it and whether it fits its content.
   gaps) to what leaves the shown players their minimum: at the bottom
   `panel_layout::players_least_height` (`MIN_PLAYER_HEIGHT`, plus
   `SCROLL_BAR_ROOM` when the row overflows, so three rows still fit above
-  the scroll bar), on a side `MIN_PLAYER_WIDTH` each with their gaps; never
-  below the least size. At the bottom with `size: None` it fits its
+  the scroll bar), on a side `MIN_PLAYER_WIDTH` each with their gaps; both
+  ends within the shares a size can hold (`MIN_CARTWALL_SHARE` to
+  `MAX_CARTWALL_SHARE`, 5 % to 95 % of the area along its axis), so a drag
+  never draws a size its share cannot keep; never below the least size. At the bottom with `size: None` it fits its
   content as before, at most `CONTENT_HEIGHT_CAP` (60 %) of the area,
   unclamped; a share is clamped to the range. On a side (`on_a_side`) it is
   the full height of the area and its share of the width
@@ -106,8 +108,10 @@ cartwall, is a splitter (`panels::cartwall_splitter` over the generic
 inert while the layout is locked or the cartwall has no range
 (`cartwall_range` is `None` while it is collapsed, on any dock). A drag
 (primary button only) lives in `ViewState::cartwall_drag`
-(`panel_layout::CartwallDrag`): it follows the pointer along the
-cartwall's axis within the range, and `panels::cartwall_drag_layout`,
+(`panel_layout::CartwallDrag`): it starts from the drawn size taken into
+the range (a cartwall that fits its content can be taller than the range
+allows), follows the pointer along the cartwall's axis within the range,
+and `panels::cartwall_drag_layout`,
 called before the pass, hands the pass a copy of the layout with the
 drag's share, so the drag shows in the same frame. On release one
 `SetCartwallSize(Some(share))` goes out, only if the drag moved something;
