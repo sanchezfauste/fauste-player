@@ -736,6 +736,81 @@ fn applied_tip(
     tip
 }
 
+/// N20, N21: the gain lines of the loudness editors. The slider is a trim
+/// on top of the automatic gain, so they say what normalization gives the
+/// track with trim 0 (or why it gives none), what it gives with the trim
+/// when that is not 0, and the limit that applies to the gain shown last.
+/// `bit_perfect` is whether the player the track plays on is. Every figure comes from the model (`fp_model::normalization`).
+pub fn gain_lines(
+    track: &Track,
+    config: &fp_model::LoudnessConfig,
+    bit_perfect: bool,
+) -> Vec<Message> {
+    use fp_model::NormalizationStatus as S;
+    let mut untrimmed = track.clone();
+    untrimmed.loudness_edit.trim_db = 0.0;
+    let auto = fp_model::normalization(config, &untrimmed, bit_perfect);
+    let reason = match auto.status {
+        S::Off => Some("loudness-no-gain-off"),
+        S::BitPerfect => Some("loudness-no-gain-bit-perfect"),
+        S::Excluded => Some("loudness-no-gain-excluded"),
+        S::NotMeasured => Some("loudness-no-gain-unmeasured"),
+        S::Silent => Some("loudness-no-gain-silent"),
+        S::Applied { .. } => None,
+    };
+    if let Some(key) = reason {
+        let mut lines = vec![Message::new(key, &[])];
+        if !config.normalize {
+            lines.push(Message::new("loudness-off-note", &[]));
+        }
+        return lines;
+    }
+    let mut lines = vec![Message::new(
+        "loudness-auto-gain",
+        &[("gain", signed_db(auto.gain_db))],
+    )];
+    let trim = fp_model::trim_in_use(config, &track.loudness_edit);
+    let status = if trim == 0.0 {
+        auto.status
+    } else {
+        let full = fp_model::normalization(config, track, bit_perfect);
+        lines.push(Message::new(
+            "loudness-trimmed-gain",
+            &[("gain", signed_db(full.gain_db))],
+        ));
+        full.status
+    };
+    if let S::Applied { limited } = status {
+        lines.extend(limit_note(config, track, trim, limited));
+    }
+    lines
+}
+
+/// The note for a gain that a limit held back, with the gain that was wanted.
+fn limit_note(
+    config: &fp_model::LoudnessConfig,
+    track: &Track,
+    trim: f32,
+    limited: Option<fp_model::GainLimit>,
+) -> Option<Message> {
+    use fp_model::GainLimit;
+    let measured = track.loudness.and_then(|m| m.integrated_lufs)?;
+    let wanted = signed_db(fp_model::wanted_gain_db(config, measured, trim));
+    match limited? {
+        GainLimit::TruePeak => Some(Message::new(
+            "tip-gain-limited-peak",
+            &[
+                ("ceiling", decimal(config.true_peak_ceiling_dbtp)),
+                ("wanted", wanted),
+            ],
+        )),
+        GainLimit::MaxBoost => Some(Message::new(
+            "tip-gain-limited-boost",
+            &[("max", decimal(config.max_boost_db)), ("wanted", wanted)],
+        )),
+    }
+}
+
 /// N19: the loudness lines of the track tooltip, drawn under its fields.
 /// The trim is the one in use under `config` (N7), with the saved one
 /// beside it when a lowered maximum limits it by more than the precision

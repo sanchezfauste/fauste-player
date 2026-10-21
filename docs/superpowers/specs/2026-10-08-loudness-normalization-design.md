@@ -35,7 +35,7 @@ automatic gain control and no compressor or limiter.
 | D2 | The analysis pass measures integrated loudness (EBU R128 / ITU-R BS.1770, gated) and true peak for every file, reusing the R128 code the meter already uses where possible. The result is stored in the analysis cache. A file that fails measurement degrades to "not measured" with a log line. A background loudness-only pass measures the tracks that have no measurement yet (D12). |
 | D3 | The gain is a pure function in `fp-model`: `target − measured + trim`, limited so that a boost never takes the measured true peak above the ceiling, and gain ≤ maximum boost. A cut is never reduced by the ceiling. It is fixed when the track is loaded or started and never changes while it sounds. |
 | D4 | The engine applies one more static per-source gain, multiplied with the fader. It arrives through `BusCommand`; nothing allocates on the device callback (CLAUDE.md rule 5). |
-| D5 | A new configuration section with `normalize`, `target_lufs` (−16), `true_peak_ceiling_dbtp` (−1) and `max_boost_db` (12), each validated with a range. Changes apply to tracks loaded afterwards. |
+| D5 | A new configuration section with `normalize`, `target_lufs` (−16), `true_peak_ceiling_dbtp` (−1) and `max_boost_db` (12), each validated with a range. Changes apply to tracks loaded afterwards. Basis: the measurement is ITU-R BS.1770 integrated loudness and true peak; −16 LUFS follows the AES recommendations for streaming and online distribution (AES TD1008, 2021, which supersedes TD1004.1.15-10: −16 to −20 LUFS for streaming), not broadcast (EBU R128 −23 LUFS, ATSC A/85 −24 LKFS); −1 dBTP is the EBU R128 maximum true peak, also used by AES (a lower ceiling such as −2 dBTP for low-bit-rate encoders is common practice, not from the standards); the 12 dB maximum boost and maximum trim are product choices with no standard behind them. |
 | D6 | Per track: exclude it from normalization, or a manual trim in dB, stored with the track's other edits (its markers) and edited where those are edited. |
 | D7 | A track not measured yet (it can play before its analysis) plays at 0 dB, and the player shows a "not normalized" indicator. Nothing is adjusted mid-track. |
 | D8 | Bit-perfect and native DSD win: no normalization on such a device, and the interface says so. |
@@ -374,10 +374,16 @@ band) stays a separate value, whatever the normalization target (Q4).
   The popup reads only the snapshot (rule 8). It names the track it edits,
   keeps editing it when the player moves on, has a Close button, and closes
   by itself when the track leaves the library.
+  The slider is a relative trim, 0 for every unedited track, so the popup
+  also shows the gain lines (`view::gain_lines`, from
+  `fp_model::normalization`): "Automatic gain: X dB" (the gain with trim 0,
+  or why there is none: normalization off, excluded, not measured, silent),
+  "Gain with trim: Y dB" when the trim is not 0, the limit that held the
+  gain back with the gain wanted, and a note when normalization is off. A bit-perfect player reads "No automatic gain: bit-perfect output plays tracks unaltered" (the popup keeps the holder it was opened from; the cart editor uses the cartwall Main). A short hint says the trim is added to the automatic gain, and a track that is sounding gets a note that a change applies from its next load. The cart editor draws the gain lines under the Trim row at full width.
 - **N21** The cart edit dialog (where a cart's file and properties are
   edited) shows the same two controls for the cart's track, as two rows
   ("Exclude from normalization", with the measurement as its hint, and
-  "Trim").
+  "Trim"). The Trim row's hint holds the same gain lines as N20.
 
 ### 8.3 Settings
 

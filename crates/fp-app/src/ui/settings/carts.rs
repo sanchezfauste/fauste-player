@@ -586,9 +586,28 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         row(ui, &t.tr("loudness-exclude"), Some(&measurement), |ui| {
             loudness_edit::exclude(ui, scene, track)
         });
-        row(ui, &t.tr("loudness-trim"), None, |ui| {
-            loudness_edit::trim(ui, scene, track);
-        });
+        row(
+            ui,
+            &t.tr("loudness-trim"),
+            Some(&t.tr("loudness-trim-hint")),
+            |ui| {
+                loudness_edit::trim(ui, scene, track);
+            },
+        );
+        // The gain lines are long: the whole width, not the label column.
+        ui.add(
+            egui::Label::new(
+                RichText::new(loudness_edit::gain_text(
+                    scene,
+                    track,
+                    Some(fp_model::Holder::CartwallMain),
+                ))
+                .font(super::super::widgets::font(12.0))
+                .color(theme::NEUTRAL_400),
+            )
+            .selectable(false)
+            .wrap(),
+        );
     }
 }
 
