@@ -1980,3 +1980,108 @@ fn reanalyse_reads_a_file_edited_in_place() {
     });
     assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
 }
+
+fn set_trim(r: &Rig, db: f64) {
+    let mut config = r.handle.model.load().config.clone();
+    config.analysis.trim_threshold_db = db;
+    assert!(r.handle.send(Command::UpdateConfig(Box::new(config))));
+}
+
+fn pass_running(r: &Rig) -> bool {
+    r.services.activity().load().pass.is_some()
+}
+
+/// Review of #115: a settings change that restarts a *Re-analyse all*
+/// keeps the restarted pass fresh, so an edited file is still read.
+#[test]
+fn a_settings_change_during_a_reanalyse_all_keeps_it_fresh() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = wav(dir.path(), "a.wav", 1);
+    let mut r = rig_cached(
+        std::slice::from_ref(&file),
+        dir,
+        Duration::ZERO,
+        |_| {},
+        Arc::new(|_| {}),
+        1,
+        None,
+        true,
+    );
+    r.run_until("analysed", |r| r.analyses.load(Ordering::SeqCst) == 1);
+    // The cache gets an entry under both settings (the pool started with
+    // its own defaults, so -60 is analysed once more).
+    set_trim(&r, -50.0);
+    r.run_until("analysed under -50", |r| {
+        r.analyses.load(Ordering::SeqCst) == 2 && !pass_running(r)
+    });
+    set_trim(&r, -60.0);
+    r.run_until("analysed under -60", |r| {
+        r.analyses.load(Ordering::SeqCst) == 3 && !pass_running(r)
+    });
+    idle_for(&mut r, 100);
+    let loud = integrated(&r);
+    edit_in_place(&file);
+    r.gate.store(false, Ordering::SeqCst);
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseAll)
+        .unwrap();
+    r.run_until("the fresh job held", |r| {
+        r.analyses.load(Ordering::SeqCst) == 4
+    });
+    set_trim(&r, -50.0);
+    r.run_until("the restart", |r| {
+        r.handle.model.load().config.analysis.trim_threshold_db == -50.0
+    });
+    idle_for(&mut r, 50);
+    r.gate.store(true, Ordering::SeqCst);
+    r.run_until("the pass ended", |r| !pass_running(r));
+    idle_for(&mut r, 100);
+    assert!((integrated(&r) - loud).abs() > 6.0, "measured again");
+}
+
+/// Review of #115: a track read only so a player can draw its waveform is
+/// not analysis activity.
+#[test]
+fn a_waveform_read_for_a_player_is_not_activity() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let mut r = rig(&files, dir);
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    idle_for(&mut r, 100);
+    let model = r.handle.model.load_full();
+    let second = model.playlists.iter().next().unwrap().entries[1].clone();
+    let track = second.track;
+    assert!(!r.media.contains(track), "not shown, not kept");
+    r.gate.store(false, Ordering::SeqCst);
+    assert!(
+        r.handle
+            .send(Command::SetNext(model.players[0].id, second.id))
+    );
+    r.run_until("the waveform read held", |r| {
+        r.analyses.load(Ordering::SeqCst) == 3
+    });
+    r.services.step(r.now);
+    assert!(!r.services.activity().load().is_busy());
+    r.gate.store(true, Ordering::SeqCst);
+    r.run_until("the waveform", |r| r.media.contains(track));
+}
+
+/// Review of #115: an idle library does not rebuild the activity every
+/// round.
+#[test]
+fn the_activity_is_rebuilt_only_when_something_changed() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = wav(dir.path(), "a.wav", 1);
+    let mut r = rig(std::slice::from_ref(&file), dir);
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    idle_for(&mut r, 200);
+    let before = r.services.activity_builds();
+    assert!(before > 0);
+    idle_for(&mut r, 200);
+    assert_eq!(r.services.activity_builds(), before);
+}

@@ -346,8 +346,8 @@ The services thread submits tracks when either:
   reported again at the next look. `ServiceRequest::ReanalyseTrack` (the row
   menu's **Re-analyse**) clears the failure and queues the track on the
   urgent queue as a fresh job, so the file is read again even when it did
-  not change. A track already queued or running (not just for a cart's
-  peaks) is left alone.
+  not change. A track already queued or running (not just for its
+  waveform) is left alone.
 
 **Library pass and explicit re-analysis** (main spec §6.1, itr06 I8, I11).
 *Re-analyse all* and a change of the analysis settings (`restart_analysis`)
@@ -357,15 +357,22 @@ its track (a command that cannot be queued puts it back); a track removed
 from the library leaves it; when nothing is in flight and nothing is forced
 the pass ends whatever happened. While it runs, `ReanalyseAll` is ignored:
 nothing is cancelled and nothing restarts. A settings change still cancels
-and restarts it. The two explicit requests fill `Services::fresh`, which
-`consider` uses up by submitting a fresh job (`submit_fresh`,
-`submit_urgent_fresh`); a read only for a cart's peaks keeps the mark.
+and restarts it, fresh again when it came from *Re-analyse all*
+(`Services::pass_fresh`). The two explicit requests fill
+`Services::fresh`, which `consider` uses up by submitting a fresh job
+(`submit_fresh`, `submit_urgent_fresh`); a read only for a waveform keeps
+the mark.
 
 **Activity.** At the end of every analysis step `publish_activity` builds
 an `AnalysisActivity` (`fp-app/src/activity.rs`) from `Analyzer::activity`
-without the peaks-only jobs, plus the forced tracks not submitted yet, the
-loudness-only jobs and the pass's progress, and stores it in an
-`ActivityCell` (`Arc<ArcSwap<…>>`) only when it changed. `main` hands
+without the reads of an analysed track for its waveform
+(`Services::shown_only`: a player's or a cart's; unlike `peaks_only` it
+only affects the activity and the Re-analyse guard, not how the result is
+applied), plus the forced tracks not submitted yet, the loudness-only jobs
+and the pass's progress, and stores it in an `ActivityCell`
+(`Arc<ArcSwap<…>>`) only when it changed. It is rebuilt only when
+`Analyzer::activity_version`, the forced and shown-only counts or the pass
+moved, so an idle large library costs two short locks per round. `main` hands
 `Services::activity()` to the interface, which only loads it.
 
 The **header reader** (`fp-header-reader`, `fp-app/src/header.rs`, driven
