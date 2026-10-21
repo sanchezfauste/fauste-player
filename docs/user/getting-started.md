@@ -140,7 +140,13 @@ dropped. Multichannel Opus and AAC files cannot be read and show as unreadable.
 Each file is analysed in the background. The analysis reads the title,
 artist, album and cover art, draws the waveform, and finds where the sound
 starts and ends and where to mix into the next track. You can play a track
-before its analysis finishes.
+before its analysis finishes. While files are being analysed, the right of
+the status bar says how many (**Analysing 12 tracks**); hover it to see the
+files being analysed now, how many are waiting and, during a
+**Re-analyse all tracks**, how far it has got. When there is less room, the
+legend items left of it are hidden first. While only loudness measurements
+run (see [Loudness](loudness.md)) it says **Measuring the loudness of N
+tracks**.
 
 ## Play
 

@@ -31,7 +31,8 @@ New files are measured with their first analysis. Files added before
 loudness was measured are measured by a **background pass** that runs while
 the normal analysis has nothing to do, without touching their markers. It
 runs whether normalization is on or off, so the measurements are ready when
-you turn it on. **Re-analyse** (in the playlist menu) measures a file again.
+you turn it on. **Re-analyse** (in the playlist menu) measures a file again,
+reading it even if its size and date did not change.
 A file shorter than
 0.4 s is never measured, and a silent file has no loudness: both play
 unchanged.
