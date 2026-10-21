@@ -1979,6 +1979,15 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
         .as_ref()
         .filter(|(_, until)| *until > scene.time)
         .map(|(text, _)| text.clone());
+    // The text on the left: an alert or a notice must stay readable, the
+    // shortcut hints may be cut to nothing.
+    let (text, color, keep) = if let Some(alert) = alerts.first() {
+        (alert.clone(), theme::ON_AIR_TEXT, true)
+    } else if let Some(notice) = notice {
+        (notice, theme::AMBER, true)
+    } else {
+        (t.tr("status-hints"), theme::NEUTRAL_500, false)
+    };
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.spacing_mut().item_spacing = vec2(18.0, 0.0);
         ui.add_space(12.0);
@@ -1990,23 +1999,35 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
             )
             .selectable(false),
         );
-        // Main spec §6.1: the analysis activity sits left of the legend;
-        // legend items that would leave it no room are left out.
-        let busy = analysis_status(scene);
+        // Main spec §6.1: the room left of the platform goes first to an
+        // alert or notice, then to the analysis item, then to the legend,
+        // whose items give way from the inside out.
         let gap = ui.spacing().item_spacing.x;
-        let reserve = busy
-            .as_ref()
-            .map_or(0.0, |(text, _)| status_text_width(ui, text) + gap);
+        let mut budget = ui.available_width();
+        if keep {
+            budget -= status_text_width(ui, &text) + gap;
+        }
+        let busy = analysis_status(scene).filter(|(busy, _)| {
+            let width = status_text_width(ui, busy) + gap;
+            let fits = width <= budget;
+            if fits {
+                budget -= width;
+            }
+            fits
+        });
         for (color, key) in status_legend() {
             let label = t.tr(key);
-            if ui.available_width() >= legend_width(ui, &label) + gap + reserve {
-                legend(ui, color, &label);
+            let width = legend_width(ui, &label) + gap;
+            if width > budget {
+                break;
             }
+            budget -= width;
+            legend(ui, color, &label);
         }
-        if let Some((text, tip)) = busy {
+        if let Some((busy, tip)) = busy {
             ui.add(
                 egui::Label::new(
-                    RichText::new(text)
+                    RichText::new(busy)
                         .font(font(11.0))
                         .color(theme::NEUTRAL_400),
                 )
@@ -2015,13 +2036,6 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
             .on_hover_text(tip);
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-            let (text, color) = if let Some(alert) = alerts.first() {
-                (alert.clone(), theme::ON_AIR_TEXT)
-            } else if let Some(notice) = notice {
-                (notice, theme::AMBER)
-            } else {
-                (t.tr("status-hints"), theme::NEUTRAL_500)
-            };
             ui.add(
                 egui::Label::new(RichText::new(text).font(font(11.0)).color(color))
                     .selectable(false)

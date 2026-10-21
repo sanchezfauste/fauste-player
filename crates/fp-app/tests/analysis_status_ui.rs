@@ -27,15 +27,22 @@ fn busy(s: &fp_model::AppState) -> AnalysisActivity {
     activity
 }
 
-fn open(
+fn open(s: fp_model::AppState, activity: AnalysisActivity, width: f32) -> Harness<'static, AppUi> {
+    open_with(s, activity, width, 0)
+}
+
+/// As `open`, with `faults` service faults (an alert in the status bar).
+fn open_with(
     mut s: fp_model::AppState,
     activity: AnalysisActivity,
     width: f32,
+    faults: u64,
 ) -> Harness<'static, AppUi> {
     let cell = activity_cell(activity);
     let lang = s.config.ui.language.take();
+    let counter = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(faults));
     let (mut h, fake) = harness_sized(s, egui::vec2(width, 700.0), move |ui| {
-        ui.with_analysis_activity(cell)
+        ui.with_analysis_activity(cell).with_service_faults(counter)
     });
     // The interface follows the configured language from a snapshot after
     // its first frame, as when the operator changes it.
@@ -138,4 +145,53 @@ fn the_item_is_clear_of_the_legend_in_a_narrow_window() {
 fn the_item_is_clear_of_the_legend_in_german() {
     clear_of_the_legend("de-DE", 1000.0);
     clear_of_the_legend("de-DE", 420.0);
+}
+
+/// The legend items shown at `width` in `lang`, in drawing order.
+fn legend_shown(
+    lang: &str,
+    width: f32,
+    faults: u64,
+) -> (Harness<'static, AppUi>, Vec<&'static str>) {
+    let mut s = state(1, 3);
+    s.config.ui.language = Some(lang.to_owned());
+    let activity = busy(&s);
+    let h = open_with(s, activity, width, faults);
+    let t = I18n::new(Some(lang));
+    let shown = status_legend()
+        .into_iter()
+        .map(|(_, key)| key)
+        .filter(|key| !in_bar(&h, &t.tr(key), 700.0).is_empty())
+        .collect();
+    (h, shown)
+}
+
+/// Review of #115: legend items give way from the inside out: the ones
+/// shown are always the outermost.
+#[test]
+fn the_legend_gives_way_from_the_inside_out() {
+    let order: Vec<&str> = status_legend().into_iter().map(|(_, k)| k).collect();
+    // German and Spanish name the next row with a word longer than the
+    // on-air one, which would fit where the next's did not.
+    for lang in ["de-DE", "es-ES"] {
+        for width in (420..=470).step_by(2) {
+            let (_, shown) = legend_shown(lang, width as f32, 0);
+            assert_eq!(shown[..], order[..shown.len()], "{lang} {width}: {shown:?}");
+        }
+    }
+}
+
+/// Review of #115: an alert keeps readable room: the legend and then the
+/// analysis item give way first.
+#[test]
+fn an_alert_keeps_its_room_in_a_narrow_german_window() {
+    let (h, shown) = legend_shown("de-DE", 420.0, 1);
+    let t = I18n::new(Some("de-DE"));
+    let alert = t.tr_args("alert-services-fault", &[("count", 1.into())]);
+    let alert = in_bar(&h, &alert, 700.0);
+    let alert = alert.first().expect("the alert");
+    assert!(shown.is_empty(), "{shown:?}");
+    let busy = t.tr_args("status-analysing", &[("count", 3.into())]);
+    assert!(in_bar(&h, &busy, 700.0).is_empty(), "the item gave way");
+    assert!(alert.width() > 250.0, "{alert:?}");
 }

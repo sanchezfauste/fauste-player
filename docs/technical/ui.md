@@ -238,9 +238,12 @@ loads it once (`load_full`, never a lock) into `Scene::analysis`. It feeds:
   `status-measuring` with only loudness-only jobs) and a tooltip with the
   running files (`tip-analysis-running`, one `• name` per line), the waiting
   count, the pass's progress and the loudness-only jobs. It is drawn left of
-  the legend in the right-to-left group; a legend item is drawn only when it
-  fits with the item's width reserved (`legend_width`), so at narrow widths
-  or in long languages the legend gives way and nothing leaves the bar;
+  the legend in the right-to-left group. `status_bar` budgets the room left
+  of the platform label: an alert or notice on the left keeps its full width
+  first (the shortcut hints may be cut to nothing), then the analysis item,
+  then the legend, which stops at the first item that does not fit
+  (`legend_width`), so items give way from the inside out and nothing leaves
+  the bar at narrow widths or in long languages, busy or idle;
 - the row flags: `view::analysis_flag` gives a waveform glyph for a running
   track (`flag-analysis-running`), the hourglass for a queued one
   (`flag-analysis-queued`) and, as before, for one not analysed and not
