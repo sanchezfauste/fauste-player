@@ -13,9 +13,10 @@ their own outputs, independently of the players.
 - **Stop all** (right end of the bar) stops every cart that is playing, on
   every page. Its label shows how many are playing, as in **Stop all (2)**;
   with none playing it is dimmed and shows no count.
-- While a cart plays, its border and a bar that shrinks as it plays take
-  the cart's [colour](#setting-up-carts) (red for a cart without one), and
-  its time counts down.
+- While a cart plays, its border and a bar that grows from the left as it
+  plays take the cart's [colour](#setting-up-carts) (red for a cart without
+  one), a thin line marks the played edge over the waveform, and its time
+  counts down. The line moves smoothly on every frame, even on a short cart.
 - Once a cart's file has been analysed, its waveform shows faintly behind
   its name, so you can tell a sound that hits at once from one that fades
   in. It covers what the cart plays, from its cue-in to its cue-out.

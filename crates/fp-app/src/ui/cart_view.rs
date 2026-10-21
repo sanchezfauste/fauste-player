@@ -175,6 +175,50 @@ pub fn page_on_air(state: &AppState, page: CartPageId) -> bool {
         .is_some_and(|p| p.carts.iter().any(|c| state.cartwall.is_playing(c.id)))
 }
 
+/// The playing position a cart button draws, between engine snapshots.
+///
+/// The engine publishes a position every few milliseconds, but the interface
+/// draws on its own clock; the sweep carries the last snapshot forward with
+/// the frame clock, so the line moves a little every frame (sub-pixel) instead
+/// of in the steps of whatever snapshot happened to arrive. It never moves
+/// backwards, except when the snapshot itself does (a loop pass, a restart).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CartSweep {
+    /// The last position the engine reported.
+    snapshot: f64,
+    /// The frame clock when it was first seen.
+    since: f64,
+    /// The position drawn on the previous frame.
+    shown: f64,
+}
+
+impl CartSweep {
+    pub fn new(position: f64, now: f64) -> Self {
+        Self {
+            snapshot: position,
+            since: now,
+            shown: position,
+        }
+    }
+
+    /// The position to draw at frame time `now`, given the engine's latest
+    /// `position` and the cart's `end` (seconds); never past `end`.
+    pub fn advance(&mut self, position: f64, now: f64, end: f64) -> f64 {
+        if position < self.snapshot {
+            *self = Self::new(position, now);
+            return position;
+        }
+        if position > self.snapshot {
+            self.snapshot = position;
+            self.since = now;
+        }
+        let ahead = self.snapshot + (now - self.since).max(0.0);
+        let shown = ahead.max(self.shown).min(end).max(position);
+        self.shown = shown;
+        shown
+    }
+}
+
 /// The colours of a cart button (cart colour spec CC6–CC8).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CartLook {
@@ -182,7 +226,7 @@ pub struct CartLook {
     pub hover_fill: Color32,
     pub active_fill: Color32,
     pub border: Color32,
-    /// The remaining-time fill while it plays.
+    /// The elapsed-time fill while it plays.
     pub progress: Color32,
     /// The kind marker of an idle or playing cart; `None`: the kind's own.
     pub marker: Option<Color32>,

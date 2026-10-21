@@ -701,7 +701,18 @@ fn cc7_a_playing_cart_with_a_colour_keeps_it_and_its_countdown_shows() {
     paint_cart(&mut s, 0, Some(CartColor::Amber));
     let id = s.cartwall.pages[0].carts[0].id;
     apply(&mut s, Command::FireCart(id)).unwrap();
-    let (h, _fake) = harness(s);
+    let (mut h, fake) = harness(s);
+    fake.telemetry.store(Arc::new(Telemetry {
+        carts: vec![(
+            id,
+            CartTelemetry {
+                position_secs: 5.0,
+                peak: 0.0,
+            },
+        )],
+        ..Telemetry::default()
+    }));
+    h.run_steps(2);
     let look = cart_look(Some(CartColor::Amber), true);
     let amber = theme::cart_color(CartColor::Amber);
     assert_eq!(
@@ -709,10 +720,10 @@ fn cc7_a_playing_cart_with_a_colour_keeps_it_and_its_countdown_shows() {
         (look.fill, amber, true)
     );
     let button = h.get_by_label("Station ID").rect();
-    assert!(
-        (progress_width(&h, "Station ID", look.progress) - button.width()).abs() < 1.0,
-        "the whole play range is still to play"
-    );
+    // I19: the played share (5.0 of the range 0.5 to 9.5) fills from the
+    // left, as far as the waveform has been played.
+    let share = progress_width(&h, "Station ID", look.progress) / button.width();
+    assert!((share - 4.5 / 9.0).abs() < 0.03, "{share}");
 }
 
 #[test]
@@ -922,4 +933,85 @@ fn rl13_filled_buttons_take_all_the_height_above_the_minimum() {
     assert_eq!(filled_button_height(f32::NAN, 4), BUTTON_HEIGHT);
     assert_eq!(filled_button_height(f32::INFINITY, 4), BUTTON_HEIGHT);
     assert_eq!(filled_button_height(100.0, 0), BUTTON_HEIGHT);
+}
+
+#[test]
+fn i22_the_sweep_advances_between_snapshots_and_never_goes_back() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(1.0, 100.0);
+    // No new snapshot: the frame clock carries the position on, sub-pixel.
+    let a = sweep.advance(1.0, 100.01, 9.0);
+    let b = sweep.advance(1.0, 100.03, 9.0);
+    assert!(
+        (a - 1.01).abs() < 1e-9 && (b - 1.03).abs() < 1e-9,
+        "{a} {b}"
+    );
+    // A snapshot that is a little behind what was drawn does not pull back.
+    let c = sweep.advance(1.02, 100.04, 9.0);
+    assert!(c >= b, "{c} {b}");
+    // Never past the end of the cart.
+    assert!((sweep.advance(1.02, 200.0, 9.0) - 9.0).abs() < 1e-9);
+}
+
+#[test]
+fn i22_the_sweep_follows_a_loop_or_restart_backwards() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(8.0, 10.0);
+    assert!(sweep.advance(8.0, 10.1, 9.0) > 8.0);
+    assert!((sweep.advance(0.2, 10.2, 9.0) - 0.2).abs() < 1e-9);
+}
+
+/// I19: the sweep grows from the start (left) to the end (right), with a line
+/// at its edge.
+#[test]
+fn i19_the_sweep_runs_left_to_right_with_a_line_at_the_played_edge() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (mut h, fake) = harness(s);
+    let look = cart_look(None, true);
+    let mut widths = Vec::new();
+    for position in [1.5, 4.5, 8.5] {
+        fake.telemetry.store(Arc::new(Telemetry {
+            carts: vec![(
+                id,
+                CartTelemetry {
+                    position_secs: position,
+                    peak: 0.0,
+                },
+            )],
+            ..Telemetry::default()
+        }));
+        h.run_steps(2);
+        widths.push(progress_width(&h, "Station ID", look.progress));
+    }
+    assert!(widths[0] < widths[1] && widths[1] < widths[2], "{widths:?}");
+}
+
+/// I22: between two engine snapshots the line still moves, frame by frame.
+#[test]
+fn i22_the_played_edge_advances_between_snapshots() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (mut h, fake) = harness(s);
+    fake.telemetry.store(Arc::new(Telemetry {
+        carts: vec![(
+            id,
+            CartTelemetry {
+                position_secs: 2.0,
+                peak: 0.0,
+            },
+        )],
+        ..Telemetry::default()
+    }));
+    let look = cart_look(None, true);
+    h.run_steps(2);
+    let first = progress_width(&h, "Station ID", look.progress);
+    let mut seen = vec![first];
+    for _ in 0..5 {
+        h.run_steps(5);
+        seen.push(progress_width(&h, "Station ID", look.progress));
+    }
+    assert!(seen.windows(2).all(|w| w[1] > w[0]), "{seen:?}");
 }
