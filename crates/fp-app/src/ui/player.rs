@@ -855,13 +855,45 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 t.tr("tip-next")
             };
+            let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
             let caption = if pv.fading {
-                t.tr("badge-fading").to_uppercase()
+                // As the header's badge: a fade stop fades, a crossfade mixes.
+                t.tr(if fade_stopping {
+                    "badge-fading"
+                } else {
+                    "badge-mixing"
+                })
+                .to_uppercase()
             } else if playing {
                 t.tr("next-caption")
             } else {
                 t.tr("play-caption")
             };
+            // While a fade runs, the button that started it drains a line like
+            // a playing cart's, from full to empty over the fade: Fade stop
+            // for a fade stop, Next/Play for a crossfade or a segue overlap
+            // (the UI times it from the frame that first showed the fade; a
+            // new fade (a fade stop pressed during a crossfade) restarts it,
+            // on Fade stop).
+            let fade_key = egui::Id::new(("fade-started", id.0));
+            let fade_left = if pv.fading {
+                let (_, started) = ui.data_mut(|d| {
+                    let entry =
+                        d.get_temp_mut_or_insert_with(fade_key, || (pv.fade_seq, scene.time));
+                    if entry.0 != pv.fade_seq {
+                        *entry = (pv.fade_seq, scene.time);
+                    }
+                    *entry
+                });
+                Some(view::fade_remaining_fraction(
+                    started, scene.time, pv.fade_ms,
+                ))
+            } else {
+                ui.data_mut(|d| d.remove_temp::<(u64, f64)>(fade_key));
+                None
+            };
+            let stop_left = fade_left.filter(|_| fade_stopping);
+            let next_left = fade_left.filter(|_| !fade_stopping);
             let play_style = TileStyle {
                 fill: Color32::TRANSPARENT,
                 border: theme::PLAY_BORDER,
@@ -884,6 +916,10 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 available.play,
                 play_style,
                 |p, r, c| {
+                    if let Some(left) = next_left {
+                        let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
+                        p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
+                    }
                     glyphs::paint(p, r.translate(vec2(0.0, -6.0)), play_action, 28.0, c);
                     p.text(
                         pos2(r.center().x, r.bottom() - 12.0),
@@ -905,7 +941,6 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 TileStyle::plain()
             };
-            let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
             let fade_style = if fade_stopping {
                 TileStyle {
                     fill: theme::NEUTRAL_800,
@@ -930,29 +965,8 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 t.tr("tip-stop-after")
             };
-            // While a fade runs, the Fade stop button drains a line like a
-            // playing cart's, from full to empty over the fade (the UI times
-            // it from the frame that first showed the fade; a new fade (a
-            // fade stop pressed during a crossfade) restarts it).
-            let fade_key = egui::Id::new(("fade-started", id.0));
-            let fade_left = if pv.fading {
-                let (_, started) = ui.data_mut(|d| {
-                    let entry =
-                        d.get_temp_mut_or_insert_with(fade_key, || (pv.fade_seq, scene.time));
-                    if entry.0 != pv.fade_seq {
-                        *entry = (pv.fade_seq, scene.time);
-                    }
-                    *entry
-                });
-                Some(view::fade_remaining_fraction(
-                    started, scene.time, pv.fade_ms,
-                ))
-            } else {
-                ui.data_mut(|d| d.remove_temp::<(u64, f64)>(fade_key));
-                None
-            };
             let fade_button: PaintFn = Box::new(move |p, r, c| {
-                if let Some(left) = fade_left {
+                if let Some(left) = stop_left {
                     let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
                     p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
                 }
