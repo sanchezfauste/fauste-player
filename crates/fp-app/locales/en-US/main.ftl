@@ -503,6 +503,7 @@ settings-restore-confirm = Restore
 
 
 menu-edit-tags = Edit tags…
+menu-loudness = Loudness…
 menu-edit-tags-file = The file is missing or cannot be read
 menu-edit-tags-format = This format has no writable tags
 menu-edit-tags-unread = The tags have not been read yet

@@ -122,6 +122,8 @@ Where to change them:
   measurement. It keeps editing that track even when the player moves on to
   another one; close it with its **×** button. It closes by itself if the
   track is removed.
+- **On a playlist row:** right-click the row and choose **Loudness…**: the
+  same popup, for that row's track.
 - **In the cart editor:** Settings → Cartwall, click a cart: the same two
   controls are under **Stop other carts when fired**, with the measurement
   under the label.

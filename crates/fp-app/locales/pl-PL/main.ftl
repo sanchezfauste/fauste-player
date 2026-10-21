@@ -513,6 +513,7 @@ settings-restore-confirm = Przywróć
 
 
 menu-edit-tags = Edytuj tagi…
+menu-loudness = Głośność…
 menu-edit-tags-file = Brak pliku lub nie można go odczytać
 menu-edit-tags-format = Ten format nie ma zapisywalnych tagów
 menu-edit-tags-unread = Tagi nie zostały jeszcze odczytane

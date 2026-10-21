@@ -532,3 +532,34 @@ fn n22_the_unmeasured_count_is_worked_out_once_per_snapshot() {
     assert_eq!(count.get(&second), 2);
     assert_eq!(count.scans(), 2);
 }
+
+#[test]
+fn n20_the_row_menu_opens_the_popup_of_that_track() {
+    let (mut h, fake) = harness(on_air());
+    h.run_steps(2);
+    let track = fake.state.load().playlists.iter().next().unwrap().entries[1].track;
+    h.get_all_by_label("Song 2")
+        .last()
+        .unwrap()
+        .click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Loudness…").click();
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+            .is_some()
+    );
+    fake.take_sent();
+    h.get_by_role_and_label(Role::Slider, "Trim").focus();
+    h.run_steps(1);
+    h.key_press(egui::Key::ArrowRight);
+    h.run_steps(2);
+    let sent = fake.take_sent();
+    assert!(
+        sent.iter().any(|c| matches!(
+            c,
+            Command::SetTrackLoudness { track: t, trim_db, .. } if *t == track && *trim_db == 0.5
+        )),
+        "{sent:?}"
+    );
+}

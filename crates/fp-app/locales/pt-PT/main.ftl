@@ -503,6 +503,7 @@ settings-restore-confirm = Repor
 
 
 menu-edit-tags = Editar etiquetas…
+menu-loudness = Loudness…
 menu-edit-tags-file = O ficheiro não existe ou não pode ser lido
 menu-edit-tags-format = Este formato não tem etiquetas graváveis
 menu-edit-tags-unread = As etiquetas ainda não foram lidas

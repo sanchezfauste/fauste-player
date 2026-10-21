@@ -503,6 +503,7 @@ settings-restore-confirm = Restaurar
 
 
 menu-edit-tags = Editar les etiquetes…
+menu-loudness = Sonoritat…
 menu-edit-tags-file = El fitxer no existeix o no es pot llegir
 menu-edit-tags-format = Aquest format no admet escriure etiquetes
 menu-edit-tags-unread = Encara no s'han llegit les etiquetes

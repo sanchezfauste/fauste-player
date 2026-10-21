@@ -503,6 +503,7 @@ settings-restore-confirm = Leheneratu
 
 
 menu-edit-tags = Editatu etiketak…
+menu-loudness = Ozentasuna…
 menu-edit-tags-file = Fitxategia falta da edo ezin da irakurri
 menu-edit-tags-format = Formatu honek ez du etiketak idazteko aukerarik
 menu-edit-tags-unread = Etiketak ez dira oraindik irakurri

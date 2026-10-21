@@ -362,6 +362,8 @@ band) stays a separate value, whatever the normalization target (Q4).
   measurement (or "not measured"), an **Exclude from normalization**
   checkbox and a **Trim** slider (−`max_trim_db` ..= +`max_trim_db`, 0.5 dB
   steps, double-click resets to 0). Each change sends `SetTrackLoudness`.
+  A playlist row's context menu has the same **Loudness…** item, for that
+  row's track.
   The popup reads only the snapshot (rule 8). It names the track it edits,
   keeps editing it when the player moves on, has a Close button, and closes
   by itself when the track leaves the library.
