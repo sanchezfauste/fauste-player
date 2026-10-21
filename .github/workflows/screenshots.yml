@@ -1,0 +1,145 @@
+name: screenshots
+
+# Retakes the README and guide screenshots (docs/images, English) and opens
+# or updates a single pull request, from the branch docs/retake-screenshots,
+# with the images that really changed.
+#   - push to master touching the UI, its strings, the theme or the
+#     screenshot scripts: retake and compare;
+#   - workflow_dispatch: a manual retake.
+# The images are compared with ImageMagick and a fuzz, so font antialiasing
+# noise does not count (scripts/site/compare-screenshots.sh). Nothing is
+# opened when no image changed. The translated guides take their own
+# screenshots at publish time (pages.yml) and are never touched here.
+#
+# Two jobs: `shots` builds and runs the app with read-only permissions and
+# no stored credentials; `publish` has the write permissions but runs no
+# build, only the compare, the commit and the pull request.
+#
+# One-time setup: with the default GITHUB_TOKEN, the repository setting
+# Settings -> Actions -> General -> "Allow GitHub Actions to create and
+# approve pull requests" must be on. A pull request opened with GITHUB_TOKEN
+# triggers no workflow, so CI does not run on it by itself: close and reopen
+# it, or run the checks by hand. To get CI automatically (and not need the
+# setting), add a repository secret SCREENSHOTS_TOKEN (a fine-grained token
+# with contents and pull requests write access); it is used when present.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - crates/fp-app/src/ui/**
+      - crates/fp-app/locales/**
+      - crates/fp-app/assets/**
+      - crates/fp-app/examples/demo_session.rs
+      - scripts/site/screenshots.sh
+      - scripts/site/tones.sh
+      - scripts/site/window_box.py
+      - scripts/site/compare-screenshots.sh
+      - scripts/site/screenshot-masks.txt
+      - .github/workflows/screenshots.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two runs never race on the branch; a queued run starts after the first.
+concurrency:
+  group: screenshots
+  cancel-in-progress: false
+
+env:
+  BRANCH: docs/retake-screenshots
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install the screenshot tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libasound2-dev libdbus-1-dev xvfb xdotool x11-utils \
+            imagemagick ffmpeg libxkbcommon-x11-0 libgl1 libegl1 libgl1-mesa-dri mesa-vulkan-drivers
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # The scratch state lives outside target/: rust-cache restores target/
+      # without the marker that lets screenshots.sh replace it.
+      - name: Take the screenshots
+        env:
+          SHOTS_HOME: ${{ runner.temp }}/shots-home
+        run: scripts/site/screenshots.sh --out "$RUNNER_TEMP/new-shots"
+      - name: Compare with docs/images
+        id: compare
+        shell: bash
+        run: |
+          set -o pipefail
+          scripts/site/compare-screenshots.sh "$RUNNER_TEMP/new-shots" | tee "$RUNNER_TEMP/new-shots/changes.txt"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/new-shots
+          if-no-files-found: error
+
+  publish:
+    needs: shots
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/new-shots
+      - name: Close the pull request when nothing changed
+        if: needs.shots.outputs.changed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+        run: |
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr close "$number" --delete-branch \
+              --comment "The screenshots match docs/images again; nothing to retake."
+          fi
+      - name: Open or update the pull request
+        if: needs.shots.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          new="$RUNNER_TEMP/new-shots"
+          scripts/site/compare-screenshots.sh --apply --prune "$new"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add docs/images
+          git commit -m "docs: retake screenshots" \
+            -m "Retaken by the screenshots workflow from ${SHA}."
+          git push --force origin "$BRANCH"
+          {
+            echo "Screenshots retaken from \`${SHA}\` by the screenshots workflow."
+            echo
+            echo "Images that changed (more than the fuzz and pixel tolerance of \`scripts/site/compare-screenshots.sh\`):"
+            echo
+            sed 's/^\([a-z]*\) \(.*\)$/- \1: `\2`/' "$new/changes.txt"
+            echo
+            echo "Look at the images before merging. If CI did not start on this pull request, close and reopen it."
+          } > "$RUNNER_TEMP/body.md"
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --title "docs: retake screenshots" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base master --head "$BRANCH" \
+              --title "docs: retake screenshots" --body-file "$RUNNER_TEMP/body.md"
+          fi

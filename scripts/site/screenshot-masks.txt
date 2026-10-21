@@ -1,0 +1,42 @@
+# Regions that change on every run of scripts/site/screenshots.sh, painted
+# on both images by compare-screenshots.sh before comparing:
+#   <image> <x>,<y>,<w>,<h>      (pixels of that image; '#' starts a comment)
+# Geometry follows the default 1920x1080 layout with four players (the
+# crops of shoot_guide in screenshots.sh): player n starts at x = 478*n in
+# main-screen.png; player.png is the crop 472x262+7+41, playlist.png
+# 472x614+7+309 and cartwall.png 1920x124+0+932. After a layout change, run
+# screenshots.sh --out twice and compare the two sets: nothing may differ.
+#
+# main-screen.png
+main-screen.png 1848,6,70,26 # top-bar clock
+main-screen.png 200,162,160,50 # player 1: remaining time
+main-screen.png 380,284,92,18 # player 1: elapsed / total
+main-screen.png 360,80,105,145 # player 1: meters and peak readouts
+main-screen.png 337,899,62,22 # playlist 1: remaining total
+main-screen.png 14,222,458,60 # player 1: waveform playhead (playing)
+main-screen.png 678,162,160,50 # player 2: remaining time
+main-screen.png 858,284,92,18 # player 2: elapsed / total
+main-screen.png 838,80,105,145 # player 2: meters and peak readouts
+main-screen.png 815,899,62,22 # playlist 2: remaining total
+main-screen.png 492,222,458,60 # player 2: waveform playhead (playing)
+main-screen.png 1156,162,160,50 # player 3: remaining time
+main-screen.png 1336,284,92,18 # player 3: elapsed / total
+main-screen.png 1316,80,105,145 # player 3: meters and peak readouts
+main-screen.png 1293,899,62,22 # playlist 3: remaining total
+main-screen.png 1634,162,160,50 # player 4: remaining time
+main-screen.png 1814,284,92,18 # player 4: elapsed / total
+main-screen.png 1794,80,105,145 # player 4: meters and peak readouts
+main-screen.png 1771,899,62,22 # playlist 4: remaining total
+main-screen.png 486,958,232,38 # the cart that plays: countdown and sweep
+
+# guide/player.png (player 1)
+guide/player.png 193,121,160,50
+guide/player.png 373,243,92,18
+guide/player.png 353,39,105,145
+guide/player.png 7,181,458,60
+
+# guide/playlist.png
+guide/playlist.png 330,590,62,22
+
+# guide/cartwall.png
+guide/cartwall.png 486,26,232,38
