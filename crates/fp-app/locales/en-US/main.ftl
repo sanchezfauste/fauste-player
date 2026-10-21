@@ -161,6 +161,10 @@ settings-normalize-max-boost = Maximum boost
 settings-normalize-max-trim = Maximum trim
 settings-hint-normalize-apply = Changes apply to tracks loaded afterwards; what is playing keeps its gain.
 settings-hint-normalize-bp = A player or cart on a bit-perfect output always plays at unity gain: it is never normalized.
+settings-hint-normalize-target = The integrated loudness every track is brought to. −16 LUFS suits music on air and online; −23 LUFS is the EBU R128 broadcast level.
+settings-hint-normalize-ceiling = A boost never takes a track's true peak above this. −1 dBTP leaves room for conversion and lossy encoders.
+settings-hint-normalize-max-boost = The most a quiet track is turned up. 0 dB only turns loud tracks down.
+settings-hint-normalize-max-trim = How far a track's own trim may go, up or down.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } track not measured yet
    *[other] { $count } tracks not measured yet

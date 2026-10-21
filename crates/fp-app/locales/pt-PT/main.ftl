@@ -161,6 +161,10 @@ settings-normalize-max-boost = Ganho máximo
 settings-normalize-max-trim = Ajuste máximo
 settings-hint-normalize-apply = As alterações aplicam-se às faixas carregadas depois; o que está a tocar mantém o seu ganho.
 settings-hint-normalize-bp = Um leitor ou cartucho numa saída bit-perfect toca sempre com ganho unitário: nunca é normalizado.
+settings-hint-normalize-target = A sonoridade integrada a que cada faixa é levada. −16 LUFS serve para música no ar e online; −23 LUFS é o nível de difusão EBU R128.
+settings-hint-normalize-ceiling = Um aumento nunca leva o pico real de uma faixa acima deste valor. −1 dBTP deixa margem para a conversão e para codificadores com perdas.
+settings-hint-normalize-max-boost = O máximo que uma faixa baixa é aumentada. Com 0 dB só as faixas altas são baixadas.
+settings-hint-normalize-max-trim = Até onde pode ir o ajuste próprio de uma faixa, para cima ou para baixo.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } faixa ainda não medida
    *[other] { $count } faixas ainda não medidas
