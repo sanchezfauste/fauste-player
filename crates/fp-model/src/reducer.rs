@@ -183,6 +183,10 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             let i = state.player_index(id)?;
             state.players[i].columns = widths.normalized();
         }
+        Command::SetPlayerShares { left, right } => {
+            crate::layout::set_player_shares(state, left, right)?
+        }
+        Command::EqualPlayerWidths => crate::layout::equal_player_widths(state)?,
         Command::ApplyAnalysis { track, analysis } => {
             // Analysis may finish after the track was removed: nothing to do.
             if let Some(t) = state.library.get_mut(track) {

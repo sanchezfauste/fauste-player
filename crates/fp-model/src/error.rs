@@ -46,4 +46,14 @@ pub enum ModelError {
     /// Bit-perfect rate and fader spec BF3.
     #[error("the volume of player {} is held at 100 % on a bit-perfect output", .0.0)]
     FaderLocked(PlayerId),
+    /// Resizable layout spec RL4, RL6: a resize between players that are not
+    /// neighbours, or a share or size that is not a usable number.
+    #[error("that layout change is not valid")]
+    BadLayout,
+    /// RL7: the last shown panel cannot be hidden.
+    #[error("the last shown panel cannot be hidden")]
+    LastPanel,
+    /// RL9: the layout is locked.
+    #[error("the layout is locked")]
+    LayoutLocked,
 }

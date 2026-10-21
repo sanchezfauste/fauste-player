@@ -5,7 +5,9 @@
 mod common;
 
 use common::fixture;
-use fp_model::{AppState, CartwallLayout, Config, Dock, Layout, Panel, PlayerId};
+use fp_model::{
+    AppState, CartwallLayout, Command, Config, Dock, Layout, ModelError, Panel, PlayerId, apply,
+};
 
 fn close(a: f32, b: f32) -> bool {
     (a - b).abs() < 1e-5
@@ -134,4 +136,112 @@ fn terms_neighbours_skip_hidden_players() {
     s.layout.hidden_players = vec![p[1]];
     assert!(s.layout.are_neighbours(&p, p[0], p[2]));
     assert!(!s.layout.are_neighbours(&p, p[0], p[1]));
+}
+
+/// Every player's RL2 share, in display order.
+fn shares(s: &AppState) -> Vec<f32> {
+    let p = s.player_ids();
+    p.iter().map(|id| s.layout.share(&p, *id)).collect()
+}
+
+#[test]
+fn rl4_a_splitter_drag_sets_both_shares() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    apply(
+        &mut s,
+        Command::SetPlayerShares {
+            left: (p[0], 1.5),
+            right: (p[1], 0.5),
+        },
+    )
+    .unwrap();
+    assert!(all_close(&shares(&s), &[1.5, 0.5, 1.0, 1.0]));
+}
+
+#[test]
+fn rl4_the_pair_keeps_its_sum_whatever_the_interface_sends() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    let before = fractions(&s);
+    apply(
+        &mut s,
+        Command::SetPlayerShares {
+            left: (p[1], 300.0),
+            right: (p[2], 100.0),
+        },
+    )
+    .unwrap();
+    assert!(all_close(&shares(&s), &[1.0, 1.5, 0.5, 1.0]));
+    let after = fractions(&s);
+    assert!(close(after[0], before[0]) && close(after[3], before[3]));
+}
+
+#[test]
+fn rl4_every_player_gets_its_share_written_down() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    s.layout.player_shares = vec![(p[0], 4.0), (PlayerId(999_999), 2.0)];
+    apply(
+        &mut s,
+        Command::SetPlayerShares {
+            left: (p[2], 1.0),
+            right: (p[3], 7.0),
+        },
+    )
+    .unwrap();
+    let ids: Vec<PlayerId> = s.layout.player_shares.iter().map(|(id, _)| *id).collect();
+    assert_eq!(ids, p, "one share per current player, the stranger gone");
+    assert!(all_close(&shares(&s), &[4.0, 4.0, 1.0, 7.0]));
+}
+
+#[test]
+fn rl4_neighbours_across_a_hidden_player() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    s.layout.hidden_players = vec![p[1]];
+    apply(
+        &mut s,
+        Command::SetPlayerShares {
+            left: (p[0], 0.5),
+            right: (p[2], 1.5),
+        },
+    )
+    .unwrap();
+    assert!(all_close(&shares(&s), &[0.5, 1.0, 1.5, 1.0]));
+}
+
+#[test]
+fn rl4_a_stranger_a_non_neighbour_and_a_bad_share_are_rejected() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    s.layout.hidden_players = vec![p[3]];
+    let stranger = PlayerId(999_999);
+    let before = s.clone();
+    for (left, right) in [
+        ((stranger, 1.0), (p[0], 1.0)),
+        ((p[0], 1.0), (p[2], 1.0)),
+        ((p[1], 1.0), (p[0], 1.0)),
+        ((p[2], 1.0), (p[3], 1.0)),
+        ((p[0], f32::NAN), (p[1], 1.0)),
+        ((p[0], 1.0), (p[1], f32::INFINITY)),
+        ((p[0], 0.0), (p[1], 2.0)),
+        ((p[0], -1.0), (p[1], 3.0)),
+    ] {
+        let err = apply(&mut s, Command::SetPlayerShares { left, right }).unwrap_err();
+        assert_eq!(err, ModelError::BadLayout, "{left:?} {right:?}");
+        assert_eq!(s, before, "a refused command changes nothing");
+    }
+}
+
+#[test]
+fn rl5_equal_widths_gives_every_player_the_same_share() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    s.layout.player_shares = vec![(p[0], 3.0), (p[1], 0.2)];
+    s.layout.hidden_players = vec![p[2]];
+    apply(&mut s, Command::EqualPlayerWidths).unwrap();
+    assert!(all_close(&shares(&s), &[1.0; 4]));
+    assert!(all_close(&fractions(&s), &[1.0 / 3.0; 3]));
+    assert_eq!(s.layout.hidden_players, vec![p[2]], "it shows nothing");
 }

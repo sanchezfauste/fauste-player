@@ -65,6 +65,16 @@ pub enum Command {
     Seek(PlayerId, f64),
     ShowPlaylist(PlayerId, PlaylistId),
     SetColumnWidths(PlayerId, ColumnWidths),
+    /// Resizable layout spec RL4: the shares of two neighbouring shown
+    /// players after a splitter drag (`right` is the next shown player
+    /// after `left`). Each share must be finite and above 0; the model
+    /// scales the pair to keep its sum, so no other player moves.
+    SetPlayerShares {
+        left: (PlayerId, f32),
+        right: (PlayerId, f32),
+    },
+    /// RL5: every player gets the same share.
+    EqualPlayerWidths,
     /// Stores an analysis result for a track (ignored if the track is gone).
     ApplyAnalysis {
         track: TrackId,

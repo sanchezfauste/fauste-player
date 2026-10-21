@@ -5,7 +5,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::ModelError;
 use crate::ids::PlayerId;
+use crate::state::AppState;
 
 /// RL6: the share of the middle area's width the cartwall gets when it is
 /// docked on a side.
@@ -173,4 +175,70 @@ impl Layout {
             (valid.iter().sum::<f64>() / valid.len() as f64) as f32
         }
     }
+}
+
+/// RL9: every layout command but `SetLayoutLocked` is refused while the
+/// layout is locked. Checked before anything else.
+pub(crate) fn unlocked(state: &AppState) -> Result<(), ModelError> {
+    if state.layout.locked {
+        Err(ModelError::LayoutLocked)
+    } else {
+        Ok(())
+    }
+}
+
+fn usable_share(share: f32) -> bool {
+    share.is_finite() && share > 0.0
+}
+
+/// Every player of `players` with its RL2 share, in display order.
+fn resolved_shares(layout: &Layout, players: &[PlayerId]) -> Vec<(PlayerId, f32)> {
+    players
+        .iter()
+        .map(|p| (*p, layout.share(players, *p)))
+        .collect()
+}
+
+/// RL4: the pair takes the new shares, scaled to keep the pair's sum; every
+/// current player's share is written down (shares of players that are gone
+/// are dropped).
+pub(crate) fn set_player_shares(
+    state: &mut AppState,
+    left: (PlayerId, f32),
+    right: (PlayerId, f32),
+) -> Result<(), ModelError> {
+    unlocked(state)?;
+    let players = state.player_ids();
+    let layout = &state.layout;
+    if !layout.are_neighbours(&players, left.0, right.0)
+        || !usable_share(left.1)
+        || !usable_share(right.1)
+    {
+        return Err(ModelError::BadLayout);
+    }
+    let before =
+        f64::from(layout.share(&players, left.0)) + f64::from(layout.share(&players, right.0));
+    let scale = before / (f64::from(left.1) + f64::from(right.1));
+    let new_left = (f64::from(left.1) * scale) as f32;
+    let new_right = (f64::from(right.1) * scale) as f32;
+    if !usable_share(new_left) || !usable_share(new_right) {
+        return Err(ModelError::BadLayout);
+    }
+    let mut shares = resolved_shares(layout, &players);
+    for (id, share) in &mut shares {
+        if *id == left.0 {
+            *share = new_left;
+        } else if *id == right.0 {
+            *share = new_right;
+        }
+    }
+    state.layout.player_shares = shares;
+    Ok(())
+}
+
+/// RL5: every current player gets share 1.0.
+pub(crate) fn equal_player_widths(state: &mut AppState) -> Result<(), ModelError> {
+    unlocked(state)?;
+    state.layout.player_shares = state.players.iter().map(|p| (p.id, 1.0)).collect();
+    Ok(())
 }
