@@ -484,11 +484,12 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                 }
                 // I19/I22: the elapsed share, from the position carried on
                 // with the frame clock between engine snapshots; a playing
-                // cart keeps the cartwall repainting every frame.
+                // cart with a known length keeps the cartwall repainting every frame.
                 let sweep_id = egui::Id::new(("cart-sweep", cart.id));
                 let elapsed = if playing {
-                    ui.ctx().request_repaint();
                     view.wave_range.map(|(start, span)| {
+                        // Something moves: ask for the next frame.
+                        ui.ctx().request_repaint();
                         let reported = scene
                             .telemetry
                             .carts
@@ -498,7 +499,11 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                         let mut sweep = ui
                             .data(|d| d.get_temp::<CartSweep>(sweep_id))
                             .unwrap_or_else(|| CartSweep::new(reported, scene.time));
-                        let at = sweep.advance(reported, scene.time, start + span);
+                        // At most two telemetry intervals past the snapshot, so
+                        // a stalled engine does not run the line to the end.
+                        let max_ahead =
+                            2.0 * scene.state.config.tuning.conductor_tick_ms.max(1.0) / 1000.0;
+                        let at = sweep.advance(reported, scene.time, start + span, max_ahead);
                         ui.data_mut(|d| d.insert_temp(sweep_id, sweep));
                         ((at - start) / span).clamp(0.0, 1.0) as f32
                     })

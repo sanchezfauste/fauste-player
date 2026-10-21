@@ -898,10 +898,10 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 t.tr("play-caption")
             };
-            // While a fade runs, the button that started it drains a line like
-            // a playing cart's, from full to empty over the fade: Fade stop
-            // for a fade stop, Next/Play for a crossfade or a segue overlap
-            // (the UI times it from the frame that first showed the fade; a
+            // While a fade runs, the button that started it drains a line
+            // from full to empty over the fade: Fade stop for a fade stop,
+            // Previous for a crossfade it started, Next/Play for any other
+            // crossfade or a segue overlap (the UI times it from the frame that first showed the fade; a
             // new fade (a fade stop pressed during a crossfade) restarts it,
             // on Fade stop).
             let fade_key = egui::Id::new(("fade-started", id.0));

@@ -280,6 +280,14 @@ fn rule8_a_fade_remembers_which_command_started_it() {
     let player = state.player(p).unwrap();
     assert!(player.fading);
     assert_eq!(player.fade_origin, FadeOrigin::Previous);
+    // The end of the fade clears it; the next crossfade is Next's again.
+    on_event(&mut state, EngineEvent::FadeCompleted { player: p });
+    let done = state.player(p).unwrap();
+    assert!(!done.fading && done.fade_ms == 0);
+    assert_eq!(done.fade_origin, FadeOrigin::default());
+    apply(&mut state, Command::Play(p)).unwrap();
+    assert!(state.player(p).unwrap().fading);
+    assert_eq!(state.player(p).unwrap().fade_origin, FadeOrigin::Next);
     // A fade stop pressed during the crossfade takes the fade over.
     apply(&mut state, Command::FadeStop(p)).unwrap();
     assert_eq!(state.player(p).unwrap().fade_origin, FadeOrigin::FadeStop);

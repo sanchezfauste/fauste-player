@@ -246,8 +246,8 @@ matches no locale shows as System.
 - **Button:**
   - a kind dot (Jingle accent, Effect amber, Spot neutral), the name, the
     kind label, and the time (`-mm:ss` countdown while playing);
-  - a red border and a translucent red progress bar that shrinks while
-    playing;
+  - a red border and a translucent red elapsed fill growing from the left with
+    a 2 pt line at its edge while playing;
   - a warning style when the file is unavailable, and a dimmed "Empty" style
     when there is none;
   - right-click opens: *Pre-listen on CUE*, *Stop*, *Edit…* (opens Settings on

@@ -92,7 +92,6 @@ fn cart_views_show_length_countdown_and_progress() {
     let playing = cart_view(&s, &telemetry, id).unwrap();
     assert_eq!(playing.status, CartStatus::Playing);
     assert_eq!(playing.time, "-00:06");
-    assert!((playing.remaining_fraction - 6.5 / 9.0).abs() < 1e-3);
 }
 
 #[test]
@@ -940,25 +939,25 @@ fn i22_the_sweep_advances_between_snapshots_and_never_goes_back() {
     use fp_app::ui::cart_view::CartSweep;
     let mut sweep = CartSweep::new(1.0, 100.0);
     // No new snapshot: the frame clock carries the position on, sub-pixel.
-    let a = sweep.advance(1.0, 100.01, 9.0);
-    let b = sweep.advance(1.0, 100.03, 9.0);
+    let a = sweep.advance(1.0, 100.01, 9.0, 1.0);
+    let b = sweep.advance(1.0, 100.03, 9.0, 1.0);
     assert!(
         (a - 1.01).abs() < 1e-9 && (b - 1.03).abs() < 1e-9,
         "{a} {b}"
     );
     // A snapshot that is a little behind what was drawn does not pull back.
-    let c = sweep.advance(1.02, 100.04, 9.0);
+    let c = sweep.advance(1.02, 100.04, 9.0, 1.0);
     assert!(c >= b, "{c} {b}");
     // Never past the end of the cart.
-    assert!((sweep.advance(1.02, 200.0, 9.0) - 9.0).abs() < 1e-9);
+    assert!((sweep.advance(1.02, 200.0, 9.0, 1000.0) - 9.0).abs() < 1e-9);
 }
 
 #[test]
 fn i22_the_sweep_follows_a_loop_or_restart_backwards() {
     use fp_app::ui::cart_view::CartSweep;
     let mut sweep = CartSweep::new(8.0, 10.0);
-    assert!(sweep.advance(8.0, 10.1, 9.0) > 8.0);
-    assert!((sweep.advance(0.2, 10.2, 9.0) - 0.2).abs() < 1e-9);
+    assert!(sweep.advance(8.0, 10.1, 9.0, 1.0) > 8.0);
+    assert!((sweep.advance(0.2, 10.2, 9.0, 1.0) - 0.2).abs() < 1e-9);
 }
 
 /// I19: the sweep grows from the start (left) to the end (right), with a line
@@ -986,11 +985,48 @@ fn i19_the_sweep_runs_left_to_right_with_a_line_at_the_played_edge() {
         widths.push(progress_width(&h, "Station ID", look.progress));
     }
     assert!(widths[0] < widths[1] && widths[1] < widths[2], "{widths:?}");
+    // The fill starts at the button's left edge and a line marks its right.
+    let button = h.get_by_label("Station ID").rect();
+    let fill = rects_in(&h, button)
+        .into_iter()
+        .filter(|r| r.fill == look.progress)
+        .max_by(|a, b| a.rect.width().total_cmp(&b.rect.width()))
+        .unwrap();
+    assert!((fill.rect.min.x - button.left()).abs() < 0.5);
+    let lines = line_xs_in(&h, button);
+    assert!(
+        lines.iter().any(|x| (x - fill.rect.max.x).abs() < 0.5),
+        "{lines:?} vs {:?}",
+        fill.rect
+    );
 }
 
-/// I22: between two engine snapshots the line still moves, frame by frame.
+/// The x of every vertical line segment painted inside `area` in the last
+/// frame.
+fn line_xs_in(h: &H, area: Rect) -> Vec<f32> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<[egui::Pos2; 2]>) {
+        match shape {
+            egui::Shape::LineSegment { points, .. } => out.push(*points),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut all = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, &mut all);
+    }
+    all.into_iter()
+        .filter(|p| {
+            p[0].x == p[1].x && area.expand(0.5).contains(p[0]) && area.expand(0.5).contains(p[1])
+        })
+        .map(|p| p[0].x)
+        .collect()
+}
+
+/// I22: between two engine snapshots the line still moves, within the cap
+/// of two telemetry intervals, and holds if no snapshot follows.
 #[test]
-fn i22_the_played_edge_advances_between_snapshots() {
+fn i22_the_played_edge_advances_between_snapshots_and_holds_at_the_cap() {
     let mut s = with_cart();
     let id = s.cartwall.pages[0].carts[0].id;
     apply(&mut s, Command::FireCart(id)).unwrap();
@@ -1006,12 +1042,12 @@ fn i22_the_played_edge_advances_between_snapshots() {
         ..Telemetry::default()
     }));
     let look = cart_look(None, true);
-    h.run_steps(2);
+    h.run_steps(1);
     let first = progress_width(&h, "Station ID", look.progress);
-    let mut seen = vec![first];
-    for _ in 0..5 {
-        h.run_steps(5);
-        seen.push(progress_width(&h, "Station ID", look.progress));
-    }
-    assert!(seen.windows(2).all(|w| w[1] > w[0]), "{seen:?}");
+    h.run_steps(1);
+    let second = progress_width(&h, "Station ID", look.progress);
+    assert!(second > first, "{first} {second}");
+    h.run_steps(20);
+    let held = progress_width(&h, "Station ID", look.progress);
+    assert!(held - second < 1.0, "holds at the cap: {second} {held}");
 }

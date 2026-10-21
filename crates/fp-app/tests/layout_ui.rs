@@ -2030,6 +2030,19 @@ fn cart_on_air(hide_players: bool) -> AppState {
         },
     )
     .unwrap();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    let analysis = TrackAnalysis {
+        duration_secs: 10.0,
+        ..TrackAnalysis::default()
+    };
+    apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
     let id = s.cartwall.pages[0].carts[0].id;
     apply(&mut s, Command::FireCart(id)).unwrap();
     if hide_players {

@@ -46,8 +46,9 @@ Each cart also shows its waveform faintly behind the text, so its shape
   background. The kind marker (the small square) takes the cart's colour.
   A cart without a colour is drawn as today.
 - **CC7. Playing cart.** A playing cart with a colour has the border in
-  the full colour, an interior wash at 16 %, and the remaining-time fill
-  in the colour at 38 %, so the countdown stays visible. A playing cart
+  the full colour, an interior wash at 16 %, and the elapsed fill
+  (growing from the left, with a 2 pt line at its edge) in the colour at
+  38 %, so the progress stays visible. A playing cart
   without a colour is drawn as today (red).
 - **CC8. Waveform.** A cart with a file whose analysis has peaks draws its
   waveform behind the text, across the whole button, in the cart's colour

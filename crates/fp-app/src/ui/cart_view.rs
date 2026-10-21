@@ -102,8 +102,6 @@ pub struct CartView {
     pub status: CartStatus,
     /// The length when idle, `-mm:ss` left while playing; empty if unknown.
     pub time: String,
-    /// Share of the cart still to play (1 at the start, 0 at the end).
-    pub remaining_fraction: f32,
     pub looped: bool,
     pub exclusive: bool,
     pub cueing: bool,
@@ -130,7 +128,6 @@ pub fn cart_view(state: &AppState, telemetry: &Telemetry, id: CartId) -> Option<
         kind: cart.kind,
         status,
         time: String::new(),
-        remaining_fraction: 0.0,
         looped: cart.looped,
         exclusive: cart.exclusive,
         cueing: state.cartwall.cue == Some(id),
@@ -157,9 +154,6 @@ pub fn cart_view(state: &AppState, telemetry: &Telemetry, id: CartId) -> Option<
         if known {
             let left = (track.cue_out_secs() - position).clamp(0.0, length);
             view.time = format!("-{}", format::clock(left));
-            view.remaining_fraction = (left / length) as f32;
-        } else {
-            view.remaining_fraction = 1.0;
         }
     } else if known {
         view.time = format::clock(length);
@@ -181,7 +175,10 @@ pub fn page_on_air(state: &AppState, page: CartPageId) -> bool {
 /// draws on its own clock; the sweep carries the last snapshot forward with
 /// the frame clock, so the line moves a little every frame (sub-pixel) instead
 /// of in the steps of whatever snapshot happened to arrive. It never moves
-/// backwards, except when the snapshot itself does (a loop pass, a restart).
+/// backwards, except when the snapshot itself does (a loop pass, a restart):
+/// a snapshot a little behind what was drawn holds the line for a moment
+/// instead of stepping it back. The extrapolation past the last snapshot is
+/// capped, so an engine that stops reporting does not run the line to the end.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CartSweep {
     /// The last position the engine reported.
@@ -202,8 +199,9 @@ impl CartSweep {
     }
 
     /// The position to draw at frame time `now`, given the engine's latest
-    /// `position` and the cart's `end` (seconds); never past `end`.
-    pub fn advance(&mut self, position: f64, now: f64, end: f64) -> f64 {
+    /// `position` and the cart's `end` (seconds); never past `end`, and never
+    /// more than `max_ahead` seconds past the snapshot.
+    pub fn advance(&mut self, position: f64, now: f64, end: f64, max_ahead: f64) -> f64 {
         if position < self.snapshot {
             *self = Self::new(position, now);
             return position;
@@ -212,7 +210,7 @@ impl CartSweep {
             self.snapshot = position;
             self.since = now;
         }
-        let ahead = self.snapshot + (now - self.since).max(0.0);
+        let ahead = self.snapshot + (now - self.since).clamp(0.0, max_ahead.max(0.0));
         let shown = ahead.max(self.shown).min(end).max(position);
         self.shown = shown;
         shown

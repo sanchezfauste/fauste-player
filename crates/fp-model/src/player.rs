@@ -178,6 +178,13 @@ impl PlayerState {
         self.fade_stop_pending
     }
 
+    /// Ends the running fade: not fading, no length, the default origin.
+    pub(crate) fn end_fade(&mut self) {
+        self.fading = false;
+        self.fade_ms = 0;
+        self.fade_origin = FadeOrigin::default();
+    }
+
     /// Marks the player as fading for `fade_ms` and numbers the fade.
     pub(crate) fn begin_fade(&mut self, fade_ms: u32, origin: FadeOrigin) {
         self.fading = true;

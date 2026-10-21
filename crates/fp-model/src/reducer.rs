@@ -423,8 +423,7 @@ fn on_engine_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction
     match event {
         EngineEvent::FadeCompleted { player } => {
             if let Ok(i) = state.player_index(player) {
-                state.players[i].fading = false;
-                state.players[i].fade_ms = 0;
+                state.players[i].end_fade();
             }
         }
         EngineEvent::ReachedEnd { player, entry } => {
@@ -512,8 +511,7 @@ fn on_engine_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction
                     match overlap_ms {
                         Some(ms) => state.players[i].begin_fade(ms, FadeOrigin::Segue),
                         None => {
-                            state.players[i].fading = false;
-                            state.players[i].fade_ms = 0;
+                            state.players[i].end_fade();
                         }
                     }
                     state.players[i].on_air = Some(normalization);
@@ -1423,8 +1421,7 @@ pub(crate) fn stop_player(state: &mut AppState, i: usize) {
     let player = &mut state.players[i];
     player.current = None;
     player.transport = Transport::Stopped;
-    player.fading = false;
-    player.fade_ms = 0;
+    player.end_fade();
     player.fade_stop_pending = false;
     player.stop_after_current = false;
     player.dsd = None;
