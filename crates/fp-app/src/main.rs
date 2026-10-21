@@ -156,6 +156,7 @@ fn run(
         Services::new(handle.clone(), store, analyzer, media.clone()).with_report_cap(report_cap);
     let requests = services.requests();
     let faults = services.faults();
+    let activity = services.activity();
     let services = services.spawn()?;
 
     let remote = fp_app::remote::start(
@@ -165,6 +166,7 @@ fn run(
     );
     let mut app = AppUi::new(handle.clone(), i18n, media)
         .with_services(requests)
+        .with_analysis_activity(activity)
         .with_service_faults(faults)
         .with_backends(backends)
         .with_notices(

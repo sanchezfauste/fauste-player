@@ -168,8 +168,13 @@ channels:
 
 The thresholds described in [Markers and mixing](markers-and-mixing.md); each
 row has a one-line hint under its name saying what the value does.
-**Re-analyse all tracks** runs the analysis again for the whole library;
-manual markers are kept.
+**Re-analyse all tracks** runs the analysis again for the whole library,
+reading every file again; manual markers are kept. While it runs the button
+is dimmed and shows how far it has got (**Analysing… 120 of 340**), so
+pressing it again does not start over; the tooltip of the status bar's
+**Analysing N tracks** gives the same progress. Changing a threshold here also analyses the library again, and
+restarts a run already going so that no track keeps markers of the old
+values.
 
 After an update whose analysis has changed, tracks analysed by the earlier
 version keep their markers and waveforms, which still work. At start,

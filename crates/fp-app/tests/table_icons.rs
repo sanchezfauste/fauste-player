@@ -12,10 +12,11 @@ mod support;
 use egui::Rect;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
+use fp_app::activity::AnalysisActivity;
 use fp_app::ui::app::AppUi;
 use fp_app::ui::controller::Controller;
 use fp_model::{AppState, Command, EntryId, TrackAnalysis};
-use support::{harness, harness_sized, state};
+use support::{activity_cell, harness, harness_from, harness_sized, nth_track, state};
 
 fn entries(s: &AppState) -> Vec<EntryId> {
     s.playlists
@@ -174,4 +175,42 @@ fn an_outdated_track_never_shows_the_hourglass() {
         h.query_by_label_contains("Analysed by an earlier version")
             .is_some()
     );
+}
+
+/// Main spec §6.1: a running track shows its own icon, a queued one the
+/// hourglass ("Waiting for analysis"), one not queued the hourglass with
+/// "Analysis pending"; all after the title, in the flag slot.
+#[test]
+fn queued_and_running_tracks_have_their_own_icons() {
+    let s = state(1, 3);
+    let mut activity = AnalysisActivity::default();
+    activity.running.push(nth_track(&s, 0));
+    activity.queued.insert(nth_track(&s, 1));
+    let cell = activity_cell(activity);
+    let (h, _) = harness_from(s, move |ui| ui.with_analysis_activity(cell));
+    let running = h.get_by_label("Analysing now").rect();
+    let queued = h.get_by_label("Waiting for analysis").rect();
+    assert_eq!(pending_flags(&h), 1, "only the third row");
+    let title = title_in_row(&h, "Song 1", running.center().y);
+    assert!(
+        running.left() >= title.right() - 0.5,
+        "{running:?} {title:?}"
+    );
+    let title = title_in_row(&h, "Song 2", queued.center().y);
+    assert!(queued.left() >= title.right() - 0.5, "{queued:?} {title:?}");
+    assert!((running.width() - queued.width()).abs() < 0.5, "one slot");
+}
+
+/// An analysed track queued again (a library pass) shows the hourglass.
+#[test]
+fn an_analysed_track_queued_again_shows_the_hourglass() {
+    let mut s = state(1, 1);
+    let track = nth_track(&s, 0);
+    s.library.get_mut(track).unwrap().analyzed = true;
+    let mut activity = AnalysisActivity::default();
+    activity.queued.insert(track);
+    let cell = activity_cell(activity);
+    let (h, _) = harness_from(s, move |ui| ui.with_analysis_activity(cell));
+    assert!(h.query_by_label("Waiting for analysis").is_some());
+    assert_eq!(pending_flags(&h), 0);
 }

@@ -1563,11 +1563,22 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
     }
     let label = t.tr("settings-reanalyse");
     row(ui, &label, Some(&t.tr("settings-hint-reanalyse")), |ui| {
-        let enabled = deps.services.is_some();
+        // Main spec §6.1: one library pass at a time, with its progress.
+        let pass = scene.analysis.pass;
+        let enabled = deps.services.is_some() && pass.is_none();
+        let text = pass.map_or_else(
+            || label.clone(),
+            |p| {
+                t.tr_args(
+                    "settings-reanalyse-running",
+                    &[("done", p.done.into()), ("total", p.total.into())],
+                )
+            },
+        );
         if widgets::text_button(
             ui,
             Some(icon::ARROWS_CLOCKWISE),
-            &label,
+            &text,
             enabled,
             TileStyle::plain(),
         )

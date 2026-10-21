@@ -272,6 +272,29 @@ and the file's next full analysis writes it. `loudness_share()` is how many may
 run at once: all workers but one, at least one. `Analyzer::with_fns` takes
 both the analysis and the loudness function (tests inject them).
 
+`submit_fresh` and `submit_urgent_fresh` queue a **fresh** job (an
+explicit re-analysis, main spec §6.1): it skips the cache lookup, analyses
+the file and stores the result under the file's key as any job does. A file
+edited in place that kept its size and modification time would otherwise be
+answered from its old entry. The mark lives in the bookkeeping
+(`Bookkeeping::fresh`), not in the queued job: a fresh job moved ahead by
+`promote` stays fresh, `cancel` clears the mark and the worker that takes
+the job uses it up.
+
+`activity()` reads the bookkeeping: the tracks whose job waits (`queued`),
+the tracks whose latest job a worker runs (`running`; a job cancelled while
+it runs is not counted) and the number of loudness-only jobs queued or
+running. Each list is sorted, after the lock is released.
+`activity_version()` moves on every change of either bookkeeping (a job
+queued, started, ended or cancelled), so a reader rebuilds its view only
+when it moved.
+
+`cancel` only clears the bookkeeping: the job stays in its queue until a
+worker takes and skips it. So that restarts of the whole library in a row
+never grow the normal queue without bound, a submission first drops the
+stale jobs from it (`drop_stale`) once the queue holds more than twice the
+live jobs plus a small slack; the live ones are queued again in order.
+
 Dropping the analyzer does not wait for queued jobs. A panicking job is
 reported as `Unreadable`.
 
@@ -280,7 +303,8 @@ reported as `Unreadable`.
 The services thread submits tracks when either:
 
 - they are not analysed yet (or were forced by *Re-analyse all* or by a
-  settings change, which also cancels running jobs); or
+  settings change, which also cancels running jobs, see *Library pass*
+  below); or
 - an earlier version analysed them (no format recorded, or an older
   `analysis_version`, and a readable file: `services::outdated`) **and**
   the operator asked for it (`ServiceRequest::AnalyseOutdated`, from the
@@ -321,9 +345,35 @@ The services thread submits tracks when either:
   change seen while the track is already being analysed is dropped and
   reported again at the next look. `ServiceRequest::ReanalyseTrack` (the row
   menu's **Re-analyse**) clears the failure and queues the track on the
-  urgent queue whatever its state, through the same analyser and cache as
-  *Re-analyse all*, so an unchanged file whose analysis is cached comes back
-  playable and fails again on the next playback.
+  urgent queue as a fresh job, so the file is read again even when it did
+  not change. A track already queued or running (not just for its
+  waveform) is left alone.
+
+**Library pass and explicit re-analysis** (main spec §6.1, itr06 I8, I11).
+*Re-analyse all* and a change of the analysis settings (`restart_analysis`)
+start a pass: `Services::library_pass` holds the tracks still without an
+answer and `pass_total` the size it started with. A routed result removes
+its track (a command that cannot be queued puts it back); a track removed
+from the library leaves it; when nothing is in flight and nothing is forced
+the pass ends whatever happened. While it runs, `ReanalyseAll` is ignored:
+nothing is cancelled and nothing restarts. A settings change still cancels
+and restarts it, fresh again when it came from *Re-analyse all*
+(`Services::pass_fresh`). The two explicit requests fill
+`Services::fresh`, which `consider` uses up by submitting a fresh job
+(`submit_fresh`, `submit_urgent_fresh`); a read only for a waveform keeps
+the mark.
+
+**Activity.** At the end of every analysis step `publish_activity` builds
+an `AnalysisActivity` (`fp-app/src/activity.rs`) from `Analyzer::activity`
+without the reads of an analysed track for its waveform
+(`Services::shown_only`: a player's or a cart's; unlike `peaks_only` it
+only affects the activity and the Re-analyse guard, not how the result is
+applied), plus the forced tracks not submitted yet, the loudness-only jobs
+and the pass's progress, and stores it in an `ActivityCell`
+(`Arc<ArcSwap<…>>`) only when it changed. It is rebuilt only when
+`Analyzer::activity_version`, the forced and shown-only counts or the pass
+moved, so an idle large library costs two short locks per round. `main` hands
+`Services::activity()` to the interface, which only loads it.
 
 The **header reader** (`fp-header-reader`, `fp-app/src/header.rs`, driven
 by `Services::header_pass`) gives a track a length before its analysis

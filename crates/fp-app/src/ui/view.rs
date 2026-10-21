@@ -373,6 +373,28 @@ pub fn analysis_pending(track: &Track) -> bool {
     !track.analyzed && track.file_state.is_playable()
 }
 
+/// Main spec §6.1: the analysis flag of a row, as its glyph and the key of
+/// its tooltip. A running track has its own glyph; a queued one, or one not
+/// analysed yet that is not queued, the hourglass ("waiting for analysis").
+pub fn analysis_flag(
+    track: &Track,
+    activity: &crate::activity::AnalysisActivity,
+) -> Option<(&'static str, &'static str)> {
+    use crate::activity::TrackActivity;
+    match activity.of(track.id) {
+        Some(TrackActivity::Running) => {
+            Some((egui_phosphor::regular::WAVEFORM, "flag-analysis-running"))
+        }
+        Some(TrackActivity::Queued) => {
+            Some((egui_phosphor::regular::HOURGLASS, "flag-analysis-queued"))
+        }
+        None if analysis_pending(track) => {
+            Some((egui_phosphor::regular::HOURGLASS, "flag-analysis-pending"))
+        }
+        None => None,
+    }
+}
+
 /// O37: the row of `entry` is the player's next, whatever else it is: the
 /// entry on air can be its own next (it plays once more).
 pub fn row_is_next(state: &AppState, player: PlayerId, entry: EntryId) -> bool {

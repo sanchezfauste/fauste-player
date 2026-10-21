@@ -690,3 +690,23 @@ layout-maximise = Maximitzar
 layout-restore = Restaurar
 layout-hide = Amagar
 notice-drop-no-player = No es veu cap reproductor: mostra'n un per deixar-hi anar fitxers.
+# Analysis activity (main spec §6.1)
+status-analysing = { $count ->
+    [one] Analitzant { $count } pista
+   *[other] Analitzant { $count } pistes
+}
+status-measuring = { $count ->
+    [one] Mesurant la sonoritat de { $count } pista
+   *[other] Mesurant la sonoritat de { $count } pistes
+}
+tip-analysis-running = Analitzant ara:
+tip-analysis-waiting = { $count ->
+    [one] { $count } pista en espera
+   *[other] { $count } pistes en espera
+}
+tip-analysis-pass = Tornant a analitzar la biblioteca: { $done } de { $total }
+settings-reanalyse-running = Analitzant… { $done } de { $total }
+flag-analysis-queued = En espera d'anàlisi
+flag-analysis-running = S'està analitzant ara
+menu-reanalyse-queued = Ja és en espera d'anàlisi
+menu-reanalyse-running = S'està analitzant ara

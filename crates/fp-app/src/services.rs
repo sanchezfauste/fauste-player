@@ -19,6 +19,7 @@ use fp_model::{
 };
 use fp_store::Store;
 
+use crate::activity::{ActivityCell, AnalysisActivity, PassProgress};
 use crate::header::HeaderReader;
 use crate::tags::{TagJob, TagOutcome, TagWorker};
 
@@ -361,12 +362,35 @@ pub struct Services {
     /// cart page shown: their result fills the media cache and is not
     /// applied to the model again.
     peaks_only: HashSet<TrackId>,
+    /// Of `in_flight`, analysed tracks submitted only because the screen
+    /// draws them (a player's or a cart's waveform): not analysis activity
+    /// (main spec §6.1), and a Re-analyse of one goes ahead.
+    shown_only: HashSet<TrackId>,
     /// Tracks whose result reached the model since the last reset.
     done: HashSet<TrackId>,
     /// Tracks whose file could not be analysed since the last reset.
     failed: HashSet<TrackId>,
     /// Tracks to analyse again even if already analysed.
     forced: HashSet<TrackId>,
+    /// Tracks whose next analysis skips the cache lookup: an explicit
+    /// re-analysis (main spec §6.1, itr06 I11).
+    fresh: HashSet<TrackId>,
+    /// The tracks of the library pass still without an answer (main spec
+    /// §6.1); empty when no pass runs.
+    library_pass: HashSet<TrackId>,
+    /// How many tracks the library pass started with.
+    pass_total: usize,
+    /// What the analysis is doing, for the interface.
+    activity: ActivityCell,
+    /// What the published activity was built from: the pool's version,
+    /// the forced and shown-only counts and the pass; nothing is rebuilt
+    /// while it stays the same.
+    activity_key: Option<(u64, usize, usize, usize, usize)>,
+    /// How many times the activity was rebuilt (a test hook reads it).
+    activity_builds: u64,
+    /// The library pass came from *Re-analyse all*: a settings change that
+    /// restarts it keeps it fresh.
+    pass_fresh: bool,
     /// What the probe saw of each track whose file is unreadable in the
     /// model (from the analysis or from playback): a change of size or
     /// modification time sends it to the analysis again.
@@ -456,9 +480,17 @@ impl Services {
             request_tx,
             in_flight: HashSet::new(),
             peaks_only: HashSet::new(),
+            shown_only: HashSet::new(),
             done: HashSet::new(),
             failed: HashSet::new(),
             forced: HashSet::new(),
+            fresh: HashSet::new(),
+            library_pass: HashSet::new(),
+            pass_total: 0,
+            activity: crate::activity::idle_cell(),
+            activity_key: None,
+            activity_builds: 0,
+            pass_fresh: false,
             stamps: HashMap::new(),
             failed_at: HashMap::new(),
             gone: HashSet::new(),
@@ -513,6 +545,11 @@ impl Services {
         self.request_tx.clone()
     }
 
+    /// What the analysis is doing (main spec §6.1), updated every step.
+    pub fn activity(&self) -> ActivityCell {
+        self.activity.clone()
+    }
+
     /// Counts the steps that panicked.
     pub fn faults(&self) -> Arc<AtomicU64> {
         self.faults.clone()
@@ -556,6 +593,12 @@ impl Services {
     #[cfg(feature = "test-hooks")]
     pub fn looked_at(&self) -> usize {
         self.stamps.values().filter(|s| **s != Seen::New).count()
+    }
+
+    /// How many times the activity was rebuilt.
+    #[cfg(feature = "test-hooks")]
+    pub fn activity_builds(&self) -> u64 {
+        self.activity_builds
     }
 
     /// How many tracks wait with a Re-analyse urgent mark.
@@ -605,7 +648,7 @@ impl Services {
         }
         while let Ok(request) = self.requests.try_recv() {
             match request {
-                ServiceRequest::ReanalyseAll => self.restart_analysis(state),
+                ServiceRequest::ReanalyseAll => self.reanalyse_all(state),
                 ServiceRequest::AnalyseOutdated => self.analyse_outdated = true,
                 ServiceRequest::ReanalyseTrack(id) => self.reanalyse_track(state, id),
             }
@@ -636,6 +679,54 @@ impl Services {
                     self.failed.insert(track);
                 }
             }
+        }
+        // Nothing queued and nothing to queue: the pass has nothing left
+        // to wait for, whatever happened to its tracks.
+        if self.in_flight.is_empty() && self.forced.is_empty() {
+            self.library_pass.clear();
+        }
+        self.publish_activity();
+    }
+
+    /// Main spec §6.1: stores what the analysis is doing when it changed.
+    /// Reads of an analysed track for its waveform are not activity. On a
+    /// large library nothing is rebuilt while the pool, the forced tracks
+    /// and the pass stay as they were.
+    fn publish_activity(&mut self) {
+        let key = (
+            self.analyzer.activity_version(),
+            self.forced.len(),
+            self.shown_only.len(),
+            self.library_pass.len(),
+            self.pass_total,
+        );
+        if self.activity_key == Some(key) {
+            return;
+        }
+        self.activity_key = Some(key);
+        self.activity_builds += 1;
+        let pool = self.analyzer.activity();
+        let counted = |id: &TrackId| !self.shown_only.contains(id);
+        let running: Vec<TrackId> = pool.running.into_iter().filter(counted).collect();
+        let queued: HashSet<TrackId> = pool
+            .queued
+            .into_iter()
+            .filter(counted)
+            .chain(self.forced.iter().copied())
+            .filter(|id| !running.contains(id))
+            .collect();
+        let pass = (!self.library_pass.is_empty()).then(|| PassProgress {
+            done: self.pass_total.saturating_sub(self.library_pass.len()),
+            total: self.pass_total,
+        });
+        let activity = AnalysisActivity {
+            queued,
+            running,
+            loudness: pool.loudness,
+            pass,
+        };
+        if **self.activity.load() != activity {
+            self.activity.store(Arc::new(activity));
         }
     }
 
@@ -674,7 +765,7 @@ impl Services {
         if self.settings.is_some() {
             // New thresholds change the automatic markers of every track.
             self.analyzer.update_settings(current.clone());
-            self.restart_analysis(state);
+            self.restart_analysis(state, false);
         }
         self.settings = Some(current.clone());
     }
@@ -700,13 +791,30 @@ impl Services {
         self.analyzer.limits()
     }
 
-    /// Analyses every track again; running analyses are cancelled so that
-    /// none finishes with outdated settings.
-    fn restart_analysis(&mut self, state: &AppState) {
+    /// *Re-analyse all* (main spec §6.1): ignored while a library pass
+    /// runs; otherwise every track is analysed again from its file.
+    fn reanalyse_all(&mut self, state: &AppState) {
+        if !self.library_pass.is_empty() {
+            tracing::debug!("re-analyse all ignored: a library pass is running");
+            return;
+        }
+        self.restart_analysis(state, true);
+    }
+
+    /// Analyses every track again as a library pass; running analyses are
+    /// cancelled so that none finishes with outdated settings.
+    /// `fresh`: *Re-analyse all*, which reads every file again. A settings
+    /// change during such a pass keeps the restarted pass fresh.
+    fn restart_analysis(&mut self, state: &AppState, fresh: bool) {
+        self.pass_fresh = fresh || (self.pass_fresh && !self.library_pass.is_empty());
+        if self.pass_fresh {
+            self.fresh = state.library.iter().map(|t| t.id).collect();
+        }
         for id in self.in_flight.drain() {
             self.analyzer.cancel(id);
         }
         self.peaks_only.clear();
+        self.shown_only.clear();
         self.done.clear();
         self.failed.clear();
         self.retried.clear();
@@ -714,24 +822,34 @@ impl Services {
         self.failed_at.clear();
         self.urgent.clear();
         self.forced = state.library.iter().map(|t| t.id).collect();
+        self.library_pass = self.forced.clone();
+        self.pass_total = self.library_pass.len();
     }
 
     /// The row menu's Re-analyse: forget the failure and analyse this track
-    /// now, ahead of the library. Manual markers are kept by the model.
+    /// now from its file, ahead of the library. Manual markers are kept by
+    /// the model. A track already queued or running is left alone (main
+    /// spec §6.1); one read only for its waveform is analysed.
     fn reanalyse_track(&mut self, state: &AppState, id: TrackId) {
         if state.library.get(id).is_none() {
+            return;
+        }
+        if self.in_flight.contains(&id) && !self.shown_only.contains(&id) {
+            tracing::debug!(?id, "re-analyse ignored: the track is queued or running");
             return;
         }
         if self.in_flight.remove(&id) {
             self.analyzer.cancel(id);
         }
         self.peaks_only.remove(&id);
+        self.shown_only.remove(&id);
         self.done.remove(&id);
         self.failed.remove(&id);
         self.retried.remove(&id);
         self.stamps.remove(&id);
         self.failed_at.remove(&id);
         self.forced.insert(id);
+        self.fresh.insert(id);
         self.urgent.insert(id);
     }
 
@@ -1183,6 +1301,9 @@ impl Services {
         self.done.retain(|id| known.contains(id));
         self.failed.retain(|id| known.contains(id));
         self.forced.retain(|id| known.contains(id));
+        self.shown_only.retain(|id| self.in_flight.contains(id));
+        self.fresh.retain(|id| known.contains(id));
+        self.library_pass.retain(|id| known.contains(id));
         self.retried.retain(|id| known.contains(id));
         self.stamps.retain(|id, _| known.contains(id));
         self.failed_at.retain(|id, _| known.contains(id));
@@ -1254,6 +1375,11 @@ impl Services {
             self.in_flight.insert(id);
             // A cart's analysed track read only for its waveform: the
             // model already has its analysis.
+            if !analyse && track.analyzed {
+                self.shown_only.insert(id);
+            } else {
+                self.shown_only.remove(&id);
+            }
             if !analyse && track.analyzed && !on_players.contains(&id) {
                 self.peaks_only.insert(id);
             } else {
@@ -1263,10 +1389,15 @@ impl Services {
             }
             // The mark is used up whichever way the track goes urgent.
             let asked = self.urgent.remove(&id);
-            if wanted.contains(&id) || asked {
-                self.analyzer.submit_urgent(id, track.path.clone());
-            } else {
-                self.analyzer.submit(id, track.path.clone());
+            // An explicit re-analysis reads the file (I11); a read for the
+            // peaks alone keeps the mark for the analysis.
+            let fresh = analyse && self.fresh.remove(&id);
+            let path = track.path.clone();
+            match (wanted.contains(&id) || asked, fresh) {
+                (true, false) => self.analyzer.submit_urgent(id, path),
+                (true, true) => self.analyzer.submit_urgent_fresh(id, path),
+                (false, false) => self.analyzer.submit(id, path),
+                (false, true) => self.analyzer.submit_fresh(id, path),
             }
         }
     }
@@ -1284,6 +1415,10 @@ impl Services {
             }
         }
         self.in_flight.remove(&result.track);
+        // An answer, whatever it is, settles the track in the pass; a
+        // command that cannot be queued puts it back below.
+        let in_pass = self.library_pass.remove(&result.track);
+        self.shown_only.remove(&result.track);
         let peaks_only = self.peaks_only.remove(&result.track)
             && state.library.get(result.track).is_some_and(|t| t.analyzed);
         if peaks_only && let Ok(analysis) = &result.outcome {
@@ -1356,6 +1491,9 @@ impl Services {
             // The queue is full: try again on a later round.
             self.done.remove(&result.track);
             self.forced.insert(result.track);
+            if in_pass {
+                self.library_pass.insert(result.track);
+            }
         }
     }
 

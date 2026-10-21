@@ -1,5 +1,6 @@
 //! Fauste Player desktop application.
 
+pub mod activity;
 pub mod bootstrap;
 pub mod cli;
 pub mod crash;

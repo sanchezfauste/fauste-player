@@ -690,3 +690,23 @@ layout-maximise = Ingrandisci
 layout-restore = Ripristina
 layout-hide = Nascondi
 notice-drop-no-player = Nessun lettore è visibile: mostrane uno per rilasciarvi i file.
+# Analysis activity (main spec §6.1)
+status-analysing = { $count ->
+    [one] Analisi di { $count } brano
+   *[other] Analisi di { $count } brani
+}
+status-measuring = { $count ->
+    [one] Misura della loudness di { $count } brano
+   *[other] Misura della loudness di { $count } brani
+}
+tip-analysis-running = In analisi ora:
+tip-analysis-waiting = { $count ->
+    [one] { $count } brano in attesa
+   *[other] { $count } brani in attesa
+}
+tip-analysis-pass = Rianalisi della libreria: { $done } di { $total }
+settings-reanalyse-running = Analisi… { $done } di { $total }
+flag-analysis-queued = In attesa di analisi
+flag-analysis-running = In analisi ora
+menu-reanalyse-queued = Già in attesa di analisi
+menu-reanalyse-running = In analisi in questo momento

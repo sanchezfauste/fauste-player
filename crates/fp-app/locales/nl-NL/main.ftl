@@ -690,3 +690,23 @@ layout-maximise = Maximaliseren
 layout-restore = Herstellen
 layout-hide = Verbergen
 notice-drop-no-player = Er is geen speler zichtbaar: toon er een om er bestanden op neer te zetten.
+# Analysis activity (main spec §6.1)
+status-analysing = { $count ->
+    [one] { $count } nummer wordt geanalyseerd
+   *[other] { $count } nummers worden geanalyseerd
+}
+status-measuring = { $count ->
+    [one] Loudness van { $count } nummer wordt gemeten
+   *[other] Loudness van { $count } nummers wordt gemeten
+}
+tip-analysis-running = Nu in analyse:
+tip-analysis-waiting = { $count ->
+    [one] { $count } nummer wacht
+   *[other] { $count } nummers wachten
+}
+tip-analysis-pass = Bibliotheek wordt opnieuw geanalyseerd: { $done } van { $total }
+settings-reanalyse-running = Analyseren… { $done } van { $total }
+flag-analysis-queued = Wacht op analyse
+flag-analysis-running = Wordt nu geanalyseerd
+menu-reanalyse-queued = Wacht al op analyse
+menu-reanalyse-running = Wordt nu geanalyseerd

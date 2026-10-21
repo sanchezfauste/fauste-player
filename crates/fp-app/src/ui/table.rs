@@ -511,12 +511,16 @@ pub(crate) fn track_table(
                                             );
                                         });
                                     }
-                                    if view::analysis_pending(track) {
-                                        flag(ui, &t.tr("flag-analysis-pending"), |p, r| {
+                                    // Main spec §6.1: running, queued, or not
+                                    // analysed yet and not queued.
+                                    if let Some((glyph, key)) =
+                                        view::analysis_flag(track, scene.analysis)
+                                    {
+                                        flag(ui, &t.tr(key), |p, r| {
                                             widgets::glyph(
                                                 p,
                                                 r,
-                                                icon::HOURGLASS,
+                                                glyph,
                                                 13.0,
                                                 theme::NEUTRAL_400,
                                                 false,
@@ -932,7 +936,17 @@ fn context_menu(
         scene.ctl.send(Command::CueEntry(player, entry));
         ui.close();
     }
-    if labelled(ui, icon::ARROWS_CLOCKWISE, "menu-reanalyse", true).clicked() {
+    // Main spec §6.1: a track already queued or running is left alone.
+    let busy = scene.analysis.of(track.id).map(|a| match a {
+        crate::activity::TrackActivity::Queued => "menu-reanalyse-queued",
+        crate::activity::TrackActivity::Running => "menu-reanalyse-running",
+    });
+    let reanalyse = labelled(ui, icon::ARROWS_CLOCKWISE, "menu-reanalyse", busy.is_none());
+    let reanalyse = match busy {
+        Some(why) => reanalyse.on_disabled_hover_text(t.tr(why)),
+        None => reanalyse,
+    };
+    if reanalyse.clicked() {
         scene.request(crate::services::ServiceRequest::ReanalyseTrack(track.id));
         ui.close();
     }

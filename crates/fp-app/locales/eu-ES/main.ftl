@@ -690,3 +690,23 @@ layout-maximise = Maximizatu
 layout-restore = Leheneratu
 layout-hide = Ezkutatu
 notice-drop-no-player = Ez da erreproduzitzailerik ikusten: erakutsi bat fitxategiak bertan jaregiteko.
+# Analysis activity (main spec §6.1)
+status-analysing = { $count ->
+    [one] { $count } pista aztertzen
+   *[other] { $count } pista aztertzen
+}
+status-measuring = { $count ->
+    [one] { $count } pistaren ozentasuna neurtzen
+   *[other] { $count } pistaren ozentasuna neurtzen
+}
+tip-analysis-running = Orain aztertzen:
+tip-analysis-waiting = { $count ->
+    [one] { $count } pista zain
+   *[other] { $count } pista zain
+}
+tip-analysis-pass = Liburutegia berriro aztertzen: { $done } / { $total }
+settings-reanalyse-running = Aztertzen… { $done } / { $total }
+flag-analysis-queued = Analisiaren zain
+flag-analysis-running = Orain aztertzen
+menu-reanalyse-queued = Dagoeneko analisiaren zain dago
+menu-reanalyse-running = Orain aztertzen ari da

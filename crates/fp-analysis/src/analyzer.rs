@@ -13,6 +13,10 @@
 //! Loudness-only jobs (loudness normalization spec N6b) have a third queue,
 //! taken last, with their own bookkeeping and results: a loudness job and
 //! an analysis of the same track are independent of each other.
+//!
+//! A fresh job (main spec §6.1, an explicit re-analysis) skips the cache
+//! lookup and analyses the file, then stores its result as any job does.
+//! `activity` reports what is queued and running (main spec §6.1).
 
 use std::collections::{HashMap, HashSet};
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -73,6 +77,18 @@ struct Job {
     generation: u64,
 }
 
+/// What the pool is doing (main spec §6.1), from its bookkeeping. Each
+/// list is sorted.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Activity {
+    /// Tracks whose analysis waits for a worker.
+    pub queued: Vec<TrackId>,
+    /// Tracks a worker is analysing now (a cancelled job is not counted).
+    pub running: Vec<TrackId>,
+    /// Loudness-only jobs queued or running (N6b).
+    pub loudness: usize,
+}
+
 #[derive(Default)]
 struct Bookkeeping {
     /// Latest pending generation per track; absent means nothing pending.
@@ -81,11 +97,18 @@ struct Bookkeeping {
     urgent: HashSet<TrackId>,
     /// The generation a worker is analysing now, per track.
     running: HashMap<TrackId, u64>,
+    /// Tracks whose pending job skips the cache lookup (an explicit
+    /// re-analysis). Kept here, not in the job, so a job moved ahead
+    /// (`promote`) stays fresh.
+    fresh: HashSet<TrackId>,
     next_generation: u64,
+    /// Bumped on every change, so a reader rebuilds its view only then.
+    changes: u64,
 }
 
 impl Bookkeeping {
     fn submit(&mut self, track: TrackId) -> u64 {
+        self.changes += 1;
         self.next_generation += 1;
         self.latest.insert(track, self.next_generation);
         self.next_generation
@@ -125,12 +148,18 @@ fn urgent_generation(book: &mut Bookkeeping, track: TrackId) -> Option<u64> {
     Some(book.submit(track))
 }
 
+/// Stale jobs the normal queue may hold beyond twice the live ones before
+/// they are dropped from it: a few restarts are skipped by the workers.
+const STALE_SLACK: usize = 64;
+
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 pub struct Analyzer {
     jobs: Option<Sender<Job>>,
+    /// The normal queue's other end: stale jobs are dropped through it.
+    queue: Receiver<Job>,
     urgent: Option<Sender<Job>>,
     loudness_jobs: Option<Sender<Job>>,
     results: Receiver<AnalysisResult>,
@@ -234,6 +263,7 @@ impl Analyzer {
         }
         Ok(Self {
             jobs: Some(job_tx),
+            queue: job_rx,
             urgent: Some(urgent_tx),
             loudness_jobs: Some(loudness_tx),
             results: res_rx,
@@ -248,10 +278,24 @@ impl Analyzer {
 
     /// Queues `path` for analysis as `track` (ignored if one is pending).
     pub fn submit(&self, track: TrackId, path: PathBuf) {
+        self.queue_normal(track, path, false);
+    }
+
+    /// As `submit`, for an explicit re-analysis: the job skips the cache
+    /// lookup and stores its result (main spec §6.1).
+    pub fn submit_fresh(&self, track: TrackId, path: PathBuf) {
+        self.queue_normal(track, path, true);
+    }
+
+    fn queue_normal(&self, track: TrackId, path: PathBuf, fresh: bool) {
         let generation = {
             let mut book = lock(&self.shared.book);
             if book.latest.contains_key(&track) {
                 return;
+            }
+            self.drop_stale(&book);
+            if fresh {
+                book.fresh.insert(track);
             }
             book.submit(track)
         };
@@ -264,6 +308,22 @@ impl Analyzer {
         }
     }
 
+    /// Cancelled jobs stay in the normal queue until a worker skips them.
+    /// Once they outnumber the live jobs (restarts of the whole library
+    /// in a row), they are dropped from it, keeping the live ones in order.
+    fn drop_stale(&self, book: &Bookkeeping) {
+        if self.queue.len() <= 2 * book.latest.len() + STALE_SLACK {
+            return;
+        }
+        let Some(jobs) = &self.jobs else {
+            return;
+        };
+        let waiting: Vec<Job> = self.queue.try_iter().collect();
+        for job in waiting.into_iter().filter(|j| book.is_current(j)) {
+            let _ = jobs.send(job);
+        }
+    }
+
     /// Queues `path` ahead of every normal job. A normal job pending for
     /// `track` is superseded (it will be skipped); an urgent or running one
     /// is kept.
@@ -271,6 +331,52 @@ impl Analyzer {
         let generation = urgent_generation(&mut lock(&self.shared.book), track);
         if let Some(generation) = generation {
             self.send_urgent(track, path, generation);
+        }
+    }
+
+    /// As `submit_urgent`, for an explicit re-analysis (see
+    /// `submit_fresh`).
+    pub fn submit_urgent_fresh(&self, track: TrackId, path: PathBuf) {
+        let generation = {
+            let mut book = lock(&self.shared.book);
+            let generation = urgent_generation(&mut book, track);
+            if generation.is_some() {
+                book.fresh.insert(track);
+            }
+            generation
+        };
+        if let Some(generation) = generation {
+            self.send_urgent(track, path, generation);
+        }
+    }
+
+    /// Moves whenever the pool's bookkeeping changes (a job queued,
+    /// started, ended or cancelled, analysis or loudness-only): `activity`
+    /// can only differ when this did.
+    pub fn activity_version(&self) -> u64 {
+        let analysis = lock(&self.shared.book).changes;
+        analysis.wrapping_add(lock(&self.shared.loudness_book).changes)
+    }
+
+    /// What is queued and running now (main spec §6.1).
+    pub fn activity(&self) -> Activity {
+        let (mut queued, mut running) = (Vec::new(), Vec::new());
+        {
+            let book = lock(&self.shared.book);
+            for &track in book.latest.keys() {
+                if book.is_running(track) {
+                    running.push(track);
+                } else {
+                    queued.push(track);
+                }
+            }
+        }
+        queued.sort_unstable();
+        running.sort_unstable();
+        Activity {
+            queued,
+            running,
+            loudness: lock(&self.shared.loudness_book).latest.len(),
         }
     }
 
@@ -309,8 +415,10 @@ impl Analyzer {
     /// Cancels a pending or running job; no result will be delivered for it.
     pub fn cancel(&self, track: TrackId) {
         let mut book = lock(&self.shared.book);
+        book.changes += 1;
         book.latest.remove(&track);
         book.urgent.remove(&track);
+        book.fresh.remove(&track);
     }
 
     /// Settings for jobs that start after this call.
@@ -357,7 +465,9 @@ impl Analyzer {
     /// Cancels a pending or running loudness-only job; no result will be
     /// delivered for it.
     pub fn cancel_loudness(&self, track: TrackId) {
-        lock(&self.shared.loudness_book).latest.remove(&track);
+        let mut book = lock(&self.shared.loudness_book);
+        book.changes += 1;
+        book.latest.remove(&track);
     }
 
     pub fn loudness_results(&self) -> &Receiver<LoudnessResult> {
@@ -435,23 +545,26 @@ fn worker(
 }
 
 fn analysis_job(job: Job, results: &Sender<AnalysisResult>, shared: &Shared) {
-    {
+    let fresh = {
         let mut book = lock(&shared.book);
         if !book.is_current(&job) {
             return;
         }
+        book.changes += 1;
         book.urgent.remove(&job.track);
         book.running.insert(job.track, job.generation);
-    }
+        book.fresh.remove(&job.track)
+    };
     // Before the analysis: a file that changes while it runs (a copy
     // that completes) is told apart from what was analysed.
     let stamp = std::fs::metadata(&job.path)
         .ok()
         .and_then(|m| Some((m.len(), m.modified().ok()?)));
-    let outcome = catch_unwind(AssertUnwindSafe(|| run(&job, shared)))
+    let outcome = catch_unwind(AssertUnwindSafe(|| run(&job, fresh, shared)))
         .unwrap_or_else(|_| Err(AnalysisError::Unreadable("the analysis crashed".to_owned())));
     let deliver = {
         let mut book = lock(&shared.book);
+        book.changes += 1;
         if book.running.get(&job.track) == Some(&job.generation) {
             book.running.remove(&job.track);
         }
@@ -471,7 +584,7 @@ fn analysis_job(job: Job, results: &Sender<AnalysisResult>, shared: &Shared) {
     }
 }
 
-fn run(job: &Job, shared: &Shared) -> Result<Analysis, AnalysisError> {
+fn run(job: &Job, fresh: bool, shared: &Shared) -> Result<Analysis, AnalysisError> {
     let settings = lock(&shared.settings).clone();
     let limits = lock(&shared.limits).clone();
     // The key is taken before analysing: if the file changes meanwhile, the
@@ -482,7 +595,8 @@ fn run(job: &Job, shared: &Shared) -> Result<Analysis, AnalysisError> {
         .cache
         .as_ref()
         .and_then(|c| c.key(&job.path, &settings, &limits));
-    if let (Some(cache), Some(key)) = (&shared.cache, &key)
+    if !fresh
+        && let (Some(cache), Some(key)) = (&shared.cache, &key)
         && let Some(analysis) = cache.load_key(key, &limits)
     {
         return Ok(analysis);
@@ -504,6 +618,7 @@ fn loudness_job(job: Job, results: &Sender<LoudnessResult>, shared: &Shared) {
         if !book.is_current(&job) {
             return;
         }
+        book.changes += 1;
         book.running.insert(job.track, job.generation);
     }
     let outcome =
@@ -514,6 +629,7 @@ fn loudness_job(job: Job, results: &Sender<LoudnessResult>, shared: &Shared) {
         });
     let deliver = {
         let mut book = lock(&shared.loudness_book);
+        book.changes += 1;
         if book.running.get(&job.track) == Some(&job.generation) {
             book.running.remove(&job.track);
         }
@@ -626,5 +742,58 @@ mod tests {
         let next = analyzer.results().recv_timeout(WAIT).expect("b's result");
         assert_eq!(next.track, TrackId(2), "a was analysed again");
         assert_eq!(runs_of_a.load(Ordering::SeqCst), 1);
+    }
+
+    /// Main spec §6.1: restarting the whole library again and again leaves
+    /// the cancelled jobs behind; the queue drops them instead of growing.
+    #[test]
+    fn repeated_restarts_do_not_grow_the_queue() {
+        let open = Arc::new(AtomicBool::new(false));
+        let gate = open.clone();
+        // Every job holds until the gate opens: none is taken meanwhile
+        // but the first.
+        let analyze: AnalyzeFn = Arc::new(move |_, _, _, cancelled| {
+            while !gate.load(Ordering::SeqCst) && !cancelled() {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            Err(AnalysisError::Unreadable("test".to_owned()))
+        });
+        let loudness: LoudnessFn = Arc::new(|_, _| Ok(None));
+        let analyzer = Analyzer::with_fns(
+            1,
+            AnalysisSettings::default(),
+            Limits::default(),
+            None,
+            analyze,
+            loudness,
+        )
+        .unwrap();
+        let library = 100;
+        for _ in 0..20 {
+            for n in 0..library {
+                analyzer.submit(TrackId(n), PathBuf::from("a.wav"));
+            }
+            for n in 0..library {
+                analyzer.cancel(TrackId(n));
+            }
+        }
+        for n in 0..library {
+            analyzer.submit(TrackId(n), PathBuf::from("a.wav"));
+        }
+        let held = analyzer.queue.len();
+        assert!(
+            held <= 3 * library as usize + STALE_SLACK,
+            "{held} jobs queued for {library} tracks"
+        );
+        // The live jobs are all still there, in order.
+        open.store(true, Ordering::SeqCst);
+        let mut answered: Vec<TrackId> = (0..library)
+            .map(|_| analyzer.results().recv_timeout(WAIT).unwrap().track)
+            .collect();
+        let in_order = answered.is_sorted();
+        answered.sort_unstable();
+        answered.dedup();
+        assert_eq!(answered.len(), library as usize);
+        assert!(in_order, "out of order");
     }
 }

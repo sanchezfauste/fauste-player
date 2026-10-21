@@ -690,3 +690,23 @@ layout-maximise = Maximize
 layout-restore = Restore
 layout-hide = Hide
 notice-drop-no-player = No player is shown: show one to drop files on it.
+# Analysis activity (main spec §6.1)
+status-analysing = { $count ->
+    [one] Analysing { $count } track
+   *[other] Analysing { $count } tracks
+}
+status-measuring = { $count ->
+    [one] Measuring the loudness of { $count } track
+   *[other] Measuring the loudness of { $count } tracks
+}
+tip-analysis-running = Analysing now:
+tip-analysis-waiting = { $count ->
+    [one] { $count } track waiting
+   *[other] { $count } tracks waiting
+}
+tip-analysis-pass = Re-analysing the library: { $done } of { $total }
+settings-reanalyse-running = Analysing… { $done } of { $total }
+flag-analysis-queued = Waiting for analysis
+flag-analysis-running = Analysing now
+menu-reanalyse-queued = Already waiting for analysis
+menu-reanalyse-running = Being analysed now

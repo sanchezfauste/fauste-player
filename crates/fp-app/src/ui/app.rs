@@ -284,6 +284,8 @@ pub(crate) struct Scene<'a> {
     pub ctl: &'a dyn Controller,
     pub i18n: &'a I18n,
     pub media: &'a MediaCache,
+    /// What the analysis is doing (main spec §6.1).
+    pub analysis: &'a crate::activity::AnalysisActivity,
     pub state: &'a AppState,
     pub telemetry: &'a Telemetry,
     /// Seconds since start, for blinking.
@@ -369,6 +371,8 @@ pub struct AppUi {
     ctl: Arc<dyn Controller>,
     i18n: I18n,
     media: MediaCache,
+    /// What the analysis is doing, published by the services thread.
+    analysis: crate::activity::ActivityCell,
     services: Option<Sender<ServiceRequest>>,
     pub(crate) view: ViewState,
     covers: HashMap<TrackId, TextureHandle>,
@@ -435,6 +439,7 @@ impl AppUi {
             ctl,
             i18n,
             media,
+            analysis: crate::activity::idle_cell(),
             services: None,
             view: ViewState::default(),
             covers: HashMap::new(),
@@ -485,6 +490,13 @@ impl AppUi {
     /// Where "Re-analyse all" goes.
     pub fn with_services(mut self, services: Sender<ServiceRequest>) -> Self {
         self.services = Some(services);
+        self
+    }
+
+    /// What the analysis is doing (`Services::activity`), for the status
+    /// bar, the rows and Settings → Analysis.
+    pub fn with_analysis_activity(mut self, activity: crate::activity::ActivityCell) -> Self {
+        self.analysis = activity;
         self
     }
 
@@ -689,10 +701,12 @@ impl AppUi {
         panels::settle_view(&mut self.view, &state);
         self.keyboard(&ctx, &state);
         let pending = fp_model::pending(&state);
+        let analysis = self.analysis.load_full();
         let scene = Scene {
             ctl: self.ctl.as_ref(),
             i18n: &self.i18n,
             media: &self.media,
+            analysis: &analysis,
             state: &state,
             telemetry: &telemetry,
             time,
@@ -1848,6 +1862,61 @@ pub fn status_legend() -> [(Color32, &'static str); 5] {
     ]
 }
 
+/// The width of a status-bar text.
+fn status_text_width(ui: &Ui, text: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(text.to_owned(), font(11.0), theme::NEUTRAL_500)
+        .size()
+        .x
+}
+
+/// The width of one legend item: its swatch, the gap and its label.
+fn legend_width(ui: &Ui, label: &str) -> f32 {
+    8.0 + 6.0 + status_text_width(ui, label)
+}
+
+/// Main spec §6.1: the status bar's analysis item and its tooltip, while
+/// anything is analysed or measured.
+fn analysis_status(scene: &Scene<'_>) -> Option<(String, String)> {
+    let a = scene.analysis;
+    if !a.is_busy() {
+        return None;
+    }
+    let t = scene.i18n;
+    let measuring = t.tr_args("status-measuring", &[("count", a.loudness.into())]);
+    let text = if a.tracks() > 0 {
+        t.tr_args("status-analysing", &[("count", a.tracks().into())])
+    } else {
+        measuring.clone()
+    };
+    let mut lines = Vec::new();
+    if !a.running.is_empty() {
+        lines.push(t.tr("tip-analysis-running"));
+        for id in &a.running {
+            if let Some(track) = scene.state.library.get(*id) {
+                let name = track.path.file_name().map_or_else(
+                    || track.path.display().to_string(),
+                    |n| n.to_string_lossy().into_owned(),
+                );
+                lines.push(format!("• {name}"));
+            }
+        }
+    }
+    if !a.queued.is_empty() {
+        lines.push(t.tr_args("tip-analysis-waiting", &[("count", a.queued.len().into())]));
+    }
+    if let Some(pass) = a.pass {
+        lines.push(t.tr_args(
+            "tip-analysis-pass",
+            &[("done", pass.done.into()), ("total", pass.total.into())],
+        ));
+    }
+    if a.loudness > 0 {
+        lines.push(measuring);
+    }
+    Some((text, lines.join("\n")))
+}
+
 fn legend(ui: &mut Ui, color: Color32, label: &str) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
@@ -1910,6 +1979,15 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
         .as_ref()
         .filter(|(_, until)| *until > scene.time)
         .map(|(text, _)| text.clone());
+    // The text on the left: an alert or a notice must stay readable, the
+    // shortcut hints may be cut to nothing.
+    let (text, color, keep) = if let Some(alert) = alerts.first() {
+        (alert.clone(), theme::ON_AIR_TEXT, true)
+    } else if let Some(notice) = notice {
+        (notice, theme::AMBER, true)
+    } else {
+        (t.tr("status-hints"), theme::NEUTRAL_500, false)
+    };
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.spacing_mut().item_spacing = vec2(18.0, 0.0);
         ui.add_space(12.0);
@@ -1921,17 +1999,43 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
             )
             .selectable(false),
         );
+        // Main spec §6.1: the room left of the platform goes first to an
+        // alert or notice, then to the analysis item, then to the legend,
+        // whose items give way from the inside out.
+        let gap = ui.spacing().item_spacing.x;
+        let mut budget = ui.available_width();
+        if keep {
+            budget -= status_text_width(ui, &text) + gap;
+        }
+        let busy = analysis_status(scene).filter(|(busy, _)| {
+            let width = status_text_width(ui, busy) + gap;
+            let fits = width <= budget;
+            if fits {
+                budget -= width;
+            }
+            fits
+        });
         for (color, key) in status_legend() {
-            legend(ui, color, &t.tr(key));
+            let label = t.tr(key);
+            let width = legend_width(ui, &label) + gap;
+            if width > budget {
+                break;
+            }
+            budget -= width;
+            legend(ui, color, &label);
+        }
+        if let Some((busy, tip)) = busy {
+            ui.add(
+                egui::Label::new(
+                    RichText::new(busy)
+                        .font(font(11.0))
+                        .color(theme::NEUTRAL_400),
+                )
+                .selectable(false),
+            )
+            .on_hover_text(tip);
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-            let (text, color) = if let Some(alert) = alerts.first() {
-                (alert.clone(), theme::ON_AIR_TEXT)
-            } else if let Some(notice) = notice {
-                (notice, theme::AMBER)
-            } else {
-                (t.tr("status-hints"), theme::NEUTRAL_500)
-            };
             ui.add(
                 egui::Label::new(RichText::new(text).font(font(11.0)).color(color))
                     .selectable(false)

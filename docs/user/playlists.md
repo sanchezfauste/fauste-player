@@ -99,7 +99,8 @@ Row colours:
 | Dimmed | Already played on this player |
 | File with a cross / warning icon | File missing / unreadable (it is skipped); hover the row: the popup starts with the reason, in amber, then the usual fields. A missing file is looked for again every 30 s (`tuning.missing_recheck_ms`). |
 | Reload arrows at the right of the title | Analysed by an earlier version; it still plays with that analysis. **Settings → Analysis → Analyse outdated tracks** brings it up to date (tracks on a player are updated anyway) |
-| Hourglass at the right of the title | The track is waiting for its analysis (hover the hourglass: *Analysis pending*). It plays anyway, and the hourglass goes when the analysis finishes |
+| Hourglass at the right of the title | The track is waiting for its analysis: *Waiting for analysis* when it is in the queue, *Analysis pending* when it has not been queued yet. It plays anyway, and the hourglass goes when the analysis finishes. An analysed track queued again (by **Re-analyse all tracks**) shows it too |
+| Waveform icon at the right of the title | The track is being analysed now (*Analysing now*) |
 | Violet | Selected |
 
 **Track tooltip.** Hover a row for a moment to see its title, artist, album, date, genre, length, format (type, sample rate and bit depth when known) and the path of its file. A field the file does not have is left out. The popup is the only hover information on a row, and it never moves while it is shown. For a missing or unreadable file it starts with the reason.
@@ -119,7 +120,7 @@ Row colours:
 | Set as next | Same as double-click. On the track on air it plays once more, from its start, when the current pass ends (mixing like Repeat, no gap), then the player goes on. It acts once. Stop after, SINGLE mode and a Stop after mark still end the player first. While a CUE is running it moves to the new next |
 | Pre-listen on CUE | Play it on the CUE output (it opens the CUE window). Dimmed when the player has no Cue output. On the on-air output it asks first while something plays there (see [CUE](players.md#cue-pre-listen)) |
 | Edit tags… | Open the tag editor for this track. **Save** writes the changes into the audio file; **Cancel** (or Esc, when no save is running) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |
-| Re-analyse | Analyse this track again now, whatever its state. A fixed file that was unreadable is also picked up by itself (see [Troubleshooting](troubleshooting.md)). Manual markers are kept |
+| Re-analyse | Analyse this track again now, whatever its state, reading the file again (so a file you edited is measured again even if its size and date did not change). A fixed file that was unreadable is also picked up by itself (see [Troubleshooting](troubleshooting.md)). Manual markers are kept. Dimmed, with the reason when you hover it, while the track is already waiting for its analysis or being analysed |
 | Loudness… | Open the loudness popup of this track (trim and exclusion; see [Loudness](loudness.md)) |
 | Add tracks below… | Pick files to insert after this track |
 | Duplicate | Insert an unplayed copy below (with its repeat and stop-after marks) |
