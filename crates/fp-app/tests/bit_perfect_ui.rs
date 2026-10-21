@@ -205,3 +205,19 @@ fn bf9_the_bit_perfect_hint_says_what_it_costs() {
         assert!(hint.contains(phrase), "{phrase:?} missing from {hint:?}");
     }
 }
+
+#[test]
+fn the_bp_badge_is_drawn_only_on_a_bit_perfect_device() {
+    let (mut h, _fake) = harness(state(1, 3));
+    h.run_steps(3);
+    assert!(
+        h.query_by_label("Bit-perfect: off").is_none(),
+        "no BP badge when the device is not bit-perfect"
+    );
+    let (mut h, _fake) = harness(locked(1));
+    h.run_steps(3);
+    assert!(
+        h.query_by_label("Bit-perfect: off").is_some(),
+        "on a bit-perfect device the badge shows, unlit until a track reaches it"
+    );
+}

@@ -355,27 +355,32 @@ fn header(
                 {
                     scene.ctl.send(Command::SetMode(id, mode));
                 }
-                let (bp, tip, on) = match fp_model::bp_badge(pv.bit_perfect, pv.dsd) {
-                    fp_model::BpBadge::Off => (t.tr("badge-bp"), t.tr("tip-bp-off"), false),
-                    fp_model::BpBadge::Pcm => (t.tr("badge-bp"), t.tr("tip-bp-on"), true),
-                    fp_model::BpBadge::Dsd => (t.tr("badge-dsd"), t.tr("tip-dsd-on"), true),
-                };
-                widgets::tile(
-                    ui,
-                    vec2(28.0, 20.0),
-                    &tip,
-                    false,
-                    widgets::bp_tile_style(on),
-                    |p, r, c| {
-                        p.text(
-                            r.center(),
-                            egui::Align2::CENTER_CENTER,
-                            &bp,
-                            font_semibold(9.0),
-                            c,
-                        );
-                    },
-                );
+                // B5: the badge exists only where the player can be bit-perfect:
+                // its Main device runs bit-perfect (the telemetry terms cover a
+                // frame of lag after the device changes).
+                if fp_model::bit_perfect_player(scene.state, id) || pv.bit_perfect || pv.dsd {
+                    let (bp, tip, on) = match fp_model::bp_badge(pv.bit_perfect, pv.dsd) {
+                        fp_model::BpBadge::Off => (t.tr("badge-bp"), t.tr("tip-bp-off"), false),
+                        fp_model::BpBadge::Pcm => (t.tr("badge-bp"), t.tr("tip-bp-on"), true),
+                        fp_model::BpBadge::Dsd => (t.tr("badge-dsd"), t.tr("tip-dsd-on"), true),
+                    };
+                    widgets::tile(
+                        ui,
+                        vec2(28.0, 20.0),
+                        &tip,
+                        false,
+                        widgets::bp_tile_style(on),
+                        |p, r, c| {
+                            p.text(
+                                r.center(),
+                                egui::Align2::CENTER_CENTER,
+                                &bp,
+                                font_semibold(9.0),
+                                c,
+                            );
+                        },
+                    );
+                }
                 // N18: the gain of the source on air, left of the BP badge.
                 if let Some(badge) = &pv.gain {
                     gain_badge(ui, t, badge);

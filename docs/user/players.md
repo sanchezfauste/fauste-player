@@ -15,7 +15,7 @@ playlist tabs, transport, volume and outputs.
 | **Stop after** badge | The player stops when the current track ends |
 | **Repeat** / **Stop after track** badge | The current track repeats, or stops the player when it ends, because of its own mark in the playlist menu. Hover for the full sentence. The player's own **Stop after** button wins: while it is on, only its badge shows |
 | Gain badge | With [loudness normalization](loudness.md#the-gain-in-the-player-header) on, the gain the track on air plays with (**+4.0 dB**), or **Not normalized**: amber while the track has no measurement yet, grey on a bit-perfect output or for a track excluded from normalization. Hover for the reason. Shown while the player is playing or paused |
-| **BP** / **DSD** | **BP** is lit while the current track reaches its Main device unchanged. **DSD** replaces it while a DSD track goes out as DSD, unchanged (see [Bit-perfect output](bit-perfect.md)). **Others muted** shows beside it when that DSD stream keeps other sources off the output |
+| **BP** / **DSD** | The badge shows only on a player whose Main device is bit-perfect; **BP** is lit while the current track reaches that device unchanged. **DSD** replaces it while a DSD track goes out as DSD, unchanged (see [Bit-perfect output](bit-perfect.md)). **Others muted** shows beside it when that DSD stream keeps other sources off the output |
 | **SINGLE** \| **CONT** | Play mode (see below): one joined control, the lit half is the active mode |
 | **CUE** | Pre-listen the next track on the CUE output |
 

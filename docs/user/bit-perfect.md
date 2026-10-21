@@ -215,8 +215,9 @@ example without exclusive access), the track goes on as PCM.
 
 ## The BP badge
 
-The **BP** badge in the player header lights up (green border and text; dim
-grey when off) while the current track reaches its Main device unchanged.
+The **BP** badge in the player header exists only on a player whose Main
+device is set bit-perfect (a player on a shared device has no badge). It
+lights up (green border and text; dim grey when off) while the current track reaches its Main device unchanged.
 All of these must hold:
 
 - the device is bit-perfect and open with exclusive access;
