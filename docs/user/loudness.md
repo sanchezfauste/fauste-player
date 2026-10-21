@@ -78,7 +78,7 @@ so they show the normalized level. The meters' own **Loudness target**
 A player or cart whose output is [bit-perfect](bit-perfect.md) is **never
 normalized**: it always plays at unity gain (0 dB), whatever the settings,
 because any gain would change the samples the device receives. With
-normalization on, its header shows a grey **Not normalized** badge whose
+normalization on, its header shows an amber **0.0 dB** badge whose
 tooltip says "Bit-perfect output: tracks play unaltered." The same holds
 for pre-listen on a bit-perfect Cue device, while the player's Main output,
 if it is not bit-perfect, still gets the gain.
@@ -92,13 +92,12 @@ stream.
 ## The gain in the player header
 
 While a player is playing or paused, a badge left of **BP** shows the gain
-of the track on air. Hover it for the reason.
+of the track on air. The badge has a border in its colour and always the same width. Hover it for the reason.
 
 | Badge | Meaning |
 |---|---|
 | **+4.0 dB**, **−7.0 dB** (blue) | The track is normalized with this gain. The tooltip states the gain and how it brings the measured loudness to the target, adds the track's trim when it is not 0, and says when the true-peak ceiling or the maximum boost held a boost back, with the gain that was wanted. When the settings, the measurement or the trim changed after the track was loaded, it says only that the track keeps the gain set when it was loaded. |
-| **Not normalized** (amber) | Normalization is on, but the track has no measurement yet (or is too short to measure): it plays unchanged. |
-| **Not normalized** (grey) | The output is bit-perfect, or the track is excluded from normalization. |
+| **0.0 dB** (amber) | The track plays unchanged, and the tooltip says why: it has no measurement yet (or is too short to measure), the output is bit-perfect, or the track is excluded from normalization. |
 | No badge | Normalization was off when the track started, the track is silent, or the player is stopped. A bit-perfect player shows none either while normalization is off. |
 
 The badge shows the gain the player asked for when the track started.

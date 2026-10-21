@@ -15,7 +15,6 @@ badge-bp = BP
 tip-bp-on = Bit-perfect: activo
 tip-bp-off = Bit-perfect: inactivo
 badge-gain = { $gain } dB
-badge-not-normalized = Sin normalizar
 tip-gain-applied = Ganancia { $gain } dB: lleva los { $lufs } LUFS medidos al objetivo de { $target } LUFS.
 tip-gain-trim = Incluye el ajuste de esta pista de { $trim } dB.
 tip-gain-limited-peak = Limitada por el techo de true peak ({ $ceiling } dBTP): se querían { $wanted } dB.

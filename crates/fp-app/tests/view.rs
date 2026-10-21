@@ -1040,24 +1040,23 @@ fn n18_the_other_statuses() {
         status,
     };
     let not = gain_badge(&of(S::NotMeasured), &c, &t).unwrap();
-    assert_eq!(
-        (not.text.key, not.tone),
-        ("badge-not-normalized", BadgeTone::Amber)
-    );
+    assert_eq!(not.text, msg("badge-gain", &[("gain", "0.0")]));
+    assert_eq!(not.tone, BadgeTone::Amber);
     assert_eq!(not.tip, vec![msg("tip-not-measured", &[])]);
     let bp = gain_badge(&of(S::BitPerfect), &c, &t).unwrap();
+    assert_eq!(bp.text, msg("badge-gain", &[("gain", "0.0")]));
     assert_eq!(
-        (bp.text.key, bp.tone, bp.tip[0].key),
-        (
-            "badge-not-normalized",
-            BadgeTone::Muted,
-            "tip-not-normalized-bp"
-        )
+        (bp.tone, bp.tip[0].key),
+        (BadgeTone::Amber, "tip-not-normalized-bp")
     );
     let ex = gain_badge(&of(S::Excluded), &c, &t).unwrap();
     assert_eq!(
-        (ex.tone, ex.tip[0].key),
-        (BadgeTone::Muted, "tip-not-normalized-excluded")
+        (ex.text, ex.tone, ex.tip[0].key),
+        (
+            msg("badge-gain", &[("gain", "0.0")]),
+            BadgeTone::Amber,
+            "tip-not-normalized-excluded"
+        )
     );
     assert_eq!(gain_badge(&of(S::Off), &c, &t), None);
     assert_eq!(gain_badge(&of(S::Silent), &c, &t), None);
@@ -1162,7 +1161,6 @@ fn every_message_the_view_returns_exists_in_english() {
     let en = fp_app::i18n::I18n::new(Some("en-US"));
     for key in [
         "badge-gain",
-        "badge-not-normalized",
         "tip-gain-applied",
         "tip-gain-trim",
         "tip-gain-limited-peak",

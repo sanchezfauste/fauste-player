@@ -228,7 +228,8 @@ fn a_player_with_no_title_shows_its_number_alone() {
     s.players[0].current = None;
     let (mut h, _) = harness(s);
     open_guard(&mut h);
-    assert!(h.query_by_label("P1").is_some());
+    // The player's header names itself "P1" too: the guard adds a second.
+    assert!(h.query_all_by_label("P1").count() >= 2);
 }
 
 #[test]

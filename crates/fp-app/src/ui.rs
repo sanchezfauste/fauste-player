@@ -11,6 +11,7 @@ pub mod exit_guard;
 pub mod files;
 pub mod format;
 pub mod glyphs;
+pub mod header_layout;
 pub mod icons;
 mod loudness_edit;
 mod notice;

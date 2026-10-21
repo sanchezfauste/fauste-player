@@ -283,6 +283,26 @@ pub struct Segment<'a> {
     pub label: &'a str,
 }
 
+/// The width of each segment of `segmented`.
+fn segment_widths(ui: &Ui, options: &[Segment<'_>]) -> Vec<f32> {
+    const PAD: f32 = 7.0;
+    options
+        .iter()
+        .map(|o| {
+            ui.painter()
+                .layout_no_wrap(o.text.to_owned(), font_semibold(9.0), theme::TEXT)
+                .size()
+                .x
+                + 2.0 * PAD
+        })
+        .collect()
+}
+
+/// The width `segmented` takes for `options`, to fit a row before drawing it.
+pub fn segmented_width(ui: &Ui, options: &[Segment<'_>]) -> f32 {
+    segment_widths(ui, options).iter().sum()
+}
+
 /// A segmented control: the options side by side inside one border, the
 /// selected one filled, so they read as one choice. Returns the index of an
 /// option clicked when it is not the selected one.
@@ -293,18 +313,8 @@ pub fn segmented(
     selected: usize,
 ) -> Option<usize> {
     const HEIGHT: f32 = 20.0;
-    const PAD: f32 = 7.0;
     let text_font = font_semibold(9.0);
-    let widths: Vec<f32> = options
-        .iter()
-        .map(|o| {
-            ui.painter()
-                .layout_no_wrap(o.text.to_owned(), text_font.clone(), theme::TEXT)
-                .size()
-                .x
-                + 2.0 * PAD
-        })
-        .collect();
+    let widths = segment_widths(ui, options);
     let (rect, _) = ui.allocate_exact_size(vec2(widths.iter().sum(), HEIGHT), Sense::hover());
     let mut clicked = None;
     let mut x = rect.left();

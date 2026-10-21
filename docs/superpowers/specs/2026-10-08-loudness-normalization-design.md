@@ -323,10 +323,17 @@ band) stays a separate value, whatever the normalization target (Q4).
   |---|---|---|
   | `Applied { limited: None }` | "−4.2 dB" (signed, one decimal; "0.0 dB" for a gain under 0.05 dB) | "Gain {gain} dB: brings the measured {lufs} LUFS to the {target} LUFS target.", plus "Includes this track's trim of {trim} dB." only when the trim in use is not 0 |
   | `Applied { limited: Some(_) }` | as above | adds "Limited by the true-peak ceiling ({ceiling} dBTP): {wanted} dB were wanted." or "Limited by the maximum boost ({max} dB): {wanted} dB were wanted." |
-  | `NotMeasured` | "Not normalized" (amber) | "Loudness not measured yet: this track plays unchanged." |
-  | `BitPerfect` | "Not normalized" (muted), only while `normalize` is on | "Bit-perfect output: tracks play unaltered." |
-  | `Excluded` | "Not normalized" (muted) | "This track is excluded from normalization." |
+  | `NotMeasured` | "0.0 dB" (amber) | "Loudness not measured yet: this track plays unchanged." |
+  | `BitPerfect` | "0.0 dB" (amber), only while `normalize` is on | "Bit-perfect output: tracks play unaltered." |
+  | `Excluded` | "0.0 dB" (amber) | "This track is excluded from normalization." |
   | `Off`, `Silent` | none | — |
+
+  *Amendment 2026-10-21 (itr06 I12).* Every not-normalized status shows the
+  same amber "0.0 dB" and states its reason only in the tooltip, so the badge
+  is as short as a gain. The badge has a fixed width (that of "−00.0 dB") and
+  a border in its tone. The header measures its items first (`header_layout`)
+  and collapses the least important when the column is narrow, so nothing
+  overlaps.
 
   `view::gain_badge(&Normalization, &LoudnessConfig, &Track) -> Option<GainBadge>`
   is a pure function in `crates/fp-app/src/ui/view.rs`; `player.rs` paints it
@@ -403,7 +410,6 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `tip-gain-earlier-settings` | "Gain set when the track was loaded. Its loudness settings or measurement have changed since; it keeps this gain until it stops." |
 | `loudness-close` | "Close" |
 | `badge-gain` | "{ $gain } dB" |
-| `badge-not-normalized` | "Not normalized" |
 | `tip-gain-applied` | "Normalized to { $target } LUFS: measured { $lufs } LUFS, trim { $trim } dB." |
 | `tip-gain-limited-peak` | "Limited by the true-peak ceiling ({ $ceiling } dBTP)." |
 | `tip-gain-limited-boost` | "Limited by the maximum boost ({ $max } dB)." |
