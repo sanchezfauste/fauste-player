@@ -276,12 +276,18 @@ both the analysis and the loudness function (tests inject them).
 explicit re-analysis, main spec §6.1): it skips the cache lookup, analyses
 the file and stores the result under the file's key as any job does. A file
 edited in place that kept its size and modification time would otherwise be
-answered from its old entry.
+answered from its old entry. The mark lives in the bookkeeping
+(`Bookkeeping::fresh`), not in the queued job: a fresh job moved ahead by
+`promote` stays fresh, `cancel` clears the mark and the worker that takes
+the job uses it up.
 
 `activity()` reads the bookkeeping: the tracks whose job waits (`queued`),
 the tracks whose latest job a worker runs (`running`; a job cancelled while
 it runs is not counted) and the number of loudness-only jobs queued or
-running. Each list is sorted.
+running. Each list is sorted, after the lock is released.
+`activity_version()` moves on every change of either bookkeeping (a job
+queued, started, ended or cancelled), so a reader rebuilds its view only
+when it moved.
 
 `cancel` only clears the bookkeeping: the job stays in its queue until a
 worker takes and skips it. So that restarts of the whole library in a row

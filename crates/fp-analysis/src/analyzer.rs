@@ -75,8 +75,6 @@ struct Job {
     track: TrackId,
     path: PathBuf,
     generation: u64,
-    /// Skip the cache lookup (an explicit re-analysis).
-    fresh: bool,
 }
 
 /// What the pool is doing (main spec §6.1), from its bookkeeping. Each
@@ -99,11 +97,18 @@ struct Bookkeeping {
     urgent: HashSet<TrackId>,
     /// The generation a worker is analysing now, per track.
     running: HashMap<TrackId, u64>,
+    /// Tracks whose pending job skips the cache lookup (an explicit
+    /// re-analysis). Kept here, not in the job, so a job moved ahead
+    /// (`promote`) stays fresh.
+    fresh: HashSet<TrackId>,
     next_generation: u64,
+    /// Bumped on every change, so a reader rebuilds its view only then.
+    changes: u64,
 }
 
 impl Bookkeeping {
     fn submit(&mut self, track: TrackId) -> u64 {
+        self.changes += 1;
         self.next_generation += 1;
         self.latest.insert(track, self.next_generation);
         self.next_generation
@@ -289,6 +294,9 @@ impl Analyzer {
                 return;
             }
             self.drop_stale(&book);
+            if fresh {
+                book.fresh.insert(track);
+            }
             book.submit(track)
         };
         if let Some(jobs) = &self.jobs {
@@ -296,7 +304,6 @@ impl Analyzer {
                 track,
                 path,
                 generation,
-                fresh,
             });
         }
     }
@@ -323,17 +330,32 @@ impl Analyzer {
     pub fn submit_urgent(&self, track: TrackId, path: PathBuf) {
         let generation = urgent_generation(&mut lock(&self.shared.book), track);
         if let Some(generation) = generation {
-            self.send_urgent(track, path, generation, false);
+            self.send_urgent(track, path, generation);
         }
     }
 
     /// As `submit_urgent`, for an explicit re-analysis (see
     /// `submit_fresh`).
     pub fn submit_urgent_fresh(&self, track: TrackId, path: PathBuf) {
-        let generation = urgent_generation(&mut lock(&self.shared.book), track);
+        let generation = {
+            let mut book = lock(&self.shared.book);
+            let generation = urgent_generation(&mut book, track);
+            if generation.is_some() {
+                book.fresh.insert(track);
+            }
+            generation
+        };
         if let Some(generation) = generation {
-            self.send_urgent(track, path, generation, true);
+            self.send_urgent(track, path, generation);
         }
+    }
+
+    /// Moves whenever the pool's bookkeeping changes (a job queued,
+    /// started, ended or cancelled, analysis or loudness-only): `activity`
+    /// can only differ when this did.
+    pub fn activity_version(&self) -> u64 {
+        let analysis = lock(&self.shared.book).changes;
+        analysis.wrapping_add(lock(&self.shared.loudness_book).changes)
     }
 
     /// What is queued and running now (main spec §6.1).
@@ -376,17 +398,16 @@ impl Analyzer {
             hook();
         }
         if let Some(generation) = generation {
-            self.send_urgent(track, path.to_path_buf(), generation, false);
+            self.send_urgent(track, path.to_path_buf(), generation);
         }
     }
 
-    fn send_urgent(&self, track: TrackId, path: PathBuf, generation: u64, fresh: bool) {
+    fn send_urgent(&self, track: TrackId, path: PathBuf, generation: u64) {
         if let Some(urgent) = &self.urgent {
             let _ = urgent.send(Job {
                 track,
                 path,
                 generation,
-                fresh,
             });
         }
     }
@@ -394,8 +415,10 @@ impl Analyzer {
     /// Cancels a pending or running job; no result will be delivered for it.
     pub fn cancel(&self, track: TrackId) {
         let mut book = lock(&self.shared.book);
+        book.changes += 1;
         book.latest.remove(&track);
         book.urgent.remove(&track);
+        book.fresh.remove(&track);
     }
 
     /// Settings for jobs that start after this call.
@@ -435,7 +458,6 @@ impl Analyzer {
                 track,
                 path,
                 generation,
-                fresh: false,
             });
         }
     }
@@ -443,7 +465,9 @@ impl Analyzer {
     /// Cancels a pending or running loudness-only job; no result will be
     /// delivered for it.
     pub fn cancel_loudness(&self, track: TrackId) {
-        lock(&self.shared.loudness_book).latest.remove(&track);
+        let mut book = lock(&self.shared.loudness_book);
+        book.changes += 1;
+        book.latest.remove(&track);
     }
 
     pub fn loudness_results(&self) -> &Receiver<LoudnessResult> {
@@ -521,23 +545,26 @@ fn worker(
 }
 
 fn analysis_job(job: Job, results: &Sender<AnalysisResult>, shared: &Shared) {
-    {
+    let fresh = {
         let mut book = lock(&shared.book);
         if !book.is_current(&job) {
             return;
         }
+        book.changes += 1;
         book.urgent.remove(&job.track);
         book.running.insert(job.track, job.generation);
-    }
+        book.fresh.remove(&job.track)
+    };
     // Before the analysis: a file that changes while it runs (a copy
     // that completes) is told apart from what was analysed.
     let stamp = std::fs::metadata(&job.path)
         .ok()
         .and_then(|m| Some((m.len(), m.modified().ok()?)));
-    let outcome = catch_unwind(AssertUnwindSafe(|| run(&job, shared)))
+    let outcome = catch_unwind(AssertUnwindSafe(|| run(&job, fresh, shared)))
         .unwrap_or_else(|_| Err(AnalysisError::Unreadable("the analysis crashed".to_owned())));
     let deliver = {
         let mut book = lock(&shared.book);
+        book.changes += 1;
         if book.running.get(&job.track) == Some(&job.generation) {
             book.running.remove(&job.track);
         }
@@ -557,7 +584,7 @@ fn analysis_job(job: Job, results: &Sender<AnalysisResult>, shared: &Shared) {
     }
 }
 
-fn run(job: &Job, shared: &Shared) -> Result<Analysis, AnalysisError> {
+fn run(job: &Job, fresh: bool, shared: &Shared) -> Result<Analysis, AnalysisError> {
     let settings = lock(&shared.settings).clone();
     let limits = lock(&shared.limits).clone();
     // The key is taken before analysing: if the file changes meanwhile, the
@@ -568,7 +595,7 @@ fn run(job: &Job, shared: &Shared) -> Result<Analysis, AnalysisError> {
         .cache
         .as_ref()
         .and_then(|c| c.key(&job.path, &settings, &limits));
-    if !job.fresh
+    if !fresh
         && let (Some(cache), Some(key)) = (&shared.cache, &key)
         && let Some(analysis) = cache.load_key(key, &limits)
     {
@@ -591,6 +618,7 @@ fn loudness_job(job: Job, results: &Sender<LoudnessResult>, shared: &Shared) {
         if !book.is_current(&job) {
             return;
         }
+        book.changes += 1;
         book.running.insert(job.track, job.generation);
     }
     let outcome =
@@ -601,6 +629,7 @@ fn loudness_job(job: Job, results: &Sender<LoudnessResult>, shared: &Shared) {
         });
     let deliver = {
         let mut book = lock(&shared.loudness_book);
+        book.changes += 1;
         if book.running.get(&job.track) == Some(&job.generation) {
             book.running.remove(&job.track);
         }

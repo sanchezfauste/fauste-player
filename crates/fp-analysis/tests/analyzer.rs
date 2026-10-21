@@ -592,3 +592,76 @@ fn a_fresh_job_skips_the_cache_and_stores_its_result() {
     assert!((duration(&analyzer) - 1.0).abs() < 1e-6, "urgent jobs too");
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
+
+/// Review of #115: a fresh job moved ahead (`promote`, a track loaded on a
+/// player while the library pass waits) stays fresh.
+#[test]
+fn a_promoted_fresh_job_still_skips_the_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav");
+    let b = wav(dir.path(), "b.wav");
+    let gate = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let reads_of_b = Arc::new(AtomicUsize::new(0));
+    let (open, reads, held, counted) = (gate.clone(), reads_of_b.clone(), a.clone(), b.clone());
+    let analyze: AnalyzeFn = Arc::new(move |path, settings, limits, cancelled| {
+        if path == held {
+            while !open.load(Ordering::SeqCst) && !cancelled() {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        if path == counted {
+            reads.fetch_add(1, Ordering::SeqCst);
+        }
+        analyze_file(path, settings, limits)
+    });
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        Some(AnalysisCache::new(dir.path().join("cache"))),
+        analyze,
+    )
+    .unwrap();
+    analyzer.submit(TrackId(2), b.clone());
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    assert_eq!(reads_of_b.load(Ordering::SeqCst), 1, "cached now");
+    gate.store(false, Ordering::SeqCst);
+    analyzer.submit(TrackId(1), a);
+    let deadline = std::time::Instant::now() + WAIT;
+    while analyzer.activity().running.is_empty() {
+        assert!(std::time::Instant::now() < deadline, "never started");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    analyzer.submit_fresh(TrackId(2), b.clone());
+    analyzer.promote(TrackId(2), &b);
+    gate.store(true, Ordering::SeqCst);
+    for _ in 0..2 {
+        analyzer.results().recv_timeout(WAIT).unwrap();
+    }
+    assert_eq!(reads_of_b.load(Ordering::SeqCst), 2, "read again");
+}
+
+/// Review of #115: the bookkeeping's version moves with every change, so
+/// the services thread rebuilds the activity only then.
+#[test]
+fn the_activity_version_moves_only_on_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let gate = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (analyzer, started) = held_pool(dir.path(), gate.clone());
+    let deadline = std::time::Instant::now() + WAIT;
+    while started.load(Ordering::SeqCst) == 0 {
+        assert!(std::time::Instant::now() < deadline, "never started");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let held = analyzer.activity_version();
+    assert_eq!(analyzer.activity_version(), held, "nothing changed");
+    analyzer.cancel(TrackId(3));
+    let cancelled = analyzer.activity_version();
+    assert_ne!(cancelled, held);
+    analyzer.submit_loudness(TrackId(9), dir.path().join("a.wav"));
+    assert_ne!(analyzer.activity_version(), cancelled);
+    let before = analyzer.activity_version();
+    gate.store(true, Ordering::SeqCst);
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    assert_ne!(analyzer.activity_version(), before, "a job ended");
+}
