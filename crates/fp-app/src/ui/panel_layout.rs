@@ -123,13 +123,15 @@ pub fn arrange(input: &PassInput<'_>) -> Arrangement {
     }
 }
 
-/// RL8, RL11, RL12: the least and the most size, in points along its axis
-/// (its height at the bottom, its width on a side), that the open cartwall
-/// can take beside the shown players: its own minimum, and what leaves the
-/// players theirs (at the bottom `players_least_height`, with the scroll
-/// bar's strip of an overflowing row), never below its own minimum. `None`
-/// while it is hidden or collapsed, or with no player shown: then it has no
-/// size to choose.
+/// RL6, RL8, RL11, RL12: the least and the most size, in points along its
+/// axis (its height at the bottom, its width on a side), that the open
+/// cartwall can take beside the shown players: its own minimum, and what
+/// leaves the players theirs (at the bottom `players_least_height`, with
+/// the scroll bar's strip of an overflowing row), both within the shares a
+/// size can hold (`MIN_CARTWALL_SHARE` to `MAX_CARTWALL_SHARE` of the
+/// area, so the drawn size never lags the pointer), and never below its
+/// own minimum. `None` while it is hidden or collapsed, or with no player
+/// shown: then it has no size to choose.
 pub fn cartwall_range(input: &PassInput<'_>) -> Option<(f32, f32)> {
     let layout = input.layout;
     let sizes = input.cartwall;
@@ -138,14 +140,18 @@ pub fn cartwall_range(input: &PassInput<'_>) -> Option<(f32, f32)> {
         return None;
     }
     let area = input.area;
-    let (least, most) = if layout.cartwall.dock.is_side() {
+    let (own, room, extent) = if layout.cartwall.dock.is_side() {
         let count = shown as f32;
         let players = count * MIN_PLAYER_WIDTH + (count - 1.0) * PANEL_GAP;
-        (sizes.min_width, area.width() - PANEL_GAP - players)
+        let extent = area.width();
+        (sizes.min_width, extent - PANEL_GAP - players, extent)
     } else {
         let players = players_least_height(spare_width(shown, area.width()) < -0.5);
-        (sizes.min_height, area.height() - PANEL_GAP - players)
+        let extent = area.height();
+        (sizes.min_height, extent - PANEL_GAP - players, extent)
     };
+    let least = own.max(MIN_CARTWALL_SHARE * extent);
+    let most = room.min(MAX_CARTWALL_SHARE * extent);
     Some((least, most.max(least)))
 }
 
@@ -512,8 +518,12 @@ pub struct CartwallDrag {
 
 impl CartwallDrag {
     /// A drag of the splitter of a cartwall docked at `dock`, begun at
-    /// `origin` with the cartwall `start` points along its axis.
+    /// `origin` with the cartwall `start` points along its axis. The start
+    /// is taken into the range: a cartwall that fits its content can be
+    /// drawn outside it (RL11), and the drag starts from the size it can
+    /// keep, so a drag back to where it began sends nothing.
     pub fn new(dock: Dock, area: Rect, range: (f32, f32), origin: Pos2, start: f32) -> Self {
+        let start = start.min(range.1).max(range.0);
         Self {
             dock,
             area,

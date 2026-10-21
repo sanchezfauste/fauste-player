@@ -15,7 +15,7 @@ use fp_app::ui::panel_layout::{
     MIN_PLAYER_WIDTH, Maximised, PANEL_GAP, PassInput, SCROLL_BAR_ROOM, SHARE_FLOOR, arrange,
     cartwall_range, drag_pair, pair_shares, panel_on_air,
 };
-use fp_model::layout::{Dock, Panel};
+use fp_model::layout::{Dock, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE, Panel};
 use fp_model::{AppState, Command, Config, PlayerId, TrackAnalysis, apply};
 
 /// The middle area of a 1920 × 1080 window, inside its 8-point margin:
@@ -615,6 +615,15 @@ fn rl12_the_cartwall_range_is_its_minimum_up_to_the_players_minimum() {
         Some((92.0, 92.0)),
         "never below its own minimum"
     );
+    // Four players overflow a 1350-point row: the players keep their least
+    // height and the scroll bar's strip.
+    assert_eq!(
+        range(&four(), laptop(), SIZES),
+        Some((
+            92.0,
+            laptop().height() - PANEL_GAP - MIN_PLAYER_HEIGHT - SCROLL_BAR_ROOM
+        ))
+    );
     let mut s = four();
     s.layout.cartwall.hidden = true;
     assert_eq!(range(&s, full_hd(), SIZES), None, "hidden");
@@ -702,7 +711,67 @@ fn rl14_a_collapsed_cartwall_is_never_maximised() {
     }
 }
 
+/// The middle area of a 1366 × 768 window: four players overflow its row.
+fn laptop() -> Rect {
+    Rect::from_min_max(pos2(8.0, 42.0), pos2(1358.0, 736.0))
+}
+
+/// A page of one row: 24 + 6 + 40 + 6, its least 24 + 6 + 28 + 6.
+const ONE_ROW: CartwallSizes = CartwallSizes {
+    content_height: 76.0,
+    min_height: 64.0,
+    min_width: 120.0,
+    collapsed: None,
+};
+
+/// A page of six rows: 24 + 6 + 6 × 40 + 5 × 6 + 6, its least with the
+/// rows at 28.
+const SIX_ROWS: CartwallSizes = CartwallSizes {
+    content_height: 306.0,
+    min_height: 234.0,
+    min_width: 490.0,
+    collapsed: None,
+};
+
+#[test]
+fn rl12_the_cartwall_range_keeps_the_size_s_shares() {
+    // The middle area of a 3840 × 2160 window: a one-row page is less than
+    // 5 % of its height and of its width.
+    let tall = Rect::from_min_max(pos2(8.0, 42.0), pos2(3832.0, 2128.0));
+    let (least, _) = range(&four(), tall, ONE_ROW).unwrap();
+    assert!(near(least, MIN_CARTWALL_SHARE * tall.height()), "{least}");
+    let (least, _) = range(&docked(two(), Dock::Left, None), tall, ONE_ROW).unwrap();
+    assert!(near(least, MIN_CARTWALL_SHARE * tall.width()), "{least}");
+    // So large an area that the players' minimum is less than 5 % of it.
+    let huge = Rect::from_min_size(pos2(0.0, 0.0), vec2(20_000.0, 20_000.0));
+    let (_, most) = range(&four(), huge, ONE_ROW).unwrap();
+    assert!(near(most, MAX_CARTWALL_SHARE * 20_000.0), "{most}");
+    let (_, most) = range(&docked(two(), Dock::Right, None), huge, ONE_ROW).unwrap();
+    assert!(near(most, MAX_CARTWALL_SHARE * 20_000.0), "{most}");
+    // Never below its own minimum, and the least is never above the most.
+    let low = Rect::from_min_size(pos2(8.0, 42.0), vec2(1904.0, 400.0));
+    assert_eq!(range(&four(), low, SIZES), Some((92.0, 92.0)));
+}
+
 // --- the cartwall drag (RL12)
+
+#[test]
+fn rl12_a_drag_of_a_cartwall_taller_than_its_range_starts_within_it() {
+    // Fitting six rows (306 points) leaves less than the overflowing
+    // players' least height: the cartwall is drawn taller than its range.
+    let s = four();
+    let a = pass_with(&s, laptop(), SIX_ROWS, None);
+    let start = a.cartwall.unwrap().height();
+    let range = range(&s, laptop(), SIX_ROWS).unwrap();
+    assert!(start > range.1, "{start} {range:?}");
+    let origin = pos2(600.0, 500.0);
+    let mut drag = CartwallDrag::new(Dock::Bottom, laptop(), range, origin, start);
+    assert_eq!(drag.size(), range.1, "it starts at the range's most");
+    drag.follow(pos2(600.0, 506.0));
+    drag.follow(origin);
+    assert_eq!(drag.size(), range.1);
+    assert_eq!(drag.release(None, 1.0), None, "back where it began");
+}
 
 #[test]
 fn rl12_a_bottom_drag_grows_the_cartwall_upwards_within_its_range() {
@@ -831,5 +900,41 @@ fn rl12_the_pass_draws_a_cartwall_drag_exactly() {
     let mut s = four();
     s.layout.cartwall.size = Some(drag.share());
     let a = pass(&s, full_hd(), None);
+    assert!(near(a.cartwall.unwrap().height(), drag.size()), "{a:?}");
+
+    // On a side, with a player hidden: the range leaves the one shown
+    // player its minimum.
+    for (dock, towards) in [(Dock::Left, 1.0), (Dock::Right, -1.0)] {
+        let mut s = docked(two(), dock, Some(0.3));
+        s.layout.hidden_players = vec![s.player_ids()[1]];
+        let start = pass(&s, full_hd(), None).cartwall.unwrap().width();
+        let range = range(&s, full_hd(), SIZES).unwrap();
+        assert!(
+            near(range.1, 1904.0 - PANEL_GAP - MIN_PLAYER_WIDTH),
+            "{range:?}"
+        );
+        let origin = pos2(900.0, 500.0);
+        let mut drag = CartwallDrag::new(dock, full_hd(), range, origin, start);
+        for moved in [333.0, 5000.0, -5000.0] {
+            drag.follow(pos2(900.0 + towards * moved, 500.0));
+            s.layout.cartwall.size = Some(drag.share());
+            let a = pass(&s, full_hd(), None);
+            assert!(
+                near(a.cartwall.unwrap().width(), drag.size()),
+                "{dock:?} {moved} {a:?}"
+            );
+        }
+    }
+
+    // A one-row page on a tall window: dragged to its least, the drawn
+    // size is the pointer's, not the share's floor.
+    let tall = Rect::from_min_max(pos2(8.0, 42.0), pos2(3832.0, 2128.0));
+    let s = four();
+    let range = range(&s, tall, ONE_ROW).unwrap();
+    let mut drag = CartwallDrag::new(Dock::Bottom, tall, range, pos2(900.0, 2000.0), 76.0);
+    drag.follow(pos2(900.0, 2100.0));
+    let mut s = s;
+    s.layout.cartwall.size = Some(drag.share());
+    let a = pass_with(&s, tall, ONE_ROW, None);
     assert!(near(a.cartwall.unwrap().height(), drag.size()), "{a:?}");
 }
