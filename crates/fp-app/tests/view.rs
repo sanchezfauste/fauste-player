@@ -991,7 +991,7 @@ fn n18_an_applied_gain_shows_its_value_and_why() {
         b.tip,
         vec![msg(
             "tip-gain-applied",
-            &[("target", "−16.0"), ("lufs", "−20.0"), ("trim", "0.0")]
+            &[("gain", "+4.0"), ("target", "−16.0"), ("lufs", "−20.0")]
         )]
     );
 }
@@ -1008,7 +1008,10 @@ fn n18_a_limited_gain_says_which_limit() {
     .unwrap();
     assert_eq!(
         peak.tip[1],
-        msg("tip-gain-limited-peak", &[("ceiling", "−1.0")])
+        msg(
+            "tip-gain-limited-peak",
+            &[("ceiling", "−1.0"), ("wanted", "+4.0")]
+        )
     );
     // The gain the current settings give for this quieter track.
     let quiet = measured_track(Some(-40.0), -30.0);
@@ -1020,7 +1023,10 @@ fn n18_a_limited_gain_says_which_limit() {
     .unwrap();
     assert_eq!(
         boost.tip[1],
-        msg("tip-gain-limited-boost", &[("max", "12.0")])
+        msg(
+            "tip-gain-limited-boost",
+            &[("max", "12.0"), ("wanted", "+24.0")]
+        )
     );
 }
 
@@ -1158,6 +1164,7 @@ fn every_message_the_view_returns_exists_in_english() {
         "badge-gain",
         "badge-not-normalized",
         "tip-gain-applied",
+        "tip-gain-trim",
         "tip-gain-limited-peak",
         "tip-gain-limited-boost",
         "tip-not-measured",
@@ -1203,10 +1210,13 @@ fn n18_the_badge_tooltip_quotes_the_trim_in_use() {
     let b = gain_badge(&applied(10.0, None), &config, &t).unwrap();
     assert_eq!(
         b.tip,
-        vec![msg(
-            "tip-gain-applied",
-            &[("target", "−16.0"), ("lufs", "−20.0"), ("trim", "+6.0")]
-        )]
+        vec![
+            msg(
+                "tip-gain-applied",
+                &[("gain", "+10.0"), ("target", "−16.0"), ("lufs", "−20.0")]
+            ),
+            msg("tip-gain-trim", &[("trim", "+6.0")]),
+        ]
     );
 }
 
