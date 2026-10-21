@@ -25,8 +25,9 @@ use super::cue_window;
 use super::exit_guard::{self, ExitIntent};
 use super::files::{AUDIO_EXTENSIONS, audio_paths};
 use super::notice;
+use super::panel_layout;
+use super::panels;
 use super::pending;
-use super::player;
 use super::playlist_files::{self, FileOutcome};
 use super::reset_played;
 use super::settings::{self, SettingsDeps, SettingsState};
@@ -37,7 +38,6 @@ use crate::i18n::I18n;
 use crate::services::{MediaCache, ServiceRequest};
 use crate::tags::{TagJob, TagOutcome, TagWorker};
 
-const MIN_COLUMN_WIDTH: f32 = 380.0;
 const TOP_BAR_HEIGHT: f32 = 34.0;
 const STATUS_BAR_HEIGHT: f32 = 24.0;
 const NOTICE_SECS: f64 = 5.0;
@@ -180,6 +180,17 @@ pub(crate) struct ViewState {
     pub tab_scroll: HashMap<PlayerId, TabScroll>,
     /// The name being typed in each player's "new playlist" popup.
     pub new_playlist: HashMap<PlayerId, String>,
+    /// The shown players' columns in the last frame (resizable layout spec
+    /// RL11), for tests.
+    pub(crate) player_rects: Vec<(PlayerId, Rect)>,
+    /// The cartwall's rectangle in the last frame; `None` while hidden.
+    pub(crate) cartwall_rect: Option<Rect>,
+    /// A player splitter being dragged or just released (RL12).
+    pub(crate) live_split: Option<super::panel_layout::LiveSplit>,
+    /// The panel maximised for the moment (RL16); never saved.
+    pub(crate) maximised: Option<super::panel_layout::Maximised>,
+    /// The cartwall splitter being dragged or just released (RL12).
+    pub(crate) cartwall_drag: Option<super::panel_layout::CartwallDrag>,
     notice: Option<(String, f64)>,
     /// Dropouts the engine counted, as the status bar alerts show them.
     dropouts: Dropouts,
@@ -561,6 +572,23 @@ impl AppUi {
         self.view.widths.get(&player).cloned()
     }
 
+    /// The shown players' column rectangles in the last frame, in display
+    /// order (resizable layout spec RL11).
+    pub fn player_rects(&self) -> Vec<(PlayerId, Rect)> {
+        self.view.player_rects.clone()
+    }
+
+    /// The cartwall's rectangle in the last frame; `None` while it is
+    /// hidden.
+    pub fn cartwall_rect(&self) -> Option<Rect> {
+        self.view.cartwall_rect
+    }
+
+    /// The panel maximised for the moment (resizable layout spec RL16).
+    pub fn maximised(&self) -> Option<fp_model::layout::Panel> {
+        self.view.maximised.as_ref().map(|m| m.panel)
+    }
+
     pub fn ui(&mut self, ui: &mut Ui) {
         #[cfg(feature = "test-hooks")]
         if std::mem::take(&mut self.fail_next_frame) {
@@ -656,6 +684,8 @@ impl AppUi {
         if let Some(track) = self.view.edit_tags.take() {
             self.open_tag_editor(&ctx, &state, track);
         }
+        // The view follows the model before the keyboard acts (RL16, RL17).
+        panels::settle_view(&mut self.view, &state);
         self.keyboard(&ctx, &state);
         let pending = fp_model::pending(&state);
         let scene = Scene {
@@ -689,31 +719,65 @@ impl AppUi {
         top_bar(&mut top_ui, &scene, &mut self.view, &pending, &|d| {
             self.settings.device_label(d)
         });
-        // The cartwall strip takes the bottom of the middle area.
+        // The middle area (resizable layout spec RL11): the pixel pass turns
+        // the layout into the players' row and the cartwall's rectangle.
         let inner = middle.shrink(8.0);
-        let cart_height = cartwall::height(&scene).min(inner.height() * 0.6);
-        let players_rect = Rect::from_min_max(
-            inner.min,
-            egui::pos2(inner.right(), inner.bottom() - cart_height - 8.0),
-        );
-        let cart_rect = Rect::from_min_max(
-            egui::pos2(inner.left(), inner.bottom() - cart_height),
-            inner.max,
-        );
-        let mut players_ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(players_rect)
-                .layout(Layout::left_to_right(Align::Min)),
-        );
-        players_row(&mut players_ui, &scene, &mut self.view, &mut self.covers);
-        let mut cart_ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(cart_rect)
-                .id_salt("cartwall")
-                .layout(Layout::top_down(Align::Min)),
-        );
-        cart_ui.set_clip_rect(cart_rect);
-        cartwall::strip(&mut cart_ui, &scene, &mut self.view);
+        let ids = state.player_ids();
+        let model_input = panel_layout::PassInput {
+            players: &ids,
+            layout: &state.layout,
+            area: inner,
+            cartwall: cartwall::sizes(ui, &scene),
+            maximised: None,
+        };
+        // RL12: a cartwall splitter drag draws its size until the echo.
+        let dragged = panels::cartwall_drag_layout(ui, &scene, &mut self.view, &model_input);
+        let layout = dragged.as_ref().unwrap_or(&state.layout);
+        let pass = |maximised: Option<fp_model::layout::Panel>| {
+            panel_layout::arrange(&panel_layout::PassInput {
+                layout,
+                maximised,
+                ..model_input
+            })
+        };
+        let maximised = self.view.maximised.as_ref().map(|m| m.panel);
+        let arranged = pass(maximised);
+        // RL16: a splitter drag starts from the sizes without the maximised
+        // panel.
+        let normal = if maximised.is_some() {
+            pass(None)
+        } else {
+            arranged.clone()
+        };
+        self.view.player_rects.clear();
+        if !arranged.widths.is_empty() {
+            let mut players_ui = ui.new_child(
+                UiBuilder::new()
+                    .max_rect(arranged.players_area)
+                    .layout(Layout::left_to_right(Align::Min)),
+            );
+            panels::players_row(
+                &mut players_ui,
+                &scene,
+                &mut self.view,
+                &mut self.covers,
+                &arranged,
+                &normal,
+            );
+        }
+        self.view.cartwall_rect = arranged.cartwall;
+        if let Some(cart_rect) = arranged.cartwall {
+            let mut cart_ui = ui.new_child(
+                UiBuilder::new()
+                    .max_rect(cart_rect)
+                    .id_salt("cartwall")
+                    .layout(Layout::top_down(Align::Min)),
+            );
+            cart_ui.set_clip_rect(cart_rect);
+            cartwall::strip(&mut cart_ui, &scene, &mut self.view, !arranged.fit_content);
+        }
+        // RL12: the splitter beside the cartwall, over the gap.
+        panels::cartwall_splitter(ui, &scene, &mut self.view, &model_input, &arranged, &normal);
         let mut status_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(status)
@@ -1442,13 +1506,16 @@ impl AppUi {
         }
         // Pointer positions are not reported during an OS drag on every
         // platform: without one, the files go to the end of the list shown
-        // by the last player used (or the first player).
+        // by the last player used, or else by the first shown player
+        // (resizable layout spec RL18).
+        let shown = state.layout.shown_players(&state.player_ids());
         let fallback = || {
-            let player = self
+            let id = self
                 .view
                 .active_player
-                .and_then(|id| state.player(id).ok())
-                .or_else(|| state.players.first())?;
+                .filter(|p| shown.contains(p))
+                .or_else(|| shown.first().copied())?;
+            let player = state.player(id).ok()?;
             let list = state.playlists.get(player.playlist)?;
             Some(DropTarget {
                 player: player.id,
@@ -1457,6 +1524,11 @@ impl AppUi {
             })
         };
         let Some(target) = self.view.file_drop.or_else(fallback) else {
+            if shown.is_empty() {
+                // RL18: no player is shown to take the files.
+                let until = ctx.input(|i| i.time) + NOTICE_SECS;
+                self.view.notice = Some((self.i18n.tr("notice-drop-no-player"), until));
+            }
             return;
         };
         // Reading folders can be slow (network shares, sleeping disks): it
@@ -1517,6 +1589,9 @@ fn shortcut_command(state: &AppState, action: ShortcutAction) -> Option<Command>
             Command::FireCart(cart.id)
         }
         ShortcutAction::StopAllCarts => Command::StopAllCarts,
+        // RL7: while the cartwall is hidden, its collapse toggle does
+        // nothing; the top bar's Carts tile shows it.
+        ShortcutAction::ToggleCartwall if state.layout.cartwall.hidden => return None,
         ShortcutAction::ToggleCartwall => Command::SetCartwallOpen(!wall.open),
         ShortcutAction::NextCartPage => Command::ShowCartPage(page_step(1)?),
         ShortcutAction::PreviousCartPage => Command::ShowCartPage(page_step(-1)?),
@@ -1625,6 +1700,9 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
         ModelError::CartGridOutOfRange => i18n.tr("error-cart-grid"),
         ModelError::FaderLocked(_) => i18n.tr("tip-volume-locked"),
         ModelError::NoPlaylists => i18n.tr("error-no-playlists"),
+        ModelError::BadLayout => i18n.tr("error-bad-layout"),
+        ModelError::LastPanel => i18n.tr("error-last-panel"),
+        ModelError::LayoutLocked => i18n.tr("error-layout-locked"),
     }
 }
 
@@ -1646,145 +1724,114 @@ fn top_bar(
         theme::NEUTRAL_800,
     );
     ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
+    // The clock and the buttons first, from the right end, so that the
+    // panel tiles on the left know where they must stop.
+    let mut right = ui.new_child(
+        UiBuilder::new()
+            .id_salt("top-bar-right")
+            .max_rect(rect)
+            .layout(Layout::right_to_left(Align::Center)),
+    );
+    top_bar_right(&mut right, scene, view_state, pending, names);
+    let right_edge = right.min_rect().left();
     ui.add_space(10.0);
+    // RL15: the panel tiles and the layout menu, on the left, 12 points
+    // clear of the right-hand block.
+    panels::layout_controls(ui, scene, right_edge - 12.0);
+}
 
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        ui.spacing_mut().item_spacing = vec2(12.0, 0.0);
-        ui.add_space(10.0);
-        let clock = chrono::Local::now().format("%H:%M:%S").to_string();
-        widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
-        let label = scene.i18n.tr("top-settings");
+/// The top bar's right-hand block, laid out from the right end: the clock,
+/// Settings, About and the pending-changes tile.
+fn top_bar_right(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    pending: &[fp_model::Pending],
+    names: pending::DeviceNames<'_>,
+) {
+    ui.spacing_mut().item_spacing = vec2(12.0, 0.0);
+    ui.add_space(10.0);
+    let clock = chrono::Local::now().format("%H:%M:%S").to_string();
+    widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
+    let label = scene.i18n.tr("top-settings");
+    let width = ui
+        .painter()
+        .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
+        .size()
+        .x
+        + 34.0;
+    let style = TileStyle {
+        border: theme::NEUTRAL_800,
+        hover_fill: theme::NEUTRAL_800,
+        ..TileStyle::plain()
+    };
+    if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
+        p.text(
+            r.center(),
+            egui::Align2::CENTER_CENTER,
+            format!("{} {label}", egui_phosphor::regular::GEAR_SIX),
+            font(12.0),
+            c,
+        );
+    })
+    .clicked()
+    {
+        view_state.settings_open = true;
+    }
+    let about = scene.i18n.tr("tip-about");
+    let style = TileStyle {
+        border: theme::NEUTRAL_800,
+        hover_fill: theme::NEUTRAL_800,
+        ..TileStyle::plain()
+    };
+    if widgets::tile(ui, vec2(24.0, 24.0), &about, true, style, |p, r, c| {
+        p.text(
+            r.center(),
+            egui::Align2::CENTER_CENTER,
+            egui_phosphor::regular::INFO,
+            font(14.0),
+            c,
+        );
+    })
+    .clicked()
+    {
+        view_state.about_open = true;
+    }
+    if !pending.is_empty() {
+        let i18n = scene.i18n;
+        let label = i18n.tr("top-settings-pending");
+        let tip = pending
+            .iter()
+            .map(|p| pending::describe(i18n, scene.state, names, p))
+            .collect::<Vec<_>>()
+            .join("\n");
         let width = ui
             .painter()
-            .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
+            .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
             .size()
             .x
             + 34.0;
         let style = TileStyle {
-            border: theme::NEUTRAL_800,
+            border: theme::AMBER,
+            content: theme::AMBER,
             hover_fill: theme::NEUTRAL_800,
             ..TileStyle::plain()
         };
-        if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
+        if widgets::tile_without_tooltip(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
             p.text(
                 r.center(),
                 egui::Align2::CENTER_CENTER,
-                format!("{} {label}", egui_phosphor::regular::GEAR_SIX),
+                format!("{} {label}", egui_phosphor::regular::HOURGLASS),
                 font(12.0),
                 c,
             );
         })
+        .on_hover_text(tip)
         .clicked()
         {
-            view_state.settings_open = true;
+            view_state.pending_open = true;
         }
-        let about = scene.i18n.tr("tip-about");
-        let style = TileStyle {
-            border: theme::NEUTRAL_800,
-            hover_fill: theme::NEUTRAL_800,
-            ..TileStyle::plain()
-        };
-        if widgets::tile(ui, vec2(24.0, 24.0), &about, true, style, |p, r, c| {
-            p.text(
-                r.center(),
-                egui::Align2::CENTER_CENTER,
-                egui_phosphor::regular::INFO,
-                font(14.0),
-                c,
-            );
-        })
-        .clicked()
-        {
-            view_state.about_open = true;
-        }
-        if !pending.is_empty() {
-            let i18n = scene.i18n;
-            let label = i18n.tr("top-settings-pending");
-            let tip = pending
-                .iter()
-                .map(|p| pending::describe(i18n, scene.state, names, p))
-                .collect::<Vec<_>>()
-                .join("\n");
-            let width = ui
-                .painter()
-                .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
-                .size()
-                .x
-                + 34.0;
-            let style = TileStyle {
-                border: theme::AMBER,
-                content: theme::AMBER,
-                hover_fill: theme::NEUTRAL_800,
-                ..TileStyle::plain()
-            };
-            if widgets::tile_without_tooltip(
-                ui,
-                vec2(width, 24.0),
-                &label,
-                true,
-                style,
-                |p, r, c| {
-                    p.text(
-                        r.center(),
-                        egui::Align2::CENTER_CENTER,
-                        format!("{} {label}", egui_phosphor::regular::HOURGLASS),
-                        font(12.0),
-                        c,
-                    );
-                },
-            )
-            .on_hover_text(tip)
-            .clicked()
-            {
-                view_state.pending_open = true;
-            }
-        }
-    });
-}
-
-fn players_row(
-    ui: &mut Ui,
-    scene: &Scene<'_>,
-    view_state: &mut ViewState,
-    covers: &mut HashMap<TrackId, TextureHandle>,
-) {
-    let count = scene.state.players.len();
-    if count == 0 {
-        return;
     }
-    let gap = 8.0;
-    let available = ui.available_width();
-    let width = ((available - gap * (count as f32 - 1.0)) / count as f32).max(MIN_COLUMN_WIDTH);
-    let overflow = width * count as f32 + gap * (count as f32 - 1.0) > available + 0.5;
-    // The horizontal scroll bar gets its own strip instead of covering the footers.
-    let bar = if overflow {
-        ui.spacing().scroll.bar_width + ui.spacing().scroll.bar_inner_margin + 2.0
-    } else {
-        0.0
-    };
-    let height = ui.available_height() - bar;
-    egui::ScrollArea::horizontal()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.horizontal_top(|ui| {
-                ui.spacing_mut().item_spacing = vec2(gap, 0.0);
-                for index in 0..count {
-                    let (rect, _) =
-                        ui.allocate_exact_size(vec2(width, height - 2.0), Sense::hover());
-                    if !ui.is_rect_visible(rect) {
-                        continue;
-                    }
-                    let mut column_ui = ui.new_child(
-                        UiBuilder::new()
-                            .max_rect(rect)
-                            .id_salt(("player", index))
-                            .layout(Layout::top_down(Align::Min)),
-                    );
-                    column_ui.set_clip_rect(rect.intersect(ui.clip_rect()));
-                    player::column(&mut column_ui, scene, view_state, covers, index);
-                }
-            });
-        });
 }
 
 /// The status bar's legend: each swatch colour and the message naming it.

@@ -15,6 +15,7 @@ pub mod dsd;
 mod entry_notice;
 pub mod error;
 pub mod ids;
+pub mod layout;
 pub mod live;
 pub mod loudness;
 pub mod midi;
@@ -66,6 +67,10 @@ pub use dsd::{
 pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
 pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
+pub use layout::{
+    CartwallLayout, DEFAULT_SIDE_SHARE, Dock, Layout, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE,
+    Panel, settle_layout,
+};
 pub use live::{
     BusyCause, DeviceSettings, Failure, Holder, LiveSettings, Pending, PendingItem, Target, Wanted,
     causes, configured_route, device_causes, device_settings, due, has_output_items, holders,

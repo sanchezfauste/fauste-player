@@ -223,6 +223,11 @@ error-carts-would-be-lost = Het kleinere raster zou carts met een bestand laten 
 error-cart-grid = Die rastergrootte valt buiten het toegestane bereik.
 error-invalid-marker = Cue-in moet voor cue-out blijven.
 error-invalid-trim = De trim moet een getal binnen de maximale trim zijn.
+error-bad-layout = Die indelingswijziging is niet mogelijk.
+error-last-panel = Er moet minstens één paneel zichtbaar blijven.
+error-layout-locked = De indeling is vergrendeld.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartwall
 cartwall-title = CARTWALL
 cartwall-hint = Klik om te starten · klik opnieuw om te stoppen
 cartwall-stop-all = Alles stoppen
@@ -652,3 +657,20 @@ cue-on-air-cartwall = de cartwall speelt
 cue-on-air-cartwall-cue = de cartwall voorbeluistert
 cue-on-air-stopped-player = Voorbeluisteren gestopt: speler { $n } is op dezelfde uitgang gestart.
 cue-on-air-stopped-cartwall = Voorbeluisteren gestopt: een cart is op dezelfde uitgang gestart.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = { -cartwall }
+tip-layout-hide = { $panel } verbergen
+tip-layout-show = { $panel } tonen
+tip-layout-show-on-air = { $panel } tonen (on air)
+tip-layout-menu = Indeling
+layout-dock-bottom = Cartwall onderaan
+layout-dock-left = Cartwall links
+layout-dock-right = Cartwall rechts
+layout-lock = Indeling vergrendelen
+layout-equal-widths = Spelers even breed
+layout-reset = Indeling terugzetten
+layout-maximise = Maximaliseren
+layout-restore = Herstellen
+layout-hide = Verbergen
+notice-drop-no-player = Er is geen speler zichtbaar: toon er een om er bestanden op neer te zetten.

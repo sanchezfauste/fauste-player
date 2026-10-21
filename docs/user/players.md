@@ -19,6 +19,10 @@ playlist tabs, transport, volume and outputs.
 | **SINGLE** \| **CONT** | Play mode (see below): one joined control, the lit half is the active mode |
 | **CUE** | Pre-listen the next track on the CUE output |
 
+Right-click the header's background (not one of its buttons) to maximize
+the player for a moment or to hide it (see
+[Layout](layout.md#maximize-a-panel)).
+
 ## Info row
 
 - **Cover** of the track on air, or a vinyl placeholder.

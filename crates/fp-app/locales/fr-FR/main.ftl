@@ -223,6 +223,11 @@ error-carts-would-be-lost = La grille plus petite ferait disparaître des cartou
 error-cart-grid = Cette taille de grille est hors de la plage autorisée.
 error-invalid-marker = Le cue-in doit rester avant le cue-out.
 error-invalid-trim = L'ajustement doit être un nombre compris dans l'ajustement maximal.
+error-bad-layout = Cette modification de la disposition n'est pas possible.
+error-last-panel = Au moins un panneau doit rester affiché.
+error-layout-locked = La disposition est verrouillée.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartouches
 cartwall-title = CARTOUCHES
 cartwall-hint = Cliquer pour lancer · cliquer à nouveau pour arrêter
 cartwall-stop-all = Tout arrêter
@@ -652,3 +657,20 @@ cue-on-air-cartwall = le mur de cartouches joue
 cue-on-air-cartwall-cue = le mur de cartouches est en pré-écoute
 cue-on-air-stopped-player = Pré-écoute arrêtée : le lecteur { $n } a démarré sur la même sortie.
 cue-on-air-stopped-cartwall = Pré-écoute arrêtée : une cartouche a démarré sur la même sortie.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = { -cartwall }
+tip-layout-hide = Masquer { $panel }
+tip-layout-show = Afficher { $panel }
+tip-layout-show-on-air = Afficher { $panel } (à l'antenne)
+tip-layout-menu = Disposition
+layout-dock-bottom = Cartouches en bas
+layout-dock-left = Cartouches à gauche
+layout-dock-right = Cartouches à droite
+layout-lock = Verrouiller la disposition
+layout-equal-widths = Lecteurs de même largeur
+layout-reset = Réinitialiser la disposition
+layout-maximise = Agrandir
+layout-restore = Restaurer
+layout-hide = Masquer
+notice-drop-no-player = Aucun lecteur n'est affiché : affichez-en un pour y déposer des fichiers.

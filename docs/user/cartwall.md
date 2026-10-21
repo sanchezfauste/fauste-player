@@ -1,6 +1,7 @@
 # Cartwall
 
-The cartwall is the strip of buttons under the players. Each button, a
+The cartwall is the panel of buttons under the players, or beside them (see
+[Layout](layout.md#move-and-resize-the-cartwall)). Each button, a
 **cart**, plays one sound instantly: jingles, effects, spots. Carts play on
 their own outputs, independently of the players.
 
@@ -35,9 +36,14 @@ An empty cart's menu has **Edit…** only, to choose its file.
 
 - **Pages:** the tabs next to **CARTWALL** switch pages. A red dot shows
   that a cart on that page is playing.
-- Click **CARTWALL** to collapse the strip or expand it again.
-- When the window is short, the buttons shrink (down to a minimum height) so
-  that all the configured rows fit; the cartwall scrolls only when even the
+- Click **CARTWALL** to collapse the cartwall or expand it again. Collapsed
+  beside the players it is a narrow strip with an arrow to expand it and,
+  while a cart plays, a red dot.
+- Under the players, as tall as its rows need, the buttons shrink when the
+  window is short (down to a minimum height) so that all the configured
+  rows fit. Once you resize the cartwall, or beside the players, the
+  buttons grow to fill it, and the names and times keep their size in the
+  middle of each button. Either way the cartwall scrolls only when even the
   smallest buttons do not fit.
 
 | Button look | Meaning |
@@ -61,6 +67,10 @@ By default **F1**…**F12** fire carts 1–12 of the page shown, and
 **Ctrl+Space** stops every cart (the same as **Stop all**; it also stops a
 cart you are pre-listening on CUE, even when no cart is playing). See
 [Keyboard](keyboard.md) to change them.
+
+The shortcut that collapses or expands the cartwall does nothing while the
+cartwall is hidden from the top bar (see
+[Layout](layout.md#show-and-hide-panels)).
 
 ## Setting up carts
 

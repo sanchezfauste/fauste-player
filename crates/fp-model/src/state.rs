@@ -24,6 +24,9 @@ pub struct AppState {
     /// notice and the confirmed pre-listens (on-air pre-listen spec CA3-CA5);
     /// runtime only.
     pub cue_on_air: crate::cue_on_air::CueOnAir,
+    /// The main window's arrangement (resizable layout spec RL1), saved
+    /// with the session.
+    pub layout: crate::layout::Layout,
 }
 
 impl AppState {
@@ -55,6 +58,7 @@ impl AppState {
             ids,
             live: crate::live::LiveSettings::default(),
             cue_on_air: crate::cue_on_air::CueOnAir::default(),
+            layout: crate::layout::Layout::default(),
         }
     }
 
@@ -70,6 +74,11 @@ impl AppState {
             .iter()
             .find(|p| p.id == id)
             .ok_or(ModelError::UnknownPlayer(id))
+    }
+
+    /// The players' ids in display order: what the layout helpers take.
+    pub fn player_ids(&self) -> Vec<PlayerId> {
+        self.players.iter().map(|p| p.id).collect()
     }
 
     pub fn track_for_entry(&self, entry: EntryId) -> Option<&Track> {

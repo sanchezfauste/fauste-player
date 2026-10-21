@@ -223,6 +223,11 @@ error-carts-would-be-lost = La rejilla más pequeña quitaría cartuchos con arc
 error-cart-grid = Ese tamaño de rejilla está fuera del rango permitido.
 error-invalid-marker = El inicio debe quedar antes del final.
 error-invalid-trim = El ajuste debe ser un número dentro del ajuste máximo.
+error-bad-layout = Ese cambio de distribución no es posible.
+error-last-panel = Al menos un panel debe seguir visible.
+error-layout-locked = La distribución está bloqueada.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartuchera
 cartwall-title = CARTUCHERA
 cartwall-hint = Clic para disparar · otro clic para parar
 cartwall-stop-all = Parar todo
@@ -652,3 +657,20 @@ cue-on-air-cartwall = la cartuchera está sonando
 cue-on-air-cartwall-cue = la cartuchera está preescuchando
 cue-on-air-stopped-player = Preescucha detenida: el player { $n } ha empezado en la misma salida.
 cue-on-air-stopped-cartwall = Preescucha detenida: un cartucho ha empezado en la misma salida.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = { -cartwall }
+tip-layout-hide = Ocultar { $panel }
+tip-layout-show = Mostrar { $panel }
+tip-layout-show-on-air = Mostrar { $panel } (sonando)
+tip-layout-menu = Distribución
+layout-dock-bottom = Cartuchera abajo
+layout-dock-left = Cartuchera a la izquierda
+layout-dock-right = Cartuchera a la derecha
+layout-lock = Bloquear la distribución
+layout-equal-widths = Igualar el ancho de los players
+layout-reset = Restablecer la distribución
+layout-maximise = Maximizar
+layout-restore = Restaurar
+layout-hide = Ocultar
+notice-drop-no-player = No se ve ningún player: muestra uno para soltar archivos en él.

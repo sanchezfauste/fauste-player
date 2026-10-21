@@ -5,7 +5,7 @@
 | `1` … `9` | Play on players 1–9 (same as their Play button) |
 | `F1` … `F12` | Fire carts 1–12 of the cart page shown |
 | `Ctrl+Space` | Stop every cart, and the cart CUE (the cartwall's **Stop all** button) |
-| `Delete` / `Backspace` | Remove the selected track from the playlist shown (not while it is on air) |
+| `Delete` / `Backspace` | Remove the selected track from the playlist shown (not while it is on air). Hiding a player clears its selection |
 | `Esc` | Close menus and Settings; cancel the "Audio is on air" dialog; clear the selection |
 
 - Holding a key does not repeat it: a held `1` presses Play once.

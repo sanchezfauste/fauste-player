@@ -223,6 +223,11 @@ error-carts-would-be-lost = Sareta txikiagoak fitxategia duten kartutxoak galduk
 error-cart-grid = Sareta-tamaina hori baimendutako tartetik kanpo dago.
 error-invalid-marker = Cue-in-ak cue-out-aren aurretik egon behar du.
 error-invalid-trim = Doikuntzak gehieneko doikuntzaren barruko zenbaki bat izan behar du.
+error-bad-layout = Diseinu-aldaketa hori ezin da egin.
+error-last-panel = Gutxienez panel batek ikusgai egon behar du.
+error-layout-locked = Diseinua blokeatuta dago.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Kartutxoak
 cartwall-title = KARTUTXOAK
 cartwall-hint = Klik jaurtitzeko · beste klik bat gelditzeko
 cartwall-stop-all = Gelditu dena
@@ -652,3 +657,20 @@ cue-on-air-cartwall = kartutxo-panela jotzen ari da
 cue-on-air-cartwall-cue = kartutxo-panela aurrez entzuten ari da
 cue-on-air-stopped-player = Aurrez entzutea geldituta: { $n }. erreproduzitzailea irteera berean hasi da.
 cue-on-air-stopped-cartwall = Aurrez entzutea geldituta: kartutxo bat irteera berean hasi da.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = { -cartwall }
+tip-layout-hide = Ezkutatu { $panel }
+tip-layout-show = Erakutsi { $panel }
+tip-layout-show-on-air = Erakutsi { $panel } (airean)
+tip-layout-menu = Diseinua
+layout-dock-bottom = Kartutxo-panela behean
+layout-dock-left = Kartutxo-panela ezkerrean
+layout-dock-right = Kartutxo-panela eskuinean
+layout-lock = Blokeatu diseinua
+layout-equal-widths = Berdindu erreproduzitzaileen zabalera
+layout-reset = Berrezarri diseinua
+layout-maximise = Maximizatu
+layout-restore = Leheneratu
+layout-hide = Ezkutatu
+notice-drop-no-player = Ez da erreproduzitzailerik ikusten: erakutsi bat fitxategiak bertan jaregiteko.

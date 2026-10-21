@@ -229,6 +229,11 @@ error-carts-would-be-lost = Mniejsza siatka usunęłaby carty z przypisanym plik
 error-cart-grid = Ten rozmiar siatki jest poza dozwolonym zakresem.
 error-invalid-marker = Cue-in musi pozostać przed cue-out.
 error-invalid-trim = Korekta musi być liczbą w granicach maksymalnej korekty.
+error-bad-layout = Ta zmiana układu nie jest możliwa.
+error-last-panel = Co najmniej jeden panel musi pozostać widoczny.
+error-layout-locked = Układ jest zablokowany.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartwall
 cartwall-title = CARTWALL
 cartwall-hint = Kliknij, aby odpalić · kliknij ponownie, aby zatrzymać
 cartwall-stop-all = Zatrzymaj wszystko
@@ -666,3 +671,20 @@ cue-on-air-cartwall = cartwall gra
 cue-on-air-cartwall-cue = cartwall prowadzi odsłuch wstępny
 cue-on-air-stopped-player = Odsłuch wstępny zatrzymany: odtwarzacz { $n } wystartował na tym samym wyjściu.
 cue-on-air-stopped-cartwall = Odsłuch wstępny zatrzymany: cart wystartował na tym samym wyjściu.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = { -cartwall }
+tip-layout-hide = Ukryj { $panel }
+tip-layout-show = Pokaż { $panel }
+tip-layout-show-on-air = Pokaż { $panel } (na antenie)
+tip-layout-menu = Układ
+layout-dock-bottom = Cartwall na dole
+layout-dock-left = Cartwall po lewej
+layout-dock-right = Cartwall po prawej
+layout-lock = Zablokuj układ
+layout-equal-widths = Równa szerokość odtwarzaczy
+layout-reset = Resetuj układ
+layout-maximise = Maksymalizuj
+layout-restore = Przywróć
+layout-hide = Ukryj
+notice-drop-no-player = Żaden odtwarzacz nie jest widoczny: pokaż jeden, aby upuścić na niego pliki.

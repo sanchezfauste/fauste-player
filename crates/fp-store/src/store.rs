@@ -58,9 +58,10 @@ fn parse_session(bytes: &[u8]) -> Result<(SessionDoc, Vec<String>), ParseError> 
                 .collect()
         })
         .unwrap_or_default();
+    let layout_notes = crate::layout_notes::layout_notes(value.get("layout"));
     let doc: SessionDoc =
         serde_json::from_value(value).map_err(|e| ParseError::Corrupt(e.to_string()))?;
-    let notes = raw
+    let mut notes: Vec<String> = raw
         .iter()
         .zip(&doc.players)
         .filter(|(had, p)| **had && p.pending_start.is_none())
@@ -71,6 +72,7 @@ fn parse_session(bytes: &[u8]) -> Result<(SessionDoc, Vec<String>), ParseError> 
             )
         })
         .collect();
+    notes.extend(layout_notes);
     Ok((doc, notes))
 }
 
@@ -152,7 +154,9 @@ pub fn fuzz_documents(bytes: &[u8]) {
     let (library, playlists, ids) = lists
         .map(|d| (d.library, d.playlists, d.ids))
         .unwrap_or_default();
-    let (sessions, cartwall_session) = session.map(|d| (d.players, d.cartwall)).unwrap_or_default();
+    let (sessions, cartwall_session, layout) = session
+        .map(|d| (d.players, d.cartwall, d.layout))
+        .unwrap_or_default();
     let _ = AppState::restore(
         RestoreParts {
             config,
@@ -160,6 +164,7 @@ pub fn fuzz_documents(bytes: &[u8]) {
             playlists,
             cart_pages: carts.map(|d| d.pages).unwrap_or_default(),
             cartwall_session,
+            layout,
             ids,
         },
         &sessions,
@@ -239,10 +244,12 @@ impl Store {
             .unwrap_or_default();
         // Without a session the players' ids are not known.
         let players_known = session.value.is_some();
-        let (sessions, cartwall_session) = session
+        let (sessions, cartwall_session, layout) = session
             .value
-            .map(|d| (d.players, d.cartwall))
+            .map(|d| (d.players, d.cartwall, d.layout))
             .unwrap_or_default();
+        // RL19: the restore repairs the layout; a copy says what it repaired.
+        let saved_layout = layout.clone();
         let cart_pages = carts_doc.map(|d| d.pages).unwrap_or_default();
         // Report what the restore will repair in the cart pages (the restore
         // itself applies the same normalisation).
@@ -269,10 +276,18 @@ impl Store {
                 playlists,
                 cart_pages,
                 cartwall_session,
+                layout,
                 ids,
             },
             &sessions,
             default_playlist_name,
+        );
+        // The restore ran the same repair for the same players.
+        let mut probe = saved_layout;
+        warnings.extend(
+            fp_model::settle_layout(&mut probe, &state.player_ids())
+                .into_iter()
+                .map(|note| format!("session: {note}")),
         );
         // Operator feedback 4, Q12: a removed player's routes and the
         // settings of a device no route names (kept until now, so a
@@ -337,6 +352,7 @@ impl Store {
             schema_version: SESSION_SCHEMA,
             players: state.sessions(position_of),
             cartwall: state.cartwall.session(),
+            layout: state.layout.clone(),
         };
         write_doc(
             &self.paths.session_file(),

@@ -954,6 +954,7 @@ fn n13_crash_recovery_computes_the_gain_again() {
         playlists: s.playlists.clone(),
         cart_pages: s.cartwall.pages.clone(),
         cartwall_session: s.cartwall.session(),
+        layout: s.layout.clone(),
         ids: s.ids.clone(),
     };
     let (restored, actions) = AppState::restore(parts, &s.sessions(|_| 20.0), "Main");

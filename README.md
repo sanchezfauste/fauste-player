@@ -48,6 +48,12 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   (fine near 0 dB, with fine adjust and a scale) and
   its own playlist tabs (they shrink, cut long names and scroll). Times keep
   a fixed width as they count.
+- **Resizable layout:** drag the gaps to resize the players and the
+  cartwall, put the cartwall under the players or on their left or right,
+  hide the panels a shift does not use (a hidden panel that is on air keeps
+  playing and shows a red dot on its tile), maximize one for a moment, and
+  lock the layout against stray drags. The layout is saved with the
+  session.
 - **About window:** the window's title bar shows "Fauste Player <version>";
   the info button next to Settings opens the author, the copyright, the
   licence, a short disclaimer and the licence notices of the bundled
@@ -85,8 +91,11 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   configurable grid. Carts overlap by default; they can loop gaplessly or stop
   the others, and a **Stop all** button stops every playing cart. They have
   their own Main and Cue outputs. Each cart can take one of eight colours and
-  shows its waveform faintly behind its name. The configured rows always fit the window
-  (the buttons shrink to a minimum before the area scrolls). Pages can be imported and exported.
+  shows its waveform faintly behind its name. It sits under the players or
+  beside them: under them the configured rows always fit the window (the
+  buttons shrink to a minimum before the area scrolls), and resized or
+  beside them the buttons grow to fill it. Pages can be imported and
+  exported.
 - **Tag editor and track tooltip:** hover a track for its tags, format and
   path; edit the common tag fields (title, artist, album, date, track and
   disc numbers, genre, BPM, key, lyrics and more) and the front cover (view,

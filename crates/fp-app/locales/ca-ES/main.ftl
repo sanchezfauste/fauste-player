@@ -223,6 +223,11 @@ error-carts-would-be-lost = La graella més petita trauria cartutxos que tenen f
 error-cart-grid = Aquesta mida de graella és fora de l'interval permès.
 error-invalid-marker = El cue-in ha de quedar abans del cue-out.
 error-invalid-trim = L'ajust ha de ser un nombre dins de l'ajust màxim.
+error-bad-layout = Aquest canvi de disposició no és possible.
+error-last-panel = Com a mínim un panell ha de quedar visible.
+error-layout-locked = La disposició està bloquejada.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartutxera
 cartwall-title = CARTUTXERA
 cartwall-hint = Clic per disparar · un altre clic per aturar
 cartwall-stop-all = Aturar-ho tot
@@ -652,3 +657,20 @@ cue-on-air-cartwall = la cartutxera està sonant
 cue-on-air-cartwall-cue = la cartutxera està preescoltant
 cue-on-air-stopped-player = Preescolta aturada: el reproductor { $n } ha començat a la mateixa sortida.
 cue-on-air-stopped-cartwall = Preescolta aturada: un cartutx ha començat a la mateixa sortida.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = { -cartwall }
+tip-layout-hide = Amagar { $panel }
+tip-layout-show = Mostrar { $panel }
+tip-layout-show-on-air = Mostrar { $panel } (en antena)
+tip-layout-menu = Disposició
+layout-dock-bottom = Cartutxera a baix
+layout-dock-left = Cartutxera a l'esquerra
+layout-dock-right = Cartutxera a la dreta
+layout-lock = Bloquejar la disposició
+layout-equal-widths = Igualar l'amplada dels reproductors
+layout-reset = Restablir la disposició
+layout-maximise = Maximitzar
+layout-restore = Restaurar
+layout-hide = Amagar
+notice-drop-no-player = No es veu cap reproductor: mostra'n un per deixar-hi anar fitxers.

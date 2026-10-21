@@ -58,6 +58,7 @@ pub fn roundtrip(state: &AppState) -> AppState {
         playlists: state.playlists.clone(),
         cart_pages: state.cartwall.pages.clone(),
         cartwall_session: state.cartwall.session(),
+        layout: state.layout.clone(),
         ids: state.ids.clone(),
     };
     AppState::restore(parts, &state.sessions(|_| 10.0), "Main").0

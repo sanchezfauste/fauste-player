@@ -236,6 +236,13 @@ matches no locale shows as System.
     (red dot when a cart plays on that page) and the hint *Click to fire ·
     click again to stop*;
   - a grid of `cols` columns, each button 40 px tall.
+
+  Amended by the [resizable layout spec](2026-10-21-resizable-layout-design.md):
+  the cartwall can also sit on the left or the right of the players, the
+  full height of the window, and a splitter resizes it (RL6, RL12); with a
+  size of its own its buttons fill it (RL13), and collapsed on a side it is
+  a narrow strip (RL14). Under the players and fitting its content it is as
+  described here.
 - **Button:**
   - a kind dot (Jingle accent, Effect amber, Spot neutral), the name, the
     kind label, and the time (`-mm:ss` countdown while playing);

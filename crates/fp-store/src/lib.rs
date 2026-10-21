@@ -4,6 +4,7 @@
 pub mod atomic;
 pub mod docs;
 pub mod error;
+mod layout_notes;
 pub mod lenient;
 pub mod migrate;
 pub mod paths;

@@ -8,6 +8,7 @@ use egui::{
     UiBuilder, pos2, vec2,
 };
 use egui_phosphor::regular as icon;
+use fp_model::layout::Panel;
 use fp_model::{Command, PlayMode, PlayerId, PlaylistId, TrackId};
 
 use super::app::{DragEntry, FollowScroll, Scene, ViewState};
@@ -75,7 +76,7 @@ pub(crate) fn column(
         .inner_margin(10.0)
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
-            header(ui, scene, id, index, &pv);
+            header(ui, scene, view_state, id, index, &pv);
             top_block(ui, scene, covers, id, &pv, &telemetry);
             wave(ui, scene, view_state, id, &pv);
             time_row(ui, scene, &pv);
@@ -206,8 +207,19 @@ fn outlined_with_tip(ui: &mut Ui, text: &str, tip: Option<&str>, border: Color32
     }
 }
 
-fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &PlayerView) {
+fn header(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    id: PlayerId,
+    index: usize,
+    pv: &PlayerView,
+) {
     let t = scene.i18n;
+    // RL16: a right click on the header's background opens the panel menu;
+    // the tiles, added after it, keep their own clicks. It is no Tab stop.
+    let row = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 20.0));
+    let background = ui.interact(row, egui::Id::new(("player-header", id.0)), Sense::CLICK);
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), 20.0),
         Layout::left_to_right(Align::Center),
@@ -371,6 +383,7 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, index: usize, pv: &Playe
             });
         },
     );
+    super::panels::header_menu(&background, scene, view_state, Panel::Player(id));
 }
 
 /// The gain badge of the header (loudness normalization spec N18): a tile

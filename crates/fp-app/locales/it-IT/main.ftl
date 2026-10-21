@@ -223,6 +223,11 @@ error-carts-would-be-lost = La griglia più piccola eliminerebbe dei cart che ha
 error-cart-grid = Questa dimensione della griglia è fuori dall'intervallo consentito.
 error-invalid-marker = Il cue-in deve restare prima del cue-out.
 error-invalid-trim = Il trim deve essere un numero entro il trim massimo.
+error-bad-layout = Questa modifica del layout non è possibile.
+error-last-panel = Almeno un pannello deve restare visibile.
+error-layout-locked = Il layout è bloccato.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartwall
 cartwall-title = CARTWALL
 cartwall-hint = Clic per lanciare · clic di nuovo per fermare
 cartwall-stop-all = Ferma tutto
@@ -652,3 +657,20 @@ cue-on-air-cartwall = la cartwall sta suonando
 cue-on-air-cartwall-cue = la cartwall è in preascolto
 cue-on-air-stopped-player = Preascolto fermato: il lettore { $n } è partito sulla stessa uscita.
 cue-on-air-stopped-cartwall = Preascolto fermato: una cartuccia è partita sulla stessa uscita.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = { -cartwall }
+tip-layout-hide = Nascondi { $panel }
+tip-layout-show = Mostra { $panel }
+tip-layout-show-on-air = Mostra { $panel } (in onda)
+tip-layout-menu = Layout
+layout-dock-bottom = Cartwall in basso
+layout-dock-left = Cartwall a sinistra
+layout-dock-right = Cartwall a destra
+layout-lock = Blocca il layout
+layout-equal-widths = Lettori di uguale larghezza
+layout-reset = Reimposta il layout
+layout-maximise = Ingrandisci
+layout-restore = Ripristina
+layout-hide = Nascondi
+notice-drop-no-player = Nessun lettore è visibile: mostrane uno per rilasciarvi i file.

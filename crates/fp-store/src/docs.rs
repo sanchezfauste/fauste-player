@@ -3,7 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use fp_model::{CartPage, CartwallSession, Config, IdGen, Library, PlayerSession, Playlists};
+use fp_model::{
+    CartPage, CartwallSession, Config, IdGen, Layout, Library, PlayerSession, Playlists,
+};
 
 use crate::migrate::Migration;
 
@@ -51,6 +53,12 @@ pub struct SessionDoc {
     pub players: Vec<PlayerSession>,
     #[serde(default)]
     pub cartwall: CartwallSession,
+    /// The main window's layout (resizable layout spec RL19). An older
+    /// session has none (the default layout); each part that does not
+    /// parse loads as its default. Older builds ignore the field, so the
+    /// schema stays 1.
+    #[serde(default, deserialize_with = "fp_model::layout::lenient_layout")]
+    pub layout: Layout,
 }
 
 /// `carts.json`: the cartwall pages. Their files are tracks of the shared

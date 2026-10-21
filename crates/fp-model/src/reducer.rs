@@ -183,6 +183,17 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             let i = state.player_index(id)?;
             state.players[i].columns = widths.normalized();
         }
+        Command::SetPlayerShares { left, right } => {
+            crate::layout::set_player_shares(state, left, right)?
+        }
+        Command::EqualPlayerWidths => crate::layout::equal_player_widths(state)?,
+        Command::SetCartwallDock(dock) => crate::layout::set_cartwall_dock(state, dock)?,
+        Command::SetCartwallSize(size) => crate::layout::set_cartwall_size(state, size)?,
+        Command::SetPanelHidden { panel, hidden } => {
+            crate::layout::set_panel_hidden(state, panel, hidden)?
+        }
+        Command::SetLayoutLocked(locked) => state.layout.locked = locked,
+        Command::ResetLayout => crate::layout::reset_layout(state)?,
         Command::ApplyAnalysis { track, analysis } => {
             // Analysis may finish after the track was removed: nothing to do.
             if let Some(t) = state.library.get_mut(track) {
@@ -1334,6 +1345,10 @@ fn set_player_count(
         fill_empty_next(state);
     }
     state.config.players.count = count;
+    // RL3: removed players take their shares and hidden flags with them;
+    // new players are shown; with no panel left shown, all are.
+    let players = state.player_ids();
+    let _ = crate::layout::settle_layout(&mut state.layout, &players);
     Ok(())
 }
 

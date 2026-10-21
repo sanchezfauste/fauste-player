@@ -4,7 +4,7 @@
 
 | Crate | Responsibility | Depends on |
 |---|---|---|
-| `fp-model` | Domain types and the **pure** state machine: player rules (spec §3, with the bit-perfect players' hard transitions and locked fader in `bit_perfect`, pre-listen on an on-air output in `cue_on_air`: what sounds there, the confirmation request, the notice), cartwall rules (Phase 2 spec P2.3), markers, shortcuts. Commands in, new state and `EngineAction`s out. No I/O, no threads. | — |
+| `fp-model` | Domain types and the **pure** state machine: player rules (spec §3, with the bit-perfect players' hard transitions and locked fader in `bit_perfect`, pre-listen on an on-air output in `cue_on_air`: what sounds there, the confirmation request, the notice), the main window's layout in `layout`: the players' shares, hidden panels, the cartwall's dock and size, the lock (resizable layout spec), cartwall rules (Phase 2 spec P2.3), markers, shortcuts. Commands in, new state and `EngineAction`s out. No I/O, no threads. | — |
 | `fp-store` | Crash-safe persistence: atomic writes, rotating backups, quarantine of corrupt files, versioned JSON documents and migrations, lenient config loading; M3U/M3U8/PLS and cart page files | `fp-model` |
 | `fp-decode` | File decoding to interleaved stereo `f32` (downmix per ITU-R BS.775): symphonia, plus DSD, WavPack, Monkey's Audio and Opus backends ([Decoding](decoding.md)) | — |
 | `fp-dsp` | Signal processing shared by the level meters and the analysis: the ITU-R BS.1770 K-weighting, the true-peak interpolator and the gated integrated-loudness meter ([Shared signal processing](dsp.md)). No I/O, no threads. | — |

@@ -223,6 +223,11 @@ error-carts-would-be-lost = Das kleinere Raster würde Carts mit Datei verwerfen
 error-cart-grid = Diese Rastergröße liegt außerhalb des erlaubten Bereichs.
 error-invalid-marker = Cue-in muss vor Cue-out liegen.
 error-invalid-trim = Der Trim muss eine Zahl innerhalb des maximalen Trims sein.
+error-bad-layout = Diese Layoutänderung ist nicht möglich.
+error-last-panel = Mindestens ein Bereich muss sichtbar bleiben.
+error-layout-locked = Das Layout ist gesperrt.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartwall
 cartwall-title = CARTWALL
 cartwall-hint = Klicken zum Starten · erneut klicken zum Stoppen
 cartwall-stop-all = Alle stoppen
@@ -652,3 +657,20 @@ cue-on-air-cartwall = die Cartwall spielt
 cue-on-air-cartwall-cue = die Cartwall vorhört
 cue-on-air-stopped-player = Vorhören gestoppt: Player { $n } hat auf demselben Ausgang begonnen.
 cue-on-air-stopped-cartwall = Vorhören gestoppt: Ein Cart hat auf demselben Ausgang begonnen.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = { -cartwall }
+tip-layout-hide = { $panel } ausblenden
+tip-layout-show = { $panel } einblenden
+tip-layout-show-on-air = { $panel } einblenden (On Air)
+tip-layout-menu = Layout
+layout-dock-bottom = Cartwall unten
+layout-dock-left = Cartwall links
+layout-dock-right = Cartwall rechts
+layout-lock = Layout sperren
+layout-equal-widths = Player gleich breit
+layout-reset = Layout zurücksetzen
+layout-maximise = Maximieren
+layout-restore = Wiederherstellen
+layout-hide = Ausblenden
+notice-drop-no-player = Kein Player ist sichtbar: einen einblenden, um Dateien darauf abzulegen.

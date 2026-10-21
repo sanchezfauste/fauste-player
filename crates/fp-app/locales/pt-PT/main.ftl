@@ -223,6 +223,11 @@ error-carts-would-be-lost = A grelha mais pequena perderia cartuchos com ficheir
 error-cart-grid = Esse tamanho de grelha está fora do intervalo permitido.
 error-invalid-marker = O cue-in tem de ficar antes do cue-out.
 error-invalid-trim = O ajuste tem de ser um número dentro do ajuste máximo.
+error-bad-layout = Essa alteração da disposição não é possível.
+error-last-panel = Pelo menos um painel tem de continuar visível.
+error-layout-locked = A disposição está bloqueada.
+# The cartwall's name; `cartwall-title` is the same word in capitals.
+-cartwall = Cartucheira
 cartwall-title = CARTUCHEIRA
 cartwall-hint = Clique para disparar · clique de novo para parar
 cartwall-stop-all = Parar tudo
@@ -652,3 +657,20 @@ cue-on-air-cartwall = a cartucheira está a tocar
 cue-on-air-cartwall-cue = a cartucheira está em pré-escuta
 cue-on-air-stopped-player = Pré-escuta parada: o leitor { $n } começou na mesma saída.
 cue-on-air-stopped-cartwall = Pré-escuta parada: um cartucho começou na mesma saída.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = { -cartwall }
+tip-layout-hide = Ocultar { $panel }
+tip-layout-show = Mostrar { $panel }
+tip-layout-show-on-air = Mostrar { $panel } (no ar)
+tip-layout-menu = Disposição
+layout-dock-bottom = Cartucheira em baixo
+layout-dock-left = Cartucheira à esquerda
+layout-dock-right = Cartucheira à direita
+layout-lock = Bloquear a disposição
+layout-equal-widths = Leitores com a mesma largura
+layout-reset = Repor a disposição
+layout-maximise = Maximizar
+layout-restore = Restaurar
+layout-hide = Ocultar
+notice-drop-no-player = Nenhum leitor está visível: mostre um para largar ficheiros nele.

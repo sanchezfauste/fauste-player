@@ -6,6 +6,7 @@
 - [Players](players.md)
 - [Playlists](playlists.md)
 - [Cartwall](cartwall.md)
+- [Layout](layout.md)
 - [Markers and mixing](markers-and-mixing.md)
 - [Settings](settings.md)
 - [Loudness normalization](loudness.md)

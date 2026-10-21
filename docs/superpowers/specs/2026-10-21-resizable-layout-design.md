@@ -19,7 +19,7 @@ beside the players, not under them. The operator can:
 
 - resize the players and the cartwall;
 - dock the cartwall at the bottom, on the left or on the right;
-- hide panels that the shift does not use, and maximise one for a moment.
+- hide panels that the shift does not use, and maximize one for a moment.
 
 A lock keeps a finished layout from being changed by a stray drag on air.
 
@@ -107,7 +107,9 @@ displays them.
     plus three table rows (`MIN_PLAYER_HEIGHT`);
   - the cartwall's width is at least the larger of its header's fixed
     parts ("Stop all", the caret, the smallest tab) and `cols` × the
-    smallest cart button, plus the gaps;
+    smallest cart button, plus the gaps. Stop all is measured with a
+    two-digit count, so the least width does not change while carts start
+    and stop;
   - the cartwall's height is at least its header plus `rows` × the
     smallest cart button, plus the gaps.
 - **RL9. Lock.** `Command::SetLayoutLocked(bool)`. While the layout is
@@ -130,6 +132,8 @@ for the interface's notice, if one ever reaches it.
      side, a share of the width. That size is clamped between the
      cartwall's minimum and what leaves the players their minimum
      (RL8).
+     At the bottom with `None`, the size is RL13's "fit the content",
+     exactly today's, and is not clamped further.
   2. **The players.** The shown players split the rest. Each first gets
      its minimum width; what is left over is split by share.
   3. **Too small a window.** Only when the minimums alone do not fit
@@ -155,12 +159,14 @@ for the interface's notice, if one ever reaches it.
     the content" at the bottom, or to the default share on a side.
   - **Lock.** While the layout is locked, or the cartwall is collapsed on
     a side, its splitter does not react, and the pointer over it shows the
-    normal cursor.
+    normal cursor. At the bottom a collapsed cartwall is only its header,
+    so its splitter does not react either.
 - **RL13. Cart buttons scale.**
   - **Size.** The shown page's grid (`rows` × `cols`) fills the cartwall
     panel. Buttons already fill the width; their height, now the free
     height divided by `rows`, has no 40 px upper clamp when `size` is
-    `Some`.
+    `Some`. The same holds whenever the panel does not fit its content:
+    maximized, or alone in the middle area.
   - **Too small a panel.** Buttons never shrink below the smallest button
     (`MIN_BUTTON_WIDTH` × `MIN_BUTTON_HEIGHT`). When the panel is smaller
     than the grid needs, the grid scrolls.
@@ -168,19 +174,24 @@ for the interface's notice, if one ever reaches it.
     exactly today's: the rows at `BUTTON_HEIGHT`, never more than 60 % of
     the middle area.
   - **Text.** The name and the detail line stay at their sizes, centred.
-    The waveform behind them grows with the button.
+    The waveform behind them grows with the button. Centred is vertical:
+    the text block of a 40 px button sits in the middle of a taller one.
   - The grid limits stay `limits.max_cart_rows` and
     `limits.max_cart_cols`.
 - **RL14. Collapsed cartwall.** At the bottom, collapsing works as today:
   only the header is shown. On a side, the cartwall becomes a narrow
   vertical strip, the width of the header's height, with the expand caret
   and, while a cart plays, an on-air dot. Expanding brings back the share
-  it had.
+  it had. At the bottom a collapsed cartwall is its header even when it
+  has a share. A collapsed cartwall cannot be maximized, and collapsing a
+  maximized cartwall ends the maximize.
 - **RL15. Top bar.**
   - **Panel toggles.** On the left of the top bar, one tile per player
-    (`P1`, `P2`, …) and one for the cartwall (`Carts`). A lit tile is a
-    shown panel; a click hides or shows it (RL7). The last lit tile is
-    disabled.
+    (`P1`, `P2`, …) and one for the cartwall, named as the cartwall is in
+    each language (`Cartwall`). A lit tile is a shown panel; a click hides
+    or shows it (RL7). The last lit tile is disabled. The tiles never run
+    into the clock and the buttons on the right: when they do not fit,
+    they scroll sideways, and the layout button stays in view.
   - **On-air dot.** The tile of a hidden panel that is on air shows a red
     dot. For a player, that is a current entry that is not stopped. For
     the cartwall, any cart playing.
@@ -193,17 +204,17 @@ for the interface's notice, if one ever reaches it.
 
     While the layout is locked, every entry except `Lock layout` is
     disabled, and so are the panel toggles.
-- **RL16. Maximise.**
+- **RL16. Maximize.**
   - **Menu.** A right click on the background of a player's header or of
-    the cartwall's header opens a menu with `Maximise` (or `Restore`) and
+    the cartwall's header opens a menu with `Maximize` (or `Restore`) and
     `Hide`. The tiles in the headers keep their own clicks.
-  - **Maximised.** The panel takes all the free space, and every other
+  - **Maximized.** The panel takes all the free space, and every other
     shown panel shrinks to its minimum (RL8). That includes the cartwall
     on a side, and the players' height at the bottom.
-  - **Not saved.** Maximising is a moment's view: it lives in `ViewState`,
+  - **Not saved.** Maximizing is a moment's view: it lives in `ViewState`,
     is never saved and sends no command. It is disabled while the layout
     is locked.
-  - **Ending it.** `Restore` or a second `Maximise` ends it and brings
+  - **Ending it.** `Restore` or a second `Maximize` ends it and brings
     back the sizes from before. Locking, hiding or showing any panel, a
     dock change and a change in the number of players end it too. A
     splitter drag first restores the earlier sizes, then applies itself.
@@ -239,7 +250,7 @@ for the interface's notice, if one ever reaches it.
   arrangement, and hiding a panel changes nothing they control (RL7).
 - **User guide:**
   - `docs/user/` gains a "Layout" section: splitters, docking, hiding,
-    the on-air dot, maximising, the lock and the reset;
+    the on-air dot, maximizing, the lock and the reset;
   - the cartwall page mentions the dock and that buttons scale.
 - **Technical docs:**
   - `docs/technical/ui.md` describes the pixel pass;
@@ -280,7 +291,7 @@ for the interface's notice, if one ever reaches it.
   - RL14: a side dock collapsed, then expanded.
   - RL15: the toggles; the on-air dot; the menu and the toggles disabled
     while locked; the cartwall shortcut while hidden.
-  - RL16: maximise and restore; hiding, locking and a dock change end
+  - RL16: maximize and restore; hiding, locking and a dock change end
     it; a drag restores the earlier sizes first.
   - RL17: hiding clears the selection; Delete then does nothing.
   - RL18: a drop with a hidden last player; a drop with no player shown.
