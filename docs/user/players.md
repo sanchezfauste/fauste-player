@@ -131,6 +131,10 @@ the same two are in the menu of a right click on the header's background
 | **Previous** (a bar and two triangles) | While on air: fade back into the track this player played before, as Next does. Press again to keep going back. The track you left becomes the next one. On a bit-perfect output it switches at once, without a fade (see [What it costs](bit-perfect.md#what-it-costs)). |
 | **Restart** (a bar and one triangle) | Back to the start of the current track (its cue-in). A paused player stays paused. |
 
+From the keyboard, `Up` and `Down` move the selection through the playlist,
+`Enter` sets the selected track as next, and a second `Enter` on it within a
+double click's time plays it. See [Keyboard](keyboard.md).
+
 Buttons that cannot act right now are dimmed: Stop and Restart with nothing
 loaded, Pause and Fade stop while stopped, Previous with no earlier track or
 during a fade. A player remembers the last 50 tracks it played

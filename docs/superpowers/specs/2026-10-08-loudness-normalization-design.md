@@ -416,7 +416,7 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `tip-gain-earlier-settings` | "Gain set when the track was loaded. Its loudness settings or measurement have changed since; it keeps this gain until it stops." |
 | `loudness-close` | "Close" |
 | `badge-gain` | "{ $gain } dB" |
-| `tip-gain-applied` | "Normalized to { $target } LUFS: measured { $lufs } LUFS, trim { $trim } dB." |
+| `tip-gain-applied` | (removed in itr06 I26: the tooltip of an applied gain lists `view::loudness_facts`, the lines of the loudness editor: the measurement with its true peak, then the gain lines) |
 | `tip-gain-limited-peak` | "Limited by the true-peak ceiling ({ $ceiling } dBTP)." |
 | `tip-gain-limited-boost` | "Limited by the maximum boost ({ $max } dB)." |
 | `track-loudness` | "Loudness: { $lufs } LUFS, true peak { $tp } dBTP" |

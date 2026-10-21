@@ -59,7 +59,11 @@ fn n18_the_header_shows_the_gain_and_says_why() {
     h.run_steps(2);
     // The tile's accessible name is its tooltip, as for the BP badge.
     assert!(
-        h.query_by_label("Gain +4.0 dB: brings the measured −20.0 LUFS to the −16.0 LUFS target.")
+        h.query_by_label_contains("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+            .is_some()
+    );
+    assert!(
+        h.query_by_label_contains("Automatic gain: +4.0 dB")
             .is_some()
     );
     assert!(
@@ -81,7 +85,7 @@ fn n18_a_track_not_measured_says_so() {
     let (mut h, _fake) = harness(s);
     h.run_steps(2);
     assert!(
-        h.query_by_label("Loudness not measured yet: this track plays unchanged.")
+        h.query_by_label_contains("Automatic gain: none, not measured yet")
             .is_some()
     );
 }
@@ -115,7 +119,7 @@ fn n18_a_bit_perfect_player_plays_at_unity_gain_and_says_so() {
     let (mut h, _fake) = harness(s);
     h.run_steps(2);
     assert!(
-        h.query_by_label("Bit-perfect output: tracks play unaltered.")
+        h.query_by_label_contains("No automatic gain: bit-perfect output plays tracks unaltered")
             .is_some()
     );
     assert!(h.query_by_label_contains("brings the measured").is_none());
@@ -588,9 +592,11 @@ fn i4_the_popup_shows_the_automatic_gain_and_the_gain_with_trim() {
     let (mut h, fake) = harness(on_air());
     h.run_steps(2);
     open_popup(&mut h);
+    // The badge tooltip lists the same lines, so the label is found twice.
     assert!(
-        h.query_by_label_contains("Automatic gain: +4.0 dB")
-            .is_some()
+        h.query_all_by_label_contains("Automatic gain: +4.0 dB")
+            .count()
+            >= 2
     );
     assert!(h.query_by_label_contains("Gain with trim").is_none());
     fake.take_sent();
@@ -599,7 +605,8 @@ fn i4_the_popup_shows_the_automatic_gain_and_the_gain_with_trim() {
     h.key_press(egui::Key::ArrowRight);
     h.run_steps(3);
     assert!(
-        h.query_by_label_contains("Automatic gain: +4.0 dB")
+        h.query_all_by_label_contains("Automatic gain: +4.0 dB")
+            .next()
             .is_some()
     );
     assert!(
