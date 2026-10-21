@@ -134,6 +134,26 @@ English link when that screenshot is missing. Pull requests take only the
 Spanish set, as a smoke test of the pipeline; the workflow caches the Rust
 build, which is done once for all languages.
 
+`docs/images` itself is kept up to date by `.github/workflows/screenshots.yml`.
+On a push to `master` that touches `crates/fp-app/src/ui`, the locales,
+`crates/fp-app/examples/demo_session.rs` or the screenshot scripts (and on
+`workflow_dispatch`), it runs `scripts/site/screenshots.sh --out`, then
+`scripts/site/compare-screenshots.sh --apply --prune`, which compares each
+PNG with ImageMagick (`compare -metric AE -fuzz 5%`, tolerating 50 pixels:
+both are options) so that font antialiasing noise is ignored, and copies
+only the images that changed. If any did, the workflow force-pushes the
+branch `docs/retake-screenshots` and opens or updates one pull request,
+"docs: retake screenshots", listing them. Its permissions are
+`contents: write` and `pull-requests: write`; two runs never overlap
+(concurrency group `screenshots`). Pull requests opened with `GITHUB_TOKEN`
+trigger no workflows, so CI does not start by itself: close and reopen the
+PR, or add a repository secret `SCREENSHOTS_TOKEN` (a fine-grained token
+with contents and pull requests write access), which the workflow uses
+when present. Look at the images before merging. `docs/i18n` is never
+touched. Locally: `scripts/site/screenshots.sh --out /tmp/new` and
+`scripts/site/compare-screenshots.sh /tmp/new` list the differences;
+`--apply` copies them into `docs/images`.
+
 ### The guide in other languages
 
 The English guide in `docs/user` is the only source: pull requests change

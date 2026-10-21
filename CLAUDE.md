@@ -73,6 +73,7 @@ scripts/site/check-translations.sh [out]      # translated guides (docs/i18n) mi
 python3 scripts/site/guide.py changed [lang]  # English guide pages changed since each translation
 scripts/site/screenshots.sh [--only main] [--lang es-ES] [--out <dir>]  # README and guide screenshots from a scripted scene (Xvfb; see Testing notes)
 scripts/site/localized-screenshots.sh <dir> [lang…]  # the same in English and every guide language (CI does it on publish)
+scripts/site/compare-screenshots.sh [--fuzz 5] [--threshold 50] [--apply] <new-dir> [docs/images]  # which screenshots really changed (the screenshots workflow uses it)
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test real_music -- --ignored   # real-music corpus (local only)
 cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
@@ -233,6 +234,18 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   editor, the CUE window, the track menu) and the top bar's buttons are
   found on the screen (`scripts/site/window_box.py`), so check a long
   language too (`--lang de-DE`).
+
+  Nobody retakes `docs/images` by hand: the `screenshots` workflow
+  (`.github/workflows/screenshots.yml`) runs on a push to `master` that
+  touches `crates/fp-app/src/ui`, the locales, `demo_session.rs` or the
+  screenshot scripts, and by hand (`workflow_dispatch`). It takes the
+  English set with `screenshots.sh --out`, keeps only the images that
+  differ (`compare-screenshots.sh`: ImageMagick `compare -metric AE -fuzz`,
+  so antialiasing noise is ignored) and opens or updates one PR from
+  `docs/retake-screenshots`. A PR opened with `GITHUB_TOKEN` starts no CI;
+  close and reopen it, or set the optional `SCREENSHOTS_TOKEN` secret.
+  Review the images before merging. The translated guides' screenshots are
+  taken at publish time and never committed.
 
   On a GNOME Wayland desktop, `xdotool` clicks into XWayland windows need
   the "remote interaction" permission every session; Xvfb avoids that.
