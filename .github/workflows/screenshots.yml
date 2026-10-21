@@ -1,0 +1,102 @@
+name: screenshots
+
+# Retakes the README and guide screenshots (docs/images, English) and opens
+# or updates a single pull request, from the branch docs/retake-screenshots,
+# with the images that really changed.
+#   - push to master touching the UI, its strings, the theme or the
+#     screenshot scripts: retake and compare;
+#   - workflow_dispatch: a manual retake.
+# The images are compared with ImageMagick and a fuzz, so font antialiasing
+# noise does not count (scripts/site/compare-screenshots.sh). Nothing is
+# opened when no image changed. The translated guides take their own
+# screenshots at publish time (pages.yml) and are never touched here.
+#
+# A pull request opened with GITHUB_TOKEN triggers no workflow, so CI does
+# not run on it by itself: close and reopen it, or run the checks by hand.
+# To get CI automatically, add a repository secret SCREENSHOTS_TOKEN (a
+# fine-grained token with contents and pull requests write access); it is
+# used when present.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - crates/fp-app/src/ui/**
+      - crates/fp-app/locales/**
+      - crates/fp-app/examples/demo_session.rs
+      - scripts/site/screenshots.sh
+      - scripts/site/tones.sh
+      - scripts/site/window_box.py
+      - scripts/site/compare-screenshots.sh
+      - .github/workflows/screenshots.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Two runs never race on the branch; a queued run starts after the first.
+concurrency:
+  group: screenshots
+  cancel-in-progress: false
+
+env:
+  BRANCH: docs/retake-screenshots
+
+jobs:
+  retake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+      - name: Install the screenshot tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libasound2-dev libdbus-1-dev xvfb xdotool x11-utils \
+            imagemagick ffmpeg libxkbcommon-x11-0 libgl1 libegl1 libgl1-mesa-dri mesa-vulkan-drivers
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # The scratch state lives outside target/: rust-cache restores target/
+      # without the marker that lets screenshots.sh replace it.
+      - name: Take the screenshots
+        env:
+          SHOTS_HOME: ${{ runner.temp }}/shots-home
+        run: scripts/site/screenshots.sh --out "$RUNNER_TEMP/new-shots"
+      - name: Compare with docs/images
+        id: compare
+        run: |
+          scripts/site/compare-screenshots.sh --apply --prune "$RUNNER_TEMP/new-shots" | tee "$RUNNER_TEMP/changes.txt"
+      - name: Open or update the pull request
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add docs/images
+          git commit -m "docs: retake screenshots" \
+            -m "Retaken by the screenshots workflow from ${SHA}."
+          git push --force origin "$BRANCH"
+          {
+            echo "Screenshots retaken from \`${SHA}\` by the screenshots workflow."
+            echo
+            echo "Images that changed (more than the fuzz and pixel tolerance of \`scripts/site/compare-screenshots.sh\`):"
+            echo
+            sed 's/^\([a-z]*\) \(.*\)$/- \1: `\2`/' "$RUNNER_TEMP/changes.txt"
+            echo
+            echo "Look at the images before merging. If CI did not start on this pull request, close and reopen it."
+            echo
+            echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+          } > "$RUNNER_TEMP/body.md"
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --title "docs: retake screenshots" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base master --head "$BRANCH" \
+              --title "docs: retake screenshots" --body-file "$RUNNER_TEMP/body.md"
+          fi
