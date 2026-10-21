@@ -18,7 +18,6 @@ mod symph;
 mod wavpack;
 
 use ape::ApeFileDecoder;
-use downmix::Downmix;
 use dsd::DsdDecoder;
 pub use dsd::DsdRawReader;
 use symph::SymphoniaDecoder;
@@ -349,16 +348,14 @@ fn silence_non_finite(samples: &mut [f32]) -> bool {
     found
 }
 
-/// Stereo from a frame of `frame.len()` channels in the usual order for
-/// that count (WAV/SMPTE: L, R, C, LFE, Ls, Rs, …); see `downmix::Downmix`.
-/// For decoders that know no channel positions.
-pub(crate) fn downmix(frame: &[f32]) -> (f32, f32) {
-    Downmix::for_count(frame.len()).apply(frame)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{downmix, silence_non_finite};
+    use super::silence_non_finite;
+    use crate::downmix::Downmix;
+
+    fn downmix(frame: &[f32]) -> (f32, f32) {
+        Downmix::for_count(frame.len()).apply(frame)
+    }
 
     #[test]
     fn non_finite_samples_become_silence_and_are_reported() {

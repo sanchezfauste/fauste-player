@@ -5,8 +5,8 @@
 //! assuming the usual WAV/SMPTE order for it. Front left/right keep their
 //! side; the centre and the back centre go to both sides at -3 dB; surround,
 //! side and rear channels go to their side at -3 dB; the LFE is dropped. A
-//! layout with any surround channel is scaled so that its loudest side
-//! cannot clip (front-only layouts are not: 3.0 and 3.1 sum above full
+//! layout with any surround or extra front channel is scaled so that its loudest side
+//! cannot clip (L R C and L R C LFE are not: 3.0 and 3.1 sum above full
 //! scale by design).
 
 use symphonia::core::audio::{ChannelLabel, Channels, Position};
@@ -28,15 +28,17 @@ pub(crate) struct Downmix {
 fn weights(pos: Position) -> Option<((f32, f32), bool)> {
     let m = MINUS_3DB;
     Some(match pos {
-        Position::FRONT_LEFT
-        | Position::FRONT_LEFT_CENTER
-        | Position::FRONT_LEFT_WIDE
-        | Position::BOTTOM_FRONT_LEFT => ((1.0, 0.0), false),
-        Position::FRONT_RIGHT
-        | Position::FRONT_RIGHT_CENTER
+        Position::FRONT_LEFT => ((1.0, 0.0), false),
+        Position::FRONT_RIGHT => ((0.0, 1.0), false),
+        Position::FRONT_CENTER => ((m, m), false),
+        // Extra front channels add to a side at full weight: scaled too.
+        Position::FRONT_LEFT_CENTER | Position::FRONT_LEFT_WIDE | Position::BOTTOM_FRONT_LEFT => {
+            ((1.0, 0.0), true)
+        }
+        Position::FRONT_RIGHT_CENTER
         | Position::FRONT_RIGHT_WIDE
-        | Position::BOTTOM_FRONT_RIGHT => ((0.0, 1.0), false),
-        Position::FRONT_CENTER | Position::BOTTOM_FRONT_CENTER => ((m, m), false),
+        | Position::BOTTOM_FRONT_RIGHT => ((0.0, 1.0), true),
+        Position::BOTTOM_FRONT_CENTER => ((m, m), true),
         Position::REAR_LEFT
         | Position::SIDE_LEFT
         | Position::TOP_FRONT_LEFT
@@ -143,8 +145,22 @@ impl Downmix {
     /// not match.
     pub(crate) fn for_channels(channels: &Channels, count: usize) -> Self {
         let positions: Option<Vec<Position>> = match channels {
+            // Plain PCM and masks of zero carry no positions: a reader
+            // invents the first `count` ones, which says nothing of the
+            // speakers. Four channels or more go by their count.
+            Channels::Positioned(set)
+                if count >= 4
+                    && u32::try_from(count).ok().and_then(Position::from_count) == Some(*set) =>
+            {
+                None
+            }
             // The decoded order is the order of the position bits.
-            Channels::Positioned(set) => Some(set.iter().collect()),
+            Channels::Positioned(set) => Some(
+                (0..u64::BITS)
+                    .map(|bit| Position::from_bits_retain(1u64 << bit))
+                    .filter(|pos| set.contains(*pos))
+                    .collect(),
+            ),
             Channels::Custom(labels) => labels
                 .iter()
                 .map(|l| match l {
@@ -292,10 +308,11 @@ mod tests {
         let mix = positioned(&[P::FRONT_LEFT, P::FRONT_RIGHT, P::FRONT_CENTER]);
         let (l, r) = only(&mix, 3, 2);
         assert!(near(l, MINUS_3DB) && near(r, l));
-        // 3.1 by positions: the LFE is dropped, nothing is scaled.
+        // The mask of 3.1 is the one a reader invents for four plain
+        // channels: it is not trusted, and four channels are quad.
         let mix = positioned(&[P::FRONT_LEFT, P::FRONT_RIGHT, P::FRONT_CENTER, P::LFE1]);
-        assert_eq!(only(&mix, 4, 3), (0.0, 0.0));
-        assert_eq!(only(&mix, 4, 0), (1.0, 0.0));
+        assert_eq!(only(&mix, 4, 3), only(&Downmix::for_count(4), 4, 3));
+        assert!(only(&mix, 4, 3).1 > 0.0);
     }
 
     #[test]
@@ -337,5 +354,39 @@ mod tests {
         assert_eq!(only(&mix, 10, 8), (0.0, 0.0));
         assert_eq!(only(&mix, 10, 9), (0.0, 0.0));
         assert!(only(&mix, 10, 6).0 > 0.0);
+    }
+
+    #[test]
+    fn invented_positions_are_not_trusted() {
+        // The first `count` positions, as a reader makes up for plain PCM.
+        for count in 4..=8u32 {
+            let invented = Channels::Positioned(P::from_count(count).unwrap());
+            let n = count as usize;
+            let frame: Vec<f32> = (0..n).map(|i| 0.1 * (i + 1) as f32).collect();
+            assert_eq!(
+                Downmix::for_channels(&invented, n).apply(&frame),
+                Downmix::for_count(n).apply(&frame),
+                "{count} channels"
+            );
+        }
+        // Three channels are L R C either way.
+        let three = Channels::Positioned(P::from_count(3).unwrap());
+        assert_eq!(
+            Downmix::for_channels(&three, 3).apply(&[0.0, 0.0, 1.0]),
+            Downmix::for_count(3).apply(&[0.0, 0.0, 1.0])
+        );
+    }
+
+    #[test]
+    fn extra_front_channels_are_scaled_too() {
+        let mix = positioned(&[
+            P::FRONT_LEFT,
+            P::FRONT_RIGHT,
+            P::FRONT_CENTER,
+            P::FRONT_LEFT_CENTER,
+            P::FRONT_RIGHT_CENTER,
+        ]);
+        let (l, r) = mix.apply(&[1.0; 5]);
+        assert!(l <= 1.0 + 1e-6 && near(l, r), "{l} {r}");
     }
 }

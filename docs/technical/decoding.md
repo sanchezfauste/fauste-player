@@ -14,8 +14,12 @@ into a stereo pair. The layout is the channel positions the container reports
 (symphonia's `Channels`; the decoded order is the order of the position
 bits, which for WAV masks is the WAV order). When it reports none, or a
 count that does not match the frame, the layout is the usual one for the
-channel count. The backends that know no positions (WavPack, Monkey's Audio,
-DSD) use the count.
+channel count. So is a set equal to the first `n` positions with `n` of 4 or
+more: plain `WAVE_FORMAT_PCM` files and masks of zero get that set invented
+by symphonia, which says nothing of the speakers (the mask of a 3.1 file is
+the same set, so four channels always read as quad). The backends that know
+no positions (WavPack, Monkey's Audio, DSD) use the count; the mix is built
+once when the file is opened (symphonia: when the channels change).
 
 | Position | To left | To right |
 |---|---|---|
@@ -27,10 +31,11 @@ DSD) use the count.
 | Rear right, side right, top right | 0 | -3 dB |
 | LFE | dropped | dropped |
 
-A layout with at least one surround, side, rear or top channel is scaled by
+A layout with at least one surround, side, rear, top or extra front channel
+(front left/right of centre, wide) is scaled by
 `1 / max(sum of the left weights, sum of the right weights)`, so that it
-cannot clip (5.1: `1 / (1 + 2 * 0.707)`, as before). Front-only layouts (3.0,
-3.1) are not scaled. A single channel, whatever its position, is duplicated.
+cannot clip (5.1: `1 / (1 + 2 * 0.707)`, as before). L R C (3.0) is not
+scaled; an audit test pins that. A single channel, whatever its position, is duplicated.
 
 By count: 1 mono; 2 L R; 3 L R C; 4 quad (L R Ls Rs); 5 L R C Ls Rs; 6 5.1
 (L R C LFE Ls Rs); 7 6.1 (L R C LFE Bc Sl Sr); 8 7.1 (L R C LFE Bl Br Sl
@@ -39,9 +44,14 @@ this order already (symphonia reorders Vorbis), so no reordering is needed
 here. Opus is read only in mapping family 0 (mono and stereo): multichannel
 Opus, like multichannel AAC, is not supported.
 
+symphonia's ALAC reader maps its 7.1 layout with the Lc/Ls weights swapped
+(upstream); the downmix trusts the positions it is given.
+
 Loudness is measured on this downmix, so a layout's side channels count in it.
 Changing the matrix for a layout changes the analysis of those files: bump
-`ANALYSIS_VERSION` (10 did).
+`ANALYSIS_VERSION` (10 did). A track analysed at 9 stays current when it has
+1, 2 or 6 channels, whose downmix is unchanged
+(`fp_analysis::cache::analysis_is_current`).
 
 ## `FileDecoder` and its backends
 

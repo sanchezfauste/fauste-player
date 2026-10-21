@@ -158,3 +158,16 @@ fn the_notice_follows_the_library_while_it_is_open() {
             .is_some()
     );
 }
+
+#[test]
+fn version_9_tracks_are_outdated_only_when_their_downmix_changed() {
+    let mut s = library(1, 0);
+    let t = s.library.iter_mut().next().unwrap();
+    t.analysis_version = 9;
+    for (channels, outdated) in [(1, false), (2, false), (6, false), (4, true), (8, true)] {
+        if let Some(f) = t.format.as_mut() {
+            f.channels = channels;
+        }
+        assert_eq!(fp_app::services::outdated(t), outdated, "{channels}");
+    }
+}

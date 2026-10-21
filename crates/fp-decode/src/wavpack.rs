@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
+use crate::downmix::Downmix;
 use wavicle::BlockHeader;
 use wavicle::block::HEADER_LEN;
 
@@ -27,6 +28,8 @@ pub(crate) struct WavPackDecoder {
     bits: u32,
     float: bool,
     buf: Vec<u8>,
+    /// The mix for `channels`, set when the first block is read.
+    mix: Downmix,
 }
 
 fn read_at(file: &mut File, offset: u64, buf: &mut [u8]) -> std::io::Result<()> {
@@ -103,6 +106,7 @@ impl WavPackDecoder {
             bits: 0,
             float: false,
             buf: Vec::new(),
+            mix: Downmix::for_count(0),
         };
         let first = decoder.decode(0)?;
         decoder.rate = first.sample_rate;
@@ -112,6 +116,7 @@ impl WavPackDecoder {
         if decoder.rate == 0 || !(1..=2).contains(&decoder.channels) {
             return Err("WavPack: bad stream parameters".into());
         }
+        decoder.mix = Downmix::for_count(decoder.channels);
         Ok(decoder)
     }
 
@@ -176,7 +181,7 @@ impl WavPackDecoder {
                     s as f32 * scale
                 };
             }
-            let (l, r) = crate::downmix(frame.get(..channels).unwrap_or_default());
+            let (l, r) = self.mix.apply(frame.get(..channels).unwrap_or_default());
             out.push(l);
             out.push(r);
         }

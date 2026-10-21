@@ -17,6 +17,7 @@ use std::path::Path;
 
 pub use raw::DsdRawReader;
 
+use crate::downmix::Downmix;
 use convert::{BYTES_PER_FRAME, DECIMATION, IDLE, WINDOW_BYTES};
 
 /// Most channels in a DSD file (5.1).
@@ -132,6 +133,7 @@ pub(crate) struct DsdDecoder {
     /// The next output frame.
     next: u64,
     frame: Vec<f32>,
+    mix: Downmix,
 }
 
 /// Opens `path` (a DSF or DSDIFF file, by its signature) for reading.
@@ -250,6 +252,11 @@ impl DsdDecoder {
                     layout.channels
                 }
             ],
+            mix: Downmix::for_count(if layout.channels > 2 {
+                SLOTS
+            } else {
+                layout.channels
+            }),
             layout,
         })
     }
@@ -340,7 +347,7 @@ impl DsdDecoder {
                         *slot += sample;
                     }
                 }
-                let (l, r) = crate::downmix(&self.frame);
+                let (l, r) = self.mix.apply(&self.frame);
                 out.push(l);
                 out.push(r);
                 self.next += 1;
