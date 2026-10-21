@@ -397,6 +397,16 @@ Jobs run on the background pool at low priority, one file at a time per worker, 
 
 Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opus, Matroska/WebM audio, WavPack, Monkey's Audio and DSD (DSF, DSDIFF). The extensions and decoders are in the [audio formats spec](2026-09-27-audio-formats-design.md) F1 (Phase 1 had symphonia's formats only).
 
+### 6.1 Analysis activity and explicit re-analysis (itr06 I8, I11)
+
+- **Activity.** The services thread publishes an `AnalysisActivity` snapshot (an `ArcSwap` the UI only loads, never waits on), rebuilt every step and stored only when it changes: the tracks queued (the pool's pending jobs plus the services' tracks still to submit), the tracks running, the number of loudness-only jobs (N6b), and the library pass's progress (done of total). Jobs that only fetch peaks for a cart's waveform are not activity. `Analyzer::activity()` reads the pool's bookkeeping; a job cancelled while it runs is not counted as running.
+- **Library pass.** *Re-analyse all* and a change of the analysis settings start a pass over every track of the library; the pass ends when every track of it has an answer (or left the library). While it runs, a second *Re-analyse all* is ignored: nothing is cancelled or restarted. A change of the settings still cancels and restarts the pass, so no track keeps markers of the old settings. Settings → Analysis disables **Re-analyse all tracks** while a pass runs and shows its progress ("Analysing… 120 of 340").
+- **Re-analyse of one track** does nothing while that track is queued or running; the row menu disables the item and says why. A track whose job only fetches peaks is re-analysed as before.
+- **Stale jobs.** Cancelled jobs left in the pool's normal queue are dropped from it once they outnumber the live jobs, so repeated restarts never grow the queue without bound.
+- **Status bar.** While analyses are queued or running, the right of the status bar shows "Analysing N tracks" (or, with only loudness-only jobs, "Measuring loudness: N tracks"), left of the legend; its tooltip lists the files being analysed, the number waiting, the pass's progress and the loudness-only jobs. Legend items that no longer fit are left out before it.
+- **Row icons.** In the title cell's flag slot (left of the outdated flag, right of the title): a running track shows a waveform icon ("Analysing now"); a queued one, or one not analysed yet that is not queued, shows the hourglass ("Waiting for analysis" or "Analysis pending").
+- **Explicit re-analysis reads the file (I11).** *Re-analyse* (a track) and *Re-analyse all* submit `fresh` jobs: the worker skips the cache lookup, analyses the file and stores the result under the file's key. A file edited in place that keeps its size and modification time gets its loudness and markers measured again. Other submissions (new tracks, settings changes, files that come back) still answer from the cache.
+
 ---
 
 ## 7. Persistence (`fp-store`)
@@ -467,14 +477,14 @@ Each frame the UI loads `Arc<AppSnapshot>` (via `arc-swap`) and reads telemetry 
     - follows the current entry: when it changes and the table and tabs were not used within `ui.follow_current_grace_secs` (0 = never), the tab of its playlist is shown and its row scrolled to the top; a drag or open row menu makes it wait (feedback spec F18);
     - virtualised rows;
     - `#` zero-padded to the digit count of the playlist length (3 digits for ≥ 100 entries);
-    - this player's current row red with a speaker icon, its next row green with an arrow icon, entries on air on another player marked "P<n>", rows this player has played dimmed, missing rows with a file-with-a-cross icon and unreadable rows with a warning icon; the row's track info popup starts with the reason, in amber (operator feedback 4, Q9; the cartwall's carts show the same icons and tooltip); tracks an earlier analysis version analysed show reload arrows at the right of the title, with a tooltip pointing to Settings → Analysis; tracks not analysed yet show a muted hourglass there, with the tooltip "Analysis pending" (operator feedback 4, Q2); entries marked to repeat or to stop after show a repeat icon or the stop-after icon at the right of the title, in the row's text colour, and the row menu has checkable "Repeat this track" and "Stop after this track".
+    - this player's current row red with a speaker icon, its next row green with an arrow icon, entries on air on another player marked "P<n>", rows this player has played dimmed, missing rows with a file-with-a-cross icon and unreadable rows with a warning icon; the row's track info popup starts with the reason, in amber (operator feedback 4, Q9; the cartwall's carts show the same icons and tooltip); tracks an earlier analysis version analysed show reload arrows at the right of the title, with a tooltip pointing to Settings → Analysis; tracks not analysed yet show a muted hourglass there, with the tooltip "Analysis pending" (operator feedback 4, Q2), and tracks queued or being analysed show the hourglass or a waveform icon (§6.1); entries marked to repeat or to stop after show a repeat icon or the stop-after icon at the right of the title, in the row's text colour, and the row menu has checkable "Repeat this track" and "Stop after this track".
   - **Footer:** "+ Add" (native file dialog via `rfd`, defaulting to the music folder), entry count, playlist times (§3, rule 20).
 - **Interactions:**
   - single click selects, double click sets next;
   - context menu: Play now, Set as next, Pre-listen on CUE, Re-analyse (operator feedback 4, Q10), Edit tags…, Loudness…, Add tracks below…, Duplicate, Move to ▸, Remove from playlist;
   - drag & drop within a list, to another player's list and onto tabs, with a violet drop indicator line at the row boundary under the pointer, drawn only in the table under the pointer (operator feedback 4, Q4);
   - OS file drops onto a list insert at the drop position.
-- **Status bar:** shortcut hints, legend (On air, Next, Intro, Outro, Mix), backend/OS label, bus alerts.
+- **Status bar:** shortcut hints, the analysis activity while busy (§6.1), legend (On air, Next, Intro, Outro, Mix), backend/OS label, bus alerts.
 - **Cartwall:** Phase 2 (hidden in Phase 1).
 
 ### 8.4 Settings (Phase 1 subset)
@@ -487,7 +497,7 @@ A modal window, closed with `Esc` or "Close", with these sections:
   - per player, Main and Cue device and channel pair;
   - "Test Main" / "Test Cue" buttons that play a test tone (defaults: 1 kHz / 440 Hz, 1.5 s, −18 dBFS) through the real engine route.
 - **Players:** player count, default mode, `fade_ms`, auto-segue on/off, `end_warning_secs` (`history_len` is set in `config.json`).
-- **Analysis:** every `AnalysisSettings` field (trim threshold and margin, segue drop and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action. Manual markers are kept.
+- **Analysis:** every `AnalysisSettings` field (trim threshold and margin, segue drop and max seconds, outro drop and max seconds, minimum duration for markers), with a "Re-analyse all" action, disabled with its progress while a library pass runs (§6.1). Manual markers are kept.
 - **Loudness** (loudness normalization spec N22): normalization on or off, target, true-peak ceiling, maximum boost and maximum trim, and the count of tracks waiting for a measurement.
 - **Playlists:** music folder, and create/rename/delete playlists. The last playlist cannot be deleted, nor a playlist containing a current entry.
 
