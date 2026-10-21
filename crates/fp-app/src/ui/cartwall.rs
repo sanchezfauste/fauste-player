@@ -1,9 +1,11 @@
 //! The cartwall panel (Phase 2 spec P2.9, v3 layout): under the players or
 //! on a side (resizable layout spec RL6, RL8, RL13, RL14).
 
-use egui::{Align, Color32, Layout, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{
+    Align, Color32, Layout, Rect, RichText, Sense, Stroke, StrokeKind, Ui, UiBuilder, pos2, vec2,
+};
 use egui_phosphor::regular as icon;
-use fp_model::layout::Panel;
+use fp_model::layout::{Dock, Panel};
 use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
@@ -12,7 +14,7 @@ use super::cart_view::{
     cart_view, filled_button_height, page_on_air,
 };
 use super::glyphs::{self, TransportAction};
-use super::panel_layout::CartwallSizes;
+use super::panel_layout::{self, CartwallSizes};
 use super::theme;
 use super::view;
 use super::widgets::{self, TileStyle, WaveMemo, font, font_medium};
@@ -129,6 +131,12 @@ pub(crate) fn page_name(scene: &Scene<'_>, index: usize, name: &str) -> String {
 /// buttons fill the panel (RL13); otherwise it fits its content, 40-point
 /// buttons at most.
 pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, fill: bool) {
+    // RL14: collapsed on a side, the cartwall is a narrow strip.
+    let dock = scene.state.layout.cartwall.dock;
+    if !scene.state.cartwall.open && dock.is_side() {
+        collapsed_strip(ui, scene, view_state, dock);
+        return;
+    }
     header(ui, scene, view_state);
     if !scene.state.cartwall.open {
         return;
@@ -140,6 +148,69 @@ pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, 
         .id_salt("cart-grid")
         .auto_shrink([false, false])
         .show(ui, |ui| grid(ui, scene, view_state, available, fill));
+}
+
+/// RL14: the cartwall collapsed on a side: a strip as wide as the header is
+/// high, the expand caret at its top (labelled as the header's, pointing at
+/// the players) and, while a cart plays, the on-air dot under it. Its
+/// background opens the panel menu (RL16), where Maximize is disabled.
+fn collapsed_strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, dock: Dock) {
+    let rect = ui.max_rect();
+    // First, so that the caret, added after it, keeps its own clicks; no
+    // Tab stop, as the header's background.
+    let background = ui.interact(rect, egui::Id::new("cartwall-strip"), Sense::CLICK);
+    ui.painter().rect(
+        rect,
+        0.0,
+        theme::NEUTRAL_900,
+        Stroke::new(1.0, theme::NEUTRAL_800),
+        StrokeKind::Inside,
+    );
+    let title = scene.i18n.tr("cartwall-title");
+    let caret = if dock == Dock::Right {
+        icon::CARET_LEFT
+    } else {
+        icon::CARET_RIGHT
+    };
+    let style = TileStyle {
+        border: Color32::TRANSPARENT,
+        hover_fill: theme::NEUTRAL_800,
+        active_fill: Color32::TRANSPARENT,
+        ..TileStyle::plain()
+    };
+    let caret_rect = Rect::from_min_size(rect.min, vec2(rect.width(), HEADER_HEIGHT));
+    let mut caret_ui = ui.new_child(UiBuilder::new().max_rect(caret_rect));
+    if widgets::tile(
+        &mut caret_ui,
+        caret_rect.size(),
+        &title,
+        true,
+        style,
+        |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                caret,
+                font(12.0),
+                c,
+            );
+        },
+    )
+    .clicked()
+    {
+        scene.ctl.send(Command::SetCartwallOpen(true));
+    }
+    if panel_layout::panel_on_air(scene.state, Panel::Cartwall) {
+        ui.painter().rect_filled(
+            Rect::from_center_size(
+                pos2(rect.center().x, rect.top() + HEADER_HEIGHT + 8.0),
+                vec2(6.0, 6.0),
+            ),
+            0.0,
+            theme::ON_AIR_TEXT,
+        );
+    }
+    super::panels::header_menu(&background, scene, view_state, Panel::Cartwall);
 }
 
 fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {

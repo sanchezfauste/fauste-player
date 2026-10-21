@@ -1732,3 +1732,119 @@ fn rl13_a_tall_buttons_text_keeps_its_size_and_is_centred() {
         "{kind:?} in {button:?}"
     );
 }
+
+// --- collapsed (RL14)
+
+fn collapsed(dock: Dock, size: Option<f32>) -> AppState {
+    let mut s = docked(state(2, 3), dock, size);
+    s.cartwall.open = false;
+    s
+}
+
+#[test]
+fn rl14_collapsed_on_a_side_is_a_narrow_strip_with_its_caret() {
+    for dock in [Dock::Left, Dock::Right] {
+        let (h, fake) = wide(collapsed(dock, Some(0.4)));
+        let cart = cart_rect(&h);
+        let p1 = column(&h, fake.player(0));
+        assert!(cart.width() < MIN_BUTTON_WIDTH, "{dock:?} {cart:?}");
+        assert!(near(cart.top(), p1.top()), "{dock:?} {cart:?}");
+        assert!(near(cart.bottom(), p1.bottom() + 2.0), "{dock:?} {cart:?}");
+        let caret = h.get_by_label("CARTWALL").rect();
+        assert!(cart.contains_rect(caret), "{dock:?}: {caret:?} in {cart:?}");
+        assert!(
+            h.query_by_label("Stop all").is_none(),
+            "{dock:?}: only the caret"
+        );
+        assert!(h.query_by_label("Cart 1, empty").is_none(), "{dock:?}");
+    }
+}
+
+#[test]
+fn rl14_the_strip_is_as_wide_as_the_collapsed_header_is_high() {
+    let (h, _) = wide(collapsed(Dock::Bottom, None));
+    let header = cart_rect(&h).height();
+    let (g, _) = wide(collapsed(Dock::Bottom, Some(0.5)));
+    assert!(
+        near(cart_rect(&g).height(), header),
+        "a share changes nothing"
+    );
+    let (s, _) = wide(collapsed(Dock::Left, None));
+    assert!(near(cart_rect(&s).width(), header), "{:?}", cart_rect(&s));
+}
+
+#[test]
+fn rl14_the_caret_expands_it_to_its_share() {
+    let (mut h, fake) = wide(collapsed(Dock::Right, Some(0.4)));
+    h.get_by_label("CARTWALL").click();
+    h.run_steps(3);
+    assert!(fake.take_sent().contains(&Command::SetCartwallOpen(true)));
+    let cart = cart_rect(&h);
+    let area = cart.right() - column(&h, fake.player(0)).left();
+    assert!(near(cart.width(), 0.4 * area), "{cart:?} in {area}");
+    assert!(
+        h.query_by_label("Cart 1, empty").is_some(),
+        "the grid is back"
+    );
+}
+
+#[test]
+fn rl14_the_strip_shows_a_red_dot_while_a_cart_plays() {
+    let mut s = docked(with_station_id(state(2, 3)), Dock::Left, None);
+    s.cartwall.open = false;
+    let (mut h, fake) = wide(s);
+    let strip = cart_rect(&h);
+    assert!(!red_dot_in(&h, strip));
+    let cart = fake.state.load().cartwall.pages[0].carts[0].id;
+    Controller::send(fake.as_ref(), Command::FireCart(cart));
+    h.run_steps(2);
+    assert!(red_dot_in(&h, strip));
+    Controller::send(fake.as_ref(), Command::StopCart(cart));
+    h.run_steps(2);
+    assert!(!red_dot_in(&h, strip));
+}
+
+#[test]
+fn rl14_the_strips_menu_hides_it_and_cannot_maximise_it() {
+    let (mut h, fake) = wide(collapsed(Dock::Left, None));
+    let strip = cart_rect(&h);
+    right_click(&mut h, strip.center());
+    assert!(disabled(&h, "Maximize"));
+    h.get_by_label("Hide").click();
+    h.run_steps(2);
+    assert_eq!(
+        layout_commands(&fake),
+        vec![Command::SetPanelHidden {
+            panel: Panel::Cartwall,
+            hidden: true,
+        }]
+    );
+}
+
+#[test]
+fn rl14_a_collapsed_bottom_cartwall_cannot_be_maximised() {
+    let mut s = state(2, 3);
+    s.cartwall.open = false;
+    let (mut h, _) = tall(s);
+    let at = cartwall_header_point(&h);
+    right_click(&mut h, at);
+    assert!(disabled(&h, "Maximize"));
+}
+
+#[test]
+fn rl14_collapsing_a_maximised_cartwall_ends_the_maximise() {
+    let (mut h, fake) = tall(state(2, 3));
+    let at = cartwall_header_point(&h);
+    maximise(&mut h, at);
+    assert_eq!(h.state().maximised(), Some(Panel::Cartwall));
+    Controller::send(fake.as_ref(), Command::SetCartwallOpen(false));
+    h.run_steps(2);
+    assert_eq!(h.state().maximised(), None);
+    Controller::send(fake.as_ref(), Command::SetCartwallOpen(true));
+    h.run_steps(2);
+    assert_eq!(
+        h.state().maximised(),
+        None,
+        "expanding does not bring it back"
+    );
+}

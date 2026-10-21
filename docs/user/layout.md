@@ -62,6 +62,12 @@ buttons grow to fill it; the names and times keep their size, in the middle
 of each button. When the cartwall is smaller than its rows and columns need
 at the smallest buttons, it scrolls.
 
+Click **CARTWALL** to collapse the cartwall. Under the players only its
+header stays; beside them it becomes a narrow strip the height of the
+window, with an arrow to expand it again and, while a cart plays, a red
+dot. Expanded, it has its size back. While it is collapsed, the gap beside
+it does nothing.
+
 ## Maximize a panel
 
 Right-click the background of a player's header, or of the cartwall's
@@ -71,7 +77,9 @@ header (not one of their buttons), for its menu:
   their smallest. It is only for the moment and is not saved. **Restore**
   in the same menu ends it, and so do hiding or showing a panel, locking
   the layout, moving the cartwall, changing the number of players and
-  dragging a gap between panels; the sizes from before come back.
+  dragging a gap between panels; the sizes from before come back. A
+  collapsed cartwall cannot be maximized, and collapsing a maximized
+  cartwall ends it.
 - **Hide** hides the panel, as its tile in the top bar does.
 
 ## The layout menu

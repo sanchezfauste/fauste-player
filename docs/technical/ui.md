@@ -130,6 +130,17 @@ taller than `BUTTON_HEIGHT` the text block of a 40-point button is centred
 vertically; the waveform, the remaining-time fill and the CUE outline take
 the whole button.
 
+**Collapsed** (RL14). `CartwallSizes::collapsed` is the header's height
+while the cartwall is collapsed. At the bottom the cartwall is then its
+header, whatever its share; on a side it is a strip that wide
+(`cartwall::collapsed_strip`): the expand caret (a tile labelled
+`cartwall-title`, pointing at the players), the on-air dot while
+`panel_on_air(Cartwall)`, and a background (`Sense::CLICK`, no Tab stop)
+that opens `panels::header_menu`. A collapsed cartwall has no range, so its
+splitter is inert; it is never maximized: the pass ignores it, the menu
+disables Maximize, and `settle_view` ends a cartwall maximize when it
+collapses.
+
 **Top bar** (RL15). `top_bar` lays out its right-hand block (the clock,
 Settings, About, the pending tile) first, from the right end, and passes
 where it begins to `panels::layout_controls`, which draws one tile per

@@ -392,15 +392,18 @@ fn layout_menu(ui: &mut Ui, scene: &Scene<'_>) {
 }
 
 /// Brings the view state in line with the model before the frame's input
-/// is handled: a maximised panel ends when the arrangement changed (RL16);
+/// is handled: a maximised panel ends when the arrangement changed (RL16),
+/// and a collapsed cartwall is not maximised (RL14);
 /// a hidden player keeps no selection and is not the last player used, so
 /// Delete cannot remove an entry the operator cannot see (RL17).
 pub(crate) fn settle_view(view_state: &mut ViewState, state: &AppState) {
-    if view_state
+    // RL16: the arrangement changed; RL14: a collapsed cartwall is never
+    // maximised, and expanding it does not maximise it again.
+    let ends = view_state
         .maximised
         .as_ref()
-        .is_some_and(|m| !m.holds(state))
-    {
+        .is_some_and(|m| !m.holds(state) || (m.panel == Panel::Cartwall && !state.cartwall.open));
+    if ends {
         view_state.maximised = None;
     }
     let hidden = &state.layout.hidden_players;
@@ -417,8 +420,8 @@ pub(crate) fn settle_view(view_state: &mut ViewState, state: &AppState) {
 
 /// RL16: the menu of a panel header's background (right click): Maximize,
 /// or Restore on the maximised panel, and Hide. Both are disabled while the
-/// layout is locked; Maximize also with one panel shown, Hide on the last
-/// shown panel.
+/// layout is locked; Maximize also with one panel shown and on a collapsed
+/// cartwall (RL14), Hide on the last shown panel.
 pub(crate) fn header_menu(
     response: &egui::Response,
     scene: &Scene<'_>,
@@ -440,7 +443,9 @@ pub(crate) fn header_menu(
                 ui.close();
             }
         } else {
-            let can = !layout.locked && layout.shown_panels(&players) > 1;
+            // RL14: a collapsed cartwall has nothing to fill the room with.
+            let collapsed = panel == Panel::Cartwall && !scene.state.cartwall.open;
+            let can = !layout.locked && layout.shown_panels(&players) > 1 && !collapsed;
             let item = egui::Button::new(t.tr("layout-maximise"));
             if ui.add_enabled(can, item).clicked() {
                 view_state.maximised = Some(Maximised::new(panel, scene.state));
