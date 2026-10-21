@@ -704,3 +704,29 @@ layout-maximise = Maksymalizuj
 layout-restore = Przywróć
 layout-hide = Ukryj
 notice-drop-no-player = Żaden odtwarzacz nie jest widoczny: pokaż jeden, aby upuścić na niego pliki.
+# Analysis activity (main spec §6.1)
+status-analysing = { $count ->
+    [one] Analiza { $count } utworu
+    [few] Analiza { $count } utworów
+    [many] Analiza { $count } utworów
+   *[other] Analiza { $count } utworu
+}
+status-measuring = { $count ->
+    [one] Pomiar głośności { $count } utworu
+    [few] Pomiar głośności { $count } utworów
+    [many] Pomiar głośności { $count } utworów
+   *[other] Pomiar głośności { $count } utworu
+}
+tip-analysis-running = Teraz analizowane:
+tip-analysis-waiting = { $count ->
+    [one] { $count } utwór czeka
+    [few] { $count } utwory czekają
+    [many] { $count } utworów czeka
+   *[other] { $count } utworu czeka
+}
+tip-analysis-pass = Ponowna analiza biblioteki: { $done } z { $total }
+settings-reanalyse-running = Analiza… { $done } z { $total }
+flag-analysis-queued = Czeka na analizę
+flag-analysis-running = Teraz analizowany
+menu-reanalyse-queued = Już czeka na analizę
+menu-reanalyse-running = Właśnie jest analizowany

@@ -690,3 +690,23 @@ layout-maximise = Maximizar
 layout-restore = Restaurar
 layout-hide = Ocultar
 notice-drop-no-player = Non se ve ningún reprodutor: mostra un para soltar ficheiros nel.
+# Analysis activity (main spec §6.1)
+status-analysing = { $count ->
+    [one] Analizando { $count } pista
+   *[other] Analizando { $count } pistas
+}
+status-measuring = { $count ->
+    [one] Medindo a sonoridade de { $count } pista
+   *[other] Medindo a sonoridade de { $count } pistas
+}
+tip-analysis-running = Analizando agora:
+tip-analysis-waiting = { $count ->
+    [one] { $count } pista en espera
+   *[other] { $count } pistas en espera
+}
+tip-analysis-pass = Volvendo analizar a biblioteca: { $done } de { $total }
+settings-reanalyse-running = Analizando… { $done } de { $total }
+flag-analysis-queued = En espera de análise
+flag-analysis-running = Analizándose agora
+menu-reanalyse-queued = Xa está en espera de análise
+menu-reanalyse-running = Estase analizando agora

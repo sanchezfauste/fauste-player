@@ -28,10 +28,10 @@ Goal: show what the analysis is doing, guard the re-analyse requests and make an
 - Tests (kittest): `reanalyse_ui.rs` (button, menu item), `table_icons.rs` (icons), `analysis_status_ui.rs` (status item, tooltip, narrow width and de-DE).
 
 ## Strings (11 locales)
-`status-analysing`, `status-measuring`, `tip-analysis-running`, `tip-analysis-waiting`, `tip-analysis-pass`, `tip-analysis-loudness`, `settings-reanalyse-running`, `flag-analysis-queued`, `flag-analysis-running`, `menu-reanalyse-queued`, `menu-reanalyse-running`.
+`status-analysing`, `status-measuring`, `tip-analysis-running`, `tip-analysis-waiting`, `tip-analysis-pass`, `settings-reanalyse-running`, `flag-analysis-queued`, `flag-analysis-running`, `menu-reanalyse-queued`, `menu-reanalyse-running`.
 
 ## Docs
-- `docs/user/playlists.md` (icons, menu), `docs/user/settings.md` (button), `docs/user/getting-started.md` or `players.md` (status bar), `docs/user/loudness.md` (re-analyse re-reads the file).
+- `docs/user/playlists.md` (icons, menu), `docs/user/settings.md` (button), `docs/user/getting-started.md` (status bar), `docs/user/loudness.md` (re-analyse re-reads the file).
 - `docs/technical/analysis.md`, `docs/technical/ui.md`.
 
 ## Commits

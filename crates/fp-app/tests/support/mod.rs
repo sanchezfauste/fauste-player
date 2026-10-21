@@ -289,3 +289,17 @@ pub fn on_desk(state: &mut AppState, holders: &[fp_model::Holder]) {
         );
     }
 }
+
+/// A cell holding `activity`, for `AppUi::with_analysis_activity`.
+pub fn activity_cell(
+    activity: fp_app::activity::AnalysisActivity,
+) -> fp_app::activity::ActivityCell {
+    let cell = fp_app::activity::idle_cell();
+    cell.store(Arc::new(activity));
+    cell
+}
+
+/// The track of the `n`th entry (from 0) of the first playlist.
+pub fn nth_track(state: &AppState, n: usize) -> fp_model::TrackId {
+    state.playlists.iter().next().unwrap().entries[n].track
+}

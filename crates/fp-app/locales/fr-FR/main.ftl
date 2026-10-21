@@ -690,3 +690,23 @@ layout-maximise = Agrandir
 layout-restore = Restaurer
 layout-hide = Masquer
 notice-drop-no-player = Aucun lecteur n'est affiché : affichez-en un pour y déposer des fichiers.
+# Analysis activity (main spec §6.1)
+status-analysing = { $count ->
+    [one] Analyse de { $count } piste
+   *[other] Analyse de { $count } pistes
+}
+status-measuring = { $count ->
+    [one] Mesure du loudness de { $count } piste
+   *[other] Mesure du loudness de { $count } pistes
+}
+tip-analysis-running = En cours d’analyse :
+tip-analysis-waiting = { $count ->
+    [one] { $count } piste en attente
+   *[other] { $count } pistes en attente
+}
+tip-analysis-pass = Réanalyse de la bibliothèque : { $done } sur { $total }
+settings-reanalyse-running = Analyse… { $done } sur { $total }
+flag-analysis-queued = En attente d’analyse
+flag-analysis-running = En cours d’analyse
+menu-reanalyse-queued = Déjà en attente d’analyse
+menu-reanalyse-running = En cours d’analyse

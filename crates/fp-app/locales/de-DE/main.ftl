@@ -690,3 +690,23 @@ layout-maximise = Maximieren
 layout-restore = Wiederherstellen
 layout-hide = Ausblenden
 notice-drop-no-player = Kein Player ist sichtbar: einen einblenden, um Dateien darauf abzulegen.
+# Analysis activity (main spec §6.1)
+status-analysing = { $count ->
+    [one] Analysiere { $count } Titel
+   *[other] Analysiere { $count } Titel
+}
+status-measuring = { $count ->
+    [one] Messe die Lautheit von { $count } Titel
+   *[other] Messe die Lautheit von { $count } Titeln
+}
+tip-analysis-running = Wird jetzt analysiert:
+tip-analysis-waiting = { $count ->
+    [one] { $count } Titel wartet
+   *[other] { $count } Titel warten
+}
+tip-analysis-pass = Bibliothek wird neu analysiert: { $done } von { $total }
+settings-reanalyse-running = Analysiere… { $done } von { $total }
+flag-analysis-queued = Wartet auf Analyse
+flag-analysis-running = Wird jetzt analysiert
+menu-reanalyse-queued = Wartet bereits auf Analyse
+menu-reanalyse-running = Wird gerade analysiert
