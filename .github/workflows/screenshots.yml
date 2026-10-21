@@ -110,6 +110,11 @@ jobs:
             gh pr close "$number" --delete-branch \
               --comment "The screenshots match docs/images again; nothing to retake."
           fi
+      - name: Install ImageMagick
+        if: needs.shots.outputs.changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends imagemagick
       - name: Open or update the pull request
         if: needs.shots.outputs.changed == 'true'
         shell: bash
