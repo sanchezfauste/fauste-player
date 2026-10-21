@@ -484,3 +484,111 @@ fn a_limits_change_during_a_job_stores_under_the_limits_it_used() {
     assert!(cache.load(&path, &settings, &lowered).is_none());
     *hook.lock().unwrap() = None;
 }
+
+/// One worker held on track 1 until `gate` opens; tracks 2 and 3 wait.
+fn held_pool(dir: &Path, gate: Arc<std::sync::atomic::AtomicBool>) -> (Analyzer, Arc<AtomicUsize>) {
+    let started = Arc::new(AtomicUsize::new(0));
+    let seen = started.clone();
+    let held: AnalyzeFn = Arc::new(move |path, settings, limits, cancelled| {
+        seen.fetch_add(1, Ordering::SeqCst);
+        while !gate.load(Ordering::SeqCst) && !cancelled() {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        analyze_file(path, settings, limits)
+    });
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        None,
+        held,
+    )
+    .unwrap();
+    let file = wav(dir, "a.wav");
+    for n in 1..=3 {
+        analyzer.submit(TrackId(n), file.clone());
+    }
+    (analyzer, started)
+}
+
+/// Itr06 I8: what the pool is doing, for the status bar and the rows.
+#[test]
+fn activity_tells_the_running_job_from_the_queued_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let gate = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (analyzer, started) = held_pool(dir.path(), gate.clone());
+    let deadline = std::time::Instant::now() + WAIT;
+    while started.load(Ordering::SeqCst) == 0 {
+        assert!(std::time::Instant::now() < deadline, "never started");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let activity = analyzer.activity();
+    assert_eq!(activity.running, vec![TrackId(1)]);
+    assert_eq!(activity.queued, vec![TrackId(2), TrackId(3)]);
+    assert_eq!(activity.loudness, 0);
+    analyzer.submit_loudness(TrackId(9), dir.path().join("a.wav"));
+    analyzer.cancel(TrackId(2));
+    let activity = analyzer.activity();
+    assert_eq!(activity.queued, vec![TrackId(3)]);
+    assert_eq!(activity.loudness, 1);
+    // A running job that was cancelled is not running any more.
+    analyzer.cancel(TrackId(1));
+    assert!(analyzer.activity().running.is_empty());
+    gate.store(true, Ordering::SeqCst);
+    analyzer.results().recv_timeout(WAIT).unwrap();
+    let deadline = std::time::Instant::now() + WAIT;
+    while analyzer.activity() != Default::default() {
+        assert!(std::time::Instant::now() < deadline, "never idle");
+        let _ = analyzer.loudness_results().try_recv();
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+/// Itr06 I11: an explicit re-analysis reads the file even when the cache
+/// has an entry for its size and time, and stores what it found.
+#[test]
+fn a_fresh_job_skips_the_cache_and_stores_its_result() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counter = calls.clone();
+    // The second analysis finds something new, as an edit in place that
+    // kept the size and the time would.
+    let counting: AnalyzeFn = Arc::new(move |path, settings, limits, _cancelled| {
+        let n = counter.fetch_add(1, Ordering::SeqCst);
+        let mut a = analyze_file(path, settings, limits)?;
+        if n == 1 {
+            a.analysis.duration_secs = 42.0;
+        }
+        Ok(a)
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "a.wav");
+    let cache = AnalysisCache::new(dir.path().join("cache"));
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        Some(cache),
+        counting,
+    )
+    .unwrap();
+    let duration = |a: &Analyzer| {
+        a.results()
+            .recv_timeout(WAIT)
+            .unwrap()
+            .outcome
+            .unwrap()
+            .analysis
+            .duration_secs
+    };
+    analyzer.submit(TrackId(1), path.clone());
+    assert!((duration(&analyzer) - 1.0).abs() < 1e-6);
+    analyzer.submit_fresh(TrackId(1), path.clone());
+    assert_eq!(duration(&analyzer), 42.0, "read again");
+    // A plain submission answers from what the fresh job stored.
+    analyzer.submit(TrackId(1), path.clone());
+    assert_eq!(duration(&analyzer), 42.0, "stored");
+    assert_eq!(calls.load(Ordering::SeqCst), 2, "from the cache");
+    analyzer.submit_urgent_fresh(TrackId(1), path);
+    assert!((duration(&analyzer) - 1.0).abs() < 1e-6, "urgent jobs too");
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+}

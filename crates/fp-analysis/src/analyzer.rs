@@ -13,6 +13,10 @@
 //! Loudness-only jobs (loudness normalization spec N6b) have a third queue,
 //! taken last, with their own bookkeeping and results: a loudness job and
 //! an analysis of the same track are independent of each other.
+//!
+//! A fresh job (main spec §6.1, an explicit re-analysis) skips the cache
+//! lookup and analyses the file, then stores its result as any job does.
+//! `activity` reports what is queued and running (main spec §6.1).
 
 use std::collections::{HashMap, HashSet};
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -71,6 +75,20 @@ struct Job {
     track: TrackId,
     path: PathBuf,
     generation: u64,
+    /// Skip the cache lookup (an explicit re-analysis).
+    fresh: bool,
+}
+
+/// What the pool is doing (main spec §6.1), from its bookkeeping. Each
+/// list is sorted.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Activity {
+    /// Tracks whose analysis waits for a worker.
+    pub queued: Vec<TrackId>,
+    /// Tracks a worker is analysing now (a cancelled job is not counted).
+    pub running: Vec<TrackId>,
+    /// Loudness-only jobs queued or running (N6b).
+    pub loudness: usize,
 }
 
 #[derive(Default)]
@@ -125,12 +143,18 @@ fn urgent_generation(book: &mut Bookkeeping, track: TrackId) -> Option<u64> {
     Some(book.submit(track))
 }
 
+/// Stale jobs the normal queue may hold beyond twice the live ones before
+/// they are dropped from it: a few restarts are skipped by the workers.
+const STALE_SLACK: usize = 64;
+
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 pub struct Analyzer {
     jobs: Option<Sender<Job>>,
+    /// The normal queue's other end: stale jobs are dropped through it.
+    queue: Receiver<Job>,
     urgent: Option<Sender<Job>>,
     loudness_jobs: Option<Sender<Job>>,
     results: Receiver<AnalysisResult>,
@@ -234,6 +258,7 @@ impl Analyzer {
         }
         Ok(Self {
             jobs: Some(job_tx),
+            queue: job_rx,
             urgent: Some(urgent_tx),
             loudness_jobs: Some(loudness_tx),
             results: res_rx,
@@ -248,11 +273,22 @@ impl Analyzer {
 
     /// Queues `path` for analysis as `track` (ignored if one is pending).
     pub fn submit(&self, track: TrackId, path: PathBuf) {
+        self.queue_normal(track, path, false);
+    }
+
+    /// As `submit`, for an explicit re-analysis: the job skips the cache
+    /// lookup and stores its result (main spec §6.1).
+    pub fn submit_fresh(&self, track: TrackId, path: PathBuf) {
+        self.queue_normal(track, path, true);
+    }
+
+    fn queue_normal(&self, track: TrackId, path: PathBuf, fresh: bool) {
         let generation = {
             let mut book = lock(&self.shared.book);
             if book.latest.contains_key(&track) {
                 return;
             }
+            self.drop_stale(&book);
             book.submit(track)
         };
         if let Some(jobs) = &self.jobs {
@@ -260,7 +296,24 @@ impl Analyzer {
                 track,
                 path,
                 generation,
+                fresh,
             });
+        }
+    }
+
+    /// Cancelled jobs stay in the normal queue until a worker skips them.
+    /// Once they outnumber the live jobs (restarts of the whole library
+    /// in a row), they are dropped from it, keeping the live ones in order.
+    fn drop_stale(&self, book: &Bookkeeping) {
+        if self.queue.len() <= 2 * book.latest.len() + STALE_SLACK {
+            return;
+        }
+        let Some(jobs) = &self.jobs else {
+            return;
+        };
+        let waiting: Vec<Job> = self.queue.try_iter().collect();
+        for job in waiting.into_iter().filter(|j| book.is_current(j)) {
+            let _ = jobs.send(job);
         }
     }
 
@@ -270,7 +323,38 @@ impl Analyzer {
     pub fn submit_urgent(&self, track: TrackId, path: PathBuf) {
         let generation = urgent_generation(&mut lock(&self.shared.book), track);
         if let Some(generation) = generation {
-            self.send_urgent(track, path, generation);
+            self.send_urgent(track, path, generation, false);
+        }
+    }
+
+    /// As `submit_urgent`, for an explicit re-analysis (see
+    /// `submit_fresh`).
+    pub fn submit_urgent_fresh(&self, track: TrackId, path: PathBuf) {
+        let generation = urgent_generation(&mut lock(&self.shared.book), track);
+        if let Some(generation) = generation {
+            self.send_urgent(track, path, generation, true);
+        }
+    }
+
+    /// What is queued and running now (main spec §6.1).
+    pub fn activity(&self) -> Activity {
+        let (mut queued, mut running) = (Vec::new(), Vec::new());
+        {
+            let book = lock(&self.shared.book);
+            for &track in book.latest.keys() {
+                if book.is_running(track) {
+                    running.push(track);
+                } else {
+                    queued.push(track);
+                }
+            }
+        }
+        queued.sort_unstable();
+        running.sort_unstable();
+        Activity {
+            queued,
+            running,
+            loudness: lock(&self.shared.loudness_book).latest.len(),
         }
     }
 
@@ -292,16 +376,17 @@ impl Analyzer {
             hook();
         }
         if let Some(generation) = generation {
-            self.send_urgent(track, path.to_path_buf(), generation);
+            self.send_urgent(track, path.to_path_buf(), generation, false);
         }
     }
 
-    fn send_urgent(&self, track: TrackId, path: PathBuf, generation: u64) {
+    fn send_urgent(&self, track: TrackId, path: PathBuf, generation: u64, fresh: bool) {
         if let Some(urgent) = &self.urgent {
             let _ = urgent.send(Job {
                 track,
                 path,
                 generation,
+                fresh,
             });
         }
     }
@@ -350,6 +435,7 @@ impl Analyzer {
                 track,
                 path,
                 generation,
+                fresh: false,
             });
         }
     }
@@ -482,7 +568,8 @@ fn run(job: &Job, shared: &Shared) -> Result<Analysis, AnalysisError> {
         .cache
         .as_ref()
         .and_then(|c| c.key(&job.path, &settings, &limits));
-    if let (Some(cache), Some(key)) = (&shared.cache, &key)
+    if !job.fresh
+        && let (Some(cache), Some(key)) = (&shared.cache, &key)
         && let Some(analysis) = cache.load_key(key, &limits)
     {
         return Ok(analysis);
@@ -626,5 +713,58 @@ mod tests {
         let next = analyzer.results().recv_timeout(WAIT).expect("b's result");
         assert_eq!(next.track, TrackId(2), "a was analysed again");
         assert_eq!(runs_of_a.load(Ordering::SeqCst), 1);
+    }
+
+    /// Main spec §6.1: restarting the whole library again and again leaves
+    /// the cancelled jobs behind; the queue drops them instead of growing.
+    #[test]
+    fn repeated_restarts_do_not_grow_the_queue() {
+        let open = Arc::new(AtomicBool::new(false));
+        let gate = open.clone();
+        // Every job holds until the gate opens: none is taken meanwhile
+        // but the first.
+        let analyze: AnalyzeFn = Arc::new(move |_, _, _, cancelled| {
+            while !gate.load(Ordering::SeqCst) && !cancelled() {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            Err(AnalysisError::Unreadable("test".to_owned()))
+        });
+        let loudness: LoudnessFn = Arc::new(|_, _| Ok(None));
+        let analyzer = Analyzer::with_fns(
+            1,
+            AnalysisSettings::default(),
+            Limits::default(),
+            None,
+            analyze,
+            loudness,
+        )
+        .unwrap();
+        let library = 100;
+        for _ in 0..20 {
+            for n in 0..library {
+                analyzer.submit(TrackId(n), PathBuf::from("a.wav"));
+            }
+            for n in 0..library {
+                analyzer.cancel(TrackId(n));
+            }
+        }
+        for n in 0..library {
+            analyzer.submit(TrackId(n), PathBuf::from("a.wav"));
+        }
+        let held = analyzer.queue.len();
+        assert!(
+            held <= 3 * library as usize + STALE_SLACK,
+            "{held} jobs queued for {library} tracks"
+        );
+        // The live jobs are all still there, in order.
+        open.store(true, Ordering::SeqCst);
+        let mut answered: Vec<TrackId> = (0..library)
+            .map(|_| analyzer.results().recv_timeout(WAIT).unwrap().track)
+            .collect();
+        let in_order = answered.is_sorted();
+        answered.sort_unstable();
+        answered.dedup();
+        assert_eq!(answered.len(), library as usize);
+        assert!(in_order, "out of order");
     }
 }

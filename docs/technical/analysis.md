@@ -272,6 +272,23 @@ and the file's next full analysis writes it. `loudness_share()` is how many may
 run at once: all workers but one, at least one. `Analyzer::with_fns` takes
 both the analysis and the loudness function (tests inject them).
 
+`submit_fresh` and `submit_urgent_fresh` queue a **fresh** job (an
+explicit re-analysis, main spec §6.1): it skips the cache lookup, analyses
+the file and stores the result under the file's key as any job does. A file
+edited in place that kept its size and modification time would otherwise be
+answered from its old entry.
+
+`activity()` reads the bookkeeping: the tracks whose job waits (`queued`),
+the tracks whose latest job a worker runs (`running`; a job cancelled while
+it runs is not counted) and the number of loudness-only jobs queued or
+running. Each list is sorted.
+
+`cancel` only clears the bookkeeping: the job stays in its queue until a
+worker takes and skips it. So that restarts of the whole library in a row
+never grow the normal queue without bound, a submission first drops the
+stale jobs from it (`drop_stale`) once the queue holds more than twice the
+live jobs plus a small slack; the live ones are queued again in order.
+
 Dropping the analyzer does not wait for queued jobs. A panicking job is
 reported as `Unreadable`.
 
