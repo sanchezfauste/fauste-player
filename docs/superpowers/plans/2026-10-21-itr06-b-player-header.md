@@ -26,4 +26,4 @@ countdown sits on the button that started the fade.
    during a crossfade moves it). Tests: `tests/fade_countdown_ui.rs`.
    Docs: main spec 8.3, `players.md`.
 
-No new strings except possibly none; `badge-not-normalized` is deleted.
+No new strings; `badge-not-normalized` is deleted.

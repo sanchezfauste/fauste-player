@@ -221,3 +221,35 @@ fn the_bp_badge_is_drawn_only_on_a_bit_perfect_device() {
         "on a bit-perfect device the badge shows, unlit until a track reaches it"
     );
 }
+
+#[test]
+fn the_badge_stays_while_a_turn_off_waits_for_the_device() {
+    // Bit-perfect is off in the settings, the running device still has it.
+    let mut s = locked(1);
+    s.config.outputs.bit_perfect.clear();
+    assert!(fp_model::bit_perfect_player(&s, s.players[0].id));
+    let (mut h, _fake) = harness(s);
+    h.run_steps(3);
+    assert!(h.query_by_label("Bit-perfect: off").is_some());
+}
+
+#[test]
+fn there_is_no_badge_while_a_turn_on_waits_for_the_device() {
+    // Bit-perfect is on in the settings, the device has not reopened yet.
+    let mut s = state(1, 3);
+    let dac = fp_model::OutputDevice {
+        backend: "null".to_owned(),
+        device: "dac".to_owned(),
+    };
+    s.config.outputs.bit_perfect.push(dac);
+    let route = fp_model::Route {
+        backend: "null".to_owned(),
+        device: "dac".to_owned(),
+        first_channel: 0,
+    };
+    s.config.outputs.routes[0].main = Some(route);
+    assert!(!fp_model::bit_perfect_player(&s, s.players[0].id));
+    let (mut h, _fake) = harness(s);
+    h.run_steps(3);
+    assert!(h.query_by_label("Bit-perfect: off").is_none());
+}

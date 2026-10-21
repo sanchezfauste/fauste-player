@@ -40,7 +40,7 @@ fn harness_in(lang: &str, state: AppState) -> Harness<'static, AppUi> {
     let fake = Fake::new(state);
     let ui = AppUi::new(fake, I18n::new(Some(lang)), MediaCache::default());
     let mut h = Harness::builder()
-        .with_size(egui::vec2(420.0, 700.0))
+        .with_size(egui::vec2(412.0, 700.0))
         .with_step_dt(0.02)
         .build_ui_state(
             |ui, app: &mut AppUi| {
@@ -53,8 +53,9 @@ fn harness_in(lang: &str, state: AppState) -> Harness<'static, AppUi> {
     h
 }
 
-fn header_rects(h: &Harness<'static, AppUi>, t: &I18n) -> Vec<(String, egui::Rect)> {
-    let mut names = vec![
+/// The rectangle of each header item, `None` for one that is not drawn.
+fn header_rects(h: &Harness<'static, AppUi>, t: &I18n) -> Vec<(String, Option<egui::Rect>)> {
+    let names = [
         "P1".to_owned(),
         t.tr("status-on-air").to_uppercase(),
         t.tr("badge-mixing"),
@@ -67,30 +68,43 @@ fn header_rects(h: &Harness<'static, AppUi>, t: &I18n) -> Vec<(String, egui::Rec
         t.tr("tip-bp-off"),
         t.tr("tip-not-normalized-bp"),
     ];
-    names.dedup();
     let band = h.get_by_label("P1").rect();
     names
         .into_iter()
-        .filter_map(|n| {
+        .map(|n| {
             // Other parts of the screen may carry the same words.
             let rect = h
                 .query_all_by_label(&n)
                 .map(|node| node.rect())
-                .find(|r| (r.center().y - band.center().y).abs() < 1.0)?;
-            Some((n, rect))
+                .find(|r| (r.center().y - band.center().y).abs() < 1.0);
+            (n, rect)
         })
         .collect()
 }
 
-fn assert_no_overlap(rects: &[(String, egui::Rect)], context: &str) {
-    for (i, (a, ra)) in rects.iter().enumerate() {
-        for (b, rb) in rects.iter().skip(i + 1) {
+fn assert_no_overlap(rects: &[(String, Option<egui::Rect>)], context: &str) {
+    let drawn: Vec<_> = rects
+        .iter()
+        .filter_map(|(n, r)| r.map(|r| (n, r)))
+        .collect();
+    for (i, (a, ra)) in drawn.iter().enumerate() {
+        for (b, rb) in drawn.iter().skip(i + 1) {
+            // Touching edges are fine (the two modes share a border).
+            let common = ra.intersect(*rb);
             assert!(
-                !ra.shrink(0.5).intersects(rb.shrink(0.5)),
+                common.width() <= 0.0 || common.height() <= 0.0,
                 "{context}: {a} {ra:?} overlaps {b} {rb:?}"
             );
         }
     }
+}
+
+fn missing(rects: &[(String, Option<egui::Rect>)]) -> Vec<&str> {
+    rects
+        .iter()
+        .filter(|(_, r)| r.is_none())
+        .map(|(n, _)| n.as_str())
+        .collect()
 }
 
 #[test]
@@ -98,25 +112,79 @@ fn the_header_never_overlaps_at_the_least_width() {
     for lang in ["en-US", "es-ES", "de-DE"] {
         for notice in [false, true] {
             let t = I18n::new(Some(lang));
-            let h = harness_in(lang, busy(notice));
-            let rects = header_rects(&h, &t);
+            let state = busy(notice);
+            let player = state.players[0].id;
+            let h = harness_in(lang, state);
             let context = format!("{lang}, entry notice {notice}");
-            // The right group and the player's number always stay.
-            for kept in [
+            let column = h
+                .state()
+                .player_rects()
+                .into_iter()
+                .find(|(p, _)| *p == player)
+                .map(|(_, r)| r)
+                .unwrap();
+            assert_eq!(
+                column.width(),
+                fp_app::ui::panel_layout::MIN_PLAYER_WIDTH,
+                "{context}: the column is at its least width"
+            );
+            let rects = header_rects(&h, &t);
+            // The player's number, the state text and the right group stay;
+            // the right group stays inside the player's panel.
+            let always = [
                 "P1".to_owned(),
+                t.tr("status-on-air").to_uppercase(),
                 t.tr("tip-cue"),
                 t.tr("tip-single"),
+                t.tr("tip-cont"),
                 t.tr("tip-bp-off"),
                 t.tr("tip-not-normalized-bp"),
-            ] {
+            ];
+            for kept in &always {
+                let rect = rects
+                    .iter()
+                    .find(|(n, _)| n == kept)
+                    .and_then(|(_, r)| *r)
+                    .unwrap_or_else(|| panic!("{context}: {kept} is shown, got {rects:?}"));
                 assert!(
-                    rects.iter().any(|(n, _)| *n == kept),
-                    "{context}: {kept} is shown, got {rects:?}"
+                    column.contains_rect(rect),
+                    "{context}: {kept} {rect:?} leaves the panel {column:?}"
                 );
             }
             assert_no_overlap(&rects, &context);
+            // What is not shown has collapsed, and only from the least
+            // important up: the other badges are shown or hidden whole.
+            let hidden = missing(&rects);
+            let optional = [
+                t.tr("badge-mixing"),
+                t.tr("badge-stop-after"),
+                t.tr("tip-entry-repeat"),
+                t.tr("tip-dsd-hold"),
+            ];
+            for name in hidden {
+                assert!(optional.iter().any(|o| o == name), "{context}: lost {name}");
+            }
         }
     }
+}
+
+#[test]
+fn in_spanish_the_badges_collapse_and_the_state_text_stays() {
+    let t = I18n::new(Some("es-ES"));
+    let h = harness_in("es-ES", busy(false));
+    let rects = header_rects(&h, &t);
+    // Only the player's number, the dot and the truncated state text fit
+    // beside the right group: every badge collapsed.
+    let hidden: Vec<String> = missing(&rects).iter().map(|n| (*n).to_owned()).collect();
+    assert_eq!(
+        hidden,
+        vec![
+            t.tr("badge-mixing"),
+            t.tr("badge-stop-after"),
+            t.tr("tip-entry-repeat"),
+            t.tr("tip-dsd-hold"),
+        ]
+    );
 }
 
 fn gain_text_colours(h: &Harness<'static, AppUi>, text: &str) -> Vec<egui::Color32> {

@@ -209,9 +209,10 @@ fn outlined_with_tip(ui: &mut Ui, text: &str, tip: Option<&str>, border: Color32
 
 /// The items of the header's left group, in drawing order. Their `rank` for
 /// `header_layout::fit` is the order in which they collapse when the column
-/// is narrow: the status text first, then the DSD hold notice, the entry
-/// notice, "stop after", the fade badge, the status dot; the player's number
-/// never.
+/// is narrow: the entry notice first, then "stop after", the fade badge
+/// (the Next caption says it too), the DSD hold notice (nothing else shows
+/// it), the state text (truncated before it goes) and the dot; the player's
+/// number never.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LeftItem {
     Number,
@@ -228,11 +229,11 @@ impl LeftItem {
         match self {
             Self::Number => 0,
             Self::Dot => 1,
-            Self::Fading => 2,
-            Self::StopAfter => 3,
-            Self::EntryNotice => 4,
-            Self::DsdHold => 5,
-            Self::Status => 6,
+            Self::Status => 2,
+            Self::DsdHold => 3,
+            Self::Fading => 4,
+            Self::StopAfter => 5,
+            Self::EntryNotice => 6,
         }
     }
 }
@@ -257,6 +258,9 @@ fn header(
     const SPACING: f32 = 6.0;
     const CUE_WIDTH: f32 = 50.0;
     const BP_WIDTH: f32 = 28.0;
+    const STATUS_MIN_WIDTH: f32 = 40.0;
+    // A point of slack, so rounding never lets two items touch.
+    const SLACK: f32 = 1.0;
     let t = scene.i18n;
     // RL16: a right click on the header's background opens the panel menu;
     // the tiles, added after it, keep their own clicks. It is no Tab stop.
@@ -292,7 +296,8 @@ fn header(
     let mut left: Vec<(LeftItem, f32)> = vec![
         (LeftItem::Number, outlined_width(ui, &number)),
         (LeftItem::Dot, 7.0),
-        (LeftItem::Status, status_width),
+        // The status text truncates down to a least width before it goes.
+        (LeftItem::Status, status_width.min(STATUS_MIN_WIDTH)),
     ];
     if pv.fading {
         left.push((LeftItem::Fading, outlined_width(ui, &fade_text)));
@@ -345,7 +350,17 @@ fn header(
             rank: kind.rank(),
         })
         .collect();
-    let shown = header_layout::fit(&items, row.width() - right_width - SPACING, SPACING);
+    let room = row.width() - right_width - SPACING - SLACK;
+    let shown = header_layout::fit(&items, room, SPACING);
+    // What the shown items leave over goes to the status text.
+    let used: f32 = items
+        .iter()
+        .zip(&shown)
+        .filter(|(_, shown)| **shown)
+        .map(|(item, _)| item.width + SPACING)
+        .sum::<f32>()
+        - SPACING;
+    let status_room = (STATUS_MIN_WIDTH + (room - used).max(0.0)).min(status_width);
     let has = |wanted: LeftItem| {
         left.iter()
             .zip(&shown)
@@ -363,7 +378,13 @@ fn header(
                 ui.painter().rect_filled(r, 0.0, dot);
             }
             if has(LeftItem::Status) {
-                ui.add(egui::Label::new(status_text).selectable(false).truncate());
+                ui.allocate_ui_with_layout(
+                    vec2(status_room, 20.0),
+                    Layout::left_to_right(Align::Center),
+                    |ui| {
+                        ui.add(egui::Label::new(status_text).selectable(false).truncate());
+                    },
+                );
             }
             if has(LeftItem::Fading) {
                 outlined(ui, &fade_text, theme::ACCENT, theme::ACCENT_300);
@@ -918,7 +939,9 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 |p, r, c| {
                     if let Some(left) = next_left {
                         let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
-                        p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
+                        // Dimmed with the tile when Next is unavailable.
+                        let strength = if available.play { 0.5 } else { 0.5 * 0.45 };
+                        p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(strength));
                     }
                     glyphs::paint(p, r.translate(vec2(0.0, -6.0)), play_action, 28.0, c);
                     p.text(

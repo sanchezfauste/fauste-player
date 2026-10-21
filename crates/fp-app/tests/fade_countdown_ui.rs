@@ -43,9 +43,13 @@ fn bar_width(h: &H, button: egui::Rect) -> f32 {
     for clipped in &h.output().shapes {
         rects(&clipped.shape, &mut all);
     }
-    let colour = fp_app::ui::theme::ACCENT.gamma_multiply(0.5);
+    // The Next tile is dimmed while a fade runs (rule 26), and so is its bar.
+    let colours = [
+        fp_app::ui::theme::ACCENT.gamma_multiply(0.5),
+        fp_app::ui::theme::ACCENT.gamma_multiply(0.5 * 0.45),
+    ];
     all.iter()
-        .filter(|r| r.fill == colour && button.expand(0.5).contains_rect(r.rect))
+        .filter(|r| colours.contains(&r.fill) && button.expand(0.5).contains_rect(r.rect))
         .map(|r| r.rect.width())
         .fold(0.0, f32::max)
 }

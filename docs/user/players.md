@@ -16,7 +16,7 @@ playlist tabs, transport, volume and outputs.
 | **Stop after** badge | The player stops when the current track ends |
 | **Repeat** / **Stop after track** badge | The current track repeats, or stops the player when it ends, because of its own mark in the playlist menu. Hover for the full sentence. The player's own **Stop after** button wins: while it is on, only its badge shows |
 | Gain badge | With [loudness normalization](loudness.md#the-gain-in-the-player-header) on, the gain the track on air plays with (**+4.0 dB**), or an amber **0.0 dB** when the track plays unchanged (no measurement yet, a bit-perfect output, or a track excluded from normalization). Hover for the reason. Shown while the player is playing or paused |
-| **BP** / **DSD** | The badge shows only on a player whose Main device is bit-perfect; **BP** is lit while the current track reaches that device unchanged. **DSD** replaces it while a DSD track goes out as DSD, unchanged (see [Bit-perfect output](bit-perfect.md)). **Others muted** shows beside it when that DSD stream keeps other sources off the output |
+| **BP** / **DSD** | The badge shows only on a player whose Main device runs bit-perfect; **BP** is lit while the current track reaches that device unchanged. **DSD** replaces it while a DSD track goes out as DSD, unchanged (see [Bit-perfect output](bit-perfect.md)). **Others muted** shows beside it when that DSD stream keeps other sources off the output |
 | **SINGLE** \| **CONT** | Play mode (see below): one joined control, the lit half is the active mode |
 | **CUE** | Pre-listen the next track on the CUE output |
 
@@ -118,7 +118,7 @@ the player for a moment or to hide it (see
 
 | Button | Action |
 |---|---|
-| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)); while it fades, a violet bar drains across the button from full to empty over the fade length. Paused: resume. With the track on air as next, Play restarts that track with the usual fade. On a bit-perfect output it switches at once, without a fade, and its tooltip says so (see [What it costs](bit-perfect.md#what-it-costs)). |
+| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)); while it fades for a crossfade (Next or Previous) or a segue, a violet bar drains across the button from full to empty over the fade length. Paused: resume. With the track on air as next, Play restarts that track with the usual fade. On a bit-perfect output it switches at once, without a fade, and its tooltip says so (see [What it costs](bit-perfect.md#what-it-costs)). |
 | **Stop** | Stop at once (with a short de-click ramp) |
 | **Fade stop** | Fade out and stop. While a fade stop runs, a violet bar drains across the button from full to empty over the fade length, like a playing cart's |
 | **Pause** | Pause or resume; blinks amber while paused |
