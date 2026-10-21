@@ -11,11 +11,17 @@ name: screenshots
 # opened when no image changed. The translated guides take their own
 # screenshots at publish time (pages.yml) and are never touched here.
 #
-# A pull request opened with GITHUB_TOKEN triggers no workflow, so CI does
-# not run on it by itself: close and reopen it, or run the checks by hand.
-# To get CI automatically, add a repository secret SCREENSHOTS_TOKEN (a
-# fine-grained token with contents and pull requests write access); it is
-# used when present.
+# Two jobs: `shots` builds and runs the app with read-only permissions and
+# no stored credentials; `publish` has the write permissions but runs no
+# build, only the compare, the commit and the pull request.
+#
+# One-time setup: with the default GITHUB_TOKEN, the repository setting
+# Settings -> Actions -> General -> "Allow GitHub Actions to create and
+# approve pull requests" must be on. A pull request opened with GITHUB_TOKEN
+# triggers no workflow, so CI does not run on it by itself: close and reopen
+# it, or run the checks by hand. To get CI automatically (and not need the
+# setting), add a repository secret SCREENSHOTS_TOKEN (a fine-grained token
+# with contents and pull requests write access); it is used when present.
 
 on:
   push:
@@ -23,17 +29,18 @@ on:
     paths:
       - crates/fp-app/src/ui/**
       - crates/fp-app/locales/**
+      - crates/fp-app/assets/**
       - crates/fp-app/examples/demo_session.rs
       - scripts/site/screenshots.sh
       - scripts/site/tones.sh
       - scripts/site/window_box.py
       - scripts/site/compare-screenshots.sh
+      - scripts/site/screenshot-masks.txt
       - .github/workflows/screenshots.yml
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 # Two runs never race on the branch; a queued run starts after the first.
 concurrency:
@@ -44,12 +51,14 @@ env:
   BRANCH: docs/retake-screenshots
 
 jobs:
-  retake:
+  shots:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
     steps:
       - uses: actions/checkout@v7
         with:
-          token: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+          persist-credentials: false
       - name: Install the screenshot tools
         run: |
           sudo apt-get update
@@ -67,14 +76,50 @@ jobs:
         run: scripts/site/screenshots.sh --out "$RUNNER_TEMP/new-shots"
       - name: Compare with docs/images
         id: compare
+        shell: bash
         run: |
-          scripts/site/compare-screenshots.sh --apply --prune "$RUNNER_TEMP/new-shots" | tee "$RUNNER_TEMP/changes.txt"
+          set -o pipefail
+          scripts/site/compare-screenshots.sh "$RUNNER_TEMP/new-shots" | tee "$RUNNER_TEMP/new-shots/changes.txt"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/new-shots
+          if-no-files-found: error
+
+  publish:
+    needs: shots
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/new-shots
+      - name: Close the pull request when nothing changed
+        if: needs.shots.outputs.changed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+        run: |
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr close "$number" --delete-branch \
+              --comment "The screenshots match docs/images again; nothing to retake."
+          fi
       - name: Open or update the pull request
-        if: steps.compare.outputs.changed == 'true'
+        if: needs.shots.outputs.changed == 'true'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
           SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
+          new="$RUNNER_TEMP/new-shots"
+          scripts/site/compare-screenshots.sh --apply --prune "$new"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
@@ -87,11 +132,9 @@ jobs:
             echo
             echo "Images that changed (more than the fuzz and pixel tolerance of \`scripts/site/compare-screenshots.sh\`):"
             echo
-            sed 's/^\([a-z]*\) \(.*\)$/- \1: `\2`/' "$RUNNER_TEMP/changes.txt"
+            sed 's/^\([a-z]*\) \(.*\)$/- \1: `\2`/' "$new/changes.txt"
             echo
             echo "Look at the images before merging. If CI did not start on this pull request, close and reopen it."
-            echo
-            echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
           } > "$RUNNER_TEMP/body.md"
           number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
           if [ -n "$number" ]; then

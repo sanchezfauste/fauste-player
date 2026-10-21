@@ -141,15 +141,27 @@ On a push to `master` that touches `crates/fp-app/src/ui`, the locales,
 `scripts/site/compare-screenshots.sh --apply --prune`, which compares each
 PNG with ImageMagick (`compare -metric AE -fuzz 5%`, tolerating 50 pixels:
 both are options) so that font antialiasing noise is ignored, and copies
-only the images that changed. If any did, the workflow force-pushes the
+only the images that changed. Regions that change on every run (the
+top-bar clock, remaining and elapsed times, meters, the playhead and the
+playing cart's sweep) are painted black on both images first, from the
+rectangles in `scripts/site/screenshot-masks.txt` (`<image> x,y,w,h`;
+update it after a layout change, checking that two runs of
+`screenshots.sh --out` compare equal). `--prune` removes only
+`main-screen.png` and `guide/*.png`, never other images. If any did, the workflow force-pushes the
 branch `docs/retake-screenshots` and opens or updates one pull request,
-"docs: retake screenshots", listing them. Its permissions are
-`contents: write` and `pull-requests: write`; two runs never overlap
-(concurrency group `screenshots`). Pull requests opened with `GITHUB_TOKEN`
-trigger no workflows, so CI does not start by itself: close and reopen the
-PR, or add a repository secret `SCREENSHOTS_TOKEN` (a fine-grained token
-with contents and pull requests write access), which the workflow uses
-when present. Look at the images before merging. `docs/i18n` is never
+"docs: retake screenshots", listing them; when nothing differs any more it
+closes that pull request with a comment. The work is split in two jobs: `shots` (read-only, no
+stored credentials) builds, takes and compares the screenshots and uploads
+them as an artifact; `publish` (`contents: write`, `pull-requests: write`,
+no build) downloads it and does the commit, the push and the PR. Two runs
+never overlap (concurrency group `screenshots`). With the default
+`GITHUB_TOKEN`, the repository setting Settings, Actions, General, "Allow
+GitHub Actions to create and approve pull requests" must be on, and pull
+requests it opens trigger no workflows, so CI does not start by itself:
+close and reopen the PR. Alternatively add a repository secret
+`SCREENSHOTS_TOKEN` (a fine-grained token with contents and pull requests
+write access), which the workflow uses when present and which needs
+neither the setting nor the reopening. Look at the images before merging. `docs/i18n` is never
 touched. Locally: `scripts/site/screenshots.sh --out /tmp/new` and
 `scripts/site/compare-screenshots.sh /tmp/new` list the differences;
 `--apply` copies them into `docs/images`.
