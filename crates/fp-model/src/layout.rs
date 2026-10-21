@@ -239,7 +239,8 @@ fn usable_share(share: f32) -> bool {
 
 /// Shares above this make a drag overflow `f32`: settle rescales them.
 const SHARE_MAX: f32 = 1e6;
-/// Shares below this can underflow to 0 in a drag: settle rescales them.
+/// Shares below this can underflow to 0 in a drag: settle rescales them
+/// and raises the ones still below it to it.
 const SHARE_MIN: f32 = 1e-6;
 
 /// Every player of `players` with its RL2 share, in display order.
@@ -350,7 +351,12 @@ pub(crate) fn reset_layout(state: &mut AppState) -> Result<(), ModelError> {
 }
 
 /// Rescales the kept shares to a mean of 1 when they are extreme (maths in
-/// `f64`), then drops those that fall below [`SHARE_MIN`] anyway.
+/// `f64`), then raises those still below [`SHARE_MIN`] to it: a tiny share
+/// is a player dragged to its minimum width, and keeping it (instead of
+/// dropping it, which would give that player the mean) changes its width
+/// by far less than a pixel. Afterwards the mean is about 1, the largest is
+/// at most the number of players and the smallest is [`SHARE_MIN`], so a
+/// second pass changes nothing.
 fn rescale_extreme_shares(layout: &mut Layout, notes: &mut Vec<String>) {
     let (min, max) = layout
         .player_shares
@@ -369,19 +375,14 @@ fn rescale_extreme_shares(layout: &mut Layout, notes: &mut Vec<String>) {
         .sum::<f64>()
         / count;
     for (_, share) in &mut layout.player_shares {
-        *share = (f64::from(*share) / mean) as f32;
+        let scaled = (f64::from(*share) / mean) as f32;
+        *share = if usable_share(scaled) {
+            scaled.max(SHARE_MIN)
+        } else {
+            SHARE_MIN
+        };
     }
     notes.push("layout: the players' shares were extreme; they were rescaled".to_owned());
-    layout.player_shares.retain(|(id, share)| {
-        let keep = usable_share(*share) && *share >= SHARE_MIN;
-        if !keep {
-            notes.push(format!(
-                "layout: the share of player {} became negligible after the rescale; it was dropped",
-                id.0
-            ));
-        }
-        keep
-    });
 }
 
 /// RL3 and RL19's repairs, for `players` (`AppState::player_ids`): drops
@@ -391,7 +392,8 @@ fn rescale_extreme_shares(layout: &mut Layout, notes: &mut Vec<String>) {
 /// and shares that are not finite and above 0; rescales all shares to a
 /// mean of 1 when the largest is above [`SHARE_MAX`] or the smallest below
 /// [`SHARE_MIN`] (ratios kept, so a drag cannot overflow or underflow),
-/// dropping the ones that are still below [`SHARE_MIN`]; shows every panel when none is shown;
+/// raising the ones still below [`SHARE_MIN`] to it; shows every panel when
+/// none is shown;
 /// fits the cartwall's size to its dock (`CartwallLayout::share`).
 /// Returns one note per repair, for the load warnings. Idempotent.
 pub fn settle_layout(layout: &mut Layout, players: &[PlayerId]) -> Vec<String> {

@@ -706,6 +706,40 @@ fn rl19_settle_rescales_huge_or_tiny_shares_and_a_drag_still_works() {
 }
 
 #[test]
+fn rl19_settle_keeps_tiny_shares_that_drags_leave() {
+    // A drag to a player's minimum sends 1e-4 of the pair's room; a few in
+    // a row leave a share far below 1e-6 (here about 5e-8).
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    for (left, right) in [(p[0], p[1]), (p[1], p[2]), (p[0], p[1])] {
+        apply(
+            &mut s,
+            Command::SetPlayerShares {
+                left: (left, 1e-4),
+                right: (right, 1.0),
+            },
+        )
+        .unwrap();
+    }
+    let tiny = s.layout.player_shares[0].1;
+    assert!(tiny > 0.0 && tiny < 1e-6, "{tiny}");
+    let before = fractions(&s);
+    let mut settled = s.layout.clone();
+    settle_layout(&mut settled, &p);
+    assert_eq!(settled.player_shares.len(), 4, "{settled:?}");
+    s.layout = settled.clone();
+    let after = fractions(&s);
+    assert!(
+        before.iter().zip(&after).all(|(a, b)| (a - b).abs() < 1e-5),
+        "{before:?} -> {after:?}"
+    );
+    assert!(
+        settle_layout(&mut settled, &p).is_empty(),
+        "settling twice changes nothing"
+    );
+}
+
+#[test]
 fn rl3_player_count_changes_while_locked() {
     let mut s = fixture(0);
     let p = s.player_ids();
