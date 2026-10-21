@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use super::super::playlist_files::FileError;
 use crossbeam_channel::Receiver;
-use egui::{Color32, RichText, Stroke, StrokeKind, Ui, vec2};
+use egui::{Align, Color32, Layout, RichText, Stroke, StrokeKind, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::{CartColor, CartEdit, CartKind, CartPageId, CartPageImport, Command};
 use fp_store::playlist_io::{parse_cart_page_noting, read_bounded, write_cart_page};
@@ -462,22 +462,29 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let mut choose = false;
     let mut clear = false;
     row(ui, &file_label, None, |ui| {
-        ui.add(
-            egui::Label::new(
-                RichText::new(&current_file)
-                    .font(font(12.0))
-                    .color(theme::NEUTRAL_300),
-            )
-            .selectable(false)
-            .truncate(),
-        );
-        choose = button(
-            ui,
-            &t.tr("settings-cart-choose"),
-            icon::FOLDER_OPEN,
-            c.file.is_none(),
-        );
-        clear = cart.track.is_some() && button(ui, &t.tr("settings-cart-clear"), icon::X, true);
+        // The buttons first, from the right, so a long path only takes
+        // what they leave.
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            clear = cart.track.is_some() && button(ui, &t.tr("settings-cart-clear"), icon::X, true);
+            choose = button(
+                ui,
+                &t.tr("settings-cart-choose"),
+                icon::FOLDER_OPEN,
+                c.file.is_none(),
+            );
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(&current_file)
+                            .font(font(12.0))
+                            .color(theme::NEUTRAL_300),
+                    )
+                    .selectable(false)
+                    .truncate(),
+                )
+                .on_hover_text(&current_file);
+            });
+        });
     });
     if choose {
         let filter = t.tr("dialog-audio-files");
