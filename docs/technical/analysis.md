@@ -297,7 +297,8 @@ reported as `Unreadable`.
 The services thread submits tracks when either:
 
 - they are not analysed yet (or were forced by *Re-analyse all* or by a
-  settings change, which also cancels running jobs); or
+  settings change, which also cancels running jobs, see *Library pass*
+  below); or
 - an earlier version analysed them (no format recorded, or an older
   `analysis_version`, and a readable file: `services::outdated`) **and**
   the operator asked for it (`ServiceRequest::AnalyseOutdated`, from the
@@ -338,9 +339,28 @@ The services thread submits tracks when either:
   change seen while the track is already being analysed is dropped and
   reported again at the next look. `ServiceRequest::ReanalyseTrack` (the row
   menu's **Re-analyse**) clears the failure and queues the track on the
-  urgent queue whatever its state, through the same analyser and cache as
-  *Re-analyse all*, so an unchanged file whose analysis is cached comes back
-  playable and fails again on the next playback.
+  urgent queue as a fresh job, so the file is read again even when it did
+  not change. A track already queued or running (not just for a cart's
+  peaks) is left alone.
+
+**Library pass and explicit re-analysis** (main spec §6.1, itr06 I8, I11).
+*Re-analyse all* and a change of the analysis settings (`restart_analysis`)
+start a pass: `Services::library_pass` holds the tracks still without an
+answer and `pass_total` the size it started with. A routed result removes
+its track (a command that cannot be queued puts it back); a track removed
+from the library leaves it; when nothing is in flight and nothing is forced
+the pass ends whatever happened. While it runs, `ReanalyseAll` is ignored:
+nothing is cancelled and nothing restarts. A settings change still cancels
+and restarts it. The two explicit requests fill `Services::fresh`, which
+`consider` uses up by submitting a fresh job (`submit_fresh`,
+`submit_urgent_fresh`); a read only for a cart's peaks keeps the mark.
+
+**Activity.** At the end of every analysis step `publish_activity` builds
+an `AnalysisActivity` (`fp-app/src/activity.rs`) from `Analyzer::activity`
+without the peaks-only jobs, plus the forced tracks not submitted yet, the
+loudness-only jobs and the pass's progress, and stores it in an
+`ActivityCell` (`Arc<ArcSwap<…>>`) only when it changed. `main` hands
+`Services::activity()` to the interface, which only loads it.
 
 The **header reader** (`fp-header-reader`, `fp-app/src/header.rs`, driven
 by `Services::header_pass`) gives a track a length before its analysis

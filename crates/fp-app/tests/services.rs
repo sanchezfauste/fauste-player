@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use fp_analysis::analyze_file_cancellable;
 use fp_analysis::analyzer::{AnalyzeFn, Analyzer, LoudnessFn};
+use fp_app::activity::{PassProgress, TrackActivity};
 use fp_app::services::{MediaCache, ServiceRequest, Services, TrackMedia};
 use fp_backends::{AudioBackend, OfflineBackend, OfflineDevice};
 use fp_engine::conductor::{Conductor, ConductorHandle};
@@ -108,6 +109,23 @@ fn rig_pool(
     threads: usize,
     measure: Option<LoudnessFn>,
 ) -> Rig {
+    rig_cached(files, dir, delay, prepare, after, threads, measure, false)
+}
+
+/// As `rig_pool`; with `cached`, the pool has an analysis cache in the
+/// test's directory.
+#[allow(clippy::too_many_arguments)]
+fn rig_cached(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    delay: Duration,
+    prepare: impl FnOnce(&mut fp_model::AppState),
+    after: AfterAnalysis,
+    threads: usize,
+    measure: Option<LoudnessFn>,
+    cached: bool,
+) -> Rig {
+    let cache = cached.then(|| fp_analysis::cache::AnalysisCache::new(dir.path().join("cache")));
     let paths = AppPaths::under(dir.path());
     let store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
@@ -181,7 +199,7 @@ fn rig_pool(
         threads,
         Default::default(),
         Default::default(),
-        None,
+        cache,
         counting,
         loudness,
     )
@@ -1781,4 +1799,184 @@ fn a_collapsed_cartwall_reads_no_peaks() {
     }
     assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
     assert!(!r.media.contains(track));
+}
+
+/// The started analyses of `paths`, in order, as indexes into `paths`.
+fn started_of(r: &Rig, paths: &[PathBuf]) -> Vec<usize> {
+    r.started
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|p| paths.iter().position(|f| f == p))
+        .collect()
+}
+
+/// Runs rounds for `ms` of the rig's time.
+fn idle_for(r: &mut Rig, ms: u64) {
+    let until = r.now + Duration::from_millis(ms);
+    r.run_until("a quiet period", |r| r.now >= until);
+}
+
+/// Main spec §6.1: a second *Re-analyse all* while the library pass runs
+/// cancels nothing and restarts nothing.
+#[test]
+fn a_second_reanalyse_all_while_the_pass_runs_cancels_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = rig(&files, dir);
+    r.run_until("analysed", |r| r.analyses.load(Ordering::SeqCst) == 3);
+    idle_for(&mut r, 100);
+    assert_eq!(r.services.activity().load().pass, None);
+    // The pass's first job holds at the gate.
+    r.gate.store(false, Ordering::SeqCst);
+    let requests = r.services.requests();
+    requests.send(ServiceRequest::ReanalyseAll).unwrap();
+    r.run_until("the pass started", |r| {
+        r.analyses.load(Ordering::SeqCst) == 4
+    });
+    let progress = Some(PassProgress { done: 0, total: 3 });
+    assert_eq!(r.services.activity().load().pass, progress);
+    requests.send(ServiceRequest::ReanalyseAll).unwrap();
+    idle_for(&mut r, 200);
+    assert_eq!(
+        r.analyses.load(Ordering::SeqCst),
+        4,
+        "the held job was not cancelled and started again"
+    );
+    assert_eq!(r.services.activity().load().pass, progress);
+    r.gate.store(true, Ordering::SeqCst);
+    r.run_until("the pass ended", |r| {
+        r.services.activity().load().pass.is_none()
+    });
+    idle_for(&mut r, 100);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 6, "each track once more");
+    assert!(!r.services.activity().load().is_busy());
+}
+
+/// Main spec §6.1: Re-analyse of a track that is queued or running does
+/// nothing: the running job is not restarted and the queued one keeps its
+/// place.
+#[test]
+fn reanalysing_a_queued_or_running_track_does_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = rig(&files, dir);
+    r.gate.store(false, Ordering::SeqCst);
+    r.run_until("the first job running", |r| {
+        r.analyses.load(Ordering::SeqCst) == 1
+    });
+    let model = r.handle.model.load_full();
+    let id = |path: &PathBuf| model.library.iter().find(|t| &t.path == path).unwrap().id;
+    let (running, queued) = (id(&files[0]), id(&files[2]));
+    // A round publishes what the pool does.
+    r.services.step(r.now);
+    let activity = r.services.activity().load_full();
+    assert_eq!(activity.of(running), Some(TrackActivity::Running));
+    assert_eq!(activity.of(queued), Some(TrackActivity::Queued));
+    let requests = r.services.requests();
+    requests
+        .send(ServiceRequest::ReanalyseTrack(running))
+        .unwrap();
+    requests
+        .send(ServiceRequest::ReanalyseTrack(queued))
+        .unwrap();
+    r.services.step(r.now);
+    r.gate.store(true, Ordering::SeqCst);
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    idle_for(&mut r, 100);
+    assert_eq!(started_of(&r, &files), vec![0, 1, 2]);
+}
+
+/// Rewrites `path` with other samples, keeping its size and modification
+/// time: an edit in place the cache key cannot see.
+fn edit_in_place(path: &Path) {
+    let before = std::fs::metadata(path).unwrap();
+    let spec = hound::WavReader::open(path).unwrap().spec();
+    let frames = hound::WavReader::open(path).unwrap().duration();
+    let mut w = hound::WavWriter::create(path, spec).unwrap();
+    for i in 0..frames {
+        w.write_sample(((i as f32 * 0.05).sin() * 800.0) as i16)
+            .unwrap();
+    }
+    w.finalize().unwrap();
+    let file = std::fs::File::options().write(true).open(path).unwrap();
+    file.set_modified(before.modified().unwrap()).unwrap();
+    let after = std::fs::metadata(path).unwrap();
+    assert_eq!(after.len(), before.len());
+    assert_eq!(after.modified().unwrap(), before.modified().unwrap());
+}
+
+fn integrated(r: &Rig) -> f32 {
+    let model = r.handle.model.load();
+    let track = model.library.iter().next().unwrap();
+    track
+        .loudness
+        .and_then(|l| l.integrated_lufs)
+        .unwrap_or(f32::NAN)
+}
+
+/// Itr06 I11: Re-analyse (a track or the library) reads the file again,
+/// even when the cache has an entry for its size and time.
+#[test]
+fn reanalyse_reads_a_file_edited_in_place() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = wav(dir.path(), "a.wav", 1);
+    let mut r = rig_cached(
+        std::slice::from_ref(&file),
+        dir,
+        Duration::ZERO,
+        |_| {},
+        Arc::new(|_| {}),
+        1,
+        None,
+        true,
+    );
+    r.run_until("analysed", |r| r.analyses.load(Ordering::SeqCst) == 1);
+    r.run_until("measured", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.loudness.is_some())
+    });
+    let loud = integrated(&r);
+    edit_in_place(&file);
+    let track = r.handle.model.load().library.iter().next().unwrap().id;
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(track))
+        .unwrap();
+    r.run_until("measured again", |r| (integrated(r) - loud).abs() > 6.0);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
+    // Back to the louder samples, and the whole library.
+    let quiet = integrated(&r);
+    let spec = hound::WavReader::open(&file).unwrap().spec();
+    let before = std::fs::metadata(&file).unwrap().modified().unwrap();
+    let mut w = hound::WavWriter::create(&file, spec).unwrap();
+    for i in 0..48_000 {
+        w.write_sample(((i as f32 * 0.05).sin() * 8_000.0) as i16)
+            .unwrap();
+    }
+    w.finalize().unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(before)
+        .unwrap();
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseAll)
+        .unwrap();
+    r.run_until("measured once more", |r| {
+        (integrated(r) - quiet).abs() > 6.0
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
 }
