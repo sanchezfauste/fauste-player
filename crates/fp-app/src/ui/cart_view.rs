@@ -10,6 +10,9 @@ use super::{format, theme};
 pub const BUTTON_HEIGHT: f32 = 40.0;
 /// The least a cart button shrinks to: room for the name and the detail line.
 pub const MIN_BUTTON_HEIGHT: f32 = 28.0;
+/// RL8, RL13: the least width of a cart button; a grid narrower than its
+/// columns at this width scrolls.
+pub const MIN_BUTTON_WIDTH: f32 = 56.0;
 /// Gap between cart buttons and below the header.
 pub const GAP: f32 = 6.0;
 

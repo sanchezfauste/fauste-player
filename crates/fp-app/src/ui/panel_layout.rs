@@ -4,7 +4,7 @@
 //! Pure and unit-tested; `ui/panels.rs` draws with it.
 
 use egui::{Rect, Vec2, pos2};
-use fp_model::layout::{Dock, Panel};
+use fp_model::layout::{DEFAULT_SIDE_SHARE, Dock, Panel};
 use fp_model::{AppState, Command, PlayerId, Transport};
 
 /// The gap between two panels; between two players it is a splitter
@@ -28,7 +28,7 @@ pub const SCROLL_BAR_ROOM: f32 = 16.0;
 /// resizable layout.
 pub const CONTENT_HEIGHT_CAP: f32 = 0.6;
 
-/// The cartwall's heights from its content (`cartwall::sizes`).
+/// The cartwall's sizes from its content (`cartwall::sizes`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CartwallSizes {
     /// What its content wants at the bottom: the header, or the header and
@@ -37,6 +37,12 @@ pub struct CartwallSizes {
     /// RL8: its least height: the header, or the header and the rows at the
     /// smallest button.
     pub min_height: f32,
+    /// RL8: its least width on a side: the larger of its header's fixed
+    /// parts and the shown page's columns at the smallest button.
+    pub min_width: f32,
+    /// RL14: while it is collapsed, its thickness (the header's height):
+    /// its height at the bottom, its width on a side. `None` while open.
+    pub collapsed: Option<f32>,
 }
 
 /// What the pass reads.
@@ -64,6 +70,13 @@ pub struct Arrangement {
     pub overflow: bool,
     /// The cartwall's rectangle; `None` while it is hidden.
     pub cartwall: Option<Rect>,
+    /// RL12: the gap between the players and the cartwall, its splitter;
+    /// `None` while the cartwall is hidden or no player is shown.
+    pub splitter: Option<Rect>,
+    /// RL13: the cartwall fits its content (at the bottom, without a share,
+    /// nothing maximised, a player shown): its buttons keep `BUTTON_HEIGHT`
+    /// at most. Otherwise they fill it.
+    pub fit_content: bool,
 }
 
 /// RL11: the pass. The cartwall first, then the players split the rest:
@@ -71,28 +84,69 @@ pub struct Arrangement {
 pub fn arrange(input: &PassInput<'_>) -> Arrangement {
     let layout = input.layout;
     let shown = layout.shown_players(input.players);
-    // A hidden panel is never maximised (RL16).
+    // A hidden panel is never maximised (RL16), nor a collapsed cartwall:
+    // it has nothing to fill the room with (RL14).
     let maximised = input.maximised.filter(|panel| match panel {
         Panel::Player(id) => shown.contains(id),
-        Panel::Cartwall => !layout.cartwall.hidden,
+        Panel::Cartwall => !layout.cartwall.hidden && input.cartwall.collapsed.is_none(),
     });
     let area = input.area;
+    let dock = layout.cartwall.dock;
     let (players_area, cartwall) = if layout.cartwall.hidden {
         (area, None)
-    } else if shown.is_empty() {
-        (Rect::from_min_size(area.min, Vec2::ZERO), Some(area))
     } else {
-        // Plan 3 makes this a `match` on `layout.cartwall.dock`, with an arm
-        // for the side docks; until then every dock is laid out here.
-        at_the_bottom(input, maximised)
+        match dock {
+            Dock::Bottom if shown.is_empty() => {
+                (Rect::from_min_size(area.min, Vec2::ZERO), Some(area))
+            }
+            Dock::Bottom => at_the_bottom(input, maximised),
+            Dock::Left | Dock::Right => on_a_side(input, maximised),
+        }
     };
+    let splitter = match cartwall {
+        Some(cart) if !shown.is_empty() => Some(gap_between(dock, players_area, cart)),
+        _ => None,
+    };
+    let fit_content = dock == Dock::Bottom
+        && !layout.cartwall.hidden
+        && !shown.is_empty()
+        && maximised.is_none()
+        && layout.cartwall.share().is_none();
     let (widths, overflow) = player_widths(input, &shown, players_area.width(), maximised);
     Arrangement {
         players_area,
         widths,
         overflow,
         cartwall,
+        splitter,
+        fit_content,
     }
+}
+
+/// RL8, RL11, RL12: the least and the most size, in points along its axis
+/// (its height at the bottom, its width on a side), that the open cartwall
+/// can take beside the shown players: its own minimum, and what leaves the
+/// players theirs (at the bottom `players_least_height`, with the scroll
+/// bar's strip of an overflowing row), never below its own minimum. `None`
+/// while it is hidden or collapsed, or with no player shown: then it has no
+/// size to choose.
+pub fn cartwall_range(input: &PassInput<'_>) -> Option<(f32, f32)> {
+    let layout = input.layout;
+    let sizes = input.cartwall;
+    let shown = layout.shown_players(input.players).len();
+    if layout.cartwall.hidden || sizes.collapsed.is_some() || shown == 0 {
+        return None;
+    }
+    let area = input.area;
+    let (least, most) = if layout.cartwall.dock.is_side() {
+        let count = shown as f32;
+        let players = count * MIN_PLAYER_WIDTH + (count - 1.0) * PANEL_GAP;
+        (sizes.min_width, area.width() - PANEL_GAP - players)
+    } else {
+        let players = players_least_height(spare_width(shown, area.width()) < -0.5);
+        (sizes.min_height, area.height() - PANEL_GAP - players)
+    };
+    Some((least, most.max(least)))
 }
 
 /// RL8: the players' row's least height: `MIN_PLAYER_HEIGHT`, and the
@@ -114,22 +168,23 @@ fn spare_width(count: usize, width: f32) -> f32 {
 }
 
 /// The cartwall under the players: its content height ("fit the content",
-/// exactly as before), or its share clamped between its minimum and what
-/// leaves the players their least height (`players_least_height`, RL8,
-/// RL11); its minimum next to
-/// a maximised player, everything but the players' least height when it is
-/// maximised itself (RL16).
+/// exactly as before, not clamped further), or its share clamped to
+/// `cartwall_range` (RL8, RL11); its least height next to a maximised
+/// player, its most when it is maximised itself (RL16); collapsed, only its
+/// header whatever its share (RL14).
 fn at_the_bottom(input: &PassInput<'_>, maximised: Option<Panel>) -> (Rect, Option<Rect>) {
     let area = input.area;
     let sizes = input.cartwall;
-    let shown = input.layout.shown_players(input.players).len();
-    let least = players_least_height(spare_width(shown, area.width()) < -0.5);
-    let room = area.height() - PANEL_GAP - least;
-    let height = match (maximised, input.layout.cartwall.share()) {
-        (Some(Panel::Cartwall), _) => room.max(sizes.min_height),
-        (Some(Panel::Player(_)), _) => sizes.min_height,
-        (None, None) => sizes.content_height.min(area.height() * CONTENT_HEIGHT_CAP),
-        (None, Some(share)) => (area.height() * share).min(room).max(sizes.min_height),
+    let height = match (
+        cartwall_range(input),
+        maximised,
+        input.layout.cartwall.share(),
+    ) {
+        (None, _, _) => sizes.content_height,
+        (Some((_, most)), Some(Panel::Cartwall), _) => most,
+        (Some((least, _)), Some(Panel::Player(_)), _) => least,
+        (Some(_), None, None) => sizes.content_height.min(area.height() * CONTENT_HEIGHT_CAP),
+        (Some((least, most)), None, Some(share)) => (area.height() * share).min(most).max(least),
     };
     let top = (area.bottom() - height).max(area.top());
     let cartwall = Rect::from_min_max(pos2(area.left(), top), area.max);
@@ -138,6 +193,63 @@ fn at_the_bottom(input: &PassInput<'_>, maximised: Option<Panel>) -> (Rect, Opti
         pos2(area.right(), (top - PANEL_GAP).max(area.top())),
     );
     (players, Some(cartwall))
+}
+
+/// RL6: the cartwall the full height of the area, on its side: its share of
+/// the width clamped to `cartwall_range` (RL8, RL11), its least width next
+/// to a maximised player, its most when maximised itself (RL16), the
+/// collapsed strip (RL14), or the whole area with no player shown. Never
+/// wider than the area; the players take what is left.
+fn on_a_side(input: &PassInput<'_>, maximised: Option<Panel>) -> (Rect, Option<Rect>) {
+    let area = input.area;
+    let layout = input.layout;
+    let width = match (input.cartwall.collapsed, cartwall_range(input), maximised) {
+        (Some(strip), _, _) => strip,
+        (None, None, _) => area.width(),
+        (None, Some((_, most)), Some(Panel::Cartwall)) => most,
+        (None, Some((least, _)), Some(Panel::Player(_))) => least,
+        (None, Some((least, most)), None) => {
+            let share = layout.cartwall.share().unwrap_or(DEFAULT_SIDE_SHARE);
+            (area.width() * share).min(most).max(least)
+        }
+    }
+    .min(area.width())
+    .max(0.0);
+    if layout.cartwall.dock == Dock::Right {
+        let left = area.right() - width;
+        let cart = Rect::from_min_max(pos2(left, area.top()), area.max);
+        let players = Rect::from_min_max(
+            area.min,
+            pos2((left - PANEL_GAP).max(area.left()), area.bottom()),
+        );
+        (players, Some(cart))
+    } else {
+        let right = area.left() + width;
+        let cart = Rect::from_min_max(area.min, pos2(right, area.bottom()));
+        let players = Rect::from_min_max(
+            pos2((right + PANEL_GAP).min(area.right()), area.top()),
+            area.max,
+        );
+        (players, Some(cart))
+    }
+}
+
+/// RL12: the gap between the players' row and the cartwall.
+fn gap_between(dock: Dock, players: Rect, cart: Rect) -> Rect {
+    match dock {
+        Dock::Bottom => Rect::from_min_max(
+            pos2(cart.left(), players.bottom()),
+            pos2(cart.right(), cart.top()),
+        ),
+        Dock::Left => Rect::from_min_max(
+            pos2(cart.right(), cart.top()),
+            pos2(players.left(), cart.bottom()),
+        ),
+        Dock::Right => Rect::from_min_max(
+            pos2(players.right(), cart.top()),
+            pos2(cart.left(), cart.bottom()),
+        ),
+    }
 }
 
 /// RL11: each shown player gets `MIN_PLAYER_WIDTH`, and the spare room of

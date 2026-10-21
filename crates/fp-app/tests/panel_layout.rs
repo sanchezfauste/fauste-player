@@ -12,8 +12,8 @@ use std::path::PathBuf;
 use egui::{Rect, pos2, vec2};
 use fp_app::ui::panel_layout::{
     Arrangement, CONTENT_HEIGHT_CAP, CartwallSizes, LiveSplit, MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH,
-    Maximised, PANEL_GAP, PassInput, SCROLL_BAR_ROOM, SHARE_FLOOR, arrange, drag_pair, pair_shares,
-    panel_on_air,
+    Maximised, PANEL_GAP, PassInput, SCROLL_BAR_ROOM, SHARE_FLOOR, arrange, cartwall_range,
+    drag_pair, pair_shares, panel_on_air,
 };
 use fp_model::layout::{Dock, Panel};
 use fp_model::{AppState, Command, Config, PlayerId, TrackAnalysis, apply};
@@ -24,11 +24,22 @@ fn full_hd() -> Rect {
     Rect::from_min_max(pos2(8.0, 42.0), pos2(1912.0, 1048.0))
 }
 
-/// A page of two rows: today's content height (24 + 6 + 2 × 40 + 6) and
-/// the least height (the rows at 28).
+/// A page of two rows of eight: today's content height (24 + 6 + 2 × 40 +
+/// 6), the least height (the rows at 28) and the least width (eight columns
+/// of 56 with seven gaps of 6); open.
 const SIZES: CartwallSizes = CartwallSizes {
     content_height: 116.0,
     min_height: 92.0,
+    min_width: 490.0,
+    collapsed: None,
+};
+
+/// The same cartwall collapsed: only its 24-point header.
+const COLLAPSED: CartwallSizes = CartwallSizes {
+    content_height: 24.0,
+    min_height: 24.0,
+    min_width: 490.0,
+    collapsed: Some(24.0),
 };
 
 /// The default state: four players.
@@ -156,6 +167,7 @@ fn rl11_fitting_the_content_is_capped_at_sixty_percent_as_before() {
     let tall = CartwallSizes {
         content_height: 900.0,
         min_height: 300.0,
+        ..SIZES
     };
     let a = pass_with(&s, full_hd(), tall, None);
     assert!(near(
@@ -437,5 +449,255 @@ fn rl16_maximise_ends_when_the_arrangement_changes() {
         let mut t = s.clone();
         apply(&mut t, command.clone()).unwrap();
         assert!(!m.holds(&t), "{command:?}");
+    }
+}
+
+// --- side docks (RL6, RL8, RL11, RL14, RL16)
+
+/// Two players: room for both beside a side cartwall at 1904 points.
+fn two() -> AppState {
+    let mut config = Config::default();
+    config.players.count = 2;
+    AppState::new(config, "Main")
+}
+
+fn docked(mut s: AppState, dock: Dock, size: Option<f32>) -> AppState {
+    s.layout.cartwall.dock = dock;
+    s.layout.cartwall.size = size;
+    s
+}
+
+fn range(s: &AppState, area: Rect, sizes: CartwallSizes) -> Option<(f32, f32)> {
+    let players = s.player_ids();
+    cartwall_range(&PassInput {
+        players: &players,
+        layout: &s.layout,
+        area,
+        cartwall: sizes,
+        maximised: None,
+    })
+}
+
+#[test]
+fn rl6_a_left_dock_is_the_full_height_on_the_left() {
+    let s = docked(two(), Dock::Left, Some(0.3));
+    let a = pass(&s, full_hd(), None);
+    let cart = a.cartwall.unwrap();
+    // 0.3 × 1904, between the least width (490) and what leaves two players
+    // theirs (1904 − 8 − 2 × 380 − 8).
+    assert!(near(cart.width(), 571.2), "{a:?}");
+    assert_eq!(
+        (cart.left(), cart.top(), cart.bottom()),
+        (8.0, 42.0, 1048.0)
+    );
+    assert!(
+        near(a.players_area.left(), cart.right() + PANEL_GAP),
+        "{a:?}"
+    );
+    assert_eq!(a.players_area.right(), 1912.0);
+    assert_eq!(
+        (a.players_area.top(), a.players_area.bottom()),
+        (42.0, 1048.0)
+    );
+    // The row is 1324.8 wide: 1324.8 − 8 − 2 × 380 = 556.8 spare, half each.
+    assert!(all_near(&widths(&a), &[658.4, 658.4]), "{a:?}");
+    assert!(!a.overflow);
+}
+
+#[test]
+fn rl6_a_right_dock_is_the_full_height_on_the_right() {
+    let s = docked(two(), Dock::Right, Some(0.3));
+    let a = pass(&s, full_hd(), None);
+    let cart = a.cartwall.unwrap();
+    assert!(near(cart.width(), 571.2), "{a:?}");
+    assert_eq!(
+        (cart.right(), cart.top(), cart.bottom()),
+        (1912.0, 42.0, 1048.0)
+    );
+    assert_eq!(a.players_area.left(), 8.0);
+    assert!(
+        near(a.players_area.right() + PANEL_GAP, cart.left()),
+        "{a:?}"
+    );
+    assert!(all_near(&widths(&a), &[658.4, 658.4]), "{a:?}");
+}
+
+#[test]
+fn rl6_a_side_dock_without_a_size_takes_the_default_share() {
+    let s = docked(two(), Dock::Left, None);
+    assert!(near(
+        pass(&s, full_hd(), None).cartwall.unwrap().width(),
+        571.2
+    ));
+}
+
+#[test]
+fn rl8_a_side_cartwall_keeps_its_least_width() {
+    let s = docked(two(), Dock::Left, Some(0.05));
+    let a = pass(&s, full_hd(), None);
+    assert!(near(a.cartwall.unwrap().width(), SIZES.min_width), "{a:?}");
+}
+
+#[test]
+fn rl11_a_side_share_leaves_the_players_their_minimum() {
+    let s = docked(two(), Dock::Left, Some(0.95));
+    let a = pass(&s, full_hd(), None);
+    // 1904 − 8 − (2 × 380 + 8)
+    assert!(near(a.cartwall.unwrap().width(), 1128.0), "{a:?}");
+    assert!(all_near(&widths(&a), &[MIN_PLAYER_WIDTH; 2]), "{a:?}");
+    assert!(!a.overflow);
+}
+
+#[test]
+fn rl11_too_narrow_a_window_on_a_side_keeps_the_cartwall_minimum() {
+    // Four players need 4 × 380 + 3 × 8 = 1544; with the cartwall's 490 and
+    // its gap that is 2042, more than 1904.
+    let s = docked(four(), Dock::Right, Some(0.3));
+    let a = pass(&s, full_hd(), None);
+    assert!(near(a.cartwall.unwrap().width(), SIZES.min_width), "{a:?}");
+    assert!(a.overflow);
+    assert!(all_near(&widths(&a), &[MIN_PLAYER_WIDTH; 4]), "{a:?}");
+    assert!(a.players_area.right() <= a.cartwall.unwrap().left() - PANEL_GAP + 0.01);
+}
+
+#[test]
+fn rl11_a_window_narrower_than_the_cartwall_minimum_gives_it_the_whole_width() {
+    let s = docked(two(), Dock::Left, Some(0.3));
+    let narrow = Rect::from_min_size(pos2(8.0, 42.0), vec2(400.0, 1006.0));
+    let a = pass(&s, narrow, None);
+    assert_eq!(a.cartwall, Some(narrow));
+    assert_eq!(a.players_area.width(), 0.0);
+    assert!(a.overflow);
+    assert!(widths(&a).iter().all(|w| w.is_finite()));
+}
+
+#[test]
+fn rl11_with_no_player_shown_a_side_cartwall_takes_the_middle_area() {
+    let mut s = docked(two(), Dock::Left, Some(0.3));
+    s.layout.hidden_players = s.player_ids();
+    let a = pass(&s, full_hd(), None);
+    assert_eq!(a.cartwall, Some(full_hd()));
+    assert!(a.widths.is_empty());
+    assert_eq!(a.splitter, None);
+}
+
+#[test]
+fn rl16_a_maximised_player_shrinks_a_side_cartwall_to_its_least_width() {
+    let s = docked(two(), Dock::Left, Some(0.3));
+    let p = s.player_ids();
+    let a = pass(&s, full_hd(), Some(Panel::Player(p[0])));
+    assert!(near(a.cartwall.unwrap().width(), SIZES.min_width), "{a:?}");
+    // The row is 1904 − 490 − 8 = 1406: 1406 − 8 − 760 = 638 spare, all P1's.
+    assert!(all_near(&widths(&a), &[1018.0, MIN_PLAYER_WIDTH]), "{a:?}");
+}
+
+#[test]
+fn rl16_a_maximised_side_cartwall_leaves_the_players_their_minimum() {
+    let s = docked(two(), Dock::Right, Some(0.3));
+    let a = pass(&s, full_hd(), Some(Panel::Cartwall));
+    assert!(near(a.cartwall.unwrap().width(), 1128.0), "{a:?}");
+    assert!(all_near(&widths(&a), &[MIN_PLAYER_WIDTH; 2]), "{a:?}");
+}
+
+#[test]
+fn rl12_the_cartwall_range_is_its_minimum_up_to_the_players_minimum() {
+    assert_eq!(
+        range(&four(), full_hd(), SIZES),
+        Some((92.0, 1006.0 - PANEL_GAP - MIN_PLAYER_HEIGHT))
+    );
+    assert_eq!(
+        range(&docked(two(), Dock::Left, None), full_hd(), SIZES),
+        Some((490.0, 1128.0))
+    );
+    let low = Rect::from_min_size(pos2(8.0, 42.0), vec2(1904.0, 400.0));
+    assert_eq!(
+        range(&four(), low, SIZES),
+        Some((92.0, 92.0)),
+        "never below its own minimum"
+    );
+    let mut s = four();
+    s.layout.cartwall.hidden = true;
+    assert_eq!(range(&s, full_hd(), SIZES), None, "hidden");
+    let mut s = four();
+    s.layout.hidden_players = s.player_ids();
+    assert_eq!(range(&s, full_hd(), SIZES), None, "no player shown");
+    assert_eq!(range(&four(), full_hd(), COLLAPSED), None, "collapsed");
+}
+
+#[test]
+fn rl12_the_cartwall_splitter_is_the_gap_beside_it() {
+    let a = pass(&four(), full_hd(), None);
+    assert_eq!(
+        a.splitter,
+        Some(Rect::from_min_max(pos2(8.0, 924.0), pos2(1912.0, 932.0)))
+    );
+    let a = pass(&docked(two(), Dock::Left, Some(0.3)), full_hd(), None);
+    let (cart, gap) = (a.cartwall.unwrap(), a.splitter.unwrap());
+    assert!(near(gap.left(), cart.right()) && near(gap.right(), a.players_area.left()));
+    assert_eq!((gap.top(), gap.bottom()), (42.0, 1048.0));
+    let a = pass(&docked(two(), Dock::Right, Some(0.3)), full_hd(), None);
+    let (cart, gap) = (a.cartwall.unwrap(), a.splitter.unwrap());
+    assert!(near(gap.left(), a.players_area.right()) && near(gap.right(), cart.left()));
+    let mut s = four();
+    s.layout.cartwall.hidden = true;
+    assert_eq!(pass(&s, full_hd(), None).splitter, None);
+}
+
+#[test]
+fn rl13_only_a_bottom_cartwall_without_a_share_fits_its_content() {
+    assert!(pass(&four(), full_hd(), None).fit_content);
+    let mut s = four();
+    s.layout.cartwall.size = Some(0.3);
+    assert!(!pass(&s, full_hd(), None).fit_content, "a share");
+    assert!(
+        !pass(&docked(two(), Dock::Left, None), full_hd(), None).fit_content,
+        "a side"
+    );
+    assert!(
+        !pass(&four(), full_hd(), Some(Panel::Cartwall)).fit_content,
+        "maximised"
+    );
+    let mut s = four();
+    s.layout.hidden_players = s.player_ids();
+    assert!(
+        !pass(&s, full_hd(), None).fit_content,
+        "alone, it fills the area"
+    );
+}
+
+#[test]
+fn rl14_collapsed_on_a_side_is_a_strip_as_wide_as_the_header_is_high() {
+    let s = docked(two(), Dock::Left, Some(0.4));
+    let a = pass_with(&s, full_hd(), COLLAPSED, None);
+    let cart = a.cartwall.unwrap();
+    assert!(near(cart.width(), 24.0), "{a:?}");
+    assert_eq!((cart.top(), cart.bottom()), (42.0, 1048.0));
+    assert!(near(a.players_area.left(), 8.0 + 24.0 + PANEL_GAP), "{a:?}");
+    assert!(a.splitter.is_some(), "the gap is still there");
+    assert_eq!(
+        range(&s, full_hd(), COLLAPSED),
+        None,
+        "but nothing to resize"
+    );
+    // Expanded, it has its share back: the model kept it.
+    let a = pass(&s, full_hd(), None);
+    assert!(near(a.cartwall.unwrap().width(), 0.4 * 1904.0), "{a:?}");
+}
+
+#[test]
+fn rl14_collapsed_at_the_bottom_is_its_header_whatever_its_share() {
+    let mut s = four();
+    s.layout.cartwall.size = Some(0.5);
+    let a = pass_with(&s, full_hd(), COLLAPSED, None);
+    assert!(near(a.cartwall.unwrap().height(), 24.0), "{a:?}");
+}
+
+#[test]
+fn rl14_a_collapsed_cartwall_is_never_maximised() {
+    for s in [four(), docked(two(), Dock::Right, None)] {
+        assert_eq!(
+            pass_with(&s, full_hd(), COLLAPSED, Some(Panel::Cartwall)),
+            pass_with(&s, full_hd(), COLLAPSED, None)
+        );
     }
 }

@@ -721,7 +721,7 @@ impl AppUi {
         // the layout into the players' row and the cartwall's rectangle.
         let inner = middle.shrink(8.0);
         let ids = state.player_ids();
-        let sizes = cartwall::sizes(&scene);
+        let sizes = cartwall::sizes(ui, &scene);
         let pass = |maximised: Option<fp_model::layout::Panel>| {
             panel_layout::arrange(&panel_layout::PassInput {
                 players: &ids,

@@ -37,6 +37,19 @@ need. Double-click the gap to give every player the same width again.
 When the window is too narrow for every shown player at its smallest, the
 players' row scrolls sideways, as it always has.
 
+## Move and resize the cartwall
+
+The cartwall sits under the players, or on the left or the right of the
+window at its full height: choose **Cartwall at the bottom**, **Cartwall on
+the left** or **Cartwall on the right** in [the layout menu](#the-layout-menu).
+Under the players it is as tall as its rows need, at most six tenths of the
+window; beside them it takes three tenths of the width at first.
+
+The cartwall is never narrower than its header (**Stop all**, its title and
+a page tab) or than its columns of buttons at their smallest. When the
+window is too narrow for it and every shown player at their smallest, the
+players' row scrolls sideways.
+
 ## Maximize a panel
 
 Right-click the background of a player's header, or of the cartwall's

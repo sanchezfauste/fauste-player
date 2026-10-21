@@ -10,16 +10,22 @@
 
 mod support;
 
+use std::path::PathBuf;
+
 use egui::accesskit::Role;
 use egui::{CursorIcon, Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::app::AppUi;
+use fp_app::ui::cart_view::{GAP, MIN_BUTTON_WIDTH};
 use fp_app::ui::controller::Controller;
 use fp_app::ui::panel_layout::{MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH, PANEL_GAP};
 use fp_app::ui::theme;
-use fp_model::layout::{Dock, Panel};
-use fp_model::{Command, KeyChord, PlayerId, Shortcut, ShortcutAction};
+use fp_model::layout::{CartwallLayout, Dock, Panel};
+use fp_model::{
+    AppState, CartEdit, CartKind, Command, KeyChord, PlayerId, Shortcut, ShortcutAction,
+    TrackAnalysis, apply,
+};
 use support::{Fake, harness, harness_sized, state};
 
 /// The shown players' columns in the last frame, in display order.
@@ -1110,4 +1116,200 @@ fn rl8_an_overflowing_row_keeps_three_rows_above_its_scroll_bar() {
     assert_eq!(h.state().maximised(), Some(Panel::Cartwall));
     let col = column(&h, fake.player(0));
     assert!(near(col.height(), MIN_PLAYER_HEIGHT - 2.0), "{col:?}");
+}
+
+// --- the cartwall's dock (RL6, RL8, RL11)
+
+fn docked(mut s: AppState, dock: Dock, size: Option<f32>) -> AppState {
+    s.layout.cartwall = CartwallLayout {
+        dock,
+        size,
+        hidden: false,
+    };
+    s
+}
+
+/// A window wide enough for two players beside a side cartwall at its
+/// default share (the middle area is 1968 × 810).
+fn wide(s: AppState) -> (Harness<'static, AppUi>, std::sync::Arc<Fake>) {
+    harness_sized(s, vec2(2000.0, 900.0), |ui| ui)
+}
+
+/// `s` with "Station ID" (10 s, a Jingle) in the first cart of the first
+/// page.
+fn with_station_id(mut s: AppState) -> AppState {
+    let page = s.cartwall.pages[0].id;
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path: PathBuf::from("/carts/id.wav"),
+        },
+    )
+    .unwrap();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(TrackAnalysis {
+                duration_secs: 10.0,
+                ..TrackAnalysis::default()
+            }),
+        },
+    )
+    .unwrap();
+    let edit = CartEdit {
+        name: "Station ID".into(),
+        kind: CartKind::Jingle,
+        looped: false,
+        exclusive: false,
+        color: None,
+    };
+    apply(
+        &mut s,
+        Command::SetCart {
+            page,
+            index: 0,
+            edit,
+        },
+    )
+    .unwrap();
+    s
+}
+
+/// `s` with a first page of `rows` × `cols`.
+fn with_grid(mut s: AppState, rows: u16, cols: u16) -> AppState {
+    let page = s.cartwall.pages[0].id;
+    apply(&mut s, Command::ResizeCartPage { page, rows, cols }).unwrap();
+    s
+}
+
+/// Eight columns of the smallest button with their gaps.
+fn eight_columns() -> f32 {
+    8.0 * MIN_BUTTON_WIDTH + 7.0 * GAP
+}
+
+#[test]
+fn rl6_a_left_dock_draws_the_cartwall_beside_the_players_at_full_height() {
+    let (h, fake) = wide(docked(state(2, 3), Dock::Left, Some(0.3)));
+    let cart = h.state().cartwall_rect().unwrap();
+    let (p1, p2) = (column(&h, fake.player(0)), column(&h, fake.player(1)));
+    assert!(near(p1.left(), cart.right() + PANEL_GAP), "{cart:?} {p1:?}");
+    assert!(near(cart.top(), p1.top()), "{cart:?} {p1:?}");
+    // A column is 2 points shorter than its row.
+    assert!(near(cart.bottom(), p1.bottom() + 2.0), "{cart:?} {p1:?}");
+    let area = p2.right() - cart.left();
+    assert!(near(cart.width(), 0.3 * area), "{cart:?} in {area}");
+}
+
+#[test]
+fn rl6_a_right_dock_draws_the_cartwall_right_of_the_players() {
+    let (h, fake) = wide(docked(state(2, 3), Dock::Right, Some(0.3)));
+    let cart = h.state().cartwall_rect().unwrap();
+    let (p1, p2) = (column(&h, fake.player(0)), column(&h, fake.player(1)));
+    assert!(near(cart.left(), p2.right() + PANEL_GAP), "{cart:?} {p2:?}");
+    assert!(near(cart.top(), p1.top()), "{cart:?} {p1:?}");
+    let area = cart.right() - p1.left();
+    assert!(near(cart.width(), 0.3 * area), "{cart:?} in {area}");
+}
+
+#[test]
+fn rl6_the_layout_menu_moves_the_cartwall() {
+    let (mut h, fake) = wide(state(2, 3));
+    let (p1, p2) = (fake.player(0), fake.player(1));
+    for (label, beside) in [
+        ("Cartwall on the left", Dock::Left),
+        ("Cartwall on the right", Dock::Right),
+        ("Cartwall at the bottom", Dock::Bottom),
+    ] {
+        open_layout_menu(&mut h);
+        h.get_by_role_and_label(Role::RadioButton, label).click();
+        h.run_steps(2);
+        let cart = h.state().cartwall_rect().unwrap();
+        let placed = match beside {
+            Dock::Left => cart.right() < column(&h, p1).left(),
+            Dock::Right => cart.left() > column(&h, p2).right(),
+            Dock::Bottom => cart.top() > column(&h, p1).bottom(),
+        };
+        assert!(placed, "{label}: {cart:?}");
+    }
+}
+
+#[test]
+fn rl11_a_side_dock_in_too_narrow_a_window_scrolls_the_players() {
+    for dock in [Dock::Left, Dock::Right] {
+        let (h, _) = harness(docked(state(2, 3), dock, Some(0.3)));
+        let cart = h.state().cartwall_rect().unwrap();
+        assert!(near(cart.width(), eight_columns()), "{dock:?} {cart:?}");
+        let c = columns(&h);
+        assert!(
+            c.iter().all(|(_, r)| near(r.width(), MIN_PLAYER_WIDTH)),
+            "{dock:?} {c:?}"
+        );
+        if dock == Dock::Left {
+            assert!(
+                c[0].1.left() >= cart.right(),
+                "nothing overlaps: {c:?} {cart:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn rl8_a_side_cartwall_is_never_narrower_than_its_grid() {
+    let (h, _) = wide(docked(state(2, 3), Dock::Left, Some(0.05)));
+    let cart = h.state().cartwall_rect().unwrap();
+    assert!(near(cart.width(), eight_columns()), "{cart:?}");
+    let eighth = h.get_all_by_label("Cart 8, empty").next().unwrap().rect();
+    assert!(near(eighth.width(), MIN_BUTTON_WIDTH), "{eighth:?}");
+    assert!(
+        eighth.right() <= cart.right() + 0.5,
+        "{eighth:?} in {cart:?}"
+    );
+}
+
+#[test]
+fn rl8_a_one_column_page_keeps_the_header_whole() {
+    let s = docked(with_grid(state(2, 3), 2, 1), Dock::Left, Some(0.05));
+    let (h, _) = wide(s);
+    let cart = h.state().cartwall_rect().unwrap();
+    assert!(
+        cart.width() < eight_columns(),
+        "the header sets it: {cart:?}"
+    );
+    let title = h.get_by_label("CARTWALL").rect();
+    let tab = h.get_by_label("Carts 1").rect();
+    let stop = h.get_by_label("Stop all").rect();
+    assert!(title.left() >= cart.left() - 0.5, "{title:?} in {cart:?}");
+    assert!(title.right() <= tab.left() + 0.5, "{title:?} {tab:?}");
+    assert!(tab.right() <= stop.left() + 0.5, "{tab:?} {stop:?}");
+    assert!(stop.right() <= cart.right() + 0.5, "{stop:?} in {cart:?}");
+}
+
+#[test]
+fn rl8_the_least_width_does_not_change_while_carts_play() {
+    let s = docked(
+        with_grid(with_station_id(state(2, 3)), 2, 1),
+        Dock::Left,
+        Some(0.05),
+    );
+    let (mut h, fake) = wide(s);
+    let before = h.state().cartwall_rect().unwrap();
+    let cart = fake.state.load().cartwall.pages[0].carts[0].id;
+    Controller::send(fake.as_ref(), Command::FireCart(cart));
+    h.run_steps(2);
+    assert!(h.query_by_label("Stop all (1)").is_some(), "a cart plays");
+    assert_eq!(h.state().cartwall_rect(), Some(before));
+}
+
+#[test]
+fn rl16_a_maximised_player_shrinks_a_side_cartwall_to_its_least_width() {
+    let (mut h, fake) = wide(docked(state(2, 3), Dock::Right, Some(0.3)));
+    let at = header_point(&h, fake.player(0));
+    maximise(&mut h, at);
+    let cart = h.state().cartwall_rect().unwrap();
+    assert!(near(cart.width(), eight_columns()), "{cart:?}");
+    assert!(near(column(&h, fake.player(1)).width(), MIN_PLAYER_WIDTH));
 }

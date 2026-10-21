@@ -1,4 +1,5 @@
-//! The cartwall strip under the players (Phase 2 spec P2.9, v3 layout).
+//! The cartwall panel (Phase 2 spec P2.9, v3 layout): under the players or
+//! on a side (resizable layout spec RL6, RL8, RL13, RL14).
 
 use egui::{Align, Color32, Layout, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use egui_phosphor::regular as icon;
@@ -7,8 +8,8 @@ use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
 use super::cart_view::{
-    BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, button_height, cart_look, cart_view,
-    page_on_air,
+    BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, MIN_BUTTON_WIDTH, button_height, cart_look,
+    cart_view, page_on_air,
 };
 use super::glyphs::{self, TransportAction};
 use super::panel_layout::CartwallSizes;
@@ -17,7 +18,10 @@ use super::view;
 use super::widgets::{self, TileStyle, WaveMemo, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
-const MIN_BUTTON_WIDTH: f32 = 56.0;
+/// The space between the header's parts.
+const HEADER_SPACING: f32 = 10.0;
+/// Stop all's icon.
+const STOP_ICON_WIDTH: f32 = 14.0;
 
 /// Height the strip needs, collapsed or open.
 pub(crate) fn height(scene: &Scene<'_>) -> f32 {
@@ -42,12 +46,72 @@ pub(crate) fn min_height(scene: &Scene<'_>) -> f32 {
     }
 }
 
-/// The heights the pixel pass needs (RL11).
-pub(crate) fn sizes(scene: &Scene<'_>) -> CartwallSizes {
+/// RL8: the cartwall's least width on a side: the larger of its header's
+/// fixed parts (Stop all, measured with a two-digit count so that it does
+/// not change while carts start and stop; the title with its caret; the
+/// narrowest page tab; the spaces between them and before the hint) and the
+/// shown page's columns at `MIN_BUTTON_WIDTH` with their gaps.
+pub(crate) fn min_width(ui: &Ui, scene: &Scene<'_>) -> f32 {
+    let t = scene.i18n;
+    let wall = &scene.state.cartwall;
+    let stop_all = stop_all_width(
+        ui,
+        &t.tr_args("cartwall-stop-all-count", &[("count", 99_usize.into())]),
+    );
+    let title = title_width(ui, &t.tr("cartwall-title"));
+    let tab = wall
+        .pages
+        .iter()
+        .enumerate()
+        .map(|(i, p)| tab_width(ui, &page_name(scene, i, &p.name)))
+        .reduce(f32::min)
+        .unwrap_or(0.0);
+    let header = stop_all + title + tab + 3.0 * HEADER_SPACING;
+    let cols = wall.shown_page().map_or(0, |p| p.cols);
+    let grid = if cols > 0 {
+        f32::from(cols) * MIN_BUTTON_WIDTH + f32::from(cols - 1) * GAP
+    } else {
+        0.0
+    };
+    header.max(grid)
+}
+
+/// The sizes the pixel pass needs (RL8, RL11, RL14).
+pub(crate) fn sizes(ui: &Ui, scene: &Scene<'_>) -> CartwallSizes {
     CartwallSizes {
         content_height: height(scene),
         min_height: min_height(scene),
+        min_width: min_width(ui, scene),
+        collapsed: (!scene.state.cartwall.open).then_some(HEADER_HEIGHT),
     }
+}
+
+/// Stop all's width for `label`.
+fn stop_all_width(ui: &Ui, label: &str) -> f32 {
+    let text = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font(10.0), theme::TEXT)
+        .size()
+        .x;
+    6.0 + STOP_ICON_WIDTH + 4.0 + text + 8.0
+}
+
+/// The width of the title tile (the caret and CARTWALL).
+fn title_width(ui: &Ui, title: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(title.to_owned(), font(10.0), theme::NEUTRAL_300)
+        .size()
+        .x
+        + 24.0
+}
+
+/// A page tab's width.
+fn tab_width(ui: &Ui, name: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(name.to_owned(), font(11.0), theme::TEXT)
+        .size()
+        .x
+        + 32.0
 }
 
 /// The name shown for a page: its own, or "Carts n" while it has none.
@@ -87,24 +151,19 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         vec2(ui.available_width(), HEADER_HEIGHT),
         Layout::right_to_left(Align::Center),
         |ui| {
-            ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
+            ui.spacing_mut().item_spacing = vec2(HEADER_SPACING, 0.0);
             // First, so that it is always at the right end and always whole;
             // the title, tabs and hint take what is left of the row.
             stop_all(ui, scene);
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
+                ui.spacing_mut().item_spacing = vec2(HEADER_SPACING, 0.0);
                 let title = t.tr("cartwall-title");
                 let caret = if wall.open {
                     icon::CARET_DOWN
                 } else {
                     icon::CARET_RIGHT
                 };
-                let width = ui
-                    .painter()
-                    .layout_no_wrap(title.clone(), font(10.0), theme::NEUTRAL_300)
-                    .size()
-                    .x
-                    + 24.0;
+                let width = title_width(ui, &title);
                 let style = TileStyle {
                     border: Color32::TRANSPARENT,
                     hover_fill: Color32::TRANSPARENT,
@@ -143,7 +202,6 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
 /// "Stop all (n)": stops every playing cart (spec O19). Dimmed, and without
 /// a count, while no cart is playing. The count is the whole cartwall's.
 fn stop_all(ui: &mut Ui, scene: &Scene<'_>) {
-    const ICON_WIDTH: f32 = 14.0;
     let t = scene.i18n;
     let playing = scene.state.cartwall.playing.len();
     let label = if playing == 0 {
@@ -151,12 +209,7 @@ fn stop_all(ui: &mut Ui, scene: &Scene<'_>) {
     } else {
         t.tr_args("cartwall-stop-all-count", &[("count", playing.into())])
     };
-    let text_width = ui
-        .painter()
-        .layout_no_wrap(label.clone(), font(10.0), theme::TEXT)
-        .size()
-        .x;
-    let width = 6.0 + ICON_WIDTH + 4.0 + text_width + 8.0;
+    let width = stop_all_width(ui, &label);
     let clicked = widgets::tile(
         ui,
         vec2(width, 20.0),
@@ -164,8 +217,10 @@ fn stop_all(ui: &mut Ui, scene: &Scene<'_>) {
         playing > 0,
         TileStyle::plain(),
         |p, r, c| {
-            let icon_rect =
-                Rect::from_min_size(pos2(r.left() + 6.0, r.top()), vec2(ICON_WIDTH, r.height()));
+            let icon_rect = Rect::from_min_size(
+                pos2(r.left() + 6.0, r.top()),
+                vec2(STOP_ICON_WIDTH, r.height()),
+            );
             glyphs::paint(p, icon_rect, TransportAction::Stop, 11.0, c);
             p.text(
                 pos2(icon_rect.right() + 4.0, r.center().y),
@@ -207,12 +262,7 @@ fn tabs(ui: &mut Ui, scene: &Scene<'_>) {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                 for (id, name, on_air) in pages {
                     let on = Some(id) == shown;
-                    let width = ui
-                        .painter()
-                        .layout_no_wrap(name.clone(), font(11.0), theme::TEXT)
-                        .size()
-                        .x
-                        + 32.0;
+                    let width = tab_width(ui, &name);
                     let style = TileStyle {
                         fill: theme::NEUTRAL_900,
                         border: theme::NEUTRAL_800,

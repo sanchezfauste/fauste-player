@@ -47,18 +47,30 @@ top bar (`TOP_BAR_HEIGHT`), the status bar and the middle area, and the
 middle area (inside an 8-point margin) goes through the pure pixel pass
 `panel_layout::arrange`. Its `PassInput` is every player id in display
 order, the model's `Layout`, the area, the cartwall's `CartwallSizes`
-(`cartwall::sizes`: its content height and its least height, the rows at
-`MIN_BUTTON_HEIGHT`) and the maximized panel; its `Arrangement` is the
-players' row, each shown player's width, whether the row overflows, and
-the cartwall's rectangle (`None` while it is hidden).
+(`cartwall::sizes`: its content height, its least height, its least width
+and its thickness while collapsed) and the maximized panel; its
+`Arrangement` is the players' row, each shown player's width, whether the
+row overflows, the cartwall's rectangle (`None` while it is hidden), the
+splitter beside it and whether it fits its content.
 
-- **The cartwall** (at the bottom): with `size: None` it fits its content
-  as before, at most `CONTENT_HEIGHT_CAP` (60 %) of the area; a share is
-  clamped between its least height and what leaves the players
-  `panel_layout::players_least_height`: `MIN_PLAYER_HEIGHT`, plus
+- **The cartwall** has a range, `panel_layout::cartwall_range`: from its
+  least size (RL8: at the bottom `min_height`, the header and the rows at
+  `MIN_BUTTON_HEIGHT`; on a side `min_width`, from `cartwall::min_width`:
+  the larger of the header's fixed parts, Stop all measured with a
+  two-digit count, and the page's columns at `MIN_BUTTON_WIDTH` with their
+  gaps) to what leaves the shown players their minimum: at the bottom
+  `panel_layout::players_least_height` (`MIN_PLAYER_HEIGHT`, plus
   `SCROLL_BAR_ROOM` when the row overflows, so three rows still fit above
-  the scroll bar. With no player shown it takes the whole area. The
-  side docks are laid out at the bottom for now.
+  the scroll bar), on a side `MIN_PLAYER_WIDTH` each with their gaps; never
+  below the least size. At the bottom with `size: None` it fits its
+  content as before, at most `CONTENT_HEIGHT_CAP` (60 %) of the area,
+  unclamped; a share is clamped to the range. On a side (`on_a_side`) it is
+  the full height of the area and its share of the width
+  (`CartwallLayout::share`, 0.3 by default) is clamped to the range; the
+  players take the rest of the width, and only they scroll when it is too
+  narrow. It is never wider than the area. With no player shown it takes
+  the whole area. `Arrangement::splitter` is the gap beside it (none while
+  it is hidden or no player is shown).
 - **The players** each get `MIN_PLAYER_WIDTH` first; the spare room is
   split by `Layout::shown_fractions`. When the minimums alone do not fit
   (by more than half a point) every column is at its minimum and the row
