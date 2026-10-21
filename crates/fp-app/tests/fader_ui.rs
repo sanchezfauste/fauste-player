@@ -402,3 +402,56 @@ fn the_scale_labels_do_not_overlap() {
         assert!(w[0].bottom() + 1.0 <= w[1].top(), "{:?} {:?}", w[0], w[1]);
     }
 }
+
+/// Presses at `from` and moves through `stops` without releasing; returns the
+/// travel after each stop.
+fn drag_through(h: &mut H, fake: &Fake, from: egui::Pos2, stops: &[egui::Pos2]) -> Vec<f32> {
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    button(h, from, true, Modifiers::NONE);
+    h.run_steps(1);
+    let mut at = from;
+    let mut out = Vec::new();
+    for &to in stops {
+        for i in 1..=10 {
+            h.event(Event::PointerMoved(at + (to - at) * (i as f32 / 10.0)));
+            h.run_steps(1);
+        }
+        at = to;
+        out.push(travel(fake));
+    }
+    button(h, at, false, Modifiers::NONE);
+    h.run_steps(2);
+    out
+}
+
+#[test]
+fn a_drag_past_the_top_and_back_keeps_the_knob_at_the_limit_until_the_pointer_returns() {
+    let (mut h, fake) = at(0.9, false);
+    let r = fader_rect(&h);
+    let start = pos2(r.center().x, r.center().y);
+    let up = (0.1 * travel_px(&h)) + 200.0;
+    let top = start + egui::vec2(0.0, -up);
+    let back50 = top + egui::vec2(0.0, 50.0);
+    let back_more = top + egui::vec2(0.0, 200.0 + 30.0);
+    let t = drag_through(&mut h, &fake, start, &[top, back50, back_more]);
+    assert!((t[0] - 1.0).abs() < 1e-4, "{t:?}");
+    assert!((t[1] - 1.0).abs() < 1e-4, "{t:?}");
+    // 30 px beyond the 200 px of overshoot: follows without offset.
+    assert!((t[2] - (1.0 - 30.0 / travel_px(&h))).abs() < 0.01, "{t:?}");
+}
+
+#[test]
+fn a_drag_past_the_bottom_and_back_keeps_the_knob_at_the_limit_until_the_pointer_returns() {
+    let (mut h, fake) = at(0.1, false);
+    let r = fader_rect(&h);
+    let start = pos2(r.center().x, r.center().y);
+    let down = (0.1 * travel_px(&h)) + 200.0;
+    let bottom = start + egui::vec2(0.0, down);
+    let back50 = bottom - egui::vec2(0.0, 50.0);
+    let back_more = bottom - egui::vec2(0.0, 230.0);
+    let t = drag_through(&mut h, &fake, start, &[bottom, back50, back_more]);
+    assert!(t[0].abs() < 1e-4, "{t:?}");
+    assert!(t[1].abs() < 1e-4, "{t:?}");
+    assert!((t[2] - 30.0 / travel_px(&h)).abs() < 0.01, "{t:?}");
+}
