@@ -17,7 +17,7 @@
 | `ui/view.rs` (`row_is_next`) | O37: `player.next == Some(entry)` whatever the row's `RowStatus`, so the playing row also draws the next arrow when it is its own next; the double-click stays a no-op on it and the context menu's Set as next is enabled there |
 | `ui/tab_strip.rs` | The pure layout of the playlist tabs (O35; the "+" new-playlist button takes the end of the strip, so the tabs and arrows are laid out in the strip less `ADD_TAB_WIDTH`; its popup sends `Command::CreatePlaylistIn`, rule 29): `layout` (tab width, overflow, view width), `clamp_offset`, `reveal`, `step`; unit-tested. `tabs` in `player.rs` draws them clipped to the view, with arrows and the wheel; the scroll lives in `ViewState::tab_scroll` per player, and the shown tab is revealed again only when the key (shown playlist, tab count, view width) changes, so the operator's scrolling is not undone every frame |
 | `ui/table_layout.rs` | The pure widths of the table's columns: `column_min`, `fit`, `column_px`, `resize_px`, `fractions_of`, and the drop geometry of an entry drag (operator feedback 4, Q4): `drop_index` (pointer, the scroll area's visible rect, its scroll offset, `ROW_HEIGHT` and the entry count give the boundary index, or `None` over the header, a column resize grab zone, the scroll bar, outside the body), `boundary_y` (the boundary's y, `None` outside the view) and `on_column_edge`; and the edge scroll of a drag, `drag_scroll_speed` (points per second, negative up: zero outside the body and outside the edge zones, `DRAG_SCROLL_EDGE` = 36 points or a third of a shorter body, ramping linearly up to `DRAG_SCROLL_MAX_SPEED` = 900 points per second at the edge); unit-tested |
-| `ui/panel_layout.rs` | The main window's pure pixel pass (resizable layout spec RL11): RL8's interface constants (`MIN_PLAYER_WIDTH`, `MIN_PLAYER_HEIGHT`, `PANEL_GAP`, `CONTENT_HEIGHT_CAP`) and `arrange`, which turns a `PassInput` (the players, the model's layout, the middle area, the cartwall's `CartwallSizes`, the maximised panel) into an `Arrangement` (the players' row, each shown player's width, the overflow, the cartwall's rectangle); see [Main window layout](#main-window-layout); unit-tested |
+| `ui/panel_layout.rs` | The main window's pure pixel pass (resizable layout spec RL11): RL8's interface constants (`MIN_PLAYER_WIDTH`, `MIN_PLAYER_HEIGHT`, `PANEL_GAP`, `CONTENT_HEIGHT_CAP`, `SCROLL_BAR_ROOM`) and `arrange`, which turns a `PassInput` (the players, the model's layout, the middle area, the cartwall's `CartwallSizes`, the maximized panel) into an `Arrangement` (the players' row, each shown player's width, the overflow, the cartwall's rectangle); see [Main window layout](#main-window-layout); unit-tested |
 | `ui/panels.rs` | The main window's panels (resizable layout spec): `players_row` draws the shown players at the pass's widths, each column keyed by its `PlayerId`; see [Main window layout](#main-window-layout) |
 | `ui/reset_played.rs` | The Reset played question (O22): `show` returns `Some(true)`, `Some(false)` or `None`; the footer button in `player.rs` sets `ViewState::confirm_reset`, `AppUi` draws it below the close guard and sends `Command::ResetPlayed`; Esc and a deleted playlist close it; no shortcut or file drop acts under it |
 | `ui/settings.rs` | The Settings modal (its text buttons all come from `widgets::text_button`: the painted text plus `SETTINGS_BUTTON_PAD` on each side, `SETTINGS_BUTTON_HEIGHT` high; `text_button_at_least` for buttons sharing a column width) (outputs, players and language, analysis, playlists and their table columns). Players shows `settings-players-bit-perfect-note` under the fade time and automatic mix while any player is a bit-perfect player; both settings stay editable (BR15) |
@@ -48,19 +48,22 @@ middle area (inside an 8-point margin) goes through the pure pixel pass
 `panel_layout::arrange`. Its `PassInput` is every player id in display
 order, the model's `Layout`, the area, the cartwall's `CartwallSizes`
 (`cartwall::sizes`: its content height and its least height, the rows at
-`MIN_BUTTON_HEIGHT`) and the maximised panel; its `Arrangement` is the
+`MIN_BUTTON_HEIGHT`) and the maximized panel; its `Arrangement` is the
 players' row, each shown player's width, whether the row overflows, and
 the cartwall's rectangle (`None` while it is hidden).
 
 - **The cartwall** (at the bottom): with `size: None` it fits its content
   as before, at most `CONTENT_HEIGHT_CAP` (60 %) of the area; a share is
   clamped between its least height and what leaves the players
-  `MIN_PLAYER_HEIGHT`. With no player shown it takes the whole area. The
+  `panel_layout::players_least_height`: `MIN_PLAYER_HEIGHT`, plus
+  `SCROLL_BAR_ROOM` when the row overflows, so three rows still fit above
+  the scroll bar. With no player shown it takes the whole area. The
   side docks are laid out at the bottom for now.
 - **The players** each get `MIN_PLAYER_WIDTH` first; the spare room is
   split by `Layout::shown_fractions`. When the minimums alone do not fit
   (by more than half a point) every column is at its minimum and the row
-  scrolls horizontally (`panels::players_row`).
+  scrolls horizontally (`panels::players_row`), with its scroll bar in a
+  strip of `SCROLL_BAR_ROOM` under the columns.
 - A column's egui id is `("player", PlayerId)`, so hiding a player never
   hands its table's scroll or its popups to its neighbour; its label is
   still `P<n>` from its place among all players.
@@ -69,7 +72,8 @@ the cartwall's rectangle (`None` while it is hidden).
 
 **Splitters** (RL12). The 8-point gap between two shown players is a
 splitter (`panels::player_splitter` over the generic `panels::splitter`,
-which senses `click_and_drag`, so a click is never a drag, shows the resize
+which senses clicks and drags (`Sense::CLICK | Sense::DRAG`, not
+focusable, so it is no Tab stop; a click is never a drag), shows the resize
 cursor and paints a line only while hovered or dragged, and senses nothing
 while the layout is locked). A drag lives in `ViewState::live_split`
 (`panel_layout::LiveSplit`): `drag_pair` moves the pair with the pointer
@@ -81,11 +85,18 @@ minimum sends `SHARE_FLOOR` of the pair's room, as the model refuses 0), so
 the next pass draws exactly the dragged widths. The released widths are
 held until the model's shares change or `HOLD_SECS` pass, as the table's
 column resize does; a change in the shown players or the row's width ends
-the drag. A double-click sends `EqualPlayerWidths`.
+the drag. Only a primary-button drag starts one. A double-click sends
+`EqualPlayerWidths`.
 
-**Top bar** (RL15). `panels::layout_controls`, on the left of `top_bar`,
-draws one tile per player (`player-label`, its place among all players) and
-one for the cartwall (`layout-panel-carts`), lit while shown; a click sends
+**Top bar** (RL15). `top_bar` lays out its right-hand block (the clock,
+Settings, About, the pending tile) first, from the right end, and passes
+where it begins to `panels::layout_controls`, which draws one tile per
+player (`player-label`, its place among all players) and one for the
+cartwall (`layout-panel-carts`, the locale's `-cartwall` term, the word
+`cartwall-title` shows in capitals), lit while shown, in a horizontal
+`ScrollArea` (salt `panel-tiles`) bounded to the room left of that block;
+the layout button follows the scroll area, so it is always reachable. The
+player ids and the shown-panel count are worked out once per frame; a click sends
 `SetPanelHidden`. A tile's accessible label and tooltip say what a click
 does (`tip-layout-hide`, `tip-layout-show`, `tip-layout-show-on-air`); the
 last shown panel's tile and every tile of a locked layout are disabled,
@@ -98,18 +109,19 @@ and Reset layout; while locked every entry but the lock is disabled. While
 the cartwall is hidden, the `ToggleCartwall` shortcut maps to no command
 (`shortcut_command`).
 
-**Maximise** (RL16). `ViewState::maximised` holds a `panel_layout::Maximised`
+**Maximize** (RL16). `ViewState::maximised` holds a `panel_layout::Maximised`
 (the panel and an `ArrangementKey`: the players, the hidden panels, the
 dock and the lock); it is never saved and sends no command. The pass gives
-a maximised player all the spare width and the others their minimum, and
-shrinks the bottom cartwall to its least height; a maximised bottom
-cartwall leaves the players `MIN_PLAYER_HEIGHT`. `panels::settle_view`,
+a maximized player all the spare width and the others their minimum, and
+shrinks the bottom cartwall to its least height; a maximized bottom
+cartwall leaves the players their least height. `panels::settle_view`,
 called before the keyboard, ends it when the key changed. A splitter drag
-ends it and starts from the pass without it (`AppUi::ui` runs the pass a
-second time, `normal`, while a panel is maximised). The headers' background
-(an `interact` with `Sense::click` added before the header's tiles, so the
-tiles keep their clicks) opens `panels::header_menu`: Maximise or Restore,
-and Hide; both disabled while locked, Maximise also with one panel shown.
+or double-click ends it; a drag starts from the pass without it (`AppUi::ui` runs the pass a
+second time, `normal`, while a panel is maximized). The headers' background
+(an `interact` with `Sense::CLICK`, not focusable, added before the
+header's tiles, so the tiles keep their clicks) opens `panels::header_menu`:
+Maximize or Restore, and Hide; both disabled while locked, Maximize also
+with one panel shown.
 
 **Hidden players** (RL17, RL18). `panels::settle_view` also drops the
 `ViewState::selection` of every hidden player and clears `active_player`

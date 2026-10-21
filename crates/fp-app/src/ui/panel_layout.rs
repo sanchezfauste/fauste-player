@@ -19,6 +19,10 @@ pub const MIN_PLAYER_WIDTH: f32 = 380.0;
 /// footer (430 points, borders and margins included), and the 2 points the
 /// row keeps under each column.
 pub const MIN_PLAYER_HEIGHT: f32 = 432.0;
+/// RL8, RL11: the strip an overflowing players' row keeps under its
+/// columns for the horizontal scroll bar: egui's bar (10 points wide, 4 of
+/// inner margin) and 2 points of air.
+pub const SCROLL_BAR_ROOM: f32 = 16.0;
 /// RL13 ("fit the content"): a bottom cartwall that fits its content never
 /// takes more than this share of the middle area's height, as before the
 /// resizable layout.
@@ -91,15 +95,36 @@ pub fn arrange(input: &PassInput<'_>) -> Arrangement {
     }
 }
 
+/// RL8: the players' row's least height: `MIN_PLAYER_HEIGHT`, and the
+/// scroll bar's strip when the row overflows (so three rows still fit
+/// above the bar).
+pub fn players_least_height(overflow: bool) -> f32 {
+    if overflow {
+        MIN_PLAYER_HEIGHT + SCROLL_BAR_ROOM
+    } else {
+        MIN_PLAYER_HEIGHT
+    }
+}
+
+/// RL11: what is left of `width` once `count` players have their minimum
+/// width and the gaps between them; below 0 they do not fit.
+fn spare_width(count: usize, width: f32) -> f32 {
+    let count = count as f32;
+    width - PANEL_GAP * (count - 1.0).max(0.0) - MIN_PLAYER_WIDTH * count
+}
+
 /// The cartwall under the players: its content height ("fit the content",
 /// exactly as before), or its share clamped between its minimum and what
-/// leaves the players `MIN_PLAYER_HEIGHT` (RL8, RL11); its minimum next to
+/// leaves the players their least height (`players_least_height`, RL8,
+/// RL11); its minimum next to
 /// a maximised player, everything but the players' least height when it is
 /// maximised itself (RL16).
 fn at_the_bottom(input: &PassInput<'_>, maximised: Option<Panel>) -> (Rect, Option<Rect>) {
     let area = input.area;
     let sizes = input.cartwall;
-    let room = area.height() - PANEL_GAP - MIN_PLAYER_HEIGHT;
+    let shown = input.layout.shown_players(input.players).len();
+    let least = players_least_height(spare_width(shown, area.width()) < -0.5);
+    let room = area.height() - PANEL_GAP - least;
     let height = match (maximised, input.layout.cartwall.share()) {
         (Some(Panel::Cartwall), _) => room.max(sizes.min_height),
         (Some(Panel::Player(_)), _) => sizes.min_height,
@@ -129,8 +154,7 @@ fn player_widths(
     if shown.is_empty() {
         return (Vec::new(), false);
     }
-    let count = shown.len() as f32;
-    let spare = width - PANEL_GAP * (count - 1.0) - MIN_PLAYER_WIDTH * count;
+    let spare = spare_width(shown.len(), width);
     if spare <= 0.0 {
         let widths = shown.iter().map(|p| (*p, MIN_PLAYER_WIDTH)).collect();
         return (widths, spare < -0.5);

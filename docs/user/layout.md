@@ -10,7 +10,8 @@ under them.
 
 The tiles on the left of the top bar, **P1** … **Pn** and **Cartwall**, show
 which panels are on screen: a lit tile is shown. Click a tile to hide or
-show its panel. The other panels take the room it leaves, and a player
+show its panel. With many players, the tiles scroll sideways (scroll the
+mouse wheel over them) and the layout button stays in view. The other panels take the room it leaves, and a player
 shown again comes back at its width.
 
 Hiding only takes a panel off the screen. A hidden player keeps playing,

@@ -919,3 +919,195 @@ fn rl18_with_no_player_shown_a_drop_is_refused_with_a_notice() {
             .is_some()
     );
 }
+
+// --- review fixes
+
+/// Where each painted text that `wanted` accepts is visible: its bounds
+/// cut to its clip rectangle (empty when it is scrolled out of sight).
+fn visible_texts(h: &Harness<'_, AppUi>, wanted: impl Fn(&str) -> bool) -> Vec<(String, Rect)> {
+    fn walk(
+        shape: &egui::Shape,
+        clip: Rect,
+        wanted: &dyn Fn(&str) -> bool,
+        out: &mut Vec<(String, Rect)>,
+    ) {
+        match shape {
+            egui::Shape::Text(t) if wanted(t.galley.text()) => {
+                let r = t.visual_bounding_rect().intersect(clip);
+                if r.is_positive() {
+                    out.push((t.galley.text().to_owned(), r));
+                }
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, wanted, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, clipped.clip_rect, &wanted, &mut out);
+    }
+    out
+}
+
+#[test]
+fn rl15_many_tiles_stay_clear_of_the_clock_and_the_buttons() {
+    let (h, _) = harness_sized(state(32, 3), vec2(1280.0, 700.0), |ui| ui);
+    let settings = h.get_by_label("Settings").rect();
+    let about = h.get_by_label("About Fauste Player").rect();
+    // The clock is right of Settings: everything from the leftmost button
+    // to the window's right edge belongs to them.
+    let right_block = settings.left().min(about.left());
+    // The tiles' names painted in the top bar (the columns' headers show
+    // `P<n>` too, lower down).
+    let tiles: Vec<(String, Rect)> = visible_texts(&h, |s| {
+        s == "Cartwall" || (s.starts_with('P') && s[1..].parse::<u32>().is_ok())
+    })
+    .into_iter()
+    .filter(|(_, r)| r.center().y < settings.bottom())
+    .collect();
+    assert!(tiles.iter().any(|(s, _)| s == "P1"), "{tiles:?}");
+    for (text, r) in &tiles {
+        assert!(
+            r.right() <= right_block,
+            "{text} at {r:?} reaches {right_block}"
+        );
+    }
+    let layout = h.get_by_label("Layout").rect();
+    assert!(
+        layout.left() >= 0.0 && layout.right() <= right_block,
+        "{layout:?}"
+    );
+    assert!(
+        tiles.iter().all(|(_, r)| r.right() <= layout.left()),
+        "the layout button is right of the visible tiles"
+    );
+}
+
+#[test]
+fn rl12_splitters_and_header_backgrounds_are_no_tab_stops() {
+    let (mut h, fake) = harness(state(2, 3));
+    let (p1, p2) = (fake.player(0), fake.player(1));
+    let inert = [
+        egui::Id::new(("player-splitter", p1.0, p2.0)),
+        egui::Id::new(("player-header", p1.0)),
+        egui::Id::new(("player-header", p2.0)),
+        egui::Id::new("cartwall-header"),
+    ];
+    let mut focused = Vec::new();
+    for _ in 0..150 {
+        h.key_press(Key::Tab);
+        h.run_steps(1);
+        if let Some(id) = h.ctx.memory(|m| m.focused()) {
+            focused.push(id);
+        }
+    }
+    assert!(!focused.is_empty(), "Tab moves the focus");
+    for id in inert {
+        assert!(!focused.contains(&id), "{id:?} took the focus");
+    }
+}
+
+#[test]
+fn rl16_only_a_primary_drag_on_a_splitter_ends_a_maximise() {
+    let (mut h, fake) = harness(state(2, 3));
+    let p1 = fake.player(0);
+    let at = header_point(&h, p1);
+    maximise(&mut h, at);
+    let from = splitter_at(&h, p1);
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    press(&mut h, from, PointerButton::Secondary, true);
+    h.run_steps(1);
+    for step in 1..=6 {
+        h.event(Event::PointerMoved(pos2(
+            from.x + 10.0 * step as f32,
+            from.y,
+        )));
+        h.run_steps(1);
+    }
+    press(
+        &mut h,
+        pos2(from.x + 60.0, from.y),
+        PointerButton::Secondary,
+        false,
+    );
+    h.run_steps(2);
+    assert_eq!(h.state().maximised(), Some(Panel::Player(p1)));
+    assert!(layout_commands(&fake).is_empty());
+}
+
+#[test]
+fn rl16_a_double_click_on_a_splitter_ends_a_maximise() {
+    let (mut h, fake) = harness(state(2, 3));
+    let p1 = fake.player(0);
+    let at = header_point(&h, p1);
+    maximise(&mut h, at);
+    // Past egui's triple-click window (twice the double-click delay), so
+    // the menu's clicks do not make the double click a triple one.
+    h.run_steps(40);
+    let at = splitter_at(&h, p1);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    click_at(&mut h, at);
+    click_at(&mut h, at);
+    h.run_steps(2);
+    assert_eq!(width_commands(&fake), vec![Command::EqualPlayerWidths]);
+    assert_eq!(h.state().maximised(), None);
+}
+
+#[test]
+fn rl16_showing_a_panel_ends_a_maximise() {
+    let mut s = state(3, 3);
+    let p = s.player_ids();
+    s.layout.hidden_players = vec![p[2]];
+    let (mut h, _) = harness_sized(s, vec2(1400.0, 700.0), |ui| ui);
+    let at = header_point(&h, p[0]);
+    maximise(&mut h, at);
+    assert_eq!(h.state().maximised(), Some(Panel::Player(p[0])));
+    h.get_by_label("Show P3").click();
+    h.run_steps(2);
+    assert_eq!(h.state().maximised(), None);
+}
+
+#[test]
+fn rl16_a_right_click_on_a_tile_opens_no_header_menu() {
+    let (mut h, _) = harness(state(2, 3));
+    let at = h.get_by_label("Hide P1").rect().center();
+    right_click(&mut h, at);
+    assert!(h.query_by_label("Maximize").is_none());
+    assert!(h.query_by_label("Restore").is_none());
+}
+
+#[test]
+fn rl12_a_refused_drag_snaps_back_after_the_hold() {
+    let (mut h, fake) = harness(state(2, 3));
+    let (p1, p2) = (fake.player(0), fake.player(1));
+    let before = (column(&h, p1).width(), column(&h, p2).width());
+    fake.hold.store(true, std::sync::atomic::Ordering::SeqCst);
+    let from = splitter_at(&h, p1);
+    drag_by(&mut h, &fake, from, 60.0);
+    press(
+        &mut h,
+        pos2(from.x + 60.0, from.y),
+        PointerButton::Primary,
+        false,
+    );
+    h.run_steps(3);
+    assert_eq!(width_commands(&fake).len(), 1);
+    assert!(near(column(&h, p1).width(), before.0 + 60.0), "held");
+    h.run_steps(40);
+    assert!(
+        near(column(&h, p1).width(), before.0) && near(column(&h, p2).width(), before.1),
+        "the model's widths come back"
+    );
+}
+
+#[test]
+fn rl8_an_overflowing_row_keeps_three_rows_above_its_scroll_bar() {
+    let (mut h, fake) = harness(state(4, 3));
+    let at = cartwall_header_point(&h);
+    maximise(&mut h, at);
+    assert_eq!(h.state().maximised(), Some(Panel::Cartwall));
+    let col = column(&h, fake.player(0));
+    assert!(near(col.height(), MIN_PLAYER_HEIGHT - 2.0), "{col:?}");
+}

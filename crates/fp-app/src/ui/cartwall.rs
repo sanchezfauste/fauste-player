@@ -80,8 +80,9 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     let wall = &scene.state.cartwall;
     // RL16: a right click on the header's background opens the panel menu;
     // the title, tabs and Stop all, added after it, keep their own clicks.
+    // It is no Tab stop.
     let row = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_HEIGHT));
-    let background = ui.interact(row, ui.id().with("cartwall-header"), Sense::click());
+    let background = ui.interact(row, egui::Id::new("cartwall-header"), Sense::CLICK);
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), HEADER_HEIGHT),
         Layout::right_to_left(Align::Center),

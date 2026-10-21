@@ -1713,102 +1713,114 @@ fn top_bar(
         theme::NEUTRAL_800,
     );
     ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
+    // The clock and the buttons first, from the right end, so that the
+    // panel tiles on the left know where they must stop.
+    let mut right = ui.new_child(
+        UiBuilder::new()
+            .id_salt("top-bar-right")
+            .max_rect(rect)
+            .layout(Layout::right_to_left(Align::Center)),
+    );
+    top_bar_right(&mut right, scene, view_state, pending, names);
+    let right_edge = right.min_rect().left();
     ui.add_space(10.0);
-    // RL15: the panel tiles and the layout menu, on the left.
-    panels::layout_controls(ui, scene);
+    // RL15: the panel tiles and the layout menu, on the left, 12 points
+    // clear of the right-hand block.
+    panels::layout_controls(ui, scene, right_edge - 12.0);
+}
 
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        ui.spacing_mut().item_spacing = vec2(12.0, 0.0);
-        ui.add_space(10.0);
-        let clock = chrono::Local::now().format("%H:%M:%S").to_string();
-        widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
-        let label = scene.i18n.tr("top-settings");
+/// The top bar's right-hand block, laid out from the right end: the clock,
+/// Settings, About and the pending-changes tile.
+fn top_bar_right(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    pending: &[fp_model::Pending],
+    names: pending::DeviceNames<'_>,
+) {
+    ui.spacing_mut().item_spacing = vec2(12.0, 0.0);
+    ui.add_space(10.0);
+    let clock = chrono::Local::now().format("%H:%M:%S").to_string();
+    widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
+    let label = scene.i18n.tr("top-settings");
+    let width = ui
+        .painter()
+        .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
+        .size()
+        .x
+        + 34.0;
+    let style = TileStyle {
+        border: theme::NEUTRAL_800,
+        hover_fill: theme::NEUTRAL_800,
+        ..TileStyle::plain()
+    };
+    if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
+        p.text(
+            r.center(),
+            egui::Align2::CENTER_CENTER,
+            format!("{} {label}", egui_phosphor::regular::GEAR_SIX),
+            font(12.0),
+            c,
+        );
+    })
+    .clicked()
+    {
+        view_state.settings_open = true;
+    }
+    let about = scene.i18n.tr("tip-about");
+    let style = TileStyle {
+        border: theme::NEUTRAL_800,
+        hover_fill: theme::NEUTRAL_800,
+        ..TileStyle::plain()
+    };
+    if widgets::tile(ui, vec2(24.0, 24.0), &about, true, style, |p, r, c| {
+        p.text(
+            r.center(),
+            egui::Align2::CENTER_CENTER,
+            egui_phosphor::regular::INFO,
+            font(14.0),
+            c,
+        );
+    })
+    .clicked()
+    {
+        view_state.about_open = true;
+    }
+    if !pending.is_empty() {
+        let i18n = scene.i18n;
+        let label = i18n.tr("top-settings-pending");
+        let tip = pending
+            .iter()
+            .map(|p| pending::describe(i18n, scene.state, names, p))
+            .collect::<Vec<_>>()
+            .join("\n");
         let width = ui
             .painter()
-            .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
+            .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
             .size()
             .x
             + 34.0;
         let style = TileStyle {
-            border: theme::NEUTRAL_800,
+            border: theme::AMBER,
+            content: theme::AMBER,
             hover_fill: theme::NEUTRAL_800,
             ..TileStyle::plain()
         };
-        if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
+        if widgets::tile_without_tooltip(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
             p.text(
                 r.center(),
                 egui::Align2::CENTER_CENTER,
-                format!("{} {label}", egui_phosphor::regular::GEAR_SIX),
+                format!("{} {label}", egui_phosphor::regular::HOURGLASS),
                 font(12.0),
                 c,
             );
         })
+        .on_hover_text(tip)
         .clicked()
         {
-            view_state.settings_open = true;
+            view_state.pending_open = true;
         }
-        let about = scene.i18n.tr("tip-about");
-        let style = TileStyle {
-            border: theme::NEUTRAL_800,
-            hover_fill: theme::NEUTRAL_800,
-            ..TileStyle::plain()
-        };
-        if widgets::tile(ui, vec2(24.0, 24.0), &about, true, style, |p, r, c| {
-            p.text(
-                r.center(),
-                egui::Align2::CENTER_CENTER,
-                egui_phosphor::regular::INFO,
-                font(14.0),
-                c,
-            );
-        })
-        .clicked()
-        {
-            view_state.about_open = true;
-        }
-        if !pending.is_empty() {
-            let i18n = scene.i18n;
-            let label = i18n.tr("top-settings-pending");
-            let tip = pending
-                .iter()
-                .map(|p| pending::describe(i18n, scene.state, names, p))
-                .collect::<Vec<_>>()
-                .join("\n");
-            let width = ui
-                .painter()
-                .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
-                .size()
-                .x
-                + 34.0;
-            let style = TileStyle {
-                border: theme::AMBER,
-                content: theme::AMBER,
-                hover_fill: theme::NEUTRAL_800,
-                ..TileStyle::plain()
-            };
-            if widgets::tile_without_tooltip(
-                ui,
-                vec2(width, 24.0),
-                &label,
-                true,
-                style,
-                |p, r, c| {
-                    p.text(
-                        r.center(),
-                        egui::Align2::CENTER_CENTER,
-                        format!("{} {label}", egui_phosphor::regular::HOURGLASS),
-                        font(12.0),
-                        c,
-                    );
-                },
-            )
-            .on_hover_text(tip)
-            .clicked()
-            {
-                view_state.pending_open = true;
-            }
-        }
-    });
+    }
 }
 
 /// The status bar's legend: each swatch colour and the message naming it.

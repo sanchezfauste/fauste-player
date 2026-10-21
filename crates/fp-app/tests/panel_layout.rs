@@ -12,7 +12,8 @@ use std::path::PathBuf;
 use egui::{Rect, pos2, vec2};
 use fp_app::ui::panel_layout::{
     Arrangement, CONTENT_HEIGHT_CAP, CartwallSizes, LiveSplit, MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH,
-    Maximised, PANEL_GAP, PassInput, SHARE_FLOOR, arrange, drag_pair, pair_shares, panel_on_air,
+    Maximised, PANEL_GAP, PassInput, SCROLL_BAR_ROOM, SHARE_FLOOR, arrange, drag_pair, pair_shares,
+    panel_on_air,
 };
 use fp_model::layout::{Dock, Panel};
 use fp_model::{AppState, Command, Config, PlayerId, TrackAnalysis, apply};
@@ -180,6 +181,33 @@ fn rl11_a_bottom_share_keeps_both_minimums() {
         near(a.cartwall.unwrap().height(), SIZES.min_height),
         "the cartwall keeps its own"
     );
+}
+
+#[test]
+fn rl8_an_overflowing_row_keeps_its_least_height_above_the_scroll_bar() {
+    let mut s = four();
+    s.layout.cartwall.size = Some(0.95);
+    let narrow = Rect::from_min_max(pos2(8.0, 42.0), pos2(1208.0, 1048.0));
+    let a = pass(&s, narrow, None);
+    assert!(a.overflow, "{a:?}");
+    assert!(
+        near(a.players_area.height(), MIN_PLAYER_HEIGHT + SCROLL_BAR_ROOM),
+        "{a:?}"
+    );
+    let a = pass(&s, narrow, Some(Panel::Cartwall));
+    assert!(
+        near(a.players_area.height(), MIN_PLAYER_HEIGHT + SCROLL_BAR_ROOM),
+        "{a:?}"
+    );
+    // Without the overflow, no bar and no room for it.
+    let a = pass(&s, full_hd(), Some(Panel::Cartwall));
+    assert!(near(a.players_area.height(), MIN_PLAYER_HEIGHT), "{a:?}");
+}
+
+#[test]
+fn rl8_the_scroll_bar_room_holds_egui_s_bar() {
+    let scroll = egui::Style::default().spacing.scroll;
+    assert!(SCROLL_BAR_ROOM >= scroll.bar_width + scroll.bar_inner_margin);
 }
 
 #[test]

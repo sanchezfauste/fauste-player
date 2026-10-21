@@ -31,9 +31,10 @@ pub(crate) fn players_row(
     if widths.is_empty() {
         return;
     }
-    // The horizontal scroll bar gets its own strip instead of covering the footers.
+    // The horizontal scroll bar gets its own strip instead of covering the
+    // footers; the pass keeps that strip out of the players' least height.
     let bar = if arranged.overflow {
-        ui.spacing().scroll.bar_width + ui.spacing().scroll.bar_inner_margin + 2.0
+        panel_layout::SCROLL_BAR_ROOM
     } else {
         0.0
     };
@@ -127,7 +128,8 @@ pub(crate) fn splitter(
     if !active {
         return None;
     }
-    let response = ui.interact(gap, id, Sense::click_and_drag());
+    // Not focusable: a splitter is no Tab stop (it has no keyboard use).
+    let response = ui.interact(gap, id, Sense::CLICK | Sense::DRAG);
     let hot = (response.hovered() && !ui.input(|i| i.pointer.any_down())) || dragging;
     if hot {
         ui.set_cursor_icon(cursor);
@@ -181,9 +183,11 @@ fn player_splitter(
         return;
     };
     if response.double_clicked() {
+        // RL16: like a drag, it first ends a maximised panel.
+        view_state.maximised = None;
         scene.ctl.send(Command::EqualPlayerWidths);
     }
-    if response.drag_started() {
+    if response.drag_started_by(egui::PointerButton::Primary) {
         // RL16: a drag first ends a maximised panel, then applies itself to
         // the sizes from before (`normal`).
         view_state.maximised = None;
@@ -210,18 +214,47 @@ fn player_splitter(
     }
 }
 
+/// What every top-bar tile reads, worked out once per frame.
+struct TileContext {
+    /// How many panels are shown (`Layout::shown_panels`).
+    shown: usize,
+}
+
+/// The room the layout button takes right of the tiles: its gap and its
+/// 24-point tile.
+const LAYOUT_BUTTON_ROOM: f32 = 4.0 + 4.0 + 24.0;
+
 /// RL15: on the left of the top bar, one tile per player (`P1` … `Pn`) and
-/// one for the cartwall (`Carts`), lit while the panel is shown, then the
-/// layout menu.
-pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>) {
+/// one for the cartwall, lit while the panel is shown, then the layout
+/// menu. The tiles never reach `right` (where the clock and the buttons on
+/// the right begin): past it they scroll sideways, and the layout button
+/// stays outside the scroll, always reachable.
+pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>, right: f32) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
         let t = scene.i18n;
-        for (n, id) in scene.state.player_ids().into_iter().enumerate() {
-            let name = t.tr_args("player-label", &[("n", (n + 1).into())]);
-            panel_tile(ui, scene, Panel::Player(id), &name);
-        }
-        panel_tile(ui, scene, Panel::Cartwall, &t.tr("layout-panel-carts"));
+        let players = scene.state.player_ids();
+        let context = TileContext {
+            shown: scene.state.layout.shown_panels(&players),
+        };
+        let room = (right - ui.cursor().left() - LAYOUT_BUTTON_ROOM).max(0.0);
+        // An explicit salt: the players' row's scroll area is another child
+        // of the root, and the two must not share their state.
+        egui::ScrollArea::horizontal()
+            .id_salt("panel-tiles")
+            .max_width(room)
+            .auto_shrink([true, true])
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
+                    for (n, id) in players.iter().enumerate() {
+                        let name = t.tr_args("player-label", &[("n", (n + 1).into())]);
+                        panel_tile(ui, scene, &context, Panel::Player(*id), &name);
+                    }
+                    let name = t.tr("layout-panel-carts");
+                    panel_tile(ui, scene, &context, Panel::Cartwall, &name);
+                });
+            });
         ui.add_space(4.0);
         layout_menu(ui, scene);
     });
@@ -230,13 +263,12 @@ pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>) {
 /// One panel tile: a click hides or shows the panel (RL7). Its label says
 /// what a click does; a hidden panel on air shows a red dot. Disabled for
 /// the last shown panel and while the layout is locked.
-fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, panel: Panel, name: &str) {
+fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Panel, name: &str) {
     let t = scene.i18n;
     let layout = &scene.state.layout;
-    let players = scene.state.player_ids();
     let shown = !layout.is_hidden(panel);
     let on_air = !shown && panel_layout::panel_on_air(scene.state, panel);
-    let last = layout.is_last_shown(&players, panel);
+    let last = shown && context.shown == 1;
     let enabled = !layout.locked && !last;
     let key = match (shown, on_air) {
         (true, _) => "tip-layout-hide",
@@ -381,9 +413,9 @@ pub(crate) fn settle_view(view_state: &mut ViewState, state: &AppState) {
     }
 }
 
-/// RL16: the menu of a panel header's background (right click): Maximise,
+/// RL16: the menu of a panel header's background (right click): Maximize,
 /// or Restore on the maximised panel, and Hide. Both are disabled while the
-/// layout is locked; Maximise also with one panel shown, Hide on the last
+/// layout is locked; Maximize also with one panel shown, Hide on the last
 /// shown panel.
 pub(crate) fn header_menu(
     response: &egui::Response,

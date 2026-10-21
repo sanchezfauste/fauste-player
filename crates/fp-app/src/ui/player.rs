@@ -217,9 +217,9 @@ fn header(
 ) {
     let t = scene.i18n;
     // RL16: a right click on the header's background opens the panel menu;
-    // the tiles, added after it, keep their own clicks.
+    // the tiles, added after it, keep their own clicks. It is no Tab stop.
     let row = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 20.0));
-    let background = ui.interact(row, egui::Id::new(("player-header", id.0)), Sense::click());
+    let background = ui.interact(row, egui::Id::new(("player-header", id.0)), Sense::CLICK);
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), 20.0),
         Layout::left_to_right(Align::Center),
