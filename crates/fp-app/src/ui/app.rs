@@ -98,6 +98,9 @@ pub(crate) struct TabScroll {
 #[derive(Default)]
 pub(crate) struct ViewState {
     pub selection: HashMap<PlayerId, EntryId>,
+    /// The Enter that set an entry as Next and may still be followed by a
+    /// second one that plays it (see `playlist_keys`).
+    pub(crate) enter_armed: Option<super::playlist_keys::Armed>,
     pub active_player: Option<PlayerId>,
     pub drop: Option<DropTarget>,
     pub file_drop: Option<DropTarget>,
@@ -1429,6 +1432,9 @@ impl AppUi {
                 self.ctl.send(command);
             }
         }
+        // Up, Down and Enter on the playlist; a shortcut bound to one of
+        // them has taken its events out above.
+        super::playlist_keys::handle(ctx, &mut self.view, state, self.ctl.as_ref());
         if delete
             && let Some(player) = self.view.active_player
             && let Some(entry) = self.view.selection.remove(&player)

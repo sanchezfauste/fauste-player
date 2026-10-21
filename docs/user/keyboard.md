@@ -5,6 +5,8 @@
 | `1` … `9` | Play on players 1–9 (same as their Play button) |
 | `F1` … `F12` | Fire carts 1–12 of the cart page shown |
 | `Ctrl+Space` | Stop every cart, and the cart CUE (the cartwall's **Stop all** button) |
+| `Up` / `Down` | Move the selection through the playlist shown by the player you used last (the first shown player at start), scrolling the row into view. With nothing selected, the first press selects the player's next track, or the first track |
+| `Enter` | Set the selected track as the player's next track. Press `Enter` a second time on the same track within a double click's time (the system's double-click delay) to play it, as the player's Play shortcut does. Another key, a click or a change of selection in between, or a longer wait, makes it a first `Enter` again |
 | `Delete` / `Backspace` | Remove the selected track from the playlist shown (not while it is on air). Hiding a player clears its selection |
 | `Esc` | Close menus and Settings; cancel the "Audio is on air" dialog; clear the selection |
 
@@ -35,4 +37,4 @@ section) restores the table above. Available actions, for every player and cart:
 - show or hide the cartwall;
 - next or previous cart page.
 
-`Delete`, `Backspace` and `Esc` cannot be changed.
+`Delete`, `Backspace` and `Esc` cannot be changed. `Up`, `Down` and `Enter` on the playlist work only when no shortcut uses them and no button or slider has the keyboard focus.

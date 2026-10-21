@@ -20,6 +20,7 @@ mod panels;
 pub mod pending;
 mod player;
 pub mod playlist_files;
+pub(crate) mod playlist_keys;
 mod reset_played;
 mod settings;
 pub mod shell;

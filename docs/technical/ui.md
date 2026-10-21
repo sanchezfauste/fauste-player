@@ -401,6 +401,17 @@ image choice or a `CoverLoaded` answer carries the id of the session that
 asked, and one from a closed editor is dropped, so it never reaches a later
 editor for the same track.
 
+**Playlist keys.** `ui/playlist_keys.rs`, called at the end of `AppUi::keyboard`
+(so every modal, a focused text field and a shortcut that took the key have
+already returned or consumed it): Up and Down move `ViewState::selection` of the
+active player (else the first shown player), scrolling the row with
+`FollowScroll` (`TableScroll::reveal_align` picks the nearest edge); Enter
+sends `SetNext`, and a second Enter on the same entry within egui's
+`input_options.max_double_click_delay` sends `Play`. `ViewState::enter_armed`
+holds the first Enter; another key, a click or a selection change clears it.
+Nothing acts while a widget has the focus, and every command goes through
+`command_available`.
+
 **Modal.** While the editor is open no keyboard shortcut acts (not even
 Delete: `AppUi::keyboard` returns early) and files dropped on the window are
 discarded. Esc or a click on the backdrop cancels, unless a save is running.
