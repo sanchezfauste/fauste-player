@@ -69,5 +69,15 @@
   "cartwall": {
     "open": true,
     "page": null
+  },
+  "layout": {
+    "player_shares": [[2, 1.5], [3, 0.5], [4, 1.0]],
+    "hidden_players": [5],
+    "cartwall": {
+      "dock": "Right",
+      "size": 0.3,
+      "hidden": false
+    },
+    "locked": false
   }
 }
