@@ -655,3 +655,31 @@ fn i4_the_cart_editor_shows_the_gain_lines() {
             .is_some()
     );
 }
+
+#[test]
+fn i4_a_bit_perfect_player_shows_no_automatic_gain() {
+    let mut s = on_air();
+    bit_perfect(&mut s);
+    let (mut h, _fake) = harness(s);
+    h.run_steps(2);
+    open_popup(&mut h);
+    assert!(
+        h.query_by_label_contains("No automatic gain: bit-perfect output plays tracks unaltered")
+            .is_some()
+    );
+}
+
+#[test]
+fn i4_the_popup_says_a_sounding_track_changes_on_its_next_load() {
+    let (mut h, _fake) = harness(on_air());
+    h.run_steps(2);
+    open_popup(&mut h);
+    assert!(
+        h.query_by_label_contains("a change applies from its next load")
+            .is_some()
+    );
+    assert!(
+        h.query_by_label_contains("Added to the automatic gain")
+            .is_some()
+    );
+}

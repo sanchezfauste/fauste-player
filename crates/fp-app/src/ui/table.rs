@@ -653,8 +653,8 @@ pub(crate) fn track_table(
     if edit_tags.is_some() {
         view_state.edit_tags = edit_tags;
     }
-    if loudness.is_some() {
-        view_state.loudness_popup = loudness;
+    if let Some(id) = loudness {
+        view_state.loudness_popup = Some((id, Some(fp_model::Holder::PlayerMain(player))));
     }
     // Q4: the drop target comes from the pointer and the body's geometry,
     // never from the widget under it, and belongs to this table alone: it is

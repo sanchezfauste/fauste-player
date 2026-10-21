@@ -13,8 +13,8 @@ use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     BadgeTone, MarkerFractions, Message, PlayerStatus, RowStatus, TipField, analysis_pending,
     cue_follow_target, cue_window_view, fader_from_gain, file_icon, file_problem, gain_badge,
-    gain_from_fader, intro_left, loudness_lines, marker_fractions, mix_active, outro_left,
-    player_view, playlist_times, row_is_next, row_status, shown_entry, signed_db,
+    gain_from_fader, gain_lines, intro_left, loudness_lines, marker_fractions, mix_active,
+    outro_left, player_view, playlist_times, row_is_next, row_status, shown_entry, signed_db,
     start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
 };
 use fp_model::{
@@ -1231,5 +1231,111 @@ fn n10_the_refused_trim_message_also_fits_a_value_that_is_not_a_number() {
     assert_eq!(
         es.tr("error-invalid-trim"),
         "El ajuste debe ser un número dentro del ajuste máximo."
+    );
+}
+
+#[test]
+fn i4_gain_lines_give_the_reason_when_there_is_no_automatic_gain() {
+    let c = normalizing();
+    let mut t = measured_track(Some(-20.0), -10.0);
+    assert_eq!(
+        gain_lines(&t, &c, true),
+        vec![msg("loudness-no-gain-bit-perfect", &[])]
+    );
+    t.loudness_edit.excluded = true;
+    assert_eq!(
+        gain_lines(&t, &c, false),
+        vec![msg("loudness-no-gain-excluded", &[])]
+    );
+    t.loudness_edit.excluded = false;
+    t.loudness = None;
+    assert_eq!(
+        gain_lines(&t, &c, false),
+        vec![msg("loudness-no-gain-unmeasured", &[])]
+    );
+    let silent = measured_track(None, -90.0);
+    assert_eq!(
+        gain_lines(&silent, &c, false),
+        vec![msg("loudness-no-gain-silent", &[])]
+    );
+    let off = fp_model::LoudnessConfig {
+        normalize: false,
+        ..c
+    };
+    assert_eq!(
+        gain_lines(&t, &off, false),
+        vec![
+            msg("loudness-no-gain-off", &[]),
+            msg("loudness-off-note", &[])
+        ]
+    );
+}
+
+#[test]
+fn i4_gain_lines_name_the_limit_and_the_gain_wanted() {
+    let c = normalizing();
+    // +6 dB wanted, 2 dB of room under the ceiling.
+    assert_eq!(
+        gain_lines(&measured_track(Some(-22.0), -3.0), &c, false),
+        vec![
+            msg("loudness-auto-gain", &[("gain", "+2.0")]),
+            msg(
+                "tip-gain-limited-peak",
+                &[("ceiling", "−1.0"), ("wanted", "+6.0")]
+            ),
+        ]
+    );
+    // +19 dB wanted, held at the maximum boost.
+    assert_eq!(
+        gain_lines(&measured_track(Some(-35.0), -30.0), &c, false),
+        vec![
+            msg("loudness-auto-gain", &[("gain", "+12.0")]),
+            msg(
+                "tip-gain-limited-boost",
+                &[("max", "12.0"), ("wanted", "+19.0")]
+            ),
+        ]
+    );
+    // The limit belongs to the gain with trim, which is the one that plays.
+    let mut t = measured_track(Some(-20.0), -30.0);
+    t.loudness_edit.trim_db = 10.0;
+    assert_eq!(
+        gain_lines(&t, &c, false),
+        vec![
+            msg("loudness-auto-gain", &[("gain", "+4.0")]),
+            msg("loudness-trimmed-gain", &[("gain", "+12.0")]),
+            msg(
+                "tip-gain-limited-boost",
+                &[("max", "12.0"), ("wanted", "+14.0")]
+            ),
+        ]
+    );
+}
+
+#[test]
+fn i4_gain_lines_use_the_trim_in_use() {
+    let mut t = measured_track(Some(-14.0), -1.0);
+    t.loudness_edit.trim_db = -10.0;
+    let c = fp_model::LoudnessConfig {
+        max_trim_db: 6.0,
+        ..normalizing()
+    };
+    // −2 dB automatic, the trim limited to −6: −8 dB.
+    assert_eq!(
+        gain_lines(&t, &c, false),
+        vec![
+            msg("loudness-auto-gain", &[("gain", "−2.0")]),
+            msg("loudness-trimmed-gain", &[("gain", "−8.0")]),
+        ]
+    );
+    // A stored trim the maximum now removes leaves no trim line.
+    t.loudness_edit.trim_db = 3.0;
+    let none = fp_model::LoudnessConfig {
+        max_trim_db: 0.0,
+        ..normalizing()
+    };
+    assert_eq!(
+        gain_lines(&t, &none, false),
+        vec![msg("loudness-auto-gain", &[("gain", "−2.0")])]
     );
 }

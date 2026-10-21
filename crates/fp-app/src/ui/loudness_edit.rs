@@ -26,8 +26,13 @@ pub(crate) fn measurement(scene: &Scene<'_>, track: &Track) -> String {
 
 /// The gain lines of `track` (automatic gain, gain with trim, limit and
 /// normalization-off notes), one per line.
-pub(crate) fn gain_text(scene: &Scene<'_>, track: &Track) -> String {
-    view::gain_lines(track, &scene.state.config.loudness)
+pub(crate) fn gain_text(
+    scene: &Scene<'_>,
+    track: &Track,
+    holder: Option<fp_model::Holder>,
+) -> String {
+    let bit_perfect = holder.is_some_and(|h| fp_model::holder_bit_perfect(scene.state, h));
+    view::gain_lines(track, &scene.state.config.loudness, bit_perfect)
         .iter()
         .map(|m| widgets::tr_message(scene.i18n, m))
         .collect::<Vec<_>>()
@@ -93,11 +98,22 @@ pub(crate) fn trim(ui: &mut Ui, scene: &Scene<'_>, track: &Track) {
     }
 }
 
+/// Whether a player that is playing or paused has `track` as its current
+/// entry: a change of the track's loudness settings waits for its next load.
+fn sounding(scene: &Scene<'_>, track: TrackId) -> bool {
+    scene.state.players.iter().any(|p| {
+        p.transport != fp_model::Transport::Stopped
+            && p.current
+                .and_then(|e| scene.state.track_for_entry(e))
+                .is_some_and(|t| t.id == track)
+    })
+}
+
 /// N20: the Loudness… popup of the track the waveform or row menu chose. It holds
 /// that track whatever the players show next, and closes with its button
 /// or by itself once the track leaves the library.
 pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
-    let Some(id) = view_state.loudness_popup else {
+    let Some((id, holder)) = view_state.loudness_popup else {
         return;
     };
     let Some(track) = scene.state.library.get(id) else {
@@ -194,7 +210,21 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
             });
             ui.add(
                 egui::Label::new(
-                    RichText::new(gain_text(scene, track))
+                    RichText::new(t.tr("loudness-trim-hint"))
+                        .font(font(11.0))
+                        .color(theme::NEUTRAL_500),
+                )
+                .selectable(false)
+                .wrap(),
+            );
+            let mut text = gain_text(scene, track, holder);
+            if sounding(scene, id) {
+                text.push('\n');
+                text.push_str(&t.tr("loudness-trim-next-load"));
+            }
+            ui.add(
+                egui::Label::new(
+                    RichText::new(text)
                         .font(font(12.0))
                         .color(theme::NEUTRAL_400),
                 )

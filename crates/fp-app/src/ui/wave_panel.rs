@@ -336,7 +336,11 @@ fn edit_markers(
         }
     });
     if open_loudness {
-        view_state.loudness_popup = Some(track);
+        let holder = match key {
+            WaveKey::Player(p) => fp_model::Holder::PlayerMain(p),
+            WaveKey::Cue(p) => fp_model::Holder::PlayerCue(p),
+        };
+        view_state.loudness_popup = Some((track, Some(holder)));
     }
     // Once the menu is closed, the point it was opened at is forgotten.
     if open.is_none() && !response.secondary_clicked() {

@@ -138,8 +138,9 @@ pub(crate) struct ViewState {
     /// Where each waveform's menu was opened, in seconds.
     pub wave_menu: HashMap<super::wave_view::WaveKey, f64>,
     /// The track whose Loudness… popup is open (loudness normalization
-    /// spec N20).
-    pub loudness_popup: Option<TrackId>,
+    /// spec N20) and the holder it was opened from, if any (a waveform's
+    /// player, for its bit-perfect state).
+    pub loudness_popup: Option<(TrackId, Option<fp_model::Holder>)>,
     /// When the operator last used each player's table or tabs (scroll,
     /// entry drag, row menu, tab click), in `Scene::time`.
     pub table_touched: HashMap<PlayerId, f64>,

@@ -125,7 +125,9 @@ editor therefore also show the resulting gain:
   it tells when the true-peak ceiling or the maximum boost held the gain
   back, and the gain that was wanted.
 - With normalization off, a note says nothing changes on air and that the
-  trim applies once it is turned on.
+  trim applies once it is turned on. For a bit-perfect player the automatic
+  gain line says the output plays tracks unaltered. While the track is
+  sounding, the popup adds that a change applies from its next load.
 
 Where to change them:
 
@@ -173,15 +175,16 @@ use too.
 - **Measurement.** Integrated loudness and true peak as defined by
   ITU-R BS.1770 (K-weighting, gated).
 - **Target −16 LUFS.** It follows the AES recommendations for streaming and
-  online distribution: AES TD1004.1.15-10 recommends −16 to −20 LUFS for
-  streaming, and AES TD1008 extends that guidance to streaming and
-  on-demand distribution. It is not a broadcast value: EBU R128 uses
-  −23 LUFS and ATSC A/85 uses −24 LKFS. Choose one of those when the
-  station must meet a broadcast delivery specification (a regulated
-  over-the-air or cable feed), and −16 for a stream or online programme.
+  online distribution. AES TD1008 (2021) supersedes the earlier AES
+  TD1004.1.15-10, which recommended −16 to −20 LUFS for streaming. It is
+  not a broadcast value: EBU R128 uses −23 LUFS and ATSC A/85 uses
+  −24 LKFS. Use one of those when a delivery specification requires it
+  (EBU R128 for European broadcast programme exchange, ATSC A/85 for US
+  digital television), and −16 for a stream or online programme.
 - **True-peak ceiling −1 dBTP.** The maximum true peak of EBU R128, also
   used by the AES recommendations. Lossy encoders can overshoot on decoding,
-  so a stream sent through a low bit rate encoder may want −2 dBTP.
+  so a stream sent through a low bit rate encoder may want a lower ceiling
+  such as −2 dBTP (a common practice, not part of those standards).
 - **Maximum boost and maximum trim, 12 dB.** Product choices with no
   standard behind them: enough to bring a quiet recording up and to correct
   a track by ear, not so much that noise is raised or the trim defeats the

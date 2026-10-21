@@ -740,14 +740,19 @@ fn applied_tip(
 /// on top of the automatic gain, so they say what normalization gives the
 /// track with trim 0 (or why it gives none), what it gives with the trim
 /// when that is not 0, and the limit that applies to the gain shown last.
-/// Every figure comes from the model (`fp_model::normalization`).
-pub fn gain_lines(track: &Track, config: &fp_model::LoudnessConfig) -> Vec<Message> {
+/// `bit_perfect` is whether the player the track plays on is. Every figure comes from the model (`fp_model::normalization`).
+pub fn gain_lines(
+    track: &Track,
+    config: &fp_model::LoudnessConfig,
+    bit_perfect: bool,
+) -> Vec<Message> {
     use fp_model::NormalizationStatus as S;
     let mut untrimmed = track.clone();
     untrimmed.loudness_edit.trim_db = 0.0;
-    let auto = fp_model::normalization(config, &untrimmed, false);
+    let auto = fp_model::normalization(config, &untrimmed, bit_perfect);
     let reason = match auto.status {
-        S::Off | S::BitPerfect => Some("loudness-no-gain-off"),
+        S::Off => Some("loudness-no-gain-off"),
+        S::BitPerfect => Some("loudness-no-gain-bit-perfect"),
         S::Excluded => Some("loudness-no-gain-excluded"),
         S::NotMeasured => Some("loudness-no-gain-unmeasured"),
         S::Silent => Some("loudness-no-gain-silent"),
@@ -768,7 +773,7 @@ pub fn gain_lines(track: &Track, config: &fp_model::LoudnessConfig) -> Vec<Messa
     let status = if trim == 0.0 {
         auto.status
     } else {
-        let full = fp_model::normalization(config, track, false);
+        let full = fp_model::normalization(config, track, bit_perfect);
         lines.push(Message::new(
             "loudness-trimmed-gain",
             &[("gain", signed_db(full.gain_db))],
