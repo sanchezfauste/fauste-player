@@ -72,6 +72,8 @@ pub struct PlayerView {
     pub fade_ms: u32,
     /// Numbers the player's fades: a new value is a new fade.
     pub fade_seq: u64,
+    /// What started the running fade (the button that drains its countdown).
+    pub fade_origin: fp_model::FadeOrigin,
     pub cueing: bool,
     /// The current source reaches its device unchanged (the BP badge).
     pub bit_perfect: bool,
@@ -298,6 +300,7 @@ pub fn player_view(
         fading: p.fading,
         fade_ms: p.fade_ms,
         fade_seq: p.fade_seq,
+        fade_origin: p.fade_origin,
         cueing: p.cue.is_some(),
         bit_perfect: false,
         dsd: false,

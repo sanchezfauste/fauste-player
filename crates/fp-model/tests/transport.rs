@@ -266,3 +266,31 @@ fn rule22_played_marks_belong_to_the_player_that_played() {
     assert!(entry.is_played_by(p1));
     assert!(!entry.is_played_by(p2));
 }
+
+#[test]
+fn rule8_a_fade_remembers_which_command_started_it() {
+    use fp_model::FadeOrigin;
+    let mut state = fixture(4);
+    let p = p0(&state);
+    apply(&mut state, Command::Play(p)).unwrap();
+    apply(&mut state, Command::Play(p)).unwrap(); // Next: a crossfade
+    assert_eq!(state.player(p).unwrap().fade_origin, FadeOrigin::Next);
+    on_event(&mut state, EngineEvent::FadeCompleted { player: p });
+    apply(&mut state, Command::Previous(p)).unwrap();
+    let player = state.player(p).unwrap();
+    assert!(player.fading);
+    assert_eq!(player.fade_origin, FadeOrigin::Previous);
+    // A fade stop pressed during the crossfade takes the fade over.
+    apply(&mut state, Command::FadeStop(p)).unwrap();
+    assert_eq!(state.player(p).unwrap().fade_origin, FadeOrigin::FadeStop);
+}
+
+#[test]
+fn rule8_a_fade_stop_on_a_steady_player_is_a_fade_stop_origin() {
+    use fp_model::FadeOrigin;
+    let mut state = fixture(3);
+    let p = p0(&state);
+    apply(&mut state, Command::Play(p)).unwrap();
+    apply(&mut state, Command::FadeStop(p)).unwrap();
+    assert_eq!(state.player(p).unwrap().fade_origin, FadeOrigin::FadeStop);
+}

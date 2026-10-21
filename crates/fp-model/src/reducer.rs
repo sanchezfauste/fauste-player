@@ -12,7 +12,7 @@ use crate::dsd::DsdOnAir;
 use crate::error::ModelError;
 use crate::ids::{EntryId, PlayerId, PlaylistId, TrackId};
 use crate::live::Holder;
-use crate::player::{CueState, PlayMode, PlayerState, Transport};
+use crate::player::{CueState, FadeOrigin, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, PlaylistEntry};
 use crate::shortcuts::{Shortcut, default_shortcuts};
 use crate::state::AppState;
@@ -510,7 +510,7 @@ fn on_engine_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction
                 };
                 if advance_to(state, i, entry, true).is_some() {
                     match overlap_ms {
-                        Some(ms) => state.players[i].begin_fade(ms),
+                        Some(ms) => state.players[i].begin_fade(ms, FadeOrigin::Segue),
                         None => {
                             state.players[i].fading = false;
                             state.players[i].fade_ms = 0;
@@ -596,7 +596,7 @@ fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Resu
             }
             let held = dsd_holds(&state.players[i]);
             if let Some(request) = advance(state, i) {
-                start_or_crossfade(state, i, held, request, out);
+                start_or_crossfade(state, i, held, request, FadeOrigin::Next, out);
             }
         }
     }
@@ -637,7 +637,7 @@ fn previous(
             player.next = Some(left);
             player.next_explicit = true;
         }
-        start_or_crossfade(state, i, held, request, out);
+        start_or_crossfade(state, i, held, request, FadeOrigin::Previous, out);
     }
     Ok(())
 }
@@ -691,7 +691,7 @@ fn fade_stop(
     // Allowed during a crossfade or segue overlap too: the engine fades every
     // Main source of the player. Only a fade stop already in progress blocks it.
     if player.transport == Transport::Playing && !player.fade_stop_pending {
-        player.begin_fade(fade_ms);
+        player.begin_fade(fade_ms, FadeOrigin::FadeStop);
         player.fade_stop_pending = true;
         out.push(EngineAction::FadeOutAndStop {
             player: id,
@@ -927,6 +927,7 @@ fn start_or_crossfade(
     i: usize,
     held: bool,
     request: SourceRequest,
+    origin: FadeOrigin,
     out: &mut Vec<EngineAction>,
 ) {
     let player = state.players[i].id;
@@ -940,7 +941,7 @@ fn start_or_crossfade(
         request,
         fade_ms,
     });
-    state.players[i].begin_fade(fade_ms);
+    state.players[i].begin_fade(fade_ms, origin);
 }
 
 /// Rules 9–11: what the engine must do when the current track ends. Returns

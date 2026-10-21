@@ -123,7 +123,7 @@ the same two are in the menu of a right click on the header's background
 
 | Button | Action |
 |---|---|
-| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)); while it fades for a crossfade (Next or Previous) or a segue, a violet bar drains across the button from full to empty over the fade length. Paused: resume. With the track on air as next, Play restarts that track with the usual fade. On a bit-perfect output it switches at once, without a fade, and its tooltip says so (see [What it costs](bit-perfect.md#what-it-costs)). |
+| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)); while it fades for a crossfade started by Next or by a segue, a violet bar drains across the button from full to empty over the fade length (a crossfade started by Previous drains on the Previous button instead). Paused: resume. With the track on air as next, Play restarts that track with the usual fade. On a bit-perfect output it switches at once, without a fade, and its tooltip says so (see [What it costs](bit-perfect.md#what-it-costs)). |
 | **Stop** | Stop at once (with a short de-click ramp) |
 | **Fade stop** | Fade out and stop. While a fade stop runs, a violet bar drains across the button from full to empty over the fade length, like a playing cart's |
 | **Pause** | Pause or resume; blinks amber while paused |
