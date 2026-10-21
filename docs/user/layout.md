@@ -1,7 +1,8 @@
 # Layout
 
-Arrange the main window for your shift: give the players the widths you
-want, hide the panels you do not use and maximize one for a moment. The
+Arrange the main window for your shift: give the players and the cartwall
+the sizes you want, put the cartwall under the players or beside them,
+hide the panels you do not use and maximize one for a moment. The
 layout is saved with the session and comes back at the next start; a new
 installation starts with every player the same width and the cartwall
 under them.
@@ -77,9 +78,9 @@ header (not one of their buttons), for its menu:
   their smallest. It is only for the moment and is not saved. **Restore**
   in the same menu ends it, and so do hiding or showing a panel, locking
   the layout, moving the cartwall, changing the number of players and
-  dragging a gap between panels; the sizes from before come back. A
-  collapsed cartwall cannot be maximized, and collapsing a maximized
-  cartwall ends it.
+  dragging or double-clicking a gap between panels; the sizes from before
+  come back. A collapsed cartwall cannot be maximized, and collapsing a
+  maximized cartwall ends it.
 - **Hide** hides the panel, as its tile in the top bar does.
 
 ## The layout menu

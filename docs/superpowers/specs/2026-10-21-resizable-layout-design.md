@@ -107,7 +107,9 @@ displays them.
     plus three table rows (`MIN_PLAYER_HEIGHT`);
   - the cartwall's width is at least the larger of its header's fixed
     parts ("Stop all", the caret, the smallest tab) and `cols` × the
-    smallest cart button, plus the gaps;
+    smallest cart button, plus the gaps. Stop all is measured with a
+    two-digit count, so the least width does not change while carts start
+    and stop;
   - the cartwall's height is at least its header plus `rows` × the
     smallest cart button, plus the gaps.
 - **RL9. Lock.** `Command::SetLayoutLocked(bool)`. While the layout is
@@ -157,12 +159,14 @@ for the interface's notice, if one ever reaches it.
     the content" at the bottom, or to the default share on a side.
   - **Lock.** While the layout is locked, or the cartwall is collapsed on
     a side, its splitter does not react, and the pointer over it shows the
-    normal cursor.
+    normal cursor. At the bottom a collapsed cartwall is only its header,
+    so its splitter does not react either.
 - **RL13. Cart buttons scale.**
   - **Size.** The shown page's grid (`rows` × `cols`) fills the cartwall
     panel. Buttons already fill the width; their height, now the free
     height divided by `rows`, has no 40 px upper clamp when `size` is
-    `Some`.
+    `Some`. The same holds whenever the panel does not fit its content:
+    maximized, or alone in the middle area.
   - **Too small a panel.** Buttons never shrink below the smallest button
     (`MIN_BUTTON_WIDTH` × `MIN_BUTTON_HEIGHT`). When the panel is smaller
     than the grid needs, the grid scrolls.
@@ -170,14 +174,17 @@ for the interface's notice, if one ever reaches it.
     exactly today's: the rows at `BUTTON_HEIGHT`, never more than 60 % of
     the middle area.
   - **Text.** The name and the detail line stay at their sizes, centred.
-    The waveform behind them grows with the button.
+    The waveform behind them grows with the button. Centred is vertical:
+    the text block of a 40 px button sits in the middle of a taller one.
   - The grid limits stay `limits.max_cart_rows` and
     `limits.max_cart_cols`.
 - **RL14. Collapsed cartwall.** At the bottom, collapsing works as today:
   only the header is shown. On a side, the cartwall becomes a narrow
   vertical strip, the width of the header's height, with the expand caret
   and, while a cart plays, an on-air dot. Expanding brings back the share
-  it had.
+  it had. At the bottom a collapsed cartwall is its header even when it
+  has a share. A collapsed cartwall cannot be maximized, and collapsing a
+  maximized cartwall ends the maximize.
 - **RL15. Top bar.**
   - **Panel toggles.** On the left of the top bar, one tile per player
     (`P1`, `P2`, …) and one for the cartwall, named as the cartwall is in
