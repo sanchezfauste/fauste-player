@@ -7,8 +7,8 @@ mod common;
 use common::{fixture, p0};
 use fp_model::{
     AppState, CartwallLayout, Command, Config, DEFAULT_SIDE_SHARE, Dock, Layout,
-    MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE, ModelError, Panel, PlayerId, Transport, apply,
-    settle_layout,
+    MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE, ModelError, Panel, PlayerId, RestoreParts, Transport,
+    apply, settle_layout,
 };
 
 fn close(a: f32, b: f32) -> bool {
@@ -557,4 +557,115 @@ fn rl19_settle_fits_the_cartwall_size_to_its_dock() {
     };
     assert_eq!(settle_layout(&mut layout, &p).len(), 1);
     assert_eq!(layout.cartwall.size, Some(MAX_CARTWALL_SHARE));
+}
+
+fn restore_with(state: &AppState, layout: Layout) -> AppState {
+    let parts = RestoreParts {
+        config: state.config.clone(),
+        library: state.library.clone(),
+        playlists: state.playlists.clone(),
+        cart_pages: state.cartwall.pages.clone(),
+        cartwall_session: state.cartwall.session(),
+        layout,
+        ids: state.ids.clone(),
+    };
+    AppState::restore(parts, &state.sessions(|_| 0.0), "Main").0
+}
+
+#[test]
+fn rl19_the_layout_survives_a_restart() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    apply(
+        &mut s,
+        Command::SetPlayerShares {
+            left: (p[0], 1.5),
+            right: (p[1], 0.5),
+        },
+    )
+    .unwrap();
+    hide(&mut s, Panel::Player(p[2]), true).unwrap();
+    apply(&mut s, Command::SetCartwallDock(Dock::Right)).unwrap();
+    apply(&mut s, Command::SetLayoutLocked(true)).unwrap();
+    assert_eq!(common::roundtrip(&s).layout, s.layout);
+}
+
+#[test]
+fn rl19_restore_drops_players_that_do_not_exist_and_shows_everything_hidden() {
+    let s = fixture(0);
+    let p = s.player_ids();
+    let stranger = PlayerId(999_999);
+    let layout = Layout {
+        player_shares: vec![(p[0], 2.0), (stranger, 5.0)],
+        hidden_players: vec![p[0], p[1], p[2], p[3], stranger],
+        cartwall: CartwallLayout {
+            dock: Dock::Left,
+            size: None,
+            hidden: true,
+        },
+        locked: true,
+    };
+    let restored = restore_with(&s, layout);
+    assert_eq!(restored.layout.player_shares, vec![(p[0], 2.0)]);
+    assert!(restored.layout.hidden_players.is_empty());
+    assert!(!restored.layout.cartwall.hidden);
+    assert_eq!(restored.layout.cartwall.size, Some(DEFAULT_SIDE_SHARE));
+    assert!(restored.layout.locked, "the lock is kept");
+}
+
+#[test]
+fn rl19_a_session_saved_with_more_players_drops_the_extra_ones() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    apply(&mut s, Command::EqualPlayerWidths).unwrap();
+    hide(&mut s, Panel::Player(p[3]), true).unwrap();
+    let layout = s.layout.clone();
+    s.config.players.count = 3;
+    let restored = restore_with(&s, layout);
+    assert_eq!(restored.player_ids(), p[..3].to_vec());
+    assert_eq!(
+        restored.layout.player_shares,
+        vec![(p[0], 1.0), (p[1], 1.0), (p[2], 1.0)]
+    );
+    assert!(restored.layout.hidden_players.is_empty());
+}
+
+#[test]
+fn rl19_each_part_of_the_layout_loads_leniently() {
+    let layout: Layout = serde_json::from_str(
+        r#"{"player_shares": [[1, 2.0], ["x", 1.0], [2]],
+            "hidden_players": "none",
+            "cartwall": {"dock": "Top", "size": 0.4, "hidden": true},
+            "locked": "yes"}"#,
+    )
+    .unwrap();
+    assert_eq!(layout.player_shares, vec![(PlayerId(1), 2.0)]);
+    assert!(layout.hidden_players.is_empty());
+    assert_eq!(
+        layout.cartwall,
+        CartwallLayout {
+            dock: Dock::Bottom,
+            size: Some(0.4),
+            hidden: true
+        }
+    );
+    assert!(!layout.locked);
+}
+
+#[test]
+fn rl19_a_layout_that_is_not_an_object_loads_as_the_default() {
+    #[derive(serde::Deserialize)]
+    struct Doc {
+        #[serde(default, deserialize_with = "fp_model::layout::lenient_layout")]
+        layout: Layout,
+    }
+    for json in [
+        r#"{}"#,
+        r#"{"layout": 5}"#,
+        r#"{"layout": null}"#,
+        r#"{"layout": {"cartwall": "left"}}"#,
+    ] {
+        let doc: Doc = serde_json::from_str(json).unwrap();
+        assert_eq!(doc.layout, Layout::default(), "{json}");
+    }
 }

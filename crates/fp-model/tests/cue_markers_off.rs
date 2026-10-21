@@ -265,6 +265,7 @@ fn a_restored_position_past_the_end_comes_back_at_the_start_of_the_range() {
             playlists: state.playlists.clone(),
             cart_pages: state.cartwall.pages.clone(),
             cartwall_session: state.cartwall.session(),
+            layout: state.layout.clone(),
             ids: state.ids.clone(),
         };
         let (restored, actions) = AppState::restore(parts, &sessions, "Main");

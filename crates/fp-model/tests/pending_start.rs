@@ -321,6 +321,7 @@ fn restore(state: &AppState, sessions: &[PlayerSession]) -> (AppState, Vec<Engin
         playlists: state.playlists.clone(),
         cart_pages: state.cartwall.pages.clone(),
         cartwall_session: state.cartwall.session(),
+        layout: state.layout.clone(),
         ids: state.ids.clone(),
     };
     AppState::restore(parts, sessions, "Main")

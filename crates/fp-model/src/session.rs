@@ -6,6 +6,7 @@ use crate::cartwall::{CartPage, Cartwall, CartwallSession};
 use crate::command::EngineAction;
 use crate::config::Config;
 use crate::ids::{EntryId, IdGen, PlayerId, PlaylistId};
+use crate::layout::Layout;
 use crate::player::{ColumnWidths, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, Playlists};
 use crate::reducer::{fill_empty_next, reconcile};
@@ -99,6 +100,9 @@ pub struct RestoreParts {
     /// Cart pages (their carts reference `library` tracks).
     pub cart_pages: Vec<CartPage>,
     pub cartwall_session: CartwallSession,
+    /// The saved layout (resizable layout spec RL19); `restore` repairs it
+    /// for the players it builds.
+    pub layout: Layout,
     pub ids: IdGen,
 }
 
@@ -140,6 +144,7 @@ impl AppState {
             mut playlists,
             cart_pages,
             cartwall_session,
+            layout,
             mut ids,
         } = parts;
         ids.observe(library.max_raw_id());
@@ -179,7 +184,7 @@ impl AppState {
             ids,
             live: crate::live::LiveSettings::default(),
             cue_on_air: crate::cue_on_air::CueOnAir::default(),
-            layout: crate::layout::Layout::default(),
+            layout: Layout::default(),
         };
         // Tracks nothing references (left by an interrupted save) are dropped.
         let orphans: Vec<_> = state
@@ -201,6 +206,11 @@ impl AppState {
             };
             state.players.push(player);
         }
+        // RL19: the saved layout, repaired for the players this start has
+        // (`fp-store` reports the repairs).
+        state.layout = layout;
+        let players = state.player_ids();
+        let _ = crate::layout::settle_layout(&mut state.layout, &players);
         // N13: the gain of each source loaded paused, computed now from the
         // current configuration and track.
         let mut loaded = Vec::new();

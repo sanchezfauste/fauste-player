@@ -3,7 +3,7 @@
 //! sits and how large it is, and the lock. Pure rules: the interface turns
 //! them into rectangles (RL11).
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::error::ModelError;
 use crate::ids::PlayerId;
@@ -16,6 +16,45 @@ pub const DEFAULT_SIDE_SHARE: f32 = 0.3;
 pub const MIN_CARTWALL_SHARE: f32 = 0.05;
 /// RL6: the largest share of the middle area the cartwall's `size` holds.
 pub const MAX_CARTWALL_SHARE: f32 = 0.95;
+
+/// One value read leniently: anything that does not parse is `Other`.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Lenient<T> {
+    Valid(T),
+    Other(serde::de::IgnoredAny),
+}
+
+impl<T> Lenient<T> {
+    fn ok(self) -> Option<T> {
+        match self {
+            Lenient::Valid(v) => Some(v),
+            Lenient::Other(_) => None,
+        }
+    }
+}
+
+/// RL19: a part that does not parse loads as its default.
+fn lenient<'de, D: Deserializer<'de>, T: Deserialize<'de> + Default>(d: D) -> Result<T, D::Error> {
+    Ok(Lenient::<T>::deserialize(d)?.ok().unwrap_or_default())
+}
+
+/// RL19: a list keeps every element that parses; a value that is not a
+/// list is empty.
+fn lenient_items<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
+    let items = Lenient::<Vec<Lenient<T>>>::deserialize(d)?
+        .ok()
+        .unwrap_or_default();
+    Ok(items.into_iter().filter_map(Lenient::ok).collect())
+}
+
+/// RL19: the `deserialize_with` of a session's `layout`: a value that is
+/// not a layout loads as the default, and inside it each part falls back
+/// on its own. The store reports what fell back (`fp-store`'s
+/// `layout_notes`).
+pub fn lenient_layout<'de, D: Deserializer<'de>>(d: D) -> Result<Layout, D::Error> {
+    lenient(d)
+}
 
 /// Where the cartwall sits (spec §2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -51,11 +90,14 @@ pub enum Panel {
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CartwallLayout {
+    #[serde(deserialize_with = "lenient")]
     pub dock: Dock,
     /// The cartwall's share of the middle area: of its height at the
     /// bottom, of its width on a side. `None` fits the content (bottom
     /// only).
+    #[serde(deserialize_with = "lenient")]
     pub size: Option<f32>,
+    #[serde(deserialize_with = "lenient")]
     pub hidden: bool,
 }
 
@@ -81,9 +123,13 @@ impl CartwallLayout {
 #[serde(default)]
 pub struct Layout {
     /// Each player's share of the players' width (RL2).
+    #[serde(deserialize_with = "lenient_items")]
     pub player_shares: Vec<(PlayerId, f32)>,
+    #[serde(deserialize_with = "lenient_items")]
     pub hidden_players: Vec<PlayerId>,
+    #[serde(deserialize_with = "lenient")]
     pub cartwall: CartwallLayout,
+    #[serde(deserialize_with = "lenient")]
     pub locked: bool,
 }
 

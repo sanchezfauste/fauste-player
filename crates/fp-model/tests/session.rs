@@ -16,6 +16,7 @@ fn parts(state: &AppState) -> RestoreParts {
         playlists: state.playlists.clone(),
         cart_pages: state.cartwall.pages.clone(),
         cartwall_session: state.cartwall.session(),
+        layout: state.layout.clone(),
         ids: state.ids.clone(),
     }
 }
@@ -92,6 +93,7 @@ fn restoring_with_no_playlists_creates_a_default_one_and_moves_ids_forward() {
         playlists: Playlists::default(),
         cart_pages: Vec::new(),
         cartwall_session: fp_model::CartwallSession::default(),
+        layout: fp_model::Layout::default(),
         ids: IdGen::default(),
     };
     let duplicate = PlayerSession {
@@ -156,6 +158,7 @@ fn restored_cart_pages_are_normalised() {
         playlists: state.playlists.clone(),
         cart_pages: vec![broken.clone(), broken],
         cartwall_session: CartwallSession::default(),
+        layout: fp_model::Layout::default(),
         ids: state.ids.clone(),
     };
     let (restored, _) = AppState::restore(parts, &[], "Main");
