@@ -9,7 +9,7 @@ use fp_model::{CartKind, CartPageId, Command};
 use super::app::{Scene, ViewState};
 use super::cart_view::{
     BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, MIN_BUTTON_WIDTH, button_height, cart_look,
-    cart_view, page_on_air,
+    cart_view, filled_button_height, page_on_air,
 };
 use super::glyphs::{self, TransportAction};
 use super::panel_layout::CartwallSizes;
@@ -125,7 +125,10 @@ pub(crate) fn page_name(scene: &Scene<'_>, index: usize, name: &str) -> String {
     }
 }
 
-pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+/// The cartwall panel: its header and the shown page's grid. `fill`: the
+/// buttons fill the panel (RL13); otherwise it fits its content, 40-point
+/// buttons at most.
+pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, fill: bool) {
     header(ui, scene, view_state);
     if !scene.state.cartwall.open {
         return;
@@ -136,7 +139,7 @@ pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) 
     egui::ScrollArea::both()
         .id_salt("cart-grid")
         .auto_shrink([false, false])
-        .show(ui, |ui| grid(ui, scene, view_state, available));
+        .show(ui, |ui| grid(ui, scene, view_state, available, fill));
 }
 
 fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
@@ -324,7 +327,7 @@ fn kind_label(scene: &Scene<'_>, kind: CartKind) -> String {
     })
 }
 
-fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f32) {
+fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f32, fill: bool) {
     let t = scene.i18n;
     let Some(page) = scene.state.cartwall.shown_page() else {
         return;
@@ -335,7 +338,14 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
     let page_id = page.id;
     // GAP is the only space between rows: the theme's own would add to it.
     ui.spacing_mut().item_spacing.y = 0.0;
-    let button = button_height(available, page.carts.chunks(cols).count());
+    let rows = page.carts.chunks(cols).count();
+    // RL13: in a panel that does not fit its content the buttons fill it;
+    // fitting its content they keep today's 40-point cap.
+    let button = if fill {
+        filled_button_height(available, rows)
+    } else {
+        button_height(available, rows)
+    };
     for (row_index, row) in page.carts.chunks(cols).enumerate() {
         if row_index > 0 {
             ui.add_space(GAP);
@@ -415,7 +425,14 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                                 look.wave,
                             );
                         }
-                        let inner = r.shrink2(vec2(8.0, 4.0));
+                        // RL13: the text keeps its size; in a taller button
+                        // the text block of a 40-point one is centred, while
+                        // the waveform and the bars take the whole button.
+                        let inner = Rect::from_center_size(
+                            r.center(),
+                            vec2(r.width(), r.height().min(BUTTON_HEIGHT)),
+                        )
+                        .shrink2(vec2(8.0, 4.0));
                         let dot = match view.status {
                             CartStatus::Empty => theme::NEUTRAL_700,
                             CartStatus::Unavailable => theme::AMBER,

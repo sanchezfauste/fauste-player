@@ -16,7 +16,7 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::services::{MediaCache, TrackMedia};
 use fp_app::ui::cart_view::{
     BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, button_height, cart_look, cart_view,
-    page_on_air,
+    filled_button_height, page_on_air,
 };
 use fp_app::ui::theme;
 use fp_engine::conductor::Telemetry;
@@ -887,4 +887,14 @@ fn cc8_without_peaks_nothing_is_drawn() {
         0,
         "not analysed yet"
     );
+}
+
+#[test]
+fn rl13_filled_buttons_take_all_the_height_above_the_minimum() {
+    assert_eq!(filled_button_height(1000.0, 2), (1000.0 - GAP) / 2.0);
+    assert_eq!(filled_button_height(4.0 * 40.0 + 3.0 * GAP, 4), 40.0);
+    assert_eq!(filled_button_height(10.0, 4), MIN_BUTTON_HEIGHT);
+    assert_eq!(filled_button_height(f32::NAN, 4), BUTTON_HEIGHT);
+    assert_eq!(filled_button_height(f32::INFINITY, 4), BUTTON_HEIGHT);
+    assert_eq!(filled_button_height(100.0, 0), BUTTON_HEIGHT);
 }

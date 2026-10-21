@@ -17,7 +17,7 @@ use egui::{CursorIcon, Event, Key, Modifiers, PointerButton, Pos2, Rect, Vec2, p
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::app::AppUi;
-use fp_app::ui::cart_view::{GAP, MIN_BUTTON_WIDTH};
+use fp_app::ui::cart_view::{BUTTON_HEIGHT, GAP, MIN_BUTTON_HEIGHT, MIN_BUTTON_WIDTH};
 use fp_app::ui::controller::Controller;
 use fp_app::ui::panel_layout::{MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH, PANEL_GAP};
 use fp_app::ui::theme;
@@ -1629,4 +1629,106 @@ fn rl16_only_a_primary_drag_on_the_cartwall_splitter_ends_a_maximise() {
     h.run_steps(2);
     assert_eq!(h.state().maximised(), Some(Panel::Player(p1)));
     assert!(layout_commands(&fake).is_empty());
+}
+
+// --- buttons scale (RL13)
+
+/// Cart `n` of the shown page, empty.
+fn empty_cart(h: &Harness<'_, AppUi>, n: usize) -> Rect {
+    h.get_all_by_label(&format!("Cart {n}, empty"))
+        .next()
+        .expect("the cart is built")
+        .rect()
+}
+
+/// Where the text `text` is laid out: the galley's rectangle.
+fn text_rect(h: &Harness<'_, AppUi>, text: &str) -> Option<Rect> {
+    fn walk(shape: &egui::Shape, text: &str, found: &mut Option<Rect>) {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text() == text => {
+                *found = Some(Rect::from_min_size(t.pos, t.galley.size()));
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, text, found)),
+            _ => {}
+        }
+    }
+    let mut found = None;
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, text, &mut found);
+    }
+    found
+}
+
+#[test]
+fn rl13_fitting_the_content_keeps_todays_buttons() {
+    let (h, _) = tall(state(2, 3));
+    // Today's: the header's item spacing (4 points) leaves the two rows 82
+    // of the panel's 116, so each is 38 points tall, never more than 40.
+    let r = empty_cart(&h, 2);
+    assert!(
+        (r.height() - (BUTTON_HEIGHT - 2.0)).abs() < 0.01,
+        "{r:?} in {:?}",
+        cart_rect(&h)
+    );
+}
+
+#[test]
+fn rl13_buttons_grow_with_a_bottom_share() {
+    let mut s = state(2, 3);
+    s.layout.cartwall.size = Some(0.5);
+    let (h, _) = tall(s);
+    let cart = cart_rect(&h);
+    let (first, last) = (empty_cart(&h, 2), empty_cart(&h, 16));
+    assert!(first.height() > BUTTON_HEIGHT, "{first:?}");
+    assert!(near(first.height(), last.height()));
+    assert!(
+        near(last.bottom(), cart.bottom()),
+        "the grid fills the panel: {last:?} in {cart:?}"
+    );
+}
+
+#[test]
+fn rl13_buttons_grow_with_a_side_dock() {
+    let (h, _) = wide(docked(state(2, 3), Dock::Left, Some(0.3)));
+    let cart = cart_rect(&h);
+    let last = empty_cart(&h, 16);
+    assert!(last.height() > BUTTON_HEIGHT, "{last:?}");
+    assert!(near(last.bottom(), cart.bottom()), "{last:?} in {cart:?}");
+    assert!(near(last.right(), cart.right()), "{last:?} in {cart:?}");
+}
+
+#[test]
+fn rl13_at_the_least_size_the_grid_scrolls() {
+    // Eight rows of 28 need 24 + 6 + 8 × 28 + 7 × 6 = 296 points; the middle
+    // area of a 360-point window has 270.
+    let s = docked(with_grid(state(2, 3), 8, 8), Dock::Left, Some(0.3));
+    let (h, _) = harness_sized(s, vec2(2000.0, 360.0), |ui| ui);
+    let cart = cart_rect(&h);
+    assert!(near(empty_cart(&h, 1).height(), MIN_BUTTON_HEIGHT));
+    let last = empty_cart(&h, 64);
+    assert!(
+        last.bottom() > cart.bottom(),
+        "the last row is below: {last:?} {cart:?}"
+    );
+}
+
+#[test]
+fn rl13_a_tall_buttons_text_keeps_its_size_and_is_centred() {
+    let mut s = with_station_id(state(2, 3));
+    s.layout.cartwall.size = Some(0.5);
+    let (h, _) = tall(s);
+    let button = h.get_all_by_label("Station ID").next().unwrap().rect();
+    assert!(button.height() > 2.0 * BUTTON_HEIGHT, "{button:?}");
+    // The text block of a 40-point button, inside its 4-point margins,
+    // centred in the taller button.
+    let name = text_rect(&h, "Station ID").expect("the name is painted");
+    assert!(
+        near(name.top(), button.center().y - BUTTON_HEIGHT / 2.0 + 4.0),
+        "{name:?} in {button:?}"
+    );
+    let kind = text_rect(&h, "Jingle").expect("the kind is painted");
+    assert!(
+        near(kind.bottom(), button.center().y + BUTTON_HEIGHT / 2.0 - 4.0),
+        "{kind:?} in {button:?}"
+    );
 }

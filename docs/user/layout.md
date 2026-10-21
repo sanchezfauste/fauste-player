@@ -57,6 +57,11 @@ to the starting size: as tall as its rows need under the players, three
 tenths of the width beside them. The size is saved with the layout; moving
 the cartwall starts it again at its starting size.
 
+Once you resize the cartwall, or while it sits beside the players, its
+buttons grow to fill it; the names and times keep their size, in the middle
+of each button. When the cartwall is smaller than its rows and columns need
+at the smallest buttons, it scrolls.
+
 ## Maximize a panel
 
 Right-click the background of a player's header, or of the cartwall's

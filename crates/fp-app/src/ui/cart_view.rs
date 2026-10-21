@@ -27,6 +27,17 @@ pub fn button_height(available: f32, rows: usize) -> f32 {
     ((available - gaps) / rows as f32).clamp(MIN_BUTTON_HEIGHT, BUTTON_HEIGHT)
 }
 
+/// RL13: the height of a cart button when the grid fills a panel that does
+/// not fit its content: what fits, never under `MIN_BUTTON_HEIGHT`, with no
+/// upper clamp. The grid scrolls only when even the minimum does not fit.
+pub fn filled_button_height(available: f32, rows: usize) -> f32 {
+    if rows == 0 || !available.is_finite() {
+        return BUTTON_HEIGHT;
+    }
+    let gaps = GAP * (rows - 1) as f32;
+    ((available - gaps) / rows as f32).max(MIN_BUTTON_HEIGHT)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CartStatus {
     /// No file.

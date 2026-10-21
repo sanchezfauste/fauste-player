@@ -774,7 +774,7 @@ impl AppUi {
                     .layout(Layout::top_down(Align::Min)),
             );
             cart_ui.set_clip_rect(cart_rect);
-            cartwall::strip(&mut cart_ui, &scene, &mut self.view);
+            cartwall::strip(&mut cart_ui, &scene, &mut self.view, !arranged.fit_content);
         }
         // RL12: the splitter beside the cartwall, over the gap.
         panels::cartwall_splitter(ui, &scene, &mut self.view, &model_input, &arranged, &normal);

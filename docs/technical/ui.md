@@ -119,6 +119,17 @@ without it (`normal`). A double-click sends `SetCartwallSize(None)` at the
 bottom (fit the content) and `SetCartwallSize(Some(DEFAULT_SIDE_SHARE))`
 on a side.
 
+**Buttons scale** (RL13). `Arrangement::fit_content` is true only at the
+bottom without a share, with nothing maximized and a player shown. Then
+`cartwall::strip` sizes the buttons with `cart_view::button_height` (40
+points at most, as before); otherwise with `cart_view::filled_button_height`
+(what fits, never under `MIN_BUTTON_HEIGHT`, no upper clamp), so the grid
+fills the panel. Widths always fill it, never under `MIN_BUTTON_WIDTH`.
+Below the minimums the grid scrolls (`ScrollArea::both`). In a button
+taller than `BUTTON_HEIGHT` the text block of a 40-point button is centred
+vertically; the waveform, the remaining-time fill and the CUE outline take
+the whole button.
+
 **Top bar** (RL15). `top_bar` lays out its right-hand block (the clock,
 Settings, About, the pending tile) first, from the right end, and passes
 where it begins to `panels::layout_controls`, which draws one tile per
