@@ -109,6 +109,12 @@ impl Normalization {
     }
 }
 
+/// N7: the gain, in dB, that brings a track measured at `lufs` to the
+/// target with `trim`, before any limit.
+pub fn wanted_gain_db(config: &LoudnessConfig, lufs: f32, trim: f32) -> f32 {
+    config.target_lufs - lufs + trim
+}
+
 /// N7: the gain `track` gets under `config` on a device that is
 /// `bit_perfect` or not.
 pub fn normalization(config: &LoudnessConfig, track: &Track, bit_perfect: bool) -> Normalization {
@@ -129,7 +135,7 @@ pub fn normalization(config: &LoudnessConfig, track: &Track, bit_perfect: bool) 
         return Normalization::none(S::Silent);
     };
     let trim = trim_in_use(config, &track.loudness_edit);
-    let wanted = config.target_lufs - lufs + trim;
+    let wanted = wanted_gain_db(config, lufs, trim);
     // The ceiling and the maximum boost only limit boosts (Q2).
     let peak_room = (config.true_peak_ceiling_dbtp - measured.true_peak_dbtp).max(0.0);
     let (gain, limited) = if wanted <= 0.0 {

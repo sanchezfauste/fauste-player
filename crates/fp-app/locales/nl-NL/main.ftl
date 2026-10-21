@@ -163,10 +163,10 @@ settings-normalize-max-boost = Maximale versterking
 settings-normalize-max-trim = Maximale trim
 settings-hint-normalize-apply = Wijzigingen gelden voor nummers die daarna worden geladen; wat speelt, behoudt zijn versterking.
 settings-hint-normalize-bp = Een speler of cart op een bit-perfect uitgang speelt altijd op eenheidsversterking: hij wordt nooit genormaliseerd.
-settings-hint-normalize-target = De geïntegreerde luidheid waarop elk nummer wordt gebracht. −16 LUFS past bij muziek in de ether en online; −23 LUFS is het EBU R128-uitzendniveau.
-settings-hint-normalize-ceiling = Een versterking brengt de true peak van een nummer nooit boven deze waarde. −1 dBTP laat ruimte voor conversie en verliesgevende encoders.
-settings-hint-normalize-max-boost = Het maximum waarmee een zacht nummer wordt versterkt. Bij 0 dB worden alleen harde nummers zachter gezet.
-settings-hint-normalize-max-trim = Hoe ver de eigen correctie van een nummer mag gaan, omhoog of omlaag.
+settings-hint-normalize-target = De luidheid waarop elk nummer wordt gebracht.
+settings-hint-normalize-ceiling = Een versterking komt nooit boven deze true peak.
+settings-hint-normalize-max-boost = De maximale versterking van een zacht nummer.
+settings-hint-normalize-max-trim = Hoe ver de correctie van een nummer mag gaan.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } nummer nog niet gemeten
    *[other] { $count } nummers nog niet gemeten

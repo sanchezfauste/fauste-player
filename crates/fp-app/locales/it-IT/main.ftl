@@ -163,10 +163,10 @@ settings-normalize-max-boost = Guadagno massimo
 settings-normalize-max-trim = Trim massimo
 settings-hint-normalize-apply = Le modifiche si applicano ai brani caricati in seguito; ciò che è in riproduzione mantiene il suo guadagno.
 settings-hint-normalize-bp = Un player o un cart su un'uscita bit-perfect suona sempre a guadagno unitario: non viene mai normalizzato.
-settings-hint-normalize-target = La sonorità integrata a cui viene portata ogni traccia. −16 LUFS va bene per la musica in onda e online; −23 LUFS è il livello di diffusione EBU R128.
-settings-hint-normalize-ceiling = Un aumento non porta mai il picco reale di una traccia oltre questo valore. −1 dBTP lascia margine per la conversione e per gli encoder con perdita.
-settings-hint-normalize-max-boost = Il massimo di cui viene alzata una traccia bassa. Con 0 dB si abbassano solo le tracce forti.
-settings-hint-normalize-max-trim = Fin dove può arrivare la regolazione propria di una traccia, in su o in giù.
+settings-hint-normalize-target = La sonorità a cui viene portata ogni traccia.
+settings-hint-normalize-ceiling = Un aumento non supera mai questo true peak.
+settings-hint-normalize-max-boost = Il massimo aumento di una traccia bassa.
+settings-hint-normalize-max-trim = Fin dove arriva la regolazione di una traccia.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } brano non ancora misurato
    *[other] { $count } brani non ancora misurati

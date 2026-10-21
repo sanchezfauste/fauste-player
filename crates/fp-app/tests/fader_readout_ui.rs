@@ -85,25 +85,41 @@ fn a_locked_fader_shows_zero_dimmed() {
 /// The x of the centre of the text `text` and of the fader's knob on the
 /// last frame.
 fn readout_and_knob_x(h: &H, text: &str) -> (f32, f32) {
-    fn walk(shape: &egui::Shape, text: &str, readout: &mut Vec<f32>, knobs: &mut Vec<f32>) {
+    let (centre, knob, _) = readout_knob_and_left(h, text);
+    (centre, knob)
+}
+
+/// As `readout_and_knob_x`, with the left edge of the readout too.
+fn readout_knob_and_left(h: &H, text: &str) -> (f32, f32, f32) {
+    fn walk(
+        shape: &egui::Shape,
+        text: &str,
+        readout: &mut Vec<f32>,
+        knobs: &mut Vec<f32>,
+        lefts: &mut Vec<f32>,
+    ) {
         match shape {
             egui::Shape::Text(t) if t.galley.text() == text => {
                 readout.push(t.pos.x + t.galley.size().x / 2.0);
+                lefts.push(t.pos.x);
             }
-            egui::Shape::Rect(r) if (r.rect.width() - 12.0).abs() < 0.01 => {
+            egui::Shape::Rect(r)
+                if (r.rect.width() - 12.0).abs() < 0.01
+                    && r.fill == fp_app::ui::theme::NEUTRAL_100 =>
+            {
                 knobs.push(r.rect.center().x);
             }
-            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, text, readout, knobs)),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, text, readout, knobs, lefts)),
             _ => {}
         }
     }
-    let (mut readout, mut knobs) = (Vec::new(), Vec::new());
+    let (mut readout, mut knobs, mut lefts) = (Vec::new(), Vec::new(), Vec::new());
     for clipped in &h.output().shapes {
-        walk(&clipped.shape, text, &mut readout, &mut knobs);
+        walk(&clipped.shape, text, &mut readout, &mut knobs, &mut lefts);
     }
     assert_eq!(readout.len(), 1, "one {text:?}: {readout:?}");
     assert!(!knobs.is_empty(), "a knob");
-    (readout[0], knobs[0])
+    (readout[0], knobs[0], lefts[0])
 }
 
 #[test]
@@ -114,4 +130,17 @@ fn the_readout_is_centred_on_the_knob() {
     h.run_steps(2);
     let (readout, knob) = readout_and_knob_x(&h, "-6.5");
     assert!((readout - knob).abs() <= 0.5, "{readout} vs {knob}");
+}
+
+#[test]
+fn the_widest_readout_stays_within_the_gap_before_the_meter() {
+    let mut s = state(1, 1);
+    s.players[0].volume = 10f32.powf(-60.0 / 20.0);
+    let (mut h, _) = harness(s);
+    h.run_steps(2);
+    let (_, knob, left) = readout_knob_and_left(&h, "-60.0");
+    // The fader's column starts 8 px left of the knob axis; the gap
+    // before the meter is 6 px.
+    let column_left = knob - 8.0;
+    assert!(left >= column_left - 6.0, "{left} vs column {column_left}");
 }

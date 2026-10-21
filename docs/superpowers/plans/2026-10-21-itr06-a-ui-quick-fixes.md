@@ -11,5 +11,5 @@ Goal: six small operator-feedback fixes (I5, I9, I15, I7, I3, I2). One commit pe
 | I3 | "Loudness…" in the playlist row menu | `ui/table.rs`, caller | `loudness_ui.rs` | `menu-loudness` |
 | I2 | Gain badge not dimmed; tooltip states the applied gain; trim line only when not 0 | `ui/player.rs`, `ui/view.rs` | `loudness_ui.rs`, `ui_polish.rs` | `tip-gain-applied`, `tip-gain-limited-*`, `tip-gain-trim` |
 
-Docs: `docs/user/loudness.md`, `docs/user/players.md`, `docs/user/playlists.md`, the loudness spec (N18-N22) and the main spec legend line.
+Docs: `docs/user/loudness.md`, `docs/user/playlists.md`, the loudness spec (N18-N22) and the main spec legend line.
 All strings go to the 11 locales.

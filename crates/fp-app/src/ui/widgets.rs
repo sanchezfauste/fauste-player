@@ -1424,10 +1424,10 @@ pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
 }
 
 /// The x of the fader's axis (the knob and the track) in a column `rect`.
-/// The level readout is centred on it; 1.5 px of padding keep "-60.0"
+/// The level readout is centred on it; 2 px of padding keep "-60.0"
 /// (27 px wide) within the gap before the meter.
 pub fn fader_axis_x(rect: Rect) -> f32 {
-    rect.left() + FADER_KNOB_WIDTH / 2.0 + 1.5
+    rect.left() + FADER_KNOB_WIDTH / 2.0 + 2.0
 }
 
 /// The levels marked beside the fader, in dB from the top; the last, `-inf`,

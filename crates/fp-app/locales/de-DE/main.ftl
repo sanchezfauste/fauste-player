@@ -163,10 +163,10 @@ settings-normalize-max-boost = Maximale Anhebung
 settings-normalize-max-trim = Maximaler Trim
 settings-hint-normalize-apply = Änderungen gelten für danach geladene Titel; was gerade läuft, behält seine Verstärkung.
 settings-hint-normalize-bp = Ein Player oder Cart an einem Bit-perfect-Ausgang spielt immer mit Einheitsverstärkung: Er wird nie normalisiert.
-settings-hint-normalize-target = Die integrierte Lautheit, auf die jeder Track gebracht wird. −16 LUFS passt für Musik on Air und online; −23 LUFS ist der EBU-R128-Rundfunkpegel.
-settings-hint-normalize-ceiling = Eine Anhebung bringt den True Peak eines Tracks nie über diesen Wert. −1 dBTP lässt Spielraum für Konvertierung und verlustbehaftete Encoder.
-settings-hint-normalize-max-boost = Wie weit ein leiser Track höchstens angehoben wird. Bei 0 dB werden nur laute Tracks abgesenkt.
-settings-hint-normalize-max-trim = Wie weit die eigene Anpassung eines Tracks nach oben oder unten gehen darf.
+settings-hint-normalize-target = Die Lautheit, auf die jeder Titel gebracht wird.
+settings-hint-normalize-ceiling = Eine Anhebung überschreitet nie diesen True Peak.
+settings-hint-normalize-max-boost = Maximale Anhebung eines leisen Titels.
+settings-hint-normalize-max-trim = Maximale Anpassung pro Titel.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } Titel noch nicht gemessen
    *[other] { $count } Titel noch nicht gemessen

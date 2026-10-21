@@ -83,7 +83,7 @@ pub(crate) fn trim(ui: &mut Ui, scene: &Scene<'_>, track: &Track) {
     }
 }
 
-/// N20: the Loudness… popup of the track the waveform menu chose. It holds
+/// N20: the Loudness… popup of the track the waveform or row menu chose. It holds
 /// that track whatever the players show next, and closes with its button
 /// or by itself once the track leaves the library.
 pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {

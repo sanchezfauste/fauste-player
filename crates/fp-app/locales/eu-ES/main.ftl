@@ -163,10 +163,10 @@ settings-normalize-max-boost = Gehieneko igoera
 settings-normalize-max-trim = Gehieneko doikuntza
 settings-hint-normalize-apply = Aldaketak geroago kargatzen diren pistei aplikatzen zaizkie; entzuten ari dena bere irabaziarekin jarraitzen du.
 settings-hint-normalize-bp = Bit perfect irteera batean dagoen erreproduzigailu edo kartutxo batek beti irabazi unitarioarekin jotzen du: ez da inoiz normalizatzen.
-settings-hint-normalize-target = Pista bakoitza eramaten den bolumen integratua. −16 LUFS egokia da musika airean eta sarean jartzeko; −23 LUFS EBU R128 emisio-maila da.
-settings-hint-normalize-ceiling = Igoera batek ez du inoiz pista baten benetako gailurra balio hau gainetik eramaten. −1 dBTP-k tartea uzten du bihurketarako eta galerarekiko kodetzaileetarako.
-settings-hint-normalize-max-boost = Pista baxu bat gehienez zenbat igotzen den. 0 dB-rekin pista indartsuak soilik jaisten dira.
-settings-hint-normalize-max-trim = Pista baten doikuntza propioa nora irits daitekeen, gora edo behera.
+settings-hint-normalize-target = Pista guztiak eramaten diren ozentasuna.
+settings-hint-normalize-ceiling = Igoerak ez du true peak hau gainditzen.
+settings-hint-normalize-max-boost = Pista baxu bat gehienez zenbat igotzen den.
+settings-hint-normalize-max-trim = Pista baten doikuntzaren muga.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } pista oraindik neurtu gabe
    *[other] { $count } pista oraindik neurtu gabe

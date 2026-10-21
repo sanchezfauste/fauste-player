@@ -57,22 +57,13 @@ fn every_analysis_value_has_a_one_line_hint() {
 }
 
 const LOUDNESS_HINTS: [(&str, &str); 4] = [
-    (
-        "Target",
-        "The integrated loudness every track is brought to. \u{2212}16 LUFS suits music on air and online; \u{2212}23 LUFS is the EBU R128 broadcast level.",
-    ),
+    ("Target", "The loudness every track is brought to."),
     (
         "True-peak ceiling",
-        "A boost never takes a track's true peak above this. \u{2212}1 dBTP leaves room for conversion and lossy encoders.",
+        "A boost never takes a true peak above this.",
     ),
-    (
-        "Maximum boost",
-        "The most a quiet track is turned up. 0 dB only turns loud tracks down.",
-    ),
-    (
-        "Maximum trim",
-        "How far a track's own trim may go, up or down.",
-    ),
+    ("Maximum boost", "The most a quiet track is turned up."),
+    ("Maximum trim", "How far a track's trim may go."),
 ];
 
 #[test]

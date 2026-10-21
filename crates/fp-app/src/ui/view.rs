@@ -706,7 +706,11 @@ fn applied_tip(
         .map_or_else(|| "—".to_owned(), decimal);
     let trim = fp_model::trim_in_use(config, &track.loudness_edit);
     let measured = track.loudness.and_then(|m| m.integrated_lufs);
-    let wanted = signed_db(config.target_lufs - measured.unwrap_or(config.target_lufs) + trim);
+    let wanted = signed_db(fp_model::wanted_gain_db(
+        config,
+        measured.unwrap_or(config.target_lufs),
+        trim,
+    ));
     let mut tip = vec![Message::new(
         "tip-gain-applied",
         &[

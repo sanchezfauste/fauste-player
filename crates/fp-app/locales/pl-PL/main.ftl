@@ -167,10 +167,10 @@ settings-normalize-max-boost = Maksymalne wzmocnienie
 settings-normalize-max-trim = Maksymalna korekta
 settings-hint-normalize-apply = Zmiany dotyczą utworów wczytanych później; to, co gra, zachowuje swoje wzmocnienie.
 settings-hint-normalize-bp = Odtwarzacz lub cart na wyjściu bit-perfect zawsze gra ze wzmocnieniem jednostkowym: nigdy nie jest normalizowany.
-settings-hint-normalize-target = Zintegrowana głośność, do której sprowadzany jest każdy utwór. −16 LUFS pasuje do muzyki na antenie i w sieci; −23 LUFS to poziom nadawczy EBU R128.
-settings-hint-normalize-ceiling = Podbicie nigdy nie wynosi szczytu rzeczywistego utworu ponad tę wartość. −1 dBTP zostawia zapas na konwersję i kodeki stratne.
-settings-hint-normalize-max-boost = O ile najwyżej podbijany jest cichy utwór. Przy 0 dB tylko głośne utwory są ściszane.
-settings-hint-normalize-max-trim = Jak daleko może sięgać własna korekta utworu, w górę lub w dół.
+settings-hint-normalize-target = Głośność, do której sprowadzany jest każdy utwór.
+settings-hint-normalize-ceiling = Podbicie nigdy nie przekracza tego szczytu rzeczywistego.
+settings-hint-normalize-max-boost = Maksymalne podbicie cichego utworu.
+settings-hint-normalize-max-trim = Jak daleko sięga korekta utworu.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } utwór jeszcze niezmierzony
     [few] { $count } utwory jeszcze niezmierzone

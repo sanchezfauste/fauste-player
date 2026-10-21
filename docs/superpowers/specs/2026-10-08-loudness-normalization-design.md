@@ -378,7 +378,7 @@ band) stays a separate value, whatever the normalization target (Q4).
   (`crates/fp-app/src/ui/settings/loudness.rs`) with: **Normalize
   loudness** (toggle), **Target** (slider, LUFS), **True-peak ceiling**
   (slider, dBTP), **Maximum boost** (slider, dB), **Maximum trim**
-  (slider, dB), each with a one-line hint, a hint "Changes apply to tracks loaded afterwards; what is
+  (slider, dB), each with a short one-clause hint (the loudness every track is brought to; a boost never takes a true peak above the ceiling; the most a quiet track is turned up; how far a track's trim may go), a hint "Changes apply to tracks loaded afterwards; what is
   playing keeps its gain.", a line counting tracks not measured
   (`loudness_unmeasured(state)`: playable with `loudness == None` and
   `loudness_pass != Some(LOUDNESS_VERSION)`, i.e. still waiting for the

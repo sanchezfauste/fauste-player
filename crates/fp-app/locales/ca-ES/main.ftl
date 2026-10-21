@@ -163,10 +163,10 @@ settings-normalize-max-boost = Guany màxim
 settings-normalize-max-trim = Ajust màxim
 settings-hint-normalize-apply = Els canvis s'apliquen a les pistes que es carreguin després; el que sona conserva el seu guany.
 settings-hint-normalize-bp = Un reproductor o un cartutx en una sortida bit perfect sempre sona a guany unitari: mai no es normalitza.
-settings-hint-normalize-target = La sonoritat integrada a la qual es porta cada pista. −16 LUFS va bé per a música en antena i en línia; −23 LUFS és el nivell de difusió EBU R128.
-settings-hint-normalize-ceiling = Una pujada mai no porta el pic real d'una pista per sobre d'aquest valor. −1 dBTP deixa marge per a la conversió i els codificadors amb pèrdua.
-settings-hint-normalize-max-boost = El màxim que es puja una pista baixa. Amb 0 dB només es baixen les pistes fortes.
-settings-hint-normalize-max-trim = Fins on pot arribar l'ajust propi d'una pista, cap amunt o cap avall.
+settings-hint-normalize-target = La sonoritat a la qual es porta cada pista.
+settings-hint-normalize-ceiling = Una pujada mai porta el true peak per sobre.
+settings-hint-normalize-max-boost = El màxim que es puja una pista baixa.
+settings-hint-normalize-max-trim = Fins on pot arribar l'ajust d'una pista.
 settings-normalize-unmeasured = { $count ->
     [one] { $count } pista encara sense mesurar
    *[other] { $count } pistes encara sense mesurar
