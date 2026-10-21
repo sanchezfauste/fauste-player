@@ -655,3 +655,16 @@ cue-on-air-cartwall = la cartuchera está sonando
 cue-on-air-cartwall-cue = la cartuchera está preescuchando
 cue-on-air-stopped-player = Preescucha detenida: el player { $n } ha empezado en la misma salida.
 cue-on-air-stopped-cartwall = Preescucha detenida: un cartucho ha empezado en la misma salida.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = Cartuchos
+tip-layout-hide = Ocultar { $panel }
+tip-layout-show = Mostrar { $panel }
+tip-layout-show-on-air = Mostrar { $panel } (sonando)
+tip-layout-menu = Distribución
+layout-dock-bottom = Cartuchera abajo
+layout-dock-left = Cartuchera a la izquierda
+layout-dock-right = Cartuchera a la derecha
+layout-lock = Bloquear la distribución
+layout-equal-widths = Igualar el ancho de los players
+layout-reset = Restablecer la distribución

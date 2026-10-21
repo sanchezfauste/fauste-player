@@ -62,6 +62,10 @@ By default **F1**…**F12** fire carts 1–12 of the page shown, and
 cart you are pre-listening on CUE, even when no cart is playing). See
 [Keyboard](keyboard.md) to change them.
 
+The shortcut that collapses or expands the cartwall does nothing while the
+cartwall is hidden from the top bar (see
+[Layout](layout.md#show-and-hide-panels)).
+
 ## Setting up carts
 
 Go to **Settings → Cartwall**:

@@ -5,7 +5,7 @@
 
 use egui::{Rect, Vec2, pos2};
 use fp_model::layout::Panel;
-use fp_model::{Command, PlayerId};
+use fp_model::{AppState, Command, PlayerId, Transport};
 
 /// The gap between two panels; between two players it is a splitter
 /// (RL12).
@@ -293,5 +293,17 @@ impl LiveSplit {
                 *width = self.now.1;
             }
         }
+    }
+}
+
+/// RL15: whether `panel` is on air, for the red dot on a hidden panel's
+/// tile: a player whose current entry is playing or paused (as the close
+/// guard counts it), or the cartwall while any cart plays.
+pub fn panel_on_air(state: &AppState, panel: Panel) -> bool {
+    match panel {
+        Panel::Player(id) => state
+            .player(id)
+            .is_ok_and(|p| p.transport != Transport::Stopped),
+        Panel::Cartwall => !state.cartwall.playing.is_empty(),
     }
 }

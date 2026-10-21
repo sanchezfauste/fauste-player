@@ -655,3 +655,16 @@ cue-on-air-cartwall = la cartutxera està sonant
 cue-on-air-cartwall-cue = la cartutxera està preescoltant
 cue-on-air-stopped-player = Preescolta aturada: el reproductor { $n } ha començat a la mateixa sortida.
 cue-on-air-stopped-cartwall = Preescolta aturada: un cartutx ha començat a la mateixa sortida.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = Cartutxos
+tip-layout-hide = Amagar { $panel }
+tip-layout-show = Mostrar { $panel }
+tip-layout-show-on-air = Mostrar { $panel } (en antena)
+tip-layout-menu = Disposició
+layout-dock-bottom = Cartutxera a baix
+layout-dock-left = Cartutxera a l'esquerra
+layout-dock-right = Cartutxera a la dreta
+layout-lock = Bloquejar la disposició
+layout-equal-widths = Igualar l'amplada dels reproductors
+layout-reset = Restablir la disposició

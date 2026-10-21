@@ -655,3 +655,16 @@ cue-on-air-cartwall = kartutxo-panela jotzen ari da
 cue-on-air-cartwall-cue = kartutxo-panela aurrez entzuten ari da
 cue-on-air-stopped-player = Aurrez entzutea geldituta: { $n }. erreproduzitzailea irteera berean hasi da.
 cue-on-air-stopped-cartwall = Aurrez entzutea geldituta: kartutxo bat irteera berean hasi da.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = Kartutxoak
+tip-layout-hide = Ezkutatu { $panel }
+tip-layout-show = Erakutsi { $panel }
+tip-layout-show-on-air = Erakutsi { $panel } (airean)
+tip-layout-menu = Diseinua
+layout-dock-bottom = Kartutxo-panela behean
+layout-dock-left = Kartutxo-panela ezkerrean
+layout-dock-right = Kartutxo-panela eskuinean
+layout-lock = Blokeatu diseinua
+layout-equal-widths = Berdindu erreproduzitzaileen zabalera
+layout-reset = Berrezarri diseinua

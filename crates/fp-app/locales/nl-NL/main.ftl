@@ -655,3 +655,16 @@ cue-on-air-cartwall = de cartwall speelt
 cue-on-air-cartwall-cue = de cartwall voorbeluistert
 cue-on-air-stopped-player = Voorbeluisteren gestopt: speler { $n } is op dezelfde uitgang gestart.
 cue-on-air-stopped-cartwall = Voorbeluisteren gestopt: een cart is op dezelfde uitgang gestart.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = Carts
+tip-layout-hide = { $panel } verbergen
+tip-layout-show = { $panel } tonen
+tip-layout-show-on-air = { $panel } tonen (on air)
+tip-layout-menu = Indeling
+layout-dock-bottom = Cartwall onderaan
+layout-dock-left = Cartwall links
+layout-dock-right = Cartwall rechts
+layout-lock = Indeling vergrendelen
+layout-equal-widths = Spelers even breed
+layout-reset = Indeling terugzetten

@@ -669,3 +669,16 @@ cue-on-air-cartwall = cartwall gra
 cue-on-air-cartwall-cue = cartwall prowadzi odsłuch wstępny
 cue-on-air-stopped-player = Odsłuch wstępny zatrzymany: odtwarzacz { $n } wystartował na tym samym wyjściu.
 cue-on-air-stopped-cartwall = Odsłuch wstępny zatrzymany: cart wystartował na tym samym wyjściu.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = Carty
+tip-layout-hide = Ukryj { $panel }
+tip-layout-show = Pokaż { $panel }
+tip-layout-show-on-air = Pokaż { $panel } (na antenie)
+tip-layout-menu = Układ
+layout-dock-bottom = Cartwall na dole
+layout-dock-left = Cartwall po lewej
+layout-dock-right = Cartwall po prawej
+layout-lock = Zablokuj układ
+layout-equal-widths = Równa szerokość odtwarzaczy
+layout-reset = Resetuj układ

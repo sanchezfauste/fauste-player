@@ -10,14 +10,16 @@
 
 mod support;
 
-use egui::{CursorIcon, Event, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
+use egui::accesskit::Role;
+use egui::{CursorIcon, Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::app::AppUi;
 use fp_app::ui::controller::Controller;
 use fp_app::ui::panel_layout::{MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH, PANEL_GAP};
-use fp_model::layout::Panel;
-use fp_model::{Command, PlayerId};
+use fp_app::ui::theme;
+use fp_model::layout::{Dock, Panel};
+use fp_model::{Command, KeyChord, PlayerId, Shortcut, ShortcutAction};
 use support::{Fake, harness, harness_sized, state};
 
 /// The shown players' columns in the last frame, in display order.
@@ -369,4 +371,243 @@ fn rl12_a_locked_layout_has_inert_splitters() {
     h.run_steps(3);
     assert!(width_commands(&fake).is_empty());
     assert!(near(column(&h, p[0]).width(), before));
+}
+
+// --- the top bar (RL15)
+
+fn hidden_commands(fake: &Fake) -> Vec<Command> {
+    fake.take_sent()
+        .into_iter()
+        .filter(|c| matches!(c, Command::SetPanelHidden { .. }))
+        .collect()
+}
+
+fn disabled(h: &Harness<'_, AppUi>, label: &str) -> bool {
+    h.get_by_label(label).accesskit_node().is_disabled()
+}
+
+fn open_layout_menu(h: &mut Harness<'_, AppUi>) {
+    h.get_by_label("Layout").click();
+    h.run_steps(2);
+}
+
+/// Whether a red square is painted inside `area`.
+fn red_dot_in(h: &Harness<'_, AppUi>, area: Rect) -> bool {
+    fn walk(shape: &egui::Shape, area: Rect, found: &mut bool) {
+        match shape {
+            egui::Shape::Rect(r) => {
+                *found |= r.fill == theme::ON_AIR_TEXT && area.contains_rect(r.rect);
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, area, found)),
+            _ => {}
+        }
+    }
+    let mut found = false;
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, area, &mut found);
+    }
+    found
+}
+
+#[test]
+fn rl15_a_tile_hides_and_shows_its_player() {
+    let (mut h, fake) = harness(state(2, 3));
+    let p2 = fake.player(1);
+    h.get_by_label("Hide P2").click();
+    h.run_steps(2);
+    assert_eq!(
+        hidden_commands(&fake),
+        vec![Command::SetPanelHidden {
+            panel: Panel::Player(p2),
+            hidden: true,
+        }]
+    );
+    assert_eq!(columns(&h).len(), 1);
+    h.get_by_label("Show P2").click();
+    h.run_steps(2);
+    assert_eq!(columns(&h).len(), 2);
+}
+
+#[test]
+fn rl15_the_carts_tile_hides_and_shows_the_cartwall() {
+    let (mut h, _) = harness(state(2, 3));
+    h.get_by_label("Hide Carts").click();
+    h.run_steps(2);
+    assert_eq!(h.state().cartwall_rect(), None);
+    h.get_by_label("Show Carts").click();
+    h.run_steps(2);
+    assert!(h.state().cartwall_rect().is_some());
+}
+
+#[test]
+fn rl15_the_last_lit_tile_is_disabled() {
+    let mut s = state(1, 3);
+    s.layout.cartwall.hidden = true;
+    let (mut h, fake) = harness(s);
+    assert!(disabled(&h, "Hide P1"));
+    assert!(!disabled(&h, "Show Carts"));
+    h.get_by_label("Hide P1").click();
+    h.run_steps(2);
+    assert!(hidden_commands(&fake).is_empty());
+}
+
+#[test]
+fn rl15_a_hidden_panel_on_air_shows_a_red_dot() {
+    let (mut h, fake) = harness(state(2, 3));
+    let p1 = fake.player(0);
+    Controller::send(fake.as_ref(), Command::Play(p1));
+    h.get_by_label("Hide P1").click();
+    h.run_steps(2);
+    let tile = h.get_by_label("Show P1 (on air)").rect();
+    assert!(red_dot_in(&h, tile));
+    Controller::send(fake.as_ref(), Command::Stop(p1));
+    h.run_steps(2);
+    let tile = h.get_by_label("Show P1").rect();
+    assert!(!red_dot_in(&h, tile));
+}
+
+#[test]
+fn rl15_the_layout_menu_sends_its_commands() {
+    let (mut h, fake) = harness(state(2, 3));
+    open_layout_menu(&mut h);
+    h.get_by_role_and_label(Role::RadioButton, "Cartwall on the left")
+        .click();
+    h.run_steps(2);
+    open_layout_menu(&mut h);
+    h.get_by_label("Equal player widths").click();
+    h.run_steps(2);
+    open_layout_menu(&mut h);
+    h.get_by_label("Reset layout").click();
+    h.run_steps(2);
+    open_layout_menu(&mut h);
+    h.get_by_role_and_label(Role::CheckBox, "Lock layout")
+        .click();
+    h.run_steps(2);
+    let sent: Vec<Command> = fake
+        .take_sent()
+        .into_iter()
+        .filter(|c| {
+            matches!(
+                c,
+                Command::SetCartwallDock(_)
+                    | Command::EqualPlayerWidths
+                    | Command::ResetLayout
+                    | Command::SetLayoutLocked(_)
+            )
+        })
+        .collect();
+    assert_eq!(
+        sent,
+        vec![
+            Command::SetCartwallDock(Dock::Left),
+            Command::EqualPlayerWidths,
+            Command::ResetLayout,
+            Command::SetLayoutLocked(true),
+        ]
+    );
+}
+
+#[test]
+fn rl15_the_menu_checks_the_current_dock() {
+    let mut s = state(2, 3);
+    s.layout.cartwall.dock = Dock::Right;
+    s.layout.cartwall.size = Some(0.3);
+    let (mut h, _) = harness(s);
+    open_layout_menu(&mut h);
+    for (label, on) in [
+        ("Cartwall at the bottom", false),
+        ("Cartwall on the left", false),
+        ("Cartwall on the right", true),
+    ] {
+        let want = if on {
+            egui::accesskit::Toggled::True
+        } else {
+            egui::accesskit::Toggled::False
+        };
+        assert_eq!(
+            h.get_by_role_and_label(Role::RadioButton, label)
+                .accesskit_node()
+                .toggled(),
+            Some(want),
+            "{label}"
+        );
+    }
+}
+
+#[test]
+fn rl15_a_locked_layout_disables_the_tiles_and_the_menu() {
+    let mut s = state(2, 3);
+    s.layout.locked = true;
+    let (mut h, fake) = harness(s);
+    for tile in ["Hide P1", "Hide P2", "Hide Carts"] {
+        assert!(disabled(&h, tile), "{tile}");
+    }
+    open_layout_menu(&mut h);
+    for label in [
+        "Cartwall at the bottom",
+        "Cartwall on the left",
+        "Cartwall on the right",
+    ] {
+        assert!(
+            h.get_by_role_and_label(Role::RadioButton, label)
+                .accesskit_node()
+                .is_disabled(),
+            "{label}"
+        );
+    }
+    assert!(disabled(&h, "Equal player widths"));
+    assert!(disabled(&h, "Reset layout"));
+    let lock = h.get_by_role_and_label(Role::CheckBox, "Lock layout");
+    assert!(!lock.accesskit_node().is_disabled());
+    assert_eq!(
+        lock.accesskit_node().toggled(),
+        Some(egui::accesskit::Toggled::True)
+    );
+    lock.click();
+    h.run_steps(2);
+    assert!(fake.take_sent().contains(&Command::SetLayoutLocked(false)));
+}
+
+#[test]
+fn rl7_the_cartwall_shortcut_does_nothing_while_it_is_hidden() {
+    let shortcut = Shortcut {
+        action: ShortcutAction::ToggleCartwall,
+        chord: KeyChord {
+            key: "C".into(),
+            ctrl: false,
+            alt: false,
+            shift: false,
+            command: false,
+        },
+    };
+    let toggles = |fake: &Fake| {
+        fake.take_sent()
+            .iter()
+            .filter(|c| matches!(c, Command::SetCartwallOpen(_)))
+            .count()
+    };
+    let mut s = state(2, 3);
+    s.config.shortcuts.push(shortcut.clone());
+    let (mut h, fake) = harness(s);
+    h.key_press(Key::C);
+    h.run_steps(2);
+    assert_eq!(toggles(&fake), 1, "shown, the shortcut collapses it");
+    let mut s = state(2, 3);
+    s.config.shortcuts.push(shortcut);
+    s.layout.cartwall.hidden = true;
+    let (mut h, fake) = harness(s);
+    h.key_press(Key::C);
+    h.run_steps(2);
+    assert_eq!(toggles(&fake), 0);
+}
+
+#[test]
+fn rl7_a_hidden_player_still_answers_its_key() {
+    let mut s = state(2, 3);
+    let p = s.player_ids();
+    s.layout.hidden_players = vec![p[1]];
+    let (mut h, fake) = harness(s);
+    h.key_press(Key::Num2);
+    h.run_steps(2);
+    assert!(fake.take_sent().contains(&Command::Play(p[1])));
 }

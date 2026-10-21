@@ -6,11 +6,14 @@
 use std::collections::HashMap;
 
 use egui::{Align, Layout, Rect, Sense, TextureHandle, Ui, UiBuilder, pos2, vec2};
+use fp_model::layout::{Dock, Panel};
 use fp_model::{Command, PlayerId, TrackId};
 
 use super::app::{Scene, ViewState};
 use super::panel_layout::{self, Arrangement, LiveSplit, PANEL_GAP};
 use super::player;
+use super::theme;
+use super::widgets::{self, TileStyle, font};
 
 /// The shown players side by side (RL11), each at its width from the pass
 /// or from a splitter's drag (RL12), with a splitter in each gap; the row
@@ -202,4 +205,151 @@ fn player_splitter(
             ));
         }
     }
+}
+
+/// RL15: on the left of the top bar, one tile per player (`P1` … `Pn`) and
+/// one for the cartwall (`Carts`), lit while the panel is shown, then the
+/// layout menu.
+pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>) {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
+        let t = scene.i18n;
+        for (n, id) in scene.state.player_ids().into_iter().enumerate() {
+            let name = t.tr_args("player-label", &[("n", (n + 1).into())]);
+            panel_tile(ui, scene, Panel::Player(id), &name);
+        }
+        panel_tile(ui, scene, Panel::Cartwall, &t.tr("layout-panel-carts"));
+        ui.add_space(4.0);
+        layout_menu(ui, scene);
+    });
+}
+
+/// One panel tile: a click hides or shows the panel (RL7). Its label says
+/// what a click does; a hidden panel on air shows a red dot. Disabled for
+/// the last shown panel and while the layout is locked.
+fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, panel: Panel, name: &str) {
+    let t = scene.i18n;
+    let layout = &scene.state.layout;
+    let players = scene.state.player_ids();
+    let shown = !layout.is_hidden(panel);
+    let on_air = !shown && panel_layout::panel_on_air(scene.state, panel);
+    let last = layout.is_last_shown(&players, panel);
+    let enabled = !layout.locked && !last;
+    let key = match (shown, on_air) {
+        (true, _) => "tip-layout-hide",
+        (false, true) => "tip-layout-show-on-air",
+        (false, false) => "tip-layout-show",
+    };
+    let label = t.tr_args(key, &[("panel", name.to_owned().into())]);
+    let style = if shown {
+        TileStyle {
+            fill: theme::NEUTRAL_800,
+            border: theme::NEUTRAL_700,
+            content: theme::TEXT,
+            hover_fill: theme::NEUTRAL_700,
+            ..TileStyle::plain()
+        }
+    } else {
+        TileStyle {
+            border: theme::NEUTRAL_800,
+            content: theme::NEUTRAL_500,
+            hover_fill: theme::NEUTRAL_800,
+            ..TileStyle::plain()
+        }
+    };
+    let width = ui
+        .painter()
+        .layout_no_wrap(name.to_owned(), font(11.0), theme::TEXT)
+        .size()
+        .x
+        + 18.0;
+    let response = widgets::tile_without_tooltip(
+        ui,
+        vec2(width.max(30.0), 24.0),
+        &label,
+        enabled,
+        style,
+        |p, r, c| {
+            p.text(r.center(), egui::Align2::CENTER_CENTER, name, font(11.0), c);
+            if on_air {
+                p.rect_filled(
+                    Rect::from_min_size(pos2(r.right() - 8.0, r.top() + 2.0), vec2(6.0, 6.0)),
+                    0.0,
+                    theme::ON_AIR_TEXT,
+                );
+            }
+        },
+    );
+    let tip = if layout.locked {
+        t.tr("error-layout-locked")
+    } else if last {
+        t.tr("error-last-panel")
+    } else {
+        label
+    };
+    if response.on_hover_text(tip).clicked() {
+        scene.ctl.send(Command::SetPanelHidden {
+            panel,
+            hidden: shown,
+        });
+    }
+}
+
+fn dock_key(dock: Dock) -> &'static str {
+    match dock {
+        Dock::Bottom => "layout-dock-bottom",
+        Dock::Left => "layout-dock-left",
+        Dock::Right => "layout-dock-right",
+    }
+}
+
+/// RL15: the layout button and its menu: the cartwall's dock, Lock layout,
+/// Equal player widths and Reset layout. While the layout is locked every
+/// entry but Lock layout is disabled.
+fn layout_menu(ui: &mut Ui, scene: &Scene<'_>) {
+    let t = scene.i18n;
+    let label = t.tr("tip-layout-menu");
+    let style = TileStyle {
+        border: theme::NEUTRAL_800,
+        hover_fill: theme::NEUTRAL_800,
+        ..TileStyle::plain()
+    };
+    let response = widgets::tile(ui, vec2(24.0, 24.0), &label, true, style, |p, r, c| {
+        p.text(
+            r.center(),
+            egui::Align2::CENTER_CENTER,
+            egui_phosphor::regular::LAYOUT,
+            font(14.0),
+            c,
+        );
+    });
+    egui::Popup::menu(&response).show(|ui| {
+        ui.set_min_width(220.0);
+        let layout = &scene.state.layout;
+        let locked = layout.locked;
+        for dock in Dock::ALL {
+            let checked = layout.cartwall.dock == dock;
+            let radio = egui::RadioButton::new(checked, t.tr(dock_key(dock)));
+            if ui.add_enabled(!locked, radio).clicked() && !checked {
+                scene.ctl.send(Command::SetCartwallDock(dock));
+                ui.close();
+            }
+        }
+        ui.separator();
+        let mut lock = locked;
+        if ui.checkbox(&mut lock, t.tr("layout-lock")).changed() {
+            scene.ctl.send(Command::SetLayoutLocked(lock));
+        }
+        ui.separator();
+        let equal = egui::Button::new(t.tr("layout-equal-widths"));
+        if ui.add_enabled(!locked, equal).clicked() {
+            scene.ctl.send(Command::EqualPlayerWidths);
+            ui.close();
+        }
+        let reset = egui::Button::new(t.tr("layout-reset"));
+        if ui.add_enabled(!locked, reset).clicked() {
+            scene.ctl.send(Command::ResetLayout);
+            ui.close();
+        }
+    });
 }

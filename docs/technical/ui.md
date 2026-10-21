@@ -83,6 +83,21 @@ held until the model's shares change or `HOLD_SECS` pass, as the table's
 column resize does; a change in the shown players or the row's width ends
 the drag. A double-click sends `EqualPlayerWidths`.
 
+**Top bar** (RL15). `panels::layout_controls`, on the left of `top_bar`,
+draws one tile per player (`player-label`, its place among all players) and
+one for the cartwall (`layout-panel-carts`), lit while shown; a click sends
+`SetPanelHidden`. A tile's accessible label and tooltip say what a click
+does (`tip-layout-hide`, `tip-layout-show`, `tip-layout-show-on-air`); the
+last shown panel's tile and every tile of a locked layout are disabled,
+with `error-last-panel` or `error-layout-locked` as the tooltip. A hidden
+panel that `panel_layout::panel_on_air` (a player not stopped, or any cart
+playing) gets a red square in its corner. The layout button
+(`tip-layout-menu`) opens an `egui::Popup::menu` with the dock radio items
+(`SetCartwallDock`), Lock layout (`SetLayoutLocked`), Equal player widths
+and Reset layout; while locked every entry but the lock is disabled. While
+the cartwall is hidden, the `ToggleCartwall` shortcut maps to no command
+(`shortcut_command`).
+
 ## Data flow
 
 Each frame, `AppUi::ui`:

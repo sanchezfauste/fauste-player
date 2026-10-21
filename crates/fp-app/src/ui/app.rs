@@ -1553,6 +1553,9 @@ fn shortcut_command(state: &AppState, action: ShortcutAction) -> Option<Command>
             Command::FireCart(cart.id)
         }
         ShortcutAction::StopAllCarts => Command::StopAllCarts,
+        // RL7: while the cartwall is hidden, its collapse toggle does
+        // nothing; the top bar's Carts tile shows it.
+        ShortcutAction::ToggleCartwall if state.layout.cartwall.hidden => return None,
         ShortcutAction::ToggleCartwall => Command::SetCartwallOpen(!wall.open),
         ShortcutAction::NextCartPage => Command::ShowCartPage(page_step(1)?),
         ShortcutAction::PreviousCartPage => Command::ShowCartPage(page_step(-1)?),
@@ -1686,6 +1689,8 @@ fn top_bar(
     );
     ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
     ui.add_space(10.0);
+    // RL15: the panel tiles and the layout menu, on the left.
+    panels::layout_controls(ui, scene);
 
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.spacing_mut().item_spacing = vec2(12.0, 0.0);

@@ -655,3 +655,16 @@ cue-on-air-cartwall = le mur de cartouches joue
 cue-on-air-cartwall-cue = le mur de cartouches est en pré-écoute
 cue-on-air-stopped-player = Pré-écoute arrêtée : le lecteur { $n } a démarré sur la même sortie.
 cue-on-air-stopped-cartwall = Pré-écoute arrêtée : une cartouche a démarré sur la même sortie.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = Cartouches
+tip-layout-hide = Masquer { $panel }
+tip-layout-show = Afficher { $panel }
+tip-layout-show-on-air = Afficher { $panel } (à l'antenne)
+tip-layout-menu = Disposition
+layout-dock-bottom = Cartouches en bas
+layout-dock-left = Cartouches à gauche
+layout-dock-right = Cartouches à droite
+layout-lock = Verrouiller la disposition
+layout-equal-widths = Lecteurs de même largeur
+layout-reset = Réinitialiser la disposition

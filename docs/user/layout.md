@@ -6,6 +6,22 @@ layout is saved with the session and comes back at the next start; a new
 installation starts with every player the same width and the cartwall
 under them.
 
+## Show and hide panels
+
+The tiles on the left of the top bar, **P1** … **Pn** and **Carts**, show
+which panels are on screen: a lit tile is shown. Click a tile to hide or
+show its panel. The other panels take the room it leaves, and a player
+shown again comes back at its width.
+
+Hiding only takes a panel off the screen. A hidden player keeps playing,
+and its number key, MIDI, the remote API, its CUE window and automation
+still control it. While a hidden panel is on air its tile shows a red dot:
+a player that is playing or paused, or the cartwall while a cart plays.
+
+At least one panel stays shown: the last lit tile cannot be clicked.
+While the cartwall is hidden, the shortcut that collapses or expands it
+does nothing; click **Carts** to show it.
+
 ## Resize the players
 
 Drag the gap between two players to move width from one to the other. The
@@ -14,3 +30,17 @@ need. Double-click the gap to give every player the same width again.
 
 When the window is too narrow for every shown player at its smallest, the
 players' row scrolls sideways, as it always has.
+
+## The layout menu
+
+The layout button, right of the tiles, opens a menu with:
+
+- **Cartwall at the bottom**, **Cartwall on the left**, **Cartwall on the
+  right**: where the cartwall sits;
+- **Lock layout**: while it is checked, nothing changes the layout by
+  accident: the tiles, the other entries of this menu, the gaps between
+  the players and the headers' **Maximise** and **Hide** do nothing.
+  Playback, and collapsing or expanding the cartwall, work as usual. The
+  lock is saved with the layout;
+- **Equal player widths**: every player the same width;
+- **Reset layout**: back to a new installation's layout.

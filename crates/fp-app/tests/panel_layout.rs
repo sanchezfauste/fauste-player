@@ -7,13 +7,15 @@
 //! Resizable layout spec RL8, RL11 and RL16: the pure pixel pass, one test
 //! per rule, named after it.
 
+use std::path::PathBuf;
+
 use egui::{Rect, pos2, vec2};
 use fp_app::ui::panel_layout::{
     Arrangement, CONTENT_HEIGHT_CAP, CartwallSizes, LiveSplit, MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH,
-    PANEL_GAP, PassInput, SHARE_FLOOR, arrange, drag_pair, pair_shares,
+    PANEL_GAP, PassInput, SHARE_FLOOR, arrange, drag_pair, pair_shares, panel_on_air,
 };
 use fp_model::layout::Panel;
-use fp_model::{AppState, Command, Config, PlayerId};
+use fp_model::{AppState, Command, Config, PlayerId, TrackAnalysis, apply};
 
 /// The middle area of a 1920 × 1080 window, inside its 8-point margin:
 /// under the 34-point top bar, over the 24-point status bar.
@@ -323,4 +325,61 @@ fn rl12_a_window_resized_or_a_player_gone_ends_a_drag() {
         "the window was resized"
     );
     assert!(live.stale(&[a, b], 1400.0, &[], 0.0), "a player went away");
+}
+
+#[test]
+fn rl15_a_panel_is_on_air_while_it_sounds() {
+    let mut s = four();
+    let playlist = s.playlists.first_id().unwrap();
+    apply(
+        &mut s,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths: vec![
+                PathBuf::from("/music/a.flac"),
+                PathBuf::from("/music/b.flac"),
+            ],
+        },
+    )
+    .unwrap();
+    let p = s.player_ids();
+    assert!(!panel_on_air(&s, Panel::Player(p[0])));
+    apply(&mut s, Command::Play(p[0])).unwrap();
+    assert!(panel_on_air(&s, Panel::Player(p[0])));
+    apply(&mut s, Command::Pause(p[0])).unwrap();
+    assert!(
+        panel_on_air(&s, Panel::Player(p[0])),
+        "paused is still on air"
+    );
+    apply(&mut s, Command::Stop(p[0])).unwrap();
+    assert!(!panel_on_air(&s, Panel::Player(p[0])));
+    assert!(!panel_on_air(&s, Panel::Player(PlayerId(999_999))));
+
+    assert!(!panel_on_air(&s, Panel::Cartwall));
+    let page = s.cartwall.pages[0].id;
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path: PathBuf::from("/carts/id.wav"),
+        },
+    )
+    .unwrap();
+    let cart = &s.cartwall.pages[0].carts[0];
+    let (id, track) = (cart.id, cart.track.unwrap());
+    apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(TrackAnalysis {
+                duration_secs: 10.0,
+                ..TrackAnalysis::default()
+            }),
+        },
+    )
+    .unwrap();
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    assert!(panel_on_air(&s, Panel::Cartwall));
 }

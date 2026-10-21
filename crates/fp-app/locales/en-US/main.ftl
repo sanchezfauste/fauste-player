@@ -655,3 +655,16 @@ cue-on-air-cartwall = the cartwall is playing
 cue-on-air-cartwall-cue = the cartwall is pre-listening
 cue-on-air-stopped-player = Pre-listen stopped: Player { $n } started on the same output.
 cue-on-air-stopped-cartwall = Pre-listen stopped: a cart started on the same output.
+
+## Resizable layout: the top bar's panel tiles and layout menu
+layout-panel-carts = Carts
+tip-layout-hide = Hide { $panel }
+tip-layout-show = Show { $panel }
+tip-layout-show-on-air = Show { $panel } (on air)
+tip-layout-menu = Layout
+layout-dock-bottom = Cartwall at the bottom
+layout-dock-left = Cartwall on the left
+layout-dock-right = Cartwall on the right
+layout-lock = Lock layout
+layout-equal-widths = Equal player widths
+layout-reset = Reset layout
