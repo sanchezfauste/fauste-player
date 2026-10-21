@@ -21,7 +21,7 @@ use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Duration, Time, TimeBase, Timestamp};
 
-use crate::downmix;
+use crate::Downmix;
 
 pub(crate) struct SymphoniaDecoder {
     /// The file, to open it again for a restart from the start.
@@ -357,8 +357,9 @@ impl SymphoniaDecoder {
             };
             let skip = skip.max(self.drop_frames.min(frames));
             self.drop_frames = self.drop_frames.saturating_sub(frames);
+            let mix = Downmix::for_channels(buf.spec().channels(), channels);
             for frame in self.scratch.chunks_exact(channels).skip(skip) {
-                let (l, r) = downmix(frame);
+                let (l, r) = mix.apply(frame);
                 out.push(l);
                 out.push(r);
             }

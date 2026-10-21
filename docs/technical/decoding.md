@@ -1,10 +1,47 @@
 # Decoding
 
 `fp-decode` turns any supported file into interleaved stereo `f32` at the
-file's own rate. Mono is duplicated and more channels are downmixed with the
-ITU-R BS.775 coefficients (`downmix`). The engine resamples to the bus rate;
+file's own rate. Mono is duplicated and more channels are downmixed by
+their positions with the ITU-R BS.775 coefficients (`downmix.rs`, see
+[Downmix](#downmix)). The engine resamples to the bus rate;
 analysis measures the same blocks. The design is the audio formats spec,
 [`2026-09-27-audio-formats-design.md`](../superpowers/specs/2026-09-27-audio-formats-design.md).
+
+## Downmix
+
+`Downmix` (`crates/fp-decode/src/downmix.rs`) turns one frame of any layout
+into a stereo pair. The layout is the channel positions the container reports
+(symphonia's `Channels`; the decoded order is the order of the position
+bits, which for WAV masks is the WAV order). When it reports none, or a
+count that does not match the frame, the layout is the usual one for the
+channel count. The backends that know no positions (WavPack, Monkey's Audio,
+DSD) use the count.
+
+| Position | To left | To right |
+|---|---|---|
+| Front left (also front left of centre, wide, bottom) | 1 | 0 |
+| Front right (likewise) | 0 | 1 |
+| Front centre | -3 dB | -3 dB |
+| Back centre, top centre | -3 dB | -3 dB |
+| Rear left, side left, top left | -3 dB | 0 |
+| Rear right, side right, top right | 0 | -3 dB |
+| LFE | dropped | dropped |
+
+A layout with at least one surround, side, rear or top channel is scaled by
+`1 / max(sum of the left weights, sum of the right weights)`, so that it
+cannot clip (5.1: `1 / (1 + 2 * 0.707)`, as before). Front-only layouts (3.0,
+3.1) are not scaled. A single channel, whatever its position, is duplicated.
+
+By count: 1 mono; 2 L R; 3 L R C; 4 quad (L R Ls Rs); 5 L R C Ls Rs; 6 5.1
+(L R C LFE Ls Rs); 7 6.1 (L R C LFE Bc Sl Sr); 8 7.1 (L R C LFE Bl Br Sl
+Sr); beyond eight, the first eight. Vorbis and FLAC deliver their channels in
+this order already (symphonia reorders Vorbis), so no reordering is needed
+here. Opus is read only in mapping family 0 (mono and stereo): multichannel
+Opus, like multichannel AAC, is not supported.
+
+Loudness is measured on this downmix, so a layout's side channels count in it.
+Changing the matrix for a layout changes the analysis of those files: bump
+`ANALYSIS_VERSION` (10 did).
 
 ## `FileDecoder` and its backends
 

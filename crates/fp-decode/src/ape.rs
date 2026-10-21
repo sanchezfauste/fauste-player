@@ -8,8 +8,7 @@ use std::path::Path;
 
 use ape_decoder::ApeDecoder;
 
-/// Most channels accepted (the downmix folds up to 5.1 and keeps the front
-/// pair of anything wider).
+/// Most channels accepted (the downmix knows the usual layouts up to this).
 const MAX_CHANNELS: u16 = 8;
 
 pub(crate) struct ApeFileDecoder {

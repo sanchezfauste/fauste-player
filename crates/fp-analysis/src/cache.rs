@@ -29,7 +29,9 @@ use crate::analyze::Analysis;
 /// 8: VBR MPEG streams without a length frame decode to their end.
 /// 9: encoded bitstreams stored as PCM (DTS-CD rips) are refused, so
 ///    files analysed as noise before are read again.
-pub const ANALYSIS_VERSION: u32 = 9;
+/// 10: surround layouts are mixed down by their channel positions (7.1
+///    side channels, quad, 6.1 and 2.1 files read differently).
+pub const ANALYSIS_VERSION: u32 = 10;
 
 #[derive(Serialize, Deserialize)]
 struct CachedAnalysis {
