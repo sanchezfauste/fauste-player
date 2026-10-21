@@ -21,16 +21,23 @@ RL15 (tiles) and RL16 (header buttons).
 - `ui/cartwall.rs`: the buttons at the right end, left of nothing; "Stop all"
   moves left of them; the caret and the right-click menu stay. The cartwall's
   least width counts them.
+- The status text's least width in a player header drops from 40 to 30 points
+  so that, at `MIN_PLAYER_WIDTH`, the state text still stays beside the buttons.
 - Tests: `layout_ui.rs` (click, disabled states, restore, cartwall),
   `header_overlap_ui.rs` (the buttons never overlap at `MIN_PLAYER_WIDTH`
   in en-US, es-ES and de-DE).
 
-## I17. Full names in the top bar
+## I17. Dropped
 
-- New message `panel-tile-player = Player { $n }` in the 11 locales, used by
-  the top-bar tile only (the column header keeps `P{ $n }`).
-- Tests that look tiles up by "P1"/"Hide P1"/"Show P1 (on air)" follow.
-- `scripts/site/screenshots.sh` checked for tile text.
+The maintainer dropped it: the top-bar tiles keep "P1", "P2"… (long labels
+do not fit with many players).
+
+## I21. Top-bar alignment
+
+The panel tiles and the layout button share the height and centre line of
+the buttons on the right: `panels::layout_controls` draws in a centred layout
+(a `ui.horizontal` row put the tiles 3 points low). Test in `layout_ui.rs`
+compares the rects with 3 and 30 players.
 
 ## Docs
 

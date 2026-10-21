@@ -179,7 +179,15 @@ second time, `normal`, while a panel is maximized). The headers' background
 (an `interact` with `Sense::CLICK`, not focusable, added before the
 header's tiles, so the tiles keep their clicks) opens `panels::header_menu`:
 Maximize or Restore, and Hide; both disabled while locked, Maximize also
-with one panel shown.
+with one panel shown. The same two actions are the icon buttons
+`panels::header_buttons` (Hide: Phosphor `MINUS`; Maximize or Restore:
+`CORNERS_OUT` or `CORNERS_IN`; 18 points square, `HEADER_BUTTONS_WIDTH` in
+all), sharing `can_hide`, `can_maximise` and `toggle_maximise` with the
+menu. They are drawn first in the right-to-left right group of a player's
+header (its width is part of the group `header_layout::fit` reserves) and
+at the right end of the cartwall's header (counted in
+`cartwall::min_width`). The top bar's tiles are drawn in a centred layout
+so they share the right-hand buttons' centre line.
 
 **Hidden players** (RL17, RL18). `panels::settle_view` also drops the
 `ViewState::selection` of every hidden player and clears `active_player`

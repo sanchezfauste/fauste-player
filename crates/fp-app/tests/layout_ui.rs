@@ -661,9 +661,17 @@ fn layout_commands(fake: &Fake) -> Vec<Command> {
         .collect()
 }
 
+/// The entry `label` of the open header menu (the header buttons carry the
+/// same names; a menu entry is at least 160 points wide).
+fn menu_entry<'a>(h: &'a Harness<'_, AppUi>, label: &'a str) -> egui_kittest::Node<'a> {
+    h.query_all_by_label(label)
+        .find(|n| n.rect().width() >= 100.0)
+        .unwrap_or_else(|| panic!("no menu entry {label}"))
+}
+
 fn maximise(h: &mut Harness<'_, AppUi>, at: Pos2) {
     right_click(h, at);
-    h.get_by_label("Maximize").click();
+    menu_entry(h, "Maximize").click();
     h.run_steps(2);
 }
 
@@ -686,7 +694,7 @@ fn rl16_maximise_and_restore_a_player() {
     );
     let at = header_point(&h, p1);
     right_click(&mut h, at);
-    h.get_by_label("Restore").click();
+    menu_entry(&h, "Restore").click();
     h.run_steps(2);
     assert_eq!(h.state().maximised(), None);
     assert!(near(column(&h, p1).width(), before.0) && near(column(&h, p2).width(), before.1));
@@ -766,7 +774,7 @@ fn rl16_hide_from_the_header_menu() {
     let p2 = fake.player(1);
     let at = header_point(&h, p2);
     right_click(&mut h, at);
-    h.get_by_label("Hide").click();
+    menu_entry(&h, "Hide").click();
     h.run_steps(2);
     assert_eq!(
         layout_commands(&fake),
@@ -784,8 +792,8 @@ fn rl16_a_locked_layout_disables_the_header_menu() {
     let (mut h, fake) = harness(s);
     let at = header_point(&h, fake.player(0));
     right_click(&mut h, at);
-    assert!(disabled(&h, "Maximize"));
-    assert!(disabled(&h, "Hide"));
+    assert!(menu_entry(&h, "Maximize").accesskit_node().is_disabled());
+    assert!(menu_entry(&h, "Hide").accesskit_node().is_disabled());
 }
 
 #[test]
@@ -795,8 +803,161 @@ fn rl16_with_one_panel_shown_maximise_is_disabled() {
     let (mut h, fake) = harness(s);
     let at = header_point(&h, fake.player(0));
     right_click(&mut h, at);
-    assert!(disabled(&h, "Maximize"));
-    assert!(disabled(&h, "Hide"), "the last shown panel");
+    assert!(menu_entry(&h, "Maximize").accesskit_node().is_disabled());
+    assert!(
+        menu_entry(&h, "Hide").accesskit_node().is_disabled(),
+        "the last shown panel"
+    );
+}
+
+// --- top bar alignment (itr06 I21)
+
+#[test]
+fn i21_the_top_bar_buttons_share_one_height_and_centre_line() {
+    // Three players fit; thirty do not and the tiles scroll.
+    for players in [3, 30] {
+        let (h, _) = harness_sized(state(players, 3), vec2(1280.0, 700.0), |ui| ui);
+        let settings = h.get_by_label("Settings").rect();
+        let buttons: Vec<(&str, Rect)> = [
+            "Hide P1",
+            "Hide Cartwall",
+            "Layout",
+            "Settings",
+            "About Fauste Player",
+        ]
+        .into_iter()
+        .map(|label| (label, h.get_by_label(label).rect()))
+        .collect();
+        for (label, r) in &buttons {
+            assert!(
+                near(r.height(), settings.height()),
+                "{players}: {label}: {r:?} vs {settings:?}"
+            );
+            assert!(
+                (r.center().y - settings.center().y).abs() < 0.5,
+                "{players}: {label}: {r:?} vs {settings:?}"
+            );
+        }
+    }
+}
+
+// --- header buttons (itr06 I16)
+
+/// The small header button `label` inside `panel`'s header row.
+fn header_button<'a>(
+    h: &'a Harness<'_, AppUi>,
+    panel: Rect,
+    label: &'a str,
+) -> egui_kittest::Node<'a> {
+    h.query_all_by_label(label)
+        .find(|n| {
+            let r = n.rect();
+            r.width() < 40.0 && panel.contains(r.center()) && r.center().y < panel.top() + 30.0
+        })
+        .unwrap_or_else(|| panic!("no header button {label} in {panel:?}"))
+}
+
+fn button_disabled(h: &Harness<'_, AppUi>, panel: Rect, label: &str) -> bool {
+    header_button(h, panel, label)
+        .accesskit_node()
+        .is_disabled()
+}
+
+#[test]
+fn i16_the_player_header_hides_and_maximises_with_its_buttons() {
+    let (mut h, fake) = harness(state(2, 3));
+    let (p1, p2) = (fake.player(0), fake.player(1));
+    let col = column(&h, p2);
+    let hide = header_button(&h, col, "Hide").rect();
+    let max = header_button(&h, col, "Maximize").rect();
+    assert!(
+        hide.right() < max.left(),
+        "hide, then maximise: {hide:?} {max:?}"
+    );
+    assert!(col.right() - max.right() < 12.0, "at the right end");
+    header_button(&h, col, "Hide").click();
+    h.run_steps(2);
+    assert_eq!(
+        layout_commands(&fake),
+        vec![Command::SetPanelHidden {
+            panel: Panel::Player(p2),
+            hidden: true,
+        }]
+    );
+    let (mut h, fake) = harness(state(2, 3));
+    let col = column(&h, p1);
+    header_button(&h, col, "Maximize").click();
+    h.run_steps(2);
+    assert_eq!(h.state().maximised(), Some(Panel::Player(p1)));
+    assert!(
+        layout_commands(&fake).is_empty(),
+        "maximising sends nothing"
+    );
+    let col = column(&h, p1);
+    assert!(
+        h.query_all_by_label("Maximize")
+            .all(|n| !col.contains(n.rect().center()) || n.rect().center().y > col.top() + 30.0),
+        "the maximised panel offers Restore instead"
+    );
+    header_button(&h, col, "Restore").click();
+    h.run_steps(2);
+    assert_eq!(h.state().maximised(), None);
+}
+
+#[test]
+fn i16_the_cartwall_header_has_the_same_buttons() {
+    let (mut h, fake) = harness(state(2, 3));
+    let wall = h.state().cartwall_rect().unwrap();
+    header_button(&h, wall, "Maximize").click();
+    h.run_steps(2);
+    assert_eq!(h.state().maximised(), Some(Panel::Cartwall));
+    let wall = h.state().cartwall_rect().unwrap();
+    header_button(&h, wall, "Restore").click();
+    h.run_steps(2);
+    assert_eq!(h.state().maximised(), None);
+    let wall = h.state().cartwall_rect().unwrap();
+    header_button(&h, wall, "Hide").click();
+    h.run_steps(2);
+    assert_eq!(
+        layout_commands(&fake),
+        vec![Command::SetPanelHidden {
+            panel: Panel::Cartwall,
+            hidden: true,
+        }]
+    );
+}
+
+#[test]
+fn i16_the_header_buttons_follow_the_menu_rules() {
+    // Locked: both disabled everywhere.
+    let mut s = state(2, 3);
+    s.layout.locked = true;
+    let (h, fake) = harness(s);
+    let col = column(&h, fake.player(0));
+    let wall = h.state().cartwall_rect().unwrap();
+    for panel in [col, wall] {
+        assert!(button_disabled(&h, panel, "Hide"));
+        assert!(button_disabled(&h, panel, "Maximize"));
+    }
+    // One panel shown: neither can go.
+    let mut s = state(1, 3);
+    s.layout.cartwall.hidden = true;
+    let (h, fake) = harness(s);
+    let col = column(&h, fake.player(0));
+    assert!(button_disabled(&h, col, "Hide"));
+    assert!(button_disabled(&h, col, "Maximize"));
+    // A collapsed cartwall cannot be maximised; it can still be hidden.
+    let mut s = state(2, 3);
+    s.cartwall.open = false;
+    let (h, _) = harness(s);
+    let wall = h.state().cartwall_rect().unwrap();
+    assert!(button_disabled(&h, wall, "Maximize"));
+    assert!(!button_disabled(&h, wall, "Hide"));
+    // Otherwise all four are enabled.
+    let (h, fake) = harness(state(2, 3));
+    let col = column(&h, fake.player(0));
+    assert!(!button_disabled(&h, col, "Hide"));
+    assert!(!button_disabled(&h, col, "Maximize"));
 }
 
 // --- hidden players (RL17, RL18)
@@ -964,7 +1125,7 @@ fn rl15_many_tiles_stay_clear_of_the_clock_and_the_buttons() {
     // to the window's right edge belongs to them.
     let right_block = settings.left().min(about.left());
     // The tiles' names painted in the top bar (the columns' headers show
-    // `P<n>` too, lower down).
+    // `P<n>`, lower down).
     let tiles: Vec<(String, Rect)> = visible_texts(&h, |s| {
         s == "Cartwall" || (s.starts_with('P') && s[1..].parse::<u32>().is_ok())
     })
@@ -1080,8 +1241,14 @@ fn rl16_a_right_click_on_a_tile_opens_no_header_menu() {
     let (mut h, _) = harness(state(2, 3));
     let at = h.get_by_label("Hide P1").rect().center();
     right_click(&mut h, at);
-    assert!(h.query_by_label("Maximize").is_none());
-    assert!(h.query_by_label("Restore").is_none());
+    // The header buttons carry these names too; a menu entry is wide.
+    for label in ["Maximize", "Restore"] {
+        assert!(
+            h.query_all_by_label(label)
+                .all(|n| n.rect().width() < 100.0),
+            "{label}"
+        );
+    }
 }
 
 #[test]
@@ -1809,8 +1976,8 @@ fn rl14_the_strips_menu_hides_it_and_cannot_maximise_it() {
     let (mut h, fake) = wide(collapsed(Dock::Left, None));
     let strip = cart_rect(&h);
     right_click(&mut h, strip.center());
-    assert!(disabled(&h, "Maximize"));
-    h.get_by_label("Hide").click();
+    assert!(menu_entry(&h, "Maximize").accesskit_node().is_disabled());
+    menu_entry(&h, "Hide").click();
     h.run_steps(2);
     assert_eq!(
         layout_commands(&fake),
@@ -1828,7 +1995,7 @@ fn rl14_a_collapsed_bottom_cartwall_cannot_be_maximised() {
     let (mut h, _) = tall(s);
     let at = cartwall_header_point(&h);
     right_click(&mut h, at);
-    assert!(disabled(&h, "Maximize"));
+    assert!(menu_entry(&h, "Maximize").accesskit_node().is_disabled());
 }
 
 #[test]

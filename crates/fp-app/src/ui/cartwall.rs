@@ -68,7 +68,8 @@ pub(crate) fn min_width(ui: &Ui, scene: &Scene<'_>) -> f32 {
         .map(|(i, p)| tab_width(ui, &page_name(scene, i, &p.name)))
         .reduce(f32::min)
         .unwrap_or(0.0);
-    let header = stop_all + title + tab + 3.0 * HEADER_SPACING;
+    let header =
+        super::panels::HEADER_BUTTONS_WIDTH + stop_all + title + tab + 4.0 * HEADER_SPACING;
     let cols = wall.shown_page().map_or(0, |p| p.cols);
     let grid = if cols > 0 {
         f32::from(cols) * MIN_BUTTON_WIDTH + f32::from(cols - 1) * GAP
@@ -226,8 +227,12 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         Layout::right_to_left(Align::Center),
         |ui| {
             ui.spacing_mut().item_spacing = vec2(HEADER_SPACING, 0.0);
-            // First, so that it is always at the right end and always whole;
-            // the title, tabs and hint take what is left of the row.
+            // First, so that they are always at the right end and always
+            // whole; the title, tabs and hint take what is left of the row.
+            // Hide, then Maximize (RL16), as in a player's header.
+            ui.scope(|ui| {
+                super::panels::header_buttons(ui, scene, view_state, Panel::Cartwall);
+            });
             stop_all(ui, scene);
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing = vec2(HEADER_SPACING, 0.0);

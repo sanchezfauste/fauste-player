@@ -67,6 +67,8 @@ fn header_rects(h: &Harness<'static, AppUi>, t: &I18n) -> Vec<(String, Option<eg
         t.tr("tip-cont"),
         t.tr("tip-bp-off"),
         t.tr("tip-not-normalized-bp"),
+        t.tr("layout-hide"),
+        t.tr("layout-maximise"),
     ];
     let band = h.get_by_label("P1").rect();
     names
@@ -130,7 +132,8 @@ fn the_header_never_overlaps_at_the_least_width() {
             );
             let rects = header_rects(&h, &t);
             // The player's number, the state text and the right group stay;
-            // the right group stays inside the player's panel.
+            // the right group (with the Hide and Maximize buttons)
+            // stays inside the player's panel.
             let always = [
                 "P1".to_owned(),
                 t.tr("status-on-air").to_uppercase(),
@@ -139,6 +142,8 @@ fn the_header_never_overlaps_at_the_least_width() {
                 t.tr("tip-cont"),
                 t.tr("tip-bp-off"),
                 t.tr("tip-not-normalized-bp"),
+                t.tr("layout-hide"),
+                t.tr("layout-maximise"),
             ];
             for kept in &always {
                 let rect = rects
