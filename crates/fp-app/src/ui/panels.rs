@@ -7,10 +7,10 @@ use std::collections::HashMap;
 
 use egui::{Align, Layout, Rect, Sense, TextureHandle, Ui, UiBuilder, pos2, vec2};
 use fp_model::layout::{Dock, Panel};
-use fp_model::{Command, PlayerId, TrackId};
+use fp_model::{AppState, Command, PlayerId, TrackId};
 
 use super::app::{Scene, ViewState};
-use super::panel_layout::{self, Arrangement, LiveSplit, PANEL_GAP};
+use super::panel_layout::{self, Arrangement, LiveSplit, Maximised, PANEL_GAP};
 use super::player;
 use super::theme;
 use super::widgets::{self, TileStyle, font};
@@ -184,6 +184,9 @@ fn player_splitter(
         scene.ctl.send(Command::EqualPlayerWidths);
     }
     if response.drag_started() {
+        // RL16: a drag first ends a maximised panel, then applies itself to
+        // the sizes from before (`normal`).
+        view_state.maximised = None;
         let width = |p: PlayerId| {
             normal
                 .widths
@@ -349,6 +352,64 @@ fn layout_menu(ui: &mut Ui, scene: &Scene<'_>) {
         let reset = egui::Button::new(t.tr("layout-reset"));
         if ui.add_enabled(!locked, reset).clicked() {
             scene.ctl.send(Command::ResetLayout);
+            ui.close();
+        }
+    });
+}
+
+/// Brings the view state in line with the model before the frame's input
+/// is handled: a maximised panel ends when the arrangement changed (RL16).
+pub(crate) fn settle_view(view_state: &mut ViewState, state: &AppState) {
+    if view_state
+        .maximised
+        .as_ref()
+        .is_some_and(|m| !m.holds(state))
+    {
+        view_state.maximised = None;
+    }
+}
+
+/// RL16: the menu of a panel header's background (right click): Maximise,
+/// or Restore on the maximised panel, and Hide. Both are disabled while the
+/// layout is locked; Maximise also with one panel shown, Hide on the last
+/// shown panel.
+pub(crate) fn header_menu(
+    response: &egui::Response,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    panel: Panel,
+) {
+    response.context_menu(|ui| {
+        let t = scene.i18n;
+        let layout = &scene.state.layout;
+        let players = scene.state.player_ids();
+        ui.set_min_width(160.0);
+        let maximised = view_state
+            .maximised
+            .as_ref()
+            .is_some_and(|m| m.panel == panel);
+        if maximised {
+            if ui.button(t.tr("layout-restore")).clicked() {
+                view_state.maximised = None;
+                ui.close();
+            }
+        } else {
+            let can = !layout.locked && layout.shown_panels(&players) > 1;
+            let item = egui::Button::new(t.tr("layout-maximise"));
+            if ui.add_enabled(can, item).clicked() {
+                view_state.maximised = Some(Maximised::new(panel, scene.state));
+                ui.close();
+            }
+        }
+        let can_hide = !layout.locked && !layout.is_last_shown(&players, panel);
+        if ui
+            .add_enabled(can_hide, egui::Button::new(t.tr("layout-hide")))
+            .clicked()
+        {
+            scene.ctl.send(Command::SetPanelHidden {
+                panel,
+                hidden: true,
+            });
             ui.close();
         }
     });

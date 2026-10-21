@@ -611,3 +611,184 @@ fn rl7_a_hidden_player_still_answers_its_key() {
     h.run_steps(2);
     assert!(fake.take_sent().contains(&Command::Play(p[1])));
 }
+
+// --- maximise (RL16)
+
+/// A point on the background of a player's header: between the status
+/// label on the left and the CUE, mode and BP tiles on the right (a column
+/// is 480 points wide in the default harness).
+fn header_point(h: &Harness<'_, AppUi>, player: PlayerId) -> Pos2 {
+    let r = column(h, player);
+    pos2(r.left() + 200.0, r.top() + 21.0)
+}
+
+/// A point on the background of the cartwall's header.
+fn cartwall_header_point(h: &Harness<'_, AppUi>) -> Pos2 {
+    let r = h.state().cartwall_rect().unwrap();
+    pos2(r.center().x, r.top() + 12.0)
+}
+
+fn right_click(h: &mut Harness<'_, AppUi>, at: Pos2) {
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    press(h, at, PointerButton::Secondary, true);
+    h.run_steps(1);
+    press(h, at, PointerButton::Secondary, false);
+    h.run_steps(2);
+}
+
+fn layout_commands(fake: &Fake) -> Vec<Command> {
+    fake.take_sent()
+        .into_iter()
+        .filter(|c| {
+            matches!(
+                c,
+                Command::SetPanelHidden { .. }
+                    | Command::SetPlayerShares { .. }
+                    | Command::EqualPlayerWidths
+                    | Command::SetCartwallDock(_)
+                    | Command::SetCartwallSize(_)
+                    | Command::SetLayoutLocked(_)
+                    | Command::ResetLayout
+            )
+        })
+        .collect()
+}
+
+fn maximise(h: &mut Harness<'_, AppUi>, at: Pos2) {
+    right_click(h, at);
+    h.get_by_label("Maximise").click();
+    h.run_steps(2);
+}
+
+#[test]
+fn rl16_maximise_and_restore_a_player() {
+    let (mut h, fake) = harness(state(2, 3));
+    let (p1, p2) = (fake.player(0), fake.player(1));
+    let before = (column(&h, p1).width(), column(&h, p2).width());
+    let at = header_point(&h, p1);
+    maximise(&mut h, at);
+    assert_eq!(h.state().maximised(), Some(Panel::Player(p1)));
+    assert!(near(column(&h, p2).width(), MIN_PLAYER_WIDTH));
+    assert!(near(
+        column(&h, p1).width(),
+        before.0 + before.1 - MIN_PLAYER_WIDTH
+    ));
+    assert!(
+        layout_commands(&fake).is_empty(),
+        "maximising sends nothing"
+    );
+    let at = header_point(&h, p1);
+    right_click(&mut h, at);
+    h.get_by_label("Restore").click();
+    h.run_steps(2);
+    assert_eq!(h.state().maximised(), None);
+    assert!(near(column(&h, p1).width(), before.0) && near(column(&h, p2).width(), before.1));
+}
+
+#[test]
+fn rl16_a_maximised_cartwall_leaves_the_players_their_least_height() {
+    let (mut h, fake) = harness(state(2, 3));
+    let at = cartwall_header_point(&h);
+    maximise(&mut h, at);
+    assert_eq!(h.state().maximised(), Some(Panel::Cartwall));
+    assert!(near(
+        column(&h, fake.player(0)).height(),
+        MIN_PLAYER_HEIGHT - 2.0
+    ));
+}
+
+#[test]
+fn rl16_hiding_locking_docking_or_a_new_player_count_end_it() {
+    for command in [
+        Command::SetPanelHidden {
+            panel: Panel::Cartwall,
+            hidden: true,
+        },
+        Command::SetLayoutLocked(true),
+        Command::SetCartwallDock(Dock::Left),
+        Command::SetPlayerCount(3),
+    ] {
+        let (mut h, fake) = harness(state(2, 3));
+        let at = header_point(&h, fake.player(0));
+        maximise(&mut h, at);
+        Controller::send(fake.as_ref(), command.clone());
+        h.run_steps(2);
+        assert_eq!(h.state().maximised(), None, "{command:?}");
+    }
+    let (mut h, fake) = harness(state(2, 3));
+    let at = header_point(&h, fake.player(1));
+    maximise(&mut h, at);
+    h.get_by_label("Hide P2").click();
+    h.run_steps(2);
+    assert_eq!(
+        h.state().maximised(),
+        None,
+        "the maximised panel was hidden"
+    );
+}
+
+#[test]
+fn rl16_a_splitter_drag_restores_the_earlier_sizes_first() {
+    let (mut h, fake) = harness(state(2, 3));
+    let (p1, p2) = (fake.player(0), fake.player(1));
+    let before = column(&h, p1).width();
+    let at = header_point(&h, p1);
+    maximise(&mut h, at);
+    let from = splitter_at(&h, p1);
+    drag_by(&mut h, &fake, from, 40.0);
+    assert_eq!(h.state().maximised(), None);
+    assert!(
+        near(column(&h, p1).width(), before + 40.0),
+        "{:?}",
+        column(&h, p1)
+    );
+    press(
+        &mut h,
+        pos2(from.x + 40.0, from.y),
+        PointerButton::Primary,
+        false,
+    );
+    h.run_steps(40);
+    assert!(near(column(&h, p1).width(), before + 40.0));
+    assert!(near(column(&h, p2).width(), before - 40.0));
+}
+
+#[test]
+fn rl16_hide_from_the_header_menu() {
+    let (mut h, fake) = harness(state(2, 3));
+    let p2 = fake.player(1);
+    let at = header_point(&h, p2);
+    right_click(&mut h, at);
+    h.get_by_label("Hide").click();
+    h.run_steps(2);
+    assert_eq!(
+        layout_commands(&fake),
+        vec![Command::SetPanelHidden {
+            panel: Panel::Player(p2),
+            hidden: true,
+        }]
+    );
+}
+
+#[test]
+fn rl16_a_locked_layout_disables_the_header_menu() {
+    let mut s = state(2, 3);
+    s.layout.locked = true;
+    let (mut h, fake) = harness(s);
+    let at = header_point(&h, fake.player(0));
+    right_click(&mut h, at);
+    assert!(disabled(&h, "Maximise"));
+    assert!(disabled(&h, "Hide"));
+}
+
+#[test]
+fn rl16_with_one_panel_shown_maximise_is_disabled() {
+    let mut s = state(1, 3);
+    s.layout.cartwall.hidden = true;
+    let (mut h, fake) = harness(s);
+    let at = header_point(&h, fake.player(0));
+    right_click(&mut h, at);
+    assert!(disabled(&h, "Maximise"));
+    assert!(disabled(&h, "Hide"), "the last shown panel");
+}

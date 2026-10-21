@@ -12,9 +12,9 @@ use std::path::PathBuf;
 use egui::{Rect, pos2, vec2};
 use fp_app::ui::panel_layout::{
     Arrangement, CONTENT_HEIGHT_CAP, CartwallSizes, LiveSplit, MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH,
-    PANEL_GAP, PassInput, SHARE_FLOOR, arrange, drag_pair, pair_shares, panel_on_air,
+    Maximised, PANEL_GAP, PassInput, SHARE_FLOOR, arrange, drag_pair, pair_shares, panel_on_air,
 };
-use fp_model::layout::Panel;
+use fp_model::layout::{Dock, Panel};
 use fp_model::{AppState, Command, Config, PlayerId, TrackAnalysis, apply};
 
 /// The middle area of a 1920 × 1080 window, inside its 8-point margin:
@@ -382,4 +382,32 @@ fn rl15_a_panel_is_on_air_while_it_sounds() {
     .unwrap();
     apply(&mut s, Command::FireCart(id)).unwrap();
     assert!(panel_on_air(&s, Panel::Cartwall));
+}
+
+#[test]
+fn rl16_maximise_ends_when_the_arrangement_changes() {
+    let s = four();
+    let p = s.player_ids();
+    let m = Maximised::new(Panel::Player(p[0]), &s);
+    assert!(m.holds(&s));
+    let mut resized = s.clone();
+    apply(&mut resized, Command::EqualPlayerWidths).unwrap();
+    assert!(m.holds(&resized), "a resize keeps it");
+    for command in [
+        Command::SetPanelHidden {
+            panel: Panel::Player(p[1]),
+            hidden: true,
+        },
+        Command::SetPanelHidden {
+            panel: Panel::Cartwall,
+            hidden: true,
+        },
+        Command::SetCartwallDock(Dock::Left),
+        Command::SetLayoutLocked(true),
+        Command::SetPlayerCount(3),
+    ] {
+        let mut t = s.clone();
+        apply(&mut t, command.clone()).unwrap();
+        assert!(!m.holds(&t), "{command:?}");
+    }
 }

@@ -187,6 +187,8 @@ pub(crate) struct ViewState {
     pub(crate) cartwall_rect: Option<Rect>,
     /// A player splitter being dragged or just released (RL12).
     pub(crate) live_split: Option<super::panel_layout::LiveSplit>,
+    /// The panel maximised for the moment (RL16); never saved.
+    pub(crate) maximised: Option<super::panel_layout::Maximised>,
     notice: Option<(String, f64)>,
     /// Dropouts the engine counted, as the status bar alerts show them.
     dropouts: Dropouts,
@@ -580,6 +582,11 @@ impl AppUi {
         self.view.cartwall_rect
     }
 
+    /// The panel maximised for the moment (resizable layout spec RL16).
+    pub fn maximised(&self) -> Option<fp_model::layout::Panel> {
+        self.view.maximised.as_ref().map(|m| m.panel)
+    }
+
     pub fn ui(&mut self, ui: &mut Ui) {
         #[cfg(feature = "test-hooks")]
         if std::mem::take(&mut self.fail_next_frame) {
@@ -675,6 +682,8 @@ impl AppUi {
         if let Some(track) = self.view.edit_tags.take() {
             self.open_tag_editor(&ctx, &state, track);
         }
+        // The view follows the model before the keyboard acts (RL16, RL17).
+        panels::settle_view(&mut self.view, &state);
         self.keyboard(&ctx, &state);
         let pending = fp_model::pending(&state);
         let scene = Scene {
@@ -722,7 +731,15 @@ impl AppUi {
                 maximised,
             })
         };
-        let arranged = pass(None);
+        let maximised = self.view.maximised.as_ref().map(|m| m.panel);
+        let arranged = pass(maximised);
+        // RL16: a splitter drag starts from the sizes without the maximised
+        // panel.
+        let normal = if maximised.is_some() {
+            pass(None)
+        } else {
+            arranged.clone()
+        };
         self.view.player_rects.clear();
         if !arranged.widths.is_empty() {
             let mut players_ui = ui.new_child(
@@ -736,7 +753,7 @@ impl AppUi {
                 &mut self.view,
                 &mut self.covers,
                 &arranged,
-                &arranged,
+                &normal,
             );
         }
         self.view.cartwall_rect = arranged.cartwall;

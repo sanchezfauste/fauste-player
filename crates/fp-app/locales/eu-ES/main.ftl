@@ -668,3 +668,6 @@ layout-dock-right = Kartutxo-panela eskuinean
 layout-lock = Blokeatu diseinua
 layout-equal-widths = Berdindu erreproduzitzaileen zabalera
 layout-reset = Berrezarri diseinua
+layout-maximise = Maximizatu
+layout-restore = Leheneratu
+layout-hide = Ezkutatu

@@ -98,6 +98,19 @@ and Reset layout; while locked every entry but the lock is disabled. While
 the cartwall is hidden, the `ToggleCartwall` shortcut maps to no command
 (`shortcut_command`).
 
+**Maximise** (RL16). `ViewState::maximised` holds a `panel_layout::Maximised`
+(the panel and an `ArrangementKey`: the players, the hidden panels, the
+dock and the lock); it is never saved and sends no command. The pass gives
+a maximised player all the spare width and the others their minimum, and
+shrinks the bottom cartwall to its least height; a maximised bottom
+cartwall leaves the players `MIN_PLAYER_HEIGHT`. `panels::settle_view`,
+called before the keyboard, ends it when the key changed. A splitter drag
+ends it and starts from the pass without it (`AppUi::ui` runs the pass a
+second time, `normal`, while a panel is maximised). The headers' background
+(an `interact` with `Sense::click` added before the header's tiles, so the
+tiles keep their clicks) opens `panels::header_menu`: Maximise or Restore,
+and Hide; both disabled while locked, Maximise also with one panel shown.
+
 ## Data flow
 
 Each frame, `AppUi::ui`:

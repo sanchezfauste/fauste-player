@@ -4,7 +4,7 @@
 //! Pure and unit-tested; `ui/panels.rs` draws with it.
 
 use egui::{Rect, Vec2, pos2};
-use fp_model::layout::Panel;
+use fp_model::layout::{Dock, Panel};
 use fp_model::{AppState, Command, PlayerId, Transport};
 
 /// The gap between two panels; between two players it is a splitter
@@ -305,5 +305,51 @@ pub fn panel_on_air(state: &AppState, panel: Panel) -> bool {
             .player(id)
             .is_ok_and(|p| p.transport != Transport::Stopped),
         Panel::Cartwall => !state.cartwall.playing.is_empty(),
+    }
+}
+
+/// RL16: what ends a maximised panel when it changes: the players, the
+/// hidden panels, the cartwall's dock and the lock. A resize does not.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArrangementKey {
+    players: Vec<PlayerId>,
+    hidden_players: Vec<PlayerId>,
+    cartwall_hidden: bool,
+    dock: Dock,
+    locked: bool,
+}
+
+impl ArrangementKey {
+    pub fn of(state: &AppState) -> Self {
+        let layout = &state.layout;
+        Self {
+            players: state.player_ids(),
+            hidden_players: layout.hidden_players.clone(),
+            cartwall_hidden: layout.cartwall.hidden,
+            dock: layout.cartwall.dock,
+            locked: layout.locked,
+        }
+    }
+}
+
+/// RL16: the panel maximised for the moment. View state only: never saved,
+/// no command.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Maximised {
+    pub panel: Panel,
+    key: ArrangementKey,
+}
+
+impl Maximised {
+    pub fn new(panel: Panel, state: &AppState) -> Self {
+        Self {
+            panel,
+            key: ArrangementKey::of(state),
+        }
+    }
+
+    /// Whether it still holds: nothing that ends it changed since.
+    pub fn holds(&self, state: &AppState) -> bool {
+        self.key == ArrangementKey::of(state)
     }
 }

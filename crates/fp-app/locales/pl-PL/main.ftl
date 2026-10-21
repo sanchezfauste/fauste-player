@@ -682,3 +682,6 @@ layout-dock-right = Cartwall po prawej
 layout-lock = Zablokuj układ
 layout-equal-widths = Równa szerokość odtwarzaczy
 layout-reset = Resetuj układ
+layout-maximise = Maksymalizuj
+layout-restore = Przywróć
+layout-hide = Ukryj

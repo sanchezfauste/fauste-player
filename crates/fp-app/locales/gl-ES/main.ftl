@@ -668,3 +668,6 @@ layout-dock-right = Cartucheira á dereita
 layout-lock = Bloquear a disposición
 layout-equal-widths = Igualar o ancho dos reprodutores
 layout-reset = Restablecer a disposición
+layout-maximise = Maximizar
+layout-restore = Restaurar
+layout-hide = Ocultar

@@ -668,3 +668,6 @@ layout-dock-right = Cartwall rechts
 layout-lock = Indeling vergrendelen
 layout-equal-widths = Spelers even breed
 layout-reset = Indeling terugzetten
+layout-maximise = Maximaliseren
+layout-restore = Herstellen
+layout-hide = Verbergen

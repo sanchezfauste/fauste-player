@@ -668,3 +668,6 @@ layout-dock-right = Cartouches à droite
 layout-lock = Verrouiller la disposition
 layout-equal-widths = Lecteurs de même largeur
 layout-reset = Réinitialiser la disposition
+layout-maximise = Agrandir
+layout-restore = Restaurer
+layout-hide = Masquer

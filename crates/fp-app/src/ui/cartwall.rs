@@ -2,6 +2,7 @@
 
 use egui::{Align, Color32, Layout, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use egui_phosphor::regular as icon;
+use fp_model::layout::Panel;
 use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
@@ -61,7 +62,7 @@ pub(crate) fn page_name(scene: &Scene<'_>, index: usize, name: &str) -> String {
 }
 
 pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
-    header(ui, scene);
+    header(ui, scene, view_state);
     if !scene.state.cartwall.open {
         return;
     }
@@ -74,9 +75,13 @@ pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) 
         .show(ui, |ui| grid(ui, scene, view_state, available));
 }
 
-fn header(ui: &mut Ui, scene: &Scene<'_>) {
+fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     let t = scene.i18n;
     let wall = &scene.state.cartwall;
+    // RL16: a right click on the header's background opens the panel menu;
+    // the title, tabs and Stop all, added after it, keep their own clicks.
+    let row = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_HEIGHT));
+    let background = ui.interact(row, ui.id().with("cartwall-header"), Sense::click());
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), HEADER_HEIGHT),
         Layout::right_to_left(Align::Center),
@@ -131,6 +136,7 @@ fn header(ui: &mut Ui, scene: &Scene<'_>) {
             });
         },
     );
+    super::panels::header_menu(&background, scene, view_state, Panel::Cartwall);
 }
 
 /// "Stop all (n)": stops every playing cart (spec O19). Dimmed, and without

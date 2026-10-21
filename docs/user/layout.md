@@ -31,6 +31,18 @@ need. Double-click the gap to give every player the same width again.
 When the window is too narrow for every shown player at its smallest, the
 players' row scrolls sideways, as it always has.
 
+## Maximise a panel
+
+Right-click the background of a player's header, or of the cartwall's
+header (not one of their buttons), for its menu:
+
+- **Maximise** gives that panel all the room: the other panels shrink to
+  their smallest. It is only for the moment and is not saved. **Restore**
+  in the same menu ends it, and so do hiding or showing a panel, locking
+  the layout, moving the cartwall, changing the number of players and
+  dragging the gap between two players; the sizes from before come back.
+- **Hide** hides the panel, as its tile in the top bar does.
+
 ## The layout menu
 
 The layout button, right of the tiles, opens a menu with:

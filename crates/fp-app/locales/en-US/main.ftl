@@ -668,3 +668,6 @@ layout-dock-right = Cartwall on the right
 layout-lock = Lock layout
 layout-equal-widths = Equal player widths
 layout-reset = Reset layout
+layout-maximise = Maximise
+layout-restore = Restore
+layout-hide = Hide

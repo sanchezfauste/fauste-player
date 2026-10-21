@@ -668,3 +668,6 @@ layout-dock-right = Cartuchera a la derecha
 layout-lock = Bloquear la distribución
 layout-equal-widths = Igualar el ancho de los players
 layout-reset = Restablecer la distribución
+layout-maximise = Maximizar
+layout-restore = Restaurar
+layout-hide = Ocultar

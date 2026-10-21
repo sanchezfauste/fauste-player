@@ -668,3 +668,6 @@ layout-dock-right = Cartwall a destra
 layout-lock = Blocca il layout
 layout-equal-widths = Lettori di uguale larghezza
 layout-reset = Reimposta il layout
+layout-maximise = Ingrandisci
+layout-restore = Ripristina
+layout-hide = Nascondi
