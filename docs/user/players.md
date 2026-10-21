@@ -10,6 +10,7 @@ playlist tabs, transport, volume and outputs.
 | Element | Meaning |
 |---|---|
 | `P1` … `Pn` | Player number (the number key that plays it) |
+| **Hide** and **Maximize** / **Restore** buttons | The two small buttons at the right end of the header: hide the player, or maximize it for a moment (**Restore** while it is maximized). Dimmed while the layout is locked, **Hide** on the last shown panel and **Maximize** with one panel shown (see [Layout](layout.md#maximize-a-panel)) |
 | Status dot and label | **On air** (red), **Paused** (amber), **Stopped** (grey) |
 | Narrow columns | When the column is too narrow for every badge, the header drops the least important first (the state text, then **Others muted**, the entry notice, **Stop after**, **Mixing** / **Fading**, the state dot), so nothing ever overlaps. The player number, **CUE**, the mode, **BP**, the gain badge and the **Hide** and **Maximize** buttons always stay. Widen the column to see them all |
 | **Mixing** / **Fading** badge | A crossfade into the next track, or a fade stop, is running. **Mixing** never lights on a player whose Main output is bit-perfect: it does not crossfade (see [What it costs](bit-perfect.md#what-it-costs)) |

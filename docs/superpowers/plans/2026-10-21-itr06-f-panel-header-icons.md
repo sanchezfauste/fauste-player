@@ -1,9 +1,9 @@
-# itr06 plan F: panel header icons and full player names in the top bar
+# itr06 plan F: panel header icons and top-bar alignment
 
 **Goal.** Each player header and the cartwall header get two icon buttons at
 their right end, Hide (minus) and Maximize or Restore (corners out or in), with
-the actions and the disabled rules of the header menu (RL16). The top-bar
-panel tiles read "Player 1", "Player 2"… instead of "P1".
+the actions and the disabled rules of the header menu (RL16). Every top-bar
+tile and button shares one height and one vertical centre line (I21).
 
 **Spec.** `docs/superpowers/specs/2026-10-21-resizable-layout-design.md`
 RL15 (tiles) and RL16 (header buttons).

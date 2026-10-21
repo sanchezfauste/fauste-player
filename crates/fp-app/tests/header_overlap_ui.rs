@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+#![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 //! The player header never overlaps (itr06 I12): at the least player width,
 //! in the longest languages, with every badge on, no two items intersect.
 
@@ -55,8 +55,17 @@ fn harness_in(lang: &str, state: AppState) -> Harness<'static, AppUi> {
 
 /// The rectangle of each header item, `None` for one that is not drawn.
 fn header_rects(h: &Harness<'static, AppUi>, t: &I18n) -> Vec<(String, Option<egui::Rect>)> {
+    header_rects_of(h, t, "P1")
+}
+
+/// As `header_rects`, for the header of the player named `number`.
+fn header_rects_of(
+    h: &Harness<'static, AppUi>,
+    t: &I18n,
+    number: &str,
+) -> Vec<(String, Option<egui::Rect>)> {
     let names = [
-        "P1".to_owned(),
+        number.to_owned(),
         t.tr("status-on-air").to_uppercase(),
         t.tr("badge-mixing"),
         t.tr("badge-stop-after"),
@@ -70,7 +79,7 @@ fn header_rects(h: &Harness<'static, AppUi>, t: &I18n) -> Vec<(String, Option<eg
         t.tr("layout-hide"),
         t.tr("layout-maximise"),
     ];
-    let band = h.get_by_label("P1").rect();
+    let band = h.get_by_label(number).rect();
     names
         .into_iter()
         .map(|n| {
@@ -251,4 +260,127 @@ fn the_gain_badge_keeps_its_width_whatever_the_gain() {
     let a = width(&applied, "+4.0 dB");
     let b = width(&unmeasured, "Loudness not measured");
     assert!((a - b).abs() < 0.5, "{a} vs {b}");
+}
+
+/// A cartwall on the right at its least width (its share asks for less),
+/// with one cart playing so that "Stop all (n)" shows its count.
+fn narrow_cartwall() -> AppState {
+    let mut s = state(2, 3);
+    s.layout.cartwall = fp_model::layout::CartwallLayout {
+        dock: fp_model::layout::Dock::Right,
+        size: Some(0.05),
+        hidden: false,
+    };
+    let page = s.cartwall.pages[0].id;
+    // One column: the header, not the grid, sets the least width.
+    apply(
+        &mut s,
+        Command::ResizeCartPage {
+            page,
+            rows: 2,
+            cols: 1,
+        },
+    )
+    .unwrap();
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path: std::path::PathBuf::from("/carts/id.wav"),
+        },
+    )
+    .unwrap();
+    let cart = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(cart)).unwrap();
+    s
+}
+
+/// The header parts of the side cartwall, with its share `size`: the
+/// cartwall's rectangle and each part's (name, rectangle).
+fn cartwall_header(lang: &str, size: f32) -> (egui::Rect, Vec<(&'static str, egui::Rect)>) {
+    let t = I18n::new(Some(lang));
+    let mut s = narrow_cartwall();
+    s.layout.cartwall.size = Some(size);
+    let ui = AppUi::new(Fake::new(s), I18n::new(Some(lang)), MediaCache::default());
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(2000.0, 900.0))
+        .with_step_dt(0.02)
+        .build_ui_state(
+            |ui, app: &mut AppUi| {
+                app.guard_close(ui.ctx());
+                app.ui(ui);
+            },
+            ui,
+        );
+    h.run_steps(4);
+    let wall = h.state().cartwall_rect().unwrap();
+    let find = |label: &str, small: bool| {
+        h.query_all_by_label_contains(label)
+            .map(|n| n.rect())
+            .find(|r| {
+                wall.contains_rect(*r)
+                    && r.center().y < wall.top() + 30.0
+                    && (r.width() < 40.0) == small
+            })
+            .unwrap_or_else(|| panic!("{lang}: {label} is not in the header of {wall:?}"))
+    };
+    let parts = vec![
+        ("Hide", find(&t.tr("layout-hide"), true)),
+        ("Maximize", find(&t.tr("layout-maximise"), true)),
+        ("Stop all", find(&t.tr("cartwall-stop-all"), false)),
+        ("title", find(&t.tr("cartwall-title"), false)),
+        ("page tab", find("Carts 1", false)),
+    ];
+    (wall, parts)
+}
+
+#[test]
+fn the_cartwall_header_never_overlaps_at_its_least_width() {
+    for lang in ["en-US", "de-DE"] {
+        let (wall, rects) = cartwall_header(lang, 0.05);
+        let (roomy, whole) = cartwall_header(lang, 0.4);
+        assert!(wall.width() < roomy.width(), "{lang}: at its least width");
+        for (i, (a, ra)) in rects.iter().enumerate() {
+            for (b, rb) in rects.iter().skip(i + 1) {
+                let common = ra.intersect(*rb);
+                assert!(
+                    common.width() <= 0.0 || common.height() <= 0.0,
+                    "{lang}: {a} {ra:?} overlaps {b} {rb:?}"
+                );
+            }
+        }
+        // The title and the tab keep the width they have with room to spare.
+        for ((name, r), (_, full)) in rects.iter().zip(&whole) {
+            assert!(
+                (r.width() - full.width()).abs() < 0.5,
+                "{lang}: {name} is squeezed: {r:?} vs {full:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn ten_players_keep_the_header_clear_at_the_least_width() {
+    let mut s = state(10, 3);
+    s.config.loudness.normalize = true;
+    // Only the tenth stays shown, so that its column is on screen.
+    for n in 0..9 {
+        let panel = fp_model::layout::Panel::Player(s.players[n].id);
+        apply(
+            &mut s,
+            Command::SetPanelHidden {
+                panel,
+                hidden: true,
+            },
+        )
+        .unwrap();
+    }
+    let tenth = s.players[9].id;
+    apply(&mut s, Command::Play(tenth)).unwrap();
+    let h = harness_in("es-ES", s);
+    let t = I18n::new(Some("es-ES"));
+    let rects = header_rects_of(&h, &t, "P10");
+    assert!(rects.iter().any(|(n, r)| n == "P10" && r.is_some()));
+    assert_no_overlap(&rects, "ten players");
 }
