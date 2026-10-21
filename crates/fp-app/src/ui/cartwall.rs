@@ -10,8 +10,8 @@ use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
 use super::cart_view::{
-    self, BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, MIN_BUTTON_WIDTH, button_height,
-    cart_look, cart_view, filled_button_height, page_on_air,
+    self, BUTTON_HEIGHT, CartStatus, CartSweep, GAP, MIN_BUTTON_HEIGHT, MIN_BUTTON_WIDTH,
+    button_height, cart_look, cart_view, filled_button_height, page_on_air,
 };
 use super::glyphs::{self, TransportAction};
 use super::panel_layout::{self, CartwallSizes};
@@ -482,14 +482,46 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                     // Let go of the last file's peaks.
                     ui.data_mut(|d| d.remove_temp::<Option<WaveMemo>>(memo_id));
                 }
+                // I19/I22: the elapsed share, from the position carried on
+                // with the frame clock between engine snapshots; a playing
+                // cart with a known length keeps the cartwall repainting every frame.
+                let sweep_id = egui::Id::new(("cart-sweep", cart.id));
+                let elapsed = if playing {
+                    view.wave_range.map(|(start, span)| {
+                        // Something moves: ask for the next frame.
+                        ui.ctx().request_repaint();
+                        let reported = scene
+                            .telemetry
+                            .carts
+                            .iter()
+                            .find(|(c, _)| *c == cart.id)
+                            .map_or(start, |(_, t)| t.position_secs);
+                        let mut sweep = ui
+                            .data(|d| d.get_temp::<CartSweep>(sweep_id))
+                            .unwrap_or_else(|| CartSweep::new(reported, scene.time));
+                        // The floor of the extrapolation past a snapshot: two
+                        // conductor ticks (the sweep widens it to twice the
+                        // step it observes).
+                        let max_ahead =
+                            2.0 * scene.state.config.tuning.conductor_tick_ms.max(1.0) / 1000.0;
+                        let at = sweep.advance(reported, scene.time, start + span, max_ahead);
+                        ui.data_mut(|d| d.insert_temp(sweep_id, sweep));
+                        ((at - start) / span).clamp(0.0, 1.0) as f32
+                    })
+                } else {
+                    ui.data_mut(|d| d.remove::<CartSweep>(sweep_id));
+                    None
+                };
                 let kind = kind_label(scene, view.kind);
                 let response =
                     widgets::tile(ui, vec2(width, button), &label, !empty, style, |p, r, c| {
+                        // The share played fills from the left, like the
+                        // waveform it sits on; a cart of unknown length
+                        // fills whole.
                         if playing {
-                            let bar = Rect::from_min_size(
-                                r.min,
-                                vec2(r.width() * view.remaining_fraction, r.height()),
-                            );
+                            let share = elapsed.unwrap_or(1.0);
+                            let bar =
+                                Rect::from_min_size(r.min, vec2(r.width() * share, r.height()));
                             p.rect_filled(bar, 0.0, look.progress);
                         }
                         if let Some(columns) = &wave {
@@ -499,6 +531,13 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                                 area,
                                 columns,
                                 look.wave,
+                            );
+                        }
+                        if let Some(share) = elapsed {
+                            let x = r.left() + r.width() * share;
+                            p.line_segment(
+                                [pos2(x, r.top()), pos2(x, r.bottom())],
+                                egui::Stroke::new(2.0, theme::TEXT.gamma_multiply(0.85)),
                             );
                         }
                         // RL13: the text keeps its size; in a taller button

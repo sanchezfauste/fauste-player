@@ -102,8 +102,6 @@ pub struct CartView {
     pub status: CartStatus,
     /// The length when idle, `-mm:ss` left while playing; empty if unknown.
     pub time: String,
-    /// Share of the cart still to play (1 at the start, 0 at the end).
-    pub remaining_fraction: f32,
     pub looped: bool,
     pub exclusive: bool,
     pub cueing: bool,
@@ -130,7 +128,6 @@ pub fn cart_view(state: &AppState, telemetry: &Telemetry, id: CartId) -> Option<
         kind: cart.kind,
         status,
         time: String::new(),
-        remaining_fraction: 0.0,
         looped: cart.looped,
         exclusive: cart.exclusive,
         cueing: state.cartwall.cue == Some(id),
@@ -157,9 +154,6 @@ pub fn cart_view(state: &AppState, telemetry: &Telemetry, id: CartId) -> Option<
         if known {
             let left = (track.cue_out_secs() - position).clamp(0.0, length);
             view.time = format!("-{}", format::clock(left));
-            view.remaining_fraction = (left / length) as f32;
-        } else {
-            view.remaining_fraction = 1.0;
         }
     } else if known {
         view.time = format::clock(length);
@@ -175,6 +169,78 @@ pub fn page_on_air(state: &AppState, page: CartPageId) -> bool {
         .is_some_and(|p| p.carts.iter().any(|c| state.cartwall.is_playing(c.id)))
 }
 
+/// The playing position a cart button draws, between engine snapshots.
+///
+/// The engine publishes a position every few milliseconds, but the interface
+/// draws on its own clock; the sweep carries the last snapshot forward with
+/// the frame clock, so the line moves a little every frame (sub-pixel) instead
+/// of in the steps of whatever snapshot happened to arrive. It never moves
+/// backwards, except when the snapshot itself does (a loop pass, a restart):
+/// a snapshot a little behind what was drawn holds the line for a moment
+/// instead of stepping it back.
+///
+/// The position moves in the steps of the audio device's buffer (often 10 to
+/// 50 ms), not on every telemetry tick. The sweep measures the time between
+/// snapshots whose position actually changed (smoothed) and extrapolates at
+/// most twice that step past the last one, never less than a floor the caller
+/// derives from the conductor tick: a device's buffer steps are smoothed out,
+/// and an engine that stops reporting holds the line within about two steps
+/// instead of running it to the end.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CartSweep {
+    /// The last position the engine reported.
+    snapshot: f64,
+    /// The frame clock when it was first seen.
+    since: f64,
+    /// The position drawn on the previous frame.
+    shown: f64,
+    /// The smoothed time between snapshots that changed; 0 until two changes
+    /// have been seen (the first interval starts at an arbitrary moment).
+    step: f64,
+    /// Whether the snapshot has changed since the sweep began.
+    changed: bool,
+}
+
+impl CartSweep {
+    pub fn new(position: f64, now: f64) -> Self {
+        Self {
+            snapshot: position,
+            since: now,
+            shown: position,
+            step: 0.0,
+            changed: false,
+        }
+    }
+
+    /// The position to draw at frame time `now`, given the engine's latest
+    /// `position` and the cart's `end` (seconds); never past `end`, and never
+    /// more than twice the observed step (at least `floor`) past the snapshot.
+    pub fn advance(&mut self, position: f64, now: f64, end: f64, floor: f64) -> f64 {
+        if position < self.snapshot {
+            *self = Self::new(position, now);
+            return position;
+        }
+        if position > self.snapshot {
+            if self.changed {
+                let seen = (now - self.since).max(0.0);
+                self.step = if self.step > 0.0 {
+                    0.5 * (self.step + seen)
+                } else {
+                    seen
+                };
+            }
+            self.changed = true;
+            self.snapshot = position;
+            self.since = now;
+        }
+        let cap = (2.0 * self.step).max(floor.max(0.0));
+        let ahead = self.snapshot + (now - self.since).clamp(0.0, cap);
+        let shown = ahead.max(self.shown).min(end).max(position);
+        self.shown = shown;
+        shown
+    }
+}
+
 /// The colours of a cart button (cart colour spec CC6–CC8).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CartLook {
@@ -182,7 +248,7 @@ pub struct CartLook {
     pub hover_fill: Color32,
     pub active_fill: Color32,
     pub border: Color32,
-    /// The remaining-time fill while it plays.
+    /// The elapsed-time fill while it plays.
     pub progress: Color32,
     /// The kind marker of an idle or playing cart; `None`: the kind's own.
     pub marker: Option<Color32>,

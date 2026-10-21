@@ -114,6 +114,7 @@ fn a_segue_overlap_drains_on_next_over_its_own_length() {
     let mut s = (**fake.state.load()).clone();
     s.players[0].fading = true;
     s.players[0].fade_ms = 10_000;
+    s.players[0].fade_origin = fp_model::FadeOrigin::Segue;
     s.players[0].fade_seq += 1;
     fake.state.store(std::sync::Arc::new(s));
     h.run_steps(2);
@@ -151,4 +152,39 @@ fn a_fade_stop_during_a_crossfade_moves_the_bar_to_fade_stop() {
         restarted > stop.width() * 0.9,
         "full again on Fade stop for the new fade: {restarted}"
     );
+}
+
+#[test]
+fn a_crossfade_started_by_previous_drains_on_previous_not_on_next() {
+    use fp_app::ui::controller::Controller;
+    let (mut h, fake) = support::harness(support::state(1, 3));
+    let p = fake.player(0);
+    fake.send(Command::Play(p));
+    fake.send(Command::Play(p)); // crossfade into the second track
+    // The engine reports it done; Previous goes back.
+    let mut s = (**fake.state.load()).clone();
+    s.players[0].fading = false;
+    s.players[0].fade_ms = 0;
+    fake.state.store(std::sync::Arc::new(s));
+    h.run_steps(3);
+    let previous = h.get_by_label("Previous track").rect();
+    let next = h.get_by_label(NEXT).rect();
+    let stop = h.get_by_label("Fade stop").rect();
+    fake.send(Command::Previous(p));
+    h.run_steps(2);
+    let first = bar_width(&h, previous);
+    assert!(first > previous.width() * 0.9, "full at the start: {first}");
+    h.run_steps(25);
+    let later = bar_width(&h, previous);
+    assert!(
+        later < first * 0.8 && later > 0.0,
+        "draining: {first} {later}"
+    );
+    assert_eq!(bar_width(&h, next), 0.0, "Next did not start it");
+    assert_eq!(bar_width(&h, stop), 0.0, "Fade stop did not start it");
+    // A fade stop pressed meanwhile takes the countdown over.
+    fake.send(Command::FadeStop(p));
+    h.run_steps(2);
+    assert_eq!(bar_width(&h, previous), 0.0);
+    assert!(bar_width(&h, stop) > stop.width() * 0.9);
 }

@@ -92,7 +92,6 @@ fn cart_views_show_length_countdown_and_progress() {
     let playing = cart_view(&s, &telemetry, id).unwrap();
     assert_eq!(playing.status, CartStatus::Playing);
     assert_eq!(playing.time, "-00:06");
-    assert!((playing.remaining_fraction - 6.5 / 9.0).abs() < 1e-3);
 }
 
 #[test]
@@ -701,7 +700,18 @@ fn cc7_a_playing_cart_with_a_colour_keeps_it_and_its_countdown_shows() {
     paint_cart(&mut s, 0, Some(CartColor::Amber));
     let id = s.cartwall.pages[0].carts[0].id;
     apply(&mut s, Command::FireCart(id)).unwrap();
-    let (h, _fake) = harness(s);
+    let (mut h, fake) = harness(s);
+    fake.telemetry.store(Arc::new(Telemetry {
+        carts: vec![(
+            id,
+            CartTelemetry {
+                position_secs: 5.0,
+                peak: 0.0,
+            },
+        )],
+        ..Telemetry::default()
+    }));
+    h.run_steps(2);
     let look = cart_look(Some(CartColor::Amber), true);
     let amber = theme::cart_color(CartColor::Amber);
     assert_eq!(
@@ -709,10 +719,10 @@ fn cc7_a_playing_cart_with_a_colour_keeps_it_and_its_countdown_shows() {
         (look.fill, amber, true)
     );
     let button = h.get_by_label("Station ID").rect();
-    assert!(
-        (progress_width(&h, "Station ID", look.progress) - button.width()).abs() < 1.0,
-        "the whole play range is still to play"
-    );
+    // I19: the played share (5.0 of the range 0.5 to 9.5) fills from the
+    // left, as far as the waveform has been played.
+    let share = progress_width(&h, "Station ID", look.progress) / button.width();
+    assert!((share - 4.5 / 9.0).abs() < 0.03, "{share}");
 }
 
 #[test]
@@ -922,4 +932,169 @@ fn rl13_filled_buttons_take_all_the_height_above_the_minimum() {
     assert_eq!(filled_button_height(f32::NAN, 4), BUTTON_HEIGHT);
     assert_eq!(filled_button_height(f32::INFINITY, 4), BUTTON_HEIGHT);
     assert_eq!(filled_button_height(100.0, 0), BUTTON_HEIGHT);
+}
+
+#[test]
+fn i22_the_sweep_advances_between_snapshots_and_never_goes_back() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(1.0, 100.0);
+    // No new snapshot: the frame clock carries the position on, sub-pixel.
+    let a = sweep.advance(1.0, 100.01, 9.0, 1.0);
+    let b = sweep.advance(1.0, 100.03, 9.0, 1.0);
+    assert!(
+        (a - 1.01).abs() < 1e-9 && (b - 1.03).abs() < 1e-9,
+        "{a} {b}"
+    );
+    // A snapshot that is a little behind what was drawn does not pull back.
+    let c = sweep.advance(1.02, 100.04, 9.0, 1.0);
+    assert!(c >= b, "{c} {b}");
+    // Never past the end of the cart.
+    assert!((sweep.advance(1.02, 200.0, 9.0, 1000.0) - 9.0).abs() < 1e-9);
+}
+
+#[test]
+fn i22_the_sweep_follows_a_loop_or_restart_backwards() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(8.0, 10.0);
+    assert!(sweep.advance(8.0, 10.1, 9.0, 1.0) > 8.0);
+    assert!((sweep.advance(0.2, 10.2, 9.0, 1.0) - 0.2).abs() < 1e-9);
+}
+
+/// I19: the sweep grows from the start (left) to the end (right), with a line
+/// at its edge.
+#[test]
+fn i19_the_sweep_runs_left_to_right_with_a_line_at_the_played_edge() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (mut h, fake) = harness(s);
+    let look = cart_look(None, true);
+    let mut widths = Vec::new();
+    for position in [1.5, 4.5, 8.5] {
+        fake.telemetry.store(Arc::new(Telemetry {
+            carts: vec![(
+                id,
+                CartTelemetry {
+                    position_secs: position,
+                    peak: 0.0,
+                },
+            )],
+            ..Telemetry::default()
+        }));
+        h.run_steps(2);
+        widths.push(progress_width(&h, "Station ID", look.progress));
+    }
+    assert!(widths[0] < widths[1] && widths[1] < widths[2], "{widths:?}");
+    // The fill starts at the button's left edge and a line marks its right.
+    let button = h.get_by_label("Station ID").rect();
+    let fill = rects_in(&h, button)
+        .into_iter()
+        .filter(|r| r.fill == look.progress)
+        .max_by(|a, b| a.rect.width().total_cmp(&b.rect.width()))
+        .unwrap();
+    assert!((fill.rect.min.x - button.left()).abs() < 0.5);
+    let lines = line_xs_in(&h, button);
+    assert!(
+        lines.iter().any(|x| (x - fill.rect.max.x).abs() < 0.5),
+        "{lines:?} vs {:?}",
+        fill.rect
+    );
+}
+
+/// The x of every vertical line segment painted inside `area` in the last
+/// frame.
+fn line_xs_in(h: &H, area: Rect) -> Vec<f32> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<[egui::Pos2; 2]>) {
+        match shape {
+            egui::Shape::LineSegment { points, .. } => out.push(*points),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut all = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, &mut all);
+    }
+    all.into_iter()
+        .filter(|p| {
+            p[0].x == p[1].x && area.expand(0.5).contains(p[0]) && area.expand(0.5).contains(p[1])
+        })
+        .map(|p| p[0].x)
+        .collect()
+}
+
+/// I22: between two engine snapshots the line still moves, within the cap
+/// of two telemetry intervals, and holds if no snapshot follows.
+#[test]
+fn i22_the_played_edge_advances_between_snapshots_and_holds_at_the_cap() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (mut h, fake) = harness(s);
+    fake.telemetry.store(Arc::new(Telemetry {
+        carts: vec![(
+            id,
+            CartTelemetry {
+                position_secs: 2.0,
+                peak: 0.0,
+            },
+        )],
+        ..Telemetry::default()
+    }));
+    let look = cart_look(None, true);
+    h.run_steps(1);
+    let first = progress_width(&h, "Station ID", look.progress);
+    h.run_steps(1);
+    let second = progress_width(&h, "Station ID", look.progress);
+    assert!(second > first, "{first} {second}");
+    h.run_steps(20);
+    let held = progress_width(&h, "Station ID", look.progress);
+    assert!(held - second < 1.0, "holds at the cap: {second} {held}");
+}
+
+#[test]
+fn i22_the_floor_applies_before_any_step_is_observed() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(2.0, 50.0);
+    let a = sweep.advance(2.0, 50.005, 9.0, 0.01);
+    assert!((a - 2.005).abs() < 1e-9, "{a}");
+    let b = sweep.advance(2.0, 60.0, 9.0, 0.01);
+    assert!((b - 2.01).abs() < 1e-9, "{b}");
+}
+
+/// The simulated engine: the position advances 40 ms every 40 ms, the
+/// interface draws every 16 ms.
+fn run_steps_of_40ms(sweep: &mut fp_app::ui::cart_view::CartSweep, frames: usize) -> Vec<f64> {
+    (1..=frames)
+        .map(|f| {
+            let t = f as f64 * 0.016;
+            let position = 1.0 + (t / 0.04).floor() * 0.04;
+            sweep.advance(position, 100.0 + t, 90.0, 0.01)
+        })
+        .collect()
+}
+
+#[test]
+fn i22_buffer_steps_are_smoothed_without_a_hold_between_them() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(1.0, 100.0);
+    let shown = run_steps_of_40ms(&mut sweep, 60);
+    // After the first steps the line moves on every frame.
+    let tail = &shown[20..];
+    assert!(tail.windows(2).all(|w| w[1] > w[0]), "{tail:?}");
+}
+
+#[test]
+fn i22_a_stalled_engine_holds_the_line_within_about_two_steps() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(1.0, 100.0);
+    run_steps_of_40ms(&mut sweep, 60);
+    // The engine stops: the same position from now on.
+    let stuck = 1.0 + (60.0 * 0.016 / 0.04_f64).floor() * 0.04;
+    let mut at = 0.0;
+    for f in 61..400 {
+        at = sweep.advance(stuck, 100.0 + f as f64 * 0.016, 90.0, 0.01);
+    }
+    assert!(at <= stuck + 0.085, "held: {at} vs {stuck}");
+    assert!(at >= stuck, "{at}");
 }

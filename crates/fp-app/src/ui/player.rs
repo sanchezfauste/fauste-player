@@ -898,10 +898,10 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 t.tr("play-caption")
             };
-            // While a fade runs, the button that started it drains a line like
-            // a playing cart's, from full to empty over the fade: Fade stop
-            // for a fade stop, Next/Play for a crossfade or a segue overlap
-            // (the UI times it from the frame that first showed the fade; a
+            // While a fade runs, the button that started it drains a line
+            // from full to empty over the fade: Fade stop for a fade stop,
+            // Previous for a crossfade it started, Next/Play for any other
+            // crossfade or a segue overlap (the UI times it from the frame that first showed the fade; a
             // new fade (a fade stop pressed during a crossfade) restarts it,
             // on Fade stop).
             let fade_key = egui::Id::new(("fade-started", id.0));
@@ -922,7 +922,12 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 None
             };
             let stop_left = fade_left.filter(|_| fade_stopping);
-            let next_left = fade_left.filter(|_| !fade_stopping);
+            // I20: the countdown sits on the button that started the fade;
+            // a segue overlap, which no button started, drains on Next.
+            let next_left = fade_left
+                .filter(|_| !fade_stopping && pv.fade_origin != fp_model::FadeOrigin::Previous);
+            let previous_left = fade_left
+                .filter(|_| !fade_stopping && pv.fade_origin == fp_model::FadeOrigin::Previous);
             let play_style = TileStyle {
                 fill: Color32::TRANSPARENT,
                 border: theme::PLAY_BORDER,
@@ -1006,6 +1011,13 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             let button = |action: TransportAction| -> PaintFn {
                 Box::new(move |p, r, c| glyphs::paint(p, r, action, 13.0, c))
             };
+            let previous_button: PaintFn = Box::new(move |p, r, c| {
+                if let Some(left) = previous_left {
+                    let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
+                    p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
+                }
+                glyphs::paint(p, r, TransportAction::Previous, 13.0, c);
+            });
             // Two rows of three (feedback spec §3.2): Previous and Restart
             // first, then Stop and Pause over Fade stop and Stop after.
             let rows: [[GridButton; 3]; 2] = [
@@ -1014,7 +1026,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                         t.tr("tip-previous"),
                         available.previous,
                         TileStyle::plain(),
-                        button(TransportAction::Previous),
+                        previous_button,
                         Command::Previous(id),
                     ),
                     GridButton::new(

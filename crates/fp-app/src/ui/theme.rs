@@ -230,7 +230,7 @@ pub fn cart_color(color: CartColor) -> Color32 {
 /// (CC7).
 pub const CART_WASH_IDLE: f32 = 0.07;
 pub const CART_WASH_PLAYING: f32 = 0.16;
-/// The remaining-time fill of a playing cart with a colour (CC7).
+/// The elapsed-time fill of a playing cart with a colour (CC7).
 pub const CART_PROGRESS_ALPHA: f32 = 0.38;
 /// The waveform behind a cart's text, idle and playing (CC8).
 pub const CART_WAVE_IDLE_ALPHA: f32 = 0.13;

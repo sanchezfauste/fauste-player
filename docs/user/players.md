@@ -101,7 +101,9 @@ the same two are in the menu of a right click on the header's background
   −10, −12, −15, −20, −25, −30, −40, −50 and −∞ dB, with the level written on their right.
   - Drag it: the fader moves by as much as the pointer does, from where it
     is, so grabbing it never makes it jump; a click without moving changes
-    nothing.
+    nothing. Pulling past the top or bottom and back leaves the knob at the
+    end until the pointer returns to where it reached it, so the knob never
+    ends up away from the pointer.
   - Use the mouse wheel: one step per notch (about 0.6 dB near 0 dB).
   - Hold **Ctrl** or **Shift** while dragging or using the wheel to move it
     ten times finer.
@@ -121,9 +123,9 @@ the same two are in the menu of a right click on the header's background
 
 | Button | Action |
 |---|---|
-| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)); while it fades for a crossfade (Next or Previous) or a segue, a violet bar drains across the button from full to empty over the fade length. Paused: resume. With the track on air as next, Play restarts that track with the usual fade. On a bit-perfect output it switches at once, without a fade, and its tooltip says so (see [What it costs](bit-perfect.md#what-it-costs)). |
+| **Play / Next** (large) | Stopped: start the next track. On air: fade into the next track (the fade time is set in [Settings](settings.md)); while it fades for a crossfade started by Next or by a segue, a violet bar drains across the button from full to empty over the fade length (a crossfade started by Previous drains on the Previous button instead). Paused: resume. With the track on air as next, Play restarts that track with the usual fade. On a bit-perfect output it switches at once, without a fade, and its tooltip says so (see [What it costs](bit-perfect.md#what-it-costs)). |
 | **Stop** | Stop at once (with a short de-click ramp) |
-| **Fade stop** | Fade out and stop. While a fade stop runs, a violet bar drains across the button from full to empty over the fade length, like a playing cart's |
+| **Fade stop** | Fade out and stop. While a fade stop runs, a violet bar drains across the button from full to empty over the fade length |
 | **Pause** | Pause or resume; blinks amber while paused |
 | **Stop after** (a play triangle then a square) | Stop when the current track ends, once. In SINGLE mode it is available only while the current track repeats: it ends the repeat when the pass that is playing ends. To stop after a track every time it plays, or to repeat a track, use its menu in the playlist (see [Playlists](playlists.md)) |
 | **Previous** (a bar and two triangles) | While on air: fade back into the track this player played before, as Next does. Press again to keep going back. The track you left becomes the next one. On a bit-perfect output it switches at once, without a fade (see [What it costs](bit-perfect.md#what-it-costs)). |

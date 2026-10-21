@@ -103,6 +103,21 @@ impl ColumnWidths {
     }
 }
 
+/// What started the fade a player is running, so the UI can drain the
+/// countdown on the button the operator pressed. Runtime only, never saved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FadeOrigin {
+    /// Next, or Play while playing: a crossfade into the next entry.
+    #[default]
+    Next,
+    /// Previous: a crossfade into the entry before.
+    Previous,
+    /// The automatic overlap into the next entry at the end of the current.
+    Segue,
+    /// Fade stop.
+    FadeStop,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerState {
     pub id: PlayerId,
@@ -119,6 +134,9 @@ pub struct PlayerState {
     /// fade stop: the configured fade; a segue overlap: the overlap). 0 while
     /// not fading.
     pub fade_ms: u32,
+    /// What started the running fade (meaningless while not fading); runtime
+    /// only, never saved.
+    pub fade_origin: FadeOrigin,
     /// Counts the fades this player has started, so a UI can tell a new fade
     /// (a fade stop during a crossfade) from the one it was already timing.
     pub fade_seq: u64,
@@ -160,10 +178,18 @@ impl PlayerState {
         self.fade_stop_pending
     }
 
+    /// Ends the running fade: not fading, no length, the default origin.
+    pub(crate) fn end_fade(&mut self) {
+        self.fading = false;
+        self.fade_ms = 0;
+        self.fade_origin = FadeOrigin::default();
+    }
+
     /// Marks the player as fading for `fade_ms` and numbers the fade.
-    pub(crate) fn begin_fade(&mut self, fade_ms: u32) {
+    pub(crate) fn begin_fade(&mut self, fade_ms: u32, origin: FadeOrigin) {
         self.fading = true;
         self.fade_ms = fade_ms;
+        self.fade_origin = origin;
         self.fade_seq = self.fade_seq.wrapping_add(1);
     }
 
@@ -177,6 +203,7 @@ impl PlayerState {
             transport: Transport::Stopped,
             fading: false,
             fade_ms: 0,
+            fade_origin: FadeOrigin::default(),
             fade_seq: 0,
             mode,
             stop_after_current: false,

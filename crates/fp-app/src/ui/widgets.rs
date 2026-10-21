@@ -1500,7 +1500,9 @@ struct FaderWheel(f32);
 /// What a drag on the fader remembers between frames.
 #[derive(Clone, Copy)]
 struct FaderDrag {
-    /// The travel the drag has reached (it starts at the fader's own).
+    /// The travel the drag has reached (it starts at the fader's own). It is
+    /// not clamped: a pointer pulled past an end keeps the overshoot, so the
+    /// knob stays at the end until the pointer is back where it reached it.
     travel: f32,
     /// The pointer's height on the previous frame.
     last_y: f32,
@@ -1567,12 +1569,16 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
                 });
             let dy = p.y - drag.last_y;
             if dy != 0.0 {
-                drag.travel = (drag.travel - dy * factor / travel_px).clamp(0.0, 1.0);
-                changed = Some(drag.travel);
+                let before = drag.travel.clamp(0.0, 1.0);
+                drag.travel -= dy * factor / travel_px;
+                let after = drag.travel.clamp(0.0, 1.0);
+                if after != before {
+                    changed = Some(after);
+                }
             }
             drag.last_y = p.y;
             ui.data_mut(|d| d.insert_temp(id, drag));
-            dragging = Some(drag.travel);
+            dragging = Some(drag.travel.clamp(0.0, 1.0));
         }
         // Only on the knob: two quick taps elsewhere on the track are not
         // a reason to jump to 0 dB on air.

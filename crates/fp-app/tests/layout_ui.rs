@@ -2015,3 +2015,79 @@ fn rl14_collapsing_a_maximised_cartwall_ends_the_maximise() {
         "expanding does not bring it back"
     );
 }
+
+/// A state whose first cart is playing (nothing else is), with the players
+/// as `players` says: all shown, or all hidden.
+fn cart_on_air(hide_players: bool) -> AppState {
+    let mut s = state(2, 0);
+    let page = s.cartwall.pages[0].id;
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path: PathBuf::from("/carts/id.wav"),
+        },
+    )
+    .unwrap();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    let analysis = TrackAnalysis {
+        duration_secs: 10.0,
+        ..TrackAnalysis::default()
+    };
+    apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    if hide_players {
+        for p in s.players.clone() {
+            apply(
+                &mut s,
+                Command::SetPanelHidden {
+                    panel: Panel::Player(p.id),
+                    hidden: true,
+                },
+            )
+            .unwrap();
+        }
+    }
+    s
+}
+
+#[test]
+fn i22_a_cart_on_air_repaints_every_frame_with_the_players_shown_or_hidden() {
+    for hide in [false, true] {
+        let (mut h, _fake) = harness(cart_on_air(hide));
+        h.run_steps(3);
+        // `run_ok` fails when the interface never stops asking for frames.
+        assert!(
+            h.run_ok().is_none(),
+            "a playing cart asks for the next frame (players hidden: {hide})"
+        );
+    }
+}
+
+#[test]
+fn i22_a_maximised_cartwall_keeps_repainting_while_a_cart_plays() {
+    let (mut h, _fake) = harness(cart_on_air(false));
+    let at = cartwall_header_point(&h);
+    maximise(&mut h, at);
+    assert_eq!(h.state().maximised(), Some(Panel::Cartwall));
+    h.run_steps(3);
+    assert!(h.run_ok().is_none());
+}
+
+#[test]
+fn i22_a_stopped_cartwall_lets_the_interface_rest() {
+    let mut s = cart_on_air(true);
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::StopCart(id)).unwrap();
+    let (mut h, _fake) = harness(s);
+    assert!(h.run_ok().is_some());
+}

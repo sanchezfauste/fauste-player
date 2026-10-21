@@ -83,7 +83,7 @@ pub use loudness::{
 };
 pub use midi::{MidiAction, MidiBinding, MidiConfig, MidiDevice, MidiTrigger};
 pub use on_air::{OnAir, on_air};
-pub use player::{ColumnWidths, CueState, PlayMode, PlayerState, Transport};
+pub use player::{ColumnWidths, CueState, FadeOrigin, PlayMode, PlayerState, Transport};
 pub use playlist::{Playlist, PlaylistEntry, Playlists};
 pub use reducer::{apply, on_event, plan_for};
 pub use remote::{HttpRemoteConfig, OscRemoteConfig, RemoteConfig, RemoteEventsConfig};

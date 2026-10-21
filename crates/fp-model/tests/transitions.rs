@@ -194,6 +194,7 @@ fn rule11_a_segue_overlap_fades_for_the_overlap_not_the_configured_fade() {
     assert_eq!(player.fade_ms, 8000, "180 s end minus the 172 s start");
     assert_ne!(player.fade_ms, state.config.players.fade_ms);
     assert_ne!(player.fade_seq, before, "a new fade is numbered");
+    assert_eq!(player.fade_origin, fp_model::FadeOrigin::Segue);
     on_event(&mut state, EngineEvent::FadeCompleted { player: p });
     assert_eq!(state.player(p).unwrap().fade_ms, 0);
 }
