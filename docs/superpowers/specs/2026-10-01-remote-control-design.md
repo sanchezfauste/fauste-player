@@ -89,7 +89,7 @@ UTF-8), except cover images and the event stream.
 - **Track:** `id`, `title`, `artist`, `album`, `duration_secs`, `kind`
   (`music` | `jingle` | `effect` | `ad` | `voice`), `file_state` (`ok` |
   `missing` | `unreadable`), `analyzed`, `format` (`null` or
-  `{sample_rate, channels, bits}`), `markers` (`cue_in`, `intro_end`,
+  `{sample_rate, channels, bits, bitrate}`; `bitrate` in bit/s, `null` when unknown), `markers` (`cue_in`, `intro_end`,
   `outro_start`, `segue_start`, `cue_out`, each `null` or `{secs, source}`
   with `source` `auto` | `manual`), `loudness` (`null` or
   `{integrated_lufs, true_peak_dbtp}`) and `loudness_edit`

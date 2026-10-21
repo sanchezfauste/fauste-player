@@ -114,6 +114,7 @@ fn pcm16(rate: u32) -> Option<AudioFormat> {
         bits: Some(16),
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     })
 }
 
@@ -388,6 +389,7 @@ fn a_lossy_file_is_not_bit_perfect() {
         bits: None,
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     });
     r.start(request(1, path, lossy));
     assert!(!bit_perfect_after(&mut r, 2_400));
@@ -403,6 +405,7 @@ fn a_multichannel_file_is_not_bit_perfect() {
         bits: Some(16),
         channels: 3,
         dsd_rate: None,
+        bitrate: None,
     });
     r.start(request(1, path, format));
     assert!(!bit_perfect_after(&mut r, 2_400));

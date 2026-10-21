@@ -104,6 +104,30 @@ pub fn read_tags(path: &Path, limits: &Limits) -> Tags {
     }
 }
 
+/// The average bit rate of `path` in bit/s as lofty reports it (the audio
+/// bit rate, else the overall one; whole kbps). `None` when the file has no
+/// readable properties.
+pub fn read_bitrate(path: &Path) -> Option<u32> {
+    use lofty::file::AudioFile;
+    // The allocation limit lofty applies comes from the global options that
+    // `read_tags` sets (per thread); the cover is skipped, so it does not
+    // matter for the properties.
+    let file = lofty::probe::Probe::open(path)
+        .ok()?
+        .options(
+            lofty::config::ParseOptions::new()
+                .read_tags(false)
+                .read_cover_art(false),
+        )
+        .guess_file_type()
+        .ok()?
+        .read()
+        .ok()?;
+    let props = file.properties();
+    let kbps = props.audio_bitrate().or_else(|| props.overall_bitrate())?;
+    Some(kbps.checked_mul(1000)?).filter(|b| *b > 0)
+}
+
 /// The ID3v2 chunk of a DSF file, which the DSF header points to, wrapped
 /// in a WAV container so that lofty reads it like any other ID3v2 tag
 /// (lofty does not read DSF itself). At most `max_bytes` are read.

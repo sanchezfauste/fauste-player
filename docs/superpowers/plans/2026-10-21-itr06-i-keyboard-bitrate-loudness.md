@@ -10,7 +10,7 @@ Goal: four small operator-facing changes (backlog I24-I27).
 ## I25 Bit rate
 - `AudioFormat::bitrate: Option<u32>` (bit/s, serde default), read with lofty in `fp-analysis`; none for DSD.
 - No `ANALYSIS_VERSION` bump: older cached formats show none until re-read.
-- Shown in the row tooltip format line, player track info and cart info; `TrackDto.format.bitrate`.
+- Ruling: shown in the row tooltip (the track info) only; no other place lists the format. Also in `TrackDto.format.bitrate`.
 - Tests: analysis of a generated WAV; tooltip text. Strings in all 11 locales.
 - Docs: remote API, user guide, spec.
 

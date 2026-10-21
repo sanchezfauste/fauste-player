@@ -155,6 +155,7 @@ pub fn set_track_rates(state: &mut AppState, rates: &[u32]) {
             bits: Some(16),
             channels: 2,
             dsd_rate: None,
+            bitrate: None,
         });
     }
 }

@@ -176,18 +176,21 @@ fn br3_3_the_next_format_is_unknown_dsd_zero_or_the_same_rate() {
             bits: None,
             channels: 2,
             dsd_rate: Some(2_822_400),
+            bitrate: None,
         }),
         Some(fp_model::AudioFormat {
             sample_rate: 0,
             bits: Some(16),
             channels: 2,
             dsd_rate: None,
+            bitrate: None,
         }),
         Some(fp_model::AudioFormat {
             sample_rate: 44_100,
             bits: Some(16),
             channels: 2,
             dsd_rate: None,
+            bitrate: None,
         }),
     ] {
         s.library.get_mut(track).unwrap().format = format;
@@ -343,6 +346,7 @@ fn br5_an_analysed_next_brings_its_rate_cut() {
             bits: Some(24),
             channels: 2,
             dsd_rate: None,
+            bitrate: None,
         }),
         ..TrackAnalysis::default()
     };
@@ -433,6 +437,7 @@ fn br10_dsd_next_or_dsd_on_air_takes_no_cut_and_the_hold_still_stops() {
         bits: None,
         channels: 2,
         dsd_rate: Some(2_822_400),
+        bitrate: None,
     });
     assert_eq!(plan(&s, p), hard(None), "the PCM of a DSD next");
     rates(&mut s, 96_000);

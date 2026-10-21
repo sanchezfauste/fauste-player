@@ -103,7 +103,7 @@ Row colours:
 | Waveform icon at the right of the title | The track is being analysed now (*Analysing now*) |
 | Violet | Selected |
 
-**Track tooltip.** Hover a row for a moment to see its title, artist, album, date, genre, length, format (type, sample rate and bit depth when known) and the path of its file. A field the file does not have is left out. The popup is the only hover information on a row, and it never moves while it is shown. For a missing or unreadable file it starts with the reason.
+**Track tooltip.** Hover a row for a moment to see its title, artist, album, date, genre, length, format (type, sample rate, bit depth and average bit rate, for example 320 kbps, when known) and the path of its file. A field the file does not have is left out. The popup is the only hover information on a row, and it never moves while it is shown. For a missing or unreadable file it starts with the reason.
 
 ## Mouse
 

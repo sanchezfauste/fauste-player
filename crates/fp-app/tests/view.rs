@@ -645,6 +645,7 @@ fn tip_track() -> Track {
         bits: Some(16),
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     });
     t
 }
@@ -671,6 +672,29 @@ fn the_tooltip_lists_what_the_track_has_in_order() {
     assert_eq!(value(TipField::Duration), "03:20");
     assert_eq!(value(TipField::Format), "FLAC · 44.1 kHz · 16 bit");
     assert_eq!(value(TipField::Path), "/m/Artist - Song.flac");
+}
+
+#[test]
+fn the_format_line_ends_with_the_bit_rate_in_whole_kbps() {
+    let mut t = tip_track();
+    t.path = PathBuf::from("/m/Artist - Song.mp3");
+    t.format = Some(AudioFormat {
+        sample_rate: 44_100,
+        bits: None,
+        channels: 2,
+        dsd_rate: None,
+        bitrate: Some(319_600),
+    });
+    let line = |t: &Track| {
+        track_tooltip(t, None)
+            .into_iter()
+            .find(|(f, _)| *f == TipField::Format)
+            .unwrap()
+            .1
+    };
+    assert_eq!(line(&t), "MP3 · 44.1 kHz · 320 kbps");
+    t.format = t.format.map(|f| AudioFormat { bitrate: None, ..f });
+    assert_eq!(line(&t), "MP3 · 44.1 kHz", "unknown: left out");
 }
 
 #[test]
@@ -702,6 +726,7 @@ fn the_format_line_leaves_out_what_is_unknown() {
         bits: None,
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     });
     let line = track_tooltip(&t, None)
         .into_iter()
@@ -1064,15 +1089,22 @@ fn n18_the_other_statuses() {
 
 #[test]
 fn n18_a_bit_perfect_player_says_nothing_while_normalization_is_off() {
-    // Normalization is off by default: a bit-perfect player plays at unity
-    // gain either way, and "Not normalized" would only be noise.
+    // A bit-perfect player plays at unity gain either way, and "Not
+    // normalized" would only be noise while normalization is off.
     let t = measured_track(Some(-20.0), -10.0);
     let bp = fp_model::Normalization {
         gain_db: 0.0,
         status: fp_model::NormalizationStatus::BitPerfect,
     };
     assert_eq!(
-        gain_badge(&bp, &fp_model::LoudnessConfig::default(), &t),
+        gain_badge(
+            &bp,
+            &fp_model::LoudnessConfig {
+                normalize: false,
+                ..Default::default()
+            },
+            &t
+        ),
         None
     );
 }

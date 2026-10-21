@@ -874,7 +874,7 @@ pub fn loudness_lines(track: &Track, config: &fp_model::LoudnessConfig) -> Vec<M
     lines
 }
 
-/// `FLAC · 44.1 kHz · 16 bit`: the codec is the file extension, in capitals.
+/// `FLAC · 44.1 kHz · 16 bit`, `MP3 · 44.1 kHz · 320 kbps`: the codec is the file extension, in capitals.
 fn format_line(track: &Track) -> String {
     let mut parts = Vec::new();
     if let Some(ext) = track.path.extension().and_then(|e| e.to_str()) {
@@ -892,6 +892,9 @@ fn format_line(track: &Track) -> String {
         }
         if let Some(bits) = f.bits {
             parts.push(format!("{bits} bit"));
+        }
+        if let Some(bitrate) = f.bitrate.filter(|b| *b > 0) {
+            parts.push(format!("{} kbps", (f64::from(bitrate) / 1000.0).round()));
         }
     }
     parts.join(" · ")

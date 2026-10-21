@@ -336,6 +336,7 @@ fn an_open_bus_keeps_its_running_bit_perfect_setting() {
         bits: Some(16),
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     });
     r.act(EngineAction::StartCurrent { player: P, request });
     r.settle();
@@ -366,6 +367,7 @@ fn a_tuning_update_and_a_rate_change_in_one_tick_size_the_mixer_for_the_new_rate
         bits: Some(16),
         channels: 2,
         dsd_rate: None,
+        bitrate: None,
     });
     r.act(EngineAction::StartCurrent { player: P, request });
     r.settle();
