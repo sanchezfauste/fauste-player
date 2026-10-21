@@ -450,11 +450,10 @@ fn open_loudness_tab(
 
 #[test]
 fn n22_the_toggle_turns_normalization_on() {
-    let (mut h, fake) = open_loudness_tab(state(1, 1));
-    assert!(
-        !fake.state.load().config.loudness.normalize,
-        "off by default"
-    );
+    let mut s = state(1, 1);
+    s.config.loudness.normalize = false;
+    let (mut h, fake) = open_loudness_tab(s);
+    assert!(!fake.state.load().config.loudness.normalize);
     h.get_by_role_and_label(Role::CheckBox, "Normalize loudness")
         .click();
     h.run_steps(2);

@@ -213,7 +213,7 @@ and the next track waiting on each player is prepared again with the new
 one. A note under the settings says how many tracks are still waiting for
 their measurement; they play unchanged until it is done. A player or cart
 on a bit-perfect output is never normalized. **Restore defaults** resets
-this section only (normalization off).
+this section only (normalization on). Normalization is on for new installations; an existing configuration keeps its current setting (every saved configuration already stores the value).
 
 ## Playlists
 

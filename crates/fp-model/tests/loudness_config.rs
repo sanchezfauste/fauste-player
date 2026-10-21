@@ -9,7 +9,7 @@ use fp_model::{Command, Config, EngineAction, LoudnessConfig, apply, pending};
 #[test]
 fn the_defaults_are_those_of_the_spec() {
     let c = LoudnessConfig::default();
-    assert!(!c.normalize, "D11: off by default");
+    assert!(c.normalize, "D11: on by default");
     assert_eq!(
         (
             c.target_lufs,
@@ -114,6 +114,8 @@ fn n1_a_file_without_the_section_loads_the_defaults() {
 #[test]
 fn n3_a_loudness_change_only_preloads_and_never_waits() {
     let mut state = fixture(3);
+    // Start from off so that turning it on is part of the change.
+    state.config.loudness.normalize = false;
     let p = p0(&state);
     apply(&mut state, Command::Play(p)).unwrap();
     let mut config = state.config.clone();
@@ -134,4 +136,17 @@ fn n3_a_loudness_change_only_preloads_and_never_waits() {
     );
     assert!(pending(&state).is_empty());
     assert!(state.config.loudness.normalize, "applied at once");
+}
+
+#[test]
+fn a_saved_false_stays_off_and_a_missing_field_takes_the_default() {
+    let off: Config = serde_json::from_str(r#"{"loudness":{"normalize":false}}"#).unwrap();
+    assert!(
+        !off.loudness.normalize,
+        "an operator who chose off stays off"
+    );
+    let missing: Config = serde_json::from_str(r#"{"loudness":{"target_lufs":-18.0}}"#).unwrap();
+    assert!(missing.loudness.normalize);
+    let none: Config = serde_json::from_str("{}").unwrap();
+    assert!(none.loudness.normalize);
 }

@@ -41,7 +41,7 @@ automatic gain control and no compressor or limiter.
 | D8 | Bit-perfect and native DSD win: no normalization on such a device, and the interface says so. |
 | D9 | The player shows the applied gain; Settings has a Loudness section; the per-track controls. Remote API and MIDI follow the existing patterns (a state readout at least). Every new string in all 11 locales. |
 | D10 | Rejected: writing normalized copies of files; live AGC. |
-| D11 | `normalize` is off by default (§14, Q1). |
+| D11 | `normalize` is on by default (§14, Q1, revised in itr06 I27); a saved `false` stays off. |
 | D12 | A background loudness-only pass (N6b) measures tracks with no loudness measurement, with no full re-analysis; `ANALYSIS_VERSION` is not bumped (N6). |
 | D13 | The shared K-weighting and true-peak code moves to a new crate `fp-dsp` (N6). |
 | D14 | CUE and pre-listen (player and cart) are normalized exactly like on air (N9). |
@@ -527,8 +527,9 @@ sleeps.
 
 Answers to the questions raised while writing the spec; binding.
 
-- **Q1** `normalize` defaults to **off**: an upgrade changes nothing on air
-  until the operator turns it on (§4).
+- **Q1** `normalize` defaulted to off so that an upgrade changed nothing on
+  air (§4). Revised (itr06 I27): it defaults to **on**; only the default
+  changes, a saved config that says `false` keeps normalization off.
 - **Q2** The true-peak ceiling **only limits boosts**: it never cuts a
   track below `target − measured + trim`, and a negative gain is never
   reduced further by it (N7).
