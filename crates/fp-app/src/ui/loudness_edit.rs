@@ -24,6 +24,16 @@ pub(crate) fn measurement(scene: &Scene<'_>, track: &Track) -> String {
         .unwrap_or_default()
 }
 
+/// The gain lines of `track` (automatic gain, gain with trim, limit and
+/// normalization-off notes), one per line.
+pub(crate) fn gain_text(scene: &Scene<'_>, track: &Track) -> String {
+    view::gain_lines(track, &scene.state.config.loudness)
+        .iter()
+        .map(|m| widgets::tr_message(scene.i18n, m))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn send(scene: &Scene<'_>, track: TrackId, excluded: bool, trim_db: f32) {
     scene.ctl.send(Command::SetTrackLoudness {
         track,
@@ -182,6 +192,15 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                 );
                 trim(ui, scene, track);
             });
+            ui.add(
+                egui::Label::new(
+                    RichText::new(gain_text(scene, track))
+                        .font(font(12.0))
+                        .color(theme::NEUTRAL_400),
+                )
+                .selectable(false)
+                .wrap(),
+            );
         });
     if close {
         view_state.loudness_popup = None;

@@ -583,3 +583,75 @@ fn n18_the_gain_badge_is_painted_at_full_strength() {
     }
     assert_eq!(found, vec![fp_app::ui::theme::ACCENT]);
 }
+
+#[test]
+fn i4_the_popup_shows_the_automatic_gain_and_the_gain_with_trim() {
+    let (mut h, fake) = harness(on_air());
+    h.run_steps(2);
+    open_popup(&mut h);
+    assert!(
+        h.query_by_label_contains("Automatic gain: +4.0 dB")
+            .is_some()
+    );
+    assert!(h.query_by_label_contains("Gain with trim").is_none());
+    fake.take_sent();
+    h.get_by_role_and_label(Role::Slider, "Trim").focus();
+    h.run_steps(1);
+    h.key_press(egui::Key::ArrowRight);
+    h.run_steps(3);
+    assert!(
+        h.query_by_label_contains("Automatic gain: +4.0 dB")
+            .is_some()
+    );
+    assert!(
+        h.query_by_label_contains("Gain with trim: +4.5 dB")
+            .is_some()
+    );
+}
+
+#[test]
+fn i4_the_popup_says_why_there_is_no_automatic_gain() {
+    let mut s = on_air();
+    s.config.loudness.normalize = false;
+    let (mut h, _fake) = harness(s);
+    h.run_steps(2);
+    open_popup(&mut h);
+    assert!(
+        h.query_by_label_contains("Automatic gain: none, normalization is off")
+            .is_some()
+    );
+    assert!(
+        h.query_by_label_contains("Normalization is off, so nothing changes")
+            .is_some()
+    );
+}
+
+#[test]
+fn i4_the_cart_editor_shows_the_gain_lines() {
+    let mut s = state(1, 0);
+    s.config.loudness.normalize = true;
+    let page = s.cartwall.pages[0].id;
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path: "/carts/a.flac".into(),
+        },
+    )
+    .unwrap();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    s.library.get_mut(track).unwrap().loudness = Some(LoudnessMeasurement {
+        integrated_lufs: Some(-20.0),
+        true_peak_dbtp: -10.0,
+    });
+    let (mut h, _fake) = harness(s);
+    h.get_by_label("a").click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Edit…").click();
+    h.run_steps(3);
+    assert!(
+        h.query_by_label_contains("Automatic gain: +4.0 dB")
+            .is_some()
+    );
+}

@@ -586,7 +586,8 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         row(ui, &t.tr("loudness-exclude"), Some(&measurement), |ui| {
             loudness_edit::exclude(ui, scene, track)
         });
-        row(ui, &t.tr("loudness-trim"), None, |ui| {
+        let gain = loudness_edit::gain_text(scene, track);
+        row(ui, &t.tr("loudness-trim"), Some(&gain), |ui| {
             loudness_edit::trim(ui, scene, track);
         });
     }
