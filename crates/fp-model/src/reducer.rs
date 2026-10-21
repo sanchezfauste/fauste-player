@@ -1345,6 +1345,10 @@ fn set_player_count(
         fill_empty_next(state);
     }
     state.config.players.count = count;
+    // RL3: removed players take their shares and hidden flags with them;
+    // new players are shown; with no panel left shown, all are.
+    let players = state.player_ids();
+    let _ = crate::layout::settle_layout(&mut state.layout, &players);
     Ok(())
 }
 

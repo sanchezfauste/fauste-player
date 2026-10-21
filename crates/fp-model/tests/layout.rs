@@ -8,6 +8,7 @@ use common::{fixture, p0};
 use fp_model::{
     AppState, CartwallLayout, Command, Config, DEFAULT_SIDE_SHARE, Dock, Layout,
     MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE, ModelError, Panel, PlayerId, Transport, apply,
+    settle_layout,
 };
 
 fn close(a: f32, b: f32) -> bool {
@@ -451,4 +452,109 @@ fn rl10_reset_gives_the_default_layout() {
     apply(&mut s, Command::ResetLayout).unwrap();
     assert_eq!(s.layout, Layout::default());
     assert!(!s.layout.locked);
+}
+
+#[test]
+fn rl3_fewer_players_drop_their_shares_and_hidden_flags() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    apply(
+        &mut s,
+        Command::SetPlayerShares {
+            left: (p[2], 1.5),
+            right: (p[3], 0.5),
+        },
+    )
+    .unwrap();
+    hide(&mut s, Panel::Player(p[3]), true).unwrap();
+    apply(&mut s, Command::SetPlayerCount(2)).unwrap();
+    assert!(
+        s.layout
+            .player_shares
+            .iter()
+            .all(|(id, _)| p[..2].contains(id))
+    );
+    assert!(s.layout.hidden_players.is_empty());
+}
+
+#[test]
+fn rl3_a_lower_max_players_drops_them_too() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    apply(&mut s, Command::EqualPlayerWidths).unwrap();
+    hide(&mut s, Panel::Player(p[3]), true).unwrap();
+    let mut config = s.config.clone();
+    config.limits.max_players = 2;
+    apply(&mut s, Command::UpdateConfig(Box::new(config))).unwrap();
+    assert_eq!(s.player_ids(), p[..2].to_vec());
+    assert_eq!(s.layout.player_shares, vec![(p[0], 1.0), (p[1], 1.0)]);
+    assert!(s.layout.hidden_players.is_empty());
+}
+
+#[test]
+fn rl3_new_players_are_shown_with_an_equal_slice() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    hide(&mut s, Panel::Player(p[0]), true).unwrap();
+    apply(&mut s, Command::SetPlayerCount(6)).unwrap();
+    let now = s.player_ids();
+    assert_eq!(s.layout.shown_players(&now), now[1..].to_vec());
+    assert!(close(s.layout.share(&now, now[5]), 1.0));
+}
+
+#[test]
+fn rl3_when_no_panel_is_left_every_panel_is_shown() {
+    let mut s = fixture(0);
+    let p = s.player_ids();
+    for panel in [
+        Panel::Cartwall,
+        Panel::Player(p[0]),
+        Panel::Player(p[1]),
+        Panel::Player(p[2]),
+    ] {
+        hide(&mut s, panel, true).unwrap();
+    }
+    apply(&mut s, Command::SetPlayerCount(3)).unwrap();
+    assert!(s.layout.hidden_players.is_empty());
+    assert!(!s.layout.cartwall.hidden);
+}
+
+#[test]
+fn rl19_settle_keeps_the_first_of_a_repeated_player() {
+    let p = [PlayerId(1), PlayerId(2)];
+    let mut layout = Layout {
+        player_shares: vec![(p[0], 2.0), (p[0], 5.0), (p[1], -1.0), (p[1], 3.0)],
+        hidden_players: vec![p[1], p[1]],
+        ..Layout::default()
+    };
+    let notes = settle_layout(&mut layout, &p);
+    assert_eq!(layout.player_shares, vec![(p[0], 2.0), (p[1], 3.0)]);
+    assert_eq!(layout.hidden_players, vec![p[1]]);
+    assert_eq!(notes.len(), 3, "{notes:?}");
+    assert!(
+        settle_layout(&mut layout, &p).is_empty(),
+        "settling twice changes nothing"
+    );
+}
+
+#[test]
+fn rl19_settle_fits_the_cartwall_size_to_its_dock() {
+    let p = [PlayerId(1)];
+    let mut layout = Layout {
+        cartwall: CartwallLayout {
+            dock: Dock::Left,
+            size: None,
+            hidden: false,
+        },
+        ..Layout::default()
+    };
+    assert_eq!(settle_layout(&mut layout, &p).len(), 1);
+    assert_eq!(layout.cartwall.size, Some(DEFAULT_SIDE_SHARE));
+    layout.cartwall = CartwallLayout {
+        dock: Dock::Bottom,
+        size: Some(5.0),
+        hidden: false,
+    };
+    assert_eq!(settle_layout(&mut layout, &p).len(), 1);
+    assert_eq!(layout.cartwall.size, Some(MAX_CARTWALL_SHARE));
 }

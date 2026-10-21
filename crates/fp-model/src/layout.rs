@@ -297,3 +297,74 @@ pub(crate) fn reset_layout(state: &mut AppState) -> Result<(), ModelError> {
     state.layout = Layout::default();
     Ok(())
 }
+
+/// RL3 and RL19's repairs, for `players` (`AppState::player_ids`): drops
+/// the shares and hidden flags of players that are not in `players`, a
+/// second share or flag of the same player (the first wins) and shares
+/// that are not finite and above 0; shows every panel when none is shown;
+/// fits the cartwall's size to its dock (`CartwallLayout::share`).
+/// Returns one note per repair, for the load warnings. Idempotent.
+pub fn settle_layout(layout: &mut Layout, players: &[PlayerId]) -> Vec<String> {
+    let mut notes = Vec::new();
+    let mut seen = Vec::new();
+    layout.player_shares.retain(|(id, share)| {
+        let keep = if !players.contains(id) {
+            notes.push(format!(
+                "layout: the share of player {} was dropped: there is no such player",
+                id.0
+            ));
+            false
+        } else if seen.contains(id) {
+            notes.push(format!(
+                "layout: a second share of player {} was dropped",
+                id.0
+            ));
+            false
+        } else if !usable_share(*share) {
+            notes.push(format!(
+                "layout: the share {share} of player {} is not above 0; it was dropped",
+                id.0
+            ));
+            false
+        } else {
+            true
+        };
+        if keep {
+            seen.push(*id);
+        }
+        keep
+    });
+    let mut seen = Vec::new();
+    layout.hidden_players.retain(|id| {
+        let keep = if !players.contains(id) {
+            notes.push(format!(
+                "layout: the hidden flag of player {} was dropped: there is no such player",
+                id.0
+            ));
+            false
+        } else if seen.contains(id) {
+            notes.push(format!("layout: player {} was hidden twice", id.0));
+            false
+        } else {
+            true
+        };
+        if keep {
+            seen.push(*id);
+        }
+        keep
+    });
+    if layout.shown_panels(players) == 0 {
+        layout.hidden_players.clear();
+        layout.cartwall.hidden = false;
+        notes.push("layout: every panel was hidden; all are shown again".to_owned());
+    }
+    let fitted = layout.cartwall.share();
+    if fitted.map(f32::to_bits) != layout.cartwall.size.map(f32::to_bits) {
+        notes.push(format!(
+            "layout: the cartwall's size {:?} does not fit its dock; it is now {fitted:?}",
+            layout.cartwall.size
+        ));
+        layout.cartwall.size = fitted;
+    }
+    notes
+}
