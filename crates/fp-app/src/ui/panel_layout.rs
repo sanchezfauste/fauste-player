@@ -4,8 +4,8 @@
 //! Pure and unit-tested; `ui/panels.rs` draws with it.
 
 use egui::{Rect, Vec2, pos2};
-use fp_model::PlayerId;
 use fp_model::layout::Panel;
+use fp_model::{Command, PlayerId};
 
 /// The gap between two panels; between two players it is a splitter
 /// (RL12).
@@ -147,4 +147,151 @@ fn player_widths(
         .map(|(p, f)| (p, MIN_PLAYER_WIDTH + spare * f))
         .collect();
     (widths, false)
+}
+
+/// RL12: how long a released splitter's widths are held while the model's
+/// echo is on its way, as the table's column resize holds its widths.
+pub const HOLD_SECS: f64 = 0.5;
+/// RL12, RL4: the share a player dragged to its minimum width sends, as a
+/// part of the pair's spare room; the model refuses 0.
+pub const SHARE_FLOOR: f32 = 1e-4;
+
+/// RL12: the pair's widths after the splitter between them moved `dx`
+/// from where the drag began. The pair keeps its total and neither goes
+/// under `MIN_PLAYER_WIDTH`; a pair without room, or a `dx` that is not a
+/// number, does not move.
+pub fn drag_pair(start: (f32, f32), dx: f32) -> (f32, f32) {
+    let total = start.0 + start.1;
+    if !dx.is_finite() || total < 2.0 * MIN_PLAYER_WIDTH {
+        return start;
+    }
+    let left = (start.0 + dx).clamp(MIN_PLAYER_WIDTH, total - MIN_PLAYER_WIDTH);
+    (left, total - left)
+}
+
+/// RL12, RL4: the shares a drag sends for the pair's new widths: each
+/// one's room above its minimum, so that the next pass draws exactly these
+/// widths (the model scales the pair to keep its sum). A player at its
+/// minimum sends `SHARE_FLOOR` of the pair's room. `None` when the pair has
+/// no room above its minimums.
+pub fn pair_shares(widths: (f32, f32)) -> Option<(f32, f32)> {
+    let room_of = |w: f32| {
+        if w.is_finite() {
+            (w - MIN_PLAYER_WIDTH).max(0.0)
+        } else {
+            0.0
+        }
+    };
+    let (left, right) = (room_of(widths.0), room_of(widths.1));
+    let room = left + right;
+    if !(room.is_finite() && room > 0.0) {
+        return None;
+    }
+    let floor = room * SHARE_FLOOR;
+    Some((left.max(floor), right.max(floor)))
+}
+
+/// RL12: a player splitter being dragged, or just released: its widths are
+/// drawn from the pointer on every frame and sent once, on release.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiveSplit {
+    left: PlayerId,
+    right: PlayerId,
+    /// The shown players and the row's width the drag began with; a change
+    /// in either ends it.
+    shown: Vec<PlayerId>,
+    row_width: f32,
+    start_x: f32,
+    start: (f32, f32),
+    /// The pair's widths now.
+    now: (f32, f32),
+    /// Set on release: the shares the model had then, and until when the
+    /// released widths are still drawn.
+    released: Option<(Vec<(PlayerId, f32)>, f64)>,
+}
+
+impl LiveSplit {
+    /// A drag of the splitter between `pair` (left, right), begun at
+    /// pointer x `start_x` with the pair `start` wide.
+    pub fn new(
+        pair: (PlayerId, PlayerId),
+        shown: Vec<PlayerId>,
+        row_width: f32,
+        start_x: f32,
+        start: (f32, f32),
+    ) -> Self {
+        Self {
+            left: pair.0,
+            right: pair.1,
+            shown,
+            row_width,
+            start_x,
+            start,
+            now: start,
+            released: None,
+        }
+    }
+
+    pub fn pair(&self) -> (PlayerId, PlayerId) {
+        (self.left, self.right)
+    }
+
+    /// The button is still down.
+    pub fn is_dragging(&self) -> bool {
+        self.released.is_none()
+    }
+
+    /// The pointer is at `x`: the pair follows it (until the release).
+    pub fn follow(&mut self, x: f32) {
+        if self.is_dragging() {
+            self.now = drag_pair(self.start, x - self.start_x);
+        }
+    }
+
+    /// The button was released: the command to send, once, and only if the
+    /// drag moved something. `shares` are the model's shares now, and the
+    /// released widths are held until they change or until `until`.
+    pub fn release(&mut self, shares: Vec<(PlayerId, f32)>, until: f64) -> Option<Command> {
+        if !self.is_dragging() {
+            return None;
+        }
+        self.released = Some((shares, until));
+        if (self.now.0 - self.start.0).abs() <= 0.5 {
+            return None;
+        }
+        let (left, right) = pair_shares(self.now)?;
+        Some(Command::SetPlayerShares {
+            left: (self.left, left),
+            right: (self.right, right),
+        })
+    }
+
+    /// Whether the drag's widths no longer apply: the shown players or the
+    /// row's width changed, or, once released, the model's shares changed
+    /// (its echo arrived) or the hold ran out.
+    pub fn stale(
+        &self,
+        shown: &[PlayerId],
+        row_width: f32,
+        shares: &[(PlayerId, f32)],
+        time: f64,
+    ) -> bool {
+        self.shown != shown
+            || (self.row_width - row_width).abs() > 0.5
+            || self
+                .released
+                .as_ref()
+                .is_some_and(|(before, until)| time >= *until || before.as_slice() != shares)
+    }
+
+    /// `widths` with the pair's replaced by the drag's.
+    pub fn apply(&self, widths: &mut [(PlayerId, f32)]) {
+        for (id, width) in widths.iter_mut() {
+            if *id == self.left {
+                *width = self.now.0;
+            } else if *id == self.right {
+                *width = self.now.1;
+            }
+        }
+    }
 }

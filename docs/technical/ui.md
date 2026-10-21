@@ -67,6 +67,22 @@ the cartwall's rectangle (`None` while it is hidden).
 - `AppUi::player_rects` and `AppUi::cartwall_rect` give the last frame's
   rectangles (tests).
 
+**Splitters** (RL12). The 8-point gap between two shown players is a
+splitter (`panels::player_splitter` over the generic `panels::splitter`,
+which senses `click_and_drag`, so a click is never a drag, shows the resize
+cursor and paints a line only while hovered or dragged, and senses nothing
+while the layout is locked). A drag lives in `ViewState::live_split`
+(`panel_layout::LiveSplit`): `drag_pair` moves the pair with the pointer
+and keeps its total and both minimums, and `panels::live_widths` applies it
+before the row is drawn, so the drag shows in the same frame. On release
+one `SetPlayerShares` goes out, only if the drag moved something, with
+`pair_shares`: each player's room above its minimum (a player at its
+minimum sends `SHARE_FLOOR` of the pair's room, as the model refuses 0), so
+the next pass draws exactly the dragged widths. The released widths are
+held until the model's shares change or `HOLD_SECS` pass, as the table's
+column resize does; a change in the shown players or the row's width ends
+the drag. A double-click sends `EqualPlayerWidths`.
+
 ## Data flow
 
 Each frame, `AppUi::ui`:

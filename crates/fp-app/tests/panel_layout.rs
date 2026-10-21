@@ -9,11 +9,11 @@
 
 use egui::{Rect, pos2, vec2};
 use fp_app::ui::panel_layout::{
-    Arrangement, CONTENT_HEIGHT_CAP, CartwallSizes, MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH, PANEL_GAP,
-    PassInput, arrange,
+    Arrangement, CONTENT_HEIGHT_CAP, CartwallSizes, LiveSplit, MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH,
+    PANEL_GAP, PassInput, SHARE_FLOOR, arrange, drag_pair, pair_shares,
 };
 use fp_model::layout::Panel;
-use fp_model::{AppState, Config, PlayerId};
+use fp_model::{AppState, Command, Config, PlayerId};
 
 /// The middle area of a 1920 × 1080 window, inside its 8-point margin:
 /// under the 34-point top bar, over the 24-point status bar.
@@ -234,4 +234,93 @@ fn rl16_a_hidden_panel_is_never_maximised() {
         pass(&s, full_hd(), Some(Panel::Cartwall)),
         pass(&s, full_hd(), None)
     );
+}
+
+#[test]
+fn rl12_a_drag_moves_the_pair_and_keeps_its_total_and_minimums() {
+    assert_eq!(drag_pair((480.0, 480.0), 60.0), (540.0, 420.0));
+    assert_eq!(drag_pair((480.0, 480.0), 400.0), (580.0, MIN_PLAYER_WIDTH));
+    assert_eq!(drag_pair((480.0, 480.0), -400.0), (MIN_PLAYER_WIDTH, 580.0));
+    assert_eq!(
+        drag_pair((380.0, 380.0), 50.0),
+        (380.0, 380.0),
+        "no room: nothing moves"
+    );
+    assert_eq!(drag_pair((480.0, 480.0), f32::NAN), (480.0, 480.0));
+}
+
+#[test]
+fn rl12_the_shares_are_the_room_above_the_minimums() {
+    assert_eq!(pair_shares((540.0, 420.0)), Some((160.0, 40.0)));
+    let (left, right) = pair_shares((580.0, 380.0)).unwrap();
+    assert_eq!(left, 200.0);
+    assert!(
+        right > 0.0 && right <= 200.0 * SHARE_FLOOR,
+        "a player at its minimum sends a sliver, never 0: {right}"
+    );
+    assert_eq!(pair_shares((380.0, 380.0)), None);
+    assert_eq!(
+        pair_shares((f32::NAN, 400.0)),
+        Some((SHARE_FLOOR * 20.0, 20.0))
+    );
+}
+
+#[test]
+fn rl12_a_live_split_sends_once_and_holds_until_the_echo() {
+    let (a, b, c) = (PlayerId(1), PlayerId(2), PlayerId(3));
+    let shown = vec![a, b, c];
+    let mut live = LiveSplit::new((a, b), shown.clone(), 1400.0, 500.0, (480.0, 480.0));
+    assert!(live.is_dragging());
+    live.follow(560.0);
+    let mut w = vec![(a, 480.0), (b, 480.0), (c, 424.0)];
+    live.apply(&mut w);
+    assert_eq!(w, vec![(a, 540.0), (b, 420.0), (c, 424.0)]);
+    let before: Vec<(PlayerId, f32)> = Vec::new();
+    assert_eq!(
+        live.release(before.clone(), 10.5),
+        Some(Command::SetPlayerShares {
+            left: (a, 160.0),
+            right: (b, 40.0),
+        })
+    );
+    assert!(!live.is_dragging());
+    assert_eq!(live.release(before.clone(), 10.5), None, "sent once");
+    live.follow(900.0);
+    let mut w = vec![(a, 480.0), (b, 480.0), (c, 424.0)];
+    live.apply(&mut w);
+    assert_eq!(
+        w[0],
+        (a, 540.0),
+        "a released drag no longer follows the pointer"
+    );
+    assert!(!live.stale(&shown, 1400.0, &before, 10.0), "held");
+    assert!(
+        live.stale(&shown, 1400.0, &[(a, 160.0)], 10.0),
+        "the echo arrived"
+    );
+    assert!(
+        live.stale(&shown, 1400.0, &before, 10.5),
+        "the hold ran out"
+    );
+}
+
+#[test]
+fn rl12_a_drag_back_to_where_it_began_sends_nothing() {
+    let (a, b) = (PlayerId(1), PlayerId(2));
+    let mut live = LiveSplit::new((a, b), vec![a, b], 968.0, 500.0, (480.0, 480.0));
+    live.follow(560.0);
+    live.follow(500.2);
+    assert_eq!(live.release(Vec::new(), 1.0), None);
+}
+
+#[test]
+fn rl12_a_window_resized_or_a_player_gone_ends_a_drag() {
+    let (a, b, c) = (PlayerId(1), PlayerId(2), PlayerId(3));
+    let live = LiveSplit::new((a, b), vec![a, b, c], 1400.0, 500.0, (480.0, 480.0));
+    assert!(!live.stale(&[a, b, c], 1400.0, &[], 0.0));
+    assert!(
+        live.stale(&[a, b, c], 1300.0, &[], 0.0),
+        "the window was resized"
+    );
+    assert!(live.stale(&[a, b], 1400.0, &[], 0.0), "a player went away");
 }

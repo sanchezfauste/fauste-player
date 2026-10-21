@@ -10,7 +10,7 @@
 
 mod support;
 
-use egui::{Rect, pos2, vec2};
+use egui::{CursorIcon, Event, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::app::AppUi;
@@ -18,7 +18,7 @@ use fp_app::ui::controller::Controller;
 use fp_app::ui::panel_layout::{MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH, PANEL_GAP};
 use fp_model::layout::Panel;
 use fp_model::{Command, PlayerId};
-use support::{harness, harness_sized, state};
+use support::{Fake, harness, harness_sized, state};
 
 /// The shown players' columns in the last frame, in display order.
 fn columns(h: &Harness<'_, AppUi>) -> Vec<(PlayerId, Rect)> {
@@ -173,4 +173,200 @@ fn rl8_three_rows_fit_a_player_at_its_least_height() {
         third.bottom() <= col.bottom() - 24.0 + 0.5,
         "{third:?} in {col:?}"
     );
+}
+
+// --- splitters (RL12)
+
+fn press(h: &mut Harness<'_, AppUi>, at: Pos2, button: PointerButton, pressed: bool) {
+    h.event(Event::PointerButton {
+        pos: at,
+        button,
+        pressed,
+        modifiers: Modifiers::NONE,
+    });
+}
+
+/// The middle of the splitter on the right of `left`'s column.
+fn splitter_at(h: &Harness<'_, AppUi>, left: PlayerId) -> Pos2 {
+    let r = column(h, left);
+    pos2(r.right() + PANEL_GAP / 2.0, r.center().y)
+}
+
+/// Presses at `from` and moves `dx` in six frames; returns the first two
+/// players' widths after each. The button stays down.
+fn drag_by(h: &mut Harness<'_, AppUi>, fake: &Fake, from: Pos2, dx: f32) -> Vec<(f32, f32)> {
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    press(h, from, PointerButton::Primary, true);
+    h.run_steps(1);
+    let mut seen = Vec::new();
+    for step in 1..=6 {
+        h.event(Event::PointerMoved(pos2(
+            from.x + dx * step as f32 / 6.0,
+            from.y,
+        )));
+        h.run_steps(1);
+        seen.push((
+            column(h, fake.player(0)).width(),
+            column(h, fake.player(1)).width(),
+        ));
+    }
+    seen
+}
+
+fn click_at(h: &mut Harness<'_, AppUi>, at: Pos2) {
+    press(h, at, PointerButton::Primary, true);
+    h.run_steps(1);
+    press(h, at, PointerButton::Primary, false);
+    h.run_steps(1);
+}
+
+fn width_commands(fake: &Fake) -> Vec<Command> {
+    fake.take_sent()
+        .into_iter()
+        .filter(|c| {
+            matches!(
+                c,
+                Command::SetPlayerShares { .. } | Command::EqualPlayerWidths
+            )
+        })
+        .collect()
+}
+
+fn cursor(h: &Harness<'_, AppUi>) -> CursorIcon {
+    h.output().platform_output.cursor_icon
+}
+
+#[test]
+fn rl12_dragging_a_splitter_resizes_both_neighbours_live() {
+    let (mut h, fake) = harness(state(2, 3));
+    let before = (
+        column(&h, fake.player(0)).width(),
+        column(&h, fake.player(1)).width(),
+    );
+    let from = splitter_at(&h, fake.player(0));
+    let seen = drag_by(&mut h, &fake, from, 60.0);
+    let last = *seen.last().unwrap();
+    assert!(
+        near(last.0, before.0 + 60.0) && near(last.1, before.1 - 60.0),
+        "{before:?} -> {last:?}"
+    );
+    assert!(seen.windows(2).all(|w| w[1].0 >= w[0].0), "{seen:?}");
+    assert!(
+        width_commands(&fake).is_empty(),
+        "nothing is sent while the button is down"
+    );
+}
+
+#[test]
+fn rl12_one_command_on_release_and_the_widths_stay() {
+    let (mut h, fake) = harness(state(2, 3));
+    let (p1, p2) = (fake.player(0), fake.player(1));
+    let from = splitter_at(&h, p1);
+    drag_by(&mut h, &fake, from, 60.0);
+    let live = (column(&h, p1).width(), column(&h, p2).width());
+    press(
+        &mut h,
+        pos2(from.x + 60.0, from.y),
+        PointerButton::Primary,
+        false,
+    );
+    h.run_steps(3);
+    let sent = width_commands(&fake);
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    let Command::SetPlayerShares { left, right } = &sent[0] else {
+        panic!("{sent:?}")
+    };
+    assert_eq!((left.0, right.0), (p1, p2));
+    let ratio = (live.0 - MIN_PLAYER_WIDTH) / (live.1 - MIN_PLAYER_WIDTH);
+    assert!(
+        (left.1 / right.1 - ratio).abs() < 0.01,
+        "{left:?} {right:?}"
+    );
+    // Past the hold, the model's shares draw the same widths.
+    h.run_steps(40);
+    assert!(near(column(&h, p1).width(), live.0) && near(column(&h, p2).width(), live.1));
+}
+
+#[test]
+fn rl12_a_click_on_a_splitter_sends_nothing() {
+    let (mut h, fake) = harness(state(2, 3));
+    let at = splitter_at(&h, fake.player(0));
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    click_at(&mut h, at);
+    h.run_steps(30);
+    assert!(width_commands(&fake).is_empty());
+}
+
+#[test]
+fn rl12_a_double_click_sends_equal_widths() {
+    let mut s = state(2, 3);
+    let p = s.player_ids();
+    s.layout.player_shares = vec![(p[0], 3.0), (p[1], 1.0)];
+    let (mut h, fake) = harness(s);
+    let at = splitter_at(&h, p[0]);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    click_at(&mut h, at);
+    click_at(&mut h, at);
+    h.run_steps(2);
+    assert_eq!(width_commands(&fake), vec![Command::EqualPlayerWidths]);
+    assert!(near(column(&h, p[0]).width(), column(&h, p[1]).width()));
+}
+
+#[test]
+fn rl12_the_minimums_hold() {
+    let (mut h, fake) = harness(state(2, 3));
+    let (p1, p2) = (fake.player(0), fake.player(1));
+    let from = splitter_at(&h, p1);
+    drag_by(&mut h, &fake, from, 400.0);
+    assert!(near(column(&h, p2).width(), MIN_PLAYER_WIDTH));
+    press(
+        &mut h,
+        pos2(from.x + 400.0, from.y),
+        PointerButton::Primary,
+        false,
+    );
+    h.run_steps(40);
+    assert_eq!(width_commands(&fake).len(), 1);
+    assert!(
+        fake.rejected.lock().unwrap().is_empty(),
+        "the model took it"
+    );
+    assert!(near(column(&h, p2).width(), MIN_PLAYER_WIDTH));
+}
+
+#[test]
+fn rl12_the_pointer_shows_the_resize_cursor_over_a_splitter() {
+    let (mut h, fake) = harness(state(2, 3));
+    h.event(Event::PointerMoved(splitter_at(&h, fake.player(0))));
+    h.run_steps(1);
+    assert_eq!(cursor(&h), CursorIcon::ResizeColumn);
+}
+
+#[test]
+fn rl12_a_locked_layout_has_inert_splitters() {
+    let mut s = state(2, 3);
+    let p = s.player_ids();
+    s.layout.player_shares = vec![(p[0], 3.0), (p[1], 1.0)];
+    s.layout.locked = true;
+    let (mut h, fake) = harness(s);
+    let before = column(&h, p[0]).width();
+    let at = splitter_at(&h, p[0]);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    assert_eq!(cursor(&h), CursorIcon::Default);
+    click_at(&mut h, at);
+    click_at(&mut h, at);
+    drag_by(&mut h, &fake, at, 60.0);
+    press(
+        &mut h,
+        pos2(at.x + 60.0, at.y),
+        PointerButton::Primary,
+        false,
+    );
+    h.run_steps(3);
+    assert!(width_commands(&fake).is_empty());
+    assert!(near(column(&h, p[0]).width(), before));
 }

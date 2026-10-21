@@ -185,6 +185,8 @@ pub(crate) struct ViewState {
     pub(crate) player_rects: Vec<(PlayerId, Rect)>,
     /// The cartwall's rectangle in the last frame; `None` while hidden.
     pub(crate) cartwall_rect: Option<Rect>,
+    /// A player splitter being dragged or just released (RL12).
+    pub(crate) live_split: Option<super::panel_layout::LiveSplit>,
     notice: Option<(String, f64)>,
     /// Dropouts the engine counted, as the status bar alerts show them.
     dropouts: Dropouts,
@@ -733,6 +735,7 @@ impl AppUi {
                 &scene,
                 &mut self.view,
                 &mut self.covers,
+                &arranged,
                 &arranged,
             );
         }
