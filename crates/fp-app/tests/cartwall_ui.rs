@@ -16,7 +16,7 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::services::{MediaCache, TrackMedia};
 use fp_app::ui::cart_view::{
     BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, button_height, cart_look, cart_view,
-    filled_button_height, page_on_air,
+    filled_button_height, fit_name, page_on_air,
 };
 use fp_app::ui::theme;
 use fp_engine::conductor::Telemetry;
@@ -449,6 +449,30 @@ fn stop_all_stays_at_the_right_end_in_a_narrow_window() {
     assert!(stop.width() > 40.0, "not squeezed: {stop:?}");
     assert!(h.query_by_label("CARTWALL").is_some(), "title kept");
     assert!(h.query_by_label("Carts 1").is_some(), "a page tab kept");
+}
+
+/// Ten points a character, the ellipsis and spaces included.
+fn tens(text: &str) -> f32 {
+    10.0 * text.chars().count() as f32
+}
+
+#[test]
+fn a_cart_name_wraps_between_words_and_never_inside_one() {
+    // Room for it: unchanged.
+    assert_eq!(fit_name("Jingle", 60.0, tens), "Jingle");
+    // Words wrap at their boundaries, as many to a line as fit.
+    assert_eq!(fit_name("Top of the hour", 100.0, tens), "Top of the\nhour");
+    assert_eq!(fit_name("Station ID", 70.0, tens), "Station\nID");
+    // A word that does not fit a line is cut with an ellipsis, never split
+    // across lines, and nothing follows it.
+    assert_eq!(fit_name("Jingle", 50.0, tens), "Jing…");
+    assert_eq!(fit_name("Big Jingle drop", 50.0, tens), "Big\nJing…");
+    // Spaces collapse; nothing is no name.
+    assert_eq!(fit_name("  Station   ID ", 100.0, tens), "Station ID");
+    assert_eq!(fit_name("", 50.0, tens), "");
+    // Not even one letter fits: the ellipsis alone.
+    assert_eq!(fit_name("Jingle", 5.0, tens), "…");
+    assert_eq!(fit_name("Jingle", f32::NAN, tens), "…");
 }
 
 #[test]

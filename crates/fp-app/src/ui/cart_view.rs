@@ -27,6 +27,53 @@ pub fn button_height(available: f32, rows: usize) -> f32 {
     ((available - gaps) / rows as f32).clamp(MIN_BUTTON_HEIGHT, BUTTON_HEIGHT)
 }
 
+/// The mark that ends a cut word.
+const ELLIPSIS: &str = "…";
+
+/// A cart's name laid out for a button `width` points wide, as `measure`
+/// gives a line's width: its words, as many to a line as fit, the lines
+/// joined by `\n`. A word is never split across lines: one that does not
+/// fit a line of its own is cut with an ellipsis, on its own line, and
+/// ends the name. Runs of spaces collapse to one.
+pub fn fit_name(name: &str, width: f32, measure: impl Fn(&str) -> f32) -> String {
+    let fits = |text: &str| measure(text) <= width;
+    let mut lines: Vec<String> = Vec::new();
+    let mut line = String::new();
+    for word in name.split_whitespace() {
+        let joined = if line.is_empty() {
+            word.to_owned()
+        } else {
+            format!("{line} {word}")
+        };
+        if fits(&joined) {
+            line = joined;
+            continue;
+        }
+        if !line.is_empty() {
+            lines.push(std::mem::take(&mut line));
+        }
+        if fits(word) {
+            line = word.to_owned();
+            continue;
+        }
+        let cut = word
+            .char_indices()
+            .rev()
+            .map(|(end, _)| end)
+            .filter(|end| *end > 0)
+            .filter_map(|end| word.get(..end))
+            .map(|prefix| format!("{prefix}{ELLIPSIS}"))
+            .find(|cut| fits(cut))
+            .unwrap_or_else(|| ELLIPSIS.to_owned());
+        lines.push(cut);
+        return lines.join("\n");
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines.join("\n")
+}
+
 /// RL13: the height of a cart button when the grid fills a panel that does
 /// not fit its content: what fits, never under `MIN_BUTTON_HEIGHT`, with no
 /// upper clamp. The grid scrolls only when even the minimum does not fit.

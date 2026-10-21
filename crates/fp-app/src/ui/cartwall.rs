@@ -10,8 +10,8 @@ use fp_model::{CartKind, CartPageId, Command};
 
 use super::app::{Scene, ViewState};
 use super::cart_view::{
-    BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, MIN_BUTTON_WIDTH, button_height, cart_look,
-    cart_view, filled_button_height, page_on_air,
+    self, BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, MIN_BUTTON_WIDTH, button_height,
+    cart_look, cart_view, filled_button_height, page_on_air,
 };
 use super::glyphs::{self, TransportAction};
 use super::panel_layout::{self, CartwallSizes};
@@ -528,8 +528,15 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                             _ => shown.clone(),
                         };
                         let name_color = if empty { theme::NEUTRAL_600 } else { c };
-                        let galley =
-                            p.layout(title, font_medium(11.0), name_color, inner.width() - 12.0);
+                        // Words wrap; a word too wide for the button is
+                        // cut with an ellipsis, never split across lines.
+                        let name_font = font_medium(11.0);
+                        let name = cart_view::fit_name(&title, inner.width() - 12.0, |line| {
+                            p.layout_no_wrap(line.to_owned(), name_font.clone(), name_color)
+                                .size()
+                                .x
+                        });
+                        let galley = p.layout_no_wrap(name, name_font, name_color);
                         p.with_clip_rect(inner).galley(
                             pos2(inner.left() + 12.0, inner.top()),
                             galley,
