@@ -100,6 +100,25 @@ column resize does; a change in the shown players or the row's width ends
 the drag. Only a primary-button drag starts one. A double-click sends
 `EqualPlayerWidths`.
 
+**Cartwall splitter** (RL12). `Arrangement::splitter`, the gap beside the
+cartwall, is a splitter (`panels::cartwall_splitter` over the generic
+`panels::splitter`): `ResizeRow` at the bottom, `ResizeColumn` on a side;
+inert while the layout is locked or the cartwall has no range
+(`cartwall_range` is `None` while it is collapsed, on any dock). A drag
+(primary button only) lives in `ViewState::cartwall_drag`
+(`panel_layout::CartwallDrag`): it follows the pointer along the
+cartwall's axis within the range, and `panels::cartwall_drag_layout`,
+called before the pass, hands the pass a copy of the layout with the
+drag's share, so the drag shows in the same frame. On release one
+`SetCartwallSize(Some(share))` goes out, only if the drag moved something;
+the share is the drawn size over the area, so the next pass draws the same
+size. The size is held until the model's size changes or `HOLD_SECS` pass;
+a change of dock, area or range, or a lock, ends the drag. A drag or a
+double-click ends a maximise first, and a drag starts from the pass
+without it (`normal`). A double-click sends `SetCartwallSize(None)` at the
+bottom (fit the content) and `SetCartwallSize(Some(DEFAULT_SIDE_SHARE))`
+on a side.
+
 **Top bar** (RL15). `top_bar` lays out its right-hand block (the clock,
 Settings, About, the pending tile) first, from the right end, and passes
 where it begins to `panels::layout_controls`, which draws one tile per

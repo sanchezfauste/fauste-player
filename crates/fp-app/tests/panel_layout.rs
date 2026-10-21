@@ -11,9 +11,9 @@ use std::path::PathBuf;
 
 use egui::{Rect, pos2, vec2};
 use fp_app::ui::panel_layout::{
-    Arrangement, CONTENT_HEIGHT_CAP, CartwallSizes, LiveSplit, MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH,
-    Maximised, PANEL_GAP, PassInput, SCROLL_BAR_ROOM, SHARE_FLOOR, arrange, cartwall_range,
-    drag_pair, pair_shares, panel_on_air,
+    Arrangement, CONTENT_HEIGHT_CAP, CartwallDrag, CartwallSizes, LiveSplit, MIN_PLAYER_HEIGHT,
+    MIN_PLAYER_WIDTH, Maximised, PANEL_GAP, PassInput, SCROLL_BAR_ROOM, SHARE_FLOOR, arrange,
+    cartwall_range, drag_pair, pair_shares, panel_on_air,
 };
 use fp_model::layout::{Dock, Panel};
 use fp_model::{AppState, Command, Config, PlayerId, TrackAnalysis, apply};
@@ -700,4 +700,136 @@ fn rl14_a_collapsed_cartwall_is_never_maximised() {
             pass_with(&s, full_hd(), COLLAPSED, None)
         );
     }
+}
+
+// --- the cartwall drag (RL12)
+
+#[test]
+fn rl12_a_bottom_drag_grows_the_cartwall_upwards_within_its_range() {
+    let mut drag = CartwallDrag::new(
+        Dock::Bottom,
+        full_hd(),
+        (92.0, 566.0),
+        pos2(900.0, 928.0),
+        116.0,
+    );
+    drag.follow(pos2(900.0, 868.0));
+    assert_eq!(drag.size(), 176.0);
+    drag.follow(pos2(900.0, 100.0));
+    assert_eq!(drag.size(), 566.0, "the players keep their least height");
+    drag.follow(pos2(900.0, 1040.0));
+    assert_eq!(drag.size(), 92.0, "the cartwall keeps its own");
+    drag.follow(pos2(f32::NAN, f32::NAN));
+    assert_eq!(
+        drag.size(),
+        92.0,
+        "a pointer that is not a number moves nothing"
+    );
+}
+
+#[test]
+fn rl12_a_side_drag_grows_the_cartwall_towards_the_players() {
+    let mut left = CartwallDrag::new(
+        Dock::Left,
+        full_hd(),
+        (490.0, 1128.0),
+        pos2(583.0, 500.0),
+        571.2,
+    );
+    left.follow(pos2(633.0, 500.0));
+    assert!(near(left.size(), 621.2));
+    let mut right = CartwallDrag::new(
+        Dock::Right,
+        full_hd(),
+        (490.0, 1128.0),
+        pos2(1336.0, 500.0),
+        571.2,
+    );
+    right.follow(pos2(1286.0, 500.0));
+    assert!(near(right.size(), 621.2));
+}
+
+#[test]
+fn rl12_a_cartwall_drag_sends_its_share_once_and_holds_until_the_echo() {
+    let area = full_hd();
+    let range = Some((92.0, 566.0));
+    let mut drag = CartwallDrag::new(Dock::Bottom, area, (92.0, 566.0), pos2(900.0, 928.0), 116.0);
+    // 0.2 of the 1006-point area is 201.2: 85.2 points up.
+    drag.follow(pos2(900.0, 842.8));
+    let sent = drag.release(None, 10.5);
+    let Some(Command::SetCartwallSize(Some(share))) = sent else {
+        panic!("{sent:?}")
+    };
+    assert!((share - 0.2).abs() < 1e-4, "{share}");
+    assert!(!drag.is_dragging());
+    assert_eq!(drag.release(None, 10.5), None, "sent once");
+    drag.follow(pos2(900.0, 500.0));
+    assert!(
+        near(drag.size(), 201.2),
+        "a released drag no longer follows the pointer"
+    );
+    assert!(!drag.stale(Dock::Bottom, area, range, None, 10.0), "held");
+    assert!(
+        drag.stale(Dock::Bottom, area, range, Some(0.2), 10.0),
+        "the echo arrived"
+    );
+    assert!(
+        drag.stale(Dock::Bottom, area, range, None, 10.5),
+        "the hold ran out"
+    );
+}
+
+#[test]
+fn rl12_a_cartwall_drag_back_to_where_it_began_sends_nothing() {
+    let mut drag = CartwallDrag::new(
+        Dock::Left,
+        full_hd(),
+        (490.0, 1128.0),
+        pos2(583.0, 500.0),
+        571.2,
+    );
+    drag.follow(pos2(683.0, 500.0));
+    drag.follow(pos2(583.2, 500.0));
+    assert_eq!(drag.release(Some(0.3), 1.0), None);
+}
+
+#[test]
+fn rl12_a_dock_change_a_resized_window_or_a_new_range_ends_a_cartwall_drag() {
+    let area = full_hd();
+    let range = Some((92.0, 566.0));
+    let drag = CartwallDrag::new(Dock::Bottom, area, (92.0, 566.0), pos2(900.0, 928.0), 116.0);
+    assert!(!drag.stale(Dock::Bottom, area, range, None, 0.0));
+    assert!(
+        drag.stale(Dock::Left, area, range, None, 0.0),
+        "docked elsewhere"
+    );
+    let smaller = Rect::from_min_max(area.min, pos2(1912.0, 900.0));
+    assert!(
+        drag.stale(Dock::Bottom, smaller, range, None, 0.0),
+        "the window was resized"
+    );
+    assert!(
+        drag.stale(Dock::Bottom, area, Some((150.0, 566.0)), None, 0.0),
+        "the page's rows changed"
+    );
+    assert!(
+        drag.stale(Dock::Bottom, area, None, None, 0.0),
+        "collapsed or hidden"
+    );
+}
+
+#[test]
+fn rl12_the_pass_draws_a_cartwall_drag_exactly() {
+    let mut drag = CartwallDrag::new(
+        Dock::Bottom,
+        full_hd(),
+        (92.0, 566.0),
+        pos2(900.0, 928.0),
+        116.0,
+    );
+    drag.follow(pos2(900.0, 777.0));
+    let mut s = four();
+    s.layout.cartwall.size = Some(drag.share());
+    let a = pass(&s, full_hd(), None);
+    assert!(near(a.cartwall.unwrap().height(), drag.size()), "{a:?}");
 }

@@ -50,6 +50,13 @@ a page tab) or than its columns of buttons at their smallest. When the
 window is too narrow for it and every shown player at their smallest, the
 players' row scrolls sideways.
 
+Drag the gap between the cartwall and the players to make it larger or
+smaller: up or down when it is under the players, sideways beside them. The
+players keep the room their controls need. Double-click the gap to go back
+to the starting size: as tall as its rows need under the players, three
+tenths of the width beside them. The size is saved with the layout; moving
+the cartwall starts it again at its starting size.
+
 ## Maximize a panel
 
 Right-click the background of a player's header, or of the cartwall's
@@ -59,7 +66,7 @@ header (not one of their buttons), for its menu:
   their smallest. It is only for the moment and is not saved. **Restore**
   in the same menu ends it, and so do hiding or showing a panel, locking
   the layout, moving the cartwall, changing the number of players and
-  dragging the gap between two players; the sizes from before come back.
+  dragging a gap between panels; the sizes from before come back.
 - **Hide** hides the panel, as its tile in the top bar does.
 
 ## The layout menu
@@ -70,7 +77,7 @@ The layout button, right of the tiles, opens a menu with:
   right**: where the cartwall sits;
 - **Lock layout**: while it is checked, nothing changes the layout by
   accident: the tiles, the other entries of this menu, the gaps between
-  the players and the headers' **Maximize** and **Hide** do nothing.
+  the panels and the headers' **Maximize** and **Hide** do nothing.
   Playback, and collapsing or expanding the cartwall, work as usual. The
   lock is saved with the layout;
 - **Equal player widths**: every player the same width;

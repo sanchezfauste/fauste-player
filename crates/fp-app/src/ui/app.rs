@@ -189,6 +189,8 @@ pub(crate) struct ViewState {
     pub(crate) live_split: Option<super::panel_layout::LiveSplit>,
     /// The panel maximised for the moment (RL16); never saved.
     pub(crate) maximised: Option<super::panel_layout::Maximised>,
+    /// The cartwall splitter being dragged or just released (RL12).
+    pub(crate) cartwall_drag: Option<super::panel_layout::CartwallDrag>,
     notice: Option<(String, f64)>,
     /// Dropouts the engine counted, as the status bar alerts show them.
     dropouts: Dropouts,
@@ -721,14 +723,21 @@ impl AppUi {
         // the layout into the players' row and the cartwall's rectangle.
         let inner = middle.shrink(8.0);
         let ids = state.player_ids();
-        let sizes = cartwall::sizes(ui, &scene);
+        let model_input = panel_layout::PassInput {
+            players: &ids,
+            layout: &state.layout,
+            area: inner,
+            cartwall: cartwall::sizes(ui, &scene),
+            maximised: None,
+        };
+        // RL12: a cartwall splitter drag draws its size until the echo.
+        let dragged = panels::cartwall_drag_layout(ui, &scene, &mut self.view, &model_input);
+        let layout = dragged.as_ref().unwrap_or(&state.layout);
         let pass = |maximised: Option<fp_model::layout::Panel>| {
             panel_layout::arrange(&panel_layout::PassInput {
-                players: &ids,
-                layout: &state.layout,
-                area: inner,
-                cartwall: sizes,
+                layout,
                 maximised,
+                ..model_input
             })
         };
         let maximised = self.view.maximised.as_ref().map(|m| m.panel);
@@ -767,6 +776,8 @@ impl AppUi {
             cart_ui.set_clip_rect(cart_rect);
             cartwall::strip(&mut cart_ui, &scene, &mut self.view);
         }
+        // RL12: the splitter beside the cartwall, over the gap.
+        panels::cartwall_splitter(ui, &scene, &mut self.view, &model_input, &arranged, &normal);
         let mut status_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(status)

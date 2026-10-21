@@ -6,11 +6,13 @@
 use std::collections::HashMap;
 
 use egui::{Align, Layout, Rect, Sense, TextureHandle, Ui, UiBuilder, pos2, vec2};
-use fp_model::layout::{Dock, Panel};
+use fp_model::layout::{DEFAULT_SIDE_SHARE, Dock, Panel};
 use fp_model::{AppState, Command, PlayerId, TrackId};
 
 use super::app::{Scene, ViewState};
-use super::panel_layout::{self, Arrangement, LiveSplit, Maximised, PANEL_GAP};
+use super::panel_layout::{
+    self, Arrangement, CartwallDrag, LiveSplit, Maximised, PANEL_GAP, PassInput,
+};
 use super::player;
 use super::theme;
 use super::widgets::{self, TileStyle, font};
@@ -457,4 +459,110 @@ pub(crate) fn header_menu(
             ui.close();
         }
     });
+}
+
+/// RL12: a cartwall splitter drag, before the pass: it follows the pointer,
+/// sends `SetCartwallSize` once on release, and ends when it no longer
+/// applies (the layout was locked; the dock, the area or the cartwall's
+/// range changed; or, once released, the model's echo arrived or the hold
+/// ran out). While it lives: the layout the pass draws, with the drag's
+/// size. `input` is the pass without a maximised panel, on the model's
+/// layout.
+pub(crate) fn cartwall_drag_layout(
+    ui: &Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    input: &PassInput<'_>,
+) -> Option<fp_model::layout::Layout> {
+    let layout = &scene.state.layout;
+    if layout.locked {
+        view_state.cartwall_drag = None;
+        return None;
+    }
+    let drag = view_state.cartwall_drag.as_mut()?;
+    if drag.is_dragging() {
+        let (down, pointer) = ui.input(|i| (i.pointer.primary_down(), i.pointer.latest_pos()));
+        if down {
+            if let Some(pos) = pointer {
+                drag.follow(pos);
+            }
+        } else if let Some(command) =
+            drag.release(layout.cartwall.size, scene.time + panel_layout::HOLD_SECS)
+        {
+            scene.ctl.send(command);
+        }
+    }
+    let range = panel_layout::cartwall_range(input);
+    if drag.stale(
+        layout.cartwall.dock,
+        input.area,
+        range,
+        layout.cartwall.size,
+        scene.time,
+    ) {
+        view_state.cartwall_drag = None;
+        return None;
+    }
+    let mut live = layout.clone();
+    live.cartwall.size = Some(drag.share());
+    Some(live)
+}
+
+/// RL12: the splitter between the players and the cartwall: horizontal at
+/// the bottom, vertical on a side. A primary-button drag ends a maximised
+/// panel and starts a `CartwallDrag` from the size without it (RL16); a
+/// double-click ends a maximised panel too and goes back to fitting the
+/// content at the bottom, or to the default share on a side. Inert while
+/// the layout is locked or the cartwall has no size to choose (collapsed).
+pub(crate) fn cartwall_splitter(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    input: &PassInput<'_>,
+    arranged: &Arrangement,
+    normal: &Arrangement,
+) {
+    let Some(gap) = arranged.splitter else {
+        return;
+    };
+    let layout = &scene.state.layout;
+    let dock = layout.cartwall.dock;
+    let range = panel_layout::cartwall_range(input);
+    let dragging = view_state
+        .cartwall_drag
+        .as_ref()
+        .is_some_and(CartwallDrag::is_dragging);
+    let cursor = if dock.is_side() {
+        egui::CursorIcon::ResizeColumn
+    } else {
+        egui::CursorIcon::ResizeRow
+    };
+    let active = !layout.locked && range.is_some();
+    let id = egui::Id::new("cartwall-splitter");
+    let Some(response) = splitter(ui, gap, id, cursor, active, dragging) else {
+        return;
+    };
+    if response.double_clicked() {
+        // RL16: like a drag, it first ends a maximised panel.
+        view_state.maximised = None;
+        let size = dock.is_side().then_some(DEFAULT_SIDE_SHARE);
+        scene.ctl.send(Command::SetCartwallSize(size));
+    }
+    if response.drag_started_by(egui::PointerButton::Primary) {
+        // RL16: a drag first ends a maximised panel, then applies itself to
+        // the size from before (`normal`).
+        view_state.maximised = None;
+        if let (Some(range), Some(cart)) = (range, normal.cartwall) {
+            let start = if dock.is_side() {
+                cart.width()
+            } else {
+                cart.height()
+            };
+            let origin = ui
+                .input(|i| i.pointer.press_origin())
+                .unwrap_or(gap.center());
+            view_state.cartwall_drag =
+                Some(CartwallDrag::new(dock, input.area, range, origin, start));
+        }
+    }
 }

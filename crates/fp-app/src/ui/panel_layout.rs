@@ -3,8 +3,8 @@
 //! widths and the cartwall's rectangle, with a maximised panel (RL16).
 //! Pure and unit-tested; `ui/panels.rs` draws with it.
 
-use egui::{Rect, Vec2, pos2};
-use fp_model::layout::{DEFAULT_SIDE_SHARE, Dock, Panel};
+use egui::{Pos2, Rect, Vec2, pos2};
+use fp_model::layout::{DEFAULT_SIDE_SHARE, Dock, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE, Panel};
 use fp_model::{AppState, Command, PlayerId, Transport};
 
 /// The gap between two panels; between two players it is a splitter
@@ -487,5 +487,121 @@ impl Maximised {
     /// Whether it still holds: nothing that ends it changed since.
     pub fn holds(&self, state: &AppState) -> bool {
         self.key == ArrangementKey::of(state)
+    }
+}
+
+/// RL12: the cartwall splitter being dragged, or just released: the size
+/// is drawn from the pointer on every frame and sent once, on release, as
+/// the cartwall's share of the middle area.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CartwallDrag {
+    dock: Dock,
+    /// The middle area and the cartwall's range the drag began with; a
+    /// change in either ends it.
+    area: Rect,
+    range: (f32, f32),
+    /// The pointer where the drag began.
+    origin: Pos2,
+    /// The cartwall's size, in points along its axis, then and now.
+    start: f32,
+    now: f32,
+    /// Set on release: the model's size then, and until when the released
+    /// size is still drawn.
+    released: Option<(Option<f32>, f64)>,
+}
+
+impl CartwallDrag {
+    /// A drag of the splitter of a cartwall docked at `dock`, begun at
+    /// `origin` with the cartwall `start` points along its axis.
+    pub fn new(dock: Dock, area: Rect, range: (f32, f32), origin: Pos2, start: f32) -> Self {
+        Self {
+            dock,
+            area,
+            range,
+            origin,
+            start,
+            now: start,
+            released: None,
+        }
+    }
+
+    /// The button is still down.
+    pub fn is_dragging(&self) -> bool {
+        self.released.is_none()
+    }
+
+    /// The pointer is at `pointer`: the size follows it (until the
+    /// release), within the range. Dragging up grows a bottom cartwall,
+    /// dragging right a left one, dragging left a right one.
+    pub fn follow(&mut self, pointer: Pos2) {
+        if !self.is_dragging() {
+            return;
+        }
+        let moved = pointer - self.origin;
+        let grow = match self.dock {
+            Dock::Bottom => -moved.y,
+            Dock::Left => moved.x,
+            Dock::Right => -moved.x,
+        };
+        if grow.is_finite() {
+            self.now = (self.start + grow).min(self.range.1).max(self.range.0);
+        }
+    }
+
+    /// The size now, in points along the cartwall's axis.
+    pub fn size(&self) -> f32 {
+        self.now
+    }
+
+    /// The size now as the cartwall's share of the middle area: what the
+    /// pass draws while the drag lives, and what the release sends.
+    pub fn share(&self) -> f32 {
+        let extent = if self.dock.is_side() {
+            self.area.width()
+        } else {
+            self.area.height()
+        };
+        if extent > 0.0 {
+            // The bounds are constants, so `clamp` cannot panic; `now` is
+            // always a number (`follow` keeps it so).
+            (self.now / extent).clamp(MIN_CARTWALL_SHARE, MAX_CARTWALL_SHARE)
+        } else {
+            MIN_CARTWALL_SHARE
+        }
+    }
+
+    /// The button was released: the command to send, once, and only if
+    /// the drag moved something. `size` is the model's size now; the
+    /// released size is held until it changes or until `until`.
+    pub fn release(&mut self, size: Option<f32>, until: f64) -> Option<Command> {
+        if !self.is_dragging() {
+            return None;
+        }
+        self.released = Some((size, until));
+        ((self.now - self.start).abs() > 0.5).then(|| Command::SetCartwallSize(Some(self.share())))
+    }
+
+    /// Whether the drag no longer applies: the dock, the area or the range
+    /// changed (or there is no range: hidden or collapsed), or, once
+    /// released, the model's size changed (its echo arrived) or the hold
+    /// ran out.
+    pub fn stale(
+        &self,
+        dock: Dock,
+        area: Rect,
+        range: Option<(f32, f32)>,
+        size: Option<f32>,
+        time: f64,
+    ) -> bool {
+        let moved = |a: Pos2, b: Pos2| (a - b).length() > 0.5;
+        self.dock != dock
+            || moved(self.area.min, area.min)
+            || moved(self.area.max, area.max)
+            || range.is_none_or(|(least, most)| {
+                (least - self.range.0).abs() > 0.5 || (most - self.range.1).abs() > 0.5
+            })
+            || self
+                .released
+                .is_some_and(|(before, until)| time >= until || before != size)
     }
 }

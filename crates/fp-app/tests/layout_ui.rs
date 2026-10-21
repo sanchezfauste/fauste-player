@@ -13,7 +13,7 @@ mod support;
 use std::path::PathBuf;
 
 use egui::accesskit::Role;
-use egui::{CursorIcon, Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
+use egui::{CursorIcon, Event, Key, Modifiers, PointerButton, Pos2, Rect, Vec2, pos2, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::app::AppUi;
@@ -21,7 +21,7 @@ use fp_app::ui::cart_view::{GAP, MIN_BUTTON_WIDTH};
 use fp_app::ui::controller::Controller;
 use fp_app::ui::panel_layout::{MIN_PLAYER_HEIGHT, MIN_PLAYER_WIDTH, PANEL_GAP};
 use fp_app::ui::theme;
-use fp_model::layout::{CartwallLayout, Dock, Panel};
+use fp_model::layout::{CartwallLayout, DEFAULT_SIDE_SHARE, Dock, Panel};
 use fp_model::{
     AppState, CartEdit, CartKind, Command, KeyChord, PlayerId, Shortcut, ShortcutAction,
     TrackAnalysis, apply,
@@ -1312,4 +1312,321 @@ fn rl16_a_maximised_player_shrinks_a_side_cartwall_to_its_least_width() {
     let cart = h.state().cartwall_rect().unwrap();
     assert!(near(cart.width(), eight_columns()), "{cart:?}");
     assert!(near(column(&h, fake.player(1)).width(), MIN_PLAYER_WIDTH));
+}
+
+// --- the cartwall splitter (RL12)
+
+/// A window tall enough for the bottom cartwall to grow (its middle area is
+/// 968 × 810: the players keep 432, so the cartwall can reach 370).
+fn tall(s: AppState) -> (Harness<'static, AppUi>, std::sync::Arc<Fake>) {
+    harness_sized(s, vec2(1000.0, 900.0), |ui| ui)
+}
+
+/// The middle of the gap between the players and the cartwall.
+fn cartwall_splitter_at(h: &Harness<'_, AppUi>) -> Pos2 {
+    let cart = h.state().cartwall_rect().unwrap();
+    let first = columns(h)[0].1;
+    if cart.top() > first.bottom() {
+        pos2(cart.center().x, cart.top() - PANEL_GAP / 2.0)
+    } else if cart.right() < first.left() {
+        pos2(cart.right() + PANEL_GAP / 2.0, cart.center().y)
+    } else {
+        pos2(cart.left() - PANEL_GAP / 2.0, cart.center().y)
+    }
+}
+
+/// Presses at `from` and moves by `by` in six frames; the button stays
+/// down.
+fn drag_along(h: &mut Harness<'_, AppUi>, from: Pos2, by: Vec2) {
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    press(h, from, PointerButton::Primary, true);
+    h.run_steps(1);
+    for step in 1..=6 {
+        h.event(Event::PointerMoved(from + by * (step as f32 / 6.0)));
+        h.run_steps(1);
+    }
+}
+
+fn size_commands(fake: &Fake) -> Vec<Command> {
+    fake.take_sent()
+        .into_iter()
+        .filter(|c| matches!(c, Command::SetCartwallSize(_)))
+        .collect()
+}
+
+fn cart_rect(h: &Harness<'_, AppUi>) -> Rect {
+    h.state().cartwall_rect().unwrap()
+}
+
+#[test]
+fn rl12_dragging_the_bottom_splitter_resizes_the_cartwall_live() {
+    let (mut h, fake) = tall(state(2, 3));
+    let p1 = fake.player(0);
+    let (cart, col) = (cart_rect(&h), column(&h, p1));
+    let from = cartwall_splitter_at(&h);
+    drag_along(&mut h, from, vec2(0.0, -60.0));
+    let (cart2, col2) = (cart_rect(&h), column(&h, p1));
+    assert!(
+        near(cart2.height(), cart.height() + 60.0),
+        "{cart:?} -> {cart2:?}"
+    );
+    assert!(
+        near(col2.height(), col.height() - 60.0),
+        "{col:?} -> {col2:?}"
+    );
+    assert!(
+        size_commands(&fake).is_empty(),
+        "nothing is sent while the button is down"
+    );
+}
+
+#[test]
+fn rl12_one_cartwall_size_on_release_and_the_size_stays() {
+    let (mut h, fake) = tall(state(2, 3));
+    let from = cartwall_splitter_at(&h);
+    drag_along(&mut h, from, vec2(0.0, -60.0));
+    let live = cart_rect(&h);
+    press(
+        &mut h,
+        from + vec2(0.0, -60.0),
+        PointerButton::Primary,
+        false,
+    );
+    h.run_steps(3);
+    let sent = size_commands(&fake);
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    let Command::SetCartwallSize(Some(share)) = sent[0].clone() else {
+        panic!("{sent:?}")
+    };
+    let area = live.bottom() - column(&h, fake.player(0)).top();
+    assert!(
+        (share * area - live.height()).abs() < 1.0,
+        "{share} of {area}: {live:?}"
+    );
+    // Past the hold, the model's share draws the same size.
+    h.run_steps(40);
+    assert!(
+        near(cart_rect(&h).height(), live.height()),
+        "{:?}",
+        cart_rect(&h)
+    );
+}
+
+#[test]
+fn rl12_a_click_on_the_cartwall_splitter_sends_nothing() {
+    let (mut h, fake) = tall(state(2, 3));
+    let at = cartwall_splitter_at(&h);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    click_at(&mut h, at);
+    h.run_steps(30);
+    assert!(size_commands(&fake).is_empty());
+}
+
+#[test]
+fn rl12_a_double_click_fits_the_content_again_at_the_bottom() {
+    let mut s = state(2, 3);
+    s.layout.cartwall.size = Some(0.4);
+    let (mut h, fake) = tall(s);
+    let at = cartwall_splitter_at(&h);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    click_at(&mut h, at);
+    click_at(&mut h, at);
+    h.run_steps(2);
+    assert_eq!(size_commands(&fake), vec![Command::SetCartwallSize(None)]);
+    // Two rows of 40 under a 24-point header, 6-point gaps.
+    assert!(near(cart_rect(&h).height(), 116.0), "{:?}", cart_rect(&h));
+}
+
+#[test]
+fn rl12_a_double_click_on_a_side_gives_the_default_share() {
+    let (mut h, fake) = wide(docked(state(2, 3), Dock::Left, Some(0.5)));
+    let at = cartwall_splitter_at(&h);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    click_at(&mut h, at);
+    click_at(&mut h, at);
+    h.run_steps(2);
+    assert_eq!(
+        size_commands(&fake),
+        vec![Command::SetCartwallSize(Some(DEFAULT_SIDE_SHARE))]
+    );
+}
+
+#[test]
+fn rl12_the_cartwall_splitter_shows_the_resize_cursor() {
+    let (mut h, _) = tall(state(2, 3));
+    h.event(Event::PointerMoved(cartwall_splitter_at(&h)));
+    h.run_steps(1);
+    assert_eq!(cursor(&h), CursorIcon::ResizeRow);
+    let (mut h, _) = wide(docked(state(2, 3), Dock::Right, Some(0.3)));
+    h.event(Event::PointerMoved(cartwall_splitter_at(&h)));
+    h.run_steps(1);
+    assert_eq!(cursor(&h), CursorIcon::ResizeColumn);
+}
+
+#[test]
+fn rl12_dragging_a_side_splitter_resizes_the_cartwall() {
+    for (dock, dx) in [(Dock::Left, 50.0), (Dock::Right, -50.0)] {
+        let (mut h, fake) = wide(docked(state(2, 3), dock, Some(0.3)));
+        let before = cart_rect(&h).width();
+        let from = cartwall_splitter_at(&h);
+        drag_along(&mut h, from, vec2(dx, 0.0));
+        assert!(near(cart_rect(&h).width(), before + 50.0), "{dock:?}");
+        press(&mut h, from + vec2(dx, 0.0), PointerButton::Primary, false);
+        h.run_steps(3);
+        assert_eq!(size_commands(&fake).len(), 1, "{dock:?}");
+    }
+}
+
+#[test]
+fn rl12_the_cartwall_splitter_keeps_the_players_least_height() {
+    let (mut h, fake) = tall(state(2, 3));
+    let from = cartwall_splitter_at(&h);
+    drag_along(&mut h, from, vec2(0.0, -800.0));
+    let p1 = fake.player(0);
+    assert!(near(column(&h, p1).height(), MIN_PLAYER_HEIGHT - 2.0));
+    press(
+        &mut h,
+        from + vec2(0.0, -800.0),
+        PointerButton::Primary,
+        false,
+    );
+    h.run_steps(40);
+    assert_eq!(size_commands(&fake).len(), 1);
+    assert!(
+        fake.rejected.lock().unwrap().is_empty(),
+        "the model took it"
+    );
+    assert!(near(column(&h, p1).height(), MIN_PLAYER_HEIGHT - 2.0));
+}
+
+#[test]
+fn rl12_a_locked_layout_has_an_inert_cartwall_splitter() {
+    let mut s = state(2, 3);
+    s.layout.locked = true;
+    let (mut h, fake) = tall(s);
+    let before = cart_rect(&h);
+    let at = cartwall_splitter_at(&h);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    assert_eq!(cursor(&h), CursorIcon::Default);
+    click_at(&mut h, at);
+    click_at(&mut h, at);
+    drag_along(&mut h, at, vec2(0.0, -60.0));
+    press(&mut h, at + vec2(0.0, -60.0), PointerButton::Primary, false);
+    h.run_steps(3);
+    assert!(size_commands(&fake).is_empty());
+    assert_eq!(cart_rect(&h), before);
+}
+
+#[test]
+fn rl12_a_collapsed_cartwall_has_an_inert_splitter() {
+    for dock in [Dock::Bottom, Dock::Left] {
+        let mut s = docked(state(2, 3), dock, Some(0.4));
+        s.cartwall.open = false;
+        let (mut h, fake) = wide(s);
+        let before = cart_rect(&h);
+        let at = cartwall_splitter_at(&h);
+        h.event(Event::PointerMoved(at));
+        h.run_steps(1);
+        assert_eq!(cursor(&h), CursorIcon::Default, "{dock:?}");
+        drag_along(&mut h, at, vec2(40.0, -40.0));
+        press(
+            &mut h,
+            at + vec2(40.0, -40.0),
+            PointerButton::Primary,
+            false,
+        );
+        h.run_steps(3);
+        assert!(size_commands(&fake).is_empty(), "{dock:?}");
+        assert_eq!(cart_rect(&h), before, "{dock:?}");
+    }
+}
+
+#[test]
+fn rl12_locking_during_a_cartwall_drag_ends_it_without_a_command() {
+    let (mut h, fake) = tall(state(2, 3));
+    let before = cart_rect(&h);
+    let from = cartwall_splitter_at(&h);
+    drag_along(&mut h, from, vec2(0.0, -60.0));
+    Controller::send(fake.as_ref(), Command::SetLayoutLocked(true));
+    h.run_steps(1);
+    press(
+        &mut h,
+        from + vec2(0.0, -60.0),
+        PointerButton::Primary,
+        false,
+    );
+    h.run_steps(3);
+    assert!(size_commands(&fake).is_empty());
+    assert!(
+        near(cart_rect(&h).height(), before.height()),
+        "the model's size"
+    );
+}
+
+#[test]
+fn rl16_a_cartwall_drag_ends_a_maximise_first() {
+    let (mut h, fake) = tall(state(2, 3));
+    let before = cart_rect(&h).height();
+    let at = header_point(&h, fake.player(0));
+    maximise(&mut h, at);
+    assert!(cart_rect(&h).height() < before, "at its least height");
+    let from = cartwall_splitter_at(&h);
+    drag_along(&mut h, from, vec2(0.0, -20.0));
+    assert_eq!(h.state().maximised(), None);
+    assert!(
+        near(cart_rect(&h).height(), before + 20.0),
+        "{:?}",
+        cart_rect(&h)
+    );
+}
+
+#[test]
+fn rl16_a_double_click_on_the_cartwall_splitter_ends_a_maximise() {
+    let (mut h, fake) = tall(state(2, 3));
+    let at = header_point(&h, fake.player(0));
+    maximise(&mut h, at);
+    // Past egui's triple-click window, as for the player splitter.
+    h.run_steps(40);
+    let at = cartwall_splitter_at(&h);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    click_at(&mut h, at);
+    click_at(&mut h, at);
+    h.run_steps(2);
+    assert_eq!(size_commands(&fake), vec![Command::SetCartwallSize(None)]);
+    assert_eq!(h.state().maximised(), None);
+}
+
+#[test]
+fn rl16_only_a_primary_drag_on_the_cartwall_splitter_ends_a_maximise() {
+    let (mut h, fake) = tall(state(2, 3));
+    let p1 = fake.player(0);
+    let at = header_point(&h, p1);
+    maximise(&mut h, at);
+    let from = cartwall_splitter_at(&h);
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    press(&mut h, from, PointerButton::Secondary, true);
+    h.run_steps(1);
+    for step in 1..=6 {
+        h.event(Event::PointerMoved(pos2(
+            from.x,
+            from.y - 10.0 * step as f32,
+        )));
+        h.run_steps(1);
+    }
+    press(
+        &mut h,
+        pos2(from.x, from.y - 60.0),
+        PointerButton::Secondary,
+        false,
+    );
+    h.run_steps(2);
+    assert_eq!(h.state().maximised(), Some(Panel::Player(p1)));
+    assert!(layout_commands(&fake).is_empty());
 }
