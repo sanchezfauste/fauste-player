@@ -41,7 +41,14 @@ fn a_settings_button_clears_its_text_by_the_padding_with_and_without_a_glyph() {
     for glyph in [None, Some(egui_phosphor::regular::FOLDER_OPEN)] {
         for label in ["OK", "Import M3U / PLS…", "Re-analyse all tracks"] {
             let seen = std::cell::Cell::new((0.0_f32, 0.0_f32, 0.0_f32));
+            let themed = std::cell::Cell::new(false);
             let mut h = Harness::new_ui(|ui| {
+                if !themed.replace(true) {
+                    // The icon glyph lives in the app's own fonts, bound from
+                    // the next frame on (as in `AppUi::ui`).
+                    theme::apply(ui.ctx());
+                    return;
+                }
                 let shown = match glyph {
                     Some(g) => format!("{g} {label}"),
                     None => label.to_owned(),

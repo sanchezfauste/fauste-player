@@ -159,7 +159,7 @@ fn collapsed_strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, d
     let rect = ui.max_rect();
     // First, so that the caret, added after it, keeps its own clicks; no
     // Tab stop, as the header's background.
-    let background = ui.interact(rect, egui::Id::new("cartwall-strip"), Sense::CLICK);
+    let background = ui.interact(rect, egui::Id::unique("cartwall-strip"), Sense::CLICK);
     ui.painter().rect(
         rect,
         0.0,
@@ -221,7 +221,7 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     // the title, tabs and Stop all, added after it, keep their own clicks.
     // It is no Tab stop.
     let row = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_HEIGHT));
-    let background = ui.interact(row, egui::Id::new("cartwall-header"), Sense::CLICK);
+    let background = ui.interact(row, egui::Id::unique("cartwall-header"), Sense::CLICK);
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), HEADER_HEIGHT),
         Layout::right_to_left(Align::Center),
@@ -460,7 +460,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                 // CC8: the play range's waveform, from the peaks the
                 // services thread keeps for the page shown, reduced once
                 // per width and remembered per cart.
-                let memo_id = egui::Id::new(("cart-wave", cart.id));
+                let memo_id = egui::Id::unique(("cart-wave", cart.id));
                 let wave = view.wave_range.and_then(|(start, span)| {
                     let media = cart
                         .track
@@ -486,7 +486,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                 // I19/I22: the elapsed share, from the position carried on
                 // with the frame clock between engine snapshots; a playing
                 // cart with a known length keeps the cartwall repainting every frame.
-                let sweep_id = egui::Id::new(("cart-sweep", cart.id));
+                let sweep_id = egui::Id::unique(("cart-sweep", cart.id));
                 let elapsed = if playing {
                     view.wave_range.map(|(start, span)| {
                         // Something moves: ask for the next frame.
@@ -639,7 +639,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                     // Its own name: it only opens the menu to choose a file.
                     let name = t.tr_args("cart-empty-edit", &[("n", (index + 1).into())]);
                     area.widget_info(|| {
-                        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name.clone())
+                        egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone())
                     });
                     area
                 } else {
@@ -653,11 +653,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                             let r =
                                 ui.add_enabled(on, egui::Button::new(format!("{glyph}  {text}")));
                             r.widget_info(|| {
-                                egui::WidgetInfo::labeled(
-                                    egui::WidgetType::Button,
-                                    on,
-                                    text.clone(),
-                                )
+                                egui::WidgetInfo::labeled(egui::Role::Button, on, text.clone())
                             });
                             r
                         };

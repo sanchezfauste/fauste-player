@@ -310,7 +310,7 @@ is given to egui as `Column::exact(px)` with `resizable(false)`, so
 is set because its default of 200 points hides the last rows under the footer
 in a short window.
 
-**Live resize (O16).** `egui_extras` 0.36 recomputes only the dragged column,
+**Live resize (O16).** `egui_extras` 0.37 recomputes only the dragged column,
 one frame late, so the table draws its own grab zones (`resize_handles`, after
 the body so they win over the rows). Dragging one creates
 `ViewState::live_resize`; `live_widths`, called before anything is drawn,

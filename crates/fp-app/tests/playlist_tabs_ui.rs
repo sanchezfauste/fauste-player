@@ -114,6 +114,7 @@ fn the_wheel_over_the_strip_scrolls_it() {
         unit: MouseWheelUnit::Line,
         delta: vec2(0.0, -3.0),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: Modifiers::NONE,
     });
     h.run_steps(8);

@@ -62,7 +62,7 @@ fn show(
     let t = scene.i18n;
     let stagger = 28.0 * index as f32;
     egui::Window::new(t.tr_args("cue-window-title", &[("n", (index + 1).into())]))
-        .id(egui::Id::new(("cue-window", v.player)))
+        .id(egui::Id::unique(("cue-window", v.player)))
         .title_bar(false)
         .resizable(false)
         .collapsible(false)

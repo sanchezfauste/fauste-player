@@ -331,7 +331,7 @@ pub(crate) fn show_panel(
     let items = fp_model::pending(state);
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 520.0);
     let mut answer = None;
-    let modal = egui::Modal::new(egui::Id::new("settings-pending"))
+    let modal = egui::Modal::new(egui::Id::unique("settings-pending"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {
@@ -380,7 +380,7 @@ pub(crate) fn show_confirm(
         .join(", ");
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 440.0);
     let mut answer = None;
-    let modal = egui::Modal::new(egui::Id::new("apply-now"))
+    let modal = egui::Modal::new(egui::Id::unique("apply-now"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {

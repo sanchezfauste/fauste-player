@@ -213,7 +213,11 @@ fn the_keys_are_ignored_while_editing_text() {
             |ui, (app, text): &mut (AppUi, String)| {
                 // After the interface, as the app's own fields are.
                 app.ui(ui);
-                ui.add(egui::TextEdit::singleline(text).id_salt("editor"));
+                ui.add(
+                    egui::TextEdit::singleline(text)
+                        .id_salt("editor")
+                        .hint_text("Editor"),
+                );
             },
             (app, String::new()),
         );

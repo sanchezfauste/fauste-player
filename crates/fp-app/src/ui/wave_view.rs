@@ -31,8 +31,8 @@ impl WaveKey {
     /// keyed on it.
     pub fn id(self) -> egui::Id {
         match self {
-            Self::Player(p) => egui::Id::new(("waveform", p)),
-            Self::Cue(p) => egui::Id::new(("cue-waveform", p)),
+            Self::Player(p) => egui::Id::unique(("waveform", p)),
+            Self::Cue(p) => egui::Id::unique(("cue-waveform", p)),
         }
     }
 }

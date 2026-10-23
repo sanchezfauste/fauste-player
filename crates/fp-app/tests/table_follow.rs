@@ -77,6 +77,7 @@ fn a_recent_scroll_holds_the_table_still() {
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(0.0, -1.0),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: Modifiers::NONE,
     });
     h.run_steps(2);
@@ -143,6 +144,7 @@ fn a_scroll_a_second_ago_still_holds_the_table() {
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(0.0, -3.0),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: Modifiers::NONE,
     });
     // Let the smooth scroll finish: about a second.

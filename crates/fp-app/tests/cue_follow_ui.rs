@@ -170,6 +170,10 @@ fn settle(h: &mut Harness<'_, AppUi>) {
     h.step();
 }
 
+/// Frames for the CUE window to open and be seen: egui draws a new window
+/// first as an invisible sizing pass, which its accessibility tree leaves out.
+const WINDOW_STEPS: usize = 3;
+
 /// More than twice egui's double-click delay.
 const SETTLE_SECS: f64 = 0.7;
 
@@ -181,7 +185,7 @@ fn run(case: Case) -> Outcome {
     let cued = match case.start {
         Start::Button => {
             fake.send(Command::ToggleCue(p));
-            h.run_steps(2);
+            h.run_steps(WINDOW_STEPS);
             main[0]
         }
         Start::RowMenu => {
@@ -189,7 +193,7 @@ fn run(case: Case) -> Outcome {
             press(&mut h, r.center(), PointerButton::Secondary);
             h.run_steps(2);
             h.get_by_label(MENU_CUE).click();
-            h.run_steps(2);
+            h.run_steps(WINDOW_STEPS);
             main[1]
         }
     };

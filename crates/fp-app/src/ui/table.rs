@@ -678,7 +678,10 @@ pub(crate) fn track_table(
     // never from the widget under it, and belongs to this table alone: it is
     // keyed by player and playlist.
     let body_rect = output.inner_rect;
-    let scroll_y = output.state.offset.y;
+    let scroll_y = output.state.clamped_offset().y;
+    // While a trackpad overscrolls (rubber-banding) the rows are drawn at the
+    // unclamped offset: the drop geometry follows what is on screen.
+    let drawn_y = output.state.unclamped_offset().y;
     view_state.table_scroll.insert(
         player,
         TableScroll {
@@ -701,7 +704,7 @@ pub(crate) fn track_table(
     let target = pointer
         .filter(on_table_layer)
         .filter(|p| !table_layout::on_column_edge(&px, area.left(), grab, p.x))
-        .and_then(|p| table_layout::drop_index(body_rect, scroll_y, ROW_HEIGHT, entries.len(), p));
+        .and_then(|p| table_layout::drop_index(body_rect, drawn_y, ROW_HEIGHT, entries.len(), p));
     if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx()) {
         match target {
             Some(index) => {
@@ -712,7 +715,7 @@ pub(crate) fn track_table(
                 });
                 // Drawn after the body, from the same geometry: at the
                 // boundary even when the rows next to it were not built.
-                if let Some(y) = table_layout::boundary_y(body_rect, scroll_y, ROW_HEIGHT, index) {
+                if let Some(y) = table_layout::boundary_y(body_rect, drawn_y, ROW_HEIGHT, index) {
                     let top = if index > 0 && index == entries.len() {
                         y - 2.0
                     } else {
@@ -804,7 +807,7 @@ fn resize_handles(
     for (edge, w) in px.iter().take(columns.len().saturating_sub(1)).enumerate() {
         x += w;
         let rect = Rect::from_min_max(pos2(x - grab, area.top()), pos2(x + grab, area.bottom()));
-        let id = ui.id().with(("column-edge", player.0, edge));
+        let id = ui.scope_id().with(("column-edge", player.0, edge));
         let response = ui.interact(rect, id, Sense::drag());
         let dragging = view_state
             .live_resize
@@ -902,9 +905,8 @@ fn context_menu(
     let labelled = |ui: &mut Ui, glyph: &str, key: &str, enabled: bool| {
         let text = t.tr(key);
         let response = ui.add_enabled(enabled, egui::Button::new(format!("{glyph}  {text}")));
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text.clone())
-        });
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text.clone()));
         response
     };
     let state = scene.state.player(player).ok();
@@ -1045,8 +1047,7 @@ fn context_menu(
 fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
     let (rect, response) = ui.allocate_exact_size(vec2(16.0, 12.0), Sense::hover());
     let owned = label.to_owned();
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, owned.clone()));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, owned.clone()));
     if ui.is_rect_visible(rect) {
         paint(ui.painter(), rect);
     }

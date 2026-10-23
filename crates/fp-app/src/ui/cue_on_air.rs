@@ -70,7 +70,7 @@ pub(crate) fn show(
     let body = t.tr_args("cue-on-air-body", &[("sounding", sounding.into())]);
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 440.0);
     let mut answer = None;
-    let modal = egui::Modal::new(egui::Id::new("cue-on-air"))
+    let modal = egui::Modal::new(egui::Id::unique("cue-on-air"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {

@@ -147,7 +147,7 @@ fn missing_from_inter(text: &str) -> Vec<(String, char)> {
         text.chars().filter(|c| !c.is_control()).collect();
     let mut missing = Vec::new();
     for w in ["inter-400", theme::MEDIUM, theme::SEMIBOLD] {
-        let face = ttf_parser::Face::parse(&fonts.font_data[w].font, 0).unwrap();
+        let face = ttf_parser::Face::parse((*fonts.font_data[w].font).as_ref(), 0).unwrap();
         for &c in &chars {
             if face.glyph_index(c).is_none() {
                 missing.push((w.to_owned(), c));

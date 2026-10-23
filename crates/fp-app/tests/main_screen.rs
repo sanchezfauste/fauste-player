@@ -73,7 +73,11 @@ fn shortcuts_are_ignored_while_editing_text() {
         .with_size(egui::vec2(1000.0, 700.0))
         .build_ui_state(
             |ui, (app, text): &mut (AppUi, String)| {
-                ui.add(egui::TextEdit::singleline(text).id_salt("editor"));
+                ui.add(
+                    egui::TextEdit::singleline(text)
+                        .id_salt("editor")
+                        .hint_text("Editor"),
+                );
                 app.ui(ui);
             },
             (app, String::new()),
@@ -151,6 +155,7 @@ fn one_wheel_notch_moves_the_fader_one_step() {
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(0.0, -1.0),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: egui::Modifiers::NONE,
     });
     h.run_steps(20);

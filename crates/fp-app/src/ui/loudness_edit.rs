@@ -141,7 +141,7 @@ fn info_row(ui: &mut Ui, width: f32, label: &str, value: &str, strong: bool) {
     };
     let (rect, response) = ui.allocate_exact_size(vec2(width, height), egui::Sense::hover());
     let name = format!("{label}: {value}");
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, name.clone()));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, name.clone()));
     if !ui.is_rect_visible(rect) {
         return;
     }
@@ -256,7 +256,7 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
     let t = scene.i18n;
     let mut close = false;
     egui::Window::new(t.tr("settings-tab-loudness"))
-        .id(egui::Id::new("loudness-popup"))
+        .id(egui::Id::unique("loudness-popup"))
         .title_bar(false)
         .resizable(false)
         .collapsible(false)

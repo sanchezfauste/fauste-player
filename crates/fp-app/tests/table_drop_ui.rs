@@ -249,6 +249,7 @@ fn the_bar_follows_the_pointer_in_a_scrolled_long_list() {
         unit: egui::MouseWheelUnit::Point,
         delta: egui::vec2(0.0, -(40.0 * 28.0 + 10.0)),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: Modifiers::NONE,
     });
     h.run_steps(30);

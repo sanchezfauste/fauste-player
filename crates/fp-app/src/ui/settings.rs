@@ -234,7 +234,7 @@ pub(crate) fn show(
     let mut open = true;
     let mut apply_now = false;
     let size = window_size(ctx.content_rect().size());
-    let modal = egui::Modal::new(egui::Id::new("settings"))
+    let modal = egui::Modal::new(egui::Id::unique("settings"))
         .frame(egui::Frame::new().fill(theme::SURFACE))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {
@@ -552,7 +552,7 @@ fn confirm_restore(ctx: &egui::Context, scene: &Scene<'_>, st: &mut SettingsStat
     };
     let t = scene.i18n;
     let mut answer = None;
-    let modal = egui::Modal::new(egui::Id::new("settings-restore"))
+    let modal = egui::Modal::new(egui::Id::unique("settings-restore"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.5))
         .show(ctx, |ui| {
@@ -591,7 +591,7 @@ fn confirm_restore(ctx: &egui::Context, scene: &Scene<'_>, st: &mut SettingsStat
 }
 
 fn body_right_id() -> egui::Id {
-    egui::Id::new("settings-body-right")
+    egui::Id::unique("settings-body-right")
 }
 
 /// Notes where the section body ends on the right, before any row is drawn.
@@ -759,7 +759,7 @@ fn view_selector(ui: &mut Ui, scene: &Scene<'_>, view: OutputsView) {
         let selected = usize::from(view == OutputsView::Advanced);
         if let Some(chosen) = widgets::segmented(
             ui,
-            egui::Id::new("outputs-view"),
+            egui::Id::unique("outputs-view"),
             &[
                 widgets::Segment {
                     text: &basic,

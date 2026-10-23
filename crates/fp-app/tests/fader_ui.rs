@@ -103,6 +103,7 @@ fn wheel_events(h: &mut H, deltas: &[egui::Vec2], unit: MouseWheelUnit, modifier
             unit,
             delta,
             phase: TouchPhase::Move,
+            source: egui::MouseWheelSource::Unknown,
             modifiers,
         });
         h.run_steps(1);

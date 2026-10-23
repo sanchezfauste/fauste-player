@@ -54,6 +54,7 @@ fn wheel(h: &mut Harness<'_, AppUi>, dy: f32) {
         unit: egui::MouseWheelUnit::Point,
         delta: egui::vec2(0.0, dy),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: Modifiers::NONE,
     });
 }
@@ -338,6 +339,7 @@ fn a_sideways_wheel_scrolls_the_table_during_a_drag_where_egui_would() {
         unit: egui::MouseWheelUnit::Point,
         delta: egui::vec2(-(10.0 * 28.0), 0.0),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: Modifiers::NONE,
     });
     h.run_steps(30);

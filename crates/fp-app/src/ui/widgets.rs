@@ -2,8 +2,8 @@
 //! volume fader and the waveform.
 
 use egui::{
-    Align2, Color32, FontFamily, FontId, Painter, Pos2, Rect, Response, Sense, Stroke, StrokeKind,
-    Ui, Vec2, WidgetInfo, WidgetType, pos2, vec2,
+    Align2, Color32, FontFamily, FontId, Painter, Pos2, Rect, Response, Role, Sense, Stroke,
+    StrokeKind, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 
 use fp_engine::meter::MeterReading;
@@ -69,7 +69,7 @@ pub fn toggle(ui: &mut Ui, on: &mut bool, label: &str) -> bool {
     let value = *on;
     let owned = label.to_owned();
     response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, value, owned.clone())
+        egui::WidgetInfo::selected(egui::Role::CheckBox, true, value, owned.clone())
     });
     if response.clicked() {
         *on = !*on;
@@ -269,7 +269,7 @@ pub fn tile_without_tooltip(
     };
     let (rect, response) = ui.allocate_exact_size(size, sense);
     let owned = label.to_owned();
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, owned.clone()));
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, owned.clone()));
     if ui.is_rect_visible(rect) {
         let dim = !enabled && style.dim_when_disabled;
         let (fill, content) = if !enabled {
@@ -364,8 +364,7 @@ pub fn segmented(
             .interact(r, id.with(i), Sense::click())
             .on_hover_text(option.label);
         let label = option.label.to_owned();
-        response
-            .widget_info(|| WidgetInfo::selected(WidgetType::RadioButton, true, on, label.clone()));
+        response.widget_info(|| WidgetInfo::selected(Role::RadioButton, true, on, label.clone()));
         if response.clicked() && !on {
             clicked = Some(i);
         }
@@ -492,7 +491,7 @@ pub fn tabular_label(ui: &mut Ui, text: &str, font: &FontId, color: Color32) -> 
     let size = tabular_size(ui.painter(), text, font);
     let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
     let owned = text.to_owned();
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, owned.clone()));
+    response.widget_info(|| WidgetInfo::labeled(Role::Label, true, owned.clone()));
     if ui.is_rect_visible(rect) {
         paint_tabular(ui.painter(), rect.left_top(), text, font, color);
     }
@@ -873,18 +872,16 @@ pub fn vu(
 ) -> bool {
     let (rect, response) = ui.allocate_exact_size(vec2(meter_width(c), height), Sense::hover());
     let meter_label = labels.meter.clone();
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Label, true, meter_label.clone())
-    });
+    response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, meter_label.clone()));
     let line = loudness_line(reading, c);
     let l = meter_layout(rect, c, line.is_some());
     let max_response = ui
         .interact(l.max, response.id.with("max"), Sense::click())
         .on_hover_text(&labels.max_tip);
     let max_label = labels.max.clone();
-    max_response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, max_label.clone())
-    });
+    max_response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, max_label.clone()));
     let clicked = max_response.clicked();
     if !ui.is_rect_visible(rect) {
         return clicked;
@@ -1455,7 +1452,7 @@ pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
     let (rect, response) =
         ui.allocate_exact_size(vec2(FADER_WIDTH, FADER_READOUT_HEIGHT), Sense::hover());
     let owned = text.to_owned();
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Label, enabled, owned.clone()));
+    response.widget_info(|| WidgetInfo::labeled(Role::Label, enabled, owned.clone()));
     if ui.is_rect_visible(rect) {
         ui.painter().text(
             pos2(fader_axis_x(rect), rect.bottom()),
@@ -1580,7 +1577,7 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
     };
     let (rect, response) = ui.allocate_exact_size(vec2(FADER_WIDTH, height), sense);
     let owned = label.to_owned();
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Slider, enabled, owned.clone()));
+    response.widget_info(|| WidgetInfo::labeled(Role::Slider, enabled, owned.clone()));
     let travel_px = (rect.height() - FADER_KNOB_HEIGHT).max(1.0);
     let fine = ui.input(|i| i.modifiers.ctrl || i.modifiers.shift);
     let factor = if fine { FADER_FINE } else { 1.0 };
@@ -1960,7 +1957,7 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
     let size = vec2(ui.available_width(), height);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
     let owned = input.accessible_label.to_owned();
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, owned.clone()));
+    response.widget_info(|| WidgetInfo::labeled(Role::Unknown, true, owned.clone()));
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, theme::NEUTRAL_900);
     painter.rect_stroke(
