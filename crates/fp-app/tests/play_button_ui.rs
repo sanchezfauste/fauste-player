@@ -109,6 +109,35 @@ fn the_button_is_filled_idle_and_deeper_on_air() {
     assert_eq!(fill_of(&h, next), theme::PLAY_FILL_ON_AIR, "on air");
 }
 
+/// The colour of the border stroked exactly around `button`.
+fn border_of(h: &H, button: Rect) -> Color32 {
+    rect_fills(h)
+        .iter()
+        .rev()
+        .find(|r| r.rect == button && r.stroke.width >= 2.0)
+        .map(|r| r.stroke.color)
+        .unwrap_or(Color32::TRANSPARENT)
+}
+
+#[test]
+fn play_and_next_are_outlined_alike() {
+    use fp_app::ui::controller::Controller;
+    let (mut h, fake) = support::harness(support::state(1, 3));
+    h.run_steps(3);
+    let play = h.get_by_label("Play").rect();
+    let idle = contrast(border_of(&h, play), fill_of(&h, play));
+    fake.send(Command::Play(fake.player(0)));
+    h.run_steps(3);
+    let next = h.get_by_label("Fade into the next track").rect();
+    let on_air = contrast(border_of(&h, next), fill_of(&h, next));
+    // The outline stands out from its fill as much on Play as on Next.
+    assert!(
+        (idle - on_air).abs() < 0.1,
+        "idle {idle:.2}, on air {on_air:.2}"
+    );
+    assert!(on_air >= 1.9, "a visible outline: {on_air:.2}");
+}
+
 #[test]
 fn hover_lightens_and_disabled_is_muted() {
     let (mut h, _fake) = support::harness(support::state(1, 3));
@@ -165,8 +194,8 @@ fn a_divider_separates_the_meter_from_the_fader() {
         "clearly visible: {}",
         contrast(theme::DIVIDER, theme::COLUMN_BG)
     );
-    // Centred between the meter's edge and the fader's track (4 px wide,
-    // NEUTRAL_800): the gap is 12 px, so 6 px each side.
+    // Found through the fader's track (4 px wide, NEUTRAL_800) on its
+    // right.
     for d in &dividers {
         let track = fills
             .iter()
@@ -180,9 +209,37 @@ fn a_divider_separates_the_meter_from_the_fader() {
             })
             .expect("a fader track right of the divider")
             .rect;
-        let to_track = track.left() - d.right();
-        assert!((to_track - 5.5).abs() < 0.6, "{to_track}: {d:?} {track:?}");
+        // Clear of the fader's knob (12 px wide, centred on the track).
+        let to_knob = track.center().x - 6.0 - d.right();
+        assert!(to_knob >= 5.0, "{to_knob}: {d:?} {track:?}");
+        // It stops above the fader's level readout, which may overhang the
+        // gap ("-60.0" is wider than the knob).
+        assert!(
+            d.bottom() <= track.bottom() + 1.0,
+            "{d:?} reaches the readout under {track:?}"
+        );
     }
+}
+
+#[test]
+fn the_divider_keeps_clear_of_the_meter_and_the_fader_readout() {
+    let (mut h, _fake) = support::harness(support::state(1, 3));
+    h.run_steps(3);
+    let fills = rect_fills(&h);
+    let d = fills
+        .iter()
+        .find(|r| r.fill == theme::DIVIDER && r.rect.width() == 1.0 && r.rect.height() > 60.0)
+        .expect("a divider")
+        .rect;
+    let readout = h.get_by_label("0.0").rect();
+    assert!(
+        d.bottom() <= readout.top(),
+        "{d:?} overlaps the readout {readout:?}"
+    );
+    assert!(
+        readout.left() - d.right() >= 3.0,
+        "{d:?} sticks to the readout {readout:?}"
+    );
 }
 
 /// The colours the glyph and caption texts inside `button` are painted in.

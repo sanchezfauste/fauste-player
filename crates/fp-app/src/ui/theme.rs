@@ -209,6 +209,12 @@ pub const PLAY_FILL_HOVER: Color32 = Color32::from_rgb(0x25, 0x9e, 0x52);
 pub const PLAY_FILL_PRESSED: Color32 = Color32::from_rgb(0x15, 0x62, 0x32);
 /// Disabled: a muted dark green, with the icon at half strength.
 pub const PLAY_FILL_DISABLED: Color32 = Color32::from_rgb(0x1a, 0x2f, 0x23);
+/// The outline on the idle fill: as far from it (WCAG 1.94:1) as
+/// [`PLAY_OUTLINE_ON_AIR`] is from the on-air fill, so Play and Next are
+/// outlined alike.
+pub const PLAY_OUTLINE: Color32 = Color32::from_rgb(0x57, 0xc2, 0x74);
+/// The outline on the on-air fill.
+pub const PLAY_OUTLINE_ON_AIR: Color32 = PLAY_BORDER;
 /// The icon and caption on the fill.
 pub const PLAY_ICON: Color32 = Color32::WHITE;
 /// The ring of a button that has keyboard focus (all tiles).
