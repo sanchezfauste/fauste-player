@@ -1,5 +1,71 @@
 # Changelog
 
+## [0.9.0](https://github.com/sanchezfauste/fauste-player/compare/v0.8.0...v0.9.0) (2026-10-23)
+
+
+### Features
+
+* **model:** bit rate in the track format ([ac1604c](https://github.com/sanchezfauste/fauste-player/commit/ac1604ce2927afa6dee9ef3c191dd4ce5928af73))
+* **model:** fade origin so a Previous crossfade counts down on Previous ([238fc74](https://github.com/sanchezfauste/fauste-player/commit/238fc74b84f36584d2ae25a6efd59d2cf3b0b019))
+* **model:** loudness normalization on by default ([5dd59dc](https://github.com/sanchezfauste/fauste-player/commit/5dd59dc952b84b1ec8a171206d335d85ed5cbbdb))
+* **ui:** arrows and Enter on the playlist ([6f38f5c](https://github.com/sanchezfauste/fauste-player/commit/6f38f5cd06f29ed83bfdad6109a5dc2af9240d42))
+* **ui:** cart sweep left to right and smooth, Previous fade countdown, fader overshoot ([7ffdc12](https://github.com/sanchezfauste/fauste-player/commit/7ffdc123c4161a3187188fb5095431a8679999ec))
+* **ui:** filled green Play button, left-to-right fade sweep, meter divider ([b31e411](https://github.com/sanchezfauste/fauste-player/commit/b31e411d6a0a8e42cf3e5ea079fb63f5db09ec64))
+* **ui:** filled Play button, left-to-right fade sweep and visual polish ([830851c](https://github.com/sanchezfauste/fauste-player/commit/830851cfdcae3df0e166683abeef433c9ff3941b))
+* **ui:** gain badge tooltip lists the loudness editor's facts ([109603a](https://github.com/sanchezfauste/fauste-player/commit/109603a9597233aa55405201bc5c98c42de14ed6))
+* **ui:** hide and maximize buttons in panel headers; align the top-bar tiles ([5f00b93](https://github.com/sanchezfauste/fauste-player/commit/5f00b93a255ceeec08f30380d9275f82a6103029))
+* **ui:** hide and maximize buttons in panel headers; align the top-bar tiles ([eac1fb9](https://github.com/sanchezfauste/fauste-player/commit/eac1fb9aa65ea711b33f104311d1c48a14838244))
+* **ui:** one gain breakdown in the badge, editor, carts and row tooltip ([1f7a4d4](https://github.com/sanchezfauste/fauste-player/commit/1f7a4d4b38cf40b030b8daefeec6ef5699782dd1))
+* **ui:** one gain breakdown in the badge, editor, carts and row tooltip ([fa73eff](https://github.com/sanchezfauste/fauste-player/commit/fa73eff873aeb2f547ceb987ab3321422e2fcff0))
+* **ui:** panel tiles show the playing and paused icon shown or hidden ([9567fdf](https://github.com/sanchezfauste/fauste-player/commit/9567fdf48bac48b37cb1379976b16e731ff7b693))
+* **ui:** playlist keyboard, bit rate, loudness tooltip, normalization on by default ([a8cd095](https://github.com/sanchezfauste/fauste-player/commit/a8cd095a26e7ecd4876602659de7dc779ae55279))
+
+
+### Bug Fixes
+
+* **ci:** install ImageMagick in the screenshots publish job ([7a29a6b](https://github.com/sanchezfauste/fauste-player/commit/7a29a6b4a3c21e719de8bcb4b2a779775cb282da))
+* **ci:** install ImageMagick in the screenshots publish job ([df15a51](https://github.com/sanchezfauste/fauste-player/commit/df15a51e75553c247d15c38514bee06025872e68))
+* **control:** keep the MIDI log quiet and exact on retries ([0044448](https://github.com/sanchezfauste/fauste-player/commit/004444881d280c03f8a815980001abe503a9e504))
+* **control:** log what a MIDI field report needs ([9ae5312](https://github.com/sanchezfauste/fauste-player/commit/9ae5312eb234e7aa2bea6850ad955de4ec46adec))
+* **control:** MIDI diagnostics and a Reconnect for a controller dead after start ([ffeefe5](https://github.com/sanchezfauste/fauste-player/commit/ffeefe59958f48e61f219952d3d706b48d6908e8))
+* **control:** reconnect the MIDI ports from Settings ([52f7651](https://github.com/sanchezfauste/fauste-player/commit/52f765195d5291082706c3f71fbbf5bf054d4e2a))
+* **ui:** cart sweep runs left to right and moves smoothly every frame ([482a5e1](https://github.com/sanchezfauste/fauste-player/commit/482a5e1cdecee079b1c4002b8487ac55842092d1))
+* **ui:** gain breakdown adds up and every badge checks the earlier settings ([d8c42b3](https://github.com/sanchezfauste/fauste-player/commit/d8c42b35bfe4e8467ff10b5d752572baae0a9358))
+* **ui:** keep the fader drag overshoot so the knob follows the pointer back ([86d4458](https://github.com/sanchezfauste/fauste-player/commit/86d4458c4b5c424ab4b0e207d77d32a8245fb9be))
+* **ui:** keep the on-air Play look during a crossfade; polish review fixes ([54e4cdb](https://github.com/sanchezfauste/fauste-player/commit/54e4cdbcfe4d8ace3e40688d18ca162a1aabc54f))
+* **ui:** review fixes for the cart sweep, fade origin and fader ([014ec7e](https://github.com/sanchezfauste/fauste-player/commit/014ec7e09c8812f87cd7f8b22f6e15b8ac01f0ab))
+* **ui:** review minors of the egui 0.37 bump ([938db1e](https://github.com/sanchezfauste/fauste-player/commit/938db1ec51708357b5e97619cae6e6e5ea97874e))
+* **ui:** self-adapting extrapolation cap for the cart sweep ([82df8b4](https://github.com/sanchezfauste/fauste-player/commit/82df8b44abeb70b7d795ab8f3e49fbba11cbab36))
+
+
+### Documentation
+
+* describe the screenshots workflow ([67a8988](https://github.com/sanchezfauste/fauste-player/commit/67a89886c3fb916d28a1abc68c1cd60cf37581f0))
+* fader overshoot in the players guide ([7d63912](https://github.com/sanchezfauste/fauste-player/commit/7d6391242c7d5d2f24cd211f7b208b8a2f729ff0))
+* plan for retaking the screenshots in CI ([fbd67f4](https://github.com/sanchezfauste/fauste-player/commit/fbd67f4310730f007460b3bf51afb0f5d015ec7e))
+* plan itr06 F, panel header icons and full player names ([9451b1c](https://github.com/sanchezfauste/fauste-player/commit/9451b1c7721c2e084642c1bb2d772f466d8cd096))
+* plan itr06 G, cart sweep, fade origin and fader overshoot ([2f0d0b1](https://github.com/sanchezfauste/fauste-player/commit/2f0d0b10666f4fe93ab64881509b1b31a73233cd))
+* plan itr06 I, playlist keyboard, bit rate, loudness tooltip, normalization default ([bfa45aa](https://github.com/sanchezfauste/fauste-player/commit/bfa45aa23f0f8cd3ab46588cbe1f599767231e0c))
+* plan itr07-J, one gain breakdown everywhere ([cdee910](https://github.com/sanchezfauste/fauste-player/commit/cdee9101e5859dcf7b635be6e460adcf394f523c))
+* plan itr07-K visual polish ([1e30c3f](https://github.com/sanchezfauste/fauste-player/commit/1e30c3fc88393fb1faef5cec3a029480e8ffcfec))
+* plan itr07-L, a MIDI controller dead after start ([be16636](https://github.com/sanchezfauste/fauste-player/commit/be1663629842e731dbee588216aacde9bcb75b4d))
+* retake screenshots ([5df4cce](https://github.com/sanchezfauste/fauste-player/commit/5df4cce39d7502380496c4a7b0fc2769a45501a6))
+* retake screenshots ([e878261](https://github.com/sanchezfauste/fauste-player/commit/e8782618baa6340007ae804c92f17efb69f433ac))
+* retake screenshots ([ecae8a0](https://github.com/sanchezfauste/fauste-player/commit/ecae8a03a2b99bcacac703378f1032a2810bcd96))
+* retake screenshots ([a880d3a](https://github.com/sanchezfauste/fauste-player/commit/a880d3a97f108920e036b991e9014fb8ac3479ca))
+
+
+### Build System
+
+* **deps:** Bump arc-swap from 1.9.2 to 1.9.3 in the cargo-patch group ([5889f6c](https://github.com/sanchezfauste/fauste-player/commit/5889f6c40f5aa76779a3484c9df4638eb497a48b))
+* **deps:** Bump arc-swap from 1.9.2 to 1.9.3 in the cargo-patch group ([d66d2a6](https://github.com/sanchezfauste/fauste-player/commit/d66d2a62538f0e94e933820c48b9fad3bfe63181))
+* **deps:** bump egui to 0.37 ([13d75ff](https://github.com/sanchezfauste/fauste-player/commit/13d75ffc72f5e1000e1f4e10c9d13a7e54035018))
+* **deps:** bump egui to 0.37 ([f3bfc94](https://github.com/sanchezfauste/fauste-player/commit/f3bfc94c61e50397897ae7988a835a9abe5f5cb0))
+* **deps:** Bump wasapi from 0.25.0 to 0.26.0 ([ff6738d](https://github.com/sanchezfauste/fauste-player/commit/ff6738d6bebdf9d8096dd8125a1b391b88f64e73))
+* **deps:** Bump wasapi from 0.25.0 to 0.26.0 ([e65db47](https://github.com/sanchezfauste/fauste-player/commit/e65db473014da7bbf62fc28ad715dc4dcd0adfec))
+* **deps:** update yanked clipboard-win 5.4.1 to 5.4.3 ([03d680e](https://github.com/sanchezfauste/fauste-player/commit/03d680ed5ea614561d6d9f832551f9675178d9d5))
+* **deps:** update yanked clipboard-win 5.4.1 to 5.4.3 ([e1fd8ef](https://github.com/sanchezfauste/fauste-player/commit/e1fd8ef3fa2eb74f775eb7ea6922f22caa3a7235))
+
 ## [0.8.0](https://github.com/sanchezfauste/fauste-player/compare/v0.7.0...v0.8.0) (2026-10-21)
 
 
