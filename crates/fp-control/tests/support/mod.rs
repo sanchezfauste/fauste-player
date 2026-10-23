@@ -1,13 +1,13 @@
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! Fake ports and a fake controller for the MIDI service tests.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
 use crossbeam_channel::Sender;
-use fp_control::service::{MidiControl, MidiCore, MidiOutput, MidiPorts};
+use fp_control::service::{MidiControl, MidiCore, MidiOutput, MidiPorts, Opened};
 use fp_model::{AppState, Command, Config, MidiAction, MidiTrigger, ShortcutAction, apply};
 
 #[derive(Default)]
@@ -18,12 +18,40 @@ pub struct Wires {
     pub sent: Vec<(String, Vec<u8>)>,
     pub scans: usize,
     pub connects: usize,
+    /// Ports opened now, by direction ("in", "out") and name: a second
+    /// open fails as a held WinMM port does, until the first is dropped.
+    pub live: HashSet<(&'static str, String)>,
+    /// Ports another program holds: every open fails.
+    pub refuse: Vec<String>,
+}
+
+/// An open port; dropping it closes it.
+struct Live(&'static str, String, Arc<Mutex<Wires>>);
+
+impl Drop for Live {
+    fn drop(&mut self) {
+        if let Ok(mut w) = self.2.lock() {
+            w.live.remove(&(self.0, self.1.clone()));
+        }
+    }
+}
+
+impl Wires {
+    fn open(&mut self, direction: &'static str, name: &str) -> Result<(), String> {
+        if self.refuse.iter().any(|r| r == name) {
+            return Err("allocated by another program".into());
+        }
+        if !self.live.insert((direction, name.to_owned())) {
+            return Err("allocated: already open".into());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Default)]
 pub struct FakePorts(pub Arc<Mutex<Wires>>);
 
-struct FakeOut(String, Arc<Mutex<Wires>>);
+struct FakeOut(String, Arc<Mutex<Wires>>, #[allow(dead_code)] Live);
 
 impl MidiOutput for FakeOut {
     fn send(&mut self, bytes: &[u8]) -> Result<(), String> {
@@ -49,20 +77,35 @@ impl MidiPorts for FakePorts {
         &mut self,
         name: &str,
         sink: Sender<(String, Vec<u8>)>,
-    ) -> Result<Box<dyn Send>, String> {
+    ) -> Result<Opened<Box<dyn Send>>, String> {
         let mut w = self.0.lock().unwrap();
         if !w.inputs.iter().any(|i| i == name) {
             return Err("gone".into());
         }
+        w.open("in", name)?;
         w.sinks.insert(name.to_owned(), sink);
         w.connects += 1;
-        Ok(Box::new(()))
+        Ok(Opened {
+            connection: Box::new(Live("in", name.to_owned(), self.0.clone())),
+            id: format!("fake-in:{name}"),
+            namesakes: 0,
+        })
     }
-    fn connect_output(&mut self, name: &str) -> Result<Box<dyn MidiOutput>, String> {
-        if !self.0.lock().unwrap().outputs.iter().any(|o| o == name) {
+    fn connect_output(&mut self, name: &str) -> Result<Opened<Box<dyn MidiOutput>>, String> {
+        let mut w = self.0.lock().unwrap();
+        if !w.outputs.iter().any(|o| o == name) {
             return Err("gone".into());
         }
-        Ok(Box::new(FakeOut(name.to_owned(), self.0.clone())))
+        w.open("out", name)?;
+        Ok(Opened {
+            connection: Box::new(FakeOut(
+                name.to_owned(),
+                self.0.clone(),
+                Live("out", name.to_owned(), self.0.clone()),
+            )),
+            id: format!("fake-out:{name}"),
+            namesakes: 0,
+        })
     }
 }
 

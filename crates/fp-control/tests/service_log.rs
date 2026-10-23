@@ -66,9 +66,58 @@ fn the_log_tells_connections_drops_and_first_messages_apart() {
     assert_eq!(has("MIDI input disconnected"), 1, "{log}");
     assert_eq!(has("MIDI output disconnected"), 1, "{log}");
     assert_eq!(
-        has("first MIDI message"),
+        has("first MIDI message on"),
         2,
         "once per connection, not per message: {log}"
     );
     assert!(has("MIDI ports") >= 3, "the lists as they change: {log}");
+}
+
+#[test]
+fn a_port_that_keeps_failing_warns_once() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    ports.0.lock().unwrap().refuse.push("APC".to_owned());
+    let c = control(true);
+    let (mut core, _handle) = core(&ports, &c);
+    let mut t = Instant::now();
+    let log = logged(|| {
+        for _ in 0..5 {
+            core.step(t);
+            t += Duration::from_millis(2100);
+        }
+    });
+    let warns = |what: &str| {
+        log.lines()
+            .filter(|l| l.contains("WARN") && l.contains(what))
+            .count()
+    };
+    assert_eq!(warns("MIDI input not connected"), 1, "{log}");
+    assert_eq!(warns("MIDI output not connected"), 1, "{log}");
+    // Once it connects, a later refusal warns again.
+    ports.0.lock().unwrap().refuse.clear();
+    let log = logged(|| core.step(t));
+    assert!(log.contains("MIDI input connected"), "{log}");
+    assert!(log.contains("fake-in:APC"), "the id is in the line: {log}");
+}
+
+#[test]
+fn the_first_ignored_message_of_a_connection_says_why() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    let c = control(true);
+    let (mut core, _handle) = core(&ports, &c);
+    let t = Instant::now();
+    let log = logged(|| {
+        core.step(t);
+        ports.press("APC", &[0x90, 99, 100]); // nothing bound to note 99
+        ports.press("APC", &[0x90, 98, 100]);
+        core.step(t);
+    });
+    let ignored: Vec<&str> = log
+        .lines()
+        .filter(|l| l.contains("INFO") && l.contains("ignored"))
+        .collect();
+    assert_eq!(ignored.len(), 1, "{log}");
+    assert!(ignored[0].contains("Unbound"), "{log}");
 }

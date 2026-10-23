@@ -409,11 +409,15 @@ The layout follows mockup C, as approved:
   opened again at once, and the LEDs are refreshed: a replug without the
   cable.
 - **Diagnostics.** The service logs, from its own thread and never from the
-  port callbacks: the port lists when they change; the system id of each
-  port opened (a warning when several share its name); every input and
-  output connected and disconnected, with the reason; the first message on
-  each input connection; the first failed LED send per output connection;
-  and, at debug level, every ignored message with its reason.
+  port callbacks: the port lists when they change; every input and output
+  connected (with the system id of the port; a warning when other ports
+  share its name) and disconnected, with the reason; a port that cannot be
+  opened, as a warning once until it opens or disappears (later retries at
+  debug level); the first message on each input connection; the first
+  ignored message on each input connection, with the reason; the first
+  failed LED send per output connection; and, at debug level, every other
+  ignored message. Messages still queued from a closed connection are
+  dropped.
 - **Rule 10.** Nothing goes on air at start-up. Only new messages act. At
   connection, faders start "not picked up".
 

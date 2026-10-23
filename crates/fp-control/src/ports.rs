@@ -2,7 +2,7 @@
 
 use crossbeam_channel::Sender;
 
-use crate::service::{MidiOutput, MidiPorts};
+use crate::service::{MidiOutput, MidiPorts, Opened};
 
 /// The client name other MIDI software sees.
 pub const CLIENT: &str = "Fauste Player";
@@ -61,7 +61,7 @@ impl MidiPorts for MidirPorts {
         &mut self,
         name: &str,
         sink: Sender<(String, Vec<u8>)>,
-    ) -> Result<Box<dyn Send>, String> {
+    ) -> Result<Opened<Box<dyn Send>>, String> {
         let input = midir::MidiInput::new(CLIENT).map_err(|e| e.to_string())?;
         // The first port of that name, so a replugged device is found again.
         let mut named: Vec<midir::MidiInputPort> = input
@@ -69,12 +69,13 @@ impl MidiPorts for MidirPorts {
             .into_iter()
             .filter(|p| input.port_name(p).is_ok_and(|n| stable_name(&n) == name))
             .collect();
-        let ids: Vec<String> = named.iter().map(midir::MidiInputPort::id).collect();
-        log_opening("input", name, &ids);
+        let namesakes = named.len().saturating_sub(1);
         if named.is_empty() {
             return Err(format!("{name} is gone"));
         }
         let port = named.swap_remove(0);
+        let id = port.id();
+        tracing::debug!(port = %name, %id, "opening a MIDI input");
         let owned = name.to_owned();
         let connection = input
             .connect(
@@ -87,43 +88,35 @@ impl MidiPorts for MidirPorts {
                 (),
             )
             .map_err(|e| e.to_string())?;
-        Ok(Box::new(connection))
+        Ok(Opened {
+            connection: Box::new(connection),
+            id,
+            namesakes,
+        })
     }
 
-    fn connect_output(&mut self, name: &str) -> Result<Box<dyn MidiOutput>, String> {
+    fn connect_output(&mut self, name: &str) -> Result<Opened<Box<dyn MidiOutput>>, String> {
         let output = midir::MidiOutput::new(CLIENT).map_err(|e| e.to_string())?;
         let mut named: Vec<midir::MidiOutputPort> = output
             .ports()
             .into_iter()
             .filter(|p| output.port_name(p).is_ok_and(|n| stable_name(&n) == name))
             .collect();
-        let ids: Vec<String> = named.iter().map(midir::MidiOutputPort::id).collect();
-        log_opening("output", name, &ids);
+        let namesakes = named.len().saturating_sub(1);
         if named.is_empty() {
             return Err(format!("{name} is gone"));
         }
         let port = named.swap_remove(0);
+        let id = port.id();
+        tracing::debug!(port = %name, %id, "opening a MIDI output");
         let connection = output
             .connect(&port, "fauste-player-out")
             .map_err(|e| e.to_string())?;
-        Ok(Box::new(Output(connection)))
-    }
-}
-
-/// Which system port a name opens (the first of `ids`), so a field log
-/// shows whether the same device is opened each time and whether another
-/// port shares its name.
-fn log_opening(direction: &str, name: &str, ids: &[String]) {
-    match ids {
-        [] => {}
-        [id] => tracing::info!(direction, port = %name, %id, "opening a MIDI port"),
-        [id, ..] => tracing::warn!(
-            direction,
-            port = %name,
-            %id,
-            ?ids,
-            "several MIDI ports share this name; opening the first"
-        ),
+        Ok(Opened {
+            connection: Box::new(Output(connection)),
+            id,
+            namesakes,
+        })
     }
 }
 

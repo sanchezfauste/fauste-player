@@ -275,3 +275,44 @@ fn reconnect_reopens_every_port_and_refreshes_the_leds() {
     core.step(t + Duration::from_millis(20));
     assert_eq!(c.sent.lock().unwrap().len(), 1);
 }
+
+#[test]
+fn messages_queued_from_a_closed_connection_do_nothing() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    let c = control(true);
+    let (mut core, handle) = core(&ports, &c);
+    let mut t = Instant::now();
+    core.step(t);
+    // Queued, then the ports are reopened before the service reads it.
+    ports.press("APC", &[0x90, 36, 100]);
+    handle.requests.send(MidiRequest::Reconnect).unwrap();
+    core.step(t);
+    assert!(c.sent.lock().unwrap().is_empty(), "stale after Reconnect");
+    // Queued, then the port goes away.
+    ports.press("APC", &[0x90, 36, 100]);
+    ports.unplug("APC");
+    t += Duration::from_millis(2100);
+    core.step(t);
+    assert!(c.sent.lock().unwrap().is_empty(), "stale after a drop");
+}
+
+#[test]
+fn a_port_is_never_opened_twice() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    let c = control(true);
+    let (mut core, handle) = core(&ports, &c);
+    let t = Instant::now();
+    core.step(t);
+    handle.requests.send(MidiRequest::Reconnect).unwrap();
+    core.step(t);
+    // The fake refuses a second open of a live port: the old one was
+    // closed before the new one opened.
+    assert_eq!(handle.status.load().inputs, vec![("APC".to_owned(), true)]);
+    assert_eq!(
+        ports.0.lock().unwrap().live.len(),
+        2,
+        "one input, one output"
+    );
+}

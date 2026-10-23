@@ -158,12 +158,14 @@ controller would. If that does not help, unplug the controller and plug it
 back in.
 
 Either way, the log says what happened. It lists the MIDI ports whenever
-they change, each port opened and closed (with why), the first message
-received on each connection and the first LED message that failed. A
-connected controller that never logs a first message is sending nothing the
-program receives. With `RUST_LOG=info,fp_control=debug` the log also says
-why each message was ignored (no binding, a fader that has not reached the
-volume yet, an action that cannot act now).
+they change, each port opened and closed (with why), a port that cannot be
+opened (once, until it opens or goes away), the first message received on
+each connection, the first message ignored on each connection with the
+reason (no binding, a fader that has not reached the volume yet, an action
+that cannot act now) and the first LED message that failed. A connected
+controller that never logs a first message is sending nothing the program
+receives. For every ignored message and every failed retry, start the
+program with `RUST_LOG=info,fp_control=debug`.
 
 ## "The interface hit an error"
 
