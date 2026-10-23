@@ -485,3 +485,36 @@ fn ca6_a_cue_button_that_would_ask_does_nothing() {
         Some(Command::ToggleCue(p2))
     );
 }
+
+// Why a message did nothing, for the service's debug log (J6).
+
+#[test]
+fn route_says_why_a_message_did_nothing() {
+    use fp_control::router::Ignored;
+    let s = at_travel(state(), travel_of(100));
+    let mut r = router(&[
+        (note(1), MidiAction::Button(ShortcutAction::StopPlayer(2))),
+        (note(2), MidiAction::Button(ShortcutAction::PlayPlayer(5))),
+        (cc(20), MidiAction::Button(ShortcutAction::PlayPlayer(2))),
+        (cc(7), MidiAction::Volume(1)),
+    ]);
+    let off = MidiMessage::NoteOff {
+        channel: 0,
+        note: 1,
+    };
+    assert_eq!(r.route("APC", off, &s), Err(Ignored::Release));
+    assert_eq!(r.route("Other", on(1), &s), Err(Ignored::Unbound));
+    assert_eq!(r.route("APC", on(9), &s), Err(Ignored::Unbound));
+    assert_eq!(r.route("APC", on(1), &s), Err(Ignored::Unavailable));
+    assert_eq!(r.route("APC", on(2), &s), Err(Ignored::NoSuchPlayer));
+    assert_eq!(
+        r.route("APC", cc_value(20, 127), &s),
+        Err(Ignored::NotPressed),
+        "the first value is the control's state"
+    );
+    assert_eq!(
+        r.route("APC", cc_value(7, 10), &s),
+        Err(Ignored::NotPickedUp)
+    );
+    assert!(r.route("APC", cc_value(7, 105), &s).is_ok());
+}

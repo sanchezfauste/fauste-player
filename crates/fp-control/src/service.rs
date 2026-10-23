@@ -3,7 +3,7 @@
 //! their LEDs up to date and answers MIDI learn. It runs on its own thread
 //! and talks to the rest only through channels and snapshots.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -16,7 +16,7 @@ use fp_model::{AppState, Command, MidiAction, MidiTrigger};
 use crate::feedback::{Feedback, desired};
 use crate::learn::trigger_for;
 use crate::message::parse;
-use crate::router::Router;
+use crate::router::{Ignored, Router};
 
 /// What the service needs from the application: the latest model and a way
 /// to send commands (the same channel as the interface).
@@ -96,6 +96,14 @@ pub struct MidiCore {
     learning: Option<MidiAction>,
     next_scan: Option<Instant>,
     started: Option<Instant>,
+    /// The inputs that have sent something since they were connected (the
+    /// first message of each connection is logged).
+    heard: HashSet<String>,
+    /// The outputs that failed a send since they were connected (the first
+    /// failure is a warning, the rest debug lines).
+    failing: HashSet<String>,
+    /// The port lists last logged.
+    seen: (Vec<String>, Vec<String>),
 }
 
 impl MidiCore {
@@ -118,6 +126,9 @@ impl MidiCore {
             learning: None,
             next_scan: None,
             started: None,
+            heard: HashSet::new(),
+            failing: HashSet::new(),
+            seen: (Vec::new(), Vec::new()),
         };
         let handle = MidiHandle {
             status,
@@ -159,7 +170,11 @@ impl MidiCore {
             if !config.enabled {
                 continue;
             }
+            if self.inputs.contains_key(&device) && self.heard.insert(device.clone()) {
+                tracing::info!(port = %device, bytes = %hex(&bytes), "first MIDI message on this connection");
+            }
             let Some(msg) = parse(&bytes) else {
+                tracing::debug!(port = %device, bytes = %hex(&bytes), "MIDI message ignored: not a channel message");
                 continue;
             };
             if let Some(action) = self.learning {
@@ -170,13 +185,18 @@ impl MidiCore {
                         device,
                         trigger,
                     });
+                } else {
+                    tracing::debug!(port = %device, ?msg, "MIDI message ignored: it cannot bind the action being learned");
                 }
                 continue;
             }
-            if let Some(command) = self.router.on_message(&device, msg, &state)
-                && !self.control.send(command)
-            {
-                tracing::warn!("a MIDI command was dropped: the queue is full");
+            match self.router.route(&device, msg, &state) {
+                Ok(command) => {
+                    if !self.control.send(command) {
+                        tracing::warn!("a MIDI command was dropped: the queue is full");
+                    }
+                }
+                Err(reason) => log_ignored(&device, msg, reason),
             }
         }
         if config.enabled {
@@ -186,7 +206,11 @@ impl MidiCore {
                 if let Some(out) = self.outputs.get_mut(&led.output)
                     && let Err(error) = out.send(&led.bytes)
                 {
-                    tracing::debug!(%error, port = %led.output, "a MIDI LED was not sent");
+                    if self.failing.insert(led.output.clone()) {
+                        tracing::warn!(%error, port = %led.output, "a MIDI LED was not sent");
+                    } else {
+                        tracing::debug!(%error, port = %led.output, "a MIDI LED was not sent");
+                    }
                 }
             }
         }
@@ -197,9 +221,8 @@ impl MidiCore {
     fn scan(&mut self, config: &fp_model::MidiConfig) {
         if !config.enabled {
             // Off: no port is opened or even listed.
-            self.inputs.clear();
-            self.outputs.clear();
-            self.feedback.reset();
+            self.close_all("MIDI is off");
+            self.seen = (Vec::new(), Vec::new());
             if !self.status.load().inputs.is_empty() {
                 self.status.store(Arc::new(MidiStatus::default()));
             }
@@ -209,6 +232,10 @@ impl MidiCore {
         let ours = |name: &String| !name.starts_with(crate::ports::CLIENT);
         let inputs: Vec<String> = self.ports.inputs().into_iter().filter(ours).collect();
         let outputs: Vec<String> = self.ports.outputs().into_iter().filter(ours).collect();
+        if self.seen.0 != inputs || self.seen.1 != outputs {
+            tracing::info!(?inputs, ?outputs, "MIDI ports");
+            self.seen = (inputs.clone(), outputs.clone());
+        }
         // Only the devices that are bound are opened (ports can be
         // exclusive), every input while learning.
         let bound: Vec<&str> = config.bindings.iter().map(|b| b.device.as_str()).collect();
@@ -223,10 +250,32 @@ impl MidiCore {
         let wanted_outputs: Vec<String> = bound.iter().map(|d| feedback_port(d)).collect();
         let learning = self.learning.is_some();
         let wanted_input = |name: &String| learning || bound.contains(&name.as_str());
-        self.inputs
-            .retain(|name, _| inputs.contains(name) && wanted_input(name));
-        self.outputs
-            .retain(|name, _| outputs.contains(name) && wanted_outputs.contains(name));
+        let heard = &mut self.heard;
+        let failing = &mut self.failing;
+        self.inputs.retain(|name, _| {
+            let reason = if !inputs.contains(name) {
+                "the port is gone"
+            } else if !wanted_input(name) {
+                "nothing is bound to it"
+            } else {
+                return true;
+            };
+            tracing::info!(port = %name, reason, "MIDI input disconnected");
+            heard.remove(name);
+            false
+        });
+        self.outputs.retain(|name, _| {
+            let reason = if !outputs.contains(name) {
+                "the port is gone"
+            } else if !wanted_outputs.contains(name) {
+                "no feedback goes to it"
+            } else {
+                return true;
+            };
+            tracing::info!(port = %name, reason, "MIDI output disconnected");
+            failing.remove(name);
+            false
+        });
         let mut reconnected = false;
         {
             for name in inputs.iter().filter(|n| wanted_input(n)) {
@@ -234,6 +283,7 @@ impl MidiCore {
                     match self.ports.connect_input(name, self.messages.0.clone()) {
                         Ok(connection) => {
                             tracing::info!(port = %name, "MIDI input connected");
+                            self.heard.remove(name);
                             self.inputs.insert(name.clone(), connection);
                         }
                         Err(error) => {
@@ -246,11 +296,13 @@ impl MidiCore {
                 if !self.outputs.contains_key(name) {
                     match self.ports.connect_output(name) {
                         Ok(out) => {
+                            tracing::info!(port = %name, "MIDI output connected");
+                            self.failing.remove(name);
                             self.outputs.insert(name.clone(), out);
                             reconnected = true;
                         }
                         Err(error) => {
-                            tracing::debug!(%error, port = %name, "MIDI output not connected")
+                            tracing::warn!(%error, port = %name, "MIDI output not connected")
                         }
                     }
                 }
@@ -273,6 +325,34 @@ impl MidiCore {
             self.status.store(Arc::new(status));
         }
     }
+}
+
+impl MidiCore {
+    /// Closes every port, logging each, and forgets the LEDs sent.
+    fn close_all(&mut self, reason: &str) {
+        for name in self.inputs.drain().map(|(name, _)| name) {
+            tracing::info!(port = %name, reason, "MIDI input disconnected");
+        }
+        for name in self.outputs.drain().map(|(name, _)| name) {
+            tracing::info!(port = %name, reason, "MIDI output disconnected");
+        }
+        self.heard.clear();
+        self.failing.clear();
+        self.feedback.reset();
+    }
+}
+
+/// Bytes as hex, for the log.
+fn hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|b| format!("{b:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn log_ignored(device: &str, msg: crate::message::MidiMessage, reason: Ignored) {
+    tracing::debug!(port = %device, ?msg, ?reason, "MIDI message ignored");
 }
 
 /// The running service, owned by whoever started it. Shutting it down (or

@@ -64,11 +64,17 @@ impl MidiPorts for MidirPorts {
     ) -> Result<Box<dyn Send>, String> {
         let input = midir::MidiInput::new(CLIENT).map_err(|e| e.to_string())?;
         // The first port of that name, so a replugged device is found again.
-        let port = input
+        let mut named: Vec<midir::MidiInputPort> = input
             .ports()
             .into_iter()
-            .find(|p| input.port_name(p).is_ok_and(|n| stable_name(&n) == name))
-            .ok_or_else(|| format!("{name} is gone"))?;
+            .filter(|p| input.port_name(p).is_ok_and(|n| stable_name(&n) == name))
+            .collect();
+        let ids: Vec<String> = named.iter().map(midir::MidiInputPort::id).collect();
+        log_opening("input", name, &ids);
+        if named.is_empty() {
+            return Err(format!("{name} is gone"));
+        }
+        let port = named.swap_remove(0);
         let owned = name.to_owned();
         let connection = input
             .connect(
@@ -86,15 +92,38 @@ impl MidiPorts for MidirPorts {
 
     fn connect_output(&mut self, name: &str) -> Result<Box<dyn MidiOutput>, String> {
         let output = midir::MidiOutput::new(CLIENT).map_err(|e| e.to_string())?;
-        let port = output
+        let mut named: Vec<midir::MidiOutputPort> = output
             .ports()
             .into_iter()
-            .find(|p| output.port_name(p).is_ok_and(|n| stable_name(&n) == name))
-            .ok_or_else(|| format!("{name} is gone"))?;
+            .filter(|p| output.port_name(p).is_ok_and(|n| stable_name(&n) == name))
+            .collect();
+        let ids: Vec<String> = named.iter().map(midir::MidiOutputPort::id).collect();
+        log_opening("output", name, &ids);
+        if named.is_empty() {
+            return Err(format!("{name} is gone"));
+        }
+        let port = named.swap_remove(0);
         let connection = output
             .connect(&port, "fauste-player-out")
             .map_err(|e| e.to_string())?;
         Ok(Box::new(Output(connection)))
+    }
+}
+
+/// Which system port a name opens (the first of `ids`), so a field log
+/// shows whether the same device is opened each time and whether another
+/// port shares its name.
+fn log_opening(direction: &str, name: &str, ids: &[String]) {
+    match ids {
+        [] => {}
+        [id] => tracing::info!(direction, port = %name, %id, "opening a MIDI port"),
+        [id, ..] => tracing::warn!(
+            direction,
+            port = %name,
+            %id,
+            ?ids,
+            "several MIDI ports share this name; opening the first"
+        ),
     }
 }
 

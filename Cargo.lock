@@ -1824,6 +1824,7 @@ dependencies = [
  "fp-model",
  "midir",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

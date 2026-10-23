@@ -27,6 +27,30 @@ struct Pickup {
     model_seen: Option<f32>,
 }
 
+/// Why a message did nothing (logged at debug level by the service).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ignored {
+    /// A Note Off: buttons act on the press.
+    Release,
+    /// No binding for this device and control.
+    Unbound,
+    /// A bound button's control change that did not rise through 64, or a
+    /// Pitch Bend on a button.
+    NotPressed,
+    /// The bound action makes no sense now (R28).
+    Unavailable,
+    /// A CUE that would be heard on air (on-air pre-listen spec CA6).
+    CueOnAir,
+    /// The binding names a player that does not exist.
+    NoSuchPlayer,
+    /// A fader binding got a message that carries no position.
+    NoPosition,
+    /// The player's fader is locked (bit-perfect output, BF10).
+    FaderLocked,
+    /// The fader has not reached the volume yet (soft takeover).
+    NotPickedUp,
+}
+
 /// Routes messages from the surfaces to commands, remembering what edge
 /// detection and soft takeover need between messages.
 #[derive(Debug, Default)]
@@ -63,12 +87,22 @@ impl Router {
         msg: MidiMessage,
         state: &AppState,
     ) -> Option<Command> {
+        self.route(device, msg, state).ok()
+    }
+
+    /// [`Router::on_message`], saying why a message did nothing.
+    pub fn route(
+        &mut self,
+        device: &str,
+        msg: MidiMessage,
+        state: &AppState,
+    ) -> Result<Command, Ignored> {
         let mut position = None;
         let (trigger, pressed) = match msg {
             MidiMessage::NoteOn { channel, note, .. } => {
                 (MidiTrigger::Note { channel, note }, true)
             }
-            MidiMessage::NoteOff { .. } => return None,
+            MidiMessage::NoteOff { .. } => return Err(Ignored::Release),
             MidiMessage::ControlChange {
                 channel,
                 controller,
@@ -99,28 +133,32 @@ impl Router {
         let binding = self
             .bindings
             .iter()
-            .find(|b| b.device == device && b.trigger == trigger)?;
+            .find(|b| b.device == device && b.trigger == trigger)
+            .ok_or(Ignored::Unbound)?;
         match binding.action {
             MidiAction::Button(action) => {
                 if !pressed {
-                    return None;
+                    return Err(Ignored::NotPressed);
                 }
-                let command = player_command(state, action)?;
+                let command = player_command(state, action).ok_or(Ignored::NoSuchPlayer)?;
                 if !command_available(state, &command) {
-                    return None;
+                    return Err(Ignored::Unavailable);
                 }
                 // On-air pre-listen spec CA6: MIDI cannot answer the
                 // question a pre-listen on a sounding on-air output asks,
                 // and has no force: such a CUE does nothing.
                 if fp_model::cue_on_air::needs_confirmation(state, &command) {
                     tracing::info!("MIDI CUE refused: it would be heard on air (cue_on_air)");
-                    return None;
+                    return Err(Ignored::CueOnAir);
                 }
-                Some(command)
+                Ok(command)
             }
             MidiAction::Volume(n) => {
-                let position = position?;
-                let player = state.players.get(usize::from(n).checked_sub(1)?)?;
+                let position = position.ok_or(Ignored::NoPosition)?;
+                let player = usize::from(n)
+                    .checked_sub(1)
+                    .and_then(|i| state.players.get(i))
+                    .ok_or(Ignored::NoSuchPlayer)?;
                 let travel = fp_model::volume::fader_from_gain(player.volume);
                 let pickup = self
                     .pickups
@@ -135,7 +173,7 @@ impl Router {
                     pickup.last_set = None;
                     pickup.last_input = Some(position);
                     pickup.model_seen = Some(travel);
-                    return None;
+                    return Err(Ignored::FaderLocked);
                 }
                 // Moved by other means since this fader last set it: pick
                 // it up again first. A model that has not caught up with this
@@ -161,10 +199,10 @@ impl Router {
                 }
                 pickup.last_input = Some(position);
                 if !pickup.picked {
-                    return None;
+                    return Err(Ignored::NotPickedUp);
                 }
                 pickup.last_set = Some(position);
-                Some(Command::SetVolume(
+                Ok(Command::SetVolume(
                     player.id,
                     fp_model::volume::gain_from_fader(position),
                 ))
