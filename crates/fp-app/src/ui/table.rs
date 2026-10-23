@@ -679,6 +679,9 @@ pub(crate) fn track_table(
     // keyed by player and playlist.
     let body_rect = output.inner_rect;
     let scroll_y = output.state.clamped_offset().y;
+    // While a trackpad overscrolls (rubber-banding) the rows are drawn at the
+    // unclamped offset: the drop geometry follows what is on screen.
+    let drawn_y = output.state.unclamped_offset().y;
     view_state.table_scroll.insert(
         player,
         TableScroll {
@@ -701,7 +704,7 @@ pub(crate) fn track_table(
     let target = pointer
         .filter(on_table_layer)
         .filter(|p| !table_layout::on_column_edge(&px, area.left(), grab, p.x))
-        .and_then(|p| table_layout::drop_index(body_rect, scroll_y, ROW_HEIGHT, entries.len(), p));
+        .and_then(|p| table_layout::drop_index(body_rect, drawn_y, ROW_HEIGHT, entries.len(), p));
     if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx()) {
         match target {
             Some(index) => {
@@ -712,7 +715,7 @@ pub(crate) fn track_table(
                 });
                 // Drawn after the body, from the same geometry: at the
                 // boundary even when the rows next to it were not built.
-                if let Some(y) = table_layout::boundary_y(body_rect, scroll_y, ROW_HEIGHT, index) {
+                if let Some(y) = table_layout::boundary_y(body_rect, drawn_y, ROW_HEIGHT, index) {
                     let top = if index > 0 && index == entries.len() {
                         y - 2.0
                     } else {

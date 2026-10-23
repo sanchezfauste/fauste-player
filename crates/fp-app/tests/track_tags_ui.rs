@@ -259,9 +259,11 @@ fn the_editor_never_shows_an_empty_body_while_the_sheet_arrives() {
     // accessibility tree (the note "Reading tags…" is drawn there), and the
     // helper thread has usually answered by the next frame. So the first
     // frame the modal can be seen in shows either the note or the form.
+    let mut seen = false;
     for _ in 0..30 {
         h.run_steps(1);
         if h.query_by_label("Edit tags").is_some() {
+            seen = true;
             let reading = h.query_by_label("Reading tags…").is_some();
             let ready = h.query_all_by_label_contains("Add field").next().is_some();
             assert!(reading || ready, "an empty body");
@@ -271,8 +273,35 @@ fn the_editor_never_shows_an_empty_body_while_the_sheet_arrives() {
             break;
         }
     }
+    assert!(seen, "the modal never appeared");
     wait_for_text(&mut h, "Add field");
     assert!(h.query_by_label("Reading tags…").is_none());
+}
+
+/// The helper thread's read blocks on a named pipe until something opens it
+/// for writing, so the editor stays in its reading phase for as long as the
+/// test wants.
+#[cfg(unix)]
+#[test]
+fn the_editor_says_it_is_reading_until_the_sheet_arrives() {
+    let dir = tempfile::tempdir().unwrap();
+    let fifo = dir.path().join("a.wav");
+    let made = std::process::Command::new("mkfifo")
+        .arg(&fifo)
+        .status()
+        .unwrap();
+    assert!(made.success());
+    let (mut h, _fake) = harness(state_at(&fifo));
+    open_editor(&mut h);
+    h.run_steps(5);
+    assert!(h.query_by_label("Reading tags…").is_some());
+    assert!(!save_enabled(&h));
+    // Opening the pipe for writing lets the read finish (an empty file: no
+    // sheet, so the editor says it cannot read it).
+    drop(std::fs::OpenOptions::new().write(true).open(&fifo).unwrap());
+    wait_for(&mut h, "the note to go", |h| {
+        h.query_by_label("Reading tags…").is_none()
+    });
 }
 
 #[test]
