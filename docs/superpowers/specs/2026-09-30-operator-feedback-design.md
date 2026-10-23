@@ -405,12 +405,22 @@ The layout follows mockup C, as approved:
   - The feedback thread only sends a message when a LED's state changes.
 - **Hot-plug.** Ports are rescanned every `rescan_interval_ms`. A port that
   returns is reconnected by name, and the LEDs are refreshed.
+- **Reconnect.** On request (Settings > MIDI), every port is closed and
+  opened again at once, and the LEDs are refreshed: a replug without the
+  cable.
+- **Diagnostics.** The service logs, from its own thread and never from the
+  port callbacks: the port lists when they change; the system id of each
+  port opened (a warning when several share its name); every input and
+  output connected and disconnected, with the reason; the first message on
+  each input connection; the first failed LED send per output connection;
+  and, at debug level, every ignored message with its reason.
 - **Rule 10.** Nothing goes on air at start-up. Only new messages act. At
   connection, faders start "not picked up".
 
 ### 6.4 Settings > MIDI
 
 - An enable switch, and the ports with their state: connected or missing.
+  While MIDI is on, a "Reconnect ports" button (§6.3).
 - For every player, a row per action (Play/Next, Pause, Stop, Fade stop,
   Restart, Previous, Cue, Volume), each with its binding, a "Learn" button and
   a "Clear" button.

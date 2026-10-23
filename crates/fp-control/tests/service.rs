@@ -251,3 +251,27 @@ fn only_bound_devices_are_opened_except_while_learning() {
         "learning listens to every input"
     );
 }
+
+#[test]
+fn reconnect_reopens_every_port_and_refreshes_the_leds() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    let c = control(true);
+    let (mut core, handle) = core(&ports, &c);
+    let t = Instant::now();
+    core.step(t);
+    assert_eq!(ports.0.lock().unwrap().connects, 1);
+    ports.take_sent();
+    handle.requests.send(MidiRequest::Reconnect).unwrap();
+    core.step(t + Duration::from_millis(10));
+    assert_eq!(
+        ports.0.lock().unwrap().connects,
+        2,
+        "opened again at once, without waiting for the rescan"
+    );
+    assert!(!ports.take_sent().is_empty(), "the LEDs are refreshed");
+    assert_eq!(handle.status.load().inputs, vec![("APC".to_owned(), true)]);
+    ports.press("APC", &[0x90, 36, 100]);
+    core.step(t + Duration::from_millis(20));
+    assert_eq!(c.sent.lock().unwrap().len(), 1);
+}

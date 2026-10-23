@@ -51,6 +51,9 @@ pub enum MidiRequest {
     /// Bind the next suitable message to this action.
     Learn(MidiAction),
     CancelLearn,
+    /// Close every port and open them again now, as unplugging and
+    /// plugging the controllers would (LEDs refreshed).
+    Reconnect,
 }
 
 /// The answer to a learn request.
@@ -154,11 +157,16 @@ impl MidiCore {
         let config = &state.config.midi;
         self.router.set_config(config);
         while let Ok(request) = self.requests.try_recv() {
-            self.learning = match request {
-                MidiRequest::Learn(action) => Some(action),
-                MidiRequest::CancelLearn => None,
-            };
-            // Learning listens to every input: connect them now.
+            match request {
+                MidiRequest::Learn(action) => self.learning = Some(action),
+                MidiRequest::CancelLearn => self.learning = None,
+                MidiRequest::Reconnect => {
+                    tracing::info!("MIDI ports reopened on request");
+                    self.close_all("reconnect requested");
+                }
+            }
+            // Learning listens to every input, and a reconnection opens
+            // the ports again: rescan now.
             self.next_scan = None;
         }
         if self.next_scan.is_none_or(|t| now >= t) {

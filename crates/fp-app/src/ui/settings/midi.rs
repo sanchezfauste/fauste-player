@@ -8,7 +8,7 @@ use fp_model::{MidiAction, MidiTrigger, ShortcutAction};
 
 use super::super::app::Scene;
 use super::super::theme;
-use super::super::widgets::font;
+use super::super::widgets::{self, font};
 use super::{SettingsState, button, row, update};
 
 /// The actions a player offers to MIDI, with their names.
@@ -107,6 +107,22 @@ pub(super) fn section(
             t.tr("midi-missing")
         };
         text(ui, format!("{name} — {state}"), theme::NEUTRAL_400);
+    }
+    if config.enabled {
+        // The cable-free replug: a controller that stopped answering (or
+        // never did after start) is opened again.
+        ui.add_space(4.0);
+        let reconnect = widgets::text_button(
+            ui,
+            None,
+            &t.tr("midi-reconnect"),
+            true,
+            widgets::TileStyle::plain(),
+        )
+        .on_hover_text(t.tr("midi-reconnect-tip"));
+        if reconnect.clicked() {
+            let _ = midi.requests.send(MidiRequest::Reconnect);
+        }
     }
     let players = scene.state.players.len() as u16;
     for n in 1..=players {
