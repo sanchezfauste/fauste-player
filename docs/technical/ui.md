@@ -26,7 +26,7 @@
 | `ui/settings/columns.rs` | Settings → Playlists → Table columns: `column_rows`, the checkboxes, the arrows (`move_column`) and Default columns; every change goes through `Scene::set_table_columns` |
 | `ui/settings/carts.rs`, `ui/settings/keys.rs` | Settings → Cartwall (pages, grid, cart editor, import and export) and → Keyboard shortcuts (capture, conflicts) |
 | `ui/settings/loudness.rs` | Settings → Loudness (loudness normalization spec N22): the Normalize loudness toggle, the target, true-peak ceiling, maximum boost and maximum trim sliders (ranges of N1), the notes that changes apply to tracks loaded afterwards and that a bit-perfect output is never normalized, and the count of tracks waiting for a measurement (`SettingsDeps::unmeasured`) |
-| `ui/loudness_edit.rs` | The per-track loudness controls (N20, N21): the measurement line, the Exclude from normalization toggle and the Trim slider, each change one `Command::SetTrackLoudness`; and the Loudness… popup (`popup`, drawn by `AppUi` after the CUE windows) |
+| `ui/loudness_edit.rs` | The per-track loudness controls (N20, N21): `info`/`info_block` (the shared gain breakdown, below), the Exclude from normalization toggle and the Trim slider, each change one `Command::SetTrackLoudness`; and the Loudness… popup (`popup`, drawn by `AppUi` after the CUE windows) |
 | `ui/settings/remote.rs` | Settings → Remote: the HTTP and OSC switches, addresses, token, origins and senders, and each server's state read from the remote thread's status cell |
 | `ui/cartwall.rs`, `ui/cart_view.rs` | The cartwall panel (at the bottom or on a side, and its collapsed side strip, `collapsed_strip`), and its pure view model (status, countdown, progress). The bar's "Stop all (n)" button sends `Command::StopAllCarts` and shows `cartwall.playing.len()`; it is the first item of a right-to-left row so it never gives way to the tabs. Button height comes from `cart_view::button_height(available, rows)` (nominal 40 px, minimum 28 px) while the cartwall fits its content (`Arrangement::fit_content`; the 60 % cap is `panel_layout::CONTENT_HEIGHT_CAP`), and from `cart_view::filled_button_height` (minimum 28 px, no upper clamp) otherwise (RL13); widths fill the panel, never under `cart_view::MIN_BUTTON_WIDTH`; the grid scrolls only below the minimums. A cart's name is laid out by the pure `cart_view::fit_name`: its words wrap at their boundaries, and a word too wide for the button is cut with an ellipsis and ends the name, never split across lines. `cartwall::sizes` gives the pass its content and least heights, its least width (`min_width`: the header's fixed parts or the columns, whichever is larger) and its collapsed thickness. A button's colours come from the pure `cart_view::cart_look(color, playing)` (`CartLook`: fill, hover and pressed fills, border, elapsed-time fill, kind marker, waveform), with the palette in `theme::cart_color` and the strengths in `theme::CART_*`. The waveform behind the text spans `CartView::wave_range` (the play range, idle and playing carts only), reduced with `widgets::memo_columns_in` into a memo kept in egui temp data per cart (`("cart-wave", cart id)`) and drawn by `widgets::paint_wave_columns`. A playing cart's sweep (I19, I22): the fill grows from the left to the played share and a 2 pt line marks its edge; the position is `cart_view::CartSweep` (kept per cart in egui temp data, `("cart-sweep", cart id)`), the engine's last position carried on with the frame clock (clamped to the cart's end and to twice the step between changed snapshots (observed and smoothed by the sweep itself: the audio buffer's step), with two conductor ticks as the floor, never backwards unless the snapshot is, as on a loop), and the cartwall requests a repaint every frame while a cart with a known length plays, so the line does not depend on the players or meters being shown (before, only `view::animating` set the frame rate and a cart alone repainted at the idle rate). The cart editor's colour row (`settings/carts.rs`, `swatch`) exposes each swatch as a selected/unselected radio button. |
 | `ui/playlist_files.rs` | Playlist import and export on helper threads (`FileOutcome`) |
@@ -350,16 +350,10 @@ inside the list.
 the usual tooltip delay: title, artist, album, date, genre, duration, format
 and path, leaving out what the track lacks. The format is the upper-cased
 extension, then the sample rate and the bit depth when known. Under the
-fields, `view::loudness_lines` adds the loudness measurement ("Loudness:
-−14.2 LUFS, true peak −0.8 dBTP", `—` for a silent file, or "Loudness: not
-measured") and the track's loudness edit when it is not the default
-(loudness normalization spec N19). The trim shown is the one in use
-(`fp_model::trim_in_use`: the saved trim within ± the current maximum
-trim); when a lowered maximum limits it, the line
-(`track-loudness-trim-limited`) also gives the saved value, unless both read
-the same at the precision shown (0.1 dB). The gain badge's
-tooltip and the Trim slider show the trim in use too. They are sentences, not label/value
-pairs, so they are plain lines rather than rows of the grid.
+fields, a rule and the shared gain breakdown (`loudness_edit::info_block`
+over `view::gain_info`, for `Holder::PlayerMain` of the list's player so a
+bit-perfect player reads "none, bit-perfect"; loudness normalization spec
+N19 and J1, see "Gain breakdown" below).
 
 **Menu item.** *Edit tags…* is enabled by `view::tag_edit_availability`
 (`fp_model::tag_edit_block` plus `fp_analysis::tags::can_write_tags`, judged
@@ -631,6 +625,27 @@ The interface shows and edits [loudness normalization](../superpowers/specs/2026
 (spec §8) from the snapshot only; the gain itself is the model's
 (`fp_model::loudness`) and the engine's.
 
+- **Gain breakdown (J1).** `view::gain_info(track, config, bit_perfect,
+  actual) -> Vec<InfoLine>` is the one pure builder of everything that
+  explains a track's gain, and `loudness_edit::info_block` the one renderer.
+  An `InfoLine` has a `kind` (`Measured`, `TruePeak`, `Target`, `AutoGain`,
+  `Trim`, `Wanted`, `Limit`, `Note`, `Result`), a label `Message` and an
+  `InfoValue` (`Text` for a figure with its unit, `Message` for a phrase).
+  The order is fixed, `Result` is always the last line, and every figure
+  comes from `fp_model::normalization`, `trim_in_use` and `wanted_gain_db`.
+  `actual` is the `Normalization` of a source on air (the badge passes it for
+  every status, the row tooltip of the entry on air too): when the current
+  settings would give another (N11) the lines are a `Note`
+  (`tip-gain-earlier-settings`) and the gain it kept. `info_block` draws
+  label left and value right with tabular digits (`widgets::paint_tabular_right`),
+  notes across the width, and `Result` under a rule in semibold; a line too
+  long for one row wraps (the label to at most half the width), so a long
+  language or a narrow window keep every line inside. Each row is one
+  accessibility node named `Label: value`; the gain badge, a tile named
+  `widgets::info_text` and showing the block with `on_hover_ui`, is named by all the
+  lines. The same block is drawn by the badge tooltip, the Loudness…
+  popup (above its controls), the cart editor and the playlist row tooltip,
+  so they cannot drift apart.
 - **Messages.** The pure functions in `view.rs` return a `view::Message`
   (a Fluent key and its arguments, already formatted with
   `view::signed_db` and one decimal with the true minus sign); the painting
@@ -645,10 +660,10 @@ The interface shows and edits [loudness normalization](../superpowers/specs/2026
   anyway and shows nothing), and nothing for `Off` and `Silent`. When
   `fp_model::normalization(config, track, false)` now differs from `on_air`
   (the settings, the measurement or the edit changed since the track
-  started, N11), the tooltip is `tip-gain-earlier-settings` alone: the
+  started, N11), the tooltip is `tip-gain-earlier-settings` and the gain it kept: the
   current target, measurement and trim did not give that gain, so they are
   not quoted beside it. `player.rs`
-  paints it as a tile left of **BP**, named by its tooltip lines. It shows
+  paints it as a tile left of **BP**, named by the plain text of the gain breakdown. It shows
   the gain the source was started with: for a scheduled transition, the
   one the engine reports in `TransitionStarted`, so a re-preload that
   races a transition the engine had already committed does not change it.
@@ -662,7 +677,7 @@ The interface shows and edits [loudness normalization](../superpowers/specs/2026
   double-click within 0.6 s of the click that opened the popup).
 - **Cart editor (N21).** Settings → Cartwall draws `loudness_edit::exclude`
   and `loudness_edit::trim` as two rows of the cart's editor, the
-  measurement as the first row's hint.
+  gain breakdown (`info_block`) above them.
 - **Settings → Loudness (N22)** is `settings/loudness.rs`, restorable
   (`SettingsSection::Loudness`). The count of tracks waiting for a
   measurement comes from `services::UnmeasuredCount`

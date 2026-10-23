@@ -644,7 +644,7 @@ pub enum BadgeTone {
 pub struct GainBadge {
     pub text: Message,
     pub tone: BadgeTone,
-    pub tip: Vec<Message>,
+    pub tip: Vec<InfoLine>,
 }
 
 /// One decimal with the true minus sign; `−0.0` is shown as `0.0` and a
@@ -683,159 +683,235 @@ pub fn gain_badge(
     track: &Track,
 ) -> Option<GainBadge> {
     use fp_model::NormalizationStatus as S;
-    // The amber states say what the loudness editor says: the measurement
-    // (with its true peak, when measured) and why there is no gain.
-    let not_normalized = |bit_perfect: bool| GainBadge {
-        text: Message::new("badge-gain", &[("gain", signed_db(0.0))]),
-        tone: BadgeTone::Amber,
-        tip: loudness_facts(track, config, bit_perfect),
+    // Every badge explains the gain the source started with, against what
+    // the current settings give (N11).
+    let badge = |tone: BadgeTone, bit_perfect: bool| GainBadge {
+        text: Message::new("badge-gain", &[("gain", signed_db(n.gain_db))]),
+        tone,
+        tip: gain_info(track, config, bit_perfect, Some(n)),
     };
     match n.status {
         S::Off | S::Silent => None,
         S::BitPerfect if !config.normalize => None,
-        S::BitPerfect => Some(not_normalized(true)),
-        S::NotMeasured | S::Excluded => Some(not_normalized(false)),
-        S::Applied { .. } => {
-            // The source keeps the gain it started with (N11). When the
-            // settings, the measurement or the edit now give another, the
-            // current values did not give this gain: say only that.
-            let tip = if fp_model::normalization(config, track, false) != *n {
-                vec![Message::new("tip-gain-earlier-settings", &[])]
-            } else {
-                loudness_facts(track, config, false)
-            };
-            Some(GainBadge {
-                text: Message::new("badge-gain", &[("gain", signed_db(n.gain_db))]),
-                tone: BadgeTone::Normal,
-                tip,
-            })
+        S::BitPerfect => Some(badge(BadgeTone::Amber, true)),
+        S::NotMeasured | S::Excluded => Some(badge(BadgeTone::Amber, false)),
+        S::Applied { .. } => Some(badge(BadgeTone::Normal, false)),
+    }
+}
+
+/// What a line of the gain information is, in the order they come.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InfoKind {
+    /// Integrated loudness measured for the track.
+    Measured,
+    /// Its true peak.
+    TruePeak,
+    /// The loudness every track is brought to.
+    Target,
+    /// The gain normalization gives with trim 0, or why it gives none.
+    AutoGain,
+    /// The operator's trim in use.
+    Trim,
+    /// The gain wanted when a limit held it back.
+    Wanted,
+    /// The limit that held the gain back.
+    Limit,
+    /// A sentence that spans both columns.
+    Note,
+    /// The gain the track plays with; always the last line.
+    Result,
+}
+
+/// The right-hand side of an [`InfoLine`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum InfoValue {
+    /// A figure with its unit (`−14.2 LUFS`), the same in every language.
+    Text(String),
+    /// A translated phrase.
+    Message(Message),
+}
+
+/// One labelled line of the gain information.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InfoLine {
+    pub kind: InfoKind,
+    /// The label (for a [`InfoKind::Note`], the whole sentence).
+    pub label: Message,
+    pub value: InfoValue,
+}
+
+impl InfoLine {
+    fn text(kind: InfoKind, key: &'static str, value: String) -> Self {
+        Self {
+            kind,
+            label: Message::new(key, &[]),
+            value: InfoValue::Text(value),
+        }
+    }
+
+    fn message(kind: InfoKind, key: &'static str, value: Message) -> Self {
+        Self {
+            kind,
+            label: Message::new(key, &[]),
+            value: InfoValue::Message(value),
         }
     }
 }
 
-/// The loudness facts of `track`: the measurement (integrated loudness and
-/// true peak) then the gain lines. The gain badge tooltip and the loudness
-/// editor both show these, so they cannot drift apart.
-pub fn loudness_facts(
-    track: &Track,
-    config: &fp_model::LoudnessConfig,
-    bit_perfect: bool,
-) -> Vec<Message> {
-    let mut lines: Vec<Message> = loudness_lines(track, config).into_iter().take(1).collect();
-    lines.extend(gain_lines(track, config, bit_perfect));
-    lines
+/// A gain with its unit: `+4.0 dB`, `0.0 dB`.
+fn gain_text(db: f32) -> String {
+    format!("{} dB", signed_db(db))
 }
 
-/// N20, N21: the gain lines of the loudness editors. The slider is a trim
-/// on top of the automatic gain, so they say what normalization gives the
-/// track with trim 0 (or why it gives none), what it gives with the trim
-/// when that is not 0, and the limit that applies to the gain shown last.
-/// `bit_perfect` is whether the player the track plays on is. Every figure comes from the model (`fp_model::normalization`).
-pub fn gain_lines(
+/// N19, N20: everything that explains a track's gain, one labelled line
+/// each, in this order: integrated loudness and true peak (as measured), the
+/// target, the automatic gain (or why there is none), the trim, the gain
+/// wanted and the limit that held it back, notes, and last the resulting
+/// gain. The gain badge tooltip, the loudness editors and the playlist row
+/// tooltip all draw these lines, so they cannot drift apart.
+///
+/// `bit_perfect` is whether the player the track plays on is. `actual` is
+/// the normalization of a source already on air: when the current settings
+/// would not give that gain (N11), the lines only say so and show it.
+/// Every figure comes from the model (`fp_model::normalization`).
+pub fn gain_info(
     track: &Track,
     config: &fp_model::LoudnessConfig,
     bit_perfect: bool,
-) -> Vec<Message> {
+    actual: Option<&fp_model::Normalization>,
+) -> Vec<InfoLine> {
     use fp_model::NormalizationStatus as S;
-    let mut untrimmed = track.clone();
-    untrimmed.loudness_edit.trim_db = 0.0;
-    let auto = fp_model::normalization(config, &untrimmed, bit_perfect);
-    let reason = match auto.status {
-        S::Off => Some("loudness-no-gain-off"),
-        S::BitPerfect => Some("loudness-no-gain-bit-perfect"),
-        S::Excluded => Some("loudness-no-gain-excluded"),
-        S::NotMeasured => Some("loudness-no-gain-unmeasured"),
-        S::Silent => Some("loudness-no-gain-silent"),
-        S::Applied { .. } => None,
-    };
-    if let Some(key) = reason {
-        let mut lines = vec![Message::new(key, &[])];
-        if !config.normalize {
-            lines.push(Message::new("loudness-off-note", &[]));
+    let result = |db: f32| InfoLine::text(InfoKind::Result, "info-result", gain_text(db));
+    let full = fp_model::normalization(config, track, bit_perfect);
+    if let Some(n) = actual
+        && *n != full
+    {
+        return vec![
+            InfoLine {
+                kind: InfoKind::Note,
+                label: Message::new("tip-gain-earlier-settings", &[]),
+                value: InfoValue::Text(String::new()),
+            },
+            result(n.gain_db),
+        ];
+    }
+    let mut lines = Vec::new();
+    match track.loudness {
+        Some(m) => {
+            lines.push(InfoLine::text(
+                InfoKind::Measured,
+                "info-measured",
+                m.integrated_lufs
+                    .map_or_else(|| "—".to_owned(), |l| format!("{} LUFS", decimal(l))),
+            ));
+            lines.push(InfoLine::text(
+                InfoKind::TruePeak,
+                "info-true-peak",
+                format!("{} dBTP", decimal(m.true_peak_dbtp)),
+            ));
         }
-        return lines;
-    }
-    let mut lines = vec![Message::new(
-        "loudness-auto-gain",
-        &[("gain", signed_db(auto.gain_db))],
-    )];
-    let trim = fp_model::trim_in_use(config, &track.loudness_edit);
-    let status = if trim == 0.0 {
-        auto.status
-    } else {
-        let full = fp_model::normalization(config, track, bit_perfect);
-        lines.push(Message::new(
-            "loudness-trimmed-gain",
-            &[("gain", signed_db(full.gain_db))],
-        ));
-        full.status
-    };
-    if let S::Applied { limited } = status {
-        lines.extend(limit_note(config, track, trim, limited));
-    }
-    lines
-}
-
-/// The note for a gain that a limit held back, with the gain that was wanted.
-fn limit_note(
-    config: &fp_model::LoudnessConfig,
-    track: &Track,
-    trim: f32,
-    limited: Option<fp_model::GainLimit>,
-) -> Option<Message> {
-    use fp_model::GainLimit;
-    let measured = track.loudness.and_then(|m| m.integrated_lufs)?;
-    let wanted = signed_db(fp_model::wanted_gain_db(config, measured, trim));
-    match limited? {
-        GainLimit::TruePeak => Some(Message::new(
-            "tip-gain-limited-peak",
-            &[
-                ("ceiling", decimal(config.true_peak_ceiling_dbtp)),
-                ("wanted", wanted),
-            ],
-        )),
-        GainLimit::MaxBoost => Some(Message::new(
-            "tip-gain-limited-boost",
-            &[("max", decimal(config.max_boost_db)), ("wanted", wanted)],
+        None => lines.push(InfoLine::message(
+            InfoKind::Measured,
+            "info-measured",
+            Message::new("info-not-measured", &[]),
         )),
     }
-}
-
-/// N19: the loudness lines of the track tooltip, drawn under its fields.
-/// The trim is the one in use under `config` (N7), with the saved one
-/// beside it when a lowered maximum limits it by more than the precision
-/// shown.
-pub fn loudness_lines(track: &Track, config: &fp_model::LoudnessConfig) -> Vec<Message> {
-    let mut lines = vec![match track.loudness {
-        Some(m) => Message::new(
-            "track-loudness",
-            &[
-                (
-                    "lufs",
-                    m.integrated_lufs.map_or_else(|| "—".to_owned(), decimal),
-                ),
-                ("tp", decimal(m.true_peak_dbtp)),
-            ],
-        ),
-        None => Message::new("track-loudness-unmeasured", &[]),
-    }];
+    lines.push(InfoLine::text(
+        InfoKind::Target,
+        "info-target",
+        format!("{} LUFS", decimal(config.target_lufs)),
+    ));
+    // The automatic gain is the plain difference to the target; the trim and
+    // the limits come after it, so the lines add up to the result.
+    let measured = track.loudness.and_then(|m| m.integrated_lufs);
     let edit = track.loudness_edit;
-    if edit.excluded {
-        lines.push(Message::new("track-loudness-excluded", &[]));
-    } else if edit.trim_db.is_finite() && edit.trim_db != 0.0 {
-        let in_use = signed_db(fp_model::trim_in_use(config, &edit));
+    let none = if edit.excluded {
+        Some("info-none-excluded")
+    } else if bit_perfect {
+        Some("info-none-bit-perfect")
+    } else if !config.normalize {
+        Some("info-none-off")
+    } else if track.loudness.is_none() {
+        Some("info-none-unmeasured")
+    } else if measured.is_none() {
+        Some("info-none-silent")
+    } else {
+        None
+    };
+    lines.push(match (none, measured) {
+        (None, Some(lufs)) => InfoLine::text(
+            InfoKind::AutoGain,
+            "info-auto-gain",
+            gain_text(fp_model::wanted_gain_db(config, lufs, 0.0)),
+        ),
+        (key, _) => InfoLine::message(
+            InfoKind::AutoGain,
+            "info-auto-gain",
+            Message::new(key.unwrap_or("info-none-silent"), &[]),
+        ),
+    });
+    let trim = fp_model::trim_in_use(config, &edit);
+    let has_trim = !edit.excluded && edit.trim_db.is_finite() && edit.trim_db != 0.0;
+    if has_trim {
+        let in_use = signed_db(trim);
         let saved = signed_db(edit.trim_db);
         // Compared as shown: a limit below the precision shown is no limit
         // the operator could read.
         lines.push(if in_use == saved {
-            Message::new("track-loudness-trim", &[("trim", in_use)])
+            InfoLine::text(InfoKind::Trim, "info-trim", format!("{in_use} dB"))
         } else {
-            Message::new(
-                "track-loudness-trim-limited",
-                &[("trim", in_use), ("saved", saved)],
+            InfoLine::message(
+                InfoKind::Trim,
+                "info-trim",
+                Message::new(
+                    "info-trim-limited",
+                    &[
+                        ("trim", in_use),
+                        ("saved", saved),
+                        ("max", decimal(fp_model::max_trim_in_use(config))),
+                    ],
+                ),
             )
         });
     }
+    if let S::Applied {
+        limited: Some(limit),
+    } = full.status
+        && let Some(lufs) = measured
+    {
+        use fp_model::GainLimit;
+        if has_trim {
+            lines.push(InfoLine::text(
+                InfoKind::Wanted,
+                "info-wanted",
+                gain_text(fp_model::wanted_gain_db(config, lufs, trim)),
+            ));
+        }
+        lines.push(InfoLine::message(
+            InfoKind::Limit,
+            "info-limit",
+            match limit {
+                GainLimit::TruePeak => Message::new(
+                    "info-limit-peak",
+                    &[("ceiling", decimal(config.true_peak_ceiling_dbtp))],
+                ),
+                GainLimit::MaxBoost => {
+                    Message::new("info-limit-boost", &[("max", decimal(config.max_boost_db))])
+                }
+            },
+        ));
+    }
+    if !config.normalize {
+        lines.push(InfoLine {
+            kind: InfoKind::Note,
+            label: Message::new("loudness-off-note", &[]),
+            value: InfoValue::Text(String::new()),
+        });
+    }
+    lines.push(result(match full.status {
+        S::Applied { .. } => full.gain_db,
+        _ => 0.0,
+    }));
     lines
 }
 

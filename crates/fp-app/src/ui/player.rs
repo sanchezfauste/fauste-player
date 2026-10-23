@@ -495,7 +495,7 @@ fn header(
                 }
                 // N18: the gain of the source on air, left of the BP badge.
                 if let Some(gain) = &gain {
-                    gain.draw(ui);
+                    gain.draw(ui, t);
                 }
             });
         },
@@ -503,13 +503,18 @@ fn header(
     super::panels::header_menu(&background, scene, view_state, Panel::Player(id));
 }
 
+/// The width of the gain badge's tooltip.
+const GAIN_TIP_WIDTH: f32 = 320.0;
+
 /// The gain badge of the header (loudness normalization spec N18), measured:
 /// a tile named by its tooltip, as the BP badge, with a border in its tone.
 /// Its width is that of the widest gain ("-00.0 dB"), so the header does not
 /// shift when the gain changes.
 struct GainBadgeLayout {
     text: String,
-    tip: String,
+    /// The tooltip as plain text: the tile's accessible name.
+    name: String,
+    tip: Vec<view::InfoLine>,
     content: Color32,
     width: f32,
 }
@@ -517,12 +522,7 @@ struct GainBadgeLayout {
 impl GainBadgeLayout {
     fn new(ui: &Ui, t: &crate::i18n::I18n, badge: &view::GainBadge) -> Self {
         let text = widgets::tr_message(t, &badge.text);
-        let tip = badge
-            .tip
-            .iter()
-            .map(|m| widgets::tr_message(t, m))
-            .collect::<Vec<_>>()
-            .join(" ");
+        let name = widgets::info_text(t, &badge.tip);
         let content = match badge.tone {
             view::BadgeTone::Normal => theme::ACCENT,
             view::BadgeTone::Amber => theme::AMBER,
@@ -543,16 +543,17 @@ impl GainBadgeLayout {
         Self {
             width: measure(&text).max(measure(&widest)) + 12.0,
             text,
-            tip,
+            name,
+            tip: badge.tip.clone(),
             content,
         }
     }
 
-    fn draw(&self, ui: &mut Ui) {
-        widgets::tile(
+    fn draw(&self, ui: &mut Ui, t: &crate::i18n::I18n) {
+        let response = widgets::tile_without_tooltip(
             ui,
             vec2(self.width, 20.0),
-            &self.tip,
+            &self.name,
             false,
             TileStyle {
                 border: self.content,
@@ -570,6 +571,10 @@ impl GainBadgeLayout {
                 );
             },
         );
+        response.on_hover_ui(|ui| {
+            ui.set_width(GAIN_TIP_WIDTH.min((ui.ctx().content_rect().width() - 16.0).max(120.0)));
+            super::loudness_edit::info_block(ui, t, &self.tip);
+        });
     }
 }
 

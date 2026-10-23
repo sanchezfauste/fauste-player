@@ -582,8 +582,12 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     // N21: the loudness controls of the cart's track, as in the waveform's
     // Loudness… popup; the measurement is the hint.
     if let Some(track) = cart.track.and_then(|id| scene.state.library.get(id)) {
-        let measurement = loudness_edit::measurement(scene, track);
-        row(ui, &t.tr("loudness-exclude"), Some(&measurement), |ui| {
+        loudness_edit::info_block(
+            ui,
+            t,
+            &loudness_edit::info(scene, track, Some(fp_model::Holder::CartwallMain), None),
+        );
+        row(ui, &t.tr("loudness-exclude"), None, |ui| {
             loudness_edit::exclude(ui, scene, track)
         });
         row(
@@ -593,20 +597,6 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             |ui| {
                 loudness_edit::trim(ui, scene, track);
             },
-        );
-        // The gain lines are long: the whole width, not the label column.
-        ui.add(
-            egui::Label::new(
-                RichText::new(loudness_edit::gain_text(
-                    scene,
-                    track,
-                    Some(fp_model::Holder::CartwallMain),
-                ))
-                .font(super::super::widgets::font(12.0))
-                .color(theme::NEUTRAL_400),
-            )
-            .selectable(false)
-            .wrap(),
         );
     }
 }

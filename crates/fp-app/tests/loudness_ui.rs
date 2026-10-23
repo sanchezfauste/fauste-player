@@ -59,7 +59,7 @@ fn n18_the_header_shows_the_gain_and_says_why() {
     h.run_steps(2);
     // The tile's accessible name is its tooltip, as for the BP badge.
     assert!(
-        h.query_by_label_contains("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+        h.query_by_label_contains("Integrated loudness: −20.0 LUFS")
             .is_some()
     );
     assert!(
@@ -119,7 +119,7 @@ fn n18_a_bit_perfect_player_plays_at_unity_gain_and_says_so() {
     let (mut h, _fake) = harness(s);
     h.run_steps(2);
     assert!(
-        h.query_by_label_contains("No automatic gain: bit-perfect output plays tracks unaltered")
+        h.query_by_label_contains("Automatic gain: none, bit-perfect")
             .is_some()
     );
     assert!(h.query_by_label_contains("brings the measured").is_none());
@@ -150,10 +150,10 @@ fn n19_the_row_tooltip_shows_the_loudness() {
     h.get_by_label("Song 3").hover();
     h.run_steps(40);
     assert!(
-        h.query_by_label("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+        h.query_by_label("Integrated loudness: −20.0 LUFS")
             .is_some()
     );
-    assert!(h.query_by_label("Excluded from normalization").is_none());
+    assert!(h.query_by_label("Automatic gain: none, excluded").is_none());
 }
 
 #[test]
@@ -173,12 +173,18 @@ fn n19_the_row_tooltip_shows_the_edit() {
     let (mut h, _) = harness(s);
     h.get_by_label("Song 3").hover();
     h.run_steps(40);
-    assert!(h.query_by_label("Excluded from normalization").is_some());
+    assert!(h.query_by_label("Automatic gain: none, excluded").is_some());
 }
 
 /// Opens the waveform's context menu of player 1 and picks Loudness….
 fn open_popup(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>) {
-    let wave = h.get_by_label("Waveform: click to seek").rect();
+    open_popup_in(h, "en-US");
+}
+
+/// As `open_popup`, in the interface language `lang`.
+fn open_popup_in(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, lang: &str) {
+    let t = fp_app::i18n::I18n::new(Some(lang));
+    let wave = h.get_by_label(&t.tr("tip-waveform")).rect();
     h.event(Event::PointerMoved(wave.center()));
     for pressed in [true, false] {
         h.event(Event::PointerButton {
@@ -189,7 +195,7 @@ fn open_popup(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>) {
         });
     }
     h.run_steps(2);
-    h.get_by_label("Loudness…").click();
+    h.get_by_label(&t.tr("wave-loudness")).click();
     h.run_steps(2);
 }
 
@@ -210,7 +216,7 @@ fn n20_the_popup_shows_the_measurement_and_excludes_the_track() {
     h.run_steps(2);
     open_popup(&mut h);
     assert!(
-        h.query_by_label("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+        h.query_by_label("Integrated loudness: −20.0 LUFS")
             .is_some()
     );
     fake.take_sent();
@@ -419,7 +425,7 @@ fn n21_the_cart_editor_has_the_same_controls() {
     h.get_by_label("Edit…").click();
     h.run_steps(3);
     assert!(
-        h.query_by_label("Loudness: −12.0 LUFS, true peak −1.5 dBTP")
+        h.query_by_label("Integrated loudness: −12.0 LUFS")
             .is_some()
     );
     // The editor is below the grid: scroll to it first, as a user would.
@@ -549,7 +555,7 @@ fn n20_the_row_menu_opens_the_popup_of_that_track() {
     h.get_by_label("Loudness…").click();
     h.run_steps(2);
     assert!(
-        h.query_by_label("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+        h.query_by_label("Integrated loudness: −20.0 LUFS")
             .is_some()
     );
     fake.take_sent();
@@ -598,7 +604,7 @@ fn i4_the_popup_shows_the_automatic_gain_and_the_gain_with_trim() {
             .count()
             >= 2
     );
-    assert!(h.query_by_label_contains("Gain with trim").is_none());
+    assert!(h.query_by_label_contains("Trim: ").is_none());
     fake.take_sent();
     h.get_by_role_and_label(Role::Slider, "Trim").focus();
     h.run_steps(1);
@@ -610,7 +616,7 @@ fn i4_the_popup_shows_the_automatic_gain_and_the_gain_with_trim() {
             .is_some()
     );
     assert!(
-        h.query_by_label_contains("Gain with trim: +4.5 dB")
+        h.query_by_label_contains("Resulting gain: +4.5 dB")
             .is_some()
     );
 }
@@ -623,7 +629,7 @@ fn i4_the_popup_says_why_there_is_no_automatic_gain() {
     h.run_steps(2);
     open_popup(&mut h);
     assert!(
-        h.query_by_label_contains("Automatic gain: none, normalization is off")
+        h.query_by_label_contains("Automatic gain: none, normalization off")
             .is_some()
     );
     assert!(
@@ -670,7 +676,7 @@ fn i4_a_bit_perfect_player_shows_no_automatic_gain() {
     h.run_steps(2);
     open_popup(&mut h);
     assert!(
-        h.query_by_label_contains("No automatic gain: bit-perfect output plays tracks unaltered")
+        h.query_by_label_contains("Automatic gain: none, bit-perfect")
             .is_some()
     );
 }
@@ -687,5 +693,225 @@ fn i4_the_popup_says_a_sounding_track_changes_on_its_next_load() {
     assert!(
         h.query_by_label_contains("Added to the automatic gain")
             .is_some()
+    );
+}
+
+/// The lines `gain_info` gives for the first library track, as `Label:
+/// value` in `lang`.
+fn expected_lines(s: &AppState, lang: &str) -> Vec<String> {
+    let t = fp_app::i18n::I18n::new(Some(lang));
+    let track = s.library.iter().next().unwrap();
+    let lines = fp_app::ui::view::gain_info(track, &s.config.loudness, false, None);
+    fp_app::ui::widgets::info_text(&t, &lines)
+        .split('\n')
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn j1_the_badge_the_editor_and_the_row_tooltip_show_the_same_lines() {
+    let s = on_air();
+    let expected = expected_lines(&s, "en-US");
+    assert!(expected.len() >= 5);
+    assert_eq!(expected.last().unwrap(), "Resulting gain: +4.0 dB");
+    assert!(expected.contains(&"Target: −16.0 LUFS".to_owned()));
+    let (mut h, _) = harness(s);
+    h.run_steps(2);
+    // The badge: one accessible name, the lines in order.
+    assert!(
+        h.query_by_label(&expected.join("\n")).is_some(),
+        "the badge is named by all the lines, in order"
+    );
+    // The editor shows the same block above its controls.
+    open_popup(&mut h);
+    for line in &expected {
+        assert!(
+            h.query_all_by_label(line).count() >= 1,
+            "the editor shows {line}"
+        );
+    }
+    let tops: Vec<f32> = expected
+        .iter()
+        .map(|l| h.query_all_by_label(l).last().unwrap().rect().top())
+        .collect();
+    assert!(tops.windows(2).all(|w| w[0] < w[1]), "in order: {tops:?}");
+    let trim = h.get_by_role_and_label(Role::Slider, "Trim").rect();
+    assert!(*tops.last().unwrap() < trim.top(), "above the controls");
+    // The row tooltip too.
+    let (mut h, _) = harness(on_air());
+    h.get_by_label("Song 3").hover();
+    h.run_steps(40);
+    for line in &expected {
+        assert!(h.query_by_label(line).is_some(), "the row shows {line}");
+    }
+}
+
+#[test]
+fn j1_a_long_language_and_a_narrow_window_keep_the_lines_inside_and_in_order() {
+    let mut s = on_air();
+    s.config.ui.language = Some("de-DE".to_owned());
+    let expected = expected_lines(&s, "de-DE");
+    for width in [1000.0_f32, 420.0] {
+        let mut first = s.clone();
+        first.config.ui.language = None;
+        let (mut h, fake) = support::harness_sized(first, egui::vec2(width, 700.0), |ui| ui);
+        // The interface follows the configured language from a snapshot.
+        fake.state.store(std::sync::Arc::new(s.clone()));
+        h.run_steps(4);
+        h.get_by_label("Song 3").hover();
+        h.run_steps(40);
+        let rects: Vec<egui::Rect> = expected
+            .iter()
+            .map(|l| {
+                h.query_by_label(l)
+                    .unwrap_or_else(|| panic!("{l} at {width}"))
+                    .rect()
+            })
+            .collect();
+        for r in &rects {
+            assert!(r.left() >= 0.0 && r.right() <= width, "{r:?} in {width}");
+        }
+        assert!(
+            rects.windows(2).all(|w| w[0].top() < w[1].top()),
+            "{rects:?}"
+        );
+    }
+}
+
+/// Every piece of text painted this frame, with the rectangle it covers.
+fn painted_texts(
+    h: &egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+) -> Vec<(String, egui::Rect)> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match shape {
+            egui::Shape::Text(t) => out.push((
+                t.galley.text().to_owned(),
+                t.galley.rect.translate(t.pos.to_vec2()),
+            )),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
+}
+
+/// The text that `after` paints and `before` did not: what a tooltip or a
+/// popup added.
+fn added_texts(
+    before: &[(String, egui::Rect)],
+    after: Vec<(String, egui::Rect)>,
+) -> Vec<(String, egui::Rect)> {
+    let mut rest = before.to_vec();
+    after
+        .into_iter()
+        .filter(|a| match rest.iter().position(|b| b == a) {
+            Some(i) => {
+                rest.swap_remove(i);
+                false
+            }
+            None => true,
+        })
+        .collect()
+}
+
+fn assert_text_fits(added: &[(String, egui::Rect)], width: f32, what: &str) {
+    assert!(
+        added.len() > 8,
+        "{what}: the lines are painted ({})",
+        added.len()
+    );
+    for (text, r) in added {
+        assert!(
+            r.left() >= -0.5 && r.right() <= width + 0.5,
+            "{what}: {text:?} {r:?} leaves the {width} px window"
+        );
+    }
+    for (i, (ta, a)) in added.iter().enumerate() {
+        for (tb, b) in &added[i + 1..] {
+            let overlap = a.shrink(0.6).intersect(b.shrink(0.6));
+            assert!(
+                overlap.width() <= 0.0 || overlap.height() <= 0.0,
+                "{what}: {ta:?} {a:?} overlaps {tb:?} {b:?}"
+            );
+        }
+    }
+}
+
+fn german(
+    width: f32,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    AppState,
+) {
+    let mut s = on_air();
+    s.config.ui.language = Some("de-DE".to_owned());
+    let mut first = s.clone();
+    first.config.ui.language = None;
+    let (mut h, fake) = support::harness_sized(first, egui::vec2(width, 700.0), |ui| ui);
+    fake.state.store(std::sync::Arc::new(s.clone()));
+    h.run_steps(4);
+    (h, s)
+}
+
+#[test]
+fn j1_no_text_overflows_or_overlaps_at_200_px_in_german() {
+    let width = 200.0;
+    // The row tooltip.
+    let (mut h, _) = german(width);
+    let before = painted_texts(&h);
+    h.get_by_label("Song 3").hover();
+    h.run_steps(40);
+    assert_text_fits(
+        &added_texts(&before, painted_texts(&h)),
+        width,
+        "row tooltip",
+    );
+    // The gain badge tooltip.
+    let (mut h, _) = german(width);
+    let before = painted_texts(&h);
+    h.get_by_label_contains("Resultierende Verstärkung").hover();
+    h.run_steps(40);
+    assert_text_fits(
+        &added_texts(&before, painted_texts(&h)),
+        width,
+        "badge tooltip",
+    );
+    // The editor popup.
+    let (mut h, _) = german(width);
+    let before = painted_texts(&h);
+    // The row menu: the waveform has no room at this width.
+    h.get_by_label("Song 3").click_secondary();
+    h.run_steps(3);
+    let t = fp_app::i18n::I18n::new(Some("de-DE"));
+    h.get_by_label(&t.tr("menu-loudness")).click();
+    h.run_steps(3);
+    assert_text_fits(&added_texts(&before, painted_texts(&h)), width, "editor");
+}
+
+#[test]
+fn j1_the_row_of_the_entry_on_air_shows_the_gain_its_source_kept() {
+    // The target moved after the track started: the badge says so, and so
+    // does the row tooltip of the entry on air.
+    let mut s = on_air();
+    let (mut h, fake) = harness(s.clone());
+    h.run_steps(2);
+    s.config.loudness.target_lufs = -10.0;
+    fake.state.store(std::sync::Arc::new(s));
+    h.run_steps(4);
+    h.get_all_by_label("Song 1").last().unwrap().hover();
+    h.run_steps(40);
+    assert!(
+        h.query_all_by_label_contains("Gain set when the track was loaded")
+            .count()
+            >= 2,
+        "the badge and the row"
+    );
+    assert!(
+        h.query_by_label("Resulting gain: +4.0 dB").is_some(),
+        "the row shows the gain it kept"
     );
 }

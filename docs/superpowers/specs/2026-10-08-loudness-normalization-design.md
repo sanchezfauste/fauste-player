@@ -361,6 +361,22 @@ band) stays a separate value, whatever the normalization target (Q4).
   the maximum trim)", unless both read the same at the precision shown
   (0.1 dB).
 
+  *Amendment 2026-10-23 (itr07 J1).* Every place that explains a track's
+  gain (the badge tooltip of N18, the row tooltip of N19, the popup of N20
+  and the cart editor of N21) draws one block, built by
+  `view::gain_info` and drawn by one renderer: two columns, label left and
+  value right (tabular digits), in this order: **Integrated loudness**,
+  **True peak** (when measured), **Target**, **Automatic gain** (target minus
+  measured, before trim and limits, or "none" with the reason: normalization off, excluded,
+  bit-perfect, not measured yet, silent), **Trim** (when not 0; the saved
+  value too when the maximum limits it), **Gain wanted** (with a trim) and **Limited by**
+  (only when the true-peak ceiling or the maximum boost held the gain
+  back), a note when normalization is off, and last, under a rule and in
+  bold, **Resulting gain**. The tables above describe what the lines say;
+  the sentences they quote are replaced by these lines. The row tooltip
+  shows the block computed for the player of the list. Lines wrap rather
+  than overflow in long languages and narrow windows.
+
 ### 8.2 Per-track controls
 
 - **N20** The waveform panel's context menu (player column and CUE window,
@@ -375,15 +391,15 @@ band) stays a separate value, whatever the normalization target (Q4).
   keeps editing it when the player moves on, has a Close button, and closes
   by itself when the track leaves the library.
   The slider is a relative trim, 0 for every unedited track, so the popup
-  also shows the gain lines (`view::gain_lines`, from
-  `fp_model::normalization`): "Automatic gain: X dB" (the gain with trim 0,
-  or why there is none: normalization off, excluded, not measured, silent),
-  "Gain with trim: Y dB" when the trim is not 0, the limit that held the
-  gain back with the gain wanted, and a note when normalization is off. A bit-perfect player reads "No automatic gain: bit-perfect output plays tracks unaltered" (the popup keeps the holder it was opened from; the cart editor uses the cartwall Main). A short hint says the trim is added to the automatic gain, and a track that is sounding gets a note that a change applies from its next load. The cart editor draws the gain lines under the Trim row at full width.
+  shows the gain breakdown (`view::gain_info`, from
+  `fp_model::normalization`; see the J1 amendment of N19) above its
+  controls, ending in the resulting gain. A bit-perfect player reads "none,
+  bit-perfect" as its automatic gain (the popup keeps the holder it was
+  opened from; the cart editor uses the cartwall Main). A short hint says the trim is added to the automatic gain, and a track that is sounding gets a note that a change applies from its next load.
 - **N21** The cart edit dialog (where a cart's file and properties are
   edited) shows the same two controls for the cart's track, as two rows
-  ("Exclude from normalization", with the measurement as its hint, and
-  "Trim"). The Trim row's hint holds the same gain lines as N20.
+  ("Exclude from normalization" and "Trim"), under the same gain
+  breakdown as N20.
 
 ### 8.3 Settings
 
@@ -416,14 +432,10 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `tip-gain-earlier-settings` | "Gain set when the track was loaded. Its loudness settings or measurement have changed since; it keeps this gain until it stops." |
 | `loudness-close` | "Close" |
 | `badge-gain` | "{ $gain } dB" |
-| `tip-gain-applied` | (removed in itr06 I26: the tooltip of an applied gain lists `view::loudness_facts`, the lines of the loudness editor: the measurement with its true peak, then the gain lines) |
-| `tip-gain-limited-peak` | "Limited by the true-peak ceiling ({ $ceiling } dBTP)." |
-| `tip-gain-limited-boost` | "Limited by the maximum boost ({ $max } dB)." |
-| `track-loudness` | "Loudness: { $lufs } LUFS, true peak { $tp } dBTP" |
-| `track-loudness-unmeasured` | "Loudness: not measured" |
-| `track-loudness-excluded` | "Excluded from normalization" |
-| `track-loudness-trim` | "Trim { $trim } dB" |
-| `track-loudness-trim-limited` | "Trim { $trim } dB (saved { $saved } dB, limited by the maximum trim)" |
+| `tip-gain-applied`, `tip-gain-limited-*`, `track-loudness*`, `loudness-auto-gain`, `loudness-no-gain-*`, `loudness-trimmed-gain` | (removed in itr07 J1: replaced by the labelled lines below) |
+| `info-measured`, `info-true-peak`, `info-target`, `info-auto-gain`, `info-trim`, `info-wanted`, `info-limit`, `info-result` | "Integrated loudness", "True peak", "Target", "Automatic gain", "Trim", "Gain wanted", "Limited by", "Resulting gain" (the labels of the gain breakdown) |
+| `info-not-measured`, `info-none-off`, `info-none-excluded`, `info-none-bit-perfect`, `info-none-unmeasured`, `info-none-silent` | "not measured", "none, normalization off", "none, excluded", "none, bit-perfect", "none, not measured yet", "none, silent" |
+| `info-trim-limited`, `info-limit-peak`, `info-limit-boost` | "{ $trim } dB (saved { $saved } dB)", "true-peak ceiling ({ $ceiling } dBTP)", "maximum boost ({ $max } dB)" |
 | `wave-loudness` | "Loudness…" |
 | `loudness-exclude` | "Exclude from normalization" |
 | `loudness-trim` | "Trim" |

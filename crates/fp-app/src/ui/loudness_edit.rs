@@ -10,34 +10,163 @@ use fp_model::{Command, Track, TrackId};
 use super::app::{Scene, ViewState};
 use super::theme;
 use super::view;
-use super::widgets::{self, TileStyle, font, font_medium};
+use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
+use crate::i18n::I18n;
 
 /// The popup's width.
 const WIDTH: f32 = 300.0;
 
-/// The measurement line of `track` ("Loudness: −14.2 LUFS, true peak …" or
-/// "Loudness: not measured").
-pub(crate) fn measurement(scene: &Scene<'_>, track: &Track) -> String {
-    view::loudness_facts(track, &scene.state.config.loudness, false)
-        .first()
-        .map(|m| widgets::tr_message(scene.i18n, m))
-        .unwrap_or_default()
-}
-
-/// The gain lines of `track` (automatic gain, gain with trim, limit and
-/// normalization-off notes), one per line.
-pub(crate) fn gain_text(
+/// The gain information of `track` as the player it plays on gives it
+/// (`holder`, when known): see [`view::gain_info`]. `on_air` is the gain a
+/// source of this track on air started with.
+pub(crate) fn info(
     scene: &Scene<'_>,
     track: &Track,
     holder: Option<fp_model::Holder>,
-) -> String {
+    on_air: Option<&fp_model::Normalization>,
+) -> Vec<view::InfoLine> {
     let bit_perfect = holder.is_some_and(|h| fp_model::holder_bit_perfect(scene.state, h));
-    view::loudness_facts(track, &scene.state.config.loudness, bit_perfect)
-        .iter()
-        .skip(1)
-        .map(|m| widgets::tr_message(scene.i18n, m))
-        .collect::<Vec<_>>()
-        .join("\n")
+    view::gain_info(track, &scene.state.config.loudness, bit_perfect, on_air)
+}
+
+/// The gap between the label and the value column.
+const GAP: f32 = 12.0;
+
+/// Draws the gain information in the width the `ui` has: label on the left,
+/// value on the right (tabular digits), notes across, and the resulting gain
+/// last under a rule, in bold. Where a tooltip, the loudness editor and the
+/// playlist row show a track's gain, this is what they draw. A label or a
+/// value too long for its line wraps (the label to at most half the width).
+pub(crate) fn info_block(ui: &mut Ui, t: &I18n, lines: &[view::InfoLine]) {
+    let width = ui.available_width();
+    for line in lines {
+        let label = widgets::tr_message(t, &line.label);
+        match line.kind {
+            view::InfoKind::Note => {
+                ui.add_space(2.0);
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(label)
+                            .font(font(11.0))
+                            .color(theme::NEUTRAL_500),
+                    )
+                    .selectable(false)
+                    .wrap(),
+                );
+            }
+            view::InfoKind::Result => {
+                ui.add_space(3.0);
+                let y = ui.cursor().top();
+                ui.painter().hline(
+                    ui.min_rect().x_range(),
+                    y,
+                    Stroke::new(1.0, theme::NEUTRAL_700),
+                );
+                ui.add_space(5.0);
+                info_row(
+                    ui,
+                    width,
+                    &label,
+                    &widgets::info_value(t, &line.value),
+                    true,
+                );
+            }
+            _ => info_row(
+                ui,
+                width,
+                &label,
+                &widgets::info_value(t, &line.value),
+                false,
+            ),
+        }
+    }
+}
+
+/// A galley that breaks a word wider than `wrap` rather than overflow.
+fn galley(
+    painter: &egui::Painter,
+    text: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+    wrap: f32,
+) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple(text.to_owned(), font, color, wrap);
+    job.wrap.break_anywhere = true;
+    painter.layout_job(job)
+}
+
+fn info_row(ui: &mut Ui, width: f32, label: &str, value: &str, strong: bool) {
+    let (font, label_color) = if strong {
+        (font_semibold(13.0), theme::TEXT)
+    } else {
+        (font(12.0), theme::NEUTRAL_400)
+    };
+    let value_color = theme::TEXT;
+    let painter = ui.painter().clone();
+    let natural_label = painter
+        .layout_no_wrap(label.to_owned(), font.clone(), label_color)
+        .size()
+        .x;
+    let natural_value = widgets::tabular_size(&painter, value, &font).x;
+    let one_line = natural_label + GAP + natural_value <= width;
+    let label_wrap = if one_line {
+        natural_label
+    } else {
+        natural_label.min(width * 0.5)
+    };
+    let label_galley = galley(&painter, label, font.clone(), label_color, label_wrap);
+    // Where the label's longest word is wider than its column, the value
+    // goes under it instead of beside it.
+    let stacked = !one_line && label_galley.size().x > label_wrap + 0.5;
+    let label_galley = if stacked {
+        galley(&painter, label, font.clone(), label_color, width)
+    } else {
+        label_galley
+    };
+    let value_galley = (!one_line).then(|| {
+        let wrap = if stacked {
+            width
+        } else {
+            (width - label_galley.size().x - GAP).max(20.0)
+        };
+        galley(&painter, value, font.clone(), value_color, wrap)
+    });
+    let height = match (&value_galley, stacked) {
+        (Some(v), true) => label_galley.size().y + v.size().y,
+        (Some(v), false) => label_galley.size().y.max(v.size().y),
+        (None, _) => label_galley
+            .size()
+            .y
+            .max(widgets::tabular_size(&painter, value, &font).y),
+    };
+    let (rect, response) = ui.allocate_exact_size(vec2(width, height), egui::Sense::hover());
+    let name = format!("{label}: {value}");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, name.clone()));
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    let label_height = label_galley.size().y;
+    painter.galley(rect.left_top(), label_galley, label_color);
+    match value_galley {
+        Some(galley) => {
+            let x = rect.right() - galley.size().x;
+            let y = if stacked {
+                rect.top() + label_height
+            } else {
+                rect.top()
+            };
+            painter.galley(egui::pos2(x, y), galley, value_color);
+        }
+        None => {
+            widgets::paint_tabular_right(
+                &painter,
+                egui::pos2(rect.right(), rect.top()),
+                value,
+                &font,
+                value_color,
+            );
+        }
+    }
 }
 
 fn send(scene: &Scene<'_>, track: TrackId, excluded: bool, trim_db: f32) {
@@ -75,6 +204,9 @@ pub(crate) fn trim(ui: &mut Ui, scene: &Scene<'_>, track: &Track) {
     let max = max_trim(scene);
     let mut value = trim_shown(scene, track);
     let label = scene.i18n.tr("loudness-trim");
+    // The rail gives way in a narrow window, so the value box stays inside.
+    let rail = (ui.available_width() - 64.0).clamp(30.0, ui.spacing().slider_width);
+    ui.spacing_mut().slider_width = rail;
     let response = ui.add_enabled(
         !excluded,
         egui::Slider::new(&mut value, -max..=max)
@@ -136,7 +268,7 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                 .inner_margin(12.0),
         )
         .show(ctx, |ui| {
-            ui.set_width(WIDTH);
+            ui.set_width(WIDTH.min((ctx.content_rect().width() - 40.0).max(150.0)));
             ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
             ui.horizontal(|ui| {
                 ui.add(
@@ -178,16 +310,8 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                 .selectable(false)
                 .truncate(),
             );
-            ui.add(
-                egui::Label::new(
-                    RichText::new(measurement(scene, track))
-                        .font(font(12.0))
-                        .color(theme::NEUTRAL_400),
-                )
-                .selectable(false)
-                .wrap(),
-            );
-            ui.horizontal(|ui| {
+            info_block(ui, t, &info(scene, track, holder, None));
+            ui.horizontal_wrapped(|ui| {
                 exclude(ui, scene, track);
                 ui.add(
                     egui::Label::new(
@@ -195,7 +319,8 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                             .font(font(13.0))
                             .color(theme::TEXT),
                     )
-                    .selectable(false),
+                    .selectable(false)
+                    .wrap(),
                 );
             });
             ui.horizontal(|ui| {
@@ -218,20 +343,17 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                 .selectable(false)
                 .wrap(),
             );
-            let mut text = gain_text(scene, track, holder);
             if sounding(scene, id) {
-                text.push('\n');
-                text.push_str(&t.tr("loudness-trim-next-load"));
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(t.tr("loudness-trim-next-load"))
+                            .font(font(12.0))
+                            .color(theme::NEUTRAL_400),
+                    )
+                    .selectable(false)
+                    .wrap(),
+                );
             }
-            ui.add(
-                egui::Label::new(
-                    RichText::new(text)
-                        .font(font(12.0))
-                        .color(theme::NEUTRAL_400),
-                )
-                .selectable(false)
-                .wrap(),
-            );
         });
     if close {
         view_state.loudness_popup = None;
