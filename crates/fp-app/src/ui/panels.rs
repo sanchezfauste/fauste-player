@@ -280,6 +280,8 @@ fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Pane
     let layout = &scene.state.layout;
     let shown = !layout.is_hidden(panel);
     let on_air = !shown && panel_layout::panel_on_air(scene.state, panel);
+    // The state icon shows whether the panel is shown or hidden.
+    let activity = panel_layout::panel_activity(scene.state, panel);
     let last = shown && context.shown == 1;
     let enabled = !layout.locked && !last;
     let key = match (shown, on_air) {
@@ -318,12 +320,26 @@ fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Pane
         style,
         |p, r, c| {
             p.text(r.center(), egui::Align2::CENTER_CENTER, name, font(11.0), c);
-            if on_air {
-                p.rect_filled(
-                    Rect::from_min_size(pos2(r.right() - 8.0, r.top() + 2.0), vec2(6.0, 6.0)),
-                    0.0,
-                    theme::ON_AIR_TEXT,
-                );
+            let corner = pos2(r.right() - 8.0, r.top() + 2.0);
+            match activity {
+                panel_layout::PanelActivity::Playing => {
+                    p.rect_filled(
+                        Rect::from_min_size(corner, vec2(6.0, 6.0)),
+                        0.0,
+                        theme::ON_AIR_TEXT,
+                    );
+                }
+                panel_layout::PanelActivity::Paused => {
+                    // Two bars: the pause icon, amber like a paused Pause button.
+                    for dx in [0.0, 4.0] {
+                        p.rect_filled(
+                            Rect::from_min_size(pos2(corner.x + dx, corner.y), vec2(2.0, 6.0)),
+                            0.0,
+                            theme::AMBER_TEXT,
+                        );
+                    }
+                }
+                panel_layout::PanelActivity::Idle => {}
             }
         },
     );

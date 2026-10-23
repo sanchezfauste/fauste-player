@@ -450,6 +450,27 @@ pub fn panel_on_air(state: &AppState, panel: Panel) -> bool {
     }
 }
 
+/// What a panel's tile shows as its state icon (itr07 J7), shown or hidden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelActivity {
+    Idle,
+    Playing,
+    Paused,
+}
+
+/// A player is playing or paused; the cartwall plays while any cart does.
+pub fn panel_activity(state: &AppState, panel: Panel) -> PanelActivity {
+    match panel {
+        Panel::Player(id) => match state.player(id).map(|p| p.transport) {
+            Ok(Transport::Playing) => PanelActivity::Playing,
+            Ok(Transport::Paused) => PanelActivity::Paused,
+            _ => PanelActivity::Idle,
+        },
+        Panel::Cartwall if !state.cartwall.playing.is_empty() => PanelActivity::Playing,
+        Panel::Cartwall => PanelActivity::Idle,
+    }
+}
+
 /// RL16: what ends a maximised panel when it changes: the players, the
 /// hidden panels, the cartwall's dock and the lock. A resize does not.
 #[derive(Debug, Clone, PartialEq)]

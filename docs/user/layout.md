@@ -17,8 +17,9 @@ shown again comes back at its width.
 
 Hiding only takes a panel off the screen. A hidden player keeps playing,
 and its number key, MIDI, the remote API, its CUE window and automation
-still control it. While a hidden panel is on air its tile shows a red dot:
-a player that is playing or paused, or the cartwall while a cart plays.
+still control it. A tile shows the state of its panel, whether the panel is shown or hidden:
+a red dot while a player is playing (or the cartwall while a cart plays)
+and two amber bars, like a Pause button, while a player is paused.
 
 Hiding a player clears its selected track, so **Delete** cannot remove a
 track you cannot see. Files dropped on the window away from a list go to

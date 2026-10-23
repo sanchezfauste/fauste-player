@@ -193,9 +193,11 @@ for the interface's notice, if one ever reaches it.
     into the clock and the buttons on the right: when they do not fit,
     they scroll sideways, and the layout button stays in view. Every
     tile and button of the top bar has the same height and centre line.
-  - **On-air dot.** The tile of a hidden panel that is on air shows a red
-    dot. For a player, that is a current entry that is not stopped. For
-    the cartwall, any cart playing.
+  - **State icon.** The tile of a panel, shown or hidden, shows a red dot
+    while a player is playing (or any cart plays, for the cartwall) and
+    two amber bars (the pause icon) while a player is paused; nothing when
+    stopped (itr07 J7). A hidden panel that is playing or paused is also
+    "on air" in the tile's label. The tile keeps its size.
   - **Layout menu.** A layout button opens a menu with:
     - the cartwall's dock: `Bottom`, `Left` or `Right`, with the current
       one checked;
