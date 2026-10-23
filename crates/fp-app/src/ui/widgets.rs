@@ -113,6 +113,9 @@ pub struct TileStyle {
     pub active_fill: Color32,
     /// Whether a disabled tile is painted at 45 % strength (the default).
     pub dim_when_disabled: bool,
+    /// Fill of a disabled tile, when it differs from `fill` (a filled
+    /// button must not look enabled).
+    pub disabled_fill: Option<Color32>,
 }
 
 impl TileStyle {
@@ -126,6 +129,7 @@ impl TileStyle {
             hover_content: theme::TEXT,
             active_fill: theme::NEUTRAL_800,
             dim_when_disabled: true,
+            disabled_fill: None,
         }
     }
 }
@@ -274,7 +278,7 @@ pub fn tile_without_tooltip(
             } else {
                 style.content
             };
-            (style.fill, content)
+            (style.disabled_fill.unwrap_or(style.fill), content)
         } else if response.is_pointer_button_down_on() {
             (style.active_fill, style.hover_content)
         } else if response.hovered() {
@@ -295,6 +299,16 @@ pub fn tile_without_tooltip(
             Stroke::new(style.border_width, border),
             StrokeKind::Inside,
         );
+        if enabled && response.has_focus() {
+            // Keyboard focus: a ring just inside the border, so it never
+            // spills over the tile's neighbours.
+            painter.rect_stroke(
+                rect.shrink(1.0),
+                0.0,
+                Stroke::new(2.0, theme::FOCUS_RING),
+                StrokeKind::Inside,
+            );
+        }
         paint(painter, rect, content);
     }
     response
@@ -1462,6 +1476,12 @@ pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
 /// (27 px wide) within the gap before the meter.
 pub fn fader_axis_x(rect: Rect) -> f32 {
     rect.left() + FADER_KNOB_WIDTH / 2.0 + 2.0
+}
+
+/// The x of the left edge of the fader's track in a column that starts at
+/// `left`.
+pub fn fader_track_left(left: f32) -> f32 {
+    left + FADER_KNOB_WIDTH / 2.0 + 2.0 - FADER_TRACK_WIDTH / 2.0
 }
 
 /// The levels marked beside the fader, in dB from the top; the last, `-inf`,

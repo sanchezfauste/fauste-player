@@ -273,13 +273,16 @@ pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>, right: f32) {
 }
 
 /// One panel tile: a click hides or shows the panel (RL7). Its label says
-/// what a click does; a hidden panel on air shows a red dot. Disabled for
+/// what a click does; a state icon in the corner shows a playing panel (red
+/// dot) or a paused one (amber bars), shown or hidden. Disabled for
 /// the last shown panel and while the layout is locked.
 fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Panel, name: &str) {
     let t = scene.i18n;
     let layout = &scene.state.layout;
     let shown = !layout.is_hidden(panel);
     let on_air = !shown && panel_layout::panel_on_air(scene.state, panel);
+    // The state icon shows whether the panel is shown or hidden.
+    let activity = panel_layout::panel_activity(scene.state, panel);
     let last = shown && context.shown == 1;
     let enabled = !layout.locked && !last;
     let key = match (shown, on_air) {
@@ -309,7 +312,7 @@ fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Pane
         .layout_no_wrap(name.to_owned(), font(11.0), theme::TEXT)
         .size()
         .x
-        + 18.0;
+        + 24.0;
     let response = widgets::tile_without_tooltip(
         ui,
         vec2(width.max(30.0), 24.0),
@@ -318,12 +321,26 @@ fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Pane
         style,
         |p, r, c| {
             p.text(r.center(), egui::Align2::CENTER_CENTER, name, font(11.0), c);
-            if on_air {
-                p.rect_filled(
-                    Rect::from_min_size(pos2(r.right() - 8.0, r.top() + 2.0), vec2(6.0, 6.0)),
-                    0.0,
-                    theme::ON_AIR_TEXT,
-                );
+            let corner = pos2(r.right() - 8.0, r.top() + 2.0);
+            match activity {
+                panel_layout::PanelActivity::Playing => {
+                    p.rect_filled(
+                        Rect::from_min_size(corner, vec2(6.0, 6.0)),
+                        0.0,
+                        theme::ON_AIR_TEXT,
+                    );
+                }
+                panel_layout::PanelActivity::Paused => {
+                    // Two bars: the pause icon, amber like a paused Pause button.
+                    for dx in [0.0, 4.0] {
+                        p.rect_filled(
+                            Rect::from_min_size(pos2(corner.x + dx, corner.y), vec2(2.0, 6.0)),
+                            0.0,
+                            theme::AMBER_TEXT,
+                        );
+                    }
+                }
+                panel_layout::PanelActivity::Idle => {}
             }
         },
     );

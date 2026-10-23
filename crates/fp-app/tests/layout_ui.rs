@@ -2091,3 +2091,109 @@ fn i22_a_stopped_cartwall_lets_the_interface_rest() {
     let (mut h, _fake) = harness(s);
     assert!(h.run_ok().is_some());
 }
+
+/// Amber bars (the pause icon) inside `area`.
+fn pause_bars_in(h: &Harness<'_, AppUi>, area: Rect) -> usize {
+    fn walk(shape: &egui::Shape, area: Rect, n: &mut usize) {
+        match shape {
+            egui::Shape::Rect(r) => {
+                if r.fill == theme::AMBER_TEXT && area.contains_rect(r.rect) {
+                    *n += 1;
+                }
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, area, n)),
+            _ => {}
+        }
+    }
+    let mut n = 0;
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, area, &mut n);
+    }
+    n
+}
+
+#[test]
+fn j7_a_shown_panel_tile_shows_playing_paused_and_nothing_when_stopped() {
+    let (mut h, fake) = harness(state(2, 3));
+    let p1 = fake.player(0);
+    let tile = h.get_by_label("Hide P1").rect();
+    assert!(!red_dot_in(&h, tile) && pause_bars_in(&h, tile) == 0);
+    Controller::send(fake.as_ref(), Command::Play(p1));
+    h.run_steps(2);
+    let tile = h.get_by_label("Hide P1").rect();
+    assert!(red_dot_in(&h, tile), "playing: the dot, panel shown");
+    assert_eq!(pause_bars_in(&h, tile), 0);
+    let size = tile.size();
+    Controller::send(fake.as_ref(), Command::Pause(p1));
+    h.run_steps(2);
+    let tile = h.get_by_label("Hide P1").rect();
+    assert_eq!(pause_bars_in(&h, tile), 2, "paused: the pause icon");
+    assert!(!red_dot_in(&h, tile));
+    assert_eq!(tile.size(), size, "the tile keeps its size");
+    Controller::send(fake.as_ref(), Command::Stop(p1));
+    h.run_steps(2);
+    let tile = h.get_by_label("Hide P1").rect();
+    assert!(!red_dot_in(&h, tile) && pause_bars_in(&h, tile) == 0);
+}
+
+#[test]
+fn j7_a_hidden_paused_panel_shows_the_pause_icon_and_many_players_still_fit() {
+    let (mut h, fake) = harness(state(2, 3));
+    let p1 = fake.player(0);
+    Controller::send(fake.as_ref(), Command::Play(p1));
+    Controller::send(fake.as_ref(), Command::Pause(p1));
+    h.get_by_label("Hide P1").click();
+    h.run_steps(2);
+    let tile = h.get_by_label("Show P1 (on air)").rect();
+    assert_eq!(pause_bars_in(&h, tile), 2);
+    let (mut h, fake) = harness_sized(state(30, 3), vec2(1280.0, 700.0), |ui| ui);
+    Controller::send(fake.as_ref(), Command::Play(fake.player(0)));
+    h.run_steps(2);
+    let settings = h.get_by_label("Settings").rect();
+    assert!(h.get_by_label("Hide P1").rect().right() < settings.left());
+}
+
+#[test]
+fn j7_the_cartwall_tile_shows_the_dot_while_a_cart_plays_shown_or_hidden() {
+    let (mut h, _fake) = harness(cart_on_air(false));
+    h.run_steps(2);
+    let tile = h.get_by_label("Hide Cartwall").rect();
+    assert!(red_dot_in(&h, tile), "shown");
+    assert_eq!(pause_bars_in(&h, tile), 0);
+    h.get_by_label("Hide Cartwall").click();
+    h.run_steps(2);
+    let tile = h.get_by_label("Show Cartwall (on air)").rect();
+    assert!(red_dot_in(&h, tile), "hidden");
+    let (mut h, _fake) = harness(state(2, 3));
+    h.run_steps(2);
+    let tile = h.get_by_label("Hide Cartwall").rect();
+    assert!(!red_dot_in(&h, tile), "no cart playing, no dot");
+}
+
+#[test]
+fn j7_the_state_icon_keeps_air_from_the_tile_text() {
+    fn text_right(h: &Harness<'_, AppUi>, tile: Rect) -> f32 {
+        fn walk(s: &egui::Shape, tile: Rect, right: &mut f32) {
+            match s {
+                egui::Shape::Text(t) if tile.contains(t.pos) => {
+                    let r = t.galley.rect.translate(t.pos.to_vec2());
+                    *right = right.max(r.right());
+                }
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, tile, right)),
+                _ => {}
+            }
+        }
+        let mut right = f32::MIN;
+        for c in &h.output().shapes {
+            walk(&c.shape, tile, &mut right);
+        }
+        right
+    }
+    let (mut h, fake) = harness(state(2, 3));
+    Controller::send(fake.as_ref(), Command::Play(fake.player(0)));
+    h.run_steps(2);
+    let tile = h.get_by_label("Hide P1").rect();
+    let dot = tile.right() - 8.0;
+    let gap = dot - text_right(&h, tile);
+    assert!(gap >= 4.0, "air between the name and the state icon: {gap}");
+}

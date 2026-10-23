@@ -455,6 +455,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                     active_fill: look.active_fill,
                     border_width: 1.0,
                     dim_when_disabled: true,
+                    disabled_fill: None,
                 };
                 // CC8: the play range's waveform, from the peaks the
                 // services thread keeps for the page shown, reduced once

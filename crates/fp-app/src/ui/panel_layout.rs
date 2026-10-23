@@ -438,8 +438,8 @@ impl LiveSplit {
     }
 }
 
-/// RL15: whether `panel` is on air, for the red dot on a hidden panel's
-/// tile: a player whose current entry is playing or paused (as the close
+/// RL15: whether `panel` is on air, for a hidden panel's tile label
+/// (`tip-layout-show-on-air`): a player whose current entry is playing or paused (as the close
 /// guard counts it), or the cartwall while any cart plays.
 pub fn panel_on_air(state: &AppState, panel: Panel) -> bool {
     match panel {
@@ -447,6 +447,27 @@ pub fn panel_on_air(state: &AppState, panel: Panel) -> bool {
             .player(id)
             .is_ok_and(|p| p.transport != Transport::Stopped),
         Panel::Cartwall => !state.cartwall.playing.is_empty(),
+    }
+}
+
+/// What a panel's tile shows as its state icon (itr07 J7), shown or hidden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelActivity {
+    Idle,
+    Playing,
+    Paused,
+}
+
+/// A player is playing or paused; the cartwall plays while any cart does.
+pub fn panel_activity(state: &AppState, panel: Panel) -> PanelActivity {
+    match panel {
+        Panel::Player(id) => match state.player(id).map(|p| p.transport) {
+            Ok(Transport::Playing) => PanelActivity::Playing,
+            Ok(Transport::Paused) => PanelActivity::Paused,
+            _ => PanelActivity::Idle,
+        },
+        Panel::Cartwall if !state.cartwall.playing.is_empty() => PanelActivity::Playing,
+        Panel::Cartwall => PanelActivity::Idle,
     }
 }
 

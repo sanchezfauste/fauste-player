@@ -30,8 +30,11 @@ fn the_fraction_stays_within_zero_and_one() {
 
 type H = egui_kittest::Harness<'static, fp_app::ui::app::AppUi>;
 
-/// Width of the violet bar painted inside `button` (0 when none).
-fn bar_width(h: &H, button: egui::Rect) -> f32 {
+/// The countdown band painted inside `button`, when there is one. The band
+/// takes the tone of its button: green on Play / Next, the button's own
+/// content tone on the neutral ones.
+fn bar(h: &H, button: egui::Rect) -> Option<egui::Rect> {
+    use fp_app::ui::theme;
     fn rects(shape: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
         match shape {
             egui::Shape::Rect(r) => out.push(r.clone()),
@@ -43,12 +46,20 @@ fn bar_width(h: &H, button: egui::Rect) -> f32 {
     for clipped in &h.output().shapes {
         rects(&clipped.shape, &mut all);
     }
-    // Next is dimmed while a fade runs (rule 26), but its bar is not.
-    let colours = [fp_app::ui::theme::ACCENT.gamma_multiply(0.5)];
+    let colours = [
+        theme::play_sweep(),
+        theme::sweep_tone(theme::NEUTRAL_300),
+        theme::sweep_tone(theme::TEXT),
+    ];
     all.iter()
         .filter(|r| colours.contains(&r.fill) && button.expand(0.5).contains_rect(r.rect))
-        .map(|r| r.rect.width())
-        .fold(0.0, f32::max)
+        .map(|r| r.rect)
+        .max_by(|a, b| a.width().total_cmp(&b.width()))
+}
+
+/// Width of the countdown band inside `button` (0 when none).
+fn bar_width(h: &H, button: egui::Rect) -> f32 {
+    bar(h, button).map_or(0.0, |r| r.width())
 }
 
 const NEXT: &str = "Fade into the next track";
@@ -187,4 +198,86 @@ fn a_crossfade_started_by_previous_drains_on_previous_not_on_next() {
     h.run_steps(2);
     assert_eq!(bar_width(&h, previous), 0.0);
     assert!(bar_width(&h, stop) > stop.width() * 0.9);
+}
+
+#[test]
+fn the_sweep_runs_left_to_right_on_every_button() {
+    use fp_app::ui::controller::Controller;
+    let (mut h, fake) = support::harness(support::state(1, 3));
+    let p = fake.player(0);
+    fake.send(Command::Play(p));
+    h.run_steps(3);
+    let next = h.get_by_label(NEXT).rect();
+    let stop = h.get_by_label("Fade stop").rect();
+    fake.send(Command::Play(p)); // crossfade: the band is on Next
+    h.run_steps(2);
+    let first = bar(&h, next).expect("band on Next");
+    h.run_steps(25);
+    let later = bar(&h, next).expect("band on Next");
+    assert!(
+        (first.right() - next.right()).abs() < 0.5 && (later.right() - next.right()).abs() < 0.5,
+        "the band stays on the right edge: {first:?} {later:?}"
+    );
+    assert!(
+        later.left() > first.left() + 5.0,
+        "its left edge moves right: {first:?} {later:?}"
+    );
+    fake.send(Command::FadeStop(p));
+    h.run_steps(2);
+    let first = bar(&h, stop).expect("band on Fade stop");
+    h.run_steps(25);
+    let later = bar(&h, stop).expect("band on Fade stop");
+    assert!((later.right() - stop.right()).abs() < 0.5);
+    assert!(later.left() > first.left() + 3.0, "{first:?} {later:?}");
+}
+
+#[test]
+fn the_sweep_takes_the_tone_of_its_button() {
+    use fp_app::ui::{controller::Controller, theme};
+    let (mut h, fake) = support::harness(support::state(1, 3));
+    let p = fake.player(0);
+    fake.send(Command::Play(p));
+    h.run_steps(3);
+    let next = h.get_by_label(NEXT).rect();
+    fake.send(Command::Play(p));
+    h.run_steps(2);
+    let fill_on = |h: &H, button: egui::Rect| -> Vec<egui::Color32> {
+        fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+            match s {
+                egui::Shape::Rect(r) => out.push(r.clone()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let mut all = Vec::new();
+        for c in &h.output().shapes {
+            walk(&c.shape, &mut all);
+        }
+        all.iter()
+            .filter(|r| button.expand(0.5).contains_rect(r.rect))
+            .map(|r| r.fill)
+            .collect()
+    };
+    let on_next = fill_on(&h, next);
+    assert!(on_next.contains(&theme::play_sweep()), "green on Play/Next");
+    assert!(
+        !on_next.contains(&theme::ACCENT.gamma_multiply(0.5)),
+        "never the violet"
+    );
+    // Previous (a crossfade it started) takes its own neutral tone.
+    let (mut h, fake) = support::harness(support::state(1, 3));
+    let p = fake.player(0);
+    fake.send(Command::Play(p));
+    fake.send(Command::Play(p));
+    let mut s = (**fake.state.load()).clone();
+    s.players[0].fading = false;
+    s.players[0].fade_ms = 0;
+    fake.state.store(std::sync::Arc::new(s));
+    h.run_steps(3);
+    let previous = h.get_by_label("Previous track").rect();
+    fake.send(Command::Previous(p));
+    h.run_steps(2);
+    let on_prev = fill_on(&h, previous);
+    assert!(on_prev.contains(&theme::sweep_tone(theme::NEUTRAL_300)));
+    assert!(!on_prev.contains(&theme::play_sweep()));
 }

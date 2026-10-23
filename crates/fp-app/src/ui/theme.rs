@@ -195,6 +195,38 @@ pub const PLAY_BORDER: Color32 = Color32::from_rgb(0x3e, 0xab, 0x5e);
 pub const PLAY_HOVER_BG: Color32 = Color32::from_rgb(0x14, 0x36, 0x1d);
 pub const PLAY_HOVER: Color32 = Color32::from_rgb(0x93, 0xe4, 0xa4);
 pub const PLAY_ACTIVE_BG: Color32 = Color32::from_rgb(0x1d, 0x4e, 0x2b);
+
+// The big Play / Next button is a filled green button with a white icon
+// (itr07 J4). Every pair below keeps the icon at WCAG >= 3:1 on its fill
+// (`tests/play_button_ui.rs` checks it).
+/// Idle: the button starts the next track.
+pub const PLAY_FILL: Color32 = Color32::from_rgb(0x1f, 0x8a, 0x47);
+/// On air: the button is Next; a deeper green than idle so the two read apart.
+pub const PLAY_FILL_ON_AIR: Color32 = Color32::from_rgb(0x1a, 0x76, 0x3d);
+/// Pointer over it: a step lighter.
+pub const PLAY_FILL_HOVER: Color32 = Color32::from_rgb(0x25, 0x9e, 0x52);
+/// Pressed: a step darker than any resting state.
+pub const PLAY_FILL_PRESSED: Color32 = Color32::from_rgb(0x15, 0x62, 0x32);
+/// Disabled: a muted dark green, with the icon at half strength.
+pub const PLAY_FILL_DISABLED: Color32 = Color32::from_rgb(0x1a, 0x2f, 0x23);
+/// The icon and caption on the fill.
+pub const PLAY_ICON: Color32 = Color32::WHITE;
+/// The ring of a button that has keyboard focus (all tiles).
+pub const FOCUS_RING: Color32 = ACCENT_300;
+
+/// Share of its tone that a fade countdown band paints over a button.
+pub const SWEEP_STRENGTH: f32 = 0.35;
+/// The countdown band on the Play / Next button: a lighter green on the fill.
+pub fn play_sweep() -> Color32 {
+    PLAY.gamma_multiply(0.55)
+}
+/// The countdown band on a button whose content has the tone `content`.
+pub fn sweep_tone(content: Color32) -> Color32 {
+    content.gamma_multiply(SWEEP_STRENGTH)
+}
+
+/// The divider between the level meter and the volume fader.
+pub const DIVIDER: Color32 = NEUTRAL_600;
 pub const INTRO_BADGE_BG: Color32 = Color32::from_rgb(0x00, 0x23, 0x32);
 pub const INTRO_BADGE_BLINK: Color32 = Color32::from_rgb(0x00, 0x50, 0x73);
 pub const INTRO_BADGE_TEXT: Color32 = Color32::from_rgb(0xb6, 0xe6, 0xff);
