@@ -1475,10 +1475,10 @@ pub fn fader_axis_x(rect: Rect) -> f32 {
     rect.left() + FADER_KNOB_WIDTH / 2.0 + 2.0
 }
 
-/// The x of the left edge of the fader's track in a column that starts at
-/// `left`.
-pub fn fader_track_left(left: f32) -> f32 {
-    left + FADER_KNOB_WIDTH / 2.0 + 2.0 - FADER_TRACK_WIDTH / 2.0
+/// The x of the left edge of the fader's knob in a column that starts at
+/// `left`: the 2 px of padding before it.
+pub fn fader_knob_left(left: f32) -> f32 {
+    left + 2.0
 }
 
 /// The levels marked beside the fader, in dB from the top; the last, `-inf`,

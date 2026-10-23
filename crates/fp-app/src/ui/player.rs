@@ -629,18 +629,19 @@ fn cover(
 fn meter_column_width(c: &fp_model::MeterConfig) -> f32 {
     widgets::meter_width(c) + METER_FADER_GAP + widgets::FADER_WIDTH
 }
-/// The gap between the meter and the fader, which holds their divider.
-const METER_FADER_GAP: f32 = 6.0;
+/// The gap between the meter and the fader, which holds their divider with
+/// room on both sides.
+const METER_FADER_GAP: f32 = 10.0;
 /// The divider's width.
 const DIVIDER_WIDTH: f32 = 1.0;
 /// Gap between the left part and the meter and fader column.
 const METER_COLUMN_GAP: f32 = 6.0;
 /// Vertical gap between the info row and the transport.
 const ROW_GAP: f32 = 8.0;
-/// The countdown shrinks to fit down to this share of its size (38 → 11 px:
+/// The countdown shrinks to fit down to this share of its size (38 → 10.5 px:
 /// a ten-hour time in a player at its minimum width, beside the widest
 /// meter, EBU's, with its two rulers, and the fader with its scale).
-const COUNTDOWN_MIN_SCALE: f32 = 11.0 / 38.0;
+const COUNTDOWN_MIN_SCALE: f32 = 10.5 / 38.0;
 
 /// The info row and the transport on the left, the meter and fader column
 /// on the right spanning both (feedback spec §3.2).
@@ -705,12 +706,17 @@ fn meter_column(
     // A hairline in the gap between the meter and the fader, so the two
     // read as separate instruments (itr07 J5).
     // Centred on what shows between the two: from the meter's right edge
-    // (its labels end there) to the fader's track.
+    // (its labels end there) to the fader's knob. It stops above the
+    // level readout under the fader, which may overhang the gap.
     let fader_left = ui.cursor().left();
     let meter_right = fader_left - METER_FADER_GAP;
-    let divider_x = (meter_right + widgets::fader_track_left(fader_left) - DIVIDER_WIDTH) / 2.0;
+    let divider_x = (meter_right + widgets::fader_knob_left(fader_left) - DIVIDER_WIDTH) / 2.0;
+    let divider_height = (height - widgets::FADER_READOUT_HEIGHT).max(0.0);
     ui.painter().rect_filled(
-        Rect::from_min_size(pos2(divider_x, meter_top), vec2(DIVIDER_WIDTH, height)),
+        Rect::from_min_size(
+            pos2(divider_x, meter_top),
+            vec2(DIVIDER_WIDTH, divider_height),
+        ),
         0.0,
         theme::DIVIDER,
     );
@@ -892,14 +898,14 @@ impl GridButton {
 /// green. Hover, pressed, disabled and keyboard focus (the ring `widgets::tile`
 /// draws) are tokens in `theme`.
 pub fn play_button_style(on_air: bool) -> TileStyle {
-    let fill = if on_air {
-        theme::PLAY_FILL_ON_AIR
+    let (fill, border) = if on_air {
+        (theme::PLAY_FILL_ON_AIR, theme::PLAY_OUTLINE_ON_AIR)
     } else {
-        theme::PLAY_FILL
+        (theme::PLAY_FILL, theme::PLAY_OUTLINE)
     };
     TileStyle {
         fill,
-        border: theme::PLAY_BORDER,
+        border,
         border_width: 2.0,
         content: theme::PLAY_ICON,
         hover_fill: theme::PLAY_FILL_HOVER,
