@@ -144,6 +144,7 @@ fn wheel(h: &mut Harness<'_, AppUi>, at: Pos2, dx: f32, dy: f32, modifiers: Modi
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(dx, dy),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers,
     });
     h.run_steps(1);
@@ -376,6 +377,7 @@ fn a_trackpad_swipe_zooms_in_proportion() {
             unit: egui::MouseWheelUnit::Point,
             delta: egui::vec2(0.0, 2.0),
             phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Unknown,
             modifiers: Modifiers::NONE,
         });
         h.run_steps(1);

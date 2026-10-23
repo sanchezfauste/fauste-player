@@ -145,6 +145,7 @@ fn rl11_a_column_keeps_its_id_when_a_player_before_it_is_hidden() {
         unit: egui::MouseWheelUnit::Line,
         delta: vec2(0.0, -10.0),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: egui::Modifiers::NONE,
     });
     h.run_steps(20);
@@ -1155,10 +1156,10 @@ fn rl12_splitters_and_header_backgrounds_are_no_tab_stops() {
     let (mut h, fake) = harness(state(2, 3));
     let (p1, p2) = (fake.player(0), fake.player(1));
     let inert = [
-        egui::Id::new(("player-splitter", p1.0, p2.0)),
-        egui::Id::new(("player-header", p1.0)),
-        egui::Id::new(("player-header", p2.0)),
-        egui::Id::new("cartwall-header"),
+        egui::Id::unique(("player-splitter", p1.0, p2.0)),
+        egui::Id::unique(("player-header", p1.0)),
+        egui::Id::unique(("player-header", p2.0)),
+        egui::Id::unique("cartwall-header"),
     ];
     let mut focused = Vec::new();
     for _ in 0..150 {

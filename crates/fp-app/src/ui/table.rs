@@ -678,7 +678,7 @@ pub(crate) fn track_table(
     // never from the widget under it, and belongs to this table alone: it is
     // keyed by player and playlist.
     let body_rect = output.inner_rect;
-    let scroll_y = output.state.offset.y;
+    let scroll_y = output.state.clamped_offset().y;
     view_state.table_scroll.insert(
         player,
         TableScroll {
@@ -804,7 +804,7 @@ fn resize_handles(
     for (edge, w) in px.iter().take(columns.len().saturating_sub(1)).enumerate() {
         x += w;
         let rect = Rect::from_min_max(pos2(x - grab, area.top()), pos2(x + grab, area.bottom()));
-        let id = ui.id().with(("column-edge", player.0, edge));
+        let id = ui.scope_id().with(("column-edge", player.0, edge));
         let response = ui.interact(rect, id, Sense::drag());
         let dragging = view_state
             .live_resize
@@ -902,9 +902,8 @@ fn context_menu(
     let labelled = |ui: &mut Ui, glyph: &str, key: &str, enabled: bool| {
         let text = t.tr(key);
         let response = ui.add_enabled(enabled, egui::Button::new(format!("{glyph}  {text}")));
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text.clone())
-        });
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text.clone()));
         response
     };
     let state = scene.state.player(player).ok();
@@ -1045,8 +1044,7 @@ fn context_menu(
 fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
     let (rect, response) = ui.allocate_exact_size(vec2(16.0, 12.0), Sense::hover());
     let owned = label.to_owned();
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, owned.clone()));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, owned.clone()));
     if ui.is_rect_visible(rect) {
         paint(ui.painter(), rect);
     }

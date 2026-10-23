@@ -543,7 +543,7 @@ pub(crate) fn show(
     } = editor;
     let saving = *saving;
     let mut answer = EditorAnswer::Open;
-    let modal = egui::Modal::new(egui::Id::new("tag-editor"))
+    let modal = egui::Modal::new(egui::Id::unique("tag-editor"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {

@@ -323,6 +323,7 @@ fn wheel(h: &mut Harness<'_, AppUi>, at: Pos2, dy: f32) {
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(0.0, dy),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: Modifiers::NONE,
     });
     h.run_steps(1);

@@ -1001,7 +1001,13 @@ fn a_saved_rate_the_device_no_longer_reports_is_kept_and_flagged() {
         .click();
     h.run_steps(2);
     assert!(h.query_by_label("96000 Hz").is_none(), "not reported");
-    assert!(h.query_by_label("48000 Hz").is_some(), "reported");
+    // A closed combo box now carries its selected text as its label too, so
+    // look at the list items only.
+    assert!(
+        h.query_by_role_and_label(Role::Button, "48000 Hz")
+            .is_some(),
+        "reported"
+    );
     assert!(
         h.query_by_label("192000 Hz").is_some(),
         "the saved one stays"
@@ -1241,17 +1247,17 @@ fn shortened_device_choices_show_whole_on_hover() {
 fn a_shortened_choice_shows_whole_on_hover() {
     let mut h = narrow_outputs(700.0);
     let full = "Keep DSD and mute the other sources";
-    assert!(
-        h.query_by_label(full).is_none(),
-        "no tooltip before hovering"
-    );
+    // The closed combo box carries its selected text as its label too, so
+    // count the nodes instead of looking for any.
+    let before = h.query_all_by_label(full).count();
     // The list is below the fold: scroll to it first, as a user would.
     h.get_by_value(full).scroll_to_me();
     h.run_steps(5);
     h.get_by_value(full).hover();
     h.run_steps(40);
-    assert!(
-        h.query_by_label(full).is_some(),
+    assert_eq!(
+        h.query_all_by_label(full).count(),
+        before + 1,
         "the tooltip gives the whole choice"
     );
 }

@@ -71,6 +71,11 @@ ignored: they are replaced by the patched copies in `vendor/`
 Ignored crates get no Dependabot security pull requests either; `cargo deny
 check` in CI still reports their advisories.
 
+`egui-phosphor` is patched too (`vendor/egui-phosphor`, only its egui
+requirement raised) but not ignored: the egui group's pull request that brings
+a release targeting the same egui version replaces the copy, and then the copy
+and its `[patch.crates-io]` entry are deleted.
+
 ## How a release happens
 
 1. Commits land on `master`.

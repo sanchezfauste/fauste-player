@@ -116,7 +116,7 @@ pub(crate) fn show(
     };
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 440.0);
     let mut answer = None;
-    let modal = egui::Modal::new(egui::Id::new("exit-guard"))
+    let modal = egui::Modal::new(egui::Id::unique("exit-guard"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {

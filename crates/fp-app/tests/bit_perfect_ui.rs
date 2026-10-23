@@ -34,6 +34,7 @@ fn wheel_down(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>) {
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(0.0, -1.0),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
         modifiers: egui::Modifiers::NONE,
     });
 }

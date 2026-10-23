@@ -186,6 +186,7 @@ hand: release-please writes it from the commits.
 | `docs/i18n/<lang>`, `docs/book-assets` | The guide's AI translations (regenerated before each release, never in feature PRs; see `docs/technical/release-process.md`) and the language menu and notice script |
 | `vendor/opus-decoder` | A patched copy of `opus-decoder` (a real FFT), used through `[patch.crates-io]`; excluded from the workspace. See its `VENDORED.md` |
 | `vendor/symphonia-format-mkv` | A patched copy of symphonia's Matroska reader (seeking through cues, blocks without duration), used the same way. See its `VENDORED.md` |
+| `vendor/egui-phosphor` | A copy of `egui-phosphor` 0.14.0 with only its egui requirement raised to 0.37 (no upstream release yet), used the same way. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
 | `site/`, `scripts/site/` | The landing page and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
 | `.github/workflows` | CI, Dependabot (`dependabot.yml`), release-please, release builds and packages, GitHub Pages, commit checks |

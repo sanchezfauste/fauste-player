@@ -143,7 +143,7 @@ pub(crate) fn show(
     let screen = ctx.content_rect();
     let width = (screen.width() - 48.0).clamp(320.0, 560.0);
     let height = (screen.height() - 82.0).clamp(300.0, 560.0);
-    egui::Modal::new(egui::Id::new("about"))
+    egui::Modal::new(egui::Id::unique("about"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {

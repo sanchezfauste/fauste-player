@@ -249,14 +249,28 @@ fn put_on_a_playing_cart(state: &mut AppState, track: fp_model::TrackId) {
 }
 
 #[test]
-fn the_editor_says_it_is_reading_until_the_sheet_arrives() {
+fn the_editor_never_shows_an_empty_body_while_the_sheet_arrives() {
     let dir = tempfile::tempdir().unwrap();
     let (mut h, _fake) = harness(state_at(&tagged_wav(dir.path(), "a.wav")));
-    open_editor(&mut h);
-    // The sheet is requested on the frame that opens the editor and handled
-    // on the next one, so this frame still waits for it.
-    assert!(h.query_by_label("Reading tags…").is_some());
-    assert!(!save_enabled(&h));
+    right_click_the_row(&h);
+    h.run_steps(3);
+    h.get_by_label("Edit tags…").click();
+    // The editor opens on a sizing pass that egui keeps out of the
+    // accessibility tree (the note "Reading tags…" is drawn there), and the
+    // helper thread has usually answered by the next frame. So the first
+    // frame the modal can be seen in shows either the note or the form.
+    for _ in 0..30 {
+        h.run_steps(1);
+        if h.query_by_label("Edit tags").is_some() {
+            let reading = h.query_by_label("Reading tags…").is_some();
+            let ready = h.query_all_by_label_contains("Add field").next().is_some();
+            assert!(reading || ready, "an empty body");
+            if reading {
+                assert!(!save_enabled(&h));
+            }
+            break;
+        }
+    }
     wait_for_text(&mut h, "Add field");
     assert!(h.query_by_label("Reading tags…").is_none());
 }

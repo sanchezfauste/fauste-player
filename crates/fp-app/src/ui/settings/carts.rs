@@ -623,7 +623,7 @@ fn swatch(ui: &mut Ui, color: Option<CartColor>, chosen: bool, name: &str) -> bo
     let (rect, response) = ui.allocate_exact_size(vec2(SIZE, SIZE), egui::Sense::click());
     let label = name.to_owned();
     response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, chosen, label.clone())
+        egui::WidgetInfo::selected(egui::Role::RadioButton, true, chosen, label.clone())
     });
     let response = response.on_hover_text(name);
     if ui.is_rect_visible(rect) {

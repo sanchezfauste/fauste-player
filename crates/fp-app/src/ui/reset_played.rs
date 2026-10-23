@@ -39,7 +39,7 @@ pub(crate) fn show(ctx: &egui::Context, scene: &Scene<'_>) -> Option<bool> {
     let t = scene.i18n;
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 380.0);
     let mut answer = None;
-    let modal = egui::Modal::new(egui::Id::new("reset-played"))
+    let modal = egui::Modal::new(egui::Id::unique("reset-played"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.5))
         .show(ctx, |ui| {

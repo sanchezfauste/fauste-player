@@ -169,7 +169,7 @@ fn a_player_that_unloads_lets_go_of_its_waveform() {
     let (held, flag) = (Arc::clone(&track), std::rc::Rc::clone(&shown));
     let mut harness = egui_kittest::Harness::new_ui(move |ui| {
         let input = WaveInput {
-            id: egui::Id::new(("wave", 1)),
+            id: egui::Id::unique(("wave", 1)),
             media: flag.get().then_some(&held),
             total: Some(1.0),
             markers: MarkerFractions::default(),
@@ -340,7 +340,7 @@ fn a_waveform_with_ignored_marks_draws_without_panicking() {
     let track = media(0.5);
     let mut harness = egui_kittest::Harness::new_ui(move |ui| {
         let input = WaveInput {
-            id: egui::Id::new(("wave", 2)),
+            id: egui::Id::unique(("wave", 2)),
             media: Some(&track),
             total: Some(1.0),
             markers: MarkerFractions {
@@ -415,8 +415,8 @@ mod keys {
     #[test]
     fn each_key_keeps_its_waveform_id() {
         let (p, q) = (PlayerId(1), PlayerId(2));
-        assert_eq!(WaveKey::Player(p).id(), egui::Id::new(("waveform", p)));
-        assert_eq!(WaveKey::Cue(p).id(), egui::Id::new(("cue-waveform", p)));
+        assert_eq!(WaveKey::Player(p).id(), egui::Id::unique(("waveform", p)));
+        assert_eq!(WaveKey::Cue(p).id(), egui::Id::unique(("cue-waveform", p)));
         let ids = [
             WaveKey::Player(p).id(),
             WaveKey::Cue(p).id(),

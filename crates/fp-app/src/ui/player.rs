@@ -201,7 +201,7 @@ fn outlined_with_tip(ui: &mut Ui, text: &str, tip: Option<&str>, border: Color32
     );
     // A badge is named by its sentence when it has one, else by its text.
     let name = tip.unwrap_or(text).to_owned();
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, name.clone()));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, name.clone()));
     if let Some(tip) = tip {
         response.on_hover_text(tip);
     }
@@ -265,7 +265,7 @@ fn header(
     // RL16: a right click on the header's background opens the panel menu;
     // the tiles, added after it, keep their own clicks. It is no Tab stop.
     let row = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 20.0));
-    let background = ui.interact(row, egui::Id::new(("player-header", id.0)), Sense::CLICK);
+    let background = ui.interact(row, egui::Id::unique(("player-header", id.0)), Sense::CLICK);
 
     // What the header shows, measured before anything is drawn, so that no
     // two items overlap (the row fits them; the lowest priority collapses).
@@ -465,7 +465,7 @@ fn header(
                 let modes = [PlayMode::Single, PlayMode::Continuous];
                 let selected = usize::from(pv.mode == PlayMode::Continuous);
                 if let Some(mode) =
-                    widgets::segmented(ui, egui::Id::new(("play-mode", id)), &segments, selected)
+                    widgets::segmented(ui, egui::Id::unique(("play-mode", id)), &segments, selected)
                         .and_then(|i| modes.get(i).copied())
                 {
                     scene.ctl.send(Command::SetMode(id, mode));
@@ -956,7 +956,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             // crossfade or a segue overlap (the UI times it from the frame that first showed the fade; a
             // new fade (a fade stop pressed during a crossfade) restarts it,
             // on Fade stop).
-            let fade_key = egui::Id::new(("fade-started", id.0));
+            let fade_key = egui::Id::unique(("fade-started", id.0));
             let fade_left = if pv.fading {
                 let (_, started) = ui.data_mut(|d| {
                     let entry =
@@ -1158,7 +1158,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 );
                 let spoken = format!("{main}{tenths}");
                 response.widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::WidgetType::Label, true, spoken.clone())
+                    egui::WidgetInfo::labeled(egui::Role::Label, true, spoken.clone())
                 });
                 widgets::paint_tabular(ui.painter(), rect.left_top(), &main, &big, colour);
                 // The tenths sit on the bottom of the big digits, smaller and dimmed.
@@ -1331,14 +1331,12 @@ fn tabs(
         let response = ui
             .interact(
                 rect.intersect(view),
-                ui.id().with(("tab", id.0, pl.id.0)),
+                ui.scope_id().with(("tab", id.0, pl.id.0)),
                 Sense::click(),
             )
             .on_hover_text(&pl.name);
         let name = pl.name.clone();
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name.clone())
-        });
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone()));
         let dropping = response.dnd_hover_payload::<DragEntry>().is_some();
         if let Some(payload) = response.dnd_release_payload::<DragEntry>() {
             scene.ctl.send(Command::MoveEntry {

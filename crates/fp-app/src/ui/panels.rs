@@ -173,7 +173,7 @@ fn player_splitter(
         .live_split
         .as_ref()
         .is_some_and(|l| l.pair() == pair && l.is_dragging());
-    let id = egui::Id::new(("player-splitter", pair.0.0, pair.1.0));
+    let id = egui::Id::unique(("player-splitter", pair.0.0, pair.1.0));
     let active = !scene.state.layout.locked;
     let Some(response) = splitter(
         ui,
@@ -686,7 +686,7 @@ pub(crate) fn cartwall_splitter(
         egui::CursorIcon::ResizeRow
     };
     let active = !layout.locked && range.is_some();
-    let id = egui::Id::new("cartwall-splitter");
+    let id = egui::Id::unique("cartwall-splitter");
     let Some(response) = splitter(ui, gap, id, cursor, active, dragging) else {
         return;
     };

@@ -53,7 +53,7 @@ pub(crate) fn show(ctx: &egui::Context, scene: &Scene<'_>, count: usize) -> Opti
     let t = scene.i18n;
     let mut answer = None;
     let width = (ctx.content_rect().width() - 48.0).clamp(320.0, 480.0);
-    egui::Modal::new(egui::Id::new("outdated-analysis"))
+    egui::Modal::new(egui::Id::unique("outdated-analysis"))
         .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {

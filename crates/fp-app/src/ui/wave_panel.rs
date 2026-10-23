@@ -292,9 +292,7 @@ fn edit_markers(
         let item = |ui: &mut Ui, key: &str| {
             let text = t.tr(key);
             let r = ui.button(&text);
-            r.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text.clone())
-            });
+            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, text.clone()));
             r.clicked()
         };
         if let Some(secs) = at {
