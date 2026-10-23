@@ -627,8 +627,12 @@ fn cover(
 
 /// Width of the meter and fader column for meter `c`.
 fn meter_column_width(c: &fp_model::MeterConfig) -> f32 {
-    widgets::meter_width(c) + 6.0 + widgets::FADER_WIDTH
+    widgets::meter_width(c) + METER_FADER_GAP + widgets::FADER_WIDTH
 }
+/// The gap between the meter and the fader, which holds their divider.
+const METER_FADER_GAP: f32 = 6.0;
+/// The divider's width.
+const DIVIDER_WIDTH: f32 = 1.0;
 /// Gap between the left part and the meter and fader column.
 const METER_COLUMN_GAP: f32 = 6.0;
 /// Vertical gap between the info row and the transport.
@@ -681,7 +685,7 @@ fn meter_column(
     height: f32,
 ) {
     let t = scene.i18n;
-    ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+    ui.spacing_mut().item_spacing = vec2(METER_FADER_GAP, 0.0);
     let meter = &scene.state.config.meter;
     let name = widgets::loudness_line(&telemetry.meter, meter)
         .map(|(value, _)| t.tr_args("meter-loudness", &[("value", value.into())]))
@@ -694,9 +698,18 @@ fn meter_column(
         ),
         max_tip: t.tr("tip-meter-max"),
     };
+    let meter_top = ui.cursor().top();
     if widgets::vu(ui, height, &telemetry.meter, meter, &labels) {
         scene.ctl.reset_meter_max(id);
     }
+    // A hairline in the gap between the meter and the fader, so the two
+    // read as separate instruments (itr07 J5).
+    let divider_x = ui.cursor().left() - (METER_FADER_GAP + DIVIDER_WIDTH) / 2.0;
+    ui.painter().rect_filled(
+        Rect::from_min_size(pos2(divider_x, meter_top), vec2(DIVIDER_WIDTH, height)),
+        0.0,
+        theme::DIVIDER,
+    );
     let volume = scene.state.player(id).map_or(1.0, |p| p.volume);
     let db = match view::volume_db(volume) {
         Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),
@@ -870,6 +883,36 @@ impl GridButton {
     }
 }
 
+/// The look of the big Play / Next button (itr07 J4): filled green with a
+/// white icon. Idle it starts the next track; on air it is Next, a deeper
+/// green. Hover, pressed, disabled and keyboard focus (the ring `widgets::tile`
+/// draws) are tokens in `theme`.
+pub fn play_button_style(on_air: bool) -> TileStyle {
+    let fill = if on_air {
+        theme::PLAY_FILL_ON_AIR
+    } else {
+        theme::PLAY_FILL
+    };
+    TileStyle {
+        fill,
+        border: theme::PLAY_BORDER,
+        border_width: 2.0,
+        content: theme::PLAY_ICON,
+        hover_fill: theme::PLAY_FILL_HOVER,
+        hover_content: theme::PLAY_ICON,
+        active_fill: theme::PLAY_FILL_PRESSED,
+        dim_when_disabled: true,
+        disabled_fill: Some(theme::PLAY_FILL_DISABLED),
+    }
+}
+
+/// The part of `r` a fade countdown still covers: anchored to the right edge
+/// so the band's leading edge sweeps from left to right, like a cart's.
+pub fn sweep_band(r: Rect, left: f32) -> Rect {
+    let width = r.width() * left.clamp(0.0, 1.0);
+    Rect::from_min_max(pos2(r.right() - width, r.top()), r.max)
+}
+
 fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
     let t = scene.i18n;
     let blink = widgets::blink(scene.time);
@@ -933,16 +976,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 .filter(|_| !fade_stopping && pv.fade_origin != fp_model::FadeOrigin::Previous);
             let previous_left = fade_left
                 .filter(|_| !fade_stopping && pv.fade_origin == fp_model::FadeOrigin::Previous);
-            let play_style = TileStyle {
-                fill: Color32::TRANSPARENT,
-                border: theme::PLAY_BORDER,
-                border_width: 2.0,
-                content: theme::PLAY,
-                hover_fill: theme::PLAY_HOVER_BG,
-                hover_content: theme::PLAY_HOVER,
-                active_fill: theme::PLAY_ACTIVE_BG,
-                dim_when_disabled: true,
-            };
+            let play_style = play_button_style(playing);
             let play_action = if playing {
                 TransportAction::Next
             } else {
@@ -956,10 +990,9 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 play_style,
                 |p, r, c| {
                     if let Some(left) = next_left {
-                        let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
                         // Full strength even though Next is unavailable during a
                         // fade: the countdown must stay visible.
-                        p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
+                        p.rect_filled(sweep_band(r, left), 0.0, theme::play_sweep());
                     }
                     glyphs::paint(p, r.translate(vec2(0.0, -6.0)), play_action, 28.0, c);
                     p.text(
@@ -1006,10 +1039,11 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             } else {
                 t.tr("tip-stop-after")
             };
+            let fade_tone = fade_style.content;
+            let previous_tone = TileStyle::plain().content;
             let fade_button: PaintFn = Box::new(move |p, r, c| {
                 if let Some(left) = stop_left {
-                    let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
-                    p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
+                    p.rect_filled(sweep_band(r, left), 0.0, theme::sweep_tone(fade_tone));
                 }
                 glyphs::paint(p, r, TransportAction::FadeStop, 13.0, c);
             });
@@ -1018,8 +1052,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             };
             let previous_button: PaintFn = Box::new(move |p, r, c| {
                 if let Some(left) = previous_left {
-                    let bar = Rect::from_min_size(r.min, vec2(r.width() * left, r.height()));
-                    p.rect_filled(bar, 0.0, theme::ACCENT.gamma_multiply(0.5));
+                    p.rect_filled(sweep_band(r, left), 0.0, theme::sweep_tone(previous_tone));
                 }
                 glyphs::paint(p, r, TransportAction::Previous, 13.0, c);
             });
