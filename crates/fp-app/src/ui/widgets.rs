@@ -300,12 +300,13 @@ pub fn tile_without_tooltip(
             StrokeKind::Inside,
         );
         if enabled && response.has_focus() {
-            // Keyboard focus: a ring just outside the border.
+            // Keyboard focus: a ring just inside the border, so it never
+            // spills over the tile's neighbours.
             painter.rect_stroke(
-                rect.expand(1.0),
+                rect.shrink(1.0),
                 0.0,
                 Stroke::new(2.0, theme::FOCUS_RING),
-                StrokeKind::Outside,
+                StrokeKind::Inside,
             );
         }
         paint(painter, rect, content);
@@ -1475,6 +1476,12 @@ pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
 /// (27 px wide) within the gap before the meter.
 pub fn fader_axis_x(rect: Rect) -> f32 {
     rect.left() + FADER_KNOB_WIDTH / 2.0 + 2.0
+}
+
+/// The x of the left edge of the fader's track in a column that starts at
+/// `left`.
+pub fn fader_track_left(left: f32) -> f32 {
+    left + FADER_KNOB_WIDTH / 2.0 + 2.0 - FADER_TRACK_WIDTH / 2.0
 }
 
 /// The levels marked beside the fader, in dB from the top; the last, `-inf`,

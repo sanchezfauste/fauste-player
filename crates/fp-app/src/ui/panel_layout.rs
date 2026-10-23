@@ -438,8 +438,8 @@ impl LiveSplit {
     }
 }
 
-/// RL15: whether `panel` is on air, for the red dot on a hidden panel's
-/// tile: a player whose current entry is playing or paused (as the close
+/// RL15: whether `panel` is on air, for a hidden panel's tile label
+/// (`tip-layout-show-on-air`): a player whose current entry is playing or paused (as the close
 /// guard counts it), or the cartwall while any cart plays.
 pub fn panel_on_air(state: &AppState, panel: Panel) -> bool {
     match panel {

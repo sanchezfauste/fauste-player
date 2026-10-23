@@ -51,7 +51,8 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
 - **Resizable layout:** drag the gaps to resize the players and the
   cartwall, put the cartwall under the players or on their left or right,
   hide the panels a shift does not use (a hidden panel that is on air keeps
-  playing and shows a red dot on its tile), maximize one for a moment, and
+  playing; every tile shows a red dot while its player plays and pause bars
+  while it is paused), maximize one for a moment, and
   lock the layout against stray drags. The layout is saved with the
   session.
 - **About window:** the window's title bar shows "Fauste Player <version>";

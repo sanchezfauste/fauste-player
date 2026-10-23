@@ -704,7 +704,11 @@ fn meter_column(
     }
     // A hairline in the gap between the meter and the fader, so the two
     // read as separate instruments (itr07 J5).
-    let divider_x = ui.cursor().left() - (METER_FADER_GAP + DIVIDER_WIDTH) / 2.0;
+    // Centred on what shows between the two: from the meter's right edge
+    // (its labels end there) to the fader's track.
+    let fader_left = ui.cursor().left();
+    let meter_right = fader_left - METER_FADER_GAP;
+    let divider_x = (meter_right + widgets::fader_track_left(fader_left) - DIVIDER_WIDTH) / 2.0;
     ui.painter().rect_filled(
         Rect::from_min_size(pos2(divider_x, meter_top), vec2(DIVIDER_WIDTH, height)),
         0.0,
@@ -976,7 +980,14 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 .filter(|_| !fade_stopping && pv.fade_origin != fp_model::FadeOrigin::Previous);
             let previous_left = fade_left
                 .filter(|_| !fade_stopping && pv.fade_origin == fp_model::FadeOrigin::Previous);
-            let play_style = play_button_style(playing);
+            let mut play_style = play_button_style(playing);
+            if next_left.is_some() {
+                // Next cannot be pressed while it fades, but it is the
+                // button counting the fade down: keep the on-air look and
+                // an undimmed icon instead of the muted disabled green.
+                play_style.disabled_fill = Some(play_style.fill);
+                play_style.dim_when_disabled = false;
+            }
             let play_action = if playing {
                 TransportAction::Next
             } else {

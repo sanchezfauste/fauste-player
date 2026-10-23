@@ -273,7 +273,8 @@ pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>, right: f32) {
 }
 
 /// One panel tile: a click hides or shows the panel (RL7). Its label says
-/// what a click does; a hidden panel on air shows a red dot. Disabled for
+/// what a click does; a state icon in the corner shows a playing panel (red
+/// dot) or a paused one (amber bars), shown or hidden. Disabled for
 /// the last shown panel and while the layout is locked.
 fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Panel, name: &str) {
     let t = scene.i18n;
@@ -311,7 +312,7 @@ fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Pane
         .layout_no_wrap(name.to_owned(), font(11.0), theme::TEXT)
         .size()
         .x
-        + 18.0;
+        + 24.0;
     let response = widgets::tile_without_tooltip(
         ui,
         vec2(width.max(30.0), 24.0),

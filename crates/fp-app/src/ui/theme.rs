@@ -226,7 +226,7 @@ pub fn sweep_tone(content: Color32) -> Color32 {
 }
 
 /// The divider between the level meter and the volume fader.
-pub const DIVIDER: Color32 = NEUTRAL_800;
+pub const DIVIDER: Color32 = NEUTRAL_600;
 pub const INTRO_BADGE_BG: Color32 = Color32::from_rgb(0x00, 0x23, 0x32);
 pub const INTRO_BADGE_BLINK: Color32 = Color32::from_rgb(0x00, 0x50, 0x73);
 pub const INTRO_BADGE_TEXT: Color32 = Color32::from_rgb(0xb6, 0xe6, 0xff);

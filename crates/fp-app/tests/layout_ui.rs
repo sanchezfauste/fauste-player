@@ -2152,3 +2152,48 @@ fn j7_a_hidden_paused_panel_shows_the_pause_icon_and_many_players_still_fit() {
     let settings = h.get_by_label("Settings").rect();
     assert!(h.get_by_label("Hide P1").rect().right() < settings.left());
 }
+
+#[test]
+fn j7_the_cartwall_tile_shows_the_dot_while_a_cart_plays_shown_or_hidden() {
+    let (mut h, _fake) = harness(cart_on_air(false));
+    h.run_steps(2);
+    let tile = h.get_by_label("Hide Cartwall").rect();
+    assert!(red_dot_in(&h, tile), "shown");
+    assert_eq!(pause_bars_in(&h, tile), 0);
+    h.get_by_label("Hide Cartwall").click();
+    h.run_steps(2);
+    let tile = h.get_by_label("Show Cartwall (on air)").rect();
+    assert!(red_dot_in(&h, tile), "hidden");
+    let (mut h, _fake) = harness(state(2, 3));
+    h.run_steps(2);
+    let tile = h.get_by_label("Hide Cartwall").rect();
+    assert!(!red_dot_in(&h, tile), "no cart playing, no dot");
+}
+
+#[test]
+fn j7_the_state_icon_keeps_air_from_the_tile_text() {
+    fn text_right(h: &Harness<'_, AppUi>, tile: Rect) -> f32 {
+        fn walk(s: &egui::Shape, tile: Rect, right: &mut f32) {
+            match s {
+                egui::Shape::Text(t) if tile.contains(t.pos) => {
+                    let r = t.galley.rect.translate(t.pos.to_vec2());
+                    *right = right.max(r.right());
+                }
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, tile, right)),
+                _ => {}
+            }
+        }
+        let mut right = f32::MIN;
+        for c in &h.output().shapes {
+            walk(&c.shape, tile, &mut right);
+        }
+        right
+    }
+    let (mut h, fake) = harness(state(2, 3));
+    Controller::send(fake.as_ref(), Command::Play(fake.player(0)));
+    h.run_steps(2);
+    let tile = h.get_by_label("Hide P1").rect();
+    let dot = tile.right() - 8.0;
+    let gap = dot - text_right(&h, tile);
+    assert!(gap >= 4.0, "air between the name and the state icon: {gap}");
+}
