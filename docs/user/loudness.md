@@ -98,11 +98,31 @@ of the track on air. The badge has a border in its colour and always the same wi
 
 | Badge | Meaning |
 |---|---|
-| **+4.0 dB**, **−7.0 dB** (blue) | The track is normalized with this gain. The tooltip lists the same lines as the loudness editor: the measured loudness and true peak, the automatic gain, the gain with the track's trim when it is not 0, and a note when the true-peak ceiling or the maximum boost held a boost back, with the gain that was wanted. When the settings, the measurement or the trim changed after the track was loaded, it says only that the track keeps the gain set when it was loaded. |
-| **0.0 dB** (amber) | The track plays unchanged, and the tooltip says why, in the same lines as the loudness editor (the measured loudness and true peak first, when the track was measured): it has no measurement yet (or is too short to measure), the output is bit-perfect, or the track is excluded from normalization. |
+| **+4.0 dB**, **−7.0 dB** (blue) | The track is normalized with this gain. The tooltip is the gain breakdown described below. When the settings, the measurement or the trim changed after the track was loaded, it says only that the track keeps the gain set when it was loaded, and shows that gain. |
+| **0.0 dB** (amber) | The track plays unchanged. The tooltip is the same breakdown, and its **Automatic gain** line says why: it has no measurement yet (or is too short to measure), the output is bit-perfect, or the track is excluded from normalization. |
 | No badge | Normalization was off when the track started, the track is silent, or the player is stopped. A bit-perfect player shows none either while normalization is off. |
 
 The badge shows the gain the player asked for when the track started.
+
+### The gain breakdown
+
+Everywhere the program explains a track's gain it shows the same block of
+lines, label on the left and value on the right: the gain badge's tooltip,
+the loudness editor (above its controls), the cart editor and the track
+tooltip of the playlist table.
+
+| Line | Meaning |
+|---|---|
+| **Integrated loudness** | The measured loudness of the track, in LUFS (or "not measured"). |
+| **True peak** | Its highest true peak, in dBTP (only when measured). |
+| **Target** | The loudness every track is brought to (Settings → Loudness). |
+| **Automatic gain** | What normalization gives the track with the trim at 0, or "none" and why: normalization off, excluded, bit-perfect output, not measured yet, or silent. |
+| **Trim** | The track's trim in use, when it is not 0 (with the saved value when a lowered **Maximum trim** limits it). |
+| **Gain wanted** and **Limited by** | Only when the true-peak ceiling or the maximum boost held the gain back: the gain that would have been needed and the limit that stopped it. |
+| **Resulting gain** | Always last, under a rule and in bold: the gain the track plays with. 0.0 dB when it is not normalized. |
+
+With normalization off, a note above the resulting gain says that nothing
+changes on air and that the trim applies once it is turned on.
 
 ## Per track: exclude and trim
 
@@ -118,18 +138,10 @@ has two settings for that:
 
 The slider is a **trim**: an offset on top of the automatic gain, so it
 reads 0 dB for every track you have not edited. The popup and the cart
-editor therefore also show the resulting gain:
-
-- **Automatic gain: −8.3 dB** is what normalization gives the track with
-  the trim at 0. When it gives none, the line says why: normalization is
-  off, the track is excluded, it is not measured yet, or it is silent.
-- **Gain with trim: −7.3 dB** appears when the trim is not 0. A note under
-  it tells when the true-peak ceiling or the maximum boost held the gain
-  back, and the gain that was wanted.
-- With normalization off, a note says nothing changes on air and that the
-  trim applies once it is turned on. For a bit-perfect player the automatic
-  gain line says the output plays tracks unaltered. While the track is
-  sounding, the popup adds that a change applies from its next load.
+editor therefore show the [gain breakdown](#the-gain-breakdown) above their
+controls: the **Resulting gain** line follows the slider as you move it.
+While the track is sounding, the popup adds that a change applies from its
+next load.
 
 Where to change them:
 
@@ -149,14 +161,9 @@ Where to change them:
 The settings belong to the track and are saved with it. A change applies
 the next time the track is loaded, like any other change.
 
-**The track tooltip** of the playlist table shows the measurement
-("Loudness: −14.2 LUFS, true peak −0.8 dBTP", or "Loudness: not measured")
-and, when it is not the default, the track's setting ("Excluded from
-normalization" or "Trim +1.5 dB"). The trim shown is the one in use: when a
-lowered **Maximum trim** limits a trim saved earlier, the line also gives
-the saved value ("Trim +6.0 dB (saved +10.0 dB, limited by the maximum
-trim)"). The gain badge's tooltip and the **Trim** slider show the trim in
-use too.
+**The track tooltip** of the playlist table shows the track's tags and, under
+a rule, the same [gain breakdown](#the-gain-breakdown), computed for the
+player that list belongs to (a bit-perfect player plays it unaltered).
 
 ## Choosing the settings
 

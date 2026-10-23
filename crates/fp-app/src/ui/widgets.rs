@@ -39,6 +39,30 @@ pub fn tr_message(t: &crate::i18n::I18n, m: &crate::ui::view::Message) -> String
     t.tr_args(m.key, &args)
 }
 
+/// The text of an [`InfoValue`](crate::ui::view::InfoValue) in the language of `t`.
+pub fn info_value(t: &crate::i18n::I18n, value: &crate::ui::view::InfoValue) -> String {
+    match value {
+        crate::ui::view::InfoValue::Text(text) => text.clone(),
+        crate::ui::view::InfoValue::Message(m) => tr_message(t, m),
+    }
+}
+
+/// The gain information as plain text, `Label: value` per line (a note is
+/// its sentence): the accessible name of the gain badge.
+pub fn info_text(t: &crate::i18n::I18n, lines: &[crate::ui::view::InfoLine]) -> String {
+    lines
+        .iter()
+        .map(|line| {
+            let label = tr_message(t, &line.label);
+            match line.kind {
+                crate::ui::view::InfoKind::Note => label,
+                _ => format!("{label}: {}", info_value(t, &line.value)),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// An on/off switch drawn like the design's toggles.
 pub fn toggle(ui: &mut Ui, on: &mut bool, label: &str) -> bool {
     let (rect, response) = ui.allocate_exact_size(vec2(36.0, 20.0), Sense::click());

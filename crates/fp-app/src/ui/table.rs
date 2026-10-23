@@ -631,7 +631,7 @@ pub(crate) fn track_table(
                     cue_follow = view::cue_follow_target(scene.state, player, entry.id);
                 }
                 response.clone().on_hover_ui(|ui| {
-                    track_tip(ui, scene, track);
+                    track_tip(ui, scene, track, fp_model::Holder::PlayerMain(player));
                 });
                 // A double-click sets the row as next, the playing one included
                 // (it then plays once more, rule 27a).
@@ -1055,7 +1055,7 @@ fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
 
 /// The row tooltip: the reason the file cannot be played, when there is one,
 /// then label and value per line. Fixed width, never wider than the window.
-fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
+fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track, holder: fp_model::Holder) {
     let t = scene.i18n;
     ui.set_width(TIP_WIDTH.min((ui.ctx().content_rect().width() - 16.0).max(120.0)));
     let lines = view::track_tooltip(track, scene.file_reason(track.id).as_deref());
@@ -1123,18 +1123,14 @@ fn track_tip(ui: &mut Ui, scene: &Scene<'_>, track: &fp_model::Track) {
             );
         });
     }
-    // N19: the loudness lines, under the fields.
+    // N19: the gain information, under the fields.
     ui.add_space(4.0);
-    for line in view::loudness_lines(track, &scene.state.config.loudness) {
-        ui.add(
-            egui::Label::new(
-                RichText::new(widgets::tr_message(t, &line))
-                    .font(font(11.0))
-                    .color(theme::NEUTRAL_400),
-            )
-            .wrap(),
-        );
-    }
+    ui.separator();
+    super::loudness_edit::info_block(
+        ui,
+        t,
+        &super::loudness_edit::info(scene, track, Some(holder)),
+    );
 }
 
 #[cfg(test)]

@@ -11,11 +11,11 @@ use std::path::PathBuf;
 
 use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
-    BadgeTone, MarkerFractions, Message, PlayerStatus, RowStatus, TipField, analysis_pending,
-    cue_follow_target, cue_window_view, fader_from_gain, file_icon, file_problem, gain_badge,
-    gain_from_fader, gain_lines, intro_left, loudness_facts, loudness_lines, marker_fractions,
-    mix_active, outro_left, player_view, playlist_times, row_is_next, row_status, shown_entry,
-    signed_db, start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
+    BadgeTone, InfoKind, InfoLine, InfoValue, MarkerFractions, Message, PlayerStatus, RowStatus,
+    TipField, analysis_pending, cue_follow_target, cue_window_view, fader_from_gain, file_icon,
+    file_problem, gain_badge, gain_from_fader, gain_info, intro_left, marker_fractions, mix_active,
+    outro_left, player_view, playlist_times, row_is_next, row_status, shown_entry, signed_db,
+    start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayMode, PlayerId,
@@ -1006,53 +1006,182 @@ fn signed_db_has_one_decimal_a_sign_and_a_true_minus() {
     assert_eq!(signed_db(f32::NAN), "0.0", "not a number shows no gain");
 }
 
-#[test]
-fn n18_an_applied_gain_shows_its_value_and_why() {
-    let t = measured_track(Some(-20.0), -10.0);
-    let b = gain_badge(&applied(4.0, None), &normalizing(), &t).unwrap();
-    assert_eq!(b.text, msg("badge-gain", &[("gain", "+4.0")]));
-    assert_eq!(b.tone, BadgeTone::Normal);
-    assert_eq!(
-        b.tip,
-        vec![
-            msg("track-loudness", &[("lufs", "−20.0"), ("tp", "−10.0")]),
-            msg("loudness-auto-gain", &[("gain", "+4.0")]),
-        ]
-    );
+fn value_of(lines: &[InfoLine], kind: InfoKind) -> Option<&InfoValue> {
+    lines.iter().find(|l| l.kind == kind).map(|l| &l.value)
+}
+
+fn text(s: &str) -> InfoValue {
+    InfoValue::Text(s.to_owned())
+}
+
+fn kinds(lines: &[InfoLine]) -> Vec<InfoKind> {
+    lines.iter().map(|l| l.kind).collect()
 }
 
 #[test]
-fn n18_a_limited_gain_says_which_limit() {
+fn j1_the_gain_info_lists_the_facts_in_order_and_the_result_last() {
+    let t = measured_track(Some(-20.0), -10.0);
+    let lines = gain_info(&t, &normalizing(), false, None);
+    assert_eq!(
+        kinds(&lines),
+        vec![
+            InfoKind::Measured,
+            InfoKind::TruePeak,
+            InfoKind::Target,
+            InfoKind::AutoGain,
+            InfoKind::Result,
+        ]
+    );
+    assert_eq!(
+        value_of(&lines, InfoKind::Measured),
+        Some(&text("−20.0 LUFS"))
+    );
+    assert_eq!(
+        value_of(&lines, InfoKind::TruePeak),
+        Some(&text("−10.0 dBTP"))
+    );
+    assert_eq!(
+        value_of(&lines, InfoKind::Target),
+        Some(&text("−16.0 LUFS"))
+    );
+    assert_eq!(value_of(&lines, InfoKind::AutoGain), Some(&text("+4.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("+4.0 dB")));
+    assert_eq!(lines[3].label, msg("info-auto-gain", &[]));
+}
+
+#[test]
+fn j1_a_trim_comes_after_the_automatic_gain_and_changes_the_result() {
+    let mut t = measured_track(Some(-20.0), -30.0);
+    t.loudness_edit.trim_db = 2.0;
+    let lines = gain_info(&t, &normalizing(), false, None);
+    assert_eq!(
+        kinds(&lines),
+        vec![
+            InfoKind::Measured,
+            InfoKind::TruePeak,
+            InfoKind::Target,
+            InfoKind::AutoGain,
+            InfoKind::Trim,
+            InfoKind::Result,
+        ]
+    );
+    assert_eq!(value_of(&lines, InfoKind::AutoGain), Some(&text("+4.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::Trim), Some(&text("+2.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("+6.0 dB")));
+}
+
+#[test]
+fn j1_a_limit_shows_the_gain_wanted_and_what_held_it_back() {
     let t = measured_track(Some(-20.0), -3.0);
-    let config = normalizing();
-    let peak = gain_badge(
-        &applied(2.0, Some(fp_model::GainLimit::TruePeak)),
-        &config,
-        &t,
-    )
-    .unwrap();
+    let lines = gain_info(&t, &normalizing(), false, None);
     assert_eq!(
-        peak.tip[2],
-        msg(
-            "tip-gain-limited-peak",
-            &[("ceiling", "−1.0"), ("wanted", "+4.0")]
-        )
+        kinds(&lines)[3..],
+        [
+            InfoKind::AutoGain,
+            InfoKind::Wanted,
+            InfoKind::Limit,
+            InfoKind::Result
+        ]
     );
-    // The gain the current settings give for this quieter track.
+    assert_eq!(value_of(&lines, InfoKind::Wanted), Some(&text("+4.0 dB")));
+    assert_eq!(
+        value_of(&lines, InfoKind::Limit),
+        Some(&InfoValue::Message(msg(
+            "info-limit-peak",
+            &[("ceiling", "−1.0")]
+        )))
+    );
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("+2.0 dB")));
+    // A quiet track meets the maximum boost instead.
     let quiet = measured_track(Some(-40.0), -30.0);
-    let boost = gain_badge(
-        &applied(12.0, Some(fp_model::GainLimit::MaxBoost)),
-        &config,
-        &quiet,
-    )
-    .unwrap();
+    let lines = gain_info(&quiet, &normalizing(), false, None);
     assert_eq!(
-        boost.tip[2],
-        msg(
-            "tip-gain-limited-boost",
-            &[("max", "12.0"), ("wanted", "+24.0")]
-        )
+        value_of(&lines, InfoKind::Limit),
+        Some(&InfoValue::Message(msg(
+            "info-limit-boost",
+            &[("max", "12.0")]
+        )))
     );
+    assert_eq!(value_of(&lines, InfoKind::Wanted), Some(&text("+24.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("+12.0 dB")));
+}
+
+#[test]
+fn j1_a_track_that_is_not_normalized_says_why_and_the_result_is_zero() {
+    let c = normalizing();
+    let t = measured_track(Some(-20.0), -10.0);
+    let why = |lines: &[InfoLine]| value_of(lines, InfoKind::AutoGain).cloned();
+    let none = |key| Some(InfoValue::Message(msg(key, &[])));
+    let mut unmeasured = measured_track(None, 0.0);
+    unmeasured.loudness = None;
+    let lines = gain_info(&unmeasured, &c, false, None);
+    assert_eq!(why(&lines), none("info-none-unmeasured"));
+    assert_eq!(
+        value_of(&lines, InfoKind::Measured),
+        Some(&InfoValue::Message(msg("info-not-measured", &[])))
+    );
+    assert_eq!(value_of(&lines, InfoKind::TruePeak), None);
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("0.0 dB")));
+    assert_eq!(
+        why(&gain_info(&t, &c, true, None)),
+        none("info-none-bit-perfect")
+    );
+    let mut excluded = t.clone();
+    excluded.loudness_edit.excluded = true;
+    excluded.loudness_edit.trim_db = 3.0;
+    let lines = gain_info(&excluded, &c, false, None);
+    assert_eq!(why(&lines), none("info-none-excluded"));
+    assert_eq!(value_of(&lines, InfoKind::Trim), None, "excluded: no trim");
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("0.0 dB")));
+    let off = fp_model::LoudnessConfig {
+        normalize: false,
+        ..Default::default()
+    };
+    let lines = gain_info(&t, &off, false, None);
+    assert_eq!(why(&lines), none("info-none-off"));
+    assert!(lines.iter().any(|l| l.kind == InfoKind::Note));
+    assert_eq!(
+        lines.last().map(|l| l.kind),
+        Some(InfoKind::Result),
+        "the note comes before the result"
+    );
+    let silent = measured_track(None, -90.0);
+    let lines = gain_info(&silent, &c, false, None);
+    assert_eq!(value_of(&lines, InfoKind::Measured), Some(&text("—")));
+    assert_eq!(why(&lines), none("info-none-silent"));
+}
+
+#[test]
+fn j1_the_result_is_always_the_last_line() {
+    let c = normalizing();
+    let mut cases = vec![
+        measured_track(Some(-20.0), -10.0),
+        measured_track(None, -90.0),
+    ];
+    let mut unmeasured = measured_track(None, 0.0);
+    unmeasured.loudness = None;
+    cases.push(unmeasured);
+    let mut trimmed = measured_track(Some(-20.0), -3.0);
+    trimmed.loudness_edit.trim_db = 1.0;
+    cases.push(trimmed);
+    for t in &cases {
+        for bit_perfect in [false, true] {
+            let lines = gain_info(t, &c, bit_perfect, None);
+            let results = lines.iter().filter(|l| l.kind == InfoKind::Result).count();
+            assert_eq!(results, 1);
+            assert_eq!(lines.last().map(|l| l.kind), Some(InfoKind::Result));
+        }
+    }
+}
+
+#[test]
+fn n18_an_applied_gain_has_a_normal_badge_with_the_info() {
+    let t = measured_track(Some(-20.0), -10.0);
+    let c = normalizing();
+    let b = gain_badge(&applied(4.0, None), &c, &t).unwrap();
+    assert_eq!(b.text, msg("badge-gain", &[("gain", "+4.0")]));
+    assert_eq!(b.tone, BadgeTone::Normal);
+    assert_eq!(b.tip, gain_info(&t, &c, false, None));
 }
 
 #[test]
@@ -1064,30 +1193,22 @@ fn n18_the_other_statuses() {
         gain_db: 0.0,
         status,
     };
-    // Each amber state shows what the loudness editor shows, with the true
-    // peak whenever the track was measured.
-    let tp = msg("track-loudness", &[("lufs", "−20.0"), ("tp", "−10.0")]);
     let mut unmeasured = measured_track(None, 0.0);
     unmeasured.loudness = None;
     let not = gain_badge(&of(S::NotMeasured), &c, &unmeasured).unwrap();
     assert_eq!(not.text, msg("badge-gain", &[("gain", "0.0")]));
     assert_eq!(not.tone, BadgeTone::Amber);
-    assert_eq!(not.tip, loudness_facts(&unmeasured, &c, false));
-    assert_eq!(not.tip[1], msg("loudness-no-gain-unmeasured", &[]));
+    assert_eq!(not.tip, gain_info(&unmeasured, &c, false, None));
     let bp = gain_badge(&of(S::BitPerfect), &c, &t).unwrap();
     assert_eq!(bp.text, msg("badge-gain", &[("gain", "0.0")]));
     assert_eq!(bp.tone, BadgeTone::Amber);
-    assert_eq!(bp.tip, loudness_facts(&t, &c, true));
-    assert_eq!(bp.tip[0], tp);
-    assert_eq!(bp.tip[1], msg("loudness-no-gain-bit-perfect", &[]));
+    assert_eq!(bp.tip, gain_info(&t, &c, true, None));
     let mut excluded = t.clone();
     excluded.loudness_edit.excluded = true;
     let ex = gain_badge(&of(S::Excluded), &c, &excluded).unwrap();
     assert_eq!(ex.text, msg("badge-gain", &[("gain", "0.0")]));
     assert_eq!(ex.tone, BadgeTone::Amber);
-    assert_eq!(ex.tip, loudness_facts(&excluded, &c, false));
-    assert_eq!(ex.tip[0], tp);
-    assert_eq!(ex.tip[1], msg("loudness-no-gain-excluded", &[]));
+    assert_eq!(ex.tip, gain_info(&excluded, &c, false, None));
     assert_eq!(gain_badge(&of(S::Off), &c, &t), None);
     assert_eq!(gain_badge(&of(S::Silent), &c, &t), None);
 }
@@ -1111,64 +1232,6 @@ fn n18_a_bit_perfect_player_says_nothing_while_normalization_is_off() {
             &t
         ),
         None
-    );
-}
-
-#[test]
-fn n19_the_tooltip_has_a_loudness_line() {
-    let mut t = measured_track(Some(-14.24), -0.81);
-    let c = normalizing();
-    assert_eq!(
-        loudness_lines(&t, &c),
-        vec![msg("track-loudness", &[("lufs", "−14.2"), ("tp", "−0.8")])]
-    );
-    t.loudness_edit.trim_db = 1.5;
-    assert_eq!(
-        loudness_lines(&t, &c)[1],
-        msg("track-loudness-trim", &[("trim", "+1.5")])
-    );
-    t.loudness_edit.excluded = true;
-    assert_eq!(
-        loudness_lines(&t, &c)[1],
-        msg("track-loudness-excluded", &[])
-    );
-    t.loudness = None;
-    assert_eq!(
-        loudness_lines(&t, &c)[0],
-        msg("track-loudness-unmeasured", &[])
-    );
-    let silent = measured_track(None, -90.0);
-    assert_eq!(
-        loudness_lines(&silent, &c)[0].args[0],
-        ("lufs", "—".to_owned())
-    );
-}
-
-#[test]
-fn n19_the_tooltip_shows_the_trim_in_use_and_the_saved_one() {
-    // A trim saved above the current maximum is limited by it (N7): the
-    // line names what is in use and, beside it, what is saved.
-    let mut t = measured_track(Some(-14.0), -1.0);
-    t.loudness_edit.trim_db = -10.0;
-    let c = fp_model::LoudnessConfig {
-        max_trim_db: 6.0,
-        ..normalizing()
-    };
-    assert_eq!(
-        loudness_lines(&t, &c)[1],
-        msg(
-            "track-loudness-trim-limited",
-            &[("trim", "−6.0"), ("saved", "−10.0")]
-        )
-    );
-    t.loudness_edit.trim_db = f32::NAN;
-    assert_eq!(loudness_lines(&t, &c).len(), 1, "no number, no trim");
-    // Limited only below the precision shown: the line would read "+6.0
-    // (saved +6.0)", so it names the trim alone.
-    t.loudness_edit.trim_db = 6.04;
-    assert_eq!(
-        loudness_lines(&t, &c)[1],
-        msg("track-loudness-trim", &[("trim", "+6.0")])
     );
 }
 
@@ -1198,18 +1261,24 @@ fn every_message_the_view_returns_exists_in_english() {
     let en = fp_app::i18n::I18n::new(Some("en-US"));
     for key in [
         "badge-gain",
-        "loudness-auto-gain",
-        "loudness-trimmed-gain",
-        "tip-gain-limited-peak",
-        "tip-gain-limited-boost",
-        "loudness-no-gain-bit-perfect",
-        "loudness-no-gain-excluded",
-        "loudness-no-gain-unmeasured",
-        "track-loudness",
-        "track-loudness-unmeasured",
-        "track-loudness-excluded",
-        "track-loudness-trim",
-        "track-loudness-trim-limited",
+        "info-measured",
+        "info-true-peak",
+        "info-target",
+        "info-auto-gain",
+        "info-trim",
+        "info-wanted",
+        "info-limit",
+        "info-result",
+        "info-not-measured",
+        "info-none-off",
+        "info-none-excluded",
+        "info-none-bit-perfect",
+        "info-none-unmeasured",
+        "info-none-silent",
+        "info-trim-limited",
+        "info-limit-peak",
+        "info-limit-boost",
+        "loudness-off-note",
         "tip-gain-earlier-settings",
     ] {
         assert_ne!(en.tr(key), key, "{key}");
@@ -1224,7 +1293,7 @@ fn n18_a_gain_started_with_earlier_settings_says_so() {
     let mut config = normalizing();
     let b = gain_badge(&applied(4.0, None), &config, &t).unwrap();
     assert!(
-        !b.tip.contains(&msg("tip-gain-earlier-settings", &[])),
+        !b.tip.iter().any(|l| l.kind == InfoKind::Note),
         "the settings still give +4.0 dB"
     );
     config.target_lufs = -10.0;
@@ -1232,30 +1301,34 @@ fn n18_a_gain_started_with_earlier_settings_says_so() {
     assert_eq!(b.text, msg("badge-gain", &[("gain", "+4.0")]));
     // The current target, measurement and trim did not give this gain:
     // the tooltip does not quote them beside it.
-    assert_eq!(b.tip, vec![msg("tip-gain-earlier-settings", &[])]);
+    assert_eq!(
+        kinds(&b.tip),
+        vec![InfoKind::Note, InfoKind::Result],
+        "the note and the gain it kept"
+    );
+    assert_eq!(b.tip[0].label, msg("tip-gain-earlier-settings", &[]));
+    assert_eq!(value_of(&b.tip, InfoKind::Result), Some(&text("+4.0 dB")));
 }
 
 #[test]
-fn i26_the_badge_tooltip_and_the_editor_list_the_same_facts() {
+fn j1_the_badge_tooltip_and_the_editor_list_the_same_lines() {
     let mut t = measured_track(Some(-20.0), -3.0);
     t.loudness_edit.trim_db = 2.0;
     let config = normalizing();
     let n = fp_model::normalization(&config, &t, false);
     let b = gain_badge(&n, &config, &t).unwrap();
-    let facts = loudness_facts(&t, &config, false);
-    assert_eq!(b.tip, facts);
+    assert_eq!(b.tip, gain_info(&t, &config, false, None));
     assert_eq!(
-        facts[0],
-        msg("track-loudness", &[("lufs", "−20.0"), ("tp", "−3.0")]),
+        value_of(&b.tip, InfoKind::TruePeak),
+        Some(&text("−3.0 dBTP")),
         "the true peak is among them"
     );
-    assert_eq!(facts[1..], gain_lines(&t, &config, false)[..]);
 }
 
 #[test]
 fn n18_the_badge_tooltip_quotes_the_trim_in_use() {
     // A trim stored above a maximum lowered since is limited by it (N7):
-    // the tooltip names the trim the gain was computed with.
+    // the info names the trim the gain was computed with and the one saved.
     let mut t = measured_track(Some(-20.0), -30.0);
     t.loudness_edit.trim_db = 10.0;
     let config = fp_model::LoudnessConfig {
@@ -1264,12 +1337,22 @@ fn n18_the_badge_tooltip_quotes_the_trim_in_use() {
     };
     let b = gain_badge(&applied(10.0, None), &config, &t).unwrap();
     assert_eq!(
-        b.tip,
-        vec![
-            msg("track-loudness", &[("lufs", "−20.0"), ("tp", "−30.0")]),
-            msg("loudness-auto-gain", &[("gain", "+4.0")]),
-            msg("loudness-trimmed-gain", &[("gain", "+10.0")]),
-        ]
+        value_of(&b.tip, InfoKind::Trim),
+        Some(&InfoValue::Message(msg(
+            "info-trim-limited",
+            &[("trim", "+6.0"), ("saved", "+10.0")]
+        )))
+    );
+    assert_eq!(value_of(&b.tip, InfoKind::Result), Some(&text("+10.0 dB")));
+    // A limit below the precision shown names the trim alone.
+    t.loudness_edit.trim_db = 6.04;
+    let lines = gain_info(&t, &config, false, None);
+    assert_eq!(value_of(&lines, InfoKind::Trim), Some(&text("+6.0 dB")));
+    // No number, no trim.
+    t.loudness_edit.trim_db = f32::NAN;
+    assert_eq!(
+        value_of(&gain_info(&t, &config, false, None), InfoKind::Trim),
+        None
     );
 }
 
@@ -1288,87 +1371,20 @@ fn n10_the_refused_trim_message_also_fits_a_value_that_is_not_a_number() {
         "El ajuste debe ser un número dentro del ajuste máximo."
     );
 }
-
 #[test]
-fn i4_gain_lines_give_the_reason_when_there_is_no_automatic_gain() {
-    let c = normalizing();
-    let mut t = measured_track(Some(-20.0), -10.0);
-    assert_eq!(
-        gain_lines(&t, &c, true),
-        vec![msg("loudness-no-gain-bit-perfect", &[])]
-    );
-    t.loudness_edit.excluded = true;
-    assert_eq!(
-        gain_lines(&t, &c, false),
-        vec![msg("loudness-no-gain-excluded", &[])]
-    );
-    t.loudness_edit.excluded = false;
-    t.loudness = None;
-    assert_eq!(
-        gain_lines(&t, &c, false),
-        vec![msg("loudness-no-gain-unmeasured", &[])]
-    );
-    let silent = measured_track(None, -90.0);
-    assert_eq!(
-        gain_lines(&silent, &c, false),
-        vec![msg("loudness-no-gain-silent", &[])]
-    );
-    let off = fp_model::LoudnessConfig {
-        normalize: false,
-        ..c
-    };
-    assert_eq!(
-        gain_lines(&t, &off, false),
-        vec![
-            msg("loudness-no-gain-off", &[]),
-            msg("loudness-off-note", &[])
-        ]
-    );
-}
-
-#[test]
-fn i4_gain_lines_name_the_limit_and_the_gain_wanted() {
-    let c = normalizing();
-    // +6 dB wanted, 2 dB of room under the ceiling.
-    assert_eq!(
-        gain_lines(&measured_track(Some(-22.0), -3.0), &c, false),
-        vec![
-            msg("loudness-auto-gain", &[("gain", "+2.0")]),
-            msg(
-                "tip-gain-limited-peak",
-                &[("ceiling", "−1.0"), ("wanted", "+6.0")]
-            ),
-        ]
-    );
-    // +19 dB wanted, held at the maximum boost.
-    assert_eq!(
-        gain_lines(&measured_track(Some(-35.0), -30.0), &c, false),
-        vec![
-            msg("loudness-auto-gain", &[("gain", "+12.0")]),
-            msg(
-                "tip-gain-limited-boost",
-                &[("max", "12.0"), ("wanted", "+19.0")]
-            ),
-        ]
-    );
-    // The limit belongs to the gain with trim, which is the one that plays.
+fn j1_the_limit_belongs_to_the_gain_with_trim() {
+    // +4 dB automatic, +10 dB trim: +14 dB wanted, held at the maximum
+    // boost; the result is the gain that plays.
     let mut t = measured_track(Some(-20.0), -30.0);
     t.loudness_edit.trim_db = 10.0;
-    assert_eq!(
-        gain_lines(&t, &c, false),
-        vec![
-            msg("loudness-auto-gain", &[("gain", "+4.0")]),
-            msg("loudness-trimmed-gain", &[("gain", "+12.0")]),
-            msg(
-                "tip-gain-limited-boost",
-                &[("max", "12.0"), ("wanted", "+14.0")]
-            ),
-        ]
-    );
+    let lines = gain_info(&t, &normalizing(), false, None);
+    assert_eq!(value_of(&lines, InfoKind::AutoGain), Some(&text("+4.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::Wanted), Some(&text("+14.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("+12.0 dB")));
 }
 
 #[test]
-fn i4_gain_lines_use_the_trim_in_use() {
+fn j1_the_result_uses_the_trim_in_use() {
     let mut t = measured_track(Some(-14.0), -1.0);
     t.loudness_edit.trim_db = -10.0;
     let c = fp_model::LoudnessConfig {
@@ -1376,21 +1392,7 @@ fn i4_gain_lines_use_the_trim_in_use() {
         ..normalizing()
     };
     // −2 dB automatic, the trim limited to −6: −8 dB.
-    assert_eq!(
-        gain_lines(&t, &c, false),
-        vec![
-            msg("loudness-auto-gain", &[("gain", "−2.0")]),
-            msg("loudness-trimmed-gain", &[("gain", "−8.0")]),
-        ]
-    );
-    // A stored trim the maximum now removes leaves no trim line.
-    t.loudness_edit.trim_db = 3.0;
-    let none = fp_model::LoudnessConfig {
-        max_trim_db: 0.0,
-        ..normalizing()
-    };
-    assert_eq!(
-        gain_lines(&t, &none, false),
-        vec![msg("loudness-auto-gain", &[("gain", "−2.0")])]
-    );
+    let lines = gain_info(&t, &c, false, None);
+    assert_eq!(value_of(&lines, InfoKind::AutoGain), Some(&text("−2.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("−8.0 dB")));
 }

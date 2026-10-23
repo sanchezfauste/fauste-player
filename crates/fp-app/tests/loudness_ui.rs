@@ -59,7 +59,7 @@ fn n18_the_header_shows_the_gain_and_says_why() {
     h.run_steps(2);
     // The tile's accessible name is its tooltip, as for the BP badge.
     assert!(
-        h.query_by_label_contains("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+        h.query_by_label_contains("Integrated loudness: −20.0 LUFS")
             .is_some()
     );
     assert!(
@@ -119,7 +119,7 @@ fn n18_a_bit_perfect_player_plays_at_unity_gain_and_says_so() {
     let (mut h, _fake) = harness(s);
     h.run_steps(2);
     assert!(
-        h.query_by_label_contains("No automatic gain: bit-perfect output plays tracks unaltered")
+        h.query_by_label_contains("Automatic gain: none, bit-perfect")
             .is_some()
     );
     assert!(h.query_by_label_contains("brings the measured").is_none());
@@ -150,10 +150,10 @@ fn n19_the_row_tooltip_shows_the_loudness() {
     h.get_by_label("Song 3").hover();
     h.run_steps(40);
     assert!(
-        h.query_by_label("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+        h.query_by_label("Integrated loudness: −20.0 LUFS")
             .is_some()
     );
-    assert!(h.query_by_label("Excluded from normalization").is_none());
+    assert!(h.query_by_label("Automatic gain: none, excluded").is_none());
 }
 
 #[test]
@@ -173,7 +173,7 @@ fn n19_the_row_tooltip_shows_the_edit() {
     let (mut h, _) = harness(s);
     h.get_by_label("Song 3").hover();
     h.run_steps(40);
-    assert!(h.query_by_label("Excluded from normalization").is_some());
+    assert!(h.query_by_label("Automatic gain: none, excluded").is_some());
 }
 
 /// Opens the waveform's context menu of player 1 and picks Loudness….
@@ -210,7 +210,7 @@ fn n20_the_popup_shows_the_measurement_and_excludes_the_track() {
     h.run_steps(2);
     open_popup(&mut h);
     assert!(
-        h.query_by_label("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+        h.query_by_label("Integrated loudness: −20.0 LUFS")
             .is_some()
     );
     fake.take_sent();
@@ -419,7 +419,7 @@ fn n21_the_cart_editor_has_the_same_controls() {
     h.get_by_label("Edit…").click();
     h.run_steps(3);
     assert!(
-        h.query_by_label("Loudness: −12.0 LUFS, true peak −1.5 dBTP")
+        h.query_by_label("Integrated loudness: −12.0 LUFS")
             .is_some()
     );
     // The editor is below the grid: scroll to it first, as a user would.
@@ -549,7 +549,7 @@ fn n20_the_row_menu_opens_the_popup_of_that_track() {
     h.get_by_label("Loudness…").click();
     h.run_steps(2);
     assert!(
-        h.query_by_label("Loudness: −20.0 LUFS, true peak −10.0 dBTP")
+        h.query_by_label("Integrated loudness: −20.0 LUFS")
             .is_some()
     );
     fake.take_sent();
@@ -598,7 +598,7 @@ fn i4_the_popup_shows_the_automatic_gain_and_the_gain_with_trim() {
             .count()
             >= 2
     );
-    assert!(h.query_by_label_contains("Gain with trim").is_none());
+    assert!(h.query_by_label_contains("Trim: ").is_none());
     fake.take_sent();
     h.get_by_role_and_label(Role::Slider, "Trim").focus();
     h.run_steps(1);
@@ -610,7 +610,7 @@ fn i4_the_popup_shows_the_automatic_gain_and_the_gain_with_trim() {
             .is_some()
     );
     assert!(
-        h.query_by_label_contains("Gain with trim: +4.5 dB")
+        h.query_by_label_contains("Resulting gain: +4.5 dB")
             .is_some()
     );
 }
@@ -623,7 +623,7 @@ fn i4_the_popup_says_why_there_is_no_automatic_gain() {
     h.run_steps(2);
     open_popup(&mut h);
     assert!(
-        h.query_by_label_contains("Automatic gain: none, normalization is off")
+        h.query_by_label_contains("Automatic gain: none, normalization off")
             .is_some()
     );
     assert!(
@@ -670,7 +670,7 @@ fn i4_a_bit_perfect_player_shows_no_automatic_gain() {
     h.run_steps(2);
     open_popup(&mut h);
     assert!(
-        h.query_by_label_contains("No automatic gain: bit-perfect output plays tracks unaltered")
+        h.query_by_label_contains("Automatic gain: none, bit-perfect")
             .is_some()
     );
 }
@@ -688,4 +688,86 @@ fn i4_the_popup_says_a_sounding_track_changes_on_its_next_load() {
         h.query_by_label_contains("Added to the automatic gain")
             .is_some()
     );
+}
+
+/// The lines `gain_info` gives for the first library track, as `Label:
+/// value` in `lang`.
+fn expected_lines(s: &AppState, lang: &str) -> Vec<String> {
+    let t = fp_app::i18n::I18n::new(Some(lang));
+    let track = s.library.iter().next().unwrap();
+    let lines = fp_app::ui::view::gain_info(track, &s.config.loudness, false, None);
+    fp_app::ui::widgets::info_text(&t, &lines)
+        .split('\n')
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn j1_the_badge_the_editor_and_the_row_tooltip_show_the_same_lines() {
+    let s = on_air();
+    let expected = expected_lines(&s, "en-US");
+    assert!(expected.len() >= 5);
+    assert_eq!(expected.last().unwrap(), "Resulting gain: +4.0 dB");
+    assert!(expected.contains(&"Target: −16.0 LUFS".to_owned()));
+    let (mut h, _) = harness(s);
+    h.run_steps(2);
+    // The badge: one accessible name, the lines in order.
+    assert!(
+        h.query_by_label(&expected.join("\n")).is_some(),
+        "the badge is named by all the lines, in order"
+    );
+    // The editor shows the same block above its controls.
+    open_popup(&mut h);
+    for line in &expected {
+        assert!(
+            h.query_all_by_label(line).count() >= 1,
+            "the editor shows {line}"
+        );
+    }
+    let tops: Vec<f32> = expected
+        .iter()
+        .map(|l| h.query_all_by_label(l).last().unwrap().rect().top())
+        .collect();
+    assert!(tops.windows(2).all(|w| w[0] < w[1]), "in order: {tops:?}");
+    let trim = h.get_by_role_and_label(Role::Slider, "Trim").rect();
+    assert!(*tops.last().unwrap() < trim.top(), "above the controls");
+    // The row tooltip too.
+    let (mut h, _) = harness(on_air());
+    h.get_by_label("Song 3").hover();
+    h.run_steps(40);
+    for line in &expected {
+        assert!(h.query_by_label(line).is_some(), "the row shows {line}");
+    }
+}
+
+#[test]
+fn j1_a_long_language_and_a_narrow_window_keep_the_lines_inside_and_in_order() {
+    let mut s = on_air();
+    s.config.ui.language = Some("de-DE".to_owned());
+    let expected = expected_lines(&s, "de-DE");
+    for width in [1000.0_f32, 420.0] {
+        let mut first = s.clone();
+        first.config.ui.language = None;
+        let (mut h, fake) = support::harness_sized(first, egui::vec2(width, 700.0), |ui| ui);
+        // The interface follows the configured language from a snapshot.
+        fake.state.store(std::sync::Arc::new(s.clone()));
+        h.run_steps(4);
+        h.get_by_label("Song 3").hover();
+        h.run_steps(40);
+        let rects: Vec<egui::Rect> = expected
+            .iter()
+            .map(|l| {
+                h.query_by_label(l)
+                    .unwrap_or_else(|| panic!("{l} at {width}"))
+                    .rect()
+            })
+            .collect();
+        for r in &rects {
+            assert!(r.left() >= 0.0 && r.right() <= width, "{r:?} in {width}");
+        }
+        assert!(
+            rects.windows(2).all(|w| w[0].top() < w[1].top()),
+            "{rects:?}"
+        );
+    }
 }
