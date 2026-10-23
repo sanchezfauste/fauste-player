@@ -150,3 +150,16 @@ fn closing_settings_while_learning_cancels_it() {
         MidiRequest::CancelLearn
     );
 }
+
+#[test]
+fn reconnect_asks_the_service_to_reopen_the_ports() {
+    let (mut h, fake, surface) = with_midi();
+    // The ports are only listed, and reopened, while MIDI is on.
+    let mut s = (**fake.state.load()).clone();
+    s.config.midi.enabled = true;
+    fake.state.store(Arc::new(s));
+    h.run_steps(2);
+    h.get_by_label("Reconnect ports").click();
+    h.run_steps(2);
+    assert_eq!(surface.requests.try_recv().unwrap(), MidiRequest::Reconnect);
+}

@@ -2,145 +2,14 @@
 //! Feedback spec §6: ports, hot-plug, routing, feedback and learn, driven
 //! with fake ports and a fake controller.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+mod support;
+
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use arc_swap::ArcSwap;
-use crossbeam_channel::Sender;
-use fp_control::service::{MidiControl, MidiCore, MidiOutput, MidiPorts, MidiRequest};
-use fp_model::{AppState, Command, Config, MidiAction, MidiTrigger, ShortcutAction, apply};
-
-#[derive(Default)]
-struct Wires {
-    inputs: Vec<String>,
-    outputs: Vec<String>,
-    sinks: HashMap<String, Sender<(String, Vec<u8>)>>,
-    sent: Vec<(String, Vec<u8>)>,
-    scans: usize,
-}
-
-#[derive(Clone, Default)]
-struct FakePorts(Arc<Mutex<Wires>>);
-
-struct FakeOut(String, Arc<Mutex<Wires>>);
-
-impl MidiOutput for FakeOut {
-    fn send(&mut self, bytes: &[u8]) -> Result<(), String> {
-        self.1
-            .lock()
-            .unwrap()
-            .sent
-            .push((self.0.clone(), bytes.to_vec()));
-        Ok(())
-    }
-}
-
-impl MidiPorts for FakePorts {
-    fn inputs(&mut self) -> Vec<String> {
-        let mut w = self.0.lock().unwrap();
-        w.scans += 1;
-        w.inputs.clone()
-    }
-    fn outputs(&mut self) -> Vec<String> {
-        self.0.lock().unwrap().outputs.clone()
-    }
-    fn connect_input(
-        &mut self,
-        name: &str,
-        sink: Sender<(String, Vec<u8>)>,
-    ) -> Result<Box<dyn Send>, String> {
-        let mut w = self.0.lock().unwrap();
-        if !w.inputs.iter().any(|i| i == name) {
-            return Err("gone".into());
-        }
-        w.sinks.insert(name.to_owned(), sink);
-        Ok(Box::new(()))
-    }
-    fn connect_output(&mut self, name: &str) -> Result<Box<dyn MidiOutput>, String> {
-        if !self.0.lock().unwrap().outputs.iter().any(|o| o == name) {
-            return Err("gone".into());
-        }
-        Ok(Box::new(FakeOut(name.to_owned(), self.0.clone())))
-    }
-}
-
-impl FakePorts {
-    fn plug(&self, name: &str) {
-        let mut w = self.0.lock().unwrap();
-        w.inputs.push(name.to_owned());
-        w.outputs.push(name.to_owned());
-    }
-    fn unplug(&self, name: &str) {
-        let mut w = self.0.lock().unwrap();
-        w.inputs.retain(|i| i != name);
-        w.outputs.retain(|o| o != name);
-        w.sinks.remove(name);
-    }
-    /// The device sends `bytes`, if it is connected.
-    fn press(&self, name: &str, bytes: &[u8]) {
-        let w = self.0.lock().unwrap();
-        if let Some(s) = w.sinks.get(name) {
-            s.send((name.to_owned(), bytes.to_vec())).unwrap();
-        }
-    }
-    fn take_sent(&self) -> Vec<(String, Vec<u8>)> {
-        std::mem::take(&mut self.0.lock().unwrap().sent)
-    }
-}
-
-struct FakeControl {
-    model: ArcSwap<AppState>,
-    sent: Mutex<Vec<Command>>,
-}
-
-impl MidiControl for FakeControl {
-    fn model(&self) -> Arc<AppState> {
-        self.model.load_full()
-    }
-    fn send(&self, command: Command) -> bool {
-        self.sent.lock().unwrap().push(command);
-        true
-    }
-}
-
-fn control(enabled: bool) -> Arc<FakeControl> {
-    let mut s = AppState::new(Config::default(), "Main");
-    let playlist = s.playlists.first_id().unwrap();
-    let paths = (1..=3)
-        .map(|n| PathBuf::from(format!("/m/{n}.mp3")))
-        .collect();
-    apply(
-        &mut s,
-        Command::InsertPaths {
-            playlist,
-            index: 0,
-            paths,
-        },
-    )
-    .unwrap();
-    s.config.midi.enabled = enabled;
-    s.config.midi.bind(
-        MidiAction::Button(ShortcutAction::PlayPlayer(1)),
-        "APC",
-        MidiTrigger::Note {
-            channel: 0,
-            note: 36,
-        },
-    );
-    Arc::new(FakeControl {
-        model: ArcSwap::from_pointee(s),
-        sent: Mutex::new(Vec::new()),
-    })
-}
-
-fn core(
-    ports: &FakePorts,
-    control: &Arc<FakeControl>,
-) -> (MidiCore, fp_control::service::MidiHandle) {
-    MidiCore::new(Box::new(ports.clone()), control.clone())
-}
+use fp_control::service::{MidiControl, MidiRequest};
+use fp_model::{Command, MidiAction, MidiTrigger, ShortcutAction};
+use support::{FakePorts, control, core};
 
 #[test]
 fn a_bound_note_becomes_a_command() {
@@ -380,5 +249,70 @@ fn only_bound_devices_are_opened_except_while_learning() {
         handle.status.load().inputs[1],
         ("Synth".to_owned(), true),
         "learning listens to every input"
+    );
+}
+
+#[test]
+fn reconnect_reopens_every_port_and_refreshes_the_leds() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    let c = control(true);
+    let (mut core, handle) = core(&ports, &c);
+    let t = Instant::now();
+    core.step(t);
+    assert_eq!(ports.0.lock().unwrap().connects, 1);
+    ports.take_sent();
+    handle.requests.send(MidiRequest::Reconnect).unwrap();
+    core.step(t + Duration::from_millis(10));
+    assert_eq!(
+        ports.0.lock().unwrap().connects,
+        2,
+        "opened again at once, without waiting for the rescan"
+    );
+    assert!(!ports.take_sent().is_empty(), "the LEDs are refreshed");
+    assert_eq!(handle.status.load().inputs, vec![("APC".to_owned(), true)]);
+    ports.press("APC", &[0x90, 36, 100]);
+    core.step(t + Duration::from_millis(20));
+    assert_eq!(c.sent.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn messages_queued_from_a_closed_connection_do_nothing() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    let c = control(true);
+    let (mut core, handle) = core(&ports, &c);
+    let mut t = Instant::now();
+    core.step(t);
+    // Queued, then the ports are reopened before the service reads it.
+    ports.press("APC", &[0x90, 36, 100]);
+    handle.requests.send(MidiRequest::Reconnect).unwrap();
+    core.step(t);
+    assert!(c.sent.lock().unwrap().is_empty(), "stale after Reconnect");
+    // Queued, then the port goes away.
+    ports.press("APC", &[0x90, 36, 100]);
+    ports.unplug("APC");
+    t += Duration::from_millis(2100);
+    core.step(t);
+    assert!(c.sent.lock().unwrap().is_empty(), "stale after a drop");
+}
+
+#[test]
+fn a_port_is_never_opened_twice() {
+    let ports = FakePorts::default();
+    ports.plug("APC");
+    let c = control(true);
+    let (mut core, handle) = core(&ports, &c);
+    let t = Instant::now();
+    core.step(t);
+    handle.requests.send(MidiRequest::Reconnect).unwrap();
+    core.step(t);
+    // The fake refuses a second open of a live port: the old one was
+    // closed before the new one opened.
+    assert_eq!(handle.status.load().inputs, vec![("APC".to_owned(), true)]);
+    assert_eq!(
+        ports.0.lock().unwrap().live.len(),
+        2,
+        "one input, one output"
     );
 }

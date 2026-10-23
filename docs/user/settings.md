@@ -259,7 +259,8 @@ See [Keyboard](keyboard.md).
 
 ![Settings, MIDI, with MIDI control off](../images/guide/settings-midi.png)
 
-Turn MIDI control surfaces on, see the input ports, and learn a control
+Turn MIDI control surfaces on, see the input ports (**Reconnect ports**
+opens them again, as replugging the controllers would), and learn a control
 for each player action. See [MIDI control surfaces](midi.md).
 
 ## Remote

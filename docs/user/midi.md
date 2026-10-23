@@ -16,6 +16,8 @@ give a port to one program at a time), plus every input while you are
 learning a control; the program never listens to its own ports. Controllers can be plugged in or out while the program runs:
 every couple of seconds the ports are looked for again, and a controller that
 comes back is connected by its name, with its lights set again.
+**Reconnect ports** closes every port and opens it again without touching
+the cable (see [Troubleshooting](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 On Linux, MIDI goes through ALSA: your user must be allowed to open the
 sequencer (`/dev/snd/seq`, usually by being in the `audio` group).
