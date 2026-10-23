@@ -503,13 +503,13 @@ fn header(
     super::panels::header_menu(&background, scene, view_state, Panel::Player(id));
 }
 
+/// The width of the gain badge's tooltip.
+const GAIN_TIP_WIDTH: f32 = 320.0;
+
 /// The gain badge of the header (loudness normalization spec N18), measured:
 /// a tile named by its tooltip, as the BP badge, with a border in its tone.
 /// Its width is that of the widest gain ("-00.0 dB"), so the header does not
 /// shift when the gain changes.
-/// The width of the gain badge's tooltip.
-const GAIN_TIP_WIDTH: f32 = 320.0;
-
 struct GainBadgeLayout {
     text: String,
     /// The tooltip as plain text: the tile's accessible name.

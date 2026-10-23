@@ -116,9 +116,9 @@ tooltip of the playlist table.
 | **Integrated loudness** | The measured loudness of the track, in LUFS (or "not measured"). |
 | **True peak** | Its highest true peak, in dBTP (only when measured). |
 | **Target** | The loudness every track is brought to (Settings → Loudness). |
-| **Automatic gain** | What normalization gives the track with the trim at 0, or "none" and why: normalization off, excluded, bit-perfect output, not measured yet, or silent. |
-| **Trim** | The track's trim in use, when it is not 0 (with the saved value when a lowered **Maximum trim** limits it). |
-| **Gain wanted** and **Limited by** | Only when the true-peak ceiling or the maximum boost held the gain back: the gain that would have been needed and the limit that stopped it. |
+| **Automatic gain** | Target minus measured loudness, before the trim and any limit, or "none" and why: excluded, bit-perfect output, normalization off, not measured yet, or silent. |
+| **Trim** | The track's trim in use, when it is not 0 (with the saved value and the maximum when a lowered **Maximum trim** limits it). |
+| **Gain wanted** and **Limited by** | Only when the true-peak ceiling or the maximum boost held the gain back: the automatic gain plus the trim (shown when there is a trim) and the limit that stopped it. |
 | **Resulting gain** | Always last, under a rule and in bold: the gain the track plays with. 0.0 dB when it is not normalized. |
 
 With normalization off, a note above the resulting gain says that nothing

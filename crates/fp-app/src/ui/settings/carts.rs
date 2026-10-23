@@ -585,7 +585,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         loudness_edit::info_block(
             ui,
             t,
-            &loudness_edit::info(scene, track, Some(fp_model::Holder::CartwallMain)),
+            &loudness_edit::info(scene, track, Some(fp_model::Holder::CartwallMain), None),
         );
         row(ui, &t.tr("loudness-exclude"), None, |ui| {
             loudness_edit::exclude(ui, scene, track)

@@ -178,7 +178,13 @@ fn n19_the_row_tooltip_shows_the_edit() {
 
 /// Opens the waveform's context menu of player 1 and picks Loudness….
 fn open_popup(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>) {
-    let wave = h.get_by_label("Waveform: click to seek").rect();
+    open_popup_in(h, "en-US");
+}
+
+/// As `open_popup`, in the interface language `lang`.
+fn open_popup_in(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, lang: &str) {
+    let t = fp_app::i18n::I18n::new(Some(lang));
+    let wave = h.get_by_label(&t.tr("tip-waveform")).rect();
     h.event(Event::PointerMoved(wave.center()));
     for pressed in [true, false] {
         h.event(Event::PointerButton {
@@ -189,7 +195,7 @@ fn open_popup(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>) {
         });
     }
     h.run_steps(2);
-    h.get_by_label("Loudness…").click();
+    h.get_by_label(&t.tr("wave-loudness")).click();
     h.run_steps(2);
 }
 
@@ -770,4 +776,142 @@ fn j1_a_long_language_and_a_narrow_window_keep_the_lines_inside_and_in_order() {
             "{rects:?}"
         );
     }
+}
+
+/// Every piece of text painted this frame, with the rectangle it covers.
+fn painted_texts(
+    h: &egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+) -> Vec<(String, egui::Rect)> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match shape {
+            egui::Shape::Text(t) => out.push((
+                t.galley.text().to_owned(),
+                t.galley.rect.translate(t.pos.to_vec2()),
+            )),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
+}
+
+/// The text that `after` paints and `before` did not: what a tooltip or a
+/// popup added.
+fn added_texts(
+    before: &[(String, egui::Rect)],
+    after: Vec<(String, egui::Rect)>,
+) -> Vec<(String, egui::Rect)> {
+    let mut rest = before.to_vec();
+    after
+        .into_iter()
+        .filter(|a| match rest.iter().position(|b| b == a) {
+            Some(i) => {
+                rest.swap_remove(i);
+                false
+            }
+            None => true,
+        })
+        .collect()
+}
+
+fn assert_text_fits(added: &[(String, egui::Rect)], width: f32, what: &str) {
+    assert!(
+        added.len() > 8,
+        "{what}: the lines are painted ({})",
+        added.len()
+    );
+    for (text, r) in added {
+        assert!(
+            r.left() >= -0.5 && r.right() <= width + 0.5,
+            "{what}: {text:?} {r:?} leaves the {width} px window"
+        );
+    }
+    for (i, (ta, a)) in added.iter().enumerate() {
+        for (tb, b) in &added[i + 1..] {
+            let overlap = a.shrink(0.6).intersect(b.shrink(0.6));
+            assert!(
+                overlap.width() <= 0.0 || overlap.height() <= 0.0,
+                "{what}: {ta:?} {a:?} overlaps {tb:?} {b:?}"
+            );
+        }
+    }
+}
+
+fn german(
+    width: f32,
+) -> (
+    egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+    AppState,
+) {
+    let mut s = on_air();
+    s.config.ui.language = Some("de-DE".to_owned());
+    let mut first = s.clone();
+    first.config.ui.language = None;
+    let (mut h, fake) = support::harness_sized(first, egui::vec2(width, 700.0), |ui| ui);
+    fake.state.store(std::sync::Arc::new(s.clone()));
+    h.run_steps(4);
+    (h, s)
+}
+
+#[test]
+fn j1_no_text_overflows_or_overlaps_at_200_px_in_german() {
+    let width = 200.0;
+    // The row tooltip.
+    let (mut h, _) = german(width);
+    let before = painted_texts(&h);
+    h.get_by_label("Song 3").hover();
+    h.run_steps(40);
+    assert_text_fits(
+        &added_texts(&before, painted_texts(&h)),
+        width,
+        "row tooltip",
+    );
+    // The gain badge tooltip.
+    let (mut h, _) = german(width);
+    let before = painted_texts(&h);
+    h.get_by_label_contains("Resultierende Verstärkung").hover();
+    h.run_steps(40);
+    assert_text_fits(
+        &added_texts(&before, painted_texts(&h)),
+        width,
+        "badge tooltip",
+    );
+    // The editor popup.
+    let (mut h, _) = german(width);
+    let before = painted_texts(&h);
+    // The row menu: the waveform has no room at this width.
+    h.get_by_label("Song 3").click_secondary();
+    h.run_steps(3);
+    let t = fp_app::i18n::I18n::new(Some("de-DE"));
+    h.get_by_label(&t.tr("menu-loudness")).click();
+    h.run_steps(3);
+    assert_text_fits(&added_texts(&before, painted_texts(&h)), width, "editor");
+}
+
+#[test]
+fn j1_the_row_of_the_entry_on_air_shows_the_gain_its_source_kept() {
+    // The target moved after the track started: the badge says so, and so
+    // does the row tooltip of the entry on air.
+    let mut s = on_air();
+    let (mut h, fake) = harness(s.clone());
+    h.run_steps(2);
+    s.config.loudness.target_lufs = -10.0;
+    fake.state.store(std::sync::Arc::new(s));
+    h.run_steps(4);
+    h.get_all_by_label("Song 1").last().unwrap().hover();
+    h.run_steps(40);
+    assert!(
+        h.query_all_by_label_contains("Gain set when the track was loaded")
+            .count()
+            >= 2,
+        "the badge and the row"
+    );
+    assert!(
+        h.query_by_label("Resulting gain: +4.0 dB").is_some(),
+        "the row shows the gain it kept"
+    );
 }

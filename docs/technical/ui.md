@@ -633,7 +633,8 @@ The interface shows and edits [loudness normalization](../superpowers/specs/2026
   `InfoValue` (`Text` for a figure with its unit, `Message` for a phrase).
   The order is fixed, `Result` is always the last line, and every figure
   comes from `fp_model::normalization`, `trim_in_use` and `wanted_gain_db`.
-  `actual` is the `Normalization` of a source on air: when the current
+  `actual` is the `Normalization` of a source on air (the badge passes it for
+  every status, the row tooltip of the entry on air too): when the current
   settings would give another (N11) the lines are a `Note`
   (`tip-gain-earlier-settings`) and the gain it kept. `info_block` draws
   label left and value right with tabular digits (`widgets::paint_tabular_right`),

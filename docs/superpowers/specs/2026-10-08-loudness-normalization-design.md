@@ -366,10 +366,10 @@ band) stays a separate value, whatever the normalization target (Q4).
   and the cart editor of N21) draws one block, built by
   `view::gain_info` and drawn by one renderer: two columns, label left and
   value right (tabular digits), in this order: **Integrated loudness**,
-  **True peak** (when measured), **Target**, **Automatic gain** (the gain
-  with trim 0, or "none" with the reason: normalization off, excluded,
+  **True peak** (when measured), **Target**, **Automatic gain** (target minus
+  measured, before trim and limits, or "none" with the reason: normalization off, excluded,
   bit-perfect, not measured yet, silent), **Trim** (when not 0; the saved
-  value too when the maximum limits it), **Gain wanted** and **Limited by**
+  value too when the maximum limits it), **Gain wanted** (with a trim) and **Limited by**
   (only when the true-peak ceiling or the maximum boost held the gain
   back), a note when normalization is off, and last, under a rule and in
   bold, **Resulting gain**. The tables above describe what the lines say;

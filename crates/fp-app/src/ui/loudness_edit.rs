@@ -17,14 +17,16 @@ use crate::i18n::I18n;
 const WIDTH: f32 = 300.0;
 
 /// The gain information of `track` as the player it plays on gives it
-/// (`holder`, when known): see [`view::gain_info`].
+/// (`holder`, when known): see [`view::gain_info`]. `on_air` is the gain a
+/// source of this track on air started with.
 pub(crate) fn info(
     scene: &Scene<'_>,
     track: &Track,
     holder: Option<fp_model::Holder>,
+    on_air: Option<&fp_model::Normalization>,
 ) -> Vec<view::InfoLine> {
     let bit_perfect = holder.is_some_and(|h| fp_model::holder_bit_perfect(scene.state, h));
-    view::gain_info(track, &scene.state.config.loudness, bit_perfect, None)
+    view::gain_info(track, &scene.state.config.loudness, bit_perfect, on_air)
 }
 
 /// The gap between the label and the value column.
@@ -80,62 +82,87 @@ pub(crate) fn info_block(ui: &mut Ui, t: &I18n, lines: &[view::InfoLine]) {
     }
 }
 
+/// A galley that breaks a word wider than `wrap` rather than overflow.
+fn galley(
+    painter: &egui::Painter,
+    text: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+    wrap: f32,
+) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple(text.to_owned(), font, color, wrap);
+    job.wrap.break_anywhere = true;
+    painter.layout_job(job)
+}
+
 fn info_row(ui: &mut Ui, width: f32, label: &str, value: &str, strong: bool) {
-    let (label_font, value_font, label_color, value_color) = if strong {
-        (
-            font_semibold(13.0),
-            font_semibold(13.0),
-            theme::TEXT,
-            theme::TEXT,
-        )
+    let (font, label_color) = if strong {
+        (font_semibold(13.0), theme::TEXT)
     } else {
-        (font(12.0), font(12.0), theme::NEUTRAL_400, theme::TEXT)
+        (font(12.0), theme::NEUTRAL_400)
     };
+    let value_color = theme::TEXT;
     let painter = ui.painter().clone();
     let natural_label = painter
-        .layout_no_wrap(label.to_owned(), label_font.clone(), label_color)
+        .layout_no_wrap(label.to_owned(), font.clone(), label_color)
         .size()
         .x;
-    let natural_value = widgets::tabular_size(&painter, value, &value_font).x;
+    let natural_value = widgets::tabular_size(&painter, value, &font).x;
     let one_line = natural_label + GAP + natural_value <= width;
-    let (label_wrap, value_wrap) = if one_line {
-        (natural_label, natural_value)
+    let label_wrap = if one_line {
+        natural_label
     } else {
-        let label_w = natural_label.min(width * 0.5);
-        (label_w, (width - label_w - GAP).max(20.0))
+        natural_label.min(width * 0.5)
     };
-    let label_galley = painter.layout(label.to_owned(), label_font, label_color, label_wrap);
+    let label_galley = galley(&painter, label, font.clone(), label_color, label_wrap);
+    // Where the label's longest word is wider than its column, the value
+    // goes under it instead of beside it.
+    let stacked = !one_line && label_galley.size().x > label_wrap + 0.5;
+    let label_galley = if stacked {
+        galley(&painter, label, font.clone(), label_color, width)
+    } else {
+        label_galley
+    };
     let value_galley = (!one_line).then(|| {
-        painter.layout(
-            value.to_owned(),
-            value_font.clone(),
-            value_color,
-            value_wrap,
-        )
+        let wrap = if stacked {
+            width
+        } else {
+            (width - label_galley.size().x - GAP).max(20.0)
+        };
+        galley(&painter, value, font.clone(), value_color, wrap)
     });
-    let value_height = value_galley.as_ref().map_or_else(
-        || widgets::tabular_size(&painter, value, &value_font).y,
-        |g| g.size().y,
-    );
-    let height = label_galley.size().y.max(value_height);
+    let height = match (&value_galley, stacked) {
+        (Some(v), true) => label_galley.size().y + v.size().y,
+        (Some(v), false) => label_galley.size().y.max(v.size().y),
+        (None, _) => label_galley
+            .size()
+            .y
+            .max(widgets::tabular_size(&painter, value, &font).y),
+    };
     let (rect, response) = ui.allocate_exact_size(vec2(width, height), egui::Sense::hover());
     let name = format!("{label}: {value}");
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, name.clone()));
     if !ui.is_rect_visible(rect) {
         return;
     }
+    let label_height = label_galley.size().y;
     painter.galley(rect.left_top(), label_galley, label_color);
     match value_galley {
         Some(galley) => {
             let x = rect.right() - galley.size().x;
-            painter.galley(egui::pos2(x, rect.top()), galley, value_color);
+            let y = if stacked {
+                rect.top() + label_height
+            } else {
+                rect.top()
+            };
+            painter.galley(egui::pos2(x, y), galley, value_color);
         }
         None => {
             widgets::paint_tabular_right(
                 &painter,
                 egui::pos2(rect.right(), rect.top()),
                 value,
-                &value_font,
+                &font,
                 value_color,
             );
         }
@@ -177,6 +204,9 @@ pub(crate) fn trim(ui: &mut Ui, scene: &Scene<'_>, track: &Track) {
     let max = max_trim(scene);
     let mut value = trim_shown(scene, track);
     let label = scene.i18n.tr("loudness-trim");
+    // The rail gives way in a narrow window, so the value box stays inside.
+    let rail = (ui.available_width() - 64.0).clamp(30.0, ui.spacing().slider_width);
+    ui.spacing_mut().slider_width = rail;
     let response = ui.add_enabled(
         !excluded,
         egui::Slider::new(&mut value, -max..=max)
@@ -238,7 +268,7 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                 .inner_margin(12.0),
         )
         .show(ctx, |ui| {
-            ui.set_width(WIDTH);
+            ui.set_width(WIDTH.min((ctx.content_rect().width() - 40.0).max(150.0)));
             ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
             ui.horizontal(|ui| {
                 ui.add(
@@ -280,8 +310,8 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                 .selectable(false)
                 .truncate(),
             );
-            info_block(ui, t, &info(scene, track, holder));
-            ui.horizontal(|ui| {
+            info_block(ui, t, &info(scene, track, holder, None));
+            ui.horizontal_wrapped(|ui| {
                 exclude(ui, scene, track);
                 ui.add(
                     egui::Label::new(
@@ -289,7 +319,8 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                             .font(font(13.0))
                             .color(theme::TEXT),
                     )
-                    .selectable(false),
+                    .selectable(false)
+                    .wrap(),
                 );
             });
             ui.horizontal(|ui| {

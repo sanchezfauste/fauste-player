@@ -1076,14 +1076,9 @@ fn j1_a_limit_shows_the_gain_wanted_and_what_held_it_back() {
     let lines = gain_info(&t, &normalizing(), false, None);
     assert_eq!(
         kinds(&lines)[3..],
-        [
-            InfoKind::AutoGain,
-            InfoKind::Wanted,
-            InfoKind::Limit,
-            InfoKind::Result
-        ]
+        [InfoKind::AutoGain, InfoKind::Limit, InfoKind::Result]
     );
-    assert_eq!(value_of(&lines, InfoKind::Wanted), Some(&text("+4.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::AutoGain), Some(&text("+4.0 dB")));
     assert_eq!(
         value_of(&lines, InfoKind::Limit),
         Some(&InfoValue::Message(msg(
@@ -1102,7 +1097,10 @@ fn j1_a_limit_shows_the_gain_wanted_and_what_held_it_back() {
             &[("max", "12.0")]
         )))
     );
-    assert_eq!(value_of(&lines, InfoKind::Wanted), Some(&text("+24.0 dB")));
+    assert_eq!(
+        value_of(&lines, InfoKind::AutoGain),
+        Some(&text("+24.0 dB"))
+    );
     assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("+12.0 dB")));
 }
 
@@ -1181,7 +1179,6 @@ fn n18_an_applied_gain_has_a_normal_badge_with_the_info() {
     let b = gain_badge(&applied(4.0, None), &c, &t).unwrap();
     assert_eq!(b.text, msg("badge-gain", &[("gain", "+4.0")]));
     assert_eq!(b.tone, BadgeTone::Normal);
-    assert_eq!(b.tip, gain_info(&t, &c, false, None));
 }
 
 #[test]
@@ -1198,17 +1195,14 @@ fn n18_the_other_statuses() {
     let not = gain_badge(&of(S::NotMeasured), &c, &unmeasured).unwrap();
     assert_eq!(not.text, msg("badge-gain", &[("gain", "0.0")]));
     assert_eq!(not.tone, BadgeTone::Amber);
-    assert_eq!(not.tip, gain_info(&unmeasured, &c, false, None));
     let bp = gain_badge(&of(S::BitPerfect), &c, &t).unwrap();
     assert_eq!(bp.text, msg("badge-gain", &[("gain", "0.0")]));
     assert_eq!(bp.tone, BadgeTone::Amber);
-    assert_eq!(bp.tip, gain_info(&t, &c, true, None));
     let mut excluded = t.clone();
     excluded.loudness_edit.excluded = true;
     let ex = gain_badge(&of(S::Excluded), &c, &excluded).unwrap();
     assert_eq!(ex.text, msg("badge-gain", &[("gain", "0.0")]));
     assert_eq!(ex.tone, BadgeTone::Amber);
-    assert_eq!(ex.tip, gain_info(&excluded, &c, false, None));
     assert_eq!(gain_badge(&of(S::Off), &c, &t), None);
     assert_eq!(gain_badge(&of(S::Silent), &c, &t), None);
 }
@@ -1317,7 +1311,6 @@ fn j1_the_badge_tooltip_and_the_editor_list_the_same_lines() {
     let config = normalizing();
     let n = fp_model::normalization(&config, &t, false);
     let b = gain_badge(&n, &config, &t).unwrap();
-    assert_eq!(b.tip, gain_info(&t, &config, false, None));
     assert_eq!(
         value_of(&b.tip, InfoKind::TruePeak),
         Some(&text("−3.0 dBTP")),
@@ -1340,7 +1333,7 @@ fn n18_the_badge_tooltip_quotes_the_trim_in_use() {
         value_of(&b.tip, InfoKind::Trim),
         Some(&InfoValue::Message(msg(
             "info-trim-limited",
-            &[("trim", "+6.0"), ("saved", "+10.0")]
+            &[("trim", "+6.0"), ("saved", "+10.0"), ("max", "6.0")]
         )))
     );
     assert_eq!(value_of(&b.tip, InfoKind::Result), Some(&text("+10.0 dB")));
@@ -1395,4 +1388,149 @@ fn j1_the_result_uses_the_trim_in_use() {
     let lines = gain_info(&t, &c, false, None);
     assert_eq!(value_of(&lines, InfoKind::AutoGain), Some(&text("−2.0 dB")));
     assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("−8.0 dB")));
+}
+
+#[test]
+fn j1_a_status_the_settings_no_longer_give_says_so_in_amber_too() {
+    use fp_model::NormalizationStatus as S;
+    let c = normalizing();
+    let of = |status| fp_model::Normalization {
+        gain_db: 0.0,
+        status,
+    };
+    // Started unmeasured; measured while it sounds: +4.0 dB now, 0.0 on air.
+    let measured = measured_track(Some(-20.0), -10.0);
+    let b = gain_badge(&of(S::NotMeasured), &c, &measured).unwrap();
+    assert_eq!(b.tone, BadgeTone::Amber);
+    assert_eq!(kinds(&b.tip), vec![InfoKind::Note, InfoKind::Result]);
+    assert_eq!(value_of(&b.tip, InfoKind::Result), Some(&text("0.0 dB")));
+    // Started excluded; the exclusion was lifted while it sounds.
+    let b = gain_badge(&of(S::Excluded), &c, &measured).unwrap();
+    assert_eq!(kinds(&b.tip), vec![InfoKind::Note, InfoKind::Result]);
+    assert_eq!(value_of(&b.tip, InfoKind::Result), Some(&text("0.0 dB")));
+}
+
+#[test]
+fn j1_the_lines_add_up_auto_then_trim_then_the_limit() {
+    let c = normalizing();
+    // Target −16, measured −30: +14.0 dB wanted; the maximum boost is 12.
+    let mut t = measured_track(Some(-30.0), -40.0);
+    let lines = gain_info(&t, &c, false, None);
+    assert_eq!(
+        value_of(&lines, InfoKind::AutoGain),
+        Some(&text("+14.0 dB"))
+    );
+    assert_eq!(value_of(&lines, InfoKind::Wanted), None, "no trim: same");
+    assert_eq!(
+        kinds(&lines)[3..],
+        [InfoKind::AutoGain, InfoKind::Limit, InfoKind::Result]
+    );
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("+12.0 dB")));
+    // A negative trim brings it under the limit: no limit line.
+    t.loudness_edit.trim_db = -3.0;
+    let lines = gain_info(&t, &c, false, None);
+    assert_eq!(
+        value_of(&lines, InfoKind::AutoGain),
+        Some(&text("+14.0 dB"))
+    );
+    assert_eq!(value_of(&lines, InfoKind::Trim), Some(&text("−3.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::Limit), None);
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("+11.0 dB")));
+    // A positive trim past the limit: wanted, limit, result.
+    t.loudness_edit.trim_db = 3.0;
+    let lines = gain_info(&t, &c, false, None);
+    assert_eq!(value_of(&lines, InfoKind::Wanted), Some(&text("+17.0 dB")));
+    assert_eq!(value_of(&lines, InfoKind::Result), Some(&text("+12.0 dB")));
+}
+
+#[test]
+fn j1_an_excluded_track_says_excluded_whatever_else_applies() {
+    let mut t = measured_track(Some(-20.0), -10.0);
+    t.loudness_edit.excluded = true;
+    let off = fp_model::LoudnessConfig {
+        normalize: false,
+        ..Default::default()
+    };
+    let none = Some(InfoValue::Message(msg("info-none-excluded", &[])));
+    assert_eq!(
+        value_of(&gain_info(&t, &off, false, None), InfoKind::AutoGain).cloned(),
+        none
+    );
+    assert_eq!(
+        value_of(
+            &gain_info(&t, &normalizing(), true, None),
+            InfoKind::AutoGain
+        )
+        .cloned(),
+        none
+    );
+}
+
+#[test]
+fn j1_the_resulting_gain_is_the_badge_gain_in_every_status() {
+    let ceiling = measured_track(Some(-20.0), -3.0);
+    let boost = measured_track(Some(-40.0), -50.0);
+    let mut trimmed = measured_track(Some(-20.0), -30.0);
+    trimmed.loudness_edit.trim_db = 2.0;
+    let mut at_max = measured_track(Some(-20.0), -30.0);
+    at_max.loudness_edit.trim_db = 12.0;
+    let mut excluded = measured_track(Some(-20.0), -10.0);
+    excluded.loudness_edit.excluded = true;
+    let mut unmeasured = measured_track(None, 0.0);
+    unmeasured.loudness = None;
+    let plain = measured_track(Some(-20.0), -10.0);
+    let off = fp_model::LoudnessConfig {
+        normalize: false,
+        ..Default::default()
+    };
+    let on = normalizing();
+    // (track, config, bit-perfect, gain the source started with)
+    let cases: Vec<(
+        Track,
+        fp_model::LoudnessConfig,
+        bool,
+        Option<fp_model::Normalization>,
+    )> = vec![
+        (plain.clone(), on.clone(), false, None),
+        (ceiling, on.clone(), false, None),
+        (boost, on.clone(), false, None),
+        (trimmed, on.clone(), false, None),
+        (at_max, on.clone(), false, None),
+        (excluded, on.clone(), false, None),
+        (unmeasured, on.clone(), false, None),
+        (plain.clone(), off, false, None),
+        (plain.clone(), on.clone(), true, None),
+        (plain, on, false, Some(applied(7.0, None))),
+    ];
+    for (i, (track, config, bp, started)) in cases.iter().enumerate() {
+        let n = started.unwrap_or_else(|| fp_model::normalization(config, track, *bp));
+        let lines = gain_info(track, config, bp_of(&n), Some(&n));
+        let expected = format!("{} dB", signed_db(n.gain_db));
+        assert_eq!(
+            value_of(&lines, InfoKind::Result),
+            Some(&text(&expected)),
+            "case {i}"
+        );
+        assert_eq!(
+            lines.last().map(|l| l.kind),
+            Some(InfoKind::Result),
+            "case {i}"
+        );
+        if let Some(b) = gain_badge(&n, config, track) {
+            assert_eq!(
+                b.text,
+                msg("badge-gain", &[("gain", &signed_db(n.gain_db))]),
+                "case {i}"
+            );
+            assert_eq!(
+                value_of(&b.tip, InfoKind::Result),
+                Some(&text(&expected)),
+                "case {i}"
+            );
+        }
+    }
+}
+
+fn bp_of(n: &fp_model::Normalization) -> bool {
+    n.status == fp_model::NormalizationStatus::BitPerfect
 }
