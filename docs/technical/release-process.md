@@ -206,16 +206,20 @@ building.
   of every book, English included. It links to the same page in each
   language, or to that language's start page when the page does not exist
   there yet (an English page added after the last regeneration).
-- **The browser's language:** the first time someone opens an English page,
-  the same script reads `navigator.languages`; the first tag that is
-  English (stay) or has a translation (`pt-BR` and `pt-PT` match `pt`)
-  decides, and the visitor goes to the same page in that language (the start
-  page when it has no such page). Choosing a language in the menu, or the
-  notice's link to English, stores the choice in `localStorage`
-  (`fauste-player-guide-language`) and the jump never overrides it; links to
-  English also carry `?lang=en`, which stores English and stops the jump
-  where storage is blocked. Nothing moves without JavaScript, so crawlers
-  see the English page.
+- **The visitor's language:** an English page sends the visitor to the
+  same page in their language (the start page when it has no such page).
+  `docs/book-assets/site-language.js`, shared with the landing page,
+  decides: `?lang=en` stores English and stays; a stored choice
+  (`localStorage`, `fauste-player-guide-language`) wins, English staying
+  and a translation being opened, and an unknown stored code counts as no
+  choice; with nothing stored, the first tag of `navigator.languages` that
+  is English (stay) or has a translation (`pt-BR` and `pt-PT` match `pt`)
+  decides. Choosing a language in the menu, or the notice's link to
+  English, stores the choice, so it is kept on every page of the guide and
+  the landing page; links to English carry `?lang=en`, which also ends the
+  redirect where storage is blocked. Translated pages never redirect, and
+  nothing moves without JavaScript, so crawlers see the English page. The
+  decision is unit-tested with `node --test 'scripts/site/tests/*.test.js'`.
 - **The build:** `scripts/site/build.sh` calls `scripts/site/guide.py build`,
   which copies `docs/` to a staging folder, writes
   `book-assets/languages.js` (the languages, each one's pages, the notice)

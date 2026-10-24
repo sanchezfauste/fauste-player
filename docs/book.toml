@@ -12,5 +12,5 @@ src = "user"
 git-repository-url = "https://github.com/sanchezfauste/fauste-player"
 # {path} is relative to docs/ (user/... or i18n/<lang>/...).
 edit-url-template = "https://github.com/sanchezfauste/fauste-player/edit/master/docs/{path}"
-additional-js = ["book-assets/languages.js", "book-assets/language-menu.js"]
+additional-js = ["book-assets/languages.js", "book-assets/site-language.js", "book-assets/language-menu.js"]
 additional-css = ["book-assets/language-menu.css"]
