@@ -47,14 +47,67 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked --features "$FEATURES" -- -D warnings
         shell: bash
-      - run: cargo test --workspace --locked --no-fail-fast --features "$FEATURES"
+      # The suite runs once, instrumented for test coverage (cargo-llvm-cov),
+      # and the report goes to the `sonarqube` job.
+      - run: rustup component add llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - run: cargo llvm-cov --no-report --workspace --locked --no-fail-fast --features "$FEATURES"
         shell: bash
+      # Coverage is informative: a failing test still leaves a report, and
+      # the report's paths are made relative to the repository root so the
+      # three systems' reports match the same files.
+      - name: Write the coverage report
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          cargo llvm-cov report --lcov --output-path "lcov-$RUNNER_OS.info"
+          ROOT="${GITHUB_WORKSPACE//\\//}" perl -pi -e \
+            'if (/^SF:/) { s{\\}{/}g; s{^SF:\Q$ENV{ROOT}\E/}{SF:}i }' "lcov-$RUNNER_OS.info"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        with:
+          name: lcov-${{ runner.os }}
+          path: lcov-${{ runner.os }}.info
+          if-no-files-found: warn
+          retention-days: 7
       # The packaging check for the Windows GUI subsystem, on the shells
       # that run it (Git Bash on the Windows release runner).
       - name: Self-test the Windows GUI subsystem check
         if: runner.os != 'macOS'
         run: scripts/check-windows-gui.sh --self-test
         shell: bash
+
+  sonarqube:
+    name: SonarQube
+    # Informative only: the analysis never blocks a pull request. Pull
+    # requests from forks and Dependabot get no secrets, so they skip it.
+    needs: test
+    if: ${{ !cancelled() }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history, for blame and new-code detection
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: lcov-*
+          path: coverage
+          merge-multiple: true
+      - uses: actions/cache@v6
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      - name: SonarQube scan
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@v8
 
   release-baseline:
     name: release build and Linux packages on the release image

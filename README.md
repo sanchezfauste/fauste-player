@@ -9,6 +9,7 @@
 <p align="center">
   <a href="https://github.com/sanchezfauste/fauste-player/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/sanchezfauste/fauste-player?display_name=tag&sort=semver"></a>
   <a href="https://github.com/sanchezfauste/fauste-player/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sanchezfauste/fauste-player/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://sonarcloud.io/summary/overall?id=sanchezfauste_fauste-player"><img alt="Coverage" src="https://sonarcloud.io/api/project_badges/measure?project=sanchezfauste_fauste-player&metric=coverage"></a>
   <a href="LICENSE"><img alt="Licence: GPL-3.0-or-later" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-blue.svg"></a>
   <img alt="Platforms: Linux, Windows, macOS" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg">
 </p>

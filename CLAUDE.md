@@ -61,6 +61,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                        # ~1 min; no audio device or display needed
 cargo test -p <crate> --test <file> <name>    # focused run
 cargo deny check                              # after dependency changes
+cargo llvm-cov --workspace --html             # test coverage (CI sends it to SonarQube Cloud; see docs/technical/testing.md)
 cargo run -p fp-app                           # run the app (FAUSTE_HOME=<dir> for a scratch state)
 FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music dir> [cart dir]
 scripts/package-release.sh <target>           # release archive for one target
@@ -194,7 +195,7 @@ hand: release-please writes it from the commits.
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX, MSIX and Info.plist, the AUR PKGBUILD template; the per-format package scripts |
 | `snap/` | The snap recipe (`snapcraft.yaml`, where snapcraft looks for it) |
 | `site/`, `scripts/site/` | The landing page and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
-| `.github/workflows` | CI, Dependabot (`dependabot.yml`), release-please, release builds and packages, store publishing (`stores.yml`: Microsoft Store, Snap Store, Flathub, WinGet, AUR), GitHub Pages, commit checks |
+| `.github/workflows` | CI (with the SonarQube Cloud analysis and coverage; `sonar-project.properties`), Dependabot (`dependabot.yml`), release-please, release builds and packages, store publishing (`stores.yml`: Microsoft Store, Snap Store, Flathub, WinGet, AUR), GitHub Pages, commit checks |
 
 ## Design source
 
