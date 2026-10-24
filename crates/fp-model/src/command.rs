@@ -112,6 +112,12 @@ pub enum Command {
         track: TrackId,
         tags: Box<TrackTags>,
     },
+    /// The bit rate the bit-rate-only pass read from the file, in bit/s
+    /// (`None`: it reports none); ignored if the track is gone.
+    ApplyBitrate {
+        track: TrackId,
+        bitrate: Option<u32>,
+    },
     /// Operator feedback 4, Q1.2: the length the file's header declares,
     /// stored only while the track is not analysed and `secs` is finite
     /// and positive (ignored if the track is gone). The analysis replaces

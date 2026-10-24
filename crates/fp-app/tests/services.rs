@@ -2097,3 +2097,72 @@ fn the_activity_is_rebuilt_only_when_something_changed() {
     idle_for(&mut r, 200);
     assert_eq!(r.services.activity_builds(), before);
 }
+
+/// A track analysed before the format carried a bit rate: analysed, tags and
+/// loudness done, the format known but with no bit rate.
+fn analysed_without_bitrate(state: &mut fp_model::AppState) {
+    for track in state.library.iter_mut() {
+        track.analyzed = true;
+        track.tags_read = true;
+        track.apply_loudness(None, fp_model::LOUDNESS_VERSION);
+        track.format = Some(fp_model::AudioFormat {
+            sample_rate: 48_000,
+            bits: Some(16),
+            channels: 1,
+            dsd_rate: None,
+            bitrate: None,
+        });
+        track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+    }
+}
+
+#[test]
+fn the_bitrate_pass_fills_the_bit_rate_of_an_older_analysis_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 1);
+    let mut r = rig_with(&[a], dir, Duration::ZERO, analysed_without_bitrate);
+    let track = only_track(&r).id;
+    r.media.seed(
+        track,
+        TrackMedia {
+            peaks: Vec::new(),
+            peak_bucket_secs: 0.01,
+            cover_png: None,
+        },
+    );
+    r.run_until("the bit rate", |r| only_track(r).bitrate_read);
+    // 48 kHz × 16 bit × 1 channel.
+    assert_eq!(only_track(&r).format.unwrap().bitrate, Some(768_000));
+    let version = r.handle.telemetry.load().model_version;
+    let until = r.now + Duration::from_millis(500);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(
+        r.handle.telemetry.load().model_version,
+        version,
+        "no further ApplyBitrate once it is read"
+    );
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "no analysis ran");
+}
+
+#[test]
+fn a_file_without_a_readable_bit_rate_is_not_asked_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let junk = dir.path().join("junk.wav");
+    std::fs::write(&junk, b"this is not audio").unwrap();
+    let mut r = rig_with(&[junk], dir, Duration::ZERO, analysed_without_bitrate);
+    let track = only_track(&r).id;
+    r.media.seed(
+        track,
+        TrackMedia {
+            peaks: Vec::new(),
+            peak_bucket_secs: 0.01,
+            cover_png: None,
+        },
+    );
+    r.run_until("the pass to answer", |r| only_track(r).bitrate_read);
+    assert_eq!(only_track(&r).format.unwrap().bitrate, None);
+    let version = r.handle.telemetry.load().model_version;
+    let until = r.now + Duration::from_millis(500);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert_eq!(r.handle.telemetry.load().model_version, version);
+}

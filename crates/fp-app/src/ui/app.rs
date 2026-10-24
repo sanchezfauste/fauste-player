@@ -1119,7 +1119,9 @@ impl AppUi {
                 }
                 // The services thread's reads and the summary writes have
                 // their own consumers.
-                TagOutcome::Read { .. } | TagOutcome::Written { .. } => {}
+                TagOutcome::Read { .. }
+                | TagOutcome::Bitrate { .. }
+                | TagOutcome::Written { .. } => {}
             }
         }
     }

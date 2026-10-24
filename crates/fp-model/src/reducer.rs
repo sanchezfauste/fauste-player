@@ -215,6 +215,11 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                 t.apply_tags(&tags);
             }
         }
+        Command::ApplyBitrate { track, bitrate } => {
+            if let Some(t) = state.library.get_mut(track) {
+                t.apply_bitrate(bitrate);
+            }
+        }
         Command::SetDuration { track, secs } => {
             // Q1.2: the header's length stands in until the analysis.
             if secs.is_finite()
