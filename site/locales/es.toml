@@ -9,7 +9,7 @@ english-link = "Leer el original en inglés"
 
 [source-hash]
 common = "d4080e3e671d2848255cc4caff571e1565669fb8973eb65bfe44b4d6319765dd"
-index = "cb64f132cee56b4a38d1f86ff5690a5ede3a440c7dd831245161090e35e90fbe"
+index = "b5f75e8145e1fb29d3e14ec4ac66448297adbdae1f5c3ce9a3702db747a67663"
 privacy = "51422d6d3df9742b71c7e6e556d8d4d0356b0926482fb052ea0ef6476a35be2e"
 
 [common]
@@ -58,6 +58,8 @@ macos-dmg = "Imagen de disco universal (.dmg)"
 macos-intel = "Archivo para Intel (.tar.gz)"
 macos-arm = "Archivo para Apple silicon (.tar.gz)"
 linux-systems = "Debian y Ubuntu (.deb), Fedora y openSUSE (.rpm), o cualquier distribución."
+snap-badge-alt = "Disponible en la Snap Store"
+snap = "Desde la Snap Store (x86_64 y aarch64):"
 architecture = "Arquitectura"
 all-files = "Todos los archivos y sumas de verificación"
 getting-started-before = "La instalación, las actualizaciones y el primer arranque de las compilaciones sin firmar se explican en"
