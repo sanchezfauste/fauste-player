@@ -152,8 +152,81 @@ def build(out, locales=LOCALES, site=SITE):
                 fh.write(rendered)
 
 
+def check(site, locales=LOCALES, i18n=I18N):
+    """Problems with the translations, as lines; with a built site, also
+    with their pages. Empty when everything is fine."""
+    problems = []
+    langs = codes(locales)
+    guide = sorted(d for d in os.listdir(i18n) if os.path.isdir(os.path.join(i18n, d)))
+    if langs != guide:
+        problems.append(f"site/locales: languages {' '.join(langs) or '(none)'} differ from "
+                        f"docs/i18n {' '.join(guide) or '(none)'}")
+    try:
+        en = load("en", locales)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        return problems + [f"site/locales/en.toml: {e}"]
+    hashes = {t: table_hash(en.get(t, {})) for t in TABLES}
+
+    for code in langs:
+        where = f"site/locales/{code}.toml"
+        try:
+            data = load(code, locales)
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            problems.append(f"{where}: {e}")
+            continue
+        recorded = data.get("source-hash", {})
+        missing = [k for k in META_KEYS if not str(data.get(k, "")).strip()]
+        missing += [f"source-hash.{t}" for t in TABLES if not recorded.get(t)]
+        if missing:
+            problems.append(f"{where}: missing {', '.join(missing)}")
+        if data.get("language", code) != code:
+            problems.append(f"{where}: language is {data['language']!r}, not {code!r}")
+        try:
+            with open(os.path.join(i18n, code, "translation.toml"), "rb") as fh:
+                meta = tomllib.load(fh)
+        except (OSError, tomllib.TOMLDecodeError):
+            meta = None
+        for key in ("name", "label"):
+            if meta is not None and data.get(key) and data.get(key) != meta.get(key):
+                problems.append(f"{where}: {key} differs from docs/i18n/{code}/translation.toml")
+        for t in TABLES:
+            want, got = set(en.get(t, {})), set(data.get(t, {}))
+            if want - got:
+                problems.append(f"{where}: [{t}] missing {', '.join(sorted(want - got))}")
+            if got - want:
+                problems.append(f"{where}: [{t}] has keys English lacks: {', '.join(sorted(got - want))}")
+            if recorded.get(t) and recorded[t] != hashes[t]:
+                problems.append(f"{where}: [{t}] was translated from older English text "
+                                f"(source-hash should be {hashes[t]})")
+        for name, value in texts(data).items():
+            if "{{" in value:
+                problems.append(f"{where}: {name} contains a placeholder")
+
+        if site:
+            for page in PAGES:
+                rel = f"{code}/{page}"
+                path = os.path.join(site, code, page)
+                if not os.path.isfile(path):
+                    problems.append(f"{rel}: not built")
+                    continue
+                with open(path, encoding="utf-8") as fh:
+                    built = fh.read()
+                if f'<html lang="{code}"' not in built:
+                    problems.append(f"{rel}: not marked lang={code}")
+                if 'class="ai-notice"' not in built:
+                    problems.append(f"{rel}: no AI-translation notice")
+                if 'class="language-menu"' not in built:
+                    problems.append(f"{rel}: no language menu")
+    return problems
+
+
 def main(argv):
-    if len(argv) == 2 and argv[0] == "build":
+    if argv == ["hash"]:
+        en = load("en")
+        print("[source-hash]")
+        for t in TABLES:
+            print(f'{t} = "{table_hash(en.get(t, {}))}"')
+    elif len(argv) == 2 and argv[0] == "build":
         try:
             build(argv[1])
         except (OSError, tomllib.TOMLDecodeError, KeyError, RenderError) as e:

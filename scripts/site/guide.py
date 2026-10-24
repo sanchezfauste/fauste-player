@@ -10,7 +10,9 @@ the strings of the AI-translation notice (see docs/technical/release-process.md)
                                         translation in <out-dir>/<lang>
     guide.py check [<site-dir>]         translations match their source;
                                         with a built site, every translated
-                                        page carries the notice
+                                        page carries the notice; also the
+                                        landing page's translations
+                                        (scripts/site/landing.py)
     guide.py images <site-dir> <shots>  screenshots taken in each language
                                         (<shots>/<lang>/guide/*.png) into the
                                         site; each translated book links its
@@ -276,12 +278,18 @@ def check(site):
         if not os.path.isfile(index) or "language-menu-" not in read(index):
             problems.append("guide/index.html: no language menu script")
 
+    # The landing page and the privacy policy (site/locales), whose
+    # translations must match the current English texts.
+    import landing
+    problems.extend(landing.check(site))
+
     for p in problems:
         print(p)
     if problems:
         print(f"{len(problems)} problem(s) in the translations")
         sys.exit(1)
-    print(f"{len(langs)} translation(s) checked: {', '.join(langs) or 'none'}")
+    print(f"{len(langs)} translation(s) of the guide and the landing page checked: "
+          f"{', '.join(langs) or 'none'}")
 
 
 # --- images ----------------------------------------------------------------
