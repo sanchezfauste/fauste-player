@@ -1,81 +1,62 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy policy — Fauste Player</title>
-<meta name="description" content="Fauste Player collects no personal data, sends no telemetry and makes no network connections of its own.">
+<title>{{ privacy.title }}</title>
+<meta name="description" content="{{ attr:privacy.description }}">
 <meta name="color-scheme" content="dark">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css">
+<link rel="icon" href="{{ root }}favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="{{ root }}style.css">
+{{ alternates }}
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="./"><img src="favicon.svg" alt="" width="28" height="28"> Fauste Player</a>
-  <nav aria-label="Main">
-    <a href="./#download">Download</a>
-    <a href="guide/">User guide</a>
-    <a href="https://github.com/sanchezfauste/fauste-player">Source</a>
+  <a class="brand" href="./"><img src="{{ root }}favicon.svg" alt="" width="28" height="28"> Fauste Player</a>
+  <nav aria-label="{{ attr:common.nav }}">
+    <a href="./#download">{{ common.nav-download }}</a>
+    <a href="{{ guide }}">{{ common.nav-guide }}</a>
+    <a href="https://github.com/sanchezfauste/fauste-player">{{ common.nav-source }}</a>
+    {{ menu }}
   </nav>
 </header>
 
 <main>
+  {{ notice }}
   <section>
-    <h1>Privacy policy</h1>
-    <p>Last updated: 24 October 2026. This policy covers the Fauste Player
-    desktop application in every distribution: the Microsoft Store, the Snap
-    Store, the packages on the GitHub releases page, and builds from source.</p>
+    <h1>{{ privacy.heading }}</h1>
+    <p>{{ privacy.updated }}</p>
 
-    <h2>No data is collected</h2>
-    <p>Fauste Player collects no personal data. It has no accounts, no
-    analytics, no advertising and no telemetry, and it never sends anything
-    about you, your computer or your music to the author or to anyone else.</p>
+    <h2>{{ privacy.no-data-heading }}</h2>
+    <p>{{ privacy.no-data }}</p>
 
-    <h2>What stays on your computer</h2>
-    <p>To work, the application keeps these files in its own folders on your
-    computer (see <a href="guide/data-and-backups.html">Data and backups</a>
-    in the user guide for where they are):</p>
+    <h2>{{ privacy.local-heading }}</h2>
+    <p>{{ privacy.local-before }} <a href="{{ guide }}data-and-backups.html">{{ privacy.local-link }}</a>
+    {{ privacy.local-after }}</p>
     <ul>
-      <li>your settings, playlists, cart pages and session;</li>
-      <li>an analysis cache with the tags, markers, loudness and waveform of
-        the audio files you load;</li>
-      <li>log files and crash reports, which may contain file paths and device
-        names.</li>
+      <li>{{ privacy.local-settings }}</li>
+      <li>{{ privacy.local-cache }}</li>
+      <li>{{ privacy.local-logs }}</li>
     </ul>
-    <p>These files never leave your computer unless you choose to share them,
-    for example by attaching a log to a bug report. You can delete them at any
-    time; uninstalling the application, or deleting its folders, removes
-    them.</p>
+    <p>{{ privacy.local-leave }}</p>
 
-    <h2>Network</h2>
-    <p>The application opens no outgoing network connections of its own.
-    The optional remote control (an HTTP/JSON API and OSC) is off by default.
-    When you turn it on in Settings, it listens for connections from the
-    clients you allow: it answers them, and sends live updates only to the
-    clients that ask for them. It can be protected with a token
-    and source allow-lists. Links in the application, such as the user guide
-    or the licence, open in your web browser, whose own privacy policy then
-    applies.</p>
+    <h2>{{ privacy.network-heading }}</h2>
+    <p>{{ privacy.network }}</p>
 
-    <h2>Store distribution</h2>
-    <p>The stores that distribute Fauste Player (for example the Microsoft
-    Store or the Snap Store) may collect data about downloads, installs and
-    crashes under their own privacy policies. The author has no control over
-    that data.</p>
+    <h2>{{ privacy.stores-heading }}</h2>
+    <p>{{ privacy.stores }}</p>
 
-    <h2>Changes and contact</h2>
-    <p>If this policy changes, the new version is published on this page with
-    a new date. Questions can be asked in the
-    <a href="https://github.com/sanchezfauste/fauste-player/issues">issue
-    tracker</a> or by writing to the author, Marc Sánchez Fauste, through
-    <a href="https://sanchezfauste.com/">sanchezfauste.com</a>.</p>
+    <h2>{{ privacy.changes-heading }}</h2>
+    <p>{{ privacy.changes }}</p>
   </section>
 </main>
 
 <footer>
   <p><a href="./">Fauste Player</a> ·
-  <a href="https://github.com/sanchezfauste/fauste-player">Repository</a> ·
-  <a href="https://github.com/sanchezfauste/fauste-player/blob/master/LICENSE">GPL-3.0-or-later</a></p>
+  <a href="https://github.com/sanchezfauste/fauste-player">{{ common.footer-repository }}</a> ·
+  <a href="https://github.com/sanchezfauste/fauste-player/blob/master/LICENSE">{{ common.footer-licence }}</a></p>
 </footer>
+<script src="{{ root }}site-language.js"></script>
+<script src="{{ root }}landing-language.js"></script>
 </body>
 </html>
