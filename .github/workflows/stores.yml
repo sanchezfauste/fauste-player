@@ -32,7 +32,6 @@ on:
       - scripts/package/flathub-manifest.py
       - scripts/package/flatpak-cargo-sources.sh
       - scripts/package/metainfo.sh
-      - rust-toolchain.toml
       - .github/workflows/stores.yml
   workflow_dispatch:
     inputs:
@@ -155,14 +154,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
-      - name: Check that the snap builds with the pinned toolchain
-        run: |
-          pinned="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
-          snap="$(sed -n 's/^ *rust-channel: "\(.*\)"$/\1/p' snap/snapcraft.yaml)"
-          [ "${pinned}" = "${snap}" ] || {
-            echo "snap/snapcraft.yaml builds with ${snap}, rust-toolchain.toml pins ${pinned}" >&2
-            exit 1
-          }
       - uses: snapcore/action-build@v1
         id: build
       - uses: actions/upload-artifact@v7
@@ -211,7 +202,12 @@ jobs:
           check() {
             python3 -c '
           import json, sys
-          report = json.loads(sys.stdin.read().strip() or "{}")
+          text = sys.stdin.read().strip()
+          try:
+              report = json.loads(text or "{}")
+          except ValueError:
+              print(text)
+              sys.exit(1)
           print(json.dumps(report, indent=2))
           errors = [e for e in report.get("errors", []) if e != "appid-url-not-reachable"]
           if "appid-url-not-reachable" in report.get("errors", []):

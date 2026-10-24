@@ -39,15 +39,23 @@ apps:
       - network-bind
 
 parts:
+  # The toolchain rust-toolchain.toml pins, which the rust plugin then uses
+  # (a part with this name replaces the plugin's own rustup set-up).
+  rust-deps:
+    plugin: nil
+    source: .
+    build-packages: [curl]
+    override-build: |
+      channel="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --profile minimal --default-toolchain "${channel}"
+
   fauste-player:
+    after: [rust-deps]
     plugin: rust
     source: .
     rust-path: [crates/fp-app]
-    # The toolchain of rust-toolchain.toml (the workflow checks they match).
-    rust-channel: "1.98.1"
     build-packages:
-      # The rust plugin installs rust-channel with rustup.
-      - rustup
       - pkg-config
       - libasound2-dev
       - libdbus-1-dev

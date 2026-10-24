@@ -396,9 +396,9 @@ an existing tag, with `dry_run` to build and check without publishing.
   read the AppStream metainfo (`packaging/linux/org.fauste.FaustePlayer.metainfo.xml`),
   whose screenshots point at `docs/images` on `master`. The MSIX logos in
   `packaging/windows/msix/Assets` are rendered by `scripts/package/icons.sh`.
-- **Toolchain:** the snap builds with `rust-channel` in `snap/snapcraft.yaml`;
-  the `snap` job fails when it differs from `rust-toolchain.toml`, so bump
-  both together. The Flatpak and Flathub builds use the SDK's `rust-stable`.
+- **Toolchain:** the snap's `rust-deps` part installs the version
+  `rust-toolchain.toml` pins, with rustup. The Flatpak and Flathub builds use
+  the SDK's `rust-stable`.
 
 ### Secrets and variables
 
