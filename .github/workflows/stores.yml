@@ -211,7 +211,7 @@ jobs:
           check() {
             python3 -c '
           import json, sys
-          report = json.loads(sys.stdin.read() or "{}")
+          report = json.loads(sys.stdin.read().strip() or "{}")
           print(json.dumps(report, indent=2))
           errors = [e for e in report.get("errors", []) if e != "appid-url-not-reachable"]
           if "appid-url-not-reachable" in report.get("errors", []):

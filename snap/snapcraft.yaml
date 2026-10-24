@@ -45,9 +45,9 @@ parts:
     rust-path: [crates/fp-app]
     # The toolchain of rust-toolchain.toml (the workflow checks they match).
     rust-channel: "1.98.1"
-    # The rust plugin installs rust-channel with rustup.
-    build-snaps: [rustup]
     build-packages:
+      # The rust plugin installs rust-channel with rustup.
+      - rustup
       - pkg-config
       - libasound2-dev
       - libdbus-1-dev
