@@ -62,7 +62,9 @@ jobs:
           fetch-depth: 0
       # Unit tests of the site scripts, before the slow screenshots.
       - name: Test the site scripts
-        run: python3 -m unittest discover -s scripts/site/tests -p 'test_*.py'
+        run: |
+          python3 -m unittest discover -s scripts/site/tests -p 'test_*.py'
+          node --test 'scripts/site/tests/*.test.js'
       # The screenshots come from the real app on a virtual display with the
       # silent null audio backend (see scripts/site/screenshots.sh).
       - name: Install the screenshot tools

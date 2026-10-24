@@ -1,12 +1,15 @@
 // The language menu in the guide's top bar, the notice on a translated page
 // that it was translated with AI and, on an English page, the jump to the
-// browser's language the first time. The data (languages, the pages each
-// one has, the notice) comes from languages.js, which scripts/site/guide.py
-// generates for every book. Uses no external resources.
+// visitor's language (the one they chose, else the browser's). The data
+// (languages, the pages each one has, the notice) comes from languages.js,
+// which scripts/site/guide.py generates for every book; the choice and the
+// decision come from site-language.js, shared with the landing page. Uses
+// no external resources.
 (function () {
     "use strict";
     var data = window.faustePlayerGuide;
-    if (!data || typeof path_to_root === "undefined") {
+    var shared = window.faustePlayerLanguage;
+    if (!data || !shared || typeof path_to_root === "undefined") {
         return;
     }
 
@@ -21,23 +24,7 @@
         page += "index.html";
     }
 
-    var STORE = "fauste-player-guide-language";
-
-    function stored() {
-        try {
-            return window.localStorage.getItem(STORE);
-        } catch (e) {
-            return null;
-        }
-    }
-
-    function remember(code) {
-        try {
-            window.localStorage.setItem(STORE, code);
-        } catch (e) {
-            // Private window or blocked storage: the ?lang=en flag still works.
-        }
-    }
+    var remember = shared.remember;
 
     // Choosing a language, in the menu or by the notice's link, is final:
     // the automatic jump never overrides it.
@@ -62,33 +49,26 @@
         return url.href;
     }
 
-    // The first visit to an English page: go to the translation that matches
-    // the browser's languages (the first one that is English or has a
-    // translation decides), unless a language was chosen before or the page
-    // was opened with ?lang=en. Without JavaScript nothing moves.
+    // An English page goes to the visitor's language: the one stored by a
+    // choice, else the first of the browser's languages that is English or
+    // has a translation (site-language.js decides). ?lang=en stores
+    // English. Without JavaScript nothing moves.
     function detect() {
-        if (data.current !== "en") {
-            return;
+        var choice = shared.decide({
+            current: data.current,
+            codes: data.languages.slice(1).map(function (l) { return l.code; }),
+            search: window.location.search,
+            stored: shared.stored(),
+            wanted: window.navigator.languages ||
+                (window.navigator.language ? [window.navigator.language] : [])
+        });
+        if (choice.remember) {
+            remember(choice.remember);
         }
-        if (/[?&]lang=en(&|$)/.test(window.location.search)) {
-            remember("en");
-            return;
-        }
-        if (stored()) {
-            return;
-        }
-        var wanted = window.navigator.languages ||
-            (window.navigator.language ? [window.navigator.language] : []);
-        for (var i = 0; i < wanted.length; i++) {
-            var primary = String(wanted[i]).toLowerCase().split(/[-_]/)[0];
-            if (primary === "en") {
+        for (var j = 1; choice.go && j < data.languages.length; j++) {
+            if (data.languages[j].code === choice.go) {
+                window.location.replace(href(data.languages[j]));
                 return;
-            }
-            for (var j = 1; j < data.languages.length; j++) {
-                if (data.languages[j].code === primary) {
-                    window.location.replace(href(data.languages[j]));
-                    return;
-                }
             }
         }
     }
