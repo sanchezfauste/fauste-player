@@ -207,10 +207,15 @@ jobs:
         run: |
           pip install aiohttp tomlkit
           scripts/package/flatpak-cargo-sources.sh
+      - name: Write the crates' notices
+        run: scripts/package/notices.sh packaging/flatpak/THIRD-PARTY.html
       - uses: actions/upload-artifact@v7
         with:
           name: cargo-sources
-          path: packaging/flatpak/cargo-sources.json
+          path: |
+            packaging/flatpak/cargo-sources.json
+            packaging/flatpak/THIRD-PARTY.html
+          if-no-files-found: error
 
   flatpak:
     name: Flatpak bundle (x86_64)

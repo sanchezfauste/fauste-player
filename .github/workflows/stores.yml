@@ -32,6 +32,7 @@ on:
       - scripts/package/flathub-manifest.py
       - scripts/package/flatpak-cargo-sources.sh
       - scripts/package/metainfo.sh
+      - scripts/package/notices.sh
       - .github/workflows/stores.yml
   workflow_dispatch:
     inputs:
@@ -64,7 +65,7 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       prerelease: ${{ steps.plan.outputs.prerelease }}
       publish: ${{ steps.plan.outputs.publish }}
-      msstore: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.MSSTORE_CLIENT_SECRET != '' && vars.MSSTORE_PRODUCT_ID != '' }}
+      msstore: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.MSSTORE_CLIENT_SECRET != '' && vars.MSSTORE_PRODUCT_ID != '' && vars.MSSTORE_IDENTITY_NAME != '' && vars.MSSTORE_PUBLISHER != '' }}
       snap: ${{ steps.plan.outputs.publish == 'true' && secrets.SNAPCRAFT_STORE_CREDENTIALS != '' }}
       flathub: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.FLATHUB_TOKEN != '' }}
       winget: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.WINGET_TOKEN != '' }}
@@ -74,7 +75,21 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
           PUBLISH: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
+          EVENT: ${{ github.event_name }}
         run: |
+          if [ "${EVENT}" != pull_request ]; then
+            # Only release tags, and only those that carry the store
+            # packaging: every job builds from the tag.
+            if ! [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+              echo "::error::${TAG} is not a release tag (vX.Y.Z)"; exit 1
+            fi
+            if ! git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/${TAG}" >/dev/null; then
+              echo "::error::there is no tag ${TAG}"; exit 1
+            fi
+            if ! curl -sfIo /dev/null "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${TAG}/snap/snapcraft.yaml"; then
+              echo "::error::${TAG} predates the store packaging; use a later release"; exit 1
+            fi
+          fi
           version="${TAG#v}"
           prerelease=false
           case "${version}" in *-*) prerelease=true ;; esac
@@ -193,11 +208,14 @@ jobs:
           scripts/package/flathub-manifest.py "${TAG}" "$(git rev-parse HEAD)" \
             flathub-out/org.fauste.FaustePlayer.yml
           scripts/package/metainfo.sh "${TAG#v}" flathub-out/org.fauste.FaustePlayer.metainfo.xml
+          scripts/package/notices.sh flathub-out/THIRD-PARTY.html
       - name: Lint as Flathub does
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends flatpak
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+          # The linter exits non-zero when it reports errors; the report
+          # decides, and no report at all (a crash) fails.
           lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@" || true; }
           # Fails on any error but appid-url-not-reachable: the domain of the
           # application ID is checked at submission (see release-process.md,
@@ -207,7 +225,7 @@ jobs:
           import json, sys
           text = sys.stdin.read().strip()
           try:
-              report = json.loads(text or "{}")
+              report = json.loads(text)
           except ValueError:
               print(text)
               sys.exit(1)
@@ -227,6 +245,7 @@ jobs:
           path: |
             flathub-out/org.fauste.FaustePlayer.yml
             flathub-out/cargo-sources.json
+            flathub-out/THIRD-PARTY.html
           if-no-files-found: error
       - name: Open the update pull request on Flathub
         if: needs.plan.outputs.flathub == 'true'
@@ -237,13 +256,15 @@ jobs:
           repo=flathub/org.fauste.FaustePlayer
           branch="update-${TAG}"
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" flathub-repo
-          cp flathub-out/org.fauste.FaustePlayer.yml flathub-out/cargo-sources.json flathub-repo/
+          cp flathub-out/org.fauste.FaustePlayer.yml flathub-out/cargo-sources.json \
+            flathub-out/THIRD-PARTY.html flathub-repo/
           cd flathub-repo
-          if git diff --quiet; then echo "Flathub already has ${TAG}"; exit 0; fi
+          git add -A
+          if git diff --cached --quiet; then echo "Flathub already has ${TAG}"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "${branch}"
-          git commit -am "Update to ${TAG}"
+          git commit -m "Update to ${TAG}"
           git push --force origin "${branch}"
           gh pr view "${branch}" --repo "${repo}" >/dev/null 2>&1 \
             || gh pr create --repo "${repo}" --head "${branch}" --title "Update to ${TAG}" \
@@ -255,7 +276,8 @@ jobs:
     if: needs.plan.outputs.winget == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: vedantmgoyal9/winget-releaser@v2
+      # Pinned by commit: the step holds a token with write access.
+      - uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
         with:
           identifier: ${{ vars.WINGET_IDENTIFIER || 'SanchezFauste.FaustePlayer' }}
           release-tag: ${{ inputs.tag }}
@@ -287,10 +309,13 @@ jobs:
             pacman -Syu --noconfirm --needed namcap >/dev/null
             useradd -m builder && chown builder /pkg
             su builder -c "makepkg --printsrcinfo" > /dev/null
-            namcap PKGBUILD'
+            # namcap always exits 0: its errors (" E: ") fail the check.
+            namcap PKGBUILD | tee namcap.txt
+            ! grep -q " E: " namcap.txt'
       - name: Push to the AUR
         if: needs.plan.outputs.aur == 'true'
-        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
+        # Pinned by commit: the step holds the AUR key.
+        uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
         with:
           pkgname: fauste-player-bin
           pkgbuild: PKGBUILD

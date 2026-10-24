@@ -335,9 +335,12 @@ the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
   builds all three Linux packages on every push.
 - Tools fetched while packaging are pinned and checked before they run:
   appimagetool is release 1.9.1 (SHA-256 per architecture in
-  `scripts/package/linux.sh`), and flatpak-cargo-generator a fixed commit of
-  flatpak-builder-tools (SHA-256 in `scripts/package/flatpak-cargo-sources.sh`). Bump both together
-  with their checksums.
+  `scripts/package/linux.sh`), flatpak-cargo-generator a fixed commit of
+  flatpak-builder-tools (SHA-256 in `scripts/package/flatpak-cargo-sources.sh`),
+  cargo-about for the builds outside `package-release.sh` release 0.9.2
+  (SHA-256 per architecture in `scripts/package/notices.sh`), and the snap's
+  rustup-init release 1.29.2 (SHA-256 per architecture in
+  `snap/snapcraft.yaml`). Bump each together with its checksums.
 
 **Local builds:**
 - Linux: `scripts/package/linux.sh x86_64-unknown-linux-gnu [version] [deb,rpm,appimage]`.
@@ -377,7 +380,10 @@ and editing the title re-checks only the title.
 repositories. release-please calls it in a `stores` job after `binaries`,
 because WinGet and the AUR read the release's assets (the MSI, the Linux
 archives). It can be run by hand (**Actions → stores → Run workflow**) with
-an existing tag, with `dry_run` to build and check without publishing.
+an existing release tag, with `dry_run` to build and check without
+publishing. Every job builds from the tag, so the tag must carry the store
+packaging: the workflow refuses other tags, and tags made before it
+(v0.10.0 and earlier).
 
 | Job | Store | What it does | Publishes when |
 |---|---|---|---|
@@ -399,6 +405,13 @@ an existing tag, with `dry_run` to build and check without publishing.
 - **Toolchain:** the snap's `rust-deps` part installs the version
   `rust-toolchain.toml` pins, with rustup. The Flatpak and Flathub builds use
   the SDK's `rust-stable`.
+- **Notices:** the snap, the Flatpak and Flathub ship `THIRD-PARTY.html`
+  from `scripts/package/notices.sh` (cargo-about) where the About window
+  looks for it. The Flatpak and Flathub builds are offline, so CI writes it
+  next to `cargo-sources.json` and the manifest lists it as a file source.
+- **Builds without a store:** on a release the MSIX, the snaps, the Flathub
+  manifest and the PKGBUILD are built and checked even for stores not set up
+  yet, so a packaging break shows on the release run before it matters.
 
 ### Secrets and variables
 
@@ -413,8 +426,8 @@ credentials; variables hold public identifiers.
 | `MSSTORE_IDENTITY_NAME`, `MSSTORE_PUBLISHER`, `MSSTORE_PUBLISHER_DISPLAY_NAME` | variables | Package/Identity/Name, Package/Identity/Publisher (`CN=…`) and Package/Properties/PublisherDisplayName from Product identity |
 | `SNAPCRAFT_STORE_CREDENTIALS` | secret | the output of `snapcraft export-login --snaps=fauste-player --acls=package_access,package_push,package_update,package_release -` |
 | `SNAP_CHANNEL` | variable (optional) | the channel releases go to; default `stable` |
-| `FLATHUB_TOKEN` | secret | a fine-grained token of a maintainer of `flathub/org.fauste.FaustePlayer`, with *contents* and *pull requests* write access to that repository |
-| `WINGET_TOKEN` | secret | a classic token with the `public_repo` scope, of the account that owns the fork of `microsoft/winget-pkgs` |
+| `FLATHUB_TOKEN` | secret | a token of a maintainer of `flathub/org.fauste.FaustePlayer` that can push branches and open pull requests there: fine-grained (*contents* and *pull requests* write) if the flathub organisation accepts fine-grained tokens, otherwise classic with `public_repo` |
+| `WINGET_TOKEN` | secret | a classic token with the `public_repo` scope, of the account that owns the fork of `microsoft/winget-pkgs`; best a separate bot account (`WINGET_FORK_USER`), since `public_repo` on the maintainer's account can also push to this repository |
 | `WINGET_IDENTIFIER`, `WINGET_FORK_USER` | variables (optional) | the package identifier (default `SanchezFauste.FaustePlayer`) and the fork's owner (default the repository owner) |
 | `AUR_SSH_PRIVATE_KEY` | secret | a private SSH key whose public key is in the AUR account |
 | `AUR_USERNAME`, `AUR_EMAIL` | variables (optional) | the author of the AUR commits |
@@ -429,8 +442,10 @@ credentials; variables hold public identifiers.
 3. Under Account settings → User management → Microsoft Entra applications,
    create (or add) an application with the *Manager* role and a key; its
    tenant ID, client ID and key go into the `MSSTORE_*` secrets.
-4. Make the first submission by hand: run the workflow with `dry_run`,
-   download the `msix` artefact, and upload it in Partner Center together
+4. Make the first submission by hand: once the variables are set, run the
+   workflow with `dry_run` for the latest release (one that carries the
+   store packaging), download the `msix` artefact, and upload it in Partner
+   Center together
    with the listing (description, screenshots, privacy policy URL, age
    rating). The `runFullTrust` capability needs a short justification (a
    desktop program that opens audio devices and music files).
@@ -454,7 +469,8 @@ credentials; variables hold public identifiers.
    `https://fauste.org/.well-known/org.flathub.VerifiedApps.txt`.
 2. Fork [flathub/flathub](https://github.com/flathub/flathub), branch from
    `new-pr`, add the `org.fauste.FaustePlayer.yml` and `cargo-sources.json`
-   of the `flathub` artefact of a stores run for the latest tag, and open a
+   (and `THIRD-PARTY.html`) of the `flathub` artefact of the latest
+   release's stores run, and open a
    pull request against `new-pr`. Reviewers ask about the permissions:
    `--device=all` (ALSA hw: devices and MIDI), `--filesystem=home:ro`
    (music libraries read in place), `--share=network` (the remote API).

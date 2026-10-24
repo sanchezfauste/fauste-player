@@ -12,3 +12,7 @@
 /test-music/*
 !/test-music/README.md
 /_site
+
+# Generated next to the Flatpak manifest for its offline build
+/packaging/flatpak/cargo-sources.json
+/packaging/flatpak/THIRD-PARTY.html

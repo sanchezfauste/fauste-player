@@ -68,6 +68,7 @@ scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows
 scripts/package/msix.sh <target>              # Microsoft Store MSIX (Windows, Git Bash, Windows SDK)
 scripts/package/flathub-manifest.py <tag> <commit> <out>  # the Flathub manifest of a release (PyYAML)
 scripts/package/aur.sh <version> <out>        # the AUR PKGBUILD of a published release
+scripts/package/notices.sh <out> [features]   # THIRD-PARTY.html with cargo-about (the snap, Flatpak and Flathub builds)
 scripts/package/icons.sh                      # regenerate the PNG and .ico icons from packaging/icons/fauste-player.svg (inkscape, magick)
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
 scripts/site/build.sh [out]                   # website: landing page + mdBook guide (default target/site; needs gh or FAUSTE_RELEASE_JSON for the download links)

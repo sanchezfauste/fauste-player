@@ -41,14 +41,24 @@ apps:
 parts:
   # The toolchain rust-toolchain.toml pins, which the rust plugin then uses
   # (a part with this name replaces the plugin's own rustup set-up).
+  # rustup-init is pinned and checked before it runs.
   rust-deps:
     plugin: nil
     source: .
     build-packages: [curl]
     override-build: |
+      rustup_version=1.29.2
+      case "$(uname -m)" in
+        x86_64) sha=5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4 ;;
+        aarch64) sha=a9c168dbea81a84671c6b7a5c1795cb0eb699020110d107ddfca427bd797e697 ;;
+        *) echo "no rustup-init pin for $(uname -m)" >&2; exit 1 ;;
+      esac
+      curl --proto '=https' --tlsv1.2 -sSf -o rustup-init \
+        "https://static.rust-lang.org/rustup/archive/${rustup_version}/$(uname -m)-unknown-linux-gnu/rustup-init"
+      echo "${sha}  rustup-init" | sha256sum -c --quiet -
+      chmod +x rustup-init
       channel="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
-      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --profile minimal --default-toolchain "${channel}"
+      ./rustup-init -y --profile minimal --default-toolchain "${channel}"
 
   fauste-player:
     after: [rust-deps]
@@ -89,4 +99,5 @@ parts:
       install -Dm644 NOTICE "${licenses}/NOTICE"
       install -Dm644 crates/fp-app/assets/fonts/OFL.txt "${licenses}/Inter-OFL.txt"
       install -Dm644 crates/fp-app/assets/licenses/Phosphor-MIT.txt "${licenses}/Phosphor-MIT.txt"
+      PATH="${HOME}/.cargo/bin:${PATH}" scripts/package/notices.sh "${licenses}/THIRD-PARTY.html"
     parse-info: [usr/share/metainfo/org.fauste.FaustePlayer.metainfo.xml]
