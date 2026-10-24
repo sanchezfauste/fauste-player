@@ -450,7 +450,10 @@ credentials; variables hold public identifiers.
    rating). The `runFullTrust` capability needs a short justification (a
    desktop program that opens audio devices and music files).
 5. Once it is certified, later releases are submitted by the workflow; each
-   still goes through certification.
+   still goes through certification. The workflow's `msstore publish`
+   replaces any pending draft with a new submission made from the last
+   published one, so listing edits are made in Partner Center after a
+   release's submission, not left in a draft before it.
 
 **Snap Store**
 1. Create an account on [snapcraft.io](https://snapcraft.io) and register
