@@ -23,7 +23,7 @@
 
   var list = document.createElement("div");
   list.setAttribute("role", "tablist");
-  list.setAttribute("aria-label", "Operating system");
+  list.setAttribute("aria-label", container.dataset.tablistLabel || "Operating system");
   list.className = "tablist";
   var tabs = [];
 

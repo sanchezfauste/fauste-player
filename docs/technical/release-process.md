@@ -110,17 +110,65 @@ build runs as a job of the release-please workflow, not on a
 
 ## The website
 
-`pages.yml` builds the website, the landing page in `site/` plus the user
-guide (`docs/user`, an mdBook, and its translations in `docs/i18n`), and
-deploys it to GitHub Pages at <https://sanchezfauste.com/fauste-player/>,
-the guide under `/guide/` and each translation under `/guide/<lang>/`. Its
-download links are filled from the latest release by
+`pages.yml` builds the website, the landing page and privacy policy in
+`site/` plus the user guide (`docs/user`, an mdBook, and its translations
+in `docs/i18n`), and deploys it to GitHub Pages at
+<https://sanchezfauste.com/fauste-player/>: the landing page and privacy
+policy at the root and each translation under `/<lang>/`, the guide under
+`/guide/` and each translation under `/guide/<lang>/`. The landing page's
+download links are filled, in every language, from the latest release by
 `scripts/site/build.sh`, so the site is rebuilt on every release: the
 release-please workflow calls `pages.yml` in a `site` job after
 `binaries`. It also runs when `master` changes the guide, the site or the
 scripts, and by hand. Pull requests touching those paths build the site and
 run `scripts/site/check-links.sh` and `scripts/site/check-translations.sh`
-without deploying.
+without deploying. Every run first tests the site scripts:
+`python3 -m unittest discover -s scripts/site/tests -p 'test_*.py'` and
+`node --test 'scripts/site/tests/*.test.js'`.
+
+### The landing page in other languages
+
+The landing page and the privacy policy are published in English and in
+every language of the guide, and unlike the guide they never lag behind
+English.
+
+- **Files:** `site/index.html` and `site/privacy.html` are templates. Their
+  texts live in `site/locales/<lang>.toml`, one table per page (`[index]`,
+  `[privacy]`) plus `[common]`. `en.toml` is the only source; values may
+  hold inline HTML but no placeholders, and a link inside a sentence is
+  split into `-before`, `-link` and `-after` so a translation can reorder
+  it. A translation also holds `language`, `name` and `label` (as in the
+  guide's `translation.toml`), the AI notice of each page (`notice`,
+  `privacy-notice`, which says the English version prevails),
+  `english-link`, and `[source-hash]`: per table, the SHA-256 of the English
+  texts it was made from (`python3 scripts/site/landing.py hash` prints the
+  current ones).
+- **The rule:** a pull request that changes `en.toml` updates every
+  translation in the same pull request, generated with AI, with the new
+  hashes. A change to the templates alone needs no translation. A new
+  guide language needs its `site/locales/<lang>.toml` in the same pull
+  request.
+- **Rendering:** `scripts/site/landing.py build`, called by `build.sh`,
+  fills `{{ table.key }}` with a text (`{{ attr:… }}` escapes it for an
+  attribute) and build values such as `{{ root }}`, `{{ guide }}`,
+  `{{ menu }}` and `{{ notice }}`, and fails on an unknown or missing name.
+  A translated page links to the guide in its language, shows its own main
+  screen when the build has it (else the English one), and carries the AI
+  notice in its HTML. Every page lists the others with
+  `<link rel="alternate" hreflang>` under the published address
+  (`FAUSTE_SITE_URL` overrides it).
+- **The language menu:** a `<details>` list of plain links in the header,
+  so it works without JavaScript. `site/landing-language.js` stores a
+  choice made in it and, on an English page, opens the visitor's language
+  through `docs/book-assets/site-language.js`, the same decision and stored
+  choice as the guide (see "The visitor's language" below).
+- **The check:** `scripts/site/check-translations.sh` fails when
+  `site/locales` and `docs/i18n` hold different languages, when a
+  translation lacks its metadata, has other keys than `en.toml`, contains a
+  placeholder, differs from `translation.toml` in `name` or `label`, or was
+  made from older English texts (the message prints the expected hash);
+  given a built site, also when a translated page lacks its `lang`, notice
+  or menu.
 
 ### The screenshots
 
@@ -206,16 +254,22 @@ building.
   of every book, English included. It links to the same page in each
   language, or to that language's start page when the page does not exist
   there yet (an English page added after the last regeneration).
-- **The browser's language:** the first time someone opens an English page,
-  the same script reads `navigator.languages`; the first tag that is
-  English (stay) or has a translation (`pt-BR` and `pt-PT` match `pt`)
-  decides, and the visitor goes to the same page in that language (the start
-  page when it has no such page). Choosing a language in the menu, or the
-  notice's link to English, stores the choice in `localStorage`
-  (`fauste-player-guide-language`) and the jump never overrides it; links to
-  English also carry `?lang=en`, which stores English and stops the jump
-  where storage is blocked. Nothing moves without JavaScript, so crawlers
-  see the English page.
+- **The visitor's language:** an English page sends the visitor to the
+  same page in their language (the start page when it has no such page).
+  `docs/book-assets/site-language.js`, shared with the landing page,
+  decides: `?lang=en` stores English and stays; a stored choice
+  (`localStorage`, `fauste-player-guide-language`) wins, English staying
+  and a translation being opened, and an unknown stored code counts as no
+  choice; with nothing stored, the first tag of `navigator.languages` that
+  is English (stay) or has a translation (`pt-BR` and `pt-PT` match `pt`)
+  decides. Choosing a language in the menu, or the notice's link to
+  English, stores the choice, so it is kept on every page of the guide and
+  the landing page; links to English carry `?lang=en`, so the page they open
+  stays in English even where storage is blocked (there, the next English
+  page reached by a plain link may redirect again, since nothing could be
+  stored). Translated pages never redirect, and
+  nothing moves without JavaScript, so crawlers see the English page. The
+  decision is unit-tested with `node --test 'scripts/site/tests/*.test.js'`.
 - **The build:** `scripts/site/build.sh` calls `scripts/site/guide.py build`,
   which copies `docs/` to a staging folder, writes
   `book-assets/languages.js` (the languages, each one's pages, the notice)

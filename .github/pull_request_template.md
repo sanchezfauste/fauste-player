@@ -14,5 +14,6 @@
 - [ ] Docs match the change: README, `docs/user/` (English only; `docs/i18n/` is regenerated before releases), `docs/technical/`, spec/plan, `CLAUDE.md`
 - [ ] Screenshots: no need to retake `docs/images` by hand; the `screenshots` workflow opens a PR after a UI change reaches `master`
 - [ ] UI strings in every locale file (`en-US` is the source)
+- [ ] Landing page and privacy texts in every `site/locales` file with its `[source-hash]` (`en.toml` is the source)
 - [ ] No third-party playout product names anywhere
 - [ ] CI green on Linux, Windows and macOS

@@ -16,3 +16,6 @@
 # Generated next to the Flatpak manifest for its offline build
 /packaging/flatpak/cargo-sources.json
 /packaging/flatpak/THIRD-PARTY.html
+
+# Python bytecode of the site scripts
+__pycache__/

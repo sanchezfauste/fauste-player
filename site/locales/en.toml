@@ -1,0 +1,125 @@
+# The texts of the landing page (site/index.html) and the privacy policy
+# (site/privacy.html): the only source. Every other file in this folder is a
+# translation into a language of the user guide, and a pull request that
+# changes a text here updates all of them, with the [source-hash] that
+# `python3 scripts/site/landing.py hash` prints. Values may contain inline
+# HTML; they never contain {{ placeholders }}. A link split into
+# -before, -link and -after lets a translation reorder the sentence.
+language = "en"
+name = "English"
+label = "Language"
+
+[common]
+nav = "Main"
+nav-download = "Download"
+nav-guide = "User guide"
+nav-source = "Source"
+footer-repository = "Repository"
+footer-releases = "Releases"
+footer-licence = "GPL-3.0-or-later"
+footer-disclaimer = "Disclaimer"
+footer-privacy = "Privacy"
+
+[index]
+title = "Fauste Player — radio playout for Linux, Windows and macOS"
+description = "Fauste Player is a desktop radio playout application written in Rust: independent players, sample-accurate mixes, CUE pre-listen, a cartwall, bit-perfect and DSD output, MIDI and remote control."
+pitch = """Radio playout for Linux, Windows and macOS. Independent players,
+      sample-accurate overlapping mixes, a separate pre-listen output, and an audio
+      engine the interface can never block."""
+cta-download = "Download"
+cta-guide = "Read the user guide"
+shot-alt = "The Fauste Player main screen: four players with waveforms and playlists, and the cartwall."
+features = "What it does"
+players-title = "Independent players"
+players = """Four by default, any number configurable. Each has its own playlists,
+        transport, countdown, meter and outputs."""
+mixing-title = "Sample-accurate mixing"
+mixing = """In continuous mode the next track starts exactly at the MIX point and
+        overlaps the fading end of the current one. Markers are found automatically
+        and editable on the waveform."""
+cue-title = "CUE pre-listen"
+cue = """Listen to any track on a separate device or channel pair before it goes
+        on air, and load it as the next one."""
+cartwall-title = "Cartwall"
+cartwall = """Pages of instant carts for jingles, effects and spots, with loops,
+        exclusive carts and their own Main and Cue outputs."""
+bit-perfect-title = "Bit-perfect and DSD"
+bit-perfect = """Exclusive access follows each file's sample rate; DSD tracks reach the
+        converter unchanged as DoP or native DSD."""
+control-title = "MIDI and remote control"
+control = """Learn players onto a MIDI controller, or operate everything over the
+        network with an HTTP/JSON API, live events and OSC."""
+survive-title = "Built to survive"
+survive = """A lost device reconnects by itself, saves are atomic with backups, and
+        after a crash nothing goes on air on its own."""
+languages-title = "Eleven languages"
+languages = """The interface follows the operating system language, or the one you
+        choose in Settings. Every language, English and Spanish included, was
+        produced with AI and may contain errors, so corrections are
+        welcome."""
+download = "Download"
+download-intro = """Pick the package for your system. Every file has a <code>.sha256</code> next to
+    it on the release page."""
+os-tabs = "Operating system"
+windows-systems = "Windows 10 and 11, x86-64."
+windows-msi = "Installer (.msi)"
+windows-zip = "Portable archive (.zip)"
+macos-systems = "Intel and Apple silicon."
+macos-dmg = "Universal disk image (.dmg)"
+macos-intel = "Intel archive (.tar.gz)"
+macos-arm = "Apple silicon archive (.tar.gz)"
+linux-systems = "Debian and Ubuntu (.deb), Fedora and openSUSE (.rpm), or any distribution."
+snap-badge-alt = "Get it from the Snap Store"
+snap = "From the Snap Store (x86_64 and aarch64):"
+architecture = "Architecture"
+all-files = "All files and checksums"
+getting-started-before = """Installing, updating and the first start of unsigned builds are covered in"""
+getting-started-link = "Getting started"
+getting-started-after = "."
+footer-guide-languages = "(also in ten other languages, translated with AI)"
+
+[privacy]
+title = "Privacy policy — Fauste Player"
+description = "Fauste Player collects no personal data, sends no telemetry and makes no network connections of its own."
+heading = "Privacy policy"
+updated = """Last updated: 24 October 2026. This policy covers the Fauste Player
+    desktop application in every distribution: the Microsoft Store, the Snap
+    Store, the packages on the GitHub releases page, and builds from source."""
+no-data-heading = "No data is collected"
+no-data = """Fauste Player collects no personal data. It has no accounts, no
+    analytics, no advertising and no telemetry, and it never sends anything
+    about you, your computer or your music to the author or to anyone else."""
+local-heading = "What stays on your computer"
+local-before = """To work, the application keeps these files in its own folders on your
+    computer (see"""
+local-link = "Data and backups"
+local-after = """in the user guide for where they are):"""
+local-settings = "your settings, playlists, cart pages and session;"
+local-cache = """an analysis cache with the tags, markers, loudness and waveform of
+        the audio files you load;"""
+local-logs = """log files and crash reports, which may contain file paths and device
+        names."""
+local-leave = """These files never leave your computer unless you choose to share them,
+    for example by attaching a log to a bug report. You can delete them at any
+    time; uninstalling the application, or deleting its folders, removes
+    them."""
+network-heading = "Network"
+network = """The application opens no outgoing network connections of its own.
+    The optional remote control (an HTTP/JSON API and OSC) is off by default.
+    When you turn it on in Settings, it listens for connections from the
+    clients you allow: it answers them, and sends live updates only to the
+    clients that ask for them. It can be protected with a token
+    and source allow-lists. Links in the application, such as the user guide
+    or the licence, open in your web browser, whose own privacy policy then
+    applies."""
+stores-heading = "Store distribution"
+stores = """The stores that distribute Fauste Player (for example the Microsoft
+    Store or the Snap Store) may collect data about downloads, installs and
+    crashes under their own privacy policies. The author has no control over
+    that data."""
+changes-heading = "Changes and contact"
+changes = """If this policy changes, the new version is published on this page with
+    a new date. Questions can be asked in the
+    <a href="https://github.com/sanchezfauste/fauste-player/issues">issue
+    tracker</a> or by writing to the author, Marc Sánchez Fauste, through
+    <a href="https://sanchezfauste.com/">sanchezfauste.com</a>."""
