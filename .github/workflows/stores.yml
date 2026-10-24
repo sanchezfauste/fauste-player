@@ -117,7 +117,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: msix
-          path: ${{ steps.package.outputs.msix }}
+          # A relative path: the script prints a Git Bash one.
+          path: dist/*.msix
+          if-no-files-found: error
       - name: Install the Microsoft Store CLI
         if: needs.plan.outputs.msstore == 'true'
         uses: microsoft/microsoft-store-apppublisher@v1.4
@@ -160,6 +162,7 @@ jobs:
         with:
           name: snap-${{ matrix.arch }}
           path: ${{ steps.build.outputs.snap }}
+          if-no-files-found: error
       - name: Upload to the Snap Store
         if: needs.plan.outputs.snap == 'true'
         uses: snapcore/action-publish@v1
@@ -224,6 +227,7 @@ jobs:
           path: |
             flathub-out/org.fauste.FaustePlayer.yml
             flathub-out/cargo-sources.json
+          if-no-files-found: error
       - name: Open the update pull request on Flathub
         if: needs.plan.outputs.flathub == 'true'
         env:
