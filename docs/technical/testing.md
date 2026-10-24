@@ -82,10 +82,22 @@ Windows packaging verifies it with the PE subsystem check
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
+cargo llvm-cov --no-report --workspace --locked   # the tests, measuring coverage
 cargo deny check          # licences, advisories, sources
 ```
 
 fmt, clippy and tests run on Linux, Windows and macOS for pushes to `master`
 and for every pull request; `cargo deny` and the release-bump check run on
 Linux.
+
+The tests run once, instrumented by `cargo-llvm-cov`. Each system writes an
+LCOV report with paths relative to the repository root, and the `sonarqube`
+job hands the three to SonarQube Cloud (`sonar-project.properties`), which
+merges them, so code built only on Windows or macOS counts too. The analysis
+is informative: it never blocks a pull request, and pull requests from forks
+and Dependabot, which get no `SONAR_TOKEN`, skip it. Locally:
+
+```sh
+rustup component add llvm-tools-preview && cargo install cargo-llvm-cov --locked
+cargo llvm-cov --workspace --html   # target/llvm-cov/html/index.html
+```
