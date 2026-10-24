@@ -9,4 +9,4 @@ out="${2:?usage: metainfo.sh <version> <output>}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 date="$(date -u +%Y-%m-%d)"
 sed "s|^  <!-- <releases>.*-->$|  <releases>\n    <release version=\"${version}\" date=\"${date}\"/>\n  </releases>|" \
-  "${root}/packaging/linux/org.fauste.FaustePlayer.metainfo.xml" > "${out}"
+  "${root}/packaging/linux/com.sanchezfauste.FaustePlayer.metainfo.xml" > "${out}"

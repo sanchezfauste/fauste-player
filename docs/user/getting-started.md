@@ -14,7 +14,7 @@ on macOS.
 | `.deb` (Debian, Ubuntu) | `sudo apt install ./fauste-player_<version>_amd64.deb` | install the newer `.deb` the same way | `sudo apt remove fauste-player` |
 | `.rpm` (Fedora, openSUSE) | `sudo dnf install ./fauste-player-<version>-1.x86_64.rpm` | install the newer `.rpm` | `sudo dnf remove fauste-player` |
 | AppImage (any distribution) | `chmod +x fauste-player-<version>-x86_64.AppImage`, then run it | replace the file | delete the file |
-| Flatpak bundle | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | install the newer bundle | `flatpak uninstall org.fauste.FaustePlayer` |
+| Flatpak bundle | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | install the newer bundle | `flatpak uninstall com.sanchezfauste.FaustePlayer` |
 | Archive | extract it and run `fauste-player` | extract the newer one | delete the folder |
 
 - **Desktop integration:** the packages add **Fauste Player** to the
@@ -35,6 +35,11 @@ on macOS.
     devices.
   - It may use the network, for the remote control API and OSC (both off
     until you turn them on).
+  - Bundles up to 0.10 were installed as `org.fauste.FaustePlayer`, and the
+    newer ones install as `com.sanchezfauste.FaustePlayer`, a separate
+    application. To keep your settings, playlists and carts, close the app
+    and run `mv ~/.var/app/org.fauste.FaustePlayer ~/.var/app/com.sanchezfauste.FaustePlayer`
+    before starting the new one, then `flatpak uninstall org.fauste.FaustePlayer`.
 - **Desktop libraries:** the window uses libxkbcommon and EGL or OpenGL, with
   Wayland or X11. Every desktop has them, and the `.deb` and `.rpm` declare
   them. On a very minimal system, install them before using the AppImage.

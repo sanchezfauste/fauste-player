@@ -477,7 +477,7 @@ Their results come back through channels.
 
 `main.rs` looks for the third-party notices (`about::find_notices`: next to
 the executable, `../Resources/licenses`, `../share/doc/fauste-player`,
-`../share/licenses/org.fauste.FaustePlayer`) once before the first frame, and
+`../share/licenses/com.sanchezfauste.FaustePlayer`) once before the first frame, and
 the About window opens the file with `open` on the `fp-open-notices` thread.
 
 ## Theme and fonts

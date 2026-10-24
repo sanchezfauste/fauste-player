@@ -19,7 +19,7 @@ export FEATURES="${FEATURES-jack}"
 dist="${root}/dist"
 stage="${dist}/fauste-player-${version}-${target}"
 work="${root}/dist/staging"
-app_id="org.fauste.FaustePlayer"
+app_id="com.sanchezfauste.FaustePlayer"
 
 want() { [[ ",${formats}," == *",$1,"* ]]; }
 

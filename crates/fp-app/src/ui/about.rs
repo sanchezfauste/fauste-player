@@ -45,9 +45,10 @@ pub fn notice_candidates(exe_dir: &Path) -> Vec<PathBuf> {
         exe_dir
             .join("../share/doc/fauste-player")
             .join(NOTICES_FILE),
-        // Flatpak.
+        // Flatpak and snap.
         exe_dir
-            .join("../share/licenses/org.fauste.FaustePlayer")
+            .join("../share/licenses")
+            .join(crate::APP_ID)
             .join(NOTICES_FILE),
     ]
 }

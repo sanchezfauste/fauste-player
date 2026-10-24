@@ -21,8 +21,8 @@ platforms:
 apps:
   fauste-player:
     command: bin/fauste-player
-    common-id: org.fauste.FaustePlayer
-    desktop: usr/share/applications/org.fauste.FaustePlayer.desktop
+    common-id: com.sanchezfauste.FaustePlayer
+    desktop: usr/share/applications/com.sanchezfauste.FaustePlayer.desktop
     # Window system libraries, Mesa and the desktop portals.
     extensions: [gnome]
     plugs:
@@ -80,7 +80,7 @@ parts:
     override-build: |
       # The rust plugin runs `cargo install --locked` into bin/.
       craftctl default
-      app=org.fauste.FaustePlayer
+      app=com.sanchezfauste.FaustePlayer
       version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)"
       share="${CRAFT_PART_INSTALL}/usr/share"
       install -Dm644 packaging/linux/${app}.desktop "${share}/applications/${app}.desktop"
@@ -100,4 +100,4 @@ parts:
       install -Dm644 crates/fp-app/assets/fonts/OFL.txt "${licenses}/Inter-OFL.txt"
       install -Dm644 crates/fp-app/assets/licenses/Phosphor-MIT.txt "${licenses}/Phosphor-MIT.txt"
       PATH="${HOME}/.cargo/bin:${PATH}" scripts/package/notices.sh "${licenses}/THIRD-PARTY.html"
-    parse-info: [usr/share/metainfo/org.fauste.FaustePlayer.metainfo.xml]
+    parse-info: [usr/share/metainfo/com.sanchezfauste.FaustePlayer.metainfo.xml]

@@ -235,7 +235,7 @@ jobs:
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: fauste-player.flatpak
-          manifest-path: packaging/flatpak/org.fauste.FaustePlayer.yml
+          manifest-path: packaging/flatpak/com.sanchezfauste.FaustePlayer.yml
           upload-artifact: false
       - uses: actions/upload-artifact@v7
         with:

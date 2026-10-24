@@ -14,7 +14,7 @@ use fp_app::services::{MediaCache, Services};
 use fp_app::ui::app::AppUi;
 use fp_app::ui::shell::Shell;
 use fp_app::ui::theme;
-use fp_app::{bootstrap, cli, crash, instance, logging};
+use fp_app::{APP_ID, bootstrap, cli, crash, instance, logging};
 use fp_backends::{AudioBackend, Availability, NullBackend, system_backends};
 use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
@@ -24,10 +24,6 @@ use fp_store::Store;
 /// Background analysis threads: enough to keep up with imports without
 /// competing with the audio threads.
 const ANALYSIS_THREADS: usize = 2;
-
-/// Reverse-DNS application id, shared by the desktop entry, AppStream,
-/// Flatpak and the macOS bundle.
-const APP_ID: &str = "org.fauste.FaustePlayer";
 
 /// How often the running instance looks for playlists handed over.
 const INBOX_INTERVAL: Duration = Duration::from_millis(500);
