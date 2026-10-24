@@ -178,7 +178,11 @@ Formats: WAV, AIFF, CAF, FLAC, MP3 (and MP1/MP2), AAC/M4A, ALAC, Ogg Vorbis, Opu
 
 ## Install
 
-Download a package for your platform from
+<a href="https://snapcraft.io/fauste-player"><img alt="Get it from the Snap Store" src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" height="56"></a>
+
+On Linux, install it from the [Snap Store](https://snapcraft.io/fauste-player)
+with `sudo snap install fauste-player` (amd64 and arm64), or download a
+package for your platform from
 [Releases](https://github.com/sanchezfauste/fauste-player/releases). Each
 file has a `.sha256` next to it.
 
@@ -359,7 +363,7 @@ See [Release process](docs/technical/release-process.md).
 | 5. Packaging | deb, rpm, Flatpak, AppImage, MSI, universal dmg; signing and notarisation when certificates are configured | done |
 | 6. Audio path | Audio path audit and its fixes (no clicks at starts, joins and cue-outs; clipped integer conversion; xrun reporting), DSD output as DoP or native DSD on bit-perfect devices, "No output (silent)" device | done (DoP and native DSD need a check on real hardware) |
 | 7. Website and guide | Project website on GitHub Pages with per-platform downloads, the user guide online (mdBook) with AI translations and a language menu, screenshots of every screen from a scripted scene | done |
-| 8. Stores | Publishing every release to the Microsoft Store, the Snap Store, Flathub, WinGet and the AUR from CI | in progress (the workflow is ready; each store needs its account and first submission) |
+| 8. Stores | Publishing every release to the Microsoft Store, the Snap Store, Flathub, WinGet and the AUR from CI | in progress (the Snap Store since 0.11.0, the Microsoft Store in review; Flathub, WinGet and the AUR not yet submitted) |
 
 ## Documentation
 
