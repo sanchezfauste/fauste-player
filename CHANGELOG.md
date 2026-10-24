@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.10.0](https://github.com/sanchezfauste/fauste-player/compare/v0.9.1...v0.10.0) (2026-10-24)
+
+
+### Features
+
+* **ui:** outline the selected playlist row ([5aa72de](https://github.com/sanchezfauste/fauste-player/commit/5aa72de03c3024cebff0803a45fbece0ec514f36))
+* **ui:** polish the loudness popup, Play button and hovers; add a Comment column ([b6c52de](https://github.com/sanchezfauste/fauste-player/commit/b6c52debf7d8c3c628a3f4b99612fe5a6d4aceac))
+* **ui:** polish the loudness popup, Play button and hovers; add a Comment column ([6a65d19](https://github.com/sanchezfauste/fauste-player/commit/6a65d19ee3b2c38c53d462b069f42780c1a515ed))
+
+
+### Bug Fixes
+
+* **app:** read the bit rate of tracks analysed before the format had one ([5d6b2f8](https://github.com/sanchezfauste/fauste-player/commit/5d6b2f893304c3217a15c013f8fc3bc09ede7822))
+* bit rate for older analyses; outline the selected row ([dab6c99](https://github.com/sanchezfauste/fauste-player/commit/dab6c99109db133e1470638dfc8c04e60e4e38ee))
+
 ## [0.9.1](https://github.com/sanchezfauste/fauste-player/compare/v0.9.0...v0.9.1) (2026-10-24)
 
 
