@@ -93,6 +93,8 @@ impl BusyBudget {
 struct VirtualClock {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    /// The configuration it paces blocks for.
+    config: StreamConfig,
 }
 
 impl VirtualClock {
@@ -134,7 +136,14 @@ impl VirtualClock {
         Some(Self {
             stop,
             thread: Some(thread),
+            config,
         })
+    }
+
+    /// Whether it renders blocks of `config`'s size at `config`'s rate.
+    fn paces(&self, config: &StreamConfig) -> bool {
+        let pace = |c: &StreamConfig| (c.sample_rate, c.buffer_frames, c.channels);
+        pace(&self.config) == pace(config)
     }
 }
 
@@ -317,8 +326,17 @@ impl Bus {
         match opened {
             Ok(stream) => {
                 self.stream = Some(stream);
-                if self.virtual_clock.is_none() {
-                    self.health = BusHealth::Ok;
+                match &self.virtual_clock {
+                    None => self.health = BusHealth::Ok,
+                    // A stream opened at another rate or buffer (the PCM
+                    // fallback after DSD) waits for its first block: until
+                    // then the virtual clock renders the mixer at the new
+                    // pace, or its timeline would run fast or slow.
+                    Some(clock) if !clock.paces(&self.config) => {
+                        self.virtual_clock = None;
+                        self.virtual_clock = VirtualClock::start(self.mixer.clone(), self.config);
+                    }
+                    Some(_) => {}
                 }
                 self.last_heartbeat = self.handle.shared.device_blocks();
                 self.opened_beat = self.last_heartbeat;

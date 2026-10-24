@@ -174,7 +174,10 @@ wall clock. The device is reopened every
 `tuning.reconnect_interval_ms` (2 s). A reopened stream starts in standby
 (`BusShared::standby`): its callback plays idle fill (DSD silence in DSD
 mode, so DoP stays valid) without touching the mixer, and the bus stays
-`Lost`. At its first block `Bus::supervise` stops (joins) the virtual clock
+`Lost`. A stream reopened at another rate or buffer (the PCM fallback of a
+device back without the DSD stream it carried) restarts the virtual clock
+at the new pace, so the timeline keeps real time while it waits. At its
+first block `Bus::supervise` stops (joins) the virtual clock
 and only then clears `standby`, so the two never render the mixer
 together. A reopened stream with no block within the startup grace, or one
 that fails, is closed and retried, still `Lost`; the first one of a loss

@@ -268,6 +268,49 @@ fn the_watchdog_falls_back_to_the_pcm_rate_before_dsd_instead_of_retrying_foreve
 }
 
 #[test]
+fn a_device_back_at_the_fallback_rate_keeps_the_virtual_clock_in_real_time() {
+    let backend = OfflineBackend::new();
+    let device = backend.add_device("dac", 2);
+    let key = BusKey {
+        backend: "offline".into(),
+        device: "dac".into(),
+    };
+    // Lost while running at a word rate…
+    let word_rate = StreamConfig {
+        sample_rate: 352_800,
+        ..CONFIG
+    };
+    let t0 = Instant::now();
+    let mut bus = Bus::open(key, Arc::new(backend), word_rate, 4, MIXER, TIMING, t0);
+    bus.set_pcm_fallback(CONFIG);
+    device.render(480).unwrap();
+    device.unplug();
+    bus.supervise(t0 + Duration::from_millis(10));
+    assert_eq!(bus.health(), BusHealth::Lost);
+    // …and back as a device that no longer takes it as PCM: reopened at
+    // the fallback rate, waiting for its first block on the virtual clock.
+    device.set_max_pcm_rate(192_000);
+    device.replug();
+    bus.supervise(t0 + Duration::from_secs(3));
+    assert_eq!(device.config().unwrap().sample_rate, 48_000);
+    assert_eq!(bus.health(), BusHealth::Lost);
+    let (frames, started) = (bus.now_frame(), Instant::now());
+    wait_until(
+        || started.elapsed() >= Duration::from_millis(200),
+        "200 ms pass",
+    );
+    let advanced = bus.now_frame() - frames;
+    // At most real time at 48 kHz plus one catch-up (100 ms); the word
+    // rate would be 7.35 times that.
+    let bound = (started.elapsed().as_secs_f64() + 0.1) * 48_000.0;
+    assert!(
+        (advanced as f64) < bound,
+        "the virtual clock rendered {advanced} frames in {:?} (at most {bound:.0} at 48 kHz)",
+        started.elapsed()
+    );
+}
+
+#[test]
 fn a_rate_change_retries_a_device_that_was_busy_for_a_moment() {
     let (_b, device, mut bus, t0) = setup(true);
     let before = device.open_attempts();

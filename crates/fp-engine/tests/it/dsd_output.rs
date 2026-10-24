@@ -1016,6 +1016,10 @@ fn a_device_back_without_native_dsd_or_its_word_rate_plays_pcm() {
     let config = r.dac.config().expect("the device is never left closed");
     assert_eq!(config.dsd, None);
     assert!(config.sample_rate <= MAX_PCM, "{}", config.sample_rate);
+    // The device's first block takes the mixer back from the virtual
+    // clock, which would otherwise play the reopened track out in real time
+    // while the decoder fills it (slow on a busy machine).
+    r.run_raw(BLOCK);
     r.settle();
     let raw = r.run_raw(BLOCK * 16);
     assert!(
