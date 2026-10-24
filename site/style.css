@@ -74,7 +74,7 @@ footer { padding-top: 2rem; padding-bottom: 3rem; color: var(--muted); text-alig
 
 /* The language menu (rendered by scripts/site/landing.py; plain links, so it
    works without JavaScript) and the notice on a translated page. */
-.language-menu { position: relative; }
+.language-menu { position: relative; margin-left: auto; }
 .language-menu summary { list-style: none; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; }
 .language-menu summary::-webkit-details-marker { display: none; }
 .language-menu summary:hover, .language-menu[open] summary { color: var(--text); }
