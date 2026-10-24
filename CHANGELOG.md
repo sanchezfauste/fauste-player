@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.11.1](https://github.com/sanchezfauste/fauste-player/compare/v0.11.0...v0.11.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **ci:** cap LCOV hit counts so SonarQube reads every line ([15dbae4](https://github.com/sanchezfauste/fauste-player/commit/15dbae4b68d8328adb0b302206a0c92e964f3540))
+* **ci:** cap LCOV hit counts so SonarQube reads every line ([2d713aa](https://github.com/sanchezfauste/fauste-player/commit/2d713aabb0125a9f4edd794f98bb3ede9512d994))
+* **ci:** pass the MSIX to the Store CLI as a directory ([f68c0b3](https://github.com/sanchezfauste/fauste-player/commit/f68c0b3b9899fee71c2a186d527fcda921d9746e))
+* **ci:** pass the MSIX to the Store CLI as a directory ([3f80569](https://github.com/sanchezfauste/fauste-player/commit/3f80569f9fd64629b35d89ce52b58d5aa36e3293))
+* **engine:** pace the virtual clock at the rate a device came back at ([93c4aa9](https://github.com/sanchezfauste/fauste-player/commit/93c4aa95da87edde8346a36bfe0959825a6d8008))
+* **engine:** pace the virtual clock at the rate a device came back at ([245c2e6](https://github.com/sanchezfauste/fauste-player/commit/245c2e6398fd7fd331d2e59e6150f0b132ae0aa9))
+
+
+### Documentation
+
+* add the Snap Store badge and install steps ([5a49e23](https://github.com/sanchezfauste/fauste-player/commit/5a49e2376e3bb1b7e210aad81e91d7afa4dc1a93))
+* add the Snap Store badge and install steps ([5a0fa93](https://github.com/sanchezfauste/fauste-player/commit/5a0fa93c9d6a973b95318ce121ebf413b7ade38a))
+* **site:** add a privacy policy page ([514643d](https://github.com/sanchezfauste/fauste-player/commit/514643d2aef8bf1cca13f6e0a1aec6d24eab4611))
+* **site:** add a privacy policy page ([b7a8881](https://github.com/sanchezfauste/fauste-player/commit/b7a88818c458ff0724f6fbd2042d42bc959e67c0))
+
 ## [0.11.0](https://github.com/sanchezfauste/fauste-player/compare/v0.10.0...v0.11.0) (2026-10-24)
 
 
