@@ -55,6 +55,10 @@
     <category>AudioVideo</category>
     <category>Audio</category>
   </categories>
+  <!-- The ID used up to 0.10. -->
+  <replaces>
+    <id>org.fauste.FaustePlayer</id>
+  </replaces>
   <provides>
     <binary>fauste-player</binary>
     <mediatype>audio/x-mpegurl</mediatype>

@@ -466,7 +466,10 @@ credentials; variables hold public identifiers.
 1. The application ID must belong to a domain or code host the developer
    controls: `com.sanchezfauste.FaustePlayer` is under `sanchezfauste.com`,
    where Flathub's verification later asks for a token at
-   `https://sanchezfauste.com/.well-known/org.flathub.VerifiedApps.txt`.
+   `https://sanchezfauste.com/.well-known/org.flathub.VerifiedApps.txt`. That
+   site is the Jekyll repository `sanchezfauste/sanchezfauste.github.io`,
+   which publishes a dot-directory only when its `_config.yml` lists it
+   (`include: [.well-known]`).
 2. Fork [flathub/flathub](https://github.com/flathub/flathub), branch from
    `new-pr`, add the `com.sanchezfauste.FaustePlayer.yml` and `cargo-sources.json`
    (and `THIRD-PARTY.html`) of the `flathub` artefact of the latest
