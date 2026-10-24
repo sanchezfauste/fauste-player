@@ -893,26 +893,35 @@ impl GridButton {
     }
 }
 
-/// The look of the big Play / Next button (itr07 J4): filled green with a
-/// white icon. Idle it starts the next track; on air it is Next, a deeper
-/// green. Hover, pressed, disabled and keyboard focus (the ring `widgets::tile`
-/// draws) are tokens in `theme`.
-pub fn play_button_style(on_air: bool) -> TileStyle {
-    let (fill, border) = if on_air {
-        (theme::PLAY_FILL_ON_AIR, theme::PLAY_OUTLINE_ON_AIR)
-    } else {
-        (theme::PLAY_FILL, theme::PLAY_OUTLINE)
-    };
+/// The look of the big Play / Next button (itr07 J4): flat green, no
+/// outline, a white icon. Idle it starts the next track; on air it is Next,
+/// in the same green. Hover, pressed, disabled and keyboard focus (the ring
+/// `widgets::tile` draws) are tokens in `theme`.
+pub fn play_button_style() -> TileStyle {
     TileStyle {
-        fill,
-        border,
-        border_width: 2.0,
+        fill: theme::PLAY_FILL,
+        border: Color32::TRANSPARENT,
+        border_width: 0.0,
         content: theme::PLAY_ICON,
         hover_fill: theme::PLAY_FILL_HOVER,
+        hover_border: Color32::TRANSPARENT,
         hover_content: theme::PLAY_ICON,
         active_fill: theme::PLAY_FILL_PRESSED,
         dim_when_disabled: true,
         disabled_fill: Some(theme::PLAY_FILL_DISABLED),
+    }
+}
+
+/// The Play button of a paused player: it blinks with `blink`, in phase
+/// with Pause (main spec rule 6), between its green and a dim one.
+pub fn paused_play_style(blink: bool) -> TileStyle {
+    TileStyle {
+        fill: if blink {
+            theme::PLAY_FILL
+        } else {
+            theme::PLAY_FILL_PAUSED_DIM
+        },
+        ..play_button_style()
     }
 }
 
@@ -986,7 +995,11 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                 .filter(|_| !fade_stopping && pv.fade_origin != fp_model::FadeOrigin::Previous);
             let previous_left = fade_left
                 .filter(|_| !fade_stopping && pv.fade_origin == fp_model::FadeOrigin::Previous);
-            let mut play_style = play_button_style(playing);
+            let mut play_style = if pv.status == PlayerStatus::Paused {
+                paused_play_style(blink)
+            } else {
+                play_button_style()
+            };
             if next_left.is_some() {
                 // Next cannot be pressed while it fades, but it is the
                 // button counting the fade down: keep the on-air look and

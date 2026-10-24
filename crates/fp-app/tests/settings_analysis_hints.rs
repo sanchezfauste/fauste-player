@@ -63,7 +63,10 @@ const LOUDNESS_HINTS: [(&str, &str); 4] = [
         "A boost never takes a true peak above this.",
     ),
     ("Maximum boost", "The most a quiet track is turned up."),
-    ("Maximum trim", "How far a track's trim may go."),
+    (
+        "Maximum manual trim",
+        "How far a track's manual trim may go.",
+    ),
 ];
 
 #[test]

@@ -310,7 +310,8 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                 .selectable(false)
                 .truncate(),
             );
-            info_block(ui, t, &info(scene, track, holder, None));
+            // The controls and their hint first: the information under them
+            // grows and shrinks as they change, and must not move them.
             ui.horizontal_wrapped(|ui| {
                 exclude(ui, scene, track);
                 ui.add(
@@ -343,6 +344,7 @@ pub(crate) fn popup(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut Vie
                 .selectable(false)
                 .wrap(),
             );
+            info_block(ui, t, &info(scene, track, holder, None));
             if sounding(scene, id) {
                 ui.add(
                     egui::Label::new(

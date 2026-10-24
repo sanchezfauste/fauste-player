@@ -91,7 +91,7 @@ Go to **Settings → Cartwall**:
   amber, green, teal, blue, violet, pink): give all the spots one colour
   and the station IDs another to find them at a glance. An empty cart
   keeps its colour, and clearing a cart's file does not remove it. A cart
-  with a file also has **Exclude from normalization** and **Trim**, its
+  with a file also has **Exclude from normalization** and **Manual trim**, its
   track's [loudness normalization](loudness.md#per-track-exclude-and-trim)
   settings, with the measurement under the label.
 

@@ -64,6 +64,7 @@ col-date = Data
 col-genre = Xénero
 col-intro = Intro
 col-file_name = Ficheiro
+col-comment = Comentario
 footer-add = Engadir
 footer-count = { $count ->
     [one] { $count } pista
@@ -621,6 +622,7 @@ column-name-genre = Xénero
 column-name-duration = Duración
 column-name-intro = Intro
 column-name-file_name = Nome do ficheiro
+column-name-comment = Comentario
 settings-columns = Columnas da táboa
 settings-hint-columns = As columnas da táboa de cada reprodutor. Tamén podes arrastrar unha cabeceira nunha táboa, ou facer clic dereito nela.
 settings-column-up = Subir { $column }

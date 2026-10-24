@@ -196,25 +196,22 @@ pub const PLAY_HOVER_BG: Color32 = Color32::from_rgb(0x14, 0x36, 0x1d);
 pub const PLAY_HOVER: Color32 = Color32::from_rgb(0x93, 0xe4, 0xa4);
 pub const PLAY_ACTIVE_BG: Color32 = Color32::from_rgb(0x1d, 0x4e, 0x2b);
 
-// The big Play / Next button is a filled green button with a white icon
-// (itr07 J4). Every pair below keeps the icon at WCAG >= 3:1 on its fill
-// (`tests/play_button_ui.rs` checks it).
-/// Idle: the button starts the next track.
-pub const PLAY_FILL: Color32 = Color32::from_rgb(0x1f, 0x8a, 0x47);
-/// On air: the button is Next; a deeper green than idle so the two read apart.
-pub const PLAY_FILL_ON_AIR: Color32 = Color32::from_rgb(0x1a, 0x76, 0x3d);
+// The big Play / Next button is a flat green button with a white icon and
+// no outline, in the green of the next row of the playlist (itr07 J4). Every
+// fill below keeps the icon at WCAG >= 3:1 (`tests/play_button_ui.rs` checks
+// it).
+/// Idle and on air (the caption tells Play from Next): the next row's green.
+pub const PLAY_FILL: Color32 = NEXT_ROW;
+/// On air: the button is Next, in the same green as Play.
+pub const PLAY_FILL_ON_AIR: Color32 = PLAY_FILL;
 /// Pointer over it: a step lighter.
-pub const PLAY_FILL_HOVER: Color32 = Color32::from_rgb(0x25, 0x9e, 0x52);
-/// Pressed: a step darker than any resting state.
-pub const PLAY_FILL_PRESSED: Color32 = Color32::from_rgb(0x15, 0x62, 0x32);
+pub const PLAY_FILL_HOVER: Color32 = Color32::from_rgb(0x1b, 0x84, 0x41);
+/// Pressed: a step darker.
+pub const PLAY_FILL_PRESSED: Color32 = Color32::from_rgb(0x0f, 0x55, 0x27);
 /// Disabled: a muted dark green, with the icon at half strength.
 pub const PLAY_FILL_DISABLED: Color32 = Color32::from_rgb(0x1a, 0x2f, 0x23);
-/// The outline on the idle fill: as far from it (WCAG 1.94:1) as
-/// [`PLAY_OUTLINE_ON_AIR`] is from the on-air fill, so Play and Next are
-/// outlined alike.
-pub const PLAY_OUTLINE: Color32 = Color32::from_rgb(0x57, 0xc2, 0x74);
-/// The outline on the on-air fill.
-pub const PLAY_OUTLINE_ON_AIR: Color32 = PLAY_BORDER;
+/// Paused: the dark phase of the blink (lit, it is [`PLAY_FILL`]).
+pub const PLAY_FILL_PAUSED_DIM: Color32 = Color32::from_rgb(0x0e, 0x3a, 0x1d);
 /// The icon and caption on the fill.
 pub const PLAY_ICON: Color32 = Color32::WHITE;
 /// The ring of a button that has keyboard focus (all tiles).
@@ -231,8 +228,9 @@ pub fn sweep_tone(content: Color32) -> Color32 {
     content.gamma_multiply(SWEEP_STRENGTH)
 }
 
-/// The divider between the level meter and the volume fader.
-pub const DIVIDER: Color32 = NEUTRAL_600;
+/// The divider between the level meter and the volume fader: the same
+/// hairline as the waveform's border, so the player reads as one piece.
+pub const DIVIDER: Color32 = NEUTRAL_800;
 pub const INTRO_BADGE_BG: Color32 = Color32::from_rgb(0x00, 0x23, 0x32);
 pub const INTRO_BADGE_BLINK: Color32 = Color32::from_rgb(0x00, 0x50, 0x73);
 pub const INTRO_BADGE_TEXT: Color32 = Color32::from_rgb(0xb6, 0xe6, 0xff);

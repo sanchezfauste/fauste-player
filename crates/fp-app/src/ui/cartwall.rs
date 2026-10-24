@@ -451,6 +451,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                     border: look.border,
                     content: theme::TEXT,
                     hover_fill: look.hover_fill,
+                    hover_border: look.border,
                     hover_content: theme::TEXT,
                     active_fill: look.active_fill,
                     border_width: 1.0,

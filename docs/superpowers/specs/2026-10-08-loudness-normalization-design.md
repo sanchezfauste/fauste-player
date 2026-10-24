@@ -383,7 +383,7 @@ band) stays a separate value, whatever the normalization target (Q4).
   `crates/fp-app/src/ui/wave_panel.rs`, `edit_markers`), where the markers
   are edited, gains a **Loudness…** item. It opens a small popup with the
   measurement (or "not measured"), an **Exclude from normalization**
-  checkbox and a **Trim** slider (−`max_trim_db` ..= +`max_trim_db`, 0.5 dB
+  checkbox and a **Manual trim** slider (−`max_trim_db` ..= +`max_trim_db`, 0.5 dB
   steps, double-click resets to 0). Each change sends `SetTrackLoudness`.
   A playlist row's context menu has the same **Loudness…** item, for that
   row's track.
@@ -392,13 +392,15 @@ band) stays a separate value, whatever the normalization target (Q4).
   by itself when the track leaves the library.
   The slider is a relative trim, 0 for every unedited track, so the popup
   shows the gain breakdown (`view::gain_info`, from
-  `fp_model::normalization`; see the J1 amendment of N19) above its
-  controls, ending in the resulting gain. A bit-perfect player reads "none,
+  `fp_model::normalization`; see the J1 amendment of N19) under its
+  controls, ending in the resulting gain. The checkbox, the slider and the
+  hint come first (amended 2026-10-24): the breakdown grows and shrinks as
+  they change, and must not move the slider while it is dragged. A bit-perfect player reads "none,
   bit-perfect" as its automatic gain (the popup keeps the holder it was
   opened from; the cart editor uses the cartwall Main). A short hint says the trim is added to the automatic gain, and a track that is sounding gets a note that a change applies from its next load.
 - **N21** The cart edit dialog (where a cart's file and properties are
   edited) shows the same two controls for the cart's track, as two rows
-  ("Exclude from normalization" and "Trim"), under the same gain
+  ("Exclude from normalization" and "Manual trim"), under the same gain
   breakdown as N20.
 
 ### 8.3 Settings
@@ -425,7 +427,7 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `settings-normalize-target` | "Target" |
 | `settings-normalize-ceiling` | "True-peak ceiling" |
 | `settings-normalize-max-boost` | "Maximum boost" |
-| `settings-normalize-max-trim` | "Maximum trim" |
+| `settings-normalize-max-trim` | "Maximum manual trim" |
 | `settings-hint-normalize-apply` | "Changes apply to tracks loaded afterwards; what is playing keeps its gain." |
 | `settings-normalize-unmeasured` | "{ $count } tracks not measured yet" (Fluent plural: "1 track not measured yet") |
 | `settings-hint-normalize-bp` | "A player or cart on a bit-perfect output always plays at unity gain: it is never normalized." |
@@ -438,7 +440,7 @@ band) stays a separate value, whatever the normalization target (Q4).
 | `info-trim-limited`, `info-limit-peak`, `info-limit-boost` | "{ $trim } dB (saved { $saved } dB)", "true-peak ceiling ({ $ceiling } dBTP)", "maximum boost ({ $max } dB)" |
 | `wave-loudness` | "Loudness…" |
 | `loudness-exclude` | "Exclude from normalization" |
-| `loudness-trim` | "Trim" |
+| `loudness-trim` | "Manual trim" |
 | `error-invalid-trim` | "The trim must be a number within the maximum trim." (N10: also for a value that is not finite) |
 
 The existing meter keys `settings-loudness` and `settings-loudness-target`

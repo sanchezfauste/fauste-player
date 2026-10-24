@@ -396,6 +396,10 @@ fn default_columns_restores_the_list_and_is_off_when_it_is_the_default() {
     let (mut h, fake) = harness(s);
     open_settings(&mut h);
     fake.take_sent();
+    // Under the column rows, which may run below the fold: scroll it into
+    // view and let the scroll settle before clicking.
+    h.get_by_label("Default columns").scroll_to_me();
+    h.run_steps(30);
     h.get_by_label("Default columns").click();
     h.run_steps(3);
     assert_eq!(

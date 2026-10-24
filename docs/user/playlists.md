@@ -37,6 +37,7 @@ Playlists can also be created, and are renamed and deleted, in
 | Dur. | Playing length, from cue-in to cue-out (the whole file with **Use cue-in and cue-out** off) |
 | Intro | How long the intro lasts, from where the track starts playing to its intro marker; empty when the track has no intro marker |
 | File name | The name of the file, with its extension |
+| Comment | The comment tag, on one line |
 
 A new installation shows `#`, Title, Artist and Dur. The other columns are
 optional; see **Choosing the columns** below. A track that lacks a value

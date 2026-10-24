@@ -64,6 +64,7 @@ col-date = Datum
 col-genre = Genre
 col-intro = Intro
 col-file_name = Dateiname
+col-comment = Kommentar
 footer-add = Hinzufügen
 footer-count = { $count ->
     [one] { $count } Track
@@ -621,6 +622,7 @@ column-name-genre = Genre
 column-name-duration = Dauer
 column-name-intro = Intro
 column-name-file_name = Dateiname
+column-name-comment = Kommentar
 settings-columns = Tabellenspalten
 settings-hint-columns = Die Spalten der Tabelle jedes Players. Eine Spaltenüberschrift lässt sich auch in einer Tabelle ziehen oder per Rechtsklick bearbeiten.
 settings-column-up = { $column } nach oben

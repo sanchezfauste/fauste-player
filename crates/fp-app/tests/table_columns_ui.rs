@@ -14,7 +14,9 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::app::AppUi;
 use fp_app::ui::table_layout::column_min;
-use fp_model::TableColumn::{Album, Artist, Date, Duration, FileName, Genre, Intro, Number, Title};
+use fp_model::TableColumn::{
+    Album, Artist, Comment, Date, Duration, FileName, Genre, Intro, Number, Title,
+};
 use fp_model::{AppState, Command, MarkerKind, TableColumn};
 use support::{Fake, harness, harness_sized, state};
 
@@ -384,4 +386,15 @@ fn drag(h: &mut Harness<'_, AppUi>, from: Pos2, to: Pos2) {
     }
     press(h, to, false);
     h.run_steps(3);
+}
+
+#[test]
+fn the_comment_column_shows_the_comment_on_one_line() {
+    let mut s = with_columns(state(1, 2), &[Title, Comment, Duration]);
+    s.library.iter_mut().next().unwrap().comment = "Live take\nfrom the studio".into();
+    let (h, _) = harness(s);
+    assert!(h.query_by_label("COMMENT").is_some());
+    assert!(h.query_by_label("Live take from the studio").is_some());
+    let (h, _) = harness(state(1, 2));
+    assert!(h.query_by_label("COMMENT").is_none(), "hidden by default");
 }

@@ -430,7 +430,8 @@
     leniently: unknown columns are dropped, and missing required columns are
     added back.
   - Required columns: Title and Duration. Optional columns: `#`, Artist,
-    Album, Date, Genre, Intro, File name.
+    Album, Date, Genre, Intro, File name, Comment (the comment tag, on one
+    line; added 2026-10-24).
   - All columns, required or not, can be reordered:
     - by dragging a header in the table;
     - in Settings > Playlists, with a checkbox list and up and down buttons.

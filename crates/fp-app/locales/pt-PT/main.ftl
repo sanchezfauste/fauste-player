@@ -64,6 +64,7 @@ col-date = Data
 col-genre = Género
 col-intro = Intro
 col-file_name = Ficheiro
+col-comment = Comentário
 footer-add = Adicionar
 footer-count = { $count ->
     [one] { $count } faixa
@@ -621,6 +622,7 @@ column-name-genre = Género
 column-name-duration = Duração
 column-name-intro = Intro
 column-name-file_name = Nome do ficheiro
+column-name-comment = Comentário
 settings-columns = Colunas da tabela
 settings-hint-columns = As colunas da tabela de cada leitor. Também pode arrastar um cabeçalho numa tabela, ou clicar nele com o botão direito.
 settings-column-up = Subir { $column }

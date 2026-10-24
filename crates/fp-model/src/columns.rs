@@ -20,11 +20,13 @@ pub enum TableColumn {
     /// How long the intro lasts, from the start of the audible part.
     Intro,
     FileName,
+    /// The comment tag, on one line.
+    Comment,
 }
 
 impl TableColumn {
     /// Every column, in the order Settings lists the hidden ones.
-    pub const ALL: [TableColumn; 9] = [
+    pub const ALL: [TableColumn; 10] = [
         TableColumn::Number,
         TableColumn::Title,
         TableColumn::Artist,
@@ -34,6 +36,7 @@ impl TableColumn {
         TableColumn::Duration,
         TableColumn::Intro,
         TableColumn::FileName,
+        TableColumn::Comment,
     ];
 
     /// Title and Duration are always shown.
@@ -53,6 +56,7 @@ impl TableColumn {
             TableColumn::Duration => "duration",
             TableColumn::Intro => "intro",
             TableColumn::FileName => "file_name",
+            TableColumn::Comment => "comment",
         }
     }
 }

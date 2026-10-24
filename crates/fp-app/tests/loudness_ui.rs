@@ -232,12 +232,12 @@ fn n20_the_trim_slider_sends_half_db_steps_and_resets_on_double_click() {
     h.run_steps(2);
     open_popup(&mut h);
     fake.take_sent();
-    h.get_by_role_and_label(Role::Slider, "Trim").focus();
+    h.get_by_role_and_label(Role::Slider, "Manual trim").focus();
     h.run_steps(1);
     h.key_press(egui::Key::ArrowRight);
     h.run_steps(2);
     assert_eq!(loudness_edits(&fake.take_sent()), vec![(false, 0.5)]);
-    let rect = h.get_by_role_and_label(Role::Slider, "Trim").rect();
+    let rect = h.get_by_role_and_label(Role::Slider, "Manual trim").rect();
     let at = egui::pos2(rect.left() + 4.0, rect.center().y);
     h.event(Event::PointerMoved(at));
     // Two clicks a frame apart, within the double-click delay.
@@ -438,7 +438,8 @@ fn n21_the_cart_editor_has_the_same_controls() {
     h.run_steps(2);
     assert_eq!(loudness_edits(&fake.take_sent()), vec![(true, 0.0)]);
     assert!(
-        h.query_by_role_and_label(Role::Slider, "Trim").is_some(),
+        h.query_by_role_and_label(Role::Slider, "Manual trim")
+            .is_some(),
         "the trim too"
     );
 }
@@ -485,7 +486,7 @@ fn n22_the_sliders_keep_their_ranges() {
     assert_eq!(press(egui::Key::ArrowLeft), -6.5, "0.5 LUFS steps");
     assert_eq!(press(egui::Key::ArrowRight), -6.0);
     assert_eq!(press(egui::Key::ArrowRight), -6.0, "the top of the range");
-    for label in ["True-peak ceiling", "Maximum boost", "Maximum trim"] {
+    for label in ["True-peak ceiling", "Maximum boost", "Maximum manual trim"] {
         assert!(
             h.query_by_role_and_label(Role::Slider, label).is_some(),
             "{label}"
@@ -559,7 +560,7 @@ fn n20_the_row_menu_opens_the_popup_of_that_track() {
             .is_some()
     );
     fake.take_sent();
-    h.get_by_role_and_label(Role::Slider, "Trim").focus();
+    h.get_by_role_and_label(Role::Slider, "Manual trim").focus();
     h.run_steps(1);
     h.key_press(egui::Key::ArrowRight);
     h.run_steps(2);
@@ -606,7 +607,7 @@ fn i4_the_popup_shows_the_automatic_gain_and_the_gain_with_trim() {
     );
     assert!(h.query_by_label_contains("Trim: ").is_none());
     fake.take_sent();
-    h.get_by_role_and_label(Role::Slider, "Trim").focus();
+    h.get_by_role_and_label(Role::Slider, "Manual trim").focus();
     h.run_steps(1);
     h.key_press(egui::Key::ArrowRight);
     h.run_steps(3);
@@ -722,7 +723,7 @@ fn j1_the_badge_the_editor_and_the_row_tooltip_show_the_same_lines() {
         h.query_by_label(&expected.join("\n")).is_some(),
         "the badge is named by all the lines, in order"
     );
-    // The editor shows the same block above its controls.
+    // The editor shows the same block, under its controls.
     open_popup(&mut h);
     for line in &expected {
         assert!(
@@ -735,8 +736,8 @@ fn j1_the_badge_the_editor_and_the_row_tooltip_show_the_same_lines() {
         .map(|l| h.query_all_by_label(l).last().unwrap().rect().top())
         .collect();
     assert!(tops.windows(2).all(|w| w[0] < w[1]), "in order: {tops:?}");
-    let trim = h.get_by_role_and_label(Role::Slider, "Trim").rect();
-    assert!(*tops.last().unwrap() < trim.top(), "above the controls");
+    let trim = h.get_by_role_and_label(Role::Slider, "Manual trim").rect();
+    assert!(trim.bottom() < tops[0], "under the controls");
     // The row tooltip too.
     let (mut h, _) = harness(on_air());
     h.get_by_label("Song 3").hover();
@@ -914,4 +915,43 @@ fn j1_the_row_of_the_entry_on_air_shows_the_gain_its_source_kept() {
         h.query_by_label("Resulting gain: +4.0 dB").is_some(),
         "the row shows the gain it kept"
     );
+}
+
+#[test]
+fn n20_the_popup_puts_its_controls_above_the_information() {
+    let (mut h, _fake) = harness(on_air());
+    h.run_steps(2);
+    open_popup(&mut h);
+    let exclude = h
+        .get_by_role_and_label(Role::CheckBox, "Exclude from normalization")
+        .rect();
+    let trim = h.get_by_role_and_label(Role::Slider, "Manual trim").rect();
+    let info = h.get_by_label("Integrated loudness: −20.0 LUFS").rect();
+    assert!(exclude.bottom() <= trim.top(), "{exclude:?} over {trim:?}");
+    assert!(trim.bottom() <= info.top(), "{trim:?} over {info:?}");
+}
+
+#[test]
+fn n20_the_trim_slider_stays_put_while_the_information_changes() {
+    use fp_app::ui::controller::Controller;
+    let (mut h, fake) = harness(on_air());
+    h.run_steps(2);
+    open_popup(&mut h);
+    let before = h.get_by_role_and_label(Role::Slider, "Manual trim").rect();
+    // A trim adds a line to the information, as dragging the slider does.
+    let state = fake.state.load();
+    let entry = state.players[0].current.unwrap();
+    let track = state.track_for_entry(entry).unwrap().id;
+    fake.send(Command::SetTrackLoudness {
+        track,
+        excluded: false,
+        trim_db: 2.0,
+    });
+    h.run_steps(3);
+    assert!(
+        h.query_by_label_contains("+2.0 dB").is_some(),
+        "a trim line"
+    );
+    let after = h.get_by_role_and_label(Role::Slider, "Manual trim").rect();
+    assert_eq!(before.top(), after.top(), "the slider did not move");
 }

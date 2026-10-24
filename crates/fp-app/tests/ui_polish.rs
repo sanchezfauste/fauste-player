@@ -194,3 +194,60 @@ fn the_player_paints_the_bp_badge_green_when_on_and_grey_off() {
     assert_eq!(border, theme::PLAY_BORDER, "not dimmed");
     assert_eq!(text, theme::PLAY_HOVER, "not dimmed");
 }
+
+/// The fill and border colours of the rect painted exactly over `button`.
+fn tile_paint(
+    h: &Harness<'static, fp_app::ui::app::AppUi>,
+    button: egui::Rect,
+) -> (Color32, Color32) {
+    fn walk(s: &Shape, out: &mut Vec<egui::epaint::RectShape>) {
+        match s {
+            Shape::Rect(r) => out.push(r.clone()),
+            Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut all = Vec::new();
+    for c in &h.output().shapes {
+        walk(&c.shape, &mut all);
+    }
+    // `widgets::tile` paints its fill and its border as two shapes.
+    let fill = all
+        .iter()
+        .rev()
+        .find(|r| r.rect == button && r.stroke.width == 0.0)
+        .map(|r| r.fill)
+        .unwrap();
+    let border = all
+        .iter()
+        .rev()
+        .find(|r| r.rect == button && r.stroke.width == 1.0)
+        .map(|r| r.stroke.color)
+        .unwrap();
+    (fill, border)
+}
+
+#[test]
+fn a_hovered_transport_button_stands_out_clearly() {
+    use fp_app::ui::controller::Controller;
+    let (mut h, fake) = harness(state(1, 3));
+    fake.send(fp_model::Command::Play(fake.player(0)));
+    h.run_steps(3);
+    let stop = h.get_by_label("Stop").rect();
+    let (rest_fill, rest_border) = tile_paint(&h, stop);
+    h.hover_at(stop.center());
+    h.run_steps(2);
+    let (fill, border) = tile_paint(&h, stop);
+    assert_eq!(rest_fill, Color32::TRANSPARENT);
+    assert_eq!(rest_border, theme::NEUTRAL_700);
+    assert_eq!(fill, theme::NEUTRAL_800, "a visible hover fill");
+    assert_eq!(border, theme::NEUTRAL_500, "a lighter border on hover");
+}
+
+#[test]
+fn every_plain_tile_shares_the_stronger_hover() {
+    let plain = TileStyle::plain();
+    assert_eq!(plain.hover_fill, theme::NEUTRAL_800);
+    assert_eq!(plain.hover_border, theme::NEUTRAL_500);
+    assert_eq!(plain.active_fill, theme::NEUTRAL_700);
+}
