@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.1](https://github.com/sanchezfauste/fauste-player/compare/v0.9.0...v0.9.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **ui:** clear the meter divider and outline Play and Next alike ([dbc52d0](https://github.com/sanchezfauste/fauste-player/commit/dbc52d01d46d4e2932a826eae289efd8955edaf7))
+* **ui:** clear the meter divider and outline Play and Next alike ([38eea15](https://github.com/sanchezfauste/fauste-player/commit/38eea1575728b725df6feb1225af2fc3f2a471f9))
+
+
+### Documentation
+
+* retake screenshots ([4f75574](https://github.com/sanchezfauste/fauste-player/commit/4f7557449fdc21b9a4e17cce334a7131a995995f))
+* retake screenshots ([ab1e37a](https://github.com/sanchezfauste/fauste-player/commit/ab1e37ac5bbc8214d8a0e7fb3b1d195d2a0f4b09))
+
 ## [0.9.0](https://github.com/sanchezfauste/fauste-player/compare/v0.8.0...v0.9.0) (2026-10-23)
 
 
