@@ -966,6 +966,9 @@ fn a_stale_snapshot_does_not_read_a_track_twice() {
                 bitrate: None,
             });
             track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+            // Only the tag read is counted: the bit-rate read's answer would
+            // be one more model version whenever it lands in its own tick.
+            track.bitrate_read = true;
         }
     });
     // The engine's first report (where each holder plays) is one model
@@ -1908,17 +1911,29 @@ fn reanalysing_a_queued_or_running_track_does_nothing() {
 /// Rewrites `path` with other samples, keeping its size and modification
 /// time: an edit in place the cache key cannot see.
 fn edit_in_place(path: &Path) {
+    rewrite_keeping_stamp(path, 800.0);
+}
+
+/// Writes the same sine at `amplitude` over `path`, keeping its size and
+/// modification time, so the analysis cache still has an entry for it. The
+/// new samples go to a sibling file renamed over the old one: the engine may
+/// be preloading the file (it is a player's next), and a half-written file
+/// would mark the track unreadable.
+fn rewrite_keeping_stamp(path: &Path, amplitude: f32) {
     let before = std::fs::metadata(path).unwrap();
     let spec = hound::WavReader::open(path).unwrap().spec();
     let frames = hound::WavReader::open(path).unwrap().duration();
-    let mut w = hound::WavWriter::create(path, spec).unwrap();
+    let staged = path.with_extension("staged");
+    let mut w = hound::WavWriter::create(&staged, spec).unwrap();
     for i in 0..frames {
-        w.write_sample(((i as f32 * 0.05).sin() * 800.0) as i16)
+        w.write_sample(((i as f32 * 0.05).sin() * amplitude) as i16)
             .unwrap();
     }
     w.finalize().unwrap();
-    let file = std::fs::File::options().write(true).open(path).unwrap();
+    let file = std::fs::File::options().write(true).open(&staged).unwrap();
     file.set_modified(before.modified().unwrap()).unwrap();
+    drop(file);
+    std::fs::rename(&staged, path).unwrap();
     let after = std::fs::metadata(path).unwrap();
     assert_eq!(after.len(), before.len());
     assert_eq!(after.modified().unwrap(), before.modified().unwrap());
@@ -1969,20 +1984,7 @@ fn reanalyse_reads_a_file_edited_in_place() {
     assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
     // Back to the louder samples, and the whole library.
     let quiet = integrated(&r);
-    let spec = hound::WavReader::open(&file).unwrap().spec();
-    let before = std::fs::metadata(&file).unwrap().modified().unwrap();
-    let mut w = hound::WavWriter::create(&file, spec).unwrap();
-    for i in 0..48_000 {
-        w.write_sample(((i as f32 * 0.05).sin() * 8_000.0) as i16)
-            .unwrap();
-    }
-    w.finalize().unwrap();
-    std::fs::File::options()
-        .write(true)
-        .open(&file)
-        .unwrap()
-        .set_modified(before)
-        .unwrap();
+    rewrite_keeping_stamp(&file, 8_000.0);
     r.services
         .requests()
         .send(ServiceRequest::ReanalyseAll)
