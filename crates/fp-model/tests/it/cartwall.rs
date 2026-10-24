@@ -1,0 +1,814 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+//! Phase 2 spec P2.3: cartwall rules C1–C11.
+
+use crate::common;
+
+use std::path::PathBuf;
+
+use common::{entries, fixture};
+use fp_model::{
+    AppState, Cart, CartColor, CartEdit, CartFileChange, CartId, CartKind, CartPageId, CartRequest,
+    Command, EngineAction, EngineEvent, FileState, ModelError, SOURCE_END, TrackAnalysis, apply,
+    on_event,
+};
+
+fn page(state: &AppState) -> CartPageId {
+    state.cartwall.pages[0].id
+}
+
+fn cart(state: &AppState, index: usize) -> CartId {
+    state.cartwall.pages[0].carts[index].id
+}
+
+/// Gives cart `index` of the first page a file of `secs` seconds.
+fn load(state: &mut AppState, index: usize, secs: f64) -> CartId {
+    let p = page(state);
+    let path = PathBuf::from(format!("/carts/cart{index}.wav"));
+    apply(
+        state,
+        Command::AssignCartFile {
+            page: p,
+            index,
+            path,
+        },
+    )
+    .unwrap();
+    let track = state.cartwall.pages[0].carts[index].track.unwrap();
+    let analysis = TrackAnalysis {
+        duration_secs: secs,
+        cue_in: Some(0.5),
+        cue_out: Some(secs - 0.5),
+        ..TrackAnalysis::default()
+    };
+    apply(
+        state,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+    cart(state, index)
+}
+
+fn edit(state: &mut AppState, index: usize, f: impl FnOnce(&mut CartEdit)) {
+    let c = &state.cartwall.pages[0].carts[index];
+    let mut e = CartEdit {
+        name: c.name.clone(),
+        kind: c.kind,
+        looped: c.looped,
+        exclusive: c.exclusive,
+        color: c.color,
+    };
+    f(&mut e);
+    let p = page(state);
+    apply(
+        state,
+        Command::SetCart {
+            page: p,
+            index,
+            edit: e,
+        },
+    )
+    .unwrap();
+}
+
+fn started(actions: &[EngineAction]) -> Vec<&CartRequest> {
+    actions
+        .iter()
+        .filter_map(|a| match a {
+            EngineAction::StartCart(request) => Some(request),
+            _ => None,
+        })
+        .collect()
+}
+
+fn stopped(actions: &[EngineAction]) -> Vec<CartId> {
+    actions
+        .iter()
+        .filter_map(|a| match a {
+            EngineAction::StopCart { cart } => Some(*cart),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_fresh_state_has_one_page_with_the_default_grid() {
+    let state = fixture(0);
+    assert_eq!(state.cartwall.pages.len(), 1);
+    let p = &state.cartwall.pages[0];
+    assert_eq!((p.rows, p.cols, p.carts.len()), (2, 8, 16));
+    assert!(p.carts.iter().all(|c| c.track.is_none()));
+}
+
+#[test]
+fn c1_firing_starts_the_cart_from_cue_in_and_overlaps() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    let b = load(&mut state, 1, 5.0);
+    let actions = apply(&mut state, Command::FireCart(a)).unwrap();
+    let s = started(&actions);
+    assert_eq!(s.len(), 1);
+    assert_eq!((s[0].cart, s[0].from_secs, s[0].until_secs), (a, 0.5, 9.5));
+    assert!(!s[0].looped);
+    apply(&mut state, Command::FireCart(b)).unwrap();
+    let playing: Vec<CartId> = state.cartwall.playing.iter().map(|p| p.cart).collect();
+    assert_eq!(playing, vec![a, b], "carts overlap by default");
+}
+
+#[test]
+fn c2_firing_a_playing_cart_stops_it() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    apply(&mut state, Command::FireCart(a)).unwrap();
+    let actions = apply(&mut state, Command::FireCart(a)).unwrap();
+    assert_eq!(stopped(&actions), vec![a]);
+    assert!(started(&actions).is_empty());
+    assert!(state.cartwall.playing.is_empty());
+}
+
+#[test]
+fn c3_an_exclusive_cart_stops_every_other_cart() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    let b = load(&mut state, 1, 10.0);
+    let c = load(&mut state, 2, 10.0);
+    edit(&mut state, 1, |e| e.looped = true);
+    edit(&mut state, 2, |e| e.exclusive = true);
+    apply(&mut state, Command::FireCart(a)).unwrap();
+    apply(&mut state, Command::FireCart(b)).unwrap();
+    apply(&mut state, Command::CueCart(a)).unwrap();
+    let actions = apply(&mut state, Command::FireCart(c)).unwrap();
+    let mut s = stopped(&actions);
+    s.sort();
+    assert_eq!(s, vec![a, b]);
+    assert_eq!(started(&actions)[0].cart, c);
+    assert_eq!(state.cartwall.cue, Some(a), "the cue is not affected");
+}
+
+#[test]
+fn c4_looped_carts_are_started_looped() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    edit(&mut state, 0, |e| e.looped = true);
+    let actions = apply(&mut state, Command::FireCart(a)).unwrap();
+    assert!(started(&actions)[0].looped);
+}
+
+#[test]
+fn c5_a_cart_ends_at_cue_out() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    apply(&mut state, Command::FireCart(a)).unwrap();
+    on_event(&mut state, EngineEvent::CartEnded { cart: a });
+    assert!(state.cartwall.playing.is_empty());
+}
+
+#[test]
+fn c6_empty_or_unavailable_carts_do_nothing() {
+    let mut state = fixture(0);
+    let empty = cart(&state, 3);
+    assert!(
+        apply(&mut state, Command::FireCart(empty))
+            .unwrap()
+            .is_empty()
+    );
+    let a = load(&mut state, 0, 10.0);
+    let track = state.cartwall.pages[0].carts[0].track.unwrap();
+    apply(
+        &mut state,
+        Command::SetFileState {
+            track,
+            state: FileState::Missing,
+        },
+    )
+    .unwrap();
+    assert!(apply(&mut state, Command::FireCart(a)).unwrap().is_empty());
+    assert!(state.cartwall.playing.is_empty());
+}
+
+#[test]
+fn c6_unknown_carts_are_refused() {
+    let mut state = fixture(0);
+    assert_eq!(
+        apply(&mut state, Command::FireCart(CartId(999_999))),
+        Err(ModelError::UnknownCart(CartId(999_999)))
+    );
+}
+
+#[test]
+fn c8_changing_the_file_of_a_playing_cart_stops_it() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    apply(&mut state, Command::FireCart(a)).unwrap();
+    let p = page(&state);
+    let actions = apply(
+        &mut state,
+        Command::AssignCartFile {
+            page: p,
+            index: 0,
+            path: PathBuf::from("/carts/other.wav"),
+        },
+    )
+    .unwrap();
+    assert_eq!(stopped(&actions), vec![a]);
+    assert!(state.cartwall.playing.is_empty());
+}
+
+#[test]
+fn c8_the_last_page_cannot_be_deleted() {
+    let mut state = fixture(0);
+    let p = page(&state);
+    assert_eq!(
+        apply(&mut state, Command::DeleteCartPage(p)),
+        Err(ModelError::LastCartPage)
+    );
+}
+
+#[test]
+fn c8_deleting_a_page_stops_its_carts_and_forgets_their_tracks() {
+    let mut state = fixture(0);
+    apply(
+        &mut state,
+        Command::CreateCartPage {
+            name: "Effects".into(),
+        },
+    )
+    .unwrap();
+    let a = load(&mut state, 0, 10.0);
+    let track = state.cartwall.pages[0].carts[0].track.unwrap();
+    apply(&mut state, Command::FireCart(a)).unwrap();
+    let p = page(&state);
+    let actions = apply(&mut state, Command::DeleteCartPage(p)).unwrap();
+    assert_eq!(stopped(&actions), vec![a]);
+    assert!(state.library.get(track).is_none());
+    assert_eq!(state.cartwall.pages.len(), 1);
+}
+
+#[test]
+fn c9_only_one_cart_pre_listens() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    let b = load(&mut state, 1, 10.0);
+    let first = apply(&mut state, Command::CueCart(a)).unwrap();
+    assert!(
+        first
+            .iter()
+            .any(|x| matches!(x, EngineAction::StartCartCue(r) if r.cart == a))
+    );
+    let second = apply(&mut state, Command::CueCart(b)).unwrap();
+    assert!(second.contains(&EngineAction::StopCartCue));
+    assert_eq!(state.cartwall.cue, Some(b));
+    let third = apply(&mut state, Command::CueCart(b)).unwrap();
+    assert_eq!(third, vec![EngineAction::StopCartCue]);
+    assert_eq!(state.cartwall.cue, None);
+    assert!(state.cartwall.playing.is_empty(), "cue never plays on Main");
+}
+
+#[test]
+fn c9_the_cue_ends_by_itself() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    apply(&mut state, Command::CueCart(a)).unwrap();
+    on_event(&mut state, EngineEvent::CartCueEnded { cart: a });
+    assert_eq!(state.cartwall.cue, None);
+}
+
+#[test]
+fn a_stale_cart_cue_end_does_not_end_a_newer_cue() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    let b = load(&mut state, 1, 10.0);
+    apply(&mut state, Command::CueCart(a)).unwrap();
+    apply(&mut state, Command::CueCart(b)).unwrap();
+    on_event(&mut state, EngineEvent::CartCueEnded { cart: a });
+    assert_eq!(state.cartwall.cue, Some(b));
+}
+
+#[test]
+fn c10_stop_all_stops_carts_and_cue() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    let b = load(&mut state, 1, 10.0);
+    apply(&mut state, Command::FireCart(a)).unwrap();
+    apply(&mut state, Command::CueCart(b)).unwrap();
+    let actions = apply(&mut state, Command::StopAllCarts).unwrap();
+    assert_eq!(stopped(&actions), vec![a]);
+    assert!(actions.contains(&EngineAction::StopCartCue));
+    assert!(state.cartwall.playing.is_empty() && state.cartwall.cue.is_none());
+}
+
+#[test]
+fn c10_stop_all_stops_every_cart_the_way_each_single_stop_does() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    let b = load(&mut state, 1, 10.0);
+    let c = load(&mut state, 2, 10.0);
+    edit(&mut state, 1, |e| e.looped = true);
+    edit(&mut state, 2, |e| e.exclusive = false);
+    for id in [a, b, c] {
+        apply(&mut state, Command::FireCart(id)).unwrap();
+    }
+    let mut one_by_one = state.clone();
+    let mut each = Vec::new();
+    for id in [a, b, c] {
+        each.extend(apply(&mut one_by_one, Command::StopCart(id)).unwrap());
+    }
+    let all = apply(&mut state, Command::StopAllCarts).unwrap();
+    assert_eq!(stopped(&all), stopped(&each));
+    assert_eq!(stopped(&all), vec![a, b, c], "in firing order");
+    assert_eq!(state.cartwall.playing, one_by_one.cartwall.playing);
+    assert!(state.cartwall.playing.is_empty());
+}
+
+#[test]
+fn c10_stop_all_with_nothing_on_air_is_harmless_and_still_stops_the_cue() {
+    let mut state = fixture(0);
+    assert!(apply(&mut state, Command::StopAllCarts).unwrap().is_empty());
+    let a = load(&mut state, 0, 10.0);
+    apply(&mut state, Command::CueCart(a)).unwrap();
+    let actions = apply(&mut state, Command::StopAllCarts).unwrap();
+    assert!(stopped(&actions).is_empty());
+    assert!(actions.contains(&EngineAction::StopCartCue));
+    assert!(state.cartwall.cue.is_none());
+}
+
+#[test]
+fn shrinking_a_page_that_would_drop_files_is_refused() {
+    let mut state = fixture(0);
+    load(&mut state, 15, 10.0);
+    let p = page(&state);
+    assert_eq!(
+        apply(
+            &mut state,
+            Command::ResizeCartPage {
+                page: p,
+                rows: 1,
+                cols: 8
+            }
+        ),
+        Err(ModelError::CartsWouldBeLost)
+    );
+    assert_eq!(state.cartwall.pages[0].carts.len(), 16);
+    apply(
+        &mut state,
+        Command::ResizeCartPage {
+            page: p,
+            rows: 3,
+            cols: 8,
+        },
+    )
+    .unwrap();
+    assert_eq!(state.cartwall.pages[0].carts.len(), 24);
+    assert!(
+        state.cartwall.pages[0].carts[15].track.is_some(),
+        "kept by position"
+    );
+}
+
+#[test]
+fn grids_outside_the_limits_are_refused() {
+    let mut state = fixture(0);
+    let p = page(&state);
+    for (rows, cols) in [(0, 8), (2, 0), (9, 8), (2, 17)] {
+        assert_eq!(
+            apply(
+                &mut state,
+                Command::ResizeCartPage {
+                    page: p,
+                    rows,
+                    cols
+                }
+            ),
+            Err(ModelError::CartGridOutOfRange),
+            "{rows}x{cols}"
+        );
+    }
+}
+
+#[test]
+fn a_track_used_by_a_cart_survives_playlist_removal() {
+    let mut state = fixture(1);
+    let e = entries(&state);
+    let track = state.playlists.entry(e[0]).unwrap().track;
+    let path = state.library.get(track).unwrap().path.clone();
+    let p = page(&state);
+    apply(
+        &mut state,
+        Command::AssignCartFile {
+            page: p,
+            index: 0,
+            path,
+        },
+    )
+    .unwrap();
+    // The cart gets its own library track even for the same file; removing
+    // the playlist entry must not touch it.
+    let cart_track = state.cartwall.pages[0].carts[0].track.unwrap();
+    apply(&mut state, Command::RemoveEntry(e[0])).unwrap();
+    assert!(state.library.get(cart_track).is_some());
+}
+
+#[test]
+fn clearing_a_cart_file_forgets_its_track() {
+    let mut state = fixture(0);
+    load(&mut state, 0, 10.0);
+    let track = state.cartwall.pages[0].carts[0].track.unwrap();
+    let p = page(&state);
+    apply(&mut state, Command::ClearCartFile { page: p, index: 0 }).unwrap();
+    assert!(state.cartwall.pages[0].carts[0].track.is_none());
+    assert!(state.library.get(track).is_none());
+}
+
+#[test]
+fn failed_carts_are_marked_unreadable_and_removed() {
+    let mut state = fixture(0);
+    let a = load(&mut state, 0, 10.0);
+    apply(&mut state, Command::FireCart(a)).unwrap();
+    on_event(&mut state, EngineEvent::CartFailed { cart: a });
+    let track = state.cartwall.pages[0].carts[0].track.unwrap();
+    assert_eq!(
+        state.library.get(track).unwrap().file_state,
+        FileState::Unreadable
+    );
+    assert!(state.cartwall.playing.is_empty());
+}
+
+#[test]
+fn a_cart_without_a_known_length_plays_to_the_end_of_the_file() {
+    let mut state = fixture(0);
+    let p = page(&state);
+    apply(
+        &mut state,
+        Command::AssignCartFile {
+            page: p,
+            index: 0,
+            path: PathBuf::from("/carts/new.wav"),
+        },
+    )
+    .unwrap();
+    let a = cart(&state, 0);
+    let actions = apply(&mut state, Command::FireCart(a)).unwrap();
+    assert_eq!(started(&actions)[0].until_secs, SOURCE_END);
+}
+
+#[test]
+fn new_pages_use_the_configured_grid_and_kinds_are_editable() {
+    let mut state = fixture(0);
+    state.config.cartwall.default_rows = 3;
+    state.config.cartwall.default_cols = 4;
+    apply(
+        &mut state,
+        Command::CreateCartPage {
+            name: "Sports".into(),
+        },
+    )
+    .unwrap();
+    let last = state.cartwall.pages.last().unwrap();
+    assert_eq!(
+        (last.name.as_str(), last.rows, last.cols, last.carts.len()),
+        ("Sports", 3, 4, 12)
+    );
+    edit(&mut state, 0, |e| {
+        e.kind = CartKind::Spot;
+        e.name = "Bakery".into();
+    });
+    let c = &state.cartwall.pages[0].carts[0];
+    assert_eq!((c.kind, c.name.as_str()), (CartKind::Spot, "Bakery"));
+}
+
+#[test]
+fn importing_duplicate_positions_keeps_no_orphan_track() {
+    let mut state = fixture(0);
+    let edit = CartEdit {
+        name: "x".into(),
+        kind: CartKind::Jingle,
+        looped: false,
+        exclusive: false,
+        color: None,
+    };
+    let import = fp_model::CartPageImport {
+        name: "Imported".into(),
+        rows: 2,
+        cols: 8,
+        carts: vec![
+            (0, edit.clone(), Some(PathBuf::from("/a.wav"))),
+            (0, edit, Some(PathBuf::from("/b.wav"))),
+        ],
+    };
+    apply(&mut state, Command::ImportCartPage(Box::new(import))).unwrap();
+    assert_eq!(
+        state.library.iter().count(),
+        1,
+        "only the referenced track remains"
+    );
+}
+
+fn plain(name: &str) -> CartEdit {
+    CartEdit {
+        name: name.into(),
+        kind: CartKind::Jingle,
+        looped: false,
+        exclusive: false,
+        color: None,
+    }
+}
+
+/// C11: a page edit is checked whole, then applied whole.
+#[test]
+fn c11_a_page_edit_that_cannot_resize_does_not_rename() {
+    let mut s = fixture(1);
+    let p = page(&s);
+    load(&mut s, 5, 30.0);
+    let before = s.cartwall.page(p).unwrap().clone();
+    let e = apply(
+        &mut s,
+        Command::EditCartPage {
+            page: p,
+            name: Some("New".into()),
+            grid: Some((1, 1)),
+        },
+    );
+    assert_eq!(e, Err(ModelError::CartsWouldBeLost));
+    assert_eq!(s.cartwall.page(p).unwrap(), &before);
+}
+
+#[test]
+fn c11_a_page_edit_renames_and_resizes_together() {
+    let mut s = fixture(1);
+    let p = page(&s);
+    apply(
+        &mut s,
+        Command::EditCartPage {
+            page: p,
+            name: Some("New".into()),
+            grid: Some((2, 3)),
+        },
+    )
+    .unwrap();
+    let pg = s.cartwall.page(p).unwrap();
+    assert_eq!(
+        (pg.name.as_str(), pg.rows, pg.cols, pg.carts.len()),
+        ("New", 2, 3, 6)
+    );
+}
+
+#[test]
+fn c11_a_cart_edit_with_an_unknown_track_changes_nothing() {
+    let mut s = fixture(1);
+    let p = page(&s);
+    load(&mut s, 0, 30.0);
+    let before = s.cartwall.pages[0].carts[0].clone();
+    let unknown = fp_model::TrackId(9_999);
+    let e = apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 0,
+            edit: plain("X"),
+            file: CartFileChange::Track(unknown),
+        },
+    );
+    assert_eq!(e, Err(ModelError::UnknownTrack(unknown)));
+    assert_eq!(s.cartwall.pages[0].carts[0], before);
+}
+
+#[test]
+fn c11_a_cart_edit_keeping_its_file_does_not_stop_it() {
+    let mut s = fixture(1);
+    let c = load(&mut s, 0, 30.0);
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    apply(&mut s, Command::FireCart(c)).unwrap();
+    let p = page(&s);
+    for file in [CartFileChange::Keep, CartFileChange::Track(track)] {
+        let out = apply(
+            &mut s,
+            Command::EditCart {
+                page: p,
+                index: 0,
+                edit: plain("Kept"),
+                file,
+            },
+        )
+        .unwrap();
+        assert!(stopped(&out).is_empty(), "{out:?}");
+    }
+    assert_eq!(s.cartwall.pages[0].carts[0].name, "Kept");
+}
+
+#[test]
+fn c11_a_cart_edit_with_a_new_file_stops_it_first() {
+    let mut s = fixture(1);
+    let c = load(&mut s, 0, 30.0);
+    load(&mut s, 1, 30.0);
+    let other = s.cartwall.pages[0].carts[1].track.unwrap();
+    apply(&mut s, Command::FireCart(c)).unwrap();
+    let p = page(&s);
+    let out = apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 0,
+            edit: plain("New"),
+            file: CartFileChange::Track(other),
+        },
+    )
+    .unwrap();
+    assert_eq!(stopped(&out), vec![c]);
+    assert_eq!(s.cartwall.pages[0].carts[0].track, Some(other));
+    assert_eq!(s.cartwall.pages[0].carts[0].name, "New");
+    let out = apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 1,
+            edit: plain("Cleared"),
+            file: CartFileChange::Clear,
+        },
+    )
+    .unwrap();
+    assert!(stopped(&out).is_empty());
+    assert_eq!(s.cartwall.pages[0].carts[1].track, None);
+}
+
+#[test]
+fn carts_keep_their_markers_when_players_ignore_them() {
+    let mut state = fixture(1);
+    let c = load(&mut state, 0, 10.0);
+    let mut config = state.config.clone();
+    config.players.use_cue_markers = false;
+    apply(&mut state, Command::UpdateConfig(Box::new(config))).unwrap();
+    let actions = apply(&mut state, Command::FireCart(c)).unwrap();
+    let requests = started(&actions);
+    let request = requests.first().unwrap();
+    assert_eq!(request.from_secs, 0.5, "the cart cue-in is kept");
+    assert_eq!(request.until_secs, 9.5, "the cart cue-out is kept");
+}
+
+/// Cart colour spec CC1.
+#[test]
+fn cc1_a_cart_has_no_colour_by_default() {
+    let s = fixture(0);
+    assert!(s.cartwall.pages[0].carts.iter().all(|c| c.color.is_none()));
+}
+
+#[test]
+fn cc1_every_colour_has_a_stable_lower_case_name() {
+    let names: Vec<&str> = CartColor::ALL.iter().map(|c| c.name()).collect();
+    assert_eq!(
+        names,
+        [
+            "red", "orange", "amber", "green", "teal", "blue", "violet", "pink"
+        ]
+    );
+    for c in CartColor::ALL {
+        assert_eq!(CartColor::from_name(c.name()), Some(c));
+        assert_eq!(serde_json::to_value(c).unwrap(), c.name());
+    }
+    assert_eq!(CartColor::from_name("Red"), None, "names are lower case");
+    assert_eq!(CartColor::from_name("magenta"), None);
+}
+
+#[test]
+fn cc1_the_state_stores_the_name_and_leaves_out_no_colour() {
+    let mut s = fixture(0);
+    edit(&mut s, 0, |e| e.color = Some(CartColor::Teal));
+    let coloured = serde_json::to_value(&s.cartwall.pages[0].carts[0]).unwrap();
+    assert_eq!(coloured["color"], "teal");
+    let plain = serde_json::to_value(&s.cartwall.pages[0].carts[1]).unwrap();
+    assert!(plain.get("color").is_none(), "no colour, no field: {plain}");
+}
+
+/// CC2: `SetCart` and `EditCart` set it with the other fields.
+#[test]
+fn cc2_set_cart_and_edit_cart_set_the_colour() {
+    let mut s = fixture(1);
+    load(&mut s, 0, 30.0);
+    edit(&mut s, 0, |e| {
+        e.name = "ID".into();
+        e.color = Some(CartColor::Amber);
+    });
+    let c = &s.cartwall.pages[0].carts[0];
+    assert_eq!((c.name.as_str(), c.color), ("ID", Some(CartColor::Amber)));
+    let p = page(&s);
+    apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 0,
+            edit: CartEdit {
+                color: Some(CartColor::Blue),
+                ..plain("ID")
+            },
+            file: CartFileChange::Keep,
+        },
+    )
+    .unwrap();
+    assert_eq!(s.cartwall.pages[0].carts[0].color, Some(CartColor::Blue));
+    edit(&mut s, 0, |e| e.color = None);
+    assert_eq!(s.cartwall.pages[0].carts[0].color, None, "cleared");
+}
+
+/// CC2 with C11: a refused edit changes nothing, the colour included.
+#[test]
+fn cc2_a_refused_cart_edit_keeps_the_old_colour() {
+    let mut s = fixture(1);
+    load(&mut s, 0, 30.0);
+    edit(&mut s, 0, |e| e.color = Some(CartColor::Green));
+    let p = page(&s);
+    let unknown = fp_model::TrackId(9_999);
+    let e = apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 0,
+            edit: CartEdit {
+                color: Some(CartColor::Red),
+                ..plain("X")
+            },
+            file: CartFileChange::Track(unknown),
+        },
+    );
+    assert_eq!(e, Err(ModelError::UnknownTrack(unknown)));
+    assert_eq!(s.cartwall.pages[0].carts[0].color, Some(CartColor::Green));
+}
+
+#[test]
+fn cc2_an_empty_cart_keeps_its_colour_and_clearing_the_file_does_not_clear_it() {
+    let mut s = fixture(0);
+    let p = page(&s);
+    edit(&mut s, 3, |e| e.color = Some(CartColor::Pink));
+    assert_eq!(s.cartwall.pages[0].carts[3].track, None, "still empty");
+    assert_eq!(s.cartwall.pages[0].carts[3].color, Some(CartColor::Pink));
+    load(&mut s, 3, 30.0);
+    assert_eq!(
+        s.cartwall.pages[0].carts[3].color,
+        Some(CartColor::Pink),
+        "a file does not change it"
+    );
+    apply(&mut s, Command::ClearCartFile { page: p, index: 3 }).unwrap();
+    assert_eq!(s.cartwall.pages[0].carts[3].color, Some(CartColor::Pink));
+    load(&mut s, 3, 30.0);
+    apply(
+        &mut s,
+        Command::EditCart {
+            page: p,
+            index: 3,
+            edit: CartEdit {
+                color: Some(CartColor::Pink),
+                ..plain("Cleared")
+            },
+            file: CartFileChange::Clear,
+        },
+    )
+    .unwrap();
+    let c = &s.cartwall.pages[0].carts[3];
+    assert_eq!((c.track, c.color), (None, Some(CartColor::Pink)));
+}
+
+/// CC3: a missing field or an unknown name loads as no colour; the rest
+/// of the cart loads as usual.
+#[test]
+fn cc3_a_missing_or_unknown_colour_loads_as_none() {
+    let missing: Cart = serde_json::from_str(r#"{"id":5,"name":"A"}"#).unwrap();
+    assert_eq!(missing.color, None);
+    for raw in [r#""magenta""#, r#""Red""#, "7", "[]", "{}", "null"] {
+        let json = format!(r#"{{"id":5,"name":"A","kind":"Spot","looped":true,"color":{raw}}}"#);
+        let c: Cart = serde_json::from_str(&json).unwrap_or_else(|e| panic!("{raw}: {e}"));
+        assert_eq!(c.color, None, "{raw}");
+        assert_eq!(
+            (c.name.as_str(), c.kind, c.looped),
+            ("A", CartKind::Spot, true),
+            "{raw}"
+        );
+    }
+    let teal: Cart = serde_json::from_str(r#"{"id":5,"color":"teal"}"#).unwrap();
+    assert_eq!(teal.color, Some(CartColor::Teal));
+}
+
+/// CC4 (model side): an imported page keeps each cart's colour.
+#[test]
+fn cc4_an_imported_page_keeps_each_carts_colour() {
+    let mut s = fixture(0);
+    let import = fp_model::CartPageImport {
+        name: "Imported".into(),
+        rows: 1,
+        cols: 2,
+        carts: vec![
+            (
+                0,
+                CartEdit {
+                    color: Some(CartColor::Violet),
+                    ..plain("a")
+                },
+                None,
+            ),
+            (1, plain("b"), None),
+        ],
+    };
+    apply(&mut s, Command::ImportCartPage(Box::new(import))).unwrap();
+    let page = s.cartwall.pages.last().unwrap();
+    assert_eq!(page.carts[0].color, Some(CartColor::Violet));
+    assert_eq!(page.carts[1].color, None);
+}

@@ -254,7 +254,7 @@ library beyond ALSA, D-Bus and the C runtime.
 
 ## Conformance suite
 
-`fp-backends/tests/conformance.rs` runs the same checks against any
+`fp-backends/tests/it/conformance.rs` runs the same checks against any
 backend:
 
 - it is available and lists named devices, including the default device;
@@ -264,7 +264,7 @@ backend:
 - the device opens again.
 
 Null and Offline run in CI. On a machine with real systems, run
-`cargo test -p fp-backends --test conformance -- --ignored` (with the
+`cargo test -p fp-backends --test it conformance:: -- --ignored` (with the
 features you built): that is the on-device check each system needs before a
 release.
 

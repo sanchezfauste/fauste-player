@@ -201,7 +201,7 @@ pub const PLAY_ACTIVE_BG: Color32 = Color32::from_rgb(0x1d, 0x4e, 0x2b);
 
 // The big Play / Next button is a flat green button with a white icon and
 // no outline, in the green of the next row of the playlist (itr07 J4). Every
-// fill below keeps the icon at WCAG >= 3:1 (`tests/play_button_ui.rs` checks
+// fill below keeps the icon at WCAG >= 3:1 (`tests/it/play_button_ui.rs` checks
 // it).
 /// Idle and on air (the caption tells Play from Next): the next row's green.
 pub const PLAY_FILL: Color32 = NEXT_ROW;

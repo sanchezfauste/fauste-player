@@ -1,0 +1,1100 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
+//! Phase 2 spec P2.9: the cartwall strip.
+
+use crate::support;
+
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use egui::{Color32, Rect};
+use egui_kittest::kittest::{NodeT, Queryable};
+use fp_app::services::{MediaCache, TrackMedia};
+use fp_app::ui::cart_view::{
+    BUTTON_HEIGHT, CartStatus, GAP, MIN_BUTTON_HEIGHT, button_height, cart_look, cart_view,
+    filled_button_height, fit_name, page_on_air,
+};
+use fp_app::ui::theme;
+use fp_engine::conductor::Telemetry;
+use fp_engine::engine::CartTelemetry;
+use fp_model::{AppState, CartColor, CartEdit, CartKind, Command, FileState, TrackAnalysis, apply};
+use support::{Fake, harness, harness_with_media, state};
+
+/// A state whose first page has "Station ID" (10 s, cue 0.5–9.5) in cell 0.
+fn with_cart() -> AppState {
+    let mut s = state(1, 0);
+    let page = s.cartwall.pages[0].id;
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page,
+            index: 0,
+            path: PathBuf::from("/carts/id.wav"),
+        },
+    )
+    .unwrap();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    let analysis = TrackAnalysis {
+        duration_secs: 10.0,
+        cue_in: Some(0.5),
+        cue_out: Some(9.5),
+        ..TrackAnalysis::default()
+    };
+    apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+    let edit = CartEdit {
+        name: "Station ID".into(),
+        kind: CartKind::Jingle,
+        looped: false,
+        exclusive: false,
+        color: None,
+    };
+    apply(
+        &mut s,
+        Command::SetCart {
+            page,
+            index: 0,
+            edit,
+        },
+    )
+    .unwrap();
+    s
+}
+
+#[test]
+fn cart_views_show_length_countdown_and_progress() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    let idle = cart_view(&s, &Telemetry::default(), id).unwrap();
+    assert_eq!(idle.status, CartStatus::Idle);
+    assert_eq!(idle.time, "00:09");
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let telemetry = Telemetry {
+        carts: vec![(
+            id,
+            CartTelemetry {
+                position_secs: 3.0,
+                peak: 0.0,
+            },
+        )],
+        ..Telemetry::default()
+    };
+    let playing = cart_view(&s, &telemetry, id).unwrap();
+    assert_eq!(playing.status, CartStatus::Playing);
+    assert_eq!(playing.time, "-00:06");
+}
+
+#[test]
+fn empty_and_unavailable_carts_are_told_apart() {
+    let mut s = with_cart();
+    let empty = s.cartwall.pages[0].carts[1].id;
+    assert_eq!(
+        cart_view(&s, &Telemetry::default(), empty).unwrap().status,
+        CartStatus::Empty
+    );
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: FileState::Missing,
+        },
+    )
+    .unwrap();
+    let id = s.cartwall.pages[0].carts[0].id;
+    assert_eq!(
+        cart_view(&s, &Telemetry::default(), id).unwrap().status,
+        CartStatus::Unavailable
+    );
+}
+
+#[test]
+fn a_playing_page_is_marked() {
+    let mut s = with_cart();
+    let page = s.cartwall.pages[0].id;
+    assert!(!page_on_air(&s, page));
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    assert!(page_on_air(&s, page));
+}
+
+#[test]
+fn clicking_a_cart_fires_it() {
+    let (mut h, fake) = harness(with_cart());
+    h.get_by_label("Station ID").click();
+    h.run_steps(2);
+    let id = fake.state.load().cartwall.pages[0].carts[0].id;
+    assert!(fake.take_sent().contains(&Command::FireCart(id)));
+}
+
+#[test]
+fn clicking_an_empty_cart_sends_nothing() {
+    let (mut h, fake) = harness(with_cart());
+    h.get_by_label("Cart 2, empty").click();
+    h.run_steps(2);
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::FireCart(_)))
+    );
+}
+
+#[test]
+fn the_cartwall_collapses_and_expands() {
+    let (mut h, fake) = harness(with_cart());
+    h.get_by_label("CARTWALL").click();
+    h.run_steps(3);
+    assert!(fake.take_sent().contains(&Command::SetCartwallOpen(false)));
+    assert!(h.query_by_label("Station ID").is_none(), "collapsed");
+    h.get_by_label("CARTWALL").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Station ID").is_some());
+}
+
+#[test]
+fn cart_page_tabs_show_default_names_and_switch_pages() {
+    let mut s = with_cart();
+    apply(
+        &mut s,
+        Command::CreateCartPage {
+            name: "Sports".into(),
+        },
+    )
+    .unwrap();
+    let (mut h, fake) = harness(s);
+    assert!(
+        h.query_by_label("Carts 1").is_some(),
+        "an unnamed page gets a default name"
+    );
+    h.get_by_label("Sports").click();
+    h.run_steps(2);
+    let sports = fake.state.load().cartwall.pages[1].id;
+    assert!(fake.take_sent().contains(&Command::ShowCartPage(sports)));
+}
+
+#[test]
+fn the_cart_menu_pre_listens_on_cue() {
+    let (mut h, fake) = harness(with_cart());
+    h.get_by_label("Station ID").click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Pre-listen on CUE").click();
+    h.run_steps(2);
+    let id = fake.state.load().cartwall.pages[0].carts[0].id;
+    assert!(fake.take_sent().contains(&Command::CueCart(id)));
+    let _ = Arc::strong_count(&fake);
+}
+
+#[test]
+fn without_a_cartwall_cue_output_the_pre_listen_item_is_dimmed_with_the_reason() {
+    let mut s = with_cart();
+    s.config.outputs.cartwall.cue = None;
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Station ID").click_secondary();
+    h.run_steps(2);
+    let item = h.get_by_label("Pre-listen on CUE");
+    assert!(item.accesskit_node().is_disabled());
+    item.hover();
+    h.run_steps(40);
+    assert!(
+        h.query_by_label_contains("The cartwall has no Cue output")
+            .is_some()
+    );
+    assert!(fake.take_sent().is_empty());
+}
+
+#[allow(dead_code)]
+fn unused(_: &Fake) {}
+
+#[test]
+fn the_last_cart_is_reachable_in_a_small_window() {
+    let fake = support::Fake::new(with_cart());
+    let app = fp_app::ui::app::AppUi::new(
+        fake.clone(),
+        fp_app::i18n::I18n::new(Some("en-US")),
+        fp_app::services::MediaCache::default(),
+    );
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(420.0, 480.0))
+        .with_step_dt(0.02)
+        .build_ui_state(|ui, app: &mut fp_app::ui::app::AppUi| app.ui(ui), app);
+    h.run_steps(3);
+    let last = fake.state.load().cartwall.pages[0].carts[15].id;
+    let node = h.get_all_by_label("Cart 16, empty").next().unwrap();
+    node.scroll_to_me();
+    h.run_steps(3);
+    // Give the last cart a file so a click fires it.
+    let page = fake.state.load().cartwall.pages[0].id;
+    fp_app::ui::controller::Controller::send(
+        fake.as_ref(),
+        Command::AssignCartFile {
+            page,
+            index: 15,
+            path: PathBuf::from("/carts/last.wav"),
+        },
+    );
+    h.run_steps(3);
+    let _ = fake.take_sent();
+    h.get_by_label("last").scroll_to_me();
+    h.run_steps(3);
+    h.get_by_label("last").click();
+    h.run_steps(2);
+    assert!(fake.take_sent().contains(&Command::FireCart(last)));
+}
+
+#[test]
+fn an_empty_cart_can_be_edited_from_its_menu() {
+    let (mut h, _fake) = harness(with_cart());
+    h.get_by_label("Cart 2, empty").click_secondary();
+    h.run_steps(2);
+    assert!(
+        h.query_by_label("Pre-listen on CUE").is_none(),
+        "nothing to cue"
+    );
+    h.get_by_label("Edit…").click();
+    h.run_steps(3);
+    // Settings opens on that cart's editor, where a file is chosen.
+    assert!(h.query_by_label("No file").is_some());
+    assert!(h.query_by_label("Choose…").is_some());
+}
+
+#[test]
+fn hovering_an_unavailable_cart_says_why() {
+    let mut s = with_cart();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: FileState::Missing,
+        },
+    )
+    .unwrap();
+    let (mut h, _fake) = harness(s);
+    h.get_by_label("Station ID").hover();
+    h.run_steps(40);
+    assert!(
+        h.query_by_label_contains("File not found: /carts/id.wav")
+            .is_some(),
+        "the tooltip gives the reason and the path"
+    );
+}
+
+/// Gives cart `index` of the first page a 10 s file called `name`.
+fn give_file(s: &mut AppState, index: usize, name: &str) {
+    let page = s.cartwall.pages[0].id;
+    apply(
+        s,
+        Command::AssignCartFile {
+            page,
+            index,
+            path: PathBuf::from(format!("/carts/{name}.wav")),
+        },
+    )
+    .unwrap();
+    let track = s.cartwall.pages[0].carts[index].track.unwrap();
+    let analysis = TrackAnalysis {
+        duration_secs: 10.0,
+        cue_in: Some(0.5),
+        cue_out: Some(9.5),
+        ..TrackAnalysis::default()
+    };
+    apply(
+        s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+}
+
+/// A state with `n` carts (the first is "Station ID") all playing.
+fn with_playing_carts(n: usize) -> AppState {
+    let mut s = with_cart();
+    for i in 1..n {
+        give_file(&mut s, i, &format!("c{i}"));
+    }
+    for i in 0..n {
+        let id = s.cartwall.pages[0].carts[i].id;
+        apply(&mut s, Command::FireCart(id)).unwrap();
+    }
+    s
+}
+
+fn stop_all_sent(fake: &Fake) -> bool {
+    fake.take_sent().contains(&Command::StopAllCarts)
+}
+
+#[test]
+fn stop_all_is_dimmed_and_has_no_count_while_no_cart_plays() {
+    let (mut h, fake) = harness(with_cart());
+    let button = h.get_by_label("Stop all");
+    assert!(button.accesskit_node().is_disabled());
+    button.click();
+    h.run_steps(2);
+    assert!(!stop_all_sent(&fake), "a dimmed button sends nothing");
+}
+
+#[test]
+fn stop_all_shows_the_number_of_playing_carts() {
+    let (mut h, _fake) = harness(with_playing_carts(2));
+    h.run_steps(2);
+    let button = h.get_by_label("Stop all (2)");
+    assert!(!button.accesskit_node().is_disabled());
+    assert!(
+        h.query_by_label("Stop all").is_none(),
+        "no label without a count"
+    );
+}
+
+#[test]
+fn stop_all_counts_carts_on_every_page() {
+    let mut s = with_playing_carts(2);
+    apply(
+        &mut s,
+        Command::CreateCartPage {
+            name: "Sports".into(),
+        },
+    )
+    .unwrap();
+    let sports = s.cartwall.pages[1].id;
+    apply(&mut s, Command::ShowCartPage(sports)).unwrap();
+    let (h, _fake) = harness(s);
+    assert!(
+        h.query_by_label("Station ID").is_none(),
+        "the carts playing are on the page not shown"
+    );
+    assert!(h.query_by_label("Stop all (2)").is_some());
+}
+
+#[test]
+fn clicking_stop_all_stops_every_cart() {
+    let (mut h, fake) = harness(with_playing_carts(2));
+    h.get_by_label("Stop all (2)").click();
+    h.run_steps(3);
+    assert!(stop_all_sent(&fake));
+    assert!(fake.state.load().cartwall.playing.is_empty());
+}
+
+#[test]
+fn stop_all_dims_again_when_the_last_cart_stops() {
+    let (mut h, fake) = harness(with_playing_carts(1));
+    assert!(h.query_by_label("Stop all (1)").is_some());
+    let id = fake.state.load().cartwall.pages[0].carts[0].id;
+    fp_app::ui::controller::Controller::send(fake.as_ref(), Command::StopCart(id));
+    h.run_steps(3);
+    assert!(h.query_by_label("Stop all (1)").is_none(), "no stale count");
+    assert!(h.get_by_label("Stop all").accesskit_node().is_disabled());
+}
+
+#[test]
+fn stop_all_works_with_the_cartwall_collapsed() {
+    let (mut h, fake) = harness(with_playing_carts(2));
+    h.get_by_label("CARTWALL").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Station ID").is_none(), "collapsed");
+    h.get_by_label("Stop all (2)").click();
+    h.run_steps(3);
+    assert!(stop_all_sent(&fake));
+}
+
+#[test]
+fn a_cart_cue_alone_does_not_enable_stop_all() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::CueCart(id)).unwrap();
+    assert!(s.cartwall.cue.is_some() && s.cartwall.playing.is_empty());
+    let (h, _fake) = harness(s);
+    assert!(h.get_by_label("Stop all").accesskit_node().is_disabled());
+}
+
+#[test]
+fn stop_all_sits_at_the_right_end_of_the_bar() {
+    let (h, _fake) = harness(with_playing_carts(2));
+    let stop = h.get_by_label("Stop all (2)").rect();
+    let title = h.get_by_label("CARTWALL").rect();
+    assert!(stop.left() > title.right(), "after the collapse control");
+    // Left of the panel's Hide and Maximize buttons.
+    assert!(stop.right() > 1000.0 - 110.0, "at the right end: {stop:?}");
+}
+
+#[test]
+fn stop_all_stays_at_the_right_end_in_a_narrow_window() {
+    let mut s = with_playing_carts(2);
+    for n in 0..8 {
+        apply(
+            &mut s,
+            Command::CreateCartPage {
+                name: format!("A rather long page name {n}"),
+            },
+        )
+        .unwrap();
+    }
+    let (mut h, _fake) = support::harness_sized(s, egui::vec2(420.0, 480.0), |ui| ui);
+    h.run_steps(3);
+    let stop = h.get_by_label("Stop all (2)").rect();
+    assert!(stop.right() <= 420.0 + 0.5, "inside the window: {stop:?}");
+    assert!(stop.right() > 420.0 - 110.0, "at the right end: {stop:?}");
+    assert!(stop.width() > 40.0, "not squeezed: {stop:?}");
+    assert!(h.query_by_label("CARTWALL").is_some(), "title kept");
+    assert!(h.query_by_label("Carts 1").is_some(), "a page tab kept");
+}
+
+/// Ten points a character, the ellipsis and spaces included.
+fn tens(text: &str) -> f32 {
+    10.0 * text.chars().count() as f32
+}
+
+#[test]
+fn a_cart_name_wraps_between_words_and_never_inside_one() {
+    // Room for it: unchanged.
+    assert_eq!(fit_name("Jingle", 60.0, tens), "Jingle");
+    // Words wrap at their boundaries, as many to a line as fit.
+    assert_eq!(fit_name("Top of the hour", 100.0, tens), "Top of the\nhour");
+    assert_eq!(fit_name("Station ID", 70.0, tens), "Station\nID");
+    // A word that does not fit a line is cut with an ellipsis, never split
+    // across lines, and nothing follows it.
+    assert_eq!(fit_name("Jingle", 50.0, tens), "Jing…");
+    assert_eq!(fit_name("Big Jingle drop", 50.0, tens), "Big\nJing…");
+    // Spaces collapse; nothing is no name.
+    assert_eq!(fit_name("  Station   ID ", 100.0, tens), "Station ID");
+    assert_eq!(fit_name("", 50.0, tens), "");
+    // Not even one letter fits: the ellipsis alone.
+    assert_eq!(fit_name("Jingle", 5.0, tens), "…");
+    assert_eq!(fit_name("Jingle", f32::NAN, tens), "…");
+}
+
+#[test]
+fn buttons_take_the_height_there_is_within_their_limits() {
+    // Room for the nominal height: unchanged.
+    assert_eq!(
+        button_height(4.0 * BUTTON_HEIGHT + 3.0 * GAP, 4),
+        BUTTON_HEIGHT
+    );
+    assert_eq!(button_height(1000.0, 4), BUTTON_HEIGHT);
+    // Less room: they shrink, gaps included.
+    let h = button_height(130.0, 4);
+    assert!((h - (130.0 - 3.0 * GAP) / 4.0).abs() < 0.01, "{h}");
+    // Never below the minimum, whatever the room.
+    assert_eq!(button_height(10.0, 4), MIN_BUTTON_HEIGHT);
+    assert_eq!(button_height(f32::NAN, 4), BUTTON_HEIGHT);
+    assert_eq!(button_height(-5.0, 4), MIN_BUTTON_HEIGHT);
+}
+
+#[test]
+fn one_row_keeps_the_nominal_button_height() {
+    assert_eq!(button_height(BUTTON_HEIGHT, 1), BUTTON_HEIGHT);
+    assert_eq!(button_height(500.0, 1), BUTTON_HEIGHT);
+    assert_eq!(button_height(100.0, 0), BUTTON_HEIGHT);
+}
+
+#[test]
+fn four_rows_fit_a_short_window_without_scrolling() {
+    // 4 rows at 40 px do not fit the 60% the strip may take of a 360 px
+    // window; at the minimum height they do.
+    let (mut h, _fake) = support::harness_sized(with_cart(), egui::vec2(700.0, 360.0), |ui| ui);
+    h.run_steps(3);
+    let first = h.get_all_by_label("Station ID").next().unwrap().rect();
+    let last = h.get_all_by_label("Cart 16, empty").next().unwrap().rect();
+    assert!(
+        first.height() < BUTTON_HEIGHT && first.height() >= MIN_BUTTON_HEIGHT,
+        "{first:?}"
+    );
+    // The last row is on screen without scrolling (above the 24 px status bar).
+    assert!(last.bottom() <= 360.0 - 24.0, "{last:?}");
+    assert!(last.top() > first.top());
+}
+
+#[test]
+fn a_collapsed_cartwall_draws_no_buttons() {
+    let mut s = with_cart();
+    apply(&mut s, Command::SetCartwallOpen(false)).unwrap();
+    let (mut h, _fake) = support::harness(s);
+    h.run_steps(3);
+    assert!(h.query_by_label("Station ID").is_none());
+}
+
+#[test]
+fn rows_are_exactly_one_gap_apart() {
+    // (Two rows here.) A window where the buttons shrink but stay above the minimum: the
+    // theme's own item spacing must not add to the gap, or the grid
+    // overflows its area and scrolls.
+    let (mut h, _fake) = support::harness_sized(with_cart(), egui::vec2(700.0, 420.0), |ui| ui);
+    h.run_steps(3);
+    let first = h.get_all_by_label("Station ID").next().unwrap().rect();
+    let last = h.get_all_by_label("Cart 16, empty").next().unwrap().rect();
+    assert!(
+        first.height() < BUTTON_HEIGHT && first.height() > MIN_BUTTON_HEIGHT,
+        "{first:?}"
+    );
+    let step = last.top() - first.top();
+    assert!(
+        (step - (first.height() + GAP)).abs() < 0.01,
+        "{step} {first:?} {last:?}"
+    );
+}
+
+type H = egui_kittest::Harness<'static, fp_app::ui::app::AppUi>;
+
+/// Gives cart `index` of the first page `color`, keeping its other fields.
+fn paint_cart(s: &mut AppState, index: usize, color: Option<CartColor>) {
+    let page = s.cartwall.pages[0].id;
+    let c = s.cartwall.pages[0].carts[index].clone();
+    let edit = CartEdit {
+        name: c.name,
+        kind: c.kind,
+        looped: c.looped,
+        exclusive: c.exclusive,
+        color,
+    };
+    apply(s, Command::SetCart { page, index, edit }).unwrap();
+}
+
+/// Every filled or stroked rectangle painted inside `area` in the last frame.
+fn rects_in(h: &H, area: Rect) -> Vec<egui::epaint::RectShape> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+        match shape {
+            egui::Shape::Rect(r) => out.push(r.clone()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut all = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, &mut all);
+    }
+    all.retain(|r| area.expand(0.5).contains_rect(r.rect));
+    all
+}
+
+fn same(a: Rect, b: Rect) -> bool {
+    (a.min - b.min).length() < 0.5 && (a.max - b.max).length() < 0.5
+}
+
+/// The button's background, its border and whether a 6×6 marker in
+/// `marker` is drawn on it.
+fn button_paint(h: &H, label: &str, marker: Color32) -> (Color32, Color32, bool) {
+    let button = h.get_by_label(label).rect();
+    let rects = rects_in(h, button);
+    let fill = rects
+        .iter()
+        .find(|r| same(r.rect, button) && r.fill != Color32::TRANSPARENT)
+        .map(|r| r.fill)
+        .unwrap_or_else(|| panic!("no background for {label}"));
+    let border = rects
+        .iter()
+        .find(|r| same(r.rect, button) && r.stroke.width > 0.0)
+        .map(|r| r.stroke.color)
+        .unwrap_or_else(|| panic!("no border for {label}"));
+    let has_marker = rects.iter().any(|r| {
+        (r.rect.width() - 6.0).abs() < 0.5
+            && (r.rect.height() - 6.0).abs() < 0.5
+            && r.fill == marker
+    });
+    (fill, border, has_marker)
+}
+
+/// The width of the remaining-time fill in `progress` on the button.
+fn progress_width(h: &H, label: &str, progress: Color32) -> f32 {
+    let button = h.get_by_label(label).rect();
+    rects_in(h, button)
+        .iter()
+        .filter(|r| r.fill == progress)
+        .map(|r| r.rect.width())
+        .fold(0.0, f32::max)
+}
+
+/// The spec's strengths (CC6, CC7), and a cart without a colour as before.
+#[test]
+fn cart_looks_follow_the_spec() {
+    let red = theme::cart_color(CartColor::Red);
+    let idle = cart_look(Some(CartColor::Red), false);
+    assert_eq!(idle.border, red);
+    assert_eq!(idle.fill, theme::NEUTRAL_900.lerp_to_gamma(red, 0.07));
+    assert_eq!(idle.hover_fill, theme::NEUTRAL_800.lerp_to_gamma(red, 0.07));
+    assert_eq!(
+        idle.active_fill,
+        theme::NEUTRAL_700.lerp_to_gamma(red, 0.07)
+    );
+    assert_eq!(idle.marker, Some(red));
+    let playing = cart_look(Some(CartColor::Red), true);
+    assert_eq!(playing.border, red);
+    assert_eq!(playing.fill, theme::NEUTRAL_900.lerp_to_gamma(red, 0.16));
+    assert_eq!(playing.progress, red.gamma_multiply(0.38));
+    let plain = cart_look(None, false);
+    assert_eq!(
+        (
+            plain.fill,
+            plain.hover_fill,
+            plain.active_fill,
+            plain.border,
+            plain.marker
+        ),
+        (
+            theme::NEUTRAL_900,
+            theme::NEUTRAL_800,
+            theme::NEUTRAL_700,
+            theme::NEUTRAL_800,
+            None
+        )
+    );
+    let plain_playing = cart_look(None, true);
+    assert_eq!(plain_playing.border, theme::ON_AIR_TEXT);
+    assert_eq!(plain_playing.fill, theme::NEUTRAL_900);
+    assert_eq!(
+        plain_playing.progress,
+        theme::ON_AIR_ROW.gamma_multiply(0.5)
+    );
+}
+
+#[test]
+fn a_cart_view_carries_its_colour() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let id = s.cartwall.pages[0].carts[0].id;
+    assert_eq!(
+        cart_view(&s, &Telemetry::default(), id).unwrap().color,
+        Some(CartColor::Teal)
+    );
+}
+
+/// CC6.
+#[test]
+fn cc6_an_idle_cart_with_a_colour_has_its_border_wash_and_marker() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let (h, _fake) = harness(s);
+    let look = cart_look(Some(CartColor::Teal), false);
+    let teal = theme::cart_color(CartColor::Teal);
+    assert_eq!(
+        button_paint(&h, "Station ID", teal),
+        (look.fill, teal, true)
+    );
+}
+
+#[test]
+fn cc6_a_cart_without_a_colour_is_drawn_as_before() {
+    let (h, _fake) = harness(with_cart());
+    // A jingle's marker is the accent violet.
+    assert_eq!(
+        button_paint(&h, "Station ID", theme::ACCENT),
+        (theme::NEUTRAL_900, theme::NEUTRAL_800, true)
+    );
+}
+
+/// CC7.
+#[test]
+fn cc7_a_playing_cart_with_a_colour_keeps_it_and_its_countdown_shows() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Amber));
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (mut h, fake) = harness(s);
+    fake.telemetry.store(Arc::new(Telemetry {
+        carts: vec![(
+            id,
+            CartTelemetry {
+                position_secs: 5.0,
+                peak: 0.0,
+            },
+        )],
+        ..Telemetry::default()
+    }));
+    h.run_steps(2);
+    let look = cart_look(Some(CartColor::Amber), true);
+    let amber = theme::cart_color(CartColor::Amber);
+    assert_eq!(
+        button_paint(&h, "Station ID", amber),
+        (look.fill, amber, true)
+    );
+    let button = h.get_by_label("Station ID").rect();
+    // I19: the played share (5.0 of the range 0.5 to 9.5) fills from the
+    // left, as far as the waveform has been played.
+    let share = progress_width(&h, "Station ID", look.progress) / button.width();
+    assert!((share - 4.5 / 9.0).abs() < 0.03, "{share}");
+}
+
+#[test]
+fn cc7_a_playing_cart_without_a_colour_is_red_as_before() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (h, _fake) = harness(s);
+    let (fill, border, _) = button_paint(&h, "Station ID", theme::ACCENT);
+    assert_eq!((fill, border), (theme::NEUTRAL_900, theme::ON_AIR_TEXT));
+    assert!(progress_width(&h, "Station ID", theme::ON_AIR_ROW.gamma_multiply(0.5)) > 0.0);
+}
+
+/// Peaks for cart `index`'s track: 100 buckets of 0.1 s (the 10 s file of
+/// `with_cart`/`give_file`), each at half scale with its RMS at a quarter.
+fn peaks_for(s: &AppState, index: usize) -> MediaCache {
+    let media = MediaCache::default();
+    let track = s.cartwall.pages[0].carts[index].track.unwrap();
+    media.seed(
+        track,
+        TrackMedia {
+            peaks: vec![
+                fp_analysis::WavePeak {
+                    min: -16_000,
+                    max: 16_000,
+                    rms: 8_000,
+                };
+                100
+            ],
+            peak_bucket_secs: 0.1,
+            cover_png: None,
+        },
+    );
+    media
+}
+
+/// How many one-pixel columns in `color` the meshes painted on `label`'s
+/// button hold.
+fn wave_columns_on(h: &H, label: &str, color: Color32) -> usize {
+    let button = h.get_by_label(label).rect();
+    let mut quads = 0;
+    for clipped in &h.output().shapes {
+        if let egui::Shape::Mesh(mesh) = &clipped.shape
+            && button.expand(0.5).contains_rect(mesh.calc_bounds())
+        {
+            quads += mesh.vertices.iter().filter(|v| v.color == color).count() / 4;
+        }
+    }
+    quads
+}
+
+/// CC8 (view side): the play range, only for a cart that can play.
+#[test]
+fn cc8_the_waveform_spans_the_play_range_of_an_idle_or_playing_cart() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    let view = |s: &AppState, id| cart_view(s, &Telemetry::default(), id).unwrap();
+    assert_eq!(view(&s, id).wave_range, Some((0.5, 9.0)), "cue-in, length");
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    assert_eq!(view(&s, id).wave_range, Some((0.5, 9.0)), "playing too");
+    let empty = s.cartwall.pages[0].carts[1].id;
+    assert_eq!(view(&s, empty).wave_range, None);
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    apply(
+        &mut s,
+        Command::SetFileState {
+            track,
+            state: FileState::Unreadable,
+        },
+    )
+    .unwrap();
+    assert_eq!(view(&s, id).wave_range, None, "unavailable");
+    // No usable play range: nothing to span.
+    let mut s = with_cart();
+    s.library.get_mut(track).unwrap().duration_secs = 0.0;
+    assert_eq!(view(&s, id).wave_range, None, "length unknown");
+    let mut s = with_cart();
+    apply(
+        &mut s,
+        Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(TrackAnalysis {
+                duration_secs: 10.0,
+                cue_in: Some(4.0),
+                cue_out: Some(4.0),
+                ..TrackAnalysis::default()
+            }),
+        },
+    )
+    .unwrap();
+    assert_eq!(view(&s, id).wave_range, None, "cue-in at cue-out");
+}
+
+/// CC8: in the cart's colour at 13 % idle, one column per pixel.
+#[test]
+fn cc8_a_cart_with_peaks_draws_its_waveform_in_its_colour() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let media = peaks_for(&s, 0);
+    let (mut h, _fake) = harness_with_media(s, media);
+    h.run_steps(2);
+    let button = h.get_by_label("Station ID").rect();
+    let wave = cart_look(Some(CartColor::Teal), false).wave;
+    assert_eq!(
+        wave_columns_on(&h, "Station ID", wave),
+        (button.width() - 2.0) as usize,
+        "one RMS column per pixel inside the border"
+    );
+}
+
+/// The heights of the one-pixel columns in `color` painted on `label`'s
+/// button.
+fn wave_heights_on(h: &H, label: &str, color: Color32) -> Vec<f32> {
+    let button = h.get_by_label(label).rect();
+    let mut heights = Vec::new();
+    for clipped in &h.output().shapes {
+        if let egui::Shape::Mesh(mesh) = &clipped.shape
+            && button.expand(0.5).contains_rect(mesh.calc_bounds())
+        {
+            let ys: Vec<f32> = mesh
+                .vertices
+                .iter()
+                .filter(|v| v.color == color)
+                .map(|v| v.pos.y)
+                .collect();
+            for quad in ys.chunks(4) {
+                let top = quad.iter().copied().fold(f32::INFINITY, f32::min);
+                let bottom = quad.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+                heights.push(bottom - top);
+            }
+        }
+    }
+    heights
+}
+
+/// CC8: the waveform starts at the cue-in. Before it (the first 0.5 s) the
+/// file is loud, after it even: every column drawn is the same height.
+#[test]
+fn cc8_the_waveform_drawn_starts_at_the_cue_in() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let media = MediaCache::default();
+    let track = s.cartwall.pages[0].carts[0].track.unwrap();
+    let peak = |level: i16| fp_analysis::WavePeak {
+        min: -level,
+        max: level,
+        rms: level / 2,
+    };
+    let mut peaks = vec![peak(32_000); 5];
+    peaks.extend(vec![peak(8_000); 95]);
+    media.seed(
+        track,
+        TrackMedia {
+            peaks,
+            peak_bucket_secs: 0.1,
+            cover_png: None,
+        },
+    );
+    let (mut h, _fake) = harness_with_media(s, media);
+    h.run_steps(2);
+    let wave = cart_look(Some(CartColor::Teal), false).wave;
+    let heights = wave_heights_on(&h, "Station ID", wave);
+    assert!(!heights.is_empty());
+    let (low, high) = heights
+        .iter()
+        .fold((f32::INFINITY, 0.0f32), |(l, h), &x| (l.min(x), h.max(x)));
+    assert!(high - low < 0.5, "columns from {low} to {high} px tall");
+}
+
+#[test]
+fn cc8_without_a_colour_it_is_light_grey_and_stronger_while_playing() {
+    let mut s = with_cart();
+    let media = peaks_for(&s, 0);
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (mut h, _fake) = harness_with_media(s, media);
+    h.run_steps(2);
+    let playing = cart_look(None, true).wave;
+    assert_eq!(playing, theme::CART_WAVE_PLAIN.gamma_multiply(0.22));
+    assert!(wave_columns_on(&h, "Station ID", playing) > 0);
+    assert_eq!(
+        wave_columns_on(&h, "Station ID", cart_look(None, false).wave),
+        0,
+        "not the idle strength"
+    );
+}
+
+#[test]
+fn cc8_without_peaks_nothing_is_drawn() {
+    let mut s = with_cart();
+    paint_cart(&mut s, 0, Some(CartColor::Teal));
+    let (mut h, _fake) = harness(s);
+    h.run_steps(2);
+    let wave = cart_look(Some(CartColor::Teal), false).wave;
+    assert_eq!(
+        wave_columns_on(&h, "Station ID", wave),
+        0,
+        "not analysed yet"
+    );
+}
+
+#[test]
+fn rl13_filled_buttons_take_all_the_height_above_the_minimum() {
+    assert_eq!(filled_button_height(1000.0, 2), (1000.0 - GAP) / 2.0);
+    assert_eq!(filled_button_height(4.0 * 40.0 + 3.0 * GAP, 4), 40.0);
+    assert_eq!(filled_button_height(10.0, 4), MIN_BUTTON_HEIGHT);
+    assert_eq!(filled_button_height(f32::NAN, 4), BUTTON_HEIGHT);
+    assert_eq!(filled_button_height(f32::INFINITY, 4), BUTTON_HEIGHT);
+    assert_eq!(filled_button_height(100.0, 0), BUTTON_HEIGHT);
+}
+
+#[test]
+fn i22_the_sweep_advances_between_snapshots_and_never_goes_back() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(1.0, 100.0);
+    // No new snapshot: the frame clock carries the position on, sub-pixel.
+    let a = sweep.advance(1.0, 100.01, 9.0, 1.0);
+    let b = sweep.advance(1.0, 100.03, 9.0, 1.0);
+    assert!(
+        (a - 1.01).abs() < 1e-9 && (b - 1.03).abs() < 1e-9,
+        "{a} {b}"
+    );
+    // A snapshot that is a little behind what was drawn does not pull back.
+    let c = sweep.advance(1.02, 100.04, 9.0, 1.0);
+    assert!(c >= b, "{c} {b}");
+    // Never past the end of the cart.
+    assert!((sweep.advance(1.02, 200.0, 9.0, 1000.0) - 9.0).abs() < 1e-9);
+}
+
+#[test]
+fn i22_the_sweep_follows_a_loop_or_restart_backwards() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(8.0, 10.0);
+    assert!(sweep.advance(8.0, 10.1, 9.0, 1.0) > 8.0);
+    assert!((sweep.advance(0.2, 10.2, 9.0, 1.0) - 0.2).abs() < 1e-9);
+}
+
+/// I19: the sweep grows from the start (left) to the end (right), with a line
+/// at its edge.
+#[test]
+fn i19_the_sweep_runs_left_to_right_with_a_line_at_the_played_edge() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (mut h, fake) = harness(s);
+    let look = cart_look(None, true);
+    let mut widths = Vec::new();
+    for position in [1.5, 4.5, 8.5] {
+        fake.telemetry.store(Arc::new(Telemetry {
+            carts: vec![(
+                id,
+                CartTelemetry {
+                    position_secs: position,
+                    peak: 0.0,
+                },
+            )],
+            ..Telemetry::default()
+        }));
+        h.run_steps(2);
+        widths.push(progress_width(&h, "Station ID", look.progress));
+    }
+    assert!(widths[0] < widths[1] && widths[1] < widths[2], "{widths:?}");
+    // The fill starts at the button's left edge and a line marks its right.
+    let button = h.get_by_label("Station ID").rect();
+    let fill = rects_in(&h, button)
+        .into_iter()
+        .filter(|r| r.fill == look.progress)
+        .max_by(|a, b| a.rect.width().total_cmp(&b.rect.width()))
+        .unwrap();
+    assert!((fill.rect.min.x - button.left()).abs() < 0.5);
+    let lines = line_xs_in(&h, button);
+    assert!(
+        lines.iter().any(|x| (x - fill.rect.max.x).abs() < 0.5),
+        "{lines:?} vs {:?}",
+        fill.rect
+    );
+}
+
+/// The x of every vertical line segment painted inside `area` in the last
+/// frame.
+fn line_xs_in(h: &H, area: Rect) -> Vec<f32> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<[egui::Pos2; 2]>) {
+        match shape {
+            egui::Shape::LineSegment { points, .. } => out.push(*points),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut all = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, &mut all);
+    }
+    all.into_iter()
+        .filter(|p| {
+            p[0].x == p[1].x && area.expand(0.5).contains(p[0]) && area.expand(0.5).contains(p[1])
+        })
+        .map(|p| p[0].x)
+        .collect()
+}
+
+/// I22: between two engine snapshots the line still moves, within the cap
+/// of two telemetry intervals, and holds if no snapshot follows.
+#[test]
+fn i22_the_played_edge_advances_between_snapshots_and_holds_at_the_cap() {
+    let mut s = with_cart();
+    let id = s.cartwall.pages[0].carts[0].id;
+    apply(&mut s, Command::FireCart(id)).unwrap();
+    let (mut h, fake) = harness(s);
+    fake.telemetry.store(Arc::new(Telemetry {
+        carts: vec![(
+            id,
+            CartTelemetry {
+                position_secs: 2.0,
+                peak: 0.0,
+            },
+        )],
+        ..Telemetry::default()
+    }));
+    let look = cart_look(None, true);
+    h.run_steps(1);
+    let first = progress_width(&h, "Station ID", look.progress);
+    h.run_steps(1);
+    let second = progress_width(&h, "Station ID", look.progress);
+    assert!(second > first, "{first} {second}");
+    h.run_steps(20);
+    let held = progress_width(&h, "Station ID", look.progress);
+    assert!(held - second < 1.0, "holds at the cap: {second} {held}");
+}
+
+#[test]
+fn i22_the_floor_applies_before_any_step_is_observed() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(2.0, 50.0);
+    let a = sweep.advance(2.0, 50.005, 9.0, 0.01);
+    assert!((a - 2.005).abs() < 1e-9, "{a}");
+    let b = sweep.advance(2.0, 60.0, 9.0, 0.01);
+    assert!((b - 2.01).abs() < 1e-9, "{b}");
+}
+
+/// The simulated engine: the position advances 40 ms every 40 ms, the
+/// interface draws every 16 ms.
+fn run_steps_of_40ms(sweep: &mut fp_app::ui::cart_view::CartSweep, frames: usize) -> Vec<f64> {
+    (1..=frames)
+        .map(|f| {
+            let t = f as f64 * 0.016;
+            let position = 1.0 + (t / 0.04).floor() * 0.04;
+            sweep.advance(position, 100.0 + t, 90.0, 0.01)
+        })
+        .collect()
+}
+
+#[test]
+fn i22_buffer_steps_are_smoothed_without_a_hold_between_them() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(1.0, 100.0);
+    let shown = run_steps_of_40ms(&mut sweep, 60);
+    // After the first steps the line moves on every frame.
+    let tail = &shown[20..];
+    assert!(tail.windows(2).all(|w| w[1] > w[0]), "{tail:?}");
+}
+
+#[test]
+fn i22_a_stalled_engine_holds_the_line_within_about_two_steps() {
+    use fp_app::ui::cart_view::CartSweep;
+    let mut sweep = CartSweep::new(1.0, 100.0);
+    run_steps_of_40ms(&mut sweep, 60);
+    // The engine stops: the same position from now on.
+    let stuck = 1.0 + (60.0 * 0.016 / 0.04_f64).floor() * 0.04;
+    let mut at = 0.0;
+    for f in 61..400 {
+        at = sweep.advance(stuck, 100.0 + f as f64 * 0.016, 90.0, 0.01);
+    }
+    assert!(at <= stuck + 0.085, "held: {at} vs {stuck}");
+    assert!(at >= stuck, "{at}");
+}

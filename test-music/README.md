@@ -11,7 +11,7 @@ another folder instead.
 
 ```sh
 # Invariants on every file (trimming never cuts audio, overlaps stay short)
-cargo test --release -p fp-analysis --test real_music -- --ignored
+cargo test --release -p fp-analysis --test it real_music:: -- --ignored
 # One row per file: cue in/out, segue, overlap, outro; tune with --set
 cargo run --release -p fp-analysis --example marker_report
 cargo run --release -p fp-analysis --example marker_report -- --set segue_drop_db=12 --set segue_max_secs=3

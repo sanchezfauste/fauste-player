@@ -115,7 +115,7 @@ family 0).
 Decoders are opened with gapless decoding on (symphonia's default): each
 decoder removes the encoder delay and end padding the container marks on its
 packets (`trim_start`, `trim_end`), so the Opus decoder does it too. The
-backend must not trim again (`tests/gapless.rs`).
+backend must not trim again (`tests/it/gapless.rs`).
 
 The Opus **pre-skip** (RFC 7845 §4.2) is not marked that way: symphonia
 0.6 keeps it as the track's delay in Ogg, whose granule positions count it,
@@ -123,7 +123,7 @@ and Matroska shifts its timestamps by `CodecDelay` rounded to its 1 ms
 resolution. `SymphoniaDecoder` therefore drops exactly the pre-skip of the
 `OpusHead` from the start of the stream in both containers, and shifts Ogg
 Opus timestamps back by it when seeking and placing packets
-(`ts_offset_secs`). A click comes out where it went in (`tests/opus.rs`).
+(`ts_offset_secs`). A click comes out where it went in (`tests/it/opus.rs`).
 
 **Seeking** (`SymphoniaDecoder::seek`): decoding restarts a codec's pre-roll
 before the target, 80 ms for Opus (RFC 7845 §4.6) and the longest block
@@ -144,7 +144,7 @@ sample-identical to it. Timestamps would place them only to the container's
 precision: Matroska's are whole milliseconds and its `CodecDelay` is rounded
 to them, and a test file restarted that way came out 648 frames short. A
 reader that has not moved since it was opened (nothing read, no seek) is used
-as it is; otherwise the file is opened again (`tests/opus.rs`, the unit tests
+as it is; otherwise the file is opened again (`tests/it/opus.rs`, the unit tests
 in `symph.rs`).
 
 symphonia seeks a Matroska file without cues (a live recording) only forward.
@@ -177,7 +177,7 @@ an audio block at or before the target: usually the cued cluster or the one
 before it, and never a reopening of the file. The frames before the target are then dropped
 by timestamp, to the container's precision: Matroska's timestamps are whole
 milliseconds, so a seek in a 44.1 kHz FLAC or PCM file lands within about 22
-frames of the target (`tests/matroska.rs`, with PCM files built in the test).
+frames of the target (`tests/it/matroska.rs`, with PCM files built in the test).
 
 The Opus decoder goes through 16-bit PCM inside `opus-decoder`: its noise
 (about −96 dBFS) is far below Opus's own coding noise. A decoder without that

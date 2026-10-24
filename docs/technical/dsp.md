@@ -32,7 +32,7 @@ ignored. A true peak above
 +60 dBTP (`MAX_PLAUSIBLE_DBTP`) means a corrupt file, and gives no
 measurement rather than one that would silence the track.
 
-Tests: `crates/fp-dsp/tests/filters.rs` (the standard's coefficients, EBU
-Tech 3341 true-peak cases 15–23) and `crates/fp-dsp/tests/loudness.rs`
+Tests: `crates/fp-dsp/tests/it/filters.rs` (the standard's coefficients, EBU
+Tech 3341 true-peak cases 15–23) and `crates/fp-dsp/tests/it/loudness.rs`
 (EBU Tech 3341 cases 1–5 for integrated loudness, rates from 8 to 96 kHz,
 short and silent programmes, non-finite input).

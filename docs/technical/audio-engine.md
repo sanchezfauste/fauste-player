@@ -147,8 +147,8 @@ Metering is split across the threads (spec [`2026-09-27-meters-design.md`](../su
   3 px gap to the ticks. Nothing is drawn over the bars or between them.
   The tick colours are the
   `METER_TICK*` and `METER_ALIGNMENT_TICK` constants in `ui/theme.rs`.
-- **Tests** (`tests/metering.rs`, `tests/mixer.rs`, and
-  `crates/fp-dsp/tests/filters.rs` for the filters):
+- **Tests** (`tests/it/metering.rs`, `tests/it/mixer.rs`, and
+  `crates/fp-dsp/tests/it/filters.rs` for the filters):
   - the BS.1770 coefficients and the 1 kHz gain at every rate;
   - EBU Tech 3341 cases 1, 2, 9, 11, 12 and 14 (loudness) and 15–23
     (true peak);
@@ -382,7 +382,7 @@ cannot hang the conductor.
     bit-perfect device 0 dB, a factor of exactly 1).
 
   This drives the BP badge.
-- **Tests:** `tests/bit_perfect.rs` plays WAV files through `file_opener` on
+- **Tests:** `tests/it/bit_perfect.rs` plays WAV files through `file_opener` on
   an Offline device. It covers the rate changes and refusals, a bit-exact
   comparison of every rendered sample with the file, the `StreamRate`
   reports (`br1_…`), the scheduled and manual rate cuts with their
@@ -518,9 +518,9 @@ plus the mixer's DSD mode.
   which runs `follow_forced_rate`. So no retry is ever stuck on a rate the
   device cannot take. If no PCM open works either, the DSD configuration is
   restored for the next retry.
-- **Tests:** `tests/dsd_mixer.rs` (the mixer's modes, under `assert_no_alloc`)
-  and `tests/dsd_output.rs` (the engine on Offline devices, byte for byte);
-  `tests/dsd_real_music.rs` is opt-in (see [Testing](testing.md)).
+- **Tests:** `tests/it/dsd_mixer.rs` (the mixer's modes, under `assert_no_alloc`)
+  and `tests/it/dsd_output.rs` (the engine on Offline devices, byte for byte);
+  `tests/it/dsd_real_music.rs` is opt-in (see [Testing](testing.md)).
 
 ## Engine
 

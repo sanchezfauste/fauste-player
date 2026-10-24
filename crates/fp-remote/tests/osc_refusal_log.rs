@@ -4,6 +4,7 @@
 //! test binary: it installs the global log subscriber (the server logs from
 //! its own thread).
 
+#[path = "it/support/mod.rs"]
 mod support;
 
 use std::io::Write;

@@ -2,6 +2,7 @@
 //! A busy port is logged once, not on every retry (plan 4, item 2). Its
 //! own test binary: it installs the global log subscriber.
 
+#[path = "it/support/mod.rs"]
 mod support;
 
 use std::io::Write;

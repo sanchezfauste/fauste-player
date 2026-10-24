@@ -1489,7 +1489,7 @@ pub fn fader_knob_left(left: f32) -> f32 {
 
 /// The levels marked beside the fader, in dB from the top; the last, `-inf`,
 /// is silence. At the player's fader height the labels keep a clear pixel
-/// between them on the fader's curve (`tests/fader_ui.rs`).
+/// between them on the fader's curve (`tests/it/fader_ui.rs`).
 pub const FADER_MARKS_DB: [f32; 14] = [
     0.0,
     -2.0,

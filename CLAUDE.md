@@ -59,7 +59,7 @@ Windows, macOS). Read [`README.md`](README.md) for the overview and
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                        # ~1 min; no audio device or display needed
-cargo test -p <crate> --test <file> <name>    # focused run
+cargo test -p <crate> --test it <file>::<name>  # focused run (one binary per crate; see docs/technical/testing.md)
 cargo deny check                              # after dependency changes
 cargo llvm-cov --workspace --html             # test coverage (CI sends it to SonarQube Cloud; see docs/technical/testing.md)
 cargo run -p fp-app                           # run the app (FAUSTE_HOME=<dir> for a scratch state)
@@ -80,7 +80,7 @@ scripts/site/screenshots.sh [--only main] [--lang es-ES] [--out <dir>]  # README
 scripts/site/localized-screenshots.sh <dir> [lang…]  # the same in English and every guide language (CI does it on publish)
 scripts/site/compare-screenshots.sh [--fuzz 5] [--threshold 50] [--masks f] [--apply] [--prune] <new-dir> [docs/images]  # which screenshots really changed (the screenshots workflow uses it)
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
-cargo test --release -p fp-analysis --test real_music -- --ignored   # real-music corpus (local only)
+cargo test --release -p fp-analysis --test it real_music:: -- --ignored   # real-music corpus (local only)
 cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
 cargo run -p fp-engine --example rate_cut_tail -- [card] [buffer]   # rate-cut play-out on a real ALSA device (local only; quiet tones)
 ```
@@ -207,15 +207,20 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
 
 ## Testing notes
 
+- Integration tests: one binary per crate. A new test file goes into
+  `crates/<crate>/tests/it/` with a `mod` line in `tests/it/main.rs`; only a
+  test that installs process-wide state (a panic hook, a global tracing
+  subscriber) gets its own file in `tests/`. Every test file is its own
+  link otherwise, and `target/` grows by gigabytes per test run.
 - Engine tests use the `Offline` backend and drive time explicitly
   (`now: Instant`). Never sleep to wait for audio.
 - Real music: `test-music/` (git-ignored except its README; or
   `FAUSTE_TEST_MUSIC=<dir>`) feeds the `#[ignore]` tests in
-  `fp-analysis/tests/real_music.rs` and the `marker_report` example. They
+  `fp-analysis/tests/it/real_music.rs` and the `marker_report` example. They
   never run in CI and pass with a note when the folder is empty.
 - UI tests use `egui_kittest`, with `Harness::builder().with_step_dt(0.02)`
   (double clicks) and the recording `Fake` controller in
-  `crates/fp-app/tests/support`.
+  `crates/fp-app/tests/it/support`.
 - Screenshots (Linux): `scripts/site/screenshots.sh` takes the README
   image and every guide screenshot (`--only main` for the README image
   alone). It builds the release binary and `examples/demo_session`,
@@ -267,5 +272,5 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   analysis like any tagged file.
 - Remote API tests drive the axum router with `tower::ServiceExt::oneshot`
   (no sockets) and the recording `FakeControl` in
-  `crates/fp-remote/tests/support`; server tests bind `127.0.0.1` on free
+  `crates/fp-remote/tests/it/support`; server tests bind `127.0.0.1` on free
   ports, and OSC tests use UDP sockets on `127.0.0.1:0`.

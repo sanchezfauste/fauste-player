@@ -285,9 +285,9 @@ have not been tried on a real converter by the project. To check one:
 3. Start a cart or another player on the same device, once with each mixing
    setting, and check the behaviour described above.
 4. On Linux, to check native DSD without the application, run
-   `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0 cargo test -p fp-backends --test conformance -- --ignored native_dsd_on_a_real_device`.
+   `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0 cargo test -p fp-backends --test it -- --ignored conformance::native_dsd_on_a_real_device`.
    It opens the device in native DSD at DSD64 and plays one second of DSD
    silence. It must pass, and the converter should lock to DSD64.
-5. With DSD files in `test-music/`, `cargo test --release -p fp-engine --test dsd_real_music -- --ignored`
+5. With DSD files in `test-music/`, `cargo test --release -p fp-engine --test it dsd_real_music:: -- --ignored`
    plays them through the engine on a simulated device and compares the
    words with the file's bytes (see [Testing](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/testing.md)).
