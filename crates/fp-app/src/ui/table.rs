@@ -415,7 +415,9 @@ pub(crate) fn track_table(
                     theme::NEUTRAL_400
                 };
                 let row_font = if hi { font_medium(12.0) } else { font(12.0) };
-                let line = |ui: &mut Ui| {
+                let is_selected = selected == Some(entry.id);
+                let last_column = columns.len().saturating_sub(1);
+                let line = |ui: &mut Ui, index: usize| {
                     let r = ui.max_rect();
                     let full = Rect::from_min_max(r.min, pos2(r.max.x, r.min.y + ROW_HEIGHT));
                     ui.painter().rect_filled(full, 0.0, bg);
@@ -427,10 +429,13 @@ pub(crate) fn track_table(
                         0.0,
                         theme::TEXT.gamma_multiply(0.06),
                     );
+                    if is_selected {
+                        selection_outline(ui, full, index == 0, index == last_column);
+                    }
                 };
-                for column in &columns {
+                for (index, column) in columns.iter().enumerate() {
                     row.col(|ui| {
-                        line(ui);
+                        line(ui, index);
                         match column {
                             TableColumn::Number => {
                                 ui.add_space(10.0);
@@ -1151,6 +1156,43 @@ fn track_tip(
             on_air.as_ref(),
         ),
     );
+}
+
+/// Width of the selected row's outline.
+const SELECTION_OUTLINE_WIDTH: f32 = 2.0;
+
+/// The selected row's outline, on the part of the row that `cell` covers:
+/// its top and bottom edges, and the left or right edge when the cell is the
+/// row's first or last. Drawn on any row colour, so a selected on-air or
+/// next row still shows it is selected.
+fn selection_outline(ui: &Ui, cell: Rect, first: bool, last: bool) {
+    let w = SELECTION_OUTLINE_WIDTH;
+    let painter = ui.painter();
+    let colour = theme::SELECTION_OUTLINE;
+    painter.rect_filled(
+        Rect::from_min_size(cell.min, vec2(cell.width(), w)),
+        0.0,
+        colour,
+    );
+    painter.rect_filled(
+        Rect::from_min_size(pos2(cell.left(), cell.bottom() - w), vec2(cell.width(), w)),
+        0.0,
+        colour,
+    );
+    if first {
+        painter.rect_filled(
+            Rect::from_min_size(cell.min, vec2(w, cell.height())),
+            0.0,
+            colour,
+        );
+    }
+    if last {
+        painter.rect_filled(
+            Rect::from_min_size(pos2(cell.right() - w, cell.top()), vec2(w, cell.height())),
+            0.0,
+            colour,
+        );
+    }
 }
 
 #[cfg(test)]
