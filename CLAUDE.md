@@ -65,6 +65,9 @@ cargo run -p fp-app                           # run the app (FAUSTE_HOME=<dir> f
 FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music dir> [cart dir]
 scripts/package-release.sh <target>           # release archive for one target
 scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows: windows.sh, macOS: macos.sh)
+scripts/package/msix.sh <target>              # Microsoft Store MSIX (Windows, Git Bash, Windows SDK)
+scripts/package/flathub-manifest.py <tag> <commit> <out>  # the Flathub manifest of a release (PyYAML)
+scripts/package/aur.sh <version> <out>        # the AUR PKGBUILD of a published release
 scripts/package/icons.sh                      # regenerate the PNG and .ico icons from packaging/icons/fauste-player.svg (inkscape, magick)
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
 scripts/site/build.sh [out]                   # website: landing page + mdBook guide (default target/site; needs gh or FAUSTE_RELEASE_JSON for the download links)
@@ -187,9 +190,10 @@ hand: release-please writes it from the commits.
 | `vendor/opus-decoder` | A patched copy of `opus-decoder` (a real FFT), used through `[patch.crates-io]`; excluded from the workspace. See its `VENDORED.md` |
 | `vendor/symphonia-format-mkv` | A patched copy of symphonia's Matroska reader (seeking through cues, blocks without duration), used the same way. See its `VENDORED.md` |
 | `vendor/egui-phosphor` | A copy of `egui-phosphor` 0.14.0 with only its egui requirement raised to 0.37 (no upstream release yet), used the same way. See its `VENDORED.md` |
-| `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX and Info.plist; the per-format package scripts |
+| `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX, MSIX and Info.plist, the AUR PKGBUILD template; the per-format package scripts |
+| `snap/` | The snap recipe (`snapcraft.yaml`, where snapcraft looks for it) |
 | `site/`, `scripts/site/` | The landing page and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
-| `.github/workflows` | CI, Dependabot (`dependabot.yml`), release-please, release builds and packages, GitHub Pages, commit checks |
+| `.github/workflows` | CI, Dependabot (`dependabot.yml`), release-please, release builds and packages, store publishing (`stores.yml`: Microsoft Store, Snap Store, Flathub, WinGet, AUR), GitHub Pages, commit checks |
 
 ## Design source
 

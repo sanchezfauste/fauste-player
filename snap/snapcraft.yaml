@@ -1,0 +1,80 @@
+# Snap package for the Snap Store, built by the `stores` workflow
+# (snapcore/action-build) on amd64 and arm64. Built from source like the
+# Flatpak; the name, summary, description and icon come from the AppStream
+# metainfo, the version from Cargo.toml.
+name: fauste-player
+title: Fauste Player
+base: core24
+grade: stable
+confinement: strict
+license: GPL-3.0-or-later
+contact: https://github.com/sanchezfauste/fauste-player/issues
+issues: https://github.com/sanchezfauste/fauste-player/issues
+source-code: https://github.com/sanchezfauste/fauste-player
+website: https://sanchezfauste.com/fauste-player/
+adopt-info: fauste-player
+
+platforms:
+  amd64:
+  arm64:
+
+apps:
+  fauste-player:
+    command: bin/fauste-player
+    common-id: org.fauste.FaustePlayer
+    desktop: usr/share/applications/org.fauste.FaustePlayer.desktop
+    # Window system libraries, Mesa and the desktop portals.
+    extensions: [gnome]
+    plugs:
+      # Through the PulseAudio protocol (PipeWire's pulse service too).
+      - audio-playback
+      # ALSA hw: devices for bit-perfect output, and MIDI control surfaces.
+      # Not connected automatically: `snap connect fauste-player:alsa`.
+      - alsa
+      # Music libraries read in place.
+      - home
+      - removable-media
+      # The remote control API and OSC.
+      - network
+      - network-bind
+
+parts:
+  fauste-player:
+    plugin: rust
+    source: .
+    rust-path: [crates/fp-app]
+    # The toolchain of rust-toolchain.toml (the workflow checks they match).
+    rust-channel: "1.98.1"
+    build-packages:
+      - pkg-config
+      - libasound2-dev
+      - libdbus-1-dev
+    stage-packages:
+      - libasound2t64
+      - libdbus-1-3
+    override-pull: |
+      craftctl default
+      craftctl set version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)"
+    override-build: |
+      # The rust plugin runs `cargo install --locked` into bin/.
+      craftctl default
+      app=org.fauste.FaustePlayer
+      version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)"
+      share="${CRAFT_PART_INSTALL}/usr/share"
+      install -Dm644 packaging/linux/${app}.desktop "${share}/applications/${app}.desktop"
+      # A themed icon name does not resolve inside the snap: point at the file.
+      sed -i "s|^Icon=.*|Icon=\${SNAP}/usr/share/icons/hicolor/512x512/apps/${app}.png|" \
+        "${share}/applications/${app}.desktop"
+      mkdir -p "${share}/metainfo"
+      scripts/package/metainfo.sh "${version}" "${share}/metainfo/${app}.metainfo.xml"
+      install -Dm644 packaging/icons/fauste-player.svg "${share}/icons/hicolor/scalable/apps/${app}.svg"
+      for n in 16 32 48 64 128 256 512; do
+        install -Dm644 packaging/icons/fauste-player-$n.png "${share}/icons/hicolor/${n}x${n}/apps/${app}.png"
+      done
+      # Where the About window looks for the notices (next to bin/).
+      licenses="${CRAFT_PART_INSTALL}/share/licenses/${app}"
+      install -Dm644 LICENSE "${licenses}/LICENSE"
+      install -Dm644 NOTICE "${licenses}/NOTICE"
+      install -Dm644 crates/fp-app/assets/fonts/OFL.txt "${licenses}/Inter-OFL.txt"
+      install -Dm644 crates/fp-app/assets/licenses/Phosphor-MIT.txt "${licenses}/Phosphor-MIT.txt"
+    parse-info: [usr/share/metainfo/org.fauste.FaustePlayer.metainfo.xml]

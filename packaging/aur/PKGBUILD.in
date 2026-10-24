@@ -1,0 +1,43 @@
+# Maintainer: Marc Sánchez Fauste <sanchezfauste at gmail dot com>
+#
+# Generated from packaging/aur/PKGBUILD.in in
+# https://github.com/sanchezfauste/fauste-player by the `stores` workflow on
+# every release. Do not edit on the AUR: change the template.
+pkgname=fauste-player-bin
+_version=@VERSION@
+pkgver=${_version//-/_}
+pkgrel=1
+pkgdesc='Radio playout with several players and a cartwall'
+arch=('x86_64' 'aarch64')
+url='https://sanchezfauste.com/fauste-player/'
+license=('GPL-3.0-or-later')
+# The window system libraries are loaded at run time (winit, glow).
+depends=('alsa-lib' 'dbus' 'gcc-libs' 'glibc' 'hicolor-icon-theme' 'libglvnd' 'libxkbcommon')
+optdepends=('pipewire-pulse: PulseAudio output on PipeWire desktops'
+            'pipewire-jack: JACK output'
+            'wayland: native Wayland window'
+            'libxcursor: X11 cursors'
+            'libxi: X11 input')
+provides=('fauste-player')
+conflicts=('fauste-player')
+options=('!strip' '!debug')
+_release="https://github.com/sanchezfauste/fauste-player/releases/download/v${_version}"
+_raw="https://raw.githubusercontent.com/sanchezfauste/fauste-player/v${_version}"
+source=("org.fauste.FaustePlayer.desktop::${_raw}/packaging/linux/org.fauste.FaustePlayer.desktop"
+        "org.fauste.FaustePlayer.svg::${_raw}/packaging/icons/fauste-player.svg")
+source_x86_64=("${_release}/fauste-player-${_version}-x86_64-unknown-linux-gnu.tar.gz")
+source_aarch64=("${_release}/fauste-player-${_version}-aarch64-unknown-linux-gnu.tar.gz")
+sha256sums=('@SHA256_DESKTOP@'
+            '@SHA256_SVG@')
+sha256sums_x86_64=('@SHA256_X86_64@')
+sha256sums_aarch64=('@SHA256_AARCH64@')
+
+package() {
+  local dir="fauste-player-${_version}-${CARCH}-unknown-linux-gnu"
+  install -Dm755 "${dir}/fauste-player" "${pkgdir}/usr/bin/fauste-player"
+  install -Dm644 org.fauste.FaustePlayer.desktop "${pkgdir}/usr/share/applications/org.fauste.FaustePlayer.desktop"
+  install -Dm644 org.fauste.FaustePlayer.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/org.fauste.FaustePlayer.svg"
+  # The About window finds the notices in share/doc/fauste-player.
+  install -Dm644 -t "${pkgdir}/usr/share/doc/fauste-player" "${dir}/README.md" "${dir}/licenses/"*
+  install -Dm644 -t "${pkgdir}/usr/share/licenses/${pkgname}" "${dir}/LICENSE" "${dir}/NOTICE"
+}

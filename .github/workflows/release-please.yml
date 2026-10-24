@@ -45,6 +45,18 @@ jobs:
     permissions:
       contents: write
 
+  # The app stores and package repositories, once the release assets they
+  # read (the MSI, the Linux archives) are attached. Each store runs only
+  # when its secrets are set (docs/technical/release-process.md, "Stores").
+  stores:
+    needs: [release-please, binaries]
+    uses: ./.github/workflows/stores.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
+    permissions:
+      contents: read
+
   # The site's download links follow the latest release, so rebuild it once
   # the assets are attached.
   site:
