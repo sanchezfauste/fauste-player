@@ -1,7 +1,9 @@
 #![allow(clippy::unwrap_used)]
 //! The columns of the track table (feedback 2 spec O24).
 
-use fp_model::TableColumn::{Album, Artist, Date, Duration, FileName, Genre, Intro, Number, Title};
+use fp_model::TableColumn::{
+    Album, Artist, Comment, Date, Duration, FileName, Genre, Intro, Number, Title,
+};
 use fp_model::{
     Config, TableColumn, column_rows, default_columns, move_column, move_column_before,
     normalize_columns, with_column_shown,
@@ -20,7 +22,7 @@ fn title_and_duration_are_the_required_columns() {
         .filter(|c| c.is_required())
         .collect();
     assert_eq!(required, vec![Title, Duration]);
-    assert_eq!(TableColumn::ALL.len(), 9);
+    assert_eq!(TableColumn::ALL.len(), 10);
 }
 
 #[test]
@@ -124,9 +126,9 @@ fn the_settings_rows_list_the_shown_columns_then_the_hidden_ones() {
     assert_eq!(shown, vec![Duration, Title]);
     assert_eq!(
         hidden,
-        vec![Number, Artist, Album, Date, Genre, Intro, FileName]
+        vec![Number, Artist, Album, Date, Genre, Intro, FileName, Comment]
     );
-    assert_eq!(rows.len(), 9);
+    assert_eq!(rows.len(), 10);
     assert!(rows[..2].iter().all(|(_, on)| *on));
 }
 
@@ -196,4 +198,20 @@ fn a_column_is_found_by_the_name_it_has_in_files() {
     assert_eq!(TableColumn::from_name("file_name"), Some(FileName));
     assert_eq!(TableColumn::from_name("file-name"), None);
     assert_eq!(TableColumn::from_name("bpm"), None);
+}
+
+#[test]
+fn the_comment_column_is_optional_and_hidden_by_default() {
+    assert!(TableColumn::ALL.contains(&Comment));
+    assert!(!Comment.is_required());
+    assert!(!default_columns().contains(&Comment));
+    assert_eq!(TableColumn::from_name("comment"), Some(Comment));
+    assert_eq!(
+        serde_json::to_string(&vec![Comment]).unwrap(),
+        r#"["comment"]"#
+    );
+    assert_eq!(
+        with_column_shown(&default_columns(), Comment, true),
+        vec![Number, Title, Artist, Duration, Comment]
+    );
 }

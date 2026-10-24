@@ -14,9 +14,11 @@ const NUMBER_PADDING: f32 = 26.0;
 pub fn column_min(column: TableColumn, number_digits: usize) -> f32 {
     match column {
         TableColumn::Number => number_digits as f32 * DIGIT + NUMBER_PADDING,
-        TableColumn::Title | TableColumn::Artist | TableColumn::Album | TableColumn::FileName => {
-            60.0
-        }
+        TableColumn::Title
+        | TableColumn::Artist
+        | TableColumn::Album
+        | TableColumn::FileName
+        | TableColumn::Comment => 60.0,
         TableColumn::Genre => 50.0,
         // "2019-05-14" fits.
         TableColumn::Date => 84.0,
@@ -30,7 +32,9 @@ pub fn column_min(column: TableColumn, number_digits: usize) -> f32 {
 fn weight(column: TableColumn) -> f32 {
     match column {
         TableColumn::Title => 3.0,
-        TableColumn::Artist | TableColumn::Album | TableColumn::FileName => 2.0,
+        TableColumn::Artist | TableColumn::Album | TableColumn::FileName | TableColumn::Comment => {
+            2.0
+        }
         TableColumn::Genre => 1.5,
         TableColumn::Number | TableColumn::Date | TableColumn::Duration | TableColumn::Intro => 0.0,
     }

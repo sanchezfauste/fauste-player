@@ -610,7 +610,8 @@ pub(crate) fn track_table(
                             TableColumn::Album
                             | TableColumn::Date
                             | TableColumn::Genre
-                            | TableColumn::FileName => {
+                            | TableColumn::FileName
+                            | TableColumn::Comment => {
                                 ui.add_space(8.0);
                                 ui.add(
                                     egui::Label::new(

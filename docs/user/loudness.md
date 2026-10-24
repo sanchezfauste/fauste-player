@@ -39,7 +39,7 @@ A file shorter than
 unchanged.
 
 **The gain.** The gain brings the measured loudness to the **Target**, plus
-the track's own **Trim** (see [Per track](#per-track-exclude-and-trim)):
+the track's own **Manual trim** (see [Per track](#per-track-exclude-and-trim)):
 
 > gain = target − measured loudness + trim
 
@@ -108,7 +108,7 @@ The badge shows the gain the player asked for when the track started.
 
 Everywhere the program explains a track's gain it shows the same block of
 lines, label on the left and value on the right: the gain badge's tooltip,
-the loudness editor (above its controls), the cart editor and the track
+the loudness popup (under its controls), the cart editor and the track
 tooltip of the playlist table.
 
 | Line | Meaning |
@@ -117,7 +117,7 @@ tooltip of the playlist table.
 | **True peak** | Its highest true peak, in dBTP (only when measured). |
 | **Target** | The loudness every track is brought to (Settings → Loudness). |
 | **Automatic gain** | Target minus measured loudness, before the trim and any limit, or "none" and why: excluded, bit-perfect output, normalization off, not measured yet, or silent. |
-| **Trim** | The track's trim in use, when it is not 0 (with the saved value and the maximum when a lowered **Maximum trim** limits it). |
+| **Manual trim** | The track's manual trim in use, when it is not 0 (with the saved value and the maximum when a lowered **Maximum manual trim** limits it). |
 | **Gain wanted** and **Limited by** | Only when the true-peak ceiling or the maximum boost held the gain back: the automatic gain plus the trim (shown when there is a trim) and the limit that stopped it. |
 | **Resulting gain** | Always last, under a rule and in bold: the gain the track plays with. 0.0 dB when it is not normalized. |
 
@@ -132,14 +132,16 @@ sounds (speech often sounds louder than music at the same LUFS). Each track
 has two settings for that:
 
 - **Exclude from normalization:** the track always plays unchanged.
-- **Trim:** dB added to the track's gain, from − to + the **Maximum trim**
+- **Manual trim:** dB added to the track's gain, from − to + the **Maximum manual trim**
   (Settings → Loudness), in 0.5 dB steps. Double-click the slider to put it
   back to 0. The trim is dimmed while the track is excluded.
 
 The slider is a **trim**: an offset on top of the automatic gain, so it
 reads 0 dB for every track you have not edited. The popup and the cart
-editor therefore show the [gain breakdown](#the-gain-breakdown) above their
-controls: the **Resulting gain** line follows the slider as you move it.
+editor therefore show the [gain breakdown](#the-gain-breakdown) with their
+controls: the **Resulting gain** line follows the slider as you move it. In
+the popup the controls come first and the breakdown under them, so the
+slider stays where it is while the breakdown grows or shrinks.
 While the track is sounding, the popup adds that a change applies from its
 next load.
 
@@ -175,7 +177,7 @@ player that list belongs to (a bit-perfect player plays it unaltered).
   lossy encoders downstream. Lower it when a stream encoder clips.
 - **Maximum boost.** Keeps a very quiet recording (or a mostly silent one)
   from being raised into noise. 0 dB only turns loud tracks down.
-- **Maximum trim.** How far the per-track trim may go. Lowering it limits
+- **Maximum manual trim.** How far the per-track trim may go. Lowering it limits
   trims already set without changing them, until you next edit that
   track's loudness: the edit then saves the limited trim.
 

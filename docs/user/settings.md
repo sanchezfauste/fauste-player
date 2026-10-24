@@ -206,7 +206,7 @@ worked out, the badge in the player header and the per-track settings.
 | Target | −16 LUFS | −36 … −6 LUFS, 0.5 steps | The integrated loudness every track is brought to |
 | True-peak ceiling | −1 dBTP | −12 … 0 dBTP, 0.1 steps | A boost never takes the track's true peak above this. Cuts are not limited |
 | Maximum boost | 12 dB | 0 … 24 dB | The largest gain a quiet track can get. Cuts are not limited |
-| Maximum trim | 12 dB | 0 … 24 dB | How far each track's own trim can go, up or down |
+| Maximum manual trim | 12 dB | 0 … 24 dB | How far each track's own manual trim can go, up or down |
 
 Changes apply to tracks loaded afterwards: what is playing keeps its gain,
 and the next track waiting on each player is prepared again with the new

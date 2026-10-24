@@ -64,6 +64,7 @@ col-date = Data
 col-genre = Gènere
 col-intro = Intro
 col-file_name = Fitxer
+col-comment = Comentari
 footer-add = Afegir
 footer-count = { $count ->
     [one] { $count } pista
@@ -621,6 +622,7 @@ column-name-genre = Gènere
 column-name-duration = Durada
 column-name-intro = Intro
 column-name-file_name = Nom del fitxer
+column-name-comment = Comentari
 settings-columns = Columnes de la taula
 settings-hint-columns = Les columnes de la taula de cada reproductor. També pots arrossegar una capçalera en una taula, o fer-hi clic dret.
 settings-column-up = Pujar { $column }

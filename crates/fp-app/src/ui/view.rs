@@ -567,6 +567,12 @@ pub fn cell_text(track: &Track, column: TableColumn, use_markers: bool) -> Strin
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default(),
+        // A comment may span lines; a cell has one.
+        TableColumn::Comment => track
+            .comment
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" "),
     }
 }
 

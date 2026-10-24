@@ -1356,12 +1356,12 @@ fn n10_the_refused_trim_message_also_fits_a_value_that_is_not_a_number() {
     let en = fp_app::i18n::I18n::new(Some("en-US"));
     assert_eq!(
         en.tr("error-invalid-trim"),
-        "The trim must be a number within the maximum trim."
+        "The manual trim must be a number within the maximum."
     );
     let es = fp_app::i18n::I18n::new(Some("es-ES"));
     assert_eq!(
         es.tr("error-invalid-trim"),
-        "El ajuste debe ser un número dentro del ajuste máximo."
+        "El ajuste manual debe ser un número dentro del máximo."
     );
 }
 #[test]

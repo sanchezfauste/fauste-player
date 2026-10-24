@@ -64,6 +64,7 @@ col-date = Data
 col-genre = Generoa
 col-intro = Intro
 col-file_name = Fitxategia
+col-comment = Iruzkina
 footer-add = Gehitu
 footer-count = { $count ->
     [one] { $count } pista
@@ -621,6 +622,7 @@ column-name-genre = Generoa
 column-name-duration = Iraupena
 column-name-intro = Intro
 column-name-file_name = Fitxategi-izena
+column-name-comment = Iruzkina
 settings-columns = Taulako zutabeak
 settings-hint-columns = Erreproduzitzaile bakoitzaren taulako zutabeak. Taula batean goiburu bat arrastatu ere egin dezakezu, edo eskuineko klika egin haren gainean.
 settings-column-up = Igo { $column }

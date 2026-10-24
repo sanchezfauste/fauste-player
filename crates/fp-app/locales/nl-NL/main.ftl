@@ -64,6 +64,7 @@ col-date = Datum
 col-genre = Genre
 col-intro = Intro
 col-file_name = Bestandsnaam
+col-comment = Opmerking
 footer-add = Toevoegen
 footer-count = { $count ->
     [one] { $count } nummer
@@ -621,6 +622,7 @@ column-name-genre = Genre
 column-name-duration = Duur
 column-name-intro = Intro
 column-name-file_name = Bestandsnaam
+column-name-comment = Opmerking
 settings-columns = Tabelkolommen
 settings-hint-columns = De kolommen van de tabel van elke speler. Je kunt ook een kolomkop in een tabel slepen of erop rechtsklikken.
 settings-column-up = { $column } omhoog

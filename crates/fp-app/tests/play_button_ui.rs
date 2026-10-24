@@ -80,12 +80,13 @@ fn the_icon_is_white_with_enough_contrast_on_every_fill() {
 
 #[test]
 fn the_states_have_distinct_fills() {
+    // Idle and on air share a fill (the caption tells Play from Next).
     let fills = [
         theme::PLAY_FILL,
-        theme::PLAY_FILL_ON_AIR,
         theme::PLAY_FILL_HOVER,
         theme::PLAY_FILL_PRESSED,
         theme::PLAY_FILL_DISABLED,
+        theme::PLAY_FILL_PAUSED_DIM,
     ];
     for (i, a) in fills.iter().enumerate() {
         for b in &fills[i + 1..] {
@@ -93,49 +94,83 @@ fn the_states_have_distinct_fills() {
         }
     }
     assert!(luminance(theme::PLAY_FILL_HOVER) > luminance(theme::PLAY_FILL));
-    assert!(luminance(theme::PLAY_FILL_PRESSED) < luminance(theme::PLAY_FILL_ON_AIR));
+    assert!(luminance(theme::PLAY_FILL_PRESSED) < luminance(theme::PLAY_FILL));
+    assert!(luminance(theme::PLAY_FILL_PAUSED_DIM) < luminance(theme::PLAY_FILL));
 }
 
 #[test]
-fn the_button_is_filled_idle_and_deeper_on_air() {
+fn the_button_has_the_next_rows_green_idle_and_on_air() {
     use fp_app::ui::controller::Controller;
+    assert_eq!(theme::PLAY_FILL, theme::NEXT_ROW);
+    assert_eq!(theme::PLAY_FILL_ON_AIR, theme::PLAY_FILL);
     let (mut h, fake) = support::harness(support::state(1, 3));
     h.run_steps(3);
     let play = h.get_by_label("Play").rect();
-    assert_eq!(fill_of(&h, play), theme::PLAY_FILL, "idle");
+    assert_eq!(fill_of(&h, play), theme::NEXT_ROW, "idle");
     fake.send(Command::Play(fake.player(0)));
     h.run_steps(3);
     let next = h.get_by_label("Fade into the next track").rect();
-    assert_eq!(fill_of(&h, next), theme::PLAY_FILL_ON_AIR, "on air");
+    assert_eq!(fill_of(&h, next), theme::NEXT_ROW, "on air");
 }
 
-/// The colour of the border stroked exactly around `button`.
-fn border_of(h: &H, button: Rect) -> Color32 {
+/// Whether a visible border is stroked exactly around `button`.
+fn has_border(h: &H, button: Rect) -> bool {
     rect_fills(h)
         .iter()
-        .rev()
-        .find(|r| r.rect == button && r.stroke.width >= 2.0)
-        .map(|r| r.stroke.color)
-        .unwrap_or(Color32::TRANSPARENT)
+        .any(|r| r.rect == button && r.stroke.width > 0.0 && r.stroke.color != Color32::TRANSPARENT)
 }
 
 #[test]
-fn play_and_next_are_outlined_alike() {
+fn play_and_next_have_no_outline() {
     use fp_app::ui::controller::Controller;
     let (mut h, fake) = support::harness(support::state(1, 3));
     h.run_steps(3);
     let play = h.get_by_label("Play").rect();
-    let idle = contrast(border_of(&h, play), fill_of(&h, play));
+    assert!(!has_border(&h, play), "idle");
     fake.send(Command::Play(fake.player(0)));
     h.run_steps(3);
     let next = h.get_by_label("Fade into the next track").rect();
-    let on_air = contrast(border_of(&h, next), fill_of(&h, next));
-    // The outline stands out from its fill as much on Play as on Next.
-    assert!(
-        (idle - on_air).abs() < 0.1,
-        "idle {idle:.2}, on air {on_air:.2}"
+    assert!(!has_border(&h, next), "on air");
+}
+
+#[test]
+fn a_paused_player_blinks_play_like_pause() {
+    use fp_app::ui::controller::Controller;
+    let (mut h, fake) = support::harness(support::state(1, 3));
+    let p = fake.player(0);
+    fake.send(Command::Play(p));
+    fake.send(Command::Pause(p));
+    h.run_steps(2);
+    let mut seen = std::collections::HashSet::new();
+    for _ in 0..60 {
+        h.step();
+        let play = h.get_by_label("Play").rect();
+        let pause = h.get_by_label("Pause").rect();
+        seen.insert((fill_of(&h, play), fill_of(&h, pause)));
+    }
+    // In phase: Play is lit while Pause is lit, dim while Pause is dark.
+    assert_eq!(
+        seen,
+        [
+            (theme::PLAY_FILL, theme::AMBER_BG),
+            (theme::PLAY_FILL_PAUSED_DIM, Color32::TRANSPARENT),
+        ]
+        .into_iter()
+        .collect(),
     );
-    assert!(on_air >= 1.9, "a visible outline: {on_air:.2}");
+    assert!(contrast(theme::PLAY_ICON, theme::PLAY_FILL_PAUSED_DIM) >= 3.0);
+}
+
+#[test]
+fn a_playing_player_does_not_blink_play() {
+    let (mut h, _fake) = support::harness(support::state(1, 3));
+    h.run_steps(2);
+    let mut seen = std::collections::HashSet::new();
+    for _ in 0..60 {
+        h.step();
+        seen.insert(fill_of(&h, h.get_by_label("Play").rect()));
+    }
+    assert_eq!(seen.len(), 1, "{seen:?}");
 }
 
 #[test]
@@ -189,10 +224,17 @@ fn a_divider_separates_the_meter_from_the_fader() {
         .map(|r| r.rect)
         .collect();
     assert_eq!(dividers.len(), 2, "one per player: {dividers:?}");
+    // The same hairline as the waveform's (seek bar's) border, so the
+    // column reads as one piece.
+    let wave_borders: std::collections::HashSet<Color32> = fills
+        .iter()
+        .filter(|r| r.stroke.width == 1.0 && r.rect.height() > 40.0 && r.rect.width() > 200.0)
+        .map(|r| r.stroke.color)
+        .collect();
     assert!(
-        contrast(theme::DIVIDER, theme::COLUMN_BG) >= 2.0,
-        "clearly visible: {}",
-        contrast(theme::DIVIDER, theme::COLUMN_BG)
+        wave_borders.contains(&theme::DIVIDER),
+        "{:?} not in {wave_borders:?}",
+        theme::DIVIDER
     );
     // Found through the fader's track (4 px wide, NEUTRAL_800) on its
     // right.

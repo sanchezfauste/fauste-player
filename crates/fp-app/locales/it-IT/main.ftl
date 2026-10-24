@@ -64,6 +64,7 @@ col-date = Data
 col-genre = Genere
 col-intro = Intro
 col-file_name = File
+col-comment = Commento
 footer-add = Aggiungi
 footer-count = { $count ->
     [one] { $count } brano
@@ -621,6 +622,7 @@ column-name-genre = Genere
 column-name-duration = Durata
 column-name-intro = Intro
 column-name-file_name = Nome del file
+column-name-comment = Commento
 settings-columns = Colonne della tabella
 settings-hint-columns = Le colonne della tabella di ogni lettore. Puoi anche trascinare un'intestazione in una tabella, o farci clic destro.
 settings-column-up = Sposta su { $column }

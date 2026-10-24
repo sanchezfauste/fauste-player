@@ -64,6 +64,7 @@ col-date = Data
 col-genre = Gatunek
 col-intro = Intro
 col-file_name = Nazwa pliku
+col-comment = Komentarz
 footer-add = Dodaj
 footer-count = { $count ->
     [one] { $count } utwór
@@ -635,6 +636,7 @@ column-name-genre = Gatunek
 column-name-duration = Czas trwania
 column-name-intro = Intro
 column-name-file_name = Nazwa pliku
+column-name-comment = Komentarz
 settings-columns = Kolumny tabeli
 settings-hint-columns = Kolumny tabeli każdego odtwarzacza. Możesz też przeciągnąć nagłówek w tabeli lub kliknąć go prawym przyciskiem.
 settings-column-up = Przesuń { $column } w górę

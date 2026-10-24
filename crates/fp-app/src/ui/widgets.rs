@@ -109,6 +109,8 @@ pub struct TileStyle {
     pub border_width: f32,
     pub content: Color32,
     pub hover_fill: Color32,
+    /// The border while the pointer is over the tile or pressing it.
+    pub hover_border: Color32,
     pub hover_content: Color32,
     pub active_fill: Color32,
     /// Whether a disabled tile is painted at 45 % strength (the default).
@@ -125,9 +127,10 @@ impl TileStyle {
             border: theme::NEUTRAL_700,
             border_width: 1.0,
             content: theme::NEUTRAL_300,
-            hover_fill: theme::NEUTRAL_900,
+            hover_fill: theme::NEUTRAL_800,
+            hover_border: theme::NEUTRAL_500,
             hover_content: theme::TEXT,
-            active_fill: theme::NEUTRAL_800,
+            active_fill: theme::NEUTRAL_700,
             dim_when_disabled: true,
             disabled_fill: None,
         }
@@ -288,7 +291,10 @@ pub fn tile_without_tooltip(
         };
         let painter = ui.painter();
         painter.rect_filled(rect, 0.0, fill);
-        let border = if !dim {
+        let lit = enabled && (response.hovered() || response.is_pointer_button_down_on());
+        let border = if lit {
+            style.hover_border
+        } else if !dim {
             style.border
         } else {
             style.border.gamma_multiply(0.45)
@@ -1963,7 +1969,7 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
     painter.rect_stroke(
         rect,
         0.0,
-        Stroke::new(1.0, theme::NEUTRAL_800),
+        Stroke::new(1.0, theme::DIVIDER),
         StrokeKind::Inside,
     );
     let inner = rect.shrink(1.0);

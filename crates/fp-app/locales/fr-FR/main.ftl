@@ -64,6 +64,7 @@ col-date = Date
 col-genre = Genre
 col-intro = Intro
 col-file_name = Fichier
+col-comment = Commentaire
 footer-add = Ajouter
 footer-count = { $count ->
     [one] { $count } piste
@@ -621,6 +622,7 @@ column-name-genre = Genre
 column-name-duration = Durée
 column-name-intro = Intro
 column-name-file_name = Nom du fichier
+column-name-comment = Commentaire
 settings-columns = Colonnes du tableau
 settings-hint-columns = Les colonnes du tableau de chaque lecteur. Vous pouvez aussi faire glisser un en-tête dans un tableau, ou faire un clic droit dessus.
 settings-column-up = Monter { $column }
