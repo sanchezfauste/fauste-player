@@ -204,9 +204,22 @@ jobs:
           sudo apt-get update && sudo apt-get install -y --no-install-recommends flatpak
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder
-          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@"; }
-          lint manifest flathub-out/org.fauste.FaustePlayer.yml
-          lint appstream flathub-out/org.fauste.FaustePlayer.metainfo.xml
+          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@" || true; }
+          # Fails on any error but appid-url-not-reachable: the domain of the
+          # application ID is checked at submission (see release-process.md,
+          # "Stores", Flathub step 1), so it is only reported here.
+          check() {
+            python3 -c '
+          import json, sys
+          report = json.loads(sys.stdin.read() or "{}")
+          print(json.dumps(report, indent=2))
+          errors = [e for e in report.get("errors", []) if e != "appid-url-not-reachable"]
+          if "appid-url-not-reachable" in report.get("errors", []):
+              print("::warning::Flathub: the domain of the application ID is not reachable")
+          sys.exit(1 if errors else 0)'
+          }
+          lint manifest flathub-out/org.fauste.FaustePlayer.yml | check
+          lint appstream flathub-out/org.fauste.FaustePlayer.metainfo.xml | check
       - uses: actions/upload-artifact@v7
         with:
           name: flathub
@@ -275,7 +288,7 @@ jobs:
             namcap PKGBUILD'
       - name: Push to the AUR
         if: needs.plan.outputs.aur == 'true'
-        uses: KSXGitHub/github-actions-deploy-aur@v4
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: fauste-player-bin
           pkgbuild: PKGBUILD

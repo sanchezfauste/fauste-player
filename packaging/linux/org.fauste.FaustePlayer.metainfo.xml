@@ -27,8 +27,6 @@
   <url type="homepage">https://sanchezfauste.com/fauste-player/</url>
   <url type="bugtracker">https://github.com/sanchezfauste/fauste-player/issues</url>
   <url type="help">https://sanchezfauste.com/fauste-player/guide/</url>
-  <url type="vcs-browser">https://github.com/sanchezfauste/fauste-player</url>
-  <url type="contribute">https://github.com/sanchezfauste/fauste-player/blob/master/CONTRIBUTING.md</url>
   <!-- The stores show these; docs/images is kept current by the screenshots workflow. -->
   <screenshots>
     <screenshot type="default">
