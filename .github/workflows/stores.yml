@@ -146,7 +146,11 @@ jobs:
             --clientId "${CLIENT_ID}" --clientSecret "${CLIENT_SECRET}"
           # Uploads the package to a new submission and commits it for
           # certification; the listing stays as set in Partner Center.
-          msstore publish "$(dirname "${MSIX}")" --inputFile "${MSIX}" --appId "${PRODUCT_ID}" --verbose
+          # The CLI takes a directory and picks the package in it, so the
+          # MSIX goes alone into one.
+          mkdir -p msstore-upload
+          cp "${MSIX}" msstore-upload/
+          msstore publish msstore-upload --inputDirectory msstore-upload --appId "${PRODUCT_ID}" --verbose
         env:
           MSIX: ${{ steps.package.outputs.msix }}
           PRODUCT_ID: ${{ vars.MSSTORE_PRODUCT_ID }}
