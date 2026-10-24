@@ -4,7 +4,10 @@
 # not mirror the English guide at the commit it was translated from (same
 # files, same SUMMARY entries), lacks its metadata or the AI-translation
 # notice on its start page, or, given a site built by build.sh, when a
-# translated page lacks the language menu and notice script.
+# translated page lacks the language menu and notice script. Also checks the
+# translations of the landing page and the privacy policy (site/locales):
+# the same languages as docs/i18n, the same keys as en.toml, and made from
+# the current English texts (scripts/site/landing.py).
 set -eu
 [ $# -le 1 ] || { echo "usage: $0 [<site-dir>]" >&2; exit 2; }
 exec python3 "$(dirname "$0")/guide.py" check "$@"

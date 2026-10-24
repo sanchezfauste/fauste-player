@@ -74,7 +74,9 @@ scripts/package/icons.sh                      # regenerate the PNG and .ico icon
 scripts/check-commits.sh origin/master        # commit subjects vs Conventional Commits
 scripts/site/build.sh [out]                   # website: landing page + mdBook guide (default target/site; needs gh or FAUSTE_RELEASE_JSON for the download links)
 scripts/site/check-links.sh <out>             # dead links in the built site
-scripts/site/check-translations.sh [out]      # translated guides (docs/i18n) mirror docs/user and carry the AI notice
+scripts/site/check-translations.sh [out]      # translated guides (docs/i18n) mirror docs/user and carry the AI notice; landing translations (site/locales) match en.toml
+python3 scripts/site/landing.py hash          # the [source-hash] of the landing page's English texts, for its translations
+python3 -m unittest discover -s scripts/site/tests -p 'test_*.py' && node --test 'scripts/site/tests/*.test.js'  # site script tests
 python3 scripts/site/guide.py changed [lang]  # English guide pages changed since each translation
 scripts/site/screenshots.sh [--only main] [--lang es-ES] [--out <dir>]  # README and guide screenshots from a scripted scene (Xvfb; see Testing notes)
 scripts/site/localized-screenshots.sh <dir> [lang…]  # the same in English and every guide language (CI does it on publish)
@@ -152,6 +154,11 @@ A change is not done until everything that describes it says the same:
 - the spec in `docs/superpowers/specs/` when behaviour changes, and the plan;
 - this file (and `AGENTS.md` if the pointer changes) when the workflow,
   commands or layout change;
+- the landing page and privacy policy texts in every `site/locales` file:
+  `en.toml` is the source, and a change to it updates every translation
+  in the same PR (with AI) and its `[source-hash]`
+  (`python3 scripts/site/landing.py hash`); `check-translations.sh` fails
+  otherwise. A new guide language also needs its `site/locales/<lang>.toml`;
 - UI strings in every locale file (en-US and es-ES written with each
   change, the rest translated in bulk with AI); a new locale is one
   `locales/<tag>/main.ftl` plus one entry in `i18n::LOCALES` (see `docs/technical/ui.md`).
@@ -194,7 +201,7 @@ hand: release-please writes it from the commits.
 | `vendor/egui-phosphor` | A copy of `egui-phosphor` 0.14.0 with only its egui requirement raised to 0.37 (no upstream release yet), used the same way. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX, MSIX and Info.plist, the AUR PKGBUILD template; the per-format package scripts |
 | `snap/` | The snap recipe (`snapcraft.yaml`, where snapcraft looks for it) |
-| `site/`, `scripts/site/` | The landing page and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
+| `site/`, `scripts/site/` | The landing page and privacy policy templates with their texts in `site/locales/<lang>.toml` (rendered by `scripts/site/landing.py`), and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
 | `.github/workflows` | CI (with the SonarQube Cloud analysis and coverage; `sonar-project.properties`), Dependabot (`dependabot.yml`), release-please, release builds and packages, store publishing (`stores.yml`: Microsoft Store, Snap Store, Flathub, WinGet, AUR), GitHub Pages, commit checks |
 
 ## Design source

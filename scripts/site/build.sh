@@ -1,6 +1,8 @@
 #!/bin/sh
 # Builds the website into <out-dir> (default target/site): the landing page
-# (site/) with its download links filled from the latest release, the user
+# and the privacy policy (site/, rendered by scripts/site/landing.py in
+# English and under <lang>/ in each translation of site/locales) with the
+# download links filled from the latest release, the user
 # guide under guide/ (each translation under guide/<lang>/) and the
 # screenshots under images/.
 #
@@ -57,8 +59,12 @@ if [ -n "${FAUSTE_SHOTS_DIR:-}" ]; then
     python3 "$root/scripts/site/guide.py" images "$out" "$FAUSTE_SHOTS_DIR"
 fi
 
-cp "$root"/site/* "$out/"
+# The landing page and the privacy policy: templates rendered in English and
+# in each translation of site/locales (into <lang>/), after the screenshots
+# so a translation shows its own main screen.
+cp "$root"/site/*.css "$root"/site/*.js "$root/docs/book-assets/site-language.js" "$out/"
 cp "$root/packaging/icons/fauste-player.svg" "$out/favicon.svg"
+python3 "$root/scripts/site/landing.py" build "$out"
 
 release=
 if [ -n "${FAUSTE_RELEASE_JSON:-}" ]; then
@@ -70,10 +76,10 @@ if [ -z "$release" ]; then
     echo "build.sh: no release found; download links point at the releases page" >&2
 fi
 
-RELEASE_JSON=$release python3 - "$out/index.html" <<'PY'
+RELEASE_JSON=$release python3 - "$out" "$root/site/locales" <<'PY'
 import json, os, re, sys
 
-path = sys.argv[1]
+out, locales = sys.argv[1], sys.argv[2]
 raw = os.environ.get("RELEASE_JSON", "")
 try:
     release = json.loads(raw) if raw.strip() else None
@@ -81,50 +87,57 @@ except ValueError:
     print("build.sh: release JSON is not valid; ignoring it", file=sys.stderr)
     release = None
 
-html = open(path, encoding="utf-8").read()
+def fill(path):
+    html = open(path, encoding="utf-8").read()
 
-if release is None:
-    html = re.sub(r'\sdata-asset="[^"]*"', "", html)
-    html = re.sub(r"\sdata-row(?=>)", "", html)
-    html = html.replace("<span data-version></span>", "").replace(
-        '<span class="version" data-version></span>', '<span class="version"></span>')
-else:
-    assets = [(a["name"], a["url"]) for a in release.get("assets", [])
-              if not a["name"].endswith(".sha256")]
-    version = release.get("tagName", "")
+    if release is None:
+        html = re.sub(r'\sdata-asset="[^"]*"', "", html)
+        html = re.sub(r"\sdata-row(?=>)", "", html)
+        html = html.replace("<span data-version></span>", "").replace(
+            '<span class="version" data-version></span>', '<span class="version"></span>')
+    else:
+        assets = [(a["name"], a["url"]) for a in release.get("assets", [])
+                  if not a["name"].endswith(".sha256")]
+        version = release.get("tagName", "")
 
-    link = re.compile(r'<a data-asset="([^"]*)" href="[^"]*">(.*?)</a>', re.S)
+        link = re.compile(r'<a data-asset="([^"]*)" href="[^"]*">(.*?)</a>', re.S)
 
-    def fill_row(match):
-        tag, body = match.group(1), match.group(2)
-        found = [0]
+        def fill_row(match):
+            tag, body = match.group(1), match.group(2)
+            found = [0]
 
-        def fill_link(m):
-            pattern = re.compile(m.group(1))
-            for name, url in assets:
-                if pattern.search(name):
-                    found[0] += 1
-                    return f'<a href="{url}">{m.group(2)}</a>'
-            return None  # no such asset
+            def fill_link(m):
+                pattern = re.compile(m.group(1))
+                for name, url in assets:
+                    if pattern.search(name):
+                        found[0] += 1
+                        return f'<a href="{url}">{m.group(2)}</a>'
+                return None  # no such asset
 
-        def sub(m):
-            repl = fill_link(m)
-            return repl if repl is not None else "\0MISSING\0"
+            def sub(m):
+                repl = fill_link(m)
+                return repl if repl is not None else "\0MISSING\0"
 
-        body = link.sub(sub, body)
-        if not found[0]:
-            return ""
-        if tag == "tr":
-            body = re.sub(r"<td>\0MISSING\0</td>", "<td>—</td>", body)
-        body = body.replace("\0MISSING\0", "")
-        return f"<{tag}>{body}</{tag}>"
+            body = link.sub(sub, body)
+            if not found[0]:
+                return ""
+            if tag == "tr":
+                body = re.sub(r"<td>\0MISSING\0</td>", "<td>—</td>", body)
+            body = body.replace("\0MISSING\0", "")
+            return f"<{tag}>{body}</{tag}>"
 
-    html = re.sub(r"<(li|tr) data-row>(.*?)</\1>", fill_row, html, flags=re.S)
-    html = html.replace("<span data-version></span>", version)
-    html = html.replace('<span class="version" data-version></span>',
-                        f'<span class="version">{version}</span>')
+        html = re.sub(r"<(li|tr) data-row>(.*?)</\1>", fill_row, html, flags=re.S)
+        html = html.replace("<span data-version></span>", version)
+        html = html.replace('<span class="version" data-version></span>',
+                            f'<span class="version">{version}</span>')
 
-open(path, "w", encoding="utf-8").write(html)
+    open(path, "w", encoding="utf-8").write(html)
+
+
+# The landing page in English and in each translation; never the guide.
+langs = sorted(f[:-5] for f in os.listdir(locales) if f.endswith(".toml") and f != "en.toml")
+for folder in [""] + langs:
+    fill(os.path.join(out, folder, "index.html"))
 PY
 
 echo "Site built in $out"

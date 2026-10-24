@@ -1,107 +1,96 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fauste Player — radio playout for Linux, Windows and macOS</title>
-<meta name="description" content="Fauste Player is a desktop radio playout application written in Rust: independent players, sample-accurate mixes, CUE pre-listen, a cartwall, bit-perfect and DSD output, MIDI and remote control.">
+<title>{{ index.title }}</title>
+<meta name="description" content="{{ attr:index.description }}">
 <meta name="color-scheme" content="dark">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css">
+<link rel="icon" href="{{ root }}favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="{{ root }}style.css">
+{{ alternates }}
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="./"><img src="favicon.svg" alt="" width="28" height="28"> Fauste Player</a>
-  <nav aria-label="Main">
-    <a href="#download">Download</a>
-    <a href="guide/">User guide</a>
-    <a href="https://github.com/sanchezfauste/fauste-player">Source</a>
+  <a class="brand" href="./"><img src="{{ root }}favicon.svg" alt="" width="28" height="28"> Fauste Player</a>
+  <nav aria-label="{{ attr:common.nav }}">
+    <a href="#download">{{ common.nav-download }}</a>
+    <a href="{{ guide }}">{{ common.nav-guide }}</a>
+    <a href="https://github.com/sanchezfauste/fauste-player">{{ common.nav-source }}</a>
+    {{ menu }}
   </nav>
 </header>
 
 <main>
+  {{ notice }}
   <section class="hero">
     <h1>Fauste Player</h1>
-    <p class="pitch">Radio playout for Linux, Windows and macOS. Independent players,
-      sample-accurate overlapping mixes, a separate pre-listen output, and an audio
-      engine the interface can never block.</p>
+    <p class="pitch">{{ index.pitch }}</p>
     <p class="cta">
-      <a class="button" href="#download">Download <span data-version></span></a>
-      <a class="button secondary" href="guide/">Read the user guide</a>
+      <a class="button" href="#download">{{ index.cta-download }} <span data-version></span></a>
+      <a class="button secondary" href="{{ guide }}">{{ index.cta-guide }}</a>
     </p>
-    <img class="shot" src="images/main-screen.png" width="1920" height="1080"
-         alt="The Fauste Player main screen: four players with waveforms and playlists, and the cartwall.">
+    <img class="shot" src="{{ shot }}" width="1920" height="1080"
+         alt="{{ attr:index.shot-alt }}">
   </section>
 
   <section aria-labelledby="features">
-    <h2 id="features">What it does</h2>
+    <h2 id="features">{{ index.features }}</h2>
     <ul class="features">
-      <li><h3>Independent players</h3>
-        <p>Four by default, any number configurable. Each has its own playlists,
-        transport, countdown, meter and outputs.</p></li>
-      <li><h3>Sample-accurate mixing</h3>
-        <p>In continuous mode the next track starts exactly at the MIX point and
-        overlaps the fading end of the current one. Markers are found automatically
-        and editable on the waveform.</p></li>
-      <li><h3>CUE pre-listen</h3>
-        <p>Listen to any track on a separate device or channel pair before it goes
-        on air, and load it as the next one.</p></li>
-      <li><h3>Cartwall</h3>
-        <p>Pages of instant carts for jingles, effects and spots, with loops,
-        exclusive carts and their own Main and Cue outputs.</p></li>
-      <li><h3>Bit-perfect and DSD</h3>
-        <p>Exclusive access follows each file's sample rate; DSD tracks reach the
-        converter unchanged as DoP or native DSD.</p></li>
-      <li><h3>MIDI and remote control</h3>
-        <p>Learn players onto a MIDI controller, or operate everything over the
-        network with an HTTP/JSON API, live events and OSC.</p></li>
-      <li><h3>Built to survive</h3>
-        <p>A lost device reconnects by itself, saves are atomic with backups, and
-        after a crash nothing goes on air on its own.</p></li>
-      <li><h3>Eleven languages</h3>
-        <p>The interface follows the operating system language, or the one you
-        choose in Settings. Every language, English and Spanish included, was
-        produced with AI and may contain errors, so corrections are
-        welcome.</p></li>
+      <li><h3>{{ index.players-title }}</h3>
+        <p>{{ index.players }}</p></li>
+      <li><h3>{{ index.mixing-title }}</h3>
+        <p>{{ index.mixing }}</p></li>
+      <li><h3>{{ index.cue-title }}</h3>
+        <p>{{ index.cue }}</p></li>
+      <li><h3>{{ index.cartwall-title }}</h3>
+        <p>{{ index.cartwall }}</p></li>
+      <li><h3>{{ index.bit-perfect-title }}</h3>
+        <p>{{ index.bit-perfect }}</p></li>
+      <li><h3>{{ index.control-title }}</h3>
+        <p>{{ index.control }}</p></li>
+      <li><h3>{{ index.survive-title }}</h3>
+        <p>{{ index.survive }}</p></li>
+      <li><h3>{{ index.languages-title }}</h3>
+        <p>{{ index.languages }}</p></li>
     </ul>
   </section>
 
   <section aria-labelledby="download" class="downloads">
-    <h2 id="download">Download <span class="version" data-version></span></h2>
-    <p>Pick the package for your system. Every file has a <code>.sha256</code> next to
-    it on the release page.</p>
+    <h2 id="download">{{ index.download }} <span class="version" data-version></span></h2>
+    <p>{{ index.download-intro }}</p>
 
-    <div id="tabs">
+    <div id="tabs" data-tablist-label="{{ attr:index.os-tabs }}">
       <section id="dl-windows" data-os="windows" aria-labelledby="h-windows">
         <h3 id="h-windows">Windows</h3>
-        <p>Windows 10 and 11, x86-64.</p>
+        <p>{{ index.windows-systems }}</p>
         <ul class="files">
-          <li data-row><a data-asset="\.msi$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Installer (.msi)</a></li>
-          <li data-row><a data-asset="-pc-windows-msvc\.zip$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Portable archive (.zip)</a></li>
+          <li data-row><a data-asset="\.msi$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">{{ index.windows-msi }}</a></li>
+          <li data-row><a data-asset="-pc-windows-msvc\.zip$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">{{ index.windows-zip }}</a></li>
         </ul>
-        <p><a href="https://github.com/sanchezfauste/fauste-player/releases/latest">All files and checksums</a></p>
+        <p><a href="https://github.com/sanchezfauste/fauste-player/releases/latest">{{ index.all-files }}</a></p>
       </section>
 
       <section id="dl-macos" data-os="macos" aria-labelledby="h-macos">
         <h3 id="h-macos">macOS</h3>
-        <p>Intel and Apple silicon.</p>
+        <p>{{ index.macos-systems }}</p>
         <ul class="files">
-          <li data-row><a data-asset="macos-universal\.dmg$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Universal disk image (.dmg)</a></li>
-          <li data-row><a data-asset="x86_64-apple-darwin\.tar\.gz$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Intel archive (.tar.gz)</a></li>
-          <li data-row><a data-asset="aarch64-apple-darwin\.tar\.gz$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">Apple silicon archive (.tar.gz)</a></li>
+          <li data-row><a data-asset="macos-universal\.dmg$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">{{ index.macos-dmg }}</a></li>
+          <li data-row><a data-asset="x86_64-apple-darwin\.tar\.gz$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">{{ index.macos-intel }}</a></li>
+          <li data-row><a data-asset="aarch64-apple-darwin\.tar\.gz$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">{{ index.macos-arm }}</a></li>
         </ul>
-        <p><a href="https://github.com/sanchezfauste/fauste-player/releases/latest">All files and checksums</a></p>
+        <p><a href="https://github.com/sanchezfauste/fauste-player/releases/latest">{{ index.all-files }}</a></p>
       </section>
 
       <section id="dl-linux" data-os="linux" aria-labelledby="h-linux">
         <h3 id="h-linux">Linux</h3>
-        <p>Debian and Ubuntu (.deb), Fedora and openSUSE (.rpm), or any distribution.</p>
-        <p><a href="https://snapcraft.io/fauste-player"><img alt="Get it from the Snap Store" src="https://snapcraft.io/static/images/badges/en/snap-store-white.svg" height="56"></a></p>
-        <p>From the Snap Store (x86_64 and aarch64): <code>sudo snap install fauste-player</code></p>
+        <p>{{ index.linux-systems }}</p>
+        <p><a href="https://snapcraft.io/fauste-player"><img alt="{{ attr:index.snap-badge-alt }}" src="https://snapcraft.io/static/images/badges/en/snap-store-white.svg" height="56"></a></p>
+        <p>{{ index.snap }} <code>sudo snap install fauste-player</code></p>
         <div class="table-wrap">
         <table>
           <thead>
-            <tr><th scope="col">Architecture</th><th scope="col">.deb</th><th scope="col">.rpm</th><th scope="col">AppImage</th><th scope="col">Flatpak</th><th scope="col">.tar.gz</th></tr>
+            <tr><th scope="col">{{ index.architecture }}</th><th scope="col">.deb</th><th scope="col">.rpm</th><th scope="col">AppImage</th><th scope="col">Flatpak</th><th scope="col">.tar.gz</th></tr>
           </thead>
           <tbody>
             <tr data-row>
@@ -123,24 +112,26 @@
           </tbody>
         </table>
         </div>
-        <p><a href="https://github.com/sanchezfauste/fauste-player/releases/latest">All files and checksums</a></p>
+        <p><a href="https://github.com/sanchezfauste/fauste-player/releases/latest">{{ index.all-files }}</a></p>
       </section>
     </div>
 
-    <p>Installing, updating and the first start of unsigned builds are covered in
-    <a href="guide/getting-started.html">Getting started</a>.</p>
+    <p>{{ index.getting-started-before }}
+    <a href="{{ guide }}getting-started.html">{{ index.getting-started-link }}</a>{{ index.getting-started-after }}</p>
   </section>
 </main>
 
 <footer>
-  <p><a href="guide/" title="Català, Deutsch, Español, Euskara, Français, Galego, Italiano, Nederlands, Polski, Português">User guide</a>
-  (also in ten other languages, translated with AI) ·
-  <a href="https://github.com/sanchezfauste/fauste-player">Repository</a> ·
-  <a href="https://github.com/sanchezfauste/fauste-player/releases">Releases</a> ·
-  <a href="https://github.com/sanchezfauste/fauste-player/blob/master/LICENSE">GPL-3.0-or-later</a> ·
-  <a href="https://github.com/sanchezfauste/fauste-player#disclaimer">Disclaimer</a> ·
-  <a href="privacy.html">Privacy</a></p>
+  <p><a href="{{ guide }}" title="{{ attr:other-languages }}">{{ common.nav-guide }}</a>
+  {{ index.footer-guide-languages }} ·
+  <a href="https://github.com/sanchezfauste/fauste-player">{{ common.footer-repository }}</a> ·
+  <a href="https://github.com/sanchezfauste/fauste-player/releases">{{ common.footer-releases }}</a> ·
+  <a href="https://github.com/sanchezfauste/fauste-player/blob/master/LICENSE">{{ common.footer-licence }}</a> ·
+  <a href="https://github.com/sanchezfauste/fauste-player#disclaimer">{{ common.footer-disclaimer }}</a> ·
+  <a href="privacy.html">{{ common.footer-privacy }}</a></p>
 </footer>
-<script src="download.js"></script>
+<script src="{{ root }}site-language.js"></script>
+<script src="{{ root }}landing-language.js"></script>
+<script src="{{ root }}download.js"></script>
 </body>
 </html>

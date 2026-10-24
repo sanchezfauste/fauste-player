@@ -362,7 +362,7 @@ See [Release process](docs/technical/release-process.md).
 | 4. Bit-perfect | Output at the file's rate and format with no processing, BP badge; ALSA `hw:`, WASAPI exclusive mode, Core Audio hog mode | done (Windows and macOS need an on-device loopback check) |
 | 5. Packaging | deb, rpm, Flatpak, AppImage, MSI, universal dmg; signing and notarisation when certificates are configured | done |
 | 6. Audio path | Audio path audit and its fixes (no clicks at starts, joins and cue-outs; clipped integer conversion; xrun reporting), DSD output as DoP or native DSD on bit-perfect devices, "No output (silent)" device | done (DoP and native DSD need a check on real hardware) |
-| 7. Website and guide | Project website on GitHub Pages with per-platform downloads, the user guide online (mdBook) with AI translations and a language menu, screenshots of every screen from a scripted scene | done |
+| 7. Website and guide | Project website on GitHub Pages with per-platform downloads, the landing page, privacy policy and user guide online (mdBook) in every interface language with AI translations and a shared language menu, screenshots of every screen from a scripted scene | done |
 | 8. Stores | Publishing every release to the Microsoft Store, the Snap Store, Flathub, WinGet and the AUR from CI | in progress (the Snap Store since 0.11.0, the Microsoft Store in review; Flathub, WinGet and the AUR not yet submitted) |
 
 ## Documentation
@@ -408,7 +408,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 See [SECURITY.md](SECURITY.md). The application makes no network
 connections and sends no telemetry; the
 [privacy policy](https://sanchezfauste.com/fauste-player/privacy.html)
-(`site/privacy.html`) says so for the stores.
+(`site/privacy.html`, with its texts in `site/locales`) says so for the stores.
 
 ## Disclaimer
 
