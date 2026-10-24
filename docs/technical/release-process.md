@@ -264,8 +264,10 @@ building.
   is English (stay) or has a translation (`pt-BR` and `pt-PT` match `pt`)
   decides. Choosing a language in the menu, or the notice's link to
   English, stores the choice, so it is kept on every page of the guide and
-  the landing page; links to English carry `?lang=en`, which also ends the
-  redirect where storage is blocked. Translated pages never redirect, and
+  the landing page; links to English carry `?lang=en`, so the page they open
+  stays in English even where storage is blocked (there, the next English
+  page reached by a plain link may redirect again, since nothing could be
+  stored). Translated pages never redirect, and
   nothing moves without JavaScript, so crawlers see the English page. The
   decision is unit-tested with `node --test 'scripts/site/tests/*.test.js'`.
 - **The build:** `scripts/site/build.sh` calls `scripts/site/guide.py build`,
