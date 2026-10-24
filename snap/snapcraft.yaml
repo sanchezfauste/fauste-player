@@ -1,9 +1,11 @@
 # Snap package for the Snap Store, built by the `stores` workflow
 # (snapcore/action-build) on amd64 and arm64. Built from source like the
-# Flatpak; the name, summary, description and icon come from the AppStream
-# metainfo, the version from Cargo.toml.
+# Flatpak; the summary and description come from the AppStream metainfo,
+# the version from Cargo.toml. The metainfo has no icon, so it is given here
+# (the store listing takes it from the snap).
 name: fauste-player
 title: Fauste Player
+icon: packaging/icons/fauste-player-512.png
 base: core24
 grade: stable
 confinement: strict
