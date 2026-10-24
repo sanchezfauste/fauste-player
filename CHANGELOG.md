@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.11.0](https://github.com/sanchezfauste/fauste-player/compare/v0.10.0...v0.11.0) (2026-10-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* the desktop entry, AppStream component, Flatpak app and macOS bundle are now com.sanchezfauste.FaustePlayer. A Flatpak bundle installs as a new application: move ~/.var/app/org.fauste.FaustePlayer to ~/.var/app/com.sanchezfauste.FaustePlayer to keep its state (see the user guide). Pinned launchers point at the old desktop entry.
+
+### Documentation
+
+* retake screenshots ([5775480](https://github.com/sanchezfauste/fauste-player/commit/57754808c07d91d748233a34d14793007f5c90b3))
+* retake screenshots ([1fd8522](https://github.com/sanchezfauste/fauste-player/commit/1fd85221d954875a6cc3651e8e32faeea9e2bd6f))
+* retake screenshots ([5eab7ba](https://github.com/sanchezfauste/fauste-player/commit/5eab7ba199d07ac96aed8eaf9277db2aabca473f))
+
+
+### Build System
+
+* declare the old application ID as replaced ([2b9352f](https://github.com/sanchezfauste/fauste-player/commit/2b9352fe98f168b9fda6d968f173d2eaab4da9b0))
+* **flatpak:** move to the freedesktop 26.08 runtime ([5f4e245](https://github.com/sanchezfauste/fauste-player/commit/5f4e2452118ba5d149fc7ade035feb8d36232e58))
+* rename the application ID to com.sanchezfauste.FaustePlayer ([72c8fd1](https://github.com/sanchezfauste/fauste-player/commit/72c8fd16923cf5f001239f83733315cdf0ba27b7))
+
 ## [0.10.0](https://github.com/sanchezfauste/fauste-player/compare/v0.9.1...v0.10.0) (2026-10-24)
 
 
