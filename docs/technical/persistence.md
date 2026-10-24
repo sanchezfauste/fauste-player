@@ -256,7 +256,7 @@ default, and one out of range is clamped, each with a warning.
 
 | Field | Default | Range | Meaning |
 |---|---|---|---|
-| `normalize` | false | | normalization on or off; off by default, so an upgrade changes nothing on air |
+| `normalize` | true | | normalization on or off; on for new installations, while a file that stores `false` keeps it off (loudness normalization spec D11) |
 | `target_lufs` | −16 | −36 … −6 | integrated loudness every track is brought to; −16 follows the AES streaming recommendations (TD1008, 2021, superseding TD1004.1.15-10: −16 to −20 LUFS), not broadcast (R128 −23, A/85 −24) |
 | `true_peak_ceiling_dbtp` | −1 | −12 … 0 | a boost may not take the measured true peak above this; it never cuts a track; −1 is the EBU R128 maximum true peak, also used by AES (−2 ahead of low-bit-rate encoders is common practice, not from the standards) |
 | `max_boost_db` | 12 | 0 … 24 | the largest gain a track may get; cuts are not limited; a product choice, no standard |

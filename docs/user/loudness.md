@@ -200,7 +200,8 @@ player that list belongs to (a bit-perfect player plays it unaltered).
   standard behind them: enough to bring a quiet recording up and to correct
   a track by ear, not so much that noise is raised or the trim defeats the
   target.
-- **Normalization is off by default,** so updating the application changes
-  nothing on air until you turn it on.
+- **Normalization is on for new installations.** Updating the application
+  keeps the setting your configuration already has, so an installation that
+  had it off stays off until you turn it on.
 - **The meter's loudness target** (Settings → Meters) is a separate setting,
   by default the R128 value of −23 LUFS. Normalization does not use it.
