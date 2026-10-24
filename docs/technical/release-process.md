@@ -446,8 +446,9 @@ credentials; variables hold public identifiers.
    workflow with `dry_run` for the latest release (one that carries the
    store packaging), download the `msix` artefact, and upload it in Partner
    Center together
-   with the listing (description, screenshots, privacy policy URL, age
-   rating). The `runFullTrust` capability needs a short justification (a
+   with the listing (description, screenshots, privacy policy URL
+   `https://sanchezfauste.com/fauste-player/privacy.html`, from
+   `site/privacy.html`, and age rating). The `runFullTrust` capability needs a short justification (a
    desktop program that opens audio devices and music files).
 5. Once it is certified, later releases are submitted by the workflow; each
    still goes through certification. The workflow's `msstore publish`

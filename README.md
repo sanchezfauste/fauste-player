@@ -402,7 +402,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Security
 
 See [SECURITY.md](SECURITY.md). The application makes no network
-connections and sends no telemetry.
+connections and sends no telemetry; the
+[privacy policy](https://sanchezfauste.com/fauste-player/privacy.html)
+(`site/privacy.html`) says so for the stores.
 
 ## Disclaimer
 
