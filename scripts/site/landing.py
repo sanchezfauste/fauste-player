@@ -76,9 +76,92 @@ def render(template, texts, values):
     return out
 
 
+GLOBE = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1.1em" '
+         'height="1.1em" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">'
+         '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/>'
+         '<path d="M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20z"/></svg>')
+
+
+def codes(locales=LOCALES):
+    """The translation codes: the strings files other than en.toml."""
+    return sorted(f[:-5] for f in os.listdir(locales)
+                  if f.endswith(".toml") and f != "en.toml")
+
+
+def folder(code):
+    return "" if code == "en" else f"{code}/"
+
+
+def page_values(lang, page, data, langs, out):
+    """The build values of one page in one language. `langs` lists
+    {"code", "name"}, English first; `out` is the site being built, where a
+    localized screenshot may already be."""
+    esc = html.escape
+    root = "" if lang == "en" else "../"
+    target = "" if page == "index.html" else page
+    label = esc(data["label"], quote=True)
+
+    items = []
+    for l in langs:
+        href = root + folder(l["code"]) + target + ("?lang=en" if l["code"] == "en" else "")
+        current = ' aria-current="true"' if l["code"] == lang else ""
+        items.append(f'<li><a href="{href}" lang="{l["code"]}" hreflang="{l["code"]}"{current}>'
+                     f'{esc(l["name"])}</a></li>')
+    menu = (f'<details class="language-menu"><summary title="{label}" aria-label="{label}">'
+            f'{GLOBE}</summary><ul>{"".join(items)}</ul></details>')
+
+    alternates = [f'<link rel="alternate" hreflang="{l["code"]}" '
+                  f'href="{BASE_URL}{folder(l["code"])}{target}">' for l in langs]
+    alternates.append(f'<link rel="alternate" hreflang="x-default" href="{BASE_URL}{target}">')
+
+    notice = ""
+    if lang != "en":
+        text = data["notice" if page == "index.html" else "privacy-notice"]
+        notice = (f'<div class="ai-notice" role="note">{esc(text)} '
+                  f'<a href="{root}{target}?lang=en" hreflang="en">{esc(data["english-link"])}</a></div>')
+
+    localized = os.path.isfile(os.path.join(out, "images", lang, "main-screen.png"))
+    return {
+        "root": root,
+        "guide": root + "guide/" + folder(lang),
+        "lang": lang,
+        "shot": root + "images/" + (f"{lang}/" if lang != "en" and localized else "") + "main-screen.png",
+        "menu": menu,
+        "alternates": "\n".join(alternates),
+        "notice": notice,
+        "other-languages": ", ".join(l["name"] for l in langs if l["code"] != lang),
+    }
+
+
+def build(out, locales=LOCALES, site=SITE):
+    """Renders every page in English into <out> and in each translation into
+    <out>/<code>."""
+    files = {code: load(code, locales) for code in ["en"] + codes(locales)}
+    langs = [{"code": code, "name": data["name"]} for code, data in files.items()]
+    templates = {page: open(os.path.join(site, page), encoding="utf-8").read() for page in PAGES}
+    for code, data in files.items():
+        dest = os.path.join(out, folder(code))
+        os.makedirs(dest, exist_ok=True)
+        for page, template in templates.items():
+            try:
+                rendered = render(template, texts(data),
+                                  page_values(code, page, data, langs, out))
+            except RenderError as e:
+                raise RenderError(f"{code}/{page}: {e}") from None
+            with open(os.path.join(dest, page), "w", encoding="utf-8") as fh:
+                fh.write(rendered)
+
+
 def main(argv):
-    print(__doc__, file=sys.stderr)
-    sys.exit(2)
+    if len(argv) == 2 and argv[0] == "build":
+        try:
+            build(argv[1])
+        except (OSError, tomllib.TOMLDecodeError, KeyError, RenderError) as e:
+            print(f"landing.py: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        print(__doc__, file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

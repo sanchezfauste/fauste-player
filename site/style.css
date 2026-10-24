@@ -30,7 +30,7 @@ code { background: var(--surface); padding: 0.1em 0.35em; border-radius: 4px; }
 .top, main, footer { width: 100%; max-width: 72rem; margin: 0 auto; padding-left: 1rem; padding-right: 1rem; }
 .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; padding-top: 1rem; padding-bottom: 1rem; }
 .brand { display: inline-flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.15rem; color: var(--text); text-decoration: none; }
-.top nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
+.top nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 1.25rem; }
 .top nav a { color: var(--muted); text-decoration: none; }
 .top nav a:hover { color: var(--text); }
 
@@ -71,3 +71,15 @@ footer { padding-top: 2rem; padding-bottom: 3rem; color: var(--muted); text-alig
   .tablist [role="tab"] { padding: 0.6rem 0.8rem; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* The language menu (rendered by scripts/site/landing.py; plain links, so it
+   works without JavaScript) and the notice on a translated page. */
+.language-menu { position: relative; }
+.language-menu summary { list-style: none; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; }
+.language-menu summary::-webkit-details-marker { display: none; }
+.language-menu summary:hover, .language-menu[open] summary { color: var(--text); }
+.language-menu ul { position: absolute; right: 0; top: calc(100% + 0.5rem); z-index: 10; margin: 0; padding: 0.35rem 0; list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
+.top nav .language-menu a { display: block; padding: 0.3rem 1.1rem; color: var(--text); white-space: nowrap; }
+.top nav .language-menu a:hover { background: var(--accent-900); }
+.top nav .language-menu a[aria-current="true"] { color: var(--accent-400); font-weight: 600; }
+.ai-notice { margin: 0.5rem 0 1rem; padding: 0.6rem 1rem; background: var(--accent-900); border-left: 3px solid var(--accent); border-radius: 6px; color: var(--text); font-size: 0.95rem; }
