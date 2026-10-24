@@ -91,8 +91,9 @@ and for every pull request; `cargo deny` and the release-bump check run on
 Linux.
 
 The tests run once, instrumented by `cargo-llvm-cov`. Each system writes an
-LCOV report with paths relative to the repository root, and the `sonarqube`
-job hands the three to SonarQube Cloud (`sonar-project.properties`), which
+LCOV report with paths relative to the repository root and hit counts capped
+at 2147483647 (SonarQube reads them as 32-bit integers, and the true-peak
+loop runs billions of times), and the `sonarqube` job hands the three to SonarQube Cloud (`sonar-project.properties`), which
 merges them, so code built only on Windows or macOS counts too. The analysis
 is informative: it never blocks a pull request, and pull requests from forks
 and Dependabot, which get no `SONAR_TOKEN`, skip it. Locally:

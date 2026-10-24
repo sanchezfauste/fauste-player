@@ -55,9 +55,11 @@ jobs:
           tool: cargo-llvm-cov
       - run: cargo llvm-cov --no-report --workspace --locked --no-fail-fast --features "$FEATURES"
         shell: bash
-      # Coverage is informative: a failing test still leaves a report, and
-      # the report's paths are made relative to the repository root so the
-      # three systems' reports match the same files.
+      # Coverage is informative: a failing test still leaves a report. Its
+      # paths are made relative to the repository root so the three systems'
+      # reports match the same files, and hit counts are capped at the
+      # largest 32-bit integer, the most SonarQube reads (a hot DSP loop runs
+      # billions of times).
       - name: Write the coverage report
         if: ${{ !cancelled() }}
         continue-on-error: true
@@ -65,7 +67,9 @@ jobs:
         run: |
           cargo llvm-cov report --lcov --output-path "lcov-$RUNNER_OS.info"
           ROOT="${GITHUB_WORKSPACE//\\//}" perl -pi -e \
-            'if (/^SF:/) { s{\\}{/}g; s{^SF:\Q$ENV{ROOT}\E/}{SF:}i }' "lcov-$RUNNER_OS.info"
+            'if (/^SF:/) { s{\\}{/}g; s{^SF:\Q$ENV{ROOT}\E/}{SF:}i }
+             s{^(?:DA:\d+,|FNDA:|BRDA:[^,]+,[^,]+,[^,]+,)\K(\d+)}{$1 > 2147483647 ? 2147483647 : $1}e' \
+            "lcov-$RUNNER_OS.info"
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         continue-on-error: true
