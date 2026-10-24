@@ -5,22 +5,22 @@ laptop and needs no sound card and no display.
 
 | Layer | Where | How |
 |---|---|---|
-| Player rules (spec §3) | `fp-model/tests/*.rs` | Tests named after the rules they cover (`ruleN_…`); the display rules (1, 16–20) are tested in `fp-app` (view model and UI tests); plus proptest properties for playlist operations (nothing lost or duplicated, the current entry never removed) |
+| Player rules (spec §3) | `fp-model/tests/it/*.rs` | Tests named after the rules they cover (`ruleN_…`); the display rules (1, 16–20) are tested in `fp-app` (view model and UI tests); plus proptest properties for playlist operations (nothing lost or duplicated, the current entry never removed) |
 | Store | `fp-store/tests`, unit tests in `fp-store/src` | Round trips, migrations, corrupt-file fallback, atomic-write crash simulation, lenient config |
-| Decoding | `fp-decode/tests`, `fp-engine/tests/decode.rs`, `worker.rs` | Formats, mono/multichannel downmix, seeks, truncated files, resampling in the worker |
+| Decoding | `fp-decode/tests`, `fp-engine/tests/it/decode.rs`, `worker.rs` | Formats, mono/multichannel downmix, seeks, truncated files, resampling in the worker |
 | Backends | `fp-backends/tests` | Null and Offline behaviour; cpal format conversion |
-| Mixer | `fp-engine/tests/mixer.rs` | Sample-exact fades and starts, underruns, and `assert_no_alloc` around `render` |
-| Engine | `fp-engine/tests/engine.rs`, `review_fixes.rs` | The `Offline` backend renders on demand; tests drive time and check exact frames, events and slot bookkeeping (`used_slots`, `unsettled_sources`) |
-| Buses | `fp-engine/tests/bus.rs` | Watchdog, virtual clock takeover, reconnect (Offline devices can be unplugged and replugged) |
-| DSD | `fp-model/tests/dsd_*.rs`, `fp-engine/tests/dsd_mixer.rs`, `fp-engine/tests/dsd_output.rs`, `fp-decode/tests/dsd.rs`, `fp-app/tests/dsd_ui.rs` | The decision and the reducer rules (one test per rule); the mixer's DSD mode under `assert_no_alloc`; the engine on Offline devices, comparing the rendered words and DoP samples byte for byte (starts, fallbacks, the two mix policies, tails, seeks, device loss); the raw reader; the badge, the Settings choices and the notice |
-| Audio path audit | `fp-engine/tests/audio_path_audit.rs`, `fp-backends/tests/audio_path_audit.rs` | Probes behind `docs/technical/audio-path-audit.md`: steps in level on constant sources, resampler passband and aliasing, overs, conversion; a probe of a confirmed defect is `#[ignore]`d with its finding id until the fix |
-| Reporting | `fp-engine/tests/reporting.rs`, unit tests in `fp-engine/src/reporting.rs` | The conductor logs each counter increase once per window (log lines captured per test thread); an unclassified stream error is not an xrun; the status bar alerts are in `fp-app/tests/main_screen.rs` |
-| Conductor | `fp-engine/tests/conductor.rs` | End to end through the model; a stress test runs 8 players with random commands over 10 simulated minutes and several seeds, checking invariants |
-| Soak | `fp-engine/tests/conductor.rs` (`#[ignore]`) | 6 simulated hours: `cargo test --release -p fp-engine --test conductor -- --ignored six_simulated_hours` |
+| Mixer | `fp-engine/tests/it/mixer.rs` | Sample-exact fades and starts, underruns, and `assert_no_alloc` around `render` |
+| Engine | `fp-engine/tests/it/engine.rs`, `review_fixes.rs` | The `Offline` backend renders on demand; tests drive time and check exact frames, events and slot bookkeeping (`used_slots`, `unsettled_sources`) |
+| Buses | `fp-engine/tests/it/bus.rs` | Watchdog, virtual clock takeover, reconnect (Offline devices can be unplugged and replugged) |
+| DSD | `fp-model/tests/it/dsd_*.rs`, `fp-engine/tests/it/dsd_mixer.rs`, `fp-engine/tests/it/dsd_output.rs`, `fp-decode/tests/it/dsd.rs`, `fp-app/tests/it/dsd_ui.rs` | The decision and the reducer rules (one test per rule); the mixer's DSD mode under `assert_no_alloc`; the engine on Offline devices, comparing the rendered words and DoP samples byte for byte (starts, fallbacks, the two mix policies, tails, seeks, device loss); the raw reader; the badge, the Settings choices and the notice |
+| Audio path audit | `fp-engine/tests/it/audio_path_audit.rs`, `fp-backends/tests/it/audio_path_audit.rs` | Probes behind `docs/technical/audio-path-audit.md`: steps in level on constant sources, resampler passband and aliasing, overs, conversion; a probe of a confirmed defect is `#[ignore]`d with its finding id until the fix |
+| Reporting | `fp-engine/tests/it/reporting.rs`, unit tests in `fp-engine/src/reporting.rs` | The conductor logs each counter increase once per window (log lines captured per test thread); an unclassified stream error is not an xrun; the status bar alerts are in `fp-app/tests/it/main_screen.rs` |
+| Conductor | `fp-engine/tests/it/conductor.rs` | End to end through the model; a stress test runs 8 players with random commands over 10 simulated minutes and several seeds, checking invariants |
+| Soak | `fp-engine/tests/it/conductor.rs` (`#[ignore]`) | 6 simulated hours: `cargo test --release -p fp-engine --test it -- --ignored conductor::six_simulated_hours` |
 | Analysis | `fp-analysis/tests`, unit tests in `signal.rs` and `cache.rs` | Markers on generated signals, tags and covers (including hostile inputs), the loudness measurement and the cache's loudness tail (`analyze.rs`), the pool (cancellation, duplicates, panics) and its loudness-only lane (`loudness_pass.rs`) |
-| Real music | `fp-analysis/tests/real_music.rs` (`#[ignore]`), `fp-analysis/examples/marker_report.rs` | On the local corpus in `test-music/` (git-ignored; `FAUSTE_TEST_MUSIC` overrides it): trimming never cuts a bucket whose stereo peak reaches `trim_threshold_db`, and no overlap exceeds `segue_max_secs`. `marker_report` prints every file's markers and the overlap percentiles, with `--set key=value` to try other settings. Never in CI; an empty folder passes with a note |
-| Real DSD | `fp-engine/tests/dsd_real_music.rs` (`#[ignore]`) | On the `.dsf` and `.dff` files of the real-music folder: each is analysed and played through the engine on an Offline device as DoP, native DSD and PCM, and the words that reach the device are compared with the raw bytes read from the file. `cargo test --release -p fp-engine --test dsd_real_music -- --ignored --nocapture`. Never in CI; with no DSD file it passes with a note |
-| On-device DSD | `fp-backends/tests/conformance.rs` (`#[ignore]`) | `native_dsd_on_a_real_device`: with `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0` set to a DSD-capable ALSA device, it opens a native DSD stream at DSD64 and plays one second of DSD silence. `cargo test -p fp-backends --test conformance -- --ignored native_dsd_on_a_real_device`. Linux only; without the variable it passes with a note. Native DSD and DoP on a real converter have not been checked on hardware yet |
+| Real music | `fp-analysis/tests/it/real_music.rs` (`#[ignore]`), `fp-analysis/examples/marker_report.rs` | On the local corpus in `test-music/` (git-ignored; `FAUSTE_TEST_MUSIC` overrides it): trimming never cuts a bucket whose stereo peak reaches `trim_threshold_db`, and no overlap exceeds `segue_max_secs`. `marker_report` prints every file's markers and the overlap percentiles, with `--set key=value` to try other settings. Never in CI; an empty folder passes with a note |
+| Real DSD | `fp-engine/tests/it/dsd_real_music.rs` (`#[ignore]`) | On the `.dsf` and `.dff` files of the real-music folder: each is analysed and played through the engine on an Offline device as DoP, native DSD and PCM, and the words that reach the device are compared with the raw bytes read from the file. `cargo test --release -p fp-engine --test it dsd_real_music:: -- --ignored --nocapture`. Never in CI; with no DSD file it passes with a note |
+| On-device DSD | `fp-backends/tests/it/conformance.rs` (`#[ignore]`) | `native_dsd_on_a_real_device`: with `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0` set to a DSD-capable ALSA device, it opens a native DSD stream at DSD64 and plays one second of DSD silence. `cargo test -p fp-backends --test it -- --ignored conformance::native_dsd_on_a_real_device`. Linux only; without the variable it passes with a note. Native DSD and DoP on a real converter have not been checked on hardware yet |
 | Rate-cut play-out on a device | `fp-engine/examples/rate_cut_tail.rs` | Runs the engine on a real ALSA `hw:` device (card id `AUDIO` by default) through the project's backend and plays a few rate cuts (BR6 mid-file and at the file's end, BR8) between quiet 44.1 and 96 kHz tones (−36 dBFS), then a quiet native DSD64 tone ending with the default DSD silence and with none. At every stream close it reads the kernel's `delay` (`/proc/asound/<card>/pcm0p/sub0/status`) and the silence rendered after the last sound: a `delay` larger than that silence is sound the close discarded. `cargo run -p fp-engine --example rate_cut_tail -- [card] [buffer]` (`ROUNDS=n`). Linux only, never in CI. In a virtual machine with the converter passed through (QEMU's USB host), the guest's stream runs many times faster than real time, so its timings say nothing about real hardware |
 | App | `fp-app/tests` | bootstrap, the locale registry and the message and variable parity of every locale, the view model, services (real analyzer and Offline engine), and the UI with `egui_kittest` (clicks, keys, context menu, drag targets, Settings, panic isolation) |
 
@@ -34,6 +34,21 @@ test binary in `target/`. `scripts/prune-target.sh [minutes]` (60 by default)
 deletes the test and example executables, and the incremental caches, that no
 build has touched for that long. It keeps libraries and build-script outputs,
 so the next build only relinks.
+
+Each crate's integration tests are one binary: `tests/it/main.rs` declares
+every test file as a module, and the shared helpers live in
+`tests/it/support` (`tests/it/common` in `fp-model`). A crate's tests link
+once instead of once per file, so a full test build writes a few hundred
+megabytes of executables, not tens of gigabytes. Run one file's tests with
+`cargo test -p <crate> --test it <file>::`. A test that installs
+process-wide state keeps its own binary next to `tests/it`: the panic hook
+(`fp-app/tests/bootstrap.rs`, `crash_cap.rs`, `crash_cap_live.rs`) and a
+global tracing subscriber (`fp-app/tests/remote.rs`,
+`fp-remote/tests/bind_log.rs`, `osc_refusal_log.rs`,
+`fp-engine/tests/decoder_priority.rs`). A new test file goes into
+`tests/it` with a `mod` line in `main.rs`, unless it needs a process of its
+own. In `fp-engine` the binary installs the `assert_no_alloc` allocator
+once for the allocation audits; it only acts inside `assert_no_alloc` blocks.
 
 ## Conventions
 

@@ -284,8 +284,8 @@ mode). Without it, the OS locations are used; see
 cargo fmt --all                                        # format
 cargo clippy --workspace --all-targets -- -D warnings  # lint (CI fails on any warning)
 cargo test --workspace                                 # all tests: no sound card or display needed
-cargo test -p fp-engine --test conductor               # one test file
-cargo test --release -p fp-engine --test conductor -- --ignored six_simulated_hours   # soak
+cargo test -p fp-engine --test it conductor::          # one test file
+cargo test --release -p fp-engine --test it -- --ignored conductor::six_simulated_hours   # soak
 cargo deny check                                       # licences, advisories, sources
 RUST_LOG=debug cargo run -p fp-app                     # verbose logs
 git config core.hooksPath .githooks                    # enable the Conventional Commits hook

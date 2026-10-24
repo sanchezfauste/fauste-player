@@ -7,7 +7,7 @@
 //! `--set segue_drop_db=12`). The folder defaults to `FAUSTE_TEST_MUSIC`,
 //! else `test-music/`.
 
-#[path = "../tests/support/corpus.rs"]
+#[path = "../tests/it/support/corpus.rs"]
 mod corpus;
 
 use std::process::ExitCode;

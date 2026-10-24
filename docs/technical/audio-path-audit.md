@@ -6,10 +6,10 @@ locked versions (`Cargo.lock`): cpal 0.18.2, dasp_sample 0.11.0, rubato
 5.0.0, symphonia 0.6.1, under `~/.cargo/registry/src/*/`.
 
 The probes added for this audit are in
-`crates/fp-engine/tests/audio_path_audit.rs` and
-`crates/fp-backends/tests/audio_path_audit.rs`. A probe that demonstrates a
+`crates/fp-engine/tests/it/audio_path_audit.rs` and
+`crates/fp-backends/tests/it/audio_path_audit.rs`. A probe that demonstrates a
 confirmed defect is `#[ignore]`d with the finding's id; run them with
-`cargo test -p fp-engine --test audio_path_audit -- --include-ignored` (and
+`cargo test -p fp-engine --test it audio_path_audit:: -- --include-ignored` (and
 the same for `fp-backends`). The level probes play constant (DC) sources at
 0.5: any step between two output samples is then a step in gain, which is a
 click on real audio. A 5 ms de-click ramp at 48 kHz moves 0.5 by about 0.002
@@ -45,14 +45,14 @@ What the code does:
   then reports `SourceFailed` once (`engine.rs:1716-1726`). A failure with
   nothing buffered is reported at once (`engine.rs:1571-1593`). The model
   skips to the next entry in Continuous mode
-  (`crates/fp-model/tests/transitions.rs`
+  (`crates/fp-model/tests/it/transitions.rs`
   `a_failing_current_source_skips_to_next_in_continuous_mode`).
 
-Evidence: `tests/review_fixes.rs`
+Evidence: `tests/it/review_fixes.rs`
 `a_failing_current_source_plays_its_buffer_before_reporting`; the probe
 `a4_a_source_that_fails_mid_file_ends_without_a_step` (one `SourceFailed`);
 `a_truncated_wav_ends_as_a_normal_end_not_a_failure` (an interrupted
-download reports `ReachedEnd`, never `SourceFailed`); `tests/decode.rs`
+download reports `ReachedEnd`, never `SourceFailed`); `tests/it/decode.rs`
 `a_truncated_file_plays_what_it_has_and_ends_cleanly`.
 
 The cut itself has no ramp: the last buffered sample is followed by silence.
@@ -67,17 +67,17 @@ files are accepted degradations of damaged files (rule 9): **A16**.
 ### 1.2 Gapless starts and ends
 
 - **Decoder delay and padding.** Lossy files decode to the length their
-  container declares (`crates/fp-decode/tests/gapless.rs`
+  container declares (`crates/fp-decode/tests/it/gapless.rs`
   `lossy_files_decode_to_their_declared_length`, Vorbis only; symphonia's
   decoders trim encoder delay and padding by default,
   `symphonia-core-0.6.1/src/codecs/audio.rs:225`, `gapless: true`). The Opus
-  pre-skip is dropped in Ogg and Matroska (`tests/opus.rs`
+  pre-skip is dropped in Ogg and Matroska (`tests/it/opus.rs`
   `the_pre_skip_is_dropped_so_audio_stays_in_place`,
   `opus_in_matroska_drops_its_codec_delay_like_ogg`). No test covers MP3 or
   AAC encoder padding (not confirmed; needs fixtures).
 - **Resampler delay.** `StreamResampler::new` drops the filter's
   `output_delay()` (`resample.rs:27`) and `finish` trims the output to
-  `input × ratio` frames (`resample.rs:58-83`): `tests/decode.rs`
+  `input × ratio` frames (`resample.rs:58-83`): `tests/it/decode.rs`
   `the_file_opener_resamples_to_the_bus_rate_with_an_exact_length`.
 - **Transitions.** A transition with a known end is dispatched ahead with an
   exact frame (`engine.rs:1860-1897`). The hard `StartNextAt` (no overlap)
@@ -107,7 +107,7 @@ files are accepted degradations of damaged files (rule 9): **A16**.
   full level (`mixer.rs:732-737`). The probe
   `a3_a_cart_ends_at_its_cue_out_without_a_step` measures a step of 0.5 at
   the cue-out. **A3**. A looped cart reopens the file at its cue-in in the
-  same ring without a gap (`worker.rs:366-374`, `tests/worker.rs`
+  same ring without a gap (`worker.rs:366-374`, `tests/it/worker.rs`
   `a_looped_source_repeats_without_gaps`); the splice is sample-adjacent,
   so whether it is smooth depends on the loop points. **A15**.
 
@@ -122,9 +122,9 @@ a stop (`engine.rs:1063-1065`, `engine.rs:1022-1060`), and the new one starts
 when it is buffered with a `declick_ms` ramp in (`StartState::WhenReady {
 fade_in: true }`, `engine.rs:1414`, applied at `engine.rs:1825-1855`). The
 first frame is exact: a resampled source pre-rolls by an aligned amount and
-drops the warm-up (`worker.rs:45-66`, `resample.rs:121`); `tests/decode.rs`
+drops the warm-up (`worker.rs:45-66`, `resample.rs:121`); `tests/it/decode.rs`
 `a_resampled_start_after_cue_in_matches_continuous_playback` and
-`seeking_lands_on_the_exact_frame`, `tests/engine.rs`
+`seeking_lands_on_the_exact_frame`, `tests/it/engine.rs`
 `seek_replaces_the_source_at_the_new_position`. Between the two there is
 silence while the new source buffers (`ready_threshold_ms`).
 
@@ -143,7 +143,7 @@ above-normal priority (`worker.rs:245`).
 
 A disk that stalls longer than the buffered audio empties the ring: the
 mixer outputs silence for the missing frames, counts an underrun and keeps
-the timeline moving (`mixer.rs:738-740`; `tests/mixer.rs`
+the timeline moving (`mixer.rs:738-740`; `tests/it/mixer.rs`
 `an_underrun_is_silent_counted_and_the_timeline_keeps_moving`). The
 underrun is counted in `SourceShared::underruns` and copied into
 `PlayerTelemetry::underruns` (`engine.rs:513-517`), but nothing reads it: the
@@ -201,7 +201,7 @@ So the switch happens only between tracks, never inside one.
 
 The **BP** badge requires the file's rate to equal the bus rate, a device
 format that holds the file's bits, exclusive access and a source the mixer
-reports unaltered (`engine.rs:413-436`). Evidence: `tests/bit_perfect.rs`
+reports unaltered (`engine.rs:413-436`). Evidence: `tests/it/bit_perfect.rs`
 `an_idle_bit_perfect_bus_reopens_at_the_file_rate`,
 `a_busy_bit_perfect_bus_keeps_its_rate`, `a_resampled_source_is_not_bit_perfect`,
 `bit_perfect_playback_is_bit_exact`, `volume_below_full_is_not_bit_perfect`,
@@ -263,22 +263,22 @@ Ramps available: `declick_ms` 5 ms linear, `pause_ramp_ms` 10 ms linear,
 |---|---|---|---|
 | Play (`StartCurrent`), CUE start, cart start | `declick_ms` ramp in when `from_secs > 0`, hard at the file's first frame (`Engine::send_start`, A1 fixed) | probes `a1_a_start_inside_the_file_ramps_in`, `a1_a_cue_inside_the_file_ramps_in`, `a1_a_cart_inside_the_file_ramps_in_and_one_at_the_start_does_not` | no |
 | Stop now | `declick_ms` linear to 0, then stop (`engine.rs:1372-1392`, `engine.rs:1022-1060`) | probe `a_stop_ramps_down_without_a_step` | no |
-| Pause / resume | `pause_ramp_ms` linear (`engine.rs:1304-1370`, `mixer.rs:390-404`) | probe `pause_and_resume_ramp_without_a_step`; `tests/mixer.rs` `pause_fades_out_holds_the_position_and_resume_continues_from_it` | no |
-| Resume of a track loaded paused | `declick_ms` ramp in (`engine.rs:1354-1356`) | `tests/engine.rs` `load_paused_waits_for_resume_and_starts_at_the_saved_position` | no |
+| Pause / resume | `pause_ramp_ms` linear (`engine.rs:1304-1370`, `mixer.rs:390-404`) | probe `pause_and_resume_ramp_without_a_step`; `tests/it/mixer.rs` `pause_fades_out_holds_the_position_and_resume_continues_from_it` | no |
+| Resume of a track loaded paused | `declick_ms` ramp in (`engine.rs:1354-1356`) | `tests/it/engine.rs` `load_paused_waits_for_resume_and_starts_at_the_saved_position` | no |
 | Seek | old: `declick_ms` out; new: `declick_ms` in (`engine.rs:1394-1419`) | probe `a_seek_ramps_the_old_source_out_and_the_new_one_in` | no |
 | Fade stop | equal-power over the fade (`engine.rs:1278-1297`) | probe `a_fade_stop_and_a_planned_stop_ramp_down` | no |
-| Planned stop at a cue-out | `declick_ms` ending on the frame (`engine.rs:1985-2004`) | same probe; `tests/engine.rs` `a_planned_stop_ends_on_the_exact_frame_and_reports_the_entry` | no |
-| Crossfade | old: equal-power out (`engine.rs:1259`); new: `declick_ms` ramp in when it starts inside the file (A1 fixed) | `tests/engine.rs` `a_crossfade_starts_the_next_now_and_reports_when_the_old_one_is_gone` | no |
-| Segue | old: equal-power from the segue to the cue-out (`engine.rs:1941-1960`); new: on the frame, `declick_ms` ramp in when it starts inside the file (A1 fixed) | `tests/engine.rs` `a_segue_starts_the_next_on_the_exact_frame_and_overlaps_the_fade`; probe `a1_the_next_source_at_a_cue_in_ramps_in` | no |
+| Planned stop at a cue-out | `declick_ms` ending on the frame (`engine.rs:1985-2004`) | same probe; `tests/it/engine.rs` `a_planned_stop_ends_on_the_exact_frame_and_reports_the_entry` | no |
+| Crossfade | old: equal-power out (`engine.rs:1259`); new: `declick_ms` ramp in when it starts inside the file (A1 fixed) | `tests/it/engine.rs` `a_crossfade_starts_the_next_now_and_reports_when_the_old_one_is_gone` | no |
+| Segue | old: equal-power from the segue to the cue-out (`engine.rs:1941-1960`); new: on the frame, `declick_ms` ramp in when it starts inside the file (A1 fixed) | `tests/it/engine.rs` `a_segue_starts_the_next_on_the_exact_frame_and_overlaps_the_fade`; probe `a1_the_next_source_at_a_cue_in_ramps_in` | no |
 | Hard transition | old: `declick_ms` ending on the frame; new: full level at the first frame, ramp in inside the file (`engine.rs:1962-1981`) | probe `a2_a_gapless_join_at_the_end_of_the_file_keeps_the_level` | **yes**: A2 at a file end |
-| Fader move | per-sample slew over `gain_smoothing_ms` (`mixer.rs:681-685`) | probe `a_fader_move_is_smoothed`; `tests/mixer.rs` `volume_changes_are_smoothed` | no |
-| Cart stop | `declick_ms` (`engine/carts.rs:261-291`) | `tests/cartwall.rs` | no |
+| Fader move | per-sample slew over `gain_smoothing_ms` (`mixer.rs:681-685`) | probe `a_fader_move_is_smoothed`; `tests/it/mixer.rs` `volume_changes_are_smoothed` | no |
+| Cart stop | `declick_ms` (`engine/carts.rs:261-291`) | `tests/it/cartwall.rs` | no |
 | Cart cue-out | linear fade over the last `declick_ms` before the cue-out, none on a looped cart (`worker.rs`, `fade_to_limit`) | probe `a3_a_cart_ends_at_its_cue_out_without_a_step` | **yes** (A3) |
 | Failed source draining | ramp to zero over the last buffered frames when at most `declick_ms` remain (`mixer.rs`, `fail_ramped`) | probe `a4_a_source_that_fails_mid_file_ends_without_a_step` | **yes** (A4) |
 | Stop during the pause ramp | `fade_out` ramps the source out unless the pause ramp is over (`pause_ramp_ends`, `engine.rs` `fade_out`); the mixer finishes a paused slot that has a stop frame (`mixer.rs`, `render_slot`) | probe `a5_a_stop_during_the_pause_ramp_does_not_step` | **yes** (A5) |
 | Stop or seek right after a start | a source whose start was sent but whose `Started` event is not polled yet is `Requested`, and `fade_out` ramps it out like a started one when its start frame has been reached (`engine.rs` `fade_out`), as the cartwall does (`engine/carts.rs` `stop_cart_source`) | probe `a5_a_stop_right_after_the_start_does_not_step` | **yes** (A5) |
 | `Cancel` after a start | `Cancel` only forgets a start that has not happened (`mixer.rs:405-413`); every engine `Cancel` of a started source is followed by a ramp and a stop | `engine.rs:1032-1049` | no |
-| Underrun | silence, no ramp (`mixer.rs:738-740`) | `tests/mixer.rs` `an_underrun_is_silent_counted_and_the_timeline_keeps_moving` | inherent to missing data |
+| Underrun | silence, no ramp (`mixer.rs:738-740`) | `tests/it/mixer.rs` `an_underrun_is_silent_counted_and_the_timeline_keeps_moving` | inherent to missing data |
 | Player removed | `Detach` (`engine.rs:910-925`); the model removes only stopped players (`crates/fp-model/src/reducer.rs:989-997`), so at most a 5 ms stop ramp can be cut | — | negligible |
 
 The level of a natural file end is the file's own: nothing is applied there
@@ -313,7 +313,7 @@ Evidence: exact for in-range integer PCM (`cpal_backend.rs` tests
 `conversion_to_i16_is_exact_for_16_bit_pcm`,
 `conversion_to_i32_is_exact_for_24_bit_pcm`,
 `conversion_to_i24_is_exact_for_24_bit_pcm`); probes in
-`crates/fp-backends/tests/audio_path_audit.rs`:
+`crates/fp-backends/tests/it/audio_path_audit.rs`:
 `cpal_conversions_saturate_and_silence_nan_except_24_bit` (passes; cpal's own conversion, no longer used),
 `a7_the_24_bit_conversion_clips_instead_of_wrapping` (+1.0 becomes 8 388 608,
 read as −8 388 608) and `a7_the_16_bit_conversion_rounds_to_the_nearest_step`
@@ -333,7 +333,7 @@ through `i16::from_sample_` and `i32::from_sample_` (saturating; `I24` is the
 `i32` value with its low byte cleared), so overs clip and NaN is 0; `F32`
 goes out as it is. Probe
 `what_an_exclusive_device_receives_above_full_scale_and_for_nan`;
-`crates/fp-backends/tests/exclusive.rs`.
+`crates/fp-backends/tests/it/exclusive.rs`.
 
 ### 4.2 Dither when the device is not bit-perfect and narrower than the source
 
@@ -397,7 +397,7 @@ longer grace before the first block (`bus.rs:298-321`). A virtual clock then
 renders the same mixer at real-time pace (`bus.rs:43-82`), the device is
 retried every `reconnect_interval_ms` and takes the mixer back
 (`bus.rs:322-334`). The status bar shows `alert-device-lost`
-(`crates/fp-app/src/ui/app.rs:1578-1589`). Evidence: `tests/bus.rs`
+(`crates/fp-app/src/ui/app.rs:1578-1589`). Evidence: `tests/it/bus.rs`
 `unplugging_switches_to_the_virtual_clock_and_the_timeline_keeps_moving`,
 `a_device_that_stops_rendering_is_declared_lost_by_the_watchdog`,
 `a_slow_starting_device_gets_a_grace_period_before_its_first_block`,
@@ -414,7 +414,7 @@ until the device comes back from a loss, and is not asked for again
 (`bus.rs:249-278`, `bus.rs:332`). Frame-based durations follow the rate
 (`mixer.rs:440-449`, test
 `volume_smoothing_keeps_its_duration_when_the_rate_changes`). Evidence:
-`tests/bit_perfect.rs` `a_rate_the_device_refuses_keeps_the_previous_rate`,
+`tests/it/bit_perfect.rs` `a_rate_the_device_refuses_keeps_the_previous_rate`,
 `an_idle_bit_perfect_bus_reopens_at_the_file_rate`. Verdict: **no change
 needed** (A21).
 
@@ -423,7 +423,7 @@ player's transitions are hard and the device reopens between two tracks at
 different rates when nothing else sounds (BR6, BR8); B3.3 still holds for a
 sounding bus (BR11). Every reopen runs on the conductor thread through
 `prepare_start`; nothing new runs on the device callback. Evidence:
-`tests/bit_perfect.rs` `br6_a_scheduled_cut_reopens_the_device_between_the_tracks`,
+`tests/it/bit_perfect.rs` `br6_a_scheduled_cut_reopens_the_device_between_the_tracks`,
 `br8_a_hard_start_at_another_rate_reopens_after_the_declick`,
 `br8_a_crossfade_at_another_rate_does_not_reopen`.
 
@@ -443,8 +443,8 @@ sounding bus (BR11). Every reopen runs on the conductor thread through
 | Core Audio hog (`coreaudio_hog.rs`) | not on the callback: taken and released around the stream | — | — | — |
 | `NullStream` thread, virtual clock (`null.rs:96-112`, `bus.rs:57-75`) | buffers allocated before the loop | the virtual clock `lock`s the mixer: it is not a device callback | they sleep to pace themselves, by design | none |
 
-Evidence: `tests/mixer.rs` wraps every `Mixer::render` in `assert_no_alloc`
-(`render` helper, `tests/mixer.rs:74-78`), including true peak
+Evidence: `tests/it/mixer.rs` wraps every `Mixer::render` in `assert_no_alloc`
+(`render` helper, `tests/it/mixer.rs:74-78`), including true peak
 (`true_peak_can_be_switched_on_for_a_bus`) and the command flood. It does not
 cover `MixerRenderer`, the programme-meter integrator together with true
 peak, `Grow`/`Detach` in the same render, or `write_samples`; the probe
@@ -482,7 +482,7 @@ the device's sum: probe `the_meter_is_per_player_and_never_sees_the_device_sum`
    `resampling_creates_inter_sample_overs` (a sine whose samples are all at
    0 dBFS reads +3.01 dBFS after 44.1 → 48 kHz).
 3. True-peak mode reads the peaks between samples, up to about 3 dB above
-   the sample peak: `crates/fp-dsp/tests/filters.rs`
+   the sample peak: `crates/fp-dsp/tests/it/filters.rs`
    `true_peak_meets_ebu_tech_3341_cases_15_to_19` (case 19: samples at
    0 dBFS read +3 dBTP).
 4. The downmix of a 3.0 or 3.1 file (§3.1): probe
@@ -551,7 +551,7 @@ building only if operators report clipping on air. Whatever the choice,
 
 | Id | Area | Finding | Evidence | Verdict | Proposed action |
 |---|---|---|---|---|---|
-| A1 | 3.2 Ramps / 1.2 Transitions | A start inside the audio (Play from a cue-in or position, the new source of a crossfade, segue or hard transition, a CUE, a cart) begins at full level with no ramp: a step from silence. Impact: audible click whenever the start point is not silent. | `engine.rs:1251`, `engine.rs:1442`, `engine.rs:1922`, `engine.rs:1758`, `engine/carts.rs:184`, `engine.rs:1825-1855`; probe `a1_a_start_inside_the_file_ramps_in` (step 0.5) | fixed in 29ef66b | ramp in over `declick_ms` every source that starts at `from_secs > 0`; a start at the first frame of the file stays hard (the file's own start, and gapless joins). Keep `tests/engine.rs` segue/transition tests (they start at 0) passing. |
+| A1 | 3.2 Ramps / 1.2 Transitions | A start inside the audio (Play from a cue-in or position, the new source of a crossfade, segue or hard transition, a CUE, a cart) begins at full level with no ramp: a step from silence. Impact: audible click whenever the start point is not silent. | `engine.rs:1251`, `engine.rs:1442`, `engine.rs:1922`, `engine.rs:1758`, `engine/carts.rs:184`, `engine.rs:1825-1855`; probe `a1_a_start_inside_the_file_ramps_in` (step 0.5) | fixed in 29ef66b | ramp in over `declick_ms` every source that starts at `from_secs > 0`; a start at the first frame of the file stays hard (the file's own start, and gapless joins). Keep `tests/it/engine.rs` segue/transition tests (they start at 0) passing. |
 | A2 | 1.2 Gapless | A hard transition on the last frame of the current file fades the file's last `declick_ms` out, then the next starts at full level: a 5 ms dip to silence and a step at every gapless join. Impact: audible dip/click between continuous tracks. | `engine.rs:1962-1981`; probe `a2_a_gapless_join_at_the_end_of_the_file_keeps_the_level` (falls to 0.002, step 0.498) | fixed in 9cc3fa4 | no de-click ramp on the outgoing source when the transition frame is its end of stream (the mixer's `RampOutBeforeCut` is skipped when eof is set and the ring ends by the stop frame); the ramp stays for cuts inside the file. |
 | A3 | 1.2 Carts | A cart's cue-out is a truncation by the worker; the mixer ends the drained source at full level. Impact: audible click at a cart's cue-out inside audio. | `worker.rs:354-362`, `engine/carts.rs:162-166`, `mixer.rs:732-737`; probe `a3_a_cart_ends_at_its_cue_out_without_a_step` (step 0.5) | fixed in 3ba3de2 | fix in this plan: the worker fades the last `declick_ms` before `until_secs` linearly to zero on a pass that ends there and does not loop (it knows `limit_frames`); the frame count is passed in `LoadOptions`. |
 | A4 | 1.1 Errors | A source whose decoder fails mid-file plays its buffer and reports `SourceFailed` once (correct), but its end is cut at full level. Impact: audible click after a decode error (rare: damaged files). | `worker.rs:307-321`, `engine.rs:1563-1569`, `mixer.rs:732-737`; probe `a4_a_source_that_fails_mid_file_ends_without_a_step` (step 0.5) | fixed in 3ba3de2 | fix in this plan: when a source is `failed` and its ring holds no more than the de-click length, the mixer ramps it to zero over the frames that remain (one more `Ramp` per slot, real-time safe). A truncated file ends as a normal end (A16) and is not covered. |
@@ -562,14 +562,14 @@ building only if operators report clipping on air. Whatever the choice,
 | A9 | 7 Overs (O34) | Readings above 0 dBFS are correct: the file's own overs, resampled inter-sample peaks, true peak, the 3.x downmix; the device sum is not metered; integer devices clip (24-bit cpal wraps, A7). | §7 probes; `widgets.rs:343`, `widgets.rs:410-421` | resolved: option (c), documented in the player guide (readings above 0 dBFS) | (a) latched OVER mark per player and per device (recommended), (b) optional per-bus true-peak limiter, off by default, bypassed on bit-perfect and DSD, or (c) no change, documented. |
 | A10 | 4.2 Dither | No dither: a 16-bit device gets truncated (A7: rounded) samples whenever they are not exact. Inaudible in practice (−96 dBFS). | `cpal_backend.rs:510-530`, `exclusive.rs:21-45` | too large | roadmap item: TPDF dither on integer outputs narrower than 24 bits, bypassed on blocks the mixer reports unaltered (needs that knowledge to reach the backend). |
 | A11 | 2.1 Resampling | Flat to 20 kHz (−0.0017 dB), −0.66 dB at 20.5 kHz, −9.6 dB at 21 kHz; images and aliases below −150 dB. | `resample.rs:23-24`; probes `resampling_44_1_to_48_khz_is_flat_to_20_khz_and_rejects_images`, `resampling_48_to_44_1_khz_rejects_aliases` | no change needed | — |
-| A12 | 1.3 Seek / 2.2 BP switch | Seek ramps out and in with an exact first frame; the rate switch happens only between tracks, and the BP badge follows it. | probe `a_seek_ramps_the_old_source_out_and_the_new_one_in`; `tests/decode.rs`, `tests/bit_perfect.rs` | no change needed | — |
-| A13 | 1.4 Decode-ahead | 5 s ring, 500 ms to start, emptiest ring first, above-normal priority; a longer stall plays silence and keeps time. | `engine.rs:948-949`, `worker.rs:299-307`, `mixer.rs:738-740`; `tests/mixer.rs` | no change needed | (reporting: A8) |
-| A14 | 1.2 Unknown length | A transition planned at `SOURCE_END` (track not analysed yet) starts the next on the engine's next tick: a gap of up to two blocks. | `engine.rs:1876-1878`, `engine.rs:1742-1744`; `tests/engine.rs` `source_end_plans_chain_when_the_file_runs_out` | no change needed | — |
-| A15 | 1.2 Cart loops | A looped cart splices its cue-out to its cue-in sample-adjacent with no crossfade; smoothness depends on the loop points. | `worker.rs:366-374`; `tests/worker.rs` `a_looped_source_repeats_without_gaps` | no change needed | — |
+| A12 | 1.3 Seek / 2.2 BP switch | Seek ramps out and in with an exact first frame; the rate switch happens only between tracks, and the BP badge follows it. | probe `a_seek_ramps_the_old_source_out_and_the_new_one_in`; `tests/it/decode.rs`, `tests/it/bit_perfect.rs` | no change needed | — |
+| A13 | 1.4 Decode-ahead | 5 s ring, 500 ms to start, emptiest ring first, above-normal priority; a longer stall plays silence and keeps time. | `engine.rs:948-949`, `worker.rs:299-307`, `mixer.rs:738-740`; `tests/it/mixer.rs` | no change needed | (reporting: A8) |
+| A14 | 1.2 Unknown length | A transition planned at `SOURCE_END` (track not analysed yet) starts the next on the engine's next tick: a gap of up to two blocks. | `engine.rs:1876-1878`, `engine.rs:1742-1744`; `tests/it/engine.rs` `source_end_plans_chain_when_the_file_runs_out` | no change needed | — |
+| A15 | 1.2 Cart loops | A looped cart splices its cue-out to its cue-in sample-adjacent with no crossfade; smoothness depends on the loop points. | `worker.rs:366-374`; `tests/it/worker.rs` `a_looped_source_repeats_without_gaps` | no change needed | — |
 | A16 | 1.1 Damaged files | symphonia skips corrupt packets (the audio jumps) and ends a truncated file as a normal end; both are the degradation rule 9 asks for. | `symph.rs:201-202`, `symph.rs:211`; probe `a_truncated_wav_ends_as_a_normal_end_not_a_failure` | no change needed | — |
 | A17 | 3.1 Summing | `f32` sum with no clamp; no fader or ramp gain above unity (volume clamped per block, `mixer.rs:630`); the normalization gain may exceed it by design (loudness normalization N14); `Attach` copies the volume unclamped as the smoothing start (`mixer.rs:326`), unreachable since the model clamps. | probes `no_fader_gain_exceeds_unity`, `the_normalization_gain_is_applied_without_allocating`, `the_meter_is_per_player_and_never_sees_the_device_sum` | no change needed | — |
 | A18 | 3.1 Downmix | 3.0 and 3.1 files fold the centre in at −3 dB without normalisation (up to +4.6 dB), while 5.x is normalised. | `lib.rs:215-231`; probe `a_three_channel_file_downmixes_above_full_scale` | no change needed | documented in §7 |
-| A19 | 5.3 Device loss | Virtual clock, watchdog, reconnection and the lost-device alert work. | `bus.rs:298-336`; `tests/bus.rs` | no change needed | — |
+| A19 | 5.3 Device loss | Virtual clock, watchdog, reconnection and the lost-device alert work. | `bus.rs:298-336`; `tests/it/bus.rs` | no change needed | — |
 | A20 | 5.1 Buffers | Requested size used when the device allows it, else its default; the size in use is reported; oversize callbacks render in pieces. | `cpal_backend.rs:109-159`, `cpal_backend.rs:365-372` and its tests | no change needed | — |
-| A21 | 5.4 Rate changes | Reopen at the file rate keeping the clock; refused rates restored and remembered; rate cuts between two tracks only when nothing else sounds. | `bus.rs:249-278`; `tests/bit_perfect.rs` (`br6_…`, `br8_…`) | no change needed | — |
-| A22 | 6 Real-time safety | No allocation, lock (beyond `try_lock`), logging, I/O or panic on the callback paths; the WASAPI crate's calls are not verifiable on Linux. | §6 table; `tests/mixer.rs`; probe `the_renderer_the_device_calls_and_the_sample_writer_never_allocate` | no change needed | — |
+| A21 | 5.4 Rate changes | Reopen at the file rate keeping the clock; refused rates restored and remembered; rate cuts between two tracks only when nothing else sounds. | `bus.rs:249-278`; `tests/it/bit_perfect.rs` (`br6_…`, `br8_…`) | no change needed | — |
+| A22 | 6 Real-time safety | No allocation, lock (beyond `try_lock`), logging, I/O or panic on the callback paths; the WASAPI crate's calls are not verifiable on Linux. | §6 table; `tests/it/mixer.rs`; probe `the_renderer_the_device_calls_and_the_sample_writer_never_allocate` | no change needed | — |

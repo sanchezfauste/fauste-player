@@ -561,7 +561,7 @@ fn stored_length(format: FormatId) -> StoredLength {
 }
 
 #[cfg(test)]
-#[path = "../tests/support/opus_files.rs"]
+#[path = "../tests/it/support/opus_files.rs"]
 mod opus_files;
 
 #[cfg(test)]
