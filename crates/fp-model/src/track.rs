@@ -161,8 +161,8 @@ pub struct AudioFormat {
     #[serde(default)]
     pub dsd_rate: Option<u32>,
     /// The file's average bit rate in bit/s, as its container or codec
-    /// reports it; `None` when unknown and for DSD. Older cached analyses
-    /// have none until the track is re-analysed.
+    /// reports it; `None` when unknown and for DSD. An older analysis has
+    /// none until the bit-rate-only pass reads it (`needs_bitrate_read`).
     #[serde(default)]
     pub bitrate: Option<u32>,
 }
@@ -299,6 +299,11 @@ pub struct Track {
     /// asks for the tag-only pass (`needs_tag_read`).
     #[serde(default)]
     pub tags_read: bool,
+    /// The bit-rate-only pass has read the file's bit rate since the last
+    /// analysis (or the analysis found one). False on libraries saved before
+    /// it, so their tracks get the bit rate once (`needs_bitrate_read`).
+    #[serde(default)]
+    pub bitrate_read: bool,
     /// What the analysis measured (loudness normalization spec N6); `None`
     /// is "not measured". Libraries saved earlier have none until the
     /// loudness-only pass measures them.
@@ -364,6 +369,7 @@ impl Track {
             composer: String::new(),
             comment: String::new(),
             tags_read: false,
+            bitrate_read: false,
             loudness: None,
             loudness_pass: None,
             loudness_edit: LoudnessEdit::default(),
@@ -405,6 +411,28 @@ impl Track {
     /// readable, and not read since the last analysis.
     pub fn needs_tag_read(&self) -> bool {
         self.analyzed && !self.tags_read && self.file_state.is_playable()
+    }
+
+    /// Whether the bit-rate-only pass should read this track's file:
+    /// analysed into a PCM format with no bit rate (an analysis cached before
+    /// the format carried one), playable, and not read since that analysis.
+    /// DSD files have none by design.
+    pub fn needs_bitrate_read(&self) -> bool {
+        self.analyzed
+            && !self.bitrate_read
+            && self.file_state.is_playable()
+            && self
+                .format
+                .is_some_and(|f| f.dsd_rate.is_none() && f.bitrate.is_none())
+    }
+
+    /// Stores the bit rate the bit-rate-only pass read (`None` or 0: the
+    /// file reports none), and ends the pass for this analysis.
+    pub fn apply_bitrate(&mut self, bitrate: Option<u32>) {
+        if let Some(format) = self.format.as_mut() {
+            format.bitrate = bitrate.filter(|b| *b > 0);
+        }
+        self.bitrate_read = true;
     }
 
     /// N6b: whether the loudness-only pass should measure this track:
@@ -569,6 +597,9 @@ impl Track {
         // Title, artist and album come from this analysis; the rest wait for
         // the tag-only pass.
         self.tags_read = false;
+        // An analysis that found the bit rate needs no pass for it; one
+        // cached before the format carried it asks for the pass.
+        self.bitrate_read = self.format.is_some_and(|f| f.bitrate.is_some());
         self.analyzed = true;
         self.file_state = FileState::Ok;
     }

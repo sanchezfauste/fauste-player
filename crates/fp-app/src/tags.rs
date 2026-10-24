@@ -50,6 +50,8 @@ pub enum TagJob {
         limits: Limits,
         thumb_px: u32,
     },
+    /// Read the average bit rate of a file (the bit-rate-only pass).
+    ReadBitrate { track: TrackId, path: PathBuf },
     /// Read the tags of a file (the tag-only pass).
     Read {
         track: TrackId,
@@ -99,6 +101,11 @@ pub enum TagOutcome {
     Read {
         track: TrackId,
         tags: TrackTags,
+    },
+    /// The answer to `ReadBitrate`: bit/s, `None` when the file reports none.
+    Bitrate {
+        track: TrackId,
+        bitrate: Option<u32>,
     },
     /// `Ok` carries the tags as the file holds them after the write.
     Written {
@@ -150,6 +157,10 @@ fn run(job: TagJob) -> TagOutcome {
             session,
             result: load_cover_file(&path, &limits, thumb_px),
         },
+        TagJob::ReadBitrate { track, path } => TagOutcome::Bitrate {
+            track,
+            bitrate: fp_analysis::metadata::read_bitrate(&path),
+        },
         TagJob::Read {
             track,
             path,
@@ -177,6 +188,7 @@ fn run(job: TagJob) -> TagOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Read,
+    ReadBitrate,
     ReadSheet,
     LoadCover,
     Write,
@@ -187,6 +199,7 @@ impl TagJob {
     fn kind(&self) -> Kind {
         match self {
             Self::Read { .. } => Kind::Read,
+            Self::ReadBitrate { .. } => Kind::ReadBitrate,
             Self::ReadSheet { .. } => Kind::ReadSheet,
             Self::LoadCover { .. } => Kind::LoadCover,
             Self::Write { .. } => Kind::Write,
@@ -197,6 +210,7 @@ impl TagJob {
     fn track(&self) -> TrackId {
         match self {
             Self::Read { track, .. }
+            | Self::ReadBitrate { track, .. }
             | Self::ReadSheet { track, .. }
             | Self::LoadCover { track, .. }
             | Self::Write { track, .. }
@@ -207,7 +221,10 @@ impl TagJob {
     /// A read nobody will see is not worth the disk once the worker is
     /// being dropped; a write is a save the operator asked for.
     fn is_read(&self) -> bool {
-        matches!(self.kind(), Kind::Read | Kind::ReadSheet | Kind::LoadCover)
+        matches!(
+            self.kind(),
+            Kind::Read | Kind::ReadBitrate | Kind::ReadSheet | Kind::LoadCover
+        )
     }
 }
 
@@ -225,6 +242,10 @@ fn run_contained(job: TagJob) -> TagOutcome {
             Kind::Read => TagOutcome::Read {
                 track,
                 tags: TrackTags::default(),
+            },
+            Kind::ReadBitrate => TagOutcome::Bitrate {
+                track,
+                bitrate: None,
             },
             Kind::ReadSheet => TagOutcome::SheetRead { track, sheet: None },
             Kind::LoadCover => TagOutcome::CoverLoaded {

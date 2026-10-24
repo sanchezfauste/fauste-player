@@ -186,6 +186,9 @@ pub const COLUMN_BG: Color32 = Color32::from_rgb(0x1b, 0x1d, 0x2b);
 /// Selected row and menu hover.
 pub const ACCENT_900: Color32 = Color32::from_rgb(0x2c, 0x28, 0x4a);
 pub const ACCENT_300: Color32 = Color32::from_rgb(0xc9, 0xc1, 0xff);
+/// The outline of the selected playlist row, drawn on any row colour (the
+/// on-air and next fills hide the selection's).
+pub const SELECTION_OUTLINE: Color32 = ACCENT_300;
 /// Paused / stop-after highlight.
 pub const AMBER_BG: Color32 = Color32::from_rgb(0x43, 0x2f, 0x07);
 pub const AMBER_TEXT: Color32 = Color32::from_rgb(0xfc, 0xd1, 0x76);

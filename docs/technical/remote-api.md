@@ -83,7 +83,7 @@ next) and `cued_on` (players pre-listening it).
 | `kind` | `music`, `jingle`, `effect`, `ad` or `voice` |
 | `file_state` | `ok`, `missing` or `unreadable` |
 | `analyzed` | Whether background analysis has finished |
-| `format` | `null` or `{sample_rate, channels, bits, bitrate}`; `bitrate` is the average bit rate in bit/s, `null` when unknown (older cached analyses until the track is re-analysed) and for DSD |
+| `format` | `null` or `{sample_rate, channels, bits, bitrate}`; `bitrate` is the average bit rate in bit/s, `null` when unknown (an older analysis until the bit-rate-only pass reads it, or a file that reports none) and for DSD |
 | `markers` | `cue_in`, `intro_end`, `outro_start`, `segue_start`, `cue_out`, each `null` or `{secs, source}` with `source` `auto` or `manual` |
 | `loudness` | `null` until the analysis measured the file; otherwise `{integrated_lufs, true_peak_dbtp}`, with `integrated_lufs` `null` for a silent file |
 | `loudness_edit` | `{excluded, trim_db}`: the operator's per-track setting (`PUT /tracks/{id}/loudness`) |

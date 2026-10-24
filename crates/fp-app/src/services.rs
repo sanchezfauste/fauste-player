@@ -432,6 +432,10 @@ pub struct Services {
     /// snapshot does not show it yet. Without it a snapshot taken before the
     /// command lands still says "unread" and the track is read twice.
     tags_answered: HashSet<TrackId>,
+    /// The same two sets for the bit-rate-only pass, which shares the tag
+    /// worker.
+    bitrate_in_flight: HashSet<TrackId>,
+    bitrate_answered: HashSet<TrackId>,
     /// Loudness-only jobs queued and not answered yet (loudness
     /// normalization spec N6b).
     loudness_in_flight: HashSet<TrackId>,
@@ -510,6 +514,8 @@ impl Services {
                 .ok(),
             tags_in_flight: HashSet::new(),
             tags_answered: HashSet::new(),
+            bitrate_in_flight: HashSet::new(),
+            bitrate_answered: HashSet::new(),
             loudness_in_flight: HashSet::new(),
             loudness_answered: HashSet::new(),
             header_reader: HeaderReader::spawn()
@@ -1075,6 +1081,10 @@ impl Services {
     /// worker. A read that cannot parse the file still answers, with the
     /// file-name title and empty fields, so a track is never asked twice for
     /// the same analysis.
+    ///
+    /// The bit-rate-only pass rides on the same worker: tracks analysed
+    /// before the format carried a bit rate (`needs_bitrate_read`) get it
+    /// read from the file's header, once per analysis.
     fn tag_pass(&mut self, state: &AppState) {
         let Some(worker) = &self.tag_worker else {
             return;
@@ -1085,7 +1095,25 @@ impl Services {
         // later reset (a new analysis) brings the read back.
         self.tags_answered
             .retain(|id| state.library.get(*id).is_some_and(|t| !t.tags_read));
+        self.bitrate_in_flight
+            .retain(|id| state.library.get(*id).is_some());
+        self.bitrate_answered
+            .retain(|id| state.library.get(*id).is_some_and(|t| !t.bitrate_read));
         for track in state.library.iter() {
+            if track.needs_bitrate_read()
+                && !self.bitrate_answered.contains(&track.id)
+                && self.bitrate_in_flight.insert(track.id)
+            {
+                let job = TagJob::ReadBitrate {
+                    track: track.id,
+                    path: track.path.clone(),
+                };
+                if !worker.submit(job) {
+                    tracing::error!("the tag worker stopped; bit rates stay unread");
+                    self.tag_worker = None;
+                    return;
+                }
+            }
             if track.needs_tag_read()
                 && !self.tags_answered.contains(&track.id)
                 && self.tags_in_flight.insert(track.id)
@@ -1104,16 +1132,29 @@ impl Services {
         }
         let outcomes: Vec<TagOutcome> = worker.results().try_iter().collect();
         for outcome in outcomes {
-            if let TagOutcome::Read { track, tags } = outcome {
-                // Answered either way. If the command is not queued the track
-                // still needs its read, so the next round asks again.
-                self.tags_in_flight.remove(&track);
-                if self.conductor.send(Command::ApplyTags {
-                    track,
-                    tags: Box::new(tags),
-                }) {
-                    self.tags_answered.insert(track);
+            match outcome {
+                TagOutcome::Read { track, tags } => {
+                    // Answered either way. If the command is not queued the
+                    // track still needs its read, so the next round asks
+                    // again.
+                    self.tags_in_flight.remove(&track);
+                    if self.conductor.send(Command::ApplyTags {
+                        track,
+                        tags: Box::new(tags),
+                    }) {
+                        self.tags_answered.insert(track);
+                    }
                 }
+                TagOutcome::Bitrate { track, bitrate } => {
+                    self.bitrate_in_flight.remove(&track);
+                    if self
+                        .conductor
+                        .send(Command::ApplyBitrate { track, bitrate })
+                    {
+                        self.bitrate_answered.insert(track);
+                    }
+                }
+                _ => {}
             }
         }
     }

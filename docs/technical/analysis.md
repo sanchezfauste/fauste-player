@@ -393,14 +393,25 @@ logged.
 A **tag-only pass** reads the tags of tracks that were analysed but not read
 since: `Track::needs_tag_read` (analysed, readable, `tags_read` false) selects
 them and `Services::tag_pass` sends a `TagJob::Read` for each to the `fp-tags`
-worker (`fp-app/src/tags.rs`, one thread). The worker has five jobs: `Read`,
-`Write`, `ReadSheet`, `WriteSheet` and `LoadCover`. A panic inside a job is
+worker (`fp-app/src/tags.rs`, one thread). The worker has six jobs: `Read`,
+`ReadBitrate`, `Write`, `ReadSheet`, `WriteSheet` and `LoadCover`. A panic inside a job is
 contained and answered as a failure. At shutdown queued reads are skipped,
 while the job in progress and queued writes finish. The answer becomes
 `Command::ApplyTags`, which sets `tags_read`. Every `ApplyAnalysis` resets
 `tags_read`, so a re-analysed track is read again. The pass changes no
 analysis version and no cache key: tracks from an earlier version get their
-date, genre and other tags without a re-analysis. The editor's own jobs
+date, genre and other tags without a re-analysis.
+
+A **bit-rate-only pass** rides on the same worker and the same
+`Services::tag_pass`: `Track::needs_bitrate_read` (analysed into a PCM
+format that has no bit rate, playable, `bitrate_read` false) selects tracks
+whose analysis predates the format's bit rate, or whose cached analysis
+lacks it, and a `TagJob::ReadBitrate` reads it from the header
+(`fp_analysis::metadata::read_bitrate`, no decoding). The answer becomes
+`Command::ApplyBitrate`, which stores it (`None` or 0: the file reports
+none) and sets `bitrate_read`, so a file without one is not asked again.
+`ApplyAnalysis` sets `bitrate_read` only when its format carries a bit rate.
+DSD files have none by design and are never asked. The editor's own jobs
 (`ReadSheet`, `WriteSheet`, `LoadCover`) come from the UI; see
 [User interface](ui.md).
 
