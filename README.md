@@ -73,7 +73,7 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   (IEC 60268-10), VU (IEC 60268-17) and K-System (K-20, K-14, K-12), each
   with its own ballistics and scale. Optional true peak and EBU R128
   loudness, and a maximum readout.
-- **Loudness normalization:** off by default. Every track and cart plays at
+- **Loudness normalization:** on by default. Every track and cart plays at
   the same integrated loudness (ITU-R BS.1770, EBU R128) with one fixed gain
   per track, measured in the background, limited by a true-peak ceiling and
   a maximum boost. A badge in each player header shows the gain on air;

@@ -68,7 +68,7 @@ defaults (lenient loading).
 
 | Field | Type | Default | Range in `Config::validate` | Meaning |
 |---|---|---|---|---|
-| `normalize` | `bool` | `false` (D11) | — | Normalization on or off. |
+| `normalize` | `bool` | `true` (D11) | — | Normalization on or off. |
 | `target_lufs` | `f32` | −16.0 | −36.0 ..= −6.0 | Integrated loudness every track is brought to. |
 | `true_peak_ceiling_dbtp` | `f32` | −1.0 | −12.0 ..= 0.0 | A boost may not take the measured true peak above this; it never cuts a track (N7). |
 | `max_boost_db` | `f32` | 12.0 | 0.0 ..= 24.0 | The largest gain N7 may give (cuts are not limited). |
