@@ -24,8 +24,33 @@
     </ul>
   </description>
   <launchable type="desktop-id">org.fauste.FaustePlayer.desktop</launchable>
-  <url type="homepage">https://github.com/sanchezfauste/fauste-player</url>
+  <url type="homepage">https://sanchezfauste.com/fauste-player/</url>
   <url type="bugtracker">https://github.com/sanchezfauste/fauste-player/issues</url>
+  <url type="help">https://sanchezfauste.com/fauste-player/guide/</url>
+  <!-- The stores show these; docs/images is kept current by the screenshots workflow. -->
+  <screenshots>
+    <screenshot type="default">
+      <caption>Four players, the playlists and the cartwall</caption>
+      <image>https://raw.githubusercontent.com/sanchezfauste/fauste-player/master/docs/images/main-screen.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Output devices, CUE and bit-perfect settings</caption>
+      <image>https://raw.githubusercontent.com/sanchezfauste/fauste-player/master/docs/images/guide/settings-outputs.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Loudness normalization settings</caption>
+      <image>https://raw.githubusercontent.com/sanchezfauste/fauste-player/master/docs/images/guide/settings-loudness.png</image>
+    </screenshot>
+  </screenshots>
+  <!-- The theme's accent (light scheme) and background (dark scheme). -->
+  <branding>
+    <color type="primary" scheme_preference="light">#9184d9</color>
+    <color type="primary" scheme_preference="dark">#161826</color>
+  </branding>
+  <recommends>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
   <categories>
     <category>AudioVideo</category>
     <category>Audio</category>

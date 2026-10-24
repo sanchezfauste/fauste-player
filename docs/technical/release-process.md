@@ -313,6 +313,7 @@ the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
 | `build` (macOS entries) | archives per architecture; each also keeps its binary as a one-day artefact | `scripts/package-release.sh` |
 | `macos-dmg` | universal `.app` (lipo of the two `build` binaries, `PREBUILT_DIR`) in a `.dmg`; it compiles an architecture only when its build failed | `scripts/package/macos.sh` |
 | `flatpak-sources`, `flatpak`, `flatpak-release` | `cargo-sources.json` (flatpak-cargo-generator), then the bundle built offline with flatpak-builder | `packaging/flatpak/org.fauste.FaustePlayer.yml` |
+| `stores` (separate workflow, `stores.yml`) | the Microsoft Store MSIX, the snaps, the Flathub update, WinGet and the AUR (see "Stores") | `scripts/package/msix.sh`, `snap/snapcraft.yaml`, `scripts/package/flathub-manifest.py`, `scripts/package/aur.sh` |
 | `unsigned-note` | a section in the release notes listing the installers built without their signing secrets, with a link to the user guide's instructions (added once) | `release-build.yml` |
 
 **Shared metadata** lives in `packaging/`, with one application id,
@@ -334,9 +335,12 @@ the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
   builds all three Linux packages on every push.
 - Tools fetched while packaging are pinned and checked before they run:
   appimagetool is release 1.9.1 (SHA-256 per architecture in
-  `scripts/package/linux.sh`), and flatpak-cargo-generator a fixed commit of
-  flatpak-builder-tools (SHA-256 in `release-build.yml`). Bump both together
-  with their checksums.
+  `scripts/package/linux.sh`), flatpak-cargo-generator a fixed commit of
+  flatpak-builder-tools (SHA-256 in `scripts/package/flatpak-cargo-sources.sh`),
+  cargo-about for the builds outside `package-release.sh` release 0.9.2
+  (SHA-256 per architecture in `scripts/package/notices.sh`), and the snap's
+  rustup-init release 1.29.2 (SHA-256 per architecture in
+  `snap/snapcraft.yaml`). Bump each together with its checksums.
 
 **Local builds:**
 - Linux: `scripts/package/linux.sh x86_64-unknown-linux-gnu [version] [deb,rpm,appimage]`.
@@ -369,3 +373,123 @@ and editing the title re-checks only the title.
 - **Portable archives** are never signed.
 - **Passing the secrets:** release-please passes them to `release-build`
   with `secrets: inherit`.
+
+## Stores
+
+`stores.yml` publishes every release to the app stores and package
+repositories. release-please calls it in a `stores` job after `binaries`,
+because WinGet and the AUR read the release's assets (the MSI, the Linux
+archives). It can be run by hand (**Actions → stores → Run workflow**) with
+an existing release tag, with `dry_run` to build and check without
+publishing. Every job builds from the tag, so the tag must carry the store
+packaging: the workflow refuses other tags, and tags made before it
+(v0.10.0 and earlier).
+
+| Job | Store | What it does | Publishes when |
+|---|---|---|---|
+| `msstore` | Microsoft Store | builds an unsigned MSIX (`scripts/package/msix.sh`; the Store signs it) and submits it with the Microsoft Store CLI (`msstore publish`) | the `MSSTORE_*` secrets and variables are set |
+| `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 (`snapcore/action-build`) and uploads and releases it (`snapcore/action-publish`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
+| `flathub` | Flathub | writes the Flathub manifest (`scripts/package/flathub-manifest.py`: the in-tree manifest with the release's git tag and commit as its source) and `cargo-sources.json`, lints both with `flatpak-builder-lint`, and opens a pull request on `flathub/org.fauste.FaustePlayer` | `FLATHUB_TOKEN` is set |
+| `winget` | WinGet | opens a pull request on `microsoft/winget-pkgs` with the release's MSI (`vedantmgoyal9/winget-releaser`) | `WINGET_TOKEN` is set |
+| `aur` | AUR | writes the `fauste-player-bin` PKGBUILD from `packaging/aur/PKGBUILD.in` (`scripts/package/aur.sh`, with the checksums of the release archives), checks it with `makepkg --printsrcinfo` and `namcap`, and pushes it | `AUR_SSH_PRIVATE_KEY` is set |
+
+- **Pre-releases** (a version with `-`) go only to the Snap Store's `beta`
+  channel; the other stores skip them.
+- **Dry run:** a pull request that touches `snap/`, `packaging/`, the store
+  scripts or `stores.yml` builds the MSIX and both snaps, lints the Flathub
+  manifest and checks the PKGBUILD, and publishes nothing.
+- **Shared metadata:** the snap, the Flathub build and the stores' listings
+  read the AppStream metainfo (`packaging/linux/org.fauste.FaustePlayer.metainfo.xml`),
+  whose screenshots point at `docs/images` on `master`. The MSIX logos in
+  `packaging/windows/msix/Assets` are rendered by `scripts/package/icons.sh`.
+- **Toolchain:** the snap's `rust-deps` part installs the version
+  `rust-toolchain.toml` pins, with rustup. The Flatpak and Flathub builds use
+  the SDK's `rust-stable`.
+- **Notices:** the snap, the Flatpak and Flathub ship `THIRD-PARTY.html`
+  from `scripts/package/notices.sh` (cargo-about) where the About window
+  looks for it. The Flatpak and Flathub builds are offline, so CI writes it
+  next to `cargo-sources.json` and the manifest lists it as a file source.
+- **Builds without a store:** on a release the MSIX, the snaps, the Flathub
+  manifest and the PKGBUILD are built and checked even for stores not set up
+  yet, so a packaging break shows on the release run before it matters.
+
+### Secrets and variables
+
+Set under **Settings → Secrets and variables → Actions**. Secrets hold
+credentials; variables hold public identifiers.
+
+| Name | Kind | Value |
+|---|---|---|
+| `MSSTORE_TENANT_ID`, `MSSTORE_CLIENT_ID`, `MSSTORE_CLIENT_SECRET` | secrets | the Microsoft Entra application linked to Partner Center (see below) |
+| `MSSTORE_SELLER_ID` | secret | Partner Center → Account settings → Legal info → Seller ID |
+| `MSSTORE_PRODUCT_ID` | variable | the Store ID of the app (`9N…`), Partner Center → Product identity |
+| `MSSTORE_IDENTITY_NAME`, `MSSTORE_PUBLISHER`, `MSSTORE_PUBLISHER_DISPLAY_NAME` | variables | Package/Identity/Name, Package/Identity/Publisher (`CN=…`) and Package/Properties/PublisherDisplayName from Product identity |
+| `SNAPCRAFT_STORE_CREDENTIALS` | secret | the output of `snapcraft export-login --snaps=fauste-player --acls=package_access,package_push,package_update,package_release -` |
+| `SNAP_CHANNEL` | variable (optional) | the channel releases go to; default `stable` |
+| `FLATHUB_TOKEN` | secret | a token of a maintainer of `flathub/org.fauste.FaustePlayer` that can push branches and open pull requests there: fine-grained (*contents* and *pull requests* write) if the flathub organisation accepts fine-grained tokens, otherwise classic with `public_repo` |
+| `WINGET_TOKEN` | secret | a classic token with the `public_repo` scope, of the account that owns the fork of `microsoft/winget-pkgs`; best a separate bot account (`WINGET_FORK_USER`), since `public_repo` on the maintainer's account can also push to this repository |
+| `WINGET_IDENTIFIER`, `WINGET_FORK_USER` | variables (optional) | the package identifier (default `SanchezFauste.FaustePlayer`) and the fork's owner (default the repository owner) |
+| `AUR_SSH_PRIVATE_KEY` | secret | a private SSH key whose public key is in the AUR account |
+| `AUR_USERNAME`, `AUR_EMAIL` | variables (optional) | the author of the AUR commits |
+
+### One-time setup per store
+
+**Microsoft Store**
+1. Register as an individual developer in
+   [Partner Center](https://partner.microsoft.com/dashboard) (free for
+   individuals) and create a new app, reserving the name *Fauste Player*.
+2. Copy the Product identity values into the `MSSTORE_*` variables.
+3. Under Account settings → User management → Microsoft Entra applications,
+   create (or add) an application with the *Manager* role and a key; its
+   tenant ID, client ID and key go into the `MSSTORE_*` secrets.
+4. Make the first submission by hand: once the variables are set, run the
+   workflow with `dry_run` for the latest release (one that carries the
+   store packaging), download the `msix` artefact, and upload it in Partner
+   Center together
+   with the listing (description, screenshots, privacy policy URL, age
+   rating). The `runFullTrust` capability needs a short justification (a
+   desktop program that opens audio devices and music files).
+5. Once it is certified, later releases are submitted by the workflow; each
+   still goes through certification.
+
+**Snap Store**
+1. Create an account on [snapcraft.io](https://snapcraft.io) and register
+   the name: `snapcraft register fauste-player`.
+2. Export the credentials (see the table) into `SNAPCRAFT_STORE_CREDENTIALS`.
+3. The first release passes an automatic review. Ask in the Snapcraft forum
+   (store-requests) for the `alsa` interface to be connected automatically;
+   until then users run `snap connect fauste-player:alsa` for direct ALSA
+   (bit-perfect) devices and MIDI. PulseAudio and PipeWire output work
+   without it (`audio-playback`).
+
+**Flathub**
+1. The application ID must belong to a domain or code host the developer
+   controls: `org.fauste.FaustePlayer` needs `fauste.org`, where Flathub's
+   verification later asks for a token at
+   `https://fauste.org/.well-known/org.flathub.VerifiedApps.txt`.
+2. Fork [flathub/flathub](https://github.com/flathub/flathub), branch from
+   `new-pr`, add the `org.fauste.FaustePlayer.yml` and `cargo-sources.json`
+   (and `THIRD-PARTY.html`) of the `flathub` artefact of the latest
+   release's stores run, and open a
+   pull request against `new-pr`. Reviewers ask about the permissions:
+   `--device=all` (ALSA hw: devices and MIDI), `--filesystem=home:ro`
+   (music libraries read in place), `--share=network` (the remote API).
+3. After the merge Flathub creates `flathub/org.fauste.FaustePlayer` and
+   gives the submitter write access. Create `FLATHUB_TOKEN` for it; from
+   then on every release opens an update pull request there, which
+   Flathub's CI builds and which is merged by hand.
+4. Verify the app in the Flathub developer portal.
+
+**WinGet**
+1. Fork [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs)
+   under the repository owner's account.
+2. Submit the first version by hand:
+   `wingetcreate new <MSI URL of the latest release>` (identifier
+   `SanchezFauste.FaustePlayer`). The action only updates packages that
+   already exist.
+3. Create `WINGET_TOKEN`.
+
+**AUR**
+1. Create an [AUR](https://aur.archlinux.org) account and add an SSH public
+   key to it; the private key goes into `AUR_SSH_PRIVATE_KEY`.
+2. The first push creates `fauste-player-bin`; nothing else is needed.

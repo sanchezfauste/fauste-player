@@ -358,6 +358,7 @@ See [Release process](docs/technical/release-process.md).
 | 5. Packaging | deb, rpm, Flatpak, AppImage, MSI, universal dmg; signing and notarisation when certificates are configured | done |
 | 6. Audio path | Audio path audit and its fixes (no clicks at starts, joins and cue-outs; clipped integer conversion; xrun reporting), DSD output as DoP or native DSD on bit-perfect devices, "No output (silent)" device | done (DoP and native DSD need a check on real hardware) |
 | 7. Website and guide | Project website on GitHub Pages with per-platform downloads, the user guide online (mdBook) with AI translations and a language menu, screenshots of every screen from a scripted scene | done |
+| 8. Stores | Publishing every release to the Microsoft Store, the Snap Store, Flathub, WinGet and the AUR from CI | in progress (the workflow is ready; each store needs its account and first submission) |
 
 ## Documentation
 

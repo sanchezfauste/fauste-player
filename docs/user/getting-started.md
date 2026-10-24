@@ -33,6 +33,8 @@ on macOS.
   - The sandbox can read your home folder (to play your music where it is).
   - It plays through PulseAudio, or through ALSA directly for bit-perfect
     devices.
+  - It may use the network, for the remote control API and OSC (both off
+    until you turn them on).
 - **Desktop libraries:** the window uses libxkbcommon and EGL or OpenGL, with
   Wayland or X11. Every desktop has them, and the `.deb` and `.rpm` declare
   them. On a very minimal system, install them before using the AppImage.

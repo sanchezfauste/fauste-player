@@ -24,6 +24,12 @@ on:
       - scripts/package-release.sh
       - scripts/package/**
       - .github/workflows/release-build.yml
+      # Store-only files: the stores workflow tests them.
+      - '!packaging/windows/msix/**'
+      - '!packaging/aur/**'
+      - '!scripts/package/msix.sh'
+      - '!scripts/package/aur.sh'
+      - '!scripts/package/flathub-manifest.py'
   workflow_dispatch:
     inputs:
       tag:
@@ -200,15 +206,16 @@ jobs:
       - name: Generate cargo-sources.json from Cargo.lock
         run: |
           pip install aiohttp tomlkit
-          # A fixed commit of the generator, checked against its SHA-256.
-          curl -fsSL -o flatpak-cargo-generator.py \
-            https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/41c20aa10819cdb2a4f3ca171758a96d1955c018/cargo/flatpak-cargo-generator.py
-          echo "0a2db6be87d75910facef28ab46d4d6460802e8419ab850d0caa6a364d26b380  flatpak-cargo-generator.py" | sha256sum -c -
-          python3 flatpak-cargo-generator.py Cargo.lock -o packaging/flatpak/cargo-sources.json
+          scripts/package/flatpak-cargo-sources.sh
+      - name: Write the crates' notices
+        run: scripts/package/notices.sh packaging/flatpak/THIRD-PARTY.html
       - uses: actions/upload-artifact@v7
         with:
           name: cargo-sources
-          path: packaging/flatpak/cargo-sources.json
+          path: |
+            packaging/flatpak/cargo-sources.json
+            packaging/flatpak/THIRD-PARTY.html
+          if-no-files-found: error
 
   flatpak:
     name: Flatpak bundle (x86_64)

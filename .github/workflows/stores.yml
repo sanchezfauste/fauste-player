@@ -1,0 +1,326 @@
+name: stores
+
+# Publishes a release to the app stores and package repositories:
+#   - Microsoft Store: an MSIX package, submitted with the Store CLI;
+#   - Snap Store: a snap for amd64 and arm64;
+#   - Flathub: a pull request to flathub/org.fauste.FaustePlayer with the
+#     release's manifest and cargo sources (Flathub builds and publishes it);
+#   - WinGet: a pull request to microsoft/winget-pkgs with the release's MSI;
+#   - AUR: the fauste-player-bin package from the release's Linux archives.
+# Called by release-please after the release assets are uploaded; can also be
+# run by hand for an existing tag. Each store publishes only when its secrets
+# are configured (see docs/technical/release-process.md, "Stores"), and
+# pre-releases go only to the Snap Store's beta channel. Pull requests that
+# touch the store packaging run it as a dry run: they build the MSIX and the
+# snaps and lint the Flathub manifest, and publish nothing.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      dry_run:
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - snap/**
+      - packaging/**
+      - scripts/package/msix.sh
+      - scripts/package/aur.sh
+      - scripts/package/flathub-manifest.py
+      - scripts/package/flatpak-cargo-sources.sh
+      - scripts/package/metainfo.sh
+      - scripts/package/notices.sh
+      - .github/workflows/stores.yml
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag (for example v0.10.0)
+        required: true
+        type: string
+      dry_run:
+        description: Build and check without publishing anything
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels the dry run it supersedes; a release
+# is never cancelled.
+concurrency:
+  group: stores-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  plan:
+    name: What to publish
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+      publish: ${{ steps.plan.outputs.publish }}
+      msstore: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.MSSTORE_CLIENT_SECRET != '' && vars.MSSTORE_PRODUCT_ID != '' && vars.MSSTORE_IDENTITY_NAME != '' && vars.MSSTORE_PUBLISHER != '' }}
+      snap: ${{ steps.plan.outputs.publish == 'true' && secrets.SNAPCRAFT_STORE_CREDENTIALS != '' }}
+      flathub: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.FLATHUB_TOKEN != '' }}
+      winget: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.WINGET_TOKEN != '' }}
+      aur: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.AUR_SSH_PRIVATE_KEY != '' }}
+    steps:
+      - id: plan
+        env:
+          TAG: ${{ inputs.tag }}
+          PUBLISH: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "${EVENT}" != pull_request ]; then
+            # Only release tags, and only those that carry the store
+            # packaging: every job builds from the tag.
+            if ! [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+              echo "::error::${TAG} is not a release tag (vX.Y.Z)"; exit 1
+            fi
+            if ! git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/${TAG}" >/dev/null; then
+              echo "::error::there is no tag ${TAG}"; exit 1
+            fi
+            if ! curl -sfIo /dev/null "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${TAG}/snap/snapcraft.yaml"; then
+              echo "::error::${TAG} predates the store packaging; use a later release"; exit 1
+            fi
+          fi
+          version="${TAG#v}"
+          prerelease=false
+          case "${version}" in *-*) prerelease=true ;; esac
+          {
+            echo "version=${version}"
+            echo "prerelease=${prerelease}"
+            echo "publish=${PUBLISH}"
+          } >> "$GITHUB_OUTPUT"
+
+  msstore:
+    name: Microsoft Store (MSIX)
+    needs: plan
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Install the pinned toolchain
+        shell: bash
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msix
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+      - name: Build the MSIX package
+        id: package
+        shell: bash
+        run: |
+          # Assigned first: a failure of the script fails the step.
+          out="$(scripts/package/msix.sh x86_64-pc-windows-msvc "${VERSION}")"
+          echo "msix=$(printf '%s\n' "${out}" | tail -n1)" >> "$GITHUB_OUTPUT"
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          FEATURES: jack
+          MSSTORE_IDENTITY_NAME: ${{ vars.MSSTORE_IDENTITY_NAME }}
+          MSSTORE_PUBLISHER: ${{ vars.MSSTORE_PUBLISHER }}
+          MSSTORE_PUBLISHER_DISPLAY_NAME: ${{ vars.MSSTORE_PUBLISHER_DISPLAY_NAME }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: msix
+          # A relative path: the script prints a Git Bash one.
+          path: dist/*.msix
+          if-no-files-found: error
+      - name: Install the Microsoft Store CLI
+        if: needs.plan.outputs.msstore == 'true'
+        uses: microsoft/microsoft-store-apppublisher@v1.4
+      - name: Submit to the Microsoft Store
+        if: needs.plan.outputs.msstore == 'true'
+        shell: bash
+        run: |
+          msstore reconfigure --tenantId "${TENANT_ID}" --sellerId "${SELLER_ID}" \
+            --clientId "${CLIENT_ID}" --clientSecret "${CLIENT_SECRET}"
+          # Uploads the package to a new submission and commits it for
+          # certification; the listing stays as set in Partner Center.
+          msstore publish "$(dirname "${MSIX}")" --inputFile "${MSIX}" --appId "${PRODUCT_ID}" --verbose
+        env:
+          MSIX: ${{ steps.package.outputs.msix }}
+          PRODUCT_ID: ${{ vars.MSSTORE_PRODUCT_ID }}
+          TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
+          SELLER_ID: ${{ secrets.MSSTORE_SELLER_ID }}
+          CLIENT_ID: ${{ secrets.MSSTORE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.MSSTORE_CLIENT_SECRET }}
+
+  snap:
+    name: Snap Store (${{ matrix.arch }})
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            os: ubuntu-24.04
+          - arch: arm64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: snapcore/action-build@v1
+        id: build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: snap-${{ matrix.arch }}
+          path: ${{ steps.build.outputs.snap }}
+          if-no-files-found: error
+      - name: Upload to the Snap Store
+        if: needs.plan.outputs.snap == 'true'
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: ${{ needs.plan.outputs.prerelease == 'true' && 'beta' || vars.SNAP_CHANNEL || 'stable' }}
+
+  flathub:
+    name: Flathub
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Write the Flathub manifest and cargo sources
+        env:
+          TAG: ${{ inputs.tag || 'v0.0.0-dry-run' }}
+        run: |
+          pip install aiohttp tomlkit pyyaml
+          mkdir -p flathub-out
+          scripts/package/flatpak-cargo-sources.sh flathub-out/cargo-sources.json
+          scripts/package/flathub-manifest.py "${TAG}" "$(git rev-parse HEAD)" \
+            flathub-out/org.fauste.FaustePlayer.yml
+          scripts/package/metainfo.sh "${TAG#v}" flathub-out/org.fauste.FaustePlayer.metainfo.xml
+          scripts/package/notices.sh flathub-out/THIRD-PARTY.html
+      - name: Lint as Flathub does
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends flatpak
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+          # The linter exits non-zero when it reports errors; the report
+          # decides, and no report at all (a crash) fails.
+          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@" || true; }
+          # Fails on any error but appid-url-not-reachable: the domain of the
+          # application ID is checked at submission (see release-process.md,
+          # "Stores", Flathub step 1), so it is only reported here.
+          check() {
+            python3 -c '
+          import json, sys
+          text = sys.stdin.read().strip()
+          try:
+              report = json.loads(text)
+          except ValueError:
+              print(text)
+              sys.exit(1)
+          print(json.dumps(report, indent=2))
+          errors = [e for e in report.get("errors", []) if e != "appid-url-not-reachable"]
+          if "appid-url-not-reachable" in report.get("errors", []):
+              print("::warning::Flathub: the domain of the application ID is not reachable")
+          sys.exit(1 if errors else 0)'
+          }
+          lint manifest flathub-out/org.fauste.FaustePlayer.yml | check
+          # The appstream check reports as text, and through its exit code.
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            appstream flathub-out/org.fauste.FaustePlayer.metainfo.xml
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flathub
+          path: |
+            flathub-out/org.fauste.FaustePlayer.yml
+            flathub-out/cargo-sources.json
+            flathub-out/THIRD-PARTY.html
+          if-no-files-found: error
+      - name: Open the update pull request on Flathub
+        if: needs.plan.outputs.flathub == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          repo=flathub/org.fauste.FaustePlayer
+          branch="update-${TAG}"
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" flathub-repo
+          cp flathub-out/org.fauste.FaustePlayer.yml flathub-out/cargo-sources.json \
+            flathub-out/THIRD-PARTY.html flathub-repo/
+          cd flathub-repo
+          git add -A
+          if git diff --cached --quiet; then echo "Flathub already has ${TAG}"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${branch}"
+          git commit -m "Update to ${TAG}"
+          git push --force origin "${branch}"
+          gh pr view "${branch}" --repo "${repo}" >/dev/null 2>&1 \
+            || gh pr create --repo "${repo}" --head "${branch}" --title "Update to ${TAG}" \
+              --body "Release notes: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+
+  winget:
+    name: WinGet
+    needs: plan
+    if: needs.plan.outputs.winget == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned by commit: the step holds a token with write access.
+      - uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
+        with:
+          identifier: ${{ vars.WINGET_IDENTIFIER || 'SanchezFauste.FaustePlayer' }}
+          release-tag: ${{ inputs.tag }}
+          installers-regex: '\.msi$'
+          fork-user: ${{ vars.WINGET_FORK_USER || github.repository_owner }}
+          token: ${{ secrets.WINGET_TOKEN }}
+
+  aur:
+    name: AUR (fauste-player-bin)
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Write the PKGBUILD
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          if [ -n "${VERSION}" ] && [ "${{ needs.plan.outputs.publish }}" = true ]; then
+            scripts/package/aur.sh "${VERSION}" PKGBUILD
+          else
+            # Dry run: the template with placeholder checksums.
+            sed -e 's/@VERSION@/0.0.0/' -e 's/@SHA256_[A-Z0-9_]*@/SKIP/' packaging/aur/PKGBUILD.in > PKGBUILD
+          fi
+      - name: Check the PKGBUILD
+        run: |
+          docker run --rm -v "$PWD:/pkg" -w /pkg archlinux:base bash -c '
+            pacman -Syu --noconfirm --needed namcap >/dev/null
+            useradd -m builder && chown builder /pkg
+            su builder -c "makepkg --printsrcinfo" > /dev/null
+            # namcap always exits 0: its errors (" E: ") fail the check.
+            namcap PKGBUILD | tee namcap.txt
+            ! grep -q " E: " namcap.txt'
+      - name: Push to the AUR
+        if: needs.plan.outputs.aur == 'true'
+        # Pinned by commit: the step holds the AUR key.
+        uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
+        with:
+          pkgname: fauste-player-bin
+          pkgbuild: PKGBUILD
+          commit_username: ${{ vars.AUR_USERNAME || 'Marc Sánchez Fauste' }}
+          commit_email: ${{ vars.AUR_EMAIL || 'sanchezfauste@gmail.com' }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update to ${{ inputs.tag }}
+          ssh_keyscan_types: rsa,ecdsa,ed25519
