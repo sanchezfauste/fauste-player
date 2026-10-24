@@ -1,6 +1,7 @@
 """Tests of scripts/site/landing.py (python3 -m unittest discover -s
 scripts/site/tests -p 'test_*.py')."""
 
+import json
 import os
 import re
 import shutil
@@ -12,8 +13,8 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import landing  # noqa: E402
-from landing import (RenderError, build, load, page_values, render,  # noqa: E402
-                     table_hash, texts)
+from landing import (TABLES, RenderError, build, check, load,  # noqa: E402
+                     page_values, render, table_hash, texts)
 
 EN = {"code": "en", "name": "English"}
 ES = {"code": "es", "name": "Español"}
@@ -127,6 +128,101 @@ class PagesTest(unittest.TestCase):
         html = read(os.path.join(self.out, "xx", "privacy.html"))
         self.assertIn('<html lang="xx">', html)
         self.assertIn('class="ai-notice"', html)
+
+
+def toml_value(v):
+    return json.dumps(v, ensure_ascii=False)
+
+
+def write_translation(locales, code, en, meta=None, change=None):
+    """A translation of `en` (the parsed English file) into `code`, with its
+    hashes; `change` edits its tables before writing."""
+    tables = {t: dict(en[t]) for t in TABLES}
+    if change:
+        change(tables)
+    meta = dict({"language": code, "name": "Xx", "label": "L", "notice": "N",
+                 "privacy-notice": "P", "english-link": "E"}, **(meta or {}))
+    lines = [f"{k} = {toml_value(v)}" for k, v in meta.items()]
+    lines.append("[source-hash]")
+    lines += [f"{t} = {toml_value(table_hash(en[t]))}" for t in TABLES]
+    for t in TABLES:
+        lines.append(f"[{t}]")
+        lines += [f"{toml_value(k)} = {toml_value(v)}" for k, v in tables[t].items()]
+    with open(os.path.join(locales, f"{code}.toml"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
+
+
+class CheckTest(unittest.TestCase):
+    def setUp(self):
+        self.locales = tempfile.mkdtemp()
+        self.i18n = tempfile.mkdtemp()
+        self.out = tempfile.mkdtemp()
+        for d in (self.locales, self.i18n, self.out):
+            self.addCleanup(shutil.rmtree, d)
+        shutil.copy(os.path.join(landing.LOCALES, "en.toml"), self.locales)
+        self.en = load("en", self.locales)
+        os.makedirs(os.path.join(self.i18n, "xx"))
+        with open(os.path.join(self.i18n, "xx", "translation.toml"), "w") as fh:
+            fh.write('name = "Xx"\nlabel = "L"\n')
+
+    def problems(self, site=None):
+        return check(site, self.locales, self.i18n)
+
+    def test_valid_translation_passes(self):
+        write_translation(self.locales, "xx", self.en)
+        self.assertEqual(self.problems(), [])
+
+    def test_language_sets_differ(self):
+        write_translation(self.locales, "xx", self.en)
+        os.makedirs(os.path.join(self.i18n, "yy"))
+        got = self.problems()
+        self.assertEqual(len(got), 1, got)
+        self.assertTrue(got[0].startswith("site/locales: languages"), got)
+
+    def test_stale_hash(self):
+        write_translation(self.locales, "xx", self.en)
+        en = read(os.path.join(self.locales, "en.toml"))
+        with open(os.path.join(self.locales, "en.toml"), "w", encoding="utf-8") as fh:
+            fh.write(en.replace('heading = "Privacy policy"', 'heading = "Privacy"'))
+        new = table_hash(load("en", self.locales)["privacy"])
+        got = self.problems()
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("[privacy] was translated from older English text", got[0])
+        self.assertIn(new, got[0])
+
+    def test_key_sets(self):
+        def change(t):
+            del t["index"]["pitch"]
+            t["index"]["extra"] = "x"
+        write_translation(self.locales, "xx", self.en, change=change)
+        got = "\n".join(self.problems())
+        self.assertIn("[index] missing pitch", got)
+        self.assertIn("[index] has keys English lacks: extra", got)
+
+    def test_name_mismatch(self):
+        write_translation(self.locales, "xx", self.en, meta={"name": "Other"})
+        self.assertIn("site/locales/xx.toml: name differs from docs/i18n/xx/translation.toml",
+                      self.problems())
+
+    def test_missing_metadata(self):
+        write_translation(self.locales, "xx", self.en, meta={"notice": ""})
+        self.assertIn("site/locales/xx.toml: missing notice", self.problems())
+
+    def test_placeholder_in_value(self):
+        def change(t):
+            t["index"]["pitch"] = "see {{ root }}"
+        write_translation(self.locales, "xx", self.en, change=change)
+        self.assertIn("site/locales/xx.toml: index.pitch contains a placeholder", self.problems())
+
+    def test_built_site(self):
+        write_translation(self.locales, "xx", self.en)
+        build(self.out, locales=self.locales)
+        self.assertEqual(self.problems(self.out), [])
+        page = os.path.join(self.out, "xx", "privacy.html")
+        html = read(page)
+        with open(page, "w", encoding="utf-8") as fh:
+            fh.write(re.sub(r'<div class="ai-notice".*?</div>', "", html, flags=re.S))
+        self.assertIn("xx/privacy.html: no AI-translation notice", self.problems(self.out))
 
 
 if __name__ == "__main__":
