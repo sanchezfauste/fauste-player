@@ -2,7 +2,9 @@
 
 ## Install
 
-Download a package for your system from the project's **Releases** page.
+On Linux, Fauste Player is in the **Snap Store**
+(<https://snapcraft.io/fauste-player>). Or download a package for your
+system from the project's **Releases** page.
 Every file has a `.sha256` next to it. To check a download, run
 `sha256sum -c <file>.sha256` on Linux, or `shasum -a 256 -c <file>.sha256`
 on macOS.
@@ -11,6 +13,7 @@ on macOS.
 
 | Package | Install | Update | Remove |
 |---|---|---|---|
+| Snap (Snap Store) | `sudo snap install fauste-player` | automatic (`sudo snap refresh fauste-player` to update now) | `sudo snap remove fauste-player` |
 | `.deb` (Debian, Ubuntu) | `sudo apt install ./fauste-player_<version>_amd64.deb` | install the newer `.deb` the same way | `sudo apt remove fauste-player` |
 | `.rpm` (Fedora, openSUSE) | `sudo dnf install ./fauste-player-<version>-1.x86_64.rpm` | install the newer `.rpm` | `sudo dnf remove fauste-player` |
 | AppImage (any distribution) | `chmod +x fauste-player-<version>-x86_64.AppImage`, then run it | replace the file | delete the file |
@@ -25,6 +28,14 @@ on macOS.
   never required.
 - **AppImage:** if it does not start because FUSE is missing, run it with
   `--appimage-extract-and-run`.
+- **Snap:**
+  - It can read your home folder and removable media (to play your music
+    where it is), and plays through PulseAudio or PipeWire.
+  - For bit-perfect output on ALSA `hw:` devices and for MIDI control
+    surfaces, connect the ALSA interface once:
+    `sudo snap connect fauste-player:alsa`.
+  - It may use the network, for the remote control API and OSC (both off
+    until you turn them on).
 - **Flatpak:**
   - The bundle needs the freedesktop runtime from Flathub. If the Flathub
     remote is not set up, run
