@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>org.fauste.FaustePlayer</id>
+  <id>com.sanchezfauste.FaustePlayer</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>Fauste Player</name>
   <summary>Radio playout with several players and a cartwall</summary>
   <summary xml:lang="es">Emisión de radio con varios reproductores y una cartuchera</summary>
-  <developer id="org.fauste">
+  <developer id="com.sanchezfauste">
     <name>Marc Sánchez Fauste</name>
   </developer>
   <description>
@@ -23,7 +23,7 @@
       <li>Keeps timing when an output device is lost, and recovers after a crash without putting anything on air</li>
     </ul>
   </description>
-  <launchable type="desktop-id">org.fauste.FaustePlayer.desktop</launchable>
+  <launchable type="desktop-id">com.sanchezfauste.FaustePlayer.desktop</launchable>
   <url type="homepage">https://sanchezfauste.com/fauste-player/</url>
   <url type="bugtracker">https://github.com/sanchezfauste/fauste-player/issues</url>
   <url type="help">https://sanchezfauste.com/fauste-player/guide/</url>
@@ -55,6 +55,10 @@
     <category>AudioVideo</category>
     <category>Audio</category>
   </categories>
+  <!-- The ID used up to 0.10. -->
+  <replaces>
+    <id>org.fauste.FaustePlayer</id>
+  </replaces>
   <provides>
     <binary>fauste-player</binary>
     <mediatype>audio/x-mpegurl</mediatype>

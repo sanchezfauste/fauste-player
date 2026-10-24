@@ -3,7 +3,7 @@ name: stores
 # Publishes a release to the app stores and package repositories:
 #   - Microsoft Store: an MSIX package, submitted with the Store CLI;
 #   - Snap Store: a snap for amd64 and arm64;
-#   - Flathub: a pull request to flathub/org.fauste.FaustePlayer with the
+#   - Flathub: a pull request to flathub/com.sanchezfauste.FaustePlayer with the
 #     release's manifest and cargo sources (Flathub builds and publishes it);
 #   - WinGet: a pull request to microsoft/winget-pkgs with the release's MSI;
 #   - AUR: the fauste-player-bin package from the release's Linux archives.
@@ -206,44 +206,42 @@ jobs:
           mkdir -p flathub-out
           scripts/package/flatpak-cargo-sources.sh flathub-out/cargo-sources.json
           scripts/package/flathub-manifest.py "${TAG}" "$(git rev-parse HEAD)" \
-            flathub-out/org.fauste.FaustePlayer.yml
-          scripts/package/metainfo.sh "${TAG#v}" flathub-out/org.fauste.FaustePlayer.metainfo.xml
+            flathub-out/com.sanchezfauste.FaustePlayer.yml
+          scripts/package/metainfo.sh "${TAG#v}" flathub-out/com.sanchezfauste.FaustePlayer.metainfo.xml
           scripts/package/notices.sh flathub-out/THIRD-PARTY.html
       - name: Lint as Flathub does
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends flatpak
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder
-          # The linter exits non-zero when it reports errors; the report
-          # decides, and no report at all (a crash) fails.
-          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@" || true; }
-          # Fails on any error but appid-url-not-reachable: the domain of the
-          # application ID is checked at submission (see release-process.md,
-          # "Stores", Flathub step 1), so it is only reported here.
-          check() {
-            python3 -c '
+          # The manifest check prints a JSON report only when it finds
+          # something, and exits non-zero on errors. Silence with a zero exit
+          # is a clean pass; silence with a failure is a crash.
+          rc=0
+          report="$(flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            manifest flathub-out/com.sanchezfauste.FaustePlayer.yml)" || rc=$?
+          if [ -z "${report}" ]; then
+            [ "${rc}" -eq 0 ] || { echo "::error::flatpak-builder-lint failed (exit ${rc})"; exit 1; }
+          else
+            printf '%s' "${report}" | python3 -c '
           import json, sys
-          text = sys.stdin.read().strip()
+          text = sys.stdin.read()
           try:
               report = json.loads(text)
           except ValueError:
               print(text)
               sys.exit(1)
           print(json.dumps(report, indent=2))
-          errors = [e for e in report.get("errors", []) if e != "appid-url-not-reachable"]
-          if "appid-url-not-reachable" in report.get("errors", []):
-              print("::warning::Flathub: the domain of the application ID is not reachable")
-          sys.exit(1 if errors else 0)'
-          }
-          lint manifest flathub-out/org.fauste.FaustePlayer.yml | check
+          sys.exit(1 if report.get("errors") else 0)'
+          fi
           # The appstream check reports as text, and through its exit code.
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
-            appstream flathub-out/org.fauste.FaustePlayer.metainfo.xml
+            appstream flathub-out/com.sanchezfauste.FaustePlayer.metainfo.xml
       - uses: actions/upload-artifact@v7
         with:
           name: flathub
           path: |
-            flathub-out/org.fauste.FaustePlayer.yml
+            flathub-out/com.sanchezfauste.FaustePlayer.yml
             flathub-out/cargo-sources.json
             flathub-out/THIRD-PARTY.html
           if-no-files-found: error
@@ -253,10 +251,10 @@ jobs:
           GH_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
         run: |
-          repo=flathub/org.fauste.FaustePlayer
+          repo=flathub/com.sanchezfauste.FaustePlayer
           branch="update-${TAG}"
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" flathub-repo
-          cp flathub-out/org.fauste.FaustePlayer.yml flathub-out/cargo-sources.json \
+          cp flathub-out/com.sanchezfauste.FaustePlayer.yml flathub-out/cargo-sources.json \
             flathub-out/THIRD-PARTY.html flathub-repo/
           cd flathub-repo
           git add -A

@@ -312,12 +312,12 @@ the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
 | `build` (Windows) | archive, `.msi` (cargo-wix, WiX Toolset v3) | `scripts/package/windows.sh` |
 | `build` (macOS entries) | archives per architecture; each also keeps its binary as a one-day artefact | `scripts/package-release.sh` |
 | `macos-dmg` | universal `.app` (lipo of the two `build` binaries, `PREBUILT_DIR`) in a `.dmg`; it compiles an architecture only when its build failed | `scripts/package/macos.sh` |
-| `flatpak-sources`, `flatpak`, `flatpak-release` | `cargo-sources.json` (flatpak-cargo-generator), then the bundle built offline with flatpak-builder | `packaging/flatpak/org.fauste.FaustePlayer.yml` |
+| `flatpak-sources`, `flatpak`, `flatpak-release` | `cargo-sources.json` (flatpak-cargo-generator), then the bundle built offline with flatpak-builder | `packaging/flatpak/com.sanchezfauste.FaustePlayer.yml` |
 | `stores` (separate workflow, `stores.yml`) | the Microsoft Store MSIX, the snaps, the Flathub update, WinGet and the AUR (see "Stores") | `scripts/package/msix.sh`, `snap/snapcraft.yaml`, `scripts/package/flathub-manifest.py`, `scripts/package/aur.sh` |
 | `unsigned-note` | a section in the release notes listing the installers built without their signing secrets, with a link to the user guide's instructions (added once) | `release-build.yml` |
 
 **Shared metadata** lives in `packaging/`, with one application id,
-`org.fauste.FaustePlayer`:
+`com.sanchezfauste.FaustePlayer`:
 - the icons (SVG, PNG sizes, `.ico`). `fauste-player.svg` is the source: after
   changing it, run `scripts/package/icons.sh` (inkscape and ImageMagick) and
   commit the regenerated PNGs and `.ico`. The window icon, the packages, the
@@ -389,7 +389,7 @@ packaging: the workflow refuses other tags, and tags made before it
 |---|---|---|---|
 | `msstore` | Microsoft Store | builds an unsigned MSIX (`scripts/package/msix.sh`; the Store signs it) and submits it with the Microsoft Store CLI (`msstore publish`) | the `MSSTORE_*` secrets and variables are set |
 | `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 (`snapcore/action-build`) and uploads and releases it (`snapcore/action-publish`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
-| `flathub` | Flathub | writes the Flathub manifest (`scripts/package/flathub-manifest.py`: the in-tree manifest with the release's git tag and commit as its source) and `cargo-sources.json`, lints both with `flatpak-builder-lint`, and opens a pull request on `flathub/org.fauste.FaustePlayer` | `FLATHUB_TOKEN` is set |
+| `flathub` | Flathub | writes the Flathub manifest (`scripts/package/flathub-manifest.py`: the in-tree manifest with the release's git tag and commit as its source) and `cargo-sources.json`, lints both with `flatpak-builder-lint`, and opens a pull request on `flathub/com.sanchezfauste.FaustePlayer` | `FLATHUB_TOKEN` is set |
 | `winget` | WinGet | opens a pull request on `microsoft/winget-pkgs` with the release's MSI (`vedantmgoyal9/winget-releaser`) | `WINGET_TOKEN` is set |
 | `aur` | AUR | writes the `fauste-player-bin` PKGBUILD from `packaging/aur/PKGBUILD.in` (`scripts/package/aur.sh`, with the checksums of the release archives), checks it with `makepkg --printsrcinfo` and `namcap`, and pushes it | `AUR_SSH_PRIVATE_KEY` is set |
 
@@ -399,7 +399,7 @@ packaging: the workflow refuses other tags, and tags made before it
   scripts or `stores.yml` builds the MSIX and both snaps, lints the Flathub
   manifest and checks the PKGBUILD, and publishes nothing.
 - **Shared metadata:** the snap, the Flathub build and the stores' listings
-  read the AppStream metainfo (`packaging/linux/org.fauste.FaustePlayer.metainfo.xml`),
+  read the AppStream metainfo (`packaging/linux/com.sanchezfauste.FaustePlayer.metainfo.xml`),
   whose screenshots point at `docs/images` on `master`. The MSIX logos in
   `packaging/windows/msix/Assets` are rendered by `scripts/package/icons.sh`.
 - **Toolchain:** the snap's `rust-deps` part installs the version
@@ -426,7 +426,7 @@ credentials; variables hold public identifiers.
 | `MSSTORE_IDENTITY_NAME`, `MSSTORE_PUBLISHER`, `MSSTORE_PUBLISHER_DISPLAY_NAME` | variables | Package/Identity/Name, Package/Identity/Publisher (`CN=…`) and Package/Properties/PublisherDisplayName from Product identity |
 | `SNAPCRAFT_STORE_CREDENTIALS` | secret | the output of `snapcraft export-login --snaps=fauste-player --acls=package_access,package_push,package_update,package_release -` |
 | `SNAP_CHANNEL` | variable (optional) | the channel releases go to; default `stable` |
-| `FLATHUB_TOKEN` | secret | a token of a maintainer of `flathub/org.fauste.FaustePlayer` that can push branches and open pull requests there: fine-grained (*contents* and *pull requests* write) if the flathub organisation accepts fine-grained tokens, otherwise classic with `public_repo` |
+| `FLATHUB_TOKEN` | secret | a token of a maintainer of `flathub/com.sanchezfauste.FaustePlayer` that can push branches and open pull requests there: fine-grained (*contents* and *pull requests* write) if the flathub organisation accepts fine-grained tokens, otherwise classic with `public_repo` |
 | `WINGET_TOKEN` | secret | a classic token with the `public_repo` scope, of the account that owns the fork of `microsoft/winget-pkgs`; best a separate bot account (`WINGET_FORK_USER`), since `public_repo` on the maintainer's account can also push to this repository |
 | `WINGET_IDENTIFIER`, `WINGET_FORK_USER` | variables (optional) | the package identifier (default `SanchezFauste.FaustePlayer`) and the fork's owner (default the repository owner) |
 | `AUR_SSH_PRIVATE_KEY` | secret | a private SSH key whose public key is in the AUR account |
@@ -464,17 +464,20 @@ credentials; variables hold public identifiers.
 
 **Flathub**
 1. The application ID must belong to a domain or code host the developer
-   controls: `org.fauste.FaustePlayer` needs `fauste.org`, where Flathub's
-   verification later asks for a token at
-   `https://fauste.org/.well-known/org.flathub.VerifiedApps.txt`.
+   controls: `com.sanchezfauste.FaustePlayer` is under `sanchezfauste.com`,
+   where Flathub's verification later asks for a token at
+   `https://sanchezfauste.com/.well-known/org.flathub.VerifiedApps.txt`. That
+   site is the Jekyll repository `sanchezfauste/sanchezfauste.github.io`,
+   which publishes a dot-directory only when its `_config.yml` lists it
+   (`include: [.well-known]`).
 2. Fork [flathub/flathub](https://github.com/flathub/flathub), branch from
-   `new-pr`, add the `org.fauste.FaustePlayer.yml` and `cargo-sources.json`
+   `new-pr`, add the `com.sanchezfauste.FaustePlayer.yml` and `cargo-sources.json`
    (and `THIRD-PARTY.html`) of the `flathub` artefact of the latest
    release's stores run, and open a
    pull request against `new-pr`. Reviewers ask about the permissions:
    `--device=all` (ALSA hw: devices and MIDI), `--filesystem=home:ro`
    (music libraries read in place), `--share=network` (the remote API).
-3. After the merge Flathub creates `flathub/org.fauste.FaustePlayer` and
+3. After the merge Flathub creates `flathub/com.sanchezfauste.FaustePlayer` and
    gives the submitter write access. Create `FLATHUB_TOKEN` for it; from
    then on every release opens an update pull request there, which
    Flathub's CI builds and which is merged by hand.

@@ -78,7 +78,7 @@ jobs:
       - run: cargo binstall -y --locked cargo-deb cargo-generate-rpm
       - name: Validate the desktop entry and AppStream metadata
         run: |
-          desktop-file-validate packaging/linux/org.fauste.FaustePlayer.desktop
+          desktop-file-validate packaging/linux/com.sanchezfauste.FaustePlayer.desktop
           scripts/package/metainfo.sh 0.0.0 metainfo.xml
           appstreamcli validate --no-net metainfo.xml
       - name: Build the archive and the packages

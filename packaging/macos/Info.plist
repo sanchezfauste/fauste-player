@@ -12,7 +12,7 @@
     <key>CFBundleIconFile</key>
     <string>fauste-player</string>
     <key>CFBundleIdentifier</key>
-    <string>org.fauste.FaustePlayer</string>
+    <string>com.sanchezfauste.FaustePlayer</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

@@ -158,6 +158,10 @@ fn notices_are_looked_up_where_the_packages_install_them() {
     assert!(c.contains(&dir.join("licenses").join("THIRD-PARTY.html")));
     assert!(c.contains(&dir.join("../share/doc/fauste-player/THIRD-PARTY.html")));
     assert!(c.contains(&dir.join("../Resources/licenses/THIRD-PARTY.html")));
+    // Flatpak and snap, under the application ID.
+    assert!(
+        c.contains(&dir.join("../share/licenses/com.sanchezfauste.FaustePlayer/THIRD-PARTY.html"))
+    );
 }
 
 #[test]

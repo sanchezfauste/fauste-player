@@ -23,7 +23,7 @@ file_sha() {
 
 x86="$(asset_sha x86_64)"
 arm="$(asset_sha aarch64)"
-desktop="$(file_sha packaging/linux/org.fauste.FaustePlayer.desktop)"
+desktop="$(file_sha packaging/linux/com.sanchezfauste.FaustePlayer.desktop)"
 svg="$(file_sha packaging/icons/fauste-player.svg)"
 for sum in "${x86}" "${arm}" "${desktop}" "${svg}"; do
   [[ "${sum}" =~ ^[0-9a-f]{64}$ ]] || { echo "bad checksum '${sum}'" >&2; exit 1; }

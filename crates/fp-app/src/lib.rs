@@ -1,5 +1,9 @@
 //! Fauste Player desktop application.
 
+/// Reverse-DNS application ID, shared by the window, the desktop entry,
+/// AppStream, the Flatpak, the snap and the macOS bundle.
+pub const APP_ID: &str = "com.sanchezfauste.FaustePlayer";
+
 pub mod activity;
 pub mod bootstrap;
 pub mod cli;
