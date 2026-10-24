@@ -55,6 +55,8 @@ parts:
     plugin: rust
     source: .
     rust-path: [crates/fp-app]
+    # Use the rust-deps toolchain, never the plugin's own rustup.
+    rust-channel: none
     build-packages:
       - pkg-config
       - libasound2-dev

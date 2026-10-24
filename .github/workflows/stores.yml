@@ -215,7 +215,9 @@ jobs:
           sys.exit(1 if errors else 0)'
           }
           lint manifest flathub-out/org.fauste.FaustePlayer.yml | check
-          lint appstream flathub-out/org.fauste.FaustePlayer.metainfo.xml | check
+          # The appstream check reports as text, and through its exit code.
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            appstream flathub-out/org.fauste.FaustePlayer.metainfo.xml
       - uses: actions/upload-artifact@v7
         with:
           name: flathub
