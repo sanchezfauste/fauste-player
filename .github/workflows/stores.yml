@@ -214,23 +214,26 @@ jobs:
           sudo apt-get update && sudo apt-get install -y --no-install-recommends flatpak
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder
-          # The linter exits non-zero when it reports errors; the report
-          # decides, and no report at all (a crash) fails.
-          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@" || true; }
-          check() {
-            python3 -c '
+          # The manifest check prints a JSON report only when it finds
+          # something, and exits non-zero on errors. Silence with a zero exit
+          # is a clean pass; silence with a failure is a crash.
+          rc=0
+          report="$(flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            manifest flathub-out/com.sanchezfauste.FaustePlayer.yml)" || rc=$?
+          if [ -z "${report}" ]; then
+            [ "${rc}" -eq 0 ] || { echo "::error::flatpak-builder-lint failed (exit ${rc})"; exit 1; }
+          else
+            printf '%s' "${report}" | python3 -c '
           import json, sys
-          text = sys.stdin.read().strip()
+          text = sys.stdin.read()
           try:
               report = json.loads(text)
           except ValueError:
               print(text)
               sys.exit(1)
           print(json.dumps(report, indent=2))
-          errors = report.get("errors", [])
-          sys.exit(1 if errors else 0)'
-          }
-          lint manifest flathub-out/com.sanchezfauste.FaustePlayer.yml | check
+          sys.exit(1 if report.get("errors") else 0)'
+          fi
           # The appstream check reports as text, and through its exit code.
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
             appstream flathub-out/com.sanchezfauste.FaustePlayer.metainfo.xml
