@@ -181,7 +181,9 @@ Formats: WAV, AIFF, CAF, FLAC, MP3 (and MP1/MP2), AAC/M4A, ALAC, Ogg Vorbis, Opu
 <a href="https://snapcraft.io/fauste-player"><img alt="Get it from the Snap Store" src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" height="56"></a>
 
 On Linux, install it from the [Snap Store](https://snapcraft.io/fauste-player)
-with `sudo snap install fauste-player` (amd64 and arm64), or download a
+with `sudo snap install fauste-player` (amd64 and arm64; see the
+[guide](docs/user/getting-started.md#linux) for bit-perfect ALSA output,
+MIDI and music on other disks), or download a
 package for your platform from
 [Releases](https://github.com/sanchezfauste/fauste-player/releases). Each
 file has a `.sha256` next to it.

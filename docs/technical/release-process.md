@@ -517,9 +517,11 @@ credentials; variables hold public identifiers.
    the name: `snapcraft register fauste-player`.
 2. Export the credentials (see the table) into `SNAPCRAFT_STORE_CREDENTIALS`.
 3. The first release passes an automatic review. Ask in the Snapcraft forum
-   (store-requests) for the `alsa` interface to be connected automatically;
-   until then users run `snap connect fauste-player:alsa` for direct ALSA
-   (bit-perfect) devices and MIDI. PulseAudio and PipeWire output work
+   (store-requests) for the `alsa` and `removable-media` interfaces to be
+   connected automatically; until then users run
+   `snap connect fauste-player:alsa` for direct ALSA (bit-perfect) devices
+   and MIDI, and `snap connect fauste-player:removable-media` for music
+   under `/media`, `/run/media` and `/mnt` (the user guide says so). PulseAudio and PipeWire output work
    without it (`audio-playback`).
 4. The listing's screenshots and featured banner are uploaded by hand on
    snapcraft.io (*Listing*): snapcraft sends only the icon, and the store

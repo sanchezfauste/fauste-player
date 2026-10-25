@@ -12,6 +12,13 @@
 The Linux paths follow the XDG variables (`XDG_CONFIG_HOME` and so on) when
 they are set.
 
+The snap keeps its files in its own folder instead: settings in
+`~/snap/fauste-player/current/.config/fausteplayer/`, playlists, session
+and logs in `~/snap/fauste-player/current/.local/share/fausteplayer/`, and
+the analysis cache in `~/snap/fauste-player/common/.cache/fausteplayer/`.
+`sudo snap remove fauste-player` deletes them too (it keeps a snapshot for
+a while; `--purge` does not).
+
 ## Portable mode
 
 Set the environment variable `FAUSTE_HOME` to a folder, and everything is kept

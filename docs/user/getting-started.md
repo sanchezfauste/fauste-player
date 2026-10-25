@@ -28,14 +28,21 @@ on macOS.
   never required.
 - **AppImage:** if it does not start because FUSE is missing, run it with
   `--appimage-extract-and-run`.
-- **Snap:**
-  - It can read your home folder and removable media (to play your music
-    where it is), and plays through PulseAudio or PipeWire.
-  - For bit-perfect output on ALSA `hw:` devices and for MIDI control
-    surfaces, connect the ALSA interface once:
+- **Snap:** the snap runs in a sandbox. Out of the box it reads your home
+  folder (except hidden files and folders), plays through PulseAudio or
+  PipeWire, and may use the network for the remote control API and OSC
+  (both off until you turn them on). Two features need a permission you
+  give once, from a terminal:
+  - Bit-perfect output on ALSA `hw:` devices, and MIDI control surfaces:
     `sudo snap connect fauste-player:alsa`.
-  - It may use the network, for the remote control API and OSC (both off
-    until you turn them on).
+  - Music on USB drives and other disks (`/media`, `/run/media`, `/mnt`):
+    `sudo snap connect fauste-player:removable-media`.
+
+  `snap connections fauste-player` shows what is connected. Restart Fauste
+  Player after connecting. Music in other places (outside your home folder
+  and those three) cannot be read by the snap: use another package for it.
+  JACK is not available in the snap. Its settings and playlists are kept
+  in `~/snap/fauste-player/` (see [Data and backups](data-and-backups.md)).
 - **Flatpak:**
   - The bundle needs the freedesktop runtime from Flathub. If the Flathub
     remote is not set up, run
