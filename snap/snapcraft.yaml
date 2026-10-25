@@ -1,8 +1,9 @@
 # Snap package for the Snap Store, built by the `stores` workflow
 # (snapcore/action-build) on amd64 and arm64. Built from source like the
 # Flatpak; the summary and description come from the AppStream metainfo,
-# the version from Cargo.toml. The metainfo has no icon, so it is given here
-# (the store listing takes it from the snap).
+# the version from Cargo.toml. The metainfo has no icon, so it is given here;
+# the stores workflow sends it to the store listing with
+# `snapcraft upload-metadata` (the store does not refresh the icon itself).
 name: fauste-player
 title: Fauste Player
 icon: packaging/icons/fauste-player-512.png
@@ -42,7 +43,7 @@ apps:
 
 parts:
   # The toolchain rust-toolchain.toml pins, which the rust plugin then uses
-  # (a part with this name replaces the plugin's own rustup set-up).
+  # (`rust-channel: none` keeps the plugin from installing its own).
   # rustup-init is pinned and checked before it runs.
   rust-deps:
     plugin: nil

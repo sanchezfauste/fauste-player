@@ -442,7 +442,7 @@ packaging: the workflow refuses other tags, and tags made before it
 | Job | Store | What it does | Publishes when |
 |---|---|---|---|
 | `msstore` | Microsoft Store | builds an unsigned MSIX (`scripts/package/msix.sh`; the Store signs it) and submits it with the Microsoft Store CLI (`msstore publish`) | the `MSSTORE_*` secrets and variables are set |
-| `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 (`snapcore/action-build`) and uploads and releases it (`snapcore/action-publish`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
+| `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 (`snapcore/action-build`), uploads and releases it (`snapcore/action-publish`), and on a release (not a pre-release) sends the amd64 snap's summary, description, title, licence and icon to the store listing (`snapcraft upload-metadata --force`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
 | `flathub` | Flathub | writes the Flathub manifest (`scripts/package/flathub-manifest.py`: the in-tree manifest with the release's git tag and commit as its source) and `cargo-sources.json`, lints both with `flatpak-builder-lint`, and opens a pull request on `flathub/com.sanchezfauste.FaustePlayer` | `FLATHUB_TOKEN` is set |
 | `winget` | WinGet | opens a pull request on `microsoft/winget-pkgs` with the release's MSI (`vedantmgoyal9/winget-releaser`) | `WINGET_TOKEN` is set |
 | `aur` | AUR | writes the `fauste-player-bin` PKGBUILD from `packaging/aur/PKGBUILD.in` (`scripts/package/aur.sh`, with the checksums of the release archives), checks it with `makepkg --printsrcinfo` and `namcap`, and pushes it | `AUR_SSH_PRIVATE_KEY` is set |
@@ -454,7 +454,9 @@ packaging: the workflow refuses other tags, and tags made before it
   manifest and checks the PKGBUILD, and publishes nothing.
 - **Shared metadata:** the snap, the Flathub build and the stores' listings
   read the AppStream metainfo (`packaging/linux/com.sanchezfauste.FaustePlayer.metainfo.xml`),
-  whose screenshots point at `docs/images` on `master`. The MSIX logos in
+  whose screenshots point at `docs/images` on `master` (the Snap Store takes
+  only its texts: the icon comes with `snapcraft upload-metadata`, the
+  screenshots are uploaded by hand; see "Snap Store" below). The MSIX logos in
   `packaging/windows/msix/Assets` are rendered by `scripts/package/icons.sh`.
 - **Toolchain:** the snap's `rust-deps` part installs the version
   `rust-toolchain.toml` pins, with rustup. The Flatpak and Flathub builds use
@@ -478,7 +480,7 @@ credentials; variables hold public identifiers.
 | `MSSTORE_SELLER_ID` | secret | Partner Center → Account settings → Legal info → Seller ID |
 | `MSSTORE_PRODUCT_ID` | variable | the Store ID of the app (`9N…`), Partner Center → Product identity |
 | `MSSTORE_IDENTITY_NAME`, `MSSTORE_PUBLISHER`, `MSSTORE_PUBLISHER_DISPLAY_NAME` | variables | Package/Identity/Name, Package/Identity/Publisher (`CN=…`) and Package/Properties/PublisherDisplayName from Product identity |
-| `SNAPCRAFT_STORE_CREDENTIALS` | secret | the output of `snapcraft export-login --snaps=fauste-player --acls=package_access,package_push,package_update,package_release -` |
+| `SNAPCRAFT_STORE_CREDENTIALS` | secret | the output of `snapcraft export-login --snaps=fauste-player --acls=package_access,package_push,package_update,package_release,package_metadata -` (`package_metadata` for the listing update) |
 | `SNAP_CHANNEL` | variable (optional) | the channel releases go to; default `stable` |
 | `FLATHUB_TOKEN` | secret | a token of a maintainer of `flathub/com.sanchezfauste.FaustePlayer` that can push branches and open pull requests there: fine-grained (*contents* and *pull requests* write) if the flathub organisation accepts fine-grained tokens, otherwise classic with `public_repo` |
 | `WINGET_TOKEN` | secret | a classic token with the `public_repo` scope, of the account that owns the fork of `microsoft/winget-pkgs`; best a separate bot account (`WINGET_FORK_USER`), since `public_repo` on the maintainer's account can also push to this repository |
@@ -519,6 +521,15 @@ credentials; variables hold public identifiers.
    until then users run `snap connect fauste-player:alsa` for direct ALSA
    (bit-perfect) devices and MIDI. PulseAudio and PipeWire output work
    without it (`audio-playback`).
+4. The listing's screenshots and featured banner are uploaded by hand on
+   snapcraft.io (*Listing*): snapcraft sends only the icon, and the store
+   reads neither from the metainfo. Screenshots: PNG, JPEG or GIF, 480×480
+   to 3840×2160, aspect ratio between 1:2 and 2:1, at most 2 MB (the ones
+   in `docs/images` that fit: `main-screen.png`, `guide/tag-editor.png`,
+   `guide/settings-*.png`). Banner: PNG or JPEG, 3:1, 720×240 to
+   4320×1440, at most 2 MB. Re-upload them after a visible UI change. The
+   icon (40×40 to 512×512, 1:1) comes from the snap on every release; the
+   store's "Update metadata on release" refreshes the texts only.
 
 **Flathub**
 1. The application ID must belong to a domain or code host the developer
