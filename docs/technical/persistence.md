@@ -187,6 +187,7 @@ An entry in `bit_perfect`, `dsd_output` or `device_overrides` for a device no ro
 | Field | Default | Meaning |
 |---|---|---|
 | `window_system` | `Auto` | `Auto`, `X11` or `Wayland`, Linux only, read at start: the window system the window opens on. `Auto` takes X11 when `DISPLAY` is set (natively or through XWayland), since winit 0.30 delivers file drops only through X11; `X11` and `Wayland` take that one when it is there. Anything else leaves the choice to winit |
+| `keep_screen_on` | `true` | Mobile only (spec MB8): the screen stays on while playout is active (`fp_model::playout_active`). Ignored on desktop |
 | `outputs_view` | `Basic` | `Basic` or `Advanced`: what Settings → Audio outputs shows. It changes no output setting |
 | `follow_current_grace_secs` | 10 | 0 … 600 (seconds after the operator uses a zoomed waveform or a playlist table before it follows what plays; 0 never follows) |
 | `table_columns` | `["number", "title", "artist", "duration"]` | an ordered list of `number`, `title`, `artist`, `album`, `date`, `genre`, `duration`, `intro`, `file_name`, `comment`; unknown names are dropped when the file is read, duplicates keep their first place, and a missing `title` or `duration` is added back (`Config::validate` warns) |

@@ -67,6 +67,15 @@ fn the_window_system_is_auto_by_default_and_is_kept() {
 }
 
 #[test]
+fn keep_screen_on_defaults_on_and_old_configs_load() {
+    assert!(Config::default().ui.keep_screen_on);
+    let c: Config = serde_json::from_str(r#"{"ui":{"wave_color":"slate"}}"#).unwrap();
+    assert!(c.ui.keep_screen_on);
+    let c: Config = serde_json::from_str(r#"{"ui":{"keep_screen_on":false}}"#).unwrap();
+    assert!(!c.ui.keep_screen_on);
+}
+
+#[test]
 fn by_default_no_device_has_its_own_values() {
     let mut c = Config::default();
     assert!(c.outputs.device_overrides.is_empty());
