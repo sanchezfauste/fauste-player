@@ -12,6 +12,9 @@ object Native {
     /** Bit of [state]: keep the screen on (MB8). */
     const val KEEP_SCREEN_ON = 2
 
+    /** Bit of [state]: something sounds; hold the audio focus only then (MB4). */
+    const val SOUNDING = 4
+
     /** The system bars and display cutout, in physical pixels (MB10). */
     external fun setInsets(left: Int, top: Int, right: Int, bottom: Int)
 

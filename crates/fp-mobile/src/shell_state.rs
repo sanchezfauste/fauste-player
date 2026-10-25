@@ -7,18 +7,34 @@ use fp_model::{AppState, Transport, playout_active};
 pub const PLAYOUT_ACTIVE: i32 = 1;
 /// Bit of `shell_state`: keep the screen on (MB8).
 pub const KEEP_SCREEN_ON: i32 = 2;
+/// Bit of `shell_state`: something sounds (a player playing, a cart, a
+/// CUE); the shell holds the audio focus only then (MB4).
+pub const SOUNDING: i32 = 4;
 
 /// `PLAYOUT_ACTIVE` while playout is active, with `KEEP_SCREEN_ON` when
-/// the setting asks for it too.
+/// the setting asks for it too, and `SOUNDING` while something sounds.
 pub fn shell_state(state: &AppState) -> i32 {
     if !playout_active(state) {
         return 0;
     }
+    let mut bits = PLAYOUT_ACTIVE;
     if state.config.ui.keep_screen_on {
-        PLAYOUT_ACTIVE | KEEP_SCREEN_ON
-    } else {
-        PLAYOUT_ACTIVE
+        bits |= KEEP_SCREEN_ON;
     }
+    if sounding(state) {
+        bits |= SOUNDING;
+    }
+    bits
+}
+
+/// A player playing or pre-listening, or a cart playing or pre-listening.
+fn sounding(state: &AppState) -> bool {
+    state
+        .players
+        .iter()
+        .any(|p| p.transport == Transport::Playing || p.cue.is_some())
+        || !state.cartwall.playing.is_empty()
+        || state.cartwall.cue.is_some()
 }
 
 /// The notification's text: one "P<n> — <title>" line per player playing

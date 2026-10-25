@@ -52,7 +52,9 @@ class MainActivity : GameActivity() {
         handler.post(poll)
     }
 
+    /** Once more on the way out: Play then Home within a poll still gets the service. */
     override fun onPause() {
+        follow(Native.state())
         handler.removeCallbacks(poll)
         super.onPause()
     }

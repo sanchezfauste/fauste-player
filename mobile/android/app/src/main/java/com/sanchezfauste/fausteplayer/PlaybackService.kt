@@ -28,10 +28,12 @@ class PlaybackService : Service() {
     private var focus: AudioFocusRequest? = null
     private val refresh = object : Runnable {
         override fun run() {
-            if (Native.state() and Native.PLAYOUT_ACTIVE == 0) {
+            val state = Native.state()
+            if (state and Native.PLAYOUT_ACTIVE == 0) {
                 stopSelf()
                 return
             }
+            followFocus(state)
             notificationManager().notify(NOTIFICATION, notification())
             handler.postDelayed(this, REFRESH_MS)
         }
@@ -56,7 +58,6 @@ class PlaybackService : Service() {
             })
             isActive = true
         }
-        requestFocus()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -65,6 +66,7 @@ class PlaybackService : Service() {
             notification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
         )
+        followFocus(Native.state())
         handler.removeCallbacks(refresh)
         handler.postDelayed(refresh, REFRESH_MS)
         return START_NOT_STICKY
@@ -72,12 +74,29 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(refresh)
-        focus?.let { getSystemService(AudioManager::class.java).abandonAudioFocusRequest(it) }
-        Native.setAudioFocusLost(false)
+        abandonFocus()
         session?.release()
         session = null
         running = false
         super.onDestroy()
+    }
+
+    /**
+     * Holds the audio focus only while something sounds: a loaded track
+     * alone must not pause the operator's other apps.
+     */
+    private fun followFocus(state: Int) {
+        if (state and Native.SOUNDING != 0) {
+            if (focus == null) requestFocus()
+        } else {
+            abandonFocus()
+        }
+    }
+
+    private fun abandonFocus() {
+        focus?.let { getSystemService(AudioManager::class.java).abandonAudioFocusRequest(it) }
+        focus = null
+        Native.setAudioFocusLost(false)
     }
 
     /** The system does not duck us (we "pause when ducked", but never do). */
