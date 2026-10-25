@@ -85,6 +85,36 @@ jobs:
         run: scripts/check-windows-gui.sh --self-test
         shell: bash
 
+  android:
+    name: android (debug APK)
+    # Mobile spec §7: the Android app builds on every change, and the
+    # `unsafe` exception stays inside fp-mobile (spec §8).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install the pinned toolchain and the Android targets
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add aarch64-linux-android x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+      - run: scripts/check-mobile-isolation.sh
+      - run: cargo test -p fp-mobile --locked
+      # The runner's SDK carries an NDK r27, which the script finds.
+      - run: scripts/package/android.sh debug
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fauste-player-android-debug
+          path: mobile/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
   sonarqube:
     name: SonarQube
     # Informative only: the analysis never blocks a pull request. Pull
