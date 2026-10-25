@@ -23,7 +23,9 @@ mod devices;
 mod keys;
 mod loudness;
 mod meters;
+#[cfg(not(target_os = "android"))]
 mod midi;
+#[cfg(not(target_os = "android"))]
 mod remote;
 use super::format;
 use super::theme;
@@ -63,7 +65,9 @@ pub(crate) enum Section {
     Playlists,
     Cartwall,
     Shortcuts,
+    #[cfg(not(target_os = "android"))]
     Midi,
+    #[cfg(not(target_os = "android"))]
     Remote,
 }
 
@@ -82,6 +86,7 @@ pub(crate) struct SettingsState {
     pub(super) keys: keys::KeysState,
     /// The MIDI action waiting for a control (MIDI learn).
     pub(super) midi_learning: Option<fp_model::MidiAction>,
+    #[cfg(not(target_os = "android"))]
     pub(super) remote: remote::RemoteState,
     /// The section whose "Restore defaults" waits for an answer.
     pub(super) confirm_restore: Option<SettingsSection>,
@@ -190,7 +195,9 @@ pub(crate) struct SettingsDeps<'a> {
     pub backends: &'a [Arc<dyn AudioBackend>],
     pub services: Option<&'a Sender<ServiceRequest>>,
     pub notice: Option<String>,
+    #[cfg(not(target_os = "android"))]
     pub midi: Option<&'a fp_control::service::MidiHandle>,
+    #[cfg(not(target_os = "android"))]
     pub remote: Option<fp_remote::RemoteStatus>,
     /// An output change waits (live settings spec §9.1).
     pub pending: bool,
@@ -305,9 +312,11 @@ pub(crate) fn show(
                                             Section::Playlists => playlists(ui, scene, st),
                                             Section::Cartwall => carts::section(ui, scene, st),
                                             Section::Shortcuts => keys::section(ui, scene, st),
+                                            #[cfg(not(target_os = "android"))]
                                             Section::Midi => {
                                                 midi::section(ui, scene, st, deps.midi)
                                             }
+                                            #[cfg(not(target_os = "android"))]
                                             Section::Remote => {
                                                 remote::section(ui, scene, st, deps.remote.as_ref())
                                             }
@@ -416,7 +425,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
         ui.painter()
             .rect_filled(ui.max_rect(), 0.0, theme::NEUTRAL_900);
         ui.add_space(8.0);
-        for (section, glyph, key) in SECTIONS {
+        for &(section, glyph, key) in SECTIONS {
             let on = st.section == section;
             let label = t.tr(key);
             let style = TileStyle {
@@ -451,6 +460,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
                 }
             });
             if response.clicked() {
+                #[cfg(not(target_os = "android"))]
                 if st.section == Section::Remote && section != Section::Remote {
                     remote::flush(scene, &mut st.remote);
                 }
@@ -466,7 +476,7 @@ fn button(ui: &mut Ui, text: &str) -> bool {
 }
 
 /// Every section: its nav glyph and its title.
-const SECTIONS: [(Section, &str, &str); 10] = [
+const SECTIONS: &[(Section, &str, &str)] = &[
     (Section::Outputs, icon::SPEAKER_HIGH, "settings-tab-outputs"),
     (
         Section::Players,
@@ -487,7 +497,9 @@ const SECTIONS: [(Section, &str, &str); 10] = [
         "settings-tab-cartwall",
     ),
     (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
+    #[cfg(not(target_os = "android"))]
     (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
+    #[cfg(not(target_os = "android"))]
     (Section::Remote, icon::BROADCAST, "settings-tab-remote"),
 ];
 
@@ -502,11 +514,9 @@ fn restorable(section: Section) -> Option<SettingsSection> {
         Section::Analysis => Some(SettingsSection::Analysis),
         Section::Loudness => Some(SettingsSection::Loudness),
         Section::Shortcuts => Some(SettingsSection::Shortcuts),
-        Section::Outputs
-        | Section::Playlists
-        | Section::Cartwall
-        | Section::Midi
-        | Section::Remote => None,
+        Section::Outputs | Section::Playlists | Section::Cartwall => None,
+        #[cfg(not(target_os = "android"))]
+        Section::Midi | Section::Remote => None,
     }
 }
 

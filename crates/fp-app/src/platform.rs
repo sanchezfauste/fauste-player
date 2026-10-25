@@ -37,8 +37,10 @@ pub trait Platform: Send + Sync {
 }
 
 /// The native dialogs (`rfd`) and the system opener (`open`).
+#[cfg(not(target_os = "android"))]
 pub struct DesktopPlatform;
 
+#[cfg(not(target_os = "android"))]
 impl Platform for DesktopPlatform {
     fn pick_audio_files(&self, filter_name: &str, start: Option<PathBuf>) -> Vec<PathBuf> {
         let mut dialog =
@@ -105,5 +107,51 @@ impl Platform for DesktopPlatform {
 
     fn can_write_user_files(&self) -> bool {
         true
+    }
+}
+
+/// What the interface uses on Android until the mobile shell gives its
+/// own platform: nothing can be picked, opened or written.
+#[cfg(target_os = "android")]
+pub struct NoPlatform;
+
+#[cfg(target_os = "android")]
+impl Platform for NoPlatform {
+    fn pick_audio_files(&self, _filter_name: &str, _start: Option<PathBuf>) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    fn pick_file(
+        &self,
+        _filter_name: &str,
+        _extensions: &[&str],
+        _start: Option<PathBuf>,
+    ) -> Option<PathBuf> {
+        None
+    }
+
+    fn pick_folder(&self, _start: Option<PathBuf>) -> Option<PathBuf> {
+        None
+    }
+
+    fn save_file(
+        &self,
+        _filter_name: &str,
+        _extensions: &[&str],
+        _file_name: String,
+    ) -> Option<PathBuf> {
+        None
+    }
+
+    fn open_url(&self, _url: &str) -> Result<(), String> {
+        Err("not available".to_owned())
+    }
+
+    fn audio_focus_lost(&self) -> bool {
+        false
+    }
+
+    fn can_write_user_files(&self) -> bool {
+        false
     }
 }

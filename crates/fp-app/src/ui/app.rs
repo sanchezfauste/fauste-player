@@ -35,7 +35,7 @@ use super::tag_editor;
 use super::theme;
 use super::widgets::{self, TileStyle, font};
 use crate::i18n::I18n;
-use crate::platform::{DesktopPlatform, Platform};
+use crate::platform::Platform;
 use crate::services::{MediaCache, ServiceRequest};
 use crate::tags::{TagJob, TagOutcome, TagWorker};
 
@@ -409,8 +409,10 @@ pub struct AppUi {
     opener: Option<Opener>,
     platform: Arc<dyn Platform>,
     /// The MIDI service's handle (Settings > MIDI), when it started.
+    #[cfg(not(target_os = "android"))]
     midi: Option<fp_control::service::MidiHandle>,
     /// The remote servers' state (Settings > Remote), when they started.
+    #[cfg(not(target_os = "android"))]
     remote_status: Option<Arc<arc_swap::ArcSwap<fp_remote::RemoteStatus>>>,
     /// Reads and writes tags off the interface thread; started by the first
     /// use of the tag editor.
@@ -467,8 +469,10 @@ impl AppUi {
             service_faults: None,
             notices: None,
             opener: None,
-            platform: Arc::new(DesktopPlatform),
+            platform: system_platform(),
+            #[cfg(not(target_os = "android"))]
             midi: None,
+            #[cfg(not(target_os = "android"))]
             remote_status: None,
             tag_worker: None,
             cover_picks_tx,
@@ -511,12 +515,14 @@ impl AppUi {
     }
 
     /// The MIDI service, for Settings > MIDI.
+    #[cfg(not(target_os = "android"))]
     pub fn with_midi(mut self, midi: fp_control::service::MidiHandle) -> Self {
         self.midi = Some(midi);
         self
     }
 
     /// The remote servers' state, for Settings > Remote.
+    #[cfg(not(target_os = "android"))]
     pub fn with_remote_status(
         mut self,
         status: Arc<arc_swap::ArcSwap<fp_remote::RemoteStatus>>,
@@ -854,7 +860,9 @@ impl AppUi {
                     .as_ref()
                     .filter(|(_, until)| *until > time)
                     .map(|(text, _)| text.clone()),
+                #[cfg(not(target_os = "android"))]
                 midi: self.midi.as_ref(),
+                #[cfg(not(target_os = "android"))]
                 remote: self.remote_status.as_ref().map(|s| (**s.load()).clone()),
                 pending: !pending.is_empty(),
                 can_apply: fp_model::has_output_items(&state),
@@ -869,7 +877,10 @@ impl AppUi {
             self.settings_shown = false;
             // Closing Settings ends MIDI learn: the next press on a surface
             // must act, not bind.
-            if self.settings.midi_learning.take().is_some()
+            #[cfg_attr(target_os = "android", allow(unused_variables))]
+            let learning = self.settings.midi_learning.take();
+            #[cfg(not(target_os = "android"))]
+            if learning.is_some()
                 && let Some(midi) = &self.midi
             {
                 let _ = midi
@@ -1687,6 +1698,16 @@ fn start_cover_dialog(
         tracing::error!(error = %e, "could not open the image dialog");
     }
     spawned.is_ok()
+}
+
+/// The native dialogs on desktop; on Android the mobile shell gives its
+/// own (`with_platform`) and, until it does, nothing can be picked or
+/// written.
+fn system_platform() -> Arc<dyn Platform> {
+    #[cfg(not(target_os = "android"))]
+    return Arc::new(crate::platform::DesktopPlatform);
+    #[cfg(target_os = "android")]
+    return Arc::new(crate::platform::NoPlatform);
 }
 
 /// Opens files and links through `platform`, logging what fails.
