@@ -23,7 +23,7 @@ use super::controller::Controller;
 use super::cue_on_air;
 use super::cue_window;
 use super::exit_guard::{self, ExitIntent};
-use super::files::{AUDIO_EXTENSIONS, audio_paths};
+use super::files::audio_paths;
 use super::notice;
 use super::panel_layout;
 use super::panels;
@@ -35,6 +35,7 @@ use super::tag_editor;
 use super::theme;
 use super::widgets::{self, TileStyle, font};
 use crate::i18n::I18n;
+use crate::platform::{DesktopPlatform, Platform};
 use crate::services::{MediaCache, ServiceRequest};
 use crate::tags::{TagJob, TagOutcome, TagWorker};
 
@@ -297,6 +298,8 @@ pub(crate) struct Scene<'a> {
     picks: &'a Sender<Picked>,
     pub files: &'a Sender<FileOutcome>,
     pub services: Option<&'a Sender<ServiceRequest>>,
+    /// Pickers, links and what the system allows (mobile spec §4).
+    pub platform: &'a Arc<dyn Platform>,
 }
 
 impl Scene<'_> {
@@ -346,16 +349,11 @@ impl Scene<'_> {
         let ctx = self.ctx.clone();
         let filter = self.i18n.tr("dialog-audio-files");
         let dir = self.state.config.ui.music_dir.clone();
+        let platform = self.platform.clone();
         let spawned = std::thread::Builder::new()
             .name("fp-file-dialog".to_owned())
             .spawn(move || {
-                let mut dialog = rfd::AsyncFileDialog::new().add_filter(filter, AUDIO_EXTENSIONS);
-                if let Some(dir) = dir {
-                    dialog = dialog.set_directory(dir);
-                }
-                let picked: Vec<PathBuf> = pollster::block_on(dialog.pick_files())
-                    .map(|files| files.iter().map(|f| f.path().to_path_buf()).collect())
-                    .unwrap_or_default();
+                let picked = platform.pick_audio_files(&filter, dir);
                 let paths = audio_paths(&picked);
                 let _ = tx.send(Picked {
                     playlist,
@@ -407,7 +405,9 @@ pub struct AppUi {
     service_faults: Option<Arc<std::sync::atomic::AtomicU64>>,
     /// The installed third-party notices, found at start-up.
     notices: Option<PathBuf>,
-    opener: Opener,
+    /// Replaces `Platform::open_url` in the About window (tests).
+    opener: Option<Opener>,
+    platform: Arc<dyn Platform>,
     /// The MIDI service's handle (Settings > MIDI), when it started.
     midi: Option<fp_control::service::MidiHandle>,
     /// The remote servers' state (Settings > Remote), when they started.
@@ -466,7 +466,8 @@ impl AppUi {
             backends: Vec::new(),
             service_faults: None,
             notices: None,
-            opener: about::system_opener(),
+            opener: None,
+            platform: Arc::new(DesktopPlatform),
             midi: None,
             remote_status: None,
             tag_worker: None,
@@ -526,7 +527,15 @@ impl AppUi {
 
     /// How the About window opens the notices file.
     pub fn with_notice_opener(mut self, opener: Opener) -> Self {
-        self.opener = opener;
+        self.opener = Some(opener);
+        self
+    }
+
+    /// The system the interface runs on: pickers, links, the audio focus
+    /// and whether user files may be written (`DesktopPlatform` by
+    /// default).
+    pub fn with_platform(mut self, platform: Arc<dyn Platform>) -> Self {
+        self.platform = platform;
         self
     }
 
@@ -717,6 +726,7 @@ impl AppUi {
             picks: &self.picks_tx,
             files: &self.files_tx,
             services: self.services.as_ref(),
+            platform: &self.platform,
         };
         let full = ui.available_rect_before_wrap();
         ui.painter().rect_filled(full, 0.0, theme::BG);
@@ -867,8 +877,12 @@ impl AppUi {
                     .send(fp_control::service::MidiRequest::CancelLearn);
             }
             if self.view.about_open {
+                let opener = self
+                    .opener
+                    .clone()
+                    .unwrap_or_else(|| platform_opener(self.platform.clone()));
                 self.view.about_open =
-                    about::show(&ctx, &scene, self.notices.as_deref(), &self.opener);
+                    about::show(&ctx, &scene, self.notices.as_deref(), opener.as_ref());
             } else if self.view.outdated_open {
                 let count = self.outdated.get(&state);
                 match notice::show(&ctx, &scene, count) {
@@ -925,13 +939,16 @@ impl AppUi {
                             #[cfg(not(feature = "test-hooks"))]
                             let hook: Option<CoverPicker> = None;
                             let filter = scene.i18n.tr("dialog-image-files");
+                            let platform = self.platform.clone();
                             let folder = state
                                 .library
                                 .get(editor.track)
                                 .and_then(|t| t.path.parent().map(Path::to_path_buf));
                             let pick = move || match hook {
                                 Some(picker) => picker(),
-                                None => pick_cover_image(filter, folder),
+                                None => {
+                                    platform.pick_file(&filter, &["jpg", "jpeg", "png"], folder)
+                                }
                             };
                             if start_cover_dialog(
                                 &self.cover_picks_tx,
@@ -1672,13 +1689,13 @@ fn start_cover_dialog(
     spawned.is_ok()
 }
 
-/// The native dialog for a cover image (JPEG or PNG), starting in `folder`.
-fn pick_cover_image(filter: String, folder: Option<PathBuf>) -> Option<PathBuf> {
-    let mut dialog = rfd::AsyncFileDialog::new().add_filter(filter, &["jpg", "jpeg", "png"]);
-    if let Some(folder) = folder {
-        dialog = dialog.set_directory(folder);
-    }
-    pollster::block_on(dialog.pick_file()).map(|file| file.path().to_path_buf())
+/// Opens files and links through `platform`, logging what fails.
+fn platform_opener(platform: Arc<dyn Platform>) -> Opener {
+    Arc::new(move |path: &Path| {
+        if let Err(error) = platform.open_url(&path.to_string_lossy()) {
+            tracing::warn!(%error, path = %path.display(), "could not open the file or link");
+        }
+    })
 }
 
 /// Why a save failed, in the interface language.
@@ -1979,6 +1996,11 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
         .collect();
     let ids: Vec<PlayerId> = scene.state.players.iter().map(|p| p.id).collect();
     alerts.extend(view_state.dropouts.alerts(scene.time, &ids, t));
+    // MB4: playout goes on; the operator only learns why the phone may
+    // be mixing another app in.
+    if scene.platform.audio_focus_lost() {
+        alerts.push(t.tr("alert-audio-focus-lost"));
+    }
     if faults > 0 {
         alerts.push(t.tr_args("alert-services-fault", &[("count", faults.into())]));
     }

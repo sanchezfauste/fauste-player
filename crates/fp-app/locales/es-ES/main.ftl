@@ -211,6 +211,7 @@ settings-hint-use-cue-markers = Desactivado: los players reproducen cada pista d
 settings-hint-end-warning = La cuenta atrás se pone roja este tiempo antes del final
 settings-hint-reanalyse = Se recalculan los marcadores automáticos; los manuales se conservan
 alert-services-fault = Los servicios en segundo plano tuvieron un error ({ $count }); la reproducción y el guardado continúan
+alert-audio-focus-lost = Otra app ha tomado el audio — la emisión continúa
 error-not-found = Ese elemento ya no existe.
 error-no-playlists = No hay playlists.
 placeholder-none = —

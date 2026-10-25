@@ -188,20 +188,20 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 name: String::new(),
             });
         }
-        if button(
-            ui,
-            &t.tr("settings-cart-import"),
-            icon::DOWNLOAD_SIMPLE,
-            c.import.is_none(),
-        ) {
+        // Read-only music on mobile (spec §2): no import or export.
+        let writes = scene.platform.can_write_user_files();
+        if writes
+            && button(
+                ui,
+                &t.tr("settings-cart-import"),
+                icon::DOWNLOAD_SIMPLE,
+                c.import.is_none(),
+            )
+        {
             let limits = scene.state.config.limits.clone();
+            let platform = scene.platform.clone();
             c.import = background(scene, move || {
-                let file = pollster::block_on(
-                    rfd::AsyncFileDialog::new()
-                        .add_filter("JSON", &["json"])
-                        .pick_file(),
-                )?;
-                let path = file.path().to_path_buf();
+                let path = platform.pick_file("JSON", &["json"], None)?;
                 Some(
                     read_bounded(&path, limits.max_playlist_file_bytes)
                         .map_err(FileError::from)
@@ -217,25 +217,23 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 )
             });
         }
-        if button(
-            ui,
-            &t.tr("settings-cart-export"),
-            icon::EXPORT,
-            c.export.is_none(),
-        ) {
+        if writes
+            && button(
+                ui,
+                &t.tr("settings-cart-export"),
+                icon::EXPORT,
+                c.export.is_none(),
+            )
+        {
             let text = write_cart_page(page, &scene.state.library);
             let index = wall.pages.iter().position(|p| p.id == page_id).unwrap_or(0);
             let file_name = format!(
                 "{}.cartpage.json",
                 super::super::playlist_files::safe_file_name(&page_name(scene, index, &page.name))
             );
+            let platform = scene.platform.clone();
             c.export = background(scene, move || {
-                let file = pollster::block_on(
-                    rfd::AsyncFileDialog::new()
-                        .set_file_name(file_name)
-                        .save_file(),
-                )?;
-                let path = file.path().to_path_buf();
+                let path = platform.save_file("", &[], file_name)?;
                 Some(
                     std::fs::write(&path, text)
                         .map(|()| path)
@@ -489,12 +487,9 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     if choose {
         let filter = t.tr("dialog-audio-files");
         let dir = scene.state.config.ui.music_dir.clone();
+        let platform = scene.platform.clone();
         c.file = background(scene, move || {
-            let mut dialog = rfd::AsyncFileDialog::new().add_filter(filter, AUDIO_EXTENSIONS);
-            if let Some(dir) = dir {
-                dialog = dialog.set_directory(dir);
-            }
-            pollster::block_on(dialog.pick_file()).map(|f| f.path().to_path_buf())
+            platform.pick_file(&filter, AUDIO_EXTENSIONS, dir)
         });
     }
     if clear {

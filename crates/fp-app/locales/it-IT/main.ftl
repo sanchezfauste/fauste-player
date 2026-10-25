@@ -211,6 +211,7 @@ settings-hint-use-cue-markers = Disattivato: i lettori suonano ogni brano dall'i
 settings-hint-end-warning = Il conto alla rovescia diventa rosso con questo anticipo sulla fine
 settings-hint-reanalyse = I marker automatici vengono ricalcolati; quelli manuali vengono mantenuti
 alert-services-fault = I servizi in background hanno riscontrato un errore ({ $count }); la riproduzione e il salvataggio continuano
+alert-audio-focus-lost = Un'altra app ha preso il focus audio — la messa in onda continua
 error-not-found = Quell'elemento non esiste più.
 error-no-playlists = Non ci sono playlist.
 placeholder-none = —

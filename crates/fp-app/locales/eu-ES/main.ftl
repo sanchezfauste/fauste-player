@@ -211,6 +211,7 @@ settings-hint-use-cue-markers = Desaktibatuta: erreproduzitzaileek pista bakoitz
 settings-hint-end-warning = Atzerako kontaketa gorri jartzen da amaiera baino denbora hori lehenago
 settings-hint-reanalyse = Markatzaile automatikoak berriro kalkulatzen dira; eskuzkoak gorde egiten dira
 alert-services-fault = Atzeko planoko zerbitzuek errore bat izan dute ({ $count }); erreprodukzioak eta gordetzeak aurrera jarraitzen dute
+alert-audio-focus-lost = Beste aplikazio batek audioa hartu du — emisioak jarraitzen du
 error-not-found = Elementu hori ez dago jada.
 error-no-playlists = Ez dago zerrendarik.
 placeholder-none = —

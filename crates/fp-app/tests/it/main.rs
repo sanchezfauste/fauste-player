@@ -37,6 +37,7 @@ mod next_row_ui;
 mod outdated_notice;
 mod panel_layout;
 mod panic_isolation;
+mod platform_ui;
 mod play_button_ui;
 mod playlist_files;
 mod playlist_keyboard_ui;

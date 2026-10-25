@@ -972,15 +972,18 @@ fn context_menu(
         scene.request(crate::services::ServiceRequest::ReanalyseTrack(track.id));
         ui.close();
     }
-    let block = view::tag_edit_availability(scene.state, track.id);
-    let edit = labelled(ui, icon::PENCIL_SIMPLE, "menu-edit-tags", block.is_none());
-    let edit = match block {
-        Some(reason) => edit.on_disabled_hover_text(t.tr(super::tag_editor::block_key(reason))),
-        None => edit,
-    };
-    if edit.clicked() {
-        outcome = Some(RowMenuOutcome::EditTags(track.id));
-        ui.close();
+    // Read-only music on mobile (spec §2): no tag or cover editing.
+    if scene.platform.can_write_user_files() {
+        let block = view::tag_edit_availability(scene.state, track.id);
+        let edit = labelled(ui, icon::PENCIL_SIMPLE, "menu-edit-tags", block.is_none());
+        let edit = match block {
+            Some(reason) => edit.on_disabled_hover_text(t.tr(super::tag_editor::block_key(reason))),
+            None => edit,
+        };
+        if edit.clicked() {
+            outcome = Some(RowMenuOutcome::EditTags(track.id));
+            ui.close();
+        }
     }
     if labelled(ui, icon::SPEAKER_HIGH, "menu-loudness", true).clicked() {
         outcome = Some(RowMenuOutcome::Loudness(track.id));

@@ -303,3 +303,58 @@ pub fn activity_cell(
 pub fn nth_track(state: &AppState, n: usize) -> fp_model::TrackId {
     state.playlists.iter().next().unwrap().entries[n].track
 }
+
+/// A platform that records what the interface asks for and answers with
+/// canned values (mobile spec §4).
+#[derive(Default)]
+pub struct FakePlatform {
+    pub audio_files: Vec<PathBuf>,
+    pub focus_lost: AtomicBool,
+    pub read_only: bool,
+    pub asked: Mutex<Vec<String>>,
+}
+
+impl fp_app::platform::Platform for FakePlatform {
+    fn pick_audio_files(&self, _filter_name: &str, _start: Option<PathBuf>) -> Vec<PathBuf> {
+        self.asked.lock().unwrap().push("audio files".into());
+        self.audio_files.clone()
+    }
+
+    fn pick_file(
+        &self,
+        _filter_name: &str,
+        _extensions: &[&str],
+        _start: Option<PathBuf>,
+    ) -> Option<PathBuf> {
+        self.asked.lock().unwrap().push("file".into());
+        None
+    }
+
+    fn pick_folder(&self, _start: Option<PathBuf>) -> Option<PathBuf> {
+        self.asked.lock().unwrap().push("folder".into());
+        None
+    }
+
+    fn save_file(
+        &self,
+        _filter_name: &str,
+        _extensions: &[&str],
+        _file_name: String,
+    ) -> Option<PathBuf> {
+        self.asked.lock().unwrap().push("save".into());
+        None
+    }
+
+    fn open_url(&self, url: &str) -> Result<(), String> {
+        self.asked.lock().unwrap().push(format!("open {url}"));
+        Ok(())
+    }
+
+    fn audio_focus_lost(&self) -> bool {
+        self.focus_lost.load(Ordering::Relaxed)
+    }
+
+    fn can_write_user_files(&self) -> bool {
+        !self.read_only
+    }
+}

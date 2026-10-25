@@ -1670,17 +1670,20 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             st.new_name.clear();
         }
         let import = t.tr("settings-import-playlist");
-        if widgets::text_button(
-            ui,
-            Some(icon::DOWNLOAD_SIMPLE),
-            &import,
-            true,
-            TileStyle::plain(),
-        )
-        .clicked()
+        // Read-only music on mobile (spec §2): no import or export.
+        if scene.platform.can_write_user_files()
+            && widgets::text_button(
+                ui,
+                Some(icon::DOWNLOAD_SIMPLE),
+                &import,
+                true,
+                TileStyle::plain(),
+            )
+            .clicked()
         {
             super::playlist_files::import_with_dialog(
                 &scene.ctx,
+                scene.platform.clone(),
                 scene.state.config.limits.clone(),
                 scene.files.clone(),
             );
@@ -1760,30 +1763,32 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 .selectable(false),
             );
             let export = t.tr("settings-export-playlist");
-            if widgets::tile(
-                ui,
-                vec2(56.0, 30.0),
-                &t.tr_args("tip-export-playlist", &[("name", Arg::Text(name.clone()))]),
-                true,
-                TileStyle {
-                    border: Color32::TRANSPARENT,
-                    content: theme::NEUTRAL_300,
-                    ..TileStyle::plain()
-                },
-                |p, r, c| {
-                    p.text(
-                        r.center(),
-                        egui::Align2::CENTER_CENTER,
-                        format!("{} {export}", icon::EXPORT),
-                        font(12.0),
-                        c,
-                    );
-                },
-            )
-            .clicked()
+            if scene.platform.can_write_user_files()
+                && widgets::tile(
+                    ui,
+                    vec2(56.0, 30.0),
+                    &t.tr_args("tip-export-playlist", &[("name", Arg::Text(name.clone()))]),
+                    true,
+                    TileStyle {
+                        border: Color32::TRANSPARENT,
+                        content: theme::NEUTRAL_300,
+                        ..TileStyle::plain()
+                    },
+                    |p, r, c| {
+                        p.text(
+                            r.center(),
+                            egui::Align2::CENTER_CENTER,
+                            format!("{} {export}", icon::EXPORT),
+                            font(12.0),
+                            c,
+                        );
+                    },
+                )
+                .clicked()
             {
                 super::playlist_files::export_with_dialog(
                     &scene.ctx,
+                    scene.platform.clone(),
                     format!("{}.m3u8", super::playlist_files::safe_file_name(&name)),
                     super::playlist_files::export_entries(scene.state, id),
                     scene.files.clone(),
@@ -1818,15 +1823,11 @@ fn pick_folder(scene: &Scene<'_>) -> Option<Receiver<Option<PathBuf>>> {
     let (tx, rx) = crossbeam_channel::bounded(1);
     let ctx = scene.ctx.clone();
     let start = scene.state.config.ui.music_dir.clone();
+    let platform = scene.platform.clone();
     let spawned = std::thread::Builder::new()
         .name("fp-folder-dialog".to_owned())
         .spawn(move || {
-            let mut dialog = rfd::AsyncFileDialog::new();
-            if let Some(dir) = start {
-                dialog = dialog.set_directory(dir);
-            }
-            let folder = pollster::block_on(dialog.pick_folder());
-            let _ = tx.send(folder.map(|f| f.path().to_path_buf()));
+            let _ = tx.send(platform.pick_folder(start));
             ctx.request_repaint();
         });
     match spawned {

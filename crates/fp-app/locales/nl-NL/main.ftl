@@ -211,6 +211,7 @@ settings-hint-use-cue-markers = Uit: spelers spelen elk nummer van begin tot ein
 settings-hint-end-warning = Zo lang voor het einde wordt de aftelling rood
 settings-hint-reanalyse = Automatische markers worden herberekend; handmatige markers blijven bewaard
 alert-services-fault = Achtergronddiensten hadden een fout ({ $count }); afspelen en opslaan gaan door
+alert-audio-focus-lost = Een andere app heeft de audiofocus genomen — de uitzending gaat door
 error-not-found = Dat item bestaat niet meer.
 error-no-playlists = Er zijn geen playlists.
 placeholder-none = —

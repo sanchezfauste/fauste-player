@@ -211,6 +211,7 @@ settings-hint-use-cue-markers = Off: players play every track from the start to 
 settings-hint-end-warning = The countdown turns red this long before the end
 settings-hint-reanalyse = Automatic markers are recalculated; manual markers are kept
 alert-services-fault = Background services hit an error ({ $count }); playback and saving continue
+alert-audio-focus-lost = Another app took the audio focus — playout continues
 error-not-found = That item no longer exists.
 error-no-playlists = There are no playlists.
 placeholder-none = —
