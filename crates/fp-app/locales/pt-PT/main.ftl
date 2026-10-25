@@ -212,6 +212,8 @@ settings-hint-end-warning = A contagem decrescente fica vermelha este tempo ante
 settings-hint-reanalyse = Os marcadores automáticos são recalculados; os manuais são mantidos
 alert-services-fault = Os serviços em segundo plano tiveram um erro ({ $count }); a reprodução e a gravação continuam
 alert-audio-focus-lost = Outra app tomou o áudio — a emissão continua
+# The Android notification channel of the playout service.
+mobile-notification-channel = Emissão
 error-not-found = Esse elemento já não existe.
 error-no-playlists = Não há listas.
 placeholder-none = —

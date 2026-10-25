@@ -218,6 +218,8 @@ settings-hint-end-warning = Na tyle przed końcem odliczanie zmienia kolor na cz
 settings-hint-reanalyse = Automatyczne znaczniki są obliczane od nowa; ręczne zostają zachowane
 alert-services-fault = W usługach w tle wystąpił błąd ({ $count }); odtwarzanie i zapisywanie trwają dalej
 alert-audio-focus-lost = Inna aplikacja przejęła dźwięk — emisja trwa dalej
+# The Android notification channel of the playout service.
+mobile-notification-channel = Emisja
 error-not-found = Ten element już nie istnieje.
 error-no-playlists = Brak playlist.
 placeholder-none = —

@@ -212,6 +212,8 @@ settings-hint-end-warning = Le compte à rebours passe au rouge ce temps avant l
 settings-hint-reanalyse = Les marqueurs automatiques sont recalculés ; les marqueurs manuels sont conservés
 alert-services-fault = Les services d'arrière-plan ont rencontré une erreur ({ $count }) ; la lecture et l'enregistrement continuent
 alert-audio-focus-lost = Une autre application a pris le focus audio — la diffusion continue
+# The Android notification channel of the playout service.
+mobile-notification-channel = Diffusion
 error-not-found = Cet élément n'existe plus.
 error-no-playlists = Il n'y a aucune playlist.
 placeholder-none = —

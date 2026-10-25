@@ -212,6 +212,8 @@ settings-hint-end-warning = Der Countdown wird so lange vor dem Ende rot
 settings-hint-reanalyse = Automatische Marker werden neu berechnet; manuelle Marker bleiben erhalten
 alert-services-fault = Hintergrunddienste hatten einen Fehler ({ $count }); Wiedergabe und Speichern laufen weiter
 alert-audio-focus-lost = Eine andere App hat den Audiofokus übernommen — die Wiedergabe läuft weiter
+# The Android notification channel of the playout service.
+mobile-notification-channel = Sendeablauf
 error-not-found = Dieses Element existiert nicht mehr.
 error-no-playlists = Es gibt keine Playlists.
 placeholder-none = —
