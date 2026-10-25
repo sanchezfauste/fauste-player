@@ -5,7 +5,8 @@ This is the **canonical** guide for agents (Claude Code and any other).
 this file and keep `AGENTS.md` a pointer.
 
 Fauste Player is a desktop radio playout application in Rust (Linux,
-Windows, macOS). Read [`README.md`](README.md) for the overview and
+Windows, macOS), with an Android app in development on the same core
+(`docs/technical/mobile.md`). Read [`README.md`](README.md) for the overview and
 [`docs/technical/README.md`](docs/technical/README.md) for how it works.
 
 ## Non-negotiable rules
@@ -35,7 +36,11 @@ Windows, macOS). Read [`README.md`](README.md) for the overview and
    the bus mixer), logs, does I/O or panics. Memory enters through
    `BusCommand` and leaves through `Retired`.
 6. **Safety lints.**
-   - `unsafe_code` is forbidden.
+   - `unsafe_code` is forbidden. The one exception is `fp-mobile`
+     (Android only, mobile spec §8): it denies `unsafe_code` and allows it
+     only at its Android entry points (`android_main`, the JNI calls),
+     each with `#[allow(unsafe_code)]` and a `// SAFETY:` comment. No other
+     crate may depend on it; `scripts/check-mobile-isolation.sh` checks.
    - `unwrap`, `expect` and `panic` are denied outside tests.
    - `fp-engine`, `fp-backends`, `fp-decode`, `fp-analysis` and `fp-dsp` deny
      `clippy::indexing_slicing` (use `get`); prefer `get` everywhere.
@@ -81,6 +86,8 @@ python3 scripts/site/guide.py changed [lang]  # English guide pages changed sinc
 scripts/site/screenshots.sh [--only main] [--lang es-ES] [--out <dir>]  # README and guide screenshots from a scripted scene (Xvfb; see Testing notes)
 scripts/site/localized-screenshots.sh <dir> [lang…]  # the same in English and every guide language (CI does it on publish)
 scripts/site/compare-screenshots.sh [--fuzz 5] [--threshold 50] [--masks f] [--apply] [--prune] <new-dir> [docs/images]  # which screenshots really changed (the screenshots workflow uses it)
+scripts/package/android.sh <debug|release>     # Android APK (cargo-ndk, NDK r27, JDK 17+; see docs/technical/mobile.md)
+scripts/check-mobile-isolation.sh             # the fp-mobile unsafe exception stays isolated (CI runs it)
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test it real_music:: -- --ignored   # real-music corpus (local only)
 cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
@@ -191,7 +198,9 @@ hand: release-please writes it from the commits.
 | `crates/fp-analysis` | Metadata, signal analysis, cache, pool |
 | `crates/fp-control` | MIDI control surfaces: parsing, bindings, soft takeover, LED feedback, learn, the MIDI thread |
 | `crates/fp-remote` | Remote control over the network: HTTP/JSON API, SSE events, OSC, security guard, the remote thread |
-| `crates/fp-app` | UI (`src/ui/*`), services thread, bootstrap, logging, crash reports, locales, fonts |
+| `crates/fp-app` | UI (`src/ui/*`), services thread, session start-up (`session.rs`), the platform seam (`platform.rs`), bootstrap, logging, crash reports, locales, fonts |
+| `crates/fp-mobile` | The Android library: `android_main`, IME bridge, safe area, Android platform, JNI calls (the only crate with the `unsafe` exception) |
+| `mobile/android` | The Android shell (Gradle, Kotlin): the activity, the playout service, the JNI declarations |
 | `docs/superpowers/specs` | The binding design spec |
 | `docs/superpowers/plans` | Implementation plans (one per step of a phase) |
 | `docs/user`, `docs/technical` | User and technical documentation. Keep them in sync with behaviour. |

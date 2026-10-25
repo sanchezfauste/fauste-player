@@ -9,8 +9,9 @@ repeats the essentials for agents that do not follow links.
   the source and every string goes into every locale file.
 - Never mention other playout or radio-automation products anywhere.
 - Use established names; do not invent terms.
-- No `unsafe`. No `unwrap`, `expect` or `panic` outside tests. No hardcoded
-  product limits (use `Config`).
+- No `unsafe` (the one exception: the Android entry points in `fp-mobile`;
+  see `CLAUDE.md` rule 6). No `unwrap`, `expect` or `panic` outside tests.
+  No hardcoded product limits (use `Config`).
 - The real-time mixer path never allocates, frees, locks, logs or panics.
   The UI thread never blocks.
 - Test first (TDD). Before committing, run `cargo fmt --all`,
