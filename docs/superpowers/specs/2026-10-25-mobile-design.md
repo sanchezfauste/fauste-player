@@ -135,6 +135,13 @@ Calls that wait (pickers) answer through channels, never blocking the UI
   and the activity being destroyed never touch the engine, the services
   thread or the analysis pool. They live at process level; a new
   activity attaches to the running session and only rebuilds the UI.
+  *From the spike (§11):* the activity declares every `configChanges`
+  and `launchMode="singleTask"`, and Back moves the task to the
+  background instead of finishing it, so rotation, resizing and leaving
+  the app never recreate it. A recreation the system forces anyway must
+  not hang the UI: `android_main` returns when its activity is
+  destroyed and a new one re-attaches (today eframe's loop never returns
+  and the new activity hits an ANR while the audio keeps playing).
 - **MB3 — Process restart is a cold start.** If the OS kills the process,
   the next launch restores state like a desktop restart (spec rules for
   restart): nothing plays (CLAUDE.md rule 10).
@@ -158,7 +165,12 @@ Calls that wait (pickers) answer through channels, never blocking the UI
   (existing rules): the source is not available, nothing re-routes
   silently to another device and nothing starts when it returns.
   Device identity across reconnects is matched by type + product name,
-  not by the volatile Android device id.
+  not by the volatile Android device id. *From the spike:* cpal names
+  AAudio devices `aaudio:<android id>` (volatile) with names such as
+  "… (Speaker)"; and with no route, a player goes to the backend's
+  default device, which cpal's AAudio host does not report today, so the
+  engine falls back to the Null device and nothing is heard.
+  `fp-backends` must report the system's default output on Android.
 - **MB6 — CUE logic is the desktop's.** A Cue route on its own device
   plays at once; a Cue route on an output that carries a Main route is
   an on-air output and follows CA1–CA… (confirmation while something
@@ -180,7 +192,14 @@ Calls that wait (pickers) answer through channels, never blocking the UI
   is active), per CLAUDE.md rule 4.
 - **MB9 — Buffer and latency** use the existing buffer config; AAudio is
   opened in low-latency performance mode. Defaults may differ per
-  platform; they stay `Config` fields with ranges.
+  platform; they stay `Config` fields with ranges. *From the spike:* the
+  streams must declare `USAGE_MEDIA` / `CONTENT_TYPE_MUSIC` (cpal leaves
+  the usage unset), which audio focus (MB4) and routing rely on; and
+  latency and dropouts are measured on release builds only (a debug
+  build underruns at start).
+- **MB10 — Safe area.** The layout keeps clear of the status bar,
+  navigation bar and display cutouts (winit 0.30 does not forward insets;
+  the shell passes them to Rust). *From the spike.*
 
 ## 6. Touch layout
 
@@ -196,15 +215,24 @@ Calls that wait (pickers) answer through channels, never blocking the UI
   the UI plan starts.
 - Touch targets ≥ 48 dp; no hover-only affordances (hover tooltips get a
   long-press equivalent); drag and drop works by long-press.
-- Text input (tag editor, names) uses the soft keyboard through winit's
-  IME on Android. If that proves unreliable, it is a blocker to raise
-  before the UI plan, not something to work around silently.
+- Text input (names, settings) uses the soft keyboard. *From the
+  spike:* the keyboard opens, but winit 0.30 drops GameActivity's text
+  events; reading the IME buffer (`AndroidApp::text_input_state`) in
+  eframe's `raw_input_hook` and handing egui the difference works
+  (typing and deleting). `fp-mobile` owns that bridge, including field
+  changes, selection and composition. Not a blocker.
 
 ## 7. Build, CI, packaging
 
 - `mobile/android/`: Gradle project (Kotlin), `minSdk` 29 (builder may
   raise it with reason), `targetSdk` current Play requirement, ABIs
-  `arm64-v8a` and `x86_64` (emulator).
+  `arm64-v8a` and `x86_64` (emulator). *From the spike:* the Rust
+  library links against API 29 (`cargo ndk -P 29`; `midir` needs
+  `libamidi`); eframe takes the `android-game-activity` feature and the
+  `androidx.games:games-activity` version must be the one the
+  `android-activity` crate names (4.4.0 for 0.6.1; another one aborts at
+  start); a release library is about 26 MB per ABI. AGP 8.13.2, Kotlin
+  2.2.21 and Gradle 9.3.1 build on JDK 25 (bytecode target 17).
 - CI: a job that cross-compiles the Rust library for Android and builds a
   debug APK on Linux. Host tests keep running everywhere; `fp-mobile`
   logic that can be tested without a device is.
@@ -232,7 +260,7 @@ maintainer, 2026-10-25, **for the mobile build only**):
 
 ## 9. Phases
 
-1. **Spike (throwaway):** eframe + engine + cpal on a real Android phone:
+1. **Spike (throwaway; done on the emulator, real device pending, §11):** eframe + engine + cpal on a real Android phone:
    sound through AAudio, screen off with a foreground service, rotation,
    two outputs at once (speaker + Bluetooth/USB), soft keyboard. Its
    findings may amend this spec; the maintainer approves the amendment
@@ -258,3 +286,30 @@ Crate and type names; JNI by hand (`jni` crate) vs a generator (UniFFI)
 for the bridge; phone/tablet breakpoints; how the in-app browser looks;
 Gradle structure; exact CI job layout; how the "playout active" state
 is derived from the snapshot (it must come from `fp-model` state).
+
+## 11. Spike findings (2026-10-25)
+
+Branch `spike/android` (throwaway, never merged), plan
+`docs/superpowers/plans/2026-10-25-mobile-plan1-android-spike.md`.
+Checked on the Android 14 (API 34) x86_64 emulator; the real-device
+checks are still pending.
+
+| Check | Result | Consequence |
+|---|---|---|
+| Build for Android | Every crate builds unchanged except `rfd` (no Android backend). `midir`, `fp-control`, `fp-remote`, cpal `realtime` build. Cargo refuses one dependency name with per-target sources. | The pickers go through the platform seam (§4), not a swapped dependency. Leaving MIDI and remote out is a product choice, not a build need. |
+| Startup | The desktop session (store, engine, conductor, analysis, services) starts in `android_main`; the only `unsafe` is its `#[unsafe(no_mangle)]`. | §8 holds; no Rust→Java call was needed yet. |
+| UI | The desktop UI renders entirely (theme, fonts, icons, meters, waveforms); taps work and long-press opens context menus. Phone portrait overflows to the right; landscape shows three players; insets are ignored. | The touch layout (§6) and MB10. |
+| Music by path (MB7) | `READ_MEDIA_AUDIO` and real paths under `/sdcard/Music`: decoding, tags, analysis, loudness and waveform work. | MB7 holds. |
+| Audio | AAudio stream at 48 kHz, stereo, f32, shared, low latency requested. No underrun on a release build; a debug build had one at start. Usage left unset by cpal. | MB9 amended. |
+| Default output | With no route the player ran on the Null device (no default device reported by cpal's AAudio host). | MB5 amended: `fp-backends` reports the default output. |
+| Activity recreated (MB2) | Rotation without `configChanges`: the audio kept playing (no underrun) but the UI hung (ANR). With every `configChanges`, `singleTask` and Back to background: rotation is live; Back, Home and relaunch keep the UI and the audio. A recreation forced by the system was not reproduced. | MB2 amended. |
+| Soft keyboard | Opens; winit drops the text; a bridge in `raw_input_hook` makes typing and deleting work. | §6 amended; not a blocker. |
+| Foreground service (MB1, G3) | `am kill` does not kill the process while the service runs; 90 s with the screen off: playback went on across a track change, no underrun. | MB1 holds; the 30-minute check stays for the device. |
+| Process killed (MB3) | Force-stop and relaunch: state restored, paused at its position, nothing plays. | MB3 holds. |
+
+**Pending on a real device:** which pairs of outputs sound at once
+(speaker with Bluetooth, USB or wired headphones; MB6), 30 minutes with
+the screen off, Bluetooth off and on with a route on it, a call during
+playout (MB4), the AAudio buffer granted and the CPU load with two
+players and a cart. Their results amend this section before the
+devices-and-outputs plan.
