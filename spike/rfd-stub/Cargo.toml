@@ -1,0 +1,12 @@
+[package]
+name = "rfd-stub"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+[lib]
+name = "rfd_stub"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rfd = "0.17.2"

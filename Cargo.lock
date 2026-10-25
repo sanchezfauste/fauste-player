@@ -192,6 +192,7 @@ dependencies = [
  "ndk-context",
  "ndk-sys",
  "num_enum",
+ "simd_cesu8",
  "thiserror 2.0.21",
 ]
 
@@ -1773,7 +1774,7 @@ dependencies = [
  "log",
  "open",
  "pollster 1.0.1",
- "rfd",
+ "rfd-stub",
  "sys-locale",
  "tempfile",
  "tracing",
@@ -4096,6 +4097,13 @@ dependencies = [
  "wayland-protocols",
  "web-sys",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "rfd-stub"
+version = "0.1.0"
+dependencies = [
+ "rfd",
 ]
 
 [[package]]
