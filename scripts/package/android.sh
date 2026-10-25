@@ -36,6 +36,10 @@ if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
   export ANDROID_NDK_HOME="${ndk}"
 fi
 
+# cargo-ndk leaves a library already in jniLibs in place (a debug build's
+# would ship in a release APK): start from an empty folder.
+rm -rf "${app}/app/src/main/jniLibs"
+
 # API 29: midir's libamidi and AAudio's newer calls need it (spec §11).
 (cd "${root}" && cargo ndk -P 29 -t arm64-v8a -t x86_64 \
   -o "${app}/app/src/main/jniLibs" build "${cargo_profile[@]}" -p fp-mobile)

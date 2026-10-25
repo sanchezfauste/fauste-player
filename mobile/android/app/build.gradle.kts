@@ -22,6 +22,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    // Until the release plan brings a release key, release builds are
+    // signed with the debug key so they install for audio checks (only
+    // release builds are judged for dropouts, mobile spec §11).
+    buildTypes {
+        release { signingConfig = signingConfigs.getByName("debug") }
+    }
     packaging { jniLibs { useLegacyPackaging = false } }
 }
 
