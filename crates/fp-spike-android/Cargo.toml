@@ -1,0 +1,29 @@
+[package]
+name = "fp-spike-android"
+description = "SPIKE ONLY: Fauste Player on Android (throwaway, never merged)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+# No `[lints] workspace = true`: `android_main` needs `#[unsafe(no_mangle)]`.
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_os = "android")'.dependencies]
+fp-app = { path = "../fp-app" }
+fp-model.workspace = true
+fp-store.workspace = true
+fp-engine.workspace = true
+fp-backends.workspace = true
+fp-analysis.workspace = true
+eframe = { workspace = true, features = ["android-game-activity"] }
+egui.workspace = true
+winit.workspace = true
+cpal.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+crossbeam-channel.workspace = true
+paranoid-android = "0.2"

@@ -19,3 +19,4 @@
 
 # Python bytecode of the site scripts
 __pycache__/
+/mobile/android-spike/app/src/main/jniLibs/

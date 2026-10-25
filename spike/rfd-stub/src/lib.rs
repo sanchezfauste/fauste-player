@@ -70,7 +70,7 @@ impl AsyncFileDialog {
 }
 
 fn log_pick(paths: &[PathBuf]) {
-    eprintln!("rfd-stub: picked {paths:?}");
+    tracing::info!(?paths, "rfd-stub picked");
 }
 
 #[derive(Clone, Copy)]
