@@ -15,6 +15,7 @@ pub mod logging;
 pub mod midi;
 pub mod remote;
 pub mod services;
+pub mod session;
 pub mod tags;
 pub mod ui;
 pub mod window_system;

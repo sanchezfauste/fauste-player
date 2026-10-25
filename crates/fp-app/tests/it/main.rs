@@ -5,6 +5,7 @@
 
 mod about;
 mod analysis_status_ui;
+mod app_session;
 mod bit_perfect_ui;
 mod blink;
 mod cartwall_ui;
