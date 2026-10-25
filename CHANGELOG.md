@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.12.0](https://github.com/sanchezfauste/fauste-player/compare/v0.11.0...v0.12.0) (2026-10-24)
+
+
+### Features
+
+* **site:** check the landing page translations ([242ac9c](https://github.com/sanchezfauste/fauste-player/commit/242ac9c5670cafd96bfbccd6d9f08e6be1273049))
+* **site:** keep the chosen guide language on English pages ([f61f92c](https://github.com/sanchezfauste/fauste-player/commit/f61f92cc58f879d69f2d52e4f169cab2f23a4985))
+* **site:** publish the landing page and privacy policy in every guide language ([af72ae6](https://github.com/sanchezfauste/fauste-player/commit/af72ae6e7fef67b62c2db149a5e8a8db77ea363d))
+* **site:** render the landing page and privacy policy from templates ([4effa8d](https://github.com/sanchezfauste/fauste-player/commit/4effa8d25bb64b2d0b3683869d73ef792622203b))
+* **site:** translate the landing page and privacy policy ([ccf7e48](https://github.com/sanchezfauste/fauste-player/commit/ccf7e48a66cb6ea72b8caeecfa16c64d7d6b261e))
+* **site:** translate the Snap Store lines of the landing page ([bef0ee3](https://github.com/sanchezfauste/fauste-player/commit/bef0ee3257daed46d87db4922f4bc78af71158e1))
+
+
+### Bug Fixes
+
+* **ci:** cap LCOV hit counts so SonarQube reads every line ([15dbae4](https://github.com/sanchezfauste/fauste-player/commit/15dbae4b68d8328adb0b302206a0c92e964f3540))
+* **ci:** cap LCOV hit counts so SonarQube reads every line ([2d713aa](https://github.com/sanchezfauste/fauste-player/commit/2d713aabb0125a9f4edd794f98bb3ede9512d994))
+* **ci:** pass the MSIX to the Store CLI as a directory ([f68c0b3](https://github.com/sanchezfauste/fauste-player/commit/f68c0b3b9899fee71c2a186d527fcda921d9746e))
+* **ci:** pass the MSIX to the Store CLI as a directory ([3f80569](https://github.com/sanchezfauste/fauste-player/commit/3f80569f9fd64629b35d89ce52b58d5aa36e3293))
+* **engine:** pace the virtual clock at the rate a device came back at ([93c4aa9](https://github.com/sanchezfauste/fauste-player/commit/93c4aa95da87edde8346a36bfe0959825a6d8008))
+* **engine:** pace the virtual clock at the rate a device came back at ([245c2e6](https://github.com/sanchezfauste/fauste-player/commit/245c2e6398fd7fd331d2e59e6150f0b132ae0aa9))
+* **site:** stop tracking Python bytecode and correct the ?lang=en note ([1c6b593](https://github.com/sanchezfauste/fauste-player/commit/1c6b5935c6a4b7079603ee0e6e59b695b9405009))
+
+
+### Documentation
+
+* add the Snap Store badge and install steps ([5a49e23](https://github.com/sanchezfauste/fauste-player/commit/5a49e2376e3bb1b7e210aad81e91d7afa4dc1a93))
+* add the Snap Store badge and install steps ([5a0fa93](https://github.com/sanchezfauste/fauste-player/commit/5a0fa93c9d6a973b95318ce121ebf413b7ade38a))
+* retake screenshots ([e36c177](https://github.com/sanchezfauste/fauste-player/commit/e36c177e2f5c4b85ff9079884c0051b2fa5123a3))
+* retake screenshots ([2cc0352](https://github.com/sanchezfauste/fauste-player/commit/2cc0352975e18a213f552075dd8a1536555251d9))
+* say loudness normalization is on by default ([78c7851](https://github.com/sanchezfauste/fauste-player/commit/78c78513f46e97c456e2f4179e00a91df1bbd519))
+* say loudness normalization is on by default ([419de99](https://github.com/sanchezfauste/fauste-player/commit/419de99e589bff376f57e923d66d260a70bf2580))
+* **site:** add a privacy policy page ([514643d](https://github.com/sanchezfauste/fauste-player/commit/514643d2aef8bf1cca13f6e0a1aec6d24eab4611))
+* **site:** add a privacy policy page ([b7a8881](https://github.com/sanchezfauste/fauste-player/commit/b7a88818c458ff0724f6fbd2042d42bc959e67c0))
+* **site:** design and plan for a multilingual landing page ([4312151](https://github.com/sanchezfauste/fauste-player/commit/4312151f442a58bc8a9eb211775f72cd675ef248))
+
+
+### Build System
+
+* **site:** add the landing page renderer core ([806ae1b](https://github.com/sanchezfauste/fauste-player/commit/806ae1b9e92df7875aee3fcd45c0771e07e5b8c8))
+
 ## [0.11.0](https://github.com/sanchezfauste/fauste-player/compare/v0.10.0...v0.11.0) (2026-10-24)
 
 
