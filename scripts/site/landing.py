@@ -76,6 +76,12 @@ def render(template, texts, values):
     return out
 
 
+# The languages snapcraft.io draws its "Get it from the Snap Store" badge in;
+# the others show the English one.
+SNAP_BADGES = {"de", "en", "es", "fr", "it", "pl", "pt"}
+SNAP_BADGE = "https://snapcraft.io/static/images/badges/{}/snap-store-white.svg"
+
+
 GLOBE = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1.1em" '
          'height="1.1em" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">'
          '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/>'
@@ -130,6 +136,7 @@ def page_values(lang, page, data, langs, out):
         "alternates": "\n".join(alternates),
         "notice": notice,
         "other-languages": ", ".join(l["name"] for l in langs if l["code"] != lang),
+        "snap-badge": SNAP_BADGE.format(lang if lang in SNAP_BADGES else "en"),
     }
 
 

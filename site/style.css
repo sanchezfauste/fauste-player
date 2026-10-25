@@ -59,6 +59,10 @@ h2 { font-size: 1.6rem; margin: 3rem 0 1rem; }
 #tabs > section[hidden] { display: none; }
 #tabs h3 { margin: 0 0 0.25rem; }
 .files { padding-left: 1.25rem; }
+.store { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; padding: 0.5rem 0 1rem; margin-bottom: 0.75rem; border-bottom: 1px solid var(--surface); }
+.store img { display: block; }
+.store p { margin: 0; }
+.store code { white-space: nowrap; }
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--surface); white-space: nowrap; }

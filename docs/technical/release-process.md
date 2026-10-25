@@ -153,7 +153,9 @@ English.
   attribute) and build values such as `{{ root }}`, `{{ guide }}`,
   `{{ menu }}` and `{{ notice }}`, and fails on an unknown or missing name.
   A translated page links to the guide in its language, shows its own main
-  screen when the build has it (else the English one), and carries the AI
+  screen when the build has it (else the English one), the Snap Store badge
+  in its language when snapcraft.io draws one (`SNAP_BADGES` in
+  `landing.py`; else the English one), and carries the AI
   notice in its HTML. Every page lists the others with
   `<link rel="alternate" hreflang>` under the published address
   (`FAUSTE_SITE_URL` overrides it).

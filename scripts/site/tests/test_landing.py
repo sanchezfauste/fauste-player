@@ -107,6 +107,15 @@ class PagesTest(unittest.TestCase):
         v = page_values("es", "privacy.html", data, [EN, ES], self.out)
         self.assertEqual(v["shot"], "../images/es/main-screen.png")
 
+    def test_snap_badge_in_the_page_language(self):
+        data = {"label": "L", "notice": "N", "privacy-notice": "P", "english-link": "E"}
+        badge = "https://snapcraft.io/static/images/badges/{}/snap-store-white.svg"
+        for lang, shown in (("es", "es"), ("de", "de"), ("ca", "en"), ("eu", "en")):
+            v = page_values(lang, "index.html", data, [EN, ES], self.out)
+            self.assertEqual(v["snap-badge"], badge.format(shown), lang)
+        v = page_values("en", "index.html", load("en"), [EN, ES], self.out)
+        self.assertEqual(v["snap-badge"], badge.format("en"))
+
     def test_english_values(self):
         v = page_values("en", "index.html", load("en"), [EN, ES], self.out)
         self.assertEqual((v["root"], v["guide"], v["notice"]), ("", "guide/", ""))
