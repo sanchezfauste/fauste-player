@@ -26,5 +26,5 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.games:games-activity:2.0.2")
+    implementation("androidx.games:games-activity:4.4.0")
 }

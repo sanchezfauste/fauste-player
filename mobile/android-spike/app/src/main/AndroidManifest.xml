@@ -12,7 +12,9 @@
         android:hasCode="true">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|layoutDirection|locale">
             <meta-data android:name="android.app.lib_name" android:value="fp_spike_android" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

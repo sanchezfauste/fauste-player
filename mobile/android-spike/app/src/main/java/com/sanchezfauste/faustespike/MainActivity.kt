@@ -24,6 +24,12 @@ class MainActivity : GameActivity() {
         ContextCompat.startForegroundService(this, Intent(this, PlaybackService::class.java))
     }
 
+    /** SPIKE: never destroy the activity on Back; the playout keeps its UI. */
+    @Deprecated("Back goes to the background")
+    override fun onBackPressed() {
+        moveTaskToBack(true)
+    }
+
     companion object {
         init { System.loadLibrary("fp_spike_android") }
     }

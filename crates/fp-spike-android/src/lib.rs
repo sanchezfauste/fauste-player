@@ -91,8 +91,57 @@ fn log_devices() {
                 .supported_output_configs()
                 .map(|c| c.map(|c| format!("{c:?}")).collect())
                 .unwrap_or_default();
-            tracing::info!(?host_id, device = ?device.description(), ?configs, "output device");
+            tracing::info!(?host_id, id = ?device.id().map(|i| i.to_string()), device = ?device.description().map(|d| d.name().to_owned()), n_configs = configs.len(), "output device");
         }
+    }
+}
+
+/// SPIKE: winit 0.30 drops GameActivity's text events; read the IME buffer
+/// ourselves and hand egui the difference.
+struct ImeBridge {
+    inner: Shell,
+    app: AndroidApp,
+    last: String,
+}
+
+impl eframe::App for ImeBridge {
+    fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        eframe::App::logic(&mut self.inner, ctx, frame);
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        eframe::App::ui(&mut self.inner, ui, frame);
+    }
+
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        let text = self.app.text_input_state().text;
+        if text == self.last {
+            return;
+        }
+        let common = self
+            .last
+            .chars()
+            .zip(text.chars())
+            .take_while(|(a, b)| a == b)
+            .count();
+        let removed = self.last.chars().count() - common;
+        for _ in 0..removed {
+            for pressed in [true, false] {
+                raw.events.push(egui::Event::Key {
+                    key: egui::Key::Backspace,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
+        let added: String = text.chars().skip(common).collect();
+        if !added.is_empty() {
+            raw.events.push(egui::Event::Text(added));
+        }
+        tracing::info!(removed, typed = %text, "ime bridge");
+        self.last = text;
     }
 }
 
@@ -101,6 +150,7 @@ fn android_main(app: AndroidApp) {
     use tracing_subscriber::prelude::*;
     let _ = tracing_subscriber::registry()
         .with(paranoid_android::layer("fauste"))
+        .with(tracing_subscriber::EnvFilter::new("info"))
         .try_init();
     let session = match SESSION.get() {
         Some(s) => {
@@ -133,6 +183,7 @@ fn android_main(app: AndroidApp) {
     .with_analysis_activity(session.activity.clone())
     .with_service_faults(session.faults.clone())
     .with_backends(session.backends.clone());
+    let ime_app = app.clone();
     let options = eframe::NativeOptions {
         android_app: Some(app),
         ..Default::default()
@@ -142,7 +193,11 @@ fn android_main(app: AndroidApp) {
         options,
         Box::new(move |cc| {
             theme::apply(&cc.egui_ctx);
-            Ok(Box::new(Shell::new(ui)))
+            Ok(Box::new(ImeBridge {
+                inner: Shell::new(ui),
+                app: ime_app,
+                last: String::new(),
+            }))
         }),
     );
     // The engine keeps running: the foreground service holds the process.
