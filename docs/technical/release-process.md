@@ -480,7 +480,7 @@ credentials; variables hold public identifiers.
 | `MSSTORE_SELLER_ID` | secret | Partner Center → Account settings → Legal info → Seller ID |
 | `MSSTORE_PRODUCT_ID` | variable | the Store ID of the app (`9N…`), Partner Center → Product identity |
 | `MSSTORE_IDENTITY_NAME`, `MSSTORE_PUBLISHER`, `MSSTORE_PUBLISHER_DISPLAY_NAME` | variables | Package/Identity/Name, Package/Identity/Publisher (`CN=…`) and Package/Properties/PublisherDisplayName from Product identity |
-| `SNAPCRAFT_STORE_CREDENTIALS` | secret | the output of `snapcraft export-login --snaps=fauste-player --acls=package_access,package_push,package_update,package_release,package_metadata -` (`package_metadata` for the listing update) |
+| `SNAPCRAFT_STORE_CREDENTIALS` | secret | the output of `snapcraft export-login --snaps=fauste-player --acls=package_access,package_push,package_update,package_release -` (`package_update` also covers the listing update) |
 | `SNAP_CHANNEL` | variable (optional) | the channel releases go to; default `stable` |
 | `FLATHUB_TOKEN` | secret | a token of a maintainer of `flathub/com.sanchezfauste.FaustePlayer` that can push branches and open pull requests there: fine-grained (*contents* and *pull requests* write) if the flathub organisation accepts fine-grained tokens, otherwise classic with `public_repo` |
 | `WINGET_TOKEN` | secret | a classic token with the `public_repo` scope, of the account that owns the fork of `microsoft/winget-pkgs`; best a separate bot account (`WINGET_FORK_USER`), since `public_repo` on the maintainer's account can also push to this repository |
