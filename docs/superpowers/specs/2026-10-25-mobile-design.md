@@ -205,14 +205,26 @@ Calls that wait (pickers) answer through channels, never blocking the UI
 
 - Same panels as the desktop (players, cartwall, playlists, library,
   settings), same theme (`theme.rs`), same Fluent strings.
-- **Phone:** one panel at a time with a bottom tab bar (Players,
-  Cartwall, Library/Playlists); on-air status of every player stays
-  visible in a compact strip above the tabs. **Tablet** (shortest side
-  ≥ 600 dp): the desktop's resizable layout with touch-sized targets.
-  The exact breakpoints and arrangement are the builder's: the builder
-  draws phone and tablet mockups (in the design project, or as HTML
-  mockups if it is unreachable) and the maintainer approves them before
-  the UI plan starts.
+- **Approved structure (maintainer, 2026-10-25; conceptual mockups:
+  https://claude.ai/artifact/TZNmMVkaq9EGUMSjtxunrE).** The look comes
+  from the existing egui widgets (player header, fader, meters, waveform,
+  playlist table, cart tiles), not from the mockups' HTML.
+  - **Phone, portrait:** a top bar with Players | Cartwall, settings and
+    the clock. *All players*: one compact panel per player with PLAY/NEXT,
+    Stop, Pause, countdown, next track, meters, fader and progress; its
+    header opens that player. *One player*: the desktop player block
+    (header, cover and titles, PLAY/NEXT with the transport, countdown,
+    meters with the volume fader, waveform) above its playlist (tabs,
+    table, footer); P1…Pn chips switch player; the row menu opens as a
+    bottom sheet. *Cartwall*: its own screen (no folding cartwall on a
+    phone).
+  - **Phone, landscape:** two desktop player blocks side by side; a swipe
+    shows the others; a tap opens the player.
+  - **Tablet** (shortest side ≥ 600 dp): the desktop layout — player
+    columns, each with its playlist, and the cartwall at the bottom — with
+    touch-sized targets.
+  The exact breakpoints are the builder's; the UI plan ends with real
+  emulator screenshots the maintainer compares with the mockups.
 - Touch targets ≥ 48 dp; no hover-only affordances (hover tooltips get a
   long-press equivalent); drag and drop works by long-press.
 - Text input (names, settings) uses the soft keyboard. *From the
