@@ -20,3 +20,8 @@
 # Python bytecode of the site scripts
 __pycache__/
 /mobile/android-spike/app/src/main/jniLibs/
+/mobile/android-spike/.gradle/
+/mobile/android-spike/build/
+/mobile/android-spike/app/build/
+/mobile/android-spike/local.properties
+/mobile/android-spike/.kotlin/
