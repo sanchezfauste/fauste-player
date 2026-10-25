@@ -8,6 +8,7 @@ use egui::{Event, Key, Modifiers};
 #[derive(Debug, Default)]
 pub struct ImeBridge {
     last: String,
+    focused: Option<egui::Id>,
 }
 
 impl ImeBridge {
@@ -48,6 +49,25 @@ impl ImeBridge {
         }
         self.last = now.to_owned();
         events
+    }
+
+    /// Whether the keyboard's text must be cleared before this frame's
+    /// typing: a text field took the focus (`focused`, egui's focused
+    /// widget), or a tap in `events` may have moved the cursor in it. The
+    /// keyboard knows neither the field's text nor egui's cursor, so it
+    /// starts empty and only what is typed from there is bridged. When it
+    /// answers true the caller clears the keyboard's text.
+    pub fn restart_for(&mut self, focused: Option<egui::Id>, events: &[Event]) -> bool {
+        let moved = focused != self.focused;
+        self.focused = focused;
+        let tapped = events
+            .iter()
+            .any(|e| matches!(e, Event::PointerButton { pressed: true, .. }));
+        if focused.is_none() || !(moved || tapped) {
+            return false;
+        }
+        self.last.clear();
+        true
     }
 
     /// Another field took the focus and the keyboard holds `now`: nothing

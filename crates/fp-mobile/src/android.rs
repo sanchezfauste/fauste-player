@@ -11,6 +11,7 @@ use fp_app::ui::shell::Shell;
 use fp_app::ui::theme;
 use fp_store::AppPaths;
 use winit::platform::android::activity::AndroidApp;
+use winit::platform::android::activity::input::{TextInputState, TextSpan};
 
 use crate::ime::ImeBridge;
 use crate::insets::{Insets, safe_area};
@@ -45,7 +46,6 @@ struct MobileApp {
     shell: Shell,
     app: AndroidApp,
     ime: ImeBridge,
-    focused: Option<egui::Id>,
 }
 
 impl eframe::App for MobileApp {
@@ -63,14 +63,18 @@ impl eframe::App for MobileApp {
     }
 
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
-        let text = self.app.text_input_state().text;
         let focused = ctx.memory(|m| m.focused());
-        if focused != self.focused {
-            // Another field: what the keyboard holds now is its start.
-            self.focused = focused;
-            self.ime.reset(&text);
+        if self.ime.restart_for(focused, &raw.events) {
+            // The keyboard starts empty for the field (or after a tap that
+            // may have moved the cursor): what it held belongs elsewhere.
+            self.app.set_text_input_state(TextInputState {
+                text: String::new(),
+                selection: TextSpan { start: 0, end: 0 },
+                compose_region: None,
+            });
             return;
         }
+        let text = self.app.text_input_state().text;
         raw.events.extend(self.ime.update(&text));
     }
 }
@@ -127,7 +131,6 @@ fn android_main(app: AndroidApp) {
                 shell: Shell::new(ui),
                 app,
                 ime: ImeBridge::new(),
-                focused: None,
             }))
         }),
     );

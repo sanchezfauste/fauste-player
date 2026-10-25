@@ -82,3 +82,46 @@ fn reset_emits_nothing() {
     ime.reset("abc");
     assert!(ime.update("abc").is_empty());
 }
+
+fn tap() -> Event {
+    Event::PointerButton {
+        pos: egui::pos2(10.0, 10.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    }
+}
+
+#[test]
+fn another_field_restarts_the_keyboard_text() {
+    let mut ime = ImeBridge::new();
+    let a = Some(egui::Id::unique("a"));
+    let b = Some(egui::Id::unique("b"));
+    assert!(ime.restart_for(a, &[]));
+    ime.update("hello");
+    assert!(!ime.restart_for(a, &[]));
+    assert!(ime.restart_for(b, &[]));
+    // The keyboard was cleared: what it holds now is new typing only.
+    assert_eq!(texts(&ime.update(" ")), vec![" ".to_owned()]);
+    assert_eq!(backspaces(&ime.update("x")), 1);
+}
+
+#[test]
+fn a_tap_inside_the_field_restarts_the_keyboard_text() {
+    // The cursor may have moved: the keyboard's text no longer matches
+    // what is before it.
+    let mut ime = ImeBridge::new();
+    let a = Some(egui::Id::unique("a"));
+    ime.restart_for(a, &[]);
+    ime.update("abc def");
+    assert!(ime.restart_for(a, &[tap()]));
+    let events = ime.update("x");
+    assert_eq!(backspaces(&events), 0);
+    assert_eq!(texts(&events), vec!["x".to_owned()]);
+}
+
+#[test]
+fn no_field_needs_no_keyboard_text() {
+    let mut ime = ImeBridge::new();
+    assert!(!ime.restart_for(None, &[tap()]));
+}
