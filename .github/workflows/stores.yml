@@ -190,6 +190,19 @@ jobs:
         with:
           snap: ${{ steps.build.outputs.snap }}
           release: ${{ needs.plan.outputs.prerelease == 'true' && 'beta' || vars.SNAP_CHANNEL || 'stable' }}
+      # "Update metadata on release" refreshes only the listing's texts, never
+      # its icon: upload-metadata sends the snap's summary, description, title,
+      # licence and meta/gui/icon.png. Once per release (both snaps carry the
+      # same metadata), and never from a pre-release. Screenshots and the
+      # banner stay manual (snapcraft does not upload them).
+      - name: Update the Snap Store listing
+        if: needs.plan.outputs.snap == 'true' && needs.plan.outputs.prerelease != 'true' && matrix.arch == 'amd64'
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          SNAP_FILE: ${{ steps.build.outputs.snap }}
+        run: |
+          command -v snapcraft >/dev/null || sudo snap install snapcraft --classic
+          snapcraft upload-metadata "${SNAP_FILE}" --force
 
   flathub:
     name: Flathub
