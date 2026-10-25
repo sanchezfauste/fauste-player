@@ -103,8 +103,14 @@ panic = "unwind"
 #
 # `egui-phosphor` 0.14.0 targets egui 0.36. The vendored copy only raises the
 # egui requirement to 0.37 (see vendor/egui-phosphor/VENDORED.md).
+#
+# `winit` 0.30.13 on Android ignores the activity's destruction, which hangs
+# its main thread, and refuses the next activity's event loop. The vendored
+# copy ends the loop on destroy and allows a new one there, so the session
+# outlives its activities (mobile spec MB2; see vendor/winit/VENDORED.md).
 [patch.crates-io]
 opus-decoder = { path = "vendor/opus-decoder" }
 symphonia-format-mkv = { path = "vendor/symphonia-format-mkv" }
 egui-phosphor = { path = "vendor/egui-phosphor" }
+winit = { path = "vendor/winit" }
 
