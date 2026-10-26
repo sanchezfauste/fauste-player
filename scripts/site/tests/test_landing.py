@@ -116,6 +116,15 @@ class PagesTest(unittest.TestCase):
         v = page_values("en", "index.html", load("en"), [EN, ES], self.out)
         self.assertEqual(v["snap-badge"], badge.format("en"))
 
+    def test_microsoft_store_badge_in_the_page_language(self):
+        data = {"label": "L", "notice": "N", "privacy-notice": "P", "english-link": "E"}
+        badge = "https://get.microsoft.com/images/{}%20light.svg"
+        for lang, shown in (("es", "es"), ("ca", "ca"), ("pt", "pt-pt"), ("eu", "en-us")):
+            v = page_values(lang, "index.html", data, [EN, ES], self.out)
+            self.assertEqual(v["msstore-badge"], badge.format(shown), lang)
+        v = page_values("en", "index.html", load("en"), [EN, ES], self.out)
+        self.assertEqual(v["msstore-badge"], badge.format("en-us"))
+
     def test_english_values(self):
         v = page_values("en", "index.html", load("en"), [EN, ES], self.out)
         self.assertEqual((v["root"], v["guide"], v["notice"]), ("", "guide/", ""))
