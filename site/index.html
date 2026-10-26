@@ -63,6 +63,10 @@
     <div id="tabs" data-tablist-label="{{ attr:index.os-tabs }}">
       <section id="dl-windows" data-os="windows" aria-labelledby="h-windows">
         <h3 id="h-windows">Windows</h3>
+        <div class="store">
+          <a href="https://apps.microsoft.com/detail/9NH4KCL73463?mode=direct"><img alt="{{ attr:index.msstore-badge-alt }}" src="{{ msstore-badge }}" height="56"></a>
+          <p>{{ index.msstore }}</p>
+        </div>
         <p>{{ index.windows-systems }}</p>
         <ul class="files">
           <li data-row><a data-asset="\.msi$" href="https://github.com/sanchezfauste/fauste-player/releases/latest">{{ index.windows-msi }}</a></li>

@@ -2,8 +2,9 @@
 
 ## Install
 
-On Linux, Fauste Player is in the **Snap Store**
-(<https://snapcraft.io/fauste-player>). Or download a package for your
+On Windows, Fauste Player is in the **Microsoft Store**
+(<https://apps.microsoft.com/detail/9NH4KCL73463>), and on Linux in the
+**Snap Store** (<https://snapcraft.io/fauste-player>). Or download a package for your
 system from the project's **Releases** page.
 Every file has a `.sha256` next to it. To check a download, run
 `sha256sum -c <file>.sha256` on Linux, or `shasum -a 256 -c <file>.sha256`
@@ -64,7 +65,11 @@ on macOS.
 
 ### Windows
 
-Run `fauste-player-<version>-x86_64-pc-windows-msvc.msi`. It installs for
+The easiest way is the **Microsoft Store**: search for *Fauste Player*, or
+open <https://apps.microsoft.com/detail/9NH4KCL73463>, and choose
+**Get**. The Store keeps it up to date, and **Settings → Apps** removes it.
+
+Or run `fauste-player-<version>-x86_64-pc-windows-msvc.msi`. It installs for
 all users under *Program Files* and adds a Start menu entry.
 - **Updating:** run the newer installer. It replaces the installed version.
 - **Removing:** use **Settings → Apps**.

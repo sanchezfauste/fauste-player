@@ -81,6 +81,12 @@ def render(template, texts, values):
 SNAP_BADGES = {"de", "en", "es", "fr", "it", "pl", "pt"}
 SNAP_BADGE = "https://snapcraft.io/static/images/badges/{}/snap-store-white.svg"
 
+# The Microsoft Store badge's name for each language it is drawn in; the others
+# show the US English one.
+MSSTORE_BADGES = {"ca": "ca", "de": "de", "es": "es", "fr": "fr", "gl": "gl", "it": "it",
+                  "nl": "nl", "pl": "pl", "pt": "pt-pt"}
+MSSTORE_BADGE = "https://get.microsoft.com/images/{}%20light.svg"
+
 
 GLOBE = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1.1em" '
          'height="1.1em" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">'
@@ -137,6 +143,7 @@ def page_values(lang, page, data, langs, out):
         "notice": notice,
         "other-languages": ", ".join(l["name"] for l in langs if l["code"] != lang),
         "snap-badge": SNAP_BADGE.format(lang if lang in SNAP_BADGES else "en"),
+        "msstore-badge": MSSTORE_BADGE.format(MSSTORE_BADGES.get(lang, "en-us")),
     }
 
 

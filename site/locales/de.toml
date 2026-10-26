@@ -9,7 +9,7 @@ english-link = "Das englische Original lesen"
 
 [source-hash]
 common = "d4080e3e671d2848255cc4caff571e1565669fb8973eb65bfe44b4d6319765dd"
-index = "b5f75e8145e1fb29d3e14ec4ac66448297adbdae1f5c3ce9a3702db747a67663"
+index = "e382affae2db1eed7da53ce355f588eeae0a137bf05925037c84f461c312ae55"
 privacy = "51422d6d3df9742b71c7e6e556d8d4d0356b0926482fb052ea0ef6476a35be2e"
 
 [common]
@@ -51,6 +51,8 @@ download = "Download"
 download-intro = "Wähle das Paket für dein System. Zu jeder Datei gibt es auf der Release-Seite eine <code>.sha256</code>."
 os-tabs = "Betriebssystem"
 windows-systems = "Windows 10 und 11, x86-64."
+msstore-badge-alt = "Bei Microsoft herunterladen"
+msstore = "Aus dem Microsoft Store (x86-64), mit automatischen Updates."
 windows-msi = "Installationsprogramm (.msi)"
 windows-zip = "Portables Archiv (.zip)"
 macos-systems = "Intel und Apple Silicon."

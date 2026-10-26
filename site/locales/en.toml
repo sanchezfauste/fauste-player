@@ -62,6 +62,8 @@ download-intro = """Pick the package for your system. Every file has a <code>.sh
     it on the release page."""
 os-tabs = "Operating system"
 windows-systems = "Windows 10 and 11, x86-64."
+msstore-badge-alt = "Get it from Microsoft"
+msstore = "From the Microsoft Store (x86-64), with automatic updates."
 windows-msi = "Installer (.msi)"
 windows-zip = "Portable archive (.zip)"
 macos-systems = "Intel and Apple silicon."
