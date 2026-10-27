@@ -629,6 +629,16 @@ tip-reset-played = Wyczyść znaczniki odtworzenia tej playlisty
 reset-played-question = Wyczyścić znacznik odtworzenia każdego utworu na tej playliście?
 reset-played-cancel = Anuluj
 reset-played-confirm = Zeruj odtworzone
+media-browser-title = Muzyka na tym urządzeniu
+media-browser-files = { $count ->
+    [one] { $count } plik
+    [few] { $count } pliki
+   *[other] { $count } plików
+}
+media-browser-add = Dodaj { $count }
+media-browser-use-folder = Użyj tego folderu
+media-browser-empty = Nie znaleziono muzyki. Skopiuj pliki audio do folderu Muzyka na urządzeniu i zezwól na dostęp do muzyki.
+media-browser-cancel = Anuluj
 
 column-name-number = Numer (#)
 column-name-title = Tytuł

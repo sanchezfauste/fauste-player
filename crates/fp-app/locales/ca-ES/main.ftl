@@ -615,6 +615,15 @@ tip-reset-played = Treure les marques de reproduïda d'aquesta llista
 reset-played-question = Vols treure la marca de reproduïda de totes les pistes d'aquesta llista?
 reset-played-cancel = Cancel·lar
 reset-played-confirm = Reiniciar
+media-browser-title = Música del dispositiu
+media-browser-files = { $count ->
+    [one] { $count } fitxer
+   *[other] { $count } fitxers
+}
+media-browser-add = Afegeix { $count }
+media-browser-use-folder = Fes servir aquesta carpeta
+media-browser-empty = No s'ha trobat música. Copia fitxers d'àudio a la carpeta Música del dispositiu i permet l'accés a la música.
+media-browser-cancel = Cancel·la
 
 column-name-number = Número (#)
 column-name-title = Títol

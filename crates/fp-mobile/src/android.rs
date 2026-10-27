@@ -15,7 +15,7 @@ use winit::platform::android::activity::input::{TextInputState, TextSpan};
 
 use crate::ime::ImeBridge;
 use crate::insets::{Insets, safe_area};
-use crate::platform::AndroidPlatform;
+use crate::platform::{AndroidPlatform, MEDIA};
 
 /// The running session; started by the first activity, never stopped (the
 /// process ends with it).
@@ -117,7 +117,13 @@ fn android_main(app: AndroidApp) {
     let Some(session) = session(&app) else {
         return;
     };
-    let ui = session.app_ui().with_platform(Arc::new(AndroidPlatform));
+    // A picker of an earlier activity waits on channels that went with its
+    // interface: answer it, so this one does not show a request no one gets.
+    MEDIA.cancel_pending();
+    let ui = session
+        .app_ui()
+        .with_platform(Arc::new(AndroidPlatform))
+        .with_media_browser(MEDIA.clone());
     let options = eframe::NativeOptions {
         android_app: Some(app.clone()),
         ..Default::default()

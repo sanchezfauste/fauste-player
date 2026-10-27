@@ -615,6 +615,15 @@ tip-reset-played = Effacer les marques de lecture de cette playlist
 reset-played-question = Effacer la marque de lecture de toutes les pistes de cette playlist ?
 reset-played-cancel = Annuler
 reset-played-confirm = Réinitialiser
+media-browser-title = Musique sur cet appareil
+media-browser-files = { $count ->
+    [one] { $count } fichier
+   *[other] { $count } fichiers
+}
+media-browser-add = Ajouter { $count }
+media-browser-use-folder = Utiliser ce dossier
+media-browser-empty = Aucune musique trouvée. Copiez des fichiers audio dans le dossier Musique de l'appareil et autorisez l'accès à la musique.
+media-browser-cancel = Annuler
 
 column-name-number = Numéro (#)
 column-name-title = Titre

@@ -24,6 +24,7 @@ use super::cue_on_air;
 use super::cue_window;
 use super::exit_guard::{self, ExitIntent};
 use super::files::audio_paths;
+use super::media_browser::{self, MediaBrowser};
 use super::notice;
 use super::panel_layout;
 use super::panels;
@@ -408,6 +409,9 @@ pub struct AppUi {
     /// Replaces `Platform::open_url` in the About window (tests).
     opener: Option<Opener>,
     platform: Arc<dyn Platform>,
+    /// Where the platform's pickers ask for music (Android, mobile spec
+    /// MB7), and what its window remembers.
+    media_browser: Option<(MediaBrowser, media_browser::BrowseView)>,
     /// The MIDI service's handle (Settings > MIDI), when it started.
     #[cfg(not(target_os = "android"))]
     midi: Option<fp_control::service::MidiHandle>,
@@ -470,6 +474,7 @@ impl AppUi {
             notices: None,
             opener: None,
             platform: system_platform(),
+            media_browser: None,
             #[cfg(not(target_os = "android"))]
             midi: None,
             #[cfg(not(target_os = "android"))]
@@ -542,6 +547,13 @@ impl AppUi {
     /// default).
     pub fn with_platform(mut self, platform: Arc<dyn Platform>) -> Self {
         self.platform = platform;
+        self
+    }
+
+    /// The media browser the platform's pickers ask through (Android); its
+    /// window shows while a picker waits.
+    pub fn with_media_browser(mut self, browser: MediaBrowser) -> Self {
+        self.media_browser = Some((browser, media_browser::BrowseView::default()));
         self
     }
 
@@ -684,6 +696,9 @@ impl AppUi {
         // Paths arrive already filtered (and folders expanded) off this thread.
         if self.ctx.is_none() {
             self.ctx = Some(ctx.clone());
+            if let Some((browser, _)) = &self.media_browser {
+                browser.set_repaint(ctx.clone());
+            }
             for path in std::mem::take(&mut self.pending_imports) {
                 self.import_playlist(path);
             }
@@ -990,6 +1005,10 @@ impl AppUi {
                     None => {}
                 }
             }
+        }
+        // MB7: a picker waits for the operator's choice of music.
+        if let Some((browser, view)) = &mut self.media_browser {
+            media_browser::show(&ctx, scene.i18n, browser, view);
         }
         // Live settings §9.3: Apply now sends at once when it interrupts
         // nothing; otherwise it asks first.

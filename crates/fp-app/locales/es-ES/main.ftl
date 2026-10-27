@@ -615,6 +615,15 @@ tip-reset-played = Quitar las marcas de reproducida de esta playlist
 reset-played-question = ¿Quitar la marca de reproducida a todas las pistas de esta playlist?
 reset-played-cancel = Cancelar
 reset-played-confirm = Reiniciar
+media-browser-title = Música del dispositivo
+media-browser-files = { $count ->
+    [one] { $count } archivo
+   *[other] { $count } archivos
+}
+media-browser-add = Añadir { $count }
+media-browser-use-folder = Usar esta carpeta
+media-browser-empty = No se ha encontrado música. Copia archivos de audio a la carpeta Música del dispositivo y permite el acceso a la música.
+media-browser-cancel = Cancelar
 
 column-name-number = Número (#)
 column-name-title = Título

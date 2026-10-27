@@ -615,6 +615,15 @@ tip-reset-played = Cancella i segni di riprodotto di questa playlist
 reset-played-question = Cancellare il segno di riprodotto da ogni brano di questa playlist?
 reset-played-cancel = Annulla
 reset-played-confirm = Azzera
+media-browser-title = Musica su questo dispositivo
+media-browser-files = { $count ->
+    [one] { $count } file
+   *[other] { $count } file
+}
+media-browser-add = Aggiungi { $count }
+media-browser-use-folder = Usa questa cartella
+media-browser-empty = Nessuna musica trovata. Copia dei file audio nella cartella Musica del dispositivo e consenti l'accesso alla musica.
+media-browser-cancel = Annulla
 
 column-name-number = Numero (#)
 column-name-title = Titolo

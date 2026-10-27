@@ -4,11 +4,11 @@
 use std::sync::atomic::Ordering;
 
 use jni::JNIEnv;
-use jni::objects::JObject;
+use jni::objects::{JObject, JObjectArray, JString};
 use jni::sys::{jboolean, jint, jstring};
 
 use crate::android::{INSETS, SESSION};
-use crate::platform::AUDIO_FOCUS_LOST;
+use crate::platform::{AUDIO_FOCUS_LOST, MEDIA};
 use crate::shell_state::{on_air_text, shell_state};
 
 /// A Java string, or null when it cannot be made.
@@ -82,4 +82,35 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_notificationCh
     let language = SESSION.get().and_then(|s| s.language.clone());
     let name = fp_app::i18n::I18n::new(language.as_deref()).tr("mobile-notification-channel");
     java_string(&mut env, &name)
+}
+
+#[allow(unsafe_code)]
+// SAFETY: as above; `external fun setMediaFiles(Array<String>)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setMediaFiles(
+    mut env: JNIEnv<'_>,
+    _this: JObject<'_>,
+    paths: JObjectArray<'_>,
+) {
+    let count = env.get_array_length(&paths).unwrap_or(0);
+    let mut files = Vec::with_capacity(usize::try_from(count).unwrap_or(0));
+    for index in 0..count {
+        // A failed call leaves a Java exception pending: no more JNI calls
+        // until it is cleared, so the list stops there.
+        let Ok(item) = env.get_object_array_element(&paths, index) else {
+            let _ = env.exception_clear();
+            break;
+        };
+        let item = JString::from(item);
+        match env.get_string(&item) {
+            Ok(path) => files.push(std::path::PathBuf::from(String::from(path))),
+            Err(_) => {
+                let _ = env.exception_clear();
+                break;
+            }
+        }
+        // Thousands of files: free each local reference as it goes.
+        let _ = env.delete_local_ref(item);
+    }
+    MEDIA.set_files(files);
 }

@@ -10,7 +10,8 @@
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.FaustePlayer"
-        android:hasCode="true">
+        android:hasCode="true"
+        android:requestLegacyExternalStorage="true">
         <!-- Every configuration change is handled in place: recreating the
              activity would stall the interface while the audio goes on
              (mobile spec §11). -->
