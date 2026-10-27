@@ -3,6 +3,7 @@
 # mobile/android/app/src/main/jniLibs, then the APK with Gradle.
 #
 #   scripts/package/android.sh <debug|release>
+#   scripts/package/android.sh --self-test   # checks version_code
 #
 # Needs the Android SDK (ANDROID_HOME, or sdk.dir in
 # mobile/android/local.properties) with NDK r27 (ANDROID_NDK_HOME, or the
@@ -12,14 +13,38 @@
 # release builds: debug builds drop out (mobile spec §11).
 set -euo pipefail
 
+# Android's versionCode from a SemVer version: major × 1 000 000 + minor ×
+# 1 000 + patch, so every release is higher than the one before. A
+# pre-release (`-rc.1`) shares its release's code: only releases are
+# published.
+version_code() {
+  local core="${1%%-*}" major minor patch
+  IFS=. read -r major minor patch <<< "${core}"
+  echo $(( 10#${major} * 1000000 + 10#${minor} * 1000 + 10#${patch} ))
+}
+
+if [[ "${1:-}" == --self-test ]]; then
+  failed=0
+  for case in 0.12.0=12000 1.2.3=1002003 0.13.0-rc.1=13000 10.0.25=10000025; do
+    got="$(version_code "${case%%=*}")"
+    if [[ "${got}" != "${case#*=}" ]]; then
+      echo "version_code ${case%%=*}: ${got}, expected ${case#*=}" >&2
+      failed=1
+    fi
+  done
+  [[ "${failed}" == 0 ]] && echo "android.sh self-test: ok"
+  exit "${failed}"
+fi
+
 profile="${1:?usage: android.sh <debug|release>}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 app="${root}/mobile/android"
 version="$(sed -n 's/^version = "\(.*\)"$/\1/p' "${root}/Cargo.toml" | head -n1)"
 
 case "${profile}" in
-  debug) cargo_profile=(); gradle_task=assembleDebug ;;
-  release) cargo_profile=(--release); gradle_task=assembleRelease ;;
+  debug) cargo_profile=(); gradle_tasks=(assembleDebug) ;;
+  # The APK for the release page, the AAB for a store.
+  release) cargo_profile=(--release); gradle_tasks=(assembleRelease bundleRelease) ;;
   *) echo "android.sh: unknown profile ${profile} (debug or release)" >&2; exit 2 ;;
 esac
 
@@ -44,5 +69,9 @@ rm -rf "${app}/app/src/main/jniLibs"
 (cd "${root}" && cargo ndk -P 29 -t arm64-v8a -t x86_64 \
   -o "${app}/app/src/main/jniLibs" build "${cargo_profile[@]}" -p fp-mobile)
 
-(cd "${app}" && ./gradlew --no-daemon -q "${gradle_task}" -PversionName="${version}")
+(cd "${app}" && ./gradlew --no-daemon -q "${gradle_tasks[@]}" \
+  -PversionName="${version}" -PversionCode="$(version_code "${version}")")
 find "${app}/app/build/outputs/apk/${profile}" -name '*.apk' -print
+if [[ "${profile}" == release ]]; then
+  find "${app}/app/build/outputs/bundle/release" -name '*.aab' -print
+fi

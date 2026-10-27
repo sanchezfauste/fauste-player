@@ -13,7 +13,8 @@ android {
         applicationId = "com.sanchezfauste.FaustePlayer"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
+        // From the workspace version (scripts/package/android.sh).
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
         // The workspace version, passed by scripts/package/android.sh.
         versionName = (project.findProperty("versionName") as String?) ?: "0.0.0-dev"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
@@ -22,11 +23,35 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    // Until the release plan brings a release key, release builds are
-    // signed with the debug key so they install for audio checks (only
-    // release builds are judged for dropouts, mobile spec §11).
+    // The release key comes from the environment (the release workflow
+    // decodes it from its secrets; docs/technical/release-process.md).
+    // Without it release builds are signed with the debug key, so they
+    // install for audio checks (mobile spec §11) but are never published.
+    val releaseKey = listOf(
+        "FAUSTE_ANDROID_KEYSTORE",
+        "FAUSTE_ANDROID_KEYSTORE_PASSWORD",
+        "FAUSTE_ANDROID_KEY_ALIAS",
+        "FAUSTE_ANDROID_KEY_PASSWORD",
+    ).map { System.getenv(it).orEmpty() }
+    signingConfigs {
+        if (releaseKey.all { it.isNotEmpty() }) {
+            create("release") {
+                storeFile = file(releaseKey[0])
+                storePassword = releaseKey[1]
+                keyAlias = releaseKey[2]
+                keyPassword = releaseKey[3]
+            }
+        }
+    }
     buildTypes {
-        release { signingConfig = signingConfigs.getByName("debug") }
+        release {
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug").also {
+                    if (gradle.startParameter.taskNames.any { it.contains("Release") }) {
+                        logger.warn("No release key: the release build is signed with the debug key")
+                    }
+                }
+        }
     }
     packaging { jniLibs { useLegacyPackaging = false } }
 }
