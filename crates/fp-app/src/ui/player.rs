@@ -78,7 +78,7 @@ pub(crate) fn column(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, view_state, id, index, &pv);
-            top_block(ui, scene, covers, id, &pv, &telemetry);
+            top_block(ui, scene, covers, id, &pv, &telemetry, true);
             wave(ui, scene, view_state, id, &pv);
             time_row(ui, scene, &pv);
         });
@@ -138,7 +138,9 @@ pub(crate) fn compact(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, view_state, id, index, &pv);
-            top_block(ui, scene, covers, id, &pv, &telemetry);
+            // A finger scrolling the list must not move a level on air: the
+            // fader is adjusted in the open player.
+            top_block(ui, scene, covers, id, &pv, &telemetry, false);
             progress_bar(ui, &pv);
             time_row(ui, scene, &pv);
         });
@@ -703,6 +705,7 @@ fn top_block(
     id: PlayerId,
     pv: &PlayerView,
     telemetry: &fp_engine::engine::PlayerTelemetry,
+    fader: bool,
 ) {
     let height = PLAY_SIZE * 2.0 + ROW_GAP;
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
@@ -725,16 +728,18 @@ fn top_block(
             .max_rect(right)
             .layout(Layout::left_to_right(Align::Min)),
     );
-    meter_column(&mut right_ui, scene, id, telemetry, height);
+    meter_column(&mut right_ui, scene, id, telemetry, height, fader);
 }
 
-/// The level meter and the volume fader, `height` tall.
+/// The level meter and the volume fader, `height` tall; the fader only
+/// shows the level unless `fader`.
 fn meter_column(
     ui: &mut Ui,
     scene: &Scene<'_>,
     id: PlayerId,
     telemetry: &fp_engine::engine::PlayerTelemetry,
     height: f32,
+    fader: bool,
 ) {
     let t = scene.i18n;
     ui.spacing_mut().item_spacing = vec2(METER_FADER_GAP, 0.0);
@@ -805,7 +810,7 @@ fn meter_column(
             (height - widgets::FADER_READOUT_HEIGHT).max(0.0),
             position,
             &tip,
-            !locked,
+            !locked && fader,
         );
         widgets::fader_readout(ui, &readout, !locked);
         if let Some(pos) = moved {

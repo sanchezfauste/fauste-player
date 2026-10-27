@@ -125,7 +125,7 @@ view hides stops or changes playout):
 
 - *Players, portrait:* every player as a compact panel (`player::compact`:
   the header, the titles with the countdown, the transport, the meter and
-  fader, and a progress bar), each with an "Open P1" tile. An open player
+  the level, and a progress bar), each with an "Open P1" tile. An open player
   is the desktop column with its playlist at the full width, under chips
   (All, P1…Pn).
 - *Players, landscape:* two desktop columns side by side, under chips for
@@ -135,9 +135,14 @@ view hides stops or changes playout):
 - *Cartwall:* the cartwall filling the area.
 
 The open player survives rotation and closes when its player goes away
-(`PhoneView::settle`). Context menus open by long press (egui reports it
-as a secondary click). Still to come: the row menu as a bottom sheet,
-long-press tooltips and long-press drag of rows.
+(`PhoneView::settle`). The top bar keeps only icons beside the screen
+tiles, which shrink to fit. A finger drag scrolls: in touch mode table
+rows and column headers do not drag (the row menu moves entries), and a
+compact panel's fader only shows the level (it is adjusted in the open
+player), so scrolling never moves a level on air. The cartwall screen
+never folds. Context menus open by long press (egui reports it as a
+secondary click). Still to come: the row menu as a bottom sheet and
+long-press tooltips.
 
 ## Media access (MB7)
 

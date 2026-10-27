@@ -184,8 +184,9 @@ fn the_cartwall_screen_shows_the_carts() {
 #[test]
 fn rotation_keeps_the_open_player() {
     let (mut h, _fake) = touch(3, PORTRAIT);
-    h.get_by_label("Open P3").click();
+    h.get_by_label("Open P2").click();
     h.run_steps(3);
+    assert_eq!(h.query_all_by_label(ADD).count(), 1, "open in portrait");
     h.set_size(LANDSCAPE);
     h.run_steps(3);
     assert_eq!(h.query_all_by_label(ADD).count(), 1);
@@ -217,4 +218,65 @@ fn a_phone_has_no_desktop_panel_buttons() {
     assert!(h.query_by_label("Maximize").is_none());
     let (h, _fake) = touch(2, TABLET);
     assert!(h.query_all_by_label("Maximize").count() > 0);
+}
+
+#[test]
+fn scrolling_over_a_compact_fader_leaves_the_volume() {
+    let (mut h, fake) = touch(3, PORTRAIT);
+    fake.take_sent();
+    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+    drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::SetVolume(..))),
+        "a scroll moved the fader"
+    );
+}
+
+#[test]
+fn a_finger_drag_on_the_playlist_moves_no_row() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    h.get_by_label("Open P1").click();
+    h.run_steps(3);
+    fake.take_sent();
+    let from = h.get_all_by_label("Song 3").last().unwrap().rect().center();
+    let to = h.get_all_by_label("Song 1").last().unwrap().rect().center();
+    drag(&mut h, from, to);
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::MoveEntry { .. })),
+        "a scroll moved a row"
+    );
+}
+
+#[test]
+fn the_top_bar_fits_a_narrow_phone() {
+    let (h, _fake) = touch(2, vec2(360.0, 780.0));
+    let cartwall = h.get_by_label("Cartwall").rect();
+    for label in ["Settings", "About"] {
+        let other = h.get_by_label_contains(label).rect();
+        assert!(
+            !cartwall.intersects(other),
+            "{label} overlaps the screen tiles"
+        );
+    }
+}
+
+#[test]
+fn the_phone_cartwall_never_folds() {
+    let mut closed = state(2, 3);
+    closed.cartwall.open = false;
+    let (mut h, _fake) = harness_sized(closed, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    h.get_by_label("Cartwall").click();
+    h.run_steps(3);
+    assert!(
+        h.query_all_by_label_contains("empty").count() > 0,
+        "the carts show"
+    );
+    assert!(h.query_by_label("CARTWALL").is_none(), "no folding caret");
 }

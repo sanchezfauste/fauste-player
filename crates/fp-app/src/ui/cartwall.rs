@@ -133,13 +133,15 @@ pub(crate) fn page_name(scene: &Scene<'_>, index: usize, name: &str) -> String {
 /// buttons at most.
 pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, fill: bool) {
     // RL14: collapsed on a side, the cartwall is a narrow strip.
+    // Mobile spec §6: a phone's cartwall screen never folds.
+    let open = scene.state.cartwall.open || view_state.phone_active;
     let dock = scene.state.layout.cartwall.dock;
-    if !scene.state.cartwall.open && dock.is_side() {
+    if !open && dock.is_side() {
         collapsed_strip(ui, scene, view_state, dock);
         return;
     }
     header(ui, scene, view_state);
-    if !scene.state.cartwall.open {
+    if !open {
         return;
     }
     ui.add_space(GAP);
@@ -242,6 +244,7 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                 } else {
                     icon::CARET_RIGHT
                 };
+                let foldable = !view_state.phone_active;
                 let width = title_width(ui, &title);
                 let style = TileStyle {
                     border: Color32::TRANSPARENT,
@@ -249,16 +252,17 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                     active_fill: Color32::TRANSPARENT,
                     ..TileStyle::plain()
                 };
-                if widgets::tile(ui, vec2(width, 20.0), &title, true, style, |p, r, c| {
-                    p.text(
-                        r.left_center(),
-                        egui::Align2::LEFT_CENTER,
-                        format!("{caret} {title}"),
-                        font(10.0),
-                        c,
-                    );
-                })
-                .clicked()
+                if foldable
+                    && widgets::tile(ui, vec2(width, 20.0), &title, true, style, |p, r, c| {
+                        p.text(
+                            r.left_center(),
+                            egui::Align2::LEFT_CENTER,
+                            format!("{caret} {title}"),
+                            font(10.0),
+                            c,
+                        );
+                    })
+                    .clicked()
                 {
                     scene.ctl.send(Command::SetCartwallOpen(!wall.open));
                 }

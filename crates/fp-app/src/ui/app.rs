@@ -103,6 +103,9 @@ pub(crate) struct ViewState {
     pub phone: super::touch::PhoneView,
     /// Whether this frame draws a phone's views (no desktop panel buttons).
     pub phone_active: bool,
+    /// Touch mode: rows and column headers do not drag (a finger drag
+    /// scrolls).
+    pub touch: bool,
     /// A swipe across the phone's landscape view.
     pub phone_swipe: super::touch::SwipeTracker,
     pub selection: HashMap<PlayerId, EntryId>,
@@ -781,6 +784,7 @@ impl AppUi {
             TOP_BAR_HEIGHT
         };
         self.view.phone_active = phone;
+        self.view.touch = self.touch;
         let top = Rect::from_min_size(full.min, vec2(full.width(), top_height));
         let status = Rect::from_min_max(
             egui::pos2(full.left(), full.bottom() - STATUS_BAR_HEIGHT),
@@ -1868,7 +1872,7 @@ fn top_bar(
     ui.add_space(10.0);
     if phone {
         // Mobile spec §6: a phone shows one screen at a time.
-        super::touch::screen_tiles(ui, scene, &mut view_state.phone);
+        super::touch::screen_tiles(ui, scene, &mut view_state.phone, right_edge - 12.0);
         return;
     }
     // RL15: the panel tiles and the layout menu, on the left, 12 points
@@ -1885,30 +1889,36 @@ fn top_bar_right(
     pending: &[fp_model::Pending],
     names: pending::DeviceNames<'_>,
 ) {
-    ui.spacing_mut().item_spacing = vec2(12.0, 0.0);
-    ui.add_space(10.0);
+    // A phone keeps only the icons, as large as a fingertip (mobile spec §6).
+    let phone = view_state.phone_active;
+    let height = if phone { super::touch::TARGET } else { 24.0 };
+    ui.spacing_mut().item_spacing = vec2(if phone { 6.0 } else { 12.0 }, 0.0);
+    ui.add_space(if phone { 6.0 } else { 10.0 });
     let clock = chrono::Local::now().format("%H:%M:%S").to_string();
     widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
     let label = scene.i18n.tr("top-settings");
-    let width = ui
-        .painter()
-        .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
-        .size()
-        .x
-        + 34.0;
+    let width = if phone {
+        height
+    } else {
+        ui.painter()
+            .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
+            .size()
+            .x
+            + 34.0
+    };
     let style = TileStyle {
         border: theme::NEUTRAL_800,
         hover_fill: theme::NEUTRAL_800,
         ..TileStyle::plain()
     };
-    if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
-        p.text(
-            r.center(),
-            egui::Align2::CENTER_CENTER,
-            format!("{} {label}", egui_phosphor::regular::GEAR_SIX),
-            font(12.0),
-            c,
-        );
+    if widgets::tile(ui, vec2(width, height), &label, true, style, |p, r, c| {
+        let text = if phone {
+            egui_phosphor::regular::GEAR_SIX.to_owned()
+        } else {
+            format!("{} {label}", egui_phosphor::regular::GEAR_SIX)
+        };
+        let size = if phone { 18.0 } else { 12.0 };
+        p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(size), c);
     })
     .clicked()
     {
@@ -1920,12 +1930,13 @@ fn top_bar_right(
         hover_fill: theme::NEUTRAL_800,
         ..TileStyle::plain()
     };
-    if widgets::tile(ui, vec2(24.0, 24.0), &about, true, style, |p, r, c| {
+    let about_size = if phone { 18.0 } else { 14.0 };
+    if widgets::tile(ui, vec2(height, height), &about, true, style, |p, r, c| {
         p.text(
             r.center(),
             egui::Align2::CENTER_CENTER,
             egui_phosphor::regular::INFO,
-            font(14.0),
+            font(about_size),
             c,
         );
     })
@@ -1941,26 +1952,29 @@ fn top_bar_right(
             .map(|p| pending::describe(i18n, scene.state, names, p))
             .collect::<Vec<_>>()
             .join("\n");
-        let width = ui
-            .painter()
-            .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
-            .size()
-            .x
-            + 34.0;
+        let width = if phone {
+            height
+        } else {
+            ui.painter()
+                .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
+                .size()
+                .x
+                + 34.0
+        };
         let style = TileStyle {
             border: theme::AMBER,
             content: theme::AMBER,
             hover_fill: theme::NEUTRAL_800,
             ..TileStyle::plain()
         };
-        if widgets::tile_without_tooltip(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
-            p.text(
-                r.center(),
-                egui::Align2::CENTER_CENTER,
-                format!("{} {label}", egui_phosphor::regular::HOURGLASS),
-                font(12.0),
-                c,
-            );
+        if widgets::tile_without_tooltip(ui, vec2(width, height), &label, true, style, |p, r, c| {
+            let text = if phone {
+                egui_phosphor::regular::HOURGLASS.to_owned()
+            } else {
+                format!("{} {label}", egui_phosphor::regular::HOURGLASS)
+            };
+            let size = if phone { 18.0 } else { 12.0 };
+            p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(size), c);
         })
         .on_hover_text(tip)
         .clicked()

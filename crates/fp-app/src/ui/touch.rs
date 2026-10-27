@@ -108,9 +108,9 @@ const INTERACT_RADIUS: f32 = 12.0;
 /// Scroll bars a finger can drag.
 const SCROLL_BAR_WIDTH: f32 = 12.0;
 /// The phone's top bar, tall enough for its screen tiles.
-pub(crate) const PHONE_TOP_BAR_HEIGHT: f32 = 48.0;
-/// The height of a target a finger uses.
-pub(crate) const TARGET: f32 = 40.0;
+pub(crate) const PHONE_TOP_BAR_HEIGHT: f32 = 56.0;
+/// The size of a target a finger uses (spec §6: 48 dp).
+pub(crate) const TARGET: f32 = 48.0;
 
 /// The style touch mode adds to the theme's.
 pub(crate) fn apply_style(ctx: &egui::Context) {
@@ -120,15 +120,17 @@ pub(crate) fn apply_style(ctx: &egui::Context) {
     });
 }
 
-/// The phone's top bar, left part: Players | Cartwall.
-pub(crate) fn screen_tiles(ui: &mut Ui, scene: &Scene<'_>, phone: &mut PhoneView) {
+/// The phone's top bar, left part: Players | Cartwall, shrunk (their names
+/// cut short) to stop before `right`, where the clock and buttons begin.
+pub(crate) fn screen_tiles(ui: &mut Ui, scene: &Scene<'_>, phone: &mut PhoneView, right: f32) {
     let t = scene.i18n;
     ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
+    let each = ((right - ui.cursor().left() - 4.0) / 2.0).max(TARGET);
     for (screen, key) in [
         (PhoneScreen::Players, "touch-players"),
         (PhoneScreen::Cartwall, "touch-cartwall"),
     ] {
-        if chip(ui, &t.tr(key), phone.screen == screen) {
+        if chip_at_most(ui, &t.tr(key), phone.screen == screen, each) {
             phone.screen = screen;
         }
     }
@@ -136,12 +138,18 @@ pub(crate) fn screen_tiles(ui: &mut Ui, scene: &Scene<'_>, phone: &mut PhoneView
 
 /// A tile that is lit while `on`; true when tapped.
 pub(crate) fn chip(ui: &mut Ui, label: &str, on: bool) -> bool {
-    let width = ui
+    chip_at_most(ui, label, on, f32::INFINITY)
+}
+
+/// [`chip`] at most `max_width` wide, its text cut short to fit.
+fn chip_at_most(ui: &mut Ui, label: &str, on: bool, max_width: f32) -> bool {
+    let natural = ui
         .painter()
         .layout_no_wrap(label.to_owned(), font(13.0), theme::TEXT)
         .size()
         .x
         + 28.0;
+    let width = natural.min(max_width);
     let style = if on {
         TileStyle {
             fill: theme::NEUTRAL_800,
@@ -158,15 +166,20 @@ pub(crate) fn chip(ui: &mut Ui, label: &str, on: bool) -> bool {
             ..TileStyle::plain()
         }
     };
-    widgets::tile_without_tooltip(ui, vec2(width, TARGET), label, true, style, |p, r, c| {
-        p.text(
-            r.center(),
-            egui::Align2::CENTER_CENTER,
-            label,
-            font(13.0),
-            c,
-        );
-    })
+    let owned = label.to_owned();
+    widgets::tile_without_tooltip(
+        ui,
+        vec2(width, TARGET),
+        label,
+        true,
+        style,
+        move |p, r, c| {
+            let mut job = egui::text::LayoutJob::simple_singleline(owned, font(13.0), c);
+            job.wrap = egui::text::TextWrapping::truncate_at_width((r.width() - 12.0).max(0.0));
+            let galley = p.layout_job(job);
+            p.galley(r.center() - galley.size() / 2.0, galley, c);
+        },
+    )
     .clicked()
 }
 
@@ -206,7 +219,8 @@ fn pairs(
     covers: &mut HashMap<TrackId, TextureHandle>,
     players: &[PlayerId],
 ) {
-    follow_swipe(ui.ctx(), view_state, players.len());
+    let area = ui.available_rect_before_wrap();
+    follow_swipe(ui, area, view_state, players.len());
     let shown = view_state.phone.pair_players(players);
     ui.horizontal(|ui| {
         egui::ScrollArea::horizontal()
@@ -254,8 +268,11 @@ fn pairs(
     columns(ui, scene, view_state, covers, &shown, rect);
 }
 
-/// Turns a sideways drag that no widget took into a change of pair.
-fn follow_swipe(ctx: &egui::Context, view_state: &mut ViewState, count: usize) {
+/// Turns a sideways drag that no widget took into a change of pair. It
+/// counts only when it starts in `area` on this view's layer (not in a
+/// window over it, nor in the top bar).
+fn follow_swipe(ui: &Ui, area: Rect, view_state: &mut ViewState, count: usize) {
+    let ctx = ui.ctx();
     let (pressed, released, position) = ctx.input(|i| {
         (
             i.pointer.primary_pressed(),
@@ -265,12 +282,16 @@ fn follow_swipe(ctx: &egui::Context, view_state: &mut ViewState, count: usize) {
     });
     let tracker = &mut view_state.phone_swipe;
     if pressed {
+        let here =
+            position.filter(|p| area.contains(*p) && ctx.layer_id_at(*p) == Some(ui.layer_id()));
         *tracker = SwipeTracker {
-            origin: position,
+            origin: here,
             blocked: false,
         };
     }
-    if ctx.dragged_id().is_some() {
+    // A widget's drag that started and stopped between two frames shows
+    // only in `drag_stopped_id`.
+    if ctx.dragged_id().is_some() || ctx.drag_stopped_id().is_some() {
         tracker.blocked = true;
     }
     if released {
