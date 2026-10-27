@@ -6,7 +6,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.KeyEvent
 import android.view.WindowManager
+import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -37,6 +39,11 @@ class MainActivity : GameActivity() {
             }
         }
         requestPermissions(wanted.toTypedArray(), PERMISSIONS)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                moveTaskToBack(true)
+            }
+        })
         ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { view, insets ->
             val bars = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
@@ -70,10 +77,21 @@ class MainActivity : GameActivity() {
         }
     }
 
-    /** Back never destroys the activity: the playout keeps its interface. */
-    @Deprecated("Back goes to the background")
-    override fun onBackPressed() {
-        moveTaskToBack(true)
+    /**
+     * Back never destroys the activity: the playout keeps its interface.
+     * GameActivity hands every key to the native side, which consumes Back,
+     * so the key is taken here before it; the gesture reaches the callback
+     * registered in `onCreate`.
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        keyCode == KeyEvent.KEYCODE_BACK || super.onKeyDown(keyCode, event)
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            moveTaskToBack(true)
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
     }
 
     private companion object {
