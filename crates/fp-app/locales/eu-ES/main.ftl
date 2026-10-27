@@ -615,6 +615,15 @@ tip-reset-played = Garbitu zerrenda honetako erreproduzitutako markak
 reset-played-question = Garbitu zerrenda honetako pista guztien erreproduzitutako marka?
 reset-played-cancel = Utzi
 reset-played-confirm = Berrezarri
+media-browser-title = Gailuko musika
+media-browser-files = { $count ->
+    [one] { $count } fitxategi
+   *[other] { $count } fitxategi
+}
+media-browser-add = Gehitu { $count }
+media-browser-use-folder = Erabili karpeta hau
+media-browser-empty = Ez da musikarik aurkitu. Kopiatu audio-fitxategiak gailuaren Musika karpetara eta eman musikarako sarbidea.
+media-browser-cancel = Utzi
 
 column-name-number = Zenbakia (#)
 column-name-title = Izenburua

@@ -615,6 +615,15 @@ tip-reset-played = Limpar as marcas de tocada desta lista
 reset-played-question = Limpar a marca de tocada de todas as faixas desta lista?
 reset-played-cancel = Cancelar
 reset-played-confirm = Repor tocadas
+media-browser-title = Música neste dispositivo
+media-browser-files = { $count ->
+    [one] { $count } ficheiro
+   *[other] { $count } ficheiros
+}
+media-browser-add = Adicionar { $count }
+media-browser-use-folder = Usar esta pasta
+media-browser-empty = Nenhuma música encontrada. Copie ficheiros de áudio para a pasta Música do dispositivo e permita o acesso à música.
+media-browser-cancel = Cancelar
 
 column-name-number = Número (#)
 column-name-title = Título

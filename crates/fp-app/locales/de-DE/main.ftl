@@ -615,6 +615,15 @@ tip-reset-played = Die Gespielt-Markierungen dieser Playlist löschen
 reset-played-question = Die Gespielt-Markierung aller Tracks dieser Playlist löschen?
 reset-played-cancel = Abbrechen
 reset-played-confirm = Zurücksetzen
+media-browser-title = Musik auf diesem Gerät
+media-browser-files = { $count ->
+    [one] { $count } Datei
+   *[other] { $count } Dateien
+}
+media-browser-add = { $count } hinzufügen
+media-browser-use-folder = Diesen Ordner verwenden
+media-browser-empty = Keine Musik gefunden. Kopiere Audiodateien in den Musikordner des Geräts und erlaube den Zugriff auf Musik.
+media-browser-cancel = Abbrechen
 
 column-name-number = Nummer (#)
 column-name-title = Titel

@@ -615,6 +615,15 @@ tip-reset-played = Clear the played marks of this playlist
 reset-played-question = Clear the played mark of every track in this playlist?
 reset-played-cancel = Cancel
 reset-played-confirm = Reset played
+media-browser-title = Music on this device
+media-browser-files = { $count ->
+    [one] { $count } file
+   *[other] { $count } files
+}
+media-browser-add = Add { $count }
+media-browser-use-folder = Use this folder
+media-browser-empty = No music found. Copy audio files to the device's Music folder, and allow access to music.
+media-browser-cancel = Cancel
 
 column-name-number = Number (#)
 column-name-title = Title
