@@ -626,6 +626,8 @@ media-browser-empty = Ez da musikarik aurkitu. Kopiatu audio-fitxategiak gailuar
 media-browser-cancel = Utzi
 touch-players = Erreproduzitzaileak
 touch-cartwall = { -cartwall }
+touch-open-player = Ireki { $player }
+touch-all-players = Denak
 
 column-name-number = Zenbakia (#)
 column-name-title = Izenburua

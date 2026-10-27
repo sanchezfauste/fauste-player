@@ -54,3 +54,56 @@ fn landscape_is_a_phone_too() {
     let (h, _fake) = touch(2, LANDSCAPE);
     assert!(h.query_by_label("Players").is_some());
 }
+
+const ADD: &str = "Add tracks to this playlist";
+
+#[test]
+fn all_players_show_as_compact_panels() {
+    let (h, _fake) = touch(2, PORTRAIT);
+    assert!(h.query_by_label("Open P1").is_some());
+    assert!(h.query_by_label("Open P2").is_some());
+    assert_eq!(h.query_all_by_label("Play").count(), 2);
+    assert!(
+        h.query_by_label(ADD).is_none(),
+        "no playlist in a compact panel"
+    );
+}
+
+#[test]
+fn open_shows_one_player_with_its_playlist() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    h.get_by_label("Open P2").click();
+    h.run_steps(3);
+    assert_eq!(h.query_all_by_label(ADD).count(), 1);
+    assert_eq!(h.query_all_by_label("Play").count(), 1);
+    assert!(h.query_by_label("Open P1").is_none());
+    assert!(h.query_by_label("All").is_some());
+}
+
+#[test]
+fn chips_switch_the_open_player_and_all_goes_back() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    h.get_by_label("Open P1").click();
+    h.run_steps(3);
+    h.get_by_label("P2").click();
+    h.run_steps(3);
+    assert_eq!(h.query_all_by_label(ADD).count(), 1);
+    h.get_by_label("All").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Open P1").is_some());
+    assert!(h.query_by_label(ADD).is_none());
+}
+
+#[test]
+fn play_in_a_compact_panel_sends_play() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    fake.take_sent();
+    h.get_by_label("Play").click();
+    h.run_steps(2);
+    assert!(
+        fake.take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::Play(_))),
+        "no play command"
+    );
+}

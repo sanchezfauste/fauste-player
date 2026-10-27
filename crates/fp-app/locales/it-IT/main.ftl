@@ -626,6 +626,8 @@ media-browser-empty = Nessuna musica trovata. Copia dei file audio nella cartell
 media-browser-cancel = Annulla
 touch-players = Lettori
 touch-cartwall = { -cartwall }
+touch-open-player = Apri { $player }
+touch-all-players = Tutti
 
 column-name-number = Numero (#)
 column-name-title = Titolo

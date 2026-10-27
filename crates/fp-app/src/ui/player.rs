@@ -105,6 +105,57 @@ pub(crate) fn column(
     footer(&mut footer_ui, scene, view_state, id, player.playlist);
 }
 
+/// A phone's compact panel (mobile spec §6): the player block without the
+/// waveform and the playlist; a bar shows the progress.
+pub(crate) fn compact(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    covers: &mut HashMap<TrackId, TextureHandle>,
+    index: usize,
+) {
+    let Some(player) = scene.state.players.get(index) else {
+        return;
+    };
+    let id = player.id;
+    let telemetry = scene
+        .telemetry
+        .players
+        .iter()
+        .find(|(p, _)| *p == id)
+        .map(|(_, t)| *t)
+        .unwrap_or_default();
+    let Some(mut pv) = view::player_view(scene.state, id, telemetry.position_secs, scene.time)
+    else {
+        return;
+    };
+    pv.bit_perfect = telemetry.bit_perfect;
+    pv.dsd = telemetry.dsd;
+    egui::Frame::new()
+        .fill(theme::SURFACE)
+        .stroke(Stroke::new(1.0, theme::NEUTRAL_800))
+        .inner_margin(10.0)
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
+            header(ui, scene, view_state, id, index, &pv);
+            top_block(ui, scene, covers, id, &pv, &telemetry);
+            progress_bar(ui, &pv);
+            time_row(ui, scene, &pv);
+        });
+}
+
+/// The share of the track played, as a thin bar.
+fn progress_bar(ui: &mut Ui, pv: &PlayerView) {
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 4.0), Sense::hover());
+    ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_800);
+    let share = pv
+        .total
+        .filter(|t| *t > 0.0)
+        .map_or(0.0, |t| (pv.elapsed / t).clamp(0.0, 1.0)) as f32;
+    let played = Rect::from_min_size(rect.min, vec2(rect.width() * share, rect.height()));
+    ui.painter().rect_filled(played, 0.0, theme::NEUTRAL_400);
+}
+
 /// Follows the player's current entry in its table (feedback spec F18):
 /// when it changes, and once the operator has left the table and tabs alone
 /// for `ui.follow_current_grace_secs` (0 never follows), the tab of its

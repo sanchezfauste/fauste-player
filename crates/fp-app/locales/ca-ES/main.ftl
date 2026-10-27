@@ -626,6 +626,8 @@ media-browser-empty = No s'ha trobat música. Copia fitxers d'àudio a la carpet
 media-browser-cancel = Cancel·la
 touch-players = Reproductors
 touch-cartwall = { -cartwall }
+touch-open-player = Obre { $player }
+touch-all-players = Tots
 
 column-name-number = Número (#)
 column-name-title = Títol

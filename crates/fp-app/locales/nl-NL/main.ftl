@@ -626,6 +626,8 @@ media-browser-empty = Geen muziek gevonden. Kopieer audiobestanden naar de map M
 media-browser-cancel = Annuleren
 touch-players = Spelers
 touch-cartwall = { -cartwall }
+touch-open-player = { $player } openen
+touch-all-players = Alle
 
 column-name-number = Nummer (#)
 column-name-title = Titel

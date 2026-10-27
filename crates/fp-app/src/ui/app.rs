@@ -793,65 +793,85 @@ impl AppUi {
         top_bar(&mut top_ui, &scene, &mut self.view, &pending, phone, &|d| {
             self.settings.device_label(d)
         });
-        // The middle area (resizable layout spec RL11): the pixel pass turns
-        // the layout into the players' row and the cartwall's rectangle.
         let inner = middle.shrink(8.0);
-        let ids = state.player_ids();
-        let model_input = panel_layout::PassInput {
-            players: &ids,
-            layout: &state.layout,
-            area: inner,
-            cartwall: cartwall::sizes(ui, &scene),
-            maximised: None,
-        };
-        // RL12: a cartwall splitter drag draws its size until the echo.
-        let dragged = panels::cartwall_drag_layout(ui, &scene, &mut self.view, &model_input);
-        let layout = dragged.as_ref().unwrap_or(&state.layout);
-        let pass = |maximised: Option<fp_model::layout::Panel>| {
-            panel_layout::arrange(&panel_layout::PassInput {
-                layout,
-                maximised,
-                ..model_input
-            })
-        };
-        let maximised = self.view.maximised.as_ref().map(|m| m.panel);
-        let arranged = pass(maximised);
-        // RL16: a splitter drag starts from the sizes without the maximised
-        // panel.
-        let normal = if maximised.is_some() {
-            pass(None)
-        } else {
-            arranged.clone()
-        };
-        self.view.player_rects.clear();
-        if !arranged.widths.is_empty() {
-            let mut players_ui = ui.new_child(
+        if phone {
+            // Mobile spec §6: a phone draws the screen chosen in its top bar.
+            let landscape = full.width() > full.height();
+            let mut phone_ui = ui.new_child(
                 UiBuilder::new()
-                    .max_rect(arranged.players_area)
-                    .layout(Layout::left_to_right(Align::Min)),
+                    .max_rect(inner)
+                    .id_salt("phone")
+                    .layout(Layout::top_down(Align::Min)),
             );
-            panels::players_row(
-                &mut players_ui,
+            phone_ui.set_clip_rect(inner);
+            super::touch::phone_middle(
+                &mut phone_ui,
                 &scene,
                 &mut self.view,
                 &mut self.covers,
-                &arranged,
-                &normal,
+                landscape,
             );
+            self.view.cartwall_rect = None;
+        } else {
+            // The middle area (resizable layout spec RL11): the pixel pass turns
+            // the layout into the players' row and the cartwall's rectangle.
+            let ids = state.player_ids();
+            let model_input = panel_layout::PassInput {
+                players: &ids,
+                layout: &state.layout,
+                area: inner,
+                cartwall: cartwall::sizes(ui, &scene),
+                maximised: None,
+            };
+            // RL12: a cartwall splitter drag draws its size until the echo.
+            let dragged = panels::cartwall_drag_layout(ui, &scene, &mut self.view, &model_input);
+            let layout = dragged.as_ref().unwrap_or(&state.layout);
+            let pass = |maximised: Option<fp_model::layout::Panel>| {
+                panel_layout::arrange(&panel_layout::PassInput {
+                    layout,
+                    maximised,
+                    ..model_input
+                })
+            };
+            let maximised = self.view.maximised.as_ref().map(|m| m.panel);
+            let arranged = pass(maximised);
+            // RL16: a splitter drag starts from the sizes without the maximised
+            // panel.
+            let normal = if maximised.is_some() {
+                pass(None)
+            } else {
+                arranged.clone()
+            };
+            self.view.player_rects.clear();
+            if !arranged.widths.is_empty() {
+                let mut players_ui = ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(arranged.players_area)
+                        .layout(Layout::left_to_right(Align::Min)),
+                );
+                panels::players_row(
+                    &mut players_ui,
+                    &scene,
+                    &mut self.view,
+                    &mut self.covers,
+                    &arranged,
+                    &normal,
+                );
+            }
+            self.view.cartwall_rect = arranged.cartwall;
+            if let Some(cart_rect) = arranged.cartwall {
+                let mut cart_ui = ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(cart_rect)
+                        .id_salt("cartwall")
+                        .layout(Layout::top_down(Align::Min)),
+                );
+                cart_ui.set_clip_rect(cart_rect);
+                cartwall::strip(&mut cart_ui, &scene, &mut self.view, !arranged.fit_content);
+            }
+            // RL12: the splitter beside the cartwall, over the gap.
+            panels::cartwall_splitter(ui, &scene, &mut self.view, &model_input, &arranged, &normal);
         }
-        self.view.cartwall_rect = arranged.cartwall;
-        if let Some(cart_rect) = arranged.cartwall {
-            let mut cart_ui = ui.new_child(
-                UiBuilder::new()
-                    .max_rect(cart_rect)
-                    .id_salt("cartwall")
-                    .layout(Layout::top_down(Align::Min)),
-            );
-            cart_ui.set_clip_rect(cart_rect);
-            cartwall::strip(&mut cart_ui, &scene, &mut self.view, !arranged.fit_content);
-        }
-        // RL12: the splitter beside the cartwall, over the gap.
-        panels::cartwall_splitter(ui, &scene, &mut self.view, &model_input, &arranged, &normal);
         let mut status_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(status)
