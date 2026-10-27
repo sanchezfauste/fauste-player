@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+pub mod aaudio_ids;
 #[cfg(target_os = "linux")]
 mod alsa_dsd;
 #[cfg(target_os = "macos")]
