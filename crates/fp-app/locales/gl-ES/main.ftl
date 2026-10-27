@@ -624,6 +624,8 @@ media-browser-add = Engadir { $count }
 media-browser-use-folder = Usar este cartafol
 media-browser-empty = Non se atopou música. Copia ficheiros de audio no cartafol Música do dispositivo e permite o acceso á música.
 media-browser-cancel = Cancelar
+touch-players = Reprodutores
+touch-cartwall = { -cartwall }
 
 column-name-number = Número (#)
 column-name-title = Título

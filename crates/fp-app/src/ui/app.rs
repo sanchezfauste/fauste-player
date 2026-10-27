@@ -99,6 +99,8 @@ pub(crate) struct TabScroll {
 /// Everything the UI remembers between frames.
 #[derive(Default)]
 pub(crate) struct ViewState {
+    /// What a phone shows (mobile spec §6); unused elsewhere.
+    pub phone: super::touch::PhoneView,
     pub selection: HashMap<PlayerId, EntryId>,
     /// The Enter that set an entry as Next and may still be followed by a
     /// second one that plays it (see `playlist_keys`).
@@ -412,6 +414,8 @@ pub struct AppUi {
     /// Where the platform's pickers ask for music (Android, mobile spec
     /// MB7), and what its window remembers.
     media_browser: Option<(MediaBrowser, media_browser::BrowseView)>,
+    /// Touch mode (mobile spec §6): the layout follows the screen.
+    touch: bool,
     /// The MIDI service's handle (Settings > MIDI), when it started.
     #[cfg(not(target_os = "android"))]
     midi: Option<fp_control::service::MidiHandle>,
@@ -475,6 +479,7 @@ impl AppUi {
             opener: None,
             platform: system_platform(),
             media_browser: None,
+            touch: false,
             #[cfg(not(target_os = "android"))]
             midi: None,
             #[cfg(not(target_os = "android"))]
@@ -554,6 +559,13 @@ impl AppUi {
     /// window shows while a picker waits.
     pub fn with_media_browser(mut self, browser: MediaBrowser) -> Self {
         self.media_browser = Some((browser, media_browser::BrowseView::default()));
+        self
+    }
+
+    /// Touch mode (Android): a phone gets its own views and every target
+    /// is easier to hit; a tablet keeps the desktop layout.
+    pub fn with_touch(mut self) -> Self {
+        self.touch = true;
         self
     }
 
@@ -644,6 +656,9 @@ impl AppUi {
         if !self.themed {
             // Fonts are bound from the next frame on; draw nothing until then.
             theme::apply(&ctx);
+            if self.touch {
+                super::touch::apply_style(&ctx);
+            }
             self.themed = true;
             ctx.request_repaint();
             return;
@@ -751,7 +766,17 @@ impl AppUi {
         };
         let full = ui.available_rect_before_wrap();
         ui.painter().rect_filled(full, 0.0, theme::BG);
-        let top = Rect::from_min_size(full.min, vec2(full.width(), TOP_BAR_HEIGHT));
+        let phone = self.touch
+            && matches!(
+                super::touch::form_factor(full.size()),
+                super::touch::FormFactor::Phone { .. }
+            );
+        let top_height = if phone {
+            super::touch::PHONE_TOP_BAR_HEIGHT
+        } else {
+            TOP_BAR_HEIGHT
+        };
+        let top = Rect::from_min_size(full.min, vec2(full.width(), top_height));
         let status = Rect::from_min_max(
             egui::pos2(full.left(), full.bottom() - STATUS_BAR_HEIGHT),
             full.max,
@@ -765,7 +790,7 @@ impl AppUi {
                 .max_rect(top)
                 .layout(Layout::left_to_right(Align::Center)),
         );
-        top_bar(&mut top_ui, &scene, &mut self.view, &pending, &|d| {
+        top_bar(&mut top_ui, &scene, &mut self.view, &pending, phone, &|d| {
             self.settings.device_label(d)
         });
         // The middle area (resizable layout spec RL11): the pixel pass turns
@@ -1791,6 +1816,7 @@ fn top_bar(
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     pending: &[fp_model::Pending],
+    phone: bool,
     names: pending::DeviceNames<'_>,
 ) {
     let rect = ui.max_rect();
@@ -1815,6 +1841,11 @@ fn top_bar(
     top_bar_right(&mut right, scene, view_state, pending, names);
     let right_edge = right.min_rect().left();
     ui.add_space(10.0);
+    if phone {
+        // Mobile spec §6: a phone shows one screen at a time.
+        super::touch::screen_tiles(ui, scene, &mut view_state.phone);
+        return;
+    }
     // RL15: the panel tiles and the layout menu, on the left, 12 points
     // clear of the right-hand block.
     panels::layout_controls(ui, scene, right_edge - 12.0);

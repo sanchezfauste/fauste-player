@@ -624,6 +624,8 @@ media-browser-add = Aggiungi { $count }
 media-browser-use-folder = Usa questa cartella
 media-browser-empty = Nessuna musica trovata. Copia dei file audio nella cartella Musica del dispositivo e consenti l'accesso alla musica.
 media-browser-cancel = Annulla
+touch-players = Lettori
+touch-cartwall = { -cartwall }
 
 column-name-number = Numero (#)
 column-name-title = Titolo

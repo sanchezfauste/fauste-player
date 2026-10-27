@@ -624,6 +624,8 @@ media-browser-add = { $count } toevoegen
 media-browser-use-folder = Deze map gebruiken
 media-browser-empty = Geen muziek gevonden. Kopieer audiobestanden naar de map Muziek van het apparaat en geef toegang tot muziek.
 media-browser-cancel = Annuleren
+touch-players = Spelers
+touch-cartwall = { -cartwall }
 
 column-name-number = Nummer (#)
 column-name-title = Titel
