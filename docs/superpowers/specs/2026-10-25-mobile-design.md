@@ -192,9 +192,10 @@ Calls that wait (pickers) answer through channels, never blocking the UI
   is active), per CLAUDE.md rule 4.
 - **MB9 — Buffer and latency** use the existing buffer config; AAudio is
   opened in low-latency performance mode. Defaults may differ per
-  platform; they stay `Config` fields with ranges. *From the spike:* the
-  streams must declare `USAGE_MEDIA` / `CONTENT_TYPE_MUSIC` (cpal leaves
-  the usage unset), which audio focus (MB4) and routing rely on; and
+  platform; they stay `Config` fields with ranges. *From the spike:*
+  AAudio maps the usage cpal leaves unset to `USAGE_MEDIA` /
+  `CONTENT_TYPE_MUSIC` (AudioFlinger showed `Usg 1`, `CT 2`), which audio
+  focus (MB4) and routing rely on, so no cpal change is needed; and
   latency and dropouts are measured on release builds only (a debug
   build underruns at start).
 - **MB10 — Safe area.** The layout keeps clear of the status bar,
@@ -312,7 +313,7 @@ checks are still pending.
 | Startup | The desktop session (store, engine, conductor, analysis, services) starts in `android_main`; the only `unsafe` is its `#[unsafe(no_mangle)]`. | §8 holds; no Rust→Java call was needed yet. |
 | UI | The desktop UI renders entirely (theme, fonts, icons, meters, waveforms); taps work and long-press opens context menus. Phone portrait overflows to the right; landscape shows three players; insets are ignored. | The touch layout (§6) and MB10. |
 | Music by path (MB7) | `READ_MEDIA_AUDIO` and real paths under `/sdcard/Music`: decoding, tags, analysis, loudness and waveform work. | MB7 holds. |
-| Audio | AAudio stream at 48 kHz, stereo, f32, shared, low latency requested. No underrun on a release build; a debug build had one at start. Usage left unset by cpal. | MB9 amended. |
+| Audio | AAudio stream at 48 kHz, stereo, f32, shared, low latency requested. No underrun on a release build; a debug build had one at start. Usage left unset by cpal, which AAudio reports as media/music (`Usg 1`, `CT 2`). | MB9 amended. |
 | Default output | With no route the player ran on the Null device (no default device reported by cpal's AAudio host). | MB5 amended: `fp-backends` reports the default output. |
 | Activity recreated (MB2) | Rotation without `configChanges`: the audio kept playing (no underrun) but the UI hung (ANR). With every `configChanges`, `singleTask` and Back to background: rotation is live; Back, Home and relaunch keep the UI and the audio. A recreation forced by the system was not reproduced. | MB2 amended. |
 | Soft keyboard | Opens; winit drops the text; a bridge in `raw_input_hook` makes typing and deleting work. | §6 amended; not a blocker. |

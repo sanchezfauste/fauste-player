@@ -19,3 +19,10 @@
 
 # Python bytecode of the site scripts
 __pycache__/
+
+# Android build output (see scripts/package/android.sh)
+/mobile/android/.gradle/
+/mobile/android/**/build/
+/mobile/android/app/src/main/jniLibs/
+/mobile/android/local.properties
+/mobile/android/.kotlin/

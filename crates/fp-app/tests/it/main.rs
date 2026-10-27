@@ -5,6 +5,7 @@
 
 mod about;
 mod analysis_status_ui;
+mod app_session;
 mod bit_perfect_ui;
 mod blink;
 mod cartwall_ui;
@@ -36,6 +37,7 @@ mod next_row_ui;
 mod outdated_notice;
 mod panel_layout;
 mod panic_isolation;
+mod platform_ui;
 mod play_button_ui;
 mod playlist_files;
 mod playlist_keyboard_ui;

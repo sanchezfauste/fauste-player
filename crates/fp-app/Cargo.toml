@@ -18,8 +18,6 @@ fp-engine.workspace = true
 fp-backends.workspace = true
 fp-analysis.workspace = true
 fp-decode.workspace = true
-fp-control.workspace = true
-fp-remote.workspace = true
 getrandom.workspace = true
 arc-swap.workspace = true
 crossbeam-channel.workspace = true
@@ -30,14 +28,24 @@ eframe.workspace = true
 egui.workspace = true
 egui_extras.workspace = true
 egui-phosphor.workspace = true
-rfd.workspace = true
-open.workspace = true
 pollster.workspace = true
 chrono.workspace = true
 fluent-bundle.workspace = true
 unic-langid.workspace = true
 sys-locale.workspace = true
 image.workspace = true
+
+# Desktop only: MIDI, the remote API, the native dialogs and the system
+# opener are not built for Android (mobile spec §2).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+fp-control.workspace = true
+fp-remote.workspace = true
+rfd.workspace = true
+open.workspace = true
+
+# eframe runs inside an Android GameActivity (mobile spec §3).
+[target.'cfg(target_os = "android")'.dependencies]
+eframe = { workspace = true, features = ["android-game-activity"] }
 
 # Wayland compositors without server-side decorations (GNOME) need winit's
 # Adwaita-style frame; eframe is built without its default features, which

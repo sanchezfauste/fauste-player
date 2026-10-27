@@ -741,6 +741,9 @@ pub struct UiConfig {
     /// The window system on Linux (`Auto` by default); read at start.
     /// Edited only in the config file.
     pub window_system: WindowSystem,
+    /// MB8: keep the screen on while playout is active (mobile only;
+    /// `true` by default).
+    pub keep_screen_on: bool,
 }
 
 impl Default for UiConfig {
@@ -753,6 +756,7 @@ impl Default for UiConfig {
             table_columns: default_columns(),
             outputs_view: OutputsView::Basic,
             window_system: WindowSystem::Auto,
+            keep_screen_on: true,
         }
     }
 }

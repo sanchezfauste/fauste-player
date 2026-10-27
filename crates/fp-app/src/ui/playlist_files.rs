@@ -3,6 +3,7 @@
 //! file I/O run on helper threads; results come back as `FileOutcome`s.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crossbeam_channel::Sender;
 use fp_model::{AppState, Limits, PlaylistId};
@@ -12,6 +13,7 @@ use fp_store::playlist_io::{
 };
 
 use crate::i18n::I18n;
+use crate::platform::Platform;
 
 /// Extensions read as playlist files.
 pub const PLAYLIST_EXTENSIONS: &[&str] = &["m3u", "m3u8", "pls"];
@@ -176,15 +178,15 @@ pub(crate) fn import(ctx: &egui::Context, path: PathBuf, limits: Limits, tx: Sen
 }
 
 /// Asks for a playlist file, then imports it.
-pub(crate) fn import_with_dialog(ctx: &egui::Context, limits: Limits, tx: Sender<FileOutcome>) {
+pub(crate) fn import_with_dialog(
+    ctx: &egui::Context,
+    platform: Arc<dyn Platform>,
+    limits: Limits,
+    tx: Sender<FileOutcome>,
+) {
     spawn(ctx, move || {
-        let picked = pollster::block_on(
-            rfd::AsyncFileDialog::new()
-                .add_filter("M3U / PLS", PLAYLIST_EXTENSIONS)
-                .pick_file(),
-        );
-        if let Some(file) = picked {
-            let _ = tx.send(read(file.path(), &limits));
+        if let Some(path) = platform.pick_file("M3U / PLS", PLAYLIST_EXTENSIONS, None) {
+            let _ = tx.send(read(&path, &limits));
         }
     });
 }
@@ -192,19 +194,13 @@ pub(crate) fn import_with_dialog(ctx: &egui::Context, limits: Limits, tx: Sender
 /// Asks where to save, then writes the entries as M3U8.
 pub(crate) fn export_with_dialog(
     ctx: &egui::Context,
+    platform: Arc<dyn Platform>,
     file_name: String,
     entries: Vec<ExportEntry>,
     tx: Sender<FileOutcome>,
 ) {
     spawn(ctx, move || {
-        let picked = pollster::block_on(
-            rfd::AsyncFileDialog::new()
-                .add_filter("M3U8", &["m3u8"])
-                .set_file_name(file_name)
-                .save_file(),
-        );
-        if let Some(file) = picked {
-            let path = file.path().to_path_buf();
+        if let Some(path) = platform.save_file("M3U8", &["m3u8"], file_name) {
             let result = std::fs::write(&path, write_m3u8(&entries))
                 .map(|()| path)
                 .map_err(|e| FileError::from_io(&e));

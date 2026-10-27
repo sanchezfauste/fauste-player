@@ -36,6 +36,7 @@ mod midi;
 mod on_air;
 mod pending_start;
 mod playlist_props;
+mod playout;
 mod replay_next;
 mod reset_played;
 mod restore;

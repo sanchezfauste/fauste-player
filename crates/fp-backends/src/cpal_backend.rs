@@ -259,9 +259,30 @@ impl CpalBackend {
     fn find(&self, host: &cpal::Host, device: &DeviceId) -> Result<cpal::Device, BackendError> {
         let id = cpal::DeviceId::from_str(&device.0)
             .map_err(|_| BackendError::DeviceNotFound(device.clone()))?;
-        host.device_by_id(&id)
+        let default = || {
+            host.default_output_device()
+                .and_then(|d| d.id().ok().map(|id| (id.to_string(), d)))
+        };
+        resolve(&device.0, || host.device_by_id(&id), default)
             .ok_or_else(|| BackendError::DeviceNotFound(device.clone()))
     }
+}
+
+/// The device named `wanted`: from the device list, or the host's default
+/// device when `wanted` is its id. cpal's AAudio host names its default
+/// device `aaudio:-1`, which `device_by_id` cannot find; route-less players
+/// went to Null on Android because of it (mobile spec §11). The default is
+/// only asked for when the list has no such device.
+fn resolve<D>(
+    wanted: &str,
+    by_id: impl FnOnce() -> Option<D>,
+    default: impl FnOnce() -> Option<(String, D)>,
+) -> Option<D> {
+    by_id().or_else(|| {
+        default()
+            .filter(|(id, _)| id == wanted)
+            .map(|(_, device)| device)
+    })
 }
 
 impl AudioBackend for CpalBackend {
@@ -751,9 +772,28 @@ mod tests {
     use super::{
         HostCache, OutputSample, check_dsd, choose_buffer_frames, choose_dop_sample_format,
         choose_sample_format, classify, device_detail, exclusive_capable, render_converted,
+        resolve,
     };
     use crate::{Renderer, StreamErrorKind};
     use cpal::DeviceDescriptionBuilder;
+
+    #[test]
+    fn the_host_default_id_resolves_to_the_default_device() {
+        let found = resolve("aaudio:-1", || None, || Some(("aaudio:-1".to_owned(), 7)));
+        assert_eq!(found, Some(7));
+    }
+
+    #[test]
+    fn another_id_goes_through_the_device_list() {
+        let found = resolve("aaudio:5", || Some(5), || Some(("aaudio:-1".to_owned(), 7)));
+        assert_eq!(found, Some(5));
+    }
+
+    #[test]
+    fn an_unknown_id_that_is_not_the_default_is_not_found() {
+        let found = resolve("aaudio:9", || None, || Some(("aaudio:-1".to_owned(), 7)));
+        assert_eq!(found, None);
+    }
 
     #[test]
     fn the_detail_is_the_first_extended_line_beyond_the_name() {

@@ -30,7 +30,7 @@ pub const REPO_URL: &str = "https://github.com/sanchezfauste/fauste-player";
 pub const LICENSE_URL: &str = "https://www.gnu.org/licenses/gpl-3.0.html";
 
 /// Opens a file or a web address (the notices file, the links). The default
-/// hands it to the system on a helper thread; tests record the call.
+/// asks the platform (`Platform::open_url`); tests record the call.
 pub type Opener = Arc<dyn Fn(&Path) + Send + Sync>;
 
 /// Where the release packages install the notices, relative to the
@@ -58,24 +58,6 @@ pub fn notice_candidates(exe_dir: &Path) -> Vec<PathBuf> {
 pub fn find_notices(exe: &Path) -> Option<PathBuf> {
     let dir = exe.parent()?;
     notice_candidates(dir).into_iter().find(|p| p.is_file())
-}
-
-/// Opens a file with the system's default application on a helper thread,
-/// so the interface never waits for it.
-pub fn system_opener() -> Opener {
-    Arc::new(|path: &Path| {
-        let path = path.to_owned();
-        let spawned = std::thread::Builder::new()
-            .name("fp-open".to_owned())
-            .spawn(move || {
-                if let Err(error) = open::that_detached(&path) {
-                    tracing::warn!(%error, path = %path.display(), "could not open the file or link");
-                }
-            });
-        if let Err(error) = spawned {
-            tracing::warn!(%error, "could not start the opener");
-        }
-    })
 }
 
 fn text(ui: &mut Ui, value: String, size: f32, color: egui::Color32) {
@@ -137,7 +119,7 @@ pub(crate) fn show(
     ctx: &egui::Context,
     scene: &Scene<'_>,
     notices: Option<&Path>,
-    opener: &Opener,
+    opener: &dyn Fn(&Path),
 ) -> bool {
     let t = scene.i18n;
     let mut open = true;

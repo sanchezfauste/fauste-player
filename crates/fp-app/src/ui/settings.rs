@@ -23,7 +23,9 @@ mod devices;
 mod keys;
 mod loudness;
 mod meters;
+#[cfg(not(target_os = "android"))]
 mod midi;
+#[cfg(not(target_os = "android"))]
 mod remote;
 use super::format;
 use super::theme;
@@ -63,7 +65,9 @@ pub(crate) enum Section {
     Playlists,
     Cartwall,
     Shortcuts,
+    #[cfg(not(target_os = "android"))]
     Midi,
+    #[cfg(not(target_os = "android"))]
     Remote,
 }
 
@@ -82,6 +86,7 @@ pub(crate) struct SettingsState {
     pub(super) keys: keys::KeysState,
     /// The MIDI action waiting for a control (MIDI learn).
     pub(super) midi_learning: Option<fp_model::MidiAction>,
+    #[cfg(not(target_os = "android"))]
     pub(super) remote: remote::RemoteState,
     /// The section whose "Restore defaults" waits for an answer.
     pub(super) confirm_restore: Option<SettingsSection>,
@@ -190,7 +195,9 @@ pub(crate) struct SettingsDeps<'a> {
     pub backends: &'a [Arc<dyn AudioBackend>],
     pub services: Option<&'a Sender<ServiceRequest>>,
     pub notice: Option<String>,
+    #[cfg(not(target_os = "android"))]
     pub midi: Option<&'a fp_control::service::MidiHandle>,
+    #[cfg(not(target_os = "android"))]
     pub remote: Option<fp_remote::RemoteStatus>,
     /// An output change waits (live settings spec §9.1).
     pub pending: bool,
@@ -305,9 +312,11 @@ pub(crate) fn show(
                                             Section::Playlists => playlists(ui, scene, st),
                                             Section::Cartwall => carts::section(ui, scene, st),
                                             Section::Shortcuts => keys::section(ui, scene, st),
+                                            #[cfg(not(target_os = "android"))]
                                             Section::Midi => {
                                                 midi::section(ui, scene, st, deps.midi)
                                             }
+                                            #[cfg(not(target_os = "android"))]
                                             Section::Remote => {
                                                 remote::section(ui, scene, st, deps.remote.as_ref())
                                             }
@@ -416,7 +425,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
         ui.painter()
             .rect_filled(ui.max_rect(), 0.0, theme::NEUTRAL_900);
         ui.add_space(8.0);
-        for (section, glyph, key) in SECTIONS {
+        for &(section, glyph, key) in SECTIONS {
             let on = st.section == section;
             let label = t.tr(key);
             let style = TileStyle {
@@ -451,6 +460,7 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
                 }
             });
             if response.clicked() {
+                #[cfg(not(target_os = "android"))]
                 if st.section == Section::Remote && section != Section::Remote {
                     remote::flush(scene, &mut st.remote);
                 }
@@ -466,7 +476,7 @@ fn button(ui: &mut Ui, text: &str) -> bool {
 }
 
 /// Every section: its nav glyph and its title.
-const SECTIONS: [(Section, &str, &str); 10] = [
+const SECTIONS: &[(Section, &str, &str)] = &[
     (Section::Outputs, icon::SPEAKER_HIGH, "settings-tab-outputs"),
     (
         Section::Players,
@@ -487,7 +497,9 @@ const SECTIONS: [(Section, &str, &str); 10] = [
         "settings-tab-cartwall",
     ),
     (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
+    #[cfg(not(target_os = "android"))]
     (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
+    #[cfg(not(target_os = "android"))]
     (Section::Remote, icon::BROADCAST, "settings-tab-remote"),
 ];
 
@@ -502,11 +514,9 @@ fn restorable(section: Section) -> Option<SettingsSection> {
         Section::Analysis => Some(SettingsSection::Analysis),
         Section::Loudness => Some(SettingsSection::Loudness),
         Section::Shortcuts => Some(SettingsSection::Shortcuts),
-        Section::Outputs
-        | Section::Playlists
-        | Section::Cartwall
-        | Section::Midi
-        | Section::Remote => None,
+        Section::Outputs | Section::Playlists | Section::Cartwall => None,
+        #[cfg(not(target_os = "android"))]
+        Section::Midi | Section::Remote => None,
     }
 }
 
@@ -1670,17 +1680,20 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             st.new_name.clear();
         }
         let import = t.tr("settings-import-playlist");
-        if widgets::text_button(
-            ui,
-            Some(icon::DOWNLOAD_SIMPLE),
-            &import,
-            true,
-            TileStyle::plain(),
-        )
-        .clicked()
+        // Read-only music on mobile (spec §2): no import or export.
+        if scene.platform.can_write_user_files()
+            && widgets::text_button(
+                ui,
+                Some(icon::DOWNLOAD_SIMPLE),
+                &import,
+                true,
+                TileStyle::plain(),
+            )
+            .clicked()
         {
             super::playlist_files::import_with_dialog(
                 &scene.ctx,
+                scene.platform.clone(),
                 scene.state.config.limits.clone(),
                 scene.files.clone(),
             );
@@ -1760,30 +1773,32 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 .selectable(false),
             );
             let export = t.tr("settings-export-playlist");
-            if widgets::tile(
-                ui,
-                vec2(56.0, 30.0),
-                &t.tr_args("tip-export-playlist", &[("name", Arg::Text(name.clone()))]),
-                true,
-                TileStyle {
-                    border: Color32::TRANSPARENT,
-                    content: theme::NEUTRAL_300,
-                    ..TileStyle::plain()
-                },
-                |p, r, c| {
-                    p.text(
-                        r.center(),
-                        egui::Align2::CENTER_CENTER,
-                        format!("{} {export}", icon::EXPORT),
-                        font(12.0),
-                        c,
-                    );
-                },
-            )
-            .clicked()
+            if scene.platform.can_write_user_files()
+                && widgets::tile(
+                    ui,
+                    vec2(56.0, 30.0),
+                    &t.tr_args("tip-export-playlist", &[("name", Arg::Text(name.clone()))]),
+                    true,
+                    TileStyle {
+                        border: Color32::TRANSPARENT,
+                        content: theme::NEUTRAL_300,
+                        ..TileStyle::plain()
+                    },
+                    |p, r, c| {
+                        p.text(
+                            r.center(),
+                            egui::Align2::CENTER_CENTER,
+                            format!("{} {export}", icon::EXPORT),
+                            font(12.0),
+                            c,
+                        );
+                    },
+                )
+                .clicked()
             {
                 super::playlist_files::export_with_dialog(
                     &scene.ctx,
+                    scene.platform.clone(),
                     format!("{}.m3u8", super::playlist_files::safe_file_name(&name)),
                     super::playlist_files::export_entries(scene.state, id),
                     scene.files.clone(),
@@ -1818,15 +1833,11 @@ fn pick_folder(scene: &Scene<'_>) -> Option<Receiver<Option<PathBuf>>> {
     let (tx, rx) = crossbeam_channel::bounded(1);
     let ctx = scene.ctx.clone();
     let start = scene.state.config.ui.music_dir.clone();
+    let platform = scene.platform.clone();
     let spawned = std::thread::Builder::new()
         .name("fp-folder-dialog".to_owned())
         .spawn(move || {
-            let mut dialog = rfd::AsyncFileDialog::new();
-            if let Some(dir) = start {
-                dialog = dialog.set_directory(dir);
-            }
-            let folder = pollster::block_on(dialog.pick_folder());
-            let _ = tx.send(folder.map(|f| f.path().to_path_buf()));
+            let _ = tx.send(platform.pick_folder(start));
             ctx.request_repaint();
         });
     match spawned {

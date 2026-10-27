@@ -1,0 +1,38 @@
+[package]
+name = "fp-mobile"
+description = "Fauste Player on Android: the session, the activity glue and the JNI calls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+egui.workspace = true
+fp-model.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+fp-app = { path = "../fp-app" }
+fp-store.workspace = true
+fp-backends.workspace = true
+eframe = { workspace = true, features = ["android-game-activity"] }
+winit.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+jni = "0.21.1"
+paranoid-android = "0.2.2"
+
+# The one crate allowed `unsafe` (mobile spec §8): `android_main` and the
+# JNI entry points need `#[unsafe(no_mangle)]`. It is denied, so each site
+# opts in with `#[allow(unsafe_code)]` and a `// SAFETY:` comment; the
+# other workspace lints are copied as they are.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

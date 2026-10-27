@@ -4,26 +4,14 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 use std::process::ExitCode;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use fp_analysis::analyzer::Analyzer;
-use fp_analysis::cache::AnalysisCache;
 use fp_app::i18n::I18n;
-use fp_app::services::{MediaCache, Services};
-use fp_app::ui::app::AppUi;
+use fp_app::session::AppSession;
 use fp_app::ui::shell::Shell;
 use fp_app::ui::theme;
 use fp_app::{APP_ID, bootstrap, cli, crash, instance, logging};
-use fp_backends::{AudioBackend, Availability, NullBackend, system_backends};
-use fp_engine::conductor::{Conductor, ConductorHandle};
-use fp_engine::engine::{Engine, EngineSettings};
-use fp_engine::worker::file_opener;
-use fp_store::Store;
-
-/// Background analysis threads: enough to keep up with imports without
-/// competing with the audio threads.
-const ANALYSIS_THREADS: usize = 2;
+use fp_backends::system_backends;
 
 /// How often the running instance looks for playlists handed over.
 const INBOX_INTERVAL: Duration = Duration::from_millis(500);
@@ -116,60 +104,19 @@ fn run(
     playlists: Vec<std::path::PathBuf>,
     report_cap: crash::ReportCap,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let store = Store::new(paths.clone(), fp_model::Limits::default());
-    let default_name = I18n::new(None).tr("default-playlist-name");
-    let loaded = store.load(&default_name);
-    for warning in &loaded.warnings {
-        tracing::warn!(%warning, "while loading the saved state");
-    }
-    let config = loaded.state.config.clone();
-    report_cap.set(config.limits.max_crash_reports);
-    let i18n = I18n::new(config.ui.language.as_deref());
-
-    // Every audio system this build supports, plus Null as the last resort.
-    let mut backends = system_backends();
-    backends.push(Arc::new(NullBackend) as Arc<dyn AudioBackend>);
-    let availability: Vec<(String, bool)> = backends
-        .iter()
-        .map(|b| (b.id().0, b.availability() == Availability::Available))
-        .collect();
-    let settings = EngineSettings::from_config(&config);
-    let engine = Engine::new(backends.clone(), settings, file_opener());
-    let in_use = engine.backend_in_use().to_owned();
-    tracing::info!(backend = %in_use, ?availability, "audio systems");
-    let (conductor, handle) = Conductor::new(loaded.state, loaded.actions, engine, Instant::now());
-    let handle = Arc::new(conductor.spawn(handle)?);
-
-    let cache = AnalysisCache::new(paths.cache_dir.join("analysis"));
-    let analyzer = Analyzer::spawn(
-        ANALYSIS_THREADS,
-        config.analysis.clone(),
-        config.limits.clone(),
-        Some(cache),
-    )?;
-    let media = MediaCache::default();
-    let services =
-        Services::new(handle.clone(), store, analyzer, media.clone()).with_report_cap(report_cap);
-    let requests = services.requests();
-    let faults = services.faults();
-    let activity = services.activity();
-    let services = services.spawn()?;
-
+    let session = AppSession::start(paths.clone(), system_backends(), Some(report_cap))?;
+    let window_system = session.handle.model.load().config.ui.window_system;
+    let handle = session.handle.clone();
     let remote = fp_app::remote::start(
         handle.clone(),
-        media.clone(),
-        paths.cache_dir.join("analysis"),
+        session.media.clone(),
+        session.analysis_dir(),
     );
-    let mut app = AppUi::new(handle.clone(), i18n, media)
-        .with_services(requests)
-        .with_analysis_activity(activity)
-        .with_service_faults(faults)
-        .with_backends(backends)
-        .with_notices(
-            std::env::current_exe()
-                .ok()
-                .and_then(|exe| fp_app::ui::about::find_notices(&exe)),
-        );
+    let mut app = session.app_ui().with_notices(
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| fp_app::ui::about::find_notices(&exe)),
+    );
     if let Some(r) = &remote {
         app = app.with_remote_status(r.status_cell());
     }
@@ -195,7 +142,7 @@ fn run(
     }
     let options = eframe::NativeOptions {
         viewport,
-        event_loop_builder: event_loop_hook(config.ui.window_system),
+        event_loop_builder: event_loop_hook(window_system),
         ..Default::default()
     };
     let result = eframe::run_native(
@@ -212,8 +159,8 @@ fn run(
     if let Some(midi) = midi {
         midi.shutdown();
     }
-    services.shutdown();
-    stop_engine(handle);
+    drop(handle);
+    session.shutdown();
     result.map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -241,22 +188,6 @@ fn event_loop_hook(setting: fp_model::WindowSystem) -> Option<eframe::EventLoopB
 #[cfg(not(target_os = "linux"))]
 fn event_loop_hook(_setting: fp_model::WindowSystem) -> Option<eframe::EventLoopBuilderHook> {
     None
-}
-
-/// Stops the conductor and the engine, closing the output streams, now.
-/// Every other holder of the handle must have stopped already.
-fn stop_engine(handle: Arc<ConductorHandle>) {
-    match Arc::try_unwrap(handle) {
-        Ok(conductor) => {
-            drop(conductor);
-            tracing::info!("the audio engine is stopped");
-        }
-        Err(handle) => tracing::warn!(
-            holders = Arc::strong_count(&handle) - 1,
-            "the audio engine is still held by another part of the application; \
-             it stops when the process ends"
-        ),
-    }
 }
 
 /// Gives `playlists` to the instance already running; without any, tells

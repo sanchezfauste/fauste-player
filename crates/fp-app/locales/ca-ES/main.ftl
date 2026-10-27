@@ -211,6 +211,9 @@ settings-hint-use-cue-markers = Desactivat: els reproductors reprodueixen cada p
 settings-hint-end-warning = El compte enrere es posa vermell aquest temps abans del final
 settings-hint-reanalyse = Es recalculen els marcadors automàtics; els manuals es conserven
 alert-services-fault = Els serveis en segon pla han tingut un error ({ $count }); la reproducció i el desament continuen
+alert-audio-focus-lost = Una altra app ha pres l'àudio — l'emissió continua
+# The Android notification channel of the playout service.
+mobile-notification-channel = Emissió
 error-not-found = Aquest element ja no existeix.
 error-no-playlists = No hi ha cap llista.
 placeholder-none = —
