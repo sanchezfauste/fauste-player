@@ -16,7 +16,7 @@ their own outputs, independently of the players.
 - While a cart plays, its border and a bar that grows from the left as it
   plays take the cart's [colour](#setting-up-carts) (red for a cart without
   one), a thin line marks the played edge over the waveform, and its time
-  counts down. The line moves smoothly on every frame, even on a short cart.
+  counts down. The line moves smoothly, even on a short cart.
 - Once a cart's file has been analysed, its waveform shows faintly behind
   its name, so you can tell a sound that hits at once from one that fades
   in. It covers what the cart plays, from its cue-in to its cue-out.

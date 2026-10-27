@@ -731,6 +731,14 @@ pub struct UiConfig {
     /// playlist), it stops following what plays for this long (seconds);
     /// 0 never follows.
     pub follow_current_grace_secs: f64,
+    /// The most frames a second the interface draws while something on it
+    /// moves on its own (a player or a cart playing, a fade, a CUE); 0
+    /// draws every frame the display shows. Input is answered at once
+    /// whatever the limit, and the meters' ballistics are the engine's,
+    /// so a lower rate only draws them less often; on an old computer it
+    /// leaves the processor to the audio. 0–240, edited only in the config
+    /// file.
+    pub max_fps: u32,
     /// The columns of the track tables, in order; one list for every player
     /// and playlist (feedback 2 spec O24). Title and Duration are required.
     pub table_columns: Vec<TableColumn>,
@@ -753,6 +761,7 @@ impl Default for UiConfig {
             music_dir: None,
             language: None,
             follow_current_grace_secs: 10.0,
+            max_fps: 30,
             table_columns: default_columns(),
             outputs_view: OutputsView::Basic,
             window_system: WindowSystem::Auto,
@@ -1079,6 +1088,7 @@ impl Config {
             "ui.follow_current_grace_secs",
             &mut w,
         );
+        clamp_to(&mut self.ui.max_fps, 0, 240, "ui.max_fps", &mut w);
         let columns = normalize_columns(&self.ui.table_columns);
         if columns != self.ui.table_columns {
             w.push(ConfigWarning {
@@ -1495,6 +1505,18 @@ mod tests {
         assert_eq!(c.players.fade_ms, 2000);
         assert_eq!(c.players.count, 4);
         assert_eq!(c.tuning, Tuning::default());
+    }
+
+    #[test]
+    fn the_interface_repaints_at_thirty_frames_a_second_by_default() {
+        let mut c = Config::default();
+        assert_eq!(c.ui.max_fps, 30);
+        c.ui.max_fps = 1_000;
+        let warnings = c.validate();
+        assert_eq!(c.ui.max_fps, 240);
+        assert!(warnings.iter().any(|w| w.field == "ui.max_fps"));
+        c.ui.max_fps = 0;
+        assert!(c.validate().is_empty(), "0 is no limit");
     }
 
     #[test]

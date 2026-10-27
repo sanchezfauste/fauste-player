@@ -140,6 +140,15 @@ xruns (PulseAudio does not; Windows exclusive mode does not).
   limit also works.
 - Avoid network drives for music that plays on air.
 
+## The interface is slow on an old computer
+
+While something plays, the interface draws at most 30 frames a second
+(`max_fps` in the `ui` section of the configuration file), and clicks and
+keys are answered at once. On an old or busy computer lower it (for
+example to 20) to leave more of the processor to the audio; 0 draws every
+frame the display shows. The meters measure the same at any rate; they are
+only drawn less often.
+
 ## Files cannot be dropped on Linux
 
 The window takes files dragged from a file manager only when it runs on X11.

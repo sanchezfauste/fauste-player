@@ -444,7 +444,7 @@ Supported formats: WAV, AIFF, CAF, FLAC, MP1/2/3, AAC/M4A, ALAC, Ogg Vorbis, Opu
 - **Fonts:** Inter embedded (OFL); Phosphor icons via `egui-phosphor`.
 - **Player-specific icons** (fade stop, stop after current) are drawn as vector shapes, as in the design.
 - **Waveform colours:** Violet, Amber, Cyan, White, Orange, Magenta, Ice, Sand, Slate (default **Slate**). They are a named palette in the theme, so more can be added without code changes elsewhere.
-- **Repaint policy:** at display rate while anything plays or a fade runs; otherwise every 100 ms (clock).
+- **Repaint policy:** while anything plays or a fade runs, at most `ui.max_fps` frames a second (default 30, 0–240, 0 is the display rate; config file only); otherwise every 100 ms (clock). Input is answered at once whatever the limit. The meters' ballistics are computed by the engine (§4), so the limit only draws them less often; on an old two-core computer an uncapped interface took a core that the audio needed.
 
 ### 8.2 Data flow
 

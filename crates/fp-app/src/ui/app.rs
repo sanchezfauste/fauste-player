@@ -1157,7 +1157,7 @@ impl AppUi {
         }
         let busy = super::view::animating(&state);
         if busy {
-            ctx.request_repaint();
+            ctx.request_repaint_after(super::view::animation_period(state.config.ui.max_fps));
         } else {
             ctx.request_repaint_after(IDLE_REPAINT);
         }

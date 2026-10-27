@@ -490,12 +490,16 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                 }
                 // I19/I22: the elapsed share, from the position carried on
                 // with the frame clock between engine snapshots; a playing
-                // cart with a known length keeps the cartwall repainting every frame.
+                // cart with a known length keeps the cartwall repainting at
+                // `ui.max_fps`.
                 let sweep_id = egui::Id::unique(("cart-sweep", cart.id));
                 let elapsed = if playing {
                     view.wave_range.map(|(start, span)| {
                         // Something moves: ask for the next frame.
-                        ui.ctx().request_repaint();
+                        ui.ctx()
+                            .request_repaint_after(super::view::animation_period(
+                                scene.state.config.ui.max_fps,
+                            ));
                         let reported = scene
                             .telemetry
                             .carts
