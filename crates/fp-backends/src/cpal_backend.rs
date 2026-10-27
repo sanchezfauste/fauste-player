@@ -256,7 +256,41 @@ impl CpalBackend {
         supported
     }
 
+    /// The host's outputs with the id, name and detail they are listed
+    /// under. On Android the AAudio host's ids are the stable ones of
+    /// `aaudio_ids` (mobile spec MB5); elsewhere they are cpal's.
+    fn listed_outputs(&self, host: &cpal::Host) -> Result<Vec<Listed>, BackendError> {
+        let devices = host.output_devices().map_err(backend_error)?;
+        #[cfg(target_os = "android")]
+        if self.host_id == cpal::HostId::AAudio {
+            return Ok(aaudio_listed(devices.collect()));
+        }
+        Ok(devices
+            .filter_map(|device| {
+                let id = device.id().ok()?;
+                let description = device.description().ok();
+                let name = description
+                    .as_ref()
+                    .map_or_else(|| id.to_string(), |d| d.name().to_owned());
+                let detail = description.as_ref().and_then(device_detail);
+                Some((DeviceId(id.to_string()), name, detail, device))
+            })
+            .collect())
+    }
+
     fn find(&self, host: &cpal::Host, device: &DeviceId) -> Result<cpal::Device, BackendError> {
+        #[cfg(target_os = "android")]
+        if self.host_id == cpal::HostId::AAudio
+            && let Some(found) = pick(
+                &device.0,
+                self.listed_outputs(host)?
+                    .into_iter()
+                    .map(|(id, _, _, d)| (id, d))
+                    .collect(),
+            )
+        {
+            return Ok(found);
+        }
         let id = cpal::DeviceId::from_str(&device.0)
             .map_err(|_| BackendError::DeviceNotFound(device.clone()))?;
         let default = || {
@@ -266,6 +300,47 @@ impl CpalBackend {
         resolve(&device.0, || host.device_by_id(&id), default)
             .ok_or_else(|| BackendError::DeviceNotFound(device.clone()))
     }
+}
+
+/// An output as `listed_outputs` gives it: id, name, detail, device.
+type Listed = (DeviceId, String, Option<String>, cpal::Device);
+
+/// The AAudio outputs under their stable ids and labels (mobile spec MB5).
+#[cfg(target_os = "android")]
+fn aaudio_listed(devices: Vec<cpal::Device>) -> Vec<Listed> {
+    use crate::aaudio_ids::{ListedOutput, identities};
+    let outputs: Vec<ListedOutput> = devices
+        .iter()
+        .map(|d| {
+            let description = d.description().ok();
+            ListedOutput {
+                name: description
+                    .as_ref()
+                    .map(|x| x.name().to_owned())
+                    .unwrap_or_default(),
+                device_type: description
+                    .as_ref()
+                    .map_or(cpal::DeviceType::Unknown, |x| x.device_type()),
+                interface: description
+                    .as_ref()
+                    .map_or(cpal::InterfaceType::Unknown, |x| x.interface_type()),
+            }
+        })
+        .collect();
+    identities(&outputs)
+        .into_iter()
+        .zip(devices)
+        .map(|((id, label), device)| (id, label, None, device))
+        .collect()
+}
+
+/// The device listed under `wanted`, if any.
+#[cfg(any(target_os = "android", test))]
+fn pick<D>(wanted: &str, listed: Vec<(DeviceId, D)>) -> Option<D> {
+    listed
+        .into_iter()
+        .find(|(id, _)| id.0 == wanted)
+        .map(|(_, device)| device)
 }
 
 /// The device named `wanted`: from the device list, or the host's default
@@ -307,13 +382,7 @@ impl AudioBackend for CpalBackend {
     fn enumerate_devices(&self) -> Result<Vec<DeviceInfo>, BackendError> {
         let host = self.host()?;
         let mut list = Vec::new();
-        for device in host.output_devices().map_err(backend_error)? {
-            let Ok(id) = device.id() else { continue };
-            let description = device.description().ok();
-            let name = description
-                .as_ref()
-                .map_or_else(|| id.to_string(), |d| d.name().to_owned());
-            let detail = description.as_ref().and_then(device_detail);
+        for (id, name, detail, device) in self.listed_outputs(&host)? {
             let mut channels = 0;
             let mut sample_rates = Vec::new();
             let mut buffer_frames: Option<(u32, u32)> = None;
@@ -332,10 +401,10 @@ impl AudioBackend for CpalBackend {
             sample_rates.sort_unstable();
             sample_rates.dedup();
             let channels = self.channels(&device, channels);
-            let exclusive = exclusive_capable(&self.id().0, &id.to_string());
-            let native_dsd = self.native_dsd_capable(&id.to_string());
+            let exclusive = exclusive_capable(&self.id().0, &id.0);
+            let native_dsd = self.native_dsd_capable(&id.0);
             list.push(DeviceInfo {
-                id: DeviceId(id.to_string()),
+                id,
                 name,
                 detail,
                 channels,
@@ -771,10 +840,10 @@ fn device_detail(d: &cpal::DeviceDescription) -> Option<String> {
 mod tests {
     use super::{
         HostCache, OutputSample, check_dsd, choose_buffer_frames, choose_dop_sample_format,
-        choose_sample_format, classify, device_detail, exclusive_capable, render_converted,
+        choose_sample_format, classify, device_detail, exclusive_capable, pick, render_converted,
         resolve,
     };
-    use crate::{Renderer, StreamErrorKind};
+    use crate::{DeviceId, Renderer, StreamErrorKind};
     use cpal::DeviceDescriptionBuilder;
 
     #[test]
@@ -787,6 +856,21 @@ mod tests {
     fn another_id_goes_through_the_device_list() {
         let found = resolve("aaudio:5", || Some(5), || Some(("aaudio:-1".to_owned(), 7)));
         assert_eq!(found, Some(5));
+    }
+
+    #[test]
+    fn a_stable_id_is_found_among_the_listed_devices() {
+        let listed = vec![
+            (DeviceId("aaudio:Built-in/Speaker/P".to_owned()), 1),
+            (DeviceId("aaudio:Bluetooth/Unknown/JBL".to_owned()), 2),
+        ];
+        assert_eq!(pick("aaudio:Bluetooth/Unknown/JBL", listed), Some(2));
+    }
+
+    #[test]
+    fn an_unknown_stable_id_is_not_found() {
+        let listed = vec![(DeviceId("aaudio:Built-in/Speaker/P".to_owned()), 1)];
+        assert_eq!(pick("aaudio:Bluetooth/Unknown/JBL", listed), None);
     }
 
     #[test]
