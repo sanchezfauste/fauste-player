@@ -68,6 +68,21 @@ paused or pre-listening, or a cart playing or pre-listening.
   device `aaudio:-1`, which `device_by_id` cannot find; `fp-backends`
   opens the default device by that id, so a player without a route sounds
   on the phone's output instead of the Null device.
+- **Outputs (MB5, MB6).** Settings → Audio outputs lists what Android
+  reports as outputs, and each player, the cartwall and their Cue routes
+  pick from it as on the desktop. Android gives a device a new id each
+  time it connects, so the AAudio host lists its outputs under stable ids
+  (`fp_backends::aaudio_ids`): the interface, the type and cpal's name,
+  percent-escaped and joined with `/`, plus `#2`, `#3`… for outputs that
+  share all three (`aaudio:Bluetooth/Unknown/JBL Flip`). A route's device
+  is found by that id when its stream opens, so a Bluetooth speaker that
+  goes away and comes back is the same output; while it is away the route
+  behaves like a missing device on the desktop (nothing re-routes,
+  nothing starts when it returns). Labels are cpal's names, plus the
+  interface when cpal has no type for the device (Bluetooth A2DP: "JBL
+  Flip (Bluetooth)"). Cue routes and the on-air confirmation are the
+  desktop's; whether two outputs can sound at once is up to Android, and
+  a refused stream is reported like any device failure.
 - **Stream usage (MB9).** AAudio maps cpal's unset usage to
   `USAGE_MEDIA` / `CONTENT_TYPE_MUSIC` (AudioFlinger reports `Usg 1`,
   `CT 2`), so no cpal change is needed.
@@ -127,8 +142,7 @@ These hold until the plans that replace them:
 - the pickers list the audio files directly in `/sdcard/Music`
   (`AndroidPlatform`), until the media browser (MB7);
 - links in the About window are not opened (`open_url` returns an error);
-- the outputs keep the desktop Settings; output choice and device checks
-  (MB5, MB6) come with their own plan;
+- the outputs page is the desktop's (the touch layout reworks it);
 - the layout is the desktop one; the touch layout (spec §6) has its plan;
 - release builds are signed with the debug key, `versionCode` is 1 and the
   notification uses a system icon, until a release plan.
