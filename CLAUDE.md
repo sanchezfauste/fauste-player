@@ -209,6 +209,7 @@ hand: release-please writes it from the commits.
 | `vendor/symphonia-format-mkv` | A patched copy of symphonia's Matroska reader (seeking through cues, blocks without duration), used the same way. See its `VENDORED.md` |
 | `vendor/egui-phosphor` | A copy of `egui-phosphor` 0.14.0 with only its egui requirement raised to 0.37 (no upstream release yet), used the same way. See its `VENDORED.md` |
 | `vendor/winit` | A patched copy of `winit` 0.30.13 (Android: the event loop ends when the activity is destroyed and a new one may start), used the same way. See its `VENDORED.md` |
+| `vendor/eframe` | A patched copy of `eframe` 0.37.0 (Android: no panic when a suspended activity is destroyed), used the same way. See its `VENDORED.md` |
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX, MSIX and Info.plist, the AUR PKGBUILD template; the per-format package scripts |
 | `snap/` | The snap recipe (`snapcraft.yaml`, where snapcraft looks for it) |
 | `site/`, `scripts/site/` | The landing page and privacy policy templates with their texts in `site/locales/<lang>.toml` (rendered by `scripts/site/landing.py`), and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |

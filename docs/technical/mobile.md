@@ -39,9 +39,13 @@ paused or pre-listening, or a cart playing or pre-listening.
   destruction (android-activity's `onDestroy` waits for `android_main` to
   return, so the main thread hung) and refused the next activity's event
   loop. The vendored copy in `vendor/winit` ends the loop on destroy and
-  allows a new one on Android (see its `VENDORED.md`).
+  allows a new one on Android (see its `VENDORED.md`). eframe 0.37.0 then
+  panicked on the way out, because it drops the window on suspend and still
+  expected it when saving; `vendor/eframe` takes it as optional.
 - **No recreation.** The activity declares every `configChanges` value and
-  `launchMode="singleTask"`; Back moves the task to the background. A
+  `launchMode="singleTask"`; Back (the key, taken in `onKeyDown` before
+  GameActivity hands it to the native side, and the gesture, through the
+  back dispatcher) moves the task to the background. A
   recreated activity used to stall the interface while the audio played
   (spec §11).
 - **The foreground service (MB1).** `MainActivity` polls `Native.state()`
