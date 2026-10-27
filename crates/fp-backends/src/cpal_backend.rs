@@ -281,6 +281,7 @@ impl CpalBackend {
     fn find(&self, host: &cpal::Host, device: &DeviceId) -> Result<cpal::Device, BackendError> {
         #[cfg(target_os = "android")]
         if self.host_id == cpal::HostId::AAudio
+            && crate::aaudio_ids::is_stable(&device.0)
             && let Some(found) = pick(
                 &device.0,
                 self.listed_outputs(host)?
@@ -324,6 +325,9 @@ fn aaudio_listed(devices: Vec<cpal::Device>) -> Vec<Listed> {
                 interface: description
                     .as_ref()
                     .map_or(cpal::InterfaceType::Unknown, |x| x.interface_type()),
+                address: description
+                    .as_ref()
+                    .and_then(|x| x.address().map(str::to_owned)),
             }
         })
         .collect();
@@ -861,16 +865,16 @@ mod tests {
     #[test]
     fn a_stable_id_is_found_among_the_listed_devices() {
         let listed = vec![
-            (DeviceId("aaudio:Built-in/Speaker/P".to_owned()), 1),
-            (DeviceId("aaudio:Bluetooth/Unknown/JBL".to_owned()), 2),
+            (DeviceId("aaudio:builtin/speaker/P".to_owned()), 1),
+            (DeviceId("aaudio:bluetooth/unknown/JBL".to_owned()), 2),
         ];
-        assert_eq!(pick("aaudio:Bluetooth/Unknown/JBL", listed), Some(2));
+        assert_eq!(pick("aaudio:bluetooth/unknown/JBL", listed), Some(2));
     }
 
     #[test]
     fn an_unknown_stable_id_is_not_found() {
-        let listed = vec![(DeviceId("aaudio:Built-in/Speaker/P".to_owned()), 1)];
-        assert_eq!(pick("aaudio:Bluetooth/Unknown/JBL", listed), None);
+        let listed = vec![(DeviceId("aaudio:builtin/speaker/P".to_owned()), 1)];
+        assert_eq!(pick("aaudio:bluetooth/unknown/JBL", listed), None);
     }
 
     #[test]

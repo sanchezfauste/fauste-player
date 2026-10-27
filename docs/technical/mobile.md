@@ -72,9 +72,18 @@ paused or pre-listening, or a cart playing or pre-listening.
   reports as outputs, and each player, the cartwall and their Cue routes
   pick from it as on the desktop. Android gives a device a new id each
   time it connects, so the AAudio host lists its outputs under stable ids
-  (`fp_backends::aaudio_ids`): the interface, the type and cpal's name,
-  percent-escaped and joined with `/`, plus `#2`, `#3`… for outputs that
-  share all three (`aaudio:Bluetooth/Unknown/JBL Flip`). A route's device
+  (`fp_backends::aaudio_ids`): the interface and the type as the module's
+  own tokens and cpal's name, percent-escaped and joined with `/`
+  (`aaudio:bluetooth/unknown/JBL Flip`). A Bluetooth device with an
+  address adds it (`…@XX:XX:XX:XX:AB:CD`; Android hides part of it but
+  keeps it per device), so two identical speakers keep their routes;
+  other outputs that share all three get `#2`, `#3`… in list order (the
+  built-in speaker and its "speaker safe" path) and ` 2`, ` 3`… in their
+  labels. A test pins whole ids, because saved routes hold them: a cpal
+  upgrade that renames a type fails it. Renaming a Bluetooth device in
+  Android's settings changes its id, so its routes must be picked again,
+  and so must routes saved with cpal's raw `aaudio:<n>` ids before these
+  ids existed (no release had them). A route's device
   is found by that id when its stream opens, so a Bluetooth speaker that
   goes away and comes back is the same output; while it is away the route
   behaves like a missing device on the desktop (nothing re-routes,
