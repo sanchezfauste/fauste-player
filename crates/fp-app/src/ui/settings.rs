@@ -694,6 +694,44 @@ pub(super) fn labelled_row<R>(
     out
 }
 
+/// What a shared `device` asks for beyond `buffer` frames at `rate`, in ms,
+/// as the backend works it out (`outputs.shared_buffer_ms`, no more than
+/// the largest buffer the device reports); `None` when it asks for no more.
+pub(super) fn shared_floor_ms(
+    device: &DeviceInfo,
+    buffer: u32,
+    rate: u32,
+    shared_ms: f64,
+) -> Option<f64> {
+    if !device.shared || shared_ms.is_nan() || shared_ms <= 0.0 {
+        return None;
+    }
+    let rate = f64::from(rate.max(1));
+    let mut floor = (shared_ms * rate / 1000.0).ceil();
+    if let Some((_, max)) = device.buffer_frames {
+        floor = floor.min(f64::from(max));
+    }
+    (floor > f64::from(buffer)).then(|| floor / rate * 1000.0)
+}
+
+/// The latency of `buffer` frames at `rate`, and the least a shared output
+/// asks for (`shared_ms`, when it asks for more than `buffer`).
+pub(super) fn latency_hint(
+    t: &crate::i18n::I18n,
+    buffer: u32,
+    rate: u32,
+    shared_ms: Option<f64>,
+) -> String {
+    let ms = format!("{:.1}", f64::from(buffer) / f64::from(rate.max(1)) * 1000.0);
+    match shared_ms {
+        Some(floor) => t.tr_args(
+            "settings-latency-shared",
+            &[("ms", ms.into()), ("floor", format!("{floor:.0}").into())],
+        ),
+        None => t.tr_args("settings-latency", &[("ms", ms.into())]),
+    }
+}
+
 /// `labelled_row` for controls that name themselves.
 pub(super) fn row(ui: &mut Ui, label: &str, hint: Option<&str>, control: impl FnOnce(&mut Ui)) {
     labelled_row(ui, label, hint, |ui, _| control(ui));
@@ -928,11 +966,23 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         });
     });
-    let latency_ms = f64::from(buffer) / f64::from(rate.max(1)) * 1000.0;
-    let latency = t.tr_args(
-        "settings-latency",
-        &[("ms", format!("{latency_ms:.1}").into())],
-    );
+    let backend_id = current.clone().or_else(|| {
+        backends
+            .iter()
+            .find(|b| b.unavailable.is_none() && b.id != "null")
+            .map(|b| b.id.clone())
+    });
+    let devices: Vec<DeviceInfo> = backends
+        .iter()
+        .find(|b| Some(&b.id) == backend_id.as_ref())
+        .map(|b| b.devices.clone())
+        .unwrap_or_default();
+    // Outputs through a sound server may ask for more than the buffer below.
+    let floor = devices
+        .iter()
+        .filter_map(|d| shared_floor_ms(d, buffer, rate, config.outputs.shared_buffer_ms))
+        .reduce(f64::max);
+    let latency = latency_hint(t, buffer, rate, floor);
     row(ui, &t.tr("settings-buffer"), Some(&latency), |ui| {
         let shown = buffer.to_string();
         fitted_combo(ui, "buffer", shown.clone(), None, |ui| {
@@ -946,17 +996,6 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     ui.add_space(12.0);
     caption(ui, &t.tr("settings-player-routes"));
     ui.add_space(4.0);
-    let backend_id = current.clone().or_else(|| {
-        backends
-            .iter()
-            .find(|b| b.unavailable.is_none() && b.id != "null")
-            .map(|b| b.id.clone())
-    });
-    let devices: Vec<DeviceInfo> = backends
-        .iter()
-        .find(|b| Some(&b.id) == backend_id.as_ref())
-        .map(|b| b.devices.clone())
-        .unwrap_or_default();
     for (n, player) in scene.state.players.iter().enumerate() {
         let routes = config
             .outputs

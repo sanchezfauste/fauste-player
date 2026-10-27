@@ -135,16 +135,18 @@ xruns (PulseAudio does not; Windows exclusive mode does not).
 
 
 - Increase the **buffer size** in Settings (it applies once nothing plays on that device, or at once with **Apply now**).
-- Through a sound server (PulseAudio, PipeWire, the ALSA `default`
-  device), every output already asks for at least 50 ms whatever the
-  buffer size, so that a busy computer is not heard. On an old or heavily
-  loaded computer, raise `shared_buffer_ms` in the `outputs` section of the
-  configuration file (for example to 100); cart and play buttons then
-  sound that much later.
+- Through a sound server (PulseAudio, the ALSA `default` device), every
+  output already asks for at least 50 ms whatever the buffer size, so that
+  a busy computer is not heard; Settings shows it next to the latency. On
+  an old or heavily loaded computer, raise `shared_buffer_ms` in the
+  `outputs` section of the configuration file (for example to 100). The
+  system keeps about two of those blocks queued, so cart and play buttons
+  then sound about twice the raise later. For the on-air output, the
+  device's own hardware entry (`hw:` on Linux) avoids the sound server
+  altogether.
 - On Linux, allow real-time scheduling. The application asks the system for
   it through rtkit (D-Bus), and the log records a refusal. Many desktops
-  refuse it to applications; membership of the `audio` group with an
-  `rtprio` limit also works.
+  refuse it to applications.
 - Avoid network drives for music that plays on air.
 
 ## The interface is slow on an old computer

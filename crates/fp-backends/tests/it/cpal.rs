@@ -81,7 +81,8 @@ impl Renderer for Probe {
     fn render(&mut self, out: &mut [f32], _channels: usize) {
         out.fill(0.0);
         self.calls += 1;
-        if self.calls == 8 {
+        // Until the stream is dropped: rtkit may answer late.
+        if self.calls >= 8 {
             *self.policy.lock().unwrap() = policy();
         }
     }

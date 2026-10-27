@@ -111,6 +111,7 @@ settings-backend-unavailable = { $name } (ez dago erabilgarri)
 settings-rate = Lagintze-maiztasuna
 settings-buffer = Bufferraren tamaina
 settings-latency = Latentzia: { $ms } ms
+settings-latency-shared = Latentzia: { $ms } ms (irteera partekatuak: gutxienez { $floor } ms)
 settings-main = Main
 settings-cue = Cue
 settings-channels = { $first }–{ $second } kanalak

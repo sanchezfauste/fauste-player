@@ -128,11 +128,12 @@ fn device_rows(
     // Its own buffer, with the latency at the rate it runs.
     let rate = outputs.rate_for(&device.backend, &device.device);
     let buffer = outputs.buffer_for(&device.backend, &device.device);
-    let latency_ms = f64::from(buffer) / f64::from(rate.max(1)) * 1000.0;
-    let latency = t.tr_args(
-        "settings-latency",
-        &[("ms", format!("{latency_ms:.1}").into())],
-    );
+    // A shared stream takes at least `shared_buffer_ms` unless the device
+    // has a buffer of its own (one that differs from the global one).
+    let floor = info
+        .filter(|_| !listed && own_buffer.is_none_or(|b| b == outputs.buffer_frames))
+        .and_then(|d| super::shared_floor_ms(d, buffer, rate, outputs.shared_buffer_ms));
+    let latency = super::latency_hint(t, buffer, rate, floor);
     let global_buffer = t.tr_args(
         "settings-device-global-buffer",
         &[("value", outputs.buffer_frames.into())],

@@ -67,6 +67,7 @@ impl AudioBackend for NullBackend {
             exclusive_capable: false,
             rate_switching: false,
             native_dsd: false,
+            shared: false,
         }])
     }
 

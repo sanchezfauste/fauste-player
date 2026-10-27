@@ -16,7 +16,9 @@ const IDLE: Duration = Duration::from_secs(1);
 
 /// The callback's half: hands its thread over once.
 pub(crate) struct Promoter<T> {
-    slot: rtrb::Producer<T>,
+    /// `None` only while dropping: the helper must see it abandoned when
+    /// woken.
+    slot: Option<rtrb::Producer<T>>,
     helper: Thread,
     offered: bool,
 }
@@ -41,7 +43,7 @@ impl<T: Send + 'static> Promoter<T> {
                 }
             })?;
         Ok(Self {
-            slot,
+            slot: Some(slot),
             helper: helper.thread().clone(),
             offered: false,
         })
@@ -55,8 +57,8 @@ impl<T: Send + 'static> Promoter<T> {
             return;
         }
         self.offered = true;
-        if let Some(info) = info() {
-            let _ = self.slot.push(info);
+        if let (Some(info), Some(slot)) = (info(), self.slot.as_mut()) {
+            let _ = slot.push(info);
             self.helper.unpark();
         }
     }
@@ -64,6 +66,8 @@ impl<T: Send + 'static> Promoter<T> {
 
 impl<T> Drop for Promoter<T> {
     fn drop(&mut self) {
+        // Abandoned first, so the helper woken here ends at once.
+        drop(self.slot.take());
         self.helper.unpark();
     }
 }
@@ -86,6 +90,19 @@ mod tests {
         assert_eq!(info, 7);
         assert_eq!(name.as_deref(), Some("fp-rt-promote"));
         assert!(rx.recv_timeout(Duration::from_millis(100)).is_err());
+    }
+
+    #[test]
+    fn the_helper_ends_at_once_when_the_stream_goes_first() {
+        let (tx, rx) = mpsc::channel::<()>();
+        let promoter = Promoter::spawn(move |_: u32| drop(tx)).unwrap();
+        // Let the helper park first.
+        thread::sleep(Duration::from_millis(50));
+        let start = std::time::Instant::now();
+        drop(promoter);
+        // `tx` lives in the helper's closure: dropped when the helper ends.
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_err());
+        assert!(start.elapsed() < Duration::from_millis(500));
     }
 
     #[test]

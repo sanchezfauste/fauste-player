@@ -81,7 +81,7 @@ impl EngineSettings {
         Self {
             sample_rate: config.outputs.sample_rate,
             buffer_frames: config.outputs.buffer_frames,
-            // Validated to 0–1000 ms.
+            // Validated to 0–500 ms.
             shared_buffer_us: (config.outputs.shared_buffer_ms * 1000.0).round() as u32,
             channels: 2,
             tuning: config.tuning.clone(),

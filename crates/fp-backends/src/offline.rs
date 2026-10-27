@@ -24,6 +24,7 @@ struct DeviceState {
     generation: u64,
     open: Option<Open>,
     exclusive_capable: bool,
+    shared: bool,
     refused_rates: HashSet<u32>,
     refused_buffers: HashSet<u32>,
     /// Opens with more channels fail with `Unsupported`.
@@ -111,6 +112,12 @@ impl OfflineDevice {
     /// Lets streams on this device be opened with `exclusive`.
     pub fn set_exclusive_capable(&self, capable: bool) {
         lock(&self.state).exclusive_capable = capable;
+    }
+
+    /// Reports the device as shared (`DeviceInfo::shared`), as a sound
+    /// server's would be. Streams open as before: only the listing changes.
+    pub fn set_shared(&self, shared: bool) {
+        lock(&self.state).shared = shared;
     }
 
     /// The sample format streams on this device run in (default `F32`).
@@ -279,10 +286,11 @@ impl AudioBackend for OfflineBackend {
             .values()
             .filter(|d| lock(&d.state).plugged)
             .map(|d| {
-                let (exclusive_capable, native_dsd, rates, buffers) = {
+                let (exclusive_capable, shared, native_dsd, rates, buffers) = {
                     let state = lock(&d.state);
                     (
                         state.exclusive_capable,
+                        state.shared,
                         state.native_dsd,
                         state.reported_rates.clone(),
                         state.reported_buffers,
@@ -298,6 +306,7 @@ impl AudioBackend for OfflineBackend {
                     exclusive_capable,
                     rate_switching: exclusive_capable,
                     native_dsd,
+                    shared,
                 }
             })
             .collect();

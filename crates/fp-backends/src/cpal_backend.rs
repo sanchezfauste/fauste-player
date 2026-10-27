@@ -161,15 +161,17 @@ fn exclusive_capable(host: &str, device: &str) -> bool {
 /// the hardware: then the callback only feeds a queue that the mixer reads
 /// on its own clock, and a short one runs dry whenever a busy machine holds
 /// the callback back. On ALSA the hardware is `hw:` and what converts on
-/// its way to one card (`plughw:`, `sysdefault:`, the channel layouts);
-/// anything else (`default`, `pipewire`, `pulse`, `dmix`) may be a server.
-/// Core Audio, JACK and ASIO call back on the device's (or the JACK
-/// server's) own cycle, where the period is the latency asked for.
+/// its way to one card (`plughw:`, the channel layouts, `iec958:`,
+/// `hdmi:`); anything else may be a server or `dmix` (`default`,
+/// `pipewire`, `pulse`, and `sysdefault:`, usually `plug` into `dmix`).
+/// PipeWire runs its clients on the graph's cycle, and a longer block asks
+/// it for a longer quantum when nothing else needs a shorter one. Core
+/// Audio, JACK and ASIO call back on the device's (or the JACK server's)
+/// own cycle, where the period is the latency asked for.
 fn shared_output(host: &str, device: &str, exclusive: bool) -> bool {
     const ALSA_HARDWARE: &[&str] = &[
         "hw:",
         "plughw:",
-        "sysdefault:",
         "front:",
         "rear:",
         "center_lfe:",
@@ -194,16 +196,20 @@ fn shared_output(host: &str, device: &str, exclusive: bool) -> bool {
 
 /// The buffer to ask for: at least `shared_buffer_us` (rounded up to whole
 /// frames) on a shared output, unless the device's own buffer was set
-/// (`exact_buffer`).
-fn wanted_frames(config: &StreamConfig, shared: bool) -> u32 {
+/// (`exact_buffer`). The floor goes no higher than the largest size the
+/// device reports (`ranges`; a PipeWire quantum stops at 2048): a size
+/// past it would be refused and leave the device to choose its own.
+fn wanted_frames(config: &StreamConfig, shared: bool, ranges: &[(u32, u32)]) -> u32 {
     if !shared || config.exact_buffer {
         return config.buffer_frames;
     }
     let floor =
         (u64::from(config.shared_buffer_us) * u64::from(config.sample_rate)).div_ceil(1_000_000);
+    let floor = u32::try_from(floor).unwrap_or(u32::MAX);
+    let largest = ranges.iter().map(|&(_, max)| max).max();
     config
         .buffer_frames
-        .max(u32::try_from(floor).unwrap_or(u32::MAX))
+        .max(largest.map_or(floor, |max| floor.min(max)))
 }
 
 fn backend_error(e: impl std::fmt::Display) -> BackendError {
@@ -466,6 +472,7 @@ impl AudioBackend for CpalBackend {
                 exclusive_capable: exclusive,
                 rate_switching: exclusive,
                 native_dsd,
+                shared: shared_output(&self.id().0, &id.to_string(), false),
             });
         }
         Ok(list)
@@ -682,7 +689,7 @@ impl CpalBackend {
             })
             .collect();
         let shared = shared_output(&self.id().0, &device.0, config.exclusive);
-        let wanted = wanted_frames(&config, shared);
+        let wanted = wanted_frames(&config, shared, &ranges);
         let attempts = buffer_attempts(&ranges, wanted, config.exact_buffer);
         let scratch_frames = (wanted as usize).max(4096);
         let mut renderer = Some(renderer);
@@ -1267,7 +1274,8 @@ mod tests {
         assert!(shared_output("alsa", "alsa:dmix:CARD=PCH,DEV=0", false));
         assert!(!shared_output("alsa", "alsa:hw:CARD=PCH,DEV=0", false));
         assert!(!shared_output("alsa", "alsa:plughw:CARD=PCH,DEV=0", false));
-        assert!(!shared_output("alsa", "alsa:sysdefault:CARD=PCH", false));
+        // Usually the card's stock `default`: `plug` into `dmix`.
+        assert!(shared_output("alsa", "alsa:sysdefault:CARD=PCH", false));
         assert!(!shared_output("alsa", "alsa:front:CARD=PCH,DEV=0", false));
         assert!(shared_output("wasapi", "wasapi:{guid}", false));
         assert!(
@@ -1293,16 +1301,19 @@ mod tests {
             exact_buffer,
             shared_buffer_us: 50_000,
         };
-        assert_eq!(wanted_frames(&config(48_000, 512, false), true), 2_400);
-        assert_eq!(wanted_frames(&config(44_100, 512, false), true), 2_205);
-        assert_eq!(wanted_frames(&config(44_100, 4_096, false), true), 4_096);
+        let any = [(1, 262_144)];
+        let wanted =
+            |c: &StreamConfig, shared, ranges: &[(u32, u32)]| wanted_frames(c, shared, ranges);
+        assert_eq!(wanted(&config(48_000, 512, false), true, &any), 2_400);
+        assert_eq!(wanted(&config(44_100, 512, false), true, &any), 2_205);
+        assert_eq!(wanted(&config(44_100, 4_096, false), true, &any), 4_096);
         assert_eq!(
-            wanted_frames(&config(48_000, 512, false), false),
+            wanted(&config(48_000, 512, false), false, &any),
             512,
             "hardware"
         );
         assert_eq!(
-            wanted_frames(&config(48_000, 256, true), true),
+            wanted(&config(48_000, 256, true), true, &any),
             256,
             "a device's own buffer is used as it is"
         );
@@ -1310,7 +1321,18 @@ mod tests {
             shared_buffer_us: 0,
             ..config(48_000, 512, false)
         };
-        assert_eq!(wanted_frames(&off, true), 512, "no floor");
+        assert_eq!(wanted(&off, true, &any), 512, "no floor");
+        // A floor past the largest size the device takes (a PipeWire
+        // quantum) is that size, not a refused one that would leave the
+        // device to choose.
+        let quantum = [(32, 2_048)];
+        assert_eq!(wanted(&config(48_000, 512, false), true, &quantum), 2_048);
+        assert_eq!(wanted(&config(48_000, 4_096, false), true, &quantum), 4_096);
+        assert_eq!(
+            wanted(&config(48_000, 512, false), true, &[]),
+            2_400,
+            "no range reported"
+        );
     }
 
     #[test]

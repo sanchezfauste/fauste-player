@@ -291,6 +291,7 @@ fn device(id: &str, name: &str, detail: Option<&str>) -> DeviceInfo {
         buffer_frames: None,
         exclusive_capable: false,
         rate_switching: false,
+        shared: false,
     }
 }
 

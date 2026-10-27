@@ -63,6 +63,9 @@ pub struct DeviceInfo {
     pub rate_switching: bool,
     /// The device takes raw DSD (Linux, ALSA hw: devices reporting a DSD format).
     pub native_dsd: bool,
+    /// A sound server or a system mixer stands between it and the hardware:
+    /// a shared stream asks for at least `StreamConfig::shared_buffer_us`.
+    pub shared: bool,
 }
 
 /// The labels an output picker shows for `devices`, in order: the name (the

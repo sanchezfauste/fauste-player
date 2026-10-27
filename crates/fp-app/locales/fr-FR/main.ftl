@@ -111,6 +111,7 @@ settings-backend-unavailable = { $name } (indisponible)
 settings-rate = Fréquence d'échantillonnage
 settings-buffer = Taille du tampon
 settings-latency = Latence : { $ms } ms
+settings-latency-shared = Latence : { $ms } ms (sorties partagées : au moins { $floor } ms)
 settings-main = Main
 settings-cue = Cue
 settings-channels = Canaux { $first }–{ $second }
