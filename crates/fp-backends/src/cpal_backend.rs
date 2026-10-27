@@ -462,6 +462,7 @@ impl AudioBackend for CpalBackend {
             let channels = self.channels(&device, channels);
             let exclusive = exclusive_capable(&self.id().0, &id.0);
             let native_dsd = self.native_dsd_capable(&id.0);
+            let shared = shared_output(&self.id().0, &id.0, false);
             list.push(DeviceInfo {
                 id,
                 name,
@@ -472,7 +473,7 @@ impl AudioBackend for CpalBackend {
                 exclusive_capable: exclusive,
                 rate_switching: exclusive,
                 native_dsd,
-                shared: shared_output(&self.id().0, &id.to_string(), false),
+                shared,
             });
         }
         Ok(list)
