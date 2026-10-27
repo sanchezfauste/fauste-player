@@ -118,8 +118,9 @@ through the media browser (`fp_app::ui::media_browser`). `MediaFiles`
 (Kotlin) lists the device's audio files from MediaStore (the `DATA`
 column, every audio file, not only music, since carts are often jingles
 and effects) on a background thread after the permission is answered, on
-resume and whenever MediaStore changes, and hands the paths to
-`Native.setMediaFiles`. The decoders open those paths as on the desktop;
+resume and whenever MediaStore changes (refreshes asked while a query
+waits to start join it, since a scan notifies once per file), and hands
+the paths to `Native.setMediaFiles`. The decoders open those paths as on the desktop;
 nothing is copied, and music is only read (spec §2). Android 10 needs
 `requestLegacyExternalStorage` for that; from Android 11 the media
 permission is enough.
@@ -129,9 +130,12 @@ thread they already run on, and it waits for the operator: adding tracks
 ticks files (`AudioFiles`), a cart takes one file with the cart
 extensions (`OneFile`) and Settings takes the music folder (`Folder`).
 `AppUi` draws the browser window while a request is pending. The handle
-is process-wide (`fp_mobile::platform::MEDIA`), so a request outlives an
-activity that is destroyed and the next one shows it; a newer request
-answers the older one with nothing, so no helper thread hangs. Folders
+is process-wide (`fp_mobile::platform::MEDIA`); a request still pending
+when its activity is destroyed is answered with nothing when the next one
+starts (its answer would reach no one), and a newer request answers the
+older one with nothing, so no helper thread hangs. The browser lists only
+audio: pickers for anything else (a cover image, a playlist or a cart page
+to import) return nothing on Android for now. Folders
 start closed and are named without the part they all share; a file that
 leaves the list leaves the selection; without permission or music the
 window says how to get some.

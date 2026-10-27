@@ -7,6 +7,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Hands the device's audio files to the media browser (mobile spec MB7):
@@ -15,6 +16,9 @@ import java.util.concurrent.Executors
  */
 class MediaFiles(private val context: Context) {
     private val worker = Executors.newSingleThreadExecutor()
+
+    /** A query is queued and not started: later refreshes join it. */
+    private val queued = AtomicBoolean(false)
     private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) = refresh()
     }
@@ -29,11 +33,20 @@ class MediaFiles(private val context: Context) {
 
     fun stop() {
         context.contentResolver.unregisterContentObserver(observer)
+        worker.shutdown()
     }
 
-    /** Lists the files again; without permission the list is empty. */
+    /**
+     * Lists the files again; without permission the list is empty. A scan
+     * notifies once per file, so refreshes asked while a query waits to
+     * start are one query.
+     */
     fun refresh() {
+        if (worker.isShutdown || !queued.compareAndSet(false, true)) {
+            return
+        }
         worker.execute {
+            queued.set(false)
             val paths = try {
                 query()
             } catch (e: SecurityException) {

@@ -117,6 +117,9 @@ fn android_main(app: AndroidApp) {
     let Some(session) = session(&app) else {
         return;
     };
+    // A picker of an earlier activity waits on channels that went with its
+    // interface: answer it, so this one does not show a request no one gets.
+    MEDIA.cancel_pending();
     let ui = session
         .app_ui()
         .with_platform(Arc::new(AndroidPlatform))

@@ -25,6 +25,24 @@ pub enum BrowseMode {
     Folder,
 }
 
+impl BrowseMode {
+    /// One file with one of `extensions`, when one of them is an audio
+    /// file's: the browser lists only audio (images, playlists and cart
+    /// pages are not there to pick).
+    pub fn one_file(extensions: &[&str]) -> Option<Self> {
+        extensions
+            .iter()
+            .any(|e| {
+                super::files::AUDIO_EXTENSIONS
+                    .iter()
+                    .any(|a| a.eq_ignore_ascii_case(e))
+            })
+            .then(|| Self::OneFile {
+                extensions: extensions.iter().map(|e| (*e).to_owned()).collect(),
+            })
+    }
+}
+
 /// The device's audio files and at most one pending request. Clones share
 /// them: the platform, the pickers' threads and the interface hold one each.
 #[derive(Clone, Default)]
@@ -77,9 +95,12 @@ impl MediaBrowser {
             self.shared.answered.notify_all();
         }
         inner.request = Some((id, mode, start));
-        if let Some(ctx) = &inner.repaint {
+        let repaint = inner.repaint.clone();
+        drop(inner);
+        if let Some(ctx) = repaint {
             ctx.request_repaint();
         }
+        let mut inner = self.lock();
         loop {
             if let Some(at) = inner.answers.iter().position(|(a, _)| *a == id) {
                 return inner.answers.swap_remove(at).1;
@@ -108,6 +129,16 @@ impl MediaBrowser {
         {
             inner.request = None;
             inner.answers.push((request, chosen));
+            self.shared.answered.notify_all();
+        }
+    }
+
+    /// Answers the pending request, if any, with nothing: its picker's
+    /// interface is gone (a new activity), so a choice could reach no one.
+    pub fn cancel_pending(&self) {
+        let mut inner = self.lock();
+        if let Some((id, _, _)) = inner.request.take() {
+            inner.answers.push((id, Vec::new()));
             self.shared.answered.notify_all();
         }
     }

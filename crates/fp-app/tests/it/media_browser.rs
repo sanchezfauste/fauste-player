@@ -108,3 +108,29 @@ fn a_stale_answer_is_ignored() {
     browser.answer(id, paths(&["/m/right.mp3"]));
     assert_eq!(thread.join().ok(), Some(paths(&["/m/right.mp3"])));
 }
+
+#[test]
+fn cancelling_the_pending_request_answers_nothing() {
+    let browser = MediaBrowser::default();
+    let asking = browser.clone();
+    let thread = std::thread::spawn(move || asking.browse(BrowseMode::AudioFiles, None));
+    wait_for_request(&browser);
+    browser.cancel_pending();
+    assert_eq!(thread.join().ok(), Some(Vec::new()));
+    assert!(browser.pending().is_none());
+    // Nothing pending: nothing happens.
+    browser.cancel_pending();
+}
+
+#[test]
+fn only_audio_extensions_open_the_browser() {
+    assert_eq!(
+        BrowseMode::one_file(&["MP3", "jpg"]),
+        Some(BrowseMode::OneFile {
+            extensions: vec!["MP3".to_owned(), "jpg".to_owned()]
+        })
+    );
+    assert_eq!(BrowseMode::one_file(&["jpg", "png"]), None);
+    assert_eq!(BrowseMode::one_file(&["m3u", "pls"]), None);
+    assert_eq!(BrowseMode::one_file(&[]), None);
+}

@@ -95,12 +95,19 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setMediaFiles(
     let count = env.get_array_length(&paths).unwrap_or(0);
     let mut files = Vec::with_capacity(usize::try_from(count).unwrap_or(0));
     for index in 0..count {
+        // A failed call leaves a Java exception pending: no more JNI calls
+        // until it is cleared, so the list stops there.
         let Ok(item) = env.get_object_array_element(&paths, index) else {
-            continue;
+            let _ = env.exception_clear();
+            break;
         };
         let item = JString::from(item);
-        if let Ok(path) = env.get_string(&item) {
-            files.push(std::path::PathBuf::from(String::from(path)));
+        match env.get_string(&item) {
+            Ok(path) => files.push(std::path::PathBuf::from(String::from(path))),
+            Err(_) => {
+                let _ = env.exception_clear();
+                break;
+            }
         }
         // Thousands of files: free each local reference as it goes.
         let _ = env.delete_local_ref(item);

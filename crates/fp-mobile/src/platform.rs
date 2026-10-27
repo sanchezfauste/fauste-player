@@ -29,11 +29,9 @@ impl Platform for AndroidPlatform {
         extensions: &[&str],
         start: Option<PathBuf>,
     ) -> Option<PathBuf> {
-        let extensions = extensions.iter().map(|e| (*e).to_owned()).collect();
-        MEDIA
-            .browse(BrowseMode::OneFile { extensions }, start)
-            .into_iter()
-            .next()
+        // Images, playlists and cart pages have no picker yet.
+        let mode = BrowseMode::one_file(extensions)?;
+        MEDIA.browse(mode, start).into_iter().next()
     }
 
     fn pick_folder(&self, start: Option<PathBuf>) -> Option<PathBuf> {
