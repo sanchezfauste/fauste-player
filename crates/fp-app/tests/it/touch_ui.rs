@@ -204,3 +204,17 @@ fn a_removed_open_player_shows_all_players() {
     assert!(h.query_by_label("Open P1").is_some());
     assert!(h.query_by_label(ADD).is_none());
 }
+
+#[test]
+fn a_phone_has_no_desktop_panel_buttons() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    assert!(h.query_by_label("Maximize").is_none());
+    h.get_by_label("Open P1").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Maximize").is_none());
+    h.get_by_label("Cartwall").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Maximize").is_none());
+    let (h, _fake) = touch(2, TABLET);
+    assert!(h.query_all_by_label("Maximize").count() > 0);
+}

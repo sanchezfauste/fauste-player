@@ -386,7 +386,7 @@ fn header(
         .as_ref()
         .map(|badge| GainBadgeLayout::new(ui, t, badge));
     let mut right_widths = vec![
-        super::panels::HEADER_BUTTONS_WIDTH,
+        super::panels::header_buttons_width(view_state),
         CUE_WIDTH,
         widgets::segmented_width(ui, &segments),
     ];

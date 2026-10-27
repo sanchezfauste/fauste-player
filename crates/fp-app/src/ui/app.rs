@@ -101,6 +101,8 @@ pub(crate) struct TabScroll {
 pub(crate) struct ViewState {
     /// What a phone shows (mobile spec §6); unused elsewhere.
     pub phone: super::touch::PhoneView,
+    /// Whether this frame draws a phone's views (no desktop panel buttons).
+    pub phone_active: bool,
     /// A swipe across the phone's landscape view.
     pub phone_swipe: super::touch::SwipeTracker,
     pub selection: HashMap<PlayerId, EntryId>,
@@ -778,6 +780,7 @@ impl AppUi {
         } else {
             TOP_BAR_HEIGHT
         };
+        self.view.phone_active = phone;
         let top = Rect::from_min_size(full.min, vec2(full.width(), top_height));
         let status = Rect::from_min_max(
             egui::pos2(full.left(), full.bottom() - STATUS_BAR_HEIGHT),
