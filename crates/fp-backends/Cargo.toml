@@ -11,6 +11,7 @@ license.workspace = true
 thiserror.workspace = true
 cpal.workspace = true
 rtrb.workspace = true
+tracing.workspace = true
 
 [features]
 default = ["pulseaudio"]

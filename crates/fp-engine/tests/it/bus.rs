@@ -22,6 +22,7 @@ const CONFIG: StreamConfig = StreamConfig {
     exclusive: false,
     dsd: None,
     exact_buffer: false,
+    shared_buffer_us: 0,
 };
 const MIXER: MixerConfig = MixerConfig {
     volume_smoothing_frames: 1,

@@ -214,8 +214,30 @@ Nothing connects to a system until it is first used.
   chosen as F32, then I32, then I16 and converted through a preallocated
   buffer; the requested buffer size is tried first, then the device default
   (`buffer_attempts`), except with `exact_buffer`.
-  Real-time priority comes through cpal's `audio_thread_priority` (rtkit
-  over D-Bus on Linux). A DoP stream chooses its format with
+- **Shared outputs:** `shared_output(host, device, exclusive)` tells the
+  outputs with a system mixer between them and the hardware: every
+  PulseAudio, PipeWire and WASAPI shared stream, and every ALSA device
+  but the hardware and what converts on its way to one card (`hw:`,
+  `plughw:`, `sysdefault:`, `front:` and the other channel layouts,
+  `iec958:`, `hdmi:`). There `wanted_frames` asks for at least
+  `StreamConfig::shared_buffer_us` (`outputs.shared_buffer_ms`, rounded up
+  to whole frames at the stream's rate) unless `exact_buffer` is set.
+  cpal's PulseAudio host makes the server's queue two blocks long
+  (`tlength = 2 × block`), so the default 50 ms is about 100 ms queued; at
+  512 frames it was 21 ms, and the stream clicked under load without any
+  error, since that host reports no underruns. Core Audio, JACK and ASIO
+  are never shared: their callback is the device's own cycle.
+- **Real-time priority** comes through cpal's `audio_thread_priority`
+  (rtkit over D-Bus on Linux) for its ALSA, PipeWire and WASAPI hosts.
+  cpal's PulseAudio host renders on the client's reactor thread at normal
+  priority; there `CpalBackend::realtime_promoter` starts a helper
+  (`rt_promote::Promoter`, thread `fp-rt-promote`): the first callback
+  names its thread (`get_current_thread_info`, plain system calls) and
+  wakes the helper, which asks rtkit (`promote_thread_to_real_time`) and
+  logs the outcome; a refusal is reported as `RealtimeDenied`. polkit
+  often refuses desktop applications (a process started from a systemd
+  user unit belongs to no login session), so the shared buffer, not the
+  priority, is what keeps such an output whole. A DoP stream chooses its format with
   `choose_dop_sample_format` instead.
 - **Default backend:** `choose_default_backend` keeps the configured
   backend when it is available, otherwise `preferred_backend` picks the

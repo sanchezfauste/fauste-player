@@ -82,7 +82,7 @@ Dependency direction: `fp-app → fp-engine → {fp-backends, fp-model}`, `fp-ap
 
 In priority order:
 
-1. **Bus output threads** (one per open device stream). Created by the backend with real-time priority (SCHED_FIFO/rtkit on Linux, MMCSS "Pro Audio" on Windows, time-constraint policy on macOS). They run the bus **mixer**: sum the sources routed to the bus, apply per-sample gain ramps, update atomic telemetry. They must never allocate, free, block, do I/O, log or panic.
+1. **Bus output threads** (one per open device stream). Created by the backend with real-time priority (SCHED_FIFO/rtkit on Linux, MMCSS "Pro Audio" on Windows, time-constraint policy on macOS). Where the audio system calls back on a thread of its own at normal priority (cpal's PulseAudio host), the callback names its thread once and a helper thread asks rtkit to promote it, off the real-time path; a refusal is reported like any other (`RealtimeDenied`). They run the bus **mixer**: sum the sources routed to the bus, apply per-sample gain ramps, update atomic telemetry. They must never allocate, free, block, do I/O, log or panic.
 2. **Player decoder threads** (one per player; later one for the cartwall). Each decodes all sources of its player (current, incoming, cue) with `symphonia`, resamples with `rubato` when the file rate ≠ bus rate, and fills each source's lock-free SPSC ring buffer (`rtrb`). Above-normal (non-RT) priority, set by the thread itself with `thread-priority`.
 3. **Conductor thread.** Single owner of the authoritative application state (`fp-model` state + engine source bookkeeping). It consumes UI commands, reacts to engine events, applies player logic, schedules sample-accurate actions on buses, publishes snapshots to the UI and requests persistence.
 4. **Background worker pool** (low priority, 2 threads). Analysis jobs. Persistence writes run on the services thread at normal priority.
@@ -303,6 +303,8 @@ A multichannel device is opened **once**. All routes to it share one stream and 
 ### 4.8 Sample rate
 
 In Phase 1 (shared mode) each device stream runs at the configured rate (default 48 kHz; Settings offers the rates the device reports as supported) and every source is resampled to it with `rubato` (sinc, high quality). The buffer size (default 512 frames; Settings offers the range the device reports) is requested from the backend. The reported latency is shown in Settings.
+
+A **shared output** (a sound server such as PulseAudio or PipeWire, an ALSA device that is not the hardware such as `default` or `dmix`, WASAPI's shared mode) asks for at least `outputs.shared_buffer_ms` (default 50 ms, 0–1000, 0 is no floor; config file only), or `buffer_frames` when that is longer. The callback only feeds the system mixer's queue, which plays on its own clock, and a queue of a few milliseconds runs dry whenever a busy machine (two cores and a package upgrade) holds the callback back: the operator hears clicks that no xrun counter reports. A device's own buffer (operator feedback 4, Q12) is used as it is. Direct hardware (`hw:`, `plughw:`), Core Audio, JACK and ASIO keep the buffer asked for: their callback is the device's (or the JACK server's) own cycle.
 
 Bit-perfect mode (no resampling, no processing, file rate) is Phase 4.
 

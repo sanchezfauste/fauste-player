@@ -320,3 +320,17 @@ fn a_bit_perfect_device_that_followed_a_file_keeps_the_global_buffer_fallback() 
     let dac = r.dac.config().expect("reopened with the global buffer");
     assert_eq!((dac.sample_rate, dac.buffer_frames), (44_100, 512));
 }
+
+#[test]
+fn every_output_is_told_the_shared_buffer_as_a_duration() {
+    // The backend decides which outputs are shared; the engine tells all.
+    let r = rig(|c| c.outputs.shared_buffer_ms = 80.0);
+    for device in [&r.dac, &r.phones] {
+        let config = device.config().expect("open");
+        assert_eq!(config.shared_buffer_us, 80_000);
+        assert_eq!(
+            config.buffer_frames, 512,
+            "the floor is the backend's to apply"
+        );
+    }
+}
