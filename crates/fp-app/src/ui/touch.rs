@@ -85,6 +85,23 @@ impl PhoneView {
     }
 }
 
+/// How far a sideways drag must go to be a swipe, in points.
+const SWIPE_DISTANCE: f32 = 80.0;
+
+/// The pair a drag of `delta` asks for: the next one (`true`, a drag to
+/// the left), the previous one, or none when it is short or not sideways.
+pub fn swipe_direction(delta: Vec2) -> Option<bool> {
+    (delta.x.abs() > SWIPE_DISTANCE && delta.x.abs() > 2.0 * delta.y.abs()).then_some(delta.x < 0.0)
+}
+
+/// A drag across the landscape view, followed until it is let go.
+#[derive(Debug, Default)]
+pub(crate) struct SwipeTracker {
+    origin: Option<egui::Pos2>,
+    /// A widget took the drag (a fader, a row): it is not a swipe.
+    blocked: bool,
+}
+
 /// How far from a widget a finger still hits it: the desktop's tiles are
 /// smaller than a fingertip.
 const INTERACT_RADIUS: f32 = 12.0;
@@ -171,11 +188,102 @@ pub(crate) fn phone_middle(
         (PhoneScreen::Players, Some(open)) => {
             one_player(ui, scene, view_state, covers, &players, open);
         }
+        (PhoneScreen::Players, None) if landscape => {
+            pairs(ui, scene, view_state, covers, &players);
+        }
         (PhoneScreen::Players, None) => {
             all_players(ui, scene, view_state, covers, &players);
         }
     }
-    let _ = landscape;
+}
+
+/// Landscape: two players side by side, under chips for the pairs and for
+/// opening a shown player; a swipe shows the next or previous pair.
+fn pairs(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    covers: &mut HashMap<TrackId, TextureHandle>,
+    players: &[PlayerId],
+) {
+    follow_swipe(ui.ctx(), view_state, players.len());
+    let shown = view_state.phone.pair_players(players);
+    ui.horizontal(|ui| {
+        egui::ScrollArea::horizontal()
+            .id_salt("phone-pairs")
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
+                    for pair in 0..PhoneView::pairs(players.len()) {
+                        let first = pair * 2;
+                        let label = if first + 1 < players.len() {
+                            format!(
+                                "{}–{}",
+                                player_name(scene, first),
+                                player_name(scene, first + 1)
+                            )
+                        } else {
+                            player_name(scene, first)
+                        };
+                        if chip(ui, &label, pair == view_state.phone.pair) {
+                            view_state.phone.pair = pair;
+                        }
+                    }
+                    ui.add_space(12.0);
+                    for id in &shown {
+                        let Ok(index) = scene.state.player_index(*id) else {
+                            continue;
+                        };
+                        let label = scene.i18n.tr_args(
+                            "touch-open-player",
+                            &[("player", player_name(scene, index).into())],
+                        );
+                        if chip(ui, &label, false) {
+                            view_state.phone.open = Some(*id);
+                        }
+                    }
+                });
+            });
+    });
+    ui.add_space(PANEL_GAP);
+    let shown: Vec<(PlayerId, usize)> = shown
+        .iter()
+        .filter_map(|id| scene.state.player_index(*id).ok().map(|i| (*id, i)))
+        .collect();
+    let rect = ui.available_rect_before_wrap();
+    columns(ui, scene, view_state, covers, &shown, rect);
+}
+
+/// Turns a sideways drag that no widget took into a change of pair.
+fn follow_swipe(ctx: &egui::Context, view_state: &mut ViewState, count: usize) {
+    let (pressed, released, position) = ctx.input(|i| {
+        (
+            i.pointer.primary_pressed(),
+            i.pointer.primary_released(),
+            i.pointer.interact_pos(),
+        )
+    });
+    let tracker = &mut view_state.phone_swipe;
+    if pressed {
+        *tracker = SwipeTracker {
+            origin: position,
+            blocked: false,
+        };
+    }
+    if ctx.dragged_id().is_some() {
+        tracker.blocked = true;
+    }
+    if released {
+        let swipe = tracker
+            .origin
+            .zip(position)
+            .filter(|_| !tracker.blocked)
+            .and_then(|(from, to)| swipe_direction(to - from));
+        *tracker = SwipeTracker::default();
+        if let Some(forward) = swipe {
+            view_state.phone.swipe(forward, count);
+        }
+    }
 }
 
 fn player_name(scene: &Scene<'_>, index: usize) -> String {

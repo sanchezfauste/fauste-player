@@ -101,6 +101,8 @@ pub(crate) struct TabScroll {
 pub(crate) struct ViewState {
     /// What a phone shows (mobile spec §6); unused elsewhere.
     pub phone: super::touch::PhoneView,
+    /// A swipe across the phone's landscape view.
+    pub phone_swipe: super::touch::SwipeTracker,
     pub selection: HashMap<PlayerId, EntryId>,
     /// The Enter that set an entry as Next and may still be followed by a
     /// second one that plays it (see `playlist_keys`).

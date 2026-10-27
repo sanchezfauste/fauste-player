@@ -88,3 +88,12 @@ fn swiping_stops_at_both_ends() {
     assert_eq!(view.pair, 1);
     assert_eq!(view.pair_players(&ids(4)), vec![PlayerId(2), PlayerId(3)]);
 }
+
+#[test]
+fn a_long_sideways_drag_is_a_swipe() {
+    use fp_app::ui::touch::swipe_direction;
+    assert_eq!(swipe_direction(vec2(-120.0, 10.0)), Some(true));
+    assert_eq!(swipe_direction(vec2(120.0, -10.0)), Some(false));
+    assert_eq!(swipe_direction(vec2(-50.0, 0.0)), None, "too short");
+    assert_eq!(swipe_direction(vec2(-120.0, 90.0)), None, "too steep");
+}
