@@ -1,13 +1,15 @@
-//! The calls of the Kotlin class `com.sanchezfauste.fausteplayer.Native`.
-//! Each entry point only reads or stores a value; none blocks.
+//! The calls of the Kotlin class `com.sanchezfauste.fausteplayer.Native`
+//! (each entry point only reads or stores a value; none blocks), and the
+//! one call into the activity, `open_url`.
 
 use std::sync::atomic::Ordering;
 
 use jni::JNIEnv;
-use jni::objects::{JObject, JObjectArray, JString};
+use jni::JavaVM;
+use jni::objects::{JObject, JObjectArray, JString, JValue};
 use jni::sys::{jboolean, jint, jstring};
 
-use crate::android::{INSETS, SESSION};
+use crate::android::{ACTIVITY, INSETS, SESSION};
 use crate::platform::{AUDIO_FOCUS_LOST, MEDIA};
 use crate::shell_state::{on_air_text, shell_state};
 
@@ -113,4 +115,37 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setMediaFiles(
         let _ = env.delete_local_ref(item);
     }
     MEDIA.set_files(files);
+}
+
+/// Asks the activity to open `url` (`MainActivity.openUrl`, a view
+/// intent). Blocks for a JNI call: run it off the interface thread.
+pub(crate) fn open_url(url: &str) -> Result<(), String> {
+    // Held through the call: the activity cannot end meanwhile.
+    let current = ACTIVITY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((vm, activity)) = *current else {
+        return Err("no activity".to_owned());
+    };
+    #[allow(unsafe_code)]
+    // SAFETY: `vm` is the process's JavaVM pointer from android-activity
+    // (`vm_as_ptr`), valid for the life of the process.
+    let vm = unsafe { JavaVM::from_raw(vm as *mut jni::sys::JavaVM) }.map_err(|e| e.to_string())?;
+    let mut env = vm.attach_current_thread().map_err(|e| e.to_string())?;
+    #[allow(unsafe_code)]
+    // SAFETY: `activity` is android-activity's global reference to the
+    // running activity (`activity_as_ptr`), valid while `ACTIVITY` holds it
+    // and we hold its lock. `JObject` never deletes it.
+    let activity = unsafe { JObject::from_raw(activity as jni::sys::jobject) };
+    let text = env.new_string(url).map_err(|e| e.to_string())?;
+    let called = env.call_method(
+        &activity,
+        "openUrl",
+        "(Ljava/lang/String;)V",
+        &[JValue::Object(&text)],
+    );
+    if called.is_err() {
+        let _ = env.exception_clear();
+    }
+    called.map(|_| ()).map_err(|e| e.to_string())
 }

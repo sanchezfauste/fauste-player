@@ -176,7 +176,10 @@ window says how to get some.
 ## The `unsafe` exception
 
 `fp-mobile` is the only crate allowed `unsafe` (spec §8), for
-`#[unsafe(no_mangle)]` on `android_main` and the six JNI entry points. Its
+`#[unsafe(no_mangle)]` on `android_main` and the six JNI entry points, and
+for the one call into the activity (`jni::open_url`: the Java VM and the
+activity reference android-activity hands out, kept in `ACTIVITY` while
+the activity runs and locked through the call). Its
 `Cargo.toml` sets `unsafe_code = "deny"` and copies the other workspace
 lints; each site opts in with `#[allow(unsafe_code)]` and a `// SAFETY:`
 comment. Its Android modules are `#[cfg(target_os = "android")]`; its pure
@@ -210,7 +213,4 @@ underruns at start. CI's `android` job runs the isolation check, the
 
 These hold until the plans that replace them:
 
-- links in the About window are not opened (`open_url` returns an error);
 - the outputs page is the desktop's (the touch layout reworks it);
-- release builds are signed with the debug key, `versionCode` is 1 and the
-  notification uses a system icon, until a release plan.

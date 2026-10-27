@@ -127,7 +127,7 @@ class PlaybackService : Service() {
             .setContentTitle(getString(R.string.app_name))
             .setContentText(text.lineSequence().firstOrNull().orEmpty())
             .setStyle(Notification.BigTextStyle().bigText(text))
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(open)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
