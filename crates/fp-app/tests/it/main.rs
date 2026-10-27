@@ -67,6 +67,7 @@ mod table_start;
 mod table_tooltip;
 mod tabular;
 mod theme;
+mod touch;
 mod track_tags_ui;
 mod ui_polish;
 mod view;
