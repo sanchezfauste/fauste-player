@@ -16,11 +16,13 @@ import com.google.androidgamesdk.GameActivity
 
 /**
  * The interface runs in Rust (`android_main` in crates/fp-mobile). This
- * activity asks for permissions, reports the insets, starts the playout
- * service while playout is active and keeps the screen on (mobile spec §5).
+ * activity asks for permissions, reports the insets and the device's
+ * music, starts the playout service while playout is active and keeps the
+ * screen on (mobile spec §5).
  */
 class MainActivity : GameActivity() {
     private val handler = Handler(Looper.getMainLooper())
+    private val media by lazy { MediaFiles(applicationContext) }
     private val poll = object : Runnable {
         override fun run() {
             follow(Native.state())
@@ -39,6 +41,7 @@ class MainActivity : GameActivity() {
             }
         }
         requestPermissions(wanted.toTypedArray(), PERMISSIONS)
+        media.start()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 moveTaskToBack(true)
@@ -57,6 +60,24 @@ class MainActivity : GameActivity() {
     override fun onResume() {
         super.onResume()
         handler.post(poll)
+        // Files copied while away, or access granted in the system settings.
+        media.refresh()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSIONS) {
+            media.refresh()
+        }
+    }
+
+    override fun onDestroy() {
+        media.stop()
+        super.onDestroy()
     }
 
     /** Once more on the way out: Play then Home within a poll still gets the service. */
