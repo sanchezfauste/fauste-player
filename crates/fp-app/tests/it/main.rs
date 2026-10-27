@@ -30,6 +30,7 @@ mod live_settings;
 mod loudness_ui;
 mod main_screen;
 mod markers_ui;
+mod media_browser;
 mod meter_view;
 mod midi_settings;
 mod new_playlist_ui;
