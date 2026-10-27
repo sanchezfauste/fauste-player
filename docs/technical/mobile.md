@@ -111,10 +111,35 @@ insets (system bars and display cutout) and calls `Native.setInsets` in
 physical pixels; `fp_mobile::insets::safe_area` turns them into the
 rectangle the interface draws in (MB10).
 
+## Media access (MB7)
+
+Android has no file dialog that gives back paths, so the pickers go
+through the media browser (`fp_app::ui::media_browser`). `MediaFiles`
+(Kotlin) lists the device's audio files from MediaStore (the `DATA`
+column, every audio file, not only music, since carts are often jingles
+and effects) on a background thread after the permission is answered, on
+resume and whenever MediaStore changes, and hands the paths to
+`Native.setMediaFiles`. The decoders open those paths as on the desktop;
+nothing is copied, and music is only read (spec §2). Android 10 needs
+`requestLegacyExternalStorage` for that; from Android 11 the media
+permission is enough.
+
+`AndroidPlatform`'s pickers call `MediaBrowser::browse` on the helper
+thread they already run on, and it waits for the operator: adding tracks
+ticks files (`AudioFiles`), a cart takes one file with the cart
+extensions (`OneFile`) and Settings takes the music folder (`Folder`).
+`AppUi` draws the browser window while a request is pending. The handle
+is process-wide (`fp_mobile::platform::MEDIA`), so a request outlives an
+activity that is destroyed and the next one shows it; a newer request
+answers the older one with nothing, so no helper thread hangs. Folders
+start closed and are named without the part they all share; a file that
+leaves the list leaves the selection; without permission or music the
+window says how to get some.
+
 ## The `unsafe` exception
 
 `fp-mobile` is the only crate allowed `unsafe` (spec §8), for
-`#[unsafe(no_mangle)]` on `android_main` and the five JNI entry points. Its
+`#[unsafe(no_mangle)]` on `android_main` and the six JNI entry points. Its
 `Cargo.toml` sets `unsafe_code = "deny"` and copies the other workspace
 lints; each site opts in with `#[allow(unsafe_code)]` and a `// SAFETY:`
 comment. Its Android modules are `#[cfg(target_os = "android")]`; its pure
@@ -148,8 +173,6 @@ underruns at start. CI's `android` job runs the isolation check, the
 
 These hold until the plans that replace them:
 
-- the pickers list the audio files directly in `/sdcard/Music`
-  (`AndroidPlatform`), until the media browser (MB7);
 - links in the About window are not opened (`open_url` returns an error);
 - the outputs page is the desktop's (the touch layout reworks it);
 - the layout is the desktop one; the touch layout (spec §6) has its plan;
