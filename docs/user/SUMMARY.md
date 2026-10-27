@@ -15,4 +15,5 @@
 - [MIDI control surfaces](midi.md)
 - [Remote control](remote-control.md)
 - [Data and backups](data-and-backups.md)
+- [Android](android.md)
 - [Troubleshooting](troubleshooting.md)

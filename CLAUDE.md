@@ -86,7 +86,7 @@ python3 scripts/site/guide.py changed [lang]  # English guide pages changed sinc
 scripts/site/screenshots.sh [--only main] [--lang es-ES] [--out <dir>]  # README and guide screenshots from a scripted scene (Xvfb; see Testing notes)
 scripts/site/localized-screenshots.sh <dir> [lang…]  # the same in English and every guide language (CI does it on publish)
 scripts/site/compare-screenshots.sh [--fuzz 5] [--threshold 50] [--masks f] [--apply] [--prune] <new-dir> [docs/images]  # which screenshots really changed (the screenshots workflow uses it)
-scripts/package/android.sh <debug|release>     # Android APK (cargo-ndk, NDK r27, JDK 17+; see docs/technical/mobile.md)
+scripts/package/android.sh <debug|release>     # Android APK (release: also the AAB, signed with FAUSTE_ANDROID_KEY* when set; --self-test; see docs/technical/mobile.md)
 scripts/check-mobile-isolation.sh             # the fp-mobile unsafe exception stays isolated (CI runs it)
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test it real_music:: -- --ignored   # real-music corpus (local only)

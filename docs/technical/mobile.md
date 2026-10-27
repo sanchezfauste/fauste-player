@@ -205,6 +205,14 @@ JDK 17 or newer). The APK is in
 `mobile/android/app/build/outputs/apk/<profile>/`. `minSdk` is 29,
 `targetSdk` 36, the application id `com.sanchezfauste.FaustePlayer`.
 
+A release build also makes the AAB a store needs. It is signed with the
+key the four `FAUSTE_ANDROID_KEYSTORE`, `FAUSTE_ANDROID_KEYSTORE_PASSWORD`,
+`FAUSTE_ANDROID_KEY_ALIAS` and `FAUSTE_ANDROID_KEY_PASSWORD` variables
+name, and with the debug key without them. The `versionCode` comes from
+the workspace version (`android.sh --self-test` checks the formula).
+`release-build.yml`'s `android` job publishes the APK and AAB with a
+release once the key is a secret (see the release process).
+
 Judge dropouts and latency on release builds only: a debug build
 underruns at start. CI's `android` job runs the isolation check, the
 `fp-mobile` tests and the debug build, and uploads the APK.
