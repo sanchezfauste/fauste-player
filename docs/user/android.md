@@ -40,7 +40,7 @@ On a **phone** the top bar switches between **Players** and
   page wider than tall is turned (8 × 2 shows as 2 × 8), in the same
   order.
 
-The volume fader moves only in an open player, so scrolling the list
+The volume fader moves only in an open player held upright, so scrolling
 never changes a level on air. In a playlist a finger scrolls; to move a
 track, use the row menu.
 
@@ -49,7 +49,8 @@ with targets made easier to hit.
 
 A long press opens what a right click opens on the desktop: the row menu,
 the header menus, a cart's menu (**Edit…** chooses an empty cart's
-file). Settings shows its sections as a row of chips above the section.
+file). On a phone, Settings shows its sections as a row of chips above
+the section.
 
 ## Music
 

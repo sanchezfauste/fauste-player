@@ -133,9 +133,9 @@ view hides stops or changes playout):
   80 points that no widget took (a fader, a row) shows the next or
   previous pair. A phone on its side is shorter than a column, so the
   columns (and an open player) are laid out 560 points tall and scroll;
-  a swipe may start on that scroll area.
-- *Cartwall:* the cartwall filling the area. On a touch screen taller than
-  wide, a page with more columns than rows is laid out turned (columns
+  a swipe may start on that scroll area, and their faders only show the
+  level, as in the compact panels (turn the phone upright to adjust it).
+- *Cartwall:* the cartwall filling the area. On an upright phone, a page with more columns than rows is laid out turned (columns
   and rows swapped, carts in the same reading order).
 
 The open player survives rotation and closes when its player goes away
@@ -143,7 +143,7 @@ The open player survives rotation and closes when its player goes away
 tiles, which shrink to fit. A finger drag scrolls: in touch mode table
 rows and column headers do not drag (the row menu moves entries), and a
 compact panel's fader only shows the level (it is adjusted in the open
-player), so scrolling never moves a level on air. The cartwall screen
+player, upright), so scrolling never moves a level on air. The cartwall screen
 never folds. The status bar leaves out the desktop's shortcut hints
 (keys, double and right clicks), and in touch mode a Settings window
 narrower than 600 points shows its sections as a row of chips above the section instead of
@@ -178,7 +178,8 @@ after an empty one means the permission was just granted:
 `Native.setMediaFiles` then asks the services thread to analyse every
 unreadable track again (`ServiceRequest::RecheckUnreadable`), since
 tracks loaded before it failed and their files did not change, so the
-missing-file recheck would never look at them again. The browser lists only
+missing-file recheck would never look at them again. A list that came before the session
+started asks for it when the session starts. The browser lists only
 audio: pickers for anything else (a cover image, a playlist or a cart page
 to import) return nothing on Android for now. Folders
 start closed and are named without the part they all share; a file that

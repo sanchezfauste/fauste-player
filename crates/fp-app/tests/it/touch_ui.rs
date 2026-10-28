@@ -389,3 +389,44 @@ fn phone_settings_put_the_sections_above_the_content() {
     h.run_steps(3);
     assert!(h.query_by_label("Buffer size").is_none(), "another section");
 }
+
+/// The landscape columns scroll by finger, so their faders only show the
+/// level: a scroll that starts on one never changes a level on air.
+#[test]
+fn scrolling_the_landscape_columns_over_a_fader_leaves_the_volume() {
+    for open in [false, true] {
+        let (mut h, fake) = touch(2, LANDSCAPE);
+        if open {
+            h.get_by_label("Open P1").click();
+            h.run_steps(3);
+        }
+        fake.take_sent();
+        let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+        // Down: at 0 dB the fader is at its top, where up changes nothing.
+        drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
+        assert!(
+            !fake
+                .take_sent()
+                .iter()
+                .any(|c| matches!(c, fp_model::Command::SetVolume(..))),
+            "open {open}: a scroll moved the fader"
+        );
+    }
+}
+
+/// A touch tablet keeps the desktop's cartwall grid and Settings side list.
+#[test]
+fn a_touch_tablet_keeps_the_desktop_cartwall_and_settings() {
+    let (mut h, _fake) = touch(2, TABLET);
+    let one = h.get_by_label("Cart 1, empty").rect();
+    let three = h.get_by_label("Cart 3, empty").rect();
+    assert!((three.top() - one.top()).abs() < 1.0, "3 on the row of 1");
+    h.get_by_label("Settings").click();
+    h.run_steps(3);
+    let buffer = h.get_by_label("Buffer size").rect();
+    let meters = h.get_by_label("Meters").rect();
+    assert!(
+        meters.right() < buffer.left(),
+        "the side list is left of the body"
+    );
+}

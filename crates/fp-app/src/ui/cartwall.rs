@@ -412,10 +412,11 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
     let Some(page) = scene.state.cartwall.shown_page() else {
         return;
     };
-    // A touch screen taller than wide turns a page wider than tall (8 × 2
-    // by default) the other way round, in the same reading order: its
-    // columns would be too narrow to read or hit.
-    let turned = view_state.touch && available > ui.available_width() && page.cols > page.rows;
+    // An upright phone turns a page wider than tall (8 × 2 by default) the
+    // other way round, in the same reading order: its columns would be too
+    // narrow to read or hit.
+    let turned =
+        view_state.phone_active && available > ui.available_width() && page.cols > page.rows;
     let cols = usize::from(if turned { page.rows } else { page.cols }.max(1));
     let width =
         ((ui.available_width() - GAP * (cols as f32 - 1.0)) / cols as f32).max(MIN_BUTTON_WIDTH);

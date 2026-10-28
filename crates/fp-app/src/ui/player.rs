@@ -33,12 +33,15 @@ const ADD_TAB_WIDTH: f32 = 30.0;
 const NEW_PLAYLIST_POPUP_WIDTH: f32 = 220.0;
 const FOOTER_HEIGHT: f32 = 24.0;
 
+/// A player's desktop column. Without `fader` its fader only shows the
+/// level (a phone's scrolling columns, where a scroll must not move it).
 pub(crate) fn column(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     covers: &mut HashMap<TrackId, TextureHandle>,
     index: usize,
+    fader: bool,
 ) {
     let Some(player) = scene.state.players.get(index) else {
         return;
@@ -78,7 +81,7 @@ pub(crate) fn column(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, view_state, id, index, &pv);
-            top_block(ui, scene, covers, id, &pv, &telemetry, true);
+            top_block(ui, scene, covers, id, &pv, &telemetry, fader);
             wave(ui, scene, view_state, id, &pv);
             time_row(ui, scene, &pv);
         });

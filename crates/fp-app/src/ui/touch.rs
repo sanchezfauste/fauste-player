@@ -398,7 +398,7 @@ fn columns(
     rect: Rect,
 ) {
     if rect.height() >= MIN_COLUMN_HEIGHT {
-        columns_in(ui, scene, view_state, covers, shown, rect);
+        columns_in(ui, scene, view_state, covers, shown, rect, true);
         return;
     }
     let mut area_ui = ui.new_child(
@@ -407,12 +407,17 @@ fn columns(
             .layout(Layout::top_down(Align::Min)),
     );
     let output = egui::ScrollArea::vertical()
-        .id_salt("phone-columns")
+        // Each set of columns keeps its own offset.
+        .id_salt((
+            "phone-columns",
+            shown.iter().map(|(id, _)| id.0).collect::<Vec<_>>(),
+        ))
         .auto_shrink([false, false])
         .show(&mut area_ui, |ui| {
             let (tall, _) =
                 ui.allocate_exact_size(vec2(rect.width(), MIN_COLUMN_HEIGHT), egui::Sense::hover());
-            columns_in(ui, scene, view_state, covers, shown, tall);
+            // A finger scrolls here: the faders only show the level.
+            columns_in(ui, scene, view_state, covers, shown, tall, false);
         });
     // egui's id for a scroll area's drag.
     view_state.phone_swipe.columns_drag = Some(output.id.with("area"));
@@ -426,6 +431,7 @@ fn columns_in(
     covers: &mut HashMap<TrackId, TextureHandle>,
     shown: &[(PlayerId, usize)],
     rect: Rect,
+    fader: bool,
 ) {
     let count = shown.len().max(1) as f32;
     let width = (rect.width() - PANEL_GAP * (count - 1.0)) / count;
@@ -440,7 +446,7 @@ fn columns_in(
                 .layout(Layout::top_down(Align::Min)),
         );
         column_ui.set_clip_rect(column.intersect(ui.clip_rect()));
-        super::player::column(&mut column_ui, scene, view_state, covers, *index);
+        super::player::column(&mut column_ui, scene, view_state, covers, *index, fader);
     }
     ui.allocate_rect(rect, egui::Sense::hover());
 }
