@@ -1,5 +1,6 @@
-//! The touch layout (mobile spec §6): the form factor from the screen size
-//! and what a phone shows. A tablet keeps the desktop layout.
+//! The touch layout: the form factor from the screen size and what a phone
+//! shows (phone layout spec). A tablet keeps the desktop layout (mobile
+//! spec §6).
 
 use std::collections::HashMap;
 
@@ -32,89 +33,74 @@ pub fn form_factor(size: Vec2) -> FormFactor {
     }
 }
 
-/// The phone's screens, chosen in the top bar.
+/// The phone's screens, chosen in the top bar (PL1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PhoneScreen {
+    /// Every player's card and the cartwall.
     #[default]
-    Players,
-    Cartwall,
+    Live,
+    /// The cartwall alone.
+    Carts,
+    /// One player with its playlists.
+    Playlists,
 }
 
-/// What the phone shows: the screen, the player open on it (all players
-/// when none) and, in landscape, which pair of players.
+/// What the phone shows: the screen and the player the Playlists screen
+/// shows (the first when none).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PhoneView {
     pub screen: PhoneScreen,
-    pub open: Option<PlayerId>,
-    pub pair: usize,
+    pub playlists: Option<PlayerId>,
 }
 
 impl PhoneView {
-    /// Follows the players there are: an open player that went away closes,
-    /// and the pair stays within the players.
+    /// Follows the players there are: a chosen player that went away
+    /// leaves the choice to the first.
     pub fn settle(&mut self, players: &[PlayerId]) {
-        if self.open.is_some_and(|id| !players.contains(&id)) {
-            self.open = None;
+        if self.playlists.is_some_and(|id| !players.contains(&id)) {
+            self.playlists = None;
         }
-        self.pair = self.pair.min(Self::pairs(players.len()).saturating_sub(1));
     }
 
-    /// How many pairs `count` players make (the last may hold one).
-    pub fn pairs(count: usize) -> usize {
-        count.div_ceil(2)
+    /// The player the Playlists screen shows.
+    pub fn shown_player(&self, players: &[PlayerId]) -> Option<PlayerId> {
+        self.playlists
+            .filter(|id| players.contains(id))
+            .or_else(|| players.first().copied())
     }
 
-    /// The players of the shown pair.
-    pub fn pair_players(&self, players: &[PlayerId]) -> Vec<PlayerId> {
-        players
-            .iter()
-            .skip(self.pair * 2)
-            .take(2)
-            .copied()
-            .collect()
-    }
-
-    /// The next (`forward`) or the previous pair, if there is one.
-    pub fn swipe(&mut self, forward: bool, count: usize) {
-        let last = Self::pairs(count).saturating_sub(1);
-        self.pair = if forward {
-            (self.pair + 1).min(last)
-        } else {
-            self.pair.saturating_sub(1)
-        };
+    /// Back from another screen goes to Live (PL2); false on Live.
+    pub fn back(&mut self) -> bool {
+        let away = self.screen != PhoneScreen::Live;
+        self.screen = PhoneScreen::Live;
+        away
     }
 }
 
 /// How far a sideways drag must go to be a swipe, in points.
 const SWIPE_DISTANCE: f32 = 80.0;
 
-/// The pair a drag of `delta` asks for: the next one (`true`, a drag to
+/// The page a drag of `delta` asks for: the next one (`true`, a drag to
 /// the left), the previous one, or none when it is short or not sideways.
 pub fn swipe_direction(delta: Vec2) -> Option<bool> {
     (delta.x.abs() > SWIPE_DISTANCE && delta.x.abs() > 2.0 * delta.y.abs()).then_some(delta.x < 0.0)
-}
-
-/// A drag across the landscape view, followed until it is let go.
-#[derive(Debug, Default)]
-pub(crate) struct SwipeTracker {
-    origin: Option<egui::Pos2>,
-    /// A widget took the drag (a fader, a row): it is not a swipe.
-    blocked: bool,
-    /// The drag of the scrolling columns (`columns`), which a swipe may
-    /// start on.
-    columns_drag: Option<egui::Id>,
 }
 
 /// How far from a widget a finger still hits it: the desktop's tiles are
 /// smaller than a fingertip.
 const INTERACT_RADIUS: f32 = 12.0;
 /// The height a player column needs for its panel and a few playlist rows;
-/// a shorter area scrolls (`columns`).
+/// a shorter area scrolls (`column`).
 const MIN_COLUMN_HEIGHT: f32 = 560.0;
+/// The Live screen's share for the cards: of the height in portrait (less
+/// when the cards need less), of the width in landscape (PL5, PL6).
+const LIVE_CARDS_SHARE: f32 = 0.6;
 /// Scroll bars a finger can drag.
 const SCROLL_BAR_WIDTH: f32 = 12.0;
 /// The phone's top bar, tall enough for its screen tiles.
 pub(crate) const PHONE_TOP_BAR_HEIGHT: f32 = 56.0;
+/// Below this width of the top bar a phone leaves the clock out.
+pub(crate) const CLOCK_MIN_WIDTH: f32 = 400.0;
 /// The size of a target a finger uses (spec §6: 48 dp).
 pub(crate) const TARGET: f32 = 48.0;
 
@@ -126,20 +112,61 @@ pub(crate) fn apply_style(ctx: &egui::Context) {
     });
 }
 
-/// The phone's top bar, left part: Players | Cartwall, shrunk (their names
-/// cut short) to stop before `right`, where the clock and buttons begin.
+/// The phone's top bar, left part: Live | Carts | Playlists, shrunk (their
+/// names cut short) to stop before `right`, where the lock and More begin.
 pub(crate) fn screen_tiles(ui: &mut Ui, scene: &Scene<'_>, phone: &mut PhoneView, right: f32) {
     let t = scene.i18n;
     ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
-    let each = ((right - ui.cursor().left() - 4.0) / 2.0).max(TARGET);
+    let each = ((right - ui.cursor().left() - 8.0) / 3.0).max(TARGET);
     for (screen, key) in [
-        (PhoneScreen::Players, "touch-players"),
-        (PhoneScreen::Cartwall, "touch-cartwall"),
+        (PhoneScreen::Live, "touch-live"),
+        (PhoneScreen::Carts, "touch-carts"),
+        (PhoneScreen::Playlists, "touch-playlists"),
     ] {
         if chip_at_most(ui, &t.tr(key), phone.screen == screen, each) {
             phone.screen = screen;
         }
     }
+}
+
+/// The top bar's More tile (⋮) and its menu: Settings and About (PL1).
+pub(crate) fn more_menu(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+    let t = scene.i18n;
+    let style = TileStyle {
+        border: theme::NEUTRAL_800,
+        hover_fill: theme::NEUTRAL_800,
+        ..TileStyle::plain()
+    };
+    let response = widgets::tile(
+        ui,
+        vec2(TARGET, TARGET),
+        &t.tr("touch-more"),
+        true,
+        style,
+        |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                egui_phosphor::regular::DOTS_THREE_VERTICAL,
+                font(20.0),
+                c,
+            );
+        },
+    );
+    egui::Popup::menu(&response).show(|ui| {
+        ui.set_min_width(180.0);
+        for (key, open) in [
+            ("top-settings", &mut view_state.settings_open),
+            ("touch-about", &mut view_state.about_open),
+        ] {
+            let item = egui::Button::new(egui::RichText::new(t.tr(key)).font(font(15.0)))
+                .min_size(vec2(180.0, TARGET));
+            if ui.add(item).clicked() {
+                *open = true;
+                ui.close();
+            }
+        }
+    });
 }
 
 /// A tile that is lit while `on`; true when tapped.
@@ -200,119 +227,10 @@ pub(crate) fn phone_middle(
     let players = scene.state.player_ids();
     view_state.phone.settle(&players);
     view_state.player_rects.clear();
-    match (view_state.phone.screen, view_state.phone.open) {
-        (PhoneScreen::Cartwall, _) => {
-            super::cartwall::strip(ui, scene, view_state, true);
-        }
-        (PhoneScreen::Players, Some(open)) => {
-            one_player(ui, scene, view_state, covers, &players, open);
-        }
-        (PhoneScreen::Players, None) if landscape => {
-            pairs(ui, scene, view_state, covers, &players);
-        }
-        (PhoneScreen::Players, None) => {
-            all_players(ui, scene, view_state, covers, &players);
-        }
-    }
-}
-
-/// Landscape: two players side by side, under chips for the pairs and for
-/// opening a shown player; a swipe shows the next or previous pair.
-fn pairs(
-    ui: &mut Ui,
-    scene: &Scene<'_>,
-    view_state: &mut ViewState,
-    covers: &mut HashMap<TrackId, TextureHandle>,
-    players: &[PlayerId],
-) {
-    let area = ui.available_rect_before_wrap();
-    follow_swipe(ui, area, view_state, players.len());
-    let shown = view_state.phone.pair_players(players);
-    ui.horizontal(|ui| {
-        egui::ScrollArea::horizontal()
-            .id_salt("phone-pairs")
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
-                    for pair in 0..PhoneView::pairs(players.len()) {
-                        let first = pair * 2;
-                        let label = if first + 1 < players.len() {
-                            format!(
-                                "{}–{}",
-                                player_name(scene, first),
-                                player_name(scene, first + 1)
-                            )
-                        } else {
-                            player_name(scene, first)
-                        };
-                        if chip(ui, &label, pair == view_state.phone.pair) {
-                            view_state.phone.pair = pair;
-                        }
-                    }
-                    ui.add_space(12.0);
-                    for id in &shown {
-                        let Ok(index) = scene.state.player_index(*id) else {
-                            continue;
-                        };
-                        let label = scene.i18n.tr_args(
-                            "touch-open-player",
-                            &[("player", player_name(scene, index).into())],
-                        );
-                        if chip(ui, &label, false) {
-                            view_state.phone.open = Some(*id);
-                        }
-                    }
-                });
-            });
-    });
-    ui.add_space(PANEL_GAP);
-    let shown: Vec<(PlayerId, usize)> = shown
-        .iter()
-        .filter_map(|id| scene.state.player_index(*id).ok().map(|i| (*id, i)))
-        .collect();
-    let rect = ui.available_rect_before_wrap();
-    columns(ui, scene, view_state, covers, &shown, rect);
-}
-
-/// Turns a sideways drag that no widget took into a change of pair. It
-/// counts only when it starts in `area` on this view's layer (not in a
-/// window over it, nor in the top bar).
-fn follow_swipe(ui: &Ui, area: Rect, view_state: &mut ViewState, count: usize) {
-    let ctx = ui.ctx();
-    let (pressed, released, position) = ctx.input(|i| {
-        (
-            i.pointer.primary_pressed(),
-            i.pointer.primary_released(),
-            i.pointer.interact_pos(),
-        )
-    });
-    let tracker = &mut view_state.phone_swipe;
-    if pressed {
-        let here =
-            position.filter(|p| area.contains(*p) && ctx.layer_id_at(*p) == Some(ui.layer_id()));
-        tracker.origin = here;
-        tracker.blocked = false;
-    }
-    // A widget's drag that started and stopped between two frames shows
-    // only in `drag_stopped_id`.
-    if ctx
-        .dragged_id()
-        .or(ctx.drag_stopped_id())
-        .is_some_and(|id| Some(id) != tracker.columns_drag)
-    {
-        tracker.blocked = true;
-    }
-    if released {
-        let swipe = tracker
-            .origin
-            .zip(position)
-            .filter(|_| !tracker.blocked)
-            .and_then(|(from, to)| swipe_direction(to - from));
-        tracker.origin = None;
-        tracker.blocked = false;
-        if let Some(forward) = swipe {
-            view_state.phone.swipe(forward, count);
-        }
+    match view_state.phone.screen {
+        PhoneScreen::Live => live(ui, scene, view_state, covers, &players, landscape),
+        PhoneScreen::Carts => super::cartwall::strip(ui, scene, view_state, true),
+        PhoneScreen::Playlists => playlists(ui, scene, view_state, covers, &players),
     }
 }
 
@@ -322,83 +240,117 @@ fn player_name(scene: &Scene<'_>, index: usize) -> String {
         .tr_args("player-label", &[("n", (index + 1).into())])
 }
 
-/// Every player as a compact panel, one under another, each with a tile
-/// that opens it.
-fn all_players(
+/// Every player's card and the cartwall (PL5, PL6): in portrait the cards
+/// on top, scrolling on their own, and the cartwall below; in landscape the
+/// cards on the left and the cartwall on the right.
+fn live(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     covers: &mut HashMap<TrackId, TextureHandle>,
     players: &[PlayerId],
+    landscape: bool,
 ) {
-    egui::ScrollArea::vertical()
-        .id_salt("phone-players")
+    let area = ui.available_rect_before_wrap();
+    let used_id = ui.scope_id().with("live-cards-height");
+    let (cards, carts) = if landscape {
+        let width = area.width() * LIVE_CARDS_SHARE;
+        (
+            Rect::from_min_size(area.min, vec2(width, area.height())),
+            Rect::from_min_max(
+                egui::pos2(area.left() + width + PANEL_GAP, area.top()),
+                area.max,
+            ),
+        )
+    } else {
+        // As tall as the cards were in the last frame, up to the share.
+        let used = ui
+            .data(|d| d.get_temp::<f32>(used_id))
+            .unwrap_or(f32::INFINITY);
+        let height = (area.height() * LIVE_CARDS_SHARE).min(used);
+        (
+            Rect::from_min_size(area.min, vec2(area.width(), height)),
+            Rect::from_min_max(
+                egui::pos2(area.left(), area.top() + height + PANEL_GAP),
+                area.max,
+            ),
+        )
+    };
+    let mut cards_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(cards)
+            .layout(Layout::top_down(Align::Min)),
+    );
+    let output = egui::ScrollArea::vertical()
+        .id_salt("live-cards")
         .auto_shrink([false, false])
-        .show(ui, |ui| {
+        .show(&mut cards_ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, PANEL_GAP);
             for (index, id) in players.iter().enumerate() {
-                ui.push_id(("phone-player", id.0), |ui| {
-                    super::player::compact(ui, scene, view_state, covers, index);
-                    let name = player_name(scene, index);
-                    let label = scene
-                        .i18n
-                        .tr_args("touch-open-player", &[("player", name.into())]);
-                    if chip(ui, &label, false) {
-                        view_state.phone.open = Some(*id);
-                    }
+                ui.push_id(("live-card", id.0), |ui| {
+                    super::player::card(ui, scene, view_state, covers, index);
                 });
             }
         });
+    ui.data_mut(|d| d.insert_temp(used_id, output.content_size.y));
+    let mut carts_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(carts)
+            .layout(Layout::top_down(Align::Min)),
+    );
+    carts_ui.set_clip_rect(carts.intersect(ui.clip_rect()));
+    super::cartwall::strip(&mut carts_ui, scene, view_state, true);
+    ui.allocate_rect(area, egui::Sense::hover());
 }
 
-/// One player with its playlist, under a row of chips: All, then a chip per
-/// player.
-fn one_player(
+/// One player with its playlist, under a chip per player (until the
+/// Playlists screen of phone plan 3).
+fn playlists(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     covers: &mut HashMap<TrackId, TextureHandle>,
     players: &[PlayerId],
-    open: PlayerId,
 ) {
+    let Some(shown) = view_state.phone.shown_player(players) else {
+        return;
+    };
     ui.horizontal(|ui| {
         egui::ScrollArea::horizontal()
             .id_salt("phone-chips")
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
-                    if chip(ui, &scene.i18n.tr("touch-all-players"), false) {
-                        view_state.phone.open = None;
-                    }
                     for (index, id) in players.iter().enumerate() {
-                        if chip(ui, &player_name(scene, index), *id == open) {
-                            view_state.phone.open = Some(*id);
+                        if chip(ui, &player_name(scene, index), *id == shown) {
+                            view_state.phone.playlists = Some(*id);
                         }
                     }
                 });
             });
     });
     ui.add_space(PANEL_GAP);
-    let Ok(index) = scene.state.player_index(open) else {
+    let Ok(index) = scene.state.player_index(shown) else {
         return;
     };
     let rect = ui.available_rect_before_wrap();
-    columns(ui, scene, view_state, covers, &[(open, index)], rect);
+    column(ui, scene, view_state, covers, shown, index, rect);
 }
 
-/// Desktop player columns side by side in `rect`. A phone in landscape is
-/// shorter than a column: the columns are then `MIN_COLUMN_HEIGHT` tall and
-/// scroll, so the playlist and its footer can be reached.
-fn columns(
+/// The desktop player column in `rect`. A phone in landscape is shorter
+/// than a column: it is then `MIN_COLUMN_HEIGHT` tall and scrolls, so the
+/// playlist and its footer can be reached.
+fn column(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     covers: &mut HashMap<TrackId, TextureHandle>,
-    shown: &[(PlayerId, usize)],
+    id: PlayerId,
+    index: usize,
     rect: Rect,
 ) {
     if rect.height() >= MIN_COLUMN_HEIGHT {
-        columns_in(ui, scene, view_state, covers, shown, rect, true);
+        column_in(ui, scene, view_state, covers, id, index, rect);
         return;
     }
     let mut area_ui = ui.new_child(
@@ -406,48 +358,37 @@ fn columns(
             .max_rect(rect)
             .layout(Layout::top_down(Align::Min)),
     );
-    let output = egui::ScrollArea::vertical()
-        // Each set of columns keeps its own offset.
-        .id_salt((
-            "phone-columns",
-            shown.iter().map(|(id, _)| id.0).collect::<Vec<_>>(),
-        ))
+    egui::ScrollArea::vertical()
+        // Each player keeps its own offset.
+        .id_salt(("phone-column", id.0))
         .auto_shrink([false, false])
         .show(&mut area_ui, |ui| {
             let (tall, _) =
                 ui.allocate_exact_size(vec2(rect.width(), MIN_COLUMN_HEIGHT), egui::Sense::hover());
-            // A drag that starts on a fader moves it (PL14); one that
-            // starts elsewhere scrolls.
-            columns_in(ui, scene, view_state, covers, shown, tall, true);
+            column_in(ui, scene, view_state, covers, id, index, tall);
         });
-    // egui's id for a scroll area's drag.
-    view_state.phone_swipe.columns_drag = Some(output.id.with("area"));
     ui.allocate_rect(rect, egui::Sense::hover());
 }
 
-fn columns_in(
+fn column_in(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     covers: &mut HashMap<TrackId, TextureHandle>,
-    shown: &[(PlayerId, usize)],
+    id: PlayerId,
+    index: usize,
     rect: Rect,
-    fader: bool,
 ) {
-    let count = shown.len().max(1) as f32;
-    let width = (rect.width() - PANEL_GAP * (count - 1.0)) / count;
-    for (k, (id, index)) in shown.iter().enumerate() {
-        let left = rect.left() + k as f32 * (width + PANEL_GAP);
-        let column = Rect::from_min_size(egui::pos2(left, rect.top()), vec2(width, rect.height()));
-        view_state.player_rects.push((*id, column));
-        let mut column_ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(column)
-                .id_salt(("player", id.0))
-                .layout(Layout::top_down(Align::Min)),
-        );
-        column_ui.set_clip_rect(column.intersect(ui.clip_rect()));
-        super::player::column(&mut column_ui, scene, view_state, covers, *index, fader);
-    }
+    view_state.player_rects.push((id, rect));
+    let mut column_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect)
+            .id_salt(("player", id.0))
+            .layout(Layout::top_down(Align::Min)),
+    );
+    column_ui.set_clip_rect(rect.intersect(ui.clip_rect()));
+    // A drag that starts on the fader moves it (PL14); one that starts
+    // elsewhere scrolls.
+    super::player::column(&mut column_ui, scene, view_state, covers, index, true);
     ui.allocate_rect(rect, egui::Sense::hover());
 }

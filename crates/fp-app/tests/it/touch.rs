@@ -1,4 +1,4 @@
-//! Form factors and the phone's view state (mobile spec §6).
+//! Form factors and the phone's view state (phone layout spec PL1).
 
 use egui::vec2;
 use fp_app::ui::touch::{FormFactor, PhoneScreen, PhoneView, form_factor};
@@ -31,62 +31,42 @@ fn a_large_screen_is_a_tablet() {
 }
 
 #[test]
-fn a_removed_open_player_falls_back_to_all() {
+fn live_is_the_first_screen() {
+    assert_eq!(PhoneView::default().screen, PhoneScreen::Live);
+}
+
+#[test]
+fn a_removed_playlists_player_falls_back_to_the_first() {
     let mut view = PhoneView {
-        open: Some(PlayerId(3)),
+        screen: PhoneScreen::Playlists,
+        playlists: Some(PlayerId(3)),
+    };
+    view.settle(&ids(2));
+    assert_eq!(view.playlists, None);
+    assert_eq!(view.shown_player(&ids(2)), Some(PlayerId(0)));
+    assert_eq!(view.screen, PhoneScreen::Playlists);
+}
+
+#[test]
+fn a_playlists_player_that_exists_stays() {
+    let mut view = PhoneView {
+        playlists: Some(PlayerId(1)),
         ..PhoneView::default()
     };
     view.settle(&ids(2));
-    assert_eq!(view.open, None);
-    assert_eq!(view.screen, PhoneScreen::Players);
+    assert_eq!(view.shown_player(&ids(2)), Some(PlayerId(1)));
+    assert_eq!(view.shown_player(&[]), None);
 }
 
 #[test]
-fn an_open_player_that_exists_stays_open() {
+fn back_goes_to_live_once() {
     let mut view = PhoneView {
-        open: Some(PlayerId(1)),
+        screen: PhoneScreen::Carts,
         ..PhoneView::default()
     };
-    view.settle(&ids(2));
-    assert_eq!(view.open, Some(PlayerId(1)));
-}
-
-#[test]
-fn pairs_cover_odd_counts() {
-    assert_eq!(PhoneView::pairs(0), 0);
-    assert_eq!(PhoneView::pairs(1), 1);
-    assert_eq!(PhoneView::pairs(3), 2);
-    assert_eq!(PhoneView::pairs(4), 2);
-    let view = PhoneView {
-        pair: 1,
-        ..PhoneView::default()
-    };
-    assert_eq!(view.pair_players(&ids(3)), vec![PlayerId(2)]);
-}
-
-#[test]
-fn the_pair_never_points_past_the_last_player() {
-    let mut view = PhoneView {
-        pair: 5,
-        ..PhoneView::default()
-    };
-    view.settle(&ids(3));
-    assert_eq!(view.pair, 1);
-    view.settle(&[]);
-    assert_eq!(view.pair, 0);
-    assert!(view.pair_players(&[]).is_empty());
-}
-
-#[test]
-fn swiping_stops_at_both_ends() {
-    let mut view = PhoneView::default();
-    view.swipe(false, 4);
-    assert_eq!(view.pair, 0);
-    view.swipe(true, 4);
-    assert_eq!(view.pair, 1);
-    view.swipe(true, 4);
-    assert_eq!(view.pair, 1);
-    assert_eq!(view.pair_players(&ids(4)), vec![PlayerId(2), PlayerId(3)]);
+    assert!(view.back());
+    assert_eq!(view.screen, PhoneScreen::Live);
+    assert!(!view.back());
 }
 
 #[test]

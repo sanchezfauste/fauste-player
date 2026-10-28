@@ -4,7 +4,8 @@
     clippy::panic,
     clippy::indexing_slicing
 )]
-//! The touch layout on a phone and a tablet (mobile spec §6).
+//! The touch layout on a phone (phone layout spec) and a tablet (mobile
+//! spec §6).
 
 use crate::support;
 
@@ -23,105 +24,6 @@ fn touch(players: usize, size: Vec2) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let (mut h, fake) = harness_sized(state(players, 3), size, |ui| ui.with_touch());
     h.run_steps(3);
     (h, fake)
-}
-
-#[test]
-fn the_phone_top_bar_has_the_screen_tiles() {
-    let (h, _fake) = touch(2, PORTRAIT);
-    assert!(h.query_by_label("Players").is_some());
-    assert!(h.query_by_label("Cartwall").is_some());
-    assert!(h.query_by_label("Hide P1").is_none());
-    assert!(h.query_by_label("Settings").is_some());
-}
-
-#[test]
-fn a_tablet_keeps_the_panel_tiles() {
-    let (h, _fake) = touch(2, TABLET);
-    assert!(h.query_by_label("Hide P1").is_some());
-    assert!(h.query_by_label("Players").is_none());
-}
-
-#[test]
-fn without_touch_nothing_changes() {
-    let (mut h, _fake) = harness_sized(state(2, 3), PORTRAIT, |ui| ui);
-    h.run_steps(3);
-    assert!(h.query_by_label("Hide P1").is_some());
-    assert!(h.query_by_label("Players").is_none());
-}
-
-#[test]
-fn landscape_is_a_phone_too() {
-    let (h, _fake) = touch(2, LANDSCAPE);
-    assert!(h.query_by_label("Players").is_some());
-}
-
-const ADD: &str = "Add tracks to this playlist";
-
-#[test]
-fn all_players_show_as_compact_panels() {
-    let (h, _fake) = touch(2, PORTRAIT);
-    assert!(h.query_by_label("Open P1").is_some());
-    assert!(h.query_by_label("Open P2").is_some());
-    assert_eq!(h.query_all_by_label("Play").count(), 2);
-    assert!(
-        h.query_by_label(ADD).is_none(),
-        "no playlist in a compact panel"
-    );
-}
-
-#[test]
-fn open_shows_one_player_with_its_playlist() {
-    let (mut h, _fake) = touch(2, PORTRAIT);
-    h.get_by_label("Open P2").click();
-    h.run_steps(3);
-    assert_eq!(h.query_all_by_label(ADD).count(), 1);
-    assert_eq!(h.query_all_by_label("Play").count(), 1);
-    assert!(h.query_by_label("Open P1").is_none());
-    assert!(h.query_by_label("All").is_some());
-}
-
-#[test]
-fn chips_switch_the_open_player_and_all_goes_back() {
-    let (mut h, _fake) = touch(2, PORTRAIT);
-    h.get_by_label("Open P1").click();
-    h.run_steps(3);
-    h.get_by_label("P2").click();
-    h.run_steps(3);
-    assert_eq!(h.query_all_by_label(ADD).count(), 1);
-    h.get_by_label("All").click();
-    h.run_steps(3);
-    assert!(h.query_by_label("Open P1").is_some());
-    assert!(h.query_by_label(ADD).is_none());
-}
-
-#[test]
-fn play_in_a_compact_panel_sends_play() {
-    let (mut h, fake) = touch(1, PORTRAIT);
-    fake.take_sent();
-    h.get_by_label("Play").click();
-    h.run_steps(2);
-    assert!(
-        fake.take_sent()
-            .iter()
-            .any(|c| matches!(c, fp_model::Command::Play(_))),
-        "no play command"
-    );
-}
-
-#[test]
-fn landscape_shows_two_players_side_by_side() {
-    let (h, _fake) = touch(3, LANDSCAPE);
-    assert_eq!(h.query_all_by_label(ADD).count(), 2);
-    assert!(h.query_by_label("P1–P2").is_some());
-    assert!(h.query_by_label("P3").is_some());
-}
-
-#[test]
-fn a_pair_chip_shows_that_pair() {
-    let (mut h, _fake) = touch(3, LANDSCAPE);
-    h.get_by_label("P3").click();
-    h.run_steps(3);
-    assert_eq!(h.query_all_by_label(ADD).count(), 1);
 }
 
 /// A finger drag. The touch event makes egui see a touch screen, as on a
@@ -157,112 +59,19 @@ fn drag(h: &mut Harness<'static, AppUi>, from: egui::Pos2, to: egui::Pos2) {
     h.run_steps(3);
 }
 
-#[test]
-fn a_swipe_shows_the_next_pair_and_back() {
-    let (mut h, _fake) = touch(3, LANDSCAPE);
-    // On the chip row, right of the chips: no widget takes the drag.
-    let row = h.get_by_label("P3").rect();
-    let from = egui::pos2(row.right() + 400.0, row.center().y);
-    drag(&mut h, from, from - vec2(200.0, 0.0));
-    assert_eq!(h.query_all_by_label(ADD).count(), 1, "the pair with P3");
-    drag(&mut h, from - vec2(200.0, 0.0), from);
-    assert_eq!(h.query_all_by_label(ADD).count(), 2);
+const ADD: &str = "Add tracks to this playlist";
+
+/// Opens the top bar's More menu and picks `entry` (Settings, About).
+fn more(h: &mut Harness<'static, AppUi>, entry: &str) {
+    h.get_by_label("More").click();
+    h.run_steps(2);
+    h.get_by_label(entry).click();
+    h.run_steps(3);
 }
 
-/// A phone in landscape is shorter than a player column: the columns
-/// scroll, so the playlist and its footer can be reached.
-#[test]
-fn landscape_columns_scroll_down_to_the_playlist() {
-    let (mut h, _fake) = touch(2, LANDSCAPE);
-    let below = |h: &Harness<'static, AppUi>| {
-        h.query_all_by_label(ADD)
-            .all(|n| n.rect().bottom() > LANDSCAPE.y)
-    };
-    assert!(below(&h), "the footers start below the screen");
-    let play = h.query_all_by_label("Play").next().unwrap().rect().center();
-    drag(&mut h, play, play - vec2(0.0, 300.0));
-    assert!(!below(&h), "a footer scrolled into view");
-    assert_eq!(h.query_all_by_label(ADD).count(), 2, "still the same pair");
-}
-
-/// A sideways swipe over the scrolling columns still changes the pair.
-#[test]
-fn a_swipe_over_the_columns_shows_the_next_pair() {
-    let (mut h, _fake) = touch(3, LANDSCAPE);
-    let play = h.query_all_by_label("Play").next().unwrap().rect().center();
-    drag(&mut h, play, play - vec2(200.0, 0.0));
-    assert_eq!(h.query_all_by_label(ADD).count(), 1, "the pair with P3");
-}
-
-#[test]
-fn an_open_player_in_landscape_scrolls_down_to_its_playlist() {
-    let (mut h, _fake) = touch(2, LANDSCAPE);
-    h.get_by_label("Open P1").click();
+fn tab(h: &mut Harness<'static, AppUi>, name: &str) {
+    h.get_by_label(name).click();
     h.run_steps(3);
-    assert!(h.get_by_label(ADD).rect().bottom() > LANDSCAPE.y);
-    let play = h.get_by_label("Play").rect().center();
-    drag(&mut h, play, play - vec2(0.0, 300.0));
-    assert!(h.get_by_label(ADD).rect().bottom() <= LANDSCAPE.y);
-}
-
-#[test]
-fn landscape_opens_a_player_as_in_portrait() {
-    let (mut h, _fake) = touch(3, LANDSCAPE);
-    h.get_by_label("Open P2").click();
-    h.run_steps(3);
-    assert_eq!(h.query_all_by_label(ADD).count(), 1);
-    assert!(h.query_by_label("All").is_some());
-}
-
-#[test]
-fn the_cartwall_screen_shows_the_carts() {
-    let (mut h, _fake) = touch(2, PORTRAIT);
-    h.get_by_label("Cartwall").click();
-    h.run_steps(3);
-    assert!(h.query_by_label("Open P1").is_none());
-    assert!(h.query_by_label_contains("Stop all").is_some());
-    h.get_by_label("Players").click();
-    h.run_steps(3);
-    assert!(h.query_by_label("Open P1").is_some());
-}
-
-#[test]
-fn rotation_keeps_the_open_player() {
-    let (mut h, _fake) = touch(3, PORTRAIT);
-    h.get_by_label("Open P2").click();
-    h.run_steps(3);
-    assert_eq!(h.query_all_by_label(ADD).count(), 1, "open in portrait");
-    h.set_size(LANDSCAPE);
-    h.run_steps(3);
-    assert_eq!(h.query_all_by_label(ADD).count(), 1);
-    assert!(h.query_by_label("All").is_some());
-}
-
-#[test]
-fn a_removed_open_player_shows_all_players() {
-    let (mut h, fake) = touch(2, PORTRAIT);
-    h.get_by_label("Open P2").click();
-    h.run_steps(3);
-    let mut fewer = (**fake.state.load()).clone();
-    fewer.players.truncate(1);
-    fake.state.store(std::sync::Arc::new(fewer));
-    h.run_steps(3);
-    assert!(h.query_by_label("Open P1").is_some());
-    assert!(h.query_by_label(ADD).is_none());
-}
-
-#[test]
-fn a_phone_has_no_desktop_panel_buttons() {
-    let (mut h, _fake) = touch(2, PORTRAIT);
-    assert!(h.query_by_label("Maximize").is_none());
-    h.get_by_label("Open P1").click();
-    h.run_steps(3);
-    assert!(h.query_by_label("Maximize").is_none());
-    h.get_by_label("Cartwall").click();
-    h.run_steps(3);
-    assert!(h.query_by_label("Maximize").is_none());
-    let (h, _fake) = touch(2, TABLET);
-    assert!(h.query_all_by_label("Maximize").count() > 0);
 }
 
 fn volume_sent(fake: &Fake) -> bool {
@@ -271,57 +80,190 @@ fn volume_sent(fake: &Fake) -> bool {
         .any(|c| matches!(c, fp_model::Command::SetVolume(..)))
 }
 
-/// PL14: a drag that starts on a fader moves it.
-#[test]
-fn a_drag_on_a_compact_fader_moves_it() {
-    let (mut h, fake) = touch(3, PORTRAIT);
-    fake.take_sent();
-    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
-    // Down: at 0 dB the fader is at its top, where up changes nothing.
-    drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
-    assert!(volume_sent(&fake), "the fader did not move");
-}
+// --- Navigation (PL1, PL3) ---
 
-/// PL14: a drag that starts beside the faders scrolls and moves no level.
 #[test]
-fn a_scroll_beside_the_compact_faders_leaves_the_volume() {
-    let (mut h, fake) = touch(3, PORTRAIT);
-    fake.take_sent();
-    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
-    let from = egui::pos2(40.0, fader.center().y);
-    drag(&mut h, from, from + vec2(0.0, -200.0));
-    assert!(!volume_sent(&fake), "a scroll moved a fader");
+fn the_phone_top_bar_has_the_tabs_and_more() {
+    let (h, _fake) = touch(2, PORTRAIT);
+    for label in ["Live", "Carts", "Playlists", "More"] {
+        assert!(h.query_by_label(label).is_some(), "{label}");
+    }
+    for gone in ["Hide P1", "Open P1", "All", "Players"] {
+        assert!(h.query_by_label(gone).is_none(), "{gone}");
+    }
 }
 
 #[test]
-fn a_finger_drag_on_the_playlist_moves_no_row() {
-    let (mut h, fake) = touch(1, PORTRAIT);
-    h.get_by_label("Open P1").click();
+fn more_opens_settings_and_about() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    assert!(h.query_by_label("Buffer size").is_some());
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "About");
+    assert!(h.query_by_label_contains("Fauste Player by").is_some());
+}
+
+#[test]
+fn a_tablet_keeps_the_panel_tiles() {
+    let (h, _fake) = touch(2, TABLET);
+    assert!(h.query_by_label("Hide P1").is_some());
+    assert!(h.query_by_label("Live").is_none());
+}
+
+#[test]
+fn without_touch_nothing_changes() {
+    let (mut h, _fake) = harness_sized(state(2, 3), PORTRAIT, |ui| ui);
     h.run_steps(3);
-    fake.take_sent();
-    let from = h.get_all_by_label("Song 3").last().unwrap().rect().center();
-    let to = h.get_all_by_label("Song 1").last().unwrap().rect().center();
-    drag(&mut h, from, to);
-    assert!(
-        !fake
-            .take_sent()
-            .iter()
-            .any(|c| matches!(c, fp_model::Command::MoveEntry { .. })),
-        "a scroll moved a row"
-    );
+    assert!(h.query_by_label("Hide P1").is_some());
+    assert!(h.query_by_label("Live").is_none());
+}
+
+#[test]
+fn landscape_is_a_phone_too() {
+    let (h, _fake) = touch(2, LANDSCAPE);
+    assert!(h.query_by_label("Live").is_some());
 }
 
 #[test]
 fn the_top_bar_fits_a_narrow_phone() {
     let (h, _fake) = touch(2, vec2(360.0, 780.0));
-    let cartwall = h.get_by_label("Cartwall").rect();
-    for label in ["Settings", "About"] {
-        let other = h.get_by_label_contains(label).rect();
+    let tiles: Vec<egui::Rect> = ["Live", "Carts", "Playlists", "More"]
+        .iter()
+        .map(|l| h.get_by_label(l).rect())
+        .collect();
+    for (i, a) in tiles.iter().enumerate() {
+        assert!(a.right() <= 360.0, "{a:?} leaves the screen");
+        for b in tiles.iter().skip(i + 1) {
+            assert!(!a.intersects(*b), "{a:?} overlaps {b:?}");
+        }
+    }
+}
+
+#[test]
+fn playlists_shows_the_chosen_player_with_its_playlist() {
+    let (mut h, _fake) = touch(3, PORTRAIT);
+    tab(&mut h, "Playlists");
+    assert_eq!(h.query_all_by_label(ADD).count(), 1, "the first player");
+    tab(&mut h, "P3");
+    assert_eq!(h.query_all_by_label(ADD).count(), 1);
+    assert!(h.query_by_label("P1").is_some(), "the chips stay");
+}
+
+#[test]
+fn rotation_keeps_the_screen() {
+    let (mut h, _fake) = touch(3, PORTRAIT);
+    tab(&mut h, "Playlists");
+    h.set_size(LANDSCAPE);
+    h.run_steps(3);
+    assert_eq!(h.query_all_by_label(ADD).count(), 1);
+}
+
+#[test]
+fn a_removed_player_leaves_the_playlists_chips() {
+    let (mut h, fake) = touch(2, PORTRAIT);
+    tab(&mut h, "Playlists");
+    tab(&mut h, "P2");
+    let mut fewer = (**fake.state.load()).clone();
+    fewer.players.truncate(1);
+    fake.state.store(std::sync::Arc::new(fewer));
+    h.run_steps(3);
+    assert!(h.query_by_label("P2").is_none());
+    assert_eq!(h.query_all_by_label(ADD).count(), 1, "P1 shows");
+}
+
+#[test]
+fn a_phone_has_no_desktop_panel_buttons() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    for screen in ["Live", "Carts", "Playlists"] {
+        tab(&mut h, screen);
+        assert!(h.query_by_label("Maximize").is_none(), "{screen}");
+    }
+    let (h, _fake) = touch(2, TABLET);
+    assert!(h.query_all_by_label("Maximize").count() > 0);
+}
+
+// --- Live (PL4–PL6) ---
+
+#[test]
+fn live_shows_every_player_card_and_the_cartwall() {
+    for size in [PORTRAIT, LANDSCAPE] {
+        let (h, _fake) = touch(2, size);
+        assert_eq!(h.query_all_by_label("Play").count(), 2, "{size:?}");
+        assert!(h.query_by_label(ADD).is_none(), "no playlist on Live");
         assert!(
-            !cartwall.intersects(other),
-            "{label} overlaps the screen tiles"
+            h.query_all_by_label_contains(", empty").count() > 0,
+            "{size:?}: the carts show"
         );
     }
+}
+
+#[test]
+fn live_puts_the_cartwall_below_in_portrait_and_right_in_landscape() {
+    let (h, _fake) = touch(2, PORTRAIT);
+    let play = h.query_all_by_label("Play").next().unwrap().rect();
+    let cart = h.get_by_label("Cart 1, empty").rect();
+    assert!(cart.top() > play.bottom(), "portrait: below");
+    let (h, _fake) = touch(2, LANDSCAPE);
+    let play = h.query_all_by_label("Play").next().unwrap().rect();
+    let cart = h.get_by_label("Cart 1, empty").rect();
+    assert!(cart.left() > play.right(), "landscape: right");
+}
+
+#[test]
+fn a_card_has_the_waveform_above_its_buttons() {
+    let (h, _fake) = touch(1, PORTRAIT);
+    let wave = h.get_by_label("Waveform: click to seek").rect();
+    let play = h.get_by_label("Play").rect();
+    assert!(wave.bottom() <= play.top(), "{wave:?} above {play:?}");
+}
+
+#[test]
+fn play_on_a_card_sends_play() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    fake.take_sent();
+    h.get_by_label("Play").click();
+    h.run_steps(2);
+    assert!(
+        fake.take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::Play(_))),
+        "no play command"
+    );
+}
+
+/// PL14: a drag that starts on a card's fader moves it.
+#[test]
+fn a_drag_on_a_card_fader_moves_it() {
+    for size in [PORTRAIT, LANDSCAPE] {
+        let (mut h, fake) = touch(3, size);
+        fake.take_sent();
+        let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+        // Down: at 0 dB the fader is at its top, where up changes nothing.
+        drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
+        assert!(volume_sent(&fake), "{size:?}: the fader did not move");
+    }
+}
+
+/// A scroll of the cards that starts on a title moves nothing.
+#[test]
+fn a_scroll_of_the_cards_sends_nothing() {
+    let (mut h, fake) = touch(4, PORTRAIT);
+    fake.take_sent();
+    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+    let from = egui::pos2(120.0, fader.center().y);
+    drag(&mut h, from, from + vec2(0.0, -200.0));
+    let sent = fake.take_sent();
+    assert!(sent.is_empty(), "a scroll sent {sent:?}");
+}
+
+// --- Carts (PL7) ---
+
+#[test]
+fn the_carts_screen_shows_the_carts() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    tab(&mut h, "Carts");
+    assert!(h.query_all_by_label("Play").count() == 0, "no players");
+    assert!(h.query_by_label_contains("Stop all").is_some());
 }
 
 #[test]
@@ -330,26 +272,12 @@ fn the_phone_cartwall_never_folds() {
     closed.cartwall.open = false;
     let (mut h, _fake) = harness_sized(closed, PORTRAIT, |ui| ui.with_touch());
     h.run_steps(3);
-    h.get_by_label("Cartwall").click();
-    h.run_steps(3);
+    tab(&mut h, "Carts");
     assert!(
         h.query_all_by_label_contains("empty").count() > 0,
         "the carts show"
     );
     assert!(h.query_by_label("CARTWALL").is_none(), "no folding caret");
-}
-
-/// The status bar's shortcut hints name keys, double clicks and right
-/// clicks: a touch screen leaves them out.
-#[test]
-fn touch_mode_shows_no_keyboard_and_mouse_hints() {
-    for size in [PORTRAIT, TABLET] {
-        let (h, _fake) = touch(2, size);
-        assert!(h.query_by_label_contains("Keys 1–9").is_none(), "{size:?}");
-    }
-    let (mut h, _fake) = harness_sized(state(2, 3), TABLET, |ui| ui);
-    h.run_steps(3);
-    assert!(h.query_by_label_contains("Keys 1–9").is_some());
 }
 
 /// A page wider than tall (8 × 2 by default) is laid out the other way
@@ -358,8 +286,7 @@ fn touch_mode_shows_no_keyboard_and_mouse_hints() {
 #[test]
 fn a_portrait_cartwall_turns_a_wide_page() {
     let (mut h, _fake) = touch(2, PORTRAIT);
-    h.get_by_label("Cartwall").click();
-    h.run_steps(3);
+    tab(&mut h, "Carts");
     let carts: Vec<egui::Rect> = h
         .query_all_by_label_contains(", empty")
         .map(|n| n.rect())
@@ -380,11 +307,61 @@ fn a_portrait_cartwall_turns_a_wide_page() {
 #[test]
 fn a_landscape_cartwall_keeps_the_page() {
     let (mut h, _fake) = touch(2, LANDSCAPE);
-    h.get_by_label("Cartwall").click();
-    h.run_steps(3);
+    tab(&mut h, "Carts");
     let one = h.get_by_label("Cart 1, empty").rect();
     let three = h.get_by_label("Cart 3, empty").rect();
     assert!((three.top() - one.top()).abs() < 1.0, "3 on the row of 1");
+}
+
+// --- Playlists (interim) and the rest ---
+
+#[test]
+fn a_finger_drag_on_the_playlist_moves_no_row() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    let from = h.get_all_by_label("Song 3").last().unwrap().rect().center();
+    let to = h.get_all_by_label("Song 1").last().unwrap().rect().center();
+    drag(&mut h, from, to);
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::MoveEntry { .. })),
+        "a scroll moved a row"
+    );
+}
+
+/// PL14: on the Playlists screen too, a drag that starts on the fader moves
+/// it, and a scroll beside it does not.
+#[test]
+fn the_playlists_fader_moves_by_touch_and_not_by_a_scroll() {
+    let (mut h, fake) = touch(2, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+    let from = egui::pos2(60.0, fader.center().y);
+    drag(&mut h, from, from + vec2(0.0, -150.0));
+    assert!(!volume_sent(&fake), "a scroll moved a fader");
+    let (mut h, fake) = touch(2, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+    drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
+    assert!(volume_sent(&fake), "the fader did not move");
+}
+
+/// The status bar's shortcut hints name keys, double clicks and right
+/// clicks: a touch screen leaves them out.
+#[test]
+fn touch_mode_shows_no_keyboard_and_mouse_hints() {
+    for size in [PORTRAIT, TABLET] {
+        let (h, _fake) = touch(2, size);
+        assert!(h.query_by_label_contains("Keys 1–9").is_none(), "{size:?}");
+    }
+    let (mut h, _fake) = harness_sized(state(2, 3), TABLET, |ui| ui);
+    h.run_steps(3);
+    assert!(h.query_by_label_contains("Keys 1–9").is_some());
 }
 
 /// On a phone the Settings sections are chips above the section, which
@@ -392,8 +369,7 @@ fn a_landscape_cartwall_keeps_the_page() {
 #[test]
 fn phone_settings_put_the_sections_above_the_content() {
     let (mut h, _fake) = touch(2, PORTRAIT);
-    h.get_by_label("Settings").click();
-    h.run_steps(3);
+    more(&mut h, "Settings");
     let buffer = h.get_by_label("Buffer size").rect();
     assert!(buffer.left() < 80.0, "{buffer:?} sits right of a side list");
     let meters = h.get_by_label("Meters").rect();
@@ -401,34 +377,6 @@ fn phone_settings_put_the_sections_above_the_content() {
     h.get_by_label("Meters").click();
     h.run_steps(3);
     assert!(h.query_by_label("Buffer size").is_none(), "another section");
-}
-
-/// PL14: in landscape too, a drag that starts on a fader moves it.
-#[test]
-fn a_drag_on_a_landscape_fader_moves_it() {
-    for open in [false, true] {
-        let (mut h, fake) = touch(2, LANDSCAPE);
-        if open {
-            h.get_by_label("Open P1").click();
-            h.run_steps(3);
-        }
-        fake.take_sent();
-        let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
-        drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
-        assert!(volume_sent(&fake), "open {open}: the fader did not move");
-    }
-}
-
-/// PL14: a scroll of the landscape columns that starts beside the faders
-/// moves no level.
-#[test]
-fn a_scroll_beside_the_landscape_faders_leaves_the_volume() {
-    let (mut h, fake) = touch(2, LANDSCAPE);
-    fake.take_sent();
-    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
-    let from = egui::pos2(60.0, fader.center().y);
-    drag(&mut h, from, from + vec2(0.0, -150.0));
-    assert!(!volume_sent(&fake), "a scroll moved a fader");
 }
 
 /// A touch tablet keeps the desktop's cartwall grid and Settings side list.
@@ -448,31 +396,31 @@ fn a_touch_tablet_keeps_the_desktop_cartwall_and_settings() {
     );
 }
 
-/// PL2: Back closes what is open, one step at a time, before the app's own
-/// Back (mobile spec §5).
+// --- Back (PL2) ---
+
 #[test]
 fn back_closes_settings_before_anything_else() {
     let (mut h, _fake) = touch(2, PORTRAIT);
-    h.get_by_label("Open P1").click();
-    h.run_steps(3);
-    h.get_by_label("Settings").click();
-    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    more(&mut h, "Settings");
     let ctx = h.ctx.clone();
     assert!(h.state_mut().back(&ctx));
     h.run_steps(3);
     assert!(h.query_by_label("Buffer size").is_none(), "Settings closed");
-    assert!(h.query_by_label(ADD).is_some(), "P1 still open");
+    assert!(h.query_by_label(ADD).is_some(), "still on Playlists");
 }
 
 #[test]
-fn back_closes_an_open_player() {
-    let (mut h, _fake) = touch(2, PORTRAIT);
-    h.get_by_label("Open P1").click();
-    h.run_steps(3);
-    let ctx = h.ctx.clone();
-    assert!(h.state_mut().back(&ctx));
-    h.run_steps(3);
-    assert!(h.query_by_label("Open P2").is_some(), "all players again");
+fn back_from_another_screen_goes_to_live() {
+    for screen in ["Carts", "Playlists"] {
+        let (mut h, _fake) = touch(2, PORTRAIT);
+        tab(&mut h, screen);
+        let ctx = h.ctx.clone();
+        assert!(h.state_mut().back(&ctx), "{screen}");
+        h.run_steps(3);
+        assert_eq!(h.query_all_by_label("Play").count(), 2, "{screen}: Live");
+        assert!(h.query_by_label(ADD).is_none());
+    }
 }
 
 #[test]
@@ -482,30 +430,28 @@ fn back_with_nothing_open_reports_nothing_to_go_back_to() {
     assert!(!h.state_mut().back(&ctx));
 }
 
-/// Back closes an open menu before the player under it.
+/// Back closes an open menu before the screen under it.
 #[test]
-fn back_closes_a_menu_before_the_player() {
+fn back_closes_a_menu_before_the_screen() {
     let (mut h, _fake) = touch(2, PORTRAIT);
-    h.get_by_label("Open P1").click();
-    h.run_steps(3);
+    tab(&mut h, "Playlists");
     let ctx = h.ctx.clone();
     egui::Popup::open_id(&ctx, egui::Id::unique("a menu"));
     assert!(h.state_mut().back(&ctx));
     assert!(!egui::Popup::is_any_open(&ctx));
     h.run_steps(3);
-    assert!(h.query_by_label(ADD).is_some(), "P1 still open");
+    assert!(h.query_by_label(ADD).is_some(), "still on Playlists");
 }
 
-/// Back closes a confirmation before the player under it.
+/// Back closes a confirmation before the screen under it.
 #[test]
-fn back_closes_a_confirmation_before_the_player() {
+fn back_closes_a_confirmation_before_the_screen() {
     let mut s = state(2, 3);
     let playlist = s.playlists.iter().next().unwrap().id;
     s.playlists.get_mut(playlist).unwrap().entries[1].legacy_played = true;
     let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
     h.run_steps(3);
-    h.get_by_label("Open P1").click();
-    h.run_steps(3);
+    tab(&mut h, "Playlists");
     h.get_by_label("Clear the played marks of this playlist")
         .click();
     h.run_steps(3);
@@ -520,5 +466,5 @@ fn back_closes_a_confirmation_before_the_player() {
         h.query_by_label("Cancel").is_none(),
         "the confirmation closed"
     );
-    assert!(h.query_by_label(ADD).is_some(), "P1 still open");
+    assert!(h.query_by_label(ADD).is_some(), "still on Playlists");
 }
