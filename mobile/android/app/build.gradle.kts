@@ -27,12 +27,20 @@ android {
     // decodes it from its secrets; docs/technical/release-process.md).
     // Without it release builds are signed with the debug key, so they
     // install for audio checks (mobile spec §11) but are never published.
+    // Some of the variables without the others is a mistake (a misspelt
+    // secret): a debug-signed release must not pass for a signed one.
     val releaseKey = listOf(
         "FAUSTE_ANDROID_KEYSTORE",
         "FAUSTE_ANDROID_KEYSTORE_PASSWORD",
         "FAUSTE_ANDROID_KEY_ALIAS",
         "FAUSTE_ANDROID_KEY_PASSWORD",
     ).map { System.getenv(it).orEmpty() }
+    if (releaseKey.any { it.isNotEmpty() } && !releaseKey.all { it.isNotEmpty() }) {
+        throw GradleException(
+            "The release key needs all of FAUSTE_ANDROID_KEYSTORE, " +
+                "FAUSTE_ANDROID_KEYSTORE_PASSWORD, FAUSTE_ANDROID_KEY_ALIAS and FAUSTE_ANDROID_KEY_PASSWORD",
+        )
+    }
     signingConfigs {
         if (releaseKey.all { it.isNotEmpty() }) {
             create("release") {

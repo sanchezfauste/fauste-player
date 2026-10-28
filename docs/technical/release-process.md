@@ -424,7 +424,6 @@ and editing the title re-checks only the title.
 | `WINDOWS_CERT_PFX` (base64 of a `.pfx`), `WINDOWS_CERT_PASSWORD` | signtool signs `fauste-player.exe` inside the MSI and the MSI itself, with an RFC 3161 timestamp |
 | `APPLE_CERT_P12` (base64 of a *Developer ID Application* `.p12`), `APPLE_CERT_PASSWORD` | codesign with the hardened runtime, for the app and the dmg (without it the app gets an ad-hoc signature, so Gatekeeper offers *Open Anyway* instead of reporting it damaged) |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (app-specific password) | notarytool notarisation, then stapling the ticket to the dmg |
-
 | `ANDROID_KEYSTORE` (base64 of a `.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | the Android release key: the `android` job signs the APK and AAB with it and uploads them |
 
 - **Android:** without `ANDROID_KEYSTORE` the APK is built (signed with
@@ -434,7 +433,12 @@ and editing the title re-checks only the title.
   uninstall to update):
   `keytool -genkeypair -keystore fauste-release.jks -alias fauste -keyalg RSA -keysize 4096 -validity 36500`,
   then `base64 -w0 fauste-release.jks` is the secret. The `versionCode` is
-  major × 1 000 000 + minor × 1 000 + patch (`android.sh --self-test`).
+  major × 1 000 000 + minor × 1 000 + patch (`android.sh --self-test`;
+  a minor or patch of 1000 or more is refused). A pre-release shares its
+  release's code, so never upload a pre-release AAB to a store. Some of
+  the four secrets without the others fail the job (a misspelt secret
+  never publishes a debug-signed APK), and the job checks the APK's signer
+  before uploading it. Pull request dry runs never see the key.
 - **Without these secrets** the packages are built unsigned. The getting
   started guide explains the SmartScreen and Gatekeeper prompts users then
   see.

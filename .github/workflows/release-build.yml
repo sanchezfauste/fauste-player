@@ -301,16 +301,27 @@ jobs:
           tool: cargo-ndk
       - if: ${{ steps.tag.outputs.android == 'true' }}
         run: scripts/package/android.sh --self-test
+      # Only a release run sees the key (a pull request's dry run builds
+      # with the debug key), and only all four secrets together: a missing
+      # one fails the job instead of publishing a debug-signed APK.
       - name: Write the release key
         if: ${{ steps.tag.outputs.android == 'true' }}
         id: key
         env:
+          RELEASE: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
           ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          HAS_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+          HAS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS != '' }}
+          HAS_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD != '' }}
         run: |
-          if [ -z "${ANDROID_KEYSTORE}" ]; then
+          if [ "${RELEASE}" != true ] || { [ -z "${ANDROID_KEYSTORE}" ] && [ "${HAS_PASSWORD}${HAS_ALIAS}${HAS_KEY_PASSWORD}" = falsefalsefalse ]; }; then
             echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "No ANDROID_KEYSTORE secret: the build is signed with the debug key and not published"
+            echo "No release key: the build is signed with the debug key and not published"
             exit 0
+          fi
+          if [ -z "${ANDROID_KEYSTORE}" ] || [ "${HAS_PASSWORD}${HAS_ALIAS}${HAS_KEY_PASSWORD}" != truetruetrue ]; then
+            echo "::error::The Android release key needs all of ANDROID_KEYSTORE, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD"
+            exit 1
           fi
           keystore="${RUNNER_TEMP}/release.jks"
           printf '%s' "${ANDROID_KEYSTORE}" | base64 -d > "${keystore}"
@@ -321,16 +332,33 @@ jobs:
         id: package
         env:
           TAG: ${{ inputs.tag }}
+          SIGNED: ${{ steps.key.outputs.signed }}
           FAUSTE_ANDROID_KEYSTORE: ${{ steps.key.outputs.path }}
-          FAUSTE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          FAUSTE_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          FAUSTE_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          FAUSTE_ANDROID_KEYSTORE_PASSWORD: ${{ steps.key.outputs.signed == 'true' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          FAUSTE_ANDROID_KEY_ALIAS: ${{ steps.key.outputs.signed == 'true' && secrets.ANDROID_KEY_ALIAS || '' }}
+          FAUSTE_ANDROID_KEY_PASSWORD: ${{ steps.key.outputs.signed == 'true' && secrets.ANDROID_KEY_PASSWORD || '' }}
         run: |
+          # The NDK the CI checks use, not the runner image's default.
+          ANDROID_NDK_HOME="$(ls -d "${ANDROID_HOME}"/ndk/27.* | sort -V | tail -n1)"
+          export ANDROID_NDK_HOME
           # Through a file: a failure of the script fails the step.
           scripts/package/android.sh release > built.txt
+          apk="$(grep '\.apk$' built.txt)"
+          # The last guard: a release APK signed with the debug key is
+          # never published.
+          if [ "${SIGNED}" = true ]; then
+            apksigner="$(ls -d "${ANDROID_HOME}"/build-tools/*/apksigner | sort -V | tail -n1)"
+            # An assignment, so a failed verification fails the step.
+            certs="$("${apksigner}" verify --print-certs "${apk}")"
+            if grep -q 'CN=Android Debug' <<< "${certs}"; then
+              echo "::error::The release APK is signed with the debug key"
+              exit 1
+            fi
+          fi
           version="${TAG#v}"
+          version="${version:-$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)}"
           mkdir -p dist
-          cp "$(grep '\.apk$' built.txt)" "dist/fauste-player-${version}-android.apk"
+          cp "${apk}" "dist/fauste-player-${version}-android.apk"
           cp "$(grep '\.aab$' built.txt)" "dist/fauste-player-${version}-android.aab"
           (cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done)
           ls -l dist

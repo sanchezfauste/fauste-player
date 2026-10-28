@@ -101,6 +101,9 @@ class MainActivity : GameActivity() {
                 )
             } catch (e: ActivityNotFoundException) {
                 Log.w("fauste", "no app opens $url", e)
+            } catch (e: RuntimeException) {
+                // On the UI thread: a crash here would end the playout too.
+                Log.w("fauste", "could not open $url", e)
             }
         }
     }

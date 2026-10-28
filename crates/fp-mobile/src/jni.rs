@@ -137,13 +137,16 @@ pub(crate) fn open_url(url: &str) -> Result<(), String> {
     // running activity (`activity_as_ptr`), valid while `ACTIVITY` holds it
     // and we hold its lock. `JObject` never deletes it.
     let activity = unsafe { JObject::from_raw(activity as jni::sys::jobject) };
-    let text = env.new_string(url).map_err(|e| e.to_string())?;
-    let called = env.call_method(
-        &activity,
-        "openUrl",
-        "(Ljava/lang/String;)V",
-        &[JValue::Object(&text)],
-    );
+    let called = env.new_string(url).and_then(|text| {
+        env.call_method(
+            &activity,
+            "openUrl",
+            "(Ljava/lang/String;)V",
+            &[JValue::Object(&text)],
+        )
+    });
+    // Any failure may leave a Java exception pending; the thread must not
+    // detach with one.
     if called.is_err() {
         let _ = env.exception_clear();
     }

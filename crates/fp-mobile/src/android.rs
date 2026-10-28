@@ -131,8 +131,8 @@ fn android_main(app: AndroidApp) {
         .with_platform(Arc::new(AndroidPlatform))
         .with_touch()
         .with_media_browser(MEDIA.clone());
-    *ACTIVITY.lock().unwrap_or_else(PoisonError::into_inner) =
-        Some((app.vm_as_ptr() as usize, app.activity_as_ptr() as usize));
+    let this = Some((app.vm_as_ptr() as usize, app.activity_as_ptr() as usize));
+    *ACTIVITY.lock().unwrap_or_else(PoisonError::into_inner) = this;
     let options = eframe::NativeOptions {
         android_app: Some(app.clone()),
         ..Default::default()
@@ -149,8 +149,14 @@ fn android_main(app: AndroidApp) {
             }))
         }),
     );
-    // The activity reference dies with this `AndroidApp`.
-    *ACTIVITY.lock().unwrap_or_else(PoisonError::into_inner) = None;
+    // The activity reference dies with this `AndroidApp`; a newer
+    // activity's entry stays.
+    {
+        let mut current = ACTIVITY.lock().unwrap_or_else(PoisonError::into_inner);
+        if *current == this {
+            *current = None;
+        }
+    }
     // The session goes on: the foreground service holds the process (MB1).
     match result {
         Ok(()) => tracing::info!("activity ended"),

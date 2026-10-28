@@ -208,7 +208,8 @@ JDK 17 or newer). The APK is in
 A release build also makes the AAB a store needs. It is signed with the
 key the four `FAUSTE_ANDROID_KEYSTORE`, `FAUSTE_ANDROID_KEYSTORE_PASSWORD`,
 `FAUSTE_ANDROID_KEY_ALIAS` and `FAUSTE_ANDROID_KEY_PASSWORD` variables
-name, and with the debug key without them. The `versionCode` comes from
+name, and with the debug key without them; some of them without the
+others fail the build. The `versionCode` comes from
 the workspace version (`android.sh --self-test` checks the formula).
 `release-build.yml`'s `android` job publishes the APK and AAB with a
 release once the key is a secret (see the release process).
