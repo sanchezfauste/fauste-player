@@ -59,19 +59,39 @@ class MediaFiles(private val context: Context) {
         }
     }
 
+    /**
+     * One record per file: the path, then the title, artist, album and
+     * duration in ms, NUL-separated (`MediaFile::from_record`); a missing
+     * tag is an empty field.
+     */
     @Suppress("DEPRECATION") // DATA is the path the decoders open.
     private fun query(): List<String> {
-        val column = MediaStore.Audio.Media.DATA
-        val paths = mutableListOf<String>()
+        val columns = arrayOf(
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DURATION,
+        )
+        val records = mutableListOf<String>()
         context.contentResolver.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, arrayOf(column), null, null, null
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, columns, null, null, null
         )?.use { cursor ->
-            val index = cursor.getColumnIndexOrThrow(column)
+            val index = columns.map(cursor::getColumnIndexOrThrow)
             while (cursor.moveToNext()) {
-                cursor.getString(index)?.let(paths::add)
+                val path = cursor.getString(index[0]) ?: continue
+                val tags = index.drop(1).map { column ->
+                    // MediaStore's "<unknown>" artist is no tag; a NUL would
+                    // split the record.
+                    cursor.getString(column)
+                        ?.takeUnless { it == MediaStore.UNKNOWN_STRING }
+                        ?.replace('\u0000', ' ')
+                        .orEmpty()
+                }
+                records.add((listOf(path) + tags).joinToString("\u0000"))
             }
         }
-        return paths
+        return records
     }
 
     private companion object {

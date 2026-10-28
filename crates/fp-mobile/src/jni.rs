@@ -90,7 +90,8 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_notificationCh
 }
 
 #[allow(unsafe_code)]
-// SAFETY: as above; `external fun setMediaFiles(Array<String>)`.
+// SAFETY: as above; `external fun setMediaFiles(Array<String>)`, one
+// record per file (`MediaFile::from_record`).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setMediaFiles(
     mut env: JNIEnv<'_>,
@@ -108,7 +109,9 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setMediaFiles(
         };
         let item = JString::from(item);
         match env.get_string(&item) {
-            Ok(path) => files.push(std::path::PathBuf::from(String::from(path))),
+            Ok(record) => files.extend(fp_app::ui::media_browser::MediaFile::from_record(
+                &String::from(record),
+            )),
             Err(_) => {
                 let _ = env.exception_clear();
                 break;
