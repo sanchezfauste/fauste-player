@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use egui::{Rect, RichText, Stroke, Ui, UiBuilder, pos2, vec2};
-use fp_model::{Command, EntryId, MarkerKind, TrackId};
+use fp_model::{Command, EntryId, MarkerKind, MarkerSource, TrackId};
 
 use super::app::{Scene, ViewState};
 use super::format;
@@ -318,6 +318,25 @@ fn edit_markers(
         view_state.wave_menu.insert(key, secs_at(p.x));
     }
     let at = view_state.wave_menu.get(&key).copied();
+    let phone = view_state.phone_active;
+    // Only a phone offers Remove (PL11b): elsewhere the list stays empty.
+    let set_by_hand = phone
+        .then(|| scene.state.library.get(track).map(|t| t.markers))
+        .flatten();
+    let manual: Vec<(MarkerKind, &str)> = [
+        (MarkerKind::CueIn, "wave-remove-cue-in"),
+        (MarkerKind::IntroEnd, "wave-remove-intro"),
+        (MarkerKind::OutroStart, "wave-remove-outro"),
+        (MarkerKind::SegueStart, "wave-remove-mix"),
+        (MarkerKind::CueOut, "wave-remove-cue-out"),
+    ]
+    .into_iter()
+    .filter(|(kind, _)| {
+        set_by_hand
+            .and_then(|m| m.get(*kind))
+            .is_some_and(|m| m.source == MarkerSource::Manual)
+    })
+    .collect();
     let mut open_loudness = false;
     let open = response.context_menu(|ui| {
         ui.set_min_width(220.0);
@@ -349,6 +368,21 @@ fn edit_markers(
                         track,
                         kind,
                         secs: Some(secs),
+                    });
+                    ui.close();
+                }
+            }
+            ui.separator();
+        }
+        // A phone removes one marker set by hand (phone layout spec PL11b):
+        // a finger cannot drag it away.
+        if phone && !manual.is_empty() {
+            for (kind, key) in &manual {
+                if item(ui, key) {
+                    scene.ctl.send(Command::SetMarker {
+                        track,
+                        kind: *kind,
+                        secs: None,
                     });
                     ui.close();
                 }

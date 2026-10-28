@@ -14,7 +14,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::app::AppUi;
 use std::sync::Arc;
-use support::{Fake, harness_sized, state};
+use support::{Fake, harness, harness_sized, state};
 
 const PORTRAIT: Vec2 = vec2(412.0, 892.0);
 const LANDSCAPE: Vec2 = vec2(892.0, 412.0);
@@ -433,7 +433,366 @@ fn a_landscape_cartwall_keeps_the_page() {
     assert!((three.top() - one.top()).abs() < 1.0, "3 on the row of 1");
 }
 
-// --- Playlists (interim) and the rest ---
+// --- Playlists (PL8–PL11b) ---
+
+fn waveform(h: &Harness<'static, AppUi>) -> egui::Rect {
+    h.get_all_by_label("Waveform: click to seek")
+        .next()
+        .unwrap()
+        .rect()
+}
+
+/// PL9: held upright, the track list is on top and the player's card at
+/// the bottom.
+#[test]
+fn the_playlists_list_is_over_the_card() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    tab(&mut h, "Playlists");
+    let row = h.get_all_by_label("Song 1").next().unwrap().rect();
+    let play = h.get_by_label("Play").rect();
+    assert!(row.bottom() < waveform(&h).top(), "the list first");
+    assert!(play.bottom() > PORTRAIT.y * 0.6, "the card at the bottom");
+}
+
+/// PL9: turned sideways, the list is on the left and the card on the right.
+#[test]
+fn in_landscape_the_list_is_left_of_the_card() {
+    let (mut h, _fake) = touch(2, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    let row = h.get_all_by_label("Song 1").next().unwrap().rect();
+    let play = h.get_by_label("Play").rect();
+    assert!(row.right() <= waveform(&h).left(), "the list on the left");
+    assert!(play.left() > LANDSCAPE.x / 2.0, "the card on the right");
+}
+
+/// PL9: the Playlists card's waveform is larger than a Live card's, for
+/// preparing a track.
+#[test]
+fn the_playlists_card_has_a_larger_waveform() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    let live = waveform(&h).height();
+    tab(&mut h, "Playlists");
+    assert!(waveform(&h).height() > live + 20.0);
+}
+
+/// PL8: the chosen player's playlist tabs, with + for a new playlist.
+#[test]
+fn the_playlists_screen_has_tabs_and_a_new_playlist_button() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    tab(&mut h, "Playlists");
+    assert!(h.query_by_label("New playlist").is_some());
+    let chip = h.get_all_by_label("P1").next().unwrap().rect();
+    let new = h.get_by_label("New playlist").rect();
+    assert!(chip.bottom() <= new.top() + 1.0, "the tabs under the chips");
+}
+
+/// Opens the row menu of `title` on the Playlists screen.
+fn row_menu(h: &mut Harness<'static, AppUi>, title: &str) {
+    h.get_all_by_label(title).next().unwrap().click_secondary();
+    h.run_steps(2);
+}
+
+fn moves(fake: &Fake) -> Vec<fp_model::Command> {
+    fake.take_sent()
+        .into_iter()
+        .filter(|c| matches!(c, fp_model::Command::MoveEntry { .. }))
+        .collect()
+}
+
+fn disabled(h: &Harness<'static, AppUi>, label: &str) -> bool {
+    use egui_kittest::kittest::NodeT;
+    h.get_by_label(label).accesskit_node().is_disabled()
+}
+
+/// PL10: Move up and Move down in the row menu.
+#[test]
+fn the_row_menu_moves_an_entry_up_and_down() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    let (e, main) = (fake.entries(), fake.state.load().players[0].playlist);
+    fake.take_sent();
+    row_menu(&mut h, "Song 2");
+    h.get_by_label("Move up").click();
+    h.run_steps(2);
+    let up = fp_model::Command::MoveEntry {
+        entry: e[1],
+        to: main,
+        index: 0,
+    };
+    assert_eq!(moves(&fake), vec![up]);
+    // The move applied, Song 2 is first: down is before the third row.
+    row_menu(&mut h, "Song 2");
+    h.get_by_label("Move down").click();
+    h.run_steps(2);
+    let down = fp_model::Command::MoveEntry {
+        entry: e[1],
+        to: main,
+        index: 2,
+    };
+    assert_eq!(moves(&fake), vec![down]);
+}
+
+#[test]
+fn the_first_row_cannot_move_up_nor_the_last_down() {
+    let (mut h, _fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    row_menu(&mut h, "Song 1");
+    assert!(disabled(&h, "Move up"));
+    assert!(!disabled(&h, "Move down"));
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    row_menu(&mut h, "Song 3");
+    assert!(disabled(&h, "Move down"));
+}
+
+/// Two players, P2 showing a new empty playlist "Other".
+fn two_players_two_playlists() -> (Harness<'static, AppUi>, Arc<Fake>, fp_model::PlaylistId) {
+    let mut s = state(2, 3);
+    let p2 = s.players[1].id;
+    fp_model::apply(
+        &mut s,
+        fp_model::Command::CreatePlaylistIn {
+            name: "Other".into(),
+            player: p2,
+        },
+    )
+    .unwrap();
+    let other = s.players[1].playlist;
+    let (mut h, fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    (h, fake, other)
+}
+
+/// PL10b: Move to another player puts the entry after that player's next
+/// in the playlist it shows (the end of an empty one).
+#[test]
+fn the_row_menu_moves_an_entry_to_another_player() {
+    let (mut h, fake, other) = two_players_two_playlists();
+    let e = fake.entries();
+    row_menu(&mut h, "Song 2");
+    h.get_by_label("Move to another player").click();
+    h.run_steps(2);
+    h.get_all_by_label("P2").last().unwrap().click();
+    h.run_steps(2);
+    let to_p2 = fp_model::Command::MoveEntry {
+        entry: e[1],
+        to: other,
+        index: 0,
+    };
+    assert_eq!(moves(&fake), vec![to_p2]);
+}
+
+/// PL10b: the entry on air stays with its player.
+#[test]
+fn the_entry_on_air_cannot_move_to_another_player() {
+    let mut s = state(2, 3);
+    let first = s.playlists.first_id().unwrap();
+    let e0 = s.playlists.get(first).unwrap().entries[0].id;
+    s.players[0].current = Some(e0);
+    s.players[0].transport = fp_model::Transport::Playing;
+    let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    row_menu(&mut h, "Song 1");
+    assert!(disabled(&h, "Move to another player"));
+}
+
+/// The desktop's row menu does not change.
+#[test]
+fn the_desktop_row_menu_has_no_phone_moves() {
+    let (mut h, _fake) = harness(state(2, 3));
+    h.run_steps(2);
+    h.get_all_by_label("Song 2")
+        .next()
+        .unwrap()
+        .click_secondary();
+    h.run_steps(2);
+    assert!(h.query_by_label("Remove from playlist").is_some());
+    assert!(h.query_by_label("Move up").is_none());
+    assert!(h.query_by_label("Move to another player").is_none());
+}
+
+/// PL10: a drag from a row's handle moves the entry.
+#[test]
+fn a_drag_from_the_handle_moves_the_entry() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    let handle = h.get_all_by_label("Drag to move").nth(2).unwrap().rect();
+    let to = h.get_all_by_label("Song 1").next().unwrap().rect();
+    drag(
+        &mut h,
+        handle.center(),
+        egui::pos2(handle.center().x, to.top() + 2.0),
+    );
+    let sent = moves(&fake);
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [fp_model::Command::MoveEntry { index: 0, .. }]
+        ),
+        "{sent:?}"
+    );
+}
+
+const RESET: &str = "Clear the played marks of this playlist";
+
+/// Reset played, from the footer's ⋯ menu.
+fn reset_played(h: &mut Harness<'static, AppUi>) {
+    h.get_by_label("More playlist actions").click();
+    h.run_steps(2);
+    h.get_by_label(RESET).click();
+    h.run_steps(3);
+}
+
+/// PL11: a phone's footer keeps Add and puts its other actions behind ⋯.
+#[test]
+fn the_phone_footer_puts_reset_played_behind_more() {
+    let mut s = state(1, 3);
+    let playlist = s.playlists.iter().next().unwrap().id;
+    s.playlists.get_mut(playlist).unwrap().entries[1].legacy_played = true;
+    let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    assert!(h.query_by_label(ADD).is_some());
+    assert!(h.query_by_label(RESET).is_none(), "not in the footer");
+    reset_played(&mut h);
+    assert!(
+        h.query_by_label("Clear the played mark of every track in this playlist?")
+            .is_some(),
+        "the question"
+    );
+}
+
+#[test]
+fn the_desktop_footer_keeps_reset_played() {
+    let (h, _fake) = harness(state(1, 3));
+    assert!(h.query_by_label("More playlist actions").is_none());
+    assert!(h.query_by_label(RESET).is_some());
+}
+
+/// A finger held still at `at` for a second, then lifted.
+fn long_press(h: &mut Harness<'static, AppUi>, at: egui::Pos2) {
+    let touch = |phase| egui::Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase,
+        pos: at,
+        force: None,
+    };
+    h.event(touch(egui::TouchPhase::Start));
+    h.event(egui::Event::PointerMoved(at));
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    for _ in 0..60 {
+        h.step();
+    }
+    h.event(touch(egui::TouchPhase::End));
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(3);
+}
+
+/// One player stopped on a 180 s analysed track; its cue-in set by hand
+/// at 5 s when `manual`.
+fn analysed(manual: bool) -> (Harness<'static, AppUi>, Arc<Fake>, fp_model::TrackId) {
+    let mut s = state(1, 2);
+    let track = s.playlists.iter().next().unwrap().entries[0].track;
+    let analysis = fp_model::TrackAnalysis {
+        duration_secs: 180.0,
+        cue_in: Some(0.0),
+        cue_out: Some(180.0),
+        ..fp_model::TrackAnalysis::default()
+    };
+    fp_model::apply(
+        &mut s,
+        fp_model::Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+    if manual {
+        fp_model::apply(
+            &mut s,
+            fp_model::Command::SetMarker {
+                track,
+                kind: fp_model::MarkerKind::CueIn,
+                secs: Some(5.0),
+            },
+        )
+        .unwrap();
+    }
+    let (mut h, fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    fake.take_sent();
+    (h, fake, track)
+}
+
+fn markers_set(fake: &Fake) -> Vec<(fp_model::MarkerKind, Option<f64>)> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            fp_model::Command::SetMarker { kind, secs, .. } => Some((kind, secs)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// PL11b: a long press on the Playlists waveform sets a marker there.
+#[test]
+fn a_long_press_on_the_playlists_waveform_sets_a_marker_there() {
+    let (mut h, fake, _track) = analysed(false);
+    tab(&mut h, "Playlists");
+    let wave = waveform(&h);
+    long_press(
+        &mut h,
+        egui::pos2(wave.left() + wave.width() * 0.25, wave.center().y),
+    );
+    h.get_by_label("Set intro end here").click();
+    h.run_steps(2);
+    let set = markers_set(&fake);
+    assert_eq!(set.len(), 1, "{set:?}");
+    assert_eq!(set[0].0, fp_model::MarkerKind::IntroEnd);
+    assert!((set[0].1.unwrap() - 45.0).abs() < 3.0, "{set:?}");
+}
+
+/// PL11b: a marker set by hand can be removed from the same menu.
+#[test]
+fn a_manual_marker_can_be_removed_by_touch() {
+    let (mut h, fake, _track) = analysed(true);
+    tab(&mut h, "Playlists");
+    let wave = waveform(&h);
+    long_press(&mut h, wave.center());
+    assert!(h.query_by_label("Remove intro end").is_none(), "not set");
+    h.get_by_label("Remove cue in").click();
+    h.run_steps(2);
+    assert_eq!(
+        markers_set(&fake),
+        vec![(fp_model::MarkerKind::CueIn, None)]
+    );
+}
+
+/// PL11b: the Live cards' waveforms never edit markers.
+#[test]
+fn a_long_press_on_a_live_waveform_opens_no_marker_menu() {
+    let (mut h, _fake, _track) = analysed(false);
+    let wave = waveform(&h);
+    long_press(&mut h, wave.center());
+    assert!(h.query_by_label("Set intro end here").is_none());
+}
+
+// --- The rest ---
 
 #[test]
 fn a_finger_drag_on_the_playlist_moves_no_row() {
@@ -572,9 +931,7 @@ fn back_closes_a_confirmation_before_the_screen() {
     let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
     h.run_steps(3);
     tab(&mut h, "Playlists");
-    h.get_by_label("Clear the played marks of this playlist")
-        .click();
-    h.run_steps(3);
+    reset_played(&mut h);
     assert!(
         h.query_by_label("Cancel").is_some(),
         "the confirmation shows"
@@ -725,4 +1082,24 @@ fn a_tablet_has_no_lock_button() {
     assert!(h.query_by_label(LOCK).is_none());
     let (h, _fake) = touch(2, PORTRAIT);
     assert!(h.query_by_label(LOCK).is_some());
+}
+
+/// PL10: the drag handle leaves the duration room to be read.
+#[test]
+fn the_drag_handle_leaves_the_duration_whole() {
+    let mut s = state(1, 3);
+    for t in s.library.iter_mut() {
+        t.duration_secs = 180.0;
+    }
+    let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    let handle = h.get_all_by_label("Drag to move").next().unwrap().rect();
+    let duration = h.get_all_by_label("03:00").next().unwrap().rect();
+    assert!(duration.right() <= handle.left(), "{duration:?} {handle:?}");
+    let header = h.get_by_label("DUR.").rect();
+    assert!(
+        duration.width() >= header.width() * 0.9,
+        "{duration:?} {header:?}"
+    );
 }

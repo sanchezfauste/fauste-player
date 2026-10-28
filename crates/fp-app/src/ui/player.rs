@@ -28,6 +28,11 @@ const GAP: f32 = 6.0;
 const WAVE_HEIGHT: f32 = 56.0;
 /// The waveform of a phone's Live card: lower, so two cards fit a phone.
 const CARD_WAVE_HEIGHT: f32 = 44.0;
+/// The Playlists screen's card (PL9): its larger waveform, its height
+/// before it was first measured and the most of an upright screen it takes.
+const PLAYLISTS_WAVE_HEIGHT: f32 = 72.0;
+const PLAYLISTS_CARD_HEIGHT: f32 = 330.0;
+const PLAYLISTS_CARD_SHARE: f32 = 0.55;
 const TABS_HEIGHT: f32 = 30.0;
 /// Width of the "+" (new playlist) button at the right end of the tabs.
 const ADD_TAB_WIDTH: f32 = 30.0;
@@ -87,9 +92,20 @@ pub(crate) fn column(
             wave_sized(ui, scene, view_state, id, &pv, WAVE_HEIGHT, true, locked);
             time_row(ui, scene, &pv);
         });
+    playlist_area(ui, scene, view_state, id, player.playlist);
+}
+
+/// A player's playlist tabs, track table and footer, filling `ui`.
+fn playlist_area(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    id: PlayerId,
+    playlist: PlaylistId,
+) {
     scroll_to_next_once(scene, view_state, id);
-    follow_current(scene, view_state, id, player.playlist);
-    tabs(ui, scene, view_state, id, player.playlist);
+    follow_current(scene, view_state, id, playlist);
+    tabs(ui, scene, view_state, id, playlist);
     let footer_top = ui.max_rect().bottom() - FOOTER_HEIGHT;
     let table_rect = Rect::from_min_max(
         ui.available_rect_before_wrap().min,
@@ -100,14 +116,84 @@ pub(crate) fn column(
             .max_rect(table_rect)
             .layout(Layout::top_down(Align::Min)),
     );
-    table::track_table(&mut table_ui, scene, view_state, id, player.playlist);
+    table::track_table(&mut table_ui, scene, view_state, id, playlist);
     let footer_rect = Rect::from_min_max(pos2(ui.max_rect().left(), footer_top), ui.max_rect().max);
     let mut footer_ui = ui.new_child(
         UiBuilder::new()
             .max_rect(footer_rect)
             .layout(Layout::left_to_right(Align::Center)),
     );
-    footer(&mut footer_ui, scene, view_state, id, player.playlist);
+    footer(&mut footer_ui, scene, view_state, id, playlist);
+}
+
+/// The phone's Playlists screen for one player (phone layout spec PL8,
+/// PL9): its playlist tabs, track list and footer, and its card with a
+/// larger waveform where markers are edited (PL11b). Held upright the card
+/// is under the list; turned sideways it is on the right.
+pub(crate) fn playlists_screen(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    covers: &mut HashMap<TrackId, TextureHandle>,
+    index: usize,
+    landscape: bool,
+) {
+    let Some(player) = scene.state.players.get(index) else {
+        return;
+    };
+    let (id, playlist) = (player.id, player.playlist);
+    let area = ui.available_rect_before_wrap();
+    let used_id = ui.scope_id().with(("playlists-card-height", id.0));
+    let (list, card_rect) = if landscape {
+        let half = (area.width() - GAP) / 2.0;
+        (
+            Rect::from_min_size(area.min, vec2(half, area.height())),
+            Rect::from_min_max(pos2(area.right() - half, area.top()), area.max),
+        )
+    } else {
+        // As tall as the card was in the last frame, leaving the list room.
+        let height = ui
+            .data(|d| d.get_temp::<f32>(used_id))
+            .unwrap_or(PLAYLISTS_CARD_HEIGHT)
+            .min(area.height() * PLAYLISTS_CARD_SHARE);
+        (
+            Rect::from_min_max(area.min, pos2(area.right(), area.bottom() - height - GAP)),
+            Rect::from_min_max(pos2(area.left(), area.bottom() - height), area.max),
+        )
+    };
+    view_state.player_rects.push((id, area));
+    let mut list_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(list)
+            .id_salt(("player", id.0))
+            .layout(Layout::top_down(Align::Min)),
+    );
+    list_ui.set_clip_rect(list.intersect(ui.clip_rect()));
+    list_ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+    playlist_area(&mut list_ui, scene, view_state, id, playlist);
+    let mut card_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(card_rect)
+            .layout(Layout::top_down(Align::Min)),
+    );
+    card_ui.set_clip_rect(card_rect.intersect(ui.clip_rect()));
+    // A card taller than the screen (sideways) scrolls.
+    let output = egui::ScrollArea::vertical()
+        .id_salt(("playlists-card", id.0))
+        .auto_shrink([false, true])
+        .show(&mut card_ui, |ui| {
+            card_sized(
+                ui,
+                scene,
+                view_state,
+                covers,
+                index,
+                PLAYLISTS_WAVE_HEIGHT,
+                true,
+            );
+        });
+    ui.data_mut(|d| d.insert_temp(used_id, output.content_size.y));
+    ui.allocate_rect(area, egui::Sense::hover());
 }
 
 /// A player's card on a phone's Live screen (phone layout spec PL4): the
@@ -119,6 +205,29 @@ pub(crate) fn card(
     view_state: &mut ViewState,
     covers: &mut HashMap<TrackId, TextureHandle>,
     index: usize,
+) {
+    // Markers are edited on the Playlists screen only (PL11b).
+    card_sized(
+        ui,
+        scene,
+        view_state,
+        covers,
+        index,
+        CARD_WAVE_HEIGHT,
+        false,
+    );
+}
+
+/// A player's card with a waveform `wave_height` tall, where markers are
+/// edited when `markers` is set.
+fn card_sized(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    covers: &mut HashMap<TrackId, TextureHandle>,
+    index: usize,
+    wave_height: f32,
+    markers: bool,
 ) {
     let Some(player) = scene.state.players.get(index) else {
         return;
@@ -144,17 +253,7 @@ pub(crate) fn card(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             let locked = super::touch::locked(scene, view_state);
-            // Markers are edited on the Playlists screen only (PL11b).
-            wave_sized(
-                ui,
-                scene,
-                view_state,
-                id,
-                &pv,
-                CARD_WAVE_HEIGHT,
-                false,
-                locked,
-            );
+            wave_sized(ui, scene, view_state, id, &pv, wave_height, markers, locked);
             header(ui, scene, view_state, id, index, &pv);
             // A drag that starts on the fader moves it (PL14), unless
             // locked (PL12); one that starts elsewhere scrolls the cards.
@@ -1642,7 +1741,67 @@ fn footer(
             .map_or(0, |p| p.entries.len());
         scene.pick_files(playlist, len);
     }
-    // O22: clear the played marks of this playlist, after a question.
+    // O22: clear the played marks of this playlist, after a question. A
+    // phone keeps only Add in sight and puts the rest behind ⋯ (PL11).
+    if view_state.phone_active {
+        footer_more(ui, scene, view_state, playlist);
+    } else {
+        reset_played_tile(ui, scene, view_state, playlist);
+    }
+    footer_totals(ui, scene, id, playlist);
+}
+
+/// The footer's ⋯ tile on a phone and its menu (PL11).
+fn footer_more(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, playlist: PlaylistId) {
+    let t = scene.i18n;
+    let response = widgets::tile(
+        ui,
+        vec2(32.0, 18.0),
+        &t.tr("tip-footer-more"),
+        true,
+        TileStyle::plain(),
+        |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                icon::DOTS_THREE,
+                font(14.0),
+                c,
+            );
+        },
+    );
+    egui::Popup::menu(&response).show(|ui| {
+        ui.set_min_width(200.0);
+        let text = t.tr("tip-reset-played");
+        let enabled = fp_model::can_reset_played(scene.state, playlist);
+        let item = ui.add_enabled(
+            enabled,
+            egui::Button::new(
+                RichText::new(format!(
+                    "{}  {}",
+                    icon::ARROW_COUNTER_CLOCKWISE,
+                    t.tr("footer-reset-played")
+                ))
+                .font(font(15.0)),
+            )
+            .min_size(vec2(200.0, 44.0)),
+        );
+        item.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text.clone()));
+        if item.clicked() {
+            view_state.confirm_reset = Some(playlist);
+            ui.close();
+        }
+    });
+}
+
+/// The footer's Reset played tile (O22).
+fn reset_played_tile(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    playlist: PlaylistId,
+) {
+    let t = scene.i18n;
     let reset = t.tr("footer-reset-played");
     let reset_width = ui
         .painter()
@@ -1670,6 +1829,11 @@ fn footer(
     {
         view_state.confirm_reset = Some(playlist);
     }
+}
+
+/// The footer's entry count and times, at the right.
+fn footer_totals(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: PlaylistId) {
+    let t = scene.i18n;
     let len = scene
         .state
         .playlists

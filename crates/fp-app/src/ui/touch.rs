@@ -89,9 +89,6 @@ pub fn swipe_direction(delta: Vec2) -> Option<bool> {
 /// How far from a widget a finger still hits it: the desktop's tiles are
 /// smaller than a fingertip.
 const INTERACT_RADIUS: f32 = 12.0;
-/// The height a player column needs for its panel and a few playlist rows;
-/// a shorter area scrolls (`column`).
-const MIN_COLUMN_HEIGHT: f32 = 560.0;
 /// The Live screen's share for the cards: of the height in portrait (less
 /// when the cards need less), of the width in landscape (PL5, PL6).
 const LIVE_CARDS_SHARE: f32 = 0.66;
@@ -277,7 +274,7 @@ pub(crate) fn phone_middle(
     match view_state.phone.screen {
         PhoneScreen::Live => live(ui, scene, view_state, covers, &players, landscape),
         PhoneScreen::Carts => carts(ui, scene, view_state),
-        PhoneScreen::Playlists => playlists(ui, scene, view_state, covers, &players),
+        PhoneScreen::Playlists => playlists(ui, scene, view_state, covers, &players, landscape),
     }
 }
 
@@ -409,14 +406,15 @@ fn page_swipe(ui: &Ui, area: Rect) -> Option<bool> {
         .and_then(|(from, to)| swipe_direction(to - from))
 }
 
-/// One player with its playlist, under a chip per player (until the
-/// Playlists screen of phone plan 3).
+/// The Playlists screen (PL8, PL9): a chip per player on top, then the
+/// chosen player's playlists and card.
 fn playlists(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     covers: &mut HashMap<TrackId, TextureHandle>,
     players: &[PlayerId],
+    landscape: bool,
 ) {
     let Some(shown) = view_state.phone.shown_player(players) else {
         return;
@@ -439,63 +437,5 @@ fn playlists(
     let Ok(index) = scene.state.player_index(shown) else {
         return;
     };
-    let rect = ui.available_rect_before_wrap();
-    column(ui, scene, view_state, covers, shown, index, rect);
-}
-
-/// The desktop player column in `rect`. A phone in landscape is shorter
-/// than a column: it is then `MIN_COLUMN_HEIGHT` tall and scrolls, so the
-/// playlist and its footer can be reached.
-fn column(
-    ui: &mut Ui,
-    scene: &Scene<'_>,
-    view_state: &mut ViewState,
-    covers: &mut HashMap<TrackId, TextureHandle>,
-    id: PlayerId,
-    index: usize,
-    rect: Rect,
-) {
-    if rect.height() >= MIN_COLUMN_HEIGHT {
-        column_in(ui, scene, view_state, covers, id, index, rect);
-        return;
-    }
-    let mut area_ui = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect)
-            .layout(Layout::top_down(Align::Min)),
-    );
-    egui::ScrollArea::vertical()
-        // Each player keeps its own offset.
-        .id_salt(("phone-column", id.0))
-        .auto_shrink([false, false])
-        .show(&mut area_ui, |ui| {
-            let (tall, _) =
-                ui.allocate_exact_size(vec2(rect.width(), MIN_COLUMN_HEIGHT), egui::Sense::hover());
-            column_in(ui, scene, view_state, covers, id, index, tall);
-        });
-    ui.allocate_rect(rect, egui::Sense::hover());
-}
-
-fn column_in(
-    ui: &mut Ui,
-    scene: &Scene<'_>,
-    view_state: &mut ViewState,
-    covers: &mut HashMap<TrackId, TextureHandle>,
-    id: PlayerId,
-    index: usize,
-    rect: Rect,
-) {
-    view_state.player_rects.push((id, rect));
-    let mut column_ui = ui.new_child(
-        UiBuilder::new()
-            .max_rect(rect)
-            .id_salt(("player", id.0))
-            .layout(Layout::top_down(Align::Min)),
-    );
-    column_ui.set_clip_rect(rect.intersect(ui.clip_rect()));
-    // A drag that starts on the fader moves it (PL14), unless locked
-    // (PL12); one that starts elsewhere scrolls.
-    let locked = locked(scene, view_state);
-    super::player::column(&mut column_ui, scene, view_state, covers, index, locked);
-    ui.allocate_rect(rect, egui::Sense::hover());
+    super::player::playlists_screen(ui, scene, view_state, covers, index, landscape);
 }

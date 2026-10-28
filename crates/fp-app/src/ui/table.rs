@@ -15,6 +15,8 @@ use super::view::{self, RowStatus};
 use super::widgets::{self, font, font_medium};
 
 const HEADER_HEIGHT: f32 = 24.0;
+/// The width of a phone row's drag handle.
+const HANDLE_WIDTH: f32 = 36.0;
 const ROW_HEIGHT: f32 = 28.0;
 /// Width of the track info popup: fixed, so egui's sizing pass gives the
 /// final size and the popup is never shown elsewhere first (Q9.3).
@@ -280,6 +282,13 @@ pub(crate) fn track_table(
     // release (O16). The table never keeps widths of its own: every column
     // is given its exact width on every frame.
     let width = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
+    // A phone's drag handle (PL10) is added to the last column, so the
+    // columns share what it leaves.
+    let width = if view_state.phone_active {
+        (width - HANDLE_WIDTH).max(0.0)
+    } else {
+        width
+    };
     let from_model = table_layout::column_px(&columns, &p.columns, width, digits);
     let px = live_widths(
         ui, scene, view_state, player, &columns, &mins, &p.columns, width, from_model,
@@ -294,6 +303,9 @@ pub(crate) fn track_table(
     let mut built = 0;
     let pointer = ui.ctx().pointer_hover_pos();
     let entries = &list.entries;
+    // A phone's rows have a drag handle and more moves in their menu.
+    let phone = view_state.phone_active;
+    let handle_label = scene.i18n.tr("tip-drag-handle");
     let selected = view_state.selection.get(&player).copied();
     let mut clicked: Option<EntryId> = None;
     // O17: the entry a running CUE moves to after a primary click.
@@ -325,8 +337,14 @@ pub(crate) fn track_table(
             Sense::click_and_drag()
         })
         .cell_layout(Layout::left_to_right(Align::Center));
-    for w in &px {
-        builder = builder.column(Column::exact(w.max(0.0)).clip(true));
+    let last_px = px.len().saturating_sub(1);
+    for (index, w) in px.iter().enumerate() {
+        let handle = if view_state.phone_active && index == last_px {
+            HANDLE_WIDTH
+        } else {
+            0.0
+        };
+        builder = builder.column(Column::exact(w.max(0.0) + handle).clip(true));
     }
     // A current entry being followed: scroll its row to the top once.
     if let Some(FollowScroll {
@@ -360,6 +378,9 @@ pub(crate) fn track_table(
         .header(HEADER_HEIGHT, |mut header| {
             for (index, column) in columns.iter().enumerate() {
                 let (_, response) = header.col(|ui| {
+                    if phone && index + 1 == columns.len() {
+                        ui.set_max_width((ui.max_rect().width() - HANDLE_WIDTH).max(0.0));
+                    }
                     let right = matches!(column, TableColumn::Duration | TableColumn::Intro);
                     header_label(ui, &t.tr(&format!("col-{}", column.name())), right);
                 });
@@ -442,6 +463,17 @@ pub(crate) fn track_table(
                 for (index, column) in columns.iter().enumerate() {
                     row.col(|ui| {
                         line(ui, index);
+                        if phone && index == last_column {
+                            let handle = drag_handle(
+                                ui,
+                                &handle_label,
+                                ui.scope_id().with(("handle", entry.id)),
+                            );
+                            if handle.drag_started() {
+                                handle.dnd_set_drag_payload(DragEntry { entry: entry.id });
+                                dragged = Some(entry.id);
+                            }
+                        }
                         match column {
                             TableColumn::Number => {
                                 ui.add_space(10.0);
@@ -663,7 +695,7 @@ pub(crate) fn track_table(
                 response.context_menu(|ui| {
                     menu_open = true;
                     clicked = Some(entry.id);
-                    match context_menu(ui, scene, player, playlist, entry.id, i, track) {
+                    match context_menu(ui, scene, player, playlist, entry.id, i, track, phone) {
                         Some(RowMenuOutcome::EditTags(id)) => edit_tags = Some(id),
                         Some(RowMenuOutcome::Loudness(id)) => loudness = Some(id),
                         None => {}
@@ -879,6 +911,7 @@ enum RowMenuOutcome {
     Loudness(fp_model::TrackId),
 }
 
+#[allow(clippy::too_many_arguments)]
 fn context_menu(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -887,6 +920,7 @@ fn context_menu(
     entry: EntryId,
     index: usize,
     track: &fp_model::Track,
+    phone: bool,
 ) -> Option<RowMenuOutcome> {
     let t = scene.i18n;
     let mut outcome = None;
@@ -1020,6 +1054,9 @@ fn context_menu(
         scene.ctl.send(Command::ToggleEntryStopAfter(entry));
         ui.close();
     }
+    if phone {
+        phone_moves(ui, scene, player, playlist, entry, index, on_air);
+    }
     let others: Vec<_> = scene
         .state
         .playlists
@@ -1056,6 +1093,114 @@ fn context_menu(
         ui.close();
     }
     outcome
+}
+
+/// The row menu's moves on a phone (phone layout spec PL10, PL10b): up,
+/// down, and to another player, after its next in the playlist it shows.
+/// The entry on air stays with its player.
+fn phone_moves(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    player: PlayerId,
+    playlist: PlaylistId,
+    entry: EntryId,
+    index: usize,
+    on_air: bool,
+) {
+    let t = scene.i18n;
+    let len = scene
+        .state
+        .playlists
+        .get(playlist)
+        .map_or(0, |p| p.entries.len());
+    let item = |ui: &mut Ui, glyph: &str, key: &str, enabled: bool| {
+        let text = t.tr(key);
+        let response = ui.add_enabled(enabled, egui::Button::new(format!("{glyph}  {text}")));
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text.clone()));
+        response.clicked()
+    };
+    // `MoveEntry` takes the boundary before the entry is taken out.
+    for (glyph, key, enabled, to) in [
+        (
+            icon::ARROW_UP,
+            "menu-move-up",
+            index > 0,
+            index.saturating_sub(1),
+        ),
+        (
+            icon::ARROW_DOWN,
+            "menu-move-down",
+            index + 1 < len,
+            index + 2,
+        ),
+    ] {
+        if item(ui, glyph, key, enabled) {
+            scene.ctl.send(Command::MoveEntry {
+                entry,
+                to: playlist,
+                index: to,
+            });
+            ui.close();
+        }
+    }
+    let targets: Vec<(String, PlaylistId, usize)> = scene
+        .state
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.id != player)
+        .filter_map(|(n, p)| {
+            let (to, index) = fp_model::after_next(scene.state, p.id)?;
+            Some((
+                t.tr_args("player-label", &[("n", (n + 1).into())]),
+                to,
+                index,
+            ))
+        })
+        .collect();
+    if targets.is_empty() {
+        return;
+    }
+    let text = t.tr("menu-move-to-player");
+    let enabled = !on_air;
+    ui.add_enabled_ui(enabled, |ui| {
+        ui.menu_button(format!("{}  {text}", icon::ARROW_SQUARE_OUT), |ui| {
+            for (name, to, index) in targets {
+                if ui.button(name).clicked() {
+                    scene.ctl.send(Command::MoveEntry { entry, to, index });
+                    ui.close();
+                }
+            }
+        })
+        .response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text.clone()));
+    });
+}
+
+/// A row's drag handle (≡) at the right of `ui`'s cell on a phone (PL10):
+/// the table itself scrolls under a finger, so only the handle moves a row.
+/// The rest of the cell is narrowed to leave it room.
+fn drag_handle(ui: &mut Ui, label: &str, id: egui::Id) -> egui::Response {
+    let cell = ui.max_rect();
+    let rect = Rect::from_min_max(
+        pos2(cell.right() - HANDLE_WIDTH, cell.top()),
+        pos2(cell.right(), cell.top() + ROW_HEIGHT),
+    );
+    let response = ui.interact(rect, id, Sense::drag());
+    let owned = label.to_owned();
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, owned.clone()));
+    if ui.is_rect_visible(rect) {
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            icon::LIST,
+            egui::FontId::proportional(16.0),
+            theme::NEUTRAL_500,
+        );
+    }
+    ui.set_max_width((cell.width() - HANDLE_WIDTH).max(0.0));
+    response
 }
 
 /// A small flag icon with `label` as its accessible name and tooltip.
