@@ -1159,3 +1159,47 @@ fn the_drag_handle_leaves_the_duration_whole() {
         "{duration:?} {header:?}"
     );
 }
+
+/// The label and the control of Settings' "Number of players" row.
+fn player_count_row(h: &Harness<'static, AppUi>) -> (egui::Rect, egui::Rect) {
+    let mut nodes: Vec<egui::Rect> = h
+        .get_all_by_label("Number of players")
+        .map(|n| n.rect())
+        .collect();
+    assert_eq!(nodes.len(), 2, "the label and the slider");
+    nodes.sort_by(|a, b| {
+        (a.top(), a.left())
+            .partial_cmp(&(b.top(), b.left()))
+            .unwrap()
+    });
+    let (label, control) = (nodes[0], nodes[1]);
+    if (label.top() - control.top()).abs() < 1.0 && control.left() < label.left() {
+        (control, label)
+    } else {
+        (label, control)
+    }
+}
+
+/// PL21: on a phone a setting's control is below its label.
+#[test]
+fn phone_settings_are_stacked() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Players").click();
+    h.run_steps(3);
+    let (label, control) = player_count_row(&h);
+    assert!(control.top() >= label.bottom(), "{label:?} {control:?}");
+}
+
+/// The desktop keeps the label column beside the control.
+#[test]
+fn desktop_settings_keep_the_label_column() {
+    let (mut h, _fake) = harness(state(2, 3));
+    h.run_steps(3);
+    h.get_by_label("Settings").click();
+    h.run_steps(3);
+    h.get_by_label("Players").click();
+    h.run_steps(3);
+    let (label, control) = player_count_row(&h);
+    assert!(control.left() > label.right(), "{label:?} {control:?}");
+}

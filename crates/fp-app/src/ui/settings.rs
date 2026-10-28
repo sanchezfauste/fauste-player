@@ -433,6 +433,7 @@ fn body(
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
                         set_body_right(ui);
+                        set_stacked(ui, deps.phone);
                         match st.section {
                             Section::Outputs => {
                                 st.load_devices(deps.backends, ctx);
@@ -721,6 +722,21 @@ fn confirm_restore(ctx: &egui::Context, scene: &Scene<'_>, st: &mut SettingsStat
     }
 }
 
+fn stacked_id() -> egui::Id {
+    egui::Id::unique("settings-stacked")
+}
+
+/// Whether the rows of this frame stack the control under its label (a
+/// phone, PL21); set by `body` before any row is drawn.
+fn set_stacked(ui: &Ui, stacked: bool) {
+    ui.data_mut(|d| d.insert_temp(stacked_id(), stacked));
+}
+
+fn stacked(ui: &Ui) -> bool {
+    ui.data(|d| d.get_temp::<bool>(stacked_id()))
+        .unwrap_or(false)
+}
+
 fn body_right_id() -> egui::Id {
     egui::Id::unique("settings-body-right")
 }
@@ -760,6 +776,9 @@ pub(super) fn labelled_row<R>(
     hint: Option<&str>,
     control: impl FnOnce(&mut Ui, egui::Id) -> R,
 ) -> R {
+    if stacked(ui) {
+        return stacked_row(ui, label, hint, control);
+    }
     let out = ui
         .horizontal(|ui| {
             ui.set_min_height(44.0);
@@ -809,6 +828,57 @@ pub(super) fn labelled_row<R>(
         })
         .inner;
     let width = column_width(ui);
+    let (r, _) = ui.allocate_exact_size(vec2(width, 1.0), Sense::hover());
+    ui.painter()
+        .rect_filled(r, 0.0, theme::TEXT.gamma_multiply(0.06));
+    out
+}
+
+/// `labelled_row` on a phone (PL21): the label and its hint on top, the
+/// control below with the whole width.
+fn stacked_row<R>(
+    ui: &mut Ui,
+    label: &str,
+    hint: Option<&str>,
+    control: impl FnOnce(&mut Ui, egui::Id) -> R,
+) -> R {
+    let width = column_width(ui);
+    let out = ui
+        .vertical(|ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
+            ui.add_space(8.0);
+            let label_id = ui
+                .add(
+                    egui::Label::new(RichText::new(label).font(font(13.0)).color(theme::TEXT))
+                        .selectable(false)
+                        .wrap(),
+                )
+                .id;
+            if let Some(hint) = hint {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(hint)
+                            .font(font(11.0))
+                            .color(theme::NEUTRAL_500),
+                    )
+                    .selectable(false)
+                    .wrap(),
+                );
+            }
+            ui.add_space(4.0);
+            ui.allocate_ui_with_layout(
+                vec2(width, 40.0),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ui.set_width(width);
+                    control(ui, label_id)
+                },
+            )
+            .inner
+        })
+        .inner;
+    ui.add_space(6.0);
     let (r, _) = ui.allocate_exact_size(vec2(width, 1.0), Sense::hover());
     ui.painter()
         .rect_filled(r, 0.0, theme::TEXT.gamma_multiply(0.06));
