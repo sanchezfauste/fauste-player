@@ -10,7 +10,7 @@ use egui_phosphor::regular as icon;
 use fp_model::{Command, PlayerId, PlaylistId};
 
 use super::app::{Scene, ViewState};
-use super::media_browser::MediaFile;
+use super::media_browser::{BrowseMode, MediaBrowser, MediaFile};
 use super::widgets::font;
 use super::{format, theme, touch};
 
@@ -51,6 +51,10 @@ pub struct MusicView {
     pub ticked: Vec<PathBuf>,
     /// Where the selection goes: a player and a playlist (PL19).
     pub target: Option<(PlayerId, PlaylistId)>,
+    /// The picker request the screen answers (PL19b), and the screen it
+    /// returns to.
+    pub pick: Option<u64>,
+    pub before_pick: Option<touch::PhoneScreen>,
 }
 
 /// What to show: groups to open, then tracks (indices into the files).
@@ -215,20 +219,80 @@ enum Action {
     Open(Group),
     Folder(Option<PathBuf>),
     Toggle(PathBuf),
+    /// Answers the picker's request (PL19b).
+    Answer(Vec<PathBuf>),
+}
+
+/// PL19b: a picker's request turns a phone to its Music screen, which
+/// answers it; once answered or cancelled, the earlier screen returns. The
+/// selection starts and ends empty.
+pub(crate) fn follow_request(view_state: &mut ViewState) {
+    let pending = view_state.media.as_ref().and_then(MediaBrowser::pending);
+    let music = &mut view_state.music;
+    match pending {
+        Some((id, _, start)) if music.pick != Some(id) => {
+            if music.pick.is_none() {
+                music.before_pick = Some(view_state.phone.screen);
+            }
+            music.pick = Some(id);
+            music.ticked.clear();
+            if start.is_some() {
+                music.browse = Browse::Folders;
+                music.folder = start;
+            }
+            view_state.phone.screen = touch::PhoneScreen::Music;
+        }
+        None if music.pick.is_some() => {
+            music.pick = None;
+            music.ticked.clear();
+            if let Some(screen) = music.before_pick.take() {
+                view_state.phone.screen = screen;
+            }
+        }
+        _ => {}
+    }
 }
 
 /// The Music screen: the search, Folders | Artists | Albums, a breadcrumb
 /// in Folders, and the list.
 pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     let t = scene.i18n;
-    let files = view_state
-        .media
+    let browser = view_state.media.clone();
+    let mut files = browser
         .as_ref()
-        .map(super::media_browser::MediaBrowser::files)
+        .map(MediaBrowser::files)
         .unwrap_or_default();
+    // PL19b: the request being answered, and only the files it can take.
+    let pick = browser
+        .as_ref()
+        .and_then(MediaBrowser::pending)
+        .filter(|(id, _, _)| view_state.music.pick == Some(*id))
+        .map(|(id, mode, _)| (id, mode));
+    if let Some((_, mode)) = &pick {
+        files = std::sync::Arc::new(
+            files
+                .iter()
+                .filter(|f| super::media_browser::matches(&f.path, mode))
+                .cloned()
+                .collect(),
+        );
+    }
     let view = &mut view_state.music;
     view.retain_listed(&files);
     ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+    let mut action = None;
+    if pick.is_some()
+        && ui
+            .add(
+                egui::Button::new(
+                    egui::RichText::new(t.tr("media-browser-cancel")).font(font(14.0)),
+                )
+                .min_size(vec2(0.0, 40.0)),
+            )
+            .clicked()
+    {
+        action = Some(Action::Answer(Vec::new()));
+    }
     let hint = t.tr("music-search");
     let search = ui.add(
         egui::TextEdit::singleline(&mut view.search)
@@ -250,13 +314,24 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
             }
         }
     });
-    let mut action = None;
     let searching = !view.search.trim().is_empty();
     if view.browse == Browse::Folders
         && !searching
         && let Some(top) = top_folder(&files)
     {
         action = breadcrumb(ui, &top, view.folder.as_deref()).or(action);
+        if matches!(pick, Some((_, BrowseMode::Folder)))
+            && ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new(t.tr("media-browser-use-folder")).font(font(14.0)),
+                    )
+                    .min_size(vec2(0.0, touch::TARGET)),
+                )
+                .clicked()
+        {
+            action = Some(Action::Answer(vec![view.folder.clone().unwrap_or(top)]));
+        }
     }
     if files.is_empty() {
         ui.add(
@@ -304,16 +379,39 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
                     continue;
                 };
                 if track_row(ui, file, view.ticked.contains(&file.path)) {
-                    action = Some(Action::Toggle(file.path.clone()));
+                    action = match &pick {
+                        Some((_, BrowseMode::OneFile { .. })) => {
+                            Some(Action::Answer(vec![file.path.clone()]))
+                        }
+                        Some((_, BrowseMode::Folder)) => None,
+                        _ => Some(Action::Toggle(file.path.clone())),
+                    };
                 }
             }
         });
-    if bar {
+    if bar && pick.is_some() {
+        ui.separator();
+        let label = t.tr_args("media-browser-add", &[("count", view.ticked.len().into())]);
+        if ui
+            .add(
+                egui::Button::new(egui::RichText::new(label).font(font(14.0)))
+                    .min_size(vec2(0.0, touch::TARGET)),
+            )
+            .clicked()
+        {
+            action = Some(Action::Answer(view.ticked.clone()));
+        }
+    } else if bar {
         let shown = view_state.phone.shown_player(&scene.state.player_ids());
         selection_bar(ui, scene, &mut view_state.music, shown);
     }
     let view = &mut view_state.music;
     match action {
+        Some(Action::Answer(chosen)) => {
+            if let (Some(browser), Some((id, _))) = (&browser, &pick) {
+                browser.answer(*id, chosen);
+            }
+        }
         Some(Action::Open(Group::Folder(path))) => view.folder = Some(path),
         Some(Action::Open(group)) => view.at = Some(group),
         Some(Action::Folder(folder)) => view.folder = folder,

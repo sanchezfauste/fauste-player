@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
 //! What the phone's Music screen lists (phone layout spec PL17).
 
 use std::path::PathBuf;

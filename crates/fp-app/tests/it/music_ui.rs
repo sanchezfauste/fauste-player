@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
 //! The phone's Music screen (phone layout spec §9, PL17–PL19b).
 
 use crate::support;
@@ -245,4 +251,102 @@ fn the_target_can_change_player() {
     fake.take_sent();
     tap(&mut h, END);
     assert_eq!(inserted(&fake).len(), 1);
+}
+
+// --- Pick mode (PL19b) ---
+
+use fp_app::ui::media_browser::BrowseMode;
+use std::thread::JoinHandle;
+
+const WINDOW: &str = "Music on this device";
+
+/// A phone (or a `size` screen) on Live, and a picker waiting in `mode`.
+fn picking(size: Vec2, mode: BrowseMode) -> (Harness<'static, AppUi>, JoinHandle<Vec<PathBuf>>) {
+    let browser = MediaBrowser::default();
+    browser.set_files(library());
+    let given = browser.clone();
+    let (mut h, _fake) = harness_sized(state(1, 3), size, move |ui| {
+        ui.with_touch().with_media_browser(given)
+    });
+    h.run_steps(3);
+    let thread = std::thread::spawn(move || browser.browse(mode, None));
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_label("Folders").is_some() || h.query_by_label(WINDOW).is_some() {
+            h.run_steps(2);
+            return (h, thread);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    panic!("nothing opened");
+}
+
+fn answer(h: &mut Harness<'static, AppUi>, thread: JoinHandle<Vec<PathBuf>>) -> Vec<PathBuf> {
+    for _ in 0..200 {
+        h.run_steps(1);
+        if thread.is_finished() {
+            h.run_steps(2);
+            return thread.join().unwrap();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    panic!("no answer");
+}
+
+fn on_live(h: &Harness<'static, AppUi>) -> bool {
+    h.query_by_label("Folders").is_none() && h.query_by_label("Stop all").is_some()
+}
+
+#[test]
+fn a_request_on_a_phone_opens_the_music_screen() {
+    let (h, _thread) = picking(PORTRAIT, BrowseMode::AudioFiles);
+    assert!(h.query_by_label("Folders").is_some());
+    assert!(h.query_by_label(WINDOW).is_none(), "no window on a phone");
+}
+
+#[test]
+fn one_file_is_answered_by_a_tap() {
+    let mode = BrowseMode::one_file(&["mp3"]).unwrap();
+    let (mut h, thread) = picking(PORTRAIT, mode);
+    tap(&mut h, ALPHA);
+    assert_eq!(answer(&mut h, thread), [PathBuf::from("/sd/Songs/a.mp3")]);
+    assert!(on_live(&h), "back where it was");
+}
+
+#[test]
+fn a_folder_is_answered_by_use_this_folder() {
+    let (mut h, thread) = picking(PORTRAIT, BrowseMode::Folder);
+    tap(&mut h, "Rock");
+    tap(&mut h, "Use this folder");
+    assert_eq!(answer(&mut h, thread), [PathBuf::from("/sd/Songs/Rock")]);
+}
+
+#[test]
+fn audio_files_are_answered_in_tap_order() {
+    let (mut h, thread) = picking(PORTRAIT, BrowseMode::AudioFiles);
+    tick_beta_then_alpha(&mut h);
+    assert!(h.query_by_label(END).is_none(), "no target in pick mode");
+    tap(&mut h, "Add 2");
+    assert_eq!(
+        answer(&mut h, thread),
+        [
+            PathBuf::from("/sd/Songs/Rock/b.mp3"),
+            PathBuf::from("/sd/Songs/a.mp3")
+        ]
+    );
+    assert!(on_live(&h));
+}
+
+#[test]
+fn back_cancels_the_request() {
+    let (mut h, thread) = picking(PORTRAIT, BrowseMode::AudioFiles);
+    assert!(back_music(&mut h));
+    assert_eq!(answer(&mut h, thread), Vec::<PathBuf>::new());
+    assert!(on_live(&h));
+}
+
+#[test]
+fn a_tablet_keeps_the_window() {
+    let (h, _thread) = picking(vec2(800.0, 1280.0), BrowseMode::AudioFiles);
+    assert!(h.query_by_label(WINDOW).is_some());
 }

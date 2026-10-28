@@ -247,7 +247,7 @@ fn sort_key(file: &Path) -> String {
         .unwrap_or_default()
 }
 
-fn matches(file: &Path, mode: &BrowseMode) -> bool {
+pub(crate) fn matches(file: &Path, mode: &BrowseMode) -> bool {
     match mode {
         BrowseMode::AudioFiles | BrowseMode::Folder => super::files::is_audio(file),
         BrowseMode::OneFile { extensions } => file

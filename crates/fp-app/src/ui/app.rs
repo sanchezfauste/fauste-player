@@ -590,6 +590,11 @@ impl AppUi {
             egui::Popup::close_all(ctx);
             return true;
         }
+        // PL2, PL19b: answering a picker, the Music screen goes up a
+        // folder before the request is cancelled.
+        if self.view.music.pick.is_some() && self.music_back() {
+            return true;
+        }
         if let Some((browser, _)) = &self.media_browser
             && browser.pending().is_some()
         {
@@ -621,17 +626,25 @@ impl AppUi {
             return true;
         }
         // PL2: the Music screen goes up a folder before leaving.
-        if v.phone.screen == super::touch::PhoneScreen::Music {
-            let files = v
-                .media
-                .as_ref()
-                .map(MediaBrowser::files)
-                .unwrap_or_default();
-            if v.music.back(&files) {
-                return true;
-            }
+        if self.music_back() {
+            return true;
         }
-        v.phone.back()
+        self.view.phone.back()
+    }
+
+    /// The phone's Music screen one step up (PL2); false elsewhere or at
+    /// its top.
+    fn music_back(&mut self) -> bool {
+        let v = &mut self.view;
+        if v.phone.screen != super::touch::PhoneScreen::Music {
+            return false;
+        }
+        let files = v
+            .media
+            .as_ref()
+            .map(MediaBrowser::files)
+            .unwrap_or_default();
+        v.music.back(&files)
     }
 
     pub fn i18n(&self) -> &I18n {
@@ -1122,8 +1135,11 @@ impl AppUi {
                 }
             }
         }
-        // MB7: a picker waits for the operator's choice of music.
-        if let Some((browser, view)) = &mut self.media_browser {
+        // MB7: a picker waits for the operator's choice of music; a phone
+        // answers it on its Music screen (PL19b).
+        if let Some((browser, view)) = &mut self.media_browser
+            && !self.view.phone_active
+        {
             media_browser::show(&ctx, scene.i18n, browser, view);
         }
         // Live settings §9.3: Apply now sends at once when it interrupts
