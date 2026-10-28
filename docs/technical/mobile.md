@@ -208,9 +208,15 @@ it lifts, PL15) and zooms on a two-finger pinch around the fingers'
 centre (`multi_touch`, with the wheel's `min_span`; the one-finger pan is
 ignored meanwhile, and a pinch never seeks, PL16). The phone's cartwall
 never folds. The status bar leaves out the desktop's shortcut hints
-(keys, double and right clicks), and in touch mode a Settings window
-narrower than 600 points shows its sections as a row of chips above the section instead of
-the side list. Context menus open by long press (egui reports it as a
+(keys, double and right clicks). On a phone Settings (`SettingsDeps::phone`,
+PL20, PL21) takes the whole screen and shows its list of sections
+(`phone_sections`) until one is chosen (`SettingsState::phone_section`;
+`edit_cart` sets it); the section header gets a back arrow, and
+`AppUi::back` calls `SettingsState::phone_back` before closing (unless
+Restore defaults or Apply now asks). `labelled_row` stacks the label and
+hint over the control (`stacked_row`) when `body` has set the frame's
+stacked flag, so every section follows. A tablet keeps the window with
+its side list. Context menus open by long press (egui reports it as a
 secondary click). Still to come: the row menu as a bottom sheet and
 long-press tooltips.
 
