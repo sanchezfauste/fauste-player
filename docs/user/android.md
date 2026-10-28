@@ -33,18 +33,33 @@ settings stay. The app is not in Google Play yet.
 
 ## The screen
 
-On a **phone** the top bar switches between **Players** and
-**Cartwall**:
+On a **phone** the top bar has three tabs, **Live**, **Carts** and
+**Playlists**, then the **padlock** and **⋮** (More: Settings and About).
+The clock shows when there is room for it.
 
-- *Players:* every player as a compact panel with its transport, its
-  countdown, its level and a progress bar. **Open P1** shows that player
-  with its playlist; the chips above it switch players, and **All** goes
-  back. Turned sideways, two players show side by side: the chips or a
-  sideways swipe show the next two, and the players scroll up to reach
-  their playlists.
-- *Cartwall:* the shown cart page, filling the screen. Held upright, a
-  page wider than tall is turned (8 × 2 shows as 2 × 8), in the same
-  order.
+- *Live:* every player as a card, and the cartwall. Each card has the
+  player's waveform on top (a tap seeks), its name, status, Single/Cont
+  and CUE, the title with the time left and the next track, the transport
+  (Play/Next, Previous, Pause, Stop, Restart, Fade stop, Stop after
+  current), and the meter with the volume fader. Held upright the cards
+  are on top, two at a time (scroll for more), and the cartwall below;
+  turned sideways the cards are on the left and the cartwall on the
+  right. A cart page too wide for the space shows in fewer columns, in
+  the same order.
+- *Carts:* the shown cart page, filling the screen. Swipe sideways to
+  show the next or the previous page. Held upright, a page wider than
+  tall is turned (8 × 2 shows as 2 × 8), in the same order.
+- *Playlists:* one player with its playlists; the chips at the top (P1,
+  P2…) choose the player.
+
+Back from Carts or Playlists goes to Live.
+
+**The padlock** guards against stray touches during a show. Locked (the
+padlock closed and lit), the volume faders only show the level and the
+waveforms neither seek nor edit markers; they look dimmed. A pinch and a
+drag still zoom and move a waveform, and Play, the transport, the carts
+and the playlists always work. The lock stays on after a restart; the
+remote API and MIDI are not locked.
 
 A drag that starts on a volume fader moves it; one that starts anywhere
 else scrolls, so scrolling never changes a level on air. A tap on a
