@@ -1083,3 +1083,23 @@ fn a_tablet_has_no_lock_button() {
     let (h, _fake) = touch(2, PORTRAIT);
     assert!(h.query_by_label(LOCK).is_some());
 }
+
+/// PL10: the drag handle leaves the duration room to be read.
+#[test]
+fn the_drag_handle_leaves_the_duration_whole() {
+    let mut s = state(1, 3);
+    for t in s.library.iter_mut() {
+        t.duration_secs = 180.0;
+    }
+    let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    let handle = h.get_all_by_label("Drag to move").next().unwrap().rect();
+    let duration = h.get_all_by_label("03:00").next().unwrap().rect();
+    assert!(duration.right() <= handle.left(), "{duration:?} {handle:?}");
+    let header = h.get_by_label("DUR.").rect();
+    assert!(
+        duration.width() >= header.width() * 0.9,
+        "{duration:?} {header:?}"
+    );
+}

@@ -282,6 +282,13 @@ pub(crate) fn track_table(
     // release (O16). The table never keeps widths of its own: every column
     // is given its exact width on every frame.
     let width = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
+    // A phone's drag handle (PL10) is added to the last column, so the
+    // columns share what it leaves.
+    let width = if view_state.phone_active {
+        (width - HANDLE_WIDTH).max(0.0)
+    } else {
+        width
+    };
     let from_model = table_layout::column_px(&columns, &p.columns, width, digits);
     let px = live_widths(
         ui, scene, view_state, player, &columns, &mins, &p.columns, width, from_model,
@@ -330,8 +337,14 @@ pub(crate) fn track_table(
             Sense::click_and_drag()
         })
         .cell_layout(Layout::left_to_right(Align::Center));
-    for w in &px {
-        builder = builder.column(Column::exact(w.max(0.0)).clip(true));
+    let last_px = px.len().saturating_sub(1);
+    for (index, w) in px.iter().enumerate() {
+        let handle = if view_state.phone_active && index == last_px {
+            HANDLE_WIDTH
+        } else {
+            0.0
+        };
+        builder = builder.column(Column::exact(w.max(0.0) + handle).clip(true));
     }
     // A current entry being followed: scroll its row to the top once.
     if let Some(FollowScroll {
@@ -365,6 +378,9 @@ pub(crate) fn track_table(
         .header(HEADER_HEIGHT, |mut header| {
             for (index, column) in columns.iter().enumerate() {
                 let (_, response) = header.col(|ui| {
+                    if phone && index + 1 == columns.len() {
+                        ui.set_max_width((ui.max_rect().width() - HANDLE_WIDTH).max(0.0));
+                    }
                     let right = matches!(column, TableColumn::Duration | TableColumn::Intro);
                     header_label(ui, &t.tr(&format!("col-{}", column.name())), right);
                 });
