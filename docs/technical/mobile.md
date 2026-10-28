@@ -200,7 +200,8 @@ never folds. The status bar leaves out the desktop's shortcut hints
 (keys, double and right clicks), and in touch mode a Settings window
 narrower than 600 points shows its sections as a row of chips above the section instead of
 the side list. Context menus open by long press (egui reports it as a
-secondary click). Still to come: long-press tooltips.
+secondary click). Still to come: the row menu as a bottom sheet and
+long-press tooltips.
 
 ## Media access (MB7)
 

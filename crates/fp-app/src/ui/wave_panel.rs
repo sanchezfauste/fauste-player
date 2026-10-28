@@ -319,7 +319,10 @@ fn edit_markers(
     }
     let at = view_state.wave_menu.get(&key).copied();
     let phone = view_state.phone_active;
-    let set_by_hand = scene.state.library.get(track).map(|t| t.markers);
+    // Only a phone offers Remove (PL11b): elsewhere the list stays empty.
+    let set_by_hand = phone
+        .then(|| scene.state.library.get(track).map(|t| t.markers))
+        .flatten();
     let manual: Vec<(MarkerKind, &str)> = [
         (MarkerKind::CueIn, "wave-remove-cue-in"),
         (MarkerKind::IntroEnd, "wave-remove-intro"),
