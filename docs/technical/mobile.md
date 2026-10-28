@@ -51,15 +51,17 @@ paused or pre-listening, or a cart playing or pre-listening.
   side, and the gesture, through the back dispatcher) calls `Native.back`,
   which sets a flag and wakes the interface through the stored
   `egui::Context`. The next frame's `MobileApp::logic` calls
-  `Shell::back` → `AppUi::back` (cancels the media browser's request,
-  then closes Settings, then About, then a phone's open player); with
+  `Shell::back` → `AppUi::back` (closes an open menu, then cancels the
+  media browser's request, then closes the topmost window or question as
+  Esc or Cancel would, then a phone's open player); with
   nothing to go back to, `Platform::leave(sounding)` calls
   `MainActivity.leave(close)` on a helper thread. While something sounds
   (`shell_state::sounding`, the `SOUNDING` bit: `playout_active` is also
   true for a stopped player with a track loaded) the task moves to the
   background; otherwise `finishAndRemoveTask()`. `onDestroy`, when
   finishing with nothing sounding (Back, or a swipe from the app
-  switcher), runs `Native.quitAndEnd`: on a helper thread `Native.quit`
+  switcher), runs `Native.quitAndEnd` (once per process): on a helper
+  thread `Native.quit`
   (`AppSession::stop_services`, the services' final save; the engine is
   left running) and then `Process.killProcess`. A swipe while something
   sounds leaves the service holding the process; its refresh ends the app
@@ -164,7 +166,7 @@ moves a level on air. A waveform seeks on a tap at the press position
 (`interact_pointer_pos`: a finger leaves no hover position on the frame
 it lifts, PL15) and zooms on a two-finger pinch around the fingers'
 centre (`multi_touch`, with the wheel's `min_span`; the one-finger pan is
-ignored meanwhile, PL16). The cartwall screen
+ignored meanwhile, and a pinch never seeks, PL16). The cartwall screen
 never folds. The status bar leaves out the desktop's shortcut hints
 (keys, double and right clicks), and in touch mode a Settings window
 narrower than 600 points shows its sections as a row of chips above the section instead of
