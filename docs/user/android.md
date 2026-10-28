@@ -49,8 +49,17 @@ The clock shows when there is room for it.
 - *Carts:* the shown cart page, filling the screen. Swipe sideways to
   show the next or the previous page. Held upright, a page wider than
   tall is turned (8 × 2 shows as 2 × 8), in the same order.
-- *Playlists:* one player with its playlists; the chips at the top (P1,
-  P2…) choose the player.
+- *Playlists:* the chips at the top (P1, P2…) choose the player; under
+  them are its playlist tabs (+ makes a new one), the track list and,
+  at the bottom (on the right when the phone is on its side), the
+  player's card with a larger waveform for preparing a track. A long
+  press on a row opens its menu, which also has **Move up**, **Move
+  down** and **Move to another player** (the track goes right after that
+  player's next track, in the playlist it shows; the track on air
+  stays). Drag a row by its ≡ handle to move it. The footer has **Add**
+  and, behind **⋯**, **Reset played**. A long press on the waveform sets
+  a marker at that point (cue in, intro end, outro start, MIX, cue out)
+  or removes one you set; markers are edited here only, not on Live.
 
 Back from Carts or Playlists goes to Live.
 
@@ -66,8 +75,8 @@ A drag that starts on a volume fader moves it; one that starts anywhere
 else scrolls, so scrolling never changes a level on air. A tap on a
 waveform seeks there, a two-finger pinch on it zooms around your fingers,
 a one-finger drag moves a zoomed view and **Full view** shows the whole
-track again. In a playlist a finger scrolls; to move a track, use the row
-menu.
+track again. In a playlist a finger scrolls; to move a track, use its ≡
+handle or the row menu.
 
 On a **tablet** the layout is the desktop's (see [Layout](layout.md)),
 with targets made easier to hit.

@@ -160,10 +160,21 @@ stops or changes playout.
   next or the previous page, stopping at the ends. On an upright phone, a
   page with more columns than rows is laid out turned (columns and rows
   swapped, carts in the same reading order).
-- *Playlists* (until phone plan 3): chips per player and the desktop
-  column with its playlist at the full width. A phone on its side is
-  shorter than a column, so the column is laid out 560 points tall and
-  scrolls.
+- *Playlists* (`touch::playlists`, `player::playlists_screen`, PL8–PL11b):
+  chips per player, then that player's playlist tabs (with +), track
+  table and footer, and its card under them (on the right when the phone
+  is on its side) with a 72-point waveform where markers are edited. The
+  card's height is remembered from the last frame, up to 55% of an
+  upright screen; a card taller than a phone on its side scrolls. On a
+  phone (`view_state.phone_active`) the row menu adds *Move up*, *Move
+  down* and *Move to another player* (`table::phone_moves`; the target is
+  `fp_model::after_next`: the playlist that player shows, right after its
+  next entry there, else its end; never the entry on air), each row ends
+  in a ≡ handle (`table::drag_handle`) that starts the desktop's
+  `DragEntry` drag and drop, the footer keeps *Add* and puts *Reset
+  played* behind a ⋯ menu (`footer_more`), and the waveform's menu (a long
+  press) offers *Remove* for each marker set by hand
+  (`SetMarker { secs: None }`, which gives it back to the analysis).
 
 **The lock** (PL12, PL13) is `Layout::touch_locked`, saved with the
 session and set by `Command::SetTouchLocked` (the layout lock does not
@@ -177,7 +188,8 @@ locked.
 The Playlists screen's player survives rotation and falls back to the
 first when it goes away (`PhoneView::settle`). Back from another screen
 goes to Live (`PhoneView::back`). A finger drag scrolls: in touch mode table
-rows and column headers do not drag (the row menu moves entries). A drag
+rows and column headers do not drag (the row menu and, on a phone, the
+row's handle move entries). A drag
 that starts on a fader moves it, on every screen (PL14); one that starts beside it scrolls, so scrolling never
 moves a level on air. A waveform seeks on a tap at the press position
 (`interact_pointer_pos`: a finger leaves no hover position on the frame
@@ -188,8 +200,7 @@ never folds. The status bar leaves out the desktop's shortcut hints
 (keys, double and right clicks), and in touch mode a Settings window
 narrower than 600 points shows its sections as a row of chips above the section instead of
 the side list. Context menus open by long press (egui reports it as a
-secondary click). Still to come: the row menu as a bottom sheet and
-long-press tooltips.
+secondary click). Still to come: long-press tooltips.
 
 ## Media access (MB7)
 
