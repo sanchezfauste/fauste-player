@@ -298,7 +298,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         if: ${{ steps.tag.outputs.android == 'true' }}
         with:
-          tool: cargo-ndk
+          tool: cargo-ndk,cargo-about
       - if: ${{ steps.tag.outputs.android == 'true' }}
         run: scripts/package/android.sh --self-test
       # Only a release run sees the key (a pull request's dry run builds

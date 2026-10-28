@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Writes THIRD-PARTY.html, the notices of the crates the app links, with
 # cargo-about. Used by the builds that do not go through package-release.sh
-# (the snap, the Flatpak and Flathub).
+# (the snap, the Flatpak and Flathub, the Android app).
 #
 #   scripts/package/notices.sh <output> [features]
+#
+# NOTICES_MANIFEST names the crate whose dependencies are listed, relative
+# to the repository (default crates/fp-app/Cargo.toml; the Android app
+# uses crates/fp-mobile/Cargo.toml).
 #
 # Uses cargo-about from PATH when there is one; otherwise, on Linux x86_64
 # and aarch64, downloads the pinned release below and checks it first.
@@ -12,6 +16,7 @@ set -euo pipefail
 output="${1:?usage: notices.sh <output> [features]}"
 features="${2:-}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
+manifest="${root}/${NOTICES_MANIFEST:-crates/fp-app/Cargo.toml}"
 
 CARGO_ABOUT_VERSION=0.9.2
 
@@ -35,5 +40,5 @@ if [ -z "${about}" ]; then
 fi
 
 mkdir -p "$(dirname "${output}")"
-"${about}" about generate --locked -m "${root}/crates/fp-app/Cargo.toml" -c "${root}/about.toml" \
+"${about}" about generate --locked -m "${manifest}" -c "${root}/about.toml" \
   ${features:+--features "${features}"} -o "${output}" "${root}/about.hbs"

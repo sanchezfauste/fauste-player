@@ -24,5 +24,6 @@ __pycache__/
 /mobile/android/.gradle/
 /mobile/android/**/build/
 /mobile/android/app/src/main/jniLibs/
+/mobile/android/app/src/main/assets/licenses/
 /mobile/android/local.properties
 /mobile/android/.kotlin/

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The files the FileProvider may hand out: the third-party notices. -->
+<paths>
+    <files-path name="licenses" path="licenses/" />
+</paths>

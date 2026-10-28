@@ -3,6 +3,7 @@
 //! destroyed eframe returns and the audio goes on; the next activity calls
 //! `android_main` again and re-attaches.
 
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
@@ -119,6 +120,17 @@ fn session(app: &AndroidApp) -> Option<&'static AppSession> {
     }
 }
 
+/// The third-party notices the activity copies out of the APK into its
+/// files folder (phone layout spec PL22); a debug APK has none. It reads
+/// the file system, so it is called once as the activity starts.
+fn notices(app: &AndroidApp) -> Option<PathBuf> {
+    let path = app
+        .internal_data_path()?
+        .join("licenses")
+        .join("THIRD-PARTY.html");
+    path.is_file().then_some(path)
+}
+
 #[allow(unsafe_code)]
 // SAFETY: `android_main` is the entry point android-activity looks up by
 // name; no other symbol in the process has it.
@@ -140,7 +152,8 @@ fn android_main(app: AndroidApp) {
         .app_ui()
         .with_platform(Arc::new(AndroidPlatform))
         .with_touch()
-        .with_media_browser(MEDIA.clone());
+        .with_media_browser(MEDIA.clone())
+        .with_notices(notices(&app));
     let this = Some((app.vm_as_ptr() as usize, app.activity_as_ptr() as usize));
     *ACTIVITY.lock().unwrap_or_else(PoisonError::into_inner) = this;
     let options = eframe::NativeOptions {

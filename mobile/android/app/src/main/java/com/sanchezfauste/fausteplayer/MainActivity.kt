@@ -9,10 +9,14 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.androidgamesdk.GameActivity
@@ -34,6 +38,8 @@ class MainActivity : GameActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Before the native side starts: it looks for the copy once.
+        copyNotices()
         super.onCreate(savedInstanceState)
         val wanted = buildList {
             if (Build.VERSION.SDK_INT >= 33) {
@@ -90,15 +96,43 @@ class MainActivity : GameActivity() {
         super.onPause()
     }
 
-    /** Opens a link from the interface (the About window); called from Rust. */
+    /**
+     * Copies the third-party notices a release APK carries as an asset to
+     * the files folder, where the interface finds them and a browser can be
+     * given them (phone layout spec PL22). A debug APK has none: a stale
+     * copy goes.
+     */
+    private fun copyNotices() {
+        val copy = File(filesDir, NOTICES)
+        try {
+            assets.open(NOTICES).use { input ->
+                copy.parentFile?.mkdirs()
+                copy.outputStream().use { input.copyTo(it) }
+            }
+        } catch (e: FileNotFoundException) {
+            copy.delete()
+        } catch (e: IOException) {
+            Log.w("fauste", "could not copy the notices", e)
+        }
+    }
+
+    /**
+     * Opens a link or a file of the files folder (the About window); called
+     * from Rust. A file is handed over through the FileProvider.
+     */
     @Suppress("unused")
     fun openUrl(url: String) {
         runOnUiThread {
             try {
-                startActivity(
+                val intent = if (url.startsWith("/")) {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.files", File(url))
+                    Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(uri, "text/html")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } else {
                     Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
+                }
+                startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (e: ActivityNotFoundException) {
                 Log.w("fauste", "no app opens $url", e)
             } catch (e: RuntimeException) {
@@ -139,5 +173,6 @@ class MainActivity : GameActivity() {
     private companion object {
         const val POLL_MS = 500L
         const val PERMISSIONS = 1
+        const val NOTICES = "licenses/THIRD-PARTY.html"
     }
 }
