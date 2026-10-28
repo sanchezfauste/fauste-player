@@ -47,6 +47,7 @@ const STEREO: StreamConfig = StreamConfig {
     exclusive: false,
     dsd: None,
     exact_buffer: false,
+    shared_buffer_us: 0,
 };
 
 fn counter() -> (Box<Counter>, Arc<AtomicU64>) {
@@ -290,6 +291,7 @@ fn device(id: &str, name: &str, detail: Option<&str>) -> DeviceInfo {
         buffer_frames: None,
         exclusive_capable: false,
         rate_switching: false,
+        shared: false,
     }
 }
 
@@ -385,6 +387,7 @@ fn offline_dop_needs_exclusive_access_and_a_24_bit_integer_format() {
         exclusive: true,
         dsd: Some(DsdStream::Dop),
         exact_buffer: false,
+        shared_buffer_us: 0,
     };
     assert!(
         matches!(
@@ -411,6 +414,7 @@ fn offline_native_dsd_needs_the_capability() {
         exclusive: true,
         dsd: Some(DsdStream::Native),
         exact_buffer: false,
+        shared_buffer_us: 0,
     };
     assert!(open(&backend, &dac, config).is_err());
     dac.set_native_dsd(true);
@@ -430,6 +434,7 @@ fn null_refuses_any_dsd_stream() {
         exclusive: false,
         dsd: Some(DsdStream::Dop),
         exact_buffer: false,
+        shared_buffer_us: 0,
     };
     assert!(open_null(config).is_err());
 }

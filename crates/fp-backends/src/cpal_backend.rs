@@ -157,6 +157,61 @@ fn exclusive_capable(host: &str, device: &str) -> bool {
     }
 }
 
+/// Whether a sound server or a system mixer stands between the stream and
+/// the hardware: then the callback only feeds a queue that the mixer reads
+/// on its own clock, and a short one runs dry whenever a busy machine holds
+/// the callback back. On ALSA the hardware is `hw:` and what converts on
+/// its way to one card (`plughw:`, the channel layouts, `iec958:`,
+/// `hdmi:`); anything else may be a server or `dmix` (`default`,
+/// `pipewire`, `pulse`, and `sysdefault:`, usually `plug` into `dmix`).
+/// PipeWire runs its clients on the graph's cycle, and a longer block asks
+/// it for a longer quantum when nothing else needs a shorter one. Core
+/// Audio, JACK and ASIO call back on the device's (or the JACK server's)
+/// own cycle, where the period is the latency asked for.
+fn shared_output(host: &str, device: &str, exclusive: bool) -> bool {
+    const ALSA_HARDWARE: &[&str] = &[
+        "hw:",
+        "plughw:",
+        "front:",
+        "rear:",
+        "center_lfe:",
+        "side:",
+        "surround",
+        "iec958:",
+        "hdmi:",
+    ];
+    if exclusive {
+        return false;
+    }
+    let inner = device
+        .strip_prefix(host)
+        .and_then(|rest| rest.strip_prefix(':'))
+        .unwrap_or(device);
+    match host {
+        "pulseaudio" | "pipewire" | "wasapi" => true,
+        "alsa" => !ALSA_HARDWARE.iter().any(|p| inner.starts_with(p)),
+        _ => false,
+    }
+}
+
+/// The buffer to ask for: at least `shared_buffer_us` (rounded up to whole
+/// frames) on a shared output, unless the device's own buffer was set
+/// (`exact_buffer`). The floor goes no higher than the largest size the
+/// device reports (`ranges`; a PipeWire quantum stops at 2048): a size
+/// past it would be refused and leave the device to choose its own.
+fn wanted_frames(config: &StreamConfig, shared: bool, ranges: &[(u32, u32)]) -> u32 {
+    if !shared || config.exact_buffer {
+        return config.buffer_frames;
+    }
+    let floor =
+        (u64::from(config.shared_buffer_us) * u64::from(config.sample_rate)).div_ceil(1_000_000);
+    let floor = u32::try_from(floor).unwrap_or(u32::MAX);
+    let largest = ranges.iter().map(|&(_, max)| max).max();
+    config
+        .buffer_frames
+        .max(largest.map_or(floor, |max| floor.min(max)))
+}
+
 fn backend_error(e: impl std::fmt::Display) -> BackendError {
     BackendError::Backend(e.to_string())
 }
@@ -407,6 +462,7 @@ impl AudioBackend for CpalBackend {
             let channels = self.channels(&device, channels);
             let exclusive = exclusive_capable(&self.id().0, &id.0);
             let native_dsd = self.native_dsd_capable(&id.0);
+            let shared = shared_output(&self.id().0, &id.0, false);
             list.push(DeviceInfo {
                 id,
                 name,
@@ -417,6 +473,7 @@ impl AudioBackend for CpalBackend {
                 exclusive_capable: exclusive,
                 rate_switching: exclusive,
                 native_dsd,
+                shared,
             });
         }
         Ok(list)
@@ -513,6 +570,36 @@ impl CpalBackend {
     }
 }
 
+#[cfg(target_os = "linux")]
+impl CpalBackend {
+    /// A promoter for the PulseAudio host, whose callback runs on the
+    /// client's thread at normal priority (cpal promotes the others). A
+    /// refusal is reported as `RealtimeDenied`: the stream still plays.
+    fn realtime_promoter(
+        &self,
+        errors: &Arc<dyn StreamErrorSink>,
+        frames: u32,
+        rate: u32,
+    ) -> Option<crate::rt_promote::Promoter<audio_thread_priority::RtPriorityThreadInfo>> {
+        if self.id().0 != "pulseaudio" {
+            return None;
+        }
+        let errors = Arc::clone(errors);
+        let promoted = crate::rt_promote::Promoter::spawn(move |thread| {
+            match audio_thread_priority::promote_thread_to_real_time(thread, frames, rate) {
+                Ok(_) => tracing::info!("the PulseAudio client thread runs in real time"),
+                Err(error) => {
+                    tracing::warn!(%error, "the PulseAudio client thread stays at normal priority");
+                    errors.report(StreamErrorKind::RealtimeDenied);
+                }
+            }
+        });
+        promoted
+            .inspect_err(|error| tracing::warn!(%error, "cannot start the real-time helper"))
+            .ok()
+    }
+}
+
 #[cfg(not(target_os = "linux"))]
 impl CpalBackend {
     fn native_dsd_capable(&self, _device_id: &str) -> bool {
@@ -602,8 +689,10 @@ impl CpalBackend {
                 cpal::SupportedBufferSize::Unknown => None,
             })
             .collect();
-        let attempts = buffer_attempts(&ranges, config.buffer_frames, config.exact_buffer);
-        let scratch_frames = (config.buffer_frames as usize).max(4096);
+        let shared = shared_output(&self.id().0, &device.0, config.exclusive);
+        let wanted = wanted_frames(&config, shared, &ranges);
+        let attempts = buffer_attempts(&ranges, wanted, config.exact_buffer);
+        let scratch_frames = (wanted as usize).max(4096);
         let mut renderer = Some(renderer);
         // Only reached without an attempt: an exact buffer out of range.
         let mut last = BackendError::Unsupported(format!(
@@ -619,6 +708,8 @@ impl CpalBackend {
             // The renderer is handed to the callback only once the stream
             // exists, so a failed attempt never loses it.
             let (mut handoff, receiver) = rtrb::RingBuffer::<Box<dyn Renderer>>::new(1);
+            #[cfg(target_os = "linux")]
+            let promoter = self.realtime_promoter(&errors, wanted, config.sample_rate);
             let errors = errors.clone();
             let fixed_frames = match buffer_size {
                 cpal::BufferSize::Fixed(frames) => Some(frames),
@@ -632,6 +723,8 @@ impl CpalBackend {
                 scratch_frames,
                 called_frames: called_frames.clone(),
                 held_frames: held_frames.clone(),
+                #[cfg(target_os = "linux")]
+                promoter,
             };
             let built = match format {
                 cpal::SampleFormat::I16 => build::<i16>(&dev, cpal_config, io),
@@ -702,6 +795,10 @@ struct Io {
     called_frames: Arc<AtomicU32>,
     /// The most frames held, for `OutputStream::latency_frames`.
     held_frames: Arc<AtomicU32>,
+    /// Promotes the callback's thread when the host leaves it at normal
+    /// priority (`realtime_promoter`).
+    #[cfg(target_os = "linux")]
+    promoter: Option<crate::rt_promote::Promoter<audio_thread_priority::RtPriorityThreadInfo>>,
 }
 
 /// Builds an output stream in sample type `T`. The callback renders f32 into
@@ -720,6 +817,8 @@ where
         scratch_frames,
         called_frames,
         held_frames: held,
+        #[cfg(target_os = "linux")]
+        mut promoter,
     } = io;
     let channels = usize::from(config.channels).max(1);
     let rate = config.sample_rate;
@@ -728,6 +827,11 @@ where
     dev.build_output_stream::<T, _, _>(
         config,
         move |out: &mut [T], info: &cpal::OutputCallbackInfo| {
+            // Once: the thread's ids, read with plain system calls.
+            #[cfg(target_os = "linux")]
+            if let Some(p) = promoter.as_mut() {
+                p.offer(|| audio_thread_priority::get_current_thread_info().ok());
+            }
             let frames = u32::try_from(out.len() / channels).unwrap_or(u32::MAX);
             called_frames.fetch_max(frames, Ordering::Relaxed);
             let stamp = info.timestamp();
@@ -1016,6 +1120,7 @@ mod tests {
             exclusive,
             dsd,
             exact_buffer: false,
+            shared_buffer_us: 0,
         };
         assert!(check_dsd(&config(Some(DsdStream::Dop), false)).is_err());
         assert!(check_dsd(&config(Some(DsdStream::Dop), true)).is_ok());
@@ -1154,6 +1259,81 @@ mod tests {
         assert_eq!(choose_buffer_frames(&[(64, 4096)], 512), Some(512));
         assert_eq!(choose_buffer_frames(&[(1024, 4096)], 512), None);
         assert_eq!(choose_buffer_frames(&[], 512), None);
+    }
+
+    #[test]
+    fn outputs_with_a_mixer_between_them_and_the_hardware_are_shared() {
+        use super::shared_output;
+        assert!(shared_output(
+            "pulseaudio",
+            "pulseaudio:alsa_output.pci",
+            false
+        ));
+        assert!(shared_output("pipewire", "pipewire:42", false));
+        assert!(shared_output("alsa", "alsa:default", false));
+        assert!(shared_output("alsa", "alsa:pipewire", false));
+        assert!(shared_output("alsa", "alsa:dmix:CARD=PCH,DEV=0", false));
+        assert!(!shared_output("alsa", "alsa:hw:CARD=PCH,DEV=0", false));
+        assert!(!shared_output("alsa", "alsa:plughw:CARD=PCH,DEV=0", false));
+        // Usually the card's stock `default`: `plug` into `dmix`.
+        assert!(shared_output("alsa", "alsa:sysdefault:CARD=PCH", false));
+        assert!(!shared_output("alsa", "alsa:front:CARD=PCH,DEV=0", false));
+        assert!(shared_output("wasapi", "wasapi:{guid}", false));
+        assert!(
+            !shared_output("wasapi", "wasapi:{guid}", true),
+            "exclusive mode"
+        );
+        // The callback is the hardware's (or the JACK server's) own cycle.
+        assert!(!shared_output("coreaudio", "coreaudio:BuiltIn", false));
+        assert!(!shared_output("jack", "jack:system", false));
+        assert!(!shared_output("asio", "asio:Driver", false));
+    }
+
+    #[test]
+    fn a_shared_output_asks_for_at_least_the_shared_buffer() {
+        use super::wanted_frames;
+        use crate::StreamConfig;
+        let config = |sample_rate, buffer_frames, exact_buffer| StreamConfig {
+            sample_rate,
+            buffer_frames,
+            channels: 2,
+            exclusive: false,
+            dsd: None,
+            exact_buffer,
+            shared_buffer_us: 50_000,
+        };
+        let any = [(1, 262_144)];
+        let wanted =
+            |c: &StreamConfig, shared, ranges: &[(u32, u32)]| wanted_frames(c, shared, ranges);
+        assert_eq!(wanted(&config(48_000, 512, false), true, &any), 2_400);
+        assert_eq!(wanted(&config(44_100, 512, false), true, &any), 2_205);
+        assert_eq!(wanted(&config(44_100, 4_096, false), true, &any), 4_096);
+        assert_eq!(
+            wanted(&config(48_000, 512, false), false, &any),
+            512,
+            "hardware"
+        );
+        assert_eq!(
+            wanted(&config(48_000, 256, true), true, &any),
+            256,
+            "a device's own buffer is used as it is"
+        );
+        let off = StreamConfig {
+            shared_buffer_us: 0,
+            ..config(48_000, 512, false)
+        };
+        assert_eq!(wanted(&off, true, &any), 512, "no floor");
+        // A floor past the largest size the device takes (a PipeWire
+        // quantum) is that size, not a refused one that would leave the
+        // device to choose.
+        let quantum = [(32, 2_048)];
+        assert_eq!(wanted(&config(48_000, 512, false), true, &quantum), 2_048);
+        assert_eq!(wanted(&config(48_000, 4_096, false), true, &quantum), 4_096);
+        assert_eq!(
+            wanted(&config(48_000, 512, false), true, &[]),
+            2_400,
+            "no range reported"
+        );
     }
 
     #[test]

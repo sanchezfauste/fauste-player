@@ -1358,3 +1358,84 @@ fn cc5_the_colour_row_sets_and_clears_the_cart_colour() {
         "the tooltip repeats the name"
     );
 }
+
+#[test]
+fn a_shared_output_shows_the_least_buffer_it_asks_for() {
+    // `dac` goes through a sound server; `speakers` is the hardware.
+    let (mut h, _fake) = outputs_built(
+        fp_model::OutputsView::Advanced,
+        Vec::new(),
+        "speakers",
+        None,
+        |dac, _| dac.set_shared(true),
+    );
+    let shared = "Latency: 10.7 ms (shared outputs: at least 50 ms)";
+    h.get_by_role_and_label(Role::ComboBox, "Buffer size: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert_eq!(
+        h.query_all_by_label(shared).count(),
+        2,
+        "the global buffer and dac's, not speakers'"
+    );
+    assert!(h.query_all_by_label("Latency: 10.7 ms").next().is_some());
+}
+
+#[test]
+fn a_shared_output_with_its_own_buffer_uses_it_as_it_is() {
+    let (mut h, _fake) = outputs_built(
+        fp_model::OutputsView::Advanced,
+        Vec::new(),
+        "speakers",
+        None,
+        |dac, s| {
+            dac.set_shared(true);
+            let dac = fp_model::OutputDevice {
+                backend: "offline".into(),
+                device: "dac".into(),
+            };
+            s.config.outputs.set_device_buffer(&dac, Some(1024));
+        },
+    );
+    h.get_by_role_and_label(Role::ComboBox, "Buffer size: dac")
+        .scroll_to_me();
+    h.run_steps(5);
+    assert!(h.query_all_by_label("Latency: 21.3 ms").next().is_some());
+    assert_eq!(
+        h.query_all_by_label("Latency: 10.7 ms (shared outputs: at least 50 ms)")
+            .count(),
+        1,
+        "only the global buffer"
+    );
+}
+
+#[test]
+fn the_least_shared_buffer_shown_is_what_the_device_takes() {
+    for (largest, shown) in [
+        (
+            2_048,
+            Some("Latency: 10.7 ms (shared outputs: at least 43 ms)"),
+        ),
+        // A shared engine that only reports its period keeps the buffer.
+        (480, None),
+    ] {
+        let (mut h, _fake) = outputs_built(
+            fp_model::OutputsView::Advanced,
+            Vec::new(),
+            "speakers",
+            None,
+            |dac, _| {
+                dac.set_shared(true);
+                dac.set_reported_buffers((32, largest));
+            },
+        );
+        h.get_by_role_and_label(Role::ComboBox, "Buffer size: dac")
+            .scroll_to_me();
+        h.run_steps(5);
+        let floored = h.query_all_by_label_contains("shared outputs").count();
+        match shown {
+            Some(text) => assert_eq!(h.query_all_by_label(text).count(), 2, "{largest}"),
+            None => assert_eq!(floored, 0, "{largest}"),
+        }
+    }
+}

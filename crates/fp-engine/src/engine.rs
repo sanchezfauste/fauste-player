@@ -61,6 +61,8 @@ pub struct DeviceStream {
 pub struct EngineSettings {
     pub sample_rate: u32,
     pub buffer_frames: u32,
+    /// `outputs.shared_buffer_ms`, in microseconds (`StreamConfig`).
+    pub shared_buffer_us: u32,
     pub channels: u16,
     pub tuning: Tuning,
     pub routes: Vec<PlayerRoutes>,
@@ -79,6 +81,8 @@ impl EngineSettings {
         Self {
             sample_rate: config.outputs.sample_rate,
             buffer_frames: config.outputs.buffer_frames,
+            // Validated to 0–500 ms.
+            shared_buffer_us: (config.outputs.shared_buffer_ms * 1000.0).round() as u32,
             channels: 2,
             tuning: config.tuning.clone(),
             routes: config.outputs.routes.clone(),
@@ -2098,6 +2102,7 @@ impl Engine {
                 // A device's own buffer it does not take falls back to the
                 // global one (`pcm_fallback`), not to the device's default.
                 exact_buffer: buffer != self.settings.buffer_frames,
+                shared_buffer_us: self.settings.shared_buffer_us,
             };
             // Lengths in this bus's frames.
             let mixer = mixer_config(&self.settings.tuning, rate);

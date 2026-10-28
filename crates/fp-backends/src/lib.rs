@@ -20,6 +20,8 @@ mod hosts;
 mod null;
 mod offline;
 mod pacer;
+#[cfg(target_os = "linux")]
+mod rt_promote;
 #[cfg(windows)]
 mod wasapi_exclusive;
 
@@ -61,6 +63,9 @@ pub struct DeviceInfo {
     pub rate_switching: bool,
     /// The device takes raw DSD (Linux, ALSA hw: devices reporting a DSD format).
     pub native_dsd: bool,
+    /// A sound server or a system mixer stands between it and the hardware:
+    /// a shared stream asks for at least `StreamConfig::shared_buffer_us`.
+    pub shared: bool,
 }
 
 /// The labels an output picker shows for `devices`, in order: the name (the
@@ -116,6 +121,12 @@ pub struct StreamConfig {
     /// the global one, not to the device's default). A backend whose
     /// driver only rounds the size (an aligned period) still opens.
     pub exact_buffer: bool,
+    /// The least a shared output asks for, in microseconds
+    /// (`outputs.shared_buffer_ms`; 0 is no floor): one with a sound server
+    /// or a system mixer between it and the hardware. A backend applies it
+    /// only to such outputs and never with `exact_buffer`. A duration, not
+    /// frames, so that it holds when the rate changes.
+    pub shared_buffer_us: u32,
 }
 
 /// The sample format a stream really runs in.

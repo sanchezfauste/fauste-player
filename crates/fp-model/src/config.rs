@@ -471,6 +471,15 @@ pub struct OutputsConfig {
     /// every switch to PCM, so that the converter locks without a pop
     /// (milliseconds, 0–2000).
     pub dsd_silence_ms: f64,
+    /// The least audio a shared output asks for (milliseconds, 0–500, at
+    /// most `tuning.play_out_max_ms` by default; 0 is no floor): one taken through a sound server (PulseAudio,
+    /// PipeWire), an ALSA plugin that is not the hardware (`default`,
+    /// `dmix`) or WASAPI's shared mode. Its blocks are at least this long
+    /// and the system queues about two of them, so a busy machine that
+    /// holds the callback back for a moment is not heard. `buffer_frames`
+    /// wins when it is longer, and a device's own buffer (one that differs
+    /// from `buffer_frames`) is used as it is. Read when an output opens.
+    pub shared_buffer_ms: f64,
     /// Devices with their own rate or buffer (operator feedback 4, Q12.4),
     /// keyed by backend and device like `bit_perfect`. Empty by default:
     /// every device uses `sample_rate` and `buffer_frames`.
@@ -499,6 +508,7 @@ impl Default for OutputsConfig {
             dsd_output: Vec::new(),
             dsd_mix: crate::dsd::DsdMix::default(),
             dsd_silence_ms: crate::dsd::DEFAULT_DSD_SILENCE_MS,
+            shared_buffer_ms: 50.0,
             device_overrides: Vec::new(),
         }
     }
@@ -1192,6 +1202,13 @@ impl Config {
             "outputs.dsd_silence_ms",
             &mut w,
         );
+        clamp_to(
+            &mut o.shared_buffer_ms,
+            0.0,
+            500.0,
+            "outputs.shared_buffer_ms",
+            &mut w,
+        );
         let mut seen: Vec<(String, String)> = Vec::new();
         let before = o.dsd_output.len();
         o.dsd_output.retain(|d| {
@@ -1517,6 +1534,22 @@ mod tests {
         assert!(warnings.iter().any(|w| w.field == "ui.max_fps"));
         c.ui.max_fps = 0;
         assert!(c.validate().is_empty(), "0 is no limit");
+    }
+
+    #[test]
+    fn shared_outputs_keep_at_least_fifty_milliseconds_by_default() {
+        let mut c = Config::default();
+        assert_eq!(c.outputs.shared_buffer_ms, 50.0);
+        c.outputs.shared_buffer_ms = 1e9;
+        let warnings = c.validate();
+        assert_eq!(c.outputs.shared_buffer_ms, 500.0);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.field == "outputs.shared_buffer_ms")
+        );
+        c.outputs.shared_buffer_ms = 0.0;
+        assert!(c.validate().is_empty(), "0 turns the floor off");
     }
 
     #[test]

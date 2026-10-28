@@ -111,6 +111,7 @@ settings-backend-unavailable = { $name } (no disponible)
 settings-rate = Freqüència de mostreig
 settings-buffer = Mida del búfer
 settings-latency = Latència: { $ms } ms
+settings-latency-shared = Latència: { $ms } ms (sortides compartides: almenys { $floor } ms)
 settings-main = Main
 settings-cue = Cue
 settings-channels = Canals { $first }–{ $second }

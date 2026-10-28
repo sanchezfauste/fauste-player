@@ -113,6 +113,7 @@ settings-backend-unavailable = { $name } (niedostępny)
 settings-rate = Częstotliwość próbkowania
 settings-buffer = Rozmiar bufora
 settings-latency = Opóźnienie: { $ms } ms
+settings-latency-shared = Opóźnienie: { $ms } ms (wyjścia współdzielone: co najmniej { $floor } ms)
 settings-main = Main
 settings-cue = Cue
 settings-channels = Kanały { $first }–{ $second }

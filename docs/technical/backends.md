@@ -214,8 +214,45 @@ Nothing connects to a system until it is first used.
   chosen as F32, then I32, then I16 and converted through a preallocated
   buffer; the requested buffer size is tried first, then the device default
   (`buffer_attempts`), except with `exact_buffer`.
-  Real-time priority comes through cpal's `audio_thread_priority` (rtkit
-  over D-Bus on Linux). A DoP stream chooses its format with
+- **Shared outputs:** `shared_output(host, device, exclusive)` tells the
+  outputs with a system mixer between them and the hardware: every
+  PulseAudio, PipeWire and WASAPI shared stream, and every ALSA device
+  but the hardware and what converts on its way to one card (`hw:`,
+  `plughw:`, `front:` and the other channel layouts, `iec958:`, `hdmi:`;
+  `sysdefault:` is usually the card's stock `plug` into `dmix`, so it is
+  shared). `DeviceInfo::shared` reports it, for Settings. There
+  `wanted_frames` asks for at least `StreamConfig::shared_buffer_us`
+  (`outputs.shared_buffer_ms`, rounded up to whole frames at the stream's
+  rate) unless `exact_buffer` is set, and no more than the largest size the
+  device reports: past it `buffer_attempts` would skip the fixed size and
+  leave the device to choose. cpal's PipeWire host reports its quantum
+  range (usually 32–2048), so a PipeWire stream asks for 2048 frames at
+  most; there a longer block asks the graph for a longer quantum when no
+  other client needs a shorter one. cpal's WASAPI host reports the shared
+  engine's period as both ends of the range, so a WASAPI shared stream
+  keeps that period (MMCSS runs its thread in real time), except on an
+  endpoint that reports buffer limits.
+  cpal's PulseAudio host makes the server's queue two blocks long
+  (`tlength = 2 × block`), so the default 50 ms is about 100 ms queued; at
+  512 frames it was 21 ms, and the stream clicked under load without any
+  error, since that host reports no underruns. Core Audio, JACK and ASIO
+  are never shared: their callback is the device's own cycle.
+- **Real-time priority** comes through cpal's `audio_thread_priority`
+  (rtkit over D-Bus on Linux) for its ALSA, PipeWire and WASAPI hosts.
+  cpal's PulseAudio host renders on the client's reactor thread at normal
+  priority; there `CpalBackend::realtime_promoter` starts a helper
+  (`rt_promote::Promoter`, thread `fp-rt-promote`): the first callback
+  names its thread (`get_current_thread_info`, plain system calls) and
+  wakes the helper, which asks rtkit (`promote_thread_to_real_time`) and
+  logs the outcome; a refusal is reported as `RealtimeDenied`. polkit
+  often refuses desktop applications (a process started from a systemd
+  user unit belongs to no login session), so the shared buffer, not the
+  priority, is what keeps such an output whole. `promote_thread_to_real_time`
+  sets the process-wide `RLIMIT_RTTIME` soft limit to the stream's block
+  (the last promotion wins, cpal's ALSA promotions included): a real-time
+  thread that runs that long without blocking gets `SIGXCPU`, which ends
+  the process. The reactor blocks in `poll` every cycle and renders one
+  block per wake-up, far below it. A DoP stream chooses its format with
   `choose_dop_sample_format` instead.
 - **Default backend:** `choose_default_backend` keeps the configured
   backend when it is available, otherwise `preferred_backend` picks the

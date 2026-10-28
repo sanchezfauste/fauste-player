@@ -111,6 +111,7 @@ settings-backend-unavailable = { $name } (niet beschikbaar)
 settings-rate = Samplefrequentie
 settings-buffer = Buffergrootte
 settings-latency = Latentie: { $ms } ms
+settings-latency-shared = Latentie: { $ms } ms (gedeelde uitgangen: minstens { $floor } ms)
 settings-main = Main
 settings-cue = Cue
 settings-channels = Kanalen { $first }–{ $second }

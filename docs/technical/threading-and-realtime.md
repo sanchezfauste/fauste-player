@@ -4,7 +4,8 @@
 
 | Thread | Name | Priority | Owns | May block? |
 |---|---|---|---|---|
-| Device callback, one per open output | set by the backend | real-time (rtkit/SCHED_FIFO on Linux, MMCSS on Windows, time-constraint on macOS, through cpal's `audio_thread_priority`) | nothing: it borrows the bus `Mixer` through `try_lock` | **never** |
+| Device callback, one per open output | set by the backend | real-time (rtkit/SCHED_FIFO on Linux, MMCSS on Windows, time-constraint on macOS, through cpal's `audio_thread_priority`; on cpal's PulseAudio host, which leaves its client thread at normal priority, through `fp-rt-promote`) | nothing: it borrows the bus `Mixer` through `try_lock` | **never** |
+| Real-time helper, one per PulseAudio stream (Linux) | `fp-rt-promote` | normal | the callback's thread ids, handed over once through a one-slot `rtrb` ring | waits (parked) for the first callback, asks rtkit over D-Bus, then ends |
 | Null output, one per open Null device | `fp-null-output` | normal | paces the mixer of a Null bus in real time | sleeps between blocks |
 | Native DSD output, one per open native stream (Linux) | `fp-alsa-dsd` | real-time (`audio_thread_priority`) | an ALSA PCM in a DSD format, and the bus renderer | waits for room in the device buffer with a timeout (at least 20 ms), never in the render |
 | Virtual clock, one per lost bus | `fp-virtual-clock` | normal | renders the same mixer at real-time pace while the device is lost | sleeps between blocks |
@@ -75,6 +76,12 @@ The mixer (`fp-engine/src/mixer.rs`) runs on the device callback. It must not:
   (cpal's error callback can run on the real-time thread, so the backend only
   counts); it is not an xrun. Indexing uses `get` (enforced by
   `clippy::indexing_slicing`), and there is no `unwrap`.
+
+The PulseAudio callback names its thread once, on its first call
+(`audio_thread_priority::get_current_thread_info`: `gettid`, `pthread_self`
+and `pthread_getschedparam`, no lock and no allocation unless the system
+call fails), pushes the ids into a preallocated slot and unparks the
+helper. Asking rtkit is D-Bus I/O, so it happens on the helper.
 
 DSD adds no exception. In DSD mode the mixer copies words and fills with the
 DSD silence word, the DoP encoder (`DopEncoder::encode_in_place`) works in
