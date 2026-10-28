@@ -1633,15 +1633,12 @@ impl ServicesHandle {
     }
 
     /// Stops the thread after its final save and waits for it; once
-    /// stopped, returns at once.
+    /// stopped, returns at once. The lock is held through the join, so a
+    /// second caller meanwhile waits for the save too.
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
-        let thread = self
-            .thread
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .take();
-        if let Some(thread) = thread
+        let mut thread = self.thread.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(thread) = thread.take()
             && thread.join().is_err()
         {
             tracing::error!("the services thread panicked");

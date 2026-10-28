@@ -2170,8 +2170,19 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
     // track (rule 3a); the CUE window seeks the CUE. It goes by where the
     // press was, since a finger leaves no hover position as it lifts (phone
     // layout spec PL15).
+    // A pinch is no tap, even when its first finger stays still: it never
+    // seeks (a track on air would jump).
+    let pinch_id = input.id.with("pinched");
+    if ui.input(|i| i.pointer.any_pressed()) {
+        ui.data_mut(|d| d.remove_temp::<bool>(pinch_id));
+    }
+    if ui.input(|i| i.multi_touch().is_some()) {
+        ui.data_mut(|d| d.insert_temp(pinch_id, true));
+    }
+    let pinched = ui.data(|d| d.get_temp::<bool>(pinch_id).is_some());
     if response.clicked()
         && !alt
+        && !pinched
         && let Some(p) = response.interact_pointer_pos().filter(|p| !shielded(*p))
     {
         seek = Some(view.secs_at(p.x, inner));

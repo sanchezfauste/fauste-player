@@ -457,7 +457,8 @@ fn back_closes_settings_before_anything_else() {
     h.run_steps(3);
     h.get_by_label("Settings").click();
     h.run_steps(3);
-    assert!(h.state_mut().back());
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
     h.run_steps(3);
     assert!(h.query_by_label("Buffer size").is_none(), "Settings closed");
     assert!(h.query_by_label(ADD).is_some(), "P1 still open");
@@ -468,7 +469,8 @@ fn back_closes_an_open_player() {
     let (mut h, _fake) = touch(2, PORTRAIT);
     h.get_by_label("Open P1").click();
     h.run_steps(3);
-    assert!(h.state_mut().back());
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
     h.run_steps(3);
     assert!(h.query_by_label("Open P2").is_some(), "all players again");
 }
@@ -476,5 +478,47 @@ fn back_closes_an_open_player() {
 #[test]
 fn back_with_nothing_open_reports_nothing_to_go_back_to() {
     let (mut h, _fake) = touch(2, PORTRAIT);
-    assert!(!h.state_mut().back());
+    let ctx = h.ctx.clone();
+    assert!(!h.state_mut().back(&ctx));
+}
+
+/// Back closes an open menu before the player under it.
+#[test]
+fn back_closes_a_menu_before_the_player() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    h.get_by_label("Open P1").click();
+    h.run_steps(3);
+    let ctx = h.ctx.clone();
+    egui::Popup::open_id(&ctx, egui::Id::unique("a menu"));
+    assert!(h.state_mut().back(&ctx));
+    assert!(!egui::Popup::is_any_open(&ctx));
+    h.run_steps(3);
+    assert!(h.query_by_label(ADD).is_some(), "P1 still open");
+}
+
+/// Back closes a confirmation before the player under it.
+#[test]
+fn back_closes_a_confirmation_before_the_player() {
+    let mut s = state(2, 3);
+    let playlist = s.playlists.iter().next().unwrap().id;
+    s.playlists.get_mut(playlist).unwrap().entries[1].legacy_played = true;
+    let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    h.get_by_label("Open P1").click();
+    h.run_steps(3);
+    h.get_by_label("Clear the played marks of this playlist")
+        .click();
+    h.run_steps(3);
+    assert!(
+        h.query_by_label("Cancel").is_some(),
+        "the confirmation shows"
+    );
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(3);
+    assert!(
+        h.query_by_label("Cancel").is_none(),
+        "the confirmation closed"
+    );
+    assert!(h.query_by_label(ADD).is_some(), "P1 still open");
 }

@@ -68,7 +68,7 @@ impl eframe::App for MobileApp {
         // app leaves: to the background while something sounds, otherwise
         // for good (PL23, PL24). A loaded but stopped player does not hold
         // it.
-        if BACK.swap(false, Ordering::AcqRel) && !self.shell.back() {
+        if BACK.swap(false, Ordering::AcqRel) && !self.shell.back(ctx) {
             let playing = SESSION
                 .get()
                 .is_some_and(|s| crate::shell_state::sounding(&s.handle.model.load()));
@@ -183,6 +183,8 @@ fn android_main(app: AndroidApp) {
         Box::new(move |cc| {
             theme::apply(&cc.egui_ctx);
             *REPAINT.lock().unwrap_or_else(PoisonError::into_inner) = Some(cc.egui_ctx.clone());
+            // A Back that came with no interface to take it is not this one's.
+            BACK.store(false, Ordering::Release);
             Ok(Box::new(MobileApp {
                 shell: Shell::new(ui),
                 app,

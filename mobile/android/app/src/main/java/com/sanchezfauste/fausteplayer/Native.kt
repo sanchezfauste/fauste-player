@@ -6,6 +6,8 @@ object Native {
         System.loadLibrary("fp_mobile")
     }
 
+    private val quitting = java.util.concurrent.atomic.AtomicBoolean(false)
+
     /** Bit of [state]: playout is active, run the foreground service (MB1). */
     const val PLAYOUT_ACTIVE = 1
 
@@ -45,6 +47,8 @@ object Native {
      * main thread.
      */
     fun quitAndEnd() {
+        // The activity and the service may both get here: one quit is enough.
+        if (!quitting.compareAndSet(false, true)) return
         Thread {
             quit()
             android.os.Process.killProcess(android.os.Process.myPid())

@@ -51,3 +51,24 @@ fn stop_services_saves_and_is_idempotent() {
     assert!(again.elapsed() < std::time::Duration::from_millis(100));
     session.shutdown();
 }
+
+/// The shell may ask from two threads at once (the activity closing and
+/// the service seeing silence): neither returns before the final save.
+#[test]
+fn stop_services_from_two_threads_both_wait_for_the_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(NullBackend)];
+    let session = AppSession::start(AppPaths::under(dir.path()), backends, None).unwrap();
+    let config_file = dir.path().join("config").join("config.json");
+    let _ = std::fs::remove_file(&config_file);
+    std::thread::scope(|s| {
+        let first = s.spawn(|| session.stop_services());
+        let second = s.spawn(|| {
+            session.stop_services();
+            config_file.exists()
+        });
+        first.join().unwrap();
+        assert!(second.join().unwrap(), "the save was done when it returned");
+    });
+    session.shutdown();
+}

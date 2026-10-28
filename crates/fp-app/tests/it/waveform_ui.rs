@@ -180,6 +180,32 @@ fn a_pinch_on_the_waveform_zooms_it() {
     assert!(h.query_by_label("Full view").is_some());
 }
 
+/// A pinch with the first finger held still is no tap: it never seeks a
+/// track on air.
+#[test]
+fn a_pinch_with_one_finger_still_does_not_seek() {
+    use egui::TouchPhase::{End, Move, Start};
+    let (mut h, fake) = harness(playing());
+    let w = wave(&h);
+    let a = w.center() - egui::vec2(20.0, 0.0);
+    let b = w.center() + egui::vec2(20.0, 0.0);
+    h.event(finger(1, Start, a));
+    h.event(Event::PointerMoved(a));
+    press(&mut h, a, true);
+    h.event(finger(2, Start, b));
+    h.run_steps(1);
+    for step in 1..=3 {
+        h.event(finger(2, Move, b + egui::vec2(15.0 * step as f32, 0.0)));
+        h.run_steps(1);
+    }
+    h.event(finger(2, End, b + egui::vec2(45.0, 0.0)));
+    h.event(finger(1, End, a));
+    press(&mut h, a, false);
+    h.event(Event::PointerGone);
+    h.run_steps(2);
+    assert_eq!(seeks(&fake), Vec::<f64>::new());
+}
+
 #[test]
 fn a_pinch_beside_the_waveform_leaves_it() {
     let (mut h, _fake) = harness(playing());
