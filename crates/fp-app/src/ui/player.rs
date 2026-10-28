@@ -816,7 +816,7 @@ fn meter_column(
             &tip,
             !locked && fader,
         );
-        widgets::fader_readout(ui, &readout, !locked);
+        widgets::fader_readout(ui, &readout, !locked && fader);
         if let Some(pos) = moved {
             scene
                 .ctl

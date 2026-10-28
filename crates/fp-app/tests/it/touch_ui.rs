@@ -292,6 +292,8 @@ fn a_scroll_of_the_cards_sends_nothing() {
     drag(&mut h, from, from + vec2(0.0, -200.0));
     let sent = fake.take_sent();
     assert!(sent.is_empty(), "a scroll sent {sent:?}");
+    let moved = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+    assert!(moved.top() < fader.top(), "the cards did not scroll");
 }
 
 // --- Carts (PL7) ---
@@ -349,6 +351,29 @@ fn a_swipe_back_on_the_first_page_does_nothing() {
     let cart = h.get_by_label("Cart 1, empty").rect();
     let from = egui::pos2(40.0, cart.bottom() + 100.0);
     drag(&mut h, from, from + vec2(250.0, 0.0));
+    assert_eq!(pages_shown(&fake), vec![]);
+}
+
+/// A drag along the page tabs scrolls them and changes no page.
+#[test]
+fn a_drag_on_the_page_tabs_changes_no_page() {
+    let mut s = state(2, 3);
+    for i in 0..12 {
+        fp_model::apply(
+            &mut s,
+            fp_model::Command::CreateCartPage {
+                name: format!("A long page name {i}"),
+            },
+        )
+        .unwrap();
+    }
+    s.cartwall.shown = Some(s.cartwall.pages[0].id);
+    let (mut h, fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Carts");
+    fake.take_sent();
+    let tab = h.get_by_label("A long page name 0").rect();
+    drag(&mut h, tab.center(), tab.center() - vec2(150.0, 0.0));
     assert_eq!(pages_shown(&fake), vec![]);
 }
 
@@ -622,6 +647,17 @@ fn the_lock_button_sends_set_touch_locked() {
             .iter()
             .any(|c| matches!(c, fp_model::Command::SetTouchLocked(false)))
     );
+}
+
+/// PL13: a locked fader's level readout is dimmed with it.
+#[test]
+fn locked_the_fader_readout_is_dimmed() {
+    use egui_kittest::kittest::NodeT;
+    for on in [false, true] {
+        let (h, _fake) = locked(on);
+        let readout = h.get_all_by_label("0.0").next().unwrap();
+        assert_eq!(readout.accesskit_node().is_disabled(), on, "locked: {on}");
+    }
 }
 
 #[test]

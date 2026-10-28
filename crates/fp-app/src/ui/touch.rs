@@ -374,11 +374,14 @@ fn carts(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
 
 /// A sideways swipe that started in `area` on this layer (not in a menu or
 /// a window over it), when it is let go: the next page (`true`) or the
-/// previous one. Nothing on the Carts screen takes a drag (carts fire on a
-/// tap), so a swipe may start on a cart.
+/// previous one. Carts fire on a tap, so a swipe may start on a cart; a
+/// drag some widget took (the page tabs scrolling) is not a swipe.
 fn page_swipe(ui: &Ui, area: Rect) -> Option<bool> {
     let ctx = ui.ctx();
     let origin_id = ui.scope_id().with("page-swipe");
+    if ctx.dragged_id().is_some() || ctx.drag_stopped_id().is_some() {
+        ctx.data_mut(|d| d.remove_temp::<egui::Pos2>(origin_id));
+    }
     let (pressed, released, position) = ctx.input(|i| {
         (
             i.pointer.primary_pressed(),

@@ -58,8 +58,9 @@ Back from Carts or Playlists goes to Live.
 padlock closed and lit), the volume faders only show the level and the
 waveforms neither seek nor edit markers; they look dimmed. A pinch and a
 drag still zoom and move a waveform, and Play, the transport, the carts
-and the playlists always work. The lock stays on after a restart; the
-remote API and MIDI are not locked.
+and the playlists always work. The lock stays on after a restart and is
+saved with the session, so loading another session takes that session's
+lock; the remote API and MIDI are not locked.
 
 A drag that starts on a volume fader moves it; one that starts anywhere
 else scrolls, so scrolling never changes a level on air. A tap on a
