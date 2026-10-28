@@ -204,6 +204,9 @@ Calls that wait (pickers) answer through channels, never blocking the UI
 
 ## 6. Touch layout
 
+> **Phones:** the [phone layout spec](2026-10-28-phone-layout-design.md)
+> replaces the phone part of this section (2026-10-28); tablets keep it.
+
 - Same panels as the desktop (players, cartwall, playlists, library,
   settings), same theme (`theme.rs`), same Fluent strings.
 - **Approved structure (maintainer, 2026-10-25; conceptual mockups:
