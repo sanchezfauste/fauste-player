@@ -673,6 +673,125 @@ fn the_desktop_footer_keeps_reset_played() {
     assert!(h.query_by_label(RESET).is_some());
 }
 
+/// A finger held still at `at` for a second, then lifted.
+fn long_press(h: &mut Harness<'static, AppUi>, at: egui::Pos2) {
+    let touch = |phase| egui::Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase,
+        pos: at,
+        force: None,
+    };
+    h.event(touch(egui::TouchPhase::Start));
+    h.event(egui::Event::PointerMoved(at));
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    for _ in 0..60 {
+        h.step();
+    }
+    h.event(touch(egui::TouchPhase::End));
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(3);
+}
+
+/// One player stopped on a 180 s analysed track; its cue-in set by hand
+/// at 5 s when `manual`.
+fn analysed(manual: bool) -> (Harness<'static, AppUi>, Arc<Fake>, fp_model::TrackId) {
+    let mut s = state(1, 2);
+    let track = s.playlists.iter().next().unwrap().entries[0].track;
+    let analysis = fp_model::TrackAnalysis {
+        duration_secs: 180.0,
+        cue_in: Some(0.0),
+        cue_out: Some(180.0),
+        ..fp_model::TrackAnalysis::default()
+    };
+    fp_model::apply(
+        &mut s,
+        fp_model::Command::ApplyAnalysis {
+            track,
+            analysis: Box::new(analysis),
+        },
+    )
+    .unwrap();
+    if manual {
+        fp_model::apply(
+            &mut s,
+            fp_model::Command::SetMarker {
+                track,
+                kind: fp_model::MarkerKind::CueIn,
+                secs: Some(5.0),
+            },
+        )
+        .unwrap();
+    }
+    let (mut h, fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    fake.take_sent();
+    (h, fake, track)
+}
+
+fn markers_set(fake: &Fake) -> Vec<(fp_model::MarkerKind, Option<f64>)> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            fp_model::Command::SetMarker { kind, secs, .. } => Some((kind, secs)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// PL11b: a long press on the Playlists waveform sets a marker there.
+#[test]
+fn a_long_press_on_the_playlists_waveform_sets_a_marker_there() {
+    let (mut h, fake, _track) = analysed(false);
+    tab(&mut h, "Playlists");
+    let wave = waveform(&h);
+    long_press(
+        &mut h,
+        egui::pos2(wave.left() + wave.width() * 0.25, wave.center().y),
+    );
+    h.get_by_label("Set intro end here").click();
+    h.run_steps(2);
+    let set = markers_set(&fake);
+    assert_eq!(set.len(), 1, "{set:?}");
+    assert_eq!(set[0].0, fp_model::MarkerKind::IntroEnd);
+    assert!((set[0].1.unwrap() - 45.0).abs() < 3.0, "{set:?}");
+}
+
+/// PL11b: a marker set by hand can be removed from the same menu.
+#[test]
+fn a_manual_marker_can_be_removed_by_touch() {
+    let (mut h, fake, _track) = analysed(true);
+    tab(&mut h, "Playlists");
+    let wave = waveform(&h);
+    long_press(&mut h, wave.center());
+    assert!(h.query_by_label("Remove intro end").is_none(), "not set");
+    h.get_by_label("Remove cue in").click();
+    h.run_steps(2);
+    assert_eq!(
+        markers_set(&fake),
+        vec![(fp_model::MarkerKind::CueIn, None)]
+    );
+}
+
+/// PL11b: the Live cards' waveforms never edit markers.
+#[test]
+fn a_long_press_on_a_live_waveform_opens_no_marker_menu() {
+    let (mut h, _fake, _track) = analysed(false);
+    let wave = waveform(&h);
+    long_press(&mut h, wave.center());
+    assert!(h.query_by_label("Set intro end here").is_none());
+}
+
 // --- The rest ---
 
 #[test]
