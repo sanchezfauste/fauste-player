@@ -23,7 +23,7 @@ settings stay. The app is not in Google Play yet.
   anything. As on the desktop, nothing goes on air by itself after a
   start or a crash.
 - **Other apps' sound.** When another app takes the audio, Fauste Player
-  goes on playing and says so at the top of the screen.
+  goes on playing and says so in the status bar at the bottom.
 
 ## The screen
 
@@ -34,8 +34,11 @@ On a **phone** the top bar switches between **Players** and
   countdown, its level and a progress bar. **Open P1** shows that player
   with its playlist; the chips above it switch players, and **All** goes
   back. Turned sideways, two players show side by side: the chips or a
-  sideways swipe show the next two.
-- *Cartwall:* the shown cart page, filling the screen.
+  sideways swipe show the next two, and the players scroll up to reach
+  their playlists.
+- *Cartwall:* the shown cart page, filling the screen. Held upright, a
+  page wider than tall is turned (8 × 2 shows as 2 × 8), in the same
+  order.
 
 The volume fader moves only in an open player, so scrolling the list
 never changes a level on air. In a playlist a finger scrolls; to move a
@@ -45,7 +48,8 @@ On a **tablet** the layout is the desktop's (see [Layout](layout.md)),
 with targets made easier to hit.
 
 A long press opens what a right click opens on the desktop: the row menu,
-the header menus.
+the header menus, a cart's menu (**Edit…** chooses an empty cart's
+file). Settings shows its sections as a row of chips above the section.
 
 ## Music
 

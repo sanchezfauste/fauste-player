@@ -131,8 +131,12 @@ view hides stops or changes playout):
 - *Players, landscape:* two desktop columns side by side, under chips for
   the pairs and for opening a shown player; a sideways swipe of more than
   80 points that no widget took (a fader, a row) shows the next or
-  previous pair.
-- *Cartwall:* the cartwall filling the area.
+  previous pair. A phone on its side is shorter than a column, so the
+  columns (and an open player) are laid out 560 points tall and scroll;
+  a swipe may start on that scroll area.
+- *Cartwall:* the cartwall filling the area. On a touch screen taller than
+  wide, a page with more columns than rows is laid out turned (columns
+  and rows swapped, carts in the same reading order).
 
 The open player survives rotation and closes when its player goes away
 (`PhoneView::settle`). The top bar keeps only icons beside the screen
@@ -140,7 +144,10 @@ tiles, which shrink to fit. A finger drag scrolls: in touch mode table
 rows and column headers do not drag (the row menu moves entries), and a
 compact panel's fader only shows the level (it is adjusted in the open
 player), so scrolling never moves a level on air. The cartwall screen
-never folds. Context menus open by long press (egui reports it as a
+never folds. The status bar leaves out the desktop's shortcut hints
+(keys, double and right clicks), and in touch mode a Settings window
+narrower than 600 points shows its sections as a row of chips above the section instead of
+the side list. Context menus open by long press (egui reports it as a
 secondary click). Still to come: the row menu as a bottom sheet and
 long-press tooltips.
 
@@ -166,7 +173,12 @@ extensions (`OneFile`) and Settings takes the music folder (`Folder`).
 is process-wide (`fp_mobile::platform::MEDIA`); a request still pending
 when its activity is destroyed is answered with nothing when the next one
 starts (its answer would reach no one), and a newer request answers the
-older one with nothing, so no helper thread hangs. The browser lists only
+older one with nothing, so no helper thread hangs. A list that arrives
+after an empty one means the permission was just granted:
+`Native.setMediaFiles` then asks the services thread to analyse every
+unreadable track again (`ServiceRequest::RecheckUnreadable`), since
+tracks loaded before it failed and their files did not change, so the
+missing-file recheck would never look at them again. The browser lists only
 audio: pickers for anything else (a cover image, a playlist or a cart page
 to import) return nothing on Android for now. Folders
 start closed and are named without the part they all share; a file that

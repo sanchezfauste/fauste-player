@@ -100,11 +100,17 @@ pub(crate) struct SwipeTracker {
     origin: Option<egui::Pos2>,
     /// A widget took the drag (a fader, a row): it is not a swipe.
     blocked: bool,
+    /// The drag of the scrolling columns (`columns`), which a swipe may
+    /// start on.
+    columns_drag: Option<egui::Id>,
 }
 
 /// How far from a widget a finger still hits it: the desktop's tiles are
 /// smaller than a fingertip.
 const INTERACT_RADIUS: f32 = 12.0;
+/// The height a player column needs for its panel and a few playlist rows;
+/// a shorter area scrolls (`columns`).
+const MIN_COLUMN_HEIGHT: f32 = 560.0;
 /// Scroll bars a finger can drag.
 const SCROLL_BAR_WIDTH: f32 = 12.0;
 /// The phone's top bar, tall enough for its screen tiles.
@@ -284,14 +290,16 @@ fn follow_swipe(ui: &Ui, area: Rect, view_state: &mut ViewState, count: usize) {
     if pressed {
         let here =
             position.filter(|p| area.contains(*p) && ctx.layer_id_at(*p) == Some(ui.layer_id()));
-        *tracker = SwipeTracker {
-            origin: here,
-            blocked: false,
-        };
+        tracker.origin = here;
+        tracker.blocked = false;
     }
     // A widget's drag that started and stopped between two frames shows
     // only in `drag_stopped_id`.
-    if ctx.dragged_id().is_some() || ctx.drag_stopped_id().is_some() {
+    if ctx
+        .dragged_id()
+        .or(ctx.drag_stopped_id())
+        .is_some_and(|id| Some(id) != tracker.columns_drag)
+    {
         tracker.blocked = true;
     }
     if released {
@@ -300,7 +308,8 @@ fn follow_swipe(ui: &Ui, area: Rect, view_state: &mut ViewState, count: usize) {
             .zip(position)
             .filter(|_| !tracker.blocked)
             .and_then(|(from, to)| swipe_direction(to - from));
-        *tracker = SwipeTracker::default();
+        tracker.origin = None;
+        tracker.blocked = false;
         if let Some(forward) = swipe {
             view_state.phone.swipe(forward, count);
         }
@@ -377,8 +386,40 @@ fn one_player(
     columns(ui, scene, view_state, covers, &[(open, index)], rect);
 }
 
-/// Desktop player columns side by side in `rect`.
+/// Desktop player columns side by side in `rect`. A phone in landscape is
+/// shorter than a column: the columns are then `MIN_COLUMN_HEIGHT` tall and
+/// scroll, so the playlist and its footer can be reached.
 fn columns(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    covers: &mut HashMap<TrackId, TextureHandle>,
+    shown: &[(PlayerId, usize)],
+    rect: Rect,
+) {
+    if rect.height() >= MIN_COLUMN_HEIGHT {
+        columns_in(ui, scene, view_state, covers, shown, rect);
+        return;
+    }
+    let mut area_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect)
+            .layout(Layout::top_down(Align::Min)),
+    );
+    let output = egui::ScrollArea::vertical()
+        .id_salt("phone-columns")
+        .auto_shrink([false, false])
+        .show(&mut area_ui, |ui| {
+            let (tall, _) =
+                ui.allocate_exact_size(vec2(rect.width(), MIN_COLUMN_HEIGHT), egui::Sense::hover());
+            columns_in(ui, scene, view_state, covers, shown, tall);
+        });
+    // egui's id for a scroll area's drag.
+    view_state.phone_swipe.columns_drag = Some(output.id.with("area"));
+    ui.allocate_rect(rect, egui::Sense::hover());
+}
+
+fn columns_in(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,

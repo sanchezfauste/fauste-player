@@ -921,6 +921,7 @@ impl AppUi {
                     .join("\n")
             };
             let deps = SettingsDeps {
+                touch: self.touch,
                 backends: &self.backends,
                 services: self.services.as_ref(),
                 notice: self
@@ -2125,6 +2126,9 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
         (alert.clone(), theme::ON_AIR_TEXT, true)
     } else if let Some(notice) = notice {
         (notice, theme::AMBER, true)
+    } else if view_state.touch {
+        // The hints name keys, double clicks and right clicks.
+        (String::new(), theme::NEUTRAL_500, false)
     } else {
         (t.tr("status-hints"), theme::NEUTRAL_500, false)
     };
