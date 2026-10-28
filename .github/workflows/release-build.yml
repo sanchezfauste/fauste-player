@@ -5,7 +5,8 @@ name: release-build
 #   - archives (.tar.gz, .zip) for every target;
 #   - Linux: .deb, .rpm and AppImage (x86_64, aarch64), and a Flatpak bundle;
 #   - Windows: .msi;
-#   - macOS: a universal .dmg.
+#   - macOS: a universal .dmg;
+#   - Android: an APK and an AAB, once the release key is configured.
 # Called by release-please after a release is created; can also be run by
 # hand to rebuild the assets of an existing tag. Pull requests that touch the
 # packaging run it as a dry run (build everything, upload nothing), so a
@@ -260,6 +261,115 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+
+  android:
+    name: Android APK and AAB
+    # Mobile spec §7. Published only when the release key is configured
+    # (ANDROID_KEYSTORE*): a debug-signed APK would install, but Android
+    # would refuse to update it with a later signed one.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      # Tags made before the Android release build have nothing to build.
+      - name: Check that the tag builds the Android release
+        id: tag
+        run: |
+          if grep -q -- --self-test scripts/package/android.sh 2>/dev/null; then
+            echo "android=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "This tag predates the Android release build: nothing to do"
+          fi
+      - uses: actions/setup-java@v5
+        if: ${{ steps.tag.outputs.android == 'true' }}
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install the pinned toolchain and the Android targets
+        if: ${{ steps.tag.outputs.android == 'true' }}
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add aarch64-linux-android x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        if: ${{ steps.tag.outputs.android == 'true' }}
+        with:
+          key: android
+      - uses: taiki-e/install-action@v2
+        if: ${{ steps.tag.outputs.android == 'true' }}
+        with:
+          tool: cargo-ndk
+      - if: ${{ steps.tag.outputs.android == 'true' }}
+        run: scripts/package/android.sh --self-test
+      # Only a release run sees the key (a pull request's dry run builds
+      # with the debug key), and only all four secrets together: a missing
+      # one fails the job instead of publishing a debug-signed APK.
+      - name: Write the release key
+        if: ${{ steps.tag.outputs.android == 'true' }}
+        id: key
+        env:
+          RELEASE: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          HAS_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+          HAS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS != '' }}
+          HAS_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD != '' }}
+        run: |
+          if [ "${RELEASE}" != true ] || { [ -z "${ANDROID_KEYSTORE}" ] && [ "${HAS_PASSWORD}${HAS_ALIAS}${HAS_KEY_PASSWORD}" = falsefalsefalse ]; }; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "No release key: the build is signed with the debug key and not published"
+            exit 0
+          fi
+          if [ -z "${ANDROID_KEYSTORE}" ] || [ "${HAS_PASSWORD}${HAS_ALIAS}${HAS_KEY_PASSWORD}" != truetruetrue ]; then
+            echo "::error::The Android release key needs all of ANDROID_KEYSTORE, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD"
+            exit 1
+          fi
+          keystore="${RUNNER_TEMP}/release.jks"
+          printf '%s' "${ANDROID_KEYSTORE}" | base64 -d > "${keystore}"
+          echo "path=${keystore}" >> "$GITHUB_OUTPUT"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+      - name: Build
+        if: ${{ steps.tag.outputs.android == 'true' }}
+        id: package
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNED: ${{ steps.key.outputs.signed }}
+          FAUSTE_ANDROID_KEYSTORE: ${{ steps.key.outputs.path }}
+          FAUSTE_ANDROID_KEYSTORE_PASSWORD: ${{ steps.key.outputs.signed == 'true' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          FAUSTE_ANDROID_KEY_ALIAS: ${{ steps.key.outputs.signed == 'true' && secrets.ANDROID_KEY_ALIAS || '' }}
+          FAUSTE_ANDROID_KEY_PASSWORD: ${{ steps.key.outputs.signed == 'true' && secrets.ANDROID_KEY_PASSWORD || '' }}
+        run: |
+          # The NDK the CI checks use, not the runner image's default.
+          ANDROID_NDK_HOME="$(ls -d "${ANDROID_HOME}"/ndk/27.* | sort -V | tail -n1)"
+          export ANDROID_NDK_HOME
+          # Through a file: a failure of the script fails the step.
+          scripts/package/android.sh release > built.txt
+          apk="$(grep '\.apk$' built.txt)"
+          # The last guard: a release APK signed with the debug key is
+          # never published.
+          if [ "${SIGNED}" = true ]; then
+            apksigner="$(ls -d "${ANDROID_HOME}"/build-tools/*/apksigner | sort -V | tail -n1)"
+            # An assignment, so a failed verification fails the step.
+            certs="$("${apksigner}" verify --print-certs "${apk}")"
+            if grep -q 'CN=Android Debug' <<< "${certs}"; then
+              echo "::error::The release APK is signed with the debug key"
+              exit 1
+            fi
+          fi
+          version="${TAG#v}"
+          version="${version:-$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)}"
+          mkdir -p dist
+          cp "${apk}" "dist/fauste-player-${version}-android.apk"
+          cp "$(grep '\.aab$' built.txt)" "dist/fauste-player-${version}-android.aab"
+          (cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done)
+          ls -l dist
+      - name: Remove the release key
+        if: ${{ always() }}
+        run: rm -f "${RUNNER_TEMP}/release.jks"
+      - name: Upload to the release
+        if: ${{ github.event_name != 'pull_request' && !inputs.dry_run && steps.tag.outputs.android == 'true' && steps.key.outputs.signed == 'true' }}
+        run: gh release upload "${{ inputs.tag }}" dist/* --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   unsigned-note:
     name: Say in the release which installers are unsigned

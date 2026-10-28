@@ -1,11 +1,14 @@
 package com.sanchezfauste.fausteplayer
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
@@ -85,6 +88,24 @@ class MainActivity : GameActivity() {
         follow(Native.state())
         handler.removeCallbacks(poll)
         super.onPause()
+    }
+
+    /** Opens a link from the interface (the About window); called from Rust. */
+    @Suppress("unused")
+    fun openUrl(url: String) {
+        runOnUiThread {
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (e: ActivityNotFoundException) {
+                Log.w("fauste", "no app opens $url", e)
+            } catch (e: RuntimeException) {
+                // On the UI thread: a crash here would end the playout too.
+                Log.w("fauste", "could not open $url", e)
+            }
+        }
     }
 
     private fun follow(state: Int) {

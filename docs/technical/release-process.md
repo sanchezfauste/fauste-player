@@ -370,6 +370,7 @@ the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
 | `build` (macOS entries) | archives per architecture; each also keeps its binary as a one-day artefact | `scripts/package-release.sh` |
 | `macos-dmg` | universal `.app` (lipo of the two `build` binaries, `PREBUILT_DIR`) in a `.dmg`; it compiles an architecture only when its build failed | `scripts/package/macos.sh` |
 | `flatpak-sources`, `flatpak`, `flatpak-release` | `cargo-sources.json` (flatpak-cargo-generator), then the bundle built offline with flatpak-builder | `packaging/flatpak/com.sanchezfauste.FaustePlayer.yml` |
+| `android` | `fauste-player-<version>-android.apk` and `.aab` (cargo-ndk, Gradle), uploaded only with the Android release key; tags made before the job are skipped | `scripts/package/android.sh release` |
 | `stores` (separate workflow, `stores.yml`) | the Microsoft Store MSIX, the snaps, the Flathub update, WinGet and the AUR (see "Stores") | `scripts/package/msix.sh`, `snap/snapcraft.yaml`, `scripts/package/flathub-manifest.py`, `scripts/package/aur.sh` |
 | `unsigned-note` | a section in the release notes listing the installers built without their signing secrets, with a link to the user guide's instructions (added once) | `release-build.yml` |
 
@@ -423,7 +424,21 @@ and editing the title re-checks only the title.
 | `WINDOWS_CERT_PFX` (base64 of a `.pfx`), `WINDOWS_CERT_PASSWORD` | signtool signs `fauste-player.exe` inside the MSI and the MSI itself, with an RFC 3161 timestamp |
 | `APPLE_CERT_P12` (base64 of a *Developer ID Application* `.p12`), `APPLE_CERT_PASSWORD` | codesign with the hardened runtime, for the app and the dmg (without it the app gets an ad-hoc signature, so Gatekeeper offers *Open Anyway* instead of reporting it damaged) |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (app-specific password) | notarytool notarisation, then stapling the ticket to the dmg |
+| `ANDROID_KEYSTORE` (base64 of a `.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | the Android release key: the `android` job signs the APK and AAB with it and uploads them |
 
+- **Android:** without `ANDROID_KEYSTORE` the APK is built (signed with
+  the debug key) but never uploaded: Android refuses to update an app
+  signed with another key, so a debug-signed APK would strand its users.
+  Make the key once and keep it safe (losing it means users must
+  uninstall to update):
+  `keytool -genkeypair -keystore fauste-release.jks -alias fauste -keyalg RSA -keysize 4096 -validity 36500`,
+  then `base64 -w0 fauste-release.jks` is the secret. The `versionCode` is
+  major × 1 000 000 + minor × 1 000 + patch (`android.sh --self-test`;
+  a minor or patch of 1000 or more is refused). A pre-release shares its
+  release's code, so never upload a pre-release AAB to a store. Some of
+  the four secrets without the others fail the job (a misspelt secret
+  never publishes a debug-signed APK), and the job checks the APK's signer
+  before uploading it. Pull request dry runs never see the key.
 - **Without these secrets** the packages are built unsigned. The getting
   started guide explains the SmartScreen and Gatekeeper prompts users then
   see.

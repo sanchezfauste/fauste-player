@@ -1,5 +1,6 @@
-//! The Android platform: pickers through the media browser (MB7), read-only
-//! music (spec §2) and the audio focus the Kotlin shell reports.
+//! The Android platform: pickers through the media browser (MB7), links
+//! through the activity, read-only music (spec §2) and the audio focus the
+//! Kotlin shell reports.
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -47,8 +48,18 @@ impl Platform for AndroidPlatform {
         None
     }
 
-    fn open_url(&self, _url: &str) -> Result<(), String> {
-        Err("not available yet".to_owned())
+    /// Through the activity, on a helper thread (a JNI call; rule 8).
+    fn open_url(&self, url: &str) -> Result<(), String> {
+        let url = url.to_owned();
+        std::thread::Builder::new()
+            .name("fp-open".to_owned())
+            .spawn(move || {
+                if let Err(error) = crate::jni::open_url(&url) {
+                    tracing::warn!(%error, %url, "could not open the link");
+                }
+            })
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 
     fn audio_focus_lost(&self) -> bool {

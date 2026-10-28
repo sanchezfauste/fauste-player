@@ -176,7 +176,10 @@ window says how to get some.
 ## The `unsafe` exception
 
 `fp-mobile` is the only crate allowed `unsafe` (spec §8), for
-`#[unsafe(no_mangle)]` on `android_main` and the six JNI entry points. Its
+`#[unsafe(no_mangle)]` on `android_main` and the six JNI entry points, and
+for the one call into the activity (`jni::open_url`: the Java VM and the
+activity reference android-activity hands out, kept in `ACTIVITY` while
+the activity runs and locked through the call). Its
 `Cargo.toml` sets `unsafe_code = "deny"` and copies the other workspace
 lints; each site opts in with `#[allow(unsafe_code)]` and a `// SAFETY:`
 comment. Its Android modules are `#[cfg(target_os = "android")]`; its pure
@@ -202,6 +205,15 @@ JDK 17 or newer). The APK is in
 `mobile/android/app/build/outputs/apk/<profile>/`. `minSdk` is 29,
 `targetSdk` 36, the application id `com.sanchezfauste.FaustePlayer`.
 
+A release build also makes the AAB a store needs. It is signed with the
+key the four `FAUSTE_ANDROID_KEYSTORE`, `FAUSTE_ANDROID_KEYSTORE_PASSWORD`,
+`FAUSTE_ANDROID_KEY_ALIAS` and `FAUSTE_ANDROID_KEY_PASSWORD` variables
+name, and with the debug key without them; some of them without the
+others fail the build. The `versionCode` comes from
+the workspace version (`android.sh --self-test` checks the formula).
+`release-build.yml`'s `android` job publishes the APK and AAB with a
+release once the key is a secret (see the release process).
+
 Judge dropouts and latency on release builds only: a debug build
 underruns at start. CI's `android` job runs the isolation check, the
 `fp-mobile` tests and the debug build, and uploads the APK.
@@ -210,7 +222,4 @@ underruns at start. CI's `android` job runs the isolation check, the
 
 These hold until the plans that replace them:
 
-- links in the About window are not opened (`open_url` returns an error);
 - the outputs page is the desktop's (the touch layout reworks it);
-- release builds are signed with the debug key, `versionCode` is 1 and the
-  notification uses a system icon, until a release plan.

@@ -4,7 +4,7 @@
 //! `android_main` again and re-attaches.
 
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use fp_app::session::AppSession;
 use fp_app::ui::shell::Shell;
@@ -20,6 +20,12 @@ use crate::platform::{AndroidPlatform, MEDIA};
 /// The running session; started by the first activity, never stopped (the
 /// process ends with it).
 pub(crate) static SESSION: OnceLock<AppSession> = OnceLock::new();
+
+/// The Java VM and the current activity (android-activity's global
+/// reference, valid while its `AndroidApp` lives), for calls into the
+/// activity (`jni::open_url`). Set while an activity runs; the lock is held
+/// through a call, so the activity cannot end in the middle of one.
+pub(crate) static ACTIVITY: Mutex<Option<(usize, usize)>> = Mutex::new(None);
 
 /// The insets the Kotlin shell last reported (`f32` bits, physical pixels):
 /// left, top, right, bottom.
@@ -125,6 +131,8 @@ fn android_main(app: AndroidApp) {
         .with_platform(Arc::new(AndroidPlatform))
         .with_touch()
         .with_media_browser(MEDIA.clone());
+    let this = Some((app.vm_as_ptr() as usize, app.activity_as_ptr() as usize));
+    *ACTIVITY.lock().unwrap_or_else(PoisonError::into_inner) = this;
     let options = eframe::NativeOptions {
         android_app: Some(app.clone()),
         ..Default::default()
@@ -141,6 +149,14 @@ fn android_main(app: AndroidApp) {
             }))
         }),
     );
+    // The activity reference dies with this `AndroidApp`; a newer
+    // activity's entry stays.
+    {
+        let mut current = ACTIVITY.lock().unwrap_or_else(PoisonError::into_inner);
+        if *current == this {
+            *current = None;
+        }
+    }
     // The session goes on: the foreground service holds the process (MB1).
     match result {
         Ok(()) => tracing::info!("activity ended"),
