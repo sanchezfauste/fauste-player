@@ -91,6 +91,9 @@ pub enum Command {
     },
     /// RL9: while locked, every other layout command is refused.
     SetLayoutLocked(bool),
+    /// Phone layout spec PL12: faders and waveforms ignore touches while
+    /// set. Not a layout command: the layout lock does not refuse it.
+    SetTouchLocked(bool),
     /// RL10: back to the default layout (unlocked only).
     ResetLayout,
     /// Stores an analysis result for a track (ignored if the track is gone).
