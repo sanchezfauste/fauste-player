@@ -15,6 +15,7 @@ pub mod dsd;
 mod entry_notice;
 pub mod error;
 pub mod ids;
+pub mod insertion;
 pub mod layout;
 pub mod live;
 pub mod loudness;
@@ -68,6 +69,7 @@ pub use dsd::{
 pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
 pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
+pub use insertion::after_next;
 pub use layout::{
     CartwallLayout, DEFAULT_SIDE_SHARE, Dock, Layout, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE,
     Panel, settle_layout,

@@ -14,7 +14,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::app::AppUi;
 use std::sync::Arc;
-use support::{Fake, harness_sized, state};
+use support::{Fake, harness, harness_sized, state};
 
 const PORTRAIT: Vec2 = vec2(412.0, 892.0);
 const LANDSCAPE: Vec2 = vec2(892.0, 412.0);
@@ -484,6 +484,157 @@ fn the_playlists_screen_has_tabs_and_a_new_playlist_button() {
     let chip = h.get_all_by_label("P1").next().unwrap().rect();
     let new = h.get_by_label("New playlist").rect();
     assert!(chip.bottom() <= new.top() + 1.0, "the tabs under the chips");
+}
+
+/// Opens the row menu of `title` on the Playlists screen.
+fn row_menu(h: &mut Harness<'static, AppUi>, title: &str) {
+    h.get_all_by_label(title).next().unwrap().click_secondary();
+    h.run_steps(2);
+}
+
+fn moves(fake: &Fake) -> Vec<fp_model::Command> {
+    fake.take_sent()
+        .into_iter()
+        .filter(|c| matches!(c, fp_model::Command::MoveEntry { .. }))
+        .collect()
+}
+
+fn disabled(h: &Harness<'static, AppUi>, label: &str) -> bool {
+    use egui_kittest::kittest::NodeT;
+    h.get_by_label(label).accesskit_node().is_disabled()
+}
+
+/// PL10: Move up and Move down in the row menu.
+#[test]
+fn the_row_menu_moves_an_entry_up_and_down() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    let (e, main) = (fake.entries(), fake.state.load().players[0].playlist);
+    fake.take_sent();
+    row_menu(&mut h, "Song 2");
+    h.get_by_label("Move up").click();
+    h.run_steps(2);
+    let up = fp_model::Command::MoveEntry {
+        entry: e[1],
+        to: main,
+        index: 0,
+    };
+    assert_eq!(moves(&fake), vec![up]);
+    // The move applied, Song 2 is first: down is before the third row.
+    row_menu(&mut h, "Song 2");
+    h.get_by_label("Move down").click();
+    h.run_steps(2);
+    let down = fp_model::Command::MoveEntry {
+        entry: e[1],
+        to: main,
+        index: 2,
+    };
+    assert_eq!(moves(&fake), vec![down]);
+}
+
+#[test]
+fn the_first_row_cannot_move_up_nor_the_last_down() {
+    let (mut h, _fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    row_menu(&mut h, "Song 1");
+    assert!(disabled(&h, "Move up"));
+    assert!(!disabled(&h, "Move down"));
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    row_menu(&mut h, "Song 3");
+    assert!(disabled(&h, "Move down"));
+}
+
+/// Two players, P2 showing a new empty playlist "Other".
+fn two_players_two_playlists() -> (Harness<'static, AppUi>, Arc<Fake>, fp_model::PlaylistId) {
+    let mut s = state(2, 3);
+    let p2 = s.players[1].id;
+    fp_model::apply(
+        &mut s,
+        fp_model::Command::CreatePlaylistIn {
+            name: "Other".into(),
+            player: p2,
+        },
+    )
+    .unwrap();
+    let other = s.players[1].playlist;
+    let (mut h, fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    (h, fake, other)
+}
+
+/// PL10b: Move to another player puts the entry after that player's next
+/// in the playlist it shows (the end of an empty one).
+#[test]
+fn the_row_menu_moves_an_entry_to_another_player() {
+    let (mut h, fake, other) = two_players_two_playlists();
+    let e = fake.entries();
+    row_menu(&mut h, "Song 2");
+    h.get_by_label("Move to another player").click();
+    h.run_steps(2);
+    h.get_all_by_label("P2").last().unwrap().click();
+    h.run_steps(2);
+    let to_p2 = fp_model::Command::MoveEntry {
+        entry: e[1],
+        to: other,
+        index: 0,
+    };
+    assert_eq!(moves(&fake), vec![to_p2]);
+}
+
+/// PL10b: the entry on air stays with its player.
+#[test]
+fn the_entry_on_air_cannot_move_to_another_player() {
+    let mut s = state(2, 3);
+    let first = s.playlists.first_id().unwrap();
+    let e0 = s.playlists.get(first).unwrap().entries[0].id;
+    s.players[0].current = Some(e0);
+    s.players[0].transport = fp_model::Transport::Playing;
+    let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    row_menu(&mut h, "Song 1");
+    assert!(disabled(&h, "Move to another player"));
+}
+
+/// The desktop's row menu does not change.
+#[test]
+fn the_desktop_row_menu_has_no_phone_moves() {
+    let (mut h, _fake) = harness(state(2, 3));
+    h.run_steps(2);
+    h.get_all_by_label("Song 2")
+        .next()
+        .unwrap()
+        .click_secondary();
+    h.run_steps(2);
+    assert!(h.query_by_label("Remove from playlist").is_some());
+    assert!(h.query_by_label("Move up").is_none());
+    assert!(h.query_by_label("Move to another player").is_none());
+}
+
+/// PL10: a drag from a row's handle moves the entry.
+#[test]
+fn a_drag_from_the_handle_moves_the_entry() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    let handle = h.get_all_by_label("Drag to move").nth(2).unwrap().rect();
+    let to = h.get_all_by_label("Song 1").next().unwrap().rect();
+    drag(
+        &mut h,
+        handle.center(),
+        egui::pos2(handle.center().x, to.top() + 2.0),
+    );
+    let sent = moves(&fake);
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [fp_model::Command::MoveEntry { index: 0, .. }]
+        ),
+        "{sent:?}"
+    );
 }
 
 // --- The rest ---

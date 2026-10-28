@@ -3,6 +3,7 @@
 //! per file. Tests that install process-wide state (a panic hook, a global
 //! tracing subscriber) keep their own binary next to this directory.
 
+mod after_next;
 mod analysis;
 mod availability;
 mod bit_perfect_rules;
