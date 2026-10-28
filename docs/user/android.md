@@ -33,8 +33,8 @@ settings stay. The app is not in Google Play yet.
 
 ## The screen
 
-On a **phone** the top bar has three tabs, **Live**, **Carts** and
-**Playlists**, then the **padlock** and **⋮** (More: Settings and About).
+On a **phone** the top bar has four tabs, **Live**, **Carts**,
+**Playlists** and **Music**, then the **padlock** and **⋮** (More: Settings and About).
 The clock shows when there is room for it.
 
 - *Live:* every player as a card, and the cartwall. Each card has the
@@ -60,8 +60,10 @@ The clock shows when there is room for it.
   and, behind **⋯**, **Reset played**. A long press on the waveform sets
   a marker at that point (cue in, intro end, outro start, MIX, cue out)
   or removes one you set; markers are edited here only, not on Live.
+- *Music:* the device's music (see [Music](#music)).
 
-Back from Carts or Playlists goes to Live.
+Back from another screen goes to Live; on Music it first goes up a
+folder.
 
 **The padlock** guards against stray touches during a show. Locked (the
 padlock closed and lit), the volume faders only show the level and the
@@ -91,10 +93,21 @@ app is built with in a browser or HTML viewer.
 
 ## Music
 
+On a **phone** the **Music** tab shows the device's audio files by
+**Folders** (with the path above the list; tap a part of it to go back
+up), **Artists** or **Albums**, and a search over title, artist, album
+and file name. Each row shows the title, the artist and the duration; tap
+rows to tick them. While something is ticked, a bar at the bottom shows
+how many, the player and playlist they go to (tap it to choose another),
+**Add at the end** and, when that player's next track is in that
+playlist, **Add after the next**. The tracks go in the order you ticked
+them.
+
 **Add** in a playlist footer, a cart's file and Settings → Playlists →
-Music folder open the **music browser**: the device's audio files by
-folder. Tick files to add them, tap one for a cart, or **Use this folder**.
-Copy music to the device (for example to its *Music* folder) to see it
+Music folder open the Music tab on a phone (on a tablet, the **music
+browser** window, by folder). Tick files and tap **Add**, tap one file for
+a cart, or **Use this folder**; **Cancel** or Back goes back to where you
+were. Copy music to the device (for example to its *Music* folder) to see it
 there. Fauste Player only reads your music: tags and covers are not
 written, and playlists and cart pages are not imported or exported on
 Android yet.

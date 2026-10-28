@@ -23,7 +23,10 @@ object Native {
     /** Another app took (or gave back) the audio focus; nothing pauses (MB4). */
     external fun setAudioFocusLost(lost: Boolean)
 
-    /** The device's audio files, as paths the decoders open (MB7). */
+    /**
+     * The device's audio files (MB7): per file the path the decoders open,
+     * then its title, artist, album and duration in ms, NUL-separated (PL18).
+     */
     external fun setMediaFiles(paths: Array<String>)
 
     /** [PLAYOUT_ACTIVE] and [KEEP_SCREEN_ON] bits from the session's model. */

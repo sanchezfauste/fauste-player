@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use fp_app::ui::media_browser::{BrowseMode, MediaBrowser, folders};
+use fp_app::ui::media_browser::{BrowseMode, MediaBrowser, MediaFile, folders};
 
 fn paths(list: &[&str]) -> Vec<PathBuf> {
     list.iter().map(PathBuf::from).collect()
@@ -56,11 +56,47 @@ fn one_file_mode_keeps_only_its_extensions() {
     );
 }
 
+fn files(list: &[&str]) -> Vec<MediaFile> {
+    paths(list).into_iter().map(MediaFile::from).collect()
+}
+
 #[test]
 fn files_are_shared() {
     let browser = MediaBrowser::default();
-    browser.set_files(paths(&["/m/a.mp3"]));
-    assert_eq!(*browser.clone().files(), paths(&["/m/a.mp3"]));
+    browser.set_files(files(&["/m/a.mp3"]));
+    assert_eq!(*browser.clone().files(), files(&["/m/a.mp3"]));
+}
+
+/// PL18: MediaStore's tags travel with the path, NUL-separated.
+#[test]
+fn a_record_carries_the_tags() {
+    let file = MediaFile::from_record("/m/a.mp3\0Song\0Band\0Disc\x00185500").unwrap();
+    assert_eq!(file.path, PathBuf::from("/m/a.mp3"));
+    assert_eq!(file.title.as_deref(), Some("Song"));
+    assert_eq!(file.artist.as_deref(), Some("Band"));
+    assert_eq!(file.album.as_deref(), Some("Disc"));
+    assert_eq!(file.duration_secs, Some(185.5));
+    assert_eq!(file.title_or_name(), "Song");
+}
+
+#[test]
+fn a_bare_path_is_a_file_without_tags() {
+    let file = MediaFile::from_record("/m/Some song.mp3").unwrap();
+    assert_eq!(file, MediaFile::from(PathBuf::from("/m/Some song.mp3")));
+    assert_eq!(file.title, None);
+    assert_eq!(file.duration_secs, None);
+    assert_eq!(file.title_or_name(), "Some song");
+}
+
+#[test]
+fn empty_or_bad_fields_are_missing() {
+    let file = MediaFile::from_record("/m/a.mp3\0\0 \0\0soon").unwrap();
+    assert_eq!(file.title, None);
+    assert_eq!(file.artist, None);
+    assert_eq!(file.album, None);
+    assert_eq!(file.duration_secs, None);
+    assert_eq!(MediaFile::from_record(""), None);
+    assert_eq!(MediaFile::from_record("\0Song"), None);
 }
 
 #[test]
@@ -142,11 +178,11 @@ fn only_audio_extensions_open_the_browser() {
 fn set_files_tells_when_the_files_become_readable() {
     let browser = MediaBrowser::default();
     assert!(!browser.set_files(Vec::new()), "still nothing");
-    assert!(browser.set_files(paths(&["/m/a.mp3"])), "access gained");
+    assert!(browser.set_files(files(&["/m/a.mp3"])), "access gained");
     assert!(
-        !browser.set_files(paths(&["/m/a.mp3", "/m/b.mp3"])),
+        !browser.set_files(files(&["/m/a.mp3", "/m/b.mp3"])),
         "a new file"
     );
     assert!(!browser.set_files(Vec::new()), "access lost");
-    assert!(browser.set_files(paths(&["/m/a.mp3"])), "gained again");
+    assert!(browser.set_files(files(&["/m/a.mp3"])), "gained again");
 }

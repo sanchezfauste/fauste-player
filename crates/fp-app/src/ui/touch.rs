@@ -43,6 +43,8 @@ pub enum PhoneScreen {
     Carts,
     /// One player with its playlists.
     Playlists,
+    /// The device's music (§9).
+    Music,
 }
 
 /// What the phone shows: the screen and the player the Playlists screen
@@ -109,16 +111,17 @@ pub(crate) fn apply_style(ctx: &egui::Context) {
     });
 }
 
-/// The phone's top bar, left part: Live | Carts | Playlists, shrunk (their
+/// The phone's top bar, left part: Live | Carts | Playlists | Music, shrunk (their
 /// names cut short) to stop before `right`, where the lock and More begin.
 pub(crate) fn screen_tiles(ui: &mut Ui, scene: &Scene<'_>, phone: &mut PhoneView, right: f32) {
     let t = scene.i18n;
     ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
-    let each = ((right - ui.cursor().left() - 8.0) / 3.0).max(TARGET);
+    let each = ((right - ui.cursor().left() - 12.0) / 4.0).max(TARGET);
     for (screen, key) in [
         (PhoneScreen::Live, "touch-live"),
         (PhoneScreen::Carts, "touch-carts"),
         (PhoneScreen::Playlists, "touch-playlists"),
+        (PhoneScreen::Music, "touch-music"),
     ] {
         if chip_at_most(ui, &t.tr(key), phone.screen == screen, each) {
             phone.screen = screen;
@@ -270,11 +273,13 @@ pub(crate) fn phone_middle(
 ) {
     let players = scene.state.player_ids();
     view_state.phone.settle(&players);
+    super::music::follow_request(view_state);
     view_state.player_rects.clear();
     match view_state.phone.screen {
         PhoneScreen::Live => live(ui, scene, view_state, covers, &players, landscape),
         PhoneScreen::Carts => carts(ui, scene, view_state),
         PhoneScreen::Playlists => playlists(ui, scene, view_state, covers, &players, landscape),
+        PhoneScreen::Music => super::music::screen(ui, scene, view_state),
     }
 }
 

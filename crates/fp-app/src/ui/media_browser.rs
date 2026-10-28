@@ -43,6 +43,65 @@ impl BrowseMode {
     }
 }
 
+/// One of the device's audio files with the tags MediaStore knows (phone
+/// layout spec PL18); `None` where a tag is missing.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MediaFile {
+    pub path: PathBuf,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration_secs: Option<f64>,
+}
+
+impl MediaFile {
+    /// A record from the platform: `path\0title\0artist\0album\0duration_ms`,
+    /// or a bare path. Empty or unreadable fields are missing; `None`
+    /// without a path.
+    pub fn from_record(record: &str) -> Option<Self> {
+        let mut fields = record.split('\0');
+        let path = fields.next().filter(|p| !p.is_empty())?;
+        let mut tag = || {
+            fields
+                .next()
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .map(str::to_owned)
+        };
+        let (title, artist, album) = (tag(), tag(), tag());
+        let duration_secs = tag()
+            .and_then(|ms| ms.parse::<f64>().ok())
+            .filter(|ms| ms.is_finite() && *ms > 0.0)
+            .map(|ms| ms / 1000.0);
+        Some(Self {
+            path: PathBuf::from(path),
+            title,
+            artist,
+            album,
+            duration_secs,
+        })
+    }
+
+    /// The title, or the file name without its extension when untagged.
+    pub fn title_or_name(&self) -> String {
+        self.title.clone().unwrap_or_else(|| {
+            self.path
+                .file_stem()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
+    }
+}
+
+impl From<PathBuf> for MediaFile {
+    fn from(path: PathBuf) -> Self {
+        Self {
+            path,
+            ..Self::default()
+        }
+    }
+}
+
 /// The device's audio files and at most one pending request. Clones share
 /// them: the platform, the pickers' threads and the interface hold one each.
 #[derive(Clone, Default)]
@@ -58,7 +117,7 @@ struct Shared {
 
 #[derive(Default)]
 struct Inner {
-    files: Arc<Vec<PathBuf>>,
+    files: Arc<Vec<MediaFile>>,
     next_id: u64,
     request: Option<(u64, BrowseMode, Option<PathBuf>)>,
     /// Answers not yet collected by their `browse` call.
@@ -72,7 +131,7 @@ impl MediaBrowser {
     /// True when the list was empty and is not any more: the app can read
     /// the device's music now (the media permission was granted), so files
     /// that failed before may play.
-    pub fn set_files(&self, files: Vec<PathBuf>) -> bool {
+    pub fn set_files(&self, files: Vec<MediaFile>) -> bool {
         let (gained, repaint) = {
             let mut inner = self.lock();
             let gained = inner.files.is_empty() && !files.is_empty();
@@ -85,7 +144,7 @@ impl MediaBrowser {
         gained
     }
 
-    pub fn files(&self) -> Arc<Vec<PathBuf>> {
+    pub fn files(&self) -> Arc<Vec<MediaFile>> {
         self.lock().files.clone()
     }
 
@@ -188,7 +247,7 @@ fn sort_key(file: &Path) -> String {
         .unwrap_or_default()
 }
 
-fn matches(file: &Path, mode: &BrowseMode) -> bool {
+pub(crate) fn matches(file: &Path, mode: &BrowseMode) -> bool {
     match mode {
         BrowseMode::AudioFiles | BrowseMode::Folder => super::files::is_audio(file),
         BrowseMode::OneFile { extensions } => file
@@ -221,7 +280,7 @@ pub(crate) fn show(ctx: &egui::Context, t: &I18n, browser: &MediaBrowser, view: 
             ticked: BTreeSet::new(),
         };
     }
-    let files = browser.files();
+    let files: Vec<PathBuf> = browser.files().iter().map(|f| f.path.clone()).collect();
     let grouped = folders(&files, &mode);
     // A file that left the list (a scan finished) leaves the selection.
     let listed: HashSet<&PathBuf> = grouped.iter().flat_map(|(_, f)| f).collect();

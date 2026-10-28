@@ -34,6 +34,8 @@ mod media_browser;
 mod media_browser_ui;
 mod meter_view;
 mod midi_settings;
+mod music;
+mod music_ui;
 mod new_playlist_ui;
 mod next_row_ui;
 mod outdated_notice;

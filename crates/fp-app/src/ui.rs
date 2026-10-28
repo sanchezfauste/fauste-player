@@ -15,6 +15,7 @@ pub mod header_layout;
 pub mod icons;
 mod loudness_edit;
 pub mod media_browser;
+pub mod music;
 mod notice;
 pub mod panel_layout;
 mod panels;

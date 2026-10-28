@@ -14,7 +14,7 @@ use std::thread::JoinHandle;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::app::AppUi;
-use fp_app::ui::media_browser::{BrowseMode, MediaBrowser};
+use fp_app::ui::media_browser::{BrowseMode, MediaBrowser, MediaFile};
 use support::{harness_from, state};
 
 const TITLE: &str = "Music on this device";
@@ -38,7 +38,7 @@ fn browsing(
     mode: BrowseMode,
 ) -> (Harness<'static, AppUi>, JoinHandle<Vec<PathBuf>>) {
     let browser = MediaBrowser::default();
-    browser.set_files(files);
+    browser.set_files(files.into_iter().map(MediaFile::from).collect());
     let given = browser.clone();
     let (mut h, _fake) = harness_from(state(1, 0), move |ui| ui.with_media_browser(given));
     let thread = std::thread::spawn(move || browser.browse(mode, None));
@@ -70,7 +70,7 @@ fn paths(list: &[&str]) -> Vec<PathBuf> {
 #[test]
 fn no_window_without_a_request() {
     let browser = MediaBrowser::default();
-    browser.set_files(library());
+    browser.set_files(library().into_iter().map(MediaFile::from).collect());
     let (mut h, _fake) = harness_from(state(1, 0), move |ui| ui.with_media_browser(browser));
     h.run_steps(3);
     assert!(h.query_by_label(TITLE).is_none());
@@ -143,7 +143,7 @@ fn an_empty_list_says_where_music_comes_from() {
 #[test]
 fn a_selection_keeps_only_files_still_listed() {
     let browser = MediaBrowser::default();
-    browser.set_files(library());
+    browser.set_files(library().into_iter().map(MediaFile::from).collect());
     let given = browser.clone();
     let (mut h, _fake) = harness_from(state(1, 0), move |ui| ui.with_media_browser(given));
     let asking = browser.clone();
@@ -157,7 +157,12 @@ fn a_selection_keeps_only_files_still_listed() {
     }
     h.get_by_label("Album").click();
     h.run_steps(2);
-    browser.set_files(paths(&["/m/Album/a.mp3"]));
+    browser.set_files(
+        paths(&["/m/Album/a.mp3"])
+            .into_iter()
+            .map(MediaFile::from)
+            .collect(),
+    );
     h.run_steps(2);
     h.get_by_label("Add 1").click();
     assert_eq!(answer(&mut h, thread), paths(&["/m/Album/a.mp3"]));

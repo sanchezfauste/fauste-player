@@ -101,6 +101,10 @@ pub(crate) struct TabScroll {
 pub(crate) struct ViewState {
     /// What a phone shows (mobile spec §6); unused elsewhere.
     pub phone: super::touch::PhoneView,
+    /// The phone's Music screen (phone layout spec §9).
+    pub music: super::music::MusicView,
+    /// The device's music, where the platform lists it (Android).
+    pub media: Option<MediaBrowser>,
     /// Whether this frame draws a phone's views (no desktop panel buttons).
     pub phone_active: bool,
     /// Touch mode: rows and column headers do not drag (a finger drag
@@ -563,6 +567,7 @@ impl AppUi {
     /// The media browser the platform's pickers ask through (Android); its
     /// window shows while a picker waits.
     pub fn with_media_browser(mut self, browser: MediaBrowser) -> Self {
+        self.view.media = Some(browser.clone());
         self.media_browser = Some((browser, media_browser::BrowseView::default()));
         self
     }
@@ -583,6 +588,11 @@ impl AppUi {
     pub fn back(&mut self, ctx: &egui::Context) -> bool {
         if egui::Popup::is_any_open(ctx) {
             egui::Popup::close_all(ctx);
+            return true;
+        }
+        // PL2, PL19b: answering a picker, the Music screen goes up a
+        // folder before the request is cancelled.
+        if self.view.music.pick.is_some() && self.music_back() {
             return true;
         }
         if let Some((browser, _)) = &self.media_browser
@@ -615,7 +625,32 @@ impl AppUi {
             v.wave_menu.clear();
             return true;
         }
-        v.phone.back()
+        // PL2: the Music screen goes up a folder before leaving.
+        if self.music_back() {
+            return true;
+        }
+        self.view.phone.back()
+    }
+
+    /// The phone's Music screen one step up (PL2); false elsewhere or at
+    /// its top.
+    fn music_back(&mut self) -> bool {
+        let v = &mut self.view;
+        if v.phone.screen != super::touch::PhoneScreen::Music {
+            return false;
+        }
+        let mut files = v
+            .media
+            .as_ref()
+            .map(MediaBrowser::files)
+            .unwrap_or_default();
+        // A picker's screen lists only what it can take: so does Back.
+        if v.music.pick.is_some()
+            && let Some((_, mode, _)) = v.media.as_ref().and_then(MediaBrowser::pending)
+        {
+            files = super::music::pickable(&files, &mode);
+        }
+        v.music.back(&files)
     }
 
     pub fn i18n(&self) -> &I18n {
@@ -625,7 +660,10 @@ impl AppUi {
     /// Forgets all view state (selection, drags, open dialogs); the next
     /// frame is rebuilt from the current snapshot.
     pub fn reset_view(&mut self) {
-        self.view = ViewState::default();
+        self.view = ViewState {
+            media: self.view.media.take(),
+            ..ViewState::default()
+        };
         self.settings = SettingsState::default();
         self.settings_shown = false;
         self.covers.clear();
@@ -946,7 +984,10 @@ impl AppUi {
         // Files dropped on the window, when no dialog is up (handled once
         // the dialogs are drawn).
         let mut take_drops = false;
-        if self.view.settings_open {
+        // PL19b: while a phone's Music screen answers a picker Settings
+        // asked, Settings waits (its state kept) instead of covering it.
+        let picking = self.view.phone_active && self.view.music.pick.is_some();
+        if self.view.settings_open && !picking {
             if !self.settings_shown {
                 self.settings.reset();
                 self.settings_shown = true;
@@ -1103,8 +1144,11 @@ impl AppUi {
                 }
             }
         }
-        // MB7: a picker waits for the operator's choice of music.
-        if let Some((browser, view)) = &mut self.media_browser {
+        // MB7: a picker waits for the operator's choice of music; a phone
+        // answers it on its Music screen (PL19b).
+        if let Some((browser, view)) = &mut self.media_browser
+            && !self.view.phone_active
+        {
             media_browser::show(&ctx, scene.i18n, browser, view);
         }
         // Live settings §9.3: Apply now sends at once when it interrupts
