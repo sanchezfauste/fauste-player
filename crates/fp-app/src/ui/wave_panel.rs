@@ -142,14 +142,14 @@ pub(crate) fn show(
             &response,
         );
     }
+    let inner = rect.shrink(1.0);
+    let bucket = input.media.map_or(
+        f64::from(scene.state.config.analysis.peak_bucket_ms) / 1000.0,
+        |m| m.peak_bucket_secs,
+    );
+    let min = min_span(bucket, inner.width());
     // The wheel zooms around the pointer; Shift or a sideways wheel pans.
     if let (Some(entry), Some(total), Some(p)) = (input.entry, total, response.hover_pos()) {
-        let inner = rect.shrink(1.0);
-        let bucket = input.media.map_or(
-            f64::from(scene.state.config.analysis.peak_bucket_ms) / 1000.0,
-            |m| m.peak_bucket_secs,
-        );
-        let min = min_span(bucket, inner.width());
         let wheels: Vec<(egui::Vec2, bool)> = ui.input(|i| {
             i.events
                 .iter()
@@ -182,8 +182,35 @@ pub(crate) fn show(
             ui.ctx().request_repaint();
         }
     }
+    // A two-finger pinch on the waveform zooms around the fingers' centre,
+    // with the wheel's limits (phone layout spec PL16).
+    let touch = ui.input(|i| i.multi_touch());
+    if let (Some(entry), Some(total), Some(touch)) = (input.entry, total, touch)
+        && rect.contains(touch.center_pos)
+        && touch.zoom_delta.is_finite()
+        && touch.zoom_delta > 0.0
+        && touch.zoom_delta != 1.0
+    {
+        let v = zoom
+            .map_or_else(|| WaveView::full(total), |z| z.view)
+            .zoom_at(
+                touch.center_pos.x,
+                inner,
+                f64::from(1.0 / touch.zoom_delta),
+                total,
+                min,
+            );
+        zoom = (!v.is_full(total)).then_some(WaveZoom {
+            view: v,
+            entry,
+            moved_at: scene.time,
+        });
+        ui.ctx().request_repaint();
+    }
     // Dragging pans a zoomed view; without zoom a drag does nothing (O10).
+    // Two fingers pinch rather than pan.
     if pan_dx != 0.0
+        && touch.is_none()
         && let (Some(z), Some(total)) = (zoom.as_mut(), total)
     {
         z.view = z.view.pan(pan_dx, rect.shrink(1.0), total);

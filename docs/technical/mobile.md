@@ -43,11 +43,30 @@ paused or pre-listening, or a cart playing or pre-listening.
   panicked on the way out, because it drops the window on suspend and still
   expected it when saving; `vendor/eframe` takes it as optional.
 - **No recreation.** The activity declares every `configChanges` value and
-  `launchMode="singleTask"`; Back (the key, taken in `onKeyDown` before
-  GameActivity hands it to the native side, and the gesture, through the
-  back dispatcher) moves the task to the background. A
+  `launchMode="singleTask"`. A
   recreated activity used to stall the interface while the audio played
   (spec §11).
+- **Back and closing (phone layout spec PL2, PL23, PL24).** Back (the
+  key, taken in `onKeyDown` before GameActivity hands it to the native
+  side, and the gesture, through the back dispatcher) calls `Native.back`,
+  which sets a flag and wakes the interface through the stored
+  `egui::Context`. The next frame's `MobileApp::logic` calls
+  `Shell::back` → `AppUi::back` (closes an open menu, then cancels the
+  media browser's request, then closes the topmost window or question as
+  Esc or Cancel would, then a phone's open player); with
+  nothing to go back to, `Platform::leave(sounding)` calls
+  `MainActivity.leave(close)` on a helper thread. While something sounds
+  (`shell_state::sounding`, the `SOUNDING` bit: `playout_active` is also
+  true for a stopped player with a track loaded) the task moves to the
+  background; otherwise `finishAndRemoveTask()`. `onDestroy`, when
+  finishing with nothing sounding (Back, or a swipe from the app
+  switcher), runs `Native.quitAndEnd` (once per process): on a helper
+  thread `Native.quit`
+  (`AppSession::stop_services`, the services' final save; the engine is
+  left running) and then `Process.killProcess`. A swipe while something
+  sounds leaves the service holding the process; its refresh ends the app
+  the same way once nothing sounds and no activity exists
+  (`MainActivity.alive`).
 - **The foreground service (MB1).** `MainActivity` polls `Native.state()`
   every 500 ms while it is resumed: bit 0 (`PLAYOUT_ACTIVE`) starts
   `PlaybackService`, bit 1 (`KEEP_SCREEN_ON`, MB8, `ui.keep_screen_on`)
@@ -133,17 +152,21 @@ view hides stops or changes playout):
   80 points that no widget took (a fader, a row) shows the next or
   previous pair. A phone on its side is shorter than a column, so the
   columns (and an open player) are laid out 560 points tall and scroll;
-  a swipe may start on that scroll area, and their faders only show the
-  level, as in the compact panels (turn the phone upright to adjust it).
+  a swipe may start on that scroll area.
 - *Cartwall:* the cartwall filling the area. On an upright phone, a page with more columns than rows is laid out turned (columns
   and rows swapped, carts in the same reading order).
 
 The open player survives rotation and closes when its player goes away
 (`PhoneView::settle`). The top bar keeps only icons beside the screen
 tiles, which shrink to fit. A finger drag scrolls: in touch mode table
-rows and column headers do not drag (the row menu moves entries), and a
-compact panel's fader only shows the level (it is adjusted in the open
-player, upright), so scrolling never moves a level on air. The cartwall screen
+rows and column headers do not drag (the row menu moves entries). A drag
+that starts on a fader moves it, in the compact panels and the landscape
+columns too (PL14); one that starts beside it scrolls, so scrolling never
+moves a level on air. A waveform seeks on a tap at the press position
+(`interact_pointer_pos`: a finger leaves no hover position on the frame
+it lifts, PL15) and zooms on a two-finger pinch around the fingers'
+centre (`multi_touch`, with the wheel's `min_span`; the one-finger pan is
+ignored meanwhile, and a pinch never seeks, PL16). The cartwall screen
 never folds. The status bar leaves out the desktop's shortcut hints
 (keys, double and right clicks), and in touch mode a Settings window
 narrower than 600 points shows its sections as a row of chips above the section instead of
@@ -227,8 +250,24 @@ the workspace version (`android.sh --self-test` checks the formula).
 `release-build.yml`'s `android` job publishes the APK and AAB with a
 release once the key is a secret (see the release process).
 
+A release build ships the third-party notices (PL22):
+`NOTICES_MANIFEST=crates/fp-mobile/Cargo.toml scripts/package/notices.sh`
+writes them to `app/src/main/assets/licenses/THIRD-PARTY.html`
+(git-ignored; a debug build removes it, so its About says the file is
+missing), and the script fails when the APK lacks the asset. It needs
+`cargo-about` (or downloads the pinned one, as `notices.sh` does);
+`release-build.yml` installs it. `MainActivity.onCreate` copies the asset
+to `filesDir/licenses/` before the native side starts; `fp-mobile` passes
+that path to `AppUi::with_notices` when the file is there, and
+`MainActivity.openUrl` hands a path (a value starting with `/`) to a
+viewer through `androidx.core.content.FileProvider` (authority
+`<applicationId>.files`, `res/xml/file_paths.xml`), with read permission.
+
 Judge dropouts and latency on release builds only: a debug build
-underruns at start. CI's `android` job runs the isolation check, the
+underruns at start. A debug build also aborted at start on the emulator
+(2026-10-28) in `android-activity` 0.6.1: a `slice::from_raw_parts`
+precondition check in its text-input callback, which only debug builds
+make. Check on a device or emulator with a release build. CI's `android` job runs the isolation check, the
 `fp-mobile` tests and the debug build, and uploads the APK.
 
 ## Interim parts

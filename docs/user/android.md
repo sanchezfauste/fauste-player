@@ -19,9 +19,15 @@ settings stay. The app is not in Google Play yet.
   13 and newer). Without it the music browser stays empty.
 - **Playout keeps going.** While a player or a cart plays, a notification
   stays up and the audio goes on with the screen off or the app in the
-  background. Back and the app switcher put the app away without stopping
-  anything. As on the desktop, nothing goes on air by itself after a
+  background. As on the desktop, nothing goes on air by itself after a
   start or a crash.
+- **Back and closing.** Back first closes what is open (the music
+  browser, Settings, About, an open player). With nothing left to close,
+  Back puts the app away while something sounds (a player, a cart or a
+  CUE pre-listen) and keeps playing; when nothing sounds, it saves and
+  closes the app. Swiping the app away in the app switcher does the same:
+  a swipe never stops what is playing, and the app closes once it falls
+  silent.
 - **Other apps' sound.** When another app takes the audio, Fauste Player
   goes on playing and says so in the status bar at the bottom.
 
@@ -40,9 +46,12 @@ On a **phone** the top bar switches between **Players** and
   page wider than tall is turned (8 × 2 shows as 2 × 8), in the same
   order.
 
-The volume fader moves only in an open player held upright, so scrolling
-never changes a level on air. In a playlist a finger scrolls; to move a
-track, use the row menu.
+A drag that starts on a volume fader moves it; one that starts anywhere
+else scrolls, so scrolling never changes a level on air. A tap on a
+waveform seeks there, a two-finger pinch on it zooms around your fingers,
+a one-finger drag moves a zoomed view and **Full view** shows the whole
+track again. In a playlist a finger scrolls; to move a track, use the row
+menu.
 
 On a **tablet** the layout is the desktop's (see [Layout](layout.md)),
 with targets made easier to hit.
@@ -51,6 +60,9 @@ A long press opens what a right click opens on the desktop: the row menu,
 the header menus, a cart's menu (**Edit…** chooses an empty cart's
 file). On a phone, Settings shows its sections as a row of chips above
 the section.
+
+About → **Third-party licences** opens the notices of the libraries the
+app is built with in a browser or HTML viewer.
 
 ## Music
 

@@ -29,6 +29,13 @@ class PlaybackService : Service() {
     private val refresh = object : Runnable {
         override fun run() {
             val state = Native.state()
+            // Swiped away while on air: once nothing sounds, with no
+            // activity, the app ends (PL24).
+            if (!MainActivity.alive && state and Native.SOUNDING == 0) {
+                stopSelf()
+                Native.quitAndEnd()
+                return
+            }
             if (state and Native.PLAYOUT_ACTIVE == 0) {
                 stopSelf()
                 return

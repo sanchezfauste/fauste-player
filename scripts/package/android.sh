@@ -8,7 +8,9 @@
 # Needs the Android SDK (ANDROID_HOME, or sdk.dir in
 # mobile/android/local.properties) with NDK r27 (ANDROID_NDK_HOME, or the
 # newest ndk/27.* under the SDK), the Rust targets aarch64-linux-android and
-# x86_64-linux-android, cargo-ndk and a JDK 17 or newer. The APK lands in
+# x86_64-linux-android, cargo-ndk and a JDK 17 or newer; a release build
+# also needs cargo-about (or curl, see notices.sh) for the third-party
+# notices it ships as an asset (phone layout spec PL22). The APK lands in
 # mobile/android/app/build/outputs/apk/<profile>/. Judge audio only on
 # release builds: debug builds drop out (mobile spec §11).
 set -euo pipefail
@@ -81,9 +83,27 @@ rm -rf "${app}/app/src/main/jniLibs"
 (cd "${root}" && cargo ndk -P 29 -t arm64-v8a -t x86_64 \
   -o "${app}/app/src/main/jniLibs" build "${cargo_profile[@]}" -p fp-mobile)
 
+# The notices ship in a release APK only; a debug APK's About says they
+# are missing.
+notices="${app}/app/src/main/assets/licenses"
+rm -rf "${notices}"
+if [[ "${profile}" == release ]]; then
+  NOTICES_MANIFEST=crates/fp-mobile/Cargo.toml \
+    "${root}/scripts/package/notices.sh" "${notices}/THIRD-PARTY.html"
+fi
+
 (cd "${app}" && ./gradlew --no-daemon -q "${gradle_tasks[@]}" \
   -PversionName="${version}" -PversionCode="${code}")
 find "${app}/app/build/outputs/apk/${profile}" -name '*.apk' -print
 if [[ "${profile}" == release ]]; then
   find "${app}/app/build/outputs/bundle/release" -name '*.aab' -print
+  for apk in "${app}"/app/build/outputs/apk/release/*.apk; do
+    # The listing first: `grep -q` stops reading early, and pipefail would
+    # count the listing cut short as a failure.
+    listing="$(unzip -l "${apk}")"
+    if ! grep -q ' assets/licenses/THIRD-PARTY.html$' <<< "${listing}"; then
+      echo "android.sh: ${apk} lacks assets/licenses/THIRD-PARTY.html" >&2
+      exit 1
+    fi
+  done
 fi

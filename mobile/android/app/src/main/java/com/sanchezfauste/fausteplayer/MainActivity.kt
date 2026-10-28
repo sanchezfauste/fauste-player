@@ -9,10 +9,14 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.androidgamesdk.GameActivity
@@ -34,6 +38,8 @@ class MainActivity : GameActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Before the native side starts: it looks for the copy once.
+        copyNotices()
         super.onCreate(savedInstanceState)
         val wanted = buildList {
             if (Build.VERSION.SDK_INT >= 33) {
@@ -45,9 +51,10 @@ class MainActivity : GameActivity() {
         }
         requestPermissions(wanted.toTypedArray(), PERMISSIONS)
         media.start()
+        alive = true
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                moveTaskToBack(true)
+                Native.back()
             }
         })
         ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { view, insets ->
@@ -78,9 +85,35 @@ class MainActivity : GameActivity() {
         }
     }
 
+    /**
+     * Swiped away from the app switcher (or finished) with nothing on air:
+     * save and end (PL23). While something sounds the service holds the
+     * process and the playout goes on (PL24).
+     */
     override fun onDestroy() {
         media.stop()
+        alive = false
+        if (isFinishing && Native.state() and Native.SOUNDING == 0) {
+            Native.quitAndEnd()
+        }
         super.onDestroy()
+    }
+
+    /**
+     * Called from Rust when Back has nothing left to go back to: to the
+     * background while playout is active, otherwise save and end (PL23,
+     * PL24).
+     */
+    @Suppress("unused")
+    fun leave(close: Boolean) {
+        runOnUiThread {
+            if (close) {
+                // `onDestroy` saves and ends the process.
+                finishAndRemoveTask()
+            } else {
+                moveTaskToBack(true)
+            }
+        }
     }
 
     /** Once more on the way out: Play then Home within a poll still gets the service. */
@@ -90,15 +123,43 @@ class MainActivity : GameActivity() {
         super.onPause()
     }
 
-    /** Opens a link from the interface (the About window); called from Rust. */
+    /**
+     * Copies the third-party notices a release APK carries as an asset to
+     * the files folder, where the interface finds them and a browser can be
+     * given them (phone layout spec PL22). A debug APK has none: a stale
+     * copy goes.
+     */
+    private fun copyNotices() {
+        val copy = File(filesDir, NOTICES)
+        try {
+            assets.open(NOTICES).use { input ->
+                copy.parentFile?.mkdirs()
+                copy.outputStream().use { input.copyTo(it) }
+            }
+        } catch (e: FileNotFoundException) {
+            copy.delete()
+        } catch (e: IOException) {
+            Log.w("fauste", "could not copy the notices", e)
+        }
+    }
+
+    /**
+     * Opens a link or a file of the files folder (the About window); called
+     * from Rust. A file is handed over through the FileProvider.
+     */
     @Suppress("unused")
     fun openUrl(url: String) {
         runOnUiThread {
             try {
-                startActivity(
+                val intent = if (url.startsWith("/")) {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.files", File(url))
+                    Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(uri, "text/html")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } else {
                     Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
+                }
+                startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (e: ActivityNotFoundException) {
                 Log.w("fauste", "no app opens $url", e)
             } catch (e: RuntimeException) {
@@ -120,24 +181,30 @@ class MainActivity : GameActivity() {
     }
 
     /**
-     * Back never destroys the activity: the playout keeps its interface.
-     * GameActivity hands every key to the native side, which consumes Back,
-     * so the key is taken here before it; the gesture reaches the callback
-     * registered in `onCreate`.
+     * Back goes to the interface, which goes back one step or calls
+     * `leave` (PL2). GameActivity hands every key to the native side, which
+     * consumes Back as a key, so the key is taken here before it; the
+     * gesture reaches the callback registered in `onCreate`.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
         keyCode == KeyEvent.KEYCODE_BACK || super.onKeyDown(keyCode, event)
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            moveTaskToBack(true)
+            Native.back()
             return true
         }
         return super.onKeyUp(keyCode, event)
     }
 
-    private companion object {
-        const val POLL_MS = 500L
-        const val PERMISSIONS = 1
+    companion object {
+        /** Whether an activity exists: the service ends the app without one (PL24). */
+        @Volatile
+        var alive = false
+            private set
+
+        private const val POLL_MS = 500L
+        private const val PERMISSIONS = 1
+        private const val NOTICES = "licenses/THIRD-PARTY.html"
     }
 }

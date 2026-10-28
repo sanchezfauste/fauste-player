@@ -34,7 +34,7 @@ const NEW_PLAYLIST_POPUP_WIDTH: f32 = 220.0;
 const FOOTER_HEIGHT: f32 = 24.0;
 
 /// A player's desktop column. Without `fader` its fader only shows the
-/// level (a phone's scrolling columns, where a scroll must not move it).
+/// level.
 pub(crate) fn column(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -141,9 +141,9 @@ pub(crate) fn compact(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, view_state, id, index, &pv);
-            // A finger scrolling the list must not move a level on air: the
-            // fader is adjusted in the open player.
-            top_block(ui, scene, covers, id, &pv, &telemetry, false);
+            // A drag that starts on the fader moves it (PL14); one that
+            // starts elsewhere scrolls the list.
+            top_block(ui, scene, covers, id, &pv, &telemetry, true);
             progress_bar(ui, &pv);
             time_row(ui, scene, &pv);
         });

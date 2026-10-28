@@ -34,6 +34,11 @@ pub trait Platform: Send + Sync {
     /// playlist and cart page import and export (read-only on mobile, spec
     /// §2).
     fn can_write_user_files(&self) -> bool;
+    /// The operator left with Back and there was nothing to go back to
+    /// (phone layout spec PL23, PL24): with `playing` the app goes to the
+    /// background and plays on, otherwise it saves and ends. Nothing by
+    /// default: a desktop window closes through its own button.
+    fn leave(&self, _playing: bool) {}
 }
 
 /// The native dialogs (`rfd`) and the system opener (`open`).

@@ -1,17 +1,18 @@
 //! The calls of the Kotlin class `com.sanchezfauste.fausteplayer.Native`
-//! (each entry point only reads or stores a value; none blocks), and the
-//! one call into the activity, `open_url`.
+//! (each entry point only reads or stores a value and none blocks, except
+//! `quit`, which the shell calls off its main thread), and the calls into
+//! the activity, `open_url` and `leave`.
 
 use std::sync::atomic::Ordering;
 
 use jni::JNIEnv;
 use jni::JavaVM;
-use jni::objects::{JObject, JObjectArray, JString, JValue};
+use jni::objects::{JObject, JObjectArray, JString, JValueOwned};
 use jni::sys::{jboolean, jint, jstring};
 
 use fp_app::services::ServiceRequest;
 
-use crate::android::{ACTIVITY, INSETS, SESSION};
+use crate::android::{ACTIVITY, BACK, INSETS, REPAINT, SESSION};
 use crate::platform::{AUDIO_FOCUS_LOST, MEDIA};
 use crate::shell_state::{on_air_text, shell_state};
 
@@ -125,9 +126,60 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setMediaFiles(
     }
 }
 
+#[allow(unsafe_code)]
+// SAFETY: as above; `external fun back()`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_back(
+    _env: JNIEnv<'_>,
+    _this: JObject<'_>,
+) {
+    BACK.store(true, Ordering::Release);
+    if let Some(ctx) = REPAINT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+    {
+        ctx.request_repaint();
+    }
+}
+
+#[allow(unsafe_code)]
+// SAFETY: as above; `external fun quit()`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_quit(
+    _env: JNIEnv<'_>,
+    _this: JObject<'_>,
+) {
+    // Waits for the services' final save: the shell ends the process next.
+    if let Some(session) = SESSION.get() {
+        session.stop_services();
+        tracing::info!("saved; the app ends");
+    }
+}
+
+/// Asks the activity to leave (`MainActivity.leave`): to the background,
+/// or, with `close`, for good after the final save. Blocks for a JNI call:
+/// run it off the interface thread.
+pub(crate) fn leave(close: bool) -> Result<(), String> {
+    call_activity("leave", "(Z)V", |_| Ok(JValueOwned::Bool(u8::from(close))))
+}
+
 /// Asks the activity to open `url` (`MainActivity.openUrl`, a view
 /// intent). Blocks for a JNI call: run it off the interface thread.
 pub(crate) fn open_url(url: &str) -> Result<(), String> {
+    call_activity("openUrl", "(Ljava/lang/String;)V", |env| {
+        env.new_string(url)
+            .map(|text| JValueOwned::Object(text.into()))
+    })
+}
+
+/// Calls `method` with signature `sig` on the running activity, with the
+/// one argument `arg` makes.
+fn call_activity(
+    method: &str,
+    sig: &str,
+    arg: impl for<'a> FnOnce(&mut JNIEnv<'a>) -> jni::errors::Result<JValueOwned<'a>>,
+) -> Result<(), String> {
     // Held through the call: the activity cannot end meanwhile.
     let current = ACTIVITY
         .lock()
@@ -145,14 +197,8 @@ pub(crate) fn open_url(url: &str) -> Result<(), String> {
     // running activity (`activity_as_ptr`), valid while `ACTIVITY` holds it
     // and we hold its lock. `JObject` never deletes it.
     let activity = unsafe { JObject::from_raw(activity as jni::sys::jobject) };
-    let called = env.new_string(url).and_then(|text| {
-        env.call_method(
-            &activity,
-            "openUrl",
-            "(Ljava/lang/String;)V",
-            &[JValue::Object(&text)],
-        )
-    });
+    let called =
+        arg(&mut env).and_then(|value| env.call_method(&activity, method, sig, &[value.borrow()]));
     // Any failure may leave a Java exception pending; the thread must not
     // detach with one.
     if called.is_err() {

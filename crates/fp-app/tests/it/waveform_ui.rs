@@ -99,6 +99,121 @@ fn a_plain_click_still_seeks_at_once() {
     assert!((s[0] - 90.0).abs() < 1.5, "{s:?}");
 }
 
+/// A finger tap on a phone's waveform seeks once, where it landed (phone
+/// layout spec PL15). On a device the finger leaves no hover position on
+/// the frame it lifts; the harness keeps one, so the emulator check in the
+/// plan's ledger covers that part.
+#[test]
+fn a_tap_on_the_waveform_seeks() {
+    let (mut h, fake) =
+        support::harness_sized(playing(), egui::vec2(892.0, 412.0), |ui| ui.with_touch());
+    h.run_steps(3);
+    let w = wave(&h);
+    let at = pos2(x_of(w, 90.0), w.center().y);
+    // The touch event makes egui see a touch screen, as on a phone.
+    h.event(Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase: egui::TouchPhase::Start,
+        pos: at,
+        force: None,
+    });
+    h.event(Event::PointerMoved(at));
+    press(&mut h, at, true);
+    h.event(Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase: egui::TouchPhase::End,
+        pos: at,
+        force: None,
+    });
+    press(&mut h, at, false);
+    h.event(Event::PointerGone);
+    h.run_steps(2);
+    let s = seeks(&fake);
+    assert_eq!(s.len(), 1, "{s:?}");
+    assert!((s[0] - 90.0).abs() < 1.5, "{s:?}");
+}
+
+fn finger(id: u64, phase: egui::TouchPhase, pos: Pos2) -> Event {
+    Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(id),
+        phase,
+        pos,
+        force: None,
+    }
+}
+
+/// Two fingers start 20 pt either side of `center` and spread to 60 pt. As
+/// on a device, the first finger also drives the pointer.
+fn pinch(h: &mut Harness<'_, AppUi>, center: Pos2) {
+    use egui::TouchPhase::{End, Move, Start};
+    let at = |d: f32| (center - egui::vec2(d, 0.0), center + egui::vec2(d, 0.0));
+    let (a, b) = at(20.0);
+    h.event(finger(1, Start, a));
+    h.event(Event::PointerMoved(a));
+    press(h, a, true);
+    h.event(finger(2, Start, b));
+    h.run_steps(1);
+    for step in 1..=5 {
+        let (a, b) = at(20.0 + 8.0 * step as f32);
+        h.event(finger(1, Move, a));
+        h.event(Event::PointerMoved(a));
+        h.event(finger(2, Move, b));
+        h.run_steps(1);
+    }
+    let (a, b) = at(60.0);
+    h.event(finger(2, End, b));
+    h.event(finger(1, End, a));
+    press(h, a, false);
+    h.event(Event::PointerGone);
+    h.run_steps(2);
+}
+
+#[test]
+fn a_pinch_on_the_waveform_zooms_it() {
+    let (mut h, _fake) = harness(playing());
+    let w = wave(&h);
+    assert!(h.query_by_label("Full view").is_none());
+    pinch(&mut h, w.center());
+    assert!(h.query_by_label("Full view").is_some());
+}
+
+/// A pinch with the first finger held still is no tap: it never seeks a
+/// track on air.
+#[test]
+fn a_pinch_with_one_finger_still_does_not_seek() {
+    use egui::TouchPhase::{End, Move, Start};
+    let (mut h, fake) = harness(playing());
+    let w = wave(&h);
+    let a = w.center() - egui::vec2(20.0, 0.0);
+    let b = w.center() + egui::vec2(20.0, 0.0);
+    h.event(finger(1, Start, a));
+    h.event(Event::PointerMoved(a));
+    press(&mut h, a, true);
+    h.event(finger(2, Start, b));
+    h.run_steps(1);
+    for step in 1..=3 {
+        h.event(finger(2, Move, b + egui::vec2(15.0 * step as f32, 0.0)));
+        h.run_steps(1);
+    }
+    h.event(finger(2, End, b + egui::vec2(45.0, 0.0)));
+    h.event(finger(1, End, a));
+    press(&mut h, a, false);
+    h.event(Event::PointerGone);
+    h.run_steps(2);
+    assert_eq!(seeks(&fake), Vec::<f64>::new());
+}
+
+#[test]
+fn a_pinch_beside_the_waveform_leaves_it() {
+    let (mut h, _fake) = harness(playing());
+    let w = wave(&h);
+    pinch(&mut h, pos2(w.center().x, w.bottom() + 150.0));
+    assert!(h.query_by_label("Full view").is_none());
+}
+
 /// A stopped player shows its next track. A click on its waveform sets
 /// where Play starts it (rule 3a, operator feedback 4 Q8); a drag never
 /// seeks.

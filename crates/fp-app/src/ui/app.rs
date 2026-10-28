@@ -576,6 +576,49 @@ impl AppUi {
         self
     }
 
+    /// Goes back one step inside the interface (the phone's Back, phone
+    /// layout spec PL2): an open menu closes first, then the media
+    /// browser's request is cancelled, then the topmost window or question
+    /// closes (as Esc or Cancel would), then a phone's open player. False
+    /// when there is nothing to go back to, so the app's own Back applies.
+    pub fn back(&mut self, ctx: &egui::Context) -> bool {
+        if egui::Popup::is_any_open(ctx) {
+            egui::Popup::close_all(ctx);
+            return true;
+        }
+        if let Some((browser, _)) = &self.media_browser
+            && browser.pending().is_some()
+        {
+            browser.cancel_pending();
+            return true;
+        }
+        let v = &mut self.view;
+        if v.exit_guard.take().is_some()
+            || v.tag_editor.take().is_some()
+            || v.confirm_reset.take().is_some()
+            || v.loudness_popup.take().is_some()
+        {
+            return true;
+        }
+        for open in [
+            &mut v.confirm_apply_now,
+            &mut v.pending_open,
+            &mut v.outdated_open,
+            &mut v.settings_open,
+            &mut v.about_open,
+        ] {
+            if *open {
+                *open = false;
+                return true;
+            }
+        }
+        if !v.wave_menu.is_empty() {
+            v.wave_menu.clear();
+            return true;
+        }
+        v.phone.open.take().is_some()
+    }
+
     pub fn i18n(&self) -> &I18n {
         &self.i18n
     }

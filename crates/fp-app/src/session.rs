@@ -123,6 +123,14 @@ impl AppSession {
         self.analysis_dir.clone()
     }
 
+    /// Stops the services after their final save, leaving the engine
+    /// running: the Android app ends its process next (phone layout spec
+    /// PL23), and its session is shared, so it cannot be consumed. Once
+    /// stopped, returns at once.
+    pub fn stop_services(&self) {
+        self.services.stop();
+    }
+
     /// Stops the services after their final save, then the engine. Every
     /// other part that can send commands must have stopped already.
     pub fn shutdown(self) {
