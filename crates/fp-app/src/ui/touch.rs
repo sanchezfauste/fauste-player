@@ -416,8 +416,9 @@ fn columns(
         .show(&mut area_ui, |ui| {
             let (tall, _) =
                 ui.allocate_exact_size(vec2(rect.width(), MIN_COLUMN_HEIGHT), egui::Sense::hover());
-            // A finger scrolls here: the faders only show the level.
-            columns_in(ui, scene, view_state, covers, shown, tall, false);
+            // A drag that starts on a fader moves it (PL14); one that
+            // starts elsewhere scrolls.
+            columns_in(ui, scene, view_state, covers, shown, tall, true);
         });
     // egui's id for a scroll area's drag.
     view_state.phone_swipe.columns_drag = Some(output.id.with("area"));
