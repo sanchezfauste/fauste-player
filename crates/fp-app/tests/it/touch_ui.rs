@@ -433,7 +433,60 @@ fn a_landscape_cartwall_keeps_the_page() {
     assert!((three.top() - one.top()).abs() < 1.0, "3 on the row of 1");
 }
 
-// --- Playlists (interim) and the rest ---
+// --- Playlists (PL8–PL11b) ---
+
+fn waveform(h: &Harness<'static, AppUi>) -> egui::Rect {
+    h.get_all_by_label("Waveform: click to seek")
+        .next()
+        .unwrap()
+        .rect()
+}
+
+/// PL9: held upright, the track list is on top and the player's card at
+/// the bottom.
+#[test]
+fn the_playlists_list_is_over_the_card() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    tab(&mut h, "Playlists");
+    let row = h.get_all_by_label("Song 1").next().unwrap().rect();
+    let play = h.get_by_label("Play").rect();
+    assert!(row.bottom() < waveform(&h).top(), "the list first");
+    assert!(play.bottom() > PORTRAIT.y * 0.6, "the card at the bottom");
+}
+
+/// PL9: turned sideways, the list is on the left and the card on the right.
+#[test]
+fn in_landscape_the_list_is_left_of_the_card() {
+    let (mut h, _fake) = touch(2, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    let row = h.get_all_by_label("Song 1").next().unwrap().rect();
+    let play = h.get_by_label("Play").rect();
+    assert!(row.right() <= waveform(&h).left(), "the list on the left");
+    assert!(play.left() > LANDSCAPE.x / 2.0, "the card on the right");
+}
+
+/// PL9: the Playlists card's waveform is larger than a Live card's, for
+/// preparing a track.
+#[test]
+fn the_playlists_card_has_a_larger_waveform() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    let live = waveform(&h).height();
+    tab(&mut h, "Playlists");
+    assert!(waveform(&h).height() > live + 20.0);
+}
+
+/// PL8: the chosen player's playlist tabs, with + for a new playlist.
+#[test]
+fn the_playlists_screen_has_tabs_and_a_new_playlist_button() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    tab(&mut h, "Playlists");
+    assert!(h.query_by_label("New playlist").is_some());
+    let chip = h.get_all_by_label("P1").next().unwrap().rect();
+    let new = h.get_by_label("New playlist").rect();
+    assert!(chip.bottom() <= new.top() + 1.0, "the tabs under the chips");
+}
+
+// --- The rest ---
 
 #[test]
 fn a_finger_drag_on_the_playlist_moves_no_row() {
