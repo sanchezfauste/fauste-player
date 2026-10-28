@@ -101,7 +101,17 @@ fn session(app: &AndroidApp) -> Option<&'static AppSession> {
         fp_model::Limits::default().max_crash_reports,
     );
     match AppSession::start(paths, fp_backends::system_backends(), Some(cap)) {
-        Ok(session) => Some(SESSION.get_or_init(|| session)),
+        Ok(session) => {
+            let session = SESSION.get_or_init(|| session);
+            // The media list may have come before the session: its
+            // recheck (`jni::setMediaFiles`) found no one to ask.
+            if !crate::platform::MEDIA.files().is_empty() {
+                let _ = session
+                    .requests
+                    .try_send(fp_app::services::ServiceRequest::RecheckUnreadable);
+            }
+            Some(session)
+        }
         Err(error) => {
             tracing::error!(%error, "could not start");
             None

@@ -46,6 +46,9 @@ const WINDOW_SIZE: egui::Vec2 = vec2(900.0, 640.0);
 /// Room kept around the window inside the main window.
 const SCREEN_MARGIN: egui::Vec2 = vec2(48.0, 82.0);
 const MIN_WINDOW_SIZE: egui::Vec2 = vec2(320.0, 300.0);
+/// Narrower than this, in touch mode, the sections are chips above the
+/// section.
+const COMPACT_WIDTH: f32 = 600.0;
 
 /// `WINDOW_SIZE`, shrunk to fit `screen`.
 pub(crate) fn window_size(screen: egui::Vec2) -> egui::Vec2 {
@@ -192,6 +195,9 @@ fn update(scene: &Scene<'_>, edit: impl FnOnce(&mut Config)) {
 
 /// Everything the modal needs besides the scene.
 pub(crate) struct SettingsDeps<'a> {
+    /// Touch mode (mobile spec §6): a narrow window shows the sections as
+    /// chips.
+    pub touch: bool,
     pub backends: &'a [Arc<dyn AudioBackend>],
     pub services: Option<&'a Sender<ServiceRequest>>,
     pub notice: Option<String>,
@@ -275,57 +281,32 @@ pub(crate) fn show(
             );
             separator(ui, size.x);
             let body_height = size.y - 44.0 - 52.0 - 2.0;
-            ui.allocate_ui_with_layout(
-                vec2(size.x, body_height),
-                Layout::left_to_right(Align::Min),
-                |ui| {
-                    nav(ui, scene, st, body_height);
-                    let (line, _) = ui.allocate_exact_size(vec2(1.0, body_height), Sense::hover());
-                    ui.painter().rect_filled(line, 0.0, theme::NEUTRAL_800);
-                    ui.vertical(|ui| {
-                        ui.set_min_size(vec2(ui.available_width(), body_height));
-                        section_header(ui, scene, st);
-                        egui::ScrollArea::both()
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                egui::Frame::new()
-                                    .inner_margin(egui::Margin {
-                                        left: 24,
-                                        right: 24,
-                                        top: 0,
-                                        bottom: 20,
-                                    })
-                                    .show(ui, |ui| {
-                                        ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
-                                        set_body_right(ui);
-                                        match st.section {
-                                            Section::Outputs => {
-                                                st.load_devices(deps.backends, ctx);
-                                                outputs(ui, scene, st);
-                                            }
-                                            Section::Players => players(ui, scene, st),
-                                            Section::Meters => meters::section(ui, scene),
-                                            Section::Analysis => analysis(ui, scene, deps),
-                                            Section::Loudness => {
-                                                loudness::section(ui, scene, deps.unmeasured)
-                                            }
-                                            Section::Playlists => playlists(ui, scene, st),
-                                            Section::Cartwall => carts::section(ui, scene, st),
-                                            Section::Shortcuts => keys::section(ui, scene, st),
-                                            #[cfg(not(target_os = "android"))]
-                                            Section::Midi => {
-                                                midi::section(ui, scene, st, deps.midi)
-                                            }
-                                            #[cfg(not(target_os = "android"))]
-                                            Section::Remote => {
-                                                remote::section(ui, scene, st, deps.remote.as_ref())
-                                            }
-                                        }
-                                    });
-                            });
-                    });
-                },
-            );
+            // On a phone the sections are a row of chips above the
+            // section, which keeps the whole width.
+            if deps.touch && size.x < COMPACT_WIDTH {
+                ui.allocate_ui_with_layout(
+                    vec2(size.x, body_height),
+                    Layout::top_down(Align::Min),
+                    |ui| {
+                        nav_chips(ui, scene, st);
+                        separator(ui, size.x);
+                        let height = ui.available_height();
+                        body(ui, ctx, scene, st, deps, height);
+                    },
+                );
+            } else {
+                ui.allocate_ui_with_layout(
+                    vec2(size.x, body_height),
+                    Layout::left_to_right(Align::Min),
+                    |ui| {
+                        nav(ui, scene, st, body_height);
+                        let (line, _) =
+                            ui.allocate_exact_size(vec2(1.0, body_height), Sense::hover());
+                        ui.painter().rect_filled(line, 0.0, theme::NEUTRAL_800);
+                        body(ui, ctx, scene, st, deps, body_height);
+                    },
+                );
+            }
             separator(ui, size.x);
             // Footer.
             ui.allocate_ui_with_layout(
@@ -414,6 +395,53 @@ pub(crate) fn show(
     Outcome { open, apply_now }
 }
 
+/// The shown section under its header, scrolling, `height` tall at least.
+fn body(
+    ui: &mut Ui,
+    ctx: &egui::Context,
+    scene: &Scene<'_>,
+    st: &mut SettingsState,
+    deps: &SettingsDeps<'_>,
+    height: f32,
+) {
+    ui.vertical(|ui| {
+        ui.set_min_size(vec2(ui.available_width(), height));
+        section_header(ui, scene, st);
+        egui::ScrollArea::both()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                egui::Frame::new()
+                    .inner_margin(egui::Margin {
+                        left: 24,
+                        right: 24,
+                        top: 0,
+                        bottom: 20,
+                    })
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
+                        set_body_right(ui);
+                        match st.section {
+                            Section::Outputs => {
+                                st.load_devices(deps.backends, ctx);
+                                outputs(ui, scene, st);
+                            }
+                            Section::Players => players(ui, scene, st),
+                            Section::Meters => meters::section(ui, scene),
+                            Section::Analysis => analysis(ui, scene, deps),
+                            Section::Loudness => loudness::section(ui, scene, deps.unmeasured),
+                            Section::Playlists => playlists(ui, scene, st),
+                            Section::Cartwall => carts::section(ui, scene, st),
+                            Section::Shortcuts => keys::section(ui, scene, st),
+                            #[cfg(not(target_os = "android"))]
+                            Section::Midi => midi::section(ui, scene, st, deps.midi),
+                            #[cfg(not(target_os = "android"))]
+                            Section::Remote => remote::section(ui, scene, st, deps.remote.as_ref()),
+                        }
+                    });
+            });
+    });
+}
+
 fn separator(ui: &mut Ui, width: f32) {
     let (r, _) = ui.allocate_exact_size(vec2(width, 1.0), Sense::hover());
     ui.painter().rect_filled(r, 0.0, theme::NEUTRAL_800);
@@ -460,14 +488,40 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
                 }
             });
             if response.clicked() {
-                #[cfg(not(target_os = "android"))]
-                if st.section == Section::Remote && section != Section::Remote {
-                    remote::flush(scene, &mut st.remote);
-                }
-                st.section = section;
+                select(scene, st, section);
             }
         }
     });
+}
+
+/// The sections as a row of chips, for a narrow window.
+fn nav_chips(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+    let t = scene.i18n;
+    egui::ScrollArea::horizontal()
+        .id_salt("settings-chips")
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
+                ui.add_space(8.0);
+                for &(section, _, key) in SECTIONS {
+                    if super::touch::chip(ui, &t.tr(key), st.section == section) {
+                        select(scene, st, section);
+                    }
+                }
+                ui.add_space(8.0);
+            });
+        });
+    ui.add_space(8.0);
+}
+
+fn select(scene: &Scene<'_>, st: &mut SettingsState, section: Section) {
+    #[cfg(not(target_os = "android"))]
+    if st.section == Section::Remote && section != Section::Remote {
+        remote::flush(scene, &mut st.remote);
+    }
+    #[cfg(target_os = "android")]
+    let _ = scene;
+    st.section = section;
 }
 
 /// A plain Settings button, as wide as its label; true when clicked.

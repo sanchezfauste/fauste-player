@@ -73,7 +73,7 @@ pub(crate) fn players_row(
                             .layout(Layout::top_down(Align::Min)),
                     );
                     column_ui.set_clip_rect(rect.intersect(ui.clip_rect()));
-                    player::column(&mut column_ui, scene, view_state, covers, index);
+                    player::column(&mut column_ui, scene, view_state, covers, index, true);
                 }
             });
         });

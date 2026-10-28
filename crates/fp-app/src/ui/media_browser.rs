@@ -68,15 +68,21 @@ struct Inner {
 
 impl MediaBrowser {
     /// The device's audio files, replacing the earlier list.
-    pub fn set_files(&self, files: Vec<PathBuf>) {
-        let repaint = {
+    ///
+    /// True when the list was empty and is not any more: the app can read
+    /// the device's music now (the media permission was granted), so files
+    /// that failed before may play.
+    pub fn set_files(&self, files: Vec<PathBuf>) -> bool {
+        let (gained, repaint) = {
             let mut inner = self.lock();
+            let gained = inner.files.is_empty() && !files.is_empty();
             inner.files = Arc::new(files);
-            inner.repaint.clone()
+            (gained, inner.repaint.clone())
         };
         if let Some(ctx) = repaint {
             ctx.request_repaint();
         }
+        gained
     }
 
     pub fn files(&self) -> Arc<Vec<PathBuf>> {
@@ -287,6 +293,14 @@ pub(crate) fn show(ctx: &egui::Context, t: &I18n, browser: &MediaBrowser, view: 
 
 /// One folder: its row and, when open, its files. Returns the answer when a
 /// tap gives one (a file in one-file mode, the folder in folder mode).
+/// A frameless button `width` wide with its text on the left, next to the
+/// tick box (`add_sized` would centre it).
+fn left_aligned(text: RichText, width: f32) -> egui::Button<'static> {
+    egui::Button::new((text, egui::Atom::grow()))
+        .frame(false)
+        .min_size(vec2(width, ROW))
+}
+
 fn folder_rows(
     ui: &mut Ui,
     t: &I18n,
@@ -324,10 +338,10 @@ fn folder_rows(
             egui_phosphor::regular::CARET_RIGHT
         };
         let text = format!("{arrow} {name}  ·  {count}");
-        let response = ui.add_sized(
-            [row_width, ROW],
-            egui::Button::new(RichText::new(text).font(font(13.0)).color(theme::TEXT)).frame(false),
-        );
+        let response = ui.add(left_aligned(
+            RichText::new(text).font(font(13.0)).color(theme::TEXT),
+            row_width,
+        ));
         let label = format!("{name}, {count}");
         response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label.clone()));
         if response.clicked() {
@@ -361,13 +375,10 @@ fn folder_rows(
                         }
                     }
                     BrowseMode::OneFile { .. } => {
-                        let response = ui.add_sized(
-                            [ui.available_width(), ROW],
-                            egui::Button::new(
-                                RichText::new(&name).font(font(13.0)).color(theme::TEXT),
-                            )
-                            .frame(false),
-                        );
+                        let response = ui.add(left_aligned(
+                            RichText::new(&name).font(font(13.0)).color(theme::TEXT),
+                            ui.available_width(),
+                        ));
                         if response.clicked() {
                             chosen = Some(vec![file.clone()]);
                         }
