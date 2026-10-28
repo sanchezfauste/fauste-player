@@ -107,7 +107,11 @@ fn a_folder_opens_and_back_goes_up_then_to_live() {
     h.run_steps(3);
     assert!(h.query_by_label("Beta · Band · 01:00").is_some());
     assert!(h.query_by_label("Alpha · Other · 01:00").is_none());
-    assert!(h.query_by_label("Songs").is_some(), "the breadcrumb's top");
+    assert!(
+        h.query_by_label("All folders").is_some(),
+        "the breadcrumb's top"
+    );
+    assert!(h.query_by_label("Songs").is_none(), "named, not its folder");
     assert!(back(&mut h));
     assert!(h.query_by_label("Alpha · Other · 01:00").is_some());
     assert!(back(&mut h));

@@ -643,6 +643,7 @@ music-search = Bilatu musika
 music-folders = Karpetak
 music-artists = Artistak
 music-albums = Albumak
+music-all-folders = Karpeta guztiak
 music-unknown-artist = Artista ezezaguna
 music-unknown-album = Album ezezaguna
 music-selected = Hautatuta: { $count }

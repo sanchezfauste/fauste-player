@@ -658,6 +658,7 @@ music-search = Szukaj muzyki
 music-folders = Foldery
 music-artists = Wykonawcy
 music-albums = Albumy
+music-all-folders = Wszystkie foldery
 music-unknown-artist = Nieznany wykonawca
 music-unknown-album = Nieznany album
 music-selected = Zaznaczone: { $count }

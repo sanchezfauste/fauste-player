@@ -643,6 +643,7 @@ music-search = Buscar música
 music-folders = Cartafoles
 music-artists = Artistas
 music-albums = Álbums
+music-all-folders = Todos os cartafoles
 music-unknown-artist = Artista descoñecido
 music-unknown-album = Álbum descoñecido
 music-selected = Selección: { $count }

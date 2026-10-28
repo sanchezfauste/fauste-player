@@ -643,6 +643,7 @@ music-search = Cerca música
 music-folders = Carpetes
 music-artists = Artistes
 music-albums = Àlbums
+music-all-folders = Totes les carpetes
 music-unknown-artist = Artista desconegut
 music-unknown-album = Àlbum desconegut
 music-selected = Selecció: { $count }

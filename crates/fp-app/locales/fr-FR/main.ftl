@@ -643,6 +643,7 @@ music-search = Rechercher de la musique
 music-folders = Dossiers
 music-artists = Artistes
 music-albums = Albums
+music-all-folders = Tous les dossiers
 music-unknown-artist = Artiste inconnu
 music-unknown-album = Album inconnu
 music-selected = Sélection : { $count }

@@ -643,6 +643,7 @@ music-search = Muziek zoeken
 music-folders = Mappen
 music-artists = Artiesten
 music-albums = Albums
+music-all-folders = Alle mappen
 music-unknown-artist = Onbekende artiest
 music-unknown-album = Onbekend album
 music-selected = Geselecteerd: { $count }

@@ -297,6 +297,8 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
     let search = ui.add(
         egui::TextEdit::singleline(&mut view.search)
             .hint_text(&hint)
+            .background_color(theme::NEUTRAL_800)
+            .margin(vec2(10.0, 10.0))
             .font(font(15.0))
             .min_size(vec2(0.0, 40.0))
             .desired_width(f32::INFINITY),
@@ -319,7 +321,8 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
         && !searching
         && let Some(top) = top_folder(&files)
     {
-        action = breadcrumb(ui, &top, view.folder.as_deref()).or(action);
+        let all = t.tr("music-all-folders");
+        action = breadcrumb(ui, &top, &all, view.folder.as_deref()).or(action);
         if matches!(pick, Some((_, BrowseMode::Folder)))
             && ui
                 .add(
@@ -426,9 +429,10 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_else(|| path.to_string_lossy().into_owned())
 }
 
-/// The top folder, then each folder down to the one shown; a tap opens it.
-fn breadcrumb(ui: &mut Ui, top: &Path, folder: Option<&Path>) -> Option<Action> {
-    let mut crumbs = vec![(file_name(top), None)];
+/// The top folder (a house, labelled `all`: its own name is often a bare
+/// "0"), then each folder down to the one shown; a tap opens it.
+fn breadcrumb(ui: &mut Ui, top: &Path, all: &str, folder: Option<&Path>) -> Option<Action> {
+    let mut crumbs = vec![(icon::HOUSE.to_owned(), None)];
     if let Some(rest) = folder.and_then(|f| f.strip_prefix(top).ok()) {
         let mut at = top.to_path_buf();
         for part in rest.components() {
@@ -450,14 +454,16 @@ fn breadcrumb(ui: &mut Ui, top: &Path, folder: Option<&Path>) -> Option<Action> 
                 } else {
                     theme::NEUTRAL_400
                 });
-            if ui
-                .add(
-                    egui::Button::new(text)
-                        .frame(false)
-                        .min_size(vec2(0.0, 32.0)),
-                )
-                .clicked()
-            {
+            let response = ui.add(
+                egui::Button::new(text)
+                    .frame(false)
+                    .min_size(vec2(0.0, 32.0)),
+            );
+            if i == 0 {
+                let all = all.to_owned();
+                response.widget_info(|| WidgetInfo::labeled(Role::Button, true, all.clone()));
+            }
+            if response.clicked() {
                 action = Some(Action::Folder(path));
             }
         }
