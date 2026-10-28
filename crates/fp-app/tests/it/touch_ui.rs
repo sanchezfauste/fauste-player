@@ -637,6 +637,42 @@ fn a_drag_from_the_handle_moves_the_entry() {
     );
 }
 
+const RESET: &str = "Clear the played marks of this playlist";
+
+/// Reset played, from the footer's ⋯ menu.
+fn reset_played(h: &mut Harness<'static, AppUi>) {
+    h.get_by_label("More playlist actions").click();
+    h.run_steps(2);
+    h.get_by_label(RESET).click();
+    h.run_steps(3);
+}
+
+/// PL11: a phone's footer keeps Add and puts its other actions behind ⋯.
+#[test]
+fn the_phone_footer_puts_reset_played_behind_more() {
+    let mut s = state(1, 3);
+    let playlist = s.playlists.iter().next().unwrap().id;
+    s.playlists.get_mut(playlist).unwrap().entries[1].legacy_played = true;
+    let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    assert!(h.query_by_label(ADD).is_some());
+    assert!(h.query_by_label(RESET).is_none(), "not in the footer");
+    reset_played(&mut h);
+    assert!(
+        h.query_by_label("Clear the played mark of every track in this playlist?")
+            .is_some(),
+        "the question"
+    );
+}
+
+#[test]
+fn the_desktop_footer_keeps_reset_played() {
+    let (h, _fake) = harness(state(1, 3));
+    assert!(h.query_by_label("More playlist actions").is_none());
+    assert!(h.query_by_label(RESET).is_some());
+}
+
 // --- The rest ---
 
 #[test]
@@ -776,9 +812,7 @@ fn back_closes_a_confirmation_before_the_screen() {
     let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
     h.run_steps(3);
     tab(&mut h, "Playlists");
-    h.get_by_label("Clear the played marks of this playlist")
-        .click();
-    h.run_steps(3);
+    reset_played(&mut h);
     assert!(
         h.query_by_label("Cancel").is_some(),
         "the confirmation shows"

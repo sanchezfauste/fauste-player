@@ -617,6 +617,7 @@ tags-error-cover = la carátula no es una imagen JPEG o PNG utilizable
 
 footer-reset-played = Reiniciar
 tip-reset-played = Quitar las marcas de reproducida de esta playlist
+tip-footer-more = Más acciones de la playlist
 reset-played-question = ¿Quitar la marca de reproducida a todas las pistas de esta playlist?
 reset-played-cancel = Cancelar
 reset-played-confirm = Reiniciar

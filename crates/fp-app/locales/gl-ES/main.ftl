@@ -617,6 +617,7 @@ tags-error-cover = a portada non é unha imaxe JPEG ou PNG utilizable
 
 footer-reset-played = Reiniciar
 tip-reset-played = Quitar as marcas de reproducida desta lista
+tip-footer-more = Máis accións da lista
 reset-played-question = Quitar a marca de reproducida de todas as pistas desta lista?
 reset-played-cancel = Cancelar
 reset-played-confirm = Reiniciar

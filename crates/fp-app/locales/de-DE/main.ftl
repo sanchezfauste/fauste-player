@@ -617,6 +617,7 @@ tags-error-cover = das Cover ist kein verwendbares JPEG- oder PNG-Bild
 
 footer-reset-played = Gespielt zurücksetzen
 tip-reset-played = Die Gespielt-Markierungen dieser Playlist löschen
+tip-footer-more = Weitere Playlist-Aktionen
 reset-played-question = Die Gespielt-Markierung aller Tracks dieser Playlist löschen?
 reset-played-cancel = Abbrechen
 reset-played-confirm = Zurücksetzen

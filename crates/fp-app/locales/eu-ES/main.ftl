@@ -617,6 +617,7 @@ tags-error-cover = azala ez da JPEG edo PNG irudi erabilgarri bat
 
 footer-reset-played = Berrezarri
 tip-reset-played = Garbitu zerrenda honetako erreproduzitutako markak
+tip-footer-more = Zerrendaren ekintza gehiago
 reset-played-question = Garbitu zerrenda honetako pista guztien erreproduzitutako marka?
 reset-played-cancel = Utzi
 reset-played-confirm = Berrezarri

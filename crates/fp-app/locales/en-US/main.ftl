@@ -617,6 +617,7 @@ tags-error-cover = the cover is not a usable JPEG or PNG image
 
 footer-reset-played = Reset played
 tip-reset-played = Clear the played marks of this playlist
+tip-footer-more = More playlist actions
 reset-played-question = Clear the played mark of every track in this playlist?
 reset-played-cancel = Cancel
 reset-played-confirm = Reset played

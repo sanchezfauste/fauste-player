@@ -617,6 +617,7 @@ tags-error-cover = la copertina non è un'immagine JPEG o PNG utilizzabile
 
 footer-reset-played = Azzera
 tip-reset-played = Cancella i segni di riprodotto di questa playlist
+tip-footer-more = Altre azioni della playlist
 reset-played-question = Cancellare il segno di riprodotto da ogni brano di questa playlist?
 reset-played-cancel = Annulla
 reset-played-confirm = Azzera

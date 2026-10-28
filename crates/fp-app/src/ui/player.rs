@@ -1741,7 +1741,67 @@ fn footer(
             .map_or(0, |p| p.entries.len());
         scene.pick_files(playlist, len);
     }
-    // O22: clear the played marks of this playlist, after a question.
+    // O22: clear the played marks of this playlist, after a question. A
+    // phone keeps only Add in sight and puts the rest behind ⋯ (PL11).
+    if view_state.phone_active {
+        footer_more(ui, scene, view_state, playlist);
+    } else {
+        reset_played_tile(ui, scene, view_state, playlist);
+    }
+    footer_totals(ui, scene, id, playlist);
+}
+
+/// The footer's ⋯ tile on a phone and its menu (PL11).
+fn footer_more(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, playlist: PlaylistId) {
+    let t = scene.i18n;
+    let response = widgets::tile(
+        ui,
+        vec2(32.0, 18.0),
+        &t.tr("tip-footer-more"),
+        true,
+        TileStyle::plain(),
+        |p, r, c| {
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                icon::DOTS_THREE,
+                font(14.0),
+                c,
+            );
+        },
+    );
+    egui::Popup::menu(&response).show(|ui| {
+        ui.set_min_width(200.0);
+        let text = t.tr("tip-reset-played");
+        let enabled = fp_model::can_reset_played(scene.state, playlist);
+        let item = ui.add_enabled(
+            enabled,
+            egui::Button::new(
+                RichText::new(format!(
+                    "{}  {}",
+                    icon::ARROW_COUNTER_CLOCKWISE,
+                    t.tr("footer-reset-played")
+                ))
+                .font(font(15.0)),
+            )
+            .min_size(vec2(200.0, 44.0)),
+        );
+        item.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text.clone()));
+        if item.clicked() {
+            view_state.confirm_reset = Some(playlist);
+            ui.close();
+        }
+    });
+}
+
+/// The footer's Reset played tile (O22).
+fn reset_played_tile(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    playlist: PlaylistId,
+) {
+    let t = scene.i18n;
     let reset = t.tr("footer-reset-played");
     let reset_width = ui
         .painter()
@@ -1769,6 +1829,11 @@ fn footer(
     {
         view_state.confirm_reset = Some(playlist);
     }
+}
+
+/// The footer's entry count and times, at the right.
+fn footer_totals(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: PlaylistId) {
+    let t = scene.i18n;
     let len = scene
         .state
         .playlists

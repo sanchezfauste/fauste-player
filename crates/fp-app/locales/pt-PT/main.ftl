@@ -617,6 +617,7 @@ tags-error-cover = a capa não é uma imagem JPEG ou PNG utilizável
 
 footer-reset-played = Repor tocadas
 tip-reset-played = Limpar as marcas de tocada desta lista
+tip-footer-more = Mais ações da lista
 reset-played-question = Limpar a marca de tocada de todas as faixas desta lista?
 reset-played-cancel = Cancelar
 reset-played-confirm = Repor tocadas

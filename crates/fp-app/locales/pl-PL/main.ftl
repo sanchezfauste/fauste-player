@@ -631,6 +631,7 @@ tags-error-cover = okładka nie jest użytecznym obrazem JPEG lub PNG
 
 footer-reset-played = Zeruj odtworzone
 tip-reset-played = Wyczyść znaczniki odtworzenia tej playlisty
+tip-footer-more = Więcej działań playlisty
 reset-played-question = Wyczyścić znacznik odtworzenia każdego utworu na tej playliście?
 reset-played-cancel = Anuluj
 reset-played-confirm = Zeruj odtworzone

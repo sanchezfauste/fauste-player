@@ -617,6 +617,7 @@ tags-error-cover = de hoes is geen bruikbare JPEG- of PNG-afbeelding
 
 footer-reset-played = Gespeeld wissen
 tip-reset-played = De gespeeld-markeringen van deze playlist wissen
+tip-footer-more = Meer playlistacties
 reset-played-question = De gespeeld-markering van elk nummer in deze playlist wissen?
 reset-played-cancel = Annuleren
 reset-played-confirm = Gespeeld wissen

@@ -617,6 +617,7 @@ tags-error-cover = la caràtula no és una imatge JPEG o PNG utilitzable
 
 footer-reset-played = Reiniciar
 tip-reset-played = Treure les marques de reproduïda d'aquesta llista
+tip-footer-more = Més accions de la llista
 reset-played-question = Vols treure la marca de reproduïda de totes les pistes d'aquesta llista?
 reset-played-cancel = Cancel·lar
 reset-played-confirm = Reiniciar

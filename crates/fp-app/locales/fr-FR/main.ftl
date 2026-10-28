@@ -617,6 +617,7 @@ tags-error-cover = la pochette n'est pas une image JPEG ou PNG utilisable
 
 footer-reset-played = Réinitialiser
 tip-reset-played = Effacer les marques de lecture de cette playlist
+tip-footer-more = Plus d'actions de la playlist
 reset-played-question = Effacer la marque de lecture de toutes les pistes de cette playlist ?
 reset-played-cancel = Annuler
 reset-played-confirm = Réinitialiser
