@@ -99,6 +99,42 @@ fn a_plain_click_still_seeks_at_once() {
     assert!((s[0] - 90.0).abs() < 1.5, "{s:?}");
 }
 
+/// A finger tap on a phone's waveform seeks once, where it landed (phone
+/// layout spec PL15). On a device the finger leaves no hover position on
+/// the frame it lifts; the harness keeps one, so the emulator check in the
+/// plan's ledger covers that part.
+#[test]
+fn a_tap_on_the_waveform_seeks() {
+    let (mut h, fake) =
+        support::harness_sized(playing(), egui::vec2(892.0, 412.0), |ui| ui.with_touch());
+    h.run_steps(3);
+    let w = wave(&h);
+    let at = pos2(x_of(w, 90.0), w.center().y);
+    // The touch event makes egui see a touch screen, as on a phone.
+    h.event(Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase: egui::TouchPhase::Start,
+        pos: at,
+        force: None,
+    });
+    h.event(Event::PointerMoved(at));
+    press(&mut h, at, true);
+    h.event(Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase: egui::TouchPhase::End,
+        pos: at,
+        force: None,
+    });
+    press(&mut h, at, false);
+    h.event(Event::PointerGone);
+    h.run_steps(2);
+    let s = seeks(&fake);
+    assert_eq!(s.len(), 1, "{s:?}");
+    assert!((s[0] - 90.0).abs() < 1.5, "{s:?}");
+}
+
 /// A stopped player shows its next track. A click on its waveform sets
 /// where Play starts it (rule 3a, operator feedback 4 Q8); a drag never
 /// seeks.

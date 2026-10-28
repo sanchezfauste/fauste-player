@@ -2165,11 +2165,16 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
             &font(10.0),
             theme::TEXT,
         );
-        // A click seeks. On a stopped player it sets where Play starts the
-        // next track (rule 3a); the CUE window seeks the CUE.
-        if response.clicked() && !alt {
-            seek = Some(view.secs_at(p.x, inner));
-        }
+    }
+    // A click seeks. On a stopped player it sets where Play starts the next
+    // track (rule 3a); the CUE window seeks the CUE. It goes by where the
+    // press was, since a finger leaves no hover position as it lifts (phone
+    // layout spec PL15).
+    if response.clicked()
+        && !alt
+        && let Some(p) = response.interact_pointer_pos().filter(|p| !shielded(*p))
+    {
+        seek = Some(view.secs_at(p.x, inner));
     }
     WaveOutput {
         response,
