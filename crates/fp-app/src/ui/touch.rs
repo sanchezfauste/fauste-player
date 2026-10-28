@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use egui::{Align, Layout, Rect, TextureHandle, Theme, Ui, UiBuilder, Vec2, vec2};
-use fp_model::{PlayerId, TrackId};
+use fp_model::{Command, PlayerId, TrackId};
 
 use super::app::{Scene, ViewState};
 use super::panel_layout::PANEL_GAP;
@@ -229,7 +229,7 @@ pub(crate) fn phone_middle(
     view_state.player_rects.clear();
     match view_state.phone.screen {
         PhoneScreen::Live => live(ui, scene, view_state, covers, &players, landscape),
-        PhoneScreen::Carts => super::cartwall::strip(ui, scene, view_state, true),
+        PhoneScreen::Carts => carts(ui, scene, view_state),
         PhoneScreen::Playlists => playlists(ui, scene, view_state, covers, &players),
     }
 }
@@ -301,6 +301,62 @@ fn live(
     carts_ui.set_clip_rect(carts.intersect(ui.clip_rect()));
     super::cartwall::strip(&mut carts_ui, scene, view_state, true);
     ui.allocate_rect(area, egui::Sense::hover());
+}
+
+/// The cartwall full screen (PL7); a sideways swipe shows the next or the
+/// previous page, stopping at the ends.
+fn carts(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+    let area = ui.available_rect_before_wrap();
+    if let Some(forward) = page_swipe(ui, area) {
+        let wall = &scene.state.cartwall;
+        let shown = wall.shown_page().map(|p| p.id);
+        let at = wall.pages.iter().position(|p| Some(p.id) == shown);
+        let to = at.and_then(|i| {
+            if forward {
+                wall.pages.get(i + 1)
+            } else {
+                i.checked_sub(1).and_then(|i| wall.pages.get(i))
+            }
+        });
+        if let Some(page) = to {
+            scene.ctl.send(Command::ShowCartPage(page.id));
+        }
+    }
+    super::cartwall::strip(ui, scene, view_state, true);
+}
+
+/// A sideways swipe that started in `area` on this layer (not in a menu or
+/// a window over it), when it is let go: the next page (`true`) or the
+/// previous one. Nothing on the Carts screen takes a drag (carts fire on a
+/// tap), so a swipe may start on a cart.
+fn page_swipe(ui: &Ui, area: Rect) -> Option<bool> {
+    let ctx = ui.ctx();
+    let origin_id = ui.scope_id().with("page-swipe");
+    let (pressed, released, position) = ctx.input(|i| {
+        (
+            i.pointer.primary_pressed(),
+            i.pointer.primary_released(),
+            i.pointer.interact_pos(),
+        )
+    });
+    if pressed {
+        let here =
+            position.filter(|p| area.contains(*p) && ctx.layer_id_at(*p) == Some(ui.layer_id()));
+        ctx.data_mut(|d| {
+            if let Some(p) = here {
+                d.insert_temp(origin_id, p);
+            } else {
+                d.remove_temp::<egui::Pos2>(origin_id);
+            }
+        });
+    }
+    if !released {
+        return None;
+    }
+    let origin = ctx.data_mut(|d| d.remove_temp::<egui::Pos2>(origin_id));
+    origin
+        .zip(position)
+        .and_then(|(from, to)| swipe_direction(to - from))
 }
 
 /// One player with its playlist, under a chip per player (until the

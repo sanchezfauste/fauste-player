@@ -304,6 +304,63 @@ fn the_carts_screen_shows_the_carts() {
     assert!(h.query_by_label_contains("Stop all").is_some());
 }
 
+/// Two cart pages; the first shown.
+fn two_pages() -> (Harness<'static, AppUi>, Arc<Fake>, fp_model::CartPageId) {
+    let mut s = state(2, 3);
+    fp_model::apply(
+        &mut s,
+        fp_model::Command::CreateCartPage {
+            name: "Second".into(),
+        },
+    )
+    .unwrap();
+    let second = s.cartwall.pages[1].id;
+    s.cartwall.shown = Some(s.cartwall.pages[0].id);
+    let (mut h, fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Carts");
+    fake.take_sent();
+    (h, fake, second)
+}
+
+fn pages_shown(fake: &Fake) -> Vec<fp_model::CartPageId> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            fp_model::Command::ShowCartPage(p) => Some(p),
+            _ => None,
+        })
+        .collect()
+}
+
+/// PL7: a sideways swipe on the Carts screen shows the next page.
+#[test]
+fn a_swipe_on_the_carts_screen_shows_the_next_page() {
+    let (mut h, fake, second) = two_pages();
+    let cart = h.get_by_label("Cart 1, empty").rect();
+    let from = egui::pos2(PORTRAIT.x - 40.0, cart.bottom() + 100.0);
+    drag(&mut h, from, from - vec2(250.0, 0.0));
+    assert_eq!(pages_shown(&fake), vec![second]);
+}
+
+#[test]
+fn a_swipe_back_on_the_first_page_does_nothing() {
+    let (mut h, fake, _second) = two_pages();
+    let cart = h.get_by_label("Cart 1, empty").rect();
+    let from = egui::pos2(40.0, cart.bottom() + 100.0);
+    drag(&mut h, from, from + vec2(250.0, 0.0));
+    assert_eq!(pages_shown(&fake), vec![]);
+}
+
+/// A tap on a cart fires it and changes no page.
+#[test]
+fn a_tap_on_the_carts_screen_shows_no_page() {
+    let (mut h, fake, _second) = two_pages();
+    let cart = h.get_by_label("Cart 1, empty").rect();
+    drag(&mut h, cart.center(), cart.center() + vec2(-4.0, 0.0));
+    assert_eq!(pages_shown(&fake), vec![]);
+}
+
 #[test]
 fn the_phone_cartwall_never_folds() {
     let mut closed = state(2, 3);
