@@ -28,7 +28,7 @@ pub fn shell_state(state: &AppState) -> i32 {
 }
 
 /// A player playing or pre-listening, or a cart playing or pre-listening.
-fn sounding(state: &AppState) -> bool {
+pub(crate) fn sounding(state: &AppState) -> bool {
     state
         .players
         .iter()

@@ -32,4 +32,22 @@ object Native {
 
     /** The notification channel's name, in the interface language. */
     external fun notificationChannelName(): String
+
+    /** Back: the interface goes back one step, or asks the activity to leave (PL2). */
+    external fun back()
+
+    /** Stops the services after their final save; blocks, so off the main thread (PL23). */
+    external fun quit()
+
+    /**
+     * Saves and ends the process: the app was closed with nothing on air
+     * (phone layout spec PL23). The save runs on a helper thread, off the
+     * main thread.
+     */
+    fun quitAndEnd() {
+        Thread {
+            quit()
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }.start()
+    }
 }

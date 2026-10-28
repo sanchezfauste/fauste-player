@@ -51,9 +51,10 @@ class MainActivity : GameActivity() {
         }
         requestPermissions(wanted.toTypedArray(), PERMISSIONS)
         media.start()
+        alive = true
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                moveTaskToBack(true)
+                Native.back()
             }
         })
         ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { view, insets ->
@@ -84,9 +85,35 @@ class MainActivity : GameActivity() {
         }
     }
 
+    /**
+     * Swiped away from the app switcher (or finished) with nothing on air:
+     * save and end (PL23). While something sounds the service holds the
+     * process and the playout goes on (PL24).
+     */
     override fun onDestroy() {
         media.stop()
+        alive = false
+        if (isFinishing && Native.state() and Native.SOUNDING == 0) {
+            Native.quitAndEnd()
+        }
         super.onDestroy()
+    }
+
+    /**
+     * Called from Rust when Back has nothing left to go back to: to the
+     * background while playout is active, otherwise save and end (PL23,
+     * PL24).
+     */
+    @Suppress("unused")
+    fun leave(close: Boolean) {
+        runOnUiThread {
+            if (close) {
+                // `onDestroy` saves and ends the process.
+                finishAndRemoveTask()
+            } else {
+                moveTaskToBack(true)
+            }
+        }
     }
 
     /** Once more on the way out: Play then Home within a poll still gets the service. */
@@ -154,25 +181,30 @@ class MainActivity : GameActivity() {
     }
 
     /**
-     * Back never destroys the activity: the playout keeps its interface.
-     * GameActivity hands every key to the native side, which consumes Back,
-     * so the key is taken here before it; the gesture reaches the callback
-     * registered in `onCreate`.
+     * Back goes to the interface, which goes back one step or calls
+     * `leave` (PL2). GameActivity hands every key to the native side, which
+     * consumes Back as a key, so the key is taken here before it; the
+     * gesture reaches the callback registered in `onCreate`.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
         keyCode == KeyEvent.KEYCODE_BACK || super.onKeyDown(keyCode, event)
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            moveTaskToBack(true)
+            Native.back()
             return true
         }
         return super.onKeyUp(keyCode, event)
     }
 
-    private companion object {
-        const val POLL_MS = 500L
-        const val PERMISSIONS = 1
-        const val NOTICES = "licenses/THIRD-PARTY.html"
+    companion object {
+        /** Whether an activity exists: the service ends the app without one (PL24). */
+        @Volatile
+        var alive = false
+            private set
+
+        private const val POLL_MS = 500L
+        private const val PERMISSIONS = 1
+        private const val NOTICES = "licenses/THIRD-PARTY.html"
     }
 }

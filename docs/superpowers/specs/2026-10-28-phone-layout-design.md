@@ -218,7 +218,8 @@ room.
 ## 12. Closing the app (Android, phone and tablet)
 
 - PL23. When **nothing sounds** (no player, cart or CUE pre-listen
-  playing: `Native.state()`'s `PLAYOUT_ACTIVE` bit clear) and the operator
+  playing: `Native.state()`'s `SOUNDING` bit clear; a stopped or paused
+  player with a track loaded does not count) and the operator
   closes the app — Back on a screen with nothing left to go back to
   (PL2), or swiping the app away from the app switcher — the app saves its
   state as on a desktop exit and the **process ends**. Today Back only

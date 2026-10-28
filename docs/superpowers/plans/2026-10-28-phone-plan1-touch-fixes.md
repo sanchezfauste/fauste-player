@@ -31,7 +31,7 @@ FileProvider), cargo-about.
 - A tap on a waveform in a scrolling area seeks once, at the tap, and a drag on it sends no seek (Task 2).
 - A pinch whose fingers are outside the waveform must not zoom it (Task 3).
 - Back with a window open closes the window, never the app (Task 5).
-- Back or close with a cart or a CUE pre-listen playing keeps the process (Task 5: `playout_active` covers carts and CUE).
+- Back or close with a cart or a CUE pre-listen playing keeps the process (Task 5: `sounding` covers carts and CUE; `playout_active` is also true for a stopped player with a track loaded, so it is not the test).
 
 ---
 

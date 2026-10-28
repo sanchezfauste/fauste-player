@@ -6,7 +6,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, PoisonError, RwLock};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -774,7 +774,7 @@ impl Services {
         Ok(ServicesHandle {
             requests,
             stop,
-            thread: Some(thread),
+            thread: Mutex::new(Some(thread)),
         })
     }
 
@@ -1617,7 +1617,8 @@ impl Services {
 pub struct ServicesHandle {
     requests: Sender<ServiceRequest>,
     stop: Arc<AtomicBool>,
-    thread: Option<JoinHandle<()>>,
+    /// Behind a lock so a shared session can stop it (`stop`).
+    thread: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl ServicesHandle {
@@ -1627,13 +1628,20 @@ impl ServicesHandle {
     }
 
     /// Stops the thread after its final save.
-    pub fn shutdown(mut self) {
-        self.stop_and_join();
+    pub fn shutdown(self) {
+        self.stop();
     }
 
-    fn stop_and_join(&mut self) {
+    /// Stops the thread after its final save and waits for it; once
+    /// stopped, returns at once.
+    pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
-        if let Some(thread) = self.thread.take()
+        let thread = self
+            .thread
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(thread) = thread
             && thread.join().is_err()
         {
             tracing::error!("the services thread panicked");
@@ -1643,7 +1651,7 @@ impl ServicesHandle {
 
 impl Drop for ServicesHandle {
     fn drop(&mut self) {
-        self.stop_and_join();
+        self.stop();
     }
 }
 

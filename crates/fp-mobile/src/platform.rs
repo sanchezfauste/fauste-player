@@ -62,6 +62,20 @@ impl Platform for AndroidPlatform {
             .map_err(|e| e.to_string())
     }
 
+    /// Through the activity, on a helper thread (a JNI call; rule 8).
+    fn leave(&self, playing: bool) {
+        let spawned = std::thread::Builder::new()
+            .name("fp-leave".to_owned())
+            .spawn(move || {
+                if let Err(error) = crate::jni::leave(!playing) {
+                    tracing::warn!(%error, "could not leave");
+                }
+            });
+        if let Err(error) = spawned {
+            tracing::warn!(%error, "could not leave");
+        }
+    }
+
     fn audio_focus_lost(&self) -> bool {
         AUDIO_FOCUS_LOST.load(Ordering::Relaxed)
     }

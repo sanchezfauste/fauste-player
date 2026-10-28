@@ -46,6 +46,12 @@ impl Shell {
         self.banner(ui);
     }
 
+    /// Goes back one step inside the interface (`AppUi::back`); false when
+    /// there is nothing to go back to, or the interface is degraded.
+    pub fn back(&mut self) -> bool {
+        !self.degraded && self.app.back()
+    }
+
     /// Runs before every frame, shown or not (see `AppUi::guard_close`).
     pub fn logic(&mut self, ctx: &egui::Context) {
         // In degraded mode the dialog cannot be drawn, and a cancelled

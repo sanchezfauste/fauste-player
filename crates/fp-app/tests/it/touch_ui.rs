@@ -447,3 +447,34 @@ fn a_touch_tablet_keeps_the_desktop_cartwall_and_settings() {
         "the side list is left of the body"
     );
 }
+
+/// PL2: Back closes what is open, one step at a time, before the app's own
+/// Back (mobile spec §5).
+#[test]
+fn back_closes_settings_before_anything_else() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    h.get_by_label("Open P1").click();
+    h.run_steps(3);
+    h.get_by_label("Settings").click();
+    h.run_steps(3);
+    assert!(h.state_mut().back());
+    h.run_steps(3);
+    assert!(h.query_by_label("Buffer size").is_none(), "Settings closed");
+    assert!(h.query_by_label(ADD).is_some(), "P1 still open");
+}
+
+#[test]
+fn back_closes_an_open_player() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    h.get_by_label("Open P1").click();
+    h.run_steps(3);
+    assert!(h.state_mut().back());
+    h.run_steps(3);
+    assert!(h.query_by_label("Open P2").is_some(), "all players again");
+}
+
+#[test]
+fn back_with_nothing_open_reports_nothing_to_go_back_to() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    assert!(!h.state_mut().back());
+}

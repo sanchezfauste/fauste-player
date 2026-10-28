@@ -576,6 +576,26 @@ impl AppUi {
         self
     }
 
+    /// Goes back one step inside the interface (the phone's Back, phone
+    /// layout spec PL2): the media browser's request is cancelled, then
+    /// Settings, then About closes, then a phone's open player. False when
+    /// there is nothing to go back to, so the app's own Back applies.
+    pub fn back(&mut self) -> bool {
+        if let Some((browser, _)) = &self.media_browser
+            && browser.pending().is_some()
+        {
+            browser.cancel_pending();
+            return true;
+        }
+        for open in [&mut self.view.settings_open, &mut self.view.about_open] {
+            if *open {
+                *open = false;
+                return true;
+            }
+        }
+        self.view.phone.open.take().is_some()
+    }
+
     pub fn i18n(&self) -> &I18n {
         &self.i18n
     }

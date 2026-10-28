@@ -4,9 +4,10 @@
 //! `android_main` again and re-attaches.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
+use fp_app::platform::Platform;
 use fp_app::session::AppSession;
 use fp_app::ui::shell::Shell;
 use fp_app::ui::theme;
@@ -27,6 +28,12 @@ pub(crate) static SESSION: OnceLock<AppSession> = OnceLock::new();
 /// activity (`jni::open_url`). Set while an activity runs; the lock is held
 /// through a call, so the activity cannot end in the middle of one.
 pub(crate) static ACTIVITY: Mutex<Option<(usize, usize)>> = Mutex::new(None);
+
+/// Set by `Native.back`: the next frame goes back one step (PL2).
+pub(crate) static BACK: AtomicBool = AtomicBool::new(false);
+
+/// The running interface's context, so `Native.back` can wake it.
+pub(crate) static REPAINT: Mutex<Option<egui::Context>> = Mutex::new(None);
 
 /// The insets the Kotlin shell last reported (`f32` bits, physical pixels):
 /// left, top, right, bottom.
@@ -57,6 +64,16 @@ struct MobileApp {
 
 impl eframe::App for MobileApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Back goes back inside the interface first; with nothing left the
+        // app leaves: to the background while something sounds, otherwise
+        // for good (PL23, PL24). A loaded but stopped player does not hold
+        // it.
+        if BACK.swap(false, Ordering::AcqRel) && !self.shell.back() {
+            let playing = SESSION
+                .get()
+                .is_some_and(|s| crate::shell_state::sounding(&s.handle.model.load()));
+            AndroidPlatform.leave(playing);
+        }
         self.shell.logic(ctx);
     }
 
@@ -165,6 +182,7 @@ fn android_main(app: AndroidApp) {
         options,
         Box::new(move |cc| {
             theme::apply(&cc.egui_ctx);
+            *REPAINT.lock().unwrap_or_else(PoisonError::into_inner) = Some(cc.egui_ctx.clone());
             Ok(Box::new(MobileApp {
                 shell: Shell::new(ui),
                 app,
@@ -178,6 +196,7 @@ fn android_main(app: AndroidApp) {
         let mut current = ACTIVITY.lock().unwrap_or_else(PoisonError::into_inner);
         if *current == this {
             *current = None;
+            *REPAINT.lock().unwrap_or_else(PoisonError::into_inner) = None;
         }
     }
     // The session goes on: the foreground service holds the process (MB1).
