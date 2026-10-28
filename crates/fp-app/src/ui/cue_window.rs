@@ -157,6 +157,7 @@ fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Cu
         },
         editable_markers: true,
         height: WAVE_HEIGHT,
+        locked: super::touch::locked(scene, view_state),
     };
     if let Some(secs) = wave_panel::show(ui, scene, view_state, &input).seek {
         scene.ctl.send(Command::SeekCue(v.player, secs));

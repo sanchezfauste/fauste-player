@@ -434,6 +434,22 @@ fn rl9_a_locked_layout_rejects_every_layout_command() {
     apply(&mut s, Command::SetCartwallDock(Dock::Left)).unwrap();
 }
 
+/// Phone layout spec PL12: the touch lock is its own flag, set while the
+/// layout is locked too, and a layout reset keeps it.
+#[test]
+fn pl12_the_touch_lock_is_its_own_flag() {
+    let mut s = fixture(0);
+    apply(&mut s, Command::SetLayoutLocked(true)).unwrap();
+    apply(&mut s, Command::SetTouchLocked(true)).unwrap();
+    assert!(s.layout.touch_locked);
+    apply(&mut s, Command::SetLayoutLocked(false)).unwrap();
+    assert!(s.layout.touch_locked, "unlocking the layout keeps it");
+    apply(&mut s, Command::ResetLayout).unwrap();
+    assert!(s.layout.touch_locked, "a layout reset keeps it");
+    apply(&mut s, Command::SetTouchLocked(false)).unwrap();
+    assert!(!s.layout.touch_locked);
+}
+
 #[test]
 fn rl10_reset_gives_the_default_layout() {
     let mut s = fixture(0);
@@ -604,6 +620,7 @@ fn rl19_restore_drops_players_that_do_not_exist_and_shows_everything_hidden() {
             hidden: true,
         },
         locked: true,
+        touch_locked: false,
     };
     let restored = restore_with(&s, layout);
     assert_eq!(restored.layout.player_shares, vec![(p[0], 2.0)]);

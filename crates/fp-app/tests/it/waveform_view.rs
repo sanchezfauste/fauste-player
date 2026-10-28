@@ -179,6 +179,7 @@ fn a_player_that_unloads_lets_go_of_its_waveform() {
             accessible_label: "Waveform",
             view: None,
             shield: None,
+            locked: false,
         };
         waveform(ui, 40.0, &input);
     });
@@ -355,6 +356,7 @@ fn a_waveform_with_ignored_marks_draws_without_panicking() {
             accessible_label: "Waveform",
             view: None,
             shield: None,
+            locked: false,
         };
         waveform(ui, 40.0, &input);
     });

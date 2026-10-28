@@ -48,6 +48,9 @@ pub(crate) struct WavePanelInput<'a> {
     /// The right-click menu and Alt-drag edit the markers.
     pub editable_markers: bool,
     pub height: f32,
+    /// The phone's lock (PL12): no seek and no marker editing; zoom and
+    /// pan go on.
+    pub locked: bool,
 }
 
 /// What a frame of the panel reports.
@@ -122,11 +125,13 @@ pub(crate) fn show(
         accessible_label: &label,
         view,
         shield: full_view_button,
+        locked: input.locked,
     };
     let output = widgets::waveform(ui, input.height, &wave_input);
     let (response, seek, pan_dx) = (output.response, output.seek, output.pan_dx);
     let rect = response.rect;
     if input.editable_markers
+        && !input.locked
         && let (Some(track), Some(total)) = (input.track, total)
     {
         let shown = view.unwrap_or_else(|| WaveView::full(total));

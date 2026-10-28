@@ -15,7 +15,7 @@ fn store(dir: &tempfile::TempDir) -> Store {
 
 /// Saves a state whose first player is at half volume and whose layout is
 /// not the default: P1 wider than P2, P3 hidden, the cartwall on the
-/// left, locked.
+/// left, locked, the touch lock on.
 fn saved(s: &Store) -> AppState {
     let mut state = AppState::new(Config::default(), "Main");
     let p = state.player_ids();
@@ -38,6 +38,7 @@ fn saved(s: &Store) -> AppState {
     .unwrap();
     apply(&mut state, Command::SetCartwallDock(Dock::Left)).unwrap();
     apply(&mut state, Command::SetLayoutLocked(true)).unwrap();
+    apply(&mut state, Command::SetTouchLocked(true)).unwrap();
     s.save_config(&state).unwrap();
     s.save_playlists(&state).unwrap();
     s.save_session(&state, |_| 0.0).unwrap();
@@ -211,4 +212,24 @@ fn rl19_a_field_from_a_newer_build_is_ignored() {
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
     assert_eq!(loaded.state.layout, state.layout);
+}
+
+/// Phone layout spec PL12: the touch lock survives a restart; a session
+/// written before it loads unlocked.
+#[test]
+fn pl12_the_touch_lock_round_trips_and_defaults_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let s = store(&dir);
+    saved(&s);
+    assert!(s.load("Main").state.layout.touch_locked);
+    edit_session(&s, |doc| {
+        doc["layout"]
+            .as_object_mut()
+            .unwrap()
+            .remove("touch_locked");
+    });
+    let loaded = s.load("Main");
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    assert!(!loaded.state.layout.touch_locked);
+    assert!(loaded.state.layout.locked, "the rest is kept");
 }

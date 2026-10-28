@@ -106,8 +106,6 @@ pub(crate) struct ViewState {
     /// Touch mode: rows and column headers do not drag (a finger drag
     /// scrolls).
     pub touch: bool,
-    /// A swipe across the phone's landscape view.
-    pub phone_swipe: super::touch::SwipeTracker,
     pub selection: HashMap<PlayerId, EntryId>,
     /// The Enter that set an entry as Next and may still be followed by a
     /// second one that plays it (see `playlist_keys`).
@@ -579,7 +577,8 @@ impl AppUi {
     /// Goes back one step inside the interface (the phone's Back, phone
     /// layout spec PL2): an open menu closes first, then the media
     /// browser's request is cancelled, then the topmost window or question
-    /// closes (as Esc or Cancel would), then a phone's open player. False
+    /// closes (as Esc or Cancel would), then a phone's other screen gives
+    /// way to Live. False
     /// when there is nothing to go back to, so the app's own Back applies.
     pub fn back(&mut self, ctx: &egui::Context) -> bool {
         if egui::Popup::is_any_open(ctx) {
@@ -616,7 +615,7 @@ impl AppUi {
             v.wave_menu.clear();
             return true;
         }
-        v.phone.open.take().is_some()
+        v.phone.back()
     }
 
     pub fn i18n(&self) -> &I18n {
@@ -1925,7 +1924,8 @@ fn top_bar(
 }
 
 /// The top bar's right-hand block, laid out from the right end: the clock,
-/// Settings, About and the pending-changes tile.
+/// Settings and About (a phone's More menu instead) and the
+/// pending-changes tile.
 fn top_bar_right(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -1938,55 +1938,17 @@ fn top_bar_right(
     let height = if phone { super::touch::TARGET } else { 24.0 };
     ui.spacing_mut().item_spacing = vec2(if phone { 6.0 } else { 12.0 }, 0.0);
     ui.add_space(if phone { 6.0 } else { 10.0 });
-    let clock = chrono::Local::now().format("%H:%M:%S").to_string();
-    widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
-    let label = scene.i18n.tr("top-settings");
-    let width = if phone {
-        height
-    } else {
-        ui.painter()
-            .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
-            .size()
-            .x
-            + 34.0
-    };
-    let style = TileStyle {
-        border: theme::NEUTRAL_800,
-        hover_fill: theme::NEUTRAL_800,
-        ..TileStyle::plain()
-    };
-    if widgets::tile(ui, vec2(width, height), &label, true, style, |p, r, c| {
-        let text = if phone {
-            egui_phosphor::regular::GEAR_SIX.to_owned()
-        } else {
-            format!("{} {label}", egui_phosphor::regular::GEAR_SIX)
-        };
-        let size = if phone { 18.0 } else { 12.0 };
-        p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(size), c);
-    })
-    .clicked()
-    {
-        view_state.settings_open = true;
+    // A narrow phone leaves the clock out: the tabs need the room.
+    if !phone || ui.max_rect().width() >= super::touch::CLOCK_MIN_WIDTH {
+        let clock = chrono::Local::now().format("%H:%M:%S").to_string();
+        widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
     }
-    let about = scene.i18n.tr("tip-about");
-    let style = TileStyle {
-        border: theme::NEUTRAL_800,
-        hover_fill: theme::NEUTRAL_800,
-        ..TileStyle::plain()
-    };
-    let about_size = if phone { 18.0 } else { 14.0 };
-    if widgets::tile(ui, vec2(height, height), &about, true, style, |p, r, c| {
-        p.text(
-            r.center(),
-            egui::Align2::CENTER_CENTER,
-            egui_phosphor::regular::INFO,
-            font(about_size),
-            c,
-        );
-    })
-    .clicked()
-    {
-        view_state.about_open = true;
+    if phone {
+        // Right to left: More, then the lock beside the tabs (PL1).
+        super::touch::more_menu(ui, scene, view_state);
+        super::touch::lock_tile(ui, scene);
+    } else {
+        settings_and_about(ui, scene, view_state);
     }
     if !pending.is_empty() {
         let i18n = scene.i18n;
@@ -2025,6 +1987,44 @@ fn top_bar_right(
         {
             view_state.pending_open = true;
         }
+    }
+}
+
+/// The desktop's Settings and About tiles.
+fn settings_and_about(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+    let label = scene.i18n.tr("top-settings");
+    let width = ui
+        .painter()
+        .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
+        .size()
+        .x
+        + 34.0;
+    let style = TileStyle {
+        border: theme::NEUTRAL_800,
+        hover_fill: theme::NEUTRAL_800,
+        ..TileStyle::plain()
+    };
+    if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
+        let text = format!("{} {label}", egui_phosphor::regular::GEAR_SIX);
+        p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(12.0), c);
+    })
+    .clicked()
+    {
+        view_state.settings_open = true;
+    }
+    let about = scene.i18n.tr("tip-about");
+    if widgets::tile(ui, vec2(24.0, 24.0), &about, true, style, |p, r, c| {
+        p.text(
+            r.center(),
+            egui::Align2::CENTER_CENTER,
+            egui_phosphor::regular::INFO,
+            font(14.0),
+            c,
+        );
+    })
+    .clicked()
+    {
+        view_state.about_open = true;
     }
 }
 

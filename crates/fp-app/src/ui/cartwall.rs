@@ -25,6 +25,9 @@ const HEADER_SPACING: f32 = 10.0;
 /// Stop all's icon.
 const STOP_ICON_WIDTH: f32 = 14.0;
 
+/// The narrowest cart a phone lays out: its name must still be readable.
+const PHONE_MIN_CART_WIDTH: f32 = 84.0;
+
 /// Height the strip needs, collapsed or open.
 pub(crate) fn height(scene: &Scene<'_>) -> f32 {
     let wall = &scene.state.cartwall;
@@ -417,7 +420,13 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
     // narrow to read or hit.
     let turned =
         view_state.phone_active && available > ui.available_width() && page.cols > page.rows;
-    let cols = usize::from(if turned { page.rows } else { page.cols }.max(1));
+    let mut cols = usize::from(if turned { page.rows } else { page.cols }.max(1));
+    // A phone's short, wide cartwall (the Live screen) lays a page too wide
+    // for it out in fewer columns, in the same reading order (PL5).
+    if view_state.phone_active {
+        let fit = ((ui.available_width() + GAP) / (PHONE_MIN_CART_WIDTH + GAP)).floor() as usize;
+        cols = cols.min(fit.max(1));
+    }
     let width =
         ((ui.available_width() - GAP * (cols as f32 - 1.0)) / cols as f32).max(MIN_BUTTON_WIDTH);
     let page_id = page.id;

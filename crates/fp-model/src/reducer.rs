@@ -193,6 +193,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             crate::layout::set_panel_hidden(state, panel, hidden)?
         }
         Command::SetLayoutLocked(locked) => state.layout.locked = locked,
+        Command::SetTouchLocked(locked) => state.layout.touch_locked = locked,
         Command::ResetLayout => crate::layout::reset_layout(state)?,
         Command::ApplyAnalysis { track, analysis } => {
             // Analysis may finish after the track was removed: nothing to do.

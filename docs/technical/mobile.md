@@ -138,35 +138,52 @@ to hit, and lays the screen out by its size (`fp_app::ui::touch`): a
 screen whose shortest side is 600 points (Android's dp) or more is a
 tablet and keeps the desktop layout; a smaller one is a phone.
 
-A phone's top bar keeps the clock, Settings and About, and its panel tiles
-give way to Players | Cartwall (`PhoneView`, view state only: nothing a
-view hides stops or changes playout):
+A phone's top bar (phone layout spec PL1) has the tabs Live | Carts |
+Playlists (`touch::screen_tiles`, shrinking to fit), the lock tile
+(`touch::lock_tile`), a More tile with Settings and About
+(`touch::more_menu`, an `egui::Popup::menu`) and the clock while the bar
+is at least `CLOCK_MIN_WIDTH` (400 points) wide. `PhoneView` is view state
+only (the screen, the Playlists screen's player): nothing a view hides
+stops or changes playout.
 
-- *Players, portrait:* every player as a compact panel (`player::compact`:
-  the header, the titles with the countdown, the transport, the meter and
-  the level, and a progress bar), each with an "Open P1" tile. An open player
-  is the desktop column with its playlist at the full width, under chips
-  (All, P1…Pn).
-- *Players, landscape:* two desktop columns side by side, under chips for
-  the pairs and for opening a shown player; a sideways swipe of more than
-  80 points that no widget took (a fader, a row) shows the next or
-  previous pair. A phone on its side is shorter than a column, so the
-  columns (and an open player) are laid out 560 points tall and scroll;
-  a swipe may start on that scroll area.
-- *Cartwall:* the cartwall filling the area. On an upright phone, a page with more columns than rows is laid out turned (columns
-  and rows swapped, carts in the same reading order).
+- *Live* (`touch::live`, PL4–PL6): a card per player (`player::card`: the
+  waveform `CARD_WAVE_HEIGHT` tall with no marker editing, the header and
+  `top_block`) in a vertical scroll area, and `cartwall::strip` filling
+  the rest. Portrait puts the cards on top, as tall as they were in the
+  last frame up to `LIVE_CARDS_SHARE` (0.66) of the height; landscape puts
+  them on the left, `LIVE_CARDS_SHARE` of the width. On a phone,
+  `cartwall::grid` lays a page out in fewer columns, in the same reading
+  order, when its columns would be narrower than `PHONE_MIN_CART_WIDTH`.
+- *Carts* (`touch::carts`, PL7): the cartwall filling the area. A
+  sideways swipe of more than 80 points that started on this layer
+  (`page_swipe`; nothing there takes a drag) sends `ShowCartPage` for the
+  next or the previous page, stopping at the ends. On an upright phone, a
+  page with more columns than rows is laid out turned (columns and rows
+  swapped, carts in the same reading order).
+- *Playlists* (until phone plan 3): chips per player and the desktop
+  column with its playlist at the full width. A phone on its side is
+  shorter than a column, so the column is laid out 560 points tall and
+  scrolls.
 
-The open player survives rotation and closes when its player goes away
-(`PhoneView::settle`). The top bar keeps only icons beside the screen
-tiles, which shrink to fit. A finger drag scrolls: in touch mode table
+**The lock** (PL12, PL13) is `Layout::touch_locked`, saved with the
+session and set by `Command::SetTouchLocked` (the layout lock does not
+refuse it, and a layout reset keeps it). `touch::locked` is true only on a
+phone: the card's and the column's faders are then disabled, and the
+waveforms (`WaveInput::locked`, `WavePanelInput::locked`, the CUE
+window's too) do not seek or edit markers and are drawn dimmed, while
+zoom, pinch and pan go on. It is UI only: the remote API and MIDI are not
+locked.
+
+The Playlists screen's player survives rotation and falls back to the
+first when it goes away (`PhoneView::settle`). Back from another screen
+goes to Live (`PhoneView::back`). A finger drag scrolls: in touch mode table
 rows and column headers do not drag (the row menu moves entries). A drag
-that starts on a fader moves it, in the compact panels and the landscape
-columns too (PL14); one that starts beside it scrolls, so scrolling never
+that starts on a fader moves it, on every screen (PL14); one that starts beside it scrolls, so scrolling never
 moves a level on air. A waveform seeks on a tap at the press position
 (`interact_pointer_pos`: a finger leaves no hover position on the frame
 it lifts, PL15) and zooms on a two-finger pinch around the fingers'
 centre (`multi_touch`, with the wheel's `min_span`; the one-finger pan is
-ignored meanwhile, and a pinch never seeks, PL16). The cartwall screen
+ignored meanwhile, and a pinch never seeks, PL16). The phone's cartwall
 never folds. The status bar leaves out the desktop's shortcut hints
 (keys, double and right clicks), and in touch mode a Settings window
 narrower than 600 points shows its sections as a row of chips above the section instead of

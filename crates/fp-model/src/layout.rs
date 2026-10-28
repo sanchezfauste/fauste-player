@@ -131,6 +131,10 @@ pub struct Layout {
     pub cartwall: CartwallLayout,
     #[serde(deserialize_with = "lenient")]
     pub locked: bool,
+    /// Phone layout spec PL12: faders and waveforms ignore touches (zoom
+    /// and pan go on). Its own flag: a layout reset keeps it.
+    #[serde(deserialize_with = "lenient")]
+    pub touch_locked: bool,
 }
 
 impl Layout {
@@ -346,7 +350,10 @@ pub(crate) fn set_panel_hidden(
 /// RL10: the default layout, unlocked.
 pub(crate) fn reset_layout(state: &mut AppState) -> Result<(), ModelError> {
     unlocked(state)?;
-    state.layout = Layout::default();
+    state.layout = Layout {
+        touch_locked: state.layout.touch_locked,
+        ..Layout::default()
+    };
     Ok(())
 }
 

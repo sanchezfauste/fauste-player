@@ -625,10 +625,13 @@ media-browser-add = Aggiungi { $count }
 media-browser-use-folder = Usa questa cartella
 media-browser-empty = Nessuna musica trovata. Copia dei file audio nella cartella Musica del dispositivo e consenti l'accesso alla musica.
 media-browser-cancel = Annulla
-touch-players = Lettori
-touch-cartwall = { -cartwall }
-touch-open-player = Apri { $player }
-touch-all-players = Tutti
+touch-live = Diretta
+touch-carts = Cartwall
+touch-playlists = Playlist
+touch-more = Altro
+tip-touch-lock = Blocca fader e forme d’onda
+tip-touch-unlock = Sblocca fader e forme d’onda
+touch-about = Informazioni
 
 column-name-number = Numero (#)
 column-name-title = Titolo

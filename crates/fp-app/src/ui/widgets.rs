@@ -1936,6 +1936,8 @@ pub struct WaveInput<'a> {
     pub view: Option<WaveView>,
     /// An area drawn over the waveform (a button) where no seek starts.
     pub shield: Option<Rect>,
+    /// The phone's lock (PL12): no seek, drawn dimmed; zoom and pan go on.
+    pub locked: bool,
 }
 
 /// What the waveform reports for a frame (feedback 2 spec O10).
@@ -2180,9 +2182,13 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
         ui.data_mut(|d| d.insert_temp(pinch_id, true));
     }
     let pinched = ui.data(|d| d.get_temp::<bool>(pinch_id).is_some());
+    if input.locked {
+        painter.rect_filled(rect, 0.0, Color32::BLACK.gamma_multiply(LOCKED_DIM));
+    }
     if response.clicked()
         && !alt
         && !pinched
+        && !input.locked
         && let Some(p) = response.interact_pointer_pos().filter(|p| !shielded(*p))
     {
         seek = Some(view.secs_at(p.x, inner));
@@ -2193,6 +2199,9 @@ pub fn waveform(ui: &mut Ui, height: f32, input: &WaveInput<'_>) -> WaveOutput {
         pan_dx,
     }
 }
+
+/// How dark a locked waveform is drawn (PL13).
+const LOCKED_DIM: f32 = 0.35;
 
 /// How dark the trimmed head and tail of the waveform are drawn.
 const TRIMMED_DIM: f32 = 0.45;
