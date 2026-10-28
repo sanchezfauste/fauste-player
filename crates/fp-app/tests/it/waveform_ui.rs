@@ -206,6 +206,18 @@ fn a_pinch_with_one_finger_still_does_not_seek() {
     assert_eq!(seeks(&fake), Vec::<f64>::new());
 }
 
+/// PL12: the phone's lock leaves zoom alone.
+#[test]
+fn locked_a_pinch_still_zooms() {
+    let mut s = playing();
+    s.layout.touch_locked = true;
+    let (mut h, _fake) = support::harness_sized(s, egui::vec2(412.0, 892.0), |ui| ui.with_touch());
+    h.run_steps(3);
+    let w = h.get_all_by_label(WAVE).next().unwrap().rect();
+    pinch(&mut h, w.center());
+    assert!(h.query_by_label("Full view").is_some());
+}
+
 #[test]
 fn a_pinch_beside_the_waveform_leaves_it() {
     let (mut h, _fake) = harness(playing());

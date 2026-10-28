@@ -644,6 +644,8 @@ touch-live = Na żywo
 touch-carts = Cartwall
 touch-playlists = Playlisty
 touch-more = Więcej
+tip-touch-lock = Zablokuj suwaki i przebiegi
+tip-touch-unlock = Odblokuj suwaki i przebiegi
 touch-about = O programie
 
 column-name-number = Numer (#)

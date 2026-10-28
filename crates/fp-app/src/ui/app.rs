@@ -1944,7 +1944,9 @@ fn top_bar_right(
         widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
     }
     if phone {
+        // Right to left: More, then the lock beside the tabs (PL1).
         super::touch::more_menu(ui, scene, view_state);
+        super::touch::lock_tile(ui, scene);
     } else {
         settings_and_about(ui, scene, view_state);
     }

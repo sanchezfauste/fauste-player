@@ -35,15 +35,15 @@ const ADD_TAB_WIDTH: f32 = 30.0;
 const NEW_PLAYLIST_POPUP_WIDTH: f32 = 220.0;
 const FOOTER_HEIGHT: f32 = 24.0;
 
-/// A player's desktop column. Without `fader` its fader only shows the
-/// level.
+/// A player's desktop column. While `locked` (the phone's lock, PL12) its
+/// fader only shows the level and its waveform does not seek.
 pub(crate) fn column(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     covers: &mut HashMap<TrackId, TextureHandle>,
     index: usize,
-    fader: bool,
+    locked: bool,
 ) {
     let Some(player) = scene.state.players.get(index) else {
         return;
@@ -83,8 +83,8 @@ pub(crate) fn column(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, view_state, id, index, &pv);
-            top_block(ui, scene, covers, id, &pv, &telemetry, fader);
-            wave(ui, scene, view_state, id, &pv);
+            top_block(ui, scene, covers, id, &pv, &telemetry, !locked);
+            wave_sized(ui, scene, view_state, id, &pv, WAVE_HEIGHT, true, locked);
             time_row(ui, scene, &pv);
         });
     scroll_to_next_once(scene, view_state, id);
@@ -143,12 +143,22 @@ pub(crate) fn card(
         .inner_margin(10.0)
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
+            let locked = super::touch::locked(scene, view_state);
             // Markers are edited on the Playlists screen only (PL11b).
-            wave_sized(ui, scene, view_state, id, &pv, CARD_WAVE_HEIGHT, false);
+            wave_sized(
+                ui,
+                scene,
+                view_state,
+                id,
+                &pv,
+                CARD_WAVE_HEIGHT,
+                false,
+                locked,
+            );
             header(ui, scene, view_state, id, index, &pv);
-            // A drag that starts on the fader moves it (PL14); one that
-            // starts elsewhere scrolls the cards.
-            top_block(ui, scene, covers, id, &pv, &telemetry, true);
+            // A drag that starts on the fader moves it (PL14), unless
+            // locked (PL12); one that starts elsewhere scrolls the cards.
+            top_block(ui, scene, covers, id, &pv, &telemetry, !locked);
         });
 }
 
@@ -1246,11 +1256,9 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
     );
 }
 
-fn wave(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, id: PlayerId, pv: &PlayerView) {
-    wave_sized(ui, scene, view_state, id, pv, WAVE_HEIGHT, true);
-}
-
-/// The player's waveform, `height` tall, its markers editable or not.
+/// The player's waveform, `height` tall, its markers editable or not;
+/// while `locked` it neither seeks nor edits markers.
+#[allow(clippy::too_many_arguments)]
 fn wave_sized(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -1259,6 +1267,7 @@ fn wave_sized(
     pv: &PlayerView,
     height: f32,
     editable_markers: bool,
+    locked: bool,
 ) {
     // The current track, or the next one waiting while stopped.
     let entry = view::shown_entry(scene.state, id);
@@ -1285,6 +1294,7 @@ fn wave_sized(
         },
         editable_markers,
         height,
+        locked,
     };
     if let Some(secs) = wave_panel::show(ui, scene, view_state, &input).seek {
         scene.ctl.send(Command::Seek(id, secs));

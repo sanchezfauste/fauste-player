@@ -129,6 +129,53 @@ pub(crate) fn screen_tiles(ui: &mut Ui, scene: &Scene<'_>, phone: &mut PhoneView
     }
 }
 
+/// Whether the phone's lock holds faders and waveforms (PL12). It guards
+/// touches on a phone only: a tablet and the desktop have no lock button.
+pub(crate) fn locked(scene: &Scene<'_>, view_state: &ViewState) -> bool {
+    view_state.phone_active && scene.state.layout.touch_locked
+}
+
+/// The top bar's lock tile (PL12, PL13): a closed padlock, lit, while
+/// locked; an open one otherwise. A tap toggles it.
+pub(crate) fn lock_tile(ui: &mut Ui, scene: &Scene<'_>) {
+    let on = scene.state.layout.touch_locked;
+    let (label, glyph) = if on {
+        ("tip-touch-unlock", egui_phosphor::regular::LOCK_SIMPLE)
+    } else {
+        ("tip-touch-lock", egui_phosphor::regular::LOCK_SIMPLE_OPEN)
+    };
+    let style = if on {
+        TileStyle {
+            fill: theme::NEUTRAL_800,
+            border: theme::NEUTRAL_700,
+            content: theme::TEXT,
+            hover_fill: theme::NEUTRAL_700,
+            ..TileStyle::plain()
+        }
+    } else {
+        TileStyle {
+            border: theme::NEUTRAL_800,
+            content: theme::NEUTRAL_400,
+            hover_fill: theme::NEUTRAL_800,
+            ..TileStyle::plain()
+        }
+    };
+    let label = scene.i18n.tr(label);
+    if widgets::tile(ui, vec2(TARGET, TARGET), &label, true, style, |p, r, c| {
+        p.text(
+            r.center(),
+            egui::Align2::CENTER_CENTER,
+            glyph,
+            font(20.0),
+            c,
+        );
+    })
+    .clicked()
+    {
+        scene.ctl.send(Command::SetTouchLocked(!on));
+    }
+}
+
 /// The top bar's More tile (⋮) and its menu: Settings and About (PL1).
 pub(crate) fn more_menu(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     let t = scene.i18n;
@@ -443,8 +490,9 @@ fn column_in(
             .layout(Layout::top_down(Align::Min)),
     );
     column_ui.set_clip_rect(rect.intersect(ui.clip_rect()));
-    // A drag that starts on the fader moves it (PL14); one that starts
-    // elsewhere scrolls.
-    super::player::column(&mut column_ui, scene, view_state, covers, index, true);
+    // A drag that starts on the fader moves it (PL14), unless locked
+    // (PL12); one that starts elsewhere scrolls.
+    let locked = locked(scene, view_state);
+    super::player::column(&mut column_ui, scene, view_state, covers, index, locked);
     ui.allocate_rect(rect, egui::Sense::hover());
 }

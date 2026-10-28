@@ -629,6 +629,8 @@ touch-live = Directe
 touch-carts = Cartutxera
 touch-playlists = Llistes
 touch-more = Més
+tip-touch-lock = Bloqueja els faders i les formes d’ona
+tip-touch-unlock = Desbloqueja els faders i les formes d’ona
 touch-about = Quant a
 
 column-name-number = Número (#)

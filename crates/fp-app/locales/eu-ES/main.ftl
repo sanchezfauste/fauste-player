@@ -629,6 +629,8 @@ touch-live = Zuzenean
 touch-carts = Kartutxoak
 touch-playlists = Zerrendak
 touch-more = Gehiago
+tip-touch-lock = Blokeatu fader-ak eta uhin-formak
+tip-touch-unlock = Desblokeatu fader-ak eta uhin-formak
 touch-about = Honi buruz
 
 column-name-number = Zenbakia (#)

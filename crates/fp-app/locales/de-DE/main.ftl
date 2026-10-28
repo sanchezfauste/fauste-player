@@ -629,6 +629,8 @@ touch-live = Live
 touch-carts = Cartwall
 touch-playlists = Playlists
 touch-more = Mehr
+tip-touch-lock = Fader und Wellenformen sperren
+tip-touch-unlock = Fader und Wellenformen entsperren
 touch-about = Über
 
 column-name-number = Nummer (#)

@@ -563,3 +563,130 @@ fn back_closes_a_confirmation_before_the_screen() {
     );
     assert!(h.query_by_label(ADD).is_some(), "still on Playlists");
 }
+
+// --- The lock (PL12, PL13) ---
+
+const LOCK: &str = "Lock faders and waveforms";
+const UNLOCK: &str = "Unlock faders and waveforms";
+
+/// A phone with two players, P1 playing a 180 s track, the lock on or off.
+fn locked(on: bool) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    let mut s = state(2, 3);
+    let e = s.playlists.iter().next().unwrap().entries[0].clone();
+    fp_model::apply(
+        &mut s,
+        fp_model::Command::ApplyAnalysis {
+            track: e.track,
+            analysis: Box::new(fp_model::TrackAnalysis {
+                duration_secs: 180.0,
+                ..fp_model::TrackAnalysis::default()
+            }),
+        },
+    )
+    .unwrap();
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, fp_model::Command::Play(p)).unwrap();
+    s.layout.touch_locked = on;
+    let (mut h, fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    fake.take_sent();
+    (h, fake)
+}
+
+fn seek_sent(fake: &Fake) -> bool {
+    fake.take_sent()
+        .iter()
+        .any(|c| matches!(c, fp_model::Command::Seek(..)))
+}
+
+/// A finger tap at `at`.
+fn tap(h: &mut Harness<'static, AppUi>, at: egui::Pos2) {
+    drag(h, at, at);
+}
+
+#[test]
+fn the_lock_button_sends_set_touch_locked() {
+    let (mut h, fake) = locked(false);
+    h.get_by_label(LOCK).click();
+    h.run_steps(2);
+    assert!(
+        fake.take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::SetTouchLocked(true)))
+    );
+    let (mut h, fake) = locked(true);
+    h.get_by_label(UNLOCK).click();
+    h.run_steps(2);
+    assert!(
+        fake.take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::SetTouchLocked(false)))
+    );
+}
+
+#[test]
+fn locked_a_card_fader_does_not_move() {
+    let (mut h, fake) = locked(true);
+    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+    drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
+    assert!(!volume_sent(&fake), "a locked fader moved");
+}
+
+#[test]
+fn locked_a_tap_on_a_waveform_does_not_seek() {
+    let (mut h, fake) = locked(false);
+    let wave = h
+        .get_all_by_label("Waveform: click to seek")
+        .next()
+        .unwrap()
+        .rect();
+    tap(&mut h, wave.center());
+    assert!(seek_sent(&fake), "unlocked, a tap seeks");
+    let (mut h, fake) = locked(true);
+    let wave = h
+        .get_all_by_label("Waveform: click to seek")
+        .next()
+        .unwrap()
+        .rect();
+    tap(&mut h, wave.center());
+    assert!(!seek_sent(&fake), "locked, a tap seeks nothing");
+}
+
+#[test]
+fn locked_play_still_plays() {
+    let (mut h, fake) = locked(true);
+    h.get_all_by_label("Play").last().unwrap().click();
+    h.run_steps(2);
+    assert!(
+        fake.take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::Play(_)))
+    );
+}
+
+#[test]
+fn locked_the_playlists_fader_and_waveform_ignore_touches() {
+    let (mut h, fake) = locked(true);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+    drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
+    let wave = h.get_by_label("Waveform: click to seek").rect();
+    tap(&mut h, wave.center());
+    let sent = fake.take_sent();
+    assert!(
+        !sent.iter().any(|c| matches!(
+            c,
+            fp_model::Command::SetVolume(..) | fp_model::Command::Seek(..)
+        )),
+        "{sent:?}"
+    );
+}
+
+#[test]
+fn a_tablet_has_no_lock_button() {
+    let (h, _fake) = touch(2, TABLET);
+    assert!(h.query_by_label(LOCK).is_none());
+    let (h, _fake) = touch(2, PORTRAIT);
+    assert!(h.query_by_label(LOCK).is_some());
+}
