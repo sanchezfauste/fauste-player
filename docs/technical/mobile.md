@@ -139,7 +139,7 @@ screen whose shortest side is 600 points (Android's dp) or more is a
 tablet and keeps the desktop layout; a smaller one is a phone.
 
 A phone's top bar (phone layout spec PL1) has the tabs Live | Carts |
-Playlists (`touch::screen_tiles`, shrinking to fit), the lock tile
+Playlists | Music (`touch::screen_tiles`, shrinking to fit), the lock tile
 (`touch::lock_tile`), a More tile with Settings and About
 (`touch::more_menu`, an `egui::Popup::menu`) and the clock while the bar
 is at least `CLOCK_MIN_WIDTH` (400 points) wide. `PhoneView` is view state
@@ -175,6 +175,17 @@ stops or changes playout.
   played* behind a ⋯ menu (`footer_more`), and the waveform's menu (a long
   press) offers *Remove* for each marker set by hand
   (`SetMarker { secs: None }`, which gives it back to the analysis).
+- *Music* (`music::screen`, PL17–PL19b): the pure part
+  (`music::listing`, `MusicView`) lists the device's files by folder
+  (from `top_folder`, the deepest folder holding every file), by artist or
+  by album (untagged files in a group of their own), or every file whose
+  title, artist, album or file name holds the search. The selection is a
+  list in tap order; the bar adds it with `InsertPaths` at the end or at
+  `fp_model::after_next`'s index when the target playlist is the one the
+  player shows and its next is in it. Back (`AppUi::back`) goes up a
+  folder or out of an artist or album before leaving the screen. The 🎧
+  pre-listen of PL18 is not built: a file outside a playlist has no CUE
+  source yet.
 
 **The lock** (PL12, PL13) is `Layout::touch_locked`, saved with the
 session and set by `Command::SetTouchLocked` (the layout lock does not
@@ -208,7 +219,8 @@ long-press tooltips.
 Android has no file dialog that gives back paths, so the pickers go
 through the media browser (`fp_app::ui::media_browser`). `MediaFiles`
 (Kotlin) lists the device's audio files from MediaStore (the `DATA`
-column, every audio file, not only music, since carts are often jingles
+column with `TITLE`, `ARTIST`, `ALBUM` and `DURATION`, joined with NUL
+into one record per file and parsed by `MediaFile::from_record`; every audio file, not only music, since carts are often jingles
 and effects) on a background thread after the permission is answered, on
 resume and whenever MediaStore changes (refreshes asked while a query
 waits to start join it, since a scan notifies once per file), and hands
@@ -221,7 +233,10 @@ permission is enough.
 thread they already run on, and it waits for the operator: adding tracks
 ticks files (`AudioFiles`), a cart takes one file with the cart
 extensions (`OneFile`) and Settings takes the music folder (`Folder`).
-`AppUi` draws the browser window while a request is pending. The handle
+`AppUi` draws the browser window while a request is pending; on a phone
+`music::follow_request` turns to the Music screen instead, which answers
+it (a tap for one file, *Use this folder*, *Add* for the ticked files)
+and returns to the earlier screen once the request is gone (PL19b). The handle
 is process-wide (`fp_mobile::platform::MEDIA`); a request still pending
 when its activity is destroyed is answered with nothing when the next one
 starts (its answer would reach no one), and a newer request answers the
