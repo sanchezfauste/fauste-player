@@ -529,6 +529,16 @@ pub fn volume_readout(gain: f32) -> Option<String> {
     })
 }
 
+/// How soon to draw the next frame of something that moves on its own, at
+/// `max_fps` (`ui.max_fps`; 0: the next frame the display shows).
+pub fn animation_period(max_fps: u32) -> std::time::Duration {
+    if max_fps == 0 {
+        std::time::Duration::ZERO
+    } else {
+        std::time::Duration::from_secs(1) / max_fps
+    }
+}
+
 /// Something on screen moves on its own (a meter, a countdown, a blinking
 /// Pause button): the interface repaints every frame instead of at the idle
 /// rate. A paused CUE still has its `cue`, so its window keeps blinking.

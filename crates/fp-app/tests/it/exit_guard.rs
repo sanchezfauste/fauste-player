@@ -290,7 +290,11 @@ fn escape_cancels_even_with_a_text_field_focused() {
                 app.ui(ui);
                 // Drawn last, so it still holds the focus while the
                 // interface reads the keys.
-                ui.add(egui::TextEdit::singleline(text).id_salt("editor"));
+                // Named: the harness checks accessibility once the
+                // interface stops asking for frames.
+                let label = ui.label("Editor");
+                ui.add(egui::TextEdit::singleline(text).id_salt("editor"))
+                    .labelled_by(label.id);
             },
             (app, String::new()),
         );

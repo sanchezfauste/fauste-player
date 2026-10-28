@@ -2061,14 +2061,22 @@ fn cart_on_air(hide_players: bool) -> AppState {
     s
 }
 
+/// How soon the last frame asked for the next one.
+fn repaint_delay(h: &Harness<'_, AppUi>) -> std::time::Duration {
+    h.output().viewport_output[&egui::ViewportId::ROOT].repaint_delay
+}
+
+/// One frame at `ui.max_fps` (30 by default).
+const FRAME_AT_30_FPS: std::time::Duration = std::time::Duration::from_nanos(33_333_333);
+
 #[test]
-fn i22_a_cart_on_air_repaints_every_frame_with_the_players_shown_or_hidden() {
+fn i22_a_cart_on_air_repaints_at_the_frame_rate_with_the_players_shown_or_hidden() {
     for hide in [false, true] {
         let (mut h, _fake) = harness(cart_on_air(hide));
         h.run_steps(3);
-        // `run_ok` fails when the interface never stops asking for frames.
-        assert!(
-            h.run_ok().is_none(),
+        assert_eq!(
+            repaint_delay(&h),
+            FRAME_AT_30_FPS,
             "a playing cart asks for the next frame (players hidden: {hide})"
         );
     }
@@ -2081,7 +2089,27 @@ fn i22_a_maximised_cartwall_keeps_repainting_while_a_cart_plays() {
     maximise(&mut h, at);
     assert_eq!(h.state().maximised(), Some(Panel::Cartwall));
     h.run_steps(3);
+    assert_eq!(repaint_delay(&h), FRAME_AT_30_FPS);
+}
+
+#[test]
+fn without_a_frame_rate_limit_a_cart_on_air_repaints_every_frame() {
+    let mut s = cart_on_air(false);
+    s.config.ui.max_fps = 0;
+    let (mut h, _fake) = harness(s);
+    h.run_steps(3);
+    // `run_ok` fails when the interface never stops asking for frames.
     assert!(h.run_ok().is_none());
+}
+
+#[test]
+fn a_playing_player_repaints_at_the_configured_frame_rate() {
+    let mut s = state(2, 3);
+    s.config.ui.max_fps = 50;
+    let (mut h, fake) = harness(s);
+    fake.send(Command::Play(fake.player(0)));
+    h.run_steps(3);
+    assert_eq!(repaint_delay(&h), std::time::Duration::from_millis(20));
 }
 
 #[test]
