@@ -624,6 +624,10 @@ media-browser-add = Gehitu { $count }
 media-browser-use-folder = Erabili karpeta hau
 media-browser-empty = Ez da musikarik aurkitu. Kopiatu audio-fitxategiak gailuaren Musika karpetara eta eman musikarako sarbidea.
 media-browser-cancel = Utzi
+touch-players = Erreproduzitzaileak
+touch-cartwall = { -cartwall }
+touch-open-player = Ireki { $player }
+touch-all-players = Denak
 
 column-name-number = Zenbakia (#)
 column-name-title = Izenburua

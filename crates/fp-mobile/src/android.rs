@@ -123,6 +123,7 @@ fn android_main(app: AndroidApp) {
     let ui = session
         .app_ui()
         .with_platform(Arc::new(AndroidPlatform))
+        .with_touch()
         .with_media_browser(MEDIA.clone());
     let options = eframe::NativeOptions {
         android_app: Some(app.clone()),

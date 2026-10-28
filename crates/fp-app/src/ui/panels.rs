@@ -504,6 +504,11 @@ pub(crate) fn header_buttons(
     view_state: &mut ViewState,
     panel: Panel,
 ) {
+    // A phone shows one panel at a time: there is nothing to hide or
+    // maximise (mobile spec §6).
+    if view_state.phone_active {
+        return;
+    }
     ui.spacing_mut().item_spacing = vec2(HEADER_BUTTONS_SPACING, 0.0);
     let t = scene.i18n;
     let locked = scene.state.layout.locked;
@@ -570,17 +575,30 @@ pub(crate) fn header_buttons(
     }
 }
 
+/// The room `header_buttons` takes.
+pub(crate) fn header_buttons_width(view_state: &ViewState) -> f32 {
+    if view_state.phone_active {
+        0.0
+    } else {
+        HEADER_BUTTONS_WIDTH
+    }
+}
+
 /// RL16: the menu of a panel header's background (right click): Maximize,
 /// or Restore on the maximised panel, and Hide. Both are disabled while the
 /// layout is locked; Maximize also with one panel shown and on a collapsed
 /// cartwall (RL14), Hide on the last shown panel. The header buttons do the
 /// same.
+/// None on a phone, as the buttons.
 pub(crate) fn header_menu(
     response: &egui::Response,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     panel: Panel,
 ) {
+    if view_state.phone_active {
+        return;
+    }
     response.context_menu(|ui| {
         let t = scene.i18n;
         ui.set_min_width(160.0);

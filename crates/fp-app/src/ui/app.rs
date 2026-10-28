@@ -99,6 +99,15 @@ pub(crate) struct TabScroll {
 /// Everything the UI remembers between frames.
 #[derive(Default)]
 pub(crate) struct ViewState {
+    /// What a phone shows (mobile spec §6); unused elsewhere.
+    pub phone: super::touch::PhoneView,
+    /// Whether this frame draws a phone's views (no desktop panel buttons).
+    pub phone_active: bool,
+    /// Touch mode: rows and column headers do not drag (a finger drag
+    /// scrolls).
+    pub touch: bool,
+    /// A swipe across the phone's landscape view.
+    pub phone_swipe: super::touch::SwipeTracker,
     pub selection: HashMap<PlayerId, EntryId>,
     /// The Enter that set an entry as Next and may still be followed by a
     /// second one that plays it (see `playlist_keys`).
@@ -412,6 +421,8 @@ pub struct AppUi {
     /// Where the platform's pickers ask for music (Android, mobile spec
     /// MB7), and what its window remembers.
     media_browser: Option<(MediaBrowser, media_browser::BrowseView)>,
+    /// Touch mode (mobile spec §6): the layout follows the screen.
+    touch: bool,
     /// The MIDI service's handle (Settings > MIDI), when it started.
     #[cfg(not(target_os = "android"))]
     midi: Option<fp_control::service::MidiHandle>,
@@ -475,6 +486,7 @@ impl AppUi {
             opener: None,
             platform: system_platform(),
             media_browser: None,
+            touch: false,
             #[cfg(not(target_os = "android"))]
             midi: None,
             #[cfg(not(target_os = "android"))]
@@ -554,6 +566,13 @@ impl AppUi {
     /// window shows while a picker waits.
     pub fn with_media_browser(mut self, browser: MediaBrowser) -> Self {
         self.media_browser = Some((browser, media_browser::BrowseView::default()));
+        self
+    }
+
+    /// Touch mode (Android): a phone gets its own views and every target
+    /// is easier to hit; a tablet keeps the desktop layout.
+    pub fn with_touch(mut self) -> Self {
+        self.touch = true;
         self
     }
 
@@ -644,6 +663,9 @@ impl AppUi {
         if !self.themed {
             // Fonts are bound from the next frame on; draw nothing until then.
             theme::apply(&ctx);
+            if self.touch {
+                super::touch::apply_style(&ctx);
+            }
             self.themed = true;
             ctx.request_repaint();
             return;
@@ -751,7 +773,19 @@ impl AppUi {
         };
         let full = ui.available_rect_before_wrap();
         ui.painter().rect_filled(full, 0.0, theme::BG);
-        let top = Rect::from_min_size(full.min, vec2(full.width(), TOP_BAR_HEIGHT));
+        let phone = self.touch
+            && matches!(
+                super::touch::form_factor(full.size()),
+                super::touch::FormFactor::Phone { .. }
+            );
+        let top_height = if phone {
+            super::touch::PHONE_TOP_BAR_HEIGHT
+        } else {
+            TOP_BAR_HEIGHT
+        };
+        self.view.phone_active = phone;
+        self.view.touch = self.touch;
+        let top = Rect::from_min_size(full.min, vec2(full.width(), top_height));
         let status = Rect::from_min_max(
             egui::pos2(full.left(), full.bottom() - STATUS_BAR_HEIGHT),
             full.max,
@@ -765,68 +799,88 @@ impl AppUi {
                 .max_rect(top)
                 .layout(Layout::left_to_right(Align::Center)),
         );
-        top_bar(&mut top_ui, &scene, &mut self.view, &pending, &|d| {
+        top_bar(&mut top_ui, &scene, &mut self.view, &pending, phone, &|d| {
             self.settings.device_label(d)
         });
-        // The middle area (resizable layout spec RL11): the pixel pass turns
-        // the layout into the players' row and the cartwall's rectangle.
         let inner = middle.shrink(8.0);
-        let ids = state.player_ids();
-        let model_input = panel_layout::PassInput {
-            players: &ids,
-            layout: &state.layout,
-            area: inner,
-            cartwall: cartwall::sizes(ui, &scene),
-            maximised: None,
-        };
-        // RL12: a cartwall splitter drag draws its size until the echo.
-        let dragged = panels::cartwall_drag_layout(ui, &scene, &mut self.view, &model_input);
-        let layout = dragged.as_ref().unwrap_or(&state.layout);
-        let pass = |maximised: Option<fp_model::layout::Panel>| {
-            panel_layout::arrange(&panel_layout::PassInput {
-                layout,
-                maximised,
-                ..model_input
-            })
-        };
-        let maximised = self.view.maximised.as_ref().map(|m| m.panel);
-        let arranged = pass(maximised);
-        // RL16: a splitter drag starts from the sizes without the maximised
-        // panel.
-        let normal = if maximised.is_some() {
-            pass(None)
-        } else {
-            arranged.clone()
-        };
-        self.view.player_rects.clear();
-        if !arranged.widths.is_empty() {
-            let mut players_ui = ui.new_child(
+        if phone {
+            // Mobile spec §6: a phone draws the screen chosen in its top bar.
+            let landscape = full.width() > full.height();
+            let mut phone_ui = ui.new_child(
                 UiBuilder::new()
-                    .max_rect(arranged.players_area)
-                    .layout(Layout::left_to_right(Align::Min)),
+                    .max_rect(inner)
+                    .id_salt("phone")
+                    .layout(Layout::top_down(Align::Min)),
             );
-            panels::players_row(
-                &mut players_ui,
+            phone_ui.set_clip_rect(inner);
+            super::touch::phone_middle(
+                &mut phone_ui,
                 &scene,
                 &mut self.view,
                 &mut self.covers,
-                &arranged,
-                &normal,
+                landscape,
             );
+            self.view.cartwall_rect = None;
+        } else {
+            // The middle area (resizable layout spec RL11): the pixel pass turns
+            // the layout into the players' row and the cartwall's rectangle.
+            let ids = state.player_ids();
+            let model_input = panel_layout::PassInput {
+                players: &ids,
+                layout: &state.layout,
+                area: inner,
+                cartwall: cartwall::sizes(ui, &scene),
+                maximised: None,
+            };
+            // RL12: a cartwall splitter drag draws its size until the echo.
+            let dragged = panels::cartwall_drag_layout(ui, &scene, &mut self.view, &model_input);
+            let layout = dragged.as_ref().unwrap_or(&state.layout);
+            let pass = |maximised: Option<fp_model::layout::Panel>| {
+                panel_layout::arrange(&panel_layout::PassInput {
+                    layout,
+                    maximised,
+                    ..model_input
+                })
+            };
+            let maximised = self.view.maximised.as_ref().map(|m| m.panel);
+            let arranged = pass(maximised);
+            // RL16: a splitter drag starts from the sizes without the maximised
+            // panel.
+            let normal = if maximised.is_some() {
+                pass(None)
+            } else {
+                arranged.clone()
+            };
+            self.view.player_rects.clear();
+            if !arranged.widths.is_empty() {
+                let mut players_ui = ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(arranged.players_area)
+                        .layout(Layout::left_to_right(Align::Min)),
+                );
+                panels::players_row(
+                    &mut players_ui,
+                    &scene,
+                    &mut self.view,
+                    &mut self.covers,
+                    &arranged,
+                    &normal,
+                );
+            }
+            self.view.cartwall_rect = arranged.cartwall;
+            if let Some(cart_rect) = arranged.cartwall {
+                let mut cart_ui = ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(cart_rect)
+                        .id_salt("cartwall")
+                        .layout(Layout::top_down(Align::Min)),
+                );
+                cart_ui.set_clip_rect(cart_rect);
+                cartwall::strip(&mut cart_ui, &scene, &mut self.view, !arranged.fit_content);
+            }
+            // RL12: the splitter beside the cartwall, over the gap.
+            panels::cartwall_splitter(ui, &scene, &mut self.view, &model_input, &arranged, &normal);
         }
-        self.view.cartwall_rect = arranged.cartwall;
-        if let Some(cart_rect) = arranged.cartwall {
-            let mut cart_ui = ui.new_child(
-                UiBuilder::new()
-                    .max_rect(cart_rect)
-                    .id_salt("cartwall")
-                    .layout(Layout::top_down(Align::Min)),
-            );
-            cart_ui.set_clip_rect(cart_rect);
-            cartwall::strip(&mut cart_ui, &scene, &mut self.view, !arranged.fit_content);
-        }
-        // RL12: the splitter beside the cartwall, over the gap.
-        panels::cartwall_splitter(ui, &scene, &mut self.view, &model_input, &arranged, &normal);
         let mut status_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(status)
@@ -1791,6 +1845,7 @@ fn top_bar(
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     pending: &[fp_model::Pending],
+    phone: bool,
     names: pending::DeviceNames<'_>,
 ) {
     let rect = ui.max_rect();
@@ -1815,6 +1870,11 @@ fn top_bar(
     top_bar_right(&mut right, scene, view_state, pending, names);
     let right_edge = right.min_rect().left();
     ui.add_space(10.0);
+    if phone {
+        // Mobile spec §6: a phone shows one screen at a time.
+        super::touch::screen_tiles(ui, scene, &mut view_state.phone, right_edge - 12.0);
+        return;
+    }
     // RL15: the panel tiles and the layout menu, on the left, 12 points
     // clear of the right-hand block.
     panels::layout_controls(ui, scene, right_edge - 12.0);
@@ -1829,30 +1889,36 @@ fn top_bar_right(
     pending: &[fp_model::Pending],
     names: pending::DeviceNames<'_>,
 ) {
-    ui.spacing_mut().item_spacing = vec2(12.0, 0.0);
-    ui.add_space(10.0);
+    // A phone keeps only the icons, as large as a fingertip (mobile spec §6).
+    let phone = view_state.phone_active;
+    let height = if phone { super::touch::TARGET } else { 24.0 };
+    ui.spacing_mut().item_spacing = vec2(if phone { 6.0 } else { 12.0 }, 0.0);
+    ui.add_space(if phone { 6.0 } else { 10.0 });
     let clock = chrono::Local::now().format("%H:%M:%S").to_string();
     widgets::tabular_label(ui, &clock, &font(13.0), theme::NEUTRAL_200);
     let label = scene.i18n.tr("top-settings");
-    let width = ui
-        .painter()
-        .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
-        .size()
-        .x
-        + 34.0;
+    let width = if phone {
+        height
+    } else {
+        ui.painter()
+            .layout_no_wrap(label.clone(), font(12.0), theme::NEUTRAL_300)
+            .size()
+            .x
+            + 34.0
+    };
     let style = TileStyle {
         border: theme::NEUTRAL_800,
         hover_fill: theme::NEUTRAL_800,
         ..TileStyle::plain()
     };
-    if widgets::tile(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
-        p.text(
-            r.center(),
-            egui::Align2::CENTER_CENTER,
-            format!("{} {label}", egui_phosphor::regular::GEAR_SIX),
-            font(12.0),
-            c,
-        );
+    if widgets::tile(ui, vec2(width, height), &label, true, style, |p, r, c| {
+        let text = if phone {
+            egui_phosphor::regular::GEAR_SIX.to_owned()
+        } else {
+            format!("{} {label}", egui_phosphor::regular::GEAR_SIX)
+        };
+        let size = if phone { 18.0 } else { 12.0 };
+        p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(size), c);
     })
     .clicked()
     {
@@ -1864,12 +1930,13 @@ fn top_bar_right(
         hover_fill: theme::NEUTRAL_800,
         ..TileStyle::plain()
     };
-    if widgets::tile(ui, vec2(24.0, 24.0), &about, true, style, |p, r, c| {
+    let about_size = if phone { 18.0 } else { 14.0 };
+    if widgets::tile(ui, vec2(height, height), &about, true, style, |p, r, c| {
         p.text(
             r.center(),
             egui::Align2::CENTER_CENTER,
             egui_phosphor::regular::INFO,
-            font(14.0),
+            font(about_size),
             c,
         );
     })
@@ -1885,26 +1952,29 @@ fn top_bar_right(
             .map(|p| pending::describe(i18n, scene.state, names, p))
             .collect::<Vec<_>>()
             .join("\n");
-        let width = ui
-            .painter()
-            .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
-            .size()
-            .x
-            + 34.0;
+        let width = if phone {
+            height
+        } else {
+            ui.painter()
+                .layout_no_wrap(label.clone(), font(12.0), theme::AMBER)
+                .size()
+                .x
+                + 34.0
+        };
         let style = TileStyle {
             border: theme::AMBER,
             content: theme::AMBER,
             hover_fill: theme::NEUTRAL_800,
             ..TileStyle::plain()
         };
-        if widgets::tile_without_tooltip(ui, vec2(width, 24.0), &label, true, style, |p, r, c| {
-            p.text(
-                r.center(),
-                egui::Align2::CENTER_CENTER,
-                format!("{} {label}", egui_phosphor::regular::HOURGLASS),
-                font(12.0),
-                c,
-            );
+        if widgets::tile_without_tooltip(ui, vec2(width, height), &label, true, style, |p, r, c| {
+            let text = if phone {
+                egui_phosphor::regular::HOURGLASS.to_owned()
+            } else {
+                format!("{} {label}", egui_phosphor::regular::HOURGLASS)
+            };
+            let size = if phone { 18.0 } else { 12.0 };
+            p.text(r.center(), egui::Align2::CENTER_CENTER, text, font(size), c);
         })
         .on_hover_text(tip)
         .clicked()

@@ -30,6 +30,7 @@ mod table;
 pub mod table_layout;
 mod tag_editor;
 pub mod theme;
+pub mod touch;
 pub mod view;
 mod wave_panel;
 pub mod wave_view;

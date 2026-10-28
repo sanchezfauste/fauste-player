@@ -78,7 +78,7 @@ pub(crate) fn column(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, view_state, id, index, &pv);
-            top_block(ui, scene, covers, id, &pv, &telemetry);
+            top_block(ui, scene, covers, id, &pv, &telemetry, true);
             wave(ui, scene, view_state, id, &pv);
             time_row(ui, scene, &pv);
         });
@@ -103,6 +103,59 @@ pub(crate) fn column(
             .layout(Layout::left_to_right(Align::Center)),
     );
     footer(&mut footer_ui, scene, view_state, id, player.playlist);
+}
+
+/// A phone's compact panel (mobile spec §6): the player block without the
+/// waveform and the playlist; a bar shows the progress.
+pub(crate) fn compact(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    covers: &mut HashMap<TrackId, TextureHandle>,
+    index: usize,
+) {
+    let Some(player) = scene.state.players.get(index) else {
+        return;
+    };
+    let id = player.id;
+    let telemetry = scene
+        .telemetry
+        .players
+        .iter()
+        .find(|(p, _)| *p == id)
+        .map(|(_, t)| *t)
+        .unwrap_or_default();
+    let Some(mut pv) = view::player_view(scene.state, id, telemetry.position_secs, scene.time)
+    else {
+        return;
+    };
+    pv.bit_perfect = telemetry.bit_perfect;
+    pv.dsd = telemetry.dsd;
+    egui::Frame::new()
+        .fill(theme::SURFACE)
+        .stroke(Stroke::new(1.0, theme::NEUTRAL_800))
+        .inner_margin(10.0)
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
+            header(ui, scene, view_state, id, index, &pv);
+            // A finger scrolling the list must not move a level on air: the
+            // fader is adjusted in the open player.
+            top_block(ui, scene, covers, id, &pv, &telemetry, false);
+            progress_bar(ui, &pv);
+            time_row(ui, scene, &pv);
+        });
+}
+
+/// The share of the track played, as a thin bar.
+fn progress_bar(ui: &mut Ui, pv: &PlayerView) {
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 4.0), Sense::hover());
+    ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_800);
+    let share = pv
+        .total
+        .filter(|t| *t > 0.0)
+        .map_or(0.0, |t| (pv.elapsed / t).clamp(0.0, 1.0)) as f32;
+    let played = Rect::from_min_size(rect.min, vec2(rect.width() * share, rect.height()));
+    ui.painter().rect_filled(played, 0.0, theme::NEUTRAL_400);
 }
 
 /// Follows the player's current entry in its table (feedback spec F18):
@@ -335,7 +388,7 @@ fn header(
         .as_ref()
         .map(|badge| GainBadgeLayout::new(ui, t, badge));
     let mut right_widths = vec![
-        super::panels::HEADER_BUTTONS_WIDTH,
+        super::panels::header_buttons_width(view_state),
         CUE_WIDTH,
         widgets::segmented_width(ui, &segments),
     ];
@@ -652,6 +705,7 @@ fn top_block(
     id: PlayerId,
     pv: &PlayerView,
     telemetry: &fp_engine::engine::PlayerTelemetry,
+    fader: bool,
 ) {
     let height = PLAY_SIZE * 2.0 + ROW_GAP;
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
@@ -674,16 +728,18 @@ fn top_block(
             .max_rect(right)
             .layout(Layout::left_to_right(Align::Min)),
     );
-    meter_column(&mut right_ui, scene, id, telemetry, height);
+    meter_column(&mut right_ui, scene, id, telemetry, height, fader);
 }
 
-/// The level meter and the volume fader, `height` tall.
+/// The level meter and the volume fader, `height` tall; the fader only
+/// shows the level unless `fader`.
 fn meter_column(
     ui: &mut Ui,
     scene: &Scene<'_>,
     id: PlayerId,
     telemetry: &fp_engine::engine::PlayerTelemetry,
     height: f32,
+    fader: bool,
 ) {
     let t = scene.i18n;
     ui.spacing_mut().item_spacing = vec2(METER_FADER_GAP, 0.0);
@@ -754,7 +810,7 @@ fn meter_column(
             (height - widgets::FADER_READOUT_HEIGHT).max(0.0),
             position,
             &tip,
-            !locked,
+            !locked && fader,
         );
         widgets::fader_readout(ui, &readout, !locked);
         if let Some(pos) = moved {

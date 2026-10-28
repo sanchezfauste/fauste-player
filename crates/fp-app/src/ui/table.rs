@@ -317,7 +317,13 @@ pub(crate) fn track_table(
         // the footer would cover the last rows, out of reach of the scroll.
         .min_scrolled_height(0.0)
         .auto_shrink([false, false])
-        .sense(Sense::click_and_drag())
+        // On touch a finger drag scrolls the table instead of moving a row
+        // or a column (mobile spec §6); the row menu still moves entries.
+        .sense(if view_state.touch {
+            Sense::click()
+        } else {
+            Sense::click_and_drag()
+        })
         .cell_layout(Layout::left_to_right(Align::Center));
     for w in &px {
         builder = builder.column(Column::exact(w.max(0.0)).clip(true));

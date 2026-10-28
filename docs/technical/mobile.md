@@ -111,6 +111,39 @@ insets (system bars and display cutout) and calls `Native.setInsets` in
 physical pixels; `fp_mobile::insets::safe_area` turns them into the
 rectangle the interface draws in (MB10).
 
+## Touch layout (§6)
+
+`fp-mobile` turns on touch mode (`AppUi::with_touch`). It widens egui's
+interaction radius and the scroll bars, so the desktop's tiles are easier
+to hit, and lays the screen out by its size (`fp_app::ui::touch`): a
+screen whose shortest side is 600 points (Android's dp) or more is a
+tablet and keeps the desktop layout; a smaller one is a phone.
+
+A phone's top bar keeps the clock, Settings and About, and its panel tiles
+give way to Players | Cartwall (`PhoneView`, view state only: nothing a
+view hides stops or changes playout):
+
+- *Players, portrait:* every player as a compact panel (`player::compact`:
+  the header, the titles with the countdown, the transport, the meter and
+  the level, and a progress bar), each with an "Open P1" tile. An open player
+  is the desktop column with its playlist at the full width, under chips
+  (All, P1…Pn).
+- *Players, landscape:* two desktop columns side by side, under chips for
+  the pairs and for opening a shown player; a sideways swipe of more than
+  80 points that no widget took (a fader, a row) shows the next or
+  previous pair.
+- *Cartwall:* the cartwall filling the area.
+
+The open player survives rotation and closes when its player goes away
+(`PhoneView::settle`). The top bar keeps only icons beside the screen
+tiles, which shrink to fit. A finger drag scrolls: in touch mode table
+rows and column headers do not drag (the row menu moves entries), and a
+compact panel's fader only shows the level (it is adjusted in the open
+player), so scrolling never moves a level on air. The cartwall screen
+never folds. Context menus open by long press (egui reports it as a
+secondary click). Still to come: the row menu as a bottom sheet and
+long-press tooltips.
+
 ## Media access (MB7)
 
 Android has no file dialog that gives back paths, so the pickers go
@@ -179,6 +212,5 @@ These hold until the plans that replace them:
 
 - links in the About window are not opened (`open_url` returns an error);
 - the outputs page is the desktop's (the touch layout reworks it);
-- the layout is the desktop one; the touch layout (spec §6) has its plan;
 - release builds are signed with the debug key, `versionCode` is 1 and the
   notification uses a system icon, until a release plan.
