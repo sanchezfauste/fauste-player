@@ -39,8 +39,8 @@ Phones only: tablets keep the window.
    in another playlist: one button, *Add at the end*.
 3. The selection keeps the order of the taps, and a file that left the
    list (a rescan) leaves the selection.
-4. Back on the Music screen: a picker's request is cancelled first, then
-   a folder goes up to its parent, then Music gives way to Live.
+4. Back on the Music screen: a folder goes up to its parent first, then
+   a picker's request is cancelled, then Music gives way to Live.
 5. A request arriving while another screen shows: the Music screen opens
    in pick mode, and answering returns to the screen that was showing.
 

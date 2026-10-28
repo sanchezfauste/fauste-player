@@ -240,12 +240,18 @@ pub(crate) fn follow_request(view_state: &mut ViewState) {
             }
             music.pick = Some(id);
             music.ticked.clear();
+            // A search or an artist left from before would hide the
+            // folders and Use this folder.
+            music.search.clear();
+            music.at = None;
             if start.is_some() {
                 music.browse = Browse::Folders;
                 music.folder = start;
             }
             view_state.phone.screen = touch::PhoneScreen::Music;
         }
+        // The request waits on this screen: other tabs wait with it.
+        Some(_) => view_state.phone.screen = touch::PhoneScreen::Music,
         None if music.pick.is_some() => {
             music.pick = None;
             music.ticked.clear();
@@ -255,6 +261,17 @@ pub(crate) fn follow_request(view_state: &mut ViewState) {
         }
         _ => {}
     }
+}
+
+/// The files a picker in `mode` can take.
+pub(crate) fn pickable(files: &[MediaFile], mode: &BrowseMode) -> std::sync::Arc<Vec<MediaFile>> {
+    std::sync::Arc::new(
+        files
+            .iter()
+            .filter(|f| super::media_browser::matches(&f.path, mode))
+            .cloned()
+            .collect(),
+    )
 }
 
 /// The Music screen: the search, Folders | Artists | Albums, a breadcrumb
@@ -273,13 +290,7 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
         .filter(|(id, _, _)| view_state.music.pick == Some(*id))
         .map(|(id, mode, _)| (id, mode));
     if let Some((_, mode)) = &pick {
-        files = std::sync::Arc::new(
-            files
-                .iter()
-                .filter(|f| super::media_browser::matches(&f.path, mode))
-                .cloned()
-                .collect(),
-        );
+        files = pickable(&files, mode);
     }
     let view = &mut view_state.music;
     view.retain_listed(&files);

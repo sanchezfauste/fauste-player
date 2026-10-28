@@ -383,3 +383,69 @@ fn in_landscape_the_header_and_the_bar_are_one_row() {
     );
     assert!(end.bottom() <= size.y, "{end:?}");
 }
+
+/// PL19b: a picker asked from Settings (a cart's file, the music folder)
+/// shows the Music screen over it; once answered Settings is back.
+#[test]
+fn a_pick_from_settings_shows_the_music_screen_above_it() {
+    let browser = MediaBrowser::default();
+    browser.set_files(library());
+    let given = browser.clone();
+    let (mut h, _fake) = harness_sized(state(1, 3), PORTRAIT, move |ui| {
+        ui.with_touch().with_media_browser(given)
+    });
+    h.run_steps(3);
+    tap(&mut h, "More");
+    tap(&mut h, "Settings");
+    let settings = h.query_by_label("Close").is_some();
+    assert!(settings, "Settings is open");
+    let mode = BrowseMode::one_file(&["mp3"]).unwrap();
+    let thread = std::thread::spawn(move || browser.browse(mode, None));
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_label(ALPHA).is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(h.query_by_label("Close").is_none(), "Settings waits");
+    tap(&mut h, ALPHA);
+    assert_eq!(answer(&mut h, thread), [PathBuf::from("/sd/Songs/a.mp3")]);
+    assert!(h.query_by_label("Close").is_some(), "Settings is back");
+}
+
+/// A pick starts with no leftover search, and the other tabs wait for it.
+#[test]
+fn a_pick_clears_the_search_and_holds_the_screen() {
+    let browser = MediaBrowser::default();
+    browser.set_files(library());
+    let given = browser.clone();
+    let (mut h, _fake) = harness_sized(state(1, 3), PORTRAIT, move |ui| {
+        ui.with_touch().with_media_browser(given)
+    });
+    h.run_steps(3);
+    tap(&mut h, "Music");
+    h.get_by_label("Search music").click();
+    h.run_steps(2);
+    h.get_by_label("Search music").type_text("gam");
+    h.run_steps(3);
+    let thread = std::thread::spawn(move || browser.browse(BrowseMode::Folder, None));
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_label("Use this folder").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        h.query_by_label("Use this folder").is_some(),
+        "the search was cleared"
+    );
+    tap(&mut h, "Live");
+    assert!(
+        h.query_by_label("Use this folder").is_some(),
+        "still answering"
+    );
+    tap(&mut h, "Use this folder");
+    assert_eq!(answer(&mut h, thread), [PathBuf::from("/sd/Songs")]);
+}

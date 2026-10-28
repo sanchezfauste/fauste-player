@@ -639,11 +639,17 @@ impl AppUi {
         if v.phone.screen != super::touch::PhoneScreen::Music {
             return false;
         }
-        let files = v
+        let mut files = v
             .media
             .as_ref()
             .map(MediaBrowser::files)
             .unwrap_or_default();
+        // A picker's screen lists only what it can take: so does Back.
+        if v.music.pick.is_some()
+            && let Some((_, mode, _)) = v.media.as_ref().and_then(MediaBrowser::pending)
+        {
+            files = super::music::pickable(&files, &mode);
+        }
         v.music.back(&files)
     }
 
@@ -978,7 +984,10 @@ impl AppUi {
         // Files dropped on the window, when no dialog is up (handled once
         // the dialogs are drawn).
         let mut take_drops = false;
-        if self.view.settings_open {
+        // PL19b: while a phone's Music screen answers a picker Settings
+        // asked, Settings waits (its state kept) instead of covering it.
+        let picking = self.view.phone_active && self.view.music.pick.is_some();
+        if self.view.settings_open && !picking {
             if !self.settings_shown {
                 self.settings.reset();
                 self.settings_shown = true;
