@@ -101,6 +101,10 @@ pub(crate) struct TabScroll {
 pub(crate) struct ViewState {
     /// What a phone shows (mobile spec §6); unused elsewhere.
     pub phone: super::touch::PhoneView,
+    /// The phone's Music screen (phone layout spec §9).
+    pub music: super::music::MusicView,
+    /// The device's music, where the platform lists it (Android).
+    pub media: Option<MediaBrowser>,
     /// Whether this frame draws a phone's views (no desktop panel buttons).
     pub phone_active: bool,
     /// Touch mode: rows and column headers do not drag (a finger drag
@@ -563,6 +567,7 @@ impl AppUi {
     /// The media browser the platform's pickers ask through (Android); its
     /// window shows while a picker waits.
     pub fn with_media_browser(mut self, browser: MediaBrowser) -> Self {
+        self.view.media = Some(browser.clone());
         self.media_browser = Some((browser, media_browser::BrowseView::default()));
         self
     }
@@ -615,6 +620,17 @@ impl AppUi {
             v.wave_menu.clear();
             return true;
         }
+        // PL2: the Music screen goes up a folder before leaving.
+        if v.phone.screen == super::touch::PhoneScreen::Music {
+            let files = v
+                .media
+                .as_ref()
+                .map(MediaBrowser::files)
+                .unwrap_or_default();
+            if v.music.back(&files) {
+                return true;
+            }
+        }
         v.phone.back()
     }
 
@@ -625,7 +641,10 @@ impl AppUi {
     /// Forgets all view state (selection, drags, open dialogs); the next
     /// frame is rebuilt from the current snapshot.
     pub fn reset_view(&mut self) {
-        self.view = ViewState::default();
+        self.view = ViewState {
+            media: self.view.media.take(),
+            ..ViewState::default()
+        };
         self.settings = SettingsState::default();
         self.settings_shown = false;
         self.covers.clear();
