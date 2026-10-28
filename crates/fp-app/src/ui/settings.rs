@@ -46,9 +46,8 @@ const WINDOW_SIZE: egui::Vec2 = vec2(900.0, 640.0);
 /// Room kept around the window inside the main window.
 const SCREEN_MARGIN: egui::Vec2 = vec2(48.0, 82.0);
 const MIN_WINDOW_SIZE: egui::Vec2 = vec2(320.0, 300.0);
-/// Narrower than this, in touch mode, the sections are chips above the
-/// section.
-const COMPACT_WIDTH: f32 = 600.0;
+/// A row of a phone's list of sections, for a finger.
+const PHONE_SECTION_ROW: f32 = 52.0;
 
 /// `WINDOW_SIZE`, shrunk to fit `screen`.
 pub(crate) fn window_size(screen: egui::Vec2) -> egui::Vec2 {
@@ -101,6 +100,8 @@ pub(crate) struct SettingsState {
     folder: Option<Receiver<Option<PathBuf>>>,
     /// Number of players being dragged, sent on release.
     player_count_draft: Option<usize>,
+    /// On a phone, a section shows instead of the list of sections (PL20).
+    pub(crate) phone_section: bool,
 }
 
 impl SettingsState {
@@ -124,6 +125,13 @@ impl SettingsState {
     pub fn edit_cart(&mut self, page: fp_model::CartPageId, index: usize) {
         self.section = Section::Cartwall;
         self.carts.select(page, index);
+        self.phone_section = true;
+    }
+
+    /// Back on a phone (PL20): from a section to the list. False on the
+    /// list, where Back closes Settings.
+    pub(crate) fn phone_back(&mut self) -> bool {
+        std::mem::replace(&mut self.phone_section, false)
     }
 
     /// Called when the modal opens: device lists are read again.
@@ -195,9 +203,9 @@ fn update(scene: &Scene<'_>, edit: impl FnOnce(&mut Config)) {
 
 /// Everything the modal needs besides the scene.
 pub(crate) struct SettingsDeps<'a> {
-    /// Touch mode (mobile spec §6): a narrow window shows the sections as
-    /// chips.
-    pub touch: bool,
+    /// A phone (phone layout spec §10): Settings fills the screen, lists
+    /// its sections, then shows one with its settings stacked.
+    pub phone: bool,
     pub backends: &'a [Arc<dyn AudioBackend>],
     pub services: Option<&'a Sender<ServiceRequest>>,
     pub notice: Option<String>,
@@ -246,7 +254,11 @@ pub(crate) fn show(
     let t = scene.i18n;
     let mut open = true;
     let mut apply_now = false;
-    let size = window_size(ctx.content_rect().size());
+    let size = if deps.phone {
+        ctx.content_rect().size()
+    } else {
+        window_size(ctx.content_rect().size())
+    };
     let modal = egui::Modal::new(egui::Id::unique("settings"))
         .frame(egui::Frame::new().fill(theme::SURFACE))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
@@ -281,17 +293,18 @@ pub(crate) fn show(
             );
             separator(ui, size.x);
             let body_height = size.y - 44.0 - 52.0 - 2.0;
-            // On a phone the sections are a row of chips above the
-            // section, which keeps the whole width.
-            if deps.touch && size.x < COMPACT_WIDTH {
+            // PL20: a phone shows its list of sections, then one section
+            // with the whole width.
+            if deps.phone {
                 ui.allocate_ui_with_layout(
                     vec2(size.x, body_height),
                     Layout::top_down(Align::Min),
                     |ui| {
-                        nav_chips(ui, scene, st);
-                        separator(ui, size.x);
-                        let height = ui.available_height();
-                        body(ui, ctx, scene, st, deps, height);
+                        if st.phone_section {
+                            body(ui, ctx, scene, st, deps, body_height);
+                        } else {
+                            phone_sections(ui, scene, st, body_height);
+                        }
                     },
                 );
             } else {
@@ -406,7 +419,7 @@ fn body(
 ) {
     ui.vertical(|ui| {
         ui.set_min_size(vec2(ui.available_width(), height));
-        section_header(ui, scene, st);
+        section_header(ui, scene, st, deps.phone);
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -494,24 +507,54 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
     });
 }
 
-/// The sections as a row of chips, for a narrow window.
-fn nav_chips(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+/// A phone's list of sections (PL20); a tap opens one.
+fn phone_sections(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
     let t = scene.i18n;
-    egui::ScrollArea::horizontal()
-        .id_salt("settings-chips")
+    egui::ScrollArea::vertical()
+        .id_salt("settings-sections")
+        .max_height(height)
+        .auto_shrink([false, false])
         .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
-                ui.add_space(8.0);
-                for &(section, _, key) in SECTIONS {
-                    if super::touch::chip(ui, &t.tr(key), st.section == section) {
-                        select(scene, st, section);
-                    }
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            let width = ui.available_width();
+            for &(section, glyph, key) in SECTIONS {
+                let label = t.tr(key);
+                let style = TileStyle {
+                    fill: Color32::TRANSPARENT,
+                    border: Color32::TRANSPARENT,
+                    hover_fill: theme::NEUTRAL_800,
+                    ..TileStyle::plain()
+                };
+                let response = widgets::tile(
+                    ui,
+                    vec2(width, PHONE_SECTION_ROW),
+                    &label,
+                    true,
+                    style,
+                    |p, r, c| {
+                        p.text(
+                            r.left_center() + vec2(20.0, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            format!("{glyph}   {label}"),
+                            font(15.0),
+                            c,
+                        );
+                        p.text(
+                            r.right_center() - vec2(20.0, 0.0),
+                            egui::Align2::RIGHT_CENTER,
+                            icon::CARET_RIGHT,
+                            font(15.0),
+                            theme::NEUTRAL_500,
+                        );
+                    },
+                );
+                if response.clicked() {
+                    select(scene, st, section);
+                    st.phone_section = true;
                 }
-                ui.add_space(8.0);
-            });
+                separator(ui, width);
+            }
         });
-    ui.add_space(8.0);
 }
 
 fn select(scene: &Scene<'_>, st: &mut SettingsState, section: Section) {
@@ -576,7 +619,7 @@ fn restorable(section: Section) -> Option<SettingsSection> {
 
 /// The section's title, and "Restore defaults" on the right where the
 /// section has one. It stays put while the body scrolls.
-fn section_header(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+fn section_header(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, phone: bool) {
     let t = scene.i18n;
     let key = SECTIONS
         .iter()
@@ -588,7 +631,31 @@ fn section_header(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         Layout::left_to_right(Align::Center),
         |ui| {
             ui.set_width(width);
-            ui.add_space(24.0);
+            if phone {
+                // PL20: back to the list of sections.
+                ui.add_space(8.0);
+                let back = t.tr("settings-back");
+                let style = TileStyle {
+                    border: Color32::TRANSPARENT,
+                    ..TileStyle::plain()
+                };
+                if widgets::tile(ui, vec2(44.0, 44.0), &back, true, style, |p, r, c| {
+                    p.text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        icon::ARROW_LEFT,
+                        font(18.0),
+                        c,
+                    );
+                })
+                .clicked()
+                {
+                    st.phone_section = false;
+                }
+                ui.add_space(4.0);
+            } else {
+                ui.add_space(24.0);
+            }
             ui.add(
                 egui::Label::new(
                     RichText::new(t.tr(key))

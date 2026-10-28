@@ -97,7 +97,7 @@ fn the_phone_top_bar_has_the_tabs_and_more() {
 fn more_opens_settings_and_about() {
     let (mut h, _fake) = touch(2, PORTRAIT);
     more(&mut h, "Settings");
-    assert!(h.query_by_label("Buffer size").is_some());
+    assert!(h.query_by_label("Audio outputs").is_some());
     let (mut h, _fake) = touch(2, PORTRAIT);
     more(&mut h, "About");
     assert!(h.query_by_label_contains("Fauste Player by").is_some());
@@ -843,19 +843,75 @@ fn touch_mode_shows_no_keyboard_and_mouse_hints() {
     assert!(h.query_by_label_contains("Keys 1–9").is_some());
 }
 
-/// On a phone the Settings sections are chips above the section, which
-/// takes the whole width (a side list would leave it no room).
+/// PL20: on a phone Settings fills the screen and opens on its list of
+/// sections; a tap opens one, Back returns to the list, then closes.
 #[test]
-fn phone_settings_put_the_sections_above_the_content() {
+fn phone_settings_open_on_the_section_list() {
     let (mut h, _fake) = touch(2, PORTRAIT);
     more(&mut h, "Settings");
-    let buffer = h.get_by_label("Buffer size").rect();
-    assert!(buffer.left() < 80.0, "{buffer:?} sits right of a side list");
-    let meters = h.get_by_label("Meters").rect();
-    assert!(meters.bottom() < buffer.top(), "the chips are above");
+    for name in ["Audio outputs", "Players", "Meters", "Cartwall"] {
+        assert!(h.query_by_label(name).is_some(), "{name}");
+    }
+    assert!(h.query_by_label("Buffer size").is_none(), "no section yet");
+    let close = h.get_by_label("Close").rect();
+    assert!(close.bottom() > PORTRAIT.y - 80.0, "full screen: {close:?}");
     h.get_by_label("Meters").click();
     h.run_steps(3);
-    assert!(h.query_by_label("Buffer size").is_none(), "another section");
+    assert!(
+        h.query_by_label("Audio outputs").is_none(),
+        "the section alone"
+    );
+    assert!(h.query_by_label("Back to the sections").is_some());
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(3);
+    assert!(
+        h.query_by_label("Audio outputs").is_some(),
+        "the list again"
+    );
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(3);
+    assert!(h.query_by_label("Close").is_none(), "Settings closed");
+}
+
+/// PL20: the arrow goes back to the list too.
+#[test]
+fn the_arrow_returns_to_the_section_list() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Audio outputs").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Buffer size").is_some());
+    h.get_by_label("Back to the sections").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Buffer size").is_none());
+    assert!(h.query_by_label("Players").is_some());
+}
+
+/// PL20: editing a cart on a phone opens its section, not the list.
+#[test]
+fn editing_a_cart_opens_its_section() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    tab(&mut h, "Carts");
+    let cart = h.get_by_label("Cart 1, empty").rect();
+    h.hover_at(cart.center());
+    h.event(egui::Event::PointerButton {
+        pos: cart.center(),
+        button: egui::PointerButton::Secondary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.event(egui::Event::PointerButton {
+        pos: cart.center(),
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(3);
+    h.get_by_label_contains("Edit").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Back to the sections").is_some());
+    assert!(h.query_by_label("Audio outputs").is_none(), "not the list");
 }
 
 /// A touch tablet keeps the desktop's cartwall grid and Settings side list.

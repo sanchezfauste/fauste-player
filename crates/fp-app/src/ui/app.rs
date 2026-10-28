@@ -601,6 +601,17 @@ impl AppUi {
             browser.cancel_pending();
             return true;
         }
+        // PL20: a phone's Settings goes from a section to its list first,
+        // unless a question waits over it.
+        if self.view.settings_open
+            && self.view.phone_active
+            && !self.view.confirm_apply_now
+            && !self.view.pending_open
+            && self.settings.confirm_restore.is_none()
+            && self.settings.phone_back()
+        {
+            return true;
+        }
         let v = &mut self.view;
         if v.exit_guard.take().is_some()
             || v.tag_editor.take().is_some()
@@ -1004,7 +1015,7 @@ impl AppUi {
                     .join("\n")
             };
             let deps = SettingsDeps {
-                touch: self.touch,
+                phone: self.view.phone_active,
                 backends: &self.backends,
                 services: self.services.as_ref(),
                 notice: self
