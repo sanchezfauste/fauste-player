@@ -354,3 +354,32 @@ fn a_tablet_keeps_the_window() {
     let (h, _thread) = picking(vec2(800.0, 1280.0), BrowseMode::AudioFiles);
     assert!(h.query_by_label(WINDOW).is_some());
 }
+
+/// On a phone on its side the search sits beside the switch and the bar
+/// is one row, so the list keeps room and the buttons stay on the screen.
+#[test]
+fn in_landscape_the_header_and_the_bar_are_one_row() {
+    let browser = MediaBrowser::default();
+    browser.set_files(library());
+    let given = browser.clone();
+    let size = vec2(892.0, 412.0);
+    let (mut h, _fake) = harness_sized(state(1, 3), size, move |ui| {
+        ui.with_touch().with_media_browser(given)
+    });
+    h.run_steps(3);
+    tap(&mut h, "Music");
+    tap(&mut h, ALPHA);
+    let search = h.get_by_label("Search music").rect();
+    let folders = h.get_by_label("Folders").rect();
+    assert!(
+        (search.center().y - folders.center().y).abs() < 10.0,
+        "{search:?} {folders:?}"
+    );
+    let end = h.get_by_label(END).rect();
+    let selected = h.get_by_label("Selected: 1").rect();
+    assert!(
+        (end.center().y - selected.center().y).abs() < 10.0,
+        "{end:?} {selected:?}"
+    );
+    assert!(end.bottom() <= size.y, "{end:?}");
+}

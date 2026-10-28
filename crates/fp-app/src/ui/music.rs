@@ -14,8 +14,12 @@ use super::media_browser::{BrowseMode, MediaBrowser, MediaFile};
 use super::widgets::font;
 use super::{format, theme, touch};
 
-/// The selection bar's height (PL19): its two lines.
-const BAR: f32 = 100.0;
+/// The selection bar's height (PL19): two lines, or one on a wide screen.
+const BAR: f32 = 110.0;
+const WIDE_BAR: f32 = 60.0;
+/// From this width the search sits beside the switch and the bar is one
+/// line (a phone on its side).
+const WIDE: f32 = 600.0;
 /// The height of a group's row and of a track's row, for a finger.
 const GROUP_ROW: f32 = 48.0;
 const TRACK_ROW: f32 = 56.0;
@@ -293,29 +297,16 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
     {
         action = Some(Action::Answer(Vec::new()));
     }
-    let hint = t.tr("music-search");
-    let search = ui.add(
-        egui::TextEdit::singleline(&mut view.search)
-            .hint_text(&hint)
-            .background_color(theme::NEUTRAL_800)
-            .margin(vec2(10.0, 10.0))
-            .font(font(15.0))
-            .min_size(vec2(0.0, 40.0))
-            .desired_width(f32::INFINITY),
-    );
-    search.widget_info(|| WidgetInfo::labeled(Role::TextInput, true, hint.clone()));
-    ui.horizontal(|ui| {
-        for (browse, key) in [
-            (Browse::Folders, "music-folders"),
-            (Browse::Artists, "music-artists"),
-            (Browse::Albums, "music-albums"),
-        ] {
-            if touch::chip(ui, &t.tr(key), view.browse == browse) && view.browse != browse {
-                view.browse = browse;
-                view.at = None;
-            }
-        }
-    });
+    let wide = ui.available_width() >= WIDE;
+    if wide {
+        ui.horizontal(|ui| {
+            browse_switch(ui, t, view);
+            search_field(ui, t, view);
+        });
+    } else {
+        search_field(ui, t, view);
+        ui.horizontal(|ui| browse_switch(ui, t, view));
+    }
     let searching = !view.search.trim().is_empty();
     if view.browse == Browse::Folders
         && !searching
@@ -351,7 +342,7 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
     let listed = listing(&files, view);
     let bar = !view.ticked.is_empty();
     let list_height = if bar {
-        (ui.available_height() - BAR).max(0.0)
+        (ui.available_height() - if wide { WIDE_BAR } else { BAR }).max(0.0)
     } else {
         ui.available_height()
     };
@@ -406,7 +397,7 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
         }
     } else if bar {
         let shown = view_state.phone.shown_player(&scene.state.player_ids());
-        selection_bar(ui, scene, &mut view_state.music, shown);
+        selection_bar(ui, scene, &mut view_state.music, shown, wide);
     }
     let view = &mut view_state.music;
     match action {
@@ -420,6 +411,35 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
         Some(Action::Folder(folder)) => view.folder = folder,
         Some(Action::Toggle(path)) => view.toggle(path),
         None => {}
+    }
+}
+
+/// The search over every file (PL17).
+fn search_field(ui: &mut Ui, t: &crate::i18n::I18n, view: &mut MusicView) {
+    let hint = t.tr("music-search");
+    let search = ui.add(
+        egui::TextEdit::singleline(&mut view.search)
+            .hint_text(&hint)
+            .background_color(theme::NEUTRAL_800)
+            .margin(vec2(10.0, 10.0))
+            .font(font(15.0))
+            .min_size(vec2(0.0, 40.0))
+            .desired_width(f32::INFINITY),
+    );
+    search.widget_info(|| WidgetInfo::labeled(Role::TextInput, true, hint.clone()));
+}
+
+/// Folders | Artists | Albums (PL17).
+fn browse_switch(ui: &mut Ui, t: &crate::i18n::I18n, view: &mut MusicView) {
+    for (browse, key) in [
+        (Browse::Folders, "music-folders"),
+        (Browse::Artists, "music-artists"),
+        (Browse::Albums, "music-albums"),
+    ] {
+        if touch::chip(ui, &t.tr(key), view.browse == browse) && view.browse != browse {
+            view.browse = browse;
+            view.at = None;
+        }
     }
 }
 
@@ -592,7 +612,13 @@ fn target_name(scene: &Scene<'_>, player: PlayerId, playlist: PlaylistId) -> Str
 
 /// The bar under the list while something is selected (PL19): the count,
 /// the target (a menu of every player and playlist) and the add buttons.
-fn selection_bar(ui: &mut Ui, scene: &Scene<'_>, view: &mut MusicView, shown: Option<PlayerId>) {
+fn selection_bar(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view: &mut MusicView,
+    shown: Option<PlayerId>,
+    wide: bool,
+) {
     let t = scene.i18n;
     let state = scene.state;
     // The chosen target while it exists, else the Playlists screen's player
@@ -615,7 +641,8 @@ fn selection_bar(ui: &mut Ui, scene: &Scene<'_>, view: &mut MusicView, shown: Op
         .filter(|(shown, index)| *shown == playlist && *index < len)
         .map(|(_, index)| index);
     ui.separator();
-    ui.horizontal(|ui| {
+    let mut add = None;
+    let mut head = |ui: &mut Ui| {
         ui.label(
             egui::RichText::new(
                 t.tr_args("music-selected", &[("count", view.ticked.len().into())]),
@@ -639,9 +666,8 @@ fn selection_bar(ui: &mut Ui, scene: &Scene<'_>, view: &mut MusicView, shown: Op
                 }
             }
         });
-    });
-    let mut add = None;
-    ui.horizontal(|ui| {
+    };
+    let mut buttons = |ui: &mut Ui| {
         let button = |ui: &mut Ui, key: &str| {
             ui.add(
                 egui::Button::new(egui::RichText::new(t.tr(key)).font(font(14.0)))
@@ -657,7 +683,18 @@ fn selection_bar(ui: &mut Ui, scene: &Scene<'_>, view: &mut MusicView, shown: Op
         if button(ui, "music-add-end") {
             add = Some(len);
         }
-    });
+    };
+    // One line on a wide screen, else the buttons go below.
+    if wide {
+        let row = egui::Layout::left_to_right(egui::Align::Center);
+        ui.allocate_ui_with_layout(vec2(ui.available_width(), touch::TARGET), row, |ui| {
+            head(ui);
+            buttons(ui);
+        });
+    } else {
+        ui.horizontal(|ui| head(ui));
+        ui.horizontal(|ui| buttons(ui));
+    }
     if let Some(index) = add {
         scene.ctl.send(Command::InsertPaths {
             playlist,
