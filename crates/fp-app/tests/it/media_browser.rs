@@ -134,3 +134,19 @@ fn only_audio_extensions_open_the_browser() {
     assert_eq!(BrowseMode::one_file(&["m3u", "pls"]), None);
     assert_eq!(BrowseMode::one_file(&[]), None);
 }
+
+/// A list after an empty one means the app can read the device's music
+/// now (the media permission was granted): the shell rechecks the files
+/// that failed before.
+#[test]
+fn set_files_tells_when_the_files_become_readable() {
+    let browser = MediaBrowser::default();
+    assert!(!browser.set_files(Vec::new()), "still nothing");
+    assert!(browser.set_files(paths(&["/m/a.mp3"])), "access gained");
+    assert!(
+        !browser.set_files(paths(&["/m/a.mp3", "/m/b.mp3"])),
+        "a new file"
+    );
+    assert!(!browser.set_files(Vec::new()), "access lost");
+    assert!(browser.set_files(paths(&["/m/a.mp3"])), "gained again");
+}

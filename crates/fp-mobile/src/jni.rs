@@ -9,6 +9,8 @@ use jni::JavaVM;
 use jni::objects::{JObject, JObjectArray, JString, JValue};
 use jni::sys::{jboolean, jint, jstring};
 
+use fp_app::services::ServiceRequest;
+
 use crate::android::{ACTIVITY, INSETS, SESSION};
 use crate::platform::{AUDIO_FOCUS_LOST, MEDIA};
 use crate::shell_state::{on_air_text, shell_state};
@@ -114,7 +116,13 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setMediaFiles(
         // Thousands of files: free each local reference as it goes.
         let _ = env.delete_local_ref(item);
     }
-    MEDIA.set_files(files);
+    // Tracks read before the permission was granted failed, and their files
+    // did not change: the missing-file recheck would never look again.
+    if MEDIA.set_files(files)
+        && let Some(session) = SESSION.get()
+    {
+        let _ = session.requests.try_send(ServiceRequest::RecheckUnreadable);
+    }
 }
 
 /// Asks the activity to open `url` (`MainActivity.openUrl`, a view

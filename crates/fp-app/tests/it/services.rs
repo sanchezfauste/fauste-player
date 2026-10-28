@@ -1277,6 +1277,34 @@ fn reanalyse_track_brings_back_a_track_that_playback_marked_unreadable() {
     assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
 }
 
+/// Mobile spec MB7: files read before the media permission was granted
+/// failed without changing; once it is, every unreadable track is analysed
+/// again.
+#[test]
+fn recheck_unreadable_analyses_every_unreadable_track_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 1);
+    let b = wav(dir.path(), "b.wav", 1);
+    let mut r = recheck_rig(&[a, b], dir);
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    let tracks: Vec<_> = r.handle.model.load().library.iter().map(|t| t.id).collect();
+    for track in tracks {
+        assert!(r.handle.send(Command::SetFileState {
+            track,
+            state: FileState::Unreadable
+        }));
+    }
+    r.run_until("unreadable", |r| all_in(r, FileState::Unreadable));
+    r.services
+        .requests()
+        .send(ServiceRequest::RecheckUnreadable)
+        .unwrap();
+    r.run_until("playable again", |r| all_in(r, FileState::Ok));
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 4);
+}
+
 /// Operator feedback 4, Q1.1: a track has the length its file's header
 /// declares long before its analysis ends.
 #[test]

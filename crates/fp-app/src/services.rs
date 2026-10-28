@@ -264,6 +264,10 @@ pub enum ServiceRequest {
     /// Analyse this track at once, whatever its state (the row menu's
     /// Re-analyse).
     ReanalyseTrack(TrackId),
+    /// Analyse every unreadable track again: the app may read files it
+    /// could not before (Android: the media permission was just granted),
+    /// which changes neither their size nor their modification time.
+    RecheckUnreadable,
 }
 
 /// Whether `track` was analysed by an earlier version: before formats were
@@ -657,6 +661,17 @@ impl Services {
                 ServiceRequest::ReanalyseAll => self.reanalyse_all(state),
                 ServiceRequest::AnalyseOutdated => self.analyse_outdated = true,
                 ServiceRequest::ReanalyseTrack(id) => self.reanalyse_track(state, id),
+                ServiceRequest::RecheckUnreadable => {
+                    let unreadable: Vec<TrackId> = state
+                        .library
+                        .iter()
+                        .filter(|t| t.file_state == FileState::Unreadable)
+                        .map(|t| t.id)
+                        .collect();
+                    for id in unreadable {
+                        self.reanalyse_track(state, id);
+                    }
+                }
             }
         }
         self.follow_settings(state);
