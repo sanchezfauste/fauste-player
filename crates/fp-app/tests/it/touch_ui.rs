@@ -209,6 +209,44 @@ fn live_puts_the_cartwall_below_in_portrait_and_right_in_landscape() {
     assert!(cart.left() > play.right(), "landscape: right");
 }
 
+/// The Live screen's cartwall is short and wide in portrait: a page too
+/// wide for it is laid out in fewer columns, in the same reading order, so
+/// every cart is inside the screen and wide enough to read.
+#[test]
+fn the_live_cartwall_fits_a_portrait_phone() {
+    let (h, _fake) = touch(2, PORTRAIT);
+    let carts: Vec<egui::Rect> = h
+        .query_all_by_label_contains(", empty")
+        .map(|n| n.rect())
+        .collect();
+    assert!(carts.len() > 2);
+    for cart in &carts {
+        assert!(cart.right() <= PORTRAIT.x, "{cart:?} leaves the screen");
+        assert!(cart.width() >= 80.0, "{cart:?} is narrow");
+    }
+    let one = h.get_by_label("Cart 1, empty").rect();
+    let two = h.get_by_label("Cart 2, empty").rect();
+    assert!(two.left() > one.right(), "2 right of 1");
+}
+
+/// Two cards show at once on a 6-inch phone held upright (PL5): about
+/// 400 × 860 dp, less the system bars.
+#[test]
+fn two_cards_fit_a_portrait_phone() {
+    let (h, _fake) = touch(3, vec2(400.0, 820.0));
+    let carts_top = h.get_by_label("Cart 1, empty").rect().top();
+    let plays: Vec<egui::Rect> = h.query_all_by_label("Play").map(|n| n.rect()).collect();
+    assert!(
+        plays[1].bottom() < carts_top,
+        "the second card's Play shows"
+    );
+    let faders: Vec<egui::Rect> = h
+        .query_all_by_label_contains("Volume")
+        .map(|n| n.rect())
+        .collect();
+    assert!(faders[1].bottom() < carts_top, "and its fader");
+}
+
 #[test]
 fn a_card_has_the_waveform_above_its_buttons() {
     let (h, _fake) = touch(1, PORTRAIT);

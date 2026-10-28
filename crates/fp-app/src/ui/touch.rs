@@ -94,7 +94,7 @@ const INTERACT_RADIUS: f32 = 12.0;
 const MIN_COLUMN_HEIGHT: f32 = 560.0;
 /// The Live screen's share for the cards: of the height in portrait (less
 /// when the cards need less), of the width in landscape (PL5, PL6).
-const LIVE_CARDS_SHARE: f32 = 0.6;
+const LIVE_CARDS_SHARE: f32 = 0.66;
 /// Scroll bars a finger can drag.
 const SCROLL_BAR_WIDTH: f32 = 12.0;
 /// The phone's top bar, tall enough for its screen tiles.
