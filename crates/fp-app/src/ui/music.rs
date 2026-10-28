@@ -7,12 +7,15 @@ use std::path::{Path, PathBuf};
 
 use egui::{Align2, Rect, Role, Sense, Ui, WidgetInfo, vec2};
 use egui_phosphor::regular as icon;
+use fp_model::{Command, PlayerId, PlaylistId};
 
 use super::app::{Scene, ViewState};
 use super::media_browser::MediaFile;
 use super::widgets::font;
 use super::{format, theme, touch};
 
+/// The selection bar's height (PL19): its two lines.
+const BAR: f32 = 100.0;
 /// The height of a group's row and of a track's row, for a finger.
 const GROUP_ROW: f32 = 48.0;
 const TRACK_ROW: f32 = 56.0;
@@ -46,6 +49,8 @@ pub struct MusicView {
     pub search: String,
     /// The selected files, in the order they were tapped (PL19).
     pub ticked: Vec<PathBuf>,
+    /// Where the selection goes: a player and a playlist (PL19).
+    pub target: Option<(PlayerId, PlaylistId)>,
 }
 
 /// What to show: groups to open, then tracks (indices into the files).
@@ -266,8 +271,15 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
         return;
     }
     let listed = listing(&files, view);
+    let bar = !view.ticked.is_empty();
+    let list_height = if bar {
+        (ui.available_height() - BAR).max(0.0)
+    } else {
+        ui.available_height()
+    };
     egui::ScrollArea::vertical()
         .id_salt("music-list")
+        .max_height(list_height)
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
@@ -296,6 +308,11 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
                 }
             }
         });
+    if bar {
+        let shown = view_state.phone.shown_player(&scene.state.player_ids());
+        selection_bar(ui, scene, &mut view_state.music, shown);
+    }
+    let view = &mut view_state.music;
     match action {
         Some(Action::Open(Group::Folder(path))) => view.folder = Some(path),
         Some(Action::Open(group)) => view.at = Some(group),
@@ -445,4 +462,103 @@ fn track_row(ui: &mut Ui, file: &MediaFile, ticked: bool) -> bool {
         }
     }
     response.clicked()
+}
+
+/// The target's name: "P1 · Playlist 1".
+fn target_name(scene: &Scene<'_>, player: PlayerId, playlist: PlaylistId) -> String {
+    let index = scene
+        .state
+        .player_ids()
+        .iter()
+        .position(|p| *p == player)
+        .unwrap_or_default();
+    let name = scene
+        .state
+        .playlists
+        .get(playlist)
+        .map(|l| l.name.clone())
+        .unwrap_or_default();
+    format!(
+        "{} · {name}",
+        scene
+            .i18n
+            .tr_args("player-label", &[("n", (index + 1).into())])
+    )
+}
+
+/// The bar under the list while something is selected (PL19): the count,
+/// the target (a menu of every player and playlist) and the add buttons.
+fn selection_bar(ui: &mut Ui, scene: &Scene<'_>, view: &mut MusicView, shown: Option<PlayerId>) {
+    let t = scene.i18n;
+    let state = scene.state;
+    // The chosen target while it exists, else the Playlists screen's player
+    // with the playlist it shows.
+    let target = view
+        .target
+        .filter(|(player, playlist)| {
+            state.player(*player).is_ok() && state.playlists.get(*playlist).is_some()
+        })
+        .or_else(|| {
+            let player = shown?;
+            Some((player, state.player(player).ok()?.playlist))
+        });
+    let Some((player, playlist)) = target else {
+        return;
+    };
+    let len = state.playlists.get(playlist).map_or(0, |l| l.entries.len());
+    // PL19: after the next only when the target holds the player's next.
+    let after = fp_model::after_next(state, player)
+        .filter(|(shown, index)| *shown == playlist && *index < len)
+        .map(|(_, index)| index);
+    ui.separator();
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(
+                t.tr_args("music-selected", &[("count", view.ticked.len().into())]),
+            )
+            .font(font(13.0))
+            .color(theme::TEXT),
+        );
+        let name = target_name(scene, player, playlist);
+        ui.menu_button(egui::RichText::new(&name).font(font(13.0)), |ui| {
+            for p in state.player_ids() {
+                for list in state.playlists.iter() {
+                    let item = target_name(scene, p, list.id);
+                    let on = (p, list.id) == (player, playlist);
+                    if ui
+                        .add(egui::Button::selectable(on, item).min_size(vec2(200.0, 40.0)))
+                        .clicked()
+                    {
+                        view.target = Some((p, list.id));
+                        ui.close();
+                    }
+                }
+            }
+        });
+    });
+    let mut add = None;
+    ui.horizontal(|ui| {
+        let button = |ui: &mut Ui, key: &str| {
+            ui.add(
+                egui::Button::new(egui::RichText::new(t.tr(key)).font(font(14.0)))
+                    .min_size(vec2(0.0, touch::TARGET)),
+            )
+            .clicked()
+        };
+        if let Some(index) = after
+            && button(ui, "music-add-after-next")
+        {
+            add = Some(index);
+        }
+        if button(ui, "music-add-end") {
+            add = Some(len);
+        }
+    });
+    if let Some(index) = add {
+        scene.ctl.send(Command::InsertPaths {
+            playlist,
+            index,
+            paths: std::mem::take(&mut view.ticked),
+        });
+    }
 }
