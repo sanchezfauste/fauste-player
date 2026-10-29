@@ -206,6 +206,9 @@ pub(crate) struct SettingsDeps<'a> {
     /// A phone (phone layout spec §10): Settings fills the screen, lists
     /// its sections, then shows one with its settings stacked.
     pub phone: bool,
+    /// Where the interface is drawn (a phone's screen less its system
+    /// bars): a phone's Settings fills it.
+    pub area: egui::Rect,
     pub backends: &'a [Arc<dyn AudioBackend>],
     pub services: Option<&'a Sender<ServiceRequest>>,
     pub notice: Option<String>,
@@ -255,11 +258,19 @@ pub(crate) fn show(
     let mut open = true;
     let mut apply_now = false;
     let size = if deps.phone {
-        ctx.content_rect().size()
+        deps.area.size()
     } else {
         window_size(ctx.content_rect().size())
     };
-    let modal = egui::Modal::new(egui::Id::unique("settings"))
+    let id = egui::Id::unique("settings");
+    let mut modal = egui::Modal::new(id);
+    if deps.phone {
+        // PL20: the whole screen the system bars leave.
+        modal = modal.area(
+            egui::Modal::default_area(id).anchor(egui::Align2::LEFT_TOP, deps.area.min.to_vec2()),
+        );
+    }
+    let modal = modal
         .frame(egui::Frame::new().fill(theme::SURFACE))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {

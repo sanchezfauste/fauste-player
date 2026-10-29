@@ -187,6 +187,38 @@ fn harness_built(
     (harness, fake)
 }
 
+/// As `harness_sized`, the interface drawn inside `size` less `top` and
+/// `bottom` points, as a phone's shell leaves its system bars out.
+pub fn harness_inset(
+    state: AppState,
+    size: egui::Vec2,
+    top: f32,
+    bottom: f32,
+    build: impl FnOnce(AppUi) -> AppUi,
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    let fake = Fake::new(state);
+    let ui = build(AppUi::new(
+        fake.clone(),
+        I18n::new(Some("en-US")),
+        MediaCache::default(),
+    ));
+    let mut harness = Harness::builder()
+        .with_size(size)
+        .with_step_dt(0.02)
+        .build_ui_state(
+            move |ui, app: &mut AppUi| {
+                app.guard_close(ui.ctx());
+                let mut area = ui.max_rect();
+                area.min.y += top;
+                area.max.y -= bottom;
+                ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| app.ui(ui));
+            },
+            ui,
+        );
+    harness.run_steps(2);
+    (harness, fake)
+}
+
 /// A Cue output (headphones) for every player and the cartwall, with Main on
 /// the default output: a CUE needs a Cue route (spec §4.6), and one off the
 /// on-air output never asks first (on-air pre-listen spec CA3).

@@ -1203,3 +1203,16 @@ fn desktop_settings_keep_the_label_column() {
     let (label, control) = player_count_row(&h);
     assert!(control.left() > label.right(), "{label:?} {control:?}");
 }
+
+/// PL20: a phone's Settings fills the screen the system bars leave.
+#[test]
+fn phone_settings_stay_clear_of_the_system_bars() {
+    let (mut h, _fake) =
+        support::harness_inset(state(2, 3), PORTRAIT, 24.0, 48.0, |ui| ui.with_touch());
+    h.run_steps(3);
+    more(&mut h, "Settings");
+    let close = h.get_by_label("Close").rect();
+    assert!(close.bottom() <= PORTRAIT.y - 48.0, "{close:?}");
+    let first = h.get_by_label("Audio outputs").rect();
+    assert!(first.top() >= 24.0 + 40.0, "under the header: {first:?}");
+}

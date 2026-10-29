@@ -107,6 +107,9 @@ pub(crate) struct ViewState {
     pub media: Option<MediaBrowser>,
     /// Whether this frame draws a phone's views (no desktop panel buttons).
     pub phone_active: bool,
+    /// Where this frame draws the interface (a phone: less its system
+    /// bars); `None` before the first frame.
+    pub area: Option<Rect>,
     /// Touch mode: rows and column headers do not drag (a finger drag
     /// scrolls).
     pub touch: bool,
@@ -863,6 +866,7 @@ impl AppUi {
             platform: &self.platform,
         };
         let full = ui.available_rect_before_wrap();
+        self.view.area = Some(full);
         ui.painter().rect_filled(full, 0.0, theme::BG);
         let phone = self.touch
             && matches!(
@@ -1016,6 +1020,7 @@ impl AppUi {
             };
             let deps = SettingsDeps {
                 phone: self.view.phone_active,
+                area: self.view.area.unwrap_or(ctx.content_rect()),
                 backends: &self.backends,
                 services: self.services.as_ref(),
                 notice: self
