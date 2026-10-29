@@ -941,7 +941,7 @@ fn back_closes_settings_before_anything_else() {
     let ctx = h.ctx.clone();
     assert!(h.state_mut().back(&ctx));
     h.run_steps(3);
-    assert!(h.query_by_label("Buffer size").is_none(), "Settings closed");
+    assert!(h.query_by_label("Close").is_none(), "Settings closed");
     assert!(h.query_by_label(ADD).is_some(), "still on Playlists");
 }
 
@@ -1215,4 +1215,51 @@ fn phone_settings_stay_clear_of_the_system_bars() {
     assert!(close.bottom() <= PORTRAIT.y - 48.0, "{close:?}");
     let first = h.get_by_label("Audio outputs").rect();
     assert!(first.top() >= 24.0 + 40.0, "under the header: {first:?}");
+    let title = h.get_all_by_label("Settings").last().unwrap().rect();
+    assert!(title.top() >= 24.0, "the header too: {title:?}");
+}
+
+/// PL20: a phone on its side still reaches Close.
+#[test]
+fn phone_settings_on_its_side_reach_close() {
+    let (mut h, _fake) =
+        support::harness_inset(state(2, 3), LANDSCAPE, 24.0, 24.0, |ui| ui.with_touch());
+    h.run_steps(3);
+    more(&mut h, "Settings");
+    h.get_by_label("Audio outputs").click();
+    h.run_steps(3);
+    let close = h.get_by_label("Close").rect();
+    assert!(close.bottom() <= LANDSCAPE.y - 24.0, "{close:?}");
+}
+
+/// PL20: Back over Restore defaults' question closes the question only.
+#[test]
+fn back_closes_the_restore_question_first() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Loudness").click();
+    h.run_steps(3);
+    h.get_by_label("Restore defaults").click();
+    h.run_steps(3);
+    let questions = h.get_all_by_label("Cancel").count();
+    assert!(questions > 0, "the question shows");
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(3);
+    assert!(h.query_by_label("Cancel").is_none(), "the question closed");
+    assert!(
+        h.query_by_label("Back to the sections").is_some(),
+        "the section stays"
+    );
+}
+
+/// PL21: the Playlists section's rows fit a phone's width.
+#[test]
+fn the_playlists_section_fits_a_phone() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_all_by_label("Playlists").last().unwrap().click();
+    h.run_steps(3);
+    let delete = h.get_by_label("Delete").rect();
+    assert!(delete.right() <= PORTRAIT.x, "{delete:?}");
 }

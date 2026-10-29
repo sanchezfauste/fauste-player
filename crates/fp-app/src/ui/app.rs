@@ -604,6 +604,10 @@ impl AppUi {
             browser.cancel_pending();
             return true;
         }
+        // Restore defaults' question closes before Settings, as Cancel.
+        if self.view.settings_open && self.settings.confirm_restore.take().is_some() {
+            return true;
+        }
         // PL20: a phone's Settings goes from a section to its list first,
         // unless a question waits over it.
         if self.view.settings_open
@@ -1042,7 +1046,7 @@ impl AppUi {
             let outcome = settings::show(&ctx, &scene, &mut self.settings, &deps);
             self.view.settings_open = outcome.open;
             self.view.apply_now_requested |= outcome.apply_now;
-        } else {
+        } else if !picking {
             self.settings_shown = false;
             // Closing Settings ends MIDI learn: the next press on a surface
             // must act, not bind.

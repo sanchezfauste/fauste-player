@@ -1941,9 +1941,21 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         }
     });
     ui.add_space(12.0);
+    // A phone's rows give the name what the counts and buttons leave
+    // (PL21); the export button is there only where files can be written.
+    let buttons = if scene.platform.can_write_user_files() {
+        56.0 + 32.0 + 8.0
+    } else {
+        32.0
+    };
+    let name_width = if stacked(ui) {
+        (column_width(ui) - 70.0 - 80.0 - 3.0 * 8.0 - buttons).max(100.0)
+    } else {
+        300.0
+    };
     ui.horizontal(|ui| {
         for (key, width) in [
-            ("settings-playlist-name", 300.0),
+            ("settings-playlist-name", name_width),
             ("settings-playlist-tracks", 70.0),
             ("settings-playlist-duration", 80.0),
         ] {
@@ -1980,7 +1992,7 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             ui.set_min_height(36.0);
             ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
             let edit = st.names.entry(id).or_insert_with(|| name.clone());
-            let response = ui.add(egui::TextEdit::singleline(edit).desired_width(300.0));
+            let response = ui.add(egui::TextEdit::singleline(edit).desired_width(name_width));
             let cancelled = ui.input(|i| i.key_pressed(egui::Key::Escape));
             let commit = !cancelled
                 && response.lost_focus()

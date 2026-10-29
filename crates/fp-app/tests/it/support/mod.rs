@@ -344,6 +344,8 @@ pub struct FakePlatform {
     pub focus_lost: AtomicBool,
     pub read_only: bool,
     pub asked: Mutex<Vec<String>>,
+    /// Folders are picked through this browser, as on Android (MB7).
+    pub browser: Option<fp_app::ui::media_browser::MediaBrowser>,
 }
 
 impl fp_app::platform::Platform for FakePlatform {
@@ -362,9 +364,11 @@ impl fp_app::platform::Platform for FakePlatform {
         None
     }
 
-    fn pick_folder(&self, _start: Option<PathBuf>) -> Option<PathBuf> {
+    fn pick_folder(&self, start: Option<PathBuf>) -> Option<PathBuf> {
         self.asked.lock().unwrap().push("folder".into());
-        None
+        let browser = self.browser.as_ref()?;
+        let mode = fp_app::ui::media_browser::BrowseMode::Folder;
+        browser.browse(mode, start).into_iter().next()
     }
 
     fn save_file(
