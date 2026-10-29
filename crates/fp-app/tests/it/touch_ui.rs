@@ -97,7 +97,7 @@ fn the_phone_top_bar_has_the_tabs_and_more() {
 fn more_opens_settings_and_about() {
     let (mut h, _fake) = touch(2, PORTRAIT);
     more(&mut h, "Settings");
-    assert!(h.query_by_label("Buffer size").is_some());
+    assert!(h.query_by_label("Audio outputs").is_some());
     let (mut h, _fake) = touch(2, PORTRAIT);
     more(&mut h, "About");
     assert!(h.query_by_label_contains("Fauste Player by").is_some());
@@ -843,19 +843,75 @@ fn touch_mode_shows_no_keyboard_and_mouse_hints() {
     assert!(h.query_by_label_contains("Keys 1–9").is_some());
 }
 
-/// On a phone the Settings sections are chips above the section, which
-/// takes the whole width (a side list would leave it no room).
+/// PL20: on a phone Settings fills the screen and opens on its list of
+/// sections; a tap opens one, Back returns to the list, then closes.
 #[test]
-fn phone_settings_put_the_sections_above_the_content() {
+fn phone_settings_open_on_the_section_list() {
     let (mut h, _fake) = touch(2, PORTRAIT);
     more(&mut h, "Settings");
-    let buffer = h.get_by_label("Buffer size").rect();
-    assert!(buffer.left() < 80.0, "{buffer:?} sits right of a side list");
-    let meters = h.get_by_label("Meters").rect();
-    assert!(meters.bottom() < buffer.top(), "the chips are above");
+    for name in ["Audio outputs", "Players", "Meters", "Cartwall"] {
+        assert!(h.query_by_label(name).is_some(), "{name}");
+    }
+    assert!(h.query_by_label("Buffer size").is_none(), "no section yet");
+    let close = h.get_by_label("Close").rect();
+    assert!(close.bottom() > PORTRAIT.y - 80.0, "full screen: {close:?}");
     h.get_by_label("Meters").click();
     h.run_steps(3);
-    assert!(h.query_by_label("Buffer size").is_none(), "another section");
+    assert!(
+        h.query_by_label("Audio outputs").is_none(),
+        "the section alone"
+    );
+    assert!(h.query_by_label("Back to the sections").is_some());
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(3);
+    assert!(
+        h.query_by_label("Audio outputs").is_some(),
+        "the list again"
+    );
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(3);
+    assert!(h.query_by_label("Close").is_none(), "Settings closed");
+}
+
+/// PL20: the arrow goes back to the list too.
+#[test]
+fn the_arrow_returns_to_the_section_list() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Audio outputs").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Buffer size").is_some());
+    h.get_by_label("Back to the sections").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Buffer size").is_none());
+    assert!(h.query_by_label("Players").is_some());
+}
+
+/// PL20: editing a cart on a phone opens its section, not the list.
+#[test]
+fn editing_a_cart_opens_its_section() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    tab(&mut h, "Carts");
+    let cart = h.get_by_label("Cart 1, empty").rect();
+    h.hover_at(cart.center());
+    h.event(egui::Event::PointerButton {
+        pos: cart.center(),
+        button: egui::PointerButton::Secondary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.event(egui::Event::PointerButton {
+        pos: cart.center(),
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(3);
+    h.get_by_label_contains("Edit").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Back to the sections").is_some());
+    assert!(h.query_by_label("Audio outputs").is_none(), "not the list");
 }
 
 /// A touch tablet keeps the desktop's cartwall grid and Settings side list.
@@ -885,7 +941,7 @@ fn back_closes_settings_before_anything_else() {
     let ctx = h.ctx.clone();
     assert!(h.state_mut().back(&ctx));
     h.run_steps(3);
-    assert!(h.query_by_label("Buffer size").is_none(), "Settings closed");
+    assert!(h.query_by_label("Close").is_none(), "Settings closed");
     assert!(h.query_by_label(ADD).is_some(), "still on Playlists");
 }
 
@@ -1102,4 +1158,108 @@ fn the_drag_handle_leaves_the_duration_whole() {
         duration.width() >= header.width() * 0.9,
         "{duration:?} {header:?}"
     );
+}
+
+/// The label and the control of Settings' "Number of players" row.
+fn player_count_row(h: &Harness<'static, AppUi>) -> (egui::Rect, egui::Rect) {
+    let mut nodes: Vec<egui::Rect> = h
+        .get_all_by_label("Number of players")
+        .map(|n| n.rect())
+        .collect();
+    assert_eq!(nodes.len(), 2, "the label and the slider");
+    nodes.sort_by(|a, b| {
+        (a.top(), a.left())
+            .partial_cmp(&(b.top(), b.left()))
+            .unwrap()
+    });
+    let (label, control) = (nodes[0], nodes[1]);
+    if (label.top() - control.top()).abs() < 1.0 && control.left() < label.left() {
+        (control, label)
+    } else {
+        (label, control)
+    }
+}
+
+/// PL21: on a phone a setting's control is below its label.
+#[test]
+fn phone_settings_are_stacked() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Players").click();
+    h.run_steps(3);
+    let (label, control) = player_count_row(&h);
+    assert!(control.top() >= label.bottom(), "{label:?} {control:?}");
+}
+
+/// The desktop keeps the label column beside the control.
+#[test]
+fn desktop_settings_keep_the_label_column() {
+    let (mut h, _fake) = harness(state(2, 3));
+    h.run_steps(3);
+    h.get_by_label("Settings").click();
+    h.run_steps(3);
+    h.get_by_label("Players").click();
+    h.run_steps(3);
+    let (label, control) = player_count_row(&h);
+    assert!(control.left() > label.right(), "{label:?} {control:?}");
+}
+
+/// PL20: a phone's Settings fills the screen the system bars leave.
+#[test]
+fn phone_settings_stay_clear_of_the_system_bars() {
+    let (mut h, _fake) =
+        support::harness_inset(state(2, 3), PORTRAIT, 24.0, 48.0, |ui| ui.with_touch());
+    h.run_steps(3);
+    more(&mut h, "Settings");
+    let close = h.get_by_label("Close").rect();
+    assert!(close.bottom() <= PORTRAIT.y - 48.0, "{close:?}");
+    let first = h.get_by_label("Audio outputs").rect();
+    assert!(first.top() >= 24.0 + 40.0, "under the header: {first:?}");
+    let title = h.get_all_by_label("Settings").last().unwrap().rect();
+    assert!(title.top() >= 24.0, "the header too: {title:?}");
+}
+
+/// PL20: a phone on its side still reaches Close.
+#[test]
+fn phone_settings_on_its_side_reach_close() {
+    let (mut h, _fake) =
+        support::harness_inset(state(2, 3), LANDSCAPE, 24.0, 24.0, |ui| ui.with_touch());
+    h.run_steps(3);
+    more(&mut h, "Settings");
+    h.get_by_label("Audio outputs").click();
+    h.run_steps(3);
+    let close = h.get_by_label("Close").rect();
+    assert!(close.bottom() <= LANDSCAPE.y - 24.0, "{close:?}");
+}
+
+/// PL20: Back over Restore defaults' question closes the question only.
+#[test]
+fn back_closes_the_restore_question_first() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Loudness").click();
+    h.run_steps(3);
+    h.get_by_label("Restore defaults").click();
+    h.run_steps(3);
+    let questions = h.get_all_by_label("Cancel").count();
+    assert!(questions > 0, "the question shows");
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(3);
+    assert!(h.query_by_label("Cancel").is_none(), "the question closed");
+    assert!(
+        h.query_by_label("Back to the sections").is_some(),
+        "the section stays"
+    );
+}
+
+/// PL21: the Playlists section's rows fit a phone's width.
+#[test]
+fn the_playlists_section_fits_a_phone() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_all_by_label("Playlists").last().unwrap().click();
+    h.run_steps(3);
+    let delete = h.get_by_label("Delete").rect();
+    assert!(delete.right() <= PORTRAIT.x, "{delete:?}");
 }

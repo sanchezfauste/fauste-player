@@ -104,6 +104,7 @@ unknown-artist = Artista ezezaguna
 default-playlist-name = Zerrenda 1
 settings-title = Ezarpenak
 settings-close = Itxi
+settings-back = Itzuli ataletara
 settings-tab-outputs = Audio-irteerak
 settings-tab-players = Erreproduzitzaileak
 settings-tab-analysis = Analisia

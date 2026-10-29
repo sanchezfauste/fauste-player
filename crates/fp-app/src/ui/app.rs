@@ -107,6 +107,9 @@ pub(crate) struct ViewState {
     pub media: Option<MediaBrowser>,
     /// Whether this frame draws a phone's views (no desktop panel buttons).
     pub phone_active: bool,
+    /// Where this frame draws the interface (a phone: less its system
+    /// bars); `None` before the first frame.
+    pub area: Option<Rect>,
     /// Touch mode: rows and column headers do not drag (a finger drag
     /// scrolls).
     pub touch: bool,
@@ -601,6 +604,21 @@ impl AppUi {
             browser.cancel_pending();
             return true;
         }
+        // Restore defaults' question closes before Settings, as Cancel.
+        if self.view.settings_open && self.settings.confirm_restore.take().is_some() {
+            return true;
+        }
+        // PL20: a phone's Settings goes from a section to its list first,
+        // unless a question waits over it.
+        if self.view.settings_open
+            && self.view.phone_active
+            && !self.view.confirm_apply_now
+            && !self.view.pending_open
+            && self.settings.confirm_restore.is_none()
+            && self.settings.phone_back()
+        {
+            return true;
+        }
         let v = &mut self.view;
         if v.exit_guard.take().is_some()
             || v.tag_editor.take().is_some()
@@ -852,6 +870,7 @@ impl AppUi {
             platform: &self.platform,
         };
         let full = ui.available_rect_before_wrap();
+        self.view.area = Some(full);
         ui.painter().rect_filled(full, 0.0, theme::BG);
         let phone = self.touch
             && matches!(
@@ -1004,7 +1023,8 @@ impl AppUi {
                     .join("\n")
             };
             let deps = SettingsDeps {
-                touch: self.touch,
+                phone: self.view.phone_active,
+                area: self.view.area.unwrap_or(ctx.content_rect()),
                 backends: &self.backends,
                 services: self.services.as_ref(),
                 notice: self
@@ -1026,7 +1046,7 @@ impl AppUi {
             let outcome = settings::show(&ctx, &scene, &mut self.settings, &deps);
             self.view.settings_open = outcome.open;
             self.view.apply_now_requested |= outcome.apply_now;
-        } else {
+        } else if !picking {
             self.settings_shown = false;
             // Closing Settings ends MIDI learn: the next press on a surface
             // must act, not bind.

@@ -104,6 +104,7 @@ unknown-artist = Artista sconosciuto
 default-playlist-name = Playlist 1
 settings-title = Impostazioni
 settings-close = Chiudi
+settings-back = Torna alle sezioni
 settings-tab-outputs = Uscite audio
 settings-tab-players = Lettori
 settings-tab-analysis = Analisi

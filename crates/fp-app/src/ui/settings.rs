@@ -46,9 +46,8 @@ const WINDOW_SIZE: egui::Vec2 = vec2(900.0, 640.0);
 /// Room kept around the window inside the main window.
 const SCREEN_MARGIN: egui::Vec2 = vec2(48.0, 82.0);
 const MIN_WINDOW_SIZE: egui::Vec2 = vec2(320.0, 300.0);
-/// Narrower than this, in touch mode, the sections are chips above the
-/// section.
-const COMPACT_WIDTH: f32 = 600.0;
+/// A row of a phone's list of sections, for a finger.
+const PHONE_SECTION_ROW: f32 = 52.0;
 
 /// `WINDOW_SIZE`, shrunk to fit `screen`.
 pub(crate) fn window_size(screen: egui::Vec2) -> egui::Vec2 {
@@ -101,6 +100,8 @@ pub(crate) struct SettingsState {
     folder: Option<Receiver<Option<PathBuf>>>,
     /// Number of players being dragged, sent on release.
     player_count_draft: Option<usize>,
+    /// On a phone, a section shows instead of the list of sections (PL20).
+    pub(crate) phone_section: bool,
 }
 
 impl SettingsState {
@@ -124,6 +125,13 @@ impl SettingsState {
     pub fn edit_cart(&mut self, page: fp_model::CartPageId, index: usize) {
         self.section = Section::Cartwall;
         self.carts.select(page, index);
+        self.phone_section = true;
+    }
+
+    /// Back on a phone (PL20): from a section to the list. False on the
+    /// list, where Back closes Settings.
+    pub(crate) fn phone_back(&mut self) -> bool {
+        std::mem::replace(&mut self.phone_section, false)
     }
 
     /// Called when the modal opens: device lists are read again.
@@ -195,9 +203,12 @@ fn update(scene: &Scene<'_>, edit: impl FnOnce(&mut Config)) {
 
 /// Everything the modal needs besides the scene.
 pub(crate) struct SettingsDeps<'a> {
-    /// Touch mode (mobile spec §6): a narrow window shows the sections as
-    /// chips.
-    pub touch: bool,
+    /// A phone (phone layout spec §10): Settings fills the screen, lists
+    /// its sections, then shows one with its settings stacked.
+    pub phone: bool,
+    /// Where the interface is drawn (a phone's screen less its system
+    /// bars): a phone's Settings fills it.
+    pub area: egui::Rect,
     pub backends: &'a [Arc<dyn AudioBackend>],
     pub services: Option<&'a Sender<ServiceRequest>>,
     pub notice: Option<String>,
@@ -246,8 +257,20 @@ pub(crate) fn show(
     let t = scene.i18n;
     let mut open = true;
     let mut apply_now = false;
-    let size = window_size(ctx.content_rect().size());
-    let modal = egui::Modal::new(egui::Id::unique("settings"))
+    let size = if deps.phone {
+        deps.area.size()
+    } else {
+        window_size(ctx.content_rect().size())
+    };
+    let id = egui::Id::unique("settings");
+    let mut modal = egui::Modal::new(id);
+    if deps.phone {
+        // PL20: the whole screen the system bars leave.
+        modal = modal.area(
+            egui::Modal::default_area(id).anchor(egui::Align2::LEFT_TOP, deps.area.min.to_vec2()),
+        );
+    }
+    let modal = modal
         .frame(egui::Frame::new().fill(theme::SURFACE))
         .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {
@@ -281,17 +304,18 @@ pub(crate) fn show(
             );
             separator(ui, size.x);
             let body_height = size.y - 44.0 - 52.0 - 2.0;
-            // On a phone the sections are a row of chips above the
-            // section, which keeps the whole width.
-            if deps.touch && size.x < COMPACT_WIDTH {
+            // PL20: a phone shows its list of sections, then one section
+            // with the whole width.
+            if deps.phone {
                 ui.allocate_ui_with_layout(
                     vec2(size.x, body_height),
                     Layout::top_down(Align::Min),
                     |ui| {
-                        nav_chips(ui, scene, st);
-                        separator(ui, size.x);
-                        let height = ui.available_height();
-                        body(ui, ctx, scene, st, deps, height);
+                        if st.phone_section {
+                            body(ui, ctx, scene, st, deps, body_height);
+                        } else {
+                            phone_sections(ui, scene, st, body_height);
+                        }
                     },
                 );
             } else {
@@ -406,7 +430,7 @@ fn body(
 ) {
     ui.vertical(|ui| {
         ui.set_min_size(vec2(ui.available_width(), height));
-        section_header(ui, scene, st);
+        section_header(ui, scene, st, deps.phone);
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -420,6 +444,7 @@ fn body(
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
                         set_body_right(ui);
+                        set_stacked(ui, deps.phone);
                         match st.section {
                             Section::Outputs => {
                                 st.load_devices(deps.backends, ctx);
@@ -494,24 +519,54 @@ fn nav(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
     });
 }
 
-/// The sections as a row of chips, for a narrow window.
-fn nav_chips(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+/// A phone's list of sections (PL20); a tap opens one.
+fn phone_sections(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, height: f32) {
     let t = scene.i18n;
-    egui::ScrollArea::horizontal()
-        .id_salt("settings-chips")
+    egui::ScrollArea::vertical()
+        .id_salt("settings-sections")
+        .max_height(height)
+        .auto_shrink([false, false])
         .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
-                ui.add_space(8.0);
-                for &(section, _, key) in SECTIONS {
-                    if super::touch::chip(ui, &t.tr(key), st.section == section) {
-                        select(scene, st, section);
-                    }
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            let width = ui.available_width();
+            for &(section, glyph, key) in SECTIONS {
+                let label = t.tr(key);
+                let style = TileStyle {
+                    fill: Color32::TRANSPARENT,
+                    border: Color32::TRANSPARENT,
+                    hover_fill: theme::NEUTRAL_800,
+                    ..TileStyle::plain()
+                };
+                let response = widgets::tile(
+                    ui,
+                    vec2(width, PHONE_SECTION_ROW),
+                    &label,
+                    true,
+                    style,
+                    |p, r, c| {
+                        p.text(
+                            r.left_center() + vec2(20.0, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            format!("{glyph}   {label}"),
+                            font(15.0),
+                            c,
+                        );
+                        p.text(
+                            r.right_center() - vec2(20.0, 0.0),
+                            egui::Align2::RIGHT_CENTER,
+                            icon::CARET_RIGHT,
+                            font(15.0),
+                            theme::NEUTRAL_500,
+                        );
+                    },
+                );
+                if response.clicked() {
+                    select(scene, st, section);
+                    st.phone_section = true;
                 }
-                ui.add_space(8.0);
-            });
+                separator(ui, width);
+            }
         });
-    ui.add_space(8.0);
 }
 
 fn select(scene: &Scene<'_>, st: &mut SettingsState, section: Section) {
@@ -576,7 +631,7 @@ fn restorable(section: Section) -> Option<SettingsSection> {
 
 /// The section's title, and "Restore defaults" on the right where the
 /// section has one. It stays put while the body scrolls.
-fn section_header(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+fn section_header(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, phone: bool) {
     let t = scene.i18n;
     let key = SECTIONS
         .iter()
@@ -588,7 +643,31 @@ fn section_header(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         Layout::left_to_right(Align::Center),
         |ui| {
             ui.set_width(width);
-            ui.add_space(24.0);
+            if phone {
+                // PL20: back to the list of sections.
+                ui.add_space(8.0);
+                let back = t.tr("settings-back");
+                let style = TileStyle {
+                    border: Color32::TRANSPARENT,
+                    ..TileStyle::plain()
+                };
+                if widgets::tile(ui, vec2(44.0, 44.0), &back, true, style, |p, r, c| {
+                    p.text(
+                        r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        icon::ARROW_LEFT,
+                        font(18.0),
+                        c,
+                    );
+                })
+                .clicked()
+                {
+                    st.phone_section = false;
+                }
+                ui.add_space(4.0);
+            } else {
+                ui.add_space(24.0);
+            }
             ui.add(
                 egui::Label::new(
                     RichText::new(t.tr(key))
@@ -654,6 +733,21 @@ fn confirm_restore(ctx: &egui::Context, scene: &Scene<'_>, st: &mut SettingsStat
     }
 }
 
+fn stacked_id() -> egui::Id {
+    egui::Id::unique("settings-stacked")
+}
+
+/// Whether the rows of this frame stack the control under its label (a
+/// phone, PL21); set by `body` before any row is drawn.
+fn set_stacked(ui: &Ui, stacked: bool) {
+    ui.data_mut(|d| d.insert_temp(stacked_id(), stacked));
+}
+
+fn stacked(ui: &Ui) -> bool {
+    ui.data(|d| d.get_temp::<bool>(stacked_id()))
+        .unwrap_or(false)
+}
+
 fn body_right_id() -> egui::Id {
     egui::Id::unique("settings-body-right")
 }
@@ -693,6 +787,9 @@ pub(super) fn labelled_row<R>(
     hint: Option<&str>,
     control: impl FnOnce(&mut Ui, egui::Id) -> R,
 ) -> R {
+    if stacked(ui) {
+        return stacked_row(ui, label, hint, control);
+    }
     let out = ui
         .horizontal(|ui| {
             ui.set_min_height(44.0);
@@ -742,6 +839,57 @@ pub(super) fn labelled_row<R>(
         })
         .inner;
     let width = column_width(ui);
+    let (r, _) = ui.allocate_exact_size(vec2(width, 1.0), Sense::hover());
+    ui.painter()
+        .rect_filled(r, 0.0, theme::TEXT.gamma_multiply(0.06));
+    out
+}
+
+/// `labelled_row` on a phone (PL21): the label and its hint on top, the
+/// control below with the whole width.
+fn stacked_row<R>(
+    ui: &mut Ui,
+    label: &str,
+    hint: Option<&str>,
+    control: impl FnOnce(&mut Ui, egui::Id) -> R,
+) -> R {
+    let width = column_width(ui);
+    let out = ui
+        .vertical(|ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
+            ui.add_space(8.0);
+            let label_id = ui
+                .add(
+                    egui::Label::new(RichText::new(label).font(font(13.0)).color(theme::TEXT))
+                        .selectable(false)
+                        .wrap(),
+                )
+                .id;
+            if let Some(hint) = hint {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(hint)
+                            .font(font(11.0))
+                            .color(theme::NEUTRAL_500),
+                    )
+                    .selectable(false)
+                    .wrap(),
+                );
+            }
+            ui.add_space(4.0);
+            ui.allocate_ui_with_layout(
+                vec2(width, 40.0),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ui.set_width(width);
+                    control(ui, label_id)
+                },
+            )
+            .inner
+        })
+        .inner;
+    ui.add_space(6.0);
     let (r, _) = ui.allocate_exact_size(vec2(width, 1.0), Sense::hover());
     ui.painter()
         .rect_filled(r, 0.0, theme::TEXT.gamma_multiply(0.06));
@@ -1793,9 +1941,21 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         }
     });
     ui.add_space(12.0);
+    // A phone's rows give the name what the counts and buttons leave
+    // (PL21); the export button is there only where files can be written.
+    let buttons = if scene.platform.can_write_user_files() {
+        56.0 + 32.0 + 8.0
+    } else {
+        32.0
+    };
+    let name_width = if stacked(ui) {
+        (column_width(ui) - 70.0 - 80.0 - 3.0 * 8.0 - buttons).max(100.0)
+    } else {
+        300.0
+    };
     ui.horizontal(|ui| {
         for (key, width) in [
-            ("settings-playlist-name", 300.0),
+            ("settings-playlist-name", name_width),
             ("settings-playlist-tracks", 70.0),
             ("settings-playlist-duration", 80.0),
         ] {
@@ -1832,7 +1992,7 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             ui.set_min_height(36.0);
             ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
             let edit = st.names.entry(id).or_insert_with(|| name.clone());
-            let response = ui.add(egui::TextEdit::singleline(edit).desired_width(300.0));
+            let response = ui.add(egui::TextEdit::singleline(edit).desired_width(name_width));
             let cancelled = ui.input(|i| i.key_pressed(egui::Key::Escape));
             let commit = !cancelled
                 && response.lost_focus()

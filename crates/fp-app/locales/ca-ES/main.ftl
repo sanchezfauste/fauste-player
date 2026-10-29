@@ -104,6 +104,7 @@ unknown-artist = Artista desconegut
 default-playlist-name = Llista 1
 settings-title = Configuració
 settings-close = Tancar
+settings-back = Tornar a les seccions
 settings-tab-outputs = Sortides d'àudio
 settings-tab-players = Reproductors
 settings-tab-analysis = Anàlisi

@@ -449,3 +449,56 @@ fn a_pick_clears_the_search_and_holds_the_screen() {
     tap(&mut h, "Use this folder");
     assert_eq!(answer(&mut h, thread), [PathBuf::from("/sd/Songs")]);
 }
+
+/// PL19b with PL20: a folder picked for Settings reaches it, and Settings
+/// comes back on the section that asked.
+#[test]
+fn a_folder_picked_for_settings_reaches_it() {
+    let browser = MediaBrowser::default();
+    browser.set_files(library());
+    let platform = Arc::new(support::FakePlatform {
+        browser: Some(browser.clone()),
+        ..support::FakePlatform::default()
+    });
+    let (mut h, fake) = harness_sized(state(1, 3), PORTRAIT, move |ui| {
+        ui.with_touch()
+            .with_media_browser(browser)
+            .with_platform(platform)
+    });
+    h.run_steps(3);
+    tap(&mut h, "More");
+    tap(&mut h, "Settings");
+    // The top bar's tab is behind Settings: the section is the last.
+    h.get_all_by_label("Playlists").last().unwrap().click();
+    h.run_steps(3);
+    tap(&mut h, "Browse…");
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_label("Use this folder").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    fake.take_sent();
+    tap(&mut h, "Rock");
+    tap(&mut h, "Use this folder");
+    let mut sent = Vec::new();
+    for _ in 0..200 {
+        h.run_steps(1);
+        sent.extend(fake.take_sent());
+        if !sent.is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        sent.iter()
+            .any(|c| matches!(c, fp_model::Command::UpdateConfig(c)
+            if c.ui.music_dir.as_deref() == Some(std::path::Path::new("/sd/Songs/Rock")))),
+        "{sent:?}"
+    );
+    assert!(
+        h.query_by_label("Back to the sections").is_some(),
+        "the section"
+    );
+}

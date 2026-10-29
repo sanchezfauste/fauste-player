@@ -85,8 +85,10 @@ with targets made easier to hit.
 
 A long press opens what a right click opens on the desktop: the row menu,
 the header menus, a cart's menu (**Edit…** chooses an empty cart's
-file). On a phone, Settings shows its sections as a row of chips above
-the section.
+file). On a phone, Settings fills the screen and lists its sections; tap
+one to open it, with each setting's name above its control. The arrow or
+Back returns to the list, and Back again (or **Close**) closes Settings.
+Editing a cart opens its section directly.
 
 About → **Third-party licences** opens the notices of the libraries the
 app is built with in a browser or HTML viewer.
