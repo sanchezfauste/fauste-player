@@ -876,12 +876,54 @@ pub fn vu(
     c: &MeterConfig,
     labels: &MeterLabels,
 ) -> bool {
-    let (rect, response) = ui.allocate_exact_size(vec2(meter_width(c), height), Sense::hover());
+    vu_sized(ui, height, reading, c, labels, false)
+}
+
+/// Width of the compact meter: its two bars, no rulers.
+pub const COMPACT_METER_WIDTH: f32 = 2.0 * BAR_WIDTH + BAR_GAP;
+
+/// [`vu`] without its rulers (phone layout spec PL30): the bars, the peak
+/// hold, the maximum and the loudness line, [`COMPACT_METER_WIDTH`] wide.
+pub fn vu_compact(
+    ui: &mut Ui,
+    height: f32,
+    reading: &MeterReading,
+    c: &MeterConfig,
+    labels: &MeterLabels,
+) -> bool {
+    vu_sized(ui, height, reading, c, labels, true)
+}
+
+fn vu_sized(
+    ui: &mut Ui,
+    height: f32,
+    reading: &MeterReading,
+    c: &MeterConfig,
+    labels: &MeterLabels,
+    compact: bool,
+) -> bool {
+    let width = if compact {
+        COMPACT_METER_WIDTH
+    } else {
+        meter_width(c)
+    };
+    let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
     let meter_label = labels.meter.clone();
     response
         .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, meter_label.clone()));
     let line = loudness_line(reading, c);
-    let l = meter_layout(rect, c, line.is_some());
+    // The compact meter is the full one with its rulers outside its rect,
+    // and not drawn.
+    let laid = if compact {
+        let side = side_width(label_column(c));
+        Rect::from_min_max(
+            pos2(rect.left() - side, rect.top()),
+            pos2(rect.right() + side, rect.bottom()),
+        )
+    } else {
+        rect
+    };
+    let l = meter_layout(laid, c, line.is_some());
     let max_response = ui
         .interact(l.max, response.id.with("max"), Sense::click())
         .on_hover_text(&labels.max_tip);
@@ -956,7 +998,7 @@ pub fn vu(
     // The rulers, outside the bars: the labels and a tick for every
     // labelled mark on each side, the minor ticks and the alignment tick.
     // Nothing is drawn over the bars or between them.
-    for ruler in &l.rulers {
+    for ruler in l.rulers.iter().filter(|_| !compact) {
         for tick in &l.ticks {
             painter.rect_filled(ruler.tick_rect(tick), 0.0, tick_colour(tick.kind));
         }
@@ -1455,13 +1497,32 @@ pub const FADER_READOUT_HEIGHT: f32 = LOUDNESS_LINE_HEIGHT;
 /// The level readout under the volume fader, in the small style of the
 /// meter's numbers; dimmed when the fader is not `enabled` (locked).
 pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
+    fader_readout_sized(ui, text, enabled, false);
+}
+
+/// [`fader_readout`] under a compact fader, centred on it.
+pub fn fader_readout_compact(ui: &mut Ui, text: &str, enabled: bool) {
+    fader_readout_sized(ui, text, enabled, true);
+}
+
+fn fader_readout_sized(ui: &mut Ui, text: &str, enabled: bool, compact: bool) {
+    let width = if compact {
+        COMPACT_FADER_WIDTH
+    } else {
+        FADER_WIDTH
+    };
     let (rect, response) =
-        ui.allocate_exact_size(vec2(FADER_WIDTH, FADER_READOUT_HEIGHT), Sense::hover());
+        ui.allocate_exact_size(vec2(width, FADER_READOUT_HEIGHT), Sense::hover());
     let owned = text.to_owned();
     response.widget_info(|| WidgetInfo::labeled(Role::Label, enabled, owned.clone()));
     if ui.is_rect_visible(rect) {
+        let x = if compact {
+            rect.center().x
+        } else {
+            fader_axis_x(rect)
+        };
         ui.painter().text(
-            pos2(fader_axis_x(rect), rect.bottom()),
+            pos2(x, rect.bottom()),
             Align2::CENTER_BOTTOM,
             text,
             FontId::monospace(9.0),
@@ -1576,15 +1637,49 @@ fn fader_mark_label(db: f32) -> String {
 /// wheel. A notch crosses the track at each scale mark, with the level on
 /// its right, away from the meter's own scale.
 pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool) -> Option<f32> {
+    fader_sized(ui, height, position, label, enabled, false)
+}
+
+/// [`fader`] without its scale (phone layout spec PL30): the notches
+/// stay, the numbers go, and the knob is wide enough for a finger.
+pub fn fader_compact(
+    ui: &mut Ui,
+    height: f32,
+    position: f32,
+    label: &str,
+    enabled: bool,
+) -> Option<f32> {
+    fader_sized(ui, height, position, label, enabled, true)
+}
+
+/// Width of the compact fader: its knob and a notch's reach either side.
+pub const COMPACT_FADER_WIDTH: f32 = COMPACT_KNOB_WIDTH + 4.0;
+/// The compact fader's knob, wider and taller for a finger.
+const COMPACT_KNOB_WIDTH: f32 = 24.0;
+const COMPACT_KNOB_HEIGHT: f32 = 10.0;
+
+fn fader_sized(
+    ui: &mut Ui,
+    height: f32,
+    position: f32,
+    label: &str,
+    enabled: bool,
+    compact: bool,
+) -> Option<f32> {
     let sense = if enabled {
         Sense::click_and_drag()
     } else {
         Sense::hover()
     };
-    let (rect, response) = ui.allocate_exact_size(vec2(FADER_WIDTH, height), sense);
+    let (width, knob_width, knob_height) = if compact {
+        (COMPACT_FADER_WIDTH, COMPACT_KNOB_WIDTH, COMPACT_KNOB_HEIGHT)
+    } else {
+        (FADER_WIDTH, FADER_KNOB_WIDTH, FADER_KNOB_HEIGHT)
+    };
+    let (rect, response) = ui.allocate_exact_size(vec2(width, height), sense);
     let owned = label.to_owned();
     response.widget_info(|| WidgetInfo::labeled(Role::Slider, enabled, owned.clone()));
-    let travel_px = (rect.height() - FADER_KNOB_HEIGHT).max(1.0);
+    let travel_px = (rect.height() - knob_height).max(1.0);
     let fine = ui.input(|i| i.modifiers.ctrl || i.modifiers.shift);
     let factor = if fine { FADER_FINE } else { 1.0 };
     let mut changed = None;
@@ -1633,8 +1728,8 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
             && let Some(p) = response.interact_pointer_pos()
         {
             let knob_bottom = rect.bottom() - position * travel_px;
-            let knob_y = (knob_bottom - FADER_KNOB_HEIGHT - FADER_KNOB_SLOP)
-                ..=(knob_bottom + FADER_KNOB_SLOP);
+            let knob_y =
+                (knob_bottom - knob_height - FADER_KNOB_SLOP)..=(knob_bottom + FADER_KNOB_SLOP);
             if knob_y.contains(&p.y) {
                 changed = Some(1.0);
             }
@@ -1708,7 +1803,11 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
         };
         // The track sits at the left of the fader, next to the meter; the
         // scale marks are on its right, away from the meter's own scale.
-        let centre_x = fader_axis_x(rect);
+        let centre_x = if compact {
+            rect.center().x
+        } else {
+            fader_axis_x(rect)
+        };
         let track = Rect::from_center_size(
             pos2(centre_x, rect.center().y),
             vec2(FADER_TRACK_WIDTH, rect.height()),
@@ -1722,7 +1821,7 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
         // The marks, on the knob's centre line for each level: a notch
         // across the slot and the level on its right.
         for (db, t) in FADER_MARKS_DB.into_iter().zip(fader_mark_travels()) {
-            let y = rect.bottom() - FADER_KNOB_HEIGHT / 2.0 - t * travel_px;
+            let y = rect.bottom() - knob_height / 2.0 - t * travel_px;
             for side in [-1.0, 1.0] {
                 painter.line_segment(
                     [
@@ -1731,6 +1830,9 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
                     ],
                     Stroke::new(1.0, mark_colour),
                 );
+            }
+            if compact {
+                continue;
             }
             painter.text(
                 pos2(centre_x + FADER_NOTCH_REACH + 2.0, y),
@@ -1742,11 +1844,8 @@ pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool
         }
         let knob_bottom = rect.bottom() - shown * travel_px;
         let knob = Rect::from_min_max(
-            pos2(
-                centre_x - FADER_KNOB_WIDTH / 2.0,
-                knob_bottom - FADER_KNOB_HEIGHT,
-            ),
-            pos2(centre_x + FADER_KNOB_WIDTH / 2.0, knob_bottom),
+            pos2(centre_x - knob_width / 2.0, knob_bottom - knob_height),
+            pos2(centre_x + knob_width / 2.0, knob_bottom),
         );
         painter.rect_filled(knob, 0.0, knob_colour);
         painter.rect_stroke(

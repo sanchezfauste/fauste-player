@@ -261,22 +261,21 @@ fn the_live_cartwall_fits_a_portrait_phone() {
     assert!(two.left() > one.right(), "2 right of 1");
 }
 
-/// Two cards show at once on a 6-inch phone held upright (PL5): about
-/// 400 × 860 dp, less the system bars.
+/// On a 6-inch phone held upright (PL5, PL29: finger-sized buttons) the
+/// first card shows whole and the second one's top shows under it, so the
+/// operator sees there is more to scroll to: about 400 × 860 dp, less the
+/// system bars.
 #[test]
 fn two_cards_fit_a_portrait_phone() {
     let (h, _fake) = touch(3, vec2(400.0, 820.0));
     let carts_top = h.get_by_label("Cart 1, empty").rect().top();
     let plays: Vec<egui::Rect> = h.query_all_by_label("Play").map(|n| n.rect()).collect();
+    assert!(plays[0].bottom() < carts_top, "the first card's Play shows");
+    let second = h.get_all_by_label("P2").next().unwrap().rect();
     assert!(
-        plays[1].bottom() < carts_top,
-        "the second card's Play shows"
+        second.bottom() < carts_top,
+        "the second card's header shows"
     );
-    let faders: Vec<egui::Rect> = h
-        .query_all_by_label_contains("Volume")
-        .map(|n| n.rect())
-        .collect();
-    assert!(faders[1].bottom() < carts_top, "and its fader");
 }
 
 #[test]
@@ -1160,7 +1159,8 @@ fn locked_a_tap_on_a_waveform_does_not_seek() {
 #[test]
 fn locked_play_still_plays() {
     let (mut h, fake) = locked(true);
-    h.get_all_by_label("Play").last().unwrap().click();
+    // P1 plays: its Play button is Next, which also sends `Play`.
+    h.get_by_label("Fade into the next track").click();
     h.run_steps(2);
     assert!(
         fake.take_sent()
@@ -1427,5 +1427,93 @@ fn a_landscape_phone_leaves_the_legend_out() {
     for size in [PORTRAIT, vec2(1280.0, 800.0)] {
         let (h, _fake) = touch(2, size);
         assert!(h.query_by_label("Intro").is_some(), "{size:?}");
+    }
+}
+
+/// PL29: a phone's transport buttons are finger targets.
+#[test]
+fn a_phones_transport_buttons_are_finger_sized() {
+    for size in [A56, LANDSCAPE] {
+        let (h, _fake) = touch(2, size);
+        for name in ["Stop", "Pause", "Previous track", "Fade stop"] {
+            let r = h.get_all_by_label(name).next().unwrap().rect();
+            assert!(
+                r.height() >= 48.0 && r.width() >= 48.0,
+                "{name} {r:?} {size:?}"
+            );
+        }
+    }
+}
+
+/// PL29: a phone's card shows the elapsed time and the track's total.
+#[test]
+fn a_phones_card_shows_elapsed_and_total() {
+    for size in [A56, LANDSCAPE] {
+        let (mut h, _fake) = touch(1, size);
+        // The test tracks have no length: the total shows as unknown.
+        assert!(h.query_by_label("00:00 / —").is_some(), "{size:?}");
+        tab(&mut h, "Playlists");
+        assert!(h.query_by_label("00:00 / —").is_some(), "{size:?}");
+    }
+}
+
+/// PL28: the Playlists card shows its transport whole in landscape.
+#[test]
+fn the_landscape_playlists_card_shows_its_transport() {
+    let (mut h, _fake) = touch(4, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    let screen = h.get_by_label("Playlists").rect().max.y;
+    for name in ["Play", "Stop after the current track", "Fade stop"] {
+        let r = h.get_all_by_label(name).next().unwrap().rect();
+        assert!(
+            r.bottom() <= LANDSCAPE.y && r.top() > screen,
+            "{name} {r:?}"
+        );
+    }
+}
+
+/// PL30: a phone's meter and fader are narrow and draw no scale numbers.
+#[test]
+fn a_phones_meter_is_narrow_without_a_scale() {
+    let (h, _fake) = touch(1, A56);
+    let fader = h
+        .get_all_by_role(egui::accesskit::Role::Slider)
+        .next()
+        .unwrap()
+        .rect();
+    assert!(fader.width() <= 30.0, "{fader:?}");
+    let texts = drawn_texts(&h);
+    assert!(!texts.iter().any(|t| t == "-20" || t == "-12"), "{texts:?}");
+}
+
+/// PL28: a compact card keeps its buttons inside it: the next card starts
+/// below the first card's lowest button.
+#[test]
+fn a_compact_card_keeps_its_buttons_inside() {
+    let (h, _fake) = touch(2, A56);
+    let lowest = h.get_all_by_label("Fade stop").next().unwrap().rect();
+    let next_wave = h
+        .get_all_by_label("Waveform: click to seek")
+        .nth(1)
+        .unwrap()
+        .rect();
+    assert!(
+        lowest.bottom() + 10.0 < next_wave.top(),
+        "{lowest:?} {next_wave:?}"
+    );
+}
+
+/// PL28: upright, the Playlists card shows its transport whole too.
+#[test]
+fn the_portrait_playlists_card_shows_its_transport() {
+    // The A56's status bar (24) and gesture bar (24) take their share.
+    let (mut h, _fake) = support::harness_inset(state(4, 3), A56, 24.0, 24.0, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    // Above the status bar, whose legend sits in it.
+    let bottom = h.get_by_label("Intro").rect().top() - 4.0;
+    for name in ["Play", "Stop after the current track", "Fade stop"] {
+        let r = h.get_all_by_label(name).next().unwrap().rect();
+        assert!(r.bottom() <= bottom, "{name} {r:?}");
     }
 }
