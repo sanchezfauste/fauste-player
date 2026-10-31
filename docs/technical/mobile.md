@@ -158,7 +158,12 @@ stops or changes playout.
   vertical scroll area, and `cartwall::strip` filling
   the rest. Portrait puts the cards on top, as tall as they were in the
   last frame up to `LIVE_CARDS_SHARE` (0.66) of the height; landscape puts
-  them on the left, `LIVE_CARDS_SHARE` of the width. On a phone,
+  them on the left, `LIVE_CARDS_SHARE` of the width, as one-row
+  `player::mini_card`s (PL36: name, status, title, countdown, Play/Next,
+  Pause and Stop at `PHONE_BUTTON`; a tap on the row elsewhere sets
+  `PhoneView` to that player's Playlists screen). A folded cartwall
+  (`Cartwall::open` false, PL35) is its header across the bottom and the
+  players take the rest. On a phone,
   `cartwall::grid` lays a page out in fewer columns, in the same reading
   order, when its columns would be narrower than `PHONE_MIN_CART_WIDTH`.
 - *Carts* (`touch::carts`, PL7): the cartwall filling the area. A
@@ -216,7 +221,8 @@ moves a level on air. A waveform seeks on a tap at the press position
 it lifts, PL15) and zooms on a two-finger pinch around the fingers'
 centre (`multi_touch`, with the wheel's `min_span`; the one-finger pan is
 ignored meanwhile, and a pinch never seeks, PL16). The phone's cartwall
-never folds. The status bar leaves out the desktop's shortcut hints
+folds on the Live screen only (`cartwall::live_fold`); the Carts screen
+always shows it open. The status bar leaves out the desktop's shortcut hints
 (keys, double and right clicks). On a phone Settings (`SettingsDeps::phone`,
 PL20, PL21) takes the whole screen and shows its list of sections
 (`phone_sections`) until one is chosen (`SettingsState::phone_section`;
