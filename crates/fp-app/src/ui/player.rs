@@ -259,25 +259,17 @@ fn card_sized(
         return;
     };
     let id = player.id;
-    let telemetry = scene
-        .telemetry
-        .players
-        .iter()
-        .find(|(p, _)| *p == id)
-        .map(|(_, t)| *t)
-        .unwrap_or_default();
-    let Some(mut pv) = view::player_view(scene.state, id, telemetry.position_secs, scene.time)
-    else {
+    let Some((pv, telemetry)) = card_view(scene, id) else {
         return;
     };
-    pv.bit_perfect = telemetry.bit_perfect;
-    pv.dsd = telemetry.dsd;
     egui::Frame::new()
         .fill(theme::SURFACE)
         .stroke(Stroke::new(1.0, theme::NEUTRAL_800))
-        .inner_margin(10.0)
+        // Tight vertical room, so the whole card fits a phone on its side
+        // between the system bars (PL28).
+        .inner_margin(egui::Margin::symmetric(10, 4))
         .show(ui, |ui| {
-            ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
+            ui.spacing_mut().item_spacing = vec2(6.0, 4.0);
             let locked = super::touch::locked(scene, view_state);
             wave_sized(ui, scene, view_state, id, &pv, wave_height, markers, locked);
             phone_time_row(ui, scene, &pv);
@@ -295,6 +287,214 @@ fn card_sized(
                 BlockSize::PhoneCompact,
             );
         });
+}
+
+/// What a card shows of player `id`, with its telemetry.
+fn card_view(
+    scene: &Scene<'_>,
+    id: PlayerId,
+) -> Option<(PlayerView, fp_engine::engine::PlayerTelemetry)> {
+    let telemetry = scene
+        .telemetry
+        .players
+        .iter()
+        .find(|(p, _)| *p == id)
+        .map(|(_, t)| *t)
+        .unwrap_or_default();
+    let mut pv = view::player_view(scene.state, id, telemetry.position_secs, scene.time)?;
+    pv.bit_perfect = telemetry.bit_perfect;
+    pv.dsd = telemetry.dsd;
+    Some((pv, telemetry))
+}
+
+/// A mini card's height: a finger-sized row and its margins (PL36).
+const MINI_CARD_HEIGHT: f32 = PHONE_BUTTON + 8.0;
+
+/// A player as one row on a phone held on its side (PL36): its name and
+/// status over the title, the remaining time, then Play/Next, Pause and
+/// Stop as on its card. A tap outside the buttons opens the player on the
+/// Playlists screen.
+pub(crate) fn mini_card(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, index: usize) {
+    let Some(player) = scene.state.players.get(index) else {
+        return;
+    };
+    let id = player.id;
+    let Some((pv, _)) = card_view(scene, id) else {
+        return;
+    };
+    let t = scene.i18n;
+    let blink = widgets::blink(scene.time);
+    let available = fp_model::availability(scene.state, id);
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(ui.available_width(), MINI_CARD_HEIGHT), Sense::hover());
+    ui.painter().rect(
+        rect,
+        0.0,
+        theme::SURFACE,
+        Stroke::new(1.0, theme::NEUTRAL_800),
+        StrokeKind::Inside,
+    );
+    let mut row = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect.shrink2(vec2(8.0, 4.0)))
+            .layout(Layout::right_to_left(Align::Center)),
+    );
+    row.spacing_mut().item_spacing = vec2(GAP, 0.0);
+    let button = vec2(PHONE_BUTTON, PHONE_BUTTON);
+    // Right to left: Stop, Pause, then Play/Next.
+    let paint = |action: TransportAction| {
+        move |p: &egui::Painter, r: Rect, c: Color32| glyphs::paint(p, r, action, 16.0, c)
+    };
+    if widgets::tile(
+        &mut row,
+        button,
+        &t.tr("tip-stop"),
+        available.stop,
+        TileStyle::plain(),
+        paint(TransportAction::Stop),
+    )
+    .clicked()
+    {
+        scene.ctl.send(Command::Stop(id));
+    }
+    let paused = pv.status == PlayerStatus::Paused;
+    let pause_style = if paused {
+        widgets::paused_style(blink)
+    } else {
+        TileStyle::plain()
+    };
+    if widgets::tile(
+        &mut row,
+        button,
+        &t.tr("tip-pause"),
+        available.pause,
+        pause_style,
+        paint(TransportAction::Pause),
+    )
+    .clicked()
+    {
+        scene.ctl.send(Command::Pause(id));
+    }
+    let playing = pv.status == PlayerStatus::OnAir;
+    let play_style = if paused {
+        paused_play_style(blink)
+    } else {
+        play_button_style()
+    };
+    let action = if playing {
+        TransportAction::Next
+    } else {
+        TransportAction::Play
+    };
+    if widgets::tile(
+        &mut row,
+        button,
+        &play_label(scene, id, playing),
+        available.play,
+        play_style,
+        move |p, r, c| glyphs::paint(p, r, action, 22.0, c),
+    )
+    .clicked()
+    {
+        scene.ctl.send(Command::Play(id));
+    }
+    let (main, tenths) = format::countdown(pv.remaining);
+    let main_font = font_medium(24.0);
+    let tenths_font = font_medium(13.0);
+    let main_size = widgets::tabular_size(row.painter(), &main, &main_font);
+    let tenths_size = widgets::tabular_size(row.painter(), &tenths, &tenths_font);
+    let (time, response) = row.allocate_exact_size(
+        vec2(main_size.x + tenths_size.x, main_size.y),
+        Sense::hover(),
+    );
+    let spoken = format!("{main}{tenths}");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, spoken.clone()));
+    widgets::paint_tabular(
+        row.painter(),
+        time.left_top(),
+        &main,
+        &main_font,
+        countdown_colour(&pv),
+    );
+    widgets::paint_tabular(
+        row.painter(),
+        pos2(
+            time.left() + main_size.x,
+            time.bottom() - tenths_size.y - 2.0,
+        ),
+        &tenths,
+        &tenths_font,
+        theme::NEUTRAL_500,
+    );
+    // The rest of the row: name, status and title; a tap opens the player.
+    let info = row.available_rect_before_wrap();
+    let name = t.tr_args("player-label", &[("n", (index + 1).into())]);
+    let open = row.interact(
+        info,
+        row.scope_id().with(("mini-card", id.0)),
+        Sense::click(),
+    );
+    let label = name.clone();
+    open.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label.clone()));
+    if open.clicked() {
+        view_state.phone.screen = super::touch::PhoneScreen::Playlists;
+        view_state.phone.playlists = Some(id);
+    }
+    let (dot, status) = status_look(scene, pv.status);
+    let painter = row.painter_at(info);
+    let top = info.top() + 4.0;
+    let number = painter.layout_no_wrap(name, font_semibold(12.0), theme::TEXT);
+    let number_width = number.size().x;
+    painter.galley(pos2(info.left(), top), number, theme::TEXT);
+    let dot_x = info.left() + number_width + 8.0;
+    painter.circle_filled(pos2(dot_x, top + 7.0), 3.5, dot);
+    painter.text(
+        pos2(dot_x + 8.0, top + 7.0),
+        egui::Align2::LEFT_CENTER,
+        status.to_uppercase(),
+        font(10.0),
+        theme::NEUTRAL_400,
+    );
+    let title = pv.title.clone().unwrap_or_else(|| "—".to_owned());
+    let mut job = egui::text::LayoutJob::simple_singleline(title, font(13.0), theme::TEXT);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(info.width().max(0.0));
+    let galley = painter.layout_job(job);
+    painter.galley(
+        pos2(info.left(), info.bottom() - galley.size().y - 4.0),
+        galley,
+        theme::TEXT,
+    );
+}
+
+/// The colour of a status's dot and its name.
+fn status_look(scene: &Scene<'_>, status: PlayerStatus) -> (Color32, String) {
+    let t = scene.i18n;
+    match status {
+        PlayerStatus::OnAir => (theme::ON_AIR_TEXT, t.tr("status-on-air")),
+        PlayerStatus::Paused => (theme::AMBER, t.tr("status-paused")),
+        PlayerStatus::Stopped => (theme::NEUTRAL_700, t.tr("status-stopped")),
+    }
+}
+
+/// Play's label: Play, or Next on air (BR15: bit-perfect, at once).
+fn play_label(scene: &Scene<'_>, id: PlayerId, playing: bool) -> String {
+    let t = scene.i18n;
+    if !playing {
+        t.tr("tip-play")
+    } else if fp_model::bit_perfect_player(scene.state, id) {
+        t.tr("tip-next-bit-perfect")
+    } else {
+        t.tr("tip-next")
+    }
+}
+
+/// The countdown's colour: red on the end warning's beat.
+fn countdown_colour(pv: &PlayerView) -> Color32 {
+    if pv.end_warning && (pv.remaining * 2.0).floor() as i64 % 2 == 1 {
+        theme::ON_AIR_TEXT
+    } else {
+        theme::TEXT
+    }
 }
 
 /// Follows the player's current entry in its table (feedback spec F18):
@@ -462,11 +662,7 @@ fn header(
     // What the header shows, measured before anything is drawn, so that no
     // two items overlap (the row fits them; the lowest priority collapses).
     let number = t.tr_args("player-label", &[("n", (index + 1).into())]);
-    let (dot, status) = match pv.status {
-        PlayerStatus::OnAir => (theme::ON_AIR_TEXT, t.tr("status-on-air")),
-        PlayerStatus::Paused => (theme::AMBER, t.tr("status-paused")),
-        PlayerStatus::Stopped => (theme::NEUTRAL_700, t.tr("status-stopped")),
-    };
+    let (dot, status) = status_look(scene, pv.status);
     let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
     let fade_text = t.tr(if fade_stopping {
         "badge-fading"
@@ -1241,15 +1437,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView, phon
             ui.spacing_mut().item_spacing = vec2(GAP, GAP);
             let available = fp_model::availability(scene.state, id);
             let playing = pv.status == PlayerStatus::OnAir;
-            // BR15: on air, a bit-perfect player starts the next track at
-            // once, without a crossfade.
-            let play_label = if !playing {
-                t.tr("tip-play")
-            } else if fp_model::bit_perfect_player(scene.state, id) {
-                t.tr("tip-next-bit-perfect")
-            } else {
-                t.tr("tip-next")
-            };
+            let play_label = play_label(scene, id, playing);
             let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
             let caption = if pv.fading {
                 // As the header's badge: a fade stop fades, a crossfade mixes.
@@ -1466,11 +1654,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView, phon
 fn countdown(ui: &mut Ui, pv: &PlayerView) {
     ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
     let (main, tenths) = format::countdown(pv.remaining);
-    let colour = if pv.end_warning && (pv.remaining * 2.0).floor() as i64 % 2 == 1 {
-        theme::ON_AIR_TEXT
-    } else {
-        theme::TEXT
-    };
+    let colour = countdown_colour(pv);
     // Full size when it fits; smaller in a narrow player or for an
     // hour-long time, so it never runs into the buttons.
     let natural = widgets::tabular_size(ui.painter(), &main, &font_medium(38.0)).x

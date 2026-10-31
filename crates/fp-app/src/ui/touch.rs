@@ -393,7 +393,8 @@ fn player_name(scene: &Scene<'_>, index: usize) -> String {
 
 /// Every player's card and the cartwall (PL5, PL6): in portrait the cards
 /// on top, scrolling on their own, and the cartwall below; in landscape the
-/// cards on the left and the cartwall on the right.
+/// players as mini cards on the left and the cartwall on the right (PL36).
+/// A folded cartwall is its header across the bottom (PL35).
 fn live(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -404,7 +405,16 @@ fn live(
 ) {
     let area = ui.available_rect_before_wrap();
     let used_id = ui.scope_id().with("live-cards-height");
-    let (cards, carts) = if landscape {
+    let (cards, carts) = if !scene.state.cartwall.open {
+        // PL35: folded, the cartwall's header at the bottom, the players
+        // over the rest.
+        let header = super::cartwall::height(scene);
+        let top = area.bottom() - header;
+        (
+            Rect::from_min_max(area.min, egui::pos2(area.right(), top - PANEL_GAP)),
+            Rect::from_min_max(egui::pos2(area.left(), top), area.max),
+        )
+    } else if landscape {
         let width = area.width() * LIVE_CARDS_SHARE;
         (
             Rect::from_min_size(area.min, vec2(width, area.height())),
@@ -439,7 +449,12 @@ fn live(
             ui.spacing_mut().item_spacing = vec2(0.0, PANEL_GAP);
             for (index, id) in players.iter().enumerate() {
                 ui.push_id(("live-card", id.0), |ui| {
-                    super::player::card(ui, scene, view_state, covers, index);
+                    if landscape {
+                        // PL36: a card is too tall for a phone on its side.
+                        super::player::mini_card(ui, scene, view_state, index);
+                    } else {
+                        super::player::card(ui, scene, view_state, covers, index);
+                    }
                 });
             }
         });

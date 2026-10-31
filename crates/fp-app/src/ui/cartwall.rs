@@ -136,10 +136,11 @@ pub(crate) fn page_name(scene: &Scene<'_>, index: usize, name: &str) -> String {
 /// buttons at most.
 pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, fill: bool) {
     // RL14: collapsed on a side, the cartwall is a narrow strip.
-    // Mobile spec §6: a phone's cartwall screen never folds.
-    let open = scene.state.cartwall.open || view_state.phone_active;
+    // Mobile spec §6: a phone's cartwall screen never folds; its Live
+    // screen's does (PL35), always to the header: a phone has no side dock.
+    let open = scene.state.cartwall.open || (view_state.phone_active && !live_fold(view_state));
     let dock = scene.state.layout.cartwall.dock;
-    if !open && dock.is_side() {
+    if !open && dock.is_side() && !view_state.phone_active {
         collapsed_strip(ui, scene, view_state, dock);
         return;
     }
@@ -219,6 +220,11 @@ fn collapsed_strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, d
     super::panels::header_menu(&background, scene, view_state, Panel::Cartwall);
 }
 
+/// Whether this is a phone's Live screen, where the cartwall folds (PL35).
+fn live_fold(view_state: &ViewState) -> bool {
+    view_state.phone.screen == super::touch::PhoneScreen::Live
+}
+
 fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     let t = scene.i18n;
     let wall = &scene.state.cartwall;
@@ -247,7 +253,7 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                 } else {
                     icon::CARET_RIGHT
                 };
-                let foldable = !view_state.phone_active;
+                let foldable = !view_state.phone_active || live_fold(view_state);
                 let width = title_width(ui, &title);
                 let style = TileStyle {
                     border: Color32::TRANSPARENT,

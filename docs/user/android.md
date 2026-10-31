@@ -48,9 +48,14 @@ the status bar at the bottom shows only when it has something to say.
   after current) with buttons a finger's size, and a slim meter with the
   volume fader (no scales; the fader's level shows under it). Held
   upright the cards are on top, one whole card and the start of the next
-  (scroll for more), and the cartwall below; turned sideways the cards
-  are on the left and the cartwall on the right. A cart page too wide for the space shows in fewer columns, in
-  the same order.
+  (scroll for more), and the cartwall below. Turned sideways each player
+  is one row on the left (its name and status, the title, the time left,
+  Play/Next, Pause and Stop; tap the row elsewhere to open the player on
+  Playlists) and the cartwall is on the right. Tap **CARTWALL** in its
+  header to fold it: only the header stays, at the bottom (page tabs and
+  *Stop all* still work), and the players get the room; tap it again to
+  unfold. The Carts tab always shows the whole cartwall. A cart page too
+  wide for the space shows in fewer columns, in the same order.
 - *Carts:* the shown cart page, filling the screen. Swipe sideways to
   show the next or the previous page. Held upright, a page wider than
   tall is turned (8 × 2 shows as 2 × 8), in the same order.

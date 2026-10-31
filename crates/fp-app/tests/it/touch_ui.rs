@@ -303,14 +303,13 @@ fn play_on_a_card_sends_play() {
 /// PL14: a drag that starts on a card's fader moves it.
 #[test]
 fn a_drag_on_a_card_fader_moves_it() {
-    for size in [PORTRAIT, LANDSCAPE] {
-        let (mut h, fake) = touch(3, size);
-        fake.take_sent();
-        let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
-        // Down: at 0 dB the fader is at its top, where up changes nothing.
-        drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
-        assert!(volume_sent(&fake), "{size:?}: the fader did not move");
-    }
+    // Upright: on its side Live has mini cards without faders (PL36).
+    let (mut h, fake) = touch(3, PORTRAIT);
+    fake.take_sent();
+    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+    // Down: at 0 dB the fader is at its top, where up changes nothing.
+    drag(&mut h, fader.center(), fader.center() + vec2(0.0, 60.0));
+    assert!(volume_sent(&fake), "the fader did not move");
 }
 
 /// A scroll of the cards that starts on a title moves nothing.
@@ -418,7 +417,7 @@ fn a_tap_on_the_carts_screen_shows_no_page() {
 }
 
 #[test]
-fn the_phone_cartwall_never_folds() {
+fn the_carts_screen_never_folds() {
     let mut closed = state(2, 3);
     closed.cartwall.open = false;
     let (mut h, _fake) = harness_sized(closed, PORTRAIT, |ui| ui.with_touch());
@@ -1442,7 +1441,9 @@ fn a_landscape_phone_leaves_the_legend_out() {
 #[test]
 fn a_phones_transport_buttons_are_finger_sized() {
     for size in [A56, LANDSCAPE] {
-        let (h, _fake) = touch(2, size);
+        let (mut h, _fake) = touch(2, size);
+        // Landscape Live has mini cards (PL36); the full card is on Playlists.
+        tab(&mut h, "Playlists");
         for name in ["Stop", "Pause", "Previous track", "Fade stop"] {
             let r = h.get_all_by_label(name).next().unwrap().rect();
             assert!(
@@ -1458,8 +1459,11 @@ fn a_phones_transport_buttons_are_finger_sized() {
 fn a_phones_card_shows_elapsed_and_total() {
     for size in [A56, LANDSCAPE] {
         let (mut h, _fake) = touch(1, size);
-        // The test tracks have no length: the total shows as unknown.
-        assert!(h.query_by_label("00:00 / —").is_some(), "{size:?}");
+        // The test tracks have no length: the total shows as unknown. On
+        // its side Live has mini cards (PL36).
+        if size == A56 {
+            assert!(h.query_by_label("00:00 / —").is_some(), "{size:?}");
+        }
         tab(&mut h, "Playlists");
         assert!(h.query_by_label("00:00 / —").is_some(), "{size:?}");
     }
@@ -1698,4 +1702,201 @@ fn the_next_frame_follows_what_moves() {
     fp_model::apply(&mut s, fp_model::Command::Pause(p)).unwrap();
     assert_eq!(s.players[0].transport, fp_model::Transport::Paused);
     assert!(next_frame(&s, &telemetry, true, 250) <= Duration::from_millis(250));
+}
+
+// --- Live after the polish (§16) ---
+
+/// A phone held `size`, its Live cartwall folded.
+fn folded(players: usize, size: Vec2) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    let mut s = state(players, 3);
+    s.cartwall.open = false;
+    let (mut h, fake) = harness_sized(s, size, |ui| ui.with_touch());
+    h.run_steps(3);
+    (h, fake)
+}
+
+/// PL35: a cartwall docked on a side (kept from a tablet layout) still
+/// folds to its header across the bottom of a phone's Live screen, with
+/// *Stop all* and the fold caret, not the side strip.
+#[test]
+fn a_side_docked_cartwall_folds_to_its_header_on_a_phone() {
+    let mut s = state(2, 3);
+    s.cartwall.open = false;
+    s.layout.cartwall.dock = fp_model::layout::Dock::Right;
+    let (mut h, _fake) = harness_sized(s, A56, |ui| ui.with_touch());
+    h.run_steps(3);
+    assert!(h.query_by_label("Stop all").is_some(), "no Stop all");
+    let title = h.get_by_label("CARTWALL").rect();
+    assert!(
+        title.bottom() > A56.y - 60.0,
+        "header at the bottom: {title:?}"
+    );
+}
+
+/// PL35: the Live screen's cartwall header folds the cartwall.
+#[test]
+fn the_live_cartwall_folds() {
+    let (mut h, fake) = touch(2, A56);
+    fake.take_sent();
+    h.get_by_label("CARTWALL").click();
+    h.run_steps(2);
+    assert!(
+        fake.take_sent()
+            .contains(&fp_model::Command::SetCartwallOpen(false)),
+        "no fold"
+    );
+}
+
+/// PL35: folded, Live shows the cartwall's header at the bottom and no
+/// cart; the cards take the rest, so the second card's Play shows.
+#[test]
+fn a_folded_live_cartwall_leaves_the_room_to_the_cards() {
+    let (h, _fake) = folded(2, A56);
+    assert!(
+        h.query_all_by_label_contains(", empty").count() == 0,
+        "no carts"
+    );
+    let title = h.get_by_label("CARTWALL").rect();
+    assert!(
+        title.bottom() > A56.y - 60.0,
+        "header at the bottom: {title:?}"
+    );
+    assert!(
+        h.query_by_label_contains("Stop all").is_some(),
+        "Stop all kept"
+    );
+    let plays: Vec<egui::Rect> = h.query_all_by_label("Play").map(|n| n.rect()).collect();
+    assert!(
+        plays.get(1).is_some_and(|p| p.bottom() < title.top()),
+        "the second card's Play shows: {plays:?}"
+    );
+}
+
+/// PL35: the Carts screen shows the grid while the Live cartwall is folded.
+#[test]
+fn the_carts_screen_ignores_the_live_fold() {
+    let (mut h, _fake) = folded(2, A56);
+    tab(&mut h, "Carts");
+    assert!(h.query_all_by_label_contains(", empty").count() > 0);
+}
+
+/// PL35: folded in landscape, the header spans the screen's width.
+#[test]
+fn a_folded_landscape_live_spans_the_header() {
+    let (h, _fake) = folded(2, A56_LANDSCAPE);
+    let title = h.get_by_label("CARTWALL").rect();
+    assert!(title.left() < 40.0, "the header spans the width: {title:?}");
+    assert!(
+        h.query_all_by_label_contains(", empty").count() == 0,
+        "no carts"
+    );
+}
+
+/// PL36: on its side the Live screen shows each player as one row with
+/// finger-sized Play, Pause and Stop, all inside the screen.
+#[test]
+fn landscape_live_shows_a_mini_card_per_player() {
+    let (h, _fake) = touch(3, A56_LANDSCAPE);
+    assert!(
+        h.query_by_label("Restart the track").is_none(),
+        "no full card"
+    );
+    for name in ["Play", "Pause", "Stop"] {
+        let buttons: Vec<egui::Rect> = h.query_all_by_label(name).map(|n| n.rect()).collect();
+        assert_eq!(buttons.len(), 3, "{name}");
+        for b in &buttons {
+            assert!(
+                b.height() >= 48.0 && b.bottom() <= A56_LANDSCAPE.y,
+                "{name} {b:?}"
+            );
+        }
+    }
+}
+
+/// PL36: a long title is cut short; the row's buttons stay whole.
+#[test]
+fn a_mini_card_cuts_a_long_title() {
+    let mut s = state(1, 0);
+    let long = "A title far too long for one row of a phone held on its side ".repeat(3);
+    let playlist = s.playlists.first_id().unwrap();
+    fp_model::apply(
+        &mut s,
+        fp_model::Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths: vec![std::path::PathBuf::from(format!("/music/{long}.mp3"))],
+        },
+    )
+    .unwrap();
+    let (mut h, _fake) = harness_sized(s, A56_LANDSCAPE, |ui| ui.with_touch());
+    h.run_steps(3);
+    let stop = h.get_by_label("Stop").rect();
+    assert!(stop.right() <= A56_LANDSCAPE.x, "{stop:?}");
+    let cut = drawn(&h, true);
+    assert!(
+        cut.iter().any(|t| t.starts_with("A title far")),
+        "the title is cut short: {cut:?}"
+    );
+}
+
+/// PL36: a tap on a mini card outside its buttons opens that player on
+/// the Playlists screen.
+#[test]
+fn a_tap_on_a_mini_card_opens_its_player() {
+    let (mut h, _fake) = touch(3, A56_LANDSCAPE);
+    h.get_by_label("P2").click();
+    h.run_steps(3);
+    assert!(h.query_by_label(ADD).is_some(), "the Playlists screen");
+    // The chip and the card's header.
+    assert_eq!(h.query_all_by_label("P2").count(), 2);
+    assert_eq!(h.query_all_by_label("P1").count(), 1);
+}
+
+#[test]
+fn play_on_a_mini_card_sends_play() {
+    let (mut h, fake) = touch(2, A56_LANDSCAPE);
+    fake.take_sent();
+    h.query_all_by_label("Play").nth(1).unwrap().click();
+    h.run_steps(2);
+    assert!(
+        fake.take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::Play(_))),
+        "no play command"
+    );
+}
+
+/// PL35, PL36: folded on its side, eight players' rows share the screen's
+/// width over the cartwall's header, and they scroll.
+#[test]
+fn eight_mini_cards_scroll_over_a_folded_cartwall() {
+    let (h, _fake) = folded(8, A56_LANDSCAPE);
+    let title = h.get_by_label("CARTWALL").rect();
+    let plays: Vec<egui::Rect> = h.query_all_by_label("Play").map(|n| n.rect()).collect();
+    assert!(plays.len() >= 3, "{plays:?}");
+    let shown: Vec<&egui::Rect> = plays.iter().filter(|p| p.top() < title.top()).collect();
+    assert!(shown.len() < 8, "they scroll: {plays:?}");
+    for p in &plays {
+        assert!(p.right() > A56_LANDSCAPE.x * 0.7, "the whole width: {p:?}");
+    }
+}
+
+/// PL28 on a real A56 on its side: the status bar and the gesture bar take
+/// 24 dp each of the 384, and the Playlists card's whole transport still
+/// shows.
+#[test]
+fn the_landscape_playlists_card_fits_between_the_system_bars() {
+    let (mut h, _fake) =
+        support::harness_inset(state(4, 3), A56_LANDSCAPE, 24.0, 24.0, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    for name in [
+        "Play",
+        "Restart the track",
+        "Stop after the current track",
+        "Fade stop",
+    ] {
+        let r = h.get_all_by_label(name).next().unwrap().rect();
+        assert!(r.bottom() <= A56_LANDSCAPE.y - 24.0, "{name} {r:?}");
+    }
 }
