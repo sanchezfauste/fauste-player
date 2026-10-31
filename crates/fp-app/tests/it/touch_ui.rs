@@ -418,7 +418,7 @@ fn a_tap_on_the_carts_screen_shows_no_page() {
 }
 
 #[test]
-fn the_phone_cartwall_never_folds() {
+fn the_carts_screen_never_folds() {
     let mut closed = state(2, 3);
     closed.cartwall.open = false;
     let (mut h, _fake) = harness_sized(closed, PORTRAIT, |ui| ui.with_touch());
@@ -1698,4 +1698,74 @@ fn the_next_frame_follows_what_moves() {
     fp_model::apply(&mut s, fp_model::Command::Pause(p)).unwrap();
     assert_eq!(s.players[0].transport, fp_model::Transport::Paused);
     assert!(next_frame(&s, &telemetry, true, 250) <= Duration::from_millis(250));
+}
+
+// --- Live after the polish (§16) ---
+
+/// A phone held `size`, its Live cartwall folded.
+fn folded(players: usize, size: Vec2) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    let mut s = state(players, 3);
+    s.cartwall.open = false;
+    let (mut h, fake) = harness_sized(s, size, |ui| ui.with_touch());
+    h.run_steps(3);
+    (h, fake)
+}
+
+/// PL35: the Live screen's cartwall header folds the cartwall.
+#[test]
+fn the_live_cartwall_folds() {
+    let (mut h, fake) = touch(2, A56);
+    fake.take_sent();
+    h.get_by_label("CARTWALL").click();
+    h.run_steps(2);
+    assert!(
+        fake.take_sent()
+            .contains(&fp_model::Command::SetCartwallOpen(false)),
+        "no fold"
+    );
+}
+
+/// PL35: folded, Live shows the cartwall's header at the bottom and no
+/// cart; the cards take the rest, so the second card's Play shows.
+#[test]
+fn a_folded_live_cartwall_leaves_the_room_to_the_cards() {
+    let (h, _fake) = folded(2, A56);
+    assert!(
+        h.query_all_by_label_contains(", empty").count() == 0,
+        "no carts"
+    );
+    let title = h.get_by_label("CARTWALL").rect();
+    assert!(
+        title.bottom() > A56.y - 60.0,
+        "header at the bottom: {title:?}"
+    );
+    assert!(
+        h.query_by_label_contains("Stop all").is_some(),
+        "Stop all kept"
+    );
+    let plays: Vec<egui::Rect> = h.query_all_by_label("Play").map(|n| n.rect()).collect();
+    assert!(
+        plays.get(1).is_some_and(|p| p.bottom() < title.top()),
+        "the second card's Play shows: {plays:?}"
+    );
+}
+
+/// PL35: the Carts screen shows the grid while the Live cartwall is folded.
+#[test]
+fn the_carts_screen_ignores_the_live_fold() {
+    let (mut h, _fake) = folded(2, A56);
+    tab(&mut h, "Carts");
+    assert!(h.query_all_by_label_contains(", empty").count() > 0);
+}
+
+/// PL35: folded in landscape, the header spans the screen's width.
+#[test]
+fn a_folded_landscape_live_spans_the_header() {
+    let (h, _fake) = folded(2, A56_LANDSCAPE);
+    let title = h.get_by_label("CARTWALL").rect();
+    assert!(title.left() < 40.0, "the header spans the width: {title:?}");
+    assert!(
+        h.query_all_by_label_contains(", empty").count() == 0,
+        "no carts"
+    );
 }
