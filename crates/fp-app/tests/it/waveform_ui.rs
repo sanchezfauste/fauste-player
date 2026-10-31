@@ -106,7 +106,7 @@ fn a_plain_click_still_seeks_at_once() {
 #[test]
 fn a_tap_on_the_waveform_seeks() {
     let (mut h, fake) =
-        support::harness_sized(playing(), egui::vec2(892.0, 412.0), |ui| ui.with_touch());
+        support::harness_sized(playing(), egui::vec2(412.0, 892.0), |ui| ui.with_touch());
     h.run_steps(3);
     let w = wave(&h);
     let at = pos2(x_of(w, 90.0), w.center().y);
