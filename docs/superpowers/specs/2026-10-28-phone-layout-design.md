@@ -301,6 +301,11 @@ possible.
   cartwall editor's cart grid wraps (or scales) to the width, its
   rows × columns controls are stacked and usable by touch. Checked one by
   one on the emulator at the A56 size.
-- PL34. **Live in landscape** *(proposal, shown to the maintainer)*:
-  compact cards (PL28) so two or more players show at once beside the
-  cartwall.
+- PL34. **Live in landscape** *(open; proposal to the maintainer)*:
+  with PL29's buttons a card cannot be under ~300 dp, so two cards never
+  fit a phone on its side; proposed instead, a one-row mini card per
+  player (name, title, countdown, Play, Stop, Pause), a tap opening the
+  player on the Playlists screen.
+- Built (2026-10-31): upright Live shows one whole card and the start of
+  the next (PL5's "two at a time" gave way to PL29); every phone card is
+  compact (no cover).

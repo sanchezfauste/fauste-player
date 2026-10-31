@@ -138,8 +138,11 @@ to hit, and lays the screen out by its size (`fp_app::ui::touch`): a
 screen whose shortest side is 600 points (Android's dp) or more is a
 tablet and keeps the desktop layout; a smaller one is a phone.
 
-A phone's top bar (phone layout spec PL1) has the tabs Live | Carts |
-Playlists | Music (`touch::screen_tiles`, shrinking to fit), the lock tile
+A phone's top bar (phone layout spec PL1, PL26, PL27) has the tabs Live |
+Carts | Playlists | Music as icon tiles (`touch::screen_tiles`, `touch::TABS`;
+the chosen tab adds its name when the room left over the icons takes it,
+nothing is cut short), on the Playlists screen in landscape the player
+chips (`touch::player_chips`, scrolling sideways), the lock tile
 (`touch::lock_tile`), a More tile with Settings and About
 (`touch::more_menu`, an `egui::Popup::menu`) and the clock while the bar
 is at least `CLOCK_MIN_WIDTH` (400 points) wide. `PhoneView` is view state
@@ -147,8 +150,12 @@ only (the screen, the Playlists screen's player): nothing a view hides
 stops or changes playout.
 
 - *Live* (`touch::live`, PL4–PL6): a card per player (`player::card`: the
-  waveform `CARD_WAVE_HEIGHT` tall with no marker editing, the header and
-  `top_block`) in a vertical scroll area, and `cartwall::strip` filling
+  waveform `CARD_WAVE_HEIGHT` tall with no marker editing, the time row
+  `phone_time_row` with elapsed / total and the countdown, the header and
+  `top_block` at `BlockSize::PhoneCompact`: no cover, title and artist on
+  one line, 48-point transport buttons (`PHONE_BUTTON`), and the compact
+  meter and fader `widgets::vu_compact` / `fader_compact`, PL28–PL30) in a
+  vertical scroll area, and `cartwall::strip` filling
   the rest. Portrait puts the cards on top, as tall as they were in the
   last frame up to `LIVE_CARDS_SHARE` (0.66) of the height; landscape puts
   them on the left, `LIVE_CARDS_SHARE` of the width. On a phone,
@@ -163,9 +170,11 @@ stops or changes playout.
 - *Playlists* (`touch::playlists`, `player::playlists_screen`, PL8–PL11b):
   chips per player, then that player's playlist tabs (with +), track
   table and footer, and its card under them (on the right when the phone
-  is on its side) with a 72-point waveform where markers are edited. The
-  card's height is remembered from the last frame, up to 55% of an
-  upright screen; a card taller than a phone on its side scrolls. On a
+  is on its side, where the chips move to the top bar) with a waveform
+  where markers are edited: up to 72 points, down to `MIN_WAVE_HEIGHT`
+  (28) so that the rest of the card, measured in the last frame, fits its
+  room (55% of an upright screen, the whole height on its side; PL28).
+  A card still too tall scrolls. On a
   phone (`view_state.phone_active`) the row menu adds *Move up*, *Move
   down* and *Move to another player* (`table::phone_moves`; the target is
   `fp_model::after_next`: the playlist that player shows, right after its
@@ -216,7 +225,24 @@ PL20, PL21) takes the whole screen and shows its list of sections
 Restore defaults or Apply now asks). `labelled_row` stacks the label and
 hint over the control (`stacked_row`) when `body` has set the frame's
 stacked flag, so every section follows. A tablet keeps the window with
-its side list. Context menus open by long press (egui reports it as a
+its side list. Rows that hold several controls size them from
+`settings::column_width` (the cartwall editor's grid wraps at 48-point
+carts, its grid sliders take a line each on a phone; PL33); the tests
+`every_settings_section_fits_a_phone` and `every_phone_screen_fits` look
+for any accessible widget past an A56's edge, upright and on its side.
+
+**Drawing (PL31, PL32).** The interface draws at `ui.max_fps` while
+something moves (`view::animating`, or a meter whose level, average or
+peak hold still shows on its scale: `view::meter_moving`) and otherwise
+once a second, just after the clock's second (`view::idle_wait`). What
+it used to poll for wakes it instead: the conductor calls the waker set
+through `Controller::set_waker` each time it publishes a new model (a
+command from the remote API or MIDI), and the JNI calls that report
+insets, the audio focus, the media files or Back call
+`ctx.request_repaint()`. A phone in landscape leaves the status bar out
+unless it has news (an alert, a notice, the analysis at work). On the
+emulator at the A56 size, idle on Live, the process went from 25% to 7%
+of a core in front and 2.5% in the background. Context menus open by long press (egui reports it as a
 secondary click). Still to come: the row menu as a bottom sheet and
 long-press tooltips.
 

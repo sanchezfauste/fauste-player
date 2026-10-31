@@ -52,7 +52,11 @@ engine rules. Each task ends with emulator screenshots at 1080×2340,
   legend is absent in landscape on a phone, present on a tablet.
 - [ ] Implement; commit.
 
-### Task 3: the card fits its space; bigger transport; both times (PL28, PL29, PL34)
+### Task 3: the card fits its space; bigger transport; both times (PL28, PL29)
+
+Ruling (in the ledger): PL34 is not built — with 48 dp buttons a card is
+~300 dp; a one-row mini card per player in landscape Live is proposed to
+the maintainer instead.
 
 **Files:** `player.rs` (the card), `touch.rs` (`live` landscape heights);
 tests in `touch_ui.rs`.
