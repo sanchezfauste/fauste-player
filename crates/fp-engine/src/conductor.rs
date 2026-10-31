@@ -312,6 +312,7 @@ impl Conductor {
     /// One iteration: commands, engine, events, snapshots.
     pub fn tick(&mut self, now: Instant) {
         let mut changed = false;
+        let mut refused = false;
         let commands: Vec<Command> = self.commands.try_iter().collect();
         for command in commands {
             match apply(&mut self.state, command) {
@@ -323,6 +324,7 @@ impl Conductor {
                 }
                 Err(e) => {
                     let _ = self.rejected.try_send(e);
+                    refused = true;
                 }
             }
         }
@@ -360,6 +362,9 @@ impl Conductor {
         if changed {
             self.version += 1;
             self.model.store(Arc::new(self.state.clone()));
+        }
+        // The interface shows a new model, or why a command was refused.
+        if changed || refused {
             let waker = self.waker.lock().unwrap_or_else(PoisonError::into_inner);
             if let Some(wake) = waker.as_ref() {
                 wake();

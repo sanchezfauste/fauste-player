@@ -205,11 +205,18 @@ pub(crate) fn playlists_screen(
         .id_salt(("playlists-card", id.0))
         .auto_shrink([false, true])
         .show(&mut card_ui, |ui| {
-            card_sized(ui, scene, view_state, covers, index, wave, true, true);
+            card_sized(ui, scene, view_state, covers, index, wave, true);
         });
+    let used = output.content_size.y;
+    let measured = used - wave;
+    // A new measure lays the card out again at once, not at the next idle
+    // frame (a rotation, the screen just opened).
+    if (measured - rest).abs() > 0.5 {
+        ui.ctx().request_repaint();
+    }
     ui.data_mut(|d| {
-        d.insert_temp(used_id, output.content_size.y);
-        d.insert_temp(rest_id, output.content_size.y - wave);
+        d.insert_temp(used_id, used);
+        d.insert_temp(rest_id, measured);
     });
     ui.allocate_rect(area, egui::Sense::hover());
 }
@@ -233,7 +240,6 @@ pub(crate) fn card(
         index,
         CARD_WAVE_HEIGHT,
         false,
-        true,
     );
 }
 
@@ -248,7 +254,6 @@ fn card_sized(
     index: usize,
     wave_height: f32,
     markers: bool,
-    compact: bool,
 ) {
     let Some(player) = scene.state.players.get(index) else {
         return;
@@ -279,12 +284,16 @@ fn card_sized(
             header(ui, scene, view_state, id, index, &pv);
             // A drag that starts on the fader moves it (PL14), unless
             // locked (PL12); one that starts elsewhere scrolls the cards.
-            let size = if compact {
-                BlockSize::PhoneCompact
-            } else {
-                BlockSize::Phone
-            };
-            top_block(ui, scene, covers, id, &pv, &telemetry, !locked, size);
+            top_block(
+                ui,
+                scene,
+                covers,
+                id,
+                &pv,
+                &telemetry,
+                !locked,
+                BlockSize::PhoneCompact,
+            );
         });
 }
 
@@ -831,9 +840,7 @@ const COUNTDOWN_MIN_SCALE: f32 = 10.5 / 38.0;
 enum BlockSize {
     /// The desktop and tablet column.
     Desktop,
-    /// A phone's card (PL29, PL30).
-    Phone,
-    /// A phone's card short of room (PL28): no cover, a lower info row.
+    /// A phone's card (PL28–PL30): no cover, a lower info row.
     PhoneCompact,
 }
 

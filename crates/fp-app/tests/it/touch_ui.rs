@@ -1658,3 +1658,36 @@ fn every_phone_screen_fits() {
     }
     assert!(found.is_empty(), "{}", found.join("\n"));
 }
+
+/// PL32: the interface gives the conductor its waker.
+#[test]
+fn the_interface_gives_its_waker() {
+    let (_h, fake) = touch(1, A56);
+    assert!(fake.waker_set.load(std::sync::atomic::Ordering::Relaxed));
+}
+
+/// PL32: when the next frame comes. Something moving: at `max_fps`. A
+/// paused player blinks (2 Hz): four frames a second. Idle, a touch device
+/// waits for the clock's next second, a desktop draws ten frames a second
+/// as before.
+#[test]
+fn the_next_frame_follows_what_moves() {
+    use fp_app::ui::view::next_frame;
+    use std::time::Duration;
+    let telemetry = fp_engine::conductor::Telemetry::default();
+    let mut s = state(1, 3);
+    assert_eq!(
+        next_frame(&s, &telemetry, false, 250),
+        Duration::from_millis(100)
+    );
+    assert_eq!(
+        next_frame(&s, &telemetry, true, 250),
+        Duration::from_millis(760)
+    );
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, fp_model::Command::Play(p)).unwrap();
+    assert!(next_frame(&s, &telemetry, true, 250) <= Duration::from_millis(34));
+    fp_model::apply(&mut s, fp_model::Command::Pause(p)).unwrap();
+    assert_eq!(s.players[0].transport, fp_model::Transport::Paused);
+    assert!(next_frame(&s, &telemetry, true, 250) <= Duration::from_millis(250));
+}

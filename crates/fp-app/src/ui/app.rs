@@ -42,6 +42,8 @@ use crate::tags::{TagJob, TagOutcome, TagWorker};
 const TOP_BAR_HEIGHT: f32 = 34.0;
 const STATUS_BAR_HEIGHT: f32 = 24.0;
 const NOTICE_SECS: f64 = 5.0;
+/// How soon a frame follows the conductor's wake (PL32).
+const WAKE_WITHIN: std::time::Duration = std::time::Duration::from_millis(33);
 
 /// The payload of a column header being dragged (feedback 2 spec O24): its
 /// position in the list of columns.
@@ -764,9 +766,12 @@ impl AppUi {
             self.themed = true;
             // A command from elsewhere (the remote API, MIDI) changes the
             // model while the interface is idle: it draws then (PL32).
+            // Within a frame's time, so a burst of commands (a library
+            // scan) draws no more than the frame rate allows.
             let repaint = ctx.clone();
-            self.ctl
-                .set_waker(Box::new(move || repaint.request_repaint()));
+            self.ctl.set_waker(Box::new(move || {
+                repaint.request_repaint_after(WAKE_WITHIN);
+            }));
             ctx.request_repaint();
             return;
         }
@@ -1274,19 +1279,10 @@ impl AppUi {
         if take_drops && self.view.tag_editor.is_none() && self.view.confirm_reset.is_none() {
             self.file_drops(&ctx, &state);
         }
-        // A meter still falling moves too (PL31); idle, only the clock
-        // does, once a second (PL32).
-        let busy = super::view::animating(&state)
-            || telemetry
-                .players
-                .iter()
-                .any(|(_, t)| super::view::meter_moving(&t.meter, &state.config.meter));
-        if busy {
-            ctx.request_repaint_after(super::view::animation_period(state.config.ui.max_fps));
-        } else {
-            let millis = chrono::Local::now().timestamp_subsec_millis();
-            ctx.request_repaint_after(super::view::idle_wait(millis));
-        }
+        let millis = chrono::Local::now().timestamp_subsec_millis();
+        ctx.request_repaint_after(super::view::next_frame(
+            &state, &telemetry, self.touch, millis,
+        ));
     }
 
     /// O23: opens the tag editor on `track` and asks the tag worker for its

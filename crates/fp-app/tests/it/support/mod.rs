@@ -25,6 +25,8 @@ pub struct Fake {
     /// While set, commands are recorded but not applied: the snapshot lags
     /// behind, as it can for a frame in the app.
     pub hold: AtomicBool,
+    /// Set once the interface has given its waker (PL32).
+    pub waker_set: AtomicBool,
 }
 
 impl Fake {
@@ -37,6 +39,7 @@ impl Fake {
             tones: Mutex::new(Vec::new()),
             meter_resets: Mutex::new(Vec::new()),
             hold: AtomicBool::new(false),
+            waker_set: AtomicBool::new(false),
         })
     }
 
@@ -87,6 +90,10 @@ impl Controller for Fake {
     fn reset_meter_max(&self, player: PlayerId) -> bool {
         self.meter_resets.lock().unwrap().push(player);
         true
+    }
+    fn set_waker(&self, _waker: fp_engine::conductor::Waker) {
+        self.waker_set
+            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
     fn take_rejection(&self) -> Option<ModelError> {
         let mut r = self.rejected.lock().unwrap();

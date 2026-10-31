@@ -918,3 +918,19 @@ fn a_new_model_wakes_the_interface() {
     conductor.tick(now);
     assert!(woken.load(std::sync::atomic::Ordering::Relaxed) > idle);
 }
+
+/// PL32: a refused command wakes the interface too: it shows the reason.
+#[test]
+fn a_refused_command_wakes_the_interface() {
+    let (mut conductor, handle, _device, now) = offline_conductor(model(1, 3));
+    conductor.tick(now);
+    let woken = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let count = woken.clone();
+    handle.set_waker(Box::new(move || {
+        count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }));
+    assert!(handle.send(Command::Play(fp_model::PlayerId(9999))));
+    conductor.tick(now);
+    assert!(handle.rejected.try_recv().is_ok(), "refused");
+    assert_eq!(woken.load(std::sync::atomic::Ordering::Relaxed), 1);
+}
