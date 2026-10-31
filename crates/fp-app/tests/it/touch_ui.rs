@@ -935,7 +935,15 @@ fn the_arrow_returns_to_the_section_list() {
     let (mut h, _fake) = touch(2, PORTRAIT);
     more(&mut h, "Settings");
     h.get_by_label("Audio outputs").click();
-    h.run_steps(3);
+    // Devices are listed by a helper thread; the section's rows show once
+    // they are (slow on a Windows runner).
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_label("Buffer size").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     assert!(h.query_by_label("Buffer size").is_some());
     h.get_by_label("Back to the sections").click();
     h.run_steps(3);
