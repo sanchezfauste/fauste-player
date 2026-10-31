@@ -301,11 +301,30 @@ possible.
   cartwall editor's cart grid wraps (or scales) to the width, its
   rows × columns controls are stacked and usable by touch. Checked one by
   one on the emulator at the A56 size.
-- PL34. **Live in landscape** *(open; proposal to the maintainer)*:
-  with PL29's buttons a card cannot be under ~300 dp, so two cards never
-  fit a phone on its side; proposed instead, a one-row mini card per
-  player (name, title, countdown, Play, Stop, Pause), a tap opening the
-  player on the Playlists screen.
+- PL34. **Live in landscape:** with PL29's buttons a card cannot be
+  under ~300 dp, so two cards never fit a phone on its side; each player
+  is a one-row mini card instead (§16).
 - Built (2026-10-31): upright Live shows one whole card and the start of
   the next (PL5's "two at a time" gave way to PL29); every phone card is
   compact (no cover).
+
+## 16. Live after the polish (maintainer, 2026-10-31)
+
+Decided: upright Live keeps one whole card and the start of the next;
+phone cards have no cover; PL34's mini card is built; the Live screen's
+cartwall folds ("ok pero que se pueda plegar la cartwall").
+
+- PL35. **The Live cartwall folds.** On the Live screen (both
+  orientations) the cartwall's header has its caret again: folded, only
+  the header stays, at the bottom of the screen and across its width
+  (its page tabs and *Stop all* still work), and the players take the
+  rest. It is the cartwall's existing open/folded state
+  (`SetCartwallOpen`, kept in the session). The Carts screen never folds:
+  it shows the grid whether the Live cartwall is folded or not.
+- PL36. **The mini card (landscape Live).** One row per player, 48 dp
+  buttons: the player's name and status, the title on air (or next) cut
+  short to fit, the remaining time, then Play/Next, Pause and Stop with
+  the card's labels, availability and looks (the paused blink, the fade
+  sweep is left out). A tap on the row outside its buttons opens that
+  player on the Playlists screen. The rows scroll when the players do
+  not fit. Portrait keeps the full cards.
